@@ -30,17 +30,22 @@ impl ApiClientService {
         let method = parse_method(&input.method)?;
         let resolved = resolve_input(input.clone(), environment)?;
         let url = build_url(&resolved.url, &resolved.query)?;
-        let timeout = Duration::from_millis(input.timeout_ms.unwrap_or(60_000).clamp(1_000, 300_000));
+        let timeout =
+            Duration::from_millis(input.timeout_ms.unwrap_or(60_000).clamp(1_000, 300_000));
 
-        let mut builder = self.client.request(method.clone(), url.clone()).timeout(timeout);
+        let mut builder = self
+            .client
+            .request(method.clone(), url.clone())
+            .timeout(timeout);
         let mut has_content_type = false;
 
         for header in resolved.headers.iter().filter(|item| item.enabled) {
             if header.key.trim().eq_ignore_ascii_case("content-type") {
                 has_content_type = true;
             }
-            let name = HeaderName::from_bytes(header.key.trim().as_bytes())
-                .map_err(|_| AppError::Validation(format!("invalid header name: {}", header.key)))?;
+            let name = HeaderName::from_bytes(header.key.trim().as_bytes()).map_err(|_| {
+                AppError::Validation(format!("invalid header name: {}", header.key))
+            })?;
             let value = HeaderValue::from_str(&header.value).map_err(|_| {
                 AppError::Validation(format!("invalid header value for {}", header.key))
             })?;
@@ -71,7 +76,13 @@ impl ApiClientService {
             .collect::<Vec<_>>();
         let body = response.text().await?;
         let history_id = self
-            .insert_history(&resolved, status.as_u16(), duration_ms, &response_headers, &body)
+            .insert_history(
+                &resolved,
+                status.as_u16(),
+                duration_ms,
+                &response_headers,
+                &body,
+            )
             .await?;
 
         Ok(ApiResponse {
@@ -145,7 +156,10 @@ impl ApiClientService {
         self.get_saved_request(&id).await
     }
 
-    pub async fn list_saved_requests(&self, workspace_id: String) -> AppResult<Vec<ApiSavedRequest>> {
+    pub async fn list_saved_requests(
+        &self,
+        workspace_id: String,
+    ) -> AppResult<Vec<ApiSavedRequest>> {
         validate_workspace_id(&workspace_id)?;
 
         let items = sqlx::query_as::<_, ApiSavedRequest>(
@@ -235,7 +249,10 @@ fn build_url(raw_url: &str, query: &[KeyValue]) -> AppResult<Url> {
 
     {
         let mut pairs = url.query_pairs_mut();
-        for item in query.iter().filter(|item| item.enabled && !item.key.is_empty()) {
+        for item in query
+            .iter()
+            .filter(|item| item.enabled && !item.key.is_empty())
+        {
             pairs.append_pair(&item.key, &item.value);
         }
     }
@@ -274,7 +291,10 @@ fn validate_workspace_id(workspace_id: &str) -> AppResult<()> {
     Ok(())
 }
 
-fn resolve_input(mut input: ApiRequestInput, environment: &[KeyValue]) -> AppResult<ApiRequestInput> {
+fn resolve_input(
+    mut input: ApiRequestInput,
+    environment: &[KeyValue],
+) -> AppResult<ApiRequestInput> {
     input.url = resolve_template(&input.url, environment)?;
     input.headers = resolve_key_values(&input.headers, environment)?;
     input.query = resolve_key_values(&input.query, environment)?;
@@ -301,7 +321,10 @@ fn resolve_key_values(items: &[KeyValue], environment: &[KeyValue]) -> AppResult
 
 fn resolve_template(value: &str, environment: &[KeyValue]) -> AppResult<String> {
     let mut output = value.to_string();
-    for variable in environment.iter().filter(|item| item.enabled && !item.key.trim().is_empty()) {
+    for variable in environment
+        .iter()
+        .filter(|item| item.enabled && !item.key.trim().is_empty())
+    {
         let token = format!("{{{{{}}}}}", variable.key.trim());
         output = output.replace(&token, &variable.value);
     }

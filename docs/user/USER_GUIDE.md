@@ -11,6 +11,16 @@ Unfour Workspace opens into a single workspace surface:
 - API client, SSH terminal, and database panels in the center
 - Local-first storage by default
 
+## Current Progress
+
+The app is currently an MVP workbench:
+
+- The workspace shell is usable.
+- API debugging is the most complete tool today.
+- SQLite database workflows have a first usable version.
+- SSH is still a preview screen while the real session engine is being built.
+- AI calls and cloud sync are not visible product features yet; the codebase only reserves their future integration points.
+
 ## API Client
 
 1. Select a workspace.
@@ -32,7 +42,50 @@ The SSH screen is present as a preview. Real connection support is planned for t
 
 ## Database
 
-The database screen is present as a preview. PostgreSQL, MySQL/MariaDB, and SQLite are planned for the database MVP.
+The database screen can save workspace-scoped database connections.
+
+1. Open `Database`.
+2. Click `+` to create a connection.
+3. Choose `SQLite`.
+4. Enter a local SQLite file path.
+5. Click `Save`.
+6. Select the saved connection and click `Test`.
+7. Review tables and columns in `Schema`.
+8. Write SQL in `SQL Editor`.
+9. Click `Run`.
+10. Review result rows, affected rows, and duration.
+
+PostgreSQL and MySQL/MariaDB connection metadata can be prepared, but live credential-backed connections are still reserved for the next implementation phase.
+
+## Code Architecture Overview
+
+This section explains the code layout in human terms. It is here so a reader can understand how the app is assembled without reading the engineering design docs first.
+
+Unfour has two halves:
+
+- The desktop window and interface are written with React and TypeScript.
+- The secure local capabilities are written in Rust inside Tauri.
+
+The frontend is responsible for what you see and edit:
+
+- `src/App.tsx` builds the main workspace window, the left resource area, the tabs, and the API/SSH/Database panels.
+- `src/lib/tauri.ts` is the bridge used by React to call Rust commands. It also contains browser-only mocks so the interface can run during frontend development.
+- `src/store/workspace-store.ts` keeps temporary UI state such as the active workspace, active tab, and sidebar state.
+- `src/components/*` contains reusable interface pieces such as terminal preview and basic controls.
+
+The Rust backend is responsible for actions that should not live only in the browser:
+
+- `src-tauri/src/lib.rs` starts the Tauri app and registers all commands.
+- `src-tauri/src/commands.rs` exposes thin Tauri commands.
+- `src-tauri/src/command_bus.rs` routes commands to the correct service. This is the same path future AI, CLI, or sync automation should use.
+- `src-tauri/src/local_db.rs` opens and migrates the local SQLite database.
+- `src-tauri/src/services/workspace.rs` handles workspace data.
+- `src-tauri/src/services/api_client.rs` sends HTTP requests and stores API history/templates.
+- `src-tauri/src/services/database.rs` stores database connections and currently runs SQLite test/schema/query actions.
+- `src-tauri/src/services/ssh.rs` is the reserved boundary for real SSH sessions.
+- `src-tauri/src/services/secret_store.rs` is the reserved boundary for OS keychain or Stronghold credentials.
+
+The important idea is that API, SSH, and Database are not separate apps. They share the same Workspace, tabs, local database, audit log, credential boundary, and future sync model.
 
 ## Data And Privacy
 

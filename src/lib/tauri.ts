@@ -4,9 +4,18 @@ import type {
   ApiRequestInput,
   ApiResponse,
   ApiSavedRequest,
+  DatabaseBrowseInput,
+  DatabaseBrowseResult,
+  DatabaseConnection,
+  DatabaseConnectionInput,
+  DatabaseQueryInput,
+  DatabaseQueryResult,
+  DatabaseSchema,
+  DatabaseTestResult,
   SystemHealth,
   Workspace,
   WorkspaceEnvironment,
+  WorkspaceLayout,
   WorkspaceState,
 } from "../types";
 
@@ -36,6 +45,7 @@ const mockState: WorkspaceState = {
 
 let mockHistory: ApiHistoryItem[] = [];
 let mockSavedRequests: ApiSavedRequest[] = [];
+let mockDatabaseConnections: DatabaseConnection[] = [];
 let mockEnvironment: WorkspaceEnvironment = {
   workspaceId: mockWorkspace.id,
   variables: [
@@ -44,6 +54,7 @@ let mockEnvironment: WorkspaceEnvironment = {
   ],
   updatedAt: new Date().toISOString(),
 };
+let mockLayouts: Record<string, WorkspaceLayout> = {};
 
 function isTauriRuntime() {
   return typeof window !== "undefined" && Boolean(window.__TAURI_INTERNALS__);
@@ -129,6 +140,22 @@ async function mockInvoke<T>(
       updatedAt: new Date().toISOString(),
     };
     return mockEnvironment as T;
+  }
+
+  if (command === "workspace_layout_get") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    return getMockLayout(workspaceId) as T;
+  }
+
+  if (command === "workspace_layout_update") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    const layout = args?.layout as WorkspaceLayout;
+    mockLayouts[workspaceId] = {
+      ...layout,
+      workspaceId,
+      updatedAt: new Date().toISOString(),
+    };
+    return mockLayouts[workspaceId] as T;
   }
 
   if (command === "api_history_list") {
@@ -217,6 +244,134 @@ async function mockInvoke<T>(
     return result as T;
   }
 
+  if (command === "database_connections_list") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    return mockDatabaseConnections.filter((item) => item.workspaceId === workspaceId) as T;
+  }
+
+  if (command === "database_connection_save") {
+    const input = args?.input as DatabaseConnectionInput;
+    const now = new Date().toISOString();
+    const existingIndex = input.id
+      ? mockDatabaseConnections.findIndex((item) => item.id === input.id)
+      : -1;
+    const connection: DatabaseConnection = {
+      id: input.id || crypto.randomUUID(),
+      workspaceId: input.workspaceId,
+      name: input.name,
+      driver: input.driver,
+      host: input.host ?? null,
+      port: input.port ?? null,
+      database: input.database ?? null,
+      username: input.username ?? null,
+      sqlitePath: input.sqlitePath ?? null,
+      credentialRef: input.credentialRef ?? null,
+      createdAt:
+        existingIndex >= 0 ? mockDatabaseConnections[existingIndex].createdAt : now,
+      updatedAt: now,
+      deletedAt: null,
+      revision: existingIndex >= 0 ? mockDatabaseConnections[existingIndex].revision + 1 : 1,
+      syncStatus: existingIndex >= 0 ? "pending" : "local",
+      remoteId: null,
+    };
+    if (existingIndex >= 0) {
+      mockDatabaseConnections[existingIndex] = connection;
+    } else {
+      mockDatabaseConnections = [connection, ...mockDatabaseConnections];
+    }
+    return connection as T;
+  }
+
+  if (command === "database_connection_delete") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    const connectionId = String(args?.connectionId ?? "");
+    mockDatabaseConnections = mockDatabaseConnections.filter(
+      (item) => !(item.workspaceId === workspaceId && item.id === connectionId),
+    );
+    return mockDatabaseConnections.filter((item) => item.workspaceId === workspaceId) as T;
+  }
+
+  if (command === "database_connection_test") {
+    const connectionId = String(args?.connectionId ?? "");
+    const connection = mockDatabaseConnections.find((item) => item.id === connectionId);
+    return ({
+      ok: connection?.driver === "sqlite",
+      message:
+        connection?.driver === "sqlite"
+          ? "SQLite connection OK"
+          : "Live PostgreSQL/MySQL connections are reserved for the next phase.",
+      serverVersion: connection?.driver === "sqlite" ? "mock-sqlite-3.x" : null,
+    } satisfies DatabaseTestResult) as T;
+  }
+
+  if (command === "database_schema_get") {
+    const connectionId = String(args?.connectionId ?? "");
+    return ({
+      connectionId,
+      tables: [
+        {
+          name: "api_history",
+          kind: "table",
+          columns: [
+            { name: "id", dataType: "TEXT", nullable: false, primaryKey: true },
+            { name: "method", dataType: "TEXT", nullable: false, primaryKey: false },
+            { name: "status", dataType: "INTEGER", nullable: true, primaryKey: false },
+          ],
+        },
+        {
+          name: "workspaces",
+          kind: "table",
+          columns: [
+            { name: "id", dataType: "TEXT", nullable: false, primaryKey: true },
+            { name: "name", dataType: "TEXT", nullable: false, primaryKey: false },
+          ],
+        },
+      ],
+    } satisfies DatabaseSchema) as T;
+  }
+
+  if (command === "database_query_execute") {
+    const input = args?.input as DatabaseQueryInput;
+    const isSelect = input.sql.trim().toLowerCase().startsWith("select");
+    return ({
+      columns: isSelect
+        ? [
+            { name: "id", dataType: "TEXT" },
+            { name: "name", dataType: "TEXT" },
+            { name: "sync_status", dataType: "TEXT" },
+          ]
+        : [],
+      rows: isSelect
+        ? [
+            ["mock-workspace", "Default Workspace", "local"],
+            ["mock-api", "API Client", "local"],
+          ]
+        : [],
+      affectedRows: isSelect ? 0 : 1,
+      durationMs: 7,
+    } satisfies DatabaseQueryResult) as T;
+  }
+
+  if (command === "database_table_browse") {
+    const input = args?.input as DatabaseBrowseInput;
+    return ({
+      sql: `SELECT * FROM "${input.tableName.split('"').join('""')}" LIMIT ${input.limit ?? 100}`,
+      result: {
+        columns: [
+          { name: "id", dataType: "TEXT" },
+          { name: "name", dataType: "TEXT" },
+          { name: "sync_status", dataType: "TEXT" },
+        ],
+        rows: [
+          ["mock-workspace", "Default Workspace", "local"],
+          ["mock-api", "API Client", "local"],
+        ].slice(0, input.limit ?? 100),
+        affectedRows: 0,
+        durationMs: 5,
+      },
+    } satisfies DatabaseBrowseResult) as T;
+  }
+
   throw new Error(`Mock command is not implemented: ${command}`);
 }
 
@@ -258,6 +413,17 @@ export function updateWorkspaceEnvironment(
   });
 }
 
+export function getWorkspaceLayout(workspaceId: string) {
+  return call<WorkspaceLayout>("workspace_layout_get", { workspaceId });
+}
+
+export function updateWorkspaceLayout(workspaceId: string, layout: WorkspaceLayout) {
+  return call<WorkspaceLayout>("workspace_layout_update", {
+    workspaceId,
+    layout,
+  });
+}
+
 export function sendApiRequest(input: ApiRequestInput) {
   return call<ApiResponse>("api_send_request", { input });
 }
@@ -272,6 +438,43 @@ export function listApiHistory(workspaceId: string) {
 
 export function listSavedApiRequests(workspaceId: string) {
   return call<ApiSavedRequest[]>("api_saved_requests", { workspaceId });
+}
+
+export function listDatabaseConnections(workspaceId: string) {
+  return call<DatabaseConnection[]>("database_connections_list", { workspaceId });
+}
+
+export function saveDatabaseConnection(input: DatabaseConnectionInput) {
+  return call<DatabaseConnection>("database_connection_save", { input });
+}
+
+export function deleteDatabaseConnection(workspaceId: string, connectionId: string) {
+  return call<DatabaseConnection[]>("database_connection_delete", {
+    workspaceId,
+    connectionId,
+  });
+}
+
+export function testDatabaseConnection(workspaceId: string, connectionId: string) {
+  return call<DatabaseTestResult>("database_connection_test", {
+    workspaceId,
+    connectionId,
+  });
+}
+
+export function getDatabaseSchema(workspaceId: string, connectionId: string) {
+  return call<DatabaseSchema>("database_schema_get", {
+    workspaceId,
+    connectionId,
+  });
+}
+
+export function executeDatabaseQuery(input: DatabaseQueryInput) {
+  return call<DatabaseQueryResult>("database_query_execute", { input });
+}
+
+export function browseDatabaseTable(input: DatabaseBrowseInput) {
+  return call<DatabaseBrowseResult>("database_table_browse", { input });
 }
 
 function resolveInput(input: ApiRequestInput, variables: WorkspaceEnvironment["variables"]) {
@@ -299,4 +502,23 @@ function resolveTemplate(value: string, variables: WorkspaceEnvironment["variabl
       (current, item) => current.split(`{{${item.key}}}`).join(item.value),
       value,
     );
+}
+
+function getMockLayout(workspaceId: string): WorkspaceLayout {
+  mockLayouts[workspaceId] ??= {
+    workspaceId,
+    sidebarCollapsed: false,
+    activeTabId: "api-main",
+    tabs: [
+      { id: "api-main", title: "API Client", kind: "api" },
+      { id: "ssh-main", title: "SSH Terminal", kind: "ssh" },
+      { id: "database-main", title: "Database", kind: "database" },
+    ],
+    selectedApiRequestId: null,
+    selectedDatabaseConnectionId: null,
+    selectedSshConnectionId: null,
+    updatedAt: new Date().toISOString(),
+  };
+
+  return mockLayouts[workspaceId];
 }

@@ -31,6 +31,11 @@ impl LocalDb {
         &self.pool
     }
 
+    #[cfg(test)]
+    pub fn from_pool(pool: SqlitePool) -> Self {
+        Self { pool }
+    }
+
     pub async fn migrate(&self) -> AppResult<()> {
         for statement in MIGRATIONS {
             sqlx::query(statement).execute(&self.pool).await?;

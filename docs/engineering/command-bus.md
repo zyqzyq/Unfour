@@ -28,6 +28,12 @@ Cloud Workflow Adapter
 - `api_history_list`
 - `api_request_save`
 - `api_saved_requests`
+- `database_connections_list`
+- `database_connection_save`
+- `database_connection_delete`
+- `database_connection_test`
+- `database_schema_get`
+- `database_query_execute`
 - `system_health`
 
 ## Rules

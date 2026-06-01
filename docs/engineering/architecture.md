@@ -28,10 +28,17 @@ The same `CommandBus` shape is reserved for later AI, MCP, CLI, workflow runner,
 - `local_db`: SQLite connection and migrations.
 - `audit_log`: append-only action trail with redacted details.
 - `ssh`: reserved boundary for `russh` sessions and event streaming. The dependency is available behind the `ssh-native` feature and uses the `ring` backend to avoid NASM on Windows.
-- `database`: reserved boundary for `sqlx` connection pools and SQL execution.
+- `database`: `sqlx`-backed database connection metadata, SQLite connection tests, SQLite schema browsing, and SQLite SQL execution. PostgreSQL/MySQL live connections remain behind the credential boundary for the next phase.
 - `secret_store`: reserved boundary for OS keychain/Stronghold credential refs.
 - `ai_reserved`: command/capability types for future AI invocation.
 - `sync_reserved`: local-first sync metadata policy.
+
+## Current Progress
+
+- Foundation and API MVP are implemented enough to validate the Workspace, Command Bus, local SQLite, history, saved request, and environment variable model.
+- Database MVP has moved beyond a preview: SQLite connection metadata, connection testing, schema browsing, and SQL execution are implemented. PostgreSQL/MySQL live connections are still reserved until credential storage is implemented.
+- SSH is still a preview surface with `xterm` rendering and a reserved Rust service boundary. Real auth, PTY, streaming, resize, and session cleanup remain.
+- AI and cloud sync are intentionally not user-facing yet. The current work only preserves their data fields and command boundaries.
 
 ## Frontend Shape
 

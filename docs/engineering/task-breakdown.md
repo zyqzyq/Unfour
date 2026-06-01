@@ -10,13 +10,17 @@
 - DONE TASK-CORE-006: Reserve secret store boundary.
 - DONE TASK-CORE-007: Add audit log and redaction rules.
 - TODO TASK-CORE-008: Add automated tests for WorkspaceService and ApiClientService.
+- DONE TASK-CORE-009: Add automated tests for DatabaseService SQLite flows.
+- TODO TASK-CORE-010: Add CI-friendly build/check scripts and document local permission requirements.
 
 ## P0: Workspace
 
 - DONE TASK-WORKSPACE-001: Create default workspace on first launch.
 - DONE TASK-WORKSPACE-002: List, create, switch, rename, and soft-delete workspaces.
-- PARTIAL TASK-WORKSPACE-003: Persist environment variables. Layout persistence remains.
-- TODO TASK-WORKSPACE-004: Restore tabs per workspace.
+- DONE TASK-WORKSPACE-003: Persist environment variables and workspace layout JSON.
+- DONE TASK-WORKSPACE-004: Restore tabs per workspace.
+- PARTIAL TASK-WORKSPACE-005: Persist sidebar state, active tab, and selected resource slots in `layout_json`. Active resource wiring remains for future resource-tree entries.
+- TODO TASK-WORKSPACE-006: Add workspace-scoped resource tree entries for API collections and database/SSH connections.
 
 ## P0: API MVP
 
@@ -25,28 +29,38 @@
 - DONE TASK-API-003: Store request history by workspace.
 - DONE TASK-API-004: Save request templates by workspace.
 - DONE TASK-API-005: Add workspace environments and variable resolution.
-- TASK-API-006: Add import/export for collections without secrets.
+- TODO TASK-API-006: Add import/export for collections without secrets.
+- TODO TASK-API-007: Add collection folders and request duplication.
+- TODO TASK-API-008: Add response headers, cookies, timing, and size panels.
+- TODO TASK-API-009: Add replay from history into an editable request tab.
 
 ## P1: SSH MVP
 
-- TASK-SSH-001: Add `russh` dependency compatible with the selected Rust toolchain.
-- TASK-SSH-002: Password auth returns `session_id`.
-- TASK-SSH-003: Private-key auth using local key path and passphrase ref.
-- TASK-SSH-004: PTY allocation, xterm input, resize, and event output.
-- TASK-SSH-005: Session close and log export with redaction.
+- DONE TASK-SSH-001: Add `russh` dependency compatible with the selected Rust toolchain.
+- TODO TASK-SSH-002: Add SSH connection metadata CRUD with `credential_ref`.
+- TODO TASK-SSH-003: Password auth returns `session_id`.
+- TODO TASK-SSH-004: Private-key auth using local key path and passphrase ref.
+- TODO TASK-SSH-005: PTY allocation, xterm input, resize, and event output.
+- TODO TASK-SSH-006: Session close and log export with redaction.
+- TODO TASK-SSH-007: Add multi-session tab lifecycle and backend cleanup on tab close.
 
 ## P1: Database MVP
 
-- TASK-DB-001: Connection metadata CRUD with `credential_ref`.
-- TASK-DB-002: SQLite connection test.
-- TASK-DB-003: PostgreSQL/MySQL connection tests.
-- TASK-DB-004: Schema tree for tables and columns.
-- TASK-DB-005: SQL editor execution and paginated results.
-- TASK-DB-006: Read-only table data view, then controlled edit support.
+- DONE TASK-DB-001: Connection metadata CRUD with `credential_ref`.
+- DONE TASK-DB-002: SQLite connection test.
+- TODO TASK-DB-003: PostgreSQL/MySQL connection tests.
+- PARTIAL TASK-DB-004: Schema tree for tables and columns. SQLite is implemented; PostgreSQL/MySQL remain.
+- PARTIAL TASK-DB-005: SQL editor execution and paginated results. SQLite is implemented; PostgreSQL/MySQL remain.
+- TODO TASK-DB-006: Read-only table data view, then controlled edit support.
+- DONE TASK-DB-007: Add safe table browse action from schema tree.
+- TODO TASK-DB-008: Add frontend pagination, copy/export, and large result virtualization.
+- TODO TASK-DB-009: Add mutation confirmation policy for destructive SQL and future AI calls.
 
 ## P2: Reserved Extensions
 
-- TASK-AI-001: Expose Command Bus through an AI adapter.
-- TASK-SYNC-001: Add cloud account model and workspace sync queue.
-- TASK-SYNC-002: Conflict UI that keeps both versions.
-- TASK-PLUGIN-001: Define extension points for future tools.
+- TODO TASK-SECRET-001: Implement OS keychain or Stronghold-backed `SecretStore`.
+- TODO TASK-AI-001: Expose Command Bus through an AI adapter.
+- TODO TASK-AI-002: Add capability metadata, confirmation policy, and dry-run summaries for risky actions.
+- TODO TASK-SYNC-001: Add cloud account model and workspace sync queue.
+- TODO TASK-SYNC-002: Conflict UI that keeps both versions.
+- TODO TASK-PLUGIN-001: Define extension points for future tools.

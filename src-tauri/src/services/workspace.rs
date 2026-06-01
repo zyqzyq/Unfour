@@ -1,7 +1,10 @@
 use crate::app_error::{AppError, AppResult};
 use crate::local_db::LocalDb;
-use crate::models::{KeyValue, Workspace, WorkspaceEnvironment, WorkspaceState};
+use crate::models::{
+    KeyValue, Workspace, WorkspaceEnvironment, WorkspaceLayout, WorkspaceLayoutTab, WorkspaceState,
+};
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -198,15 +201,14 @@ impl WorkspaceService {
         self.get(&workspace_id).await?;
         let now = Utc::now().to_rfc3339();
 
-        sqlx::query(
-            "UPDATE workspaces SET last_opened_at = ?1, updated_at = ?1 WHERE id = ?2",
-        )
-        .bind(&now)
-        .bind(&workspace_id)
-        .execute(self.db.pool())
-        .await?;
+        sqlx::query("UPDATE workspaces SET last_opened_at = ?1, updated_at = ?1 WHERE id = ?2")
+            .bind(&now)
+            .bind(&workspace_id)
+            .execute(self.db.pool())
+            .await?;
 
-        self.write_setting("active_workspace_id", &workspace_id).await?;
+        self.write_setting("active_workspace_id", &workspace_id)
+            .await?;
         self.state().await
     }
 
@@ -260,6 +262,49 @@ impl WorkspaceService {
         self.environment(workspace_id).await
     }
 
+    pub async fn layout(&self, workspace_id: String) -> AppResult<WorkspaceLayout> {
+        self.get(&workspace_id).await?;
+
+        let row: (String, String) = sqlx::query_as(
+            r#"
+            SELECT layout_json, updated_at
+            FROM workspace_settings
+            WHERE workspace_id = ?1 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(&workspace_id)
+        .fetch_one(self.db.pool())
+        .await?;
+
+        Ok(parse_layout(&workspace_id, &row.0, &row.1))
+    }
+
+    pub async fn update_layout(
+        &self,
+        workspace_id: String,
+        layout: WorkspaceLayout,
+    ) -> AppResult<WorkspaceLayout> {
+        self.get(&workspace_id).await?;
+        let stored = StoredWorkspaceLayout::try_from_layout(&workspace_id, layout)?;
+        let now = Utc::now().to_rfc3339();
+        let layout_json = serde_json::to_string(&stored)?;
+
+        sqlx::query(
+            r#"
+            UPDATE workspace_settings
+            SET layout_json = ?1, updated_at = ?2, revision = revision + 1, sync_status = 'pending'
+            WHERE workspace_id = ?3 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(layout_json)
+        .bind(&now)
+        .bind(&workspace_id)
+        .execute(self.db.pool())
+        .await?;
+
+        self.layout(workspace_id).await
+    }
+
     async fn get(&self, workspace_id: &str) -> AppResult<Workspace> {
         let workspace = sqlx::query_as::<_, Workspace>(
             r#"
@@ -288,7 +333,8 @@ impl WorkspaceService {
         let fallback = workspaces
             .first()
             .ok_or_else(|| AppError::NotFound("workspace".to_string()))?;
-        self.write_setting("active_workspace_id", &fallback.id).await?;
+        self.write_setting("active_workspace_id", &fallback.id)
+            .await?;
         Ok(fallback.id.clone())
     }
 
@@ -353,4 +399,226 @@ fn validate_environment(variables: &[KeyValue]) -> AppResult<()> {
     }
 
     Ok(())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StoredWorkspaceLayout {
+    sidebar_collapsed: bool,
+    active_tab_id: String,
+    tabs: Vec<WorkspaceLayoutTab>,
+    selected_api_request_id: Option<String>,
+    selected_database_connection_id: Option<String>,
+    selected_ssh_connection_id: Option<String>,
+}
+
+impl StoredWorkspaceLayout {
+    fn try_from_layout(workspace_id: &str, layout: WorkspaceLayout) -> AppResult<Self> {
+        if layout.workspace_id != workspace_id {
+            return Err(AppError::Validation(
+                "layout workspace_id does not match command workspace_id".to_string(),
+            ));
+        }
+
+        validate_layout_tabs(&layout.active_tab_id, &layout.tabs)?;
+
+        Ok(Self {
+            sidebar_collapsed: layout.sidebar_collapsed,
+            active_tab_id: layout.active_tab_id,
+            tabs: layout.tabs,
+            selected_api_request_id: non_empty_optional(layout.selected_api_request_id),
+            selected_database_connection_id: non_empty_optional(
+                layout.selected_database_connection_id,
+            ),
+            selected_ssh_connection_id: non_empty_optional(layout.selected_ssh_connection_id),
+        })
+    }
+}
+
+fn parse_layout(workspace_id: &str, value: &str, updated_at: &str) -> WorkspaceLayout {
+    let stored = serde_json::from_str::<StoredWorkspaceLayout>(value).unwrap_or_else(|_| {
+        StoredWorkspaceLayout {
+            sidebar_collapsed: false,
+            active_tab_id: "api-main".to_string(),
+            tabs: default_layout_tabs(),
+            selected_api_request_id: None,
+            selected_database_connection_id: None,
+            selected_ssh_connection_id: None,
+        }
+    });
+
+    let mut tabs = stored.tabs;
+    if validate_layout_tabs(&stored.active_tab_id, &tabs).is_err() {
+        tabs = default_layout_tabs();
+    }
+    let active_tab_id = if tabs.iter().any(|tab| tab.id == stored.active_tab_id) {
+        stored.active_tab_id
+    } else {
+        "api-main".to_string()
+    };
+
+    WorkspaceLayout {
+        workspace_id: workspace_id.to_string(),
+        sidebar_collapsed: stored.sidebar_collapsed,
+        active_tab_id,
+        tabs,
+        selected_api_request_id: stored.selected_api_request_id,
+        selected_database_connection_id: stored.selected_database_connection_id,
+        selected_ssh_connection_id: stored.selected_ssh_connection_id,
+        updated_at: updated_at.to_string(),
+    }
+}
+
+fn validate_layout_tabs(active_tab_id: &str, tabs: &[WorkspaceLayoutTab]) -> AppResult<()> {
+    if tabs.is_empty() {
+        return Err(AppError::Validation(
+            "layout must include at least one tab".to_string(),
+        ));
+    }
+    if active_tab_id.trim().is_empty() {
+        return Err(AppError::Validation(
+            "layout active_tab_id cannot be empty".to_string(),
+        ));
+    }
+
+    for tab in tabs {
+        if tab.id.trim().is_empty() || tab.title.trim().is_empty() {
+            return Err(AppError::Validation(
+                "layout tabs must have non-empty id and title".to_string(),
+            ));
+        }
+        if !matches!(tab.kind.as_str(), "api" | "ssh" | "database") {
+            return Err(AppError::Validation(format!(
+                "unsupported layout tab kind: {}",
+                tab.kind
+            )));
+        }
+    }
+
+    if !tabs.iter().any(|tab| tab.id == active_tab_id) {
+        return Err(AppError::Validation(
+            "layout active_tab_id must reference an open tab".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn default_layout_tabs() -> Vec<WorkspaceLayoutTab> {
+    vec![
+        WorkspaceLayoutTab {
+            id: "api-main".to_string(),
+            title: "API Client".to_string(),
+            kind: "api".to_string(),
+        },
+        WorkspaceLayoutTab {
+            id: "ssh-main".to_string(),
+            title: "SSH Terminal".to_string(),
+            kind: "ssh".to_string(),
+        },
+        WorkspaceLayoutTab {
+            id: "database-main".to_string(),
+            title: "Database".to_string(),
+            kind: "database".to_string(),
+        },
+    ]
+}
+
+fn non_empty_optional(value: Option<String>) -> Option<String> {
+    value.and_then(|item| {
+        let trimmed = item.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+
+    async fn service() -> WorkspaceService {
+        let options = SqliteConnectOptions::new()
+            .filename(":memory:")
+            .create_if_missing(true)
+            .foreign_keys(true);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .expect("connect in-memory sqlite");
+        let db = LocalDb::from_pool(pool);
+        db.migrate().await.expect("run migrations");
+        let service = WorkspaceService::new(db);
+        service
+            .ensure_default_workspace()
+            .await
+            .expect("ensure default workspace");
+        service
+    }
+
+    #[tokio::test]
+    async fn layout_returns_defaults_for_new_workspace() {
+        let service = service().await;
+        let state = service.state().await.expect("workspace state");
+
+        let layout = service
+            .layout(state.active_workspace_id)
+            .await
+            .expect("workspace layout");
+
+        assert_eq!(layout.active_tab_id, "api-main");
+        assert!(!layout.sidebar_collapsed);
+        assert_eq!(layout.tabs.len(), 3);
+        assert!(layout
+            .tabs
+            .iter()
+            .any(|tab| tab.id == "database-main" && tab.kind == "database"));
+    }
+
+    #[tokio::test]
+    async fn layout_update_persists_valid_layout() {
+        let service = service().await;
+        let state = service.state().await.expect("workspace state");
+        let workspace_id = state.active_workspace_id;
+        let mut layout = service
+            .layout(workspace_id.clone())
+            .await
+            .expect("workspace layout");
+        layout.sidebar_collapsed = true;
+        layout.active_tab_id = "database-main".to_string();
+        layout.selected_database_connection_id = Some("db-1".to_string());
+
+        let updated = service
+            .update_layout(workspace_id.clone(), layout)
+            .await
+            .expect("update layout");
+        let loaded = service.layout(workspace_id).await.expect("reload layout");
+
+        assert!(updated.sidebar_collapsed);
+        assert_eq!(loaded.active_tab_id, "database-main");
+        assert_eq!(
+            loaded.selected_database_connection_id.as_deref(),
+            Some("db-1")
+        );
+    }
+
+    #[tokio::test]
+    async fn layout_update_rejects_active_tab_outside_open_tabs() {
+        let service = service().await;
+        let state = service.state().await.expect("workspace state");
+        let workspace_id = state.active_workspace_id;
+        let mut layout = service
+            .layout(workspace_id.clone())
+            .await
+            .expect("workspace layout");
+        layout.active_tab_id = "missing-tab".to_string();
+
+        let result = service.update_layout(workspace_id, layout).await;
+
+        assert!(matches!(result, Err(AppError::Validation(_))));
+    }
 }

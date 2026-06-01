@@ -11,6 +11,7 @@ Unfour Workspace is a Tauri 2 desktop app for unified operations and development
 - SQLite migrations for workspaces, API requests/history, connections, and audit events.
 - Workspace environment variables with `{{variable}}` resolution for API requests.
 - Saved API requests can be loaded back into the editor.
+- Database connection metadata, SQLite connection test, SQLite schema browsing, and SQLite SQL execution.
 - AI and cloud sync extension points reserved.
 
 ## Commands
@@ -34,5 +35,6 @@ The project currently expects a modern stable Rust toolchain. This workspace was
 
 - `AGENTS.md`: rules for coding agents.
 - `docs/engineering`: architecture and implementation notes.
+- `docs/engineering/progress.md`: current progress and next work slices.
 - `docs/decisions`: ADRs.
 - `docs/user/USER_GUIDE.md`: user-facing guide.

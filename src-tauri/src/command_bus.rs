@@ -3,8 +3,10 @@ use crate::app_error::AppResult;
 use crate::audit_log::AuditLogService;
 use crate::local_db::LocalDb;
 use crate::models::{
-    ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest, SystemHealth, Workspace,
-    WorkspaceEnvironment, WorkspaceState,
+    ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest, DatabaseBrowseInput,
+    DatabaseBrowseResult, DatabaseConnection, DatabaseConnectionInput, DatabaseQueryInput,
+    DatabaseQueryResult, DatabaseSchema, DatabaseTestResult, SystemHealth, Workspace,
+    WorkspaceEnvironment, WorkspaceLayout, WorkspaceState,
 };
 use crate::services::api_client::ApiClientService;
 use crate::services::database::DatabaseService;
@@ -37,7 +39,7 @@ impl CommandBus {
         Ok(Self {
             api_client: ApiClientService::new(db.clone()),
             audit_log,
-            database: DatabaseService::new(),
+            database: DatabaseService::new(db.clone()),
             secret_store,
             ssh: SshService::new(),
             workspace,
@@ -71,7 +73,11 @@ impl CommandBus {
         Ok(workspace)
     }
 
-    pub async fn rename_workspace(&self, workspace_id: String, name: String) -> AppResult<Workspace> {
+    pub async fn rename_workspace(
+        &self,
+        workspace_id: String,
+        name: String,
+    ) -> AppResult<Workspace> {
         let workspace = self.workspace.rename(workspace_id, name).await?;
         self.audit_log
             .record(
@@ -128,9 +134,43 @@ impl CommandBus {
         Ok(environment)
     }
 
+    pub async fn workspace_layout(&self, workspace_id: String) -> AppResult<WorkspaceLayout> {
+        self.workspace.layout(workspace_id).await
+    }
+
+    pub async fn workspace_layout_update(
+        &self,
+        workspace_id: String,
+        layout: WorkspaceLayout,
+    ) -> AppResult<WorkspaceLayout> {
+        let layout = self
+            .workspace
+            .update_layout(workspace_id.clone(), layout)
+            .await?;
+        self.audit_log
+            .record(
+                Some(&workspace_id),
+                "workspace.layout.update",
+                Some(&workspace_id),
+                serde_json::json!({
+                    "activeTabId": layout.active_tab_id,
+                    "tabCount": layout.tabs.len(),
+                    "sidebarCollapsed": layout.sidebar_collapsed
+                }),
+            )
+            .await?;
+        Ok(layout)
+    }
+
     pub async fn send_api_request(&self, input: ApiRequestInput) -> AppResult<ApiResponse> {
-        let environment = self.workspace.environment(input.workspace_id.clone()).await?;
-        let response = self.api_client.send(input.clone(), &environment.variables).await?;
+        let environment = self
+            .workspace
+            .environment(input.workspace_id.clone())
+            .await?;
+        let response = self
+            .api_client
+            .send(input.clone(), &environment.variables)
+            .await?;
         self.audit_log
             .record(
                 Some(&input.workspace_id),
@@ -172,6 +212,121 @@ impl CommandBus {
         workspace_id: String,
     ) -> AppResult<Vec<ApiSavedRequest>> {
         self.api_client.list_saved_requests(workspace_id).await
+    }
+
+    pub async fn list_database_connections(
+        &self,
+        workspace_id: String,
+    ) -> AppResult<Vec<DatabaseConnection>> {
+        self.database.list_connections(workspace_id).await
+    }
+
+    pub async fn save_database_connection(
+        &self,
+        input: DatabaseConnectionInput,
+    ) -> AppResult<DatabaseConnection> {
+        let connection = self.database.save_connection(input).await?;
+        self.audit_log
+            .record(
+                Some(&connection.workspace_id),
+                "database.connection.save",
+                Some(&connection.id),
+                serde_json::json!({
+                    "name": connection.name,
+                    "driver": connection.driver,
+                    "credentialRef": connection.credential_ref.is_some()
+                }),
+            )
+            .await?;
+        Ok(connection)
+    }
+
+    pub async fn delete_database_connection(
+        &self,
+        workspace_id: String,
+        connection_id: String,
+    ) -> AppResult<Vec<DatabaseConnection>> {
+        let connections = self
+            .database
+            .delete_connection(workspace_id.clone(), connection_id.clone())
+            .await?;
+        self.audit_log
+            .record(
+                Some(&workspace_id),
+                "database.connection.delete",
+                Some(&connection_id),
+                serde_json::json!({ "softDelete": true }),
+            )
+            .await?;
+        Ok(connections)
+    }
+
+    pub async fn test_database_connection(
+        &self,
+        workspace_id: String,
+        connection_id: String,
+    ) -> AppResult<DatabaseTestResult> {
+        let result = self
+            .database
+            .test_connection(workspace_id.clone(), connection_id.clone())
+            .await?;
+        self.audit_log
+            .record(
+                Some(&workspace_id),
+                "database.connection.test",
+                Some(&connection_id),
+                serde_json::json!({ "ok": result.ok }),
+            )
+            .await?;
+        Ok(result)
+    }
+
+    pub async fn database_schema(
+        &self,
+        workspace_id: String,
+        connection_id: String,
+    ) -> AppResult<DatabaseSchema> {
+        self.database.schema(workspace_id, connection_id).await
+    }
+
+    pub async fn execute_database_query(
+        &self,
+        input: DatabaseQueryInput,
+    ) -> AppResult<DatabaseQueryResult> {
+        let result = self.database.execute_query(input.clone()).await?;
+        self.audit_log
+            .record(
+                Some(&input.workspace_id),
+                "database.query.execute",
+                Some(&input.connection_id),
+                serde_json::json!({
+                    "columns": result.columns.len(),
+                    "rows": result.rows.len(),
+                    "affectedRows": result.affected_rows
+                }),
+            )
+            .await?;
+        Ok(result)
+    }
+
+    pub async fn browse_database_table(
+        &self,
+        input: DatabaseBrowseInput,
+    ) -> AppResult<DatabaseBrowseResult> {
+        let result = self.database.browse_table(input.clone()).await?;
+        self.audit_log
+            .record(
+                Some(&input.workspace_id),
+                "database.table.browse",
+                Some(&input.connection_id),
+                serde_json::json!({
+                    "table": input.table_name,
+                    "rows": result.result.rows.len(),
+                    "limit": input.limit.unwrap_or(100).clamp(1, 1_000)
+                }),
+            )
+            .await?;
+        Ok(result)
     }
 
     pub fn reserved_status(&self) -> serde_json::Value {

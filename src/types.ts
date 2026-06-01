@@ -83,6 +83,93 @@ export type ApiSavedRequest = {
   remoteId: string | null;
 };
 
+export type DatabaseConnectionInput = {
+  id?: string;
+  workspaceId: string;
+  name: string;
+  driver: "sqlite" | "postgres" | "mysql";
+  host?: string | null;
+  port?: number | null;
+  database?: string | null;
+  username?: string | null;
+  sqlitePath?: string | null;
+  credentialRef?: string | null;
+};
+
+export type DatabaseConnection = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  driver: "sqlite" | "postgres" | "mysql";
+  host: string | null;
+  port: number | null;
+  database: string | null;
+  username: string | null;
+  sqlitePath: string | null;
+  credentialRef: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  revision: number;
+  syncStatus: string;
+  remoteId: string | null;
+};
+
+export type DatabaseTestResult = {
+  ok: boolean;
+  message: string;
+  serverVersion: string | null;
+};
+
+export type DatabaseSchema = {
+  connectionId: string;
+  tables: DatabaseTable[];
+};
+
+export type DatabaseTable = {
+  name: string;
+  kind: string;
+  columns: DatabaseTableColumn[];
+};
+
+export type DatabaseTableColumn = {
+  name: string;
+  dataType: string;
+  nullable: boolean;
+  primaryKey: boolean;
+};
+
+export type DatabaseQueryInput = {
+  workspaceId: string;
+  connectionId: string;
+  sql: string;
+  limit?: number;
+};
+
+export type DatabaseBrowseInput = {
+  workspaceId: string;
+  connectionId: string;
+  tableName: string;
+  limit?: number;
+};
+
+export type DatabaseBrowseResult = {
+  sql: string;
+  result: DatabaseQueryResult;
+};
+
+export type DatabaseQueryResult = {
+  columns: DatabaseResultColumn[];
+  rows: Array<Array<string | null>>;
+  affectedRows: number;
+  durationMs: number;
+};
+
+export type DatabaseResultColumn = {
+  name: string;
+  dataType: string;
+};
+
 export type SystemHealth = {
   appName: string;
   storageReady: boolean;
@@ -95,4 +182,15 @@ export type WorkspaceTab = {
   id: string;
   title: string;
   kind: "api" | "ssh" | "database";
+};
+
+export type WorkspaceLayout = {
+  workspaceId: string;
+  sidebarCollapsed: boolean;
+  activeTabId: string;
+  tabs: WorkspaceTab[];
+  selectedApiRequestId: string | null;
+  selectedDatabaseConnectionId: string | null;
+  selectedSshConnectionId: string | null;
+  updatedAt: string;
 };

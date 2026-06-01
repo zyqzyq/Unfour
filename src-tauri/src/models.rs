@@ -33,6 +33,27 @@ pub struct WorkspaceEnvironment {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct WorkspaceLayout {
+    pub workspace_id: String,
+    pub sidebar_collapsed: bool,
+    pub active_tab_id: String,
+    pub tabs: Vec<WorkspaceLayoutTab>,
+    pub selected_api_request_id: Option<String>,
+    pub selected_database_connection_id: Option<String>,
+    pub selected_ssh_connection_id: Option<String>,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceLayoutTab {
+    pub id: String,
+    pub title: String,
+    pub kind: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct KeyValue {
     pub key: String,
     pub value: String,
@@ -100,6 +121,143 @@ pub struct ApiSavedRequest {
     pub revision: i64,
     pub sync_status: String,
     pub remote_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseConnectionInput {
+    pub id: Option<String>,
+    pub workspace_id: String,
+    pub name: String,
+    pub driver: String,
+    pub host: Option<String>,
+    pub port: Option<u16>,
+    pub database: Option<String>,
+    pub username: Option<String>,
+    pub sqlite_path: Option<String>,
+    pub credential_ref: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseConnection {
+    pub id: String,
+    pub workspace_id: String,
+    pub name: String,
+    pub driver: String,
+    pub host: Option<String>,
+    pub port: Option<u16>,
+    pub database: Option<String>,
+    pub username: Option<String>,
+    pub sqlite_path: Option<String>,
+    pub credential_ref: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: Option<String>,
+    pub revision: i64,
+    pub sync_status: String,
+    pub remote_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct StoredConnection {
+    pub id: String,
+    pub workspace_id: String,
+    pub kind: String,
+    pub name: String,
+    pub config_json: String,
+    pub credential_ref: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: Option<String>,
+    pub revision: i64,
+    pub sync_status: String,
+    pub remote_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseConnectionConfig {
+    pub driver: String,
+    pub host: Option<String>,
+    pub port: Option<u16>,
+    pub database: Option<String>,
+    pub username: Option<String>,
+    pub sqlite_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseTestResult {
+    pub ok: bool,
+    pub message: String,
+    pub server_version: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseSchema {
+    pub connection_id: String,
+    pub tables: Vec<DatabaseTable>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseTable {
+    pub name: String,
+    pub kind: String,
+    pub columns: Vec<DatabaseTableColumn>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseTableColumn {
+    pub name: String,
+    pub data_type: String,
+    pub nullable: bool,
+    pub primary_key: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseQueryInput {
+    pub workspace_id: String,
+    pub connection_id: String,
+    pub sql: String,
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseBrowseInput {
+    pub workspace_id: String,
+    pub connection_id: String,
+    pub table_name: String,
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseBrowseResult {
+    pub sql: String,
+    pub result: DatabaseQueryResult,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseQueryResult {
+    pub columns: Vec<DatabaseResultColumn>,
+    pub rows: Vec<Vec<Option<String>>>,
+    pub affected_rows: u64,
+    pub duration_ms: u128,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseResultColumn {
+    pub name: String,
+    pub data_type: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

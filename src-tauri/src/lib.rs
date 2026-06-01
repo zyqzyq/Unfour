@@ -39,12 +39,21 @@ pub fn run() {
             commands::workspace_list,
             commands::workspace_environment_get,
             commands::workspace_environment_update,
+            commands::workspace_layout_get,
+            commands::workspace_layout_update,
             commands::workspace_rename,
             commands::workspace_set_active,
             commands::api_history_list,
             commands::api_request_save,
             commands::api_saved_requests,
             commands::api_send_request,
+            commands::database_connection_delete,
+            commands::database_connection_save,
+            commands::database_connection_test,
+            commands::database_connections_list,
+            commands::database_query_execute,
+            commands::database_schema_get,
+            commands::database_table_browse,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Unfour Workspace");

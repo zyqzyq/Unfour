@@ -10,11 +10,15 @@
 - Workspace environments.
 - Engineering docs.
 
+Status: mostly implemented. Remaining foundation work is automated testing and workspace layout/tab restore.
+
 ## v0.2 API Client
 
 - Request collections and folders.
 - Response headers/cookies/timing panels.
 - Import/export without secrets.
+
+Status: request execution, history, saved requests, and environments are implemented. Collections/folders and richer response panels remain.
 
 ## v0.3 SSH
 
@@ -23,6 +27,8 @@
 - PTY resize and event streaming.
 - Session logs.
 
+Status: UI preview and backend boundary exist. Real session lifecycle is next.
+
 ## v0.4 Database
 
 - PostgreSQL/MySQL/SQLite connection management.
@@ -30,12 +36,16 @@
 - SQL execution.
 - Paginated result grids.
 
+Status: SQLite connection metadata, test, schema browsing, and SQL execution are implemented. PostgreSQL/MySQL live connections, pagination polish, and controlled editing remain.
+
 ## v0.5 Hardening
 
 - OS keychain/Stronghold.
 - Capability review.
 - Cross-platform packaging.
 - User guide with screenshots.
+
+Status: secret/sync/AI boundaries are reserved. Actual credential provider, packaging, and screenshots remain.
 
 ## Later
 
