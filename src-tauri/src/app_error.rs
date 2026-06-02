@@ -23,6 +23,11 @@ pub enum AppError {
     Unsupported(String),
     #[error("validation error: {0}")]
     Validation(String),
+    #[error("confirmation required: {message}")]
+    ConfirmationRequired {
+        message: String,
+        details: serde_json::Value,
+    },
 }
 
 impl AppError {
@@ -37,6 +42,7 @@ impl AppError {
             AppError::Tauri(_) => "TAURI_ERROR",
             AppError::Unsupported(_) => "UNSUPPORTED_OPERATION",
             AppError::Validation(_) => "VALIDATION_ERROR",
+            AppError::ConfirmationRequired { .. } => "CONFIRMATION_REQUIRED",
         }
     }
 }
@@ -46,9 +52,12 @@ impl serde::Serialize for AppError {
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("AppError", 2)?;
+        let mut state = serializer.serialize_struct("AppError", 3)?;
         state.serialize_field("code", self.code())?;
         state.serialize_field("message", &self.to_string())?;
+        if let AppError::ConfirmationRequired { details, .. } = self {
+            state.serialize_field("details", details)?;
+        }
         state.end()
     }
 }

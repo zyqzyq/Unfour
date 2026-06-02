@@ -2,8 +2,9 @@ use crate::app_error::{AppError, AppResult};
 use crate::local_db::LocalDb;
 use crate::models::{
     DatabaseBrowseInput, DatabaseBrowseResult, DatabaseConnection, DatabaseConnectionConfig,
-    DatabaseConnectionInput, DatabaseQueryInput, DatabaseQueryResult, DatabaseResultColumn,
-    DatabaseSchema, DatabaseTable, DatabaseTableColumn, DatabaseTestResult, StoredConnection,
+    DatabaseConnectionInput, DatabaseQueryInput, DatabaseQueryResult, DatabaseQuerySafety,
+    DatabaseResultColumn, DatabaseSchema, DatabaseTable, DatabaseTableColumn, DatabaseTestResult,
+    StoredConnection,
 };
 use chrono::Utc;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
@@ -223,6 +224,20 @@ impl DatabaseService {
         if sql.is_empty() {
             return Err(AppError::Validation("SQL cannot be empty".to_string()));
         }
+        validate_single_statement(sql)?;
+        let safety = classify_query(sql);
+        if safety.requires_confirmation && input.confirm_mutation != Some(true) {
+            return Err(AppError::ConfirmationRequired {
+                message: safety.message.clone().unwrap_or_else(|| {
+                    "SQL statement requires confirmation before execution".to_string()
+                }),
+                details: serde_json::json!({
+                    "classification": safety.classification,
+                    "requiresConfirmation": safety.requires_confirmation,
+                    "confirmed": false
+                }),
+            });
+        }
 
         let connection = self
             .get_connection(&input.workspace_id, &input.connection_id)
@@ -253,6 +268,7 @@ impl DatabaseService {
                 rows: values,
                 affected_rows: 0,
                 duration_ms: started.elapsed().as_millis(),
+                safety,
             });
         }
 
@@ -262,6 +278,10 @@ impl DatabaseService {
             rows: Vec::new(),
             affected_rows: result.rows_affected(),
             duration_ms: started.elapsed().as_millis(),
+            safety: DatabaseQuerySafety {
+                confirmed: input.confirm_mutation == Some(true),
+                ..safety
+            },
         })
     }
 
@@ -312,6 +332,12 @@ impl DatabaseService {
                 rows: values,
                 affected_rows: 0,
                 duration_ms: started.elapsed().as_millis(),
+                safety: DatabaseQuerySafety {
+                    classification: "read".to_string(),
+                    requires_confirmation: false,
+                    confirmed: true,
+                    message: None,
+                },
             },
         })
     }
@@ -577,6 +603,66 @@ fn returns_rows(sql: &str) -> bool {
     matches!(keyword.as_str(), "select" | "with" | "pragma" | "explain")
 }
 
+fn validate_single_statement(sql: &str) -> AppResult<()> {
+    let trimmed = sql.trim();
+    let without_trailing = trimmed.trim_end_matches(';').trim_end();
+    if without_trailing.contains(';') {
+        return Err(AppError::Validation(
+            "only one SQL statement can be executed at a time".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn classify_query(sql: &str) -> DatabaseQuerySafety {
+    let keyword = sql
+        .split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
+    match keyword.as_str() {
+        "select" | "with" | "pragma" | "explain" => DatabaseQuerySafety {
+            classification: "read".to_string(),
+            requires_confirmation: false,
+            confirmed: true,
+            message: None,
+        },
+        "insert" | "update" | "delete" | "replace" => DatabaseQuerySafety {
+            classification: "mutation".to_string(),
+            requires_confirmation: true,
+            confirmed: false,
+            message: Some("This SQL statement may change data. Confirm to execute it.".to_string()),
+        },
+        "create" | "alter" | "drop" | "truncate" | "vacuum" | "reindex" => DatabaseQuerySafety {
+            classification: "schema-change".to_string(),
+            requires_confirmation: true,
+            confirmed: false,
+            message: Some(
+                "This SQL statement may change schema or database storage. Confirm to execute it."
+                    .to_string(),
+            ),
+        },
+        "begin" | "commit" | "rollback" => DatabaseQuerySafety {
+            classification: "transaction-control".to_string(),
+            requires_confirmation: true,
+            confirmed: false,
+            message: Some(
+                "Transaction control statements require confirmation in this editor.".to_string(),
+            ),
+        },
+        _ => DatabaseQuerySafety {
+            classification: "unknown".to_string(),
+            requires_confirmation: true,
+            confirmed: false,
+            message: Some(
+                "Unrecognized SQL statement type requires confirmation before execution."
+                    .to_string(),
+            ),
+        },
+    }
+}
+
 fn sql_with_limit(sql: &str, limit: u32) -> String {
     let trimmed = sql.trim().trim_end_matches(';');
     let lower = trimmed.to_ascii_lowercase();
@@ -765,11 +851,14 @@ mod tests {
                 connection_id: connection.id.clone(),
                 sql: "select service, version from deploys order by id".to_string(),
                 limit: Some(1),
+                confirm_mutation: None,
             })
             .await
             .expect("query");
         assert_eq!(query.rows.len(), 1);
         assert_eq!(query.rows[0][0].as_deref(), Some("api"));
+        assert_eq!(query.safety.classification, "read");
+        assert!(!query.safety.requires_confirmation);
 
         let browse = service
             .browse_table(DatabaseBrowseInput {
@@ -792,6 +881,56 @@ mod tests {
             })
             .await;
         assert!(matches!(missing, Err(AppError::NotFound(_))));
+        let _ = fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn mutating_sql_requires_confirmation_and_rejects_multiple_statements() {
+        let (service, workspace_id) = service_with_workspace().await;
+        let path = sqlite_fixture().await;
+        let connection = service
+            .save_connection(sqlite_input(&workspace_id, &path))
+            .await
+            .expect("save connection");
+
+        let unconfirmed = service
+            .execute_query(DatabaseQueryInput {
+                workspace_id: workspace_id.clone(),
+                connection_id: connection.id.clone(),
+                sql: "update deploys set version = '1.0.2' where service = 'api'".to_string(),
+                limit: Some(100),
+                confirm_mutation: None,
+            })
+            .await;
+        assert!(matches!(
+            unconfirmed,
+            Err(AppError::ConfirmationRequired { .. })
+        ));
+
+        let confirmed = service
+            .execute_query(DatabaseQueryInput {
+                workspace_id: workspace_id.clone(),
+                connection_id: connection.id.clone(),
+                sql: "update deploys set version = '1.0.2' where service = 'api'".to_string(),
+                limit: Some(100),
+                confirm_mutation: Some(true),
+            })
+            .await
+            .expect("confirmed update");
+        assert_eq!(confirmed.affected_rows, 1);
+        assert_eq!(confirmed.safety.classification, "mutation");
+        assert!(confirmed.safety.confirmed);
+
+        let multiple = service
+            .execute_query(DatabaseQueryInput {
+                workspace_id,
+                connection_id: connection.id,
+                sql: "select * from deploys; select * from deploys;".to_string(),
+                limit: Some(100),
+                confirm_mutation: Some(true),
+            })
+            .await;
+        assert!(matches!(multiple, Err(AppError::Validation(_))));
         let _ = fs::remove_file(path);
     }
 }

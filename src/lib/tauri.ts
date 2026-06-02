@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  ApiHistoryDetail,
   ApiHistoryItem,
   ApiRequestInput,
   ApiResponse,
@@ -44,6 +45,7 @@ const mockState: WorkspaceState = {
 };
 
 let mockHistory: ApiHistoryItem[] = [];
+let mockHistoryDetails: ApiHistoryDetail[] = [];
 let mockSavedRequests: ApiSavedRequest[] = [];
 let mockDatabaseConnections: DatabaseConnection[] = [];
 let mockEnvironment: WorkspaceEnvironment = {
@@ -162,6 +164,16 @@ async function mockInvoke<T>(
     return mockHistory as T;
   }
 
+  if (command === "api_history_detail") {
+    const workspaceId = String(args?.workspaceId ?? "");
+    const historyId = String(args?.historyId ?? "");
+    const detail = mockHistoryDetails.find(
+      (item) => item.workspaceId === workspaceId && item.id === historyId,
+    );
+    if (!detail) throw new Error("api history not found");
+    return detail as T;
+  }
+
   if (command === "api_saved_requests") {
     return mockSavedRequests as T;
   }
@@ -240,6 +252,29 @@ async function mockInvoke<T>(
         remoteId: null,
       },
       ...mockHistory,
+    ];
+    mockHistoryDetails = [
+      {
+        id: result.historyId,
+        workspaceId: input.workspaceId,
+        name: input.name ?? null,
+        method: resolved.method,
+        url: resolved.url,
+        requestHeadersJson: JSON.stringify(redactHeaders(input.headers)),
+        requestQueryJson: JSON.stringify(input.query),
+        requestBody: input.body ?? null,
+        status: result.status,
+        durationMs: result.durationMs,
+        responseHeadersJson: JSON.stringify(result.headers),
+        responseBodyPreview: body.slice(0, 20_000),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        deletedAt: null,
+        revision: 1,
+        syncStatus: "local",
+        remoteId: null,
+      },
+      ...mockHistoryDetails,
     ];
     return result as T;
   }
@@ -333,6 +368,21 @@ async function mockInvoke<T>(
   if (command === "database_query_execute") {
     const input = args?.input as DatabaseQueryInput;
     const isSelect = input.sql.trim().toLowerCase().startsWith("select");
+    const keyword = input.sql.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+    const requiresConfirmation = !["select", "with", "pragma", "explain"].includes(keyword);
+    if (requiresConfirmation && !input.confirmMutation) {
+      throw {
+        code: "CONFIRMATION_REQUIRED",
+        message: "confirmation required: This SQL statement may change data. Confirm to execute it.",
+        details: {
+          classification: ["insert", "update", "delete", "replace"].includes(keyword)
+            ? "mutation"
+            : "schema-change",
+          requiresConfirmation: true,
+          confirmed: false,
+        },
+      };
+    }
     return ({
       columns: isSelect
         ? [
@@ -349,6 +399,14 @@ async function mockInvoke<T>(
         : [],
       affectedRows: isSelect ? 0 : 1,
       durationMs: 7,
+      safety: {
+        classification: isSelect ? "read" : "mutation",
+        requiresConfirmation,
+        confirmed: !requiresConfirmation || input.confirmMutation === true,
+        message: requiresConfirmation
+          ? "This SQL statement may change data. Confirm to execute it."
+          : null,
+      },
     } satisfies DatabaseQueryResult) as T;
   }
 
@@ -368,6 +426,12 @@ async function mockInvoke<T>(
         ].slice(0, input.limit ?? 100),
         affectedRows: 0,
         durationMs: 5,
+        safety: {
+          classification: "read",
+          requiresConfirmation: false,
+          confirmed: true,
+          message: null,
+        },
       },
     } satisfies DatabaseBrowseResult) as T;
   }
@@ -436,6 +500,10 @@ export function listApiHistory(workspaceId: string) {
   return call<ApiHistoryItem[]>("api_history_list", { workspaceId, limit: 50 });
 }
 
+export function getApiHistoryDetail(workspaceId: string, historyId: string) {
+  return call<ApiHistoryDetail>("api_history_detail", { workspaceId, historyId });
+}
+
 export function listSavedApiRequests(workspaceId: string) {
   return call<ApiSavedRequest[]>("api_saved_requests", { workspaceId });
 }
@@ -502,6 +570,20 @@ function resolveTemplate(value: string, variables: WorkspaceEnvironment["variabl
       (current, item) => current.split(`{{${item.key}}}`).join(item.value),
       value,
     );
+}
+
+function redactHeaders(headers: ApiRequestInput["headers"]) {
+  const sensitive = new Set([
+    "authorization",
+    "cookie",
+    "proxy-authorization",
+    "x-api-key",
+    "x-auth-token",
+  ]);
+  return headers.map((item) => ({
+    ...item,
+    value: sensitive.has(item.key.toLowerCase()) ? "<redacted>" : item.value,
+  }));
 }
 
 function getMockLayout(workspaceId: string): WorkspaceLayout {

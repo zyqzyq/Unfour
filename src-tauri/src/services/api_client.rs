@@ -1,6 +1,8 @@
 use crate::app_error::{AppError, AppResult};
 use crate::local_db::LocalDb;
-use crate::models::{ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest, KeyValue};
+use crate::models::{
+    ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest, KeyValue,
+};
 use chrono::Utc;
 use reqwest::header::{HeaderName, HeaderValue, CONTENT_TYPE};
 use reqwest::{Client, Method, Url};
@@ -120,6 +122,36 @@ impl ApiClientService {
         .await?;
 
         Ok(items)
+    }
+
+    pub async fn history_detail(
+        &self,
+        workspace_id: String,
+        history_id: String,
+    ) -> AppResult<ApiHistoryDetail> {
+        validate_workspace_id(&workspace_id)?;
+        if history_id.trim().is_empty() {
+            return Err(AppError::Validation(
+                "history id cannot be empty".to_string(),
+            ));
+        }
+
+        let item = sqlx::query_as::<_, ApiHistoryDetail>(
+            r#"
+            SELECT
+              id, workspace_id, name, method, url, request_headers_json, request_query_json,
+              request_body, status, duration_ms, response_headers_json, response_body_preview,
+              created_at, updated_at, deleted_at, revision, sync_status, remote_id
+            FROM api_history
+            WHERE workspace_id = ?1 AND id = ?2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(history_id)
+        .fetch_optional(self.db.pool())
+        .await?;
+
+        item.ok_or_else(|| AppError::NotFound("api history".to_string()))
     }
 
     pub async fn save_request(&self, input: ApiRequestInput) -> AppResult<ApiSavedRequest> {
@@ -340,4 +372,120 @@ fn resolve_template(value: &str, environment: &[KeyValue]) -> AppResult<String> 
     }
 
     Ok(output)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+
+    async fn service() -> ApiClientService {
+        let options = SqliteConnectOptions::new()
+            .filename(":memory:")
+            .create_if_missing(true)
+            .foreign_keys(true);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .expect("connect in-memory sqlite");
+        let db = LocalDb::from_pool(pool);
+        db.migrate().await.expect("run migrations");
+        seed_workspace(&db, "workspace-a").await;
+        seed_workspace(&db, "workspace-b").await;
+        ApiClientService::new(db)
+    }
+
+    async fn seed_workspace(db: &LocalDb, workspace_id: &str) {
+        let now = Utc::now().to_rfc3339();
+        sqlx::query(
+            r#"
+            INSERT INTO workspaces (
+              id, name, is_default, last_opened_at, created_at, updated_at,
+              revision, sync_status
+            )
+            VALUES (?1, ?1, 0, ?2, ?2, ?2, 1, 'local')
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(&now)
+        .execute(db.pool())
+        .await
+        .expect("insert workspace");
+
+        sqlx::query(
+            r#"
+            INSERT INTO workspace_settings (
+              workspace_id, layout_json, env_json, created_at, updated_at,
+              revision, sync_status
+            )
+            VALUES (?1, '{}', '[]', ?2, ?2, 1, 'local')
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(now)
+        .execute(db.pool())
+        .await
+        .expect("insert workspace settings");
+    }
+
+    #[tokio::test]
+    async fn save_request_redacts_sensitive_headers() {
+        let service = service().await;
+
+        let saved = service
+            .save_request(ApiRequestInput {
+                workspace_id: "workspace-a".to_string(),
+                name: Some("Secret request".to_string()),
+                method: "GET".to_string(),
+                url: "https://example.test".to_string(),
+                headers: vec![KeyValue {
+                    key: "Authorization".to_string(),
+                    value: "Bearer secret".to_string(),
+                    enabled: true,
+                }],
+                query: vec![],
+                body: None,
+                body_kind: "json".to_string(),
+                timeout_ms: None,
+            })
+            .await
+            .expect("save request");
+
+        assert!(saved.headers_json.contains("<redacted>"));
+        assert!(!saved.headers_json.contains("Bearer secret"));
+    }
+
+    #[tokio::test]
+    async fn history_detail_is_scoped_to_workspace() {
+        let service = service().await;
+        sqlx::query(
+            r#"
+            INSERT INTO api_history (
+              id, workspace_id, name, method, url, request_headers_json, request_query_json,
+              request_body, status, duration_ms, response_headers_json, response_body_preview,
+              created_at, updated_at, revision, sync_status
+            )
+            VALUES (
+              'history-a', 'workspace-a', 'Health', 'GET', 'https://example.test',
+              '[]', '[]', NULL, 200, 12, '[]', '{}', ?1, ?1, 1, 'local'
+            )
+            "#,
+        )
+        .bind(Utc::now().to_rfc3339())
+        .execute(service.db.pool())
+        .await
+        .expect("insert history");
+
+        let detail = service
+            .history_detail("workspace-a".to_string(), "history-a".to_string())
+            .await
+            .expect("load detail");
+        let wrong_workspace = service
+            .history_detail("workspace-b".to_string(), "history-a".to_string())
+            .await;
+
+        assert_eq!(detail.method, "GET");
+        assert!(matches!(wrong_workspace, Err(AppError::NotFound(_))));
+    }
 }

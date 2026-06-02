@@ -5,6 +5,7 @@ use crate::models::{
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -382,6 +383,7 @@ fn normalize_name(name: String) -> AppResult<String> {
 }
 
 fn validate_environment(variables: &[KeyValue]) -> AppResult<()> {
+    let mut seen = HashSet::new();
     for variable in variables {
         let key = variable.key.trim();
         if key.is_empty() {
@@ -393,6 +395,12 @@ fn validate_environment(variables: &[KeyValue]) -> AppResult<()> {
         if !valid {
             return Err(AppError::Validation(format!(
                 "invalid environment variable name: {}",
+                variable.key
+            )));
+        }
+        if variable.enabled && !seen.insert(key.to_ascii_lowercase()) {
+            return Err(AppError::Validation(format!(
+                "duplicate environment variable name: {}",
                 variable.key
             )));
         }
@@ -618,6 +626,32 @@ mod tests {
         layout.active_tab_id = "missing-tab".to_string();
 
         let result = service.update_layout(workspace_id, layout).await;
+
+        assert!(matches!(result, Err(AppError::Validation(_))));
+    }
+
+    #[tokio::test]
+    async fn environment_update_rejects_duplicate_enabled_names() {
+        let service = service().await;
+        let state = service.state().await.expect("workspace state");
+
+        let result = service
+            .update_environment(
+                state.active_workspace_id,
+                vec![
+                    KeyValue {
+                        key: "base_url".to_string(),
+                        value: "https://example.test".to_string(),
+                        enabled: true,
+                    },
+                    KeyValue {
+                        key: "BASE_URL".to_string(),
+                        value: "https://other.test".to_string(),
+                        enabled: true,
+                    },
+                ],
+            )
+            .await;
 
         assert!(matches!(result, Err(AppError::Validation(_))));
     }

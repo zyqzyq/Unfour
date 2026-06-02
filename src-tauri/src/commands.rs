@@ -1,9 +1,9 @@
 use crate::app_error::AppResult;
 use crate::models::{
-    ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest, DatabaseBrowseInput,
-    DatabaseBrowseResult, DatabaseConnection, DatabaseConnectionInput, DatabaseQueryInput,
-    DatabaseQueryResult, DatabaseSchema, DatabaseTestResult, KeyValue, SystemHealth, Workspace,
-    WorkspaceEnvironment, WorkspaceLayout, WorkspaceState,
+    ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest,
+    DatabaseBrowseInput, DatabaseBrowseResult, DatabaseConnection, DatabaseConnectionInput,
+    DatabaseQueryInput, DatabaseQueryResult, DatabaseSchema, DatabaseTestResult, KeyValue,
+    SystemHealth, Workspace, WorkspaceEnvironment, WorkspaceLayout, WorkspaceState,
 };
 use crate::AppState;
 use tauri::State;
@@ -105,6 +105,18 @@ pub async fn api_history_list(
     state
         .command_bus
         .list_api_history(workspace_id, limit)
+        .await
+}
+
+#[tauri::command]
+pub async fn api_history_detail(
+    workspace_id: String,
+    history_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<ApiHistoryDetail> {
+    state
+        .command_bus
+        .api_history_detail(workspace_id, history_id)
         .await
 }
 

@@ -3,10 +3,10 @@ use crate::app_error::AppResult;
 use crate::audit_log::AuditLogService;
 use crate::local_db::LocalDb;
 use crate::models::{
-    ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest, DatabaseBrowseInput,
-    DatabaseBrowseResult, DatabaseConnection, DatabaseConnectionInput, DatabaseQueryInput,
-    DatabaseQueryResult, DatabaseSchema, DatabaseTestResult, SystemHealth, Workspace,
-    WorkspaceEnvironment, WorkspaceLayout, WorkspaceState,
+    ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest,
+    DatabaseBrowseInput, DatabaseBrowseResult, DatabaseConnection, DatabaseConnectionInput,
+    DatabaseQueryInput, DatabaseQueryResult, DatabaseSchema, DatabaseTestResult, SystemHealth,
+    Workspace, WorkspaceEnvironment, WorkspaceLayout, WorkspaceState,
 };
 use crate::services::api_client::ApiClientService;
 use crate::services::database::DatabaseService;
@@ -192,6 +192,16 @@ impl CommandBus {
         limit: Option<i64>,
     ) -> AppResult<Vec<ApiHistoryItem>> {
         self.api_client.list_history(workspace_id, limit).await
+    }
+
+    pub async fn api_history_detail(
+        &self,
+        workspace_id: String,
+        history_id: String,
+    ) -> AppResult<ApiHistoryDetail> {
+        self.api_client
+            .history_detail(workspace_id, history_id)
+            .await
     }
 
     pub async fn save_api_request(&self, input: ApiRequestInput) -> AppResult<ApiSavedRequest> {

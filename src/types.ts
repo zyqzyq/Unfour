@@ -65,6 +65,27 @@ export type ApiHistoryItem = {
   remoteId: string | null;
 };
 
+export type ApiHistoryDetail = {
+  id: string;
+  workspaceId: string;
+  name: string | null;
+  method: string;
+  url: string;
+  requestHeadersJson: string;
+  requestQueryJson: string;
+  requestBody: string | null;
+  status: number | null;
+  durationMs: number | null;
+  responseHeadersJson: string;
+  responseBodyPreview: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  revision: number;
+  syncStatus: string;
+  remoteId: string | null;
+};
+
 export type ApiSavedRequest = {
   id: string;
   workspaceId: string;
@@ -144,6 +165,7 @@ export type DatabaseQueryInput = {
   connectionId: string;
   sql: string;
   limit?: number;
+  confirmMutation?: boolean;
 };
 
 export type DatabaseBrowseInput = {
@@ -163,11 +185,19 @@ export type DatabaseQueryResult = {
   rows: Array<Array<string | null>>;
   affectedRows: number;
   durationMs: number;
+  safety: DatabaseQuerySafety;
 };
 
 export type DatabaseResultColumn = {
   name: string;
   dataType: string;
+};
+
+export type DatabaseQuerySafety = {
+  classification: string;
+  requiresConfirmation: boolean;
+  confirmed: boolean;
+  message: string | null;
 };
 
 export type SystemHealth = {

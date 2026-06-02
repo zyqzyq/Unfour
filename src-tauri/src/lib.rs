@@ -43,6 +43,7 @@ pub fn run() {
             commands::workspace_layout_update,
             commands::workspace_rename,
             commands::workspace_set_active,
+            commands::api_history_detail,
             commands::api_history_list,
             commands::api_request_save,
             commands::api_saved_requests,

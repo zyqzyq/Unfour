@@ -29,10 +29,10 @@
 - DONE TASK-API-003: Store request history by workspace.
 - DONE TASK-API-004: Save request templates by workspace.
 - DONE TASK-API-005: Add workspace environments and variable resolution.
-- TODO TASK-API-006: Add import/export for collections without secrets.
+- DONE TASK-API-006: Add import/export for collections without secrets.
 - TODO TASK-API-007: Add collection folders and request duplication.
-- TODO TASK-API-008: Add response headers, cookies, timing, and size panels.
-- TODO TASK-API-009: Add replay from history into an editable request tab.
+- DONE TASK-API-008: Add response headers, cookies, timing, and size panels.
+- DONE TASK-API-009: Add replay from history into an editable request tab.
 
 ## P1: SSH MVP
 
@@ -53,8 +53,8 @@
 - PARTIAL TASK-DB-005: SQL editor execution and paginated results. SQLite is implemented; PostgreSQL/MySQL remain.
 - TODO TASK-DB-006: Read-only table data view, then controlled edit support.
 - DONE TASK-DB-007: Add safe table browse action from schema tree.
-- TODO TASK-DB-008: Add frontend pagination, copy/export, and large result virtualization.
-- TODO TASK-DB-009: Add mutation confirmation policy for destructive SQL and future AI calls.
+- PARTIAL TASK-DB-008: Add frontend pagination, copy/export, and large result virtualization. Pagination, column width handling, TSV copy, and CSV export are implemented; virtualization remains.
+- DONE TASK-DB-009: Add mutation confirmation policy for destructive SQL and future AI calls.
 
 ## P2: Reserved Extensions
 

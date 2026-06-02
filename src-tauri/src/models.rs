@@ -105,6 +105,29 @@ pub struct ApiHistoryItem {
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 #[serde(rename_all = "camelCase")]
+pub struct ApiHistoryDetail {
+    pub id: String,
+    pub workspace_id: String,
+    pub name: Option<String>,
+    pub method: String,
+    pub url: String,
+    pub request_headers_json: String,
+    pub request_query_json: String,
+    pub request_body: Option<String>,
+    pub status: Option<i64>,
+    pub duration_ms: Option<i64>,
+    pub response_headers_json: String,
+    pub response_body_preview: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: Option<String>,
+    pub revision: i64,
+    pub sync_status: String,
+    pub remote_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct ApiSavedRequest {
     pub id: String,
     pub workspace_id: String,
@@ -226,6 +249,7 @@ pub struct DatabaseQueryInput {
     pub connection_id: String,
     pub sql: String,
     pub limit: Option<u32>,
+    pub confirm_mutation: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -251,6 +275,16 @@ pub struct DatabaseQueryResult {
     pub rows: Vec<Vec<Option<String>>>,
     pub affected_rows: u64,
     pub duration_ms: u128,
+    pub safety: DatabaseQuerySafety,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseQuerySafety {
+    pub classification: String,
+    pub requires_confirmation: bool,
+    pub confirmed: bool,
+    pub message: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

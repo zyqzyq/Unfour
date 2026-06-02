@@ -5,7 +5,9 @@ import {
   CheckCircle2,
   ChevronLeft,
   Clock,
+  Clipboard,
   Database,
+  Download,
   Folder,
   Globe2,
   History,
@@ -20,6 +22,7 @@ import {
   Table2,
   TerminalSquare,
   Trash2,
+  Upload,
   XCircle,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -39,6 +42,7 @@ import {
   createWorkspace,
   deleteDatabaseConnection,
   executeDatabaseQuery,
+  getApiHistoryDetail,
   getDatabaseSchema,
   getSystemHealth,
   getWorkspaceEnvironment,
@@ -61,6 +65,7 @@ import { cn } from "./lib/utils";
 import { useWorkspaceStore } from "./store/workspace-store";
 import type {
   ApiHistoryItem,
+  ApiHistoryDetail,
   ApiRequestInput,
   ApiResponse,
   ApiSavedRequest,
@@ -474,6 +479,7 @@ function ApiClientPanel({ workspaceId }: { workspaceId: string }) {
   ]);
   const [body, setBody] = useState("{\n  \"hello\": \"workspace\"\n}");
   const [envVariables, setEnvVariables] = useState<KeyValue[]>([]);
+  const [collectionStatus, setCollectionStatus] = useState("");
   const [response, setResponse] = useState<ApiResponse | null>(null);
 
   const historyQuery = useQuery({
@@ -532,18 +538,93 @@ function ApiClientPanel({ workspaceId }: { workspaceId: string }) {
       queryClient.invalidateQueries({ queryKey: ["workspace-environment", workspaceId] }),
   });
 
+  const replayHistoryMutation = useMutation({
+    mutationFn: (historyId: string) => getApiHistoryDetail(workspaceId, historyId),
+    onSuccess: loadHistoryRequest,
+  });
+
+  const importCollectionMutation = useMutation({
+    mutationFn: async (requests: ApiRequestInput[]) => {
+      for (const request of requests) {
+        await saveApiRequest({ ...request, workspaceId });
+      }
+      return requests.length;
+    },
+    onSuccess: (count) => {
+      setCollectionStatus(`Imported ${count} request${count === 1 ? "" : "s"}`);
+      queryClient.invalidateQueries({ queryKey: ["api-saved", workspaceId] });
+    },
+    onError: (error) => setCollectionStatus(formatError(error)),
+  });
+
   function submit(event: FormEvent) {
     event.preventDefault();
     sendMutation.mutate(input);
   }
 
+  function loadRequestDraft(request: ApiRequestInput) {
+    setName(request.name ?? `${request.method} ${request.url}`);
+    setMethod(request.method);
+    setUrl(request.url);
+    setHeaders(request.headers);
+    setQuery(request.query);
+    setBody(request.body ?? "");
+  }
+
   function loadSavedRequest(saved: ApiSavedRequest) {
-    setName(saved.name);
-    setMethod(saved.method);
-    setUrl(saved.url);
-    setHeaders(parseKeyValues(saved.headersJson));
-    setQuery(parseKeyValues(saved.queryJson));
-    setBody(saved.body ?? "");
+    loadRequestDraft(savedRequestToInput(saved, workspaceId));
+  }
+
+  function loadHistoryRequest(history: ApiHistoryDetail) {
+    loadRequestDraft(historyDetailToInput(history));
+  }
+
+  function exportCollection() {
+    const payload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      workspaceId,
+      savedRequests: (savedQuery.data ?? []).map((item) => ({
+        name: item.name,
+        method: item.method,
+        url: item.url,
+        headers: parseKeyValues(item.headersJson),
+        query: parseKeyValues(item.queryJson),
+        body: item.body,
+        bodyKind: item.bodyKind,
+      })),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json;charset=utf-8",
+    });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = `unfour-api-collection-${new Date()
+      .toISOString()
+      .slice(0, 10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(href);
+    setCollectionStatus(`Exported ${payload.savedRequests.length} request${payload.savedRequests.length === 1 ? "" : "s"}`);
+  }
+
+  async function importCollection(file: File | undefined) {
+    if (!file) {
+      return;
+    }
+    try {
+      const parsed = JSON.parse(await file.text());
+      const requests = parseCollectionImport(parsed, workspaceId);
+      if (!requests.length) {
+        setCollectionStatus("No importable requests found");
+        return;
+      }
+      importCollectionMutation.mutate(requests);
+    } catch (error) {
+      setCollectionStatus(formatError(error));
+    }
   }
 
   return (
@@ -580,7 +661,11 @@ function ApiClientPanel({ workspaceId }: { workspaceId: string }) {
         <div className="grid min-h-0 flex-1 grid-cols-[320px_minmax(0,1fr)]">
           <div className="space-y-4 overflow-y-auto border-r border-zinc-200 p-3">
             <SavedRequestsList
+              collectionStatus={collectionStatus}
+              importing={importCollectionMutation.isPending}
               items={savedQuery.data ?? []}
+              onExport={exportCollection}
+              onImport={importCollection}
               onLoad={loadSavedRequest}
             />
             <FieldGroup title="Request">
@@ -604,9 +689,11 @@ function ApiClientPanel({ workspaceId }: { workspaceId: string }) {
               </div>
               <KeyValueEditor
                 items={envVariables}
+                maskSensitiveValues
                 onChange={setEnvVariables}
                 title="Variables"
               />
+              <EnvironmentHints variables={envVariables} />
             </div>
             <KeyValueEditor items={query} onChange={setQuery} title="Query" />
             <KeyValueEditor items={headers} onChange={setHeaders} title="Headers" />
@@ -650,6 +737,8 @@ function ApiClientPanel({ workspaceId }: { workspaceId: string }) {
               </div>
             )}
           </div>
+          <ResponseSummary response={response} />
+          <ResponseDetails response={response} />
           <div className="min-h-0 flex-1">
             <Editor
               defaultLanguage="json"
@@ -674,7 +763,11 @@ function ApiClientPanel({ workspaceId }: { workspaceId: string }) {
             </div>
             <Badge tone="neutral">{savedQuery.data?.length ?? 0} saved</Badge>
           </div>
-          <HistoryTable items={historyQuery.data ?? []} />
+          <HistoryTable
+            items={historyQuery.data ?? []}
+            loadingReplay={replayHistoryMutation.isPending}
+            onReplay={(item) => replayHistoryMutation.mutate(item.id)}
+          />
         </section>
       </div>
     </div>
@@ -682,10 +775,18 @@ function ApiClientPanel({ workspaceId }: { workspaceId: string }) {
 }
 
 function SavedRequestsList({
+  collectionStatus,
+  importing,
   items,
+  onExport,
+  onImport,
   onLoad,
 }: {
+  collectionStatus: string;
+  importing: boolean;
   items: ApiSavedRequest[];
+  onExport: () => void;
+  onImport: (file: File | undefined) => void;
   onLoad: (item: ApiSavedRequest) => void;
 }) {
   return (
@@ -696,6 +797,44 @@ function SavedRequestsList({
         </span>
         <Badge tone="neutral">{items.length}</Badge>
       </div>
+      <div className="mb-2 grid grid-cols-2 gap-2">
+        <Button
+          disabled={items.length === 0}
+          onClick={onExport}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          <Download size={13} />
+          Export
+        </Button>
+        <label>
+          <input
+            accept="application/json"
+            className="sr-only"
+            disabled={importing}
+            onChange={(event) => {
+              onImport(event.target.files?.[0]);
+              event.target.value = "";
+            }}
+            type="file"
+          />
+          <span
+            className={cn(
+              "inline-flex h-8 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-800 hover:bg-zinc-50",
+              importing && "pointer-events-none opacity-50",
+            )}
+          >
+            <Upload size={13} />
+            Import
+          </span>
+        </label>
+      </div>
+      {collectionStatus && (
+        <div className="mb-2 truncate rounded-md bg-zinc-50 px-2 py-1 text-xs text-zinc-600">
+          {collectionStatus}
+        </div>
+      )}
       <div className="max-h-32 space-y-1 overflow-y-auto">
         {items.map((item) => (
           <button
@@ -727,10 +866,12 @@ function FieldGroup({ children, title }: { children: React.ReactNode; title: str
 
 function KeyValueEditor({
   items,
+  maskSensitiveValues = false,
   onChange,
   title,
 }: {
   items: KeyValue[];
+  maskSensitiveValues?: boolean;
   onChange: (items: KeyValue[]) => void;
   title: string;
 }) {
@@ -769,11 +910,38 @@ function KeyValueEditor({
             <Input
               onChange={(event) => update(index, { value: event.target.value })}
               placeholder="Value"
+              type={maskSensitiveValues && isSensitiveKey(item.key) ? "password" : "text"}
               value={item.value}
             />
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function EnvironmentHints({ variables }: { variables: KeyValue[] }) {
+  const duplicateKeys = duplicateEnvironmentKeys(variables);
+  const sensitiveKeys = variables
+    .filter((item) => item.enabled && isSensitiveKey(item.key) && item.value.trim())
+    .map((item) => item.key.trim());
+
+  if (!duplicateKeys.length && !sensitiveKeys.length) {
+    return null;
+  }
+
+  return (
+    <div className="mt-2 space-y-1 text-xs">
+      {duplicateKeys.length > 0 && (
+        <div className="rounded-md bg-amber-50 px-2 py-1 text-amber-700">
+          Duplicate variables: {duplicateKeys.join(", ")}
+        </div>
+      )}
+      {sensitiveKeys.length > 0 && (
+        <div className="rounded-md bg-zinc-50 px-2 py-1 text-zinc-600">
+          Sensitive-looking values are masked locally: {sensitiveKeys.join(", ")}
+        </div>
+      )}
     </div>
   );
 }
@@ -796,11 +964,231 @@ function parseKeyValues(value: string): KeyValue[] {
   return [];
 }
 
+function savedRequestToInput(saved: ApiSavedRequest, workspaceId: string): ApiRequestInput {
+  return {
+    workspaceId,
+    name: saved.name,
+    method: saved.method,
+    url: saved.url,
+    headers: parseKeyValues(saved.headersJson),
+    query: parseKeyValues(saved.queryJson),
+    body: saved.body ?? undefined,
+    bodyKind: saved.bodyKind,
+    timeoutMs: 60_000,
+  };
+}
+
+function historyDetailToInput(history: ApiHistoryDetail): ApiRequestInput {
+  return {
+    workspaceId: history.workspaceId,
+    name: history.name ?? `${history.method} ${history.url}`,
+    method: history.method,
+    url: history.url,
+    headers: parseKeyValues(history.requestHeadersJson),
+    query: parseKeyValues(history.requestQueryJson),
+    body: history.requestBody ?? undefined,
+    bodyKind: "json",
+    timeoutMs: 60_000,
+  };
+}
+
+function parseCollectionImport(value: unknown, workspaceId: string): ApiRequestInput[] {
+  const rawItems = Array.isArray(value)
+    ? value
+    : typeof value === "object" && value !== null && "savedRequests" in value
+      ? (value as { savedRequests?: unknown }).savedRequests
+      : [];
+  if (!Array.isArray(rawItems)) {
+    return [];
+  }
+
+  return rawItems
+    .map((item) => normalizeImportedRequest(item, workspaceId))
+    .filter((item): item is ApiRequestInput => item !== null);
+}
+
+function normalizeImportedRequest(item: unknown, workspaceId: string): ApiRequestInput | null {
+  if (typeof item !== "object" || item === null) {
+    return null;
+  }
+  const candidate = item as Partial<ApiRequestInput>;
+  if (typeof candidate.method !== "string" || typeof candidate.url !== "string") {
+    return null;
+  }
+
+  return {
+    workspaceId,
+    name: typeof candidate.name === "string" ? candidate.name : undefined,
+    method: candidate.method.toUpperCase(),
+    url: candidate.url,
+    headers: Array.isArray(candidate.headers) ? sanitizeKeyValues(candidate.headers) : [],
+    query: Array.isArray(candidate.query) ? sanitizeKeyValues(candidate.query) : [],
+    body: typeof candidate.body === "string" ? candidate.body : undefined,
+    bodyKind: typeof candidate.bodyKind === "string" ? candidate.bodyKind : "json",
+    timeoutMs: typeof candidate.timeoutMs === "number" ? candidate.timeoutMs : 60_000,
+  };
+}
+
+function sanitizeKeyValues(items: unknown[]): KeyValue[] {
+  return items
+    .filter(isKeyValueLike)
+    .map((item) => ({
+      key: item.key ?? "",
+      value: item.value ?? "",
+      enabled: typeof item.enabled === "boolean" ? item.enabled : true,
+    }));
+}
+
+function isKeyValueLike(item: unknown): item is Partial<KeyValue> {
+  if (typeof item !== "object" || item === null) {
+    return false;
+  }
+  const candidate = item as Record<string, unknown>;
+  return typeof candidate.key === "string" && typeof candidate.value === "string";
+}
+
+function duplicateEnvironmentKeys(variables: KeyValue[]) {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const variable of variables) {
+    const key = variable.key.trim().toLowerCase();
+    if (!key || !variable.enabled) {
+      continue;
+    }
+    if (seen.has(key)) {
+      duplicates.add(variable.key.trim());
+    }
+    seen.add(key);
+  }
+  return Array.from(duplicates);
+}
+
+function isSensitiveKey(key: string) {
+  return /(token|secret|password|passwd|api[_-]?key|auth|credential)/i.test(key);
+}
+
+function formatByteSize(bytes: number) {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  const kb = bytes / 1024;
+  if (kb < 1024) {
+    return `${kb.toFixed(kb >= 10 ? 0 : 1)} KB`;
+  }
+  const mb = kb / 1024;
+  return `${mb.toFixed(mb >= 10 ? 0 : 1)} MB`;
+}
+
 const columnHelper = createColumnHelper<ApiHistoryItem>();
 
-function HistoryTable({ items }: { items: ApiHistoryItem[] }) {
+function ResponseSummary({ response }: { response: ApiResponse | null }) {
+  if (!response) {
+    return (
+      <div className="grid grid-cols-3 border-b border-zinc-200 text-xs text-zinc-500">
+        <div className="px-3 py-2">Headers -</div>
+        <div className="px-3 py-2">Size -</div>
+        <div className="px-3 py-2">Timing -</div>
+      </div>
+    );
+  }
+
+  const bodySize = formatByteSize(new TextEncoder().encode(response.body).length);
+  const headerSize = formatByteSize(
+    new TextEncoder().encode(
+      response.headers.map((item) => `${item.key}: ${item.value}`).join("\r\n"),
+    ).length,
+  );
+  const cookies = response.headers.filter((item) => item.key.toLowerCase() === "set-cookie");
+
+  return (
+    <div className="grid grid-cols-3 border-b border-zinc-200 text-xs text-zinc-600">
+      <div className="min-w-0 px-3 py-2">
+        <span className="font-medium text-zinc-800">{response.headers.length}</span> headers
+        {cookies.length > 0 && <span>, {cookies.length} cookies</span>}
+      </div>
+      <div className="min-w-0 px-3 py-2">
+        <span className="font-medium text-zinc-800">{bodySize}</span> body, {headerSize} headers
+      </div>
+      <div className="min-w-0 px-3 py-2">
+        <span className="font-medium text-zinc-800">{response.durationMs}ms</span> total
+      </div>
+    </div>
+  );
+}
+
+function ResponseDetails({ response }: { response: ApiResponse | null }) {
+  if (!response) {
+    return null;
+  }
+
+  const cookies = response.headers.filter((item) => item.key.toLowerCase() === "set-cookie");
+  const bodyBytes = new TextEncoder().encode(response.body).length;
+  const headerBytes = new TextEncoder().encode(
+    response.headers.map((item) => `${item.key}: ${item.value}`).join("\r\n"),
+  ).length;
+
+  return (
+    <div className="grid max-h-32 grid-cols-[1.4fr_1fr] overflow-hidden border-b border-zinc-200 text-xs">
+      <div className="min-w-0 overflow-auto border-r border-zinc-200 p-2">
+        <div className="mb-1 font-semibold uppercase tracking-wide text-zinc-500">Headers</div>
+        <div className="space-y-1">
+          {response.headers.map((header) => (
+            <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-2" key={`${header.key}-${header.value}`}>
+              <span className="truncate font-medium text-zinc-700">{header.key}</span>
+              <span className="truncate text-zinc-500">{header.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="min-w-0 overflow-auto p-2">
+        <div className="mb-1 font-semibold uppercase tracking-wide text-zinc-500">Timing / Size</div>
+        <div className="grid grid-cols-2 gap-2 text-zinc-600">
+          <Metric label="Total" value={`${response.durationMs}ms`} />
+          <Metric label="Status" value={`${response.status} ${response.statusText}`} />
+          <Metric label="Body" value={formatByteSize(bodyBytes)} />
+          <Metric label="Headers" value={formatByteSize(headerBytes)} />
+          <Metric label="Cookies" value={String(cookies.length)} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-md bg-zinc-50 px-2 py-1">
+      <div className="text-[10px] uppercase text-zinc-400">{label}</div>
+      <div className="truncate font-medium text-zinc-700">{value}</div>
+    </div>
+  );
+}
+
+function HistoryTable({
+  items,
+  loadingReplay,
+  onReplay,
+}: {
+  items: ApiHistoryItem[];
+  loadingReplay: boolean;
+  onReplay: (item: ApiHistoryItem) => void;
+}) {
   const columns = useMemo(
     () => [
+      columnHelper.display({
+        cell: (info) => (
+          <Button
+            disabled={loadingReplay}
+            onClick={() => onReplay(info.row.original)}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            Load
+          </Button>
+        ),
+        header: "",
+        id: "replay",
+      }),
       columnHelper.accessor("method", {
         cell: (info) => <Badge tone="teal">{info.getValue()}</Badge>,
         header: "Method",
@@ -824,7 +1212,7 @@ function HistoryTable({ items }: { items: ApiHistoryItem[] }) {
         header: "Time",
       }),
     ],
-    [],
+    [loadingReplay, onReplay],
   );
   const table = useReactTable({
     columns,
@@ -901,6 +1289,7 @@ function DatabasePanel({ workspaceId }: { workspaceId: string }) {
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<DatabaseTestResult | null>(null);
   const [queryResult, setQueryResult] = useState<DatabaseQueryResult | null>(null);
+  const [pendingSqlConfirmation, setPendingSqlConfirmation] = useState(false);
   const [sql, setSql] = useState(
     "select name, type\nfrom sqlite_master\nwhere type in ('table', 'view')\nlimit 100;",
   );
@@ -960,6 +1349,7 @@ function DatabasePanel({ workspaceId }: { workspaceId: string }) {
     });
     setTestResult(null);
     setQueryResult(null);
+    setPendingSqlConfirmation(false);
   }, [selectedConnection, workspaceId]);
 
   const saveMutation = useMutation({
@@ -976,6 +1366,7 @@ function DatabasePanel({ workspaceId }: { workspaceId: string }) {
       setSelectedConnectionId(null);
       setTestResult(null);
       setQueryResult(null);
+      setPendingSqlConfirmation(false);
       queryClient.invalidateQueries({ queryKey: ["database-connections", workspaceId] });
     },
   });
@@ -991,14 +1382,21 @@ function DatabasePanel({ workspaceId }: { workspaceId: string }) {
   });
 
   const executeMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (confirmMutation: boolean) =>
       executeDatabaseQuery({
         workspaceId,
         connectionId: selectedConnectionId ?? "",
         sql,
         limit: 100,
+        confirmMutation,
       }),
-    onSuccess: (result) => setQueryResult(result),
+    onError: (error) => {
+      setPendingSqlConfirmation(isConfirmationRequired(error));
+    },
+    onSuccess: (result) => {
+      setPendingSqlConfirmation(false);
+      setQueryResult(result);
+    },
   });
 
   const browseMutation = useMutation({
@@ -1008,8 +1406,9 @@ function DatabasePanel({ workspaceId }: { workspaceId: string }) {
         connectionId: selectedConnectionId ?? "",
         tableName: table.name,
         limit: 100,
-      }),
+    }),
     onSuccess: (browse) => {
+      setPendingSqlConfirmation(false);
       setSql(browse.sql);
       setQueryResult(browse.result);
     },
@@ -1028,6 +1427,7 @@ function DatabasePanel({ workspaceId }: { workspaceId: string }) {
     setSelectedConnectionId(null);
     setTestResult(null);
     setQueryResult(null);
+    setPendingSqlConfirmation(false);
     setForm({
       workspaceId,
       name: "Local SQLite",
@@ -1210,12 +1610,13 @@ function DatabasePanel({ workspaceId }: { workspaceId: string }) {
             {selectedConnection && <Badge tone="neutral">{selectedConnection.name}</Badge>}
             <Button
               disabled={!selectedConnectionId || executeMutation.isPending}
-              onClick={() => executeMutation.mutate()}
+              className={pendingSqlConfirmation ? "bg-red-700 hover:bg-red-800" : undefined}
+              onClick={() => executeMutation.mutate(pendingSqlConfirmation)}
               size="sm"
               type="button"
             >
               <Play size={14} />
-              Run
+              {pendingSqlConfirmation ? "Confirm run" : "Run"}
             </Button>
           </div>
         </div>
@@ -1235,6 +1636,7 @@ function DatabasePanel({ workspaceId }: { workspaceId: string }) {
         <DatabaseResultView
           error={executeMutation.error}
           isPending={executeMutation.isPending}
+          pendingConfirmation={pendingSqlConfirmation}
           result={queryResult}
         />
       </section>
@@ -1340,16 +1742,32 @@ function SchemaTree({
 function DatabaseResultView({
   error,
   isPending,
+  pendingConfirmation,
   result,
 }: {
   error: unknown;
   isPending: boolean;
+  pendingConfirmation: boolean;
   result: DatabaseQueryResult | null;
 }) {
+  const pageSize = 25;
+  const [pageIndex, setPageIndex] = useState(0);
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
+
+  useEffect(() => {
+    setPageIndex(0);
+    setCopyStatus("idle");
+  }, [result]);
+
   if (error) {
     return (
-      <div className="flex min-h-0 flex-1 items-center justify-center p-4 text-sm text-red-700">
-        {formatError(error)}
+      <div
+        className={cn(
+          "flex min-h-0 flex-1 items-center justify-center p-4 text-sm",
+          pendingConfirmation ? "text-amber-700" : "text-red-700",
+        )}
+      >
+        {pendingConfirmation ? confirmationMessage(error) : formatError(error)}
       </div>
     );
   }
@@ -1378,38 +1796,164 @@ function DatabaseResultView({
     );
   }
 
+  const queryResult = result;
+  const pageCount = Math.max(1, Math.ceil(queryResult.rows.length / pageSize));
+  const safePageIndex = Math.min(pageIndex, pageCount - 1);
+  const startIndex = safePageIndex * pageSize;
+  const pageRows = queryResult.rows.slice(startIndex, startIndex + pageSize);
+  const columnWidths = queryResult.columns.map((column, columnIndex) =>
+    queryResult.rows.reduce((width, row) => {
+      const value = row[columnIndex] ?? "";
+      return Math.min(Math.max(width, String(value).length * 8 + 48), 360);
+    }, Math.min(Math.max(column.name.length * 9 + 72, 140), 260)),
+  );
+
+  async function copyTsv() {
+    const text = serializeDatabaseResult(queryResult, "\t");
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyStatus("copied");
+      window.setTimeout(() => setCopyStatus("idle"), 1600);
+    } catch {
+      setCopyStatus("failed");
+    }
+  }
+
+  function exportCsv() {
+    const text = serializeDatabaseResult(queryResult, ",");
+    const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `unfour-query-results-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   return (
-    <div className="min-h-0 flex-1 overflow-auto">
-      <table className="w-full text-left text-xs">
-        <thead className="sticky top-0 bg-zinc-50 text-zinc-500">
-          <tr>
-            {result.columns.map((column) => (
-              <th className="border-b border-zinc-200 px-3 py-2 font-medium" key={column.name}>
-                <div className="flex items-center gap-2">
-                  <span>{column.name}</span>
-                  <span className="text-[10px] uppercase text-zinc-400">{column.dataType}</span>
-                </div>
-              </th>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1 overflow-auto">
+        <table className="w-max min-w-full table-fixed text-left text-xs">
+          <colgroup>
+            {columnWidths.map((width, index) => (
+              <col key={`db-col-${index}`} style={{ width }} />
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {result.rows.map((row, rowIndex) => (
-            <tr className="border-b border-zinc-100" key={`db-row-${rowIndex}`}>
-              {row.map((value, cellIndex) => (
-                <td className="max-w-[280px] truncate px-3 py-2" key={`db-cell-${cellIndex}`}>
-                  {value ?? <span className="text-zinc-400">NULL</span>}
-                </td>
+          </colgroup>
+          <thead className="sticky top-0 bg-zinc-50 text-zinc-500">
+            <tr>
+              {queryResult.columns.map((column) => (
+                <th className="border-b border-zinc-200 px-3 py-2 font-medium" key={column.name}>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate">{column.name}</span>
+                    <span className="shrink-0 text-[10px] uppercase text-zinc-400">
+                      {column.dataType}
+                    </span>
+                  </div>
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="border-t border-zinc-200 px-3 py-2 text-xs text-zinc-500">
-        {result.rows.length} rows in {result.durationMs}ms
+          </thead>
+          <tbody>
+            {pageRows.map((row, rowIndex) => (
+              <tr className="border-b border-zinc-100" key={`db-row-${startIndex + rowIndex}`}>
+                {row.map((value, cellIndex) => (
+                  <td className="truncate px-3 py-2" key={`db-cell-${cellIndex}`}>
+                    {value ?? <span className="text-zinc-400">NULL</span>}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex h-10 items-center justify-between gap-3 border-t border-zinc-200 px-3 text-xs text-zinc-500">
+        <span>
+          {startIndex + 1}-{Math.min(startIndex + pageRows.length, queryResult.rows.length)} of{" "}
+          {queryResult.rows.length} rows in {queryResult.durationMs}ms
+        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button onClick={copyTsv} size="sm" type="button" variant="outline">
+            <Clipboard size={13} />
+            {copyStatus === "copied"
+              ? "Copied"
+              : copyStatus === "failed"
+                ? "Copy failed"
+                : "Copy TSV"}
+          </Button>
+          <Button onClick={exportCsv} size="sm" type="button" variant="outline">
+            <Download size={13} />
+            Export CSV
+          </Button>
+          <Button
+            disabled={safePageIndex === 0}
+            onClick={() => setPageIndex((current) => Math.max(0, current - 1))}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            Prev
+          </Button>
+          <span>
+            Page {safePageIndex + 1} / {pageCount}
+          </span>
+          <Button
+            disabled={safePageIndex >= pageCount - 1}
+            onClick={() => setPageIndex((current) => Math.min(pageCount - 1, current + 1))}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            Next
+          </Button>
+        </div>
       </div>
     </div>
   );
+}
+
+function serializeDatabaseResult(result: DatabaseQueryResult, delimiter: "," | "\t") {
+  const header = result.columns
+    .map((column) => serializeCell(column.name, delimiter))
+    .join(delimiter);
+  const rows = result.rows.map((row) =>
+    result.columns
+      .map((_, index) => serializeCell(row[index] ?? "", delimiter))
+      .join(delimiter),
+  );
+  return [header, ...rows].join("\r\n");
+}
+
+function serializeCell(value: string, delimiter: "," | "\t") {
+  const needsQuotes =
+    value.includes(delimiter) ||
+    value.includes("\"") ||
+    value.includes("\n") ||
+    value.includes("\r");
+  if (!needsQuotes) {
+    return value;
+  }
+  return `"${value.replace(/"/g, "\"\"")}"`;
+}
+
+function isConfirmationRequired(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code: unknown }).code === "CONFIRMATION_REQUIRED"
+  );
+}
+
+function confirmationMessage(error: unknown) {
+  if (typeof error === "object" && error !== null && "details" in error) {
+    const details = (error as { details?: { classification?: unknown } }).details;
+    if (details?.classification) {
+      return `Confirmation required for ${String(details.classification)} SQL. Review the statement, then click Confirm run.`;
+    }
+  }
+  return "Confirmation required. Review the SQL statement, then click Confirm run.";
 }
 
 function formatError(error: unknown) {

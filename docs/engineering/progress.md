@@ -29,10 +29,13 @@ This document records the current implementation state and the next work slices.
 - DONE: HTTP/HTTPS requests are executed by Rust `reqwest`.
 - DONE: Methods, URL, headers, query params, JSON body, and timeout are supported.
 - DONE: Workspace variables resolve with `{{variable}}` syntax in URL, headers, query, and body.
+- DONE: Workspace environment updates reject duplicate enabled variable names, and sensitive-looking values are masked in the frontend.
 - DONE: Request history is stored per workspace.
 - DONE: Saved request templates are stored per workspace and can be loaded back into the editor.
-- PARTIAL: Response viewer exists for body/status/duration; headers/cookies/timing panels are still basic.
-- TODO: Collection folders and import/export without secrets.
+- DONE: Request history entries can be replayed into the editable API request form.
+- DONE: Response viewer shows body, headers, cookies, timing, and payload sizes.
+- DONE: Saved API request collections can be exported/imported as secret-redacted JSON.
+- TODO: Collection folders and request duplication.
 
 ### Database
 
@@ -43,6 +46,8 @@ This document records the current implementation state and the next work slices.
 - DONE: SQLite SQL editor execution supports row results and affected row counts.
 - DONE: SQLite table browse action uses a backend-generated safe `SELECT * FROM table LIMIT ?` query.
 - DONE: DatabaseService has automated tests for connection CRUD, SQLite test, schema browsing, query execution, and table browsing.
+- DONE: Mutating, schema-changing, transaction-control, and unknown SQL require explicit confirmation before execution.
+- DONE: Database result grids use frontend pagination, stable column widths, TSV copy, and CSV export.
 - PARTIAL: PostgreSQL/MySQL metadata can be saved, but live credential-backed connections are still reserved.
 - TODO: PostgreSQL/MySQL connection tests, schema browsing, paginated result grids, and controlled editing.
 
@@ -79,9 +84,9 @@ Goal: make the workspace shell remember layout and open tabs.
 Goal: turn the SQLite database MVP into a dependable local database tool.
 
 - DONE: Add backend tests around connection CRUD, SQLite test, schema browsing, query execution, and table browsing.
-- TODO: Add query safety policy for mutating SQL, including confirmation metadata for future AI/automation.
+- DONE: Add query safety policy for mutating SQL, including confirmation metadata for future AI/automation.
 - DONE: Add table data browse action that generates safe `SELECT * FROM table LIMIT ?` queries.
-- Add result pagination and column width handling in the frontend.
+- DONE: Add result pagination and column width handling in the frontend.
 - Add Postgres/MySQL live connection tests after secret storage is ready.
 
 ### Slice 3: Secret Store
@@ -108,10 +113,11 @@ Goal: implement a real multi-session terminal flow.
 Goal: move from functional request runner to Postman-like daily tool.
 
 - Add collections and folders.
-- Add response headers, cookies, timing, and size panels.
-- Add history replay into a new tab.
-- Add import/export without secrets.
-- Add environment variable duplicate detection and masking for sensitive-looking values.
+- DONE: Add response headers, cookies, timing, and size panels.
+- DONE: Add history replay into the editable request form.
+- DONE: Add import/export without secrets.
+- DONE: Add environment variable duplicate detection and masking for sensitive-looking values.
+- Add request duplication.
 
 ### Slice 6: Packaging And Final User Guide
 
