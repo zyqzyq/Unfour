@@ -47,7 +47,7 @@ Workspace-scoped API requests need environment variables.
 
 ## Verification
 
-- Run `npm run build` for frontend changes.
+- Run `pnpm run build` for frontend changes.
 - Run `cargo check` from `src-tauri` for Rust changes.
 - Run `cargo check --features ssh-native` when changing SSH dependency or session code.
 - For UI changes, run the local app and inspect the first viewport in the in-app browser.

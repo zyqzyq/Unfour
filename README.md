@@ -17,9 +17,9 @@ Unfour Workspace is a Tauri 2 desktop app for unified operations and development
 ## Commands
 
 ```bash
-npm install
-npm run build
-npm run tauri dev
+pnpm install
+pnpm run build
+pnpm run tauri dev
 ```
 
 Rust checks should be run from `src-tauri`:
