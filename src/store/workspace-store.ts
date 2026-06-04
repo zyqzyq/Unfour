@@ -5,11 +5,17 @@ type WorkspaceStore = {
   activeWorkspaceId?: string;
   activeTabId: string;
   layoutWorkspaceId?: string;
+  selectedApiRequestId: string | null;
+  selectedDatabaseConnectionId: string | null;
+  selectedSshConnectionId: string | null;
   sidebarCollapsed: boolean;
   tabs: WorkspaceTab[];
   hydrateLayout: (layout: WorkspaceLayout) => void;
   openTab: (tab: WorkspaceTab) => void;
   snapshotLayout: (workspaceId: string) => WorkspaceLayout;
+  setSelectedApiRequest: (requestId: string | null) => void;
+  setSelectedDatabaseConnection: (connectionId: string | null) => void;
+  setSelectedSshConnection: (connectionId: string | null) => void;
   setActiveTab: (tabId: string) => void;
   setActiveWorkspace: (workspaceId: string) => void;
   toggleSidebar: () => void;
@@ -23,12 +29,18 @@ const initialTabs: WorkspaceTab[] = [
 
 export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   activeTabId: "api-main",
+  selectedApiRequestId: null,
+  selectedDatabaseConnectionId: null,
+  selectedSshConnectionId: null,
   sidebarCollapsed: false,
   tabs: initialTabs,
   hydrateLayout: (layout) =>
     set({
       activeTabId: layout.activeTabId,
       layoutWorkspaceId: layout.workspaceId,
+      selectedApiRequestId: layout.selectedApiRequestId,
+      selectedDatabaseConnectionId: layout.selectedDatabaseConnectionId,
+      selectedSshConnectionId: layout.selectedSshConnectionId,
       sidebarCollapsed: layout.sidebarCollapsed,
       tabs: layout.tabs.length ? layout.tabs : initialTabs,
     }),
@@ -46,12 +58,16 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       sidebarCollapsed: state.sidebarCollapsed,
       activeTabId: state.activeTabId,
       tabs: state.tabs,
-      selectedApiRequestId: null,
-      selectedDatabaseConnectionId: null,
-      selectedSshConnectionId: null,
+      selectedApiRequestId: state.selectedApiRequestId,
+      selectedDatabaseConnectionId: state.selectedDatabaseConnectionId,
+      selectedSshConnectionId: state.selectedSshConnectionId,
       updatedAt: new Date().toISOString(),
     };
   },
+  setSelectedApiRequest: (requestId) => set({ selectedApiRequestId: requestId }),
+  setSelectedDatabaseConnection: (connectionId) =>
+    set({ selectedDatabaseConnectionId: connectionId }),
+  setSelectedSshConnection: (connectionId) => set({ selectedSshConnectionId: connectionId }),
   setActiveTab: (tabId) => set({ activeTabId: tabId }),
   setActiveWorkspace: (workspaceId) => set({ activeWorkspaceId: workspaceId }),
   toggleSidebar: () =>

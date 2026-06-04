@@ -11,14 +11,12 @@ import {
   Download,
   Folder,
   Globe2,
-  History,
   Pencil,
   Play,
   Plus,
   Save,
   Send,
   Server,
-  Settings,
   Table2,
   TerminalSquare,
   Trash2,
@@ -94,6 +92,9 @@ function App() {
     activeWorkspaceId,
     hydrateLayout,
     layoutWorkspaceId,
+    selectedApiRequestId,
+    selectedDatabaseConnectionId,
+    selectedSshConnectionId,
     setActiveTab,
     setActiveWorkspace,
     sidebarCollapsed,
@@ -161,6 +162,9 @@ function App() {
     activeTabId,
     activeWorkspace?.id,
     layoutWorkspaceId,
+    selectedApiRequestId,
+    selectedDatabaseConnectionId,
+    selectedSshConnectionId,
     sidebarCollapsed,
     tabs,
   ]);
@@ -202,25 +206,25 @@ function App() {
     <div className="app-shell flex h-screen min-h-[680px] text-slate-950">
       <aside
         className={cn(
-          "flex h-full shrink-0 flex-col border-r border-slate-300 bg-slate-50/95 transition-all",
-          sidebarCollapsed ? "w-[64px]" : "w-[272px]",
+          "sidebar-shell flex h-full shrink-0 flex-col border-r transition-all duration-200",
+          sidebarCollapsed ? "w-[64px]" : "w-[240px]",
         )}
       >
-        <div className="flex h-14 items-center gap-2 border-b border-slate-300 px-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-slate-950 text-white shadow-sm">
+        <div className="sidebar-divider flex h-14 items-center gap-2 border-b px-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-teal-500 text-white shadow-sm shadow-teal-950/20">
             <Activity size={17} />
           </div>
           {!sidebarCollapsed && (
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold">Unfour Workspace</div>
-              <div className="truncate text-xs text-slate-500">
+              <div className="truncate text-xs text-slate-400">
                 {healthQuery.data?.syncStrategy ?? "local-first"}
               </div>
             </div>
           )}
           <Button
             aria-label="Toggle sidebar"
-            className="ml-auto"
+            className="ml-auto text-slate-300 hover:bg-white/10 hover:text-white"
             onClick={toggleSidebar}
             size="icon"
             type="button"
@@ -236,7 +240,7 @@ function App() {
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
           {!sidebarCollapsed && (
             <form
-              className="flex gap-2 rounded-md border border-slate-200 bg-white p-1.5 shadow-sm"
+              className="workspace-card flex gap-2 rounded-md p-1.5"
               onSubmit={(event) => {
                 event.preventDefault();
                 if (newWorkspaceName.trim()) {
@@ -265,8 +269,8 @@ function App() {
                 className={cn(
                   "flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
                   activeWorkspace?.id === workspace.id
-                    ? "bg-teal-50 text-teal-900 ring-1 ring-inset ring-teal-200"
-                    : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
+                    ? "bg-teal-500/20 text-white ring-1 ring-inset ring-teal-400/35"
+                    : "text-slate-300 hover:bg-white/10 hover:text-white",
                 )}
                 key={workspace.id}
                 onClick={() => activateWorkspaceMutation.mutate(workspace.id)}
@@ -319,23 +323,19 @@ function App() {
           </ResourceGroup>
         </div>
 
-        <div className="border-t border-slate-300 p-3">
-          <SidebarAction
-            collapsed={sidebarCollapsed}
-            icon={<Settings size={15} />}
-            label="Settings"
-            onClick={() => setActiveTab("api-main")}
-            selected={false}
-          />
-        </div>
+        {!sidebarCollapsed && (
+          <div className="sidebar-divider border-t px-3 py-2 text-xs text-slate-500">
+            Local workspace
+          </div>
+        )}
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 items-center justify-between border-b border-slate-300 bg-white/90 px-4">
+        <header className="flex h-14 items-center justify-between border-b border-slate-300/80 bg-white/95 px-4 shadow-sm">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <Input
-                className="h-8 w-[260px] border-transparent bg-slate-100 font-semibold hover:bg-white"
+                className="h-8 w-[260px] border-transparent bg-slate-100 font-semibold shadow-none hover:bg-white"
                 onChange={(event) => setWorkspaceDraftName(event.target.value)}
                 value={workspaceDraftName}
               />
@@ -379,23 +379,23 @@ function App() {
               <Badge tone={healthQuery.data?.storageReady ? "green" : "amber"}>
                 {healthQuery.data?.storageReady ? "local storage" : "checking"}
               </Badge>
-              <span>{healthQuery.data?.aiReservedCapabilities.length ?? 0} AI hooks reserved</span>
+              <span>{healthQuery.data?.syncStrategy ?? "local-first"}</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Badge tone="neutral">offline-first</Badge>
-            <Badge tone="teal">command bus</Badge>
+            <Badge tone="neutral">{activeTab.title}</Badge>
+            <Badge tone="teal">offline-first</Badge>
           </div>
         </header>
 
-        <div className="flex h-10 items-end gap-1 border-b border-slate-300 bg-slate-50/80 px-3">
+        <div className="flex h-10 items-end gap-1 border-b border-slate-300/80 bg-slate-100/80 px-3">
           {tabs.map((tab) => (
             <button
               className={cn(
-                "flex h-8 items-center gap-2 rounded-t-md border border-b-0 px-3 text-sm transition-colors",
+                "flex h-8 items-center gap-2 rounded-t-md border border-b-0 px-3 text-sm transition-colors duration-150",
                 activeTabId === tab.id
                   ? "border-slate-300 bg-white text-slate-950 shadow-sm"
-                  : "border-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-800",
+                  : "border-transparent text-slate-500 hover:bg-white/70 hover:text-slate-800",
               )}
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
@@ -409,7 +409,7 @@ function App() {
           ))}
         </div>
 
-        <section className="min-h-0 flex-1 overflow-hidden p-2">
+        <section className="min-h-0 flex-1 overflow-hidden p-3">
           {activeTab.kind === "api" && activeWorkspace && (
             <ApiClientPanel workspaceId={activeWorkspace.id} />
           )}
@@ -438,7 +438,7 @@ function ResourceGroup({
 }) {
   return (
     <div>
-      <div className="mb-1 flex h-7 items-center gap-2 px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <div className="mb-1 flex h-7 items-center gap-2 px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
         {icon}
         {!collapsed && title}
       </div>
@@ -463,10 +463,10 @@ function SidebarAction({
   return (
     <button
       className={cn(
-        "flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
+        "flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition-colors duration-150",
         selected
-          ? "bg-slate-950 text-white shadow-sm"
-          : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
+          ? "bg-white text-slate-950 shadow-sm"
+          : "text-slate-300 hover:bg-white/10 hover:text-white",
       )}
       onClick={onClick}
       type="button"
@@ -477,8 +477,134 @@ function SidebarAction({
   );
 }
 
+function Panel({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={cn("surface-panel flex min-h-0 flex-col rounded-md", className)}>
+      {children}
+    </section>
+  );
+}
+
+function PanelHeader({
+  actions,
+  icon,
+  subtitle,
+  title,
+}: {
+  actions?: React.ReactNode;
+  icon?: React.ReactNode;
+  subtitle?: React.ReactNode;
+  title: React.ReactNode;
+}) {
+  return (
+    <div className="surface-header flex min-h-10 items-center justify-between gap-3 px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2 text-sm font-semibold">
+        {icon}
+        <div className="min-w-0">
+          <div className="truncate">{title}</div>
+          {subtitle && <div className="truncate text-xs font-normal text-slate-500">{subtitle}</div>}
+        </div>
+      </div>
+      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+    </div>
+  );
+}
+
+function ResourceListItem({
+  actions,
+  children,
+  disabled,
+  onClick,
+  selected,
+}: {
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+  disabled?: boolean;
+  onClick: () => void;
+  selected: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "group flex min-h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition-colors duration-150",
+        selected
+          ? "bg-teal-50 text-teal-900 ring-1 ring-inset ring-teal-200"
+          : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
+      )}
+    >
+      <button
+        className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-not-allowed"
+        disabled={disabled}
+        onClick={onClick}
+        type="button"
+      >
+        {children}
+      </button>
+      {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
+    </div>
+  );
+}
+
+function InlineStatus({
+  children,
+  className,
+  icon,
+  tone = "neutral",
+}: {
+  children: React.ReactNode;
+  className?: string;
+  icon?: React.ReactNode;
+  tone?: "neutral" | "success" | "warning" | "danger";
+}) {
+  const toneClass = {
+    danger: "bg-rose-50 text-rose-800 ring-rose-200",
+    neutral: "bg-slate-50 text-slate-700 ring-slate-200",
+    success: "bg-emerald-50 text-emerald-800 ring-emerald-200",
+    warning: "bg-amber-50 text-amber-800 ring-amber-200",
+  }[tone];
+
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 rounded-md px-2 py-2 text-xs ring-1 ring-inset",
+        toneClass,
+        className,
+      )}
+    >
+      {icon}
+      <span className="min-w-0 flex-1">{children}</span>
+    </div>
+  );
+}
+
+function EmptyState({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "empty-state flex items-center justify-center rounded-md px-3 py-4 text-center text-sm",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
 function ApiClientPanel({ workspaceId }: { workspaceId: string }) {
   const queryClient = useQueryClient();
+  const { selectedApiRequestId, setSelectedApiRequest } = useWorkspaceStore();
   const [method, setMethod] = useState("GET");
   const [url, setUrl] = useState("{{base_url}}/get");
   const [name, setName] = useState("Health check");
@@ -492,6 +618,8 @@ function ApiClientPanel({ workspaceId }: { workspaceId: string }) {
   const [body, setBody] = useState("{\n  \"hello\": \"workspace\"\n}");
   const [envVariables, setEnvVariables] = useState<KeyValue[]>([]);
   const [collectionStatus, setCollectionStatus] = useState("");
+  const [loadedSavedRequestId, setLoadedSavedRequestId] = useState<string | null>(null);
+  const [resultTab, setResultTab] = useState<"response" | "history">("response");
   const [response, setResponse] = useState<ApiResponse | null>(null);
 
   const historyQuery = useQuery({
@@ -516,6 +644,23 @@ function ApiClientPanel({ workspaceId }: { workspaceId: string }) {
     }
   }, [environmentQuery.data]);
 
+  useEffect(() => {
+    if (!savedQuery.data || !selectedApiRequestId) {
+      return;
+    }
+
+    const selected = savedQuery.data.find((item) => item.id === selectedApiRequestId);
+    if (!selected) {
+      setSelectedApiRequest(null);
+      setLoadedSavedRequestId(null);
+      return;
+    }
+
+    if (loadedSavedRequestId !== selected.id) {
+      loadSavedRequest(selected);
+    }
+  }, [loadedSavedRequestId, savedQuery.data, selectedApiRequestId, setSelectedApiRequest]);
+
   const input = useMemo<ApiRequestInput>(
     () => ({
       workspaceId,
@@ -536,6 +681,7 @@ function ApiClientPanel({ workspaceId }: { workspaceId: string }) {
     mutationFn: sendApiRequest,
     onSuccess: (result) => {
       setResponse(result);
+      setResultTab("response");
       queryClient.invalidateQueries({ queryKey: ["api-history", workspaceId] });
     },
   });
@@ -563,7 +709,11 @@ function ApiClientPanel({ workspaceId }: { workspaceId: string }) {
 
   const replayHistoryMutation = useMutation({
     mutationFn: (historyId: string) => getApiHistoryDetail(workspaceId, historyId),
-    onSuccess: loadHistoryRequest,
+    onSuccess: (history) => {
+      setSelectedApiRequest(null);
+      setLoadedSavedRequestId(null);
+      loadHistoryRequest(history);
+    },
   });
 
   const importCollectionMutation = useMutation({
@@ -596,6 +746,8 @@ function ApiClientPanel({ workspaceId }: { workspaceId: string }) {
   }
 
   function loadSavedRequest(saved: ApiSavedRequest) {
+    setSelectedApiRequest(saved.id);
+    setLoadedSavedRequestId(saved.id);
     loadRequestDraft(savedRequestToInput(saved, workspaceId));
   }
 
@@ -653,51 +805,87 @@ function ApiClientPanel({ workspaceId }: { workspaceId: string }) {
   }
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_300px] gap-2">
-      <form className="surface-panel flex min-h-0 flex-col rounded-md" onSubmit={submit}>
-        <div className="surface-header flex items-center gap-2 px-3 py-2">
-          <select
-            className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm font-semibold text-slate-900 outline-none focus:border-teal-700"
-            onChange={(event) => setMethod(event.target.value)}
-            value={method}
-          >
-            {methods.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-          <Input onChange={(event) => setUrl(event.target.value)} value={url} />
-          <Button disabled={sendMutation.isPending} type="submit">
-            <Send size={15} />
-            Send
-          </Button>
-          <Button
-            disabled={saveMutation.isPending}
-            onClick={() => saveMutation.mutate(input)}
-            type="button"
-            variant="outline"
-          >
-            <Save size={15} />
-            Save
-          </Button>
-        </div>
-
-        <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)]">
-          <div className="space-y-3 overflow-y-auto border-r border-slate-200 bg-slate-50/55 p-3">
-            <SavedRequestsList
-              collectionStatus={collectionStatus}
-              importing={importCollectionMutation.isPending}
-              items={savedQuery.data ?? []}
-              mutatingItemId={
-                duplicateSavedMutation.variables ?? deleteSavedMutation.variables ?? null
+    <div className="grid h-full min-h-0 grid-cols-[280px_minmax(0,1fr)] gap-3">
+      <Panel>
+        <PanelHeader
+          actions={<Badge tone="neutral">{savedQuery.data?.length ?? 0} saved</Badge>}
+          icon={<Globe2 size={16} />}
+          title="API Workspace"
+        />
+        <div className="form-band min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+          <SavedRequestsList
+            collectionStatus={collectionStatus}
+            importing={importCollectionMutation.isPending}
+            items={savedQuery.data ?? []}
+            mutatingItemId={
+              duplicateSavedMutation.variables ?? deleteSavedMutation.variables ?? null
+            }
+            onExport={exportCollection}
+            onImport={importCollection}
+            onLoad={loadSavedRequest}
+            onDuplicate={(item) => duplicateSavedMutation.mutate(item.id)}
+            onDelete={(item) => {
+              if (selectedApiRequestId === item.id) {
+                setSelectedApiRequest(null);
+                setLoadedSavedRequestId(null);
               }
-              onExport={exportCollection}
-              onImport={importCollection}
-              onLoad={loadSavedRequest}
-              onDuplicate={(item) => duplicateSavedMutation.mutate(item.id)}
-              onDelete={(item) => deleteSavedMutation.mutate(item.id)}
+              deleteSavedMutation.mutate(item.id);
+            }}
+            selectedId={selectedApiRequestId}
+          />
+          <div className="subpanel rounded-md p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Environment
+              </span>
+              <Button
+                disabled={saveEnvironmentMutation.isPending}
+                onClick={() => saveEnvironmentMutation.mutate(envVariables)}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                <Save size={13} />
+                Save
+              </Button>
+            </div>
+            <KeyValueEditor
+              items={envVariables}
+              maskSensitiveValues
+              onChange={setEnvVariables}
+              title="Variables"
             />
+            <EnvironmentHints variables={envVariables} />
+          </div>
+        </div>
+      </Panel>
+
+      <form className="surface-panel flex min-h-0 flex-col rounded-md" onSubmit={submit}>
+        <PanelHeader
+          actions={
+            <>
+              <Button disabled={sendMutation.isPending} type="submit">
+                <Send size={15} />
+                Send
+              </Button>
+              <Button
+                disabled={saveMutation.isPending}
+                onClick={() => saveMutation.mutate(input)}
+                type="button"
+                variant="outline"
+              >
+                <Save size={15} />
+                Save
+              </Button>
+            </>
+          }
+          icon={<Braces size={16} />}
+          subtitle={folderPath || "Unfiled"}
+          title={name || `${method} request`}
+        />
+
+        <div className="form-band space-y-3 border-b border-slate-200 p-3">
+          <div className="grid grid-cols-[minmax(0,1fr)_180px] gap-3">
             <FieldGroup title="Request">
               <Input onChange={(event) => setName(event.target.value)} value={name} />
             </FieldGroup>
@@ -708,30 +896,26 @@ function ApiClientPanel({ workspaceId }: { workspaceId: string }) {
                 value={folderPath}
               />
             </FieldGroup>
-            <div className="rounded-md border border-slate-200 bg-white p-3 shadow-sm">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Environment
-                </span>
-                <Button
-                  disabled={saveEnvironmentMutation.isPending}
-                  onClick={() => saveEnvironmentMutation.mutate(envVariables)}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  <Save size={13} />
-                  Save
-                </Button>
-              </div>
-              <KeyValueEditor
-                items={envVariables}
-                maskSensitiveValues
-                onChange={setEnvVariables}
-                title="Variables"
-              />
-              <EnvironmentHints variables={envVariables} />
-            </div>
+          </div>
+          <div className="grid grid-cols-[112px_minmax(0,1fr)] gap-2">
+            <select
+              aria-label="HTTP method"
+              className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm font-semibold text-slate-900 shadow-xs outline-none transition-colors hover:border-slate-400 focus:border-teal-700 focus:ring-2 focus:ring-teal-700/15"
+              onChange={(event) => setMethod(event.target.value)}
+              value={method}
+            >
+              {methods.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+            <Input onChange={(event) => setUrl(event.target.value)} value={url} />
+          </div>
+        </div>
+
+        <div className="grid min-h-0 flex-[0.58] grid-cols-[minmax(220px,0.42fr)_minmax(0,1fr)] border-b border-slate-200">
+          <div className="min-h-0 space-y-3 overflow-y-auto border-r border-slate-200 p-3">
             <KeyValueEditor items={query} onChange={setQuery} title="Query" />
             <KeyValueEditor items={headers} onChange={setHeaders} title="Headers" />
           </div>
@@ -756,16 +940,36 @@ function ApiClientPanel({ workspaceId }: { workspaceId: string }) {
             </div>
           </div>
         </div>
-      </form>
 
-      <div className="flex min-h-0 flex-col gap-3">
-        <section className="surface-panel flex min-h-0 flex-1 flex-col rounded-md">
+        <div className="flex min-h-0 flex-[0.42] flex-col">
           <div className="surface-header flex h-10 items-center justify-between px-3">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <Braces size={15} />
-              Response
+            <div className="flex items-center gap-1">
+              <button
+                className={cn(
+                  "h-7 rounded-md px-2 text-xs font-semibold transition-colors",
+                  resultTab === "response"
+                    ? "bg-white text-slate-950 shadow-sm ring-1 ring-inset ring-slate-200"
+                    : "text-slate-500 hover:bg-white/70 hover:text-slate-900",
+                )}
+                onClick={() => setResultTab("response")}
+                type="button"
+              >
+                Response
+              </button>
+              <button
+                className={cn(
+                  "h-7 rounded-md px-2 text-xs font-semibold transition-colors",
+                  resultTab === "history"
+                    ? "bg-white text-slate-950 shadow-sm ring-1 ring-inset ring-slate-200"
+                    : "text-slate-500 hover:bg-white/70 hover:text-slate-900",
+                )}
+                onClick={() => setResultTab("history")}
+                type="button"
+              >
+                History
+              </button>
             </div>
-            {response && (
+            {resultTab === "response" && response && (
               <div className="flex items-center gap-2">
                 <Badge tone={response.status < 400 ? "green" : "red"}>
                   {response.status}
@@ -773,40 +977,42 @@ function ApiClientPanel({ workspaceId }: { workspaceId: string }) {
                 <Badge tone="neutral">{response.durationMs}ms</Badge>
               </div>
             )}
+            {resultTab === "history" && (
+              <Badge tone="neutral">{historyQuery.data?.length ?? 0} runs</Badge>
+            )}
           </div>
-          <ResponseSummary response={response} />
-          <ResponseDetails response={response} />
-          <div className="min-h-0 flex-1">
-            <Editor
-              defaultLanguage="json"
-              options={{
-                fontSize: 12,
-                minimap: { enabled: false },
-                readOnly: true,
-                scrollBeyondLastLine: false,
-                wordWrap: "on",
-              }}
-              theme="vs-light"
-              value={formatResponseBody(response?.body)}
-            />
-          </div>
-        </section>
 
-        <section className="surface-panel h-[270px] rounded-md">
-          <div className="surface-header flex h-10 items-center justify-between px-3">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <History size={15} />
-              History
-            </div>
-            <Badge tone="neutral">{savedQuery.data?.length ?? 0} saved</Badge>
-          </div>
-          <HistoryTable
-            items={historyQuery.data ?? []}
-            loadingReplay={replayHistoryMutation.isPending}
-            onReplay={(item) => replayHistoryMutation.mutate(item.id)}
-          />
-        </section>
-      </div>
+          {resultTab === "response" ? (
+            <>
+              <ResponseSummary response={response} />
+              <ResponseDetails response={response} />
+              <div className="min-h-0 flex-1">
+                <Editor
+                  defaultLanguage="json"
+                  options={{
+                    fontSize: 12,
+                    minimap: { enabled: false },
+                    readOnly: true,
+                    scrollBeyondLastLine: false,
+                    wordWrap: "on",
+                  }}
+                  theme="vs-light"
+                  value={formatResponseBody(response?.body)}
+                />
+              </div>
+            </>
+          ) : (
+            <HistoryTable
+              items={historyQuery.data ?? []}
+              loadingReplay={replayHistoryMutation.isPending}
+              onReplay={(item) => {
+                setResultTab("response");
+                replayHistoryMutation.mutate(item.id);
+              }}
+            />
+          )}
+        </div>
+      </form>
     </div>
   );
 }
@@ -821,6 +1027,7 @@ function SavedRequestsList({
   onExport,
   onImport,
   onLoad,
+  selectedId,
 }: {
   collectionStatus: string;
   importing: boolean;
@@ -831,11 +1038,12 @@ function SavedRequestsList({
   onExport: () => void;
   onImport: (file: File | undefined) => void;
   onLoad: (item: ApiSavedRequest) => void;
+  selectedId: string | null;
 }) {
   const groups = groupSavedRequests(items);
 
   return (
-    <div className="rounded-md border border-slate-200 bg-white p-3 shadow-sm">
+    <div className="subpanel rounded-md p-3">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           Saved
@@ -866,7 +1074,7 @@ function SavedRequestsList({
           />
           <span
             className={cn(
-              "inline-flex h-8 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-xs font-medium text-slate-800 hover:bg-slate-50",
+              "inline-flex h-8 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-xs font-medium text-slate-800 transition-colors hover:border-slate-400 hover:bg-slate-50",
               importing && "pointer-events-none opacity-50",
             )}
           >
@@ -876,11 +1084,11 @@ function SavedRequestsList({
         </label>
       </div>
       {collectionStatus && (
-        <div className="mb-2 truncate rounded-md bg-slate-50 px-2 py-1 text-xs text-slate-600">
+        <InlineStatus className="mb-2 truncate py-1" tone="neutral">
           {collectionStatus}
-        </div>
+        </InlineStatus>
       )}
-      <div className="max-h-44 space-y-3 overflow-y-auto">
+      <div className="max-h-64 space-y-3 overflow-y-auto">
         {groups.map((group) => (
           <div key={group.folder}>
             <div className="mb-1 flex items-center gap-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
@@ -890,45 +1098,44 @@ function SavedRequestsList({
             </div>
             <div className="space-y-1">
               {group.items.map((item) => (
-                <div
-                  className="group flex h-8 w-full items-center gap-1 rounded-md px-2 text-xs text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950"
+                <ResourceListItem
+                  actions={
+                    <>
+                      <Button
+                        aria-label={`Duplicate ${item.name}`}
+                        disabled={mutatingItemId === item.id}
+                        onClick={() => onDuplicate(item)}
+                        size="icon"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Copy size={12} />
+                      </Button>
+                      <Button
+                        aria-label={`Delete ${item.name}`}
+                        disabled={mutatingItemId === item.id}
+                        onClick={() => onDelete(item)}
+                        size="icon"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Trash2 size={12} />
+                      </Button>
+                    </>
+                  }
                   key={item.id}
+                  onClick={() => onLoad(item)}
+                  selected={selectedId === item.id}
                 >
-                  <button
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                    onClick={() => onLoad(item)}
-                    type="button"
-                  >
-                    <Badge tone="teal">{item.method}</Badge>
-                    <span className="min-w-0 flex-1 truncate">{item.name}</span>
-                  </button>
-                  <Button
-                    aria-label={`Duplicate ${item.name}`}
-                    disabled={mutatingItemId === item.id}
-                    onClick={() => onDuplicate(item)}
-                    size="icon"
-                    type="button"
-                    variant="ghost"
-                  >
-                    <Copy size={12} />
-                  </Button>
-                  <Button
-                    aria-label={`Delete ${item.name}`}
-                    disabled={mutatingItemId === item.id}
-                    onClick={() => onDelete(item)}
-                    size="icon"
-                    type="button"
-                    variant="ghost"
-                  >
-                    <Trash2 size={12} />
-                  </Button>
-                </div>
+                  <Badge tone="teal">{item.method}</Badge>
+                  <span className="min-w-0 flex-1 truncate text-xs">{item.name}</span>
+                </ResourceListItem>
               ))}
             </div>
           </div>
         ))}
         {items.length === 0 && (
-          <div className="empty-state rounded-md py-3 text-center text-xs">No saved requests</div>
+          <EmptyState className="py-3 text-xs">No saved requests</EmptyState>
         )}
       </div>
     </div>
@@ -1323,9 +1530,9 @@ function HistoryTable({
   });
 
   return (
-    <div className="h-[228px] overflow-auto">
-      <table className="w-full text-left text-xs">
-        <thead className="sticky top-0 bg-slate-50 text-slate-500">
+    <div className="min-h-0 flex-1 overflow-auto">
+      <table className="data-table w-full text-left text-xs">
+        <thead className="sticky top-0">
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map((header) => (
@@ -1338,7 +1545,7 @@ function HistoryTable({
         </thead>
         <tbody>
           {table.getRowModel().rows.map((row) => (
-            <tr className="border-b border-slate-100 hover:bg-slate-50/70" key={row.id}>
+            <tr className="border-b" key={row.id}>
               {row.getVisibleCells().map((cell) => (
                 <td className="px-3 py-2" key={cell.id}>
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -1349,9 +1556,7 @@ function HistoryTable({
         </tbody>
       </table>
       {items.length === 0 && (
-        <div className="empty-state m-3 flex h-24 items-center justify-center rounded-md text-sm">
-          No requests yet
-        </div>
+        <EmptyState className="m-3 h-24">No requests yet</EmptyState>
       )}
     </div>
   );
@@ -1359,7 +1564,8 @@ function HistoryTable({
 
 function SshPanel({ workspaceId }: { workspaceId: string }) {
   const queryClient = useQueryClient();
-  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
+  const { selectedSshConnectionId: selectedConnectionId, setSelectedSshConnection } =
+    useWorkspaceStore();
   const [form, setForm] = useState<SshConnectionInput>({
     workspaceId,
     name: "Deploy host",
@@ -1385,13 +1591,16 @@ function SshPanel({ workspaceId }: { workspaceId: string }) {
 
   useEffect(() => {
     if (!connectionsQuery.data?.length) {
-      setSelectedConnectionId(null);
+      setSelectedSshConnection(null);
       return;
     }
-    if (!selectedConnectionId) {
-      setSelectedConnectionId(connectionsQuery.data[0].id);
+    if (
+      !selectedConnectionId ||
+      !connectionsQuery.data.some((connection) => connection.id === selectedConnectionId)
+    ) {
+      setSelectedSshConnection(connectionsQuery.data[0].id);
     }
-  }, [connectionsQuery.data, selectedConnectionId]);
+  }, [connectionsQuery.data, selectedConnectionId, setSelectedSshConnection]);
 
   useEffect(() => {
     if (!selectedConnection) {
@@ -1413,7 +1622,7 @@ function SshPanel({ workspaceId }: { workspaceId: string }) {
   const saveMutation = useMutation({
     mutationFn: saveSshConnection,
     onSuccess: (connection) => {
-      setSelectedConnectionId(connection.id);
+      setSelectedSshConnection(connection.id);
       queryClient.invalidateQueries({ queryKey: ["ssh-connections", workspaceId] });
     },
   });
@@ -1421,7 +1630,7 @@ function SshPanel({ workspaceId }: { workspaceId: string }) {
   const deleteMutation = useMutation({
     mutationFn: (connectionId: string) => deleteSshConnection(workspaceId, connectionId),
     onSuccess: () => {
-      setSelectedConnectionId(null);
+      setSelectedSshConnection(null);
       queryClient.invalidateQueries({ queryKey: ["ssh-connections", workspaceId] });
     },
   });
@@ -1431,7 +1640,7 @@ function SshPanel({ workspaceId }: { workspaceId: string }) {
   }
 
   function newConnection() {
-    setSelectedConnectionId(null);
+    setSelectedSshConnection(null);
     setForm({
       workspaceId,
       name: "Deploy host",
@@ -1449,19 +1658,22 @@ function SshPanel({ workspaceId }: { workspaceId: string }) {
   }
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-[300px_minmax(0,1fr)] gap-2">
-      <section className="surface-panel flex min-h-0 flex-col rounded-md">
-        <div className="surface-header flex h-10 items-center justify-between px-3">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <TerminalSquare size={16} />
-            SSH Connections
-          </div>
-          <Button onClick={newConnection} size="icon" type="button" variant="ghost">
-            <Plus size={15} />
-          </Button>
-        </div>
+    <div className="grid h-full min-h-0 grid-cols-[280px_minmax(0,1fr)] gap-3">
+      <Panel>
+        <PanelHeader
+          actions={
+            <>
+              <Badge tone="amber">reserved</Badge>
+              <Button aria-label="New SSH connection" onClick={newConnection} size="icon" type="button" variant="ghost">
+                <Plus size={15} />
+              </Button>
+            </>
+          }
+          icon={<TerminalSquare size={16} />}
+          title="SSH Connections"
+        />
 
-        <form className="space-y-3 border-b border-slate-200 bg-slate-50/55 p-3" onSubmit={submitConnection}>
+        <form className="form-band space-y-3 border-b border-slate-200 p-3" onSubmit={submitConnection}>
           <FieldGroup title="Name">
             <Input onChange={(event) => updateForm({ name: event.target.value })} value={form.name} />
           </FieldGroup>
@@ -1484,7 +1696,7 @@ function SshPanel({ workspaceId }: { workspaceId: string }) {
           </FieldGroup>
           <FieldGroup title="Auth">
             <select
-              className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-700/15"
+              className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-950 shadow-xs outline-none transition-colors hover:border-slate-400 focus:border-teal-700 focus:ring-2 focus:ring-teal-700/15"
               onChange={(event) =>
                 updateForm({
                   authKind: event.target.value as SshConnectionInput["authKind"],
@@ -1531,9 +1743,9 @@ function SshPanel({ workspaceId }: { workspaceId: string }) {
             </Button>
           </div>
           {(saveMutation.error || deleteMutation.error) && (
-            <div className="rounded-md bg-rose-50 px-2 py-2 text-xs text-rose-800 ring-1 ring-inset ring-rose-200">
+            <InlineStatus icon={<XCircle size={14} />} tone="danger">
               {formatError(saveMutation.error ?? deleteMutation.error)}
-            </div>
+            </InlineStatus>
           )}
         </form>
 
@@ -1546,34 +1758,26 @@ function SshPanel({ workspaceId }: { workspaceId: string }) {
           </div>
           <div className="space-y-1">
             {connectionsQuery.data?.map((connection) => (
-              <button
-                className={cn(
-                  "flex min-h-9 w-full items-center justify-between gap-2 rounded-md px-2 text-left text-sm transition-colors",
-                  selectedConnectionId === connection.id
-                    ? "bg-teal-50 text-teal-900 ring-1 ring-inset ring-teal-200"
-                    : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
-                )}
+              <ResourceListItem
                 key={connection.id}
-                onClick={() => setSelectedConnectionId(connection.id)}
-                type="button"
+                onClick={() => setSelectedSshConnection(connection.id)}
+                selected={selectedConnectionId === connection.id}
               >
                 <span className="min-w-0 flex-1 truncate">{connection.name}</span>
                 <Badge tone={connection.authKind === "password" ? "amber" : "teal"}>
                   {connection.authKind}
                 </Badge>
-              </button>
+              </ResourceListItem>
             ))}
             {connectionsQuery.data?.length === 0 && (
-              <div className="empty-state rounded-md py-4 text-center text-sm">
-                No SSH connections
-              </div>
+              <EmptyState>No SSH connections</EmptyState>
             )}
           </div>
-          <div className="mt-3 rounded-md bg-amber-50 px-2 py-2 text-xs text-amber-800 ring-1 ring-inset ring-amber-200">
+          <InlineStatus className="mt-3" tone="warning">
             Session login and terminal streaming remain reserved for the russh backend.
-          </div>
+          </InlineStatus>
         </div>
-      </section>
+      </Panel>
       <TerminalPreview />
     </div>
   );
@@ -1581,7 +1785,10 @@ function SshPanel({ workspaceId }: { workspaceId: string }) {
 
 function DatabasePanel({ workspaceId }: { workspaceId: string }) {
   const queryClient = useQueryClient();
-  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
+  const {
+    selectedDatabaseConnectionId: selectedConnectionId,
+    setSelectedDatabaseConnection,
+  } = useWorkspaceStore();
   const [testResult, setTestResult] = useState<DatabaseTestResult | null>(null);
   const [queryResult, setQueryResult] = useState<DatabaseQueryResult | null>(null);
   const [pendingSqlConfirmation, setPendingSqlConfirmation] = useState(false);
@@ -1612,14 +1819,17 @@ function DatabasePanel({ workspaceId }: { workspaceId: string }) {
 
   useEffect(() => {
     if (!connectionsQuery.data?.length) {
-      setSelectedConnectionId(null);
+      setSelectedDatabaseConnection(null);
       return;
     }
 
-    if (!selectedConnectionId) {
-      setSelectedConnectionId(connectionsQuery.data[0].id);
+    if (
+      !selectedConnectionId ||
+      !connectionsQuery.data.some((connection) => connection.id === selectedConnectionId)
+    ) {
+      setSelectedDatabaseConnection(connectionsQuery.data[0].id);
     }
-  }, [connectionsQuery.data, selectedConnectionId]);
+  }, [connectionsQuery.data, selectedConnectionId, setSelectedDatabaseConnection]);
 
   useEffect(() => {
     setForm((current) => ({ ...current, workspaceId }));
@@ -1650,7 +1860,7 @@ function DatabasePanel({ workspaceId }: { workspaceId: string }) {
   const saveMutation = useMutation({
     mutationFn: saveDatabaseConnection,
     onSuccess: (connection) => {
-      setSelectedConnectionId(connection.id);
+      setSelectedDatabaseConnection(connection.id);
       queryClient.invalidateQueries({ queryKey: ["database-connections", workspaceId] });
     },
   });
@@ -1658,7 +1868,7 @@ function DatabasePanel({ workspaceId }: { workspaceId: string }) {
   const deleteMutation = useMutation({
     mutationFn: (connectionId: string) => deleteDatabaseConnection(workspaceId, connectionId),
     onSuccess: () => {
-      setSelectedConnectionId(null);
+      setSelectedDatabaseConnection(null);
       setTestResult(null);
       setQueryResult(null);
       setPendingSqlConfirmation(false);
@@ -1719,7 +1929,7 @@ function DatabasePanel({ workspaceId }: { workspaceId: string }) {
   }
 
   function newConnection() {
-    setSelectedConnectionId(null);
+    setSelectedDatabaseConnection(null);
     setTestResult(null);
     setQueryResult(null);
     setPendingSqlConfirmation(false);
@@ -1732,19 +1942,19 @@ function DatabasePanel({ workspaceId }: { workspaceId: string }) {
   }
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-[300px_minmax(0,1fr)] gap-2">
-      <section className="surface-panel flex min-h-0 flex-col rounded-md">
-        <div className="surface-header flex h-10 items-center justify-between px-3">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Database size={16} />
-            Connections
-          </div>
-          <Button onClick={newConnection} size="icon" type="button" variant="ghost">
-            <Plus size={15} />
-          </Button>
-        </div>
+    <div className="grid h-full min-h-0 grid-cols-[280px_minmax(0,1fr)] gap-3">
+      <Panel>
+        <PanelHeader
+          actions={
+            <Button aria-label="New database connection" onClick={newConnection} size="icon" type="button" variant="ghost">
+              <Plus size={15} />
+            </Button>
+          }
+          icon={<Database size={16} />}
+          title="Connections"
+        />
 
-        <form className="space-y-3 border-b border-slate-200 bg-slate-50/55 p-3" onSubmit={submitConnection}>
+        <form className="form-band space-y-3 border-b border-slate-200 p-3" onSubmit={submitConnection}>
           <FieldGroup title="Name">
             <Input
               onChange={(event) => updateForm({ name: event.target.value })}
@@ -1753,7 +1963,7 @@ function DatabasePanel({ workspaceId }: { workspaceId: string }) {
           </FieldGroup>
           <FieldGroup title="Driver">
             <select
-              className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-700/15"
+              className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-950 shadow-xs outline-none transition-colors hover:border-slate-400 focus:border-teal-700 focus:ring-2 focus:ring-teal-700/15"
               onChange={(event) =>
                 updateForm({
                   driver: event.target.value as DatabaseConnectionInput["driver"],
@@ -1856,27 +2066,19 @@ function DatabasePanel({ workspaceId }: { workspaceId: string }) {
           </div>
           <div className="space-y-1">
             {connectionsQuery.data?.map((connection) => (
-              <button
-                className={cn(
-                  "flex min-h-9 w-full items-center justify-between gap-2 rounded-md px-2 text-left text-sm transition-colors",
-                  selectedConnectionId === connection.id
-                    ? "bg-teal-50 text-teal-900 ring-1 ring-inset ring-teal-200"
-                    : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
-                )}
+              <ResourceListItem
                 key={connection.id}
-                onClick={() => setSelectedConnectionId(connection.id)}
-                type="button"
+                onClick={() => setSelectedDatabaseConnection(connection.id)}
+                selected={selectedConnectionId === connection.id}
               >
                 <span className="min-w-0 flex-1 truncate">{connection.name}</span>
                 <Badge tone={connection.driver === "sqlite" ? "green" : "amber"}>
                   {connection.driver}
                 </Badge>
-              </button>
+              </ResourceListItem>
             ))}
             {connectionsQuery.data?.length === 0 && (
-              <div className="empty-state rounded-md py-4 text-center text-sm">
-                No database connections
-              </div>
+              <EmptyState>No database connections</EmptyState>
             )}
           </div>
 
@@ -1894,27 +2096,27 @@ function DatabasePanel({ workspaceId }: { workspaceId: string }) {
             />
           </div>
         </div>
-      </section>
-      <section className="surface-panel flex min-h-0 flex-col rounded-md">
-        <div className="surface-header flex h-10 items-center justify-between px-3">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Clock size={15} />
-            SQL Editor
-          </div>
-          <div className="flex items-center gap-2">
-            {selectedConnection && <Badge tone="neutral">{selectedConnection.name}</Badge>}
-            <Button
-              disabled={!selectedConnectionId || executeMutation.isPending}
-              className={pendingSqlConfirmation ? "bg-rose-700 hover:bg-rose-800" : undefined}
-              onClick={() => executeMutation.mutate(pendingSqlConfirmation)}
-              size="sm"
-              type="button"
-            >
-              <Play size={14} />
-              {pendingSqlConfirmation ? "Confirm run" : "Run"}
-            </Button>
-          </div>
-        </div>
+      </Panel>
+      <Panel>
+        <PanelHeader
+          actions={
+            <>
+              {selectedConnection && <Badge tone="neutral">{selectedConnection.name}</Badge>}
+              <Button
+                disabled={!selectedConnectionId || executeMutation.isPending}
+                className={pendingSqlConfirmation ? "bg-rose-700 hover:bg-rose-800" : undefined}
+                onClick={() => executeMutation.mutate(pendingSqlConfirmation)}
+                size="sm"
+                type="button"
+              >
+                <Play size={14} />
+                {pendingSqlConfirmation ? "Confirm run" : "Run"}
+              </Button>
+            </>
+          }
+          icon={<Clock size={15} />}
+          title="SQL Editor"
+        />
         <div className="min-h-0 flex-[0.55] border-b border-slate-200">
           <Editor
             defaultLanguage="sql"
@@ -1934,7 +2136,7 @@ function DatabasePanel({ workspaceId }: { workspaceId: string }) {
           pendingConfirmation={pendingSqlConfirmation}
           result={queryResult}
         />
-      </section>
+      </Panel>
     </div>
   );
 }
@@ -1948,10 +2150,9 @@ function StatusLine({
 }) {
   if (error) {
     return (
-      <div className="flex items-center gap-2 rounded-md bg-rose-50 px-2 py-2 text-xs text-rose-800 ring-1 ring-inset ring-rose-200">
-        <XCircle size={14} />
-        <span className="min-w-0 flex-1">{formatError(error)}</span>
-      </div>
+      <InlineStatus icon={<XCircle size={14} />} tone="danger">
+        {formatError(error)}
+      </InlineStatus>
     );
   }
 
@@ -1960,20 +2161,13 @@ function StatusLine({
   }
 
   return (
-    <div
-      className={cn(
-        "flex items-center gap-2 rounded-md px-2 py-2 text-xs ring-1 ring-inset",
-        result.ok
-          ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
-          : "bg-amber-50 text-amber-800 ring-amber-200",
-      )}
+    <InlineStatus
+      icon={result.ok ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+      tone={result.ok ? "success" : "warning"}
     >
-      {result.ok ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-      <span className="min-w-0 flex-1">
-        {result.message}
-        {result.serverVersion ? ` (${result.serverVersion})` : ""}
-      </span>
-    </div>
+      {result.message}
+      {result.serverVersion ? ` (${result.serverVersion})` : ""}
+    </InlineStatus>
   );
 }
 
@@ -1991,15 +2185,23 @@ function SchemaTree({
   schema?: DatabaseSchema;
 }) {
   if (error) {
-    return <div className="rounded-md bg-amber-50 p-2 text-xs text-amber-800 ring-1 ring-inset ring-amber-200">{formatError(error)}</div>;
+    return (
+      <InlineStatus tone="warning">
+        {formatError(error)}
+      </InlineStatus>
+    );
   }
 
   if (loading) {
-    return <div className="empty-state rounded-md p-3 text-xs">Loading schema...</div>;
+    return <EmptyState className="p-3 text-xs">Loading schema...</EmptyState>;
   }
 
   if (!schema?.tables.length) {
-    return <div className="empty-state rounded-md p-3 text-xs">Select a SQLite connection to inspect tables.</div>;
+    return (
+      <EmptyState className="p-3 text-xs">
+        Select a SQLite connection to inspect tables.
+      </EmptyState>
+    );
   }
 
   return (
@@ -2058,39 +2260,30 @@ function DatabaseResultView({
 
   if (error) {
     return (
-      <div
+      <EmptyState
         className={cn(
-          "flex min-h-0 flex-1 items-center justify-center p-4 text-sm",
-          "empty-state",
+          "min-h-0 flex-1 p-4",
           pendingConfirmation ? "text-amber-800" : "text-rose-800",
         )}
       >
         {pendingConfirmation ? confirmationMessage(error) : formatError(error)}
-      </div>
+      </EmptyState>
     );
   }
 
   if (isPending) {
-    return (
-      <div className="empty-state flex min-h-0 flex-1 items-center justify-center text-sm">
-        Running query...
-      </div>
-    );
+    return <EmptyState className="min-h-0 flex-1">Running query...</EmptyState>;
   }
 
   if (!result) {
-    return (
-      <div className="empty-state flex min-h-0 flex-1 items-center justify-center text-sm">
-        Query results will appear here.
-      </div>
-    );
+    return <EmptyState className="min-h-0 flex-1">Query results will appear here.</EmptyState>;
   }
 
   if (result.columns.length === 0) {
     return (
-      <div className="empty-state flex min-h-0 flex-1 items-center justify-center text-sm text-slate-600">
+      <EmptyState className="min-h-0 flex-1 text-slate-600">
         {result.affectedRows} rows affected in {result.durationMs}ms.
-      </div>
+      </EmptyState>
     );
   }
 
@@ -2099,6 +2292,8 @@ function DatabaseResultView({
   const safePageIndex = Math.min(pageIndex, pageCount - 1);
   const startIndex = safePageIndex * pageSize;
   const pageRows = queryResult.rows.slice(startIndex, startIndex + pageSize);
+  const displayStart = queryResult.rows.length ? startIndex + 1 : 0;
+  const displayEnd = Math.min(startIndex + pageRows.length, queryResult.rows.length);
   const columnWidths = queryResult.columns.map((column, columnIndex) =>
     queryResult.rows.reduce((width, row) => {
       const value = row[columnIndex] ?? "";
@@ -2133,13 +2328,13 @@ function DatabaseResultView({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-auto">
-        <table className="w-max min-w-full table-fixed text-left text-xs">
+        <table className="data-table w-max min-w-full table-fixed text-left text-xs">
           <colgroup>
             {columnWidths.map((width, index) => (
               <col key={`db-col-${index}`} style={{ width }} />
             ))}
           </colgroup>
-          <thead className="sticky top-0 bg-slate-50 text-slate-500">
+          <thead className="sticky top-0">
             <tr>
               {queryResult.columns.map((column) => (
                 <th className="border-b border-slate-200 px-3 py-2 font-medium" key={column.name}>
@@ -2155,7 +2350,7 @@ function DatabaseResultView({
           </thead>
           <tbody>
             {pageRows.map((row, rowIndex) => (
-              <tr className="border-b border-slate-100 hover:bg-slate-50/70" key={`db-row-${startIndex + rowIndex}`}>
+              <tr className="border-b" key={`db-row-${startIndex + rowIndex}`}>
                 {row.map((value, cellIndex) => (
                   <td className="truncate px-3 py-2" key={`db-cell-${cellIndex}`}>
                     {value ?? <span className="text-slate-400">NULL</span>}
@@ -2168,8 +2363,8 @@ function DatabaseResultView({
       </div>
       <div className="flex h-10 items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-3 text-xs text-slate-500">
         <span>
-          {startIndex + 1}-{Math.min(startIndex + pageRows.length, queryResult.rows.length)} of{" "}
-          {queryResult.rows.length} rows in {queryResult.durationMs}ms
+          {displayStart}-{displayEnd} of {queryResult.rows.length} rows in{" "}
+          {queryResult.durationMs}ms
         </span>
         <div className="flex shrink-0 items-center gap-2">
           <Button onClick={copyTsv} size="sm" type="button" variant="outline">

@@ -32,5 +32,9 @@ export function TerminalPreview() {
     return () => terminal.dispose();
   }, []);
 
-  return <div className="h-full min-h-[360px] overflow-hidden rounded-md bg-slate-950 p-2" ref={hostRef} />;
+  return (
+    <section className="surface-panel min-h-0 rounded-md bg-slate-950 p-2">
+      <div className="h-full min-h-[360px] overflow-hidden rounded-md bg-slate-950" ref={hostRef} />
+    </section>
+  );
 }
