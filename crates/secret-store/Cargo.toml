@@ -1,0 +1,13 @@
+[package]
+name = "unfour-secret-store"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+keyring = "3"
+serde_json = "1"
+unfour-core = { path = "../unfour-core" }
+uuid = { version = "1", features = ["serde", "v4"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }

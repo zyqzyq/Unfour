@@ -1,7 +1,7 @@
-use crate::app_error::{AppError, AppResult};
-use crate::models::CredentialMetadata;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use unfour_core::models::CredentialMetadata;
+use unfour_core::{AppError, AppResult};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -118,7 +118,9 @@ impl SecretStore {
                 "credential secret cannot be empty".to_string(),
             ));
         }
-        let metadata = self.inspect_credential(workspace_id, credential_ref).await?;
+        let metadata = self
+            .inspect_credential(workspace_id, credential_ref)
+            .await?;
         self.write_secret(&metadata.credential_ref, &secret).await?;
 
         Ok(CredentialMetadata {

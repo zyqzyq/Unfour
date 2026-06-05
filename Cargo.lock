@@ -6032,23 +6032,113 @@ dependencies = [
 ]
 
 [[package]]
-name = "unfour-workspace"
+name = "unfour-core"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "keyring",
  "reqwest 0.12.28",
- "russh",
  "serde",
  "serde_json",
  "sqlx",
  "tauri",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "unfour-database-engine"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "unfour-core",
+ "unfour-local-storage",
+ "uuid",
+]
+
+[[package]]
+name = "unfour-http-engine"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "reqwest 0.12.28",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "unfour-core",
+ "unfour-local-storage",
+ "uuid",
+]
+
+[[package]]
+name = "unfour-local-storage"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde_json",
+ "sqlx",
+ "tauri",
+ "unfour-core",
+ "uuid",
+]
+
+[[package]]
+name = "unfour-secret-store"
+version = "0.1.0"
+dependencies = [
+ "keyring",
+ "serde_json",
+ "tokio",
+ "unfour-core",
+ "uuid",
+]
+
+[[package]]
+name = "unfour-ssh-engine"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "russh",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "unfour-core",
+ "unfour-local-storage",
+ "uuid",
+]
+
+[[package]]
+name = "unfour-workspace"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tauri",
  "tauri-build",
  "tauri-plugin-opener",
- "thiserror 2.0.18",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "unfour-core",
+ "unfour-database-engine",
+ "unfour-http-engine",
+ "unfour-local-storage",
+ "unfour-secret-store",
+ "unfour-ssh-engine",
+ "unfour-workspace-engine",
+]
+
+[[package]]
+name = "unfour-workspace-engine"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "unfour-core",
+ "unfour-local-storage",
  "uuid",
 ]
 

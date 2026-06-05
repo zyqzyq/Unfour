@@ -1,13 +1,13 @@
-use crate::app_error::{AppError, AppResult};
-use crate::local_db::LocalDb;
-use crate::models::{
-    ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest, KeyValue,
-};
-use crate::redaction::redact_key_values;
 use chrono::Utc;
 use reqwest::header::{HeaderName, HeaderValue, CONTENT_TYPE};
 use reqwest::{Client, Method, Url};
 use std::time::{Duration, Instant};
+use unfour_core::models::{
+    ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest, KeyValue,
+};
+use unfour_core::redaction::redact_key_values;
+use unfour_core::{AppError, AppResult};
+use unfour_local_storage::LocalDb;
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -397,9 +397,13 @@ fn build_url(raw_url: &str, query: &[KeyValue]) -> AppResult<Url> {
 }
 
 fn redact_headers(headers: &[KeyValue]) -> Vec<KeyValue> {
-    redact_key_values(headers.to_vec(), |item| &item.key, |item, value| {
-        item.value = value;
-    })
+    redact_key_values(
+        headers.to_vec(),
+        |item| &item.key,
+        |item, value| {
+            item.value = value;
+        },
+    )
 }
 
 fn validate_workspace_id(workspace_id: &str) -> AppResult<()> {

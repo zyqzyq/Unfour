@@ -53,7 +53,7 @@ Workspace-scoped API requests need environment variables.
 ## Verification
 
 - Run `pnpm run build` for frontend changes.
-- Run `cargo check` from `apps/desktop/src-tauri` for Rust changes.
-- Run `cargo check --features ssh-native` from `apps/desktop/src-tauri` when changing SSH dependency or session code.
-- Run `cargo test` from `apps/desktop/src-tauri`; do not rely on `--manifest-path` from the repository root for Rust tests.
+- Run `cargo check --workspace` from the repository root for Rust changes.
+- Run `cargo check -p unfour-workspace --features ssh-native` from the repository root when changing SSH dependency or session code.
+- Run `cargo test --workspace` from the repository root for Rust tests.
 - For UI changes, run the local app and inspect the first viewport in the in-app browser.

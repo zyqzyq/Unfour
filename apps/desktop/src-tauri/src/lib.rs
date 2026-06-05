@@ -1,13 +1,5 @@
-mod ai_reserved;
-mod app_error;
-mod activity_log;
 mod command_bus;
 mod commands;
-mod local_db;
-mod models;
-mod redaction;
-mod services;
-mod sync_reserved;
 
 use command_bus::CommandBus;
 use tauri::Manager;

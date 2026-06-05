@@ -1,5 +1,6 @@
-use crate::app_error::AppResult;
-use crate::models::{
+use crate::AppState;
+use tauri::State;
+use unfour_core::models::{
     ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest,
     CredentialCreateInput, CredentialDeleteInput, CredentialInspectInput, CredentialMetadata,
     CredentialRotateInput, DatabaseBrowseInput, DatabaseBrowseResult, DatabaseConnection,
@@ -9,8 +10,7 @@ use crate::models::{
     SshSessionInput, SshSessionSummary, SystemHealth, Workspace, WorkspaceEnvironment,
     WorkspaceLayout, WorkspaceState,
 };
-use crate::AppState;
-use tauri::State;
+use unfour_core::AppResult;
 
 #[tauri::command]
 pub async fn system_health(state: State<'_, AppState>) -> AppResult<SystemHealth> {

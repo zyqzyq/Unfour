@@ -1,24 +1,23 @@
-use crate::ai_reserved;
-use crate::app_error::AppResult;
-use crate::activity_log::ActivityLogService;
-use crate::local_db::LocalDb;
-use crate::models::{
+use tauri::AppHandle;
+use unfour_core::ai_reserved;
+use unfour_core::models::{
     ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest,
     CredentialCreateInput, CredentialDeleteInput, CredentialInspectInput, CredentialMetadata,
     CredentialRotateInput, DatabaseBrowseInput, DatabaseBrowseResult, DatabaseConnection,
     DatabaseConnectionInput, DatabaseQueryInput, DatabaseQueryResult, DatabaseSchema,
-    DatabaseTestResult, SshCloseInput, SshConnectInput, SshConnection, SshConnectionInput,
-    SshLogExport, SshLogExportInput, SshResizeInput, SshSessionEvent, SshSessionInput,
-    SshSessionSummary, SystemHealth, Workspace, WorkspaceEnvironment, WorkspaceLayout,
-    WorkspaceState,
+    DatabaseTestResult, KeyValue, SshCloseInput, SshConnectInput, SshConnection,
+    SshConnectionInput, SshLogExport, SshLogExportInput, SshResizeInput, SshSessionEvent,
+    SshSessionInput, SshSessionSummary, SystemHealth, Workspace, WorkspaceEnvironment,
+    WorkspaceLayout, WorkspaceState,
 };
-use crate::services::api_client::ApiClientService;
-use crate::services::database::DatabaseService;
-use crate::services::secret_store::SecretStore;
-use crate::services::ssh::SshService;
-use crate::services::workspace::WorkspaceService;
-use crate::sync_reserved;
-use tauri::AppHandle;
+use unfour_core::sync_reserved;
+use unfour_core::AppResult;
+use unfour_database_engine::DatabaseService;
+use unfour_http_engine::ApiClientService;
+use unfour_local_storage::{ActivityLogService, LocalDb};
+use unfour_secret_store::SecretStore;
+use unfour_ssh_engine::SshService;
+use unfour_workspace_engine::WorkspaceService;
 
 #[derive(Clone)]
 pub struct CommandBus {
@@ -121,7 +120,7 @@ impl CommandBus {
     pub async fn workspace_environment_update(
         &self,
         workspace_id: String,
-        variables: Vec<crate::models::KeyValue>,
+        variables: Vec<KeyValue>,
     ) -> AppResult<WorkspaceEnvironment> {
         let environment = self
             .workspace

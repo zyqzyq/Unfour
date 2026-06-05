@@ -80,12 +80,12 @@ The Rust backend is responsible for actions that should not live only in the bro
 - `apps/desktop/src-tauri/src/lib.rs` starts the Tauri app and registers all commands.
 - `apps/desktop/src-tauri/src/commands.rs` exposes thin Tauri commands.
 - `apps/desktop/src-tauri/src/command_bus.rs` routes commands to the correct service. This is the same path future AI, CLI, or sync automation should use.
-- `apps/desktop/src-tauri/src/local_db.rs` opens and migrates the local SQLite database.
-- `apps/desktop/src-tauri/src/services/workspace.rs` handles workspace data.
-- `apps/desktop/src-tauri/src/services/api_client.rs` sends HTTP requests and stores API history/templates.
-- `apps/desktop/src-tauri/src/services/database.rs` stores database connections and currently runs SQLite test/schema/query actions.
-- `apps/desktop/src-tauri/src/services/ssh.rs` is the reserved boundary for real SSH sessions.
-- `apps/desktop/src-tauri/src/services/secret_store.rs` is the reserved boundary for OS keychain or Stronghold credentials.
+- `crates/local-storage` opens and migrates the local SQLite database and records local activity.
+- `crates/workspace-engine` handles workspace data.
+- `crates/http-engine` sends HTTP requests and stores API history/templates.
+- `crates/database-engine` stores database connections and currently runs SQLite test/schema/query actions.
+- `crates/ssh-engine` is the reserved boundary for real SSH sessions.
+- `crates/secret-store` is the reserved boundary for OS keychain or Stronghold credentials.
 
 The important idea is that API, SSH, and Database are not separate apps. They share the same Workspace, tabs, local database, local activity trail, credential boundary, and future sync model.
 

@@ -8,9 +8,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "check:rust": "cd src-tauri && cargo check",
-    "check:rust:ssh": "cd src-tauri && cargo check --features ssh-native",
-    "test:rust": "cd src-tauri && cargo test"
+    "check:rust": "cd ../.. && cargo check --workspace",
+    "check:rust:ssh": "cd ../.. && cargo check -p unfour-workspace --features ssh-native",
+    "test:rust": "cd ../.. && cargo test --workspace"
   },
   "dependencies": {
     "@unfour/command-client": "workspace:*",

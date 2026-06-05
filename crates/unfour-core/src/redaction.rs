@@ -75,13 +75,21 @@ mod tests {
     #[test]
     fn key_values_are_redacted_without_mutating_safe_values() {
         let headers = vec![
-            ("Authorization".to_string(), "Bearer secret".to_string(), true),
+            (
+                "Authorization".to_string(),
+                "Bearer secret".to_string(),
+                true,
+            ),
             ("Accept".to_string(), "application/json".to_string(), true),
         ];
 
-        let redacted = redact_key_values(headers, |item| &item.0, |item, value| {
-            item.1 = value;
-        });
+        let redacted = redact_key_values(
+            headers,
+            |item| &item.0,
+            |item, value| {
+                item.1 = value;
+            },
+        );
 
         assert_eq!(redacted[0].1, "<redacted>");
         assert_eq!(redacted[1].1, "application/json");

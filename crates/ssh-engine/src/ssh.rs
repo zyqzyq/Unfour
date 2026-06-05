@@ -1,14 +1,14 @@
-use crate::app_error::{AppError, AppResult};
-use crate::local_db::LocalDb;
-use crate::models::{
+use chrono::Utc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use unfour_core::models::{
     SshCloseInput, SshConnectInput, SshConnection, SshConnectionConfig, SshConnectionInput,
     SshLogExport, SshLogExportInput, SshResizeInput, SshSessionEvent, SshSessionInput,
     SshSessionSummary, StoredConnection,
 };
-use crate::redaction::redact_sensitive_lines;
-use chrono::Utc;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use unfour_core::redaction::redact_sensitive_lines;
+use unfour_core::{AppError, AppResult};
+use unfour_local_storage::LocalDb;
 use uuid::Uuid;
 
 #[derive(Clone)]

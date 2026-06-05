@@ -53,7 +53,11 @@ The same `CommandBus` shape is reserved for later AI, MCP, CLI, workflow runner,
 
 - Root `package.json` orchestrates workspace commands through pnpm filters.
 - `pnpm-workspace.yaml` includes `apps/*` and `packages/*`.
-- Rust currently remains inside `apps/desktop/src-tauri`; future engine crates can move into root `crates/*` after the frontend package boundaries settle.
+- Root `Cargo.toml` defines a Cargo workspace for `apps/desktop/src-tauri` and `crates/*`.
+- `apps/desktop/src-tauri` is the Tauri adapter and composition layer.
+- `crates/unfour-core` owns shared models, errors, redaction, sync policy, and reserved AI contracts.
+- `crates/local-storage` owns SQLite setup and local activity logging.
+- `crates/http-engine`, `crates/database-engine`, `crates/ssh-engine`, `crates/workspace-engine`, and `crates/secret-store` own backend capability modules.
 
 ## Design Constraint
 

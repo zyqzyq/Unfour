@@ -1,0 +1,13 @@
+[workspace]
+members = [
+  "apps/desktop/src-tauri",
+  "crates/unfour-core",
+  "crates/local-storage",
+  "crates/http-engine",
+  "crates/database-engine",
+  "crates/ssh-engine",
+  "crates/workspace-engine",
+  "crates/secret-store",
+]
+resolver = "2"
+

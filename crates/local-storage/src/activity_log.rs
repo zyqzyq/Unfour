@@ -1,7 +1,7 @@
-use crate::app_error::AppResult;
-use crate::local_db::LocalDb;
+use crate::LocalDb;
 use chrono::Utc;
 use serde_json::Value;
+use unfour_core::AppResult;
 use uuid::Uuid;
 
 #[derive(Clone)]

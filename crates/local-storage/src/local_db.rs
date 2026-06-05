@@ -1,7 +1,7 @@
-use crate::app_error::AppResult;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Manager};
+use unfour_core::AppResult;
 
 #[derive(Clone)]
 pub struct LocalDb {
@@ -31,7 +31,6 @@ impl LocalDb {
         &self.pool
     }
 
-    #[cfg(test)]
     pub fn from_pool(pool: SqlitePool) -> Self {
         Self { pool }
     }

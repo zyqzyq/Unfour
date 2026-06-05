@@ -20,24 +20,18 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
-chrono = { version = "0.4", features = ["serde"] }
-reqwest = { version = "0.12", default-features = false, features = ["brotli", "cookies", "deflate", "gzip", "json", "rustls-tls"] }
-serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-keyring = "3"
-sqlx = { version = "0.8", default-features = false, features = ["chrono", "json", "macros", "mysql", "postgres", "runtime-tokio-rustls", "sqlite", "uuid"] }
-thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
-uuid = { version = "1", features = ["serde", "v4"] }
+unfour-core = { path = "../../../crates/unfour-core" }
+unfour-database-engine = { path = "../../../crates/database-engine" }
+unfour-http-engine = { path = "../../../crates/http-engine" }
+unfour-local-storage = { path = "../../../crates/local-storage" }
+unfour-secret-store = { path = "../../../crates/secret-store" }
+unfour-ssh-engine = { path = "../../../crates/ssh-engine" }
+unfour-workspace-engine = { path = "../../../crates/workspace-engine" }
 
 [features]
 default = []
-ssh-native = ["dep:russh"]
-
-[dependencies.russh]
-version = "0.61"
-default-features = false
-features = ["flate2", "ring", "rsa"]
-optional = true
+ssh-native = ["unfour-ssh-engine/ssh-native"]

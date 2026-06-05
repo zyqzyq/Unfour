@@ -10,9 +10,9 @@
     "preview": "pnpm --filter @unfour/desktop preview",
     "tauri": "pnpm --filter @unfour/desktop tauri",
     "check": "pnpm run build && pnpm run check:rust",
-    "check:rust": "pnpm --filter @unfour/desktop check:rust",
-    "check:rust:ssh": "pnpm --filter @unfour/desktop check:rust:ssh",
-    "test:rust": "pnpm --filter @unfour/desktop test:rust"
+    "check:rust": "cargo check --workspace",
+    "check:rust:ssh": "cargo check -p unfour-workspace --features ssh-native",
+    "test:rust": "cargo test --workspace"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
