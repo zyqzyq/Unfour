@@ -131,6 +131,25 @@ export type SshConnectionInput = {
   credentialRef?: string | null;
 };
 
+export type CredentialCreateInput = {
+  workspaceId: string;
+  kind: string;
+  label: string;
+  secret: string;
+};
+
+export type CredentialDeleteInput = {
+  workspaceId: string;
+  credentialRef: string;
+};
+
+export type CredentialMetadata = {
+  workspaceId: string;
+  kind: string;
+  label: string;
+  credentialRef: string;
+};
+
 export type SshConnection = {
   id: string;
   workspaceId: string;

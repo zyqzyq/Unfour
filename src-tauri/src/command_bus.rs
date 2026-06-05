@@ -4,10 +4,10 @@ use crate::audit_log::AuditLogService;
 use crate::local_db::LocalDb;
 use crate::models::{
     ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest,
-    DatabaseBrowseInput, DatabaseBrowseResult, DatabaseConnection, DatabaseConnectionInput,
-    DatabaseQueryInput, DatabaseQueryResult, DatabaseSchema, DatabaseTestResult, SshConnection,
-    SshConnectionInput, SystemHealth, Workspace, WorkspaceEnvironment, WorkspaceLayout,
-    WorkspaceState,
+    CredentialCreateInput, CredentialDeleteInput, CredentialMetadata, DatabaseBrowseInput,
+    DatabaseBrowseResult, DatabaseConnection, DatabaseConnectionInput, DatabaseQueryInput,
+    DatabaseQueryResult, DatabaseSchema, DatabaseTestResult, SshConnection, SshConnectionInput,
+    SystemHealth, Workspace, WorkspaceEnvironment, WorkspaceLayout, WorkspaceState,
 };
 use crate::services::api_client::ApiClientService;
 use crate::services::database::DatabaseService;
@@ -263,6 +263,44 @@ impl CommandBus {
             )
             .await?;
         Ok(requests)
+    }
+
+    pub async fn create_credential(
+        &self,
+        input: CredentialCreateInput,
+    ) -> AppResult<CredentialMetadata> {
+        let credential = self
+            .secret_store
+            .create_credential(input.workspace_id, input.kind, input.label, input.secret)
+            .await?;
+        self.audit_log
+            .record(
+                Some(&credential.workspace_id),
+                "credential.create",
+                Some(&credential.credential_ref),
+                serde_json::json!({
+                    "kind": credential.kind,
+                    "label": credential.label,
+                    "secretStored": true
+                }),
+            )
+            .await?;
+        Ok(credential)
+    }
+
+    pub async fn delete_credential(&self, input: CredentialDeleteInput) -> AppResult<()> {
+        self.secret_store
+            .delete_credential(input.workspace_id.clone(), input.credential_ref.clone())
+            .await?;
+        self.audit_log
+            .record(
+                Some(&input.workspace_id),
+                "credential.delete",
+                Some(&input.credential_ref),
+                serde_json::json!({ "deleted": true }),
+            )
+            .await?;
+        Ok(())
     }
 
     pub async fn list_database_connections(

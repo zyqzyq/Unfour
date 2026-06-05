@@ -5,6 +5,9 @@ import type {
   ApiRequestInput,
   ApiResponse,
   ApiSavedRequest,
+  CredentialCreateInput,
+  CredentialDeleteInput,
+  CredentialMetadata,
   DatabaseBrowseInput,
   DatabaseBrowseResult,
   DatabaseConnection,
@@ -51,6 +54,7 @@ let mockHistoryDetails: ApiHistoryDetail[] = [];
 let mockSavedRequests: ApiSavedRequest[] = [];
 let mockDatabaseConnections: DatabaseConnection[] = [];
 let mockSshConnections: SshConnection[] = [];
+let mockCredentials: Record<string, string> = {};
 let mockEnvironment: WorkspaceEnvironment = {
   workspaceId: mockWorkspace.id,
   variables: [
@@ -314,6 +318,24 @@ async function mockInvoke<T>(
       ...mockHistoryDetails,
     ];
     return result as T;
+  }
+
+  if (command === "credential_create") {
+    const input = args?.input as CredentialCreateInput;
+    const credentialRef = `unfour-workspace:${input.workspaceId}:${input.kind}:${crypto.randomUUID()}`;
+    mockCredentials[credentialRef] = input.secret;
+    return ({
+      workspaceId: input.workspaceId,
+      kind: input.kind,
+      label: input.label,
+      credentialRef,
+    } satisfies CredentialMetadata) as T;
+  }
+
+  if (command === "credential_delete") {
+    const input = args?.input as CredentialDeleteInput;
+    delete mockCredentials[input.credentialRef];
+    return undefined as T;
   }
 
   if (command === "database_connections_list") {
@@ -606,6 +628,14 @@ export function getApiHistoryDetail(workspaceId: string, historyId: string) {
 
 export function listSavedApiRequests(workspaceId: string) {
   return call<ApiSavedRequest[]>("api_saved_requests", { workspaceId });
+}
+
+export function createCredential(input: CredentialCreateInput) {
+  return call<CredentialMetadata>("credential_create", { input });
+}
+
+export function deleteCredential(input: CredentialDeleteInput) {
+  return call<void>("credential_delete", { input });
 }
 
 export function listDatabaseConnections(workspaceId: string) {

@@ -50,6 +50,8 @@ pub fn run() {
             commands::api_request_save,
             commands::api_saved_requests,
             commands::api_send_request,
+            commands::credential_create,
+            commands::credential_delete,
             commands::database_connection_delete,
             commands::database_connection_save,
             commands::database_connection_test,
