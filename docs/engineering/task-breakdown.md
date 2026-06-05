@@ -58,7 +58,7 @@
 
 ## P2: Reserved Extensions
 
-- PARTIAL TASK-SECRET-001: Implement OS keychain or Stronghold-backed `SecretStore`. OS keychain backend, credential create/inspect/rotate/delete command surface, and shared redaction helpers are implemented; frontend credential management UI remains.
+- DONE TASK-SECRET-001: Implement OS keychain or Stronghold-backed `SecretStore`. OS keychain backend, credential create/inspect/rotate/delete command surface, shared redaction helpers, and frontend credential reference management UI are implemented.
 - TODO TASK-AI-001: Expose Command Bus through an AI adapter.
 - TODO TASK-AI-002: Add capability metadata, confirmation policy, and dry-run summaries for risky actions.
 - TODO TASK-SYNC-001: Add cloud account model and workspace sync queue.

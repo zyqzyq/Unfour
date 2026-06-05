@@ -62,7 +62,7 @@ This document records the current implementation state and the next work slices.
 - DONE: Credential create, inspect, rotate, and delete are exposed through the Command Bus and Tauri adapters.
 - DONE: Credential references are workspace-scoped and secrets are never returned by metadata commands.
 - DONE: Shared Rust redaction helpers cover sensitive HTTP-style keys and credential-bearing log lines.
-- TODO: Add frontend credential management UI for attaching, rotating, and deleting credential references from SSH/database forms.
+- DONE: Frontend SSH and database forms can create, inspect, rotate, delete, and attach credential references without persisting secret material.
 
 ### SSH
 
@@ -121,7 +121,7 @@ Goal: stop all credential-bearing workflows at a real OS secret boundary.
 - DONE: Add commands for creating, reading metadata for, rotating, and deleting credentials.
 - DONE: Store only `credential_ref` in SQLite.
 - DONE: Add redaction helpers shared by API, SSH, database, local activity, and future sync.
-- Add frontend credential management UI for SSH/database credential references.
+- DONE: Add frontend credential management UI for SSH/database credential references.
 
 ### Slice 4: SSH MVP
 

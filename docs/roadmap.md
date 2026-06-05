@@ -45,7 +45,7 @@ Status: SQLite connection metadata, test, schema browsing, SQL execution, read-o
 - Cross-platform packaging.
 - User guide with screenshots.
 
-Status: secret/sync/AI boundaries are reserved. Actual credential provider, packaging, and screenshots remain.
+Status: OS keychain-backed credential references are implemented with frontend attach/rotate/delete flows. Sync/AI boundaries, packaging, and screenshots remain.
 
 ## Later
 

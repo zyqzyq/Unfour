@@ -16,6 +16,7 @@ import {
   Folder,
   Globe2,
   Home,
+  KeyRound,
   Maximize2,
   Minus,
   MoreHorizontal,
@@ -52,8 +53,10 @@ import {
   closeSshSession,
   connectSshSession,
   browseDatabaseTable,
+  createCredential,
   createWorkspace,
   deleteApiRequest,
+  deleteCredential,
   deleteDatabaseConnection,
   deleteSshConnection,
   executeDatabaseQuery,
@@ -71,7 +74,9 @@ import {
   listSshSessions,
   renameWorkspace,
   exportSshLog,
+  inspectCredential,
   resizeSshSession,
+  rotateCredential,
   saveApiRequest,
   duplicateApiRequest,
   saveDatabaseConnection,
@@ -91,6 +96,7 @@ import type {
   ApiRequestInput,
   ApiResponse,
   ApiSavedRequest,
+  CredentialMetadata,
   DatabaseConnection,
   DatabaseConnectionInput,
   DatabaseQueryResult,
@@ -1932,6 +1938,164 @@ function FieldGroup({ children, title }: { children: React.ReactNode; title: str
   );
 }
 
+function CredentialReferenceControl({
+  kind,
+  label,
+  onChange,
+  value,
+  workspaceId,
+}: {
+  kind: string;
+  label: string;
+  onChange: (credentialRef: string | null) => void;
+  value?: string | null;
+  workspaceId: string;
+}) {
+  const [credentialLabel, setCredentialLabel] = useState(label);
+  const [secret, setSecret] = useState("");
+  const [metadata, setMetadata] = useState<CredentialMetadata | null>(null);
+  const [status, setStatus] = useState("");
+  const credentialRef = value?.trim() ?? "";
+
+  useEffect(() => {
+    setMetadata(null);
+    setStatus("");
+  }, [credentialRef]);
+
+  const createMutation = useMutation({
+    mutationFn: () =>
+      createCredential({
+        workspaceId,
+        kind,
+        label: credentialLabel.trim() || label,
+        secret,
+      }),
+    onSuccess: (created) => {
+      setMetadata(created);
+      setSecret("");
+      setStatus("Credential reference created");
+      onChange(created.credentialRef);
+    },
+  });
+  const inspectMutation = useMutation({
+    mutationFn: () => inspectCredential({ workspaceId, credentialRef }),
+    onSuccess: (inspected) => {
+      setMetadata(inspected);
+      setStatus("Credential reference verified");
+    },
+  });
+  const rotateMutation = useMutation({
+    mutationFn: () => rotateCredential({ workspaceId, credentialRef, secret }),
+    onSuccess: (rotated) => {
+      setMetadata(rotated);
+      setSecret("");
+      setStatus("Credential rotated");
+    },
+  });
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteCredential({ workspaceId, credentialRef }),
+    onSuccess: () => {
+      setMetadata(null);
+      setSecret("");
+      setStatus("Credential deleted");
+      onChange(null);
+    },
+  });
+  const error =
+    createMutation.error ??
+    inspectMutation.error ??
+    rotateMutation.error ??
+    deleteMutation.error;
+  const isPending =
+    createMutation.isPending ||
+    inspectMutation.isPending ||
+    rotateMutation.isPending ||
+    deleteMutation.isPending;
+
+  return (
+    <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2">
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <KeyRound size={13} />
+        Credential
+      </div>
+      <Input
+        onChange={(event) => onChange(event.target.value.trim() || null)}
+        placeholder="Create or paste a credential reference"
+        value={credentialRef}
+      />
+      <div className="grid grid-cols-2 gap-2">
+        <Input
+          onChange={(event) => setCredentialLabel(event.target.value)}
+          placeholder={label}
+          value={credentialLabel}
+        />
+        <Input
+          onChange={(event) => setSecret(event.target.value)}
+          placeholder="Secret value"
+          type="password"
+          value={secret}
+        />
+      </div>
+      <div className="grid grid-cols-4 gap-1.5">
+        <Button
+          aria-label="Create credential"
+          disabled={!secret || isPending}
+          onClick={() => createMutation.mutate()}
+          size="icon"
+          title="Create credential"
+          type="button"
+          variant="outline"
+        >
+          <Plus size={13} />
+        </Button>
+        <Button
+          aria-label="Check credential"
+          disabled={!credentialRef || isPending}
+          onClick={() => inspectMutation.mutate()}
+          size="icon"
+          title="Check credential"
+          type="button"
+          variant="outline"
+        >
+          <CheckCircle2 size={13} />
+        </Button>
+        <Button
+          aria-label="Rotate credential"
+          disabled={!credentialRef || !secret || isPending}
+          onClick={() => rotateMutation.mutate()}
+          size="icon"
+          title="Rotate credential"
+          type="button"
+          variant="outline"
+        >
+          <RefreshCw size={13} />
+        </Button>
+        <Button
+          aria-label="Delete credential"
+          disabled={!credentialRef || isPending}
+          onClick={() => deleteMutation.mutate()}
+          size="icon"
+          title="Delete credential"
+          type="button"
+          variant="ghost"
+        >
+          <Trash2 size={13} />
+        </Button>
+      </div>
+      {metadata && (
+        <InlineStatus className="py-1" tone="success">
+          {metadata.kind}
+        </InlineStatus>
+      )}
+      {(status || error) && (
+        <InlineStatus className="py-1" tone={error ? "danger" : "neutral"}>
+          {error ? formatError(error) : status}
+        </InlineStatus>
+      )}
+    </div>
+  );
+}
+
 function KeyValueEditor({
   items,
   maskSensitiveValues = false,
@@ -2358,7 +2522,7 @@ function SshPanel({ workspaceId }: { workspaceId: string }) {
     port: 22,
     username: "deploy",
     authKind: "password",
-    credentialRef: "credential://ssh/deploy-host",
+    credentialRef: null,
   });
 
   const connectionsQuery = useQuery({
@@ -2514,13 +2678,17 @@ function SshPanel({ workspaceId }: { workspaceId: string }) {
       port: 22,
       username: "deploy",
       authKind: "password",
-      credentialRef: "credential://ssh/deploy-host",
+      credentialRef: null,
     });
   }
 
   function submitConnection(event: FormEvent) {
     event.preventDefault();
-    saveMutation.mutate(form);
+    saveMutation.mutate({
+      ...form,
+      credentialRef: form.credentialRef?.trim() || null,
+      keyPath: form.keyPath?.trim() || null,
+    });
   }
 
   function connectSelectedConnection() {
@@ -2590,13 +2758,13 @@ function SshPanel({ workspaceId }: { workspaceId: string }) {
               />
             </FieldGroup>
           )}
-          <FieldGroup title="Credential Ref">
-            <Input
-              onChange={(event) => updateForm({ credentialRef: event.target.value })}
-              placeholder="credential://ssh/deploy-host"
-              value={form.credentialRef ?? ""}
-            />
-          </FieldGroup>
+          <CredentialReferenceControl
+            kind={form.authKind === "private-key" ? "ssh-key-passphrase" : "ssh-password"}
+            label={`${form.name || "SSH"} credential`}
+            onChange={(credentialRef) => updateForm({ credentialRef })}
+            value={form.credentialRef}
+            workspaceId={workspaceId}
+          />
 
           <div className="flex items-center gap-2">
             <Button disabled={saveMutation.isPending} type="submit">
@@ -2956,7 +3124,14 @@ function DatabasePanel({ workspaceId }: { workspaceId: string }) {
 
   function submitConnection(event: FormEvent) {
     event.preventDefault();
-    saveMutation.mutate(form);
+    saveMutation.mutate({
+      ...form,
+      credentialRef: form.credentialRef?.trim() || null,
+      sqlitePath: form.sqlitePath?.trim() || null,
+      host: form.host?.trim() || null,
+      database: form.database?.trim() || null,
+      username: form.username?.trim() || null,
+    });
   }
 
   function newConnection() {
@@ -3033,6 +3208,7 @@ function DatabasePanel({ workspaceId }: { workspaceId: string }) {
                 updateForm({
                   driver: event.target.value as DatabaseConnectionInput["driver"],
                   sqlitePath: event.target.value === "sqlite" ? form.sqlitePath : null,
+                  credentialRef: event.target.value === "sqlite" ? null : form.credentialRef,
                 })
               }
               value={form.driver}
@@ -3086,6 +3262,13 @@ function DatabasePanel({ workspaceId }: { workspaceId: string }) {
                   value={form.username ?? ""}
                 />
               </FieldGroup>
+              <CredentialReferenceControl
+                kind="database-password"
+                label={`${form.name || "Database"} password`}
+                onChange={(credentialRef) => updateForm({ credentialRef })}
+                value={form.credentialRef}
+                workspaceId={workspaceId}
+              />
             </div>
           )}
 
