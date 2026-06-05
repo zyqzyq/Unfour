@@ -1,6 +1,6 @@
 mod ai_reserved;
 mod app_error;
-mod audit_log;
+mod activity_log;
 mod command_bus;
 mod commands;
 mod local_db;

@@ -1,6 +1,6 @@
 # Architecture
 
-Unfour Workspace is a local-first Tauri 2 app built around a shared Workspace model. SSH, database, and API workflows reuse the same resource tree, tab system, credential boundary, audit log, and future sync model.
+Unfour Workspace is a local-first Tauri 2 app built around a shared Workspace model. SSH, database, and API workflows reuse the same resource tree, tab system, credential boundary, local activity trail, and future sync model.
 
 ## Runtime Split
 
@@ -26,7 +26,7 @@ The same `CommandBus` shape is reserved for later AI, MCP, CLI, workflow runner,
 - `workspace`: workspace CRUD, active workspace state, and workspace-scoped environment variables.
 - `api_client`: HTTP/HTTPS execution, workspace variable resolution, saved requests, request history.
 - `local_db`: SQLite connection and migrations.
-- `audit_log`: append-only action trail with redacted details.
+- `activity_log`: append-only local activity trail with redacted summaries for high-value actions.
 - `ssh`: reserved boundary for `russh` sessions and event streaming. The dependency is available behind the `ssh-native` feature and uses the `ring` backend to avoid NASM on Windows.
 - `database`: `sqlx`-backed database connection metadata, SQLite connection tests, SQLite schema browsing, and SQLite SQL execution. PostgreSQL/MySQL live connections remain behind the credential boundary for the next phase.
 - `secret_store`: reserved boundary for OS keychain/Stronghold credential refs.
@@ -35,7 +35,7 @@ The same `CommandBus` shape is reserved for later AI, MCP, CLI, workflow runner,
 
 ## Current Progress
 
-- Foundation and API MVP are implemented enough to validate the Workspace, Command Bus, local SQLite, history, saved request, and environment variable model.
+- Foundation and API MVP are implemented enough to validate the Workspace, Command Bus, local SQLite, history, saved request, local activity, and environment variable model.
 - Database MVP has moved beyond a preview: SQLite connection metadata, connection testing, schema browsing, and SQL execution are implemented. PostgreSQL/MySQL live connections are still reserved until credential storage is implemented.
 - SSH is still a preview surface with `xterm` rendering and a reserved Rust service boundary. Real auth, PTY, streaming, resize, and session cleanup remain.
 - AI and cloud sync are intentionally not user-facing yet. The current work only preserves their data fields and command boundaries.

@@ -157,7 +157,7 @@ const MIGRATIONS: &[&str] = &[
     )
     "#,
     r#"
-    CREATE TABLE IF NOT EXISTS audit_events (
+    CREATE TABLE IF NOT EXISTS activity_events (
       id TEXT PRIMARY KEY,
       workspace_id TEXT,
       action TEXT NOT NULL,

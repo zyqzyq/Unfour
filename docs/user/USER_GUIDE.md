@@ -85,11 +85,11 @@ The Rust backend is responsible for actions that should not live only in the bro
 - `src-tauri/src/services/ssh.rs` is the reserved boundary for real SSH sessions.
 - `src-tauri/src/services/secret_store.rs` is the reserved boundary for OS keychain or Stronghold credentials.
 
-The important idea is that API, SSH, and Database are not separate apps. They share the same Workspace, tabs, local database, audit log, credential boundary, and future sync model.
+The important idea is that API, SSH, and Database are not separate apps. They share the same Workspace, tabs, local database, local activity trail, credential boundary, and future sync model.
 
 ## Data And Privacy
 
-The app is local-first. Workspace metadata is stored locally. Secret storage is reserved for OS keychain/Stronghold integration; until that work lands, do not place long-lived secrets into saved request bodies.
+The app is local-first. Workspace metadata is stored locally. High-value actions such as writes, credential changes, external API sends, SSH session lifecycle events, and future AI-triggered actions keep redacted local activity records for troubleshooting. Routine reads and UI layout changes are not treated as activity events. Secret storage is reserved for OS keychain/Stronghold integration; until that work lands, do not place long-lived secrets into saved request bodies.
 
 ## Documentation Split
 

@@ -8,14 +8,14 @@ Unfour Workspace is a Tauri 2 desktop app for operations and development work. T
 - Route business actions through the Rust Command Bus. Tauri commands are adapters, not the place for domain logic.
 - Every persisted business record must carry `workspace_id` unless it is truly global app configuration.
 - Never store passwords, private-key passphrases, API tokens, or database passwords in SQLite plaintext. Persist only a credential reference.
-- Redact `authorization`, `cookie`, `proxy-authorization`, `x-api-key`, and `x-auth-token` in logs and history.
+- Redact `authorization`, `cookie`, `proxy-authorization`, `x-api-key`, and `x-auth-token` in logs, history, and local activity details.
 - Prefer small, verifiable tasks. Each task should define scope, non-scope, acceptance criteria, and tests.
 
 ## Current Implementation Slice
 
 - Tauri 2 + React + TypeScript project is initialized.
 - Frontend workspace shell, API client panel, terminal preview, database editor preview, and shadcn-style UI primitives exist.
-- Rust has the Command Bus boundary, Workspace service, SQLite migrations, audit log, API request execution/history/save support, and reserved SSH/database/secret/sync/AI modules.
+- Rust has the Command Bus boundary, Workspace service, SQLite migrations, local activity log, API request execution/history/save support, and reserved SSH/database/secret/sync/AI modules.
 - Workspace environments are implemented and API requests can resolve `{{variable}}` placeholders from the active workspace.
 - Saved API requests can be created and loaded in the frontend.
 - SSH and database execution are intentionally reserved modules for the next task batches. The optional `ssh-native` Cargo feature compiles with `russh` using the `ring` backend.

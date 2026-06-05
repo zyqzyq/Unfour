@@ -8,7 +8,7 @@ Unfour Workspace is a Tauri 2 desktop app for unified operations and development
 - shadcn-style UI primitives with Tailwind CSS.
 - Workspace shell with API, SSH, and database tabs.
 - Rust Command Bus with Workspace and API services.
-- SQLite migrations for workspaces, API requests/history, connections, and audit events.
+- SQLite migrations for workspaces, API requests/history, connections, and local activity events.
 - Workspace environment variables with `{{variable}}` resolution for API requests.
 - Saved API requests can be grouped into folders, duplicated, deleted, and loaded back into the editor.
 - Database connection metadata, SQLite connection test, SQLite schema browsing, and SQLite SQL execution.

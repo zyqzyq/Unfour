@@ -1,6 +1,6 @@
 use crate::ai_reserved;
 use crate::app_error::AppResult;
-use crate::audit_log::AuditLogService;
+use crate::activity_log::ActivityLogService;
 use crate::local_db::LocalDb;
 use crate::models::{
     ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest,
@@ -22,7 +22,7 @@ use tauri::AppHandle;
 #[derive(Clone)]
 pub struct CommandBus {
     api_client: ApiClientService,
-    audit_log: AuditLogService,
+    activity_log: ActivityLogService,
     database: DatabaseService,
     secret_store: SecretStore,
     ssh: SshService,
@@ -34,14 +34,14 @@ impl CommandBus {
         let db = LocalDb::connect(&app).await?;
         db.migrate().await?;
 
-        let audit_log = AuditLogService::new(db.clone());
+        let activity_log = ActivityLogService::new(db.clone());
         let secret_store = SecretStore::new("unfour-workspace");
         let workspace = WorkspaceService::new(db.clone());
         workspace.ensure_default_workspace().await?;
 
         Ok(Self {
             api_client: ApiClientService::new(db.clone()),
-            audit_log,
+            activity_log,
             database: DatabaseService::new(db.clone()),
             secret_store,
             ssh: SshService::new(db.clone()),
@@ -65,7 +65,7 @@ impl CommandBus {
 
     pub async fn create_workspace(&self, name: String) -> AppResult<Workspace> {
         let workspace = self.workspace.create(name).await?;
-        self.audit_log
+        self.activity_log
             .record(
                 Some(&workspace.id),
                 "workspace.create",
@@ -82,7 +82,7 @@ impl CommandBus {
         name: String,
     ) -> AppResult<Workspace> {
         let workspace = self.workspace.rename(workspace_id, name).await?;
-        self.audit_log
+        self.activity_log
             .record(
                 Some(&workspace.id),
                 "workspace.rename",
@@ -95,7 +95,7 @@ impl CommandBus {
 
     pub async fn delete_workspace(&self, workspace_id: String) -> AppResult<WorkspaceState> {
         let state = self.workspace.delete(workspace_id.clone()).await?;
-        self.audit_log
+        self.activity_log
             .record(
                 Some(&workspace_id),
                 "workspace.delete",
@@ -126,7 +126,7 @@ impl CommandBus {
             .workspace
             .update_environment(workspace_id.clone(), variables)
             .await?;
-        self.audit_log
+        self.activity_log
             .record(
                 Some(&workspace_id),
                 "workspace.environment.update",
@@ -146,23 +146,7 @@ impl CommandBus {
         workspace_id: String,
         layout: WorkspaceLayout,
     ) -> AppResult<WorkspaceLayout> {
-        let layout = self
-            .workspace
-            .update_layout(workspace_id.clone(), layout)
-            .await?;
-        self.audit_log
-            .record(
-                Some(&workspace_id),
-                "workspace.layout.update",
-                Some(&workspace_id),
-                serde_json::json!({
-                    "activeTabId": layout.active_tab_id,
-                    "tabCount": layout.tabs.len(),
-                    "sidebarCollapsed": layout.sidebar_collapsed
-                }),
-            )
-            .await?;
-        Ok(layout)
+        self.workspace.update_layout(workspace_id, layout).await
     }
 
     pub async fn send_api_request(&self, input: ApiRequestInput) -> AppResult<ApiResponse> {
@@ -174,7 +158,7 @@ impl CommandBus {
             .api_client
             .send(input.clone(), &environment.variables)
             .await?;
-        self.audit_log
+        self.activity_log
             .record(
                 Some(&input.workspace_id),
                 "api.send_request",
@@ -209,7 +193,7 @@ impl CommandBus {
 
     pub async fn save_api_request(&self, input: ApiRequestInput) -> AppResult<ApiSavedRequest> {
         let saved = self.api_client.save_request(input).await?;
-        self.audit_log
+        self.activity_log
             .record(
                 Some(&saved.workspace_id),
                 "api.save_request",
@@ -236,7 +220,7 @@ impl CommandBus {
             .api_client
             .duplicate_request(workspace_id.clone(), request_id.clone())
             .await?;
-        self.audit_log
+        self.activity_log
             .record(
                 Some(&workspace_id),
                 "api.duplicate_request",
@@ -256,7 +240,7 @@ impl CommandBus {
             .api_client
             .delete_request(workspace_id.clone(), request_id.clone())
             .await?;
-        self.audit_log
+        self.activity_log
             .record(
                 Some(&workspace_id),
                 "api.delete_request",
@@ -275,7 +259,7 @@ impl CommandBus {
             .secret_store
             .create_credential(input.workspace_id, input.kind, input.label, input.secret)
             .await?;
-        self.audit_log
+        self.activity_log
             .record(
                 Some(&credential.workspace_id),
                 "credential.create",
@@ -294,7 +278,7 @@ impl CommandBus {
         self.secret_store
             .delete_credential(input.workspace_id.clone(), input.credential_ref.clone())
             .await?;
-        self.audit_log
+        self.activity_log
             .record(
                 Some(&input.workspace_id),
                 "credential.delete",
@@ -317,7 +301,7 @@ impl CommandBus {
         input: DatabaseConnectionInput,
     ) -> AppResult<DatabaseConnection> {
         let connection = self.database.save_connection(input).await?;
-        self.audit_log
+        self.activity_log
             .record(
                 Some(&connection.workspace_id),
                 "database.connection.save",
@@ -341,7 +325,7 @@ impl CommandBus {
             .database
             .delete_connection(workspace_id.clone(), connection_id.clone())
             .await?;
-        self.audit_log
+        self.activity_log
             .record(
                 Some(&workspace_id),
                 "database.connection.delete",
@@ -357,19 +341,9 @@ impl CommandBus {
         workspace_id: String,
         connection_id: String,
     ) -> AppResult<DatabaseTestResult> {
-        let result = self
-            .database
-            .test_connection(workspace_id.clone(), connection_id.clone())
-            .await?;
-        self.audit_log
-            .record(
-                Some(&workspace_id),
-                "database.connection.test",
-                Some(&connection_id),
-                serde_json::json!({ "ok": result.ok }),
-            )
-            .await?;
-        Ok(result)
+        self.database
+            .test_connection(workspace_id, connection_id)
+            .await
     }
 
     pub async fn database_schema(
@@ -385,18 +359,23 @@ impl CommandBus {
         input: DatabaseQueryInput,
     ) -> AppResult<DatabaseQueryResult> {
         let result = self.database.execute_query(input.clone()).await?;
-        self.audit_log
-            .record(
-                Some(&input.workspace_id),
-                "database.query.execute",
-                Some(&input.connection_id),
-                serde_json::json!({
-                    "columns": result.columns.len(),
-                    "rows": result.rows.len(),
-                    "affectedRows": result.affected_rows
-                }),
-            )
-            .await?;
+        if result.safety.classification != "read" {
+            let classification = result.safety.classification.clone();
+            self.activity_log
+                .record(
+                    Some(&input.workspace_id),
+                    "database.query.execute",
+                    Some(&input.connection_id),
+                    serde_json::json!({
+                        "classification": classification,
+                        "confirmed": result.safety.confirmed,
+                        "columns": result.columns.len(),
+                        "rows": result.rows.len(),
+                        "affectedRows": result.affected_rows
+                    }),
+                )
+                .await?;
+        }
         Ok(result)
     }
 
@@ -404,23 +383,7 @@ impl CommandBus {
         &self,
         input: DatabaseBrowseInput,
     ) -> AppResult<DatabaseBrowseResult> {
-        let result = self.database.browse_table(input.clone()).await?;
-        self.audit_log
-            .record(
-                Some(&input.workspace_id),
-                "database.table.browse",
-                Some(&input.connection_id),
-                serde_json::json!({
-                    "table": input.table_name,
-                    "rows": result.result.rows.len(),
-                    "limit": result.limit,
-                    "offset": result.offset,
-                    "totalRows": result.total_rows,
-                    "readOnly": result.read_only
-                }),
-            )
-            .await?;
-        Ok(result)
+        self.database.browse_table(input).await
     }
 
     pub async fn list_ssh_connections(
@@ -432,7 +395,7 @@ impl CommandBus {
 
     pub async fn save_ssh_connection(&self, input: SshConnectionInput) -> AppResult<SshConnection> {
         let connection = self.ssh.save_connection(input).await?;
-        self.audit_log
+        self.activity_log
             .record(
                 Some(&connection.workspace_id),
                 "ssh.connection.save",
@@ -457,7 +420,7 @@ impl CommandBus {
             .ssh
             .delete_connection(workspace_id.clone(), connection_id.clone())
             .await?;
-        self.audit_log
+        self.activity_log
             .record(
                 Some(&workspace_id),
                 "ssh.connection.delete",
@@ -473,7 +436,7 @@ impl CommandBus {
         input: SshConnectInput,
     ) -> AppResult<SshSessionSummary> {
         let session = self.ssh.connect(input.clone()).await?;
-        self.audit_log
+        self.activity_log
             .record(
                 Some(&input.workspace_id),
                 "ssh.session.connect",
@@ -504,21 +467,12 @@ impl CommandBus {
     }
 
     pub async fn resize_ssh_session(&self, input: SshResizeInput) -> AppResult<SshSessionEvent> {
-        let event = self.ssh.resize(input.clone())?;
-        self.audit_log
-            .record(
-                Some(&input.workspace_id),
-                "ssh.session.resize",
-                Some(&input.session_id),
-                serde_json::json!({ "cols": input.cols, "rows": input.rows }),
-            )
-            .await?;
-        Ok(event)
+        self.ssh.resize(input)
     }
 
     pub async fn close_ssh_session(&self, input: SshCloseInput) -> AppResult<SshSessionSummary> {
         let session = self.ssh.close_session(input.clone())?;
-        self.audit_log
+        self.activity_log
             .record(
                 Some(&input.workspace_id),
                 "ssh.session.close",
@@ -531,7 +485,7 @@ impl CommandBus {
 
     pub async fn export_ssh_log(&self, input: SshLogExportInput) -> AppResult<SshLogExport> {
         let export = self.ssh.export_log(input.clone())?;
-        self.audit_log
+        self.activity_log
             .record(
                 Some(&input.workspace_id),
                 "ssh.session.log_export",

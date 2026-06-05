@@ -8,7 +8,7 @@
 - DONE TASK-CORE-004: Add Command Bus and route Tauri commands through it.
 - DONE TASK-CORE-005: Add SQLite local store and migrations.
 - DONE TASK-CORE-006: Reserve secret store boundary.
-- DONE TASK-CORE-007: Add audit log and redaction rules.
+- DONE TASK-CORE-007: Add local activity log and redaction rules.
 - DONE TASK-CORE-008: Add automated tests for WorkspaceService and ApiClientService.
 - DONE TASK-CORE-009: Add automated tests for DatabaseService SQLite flows.
 - DONE TASK-CORE-010: Add CI-friendly build/check scripts and document local permission requirements.

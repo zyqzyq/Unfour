@@ -12,7 +12,7 @@ This document records the current implementation state and the next work slices.
 - DONE: Rust `AppError` with structured serialization for Tauri command errors.
 - DONE: Thin Tauri commands routed through `CommandBus`.
 - DONE: Local SQLite app database with repeatable migrations.
-- DONE: Audit log table and action recording for workspace/API/database operations.
+- DONE: Local activity table and redacted action recording for high-value workspace/API/database/SSH operations.
 - DONE: Root-level validation scripts cover frontend build, Rust check, `ssh-native` check, and Rust tests.
 - DONE: AI and cloud sync extension boundaries reserved.
 - DONE: `russh` dependency is available behind `ssh-native` and configured to use the `ring` backend.
@@ -112,7 +112,7 @@ Goal: stop all credential-bearing workflows at a real OS secret boundary.
 - Implement `SecretStore` using OS keychain or Stronghold.
 - Add commands for creating, reading metadata for, rotating, and deleting credentials.
 - Store only `credential_ref` in SQLite.
-- Add redaction helpers shared by API, SSH, database, audit log, and future sync.
+- Add redaction helpers shared by API, SSH, database, local activity, and future sync.
 
 ### Slice 4: SSH MVP
 

@@ -5,11 +5,11 @@ use serde_json::Value;
 use uuid::Uuid;
 
 #[derive(Clone)]
-pub struct AuditLogService {
+pub struct ActivityLogService {
     db: LocalDb,
 }
 
-impl AuditLogService {
+impl ActivityLogService {
     pub fn new(db: LocalDb) -> Self {
         Self { db }
     }
@@ -21,9 +21,11 @@ impl AuditLogService {
         target: Option<&str>,
         details: Value,
     ) -> AppResult<()> {
+        // This is a local activity trail, not a compliance log. Callers should
+        // pass only redacted summaries and avoid routine read/UI noise.
         sqlx::query(
             r#"
-            INSERT INTO audit_events (id, workspace_id, action, target, details_json, created_at)
+            INSERT INTO activity_events (id, workspace_id, action, target, details_json, created_at)
             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
             "#,
         )

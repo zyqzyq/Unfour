@@ -10,7 +10,7 @@ A workspace owns:
 - SSH/database connection metadata
 - Environment variables
 - Layout and tab restore state
-- Audit events
+- Local activity events
 - Future sync state
 
 ## Persistence
@@ -36,7 +36,7 @@ Global records, such as `app_settings`, do not require `workspace_id`.
 - `api_requests`
 - `api_history`
 - `connections`
-- `audit_events`
+- `activity_events` for local activity summaries
 
 ## Environments
 

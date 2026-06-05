@@ -54,3 +54,10 @@ Cloud Workflow Adapter
 - Database
 
 The first AI implementation should call the bus, not DOM-click the UI.
+
+AI adapters should also use the same safety policy as human-triggered commands:
+
+- Routine local reads may run without a confirmation dialog.
+- Writes, destructive operations, sensitive exports, and data sent to third-party AI services require confirmation.
+- Confirmed AI-triggered writes and external side effects must write redacted local activity records.
+- Prompts, responses, secrets, request/response bodies, and query result rows must not be stored in activity details.
