@@ -15,6 +15,13 @@ Unfour Workspace is a Tauri 2 desktop app for unified operations and development
 - SSH connection metadata with credential references; live sessions remain reserved.
 - AI and cloud sync extension points reserved.
 
+## Workspace Layout
+
+- `apps/desktop`: Tauri/Vite desktop app entry and Tauri adapter layer.
+- `packages/*`: frontend package boundaries imported through `@unfour/*` package names.
+- `crates/*`: Rust backend capability crates composed by the desktop Tauri app.
+- Root `Cargo.toml`: Cargo workspace for `apps/desktop/src-tauri` and Rust crates.
+
 ## Commands
 
 ```bash
@@ -25,8 +32,7 @@ pnpm run test:rust
 pnpm run tauri dev
 ```
 
-Rust checks can be run from the repository root through package scripts. These scripts change into
-`src-tauri` before invoking Cargo:
+Rust checks can be run from the repository root through package scripts:
 
 ```bash
 pnpm run check:rust
@@ -34,16 +40,15 @@ pnpm run check:rust:ssh
 pnpm run test:rust
 ```
 
-When invoking Cargo directly, run it from `src-tauri`:
+When invoking Cargo directly, run it from the repository root:
 
 ```bash
-cd src-tauri
-cargo check
-cargo check --features ssh-native
-cargo test
+cargo check --workspace
+cargo check -p unfour-workspace --features ssh-native
+cargo test --workspace
 ```
 
-On Windows, Rust and Vite build steps write generated artifacts under `src-tauri/target` and `dist`.
+On Windows, Rust and Vite build steps write generated artifacts under `target` and `apps/desktop/dist`.
 When running inside a restricted automation sandbox, those steps may need permission to spawn helper processes
 or write build artifacts.
 

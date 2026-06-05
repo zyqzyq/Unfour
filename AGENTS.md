@@ -8,6 +8,8 @@ Unfour Workspace is a Tauri 2 desktop app for operations and development work. T
 - Treat `apps/desktop` as the only desktop application entry. It should compose internal packages, not own feature logic directly.
 - Treat `packages/*` as internal module boundaries. Import through package names like `@unfour/api-debugger`, never through another package's `src` internals.
 - Keep `packages/ui` free of business logic, `packages/command-client` free of React screens, and feature packages free of direct dependencies on each other.
+- Treat `apps/desktop/src-tauri` as the Tauri adapter and composition layer only. Keep backend capability logic in `crates/*`.
+- Use the root Cargo workspace for Rust work. New Rust services should land in an existing crate boundary or a focused new crate, then be wired through the Command Bus.
 - Route business actions through the Rust Command Bus. Tauri commands are adapters, not the place for domain logic.
 - Every persisted business record must carry `workspace_id` unless it is truly global app configuration.
 - Never store passwords, private-key passphrases, API tokens, or database passwords in SQLite plaintext. Persist only a credential reference.
@@ -20,10 +22,11 @@ Unfour Workspace is a Tauri 2 desktop app for operations and development work. T
 - The repository uses a pnpm workspace with `apps/*` and `packages/*`. The Community desktop app lives in `apps/desktop`.
 - Frontend package boundaries exist for `@unfour/ui`, `@unfour/command-client`, `@unfour/workspace`, `@unfour/app-shell`, `@unfour/api-debugger`, `@unfour/database`, and `@unfour/terminal`.
 - Frontend workspace shell, API client panel, terminal preview, database editor preview, and shadcn-style UI primitives exist.
-- Rust has the Command Bus boundary, Workspace service, SQLite migrations, local activity log, API request execution/history/save support, and reserved SSH/database/secret/sync/AI modules.
+- Rust uses a Cargo workspace with `apps/desktop/src-tauri` plus `crates/*`. Shared core types, storage, workspace, HTTP, database, SSH, and secret boundaries live in crates.
+- Rust has the Command Bus boundary, Workspace service, SQLite migrations, local activity log, API request execution/history/save support, database execution, and reserved SSH/sync/AI modules.
 - Workspace environments are implemented and API requests can resolve `{{variable}}` placeholders from the active workspace.
 - Saved API requests can be created and loaded in the frontend.
-- SSH and database execution are intentionally reserved modules for the next task batches. The optional `ssh-native` Cargo feature compiles with `russh` using the `ring` backend.
+- Live SSH sessions are intentionally reserved for a later task batch. The optional `ssh-native` Cargo feature compiles with `russh` using the `ring` backend.
 
 ## Task Format
 
