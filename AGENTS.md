@@ -63,6 +63,8 @@ During modification:
 - Do not add feature logic to `packages/app-shell`.
 - Do not add business logic to `packages/ui`.
 
+For implementation-task workflow, verification defaults, commit discipline, and final reporting, follow `docs/agents/EXECUTION_PROTOCOL.md`.
+
 After completion, output:
 
 1. Modified file list

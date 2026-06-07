@@ -23,6 +23,8 @@ This is the entry point for AI coding tools working in the Unfour repository.
 - Do not write feature logic into `packages/app-shell`.
 - Do not write business logic into `packages/ui`.
 
+For the full execution workflow, verification matrix, commit discipline, and reporting format, see `docs/agents/EXECUTION_PROTOCOL.md`.
+
 ## After Modification
 
 Output the following report:
