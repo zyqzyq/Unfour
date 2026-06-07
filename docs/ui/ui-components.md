@@ -42,3 +42,29 @@ but must not create local replacements for common controls.
 - Existing feature panels still contain local select, tab-like toggles, panel
   header, list item, empty state, and inline status implementations.
 - Existing feature panels still include hardcoded Tailwind colors and sizes.
+
+## Icon Rules
+
+- Use `lucide-react` only.
+- Do not mix icon libraries.
+- Do not use emojis as functional icons.
+- All icon-only buttons MUST provide tooltips.
+- Use consistent stroke width across the application.
+- Avoid decorative icons without functional meaning.
+
+Recommended sizes:
+
+| Context      | Size |
+| ------------ | ---: |
+| Toolbar      | 16px |
+| Button       | 15px |
+| Sidebar row  | 15px |
+| Table action | 14px |
+| Status bar   | 14px |
+
+## Component-Related Forbidden Patterns
+
+- Do not create page-local variants of common components when `packages/ui` already provides them.
+- Do not introduce page-specific styling for shared patterns.
+- Do not use multiple icon libraries.
+- Do not create inconsistent button styles across modules.

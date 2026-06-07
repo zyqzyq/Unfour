@@ -1,3 +1,11 @@
+# Deprecated
+
+This document is no longer maintained.
+
+Use [`package-boundaries.md`](./package-boundaries.md) as the canonical source of truth.
+
+---
+
 # Module Boundaries
 
 ## packages/app-shell

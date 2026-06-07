@@ -80,3 +80,18 @@ Recommended order:
 - Introducing a new UI framework.
 - Replacing routing or workspace persistence architecture.
 - Removing existing feature entry points.
+
+## Implementation Checklist
+
+When implementing or refactoring UI:
+
+1. Read `docs/ui/ui-guidelines.md` first.
+2. Read `docs/ui/ui-layouts.md` and `docs/ui/ui-tokens.md`.
+3. Inspect `packages/ui` for reusable components.
+4. Reuse shared layout components.
+5. Use design tokens only; do not hardcode colors unless adding a token.
+6. Do not create page-local button or input styles.
+7. Add empty, loading, and error states applicable to the workflow.
+8. Verify narrow-width behavior.
+9. Run `pnpm run build`.
+10. Inspect the first viewport in the local app for visual review.

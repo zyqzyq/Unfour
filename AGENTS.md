@@ -1,62 +1,95 @@
 # AGENTS.md
 
-Unfour Workspace is a Tauri 2 desktop app for operations and development work. Treat the product as one unified workspace, not three separate tools.
+Unfour is a lightweight IDE-style desktop developer tool built on Tauri 2, React, and Rust.
 
-## Working Rules
+## Project Direction
 
-- Keep frontend interaction in React/TypeScript and execution/security boundaries in Rust.
-- Treat `apps/desktop` as the only desktop application entry. It should compose internal packages, not own feature logic directly.
-- Treat `packages/*` as internal module boundaries. Import through package names like `@unfour/api-debugger`, never through another package's `src` internals.
-- Keep `packages/ui` free of business logic, `packages/command-client` free of React screens, and feature packages free of direct dependencies on each other.
-- Treat `apps/desktop/src-tauri` as the Tauri adapter and composition layer only. Keep backend capability logic in `crates/*`.
-- Use the root Cargo workspace for Rust work. New Rust services should land in an existing crate boundary or a focused new crate, then be wired through the Command Bus.
-- Route business actions through the Rust Command Bus. Tauri commands are adapters, not the place for domain logic.
-- Every persisted business record must carry `workspace_id` unless it is truly global app configuration.
-- Never store passwords, private-key passphrases, API tokens, or database passwords in SQLite plaintext. Persist only a credential reference.
-- Redact `authorization`, `cookie`, `proxy-authorization`, `x-api-key`, and `x-auth-token` in logs, history, and local activity details.
-- Prefer small, verifiable tasks. Each task should define scope, non-scope, acceptance criteria, and tests.
+- Core modules: Terminal / SSH, Database, API Debugger, Workspace.
+- UI module split is in progress. Database, Terminal, and further Workspace extraction are planned.
+- During the split, module boundary clarity takes priority over adding new page features.
 
-## Current Implementation Slice
+## Architecture Rules
 
-- Tauri 2 + React + TypeScript project is initialized.
-- The repository uses a pnpm workspace with `apps/*` and `packages/*`. The Community desktop app lives in `apps/desktop`.
-- Frontend package boundaries exist for `@unfour/ui`, `@unfour/command-client`, `@unfour/workspace`, `@unfour/app-shell`, `@unfour/api-debugger`, `@unfour/database`, and `@unfour/terminal`.
-- Frontend workspace shell, API client panel, terminal preview, database editor preview, and shadcn-style UI primitives exist.
-- Rust uses a Cargo workspace with `apps/desktop/src-tauri` plus `crates/*`. Shared core types, storage, workspace, HTTP, database, SSH, and secret boundaries live in crates.
-- Rust has the Command Bus boundary, Workspace service, SQLite migrations, local activity log, API request execution/history/save support, database execution, and reserved SSH/sync/AI modules.
-- Workspace environments are implemented and API requests can resolve `{{variable}}` placeholders from the active workspace.
-- Saved API requests can be created and loaded in the frontend.
-- Live SSH sessions are intentionally reserved for a later task batch. The optional `ssh-native` Cargo feature compiles with `russh` using the `ring` backend.
+### Frontend Boundaries
 
-## Task Format
+- `packages/app-shell` MUST contain only:
+  - Global layout composition
+  - Sidebar mounting surface
+  - Top-level navigation wiring
+  - Route assembly
+  - Cross-module container slots
+  - Module mount points
 
-Use task files or issue text like:
+- `packages/app-shell` MUST NOT contain:
+  - API request execution logic
+  - SQL editing or execution logic
+  - SSH session state or lifecycle
+  - Feature-specific mock data
+  - Feature-specific large UI components
 
-```md
-# TASK-API-001: Support request environments
+- Terminal, Database, and API Debugger business state and business components MUST live in their respective packages.
+- Shared UI primitives MUST be reused from or added to `packages/ui`.
+- `packages/ui` MUST NOT contain feature-specific business logic.
+- Feature packages MUST NOT depend on `packages/app-shell`.
+- UI refactoring MUST NOT rewrite backend call logic.
+- New large dependencies MUST NOT be added without an explicit requirement.
+- Code with unconfirmed purpose MUST NOT be deleted for cosmetic reasons.
 
-## Background
-Workspace-scoped API requests need environment variables.
+### Backend Boundaries
 
-## Scope
-- Add environment CRUD under WorkspaceService.
-- Resolve `{{variable}}` in URL, headers, query, and body.
-- Keep resolved values out of saved request templates.
+- Frontend interaction lives in React/TypeScript; execution and security boundaries live in Rust.
+- `apps/desktop/src-tauri` is the Tauri adapter and composition layer only. Backend capability logic lives in `crates/*`.
+- Business actions route through the Rust Command Bus. Tauri commands are adapters, not domain logic.
+- Every persisted business record MUST carry `workspace_id` unless it is truly global app configuration.
+- Passwords, private-key passphrases, API tokens, and database passwords MUST NOT be stored in SQLite plaintext. Persist only a credential reference.
+- `authorization`, `cookie`, `proxy-authorization`, `x-api-key`, and `x-auth-token` MUST be redacted in logs, history, and local activity details.
 
-## Non-Scope
-- Cloud sync.
-- Team sharing.
+## AI Execution Rules
 
-## Acceptance
-- Variables are scoped by workspace.
-- Missing variables return structured validation errors.
-- Frontend can select and edit an environment.
-```
+Before modifying code:
+
+1. Read this file.
+2. Read `docs/ui/ui-guidelines.md` for UI changes.
+3. Read `docs/architecture/package-boundaries.md` for package changes.
+4. Read any local README or notes in the target package.
+5. Inspect the current implementation.
+6. Review the current Git diff to avoid overwriting uncommitted work.
+
+During modification:
+
+- Keep the change set as small as possible.
+- Do not modify files outside the task scope.
+- Do not expand the refactor scope without reporting the issue first.
+- Do not add feature logic to `packages/app-shell`.
+- Do not add business logic to `packages/ui`.
+
+After completion, output:
+
+1. Modified file list
+2. Purpose of each change
+3. Whether business logic was modified
+4. Whether new dependencies were added
+5. Whether package boundaries changed
+6. Verification commands executed and their results
+7. Unresolved issues
+8. Files recommended for human review
 
 ## Verification
 
-- Run `pnpm run build` for frontend changes.
-- Run `cargo check --workspace` from the repository root for Rust changes.
-- Run `cargo check -p unfour-workspace --features ssh-native` from the repository root when changing SSH dependency or session code.
-- Run `cargo test --workspace` from the repository root for Rust tests.
-- For UI changes, run the local app and inspect the first viewport in the in-app browser.
+Run these commands from the repository root:
+
+```bash
+# Frontend build
+pnpm run build
+
+# Rust check
+pnpm run check:rust
+
+# Rust SSH feature check
+pnpm run check:rust:ssh
+
+# Rust tests
+pnpm run test:rust
+```
+
+For UI changes, run the local app and inspect the first viewport.

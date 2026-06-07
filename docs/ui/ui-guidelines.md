@@ -1,363 +1,105 @@
-# Unfour Workspace UI Guidelines
-
-## 1. Product Positioning
-
-Unfour Workspace is a compact desktop developer tool.
-
-It combines:
-
-* SSH terminal
-* Database management
-* API debugging
-* Workspace management
-* Logs and developer utilities
-
-The interface should feel like a unified IDE rather than a collection of unrelated web pages.
-
-Reference style:
-
-* VS Code and Cursor for application structure
-* Linear for visual restraint
-* TablePlus and DataGrip for database density
-* Bruno and Insomnia for API debugging clarity
-* Termius and Tabby for terminal workflows
-
-Avoid SaaS dashboard styling.
-
----
-
-## 2. Core Design Principles
-
-### 2.1 Compact desktop layout
-
-Unfour is a desktop productivity application.
-
-Prefer:
-
-* compact spacing
-* high information density
-* clear visual hierarchy
-* restrained use of decoration
-* keyboard-friendly interactions
-* context menus and secondary menus
-
-Avoid:
-
-* oversized headings
-* large blank areas
-* mobile-first layouts
-* marketing-page layouts
-* excessive explanatory text
-* large rounded cards
-
-### 2.2 Unified application shell
-
-All modules must use the same shell:
-
-```text
-┌─────────────────────────────────────────────┐
-│ Global toolbar                             │
-├────────────┬────────────────────────────────┤
-│ Sidebar    │ Main tab area                  │
-│ Explorer   │                                │
-│            │                                │
-├────────────┴────────────────────────────────┤
-│ Bottom panel: logs / output / status        │
-└─────────────────────────────────────────────┘
-```
-
-The UI must include:
-
-* fixed global toolbar
-* left navigation sidebar
-* central tab-based workspace
-* optional right-side inspector
-* optional bottom panel
-* compact status bar
-
-Do not create module-specific shells.
-
----
-
-## 3. Layout Rules
-
-### 3.1 Global toolbar
-
-The global toolbar should contain only application-level actions:
-
-* workspace switcher
-* global search
-* command palette
-* layout toggle
-* settings
-* account or sync state
-
-Module-specific actions must not appear here.
-
-### 3.2 Sidebar
-
-The sidebar is for navigation and tree structures.
-
-Examples:
-
-* saved connections
-* SSH hosts
-* database schemas
-* API collections
-* workspace files
-
-Rules:
-
-* use compact tree rows
-* use context menus for secondary operations
-* show only essential inline actions
-* avoid placing full forms inside the sidebar
-* use drawers or dialogs for configuration
-
-### 3.3 Main workspace
-
-The main content area uses tabs.
-
-Examples:
-
-* terminal sessions
-* SQL editors
-* database tables
-* API requests
-* log views
-* settings pages
-
-Rules:
-
-* tabs must support close action
-* tabs may show modified or connection state
-* tabs should reuse the same tab component
-* module pages should not recreate their own navigation bars
-
-### 3.4 Right-side inspector
-
-Use a right-side inspector for secondary details:
-
-* connection properties
-* table metadata
-* request history
-* environment variables
-* object properties
-
-Do not place low-frequency settings directly in the main workspace.
-
-### 3.5 Bottom panel
-
-Use the bottom panel for:
-
-* logs
-* task output
-* request trace
-* connection diagnostics
-* error details
-
-The panel should support collapse and resizing.
-
----
-
-## 4. Density Rules
-
-Use compact desktop dimensions.
-
-Recommended baseline:
-
-| Element          | Height |
-| ---------------- | -----: |
-| Global toolbar   |   38px |
-| Tab bar          |   34px |
-| Sidebar tree row |   28px |
-| Input            |   32px |
-| Button           |   30px |
-| Compact button   |   28px |
-| Table row        |   30px |
-| Status bar       |   24px |
-| Section toolbar  |   34px |
-
-Recommended border radius:
-
-| Element |                 Radius |
-| ------- | ---------------------: |
-| Buttons |                    5px |
-| Inputs  |                    5px |
-| Dialog  |                    8px |
-| Tooltip |                    4px |
-| Tabs    |                    4px |
-| Cards   | Avoid unless necessary |
-
-Avoid radius values above 10px unless implementing a modal or onboarding surface.
-
----
-
-## 5. Component Rules
-
-All UI components must be imported from `packages/ui`.
-
-Do not create page-local variants of common components.
-
-Shared components should include:
-
-```text
-Button
-IconButton
-Input
-Textarea
-Select
-Checkbox
-Switch
-Tabs
-TabBar
-Toolbar
-Sidebar
-TreeView
-DataTable
-PropertyGrid
-Dialog
-Drawer
-Popover
-Tooltip
-ContextMenu
-DropdownMenu
-CommandPalette
-SplitPane
-BottomPanel
-StatusBadge
-EmptyState
-LoadingState
-ErrorState
-ConnectionStatus
-```
-
-Before creating a new component:
-
-1. Search `packages/ui`.
-2. Check whether an existing component can be extended.
-3. Create a shared component only when the behavior is reusable.
-4. Do not introduce page-specific styling for shared patterns.
-
----
-
-## 6. Icon Rules
-
-Use `lucide-react` only.
-
-Recommended sizes:
-
-| Context      | Size |
-| ------------ | ---: |
-| Toolbar      | 16px |
-| Button       | 15px |
-| Sidebar row  | 15px |
-| Table action | 14px |
-| Status bar   | 14px |
-
-Rules:
-
-* do not mix icon libraries
-* do not use emojis as functional icons
-* all icon-only buttons require tooltips
-* use consistent stroke width
-* avoid decorative icons without functional meaning
-
----
-
-## 7. Visual Hierarchy
-
-Each panel should contain no more than one primary action.
-
-Examples:
-
-* API Debugger: `Send`
-* SQL Editor: `Run`
-* Connection form: `Connect`
-* Workspace creation: `Create workspace`
-
-Secondary actions should use:
-
-* icon buttons
-* dropdown menus
-* context menus
-* command palette
-* keyboard shortcuts
-
-Avoid showing every action at the same visual priority.
-
----
-
-## 8. State Handling
-
-Every feature page must handle:
-
-* default state
-* empty state
-* loading state
-* error state
-* disconnected state
-* disabled state
-* long text overflow
-* narrow panel width
-* keyboard focus state
-
-A page is not complete if it only implements the happy path.
-
----
-
-## 9. Interaction Rules
-
-Prefer keyboard-friendly workflows.
-
-Common actions should support:
-
-* command palette
-* keyboard shortcuts
-* context menus
-* tab navigation
-* resizable panels
-* collapsible panels
-* persistent layout state
-
-Use tooltips for icon-only actions.
-
-Do not hide critical actions behind hover-only interactions.
-
----
-
-## 10. Forbidden Patterns
-
-Do not use:
-
-* dashboard card grids for developer workflows
-* excessive shadows
-* random gradients
-* oversized rounded corners
-* oversized titles
-* large marketing-style illustrations
-* multiple icon libraries
-* inconsistent toolbar heights
-* inconsistent button styles
-* module-specific visual languages
-* unnecessary nested containers
-* excessive borders between every section
-* forms directly embedded into navigation trees
-* page-local CSS for reusable patterns
-
----
-
-## 11. Implementation Requirements
-
-When implementing or refactoring UI:
-
-1. Read this document first.
-2. Inspect `packages/ui`.
-3. Reuse shared layout components.
-4. Use design tokens only.
-5. Do not hardcode colors unless adding a token.
-6. Do not create page-local button or input styles.
-7. Add empty, loading and error states.
-8. Verify narrow-width behavior.
-9. Run frontend tests.
-10. Generate screenshots for visual review.
+# UI Guidelines
+
+## Product Style
+
+- Lightweight IDE / desktop developer tool.
+- High information density, efficiency, and clear state communication.
+- MUST NOT use marketing-style dashboard layouts.
+- MUST NOT use large border radii, heavy shadows, excessive whitespace, or meaningless card stacks.
+
+## Shared Layout
+
+- `AppShell` (via `packages/ui` shell components) provides the unified `GlobalToolbar`, `Sidebar`, `MainWorkspace`, `RightInspector`, `BottomPanel`, and `StatusBar`.
+- Complex module regions SHOULD use `SplitPane` from `packages/ui`.
+- Module-level actions MUST live in a module `Toolbar`, not in the global toolbar.
+- Each panel SHOULD expose only one primary action.
+- Secondary actions MUST go into `DropdownMenu`, context menus, or secondary action groups.
+- Wide and narrow viewports MUST have reasonable layout behavior.
+- Long content MUST support scroll, truncation, or expand patterns.
+
+## Shared Components
+
+Reuse components exported by `packages/ui` before creating local variants.
+
+Current shared components (observed in `packages/ui/src/index.ts`):
+
+- `Badge`
+- `Button`
+- `DataTable`
+- `Dialog` (with `DialogBody`, `DialogContent`, `DialogFooter`, `DialogHeader`, `DialogTitle`, etc.)
+- `IconButton`
+- `Input`
+- `Menus` (`ContextMenu`, `DropdownMenu`)
+- `Select`
+- `Shell` (`AppShellFrame`, `BottomPanel`, `CommandPalette`, `GlobalToolbar`, `MainWorkspace`, `RightInspector`, `Sidebar`, `SplitPane`, `StatusBar`, `TabBar`)
+- `States` (`EmptyState`, `ErrorState`, `LoadingState`)
+- `Status` (`ConnectionStatus`, `StatusBadge`)
+- `Tabs`
+- `Toolbar` (with `ToolbarGroup`)
+- `TreeView`
+- `cn` utility
+
+Planned additions (marked in `docs/ui/ui-components.md`):
+
+- `Textarea`, `Checkbox`, `Switch`, `PropertyGrid`, `Popover`, `Tooltip` wrappers still need to move into `packages/ui`.
+
+## Required States
+
+Each feature MUST evaluate the following states and implement the states that are applicable to its workflow.
+
+Common state checklist:
+
+- Initial state
+- Nothing selected
+- Empty state
+- Loading
+- Success
+- Failure
+- Network error
+- Timeout
+- No data
+- Long content
+- Unsupported format
+- Disabled state
+
+## Module-Specific State Expectations
+
+| State | API Debugger | Database | Terminal | Workspace |
+| --- | --- | --- | --- | --- |
+| Initial / nothing selected | MUST (no request selected) | MUST (no connection selected) | MUST (no connection selected) | MUST (first load) |
+| Empty | MUST (no collections) | MUST (no connections) | MUST (no SSH connections) | MUST (no workspaces) |
+| Loading | MUST (sending) | MUST (connecting / executing) | MUST (connecting) | SHOULD |
+| Success | MUST (response received) | MUST (query results) | MUST (connected) | SHOULD |
+| Failure | MUST (4xx/5xx) | MUST (connection / SQL error) | MUST (connection failed) | SHOULD |
+| Network error | MUST | SHOULD (live connections) | MUST | — |
+| Timeout | MUST | SHOULD | — | — |
+| No data | MUST (empty body) | MUST (empty result set) | SHOULD (no output) | — |
+| Long content | MUST (large response) | SHOULD (large result) | SHOULD (log overflow) | — |
+| Unsupported format | SHOULD | — | — | — |
+| Disabled | SHOULD | SHOULD (untestable connection) | — | — |
+| Confirmation required | — | MUST (mutation SQL) | — | — |
+| Disconnected / closed | — | — | MUST (session closed) | — |
+| Reconnecting | — | — | SHOULD | — |
+
+## API Debugger Pattern
+
+The current API Debugger (`packages/api-debugger`) implements the following patterns. Use it as a reference for consistent module design.
+
+Verified patterns:
+
+- Module-level toolbar (`ApiRequestToolbar`).
+- `Send` is the primary action.
+- Collection tree rendered in the unified sidebar via `ApiCollectionTree`.
+- Request area and response area use `SplitPane`.
+- Request area has tabbed sections: Query, Headers, Body, Auth (`RequestParamsTabs`).
+- Response area has a Response / History toggle and tabbed sections: Body, Headers, Cookies, Timing (`ResponseTabs`).
+- Status badges show `sending`, status code, duration, and size.
+- Empty states use `EmptyState` from `packages/ui` (note: `ResponseTabs.tsx` currently defines a local `EmptyState` — this is a known inconsistency).
+
+## Scope Control
+
+- UI optimization MUST NOT change existing business behavior.
+- UI optimization MUST NOT modify backend protocols.
+- A component MUST have at least two clear consumers before it is extracted into `packages/ui`.
+- Visual uniformity MUST NOT force every module into an identical layout.
+- Terminal, Database, and API Debugger MAY share design language but MUST retain their own workflow characteristics.

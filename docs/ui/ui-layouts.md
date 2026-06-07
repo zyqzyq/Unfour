@@ -65,3 +65,27 @@ Height must be state-driven so it can later be persisted per workspace.
 
 The status bar is compact and always visible. It shows workspace, storage,
 sync, connection, and background-task status.
+
+## Visual Hierarchy
+
+- Each panel SHOULD contain no more than one primary action.
+- Examples: API Debugger `Send`, SQL Editor `Run`, Connection form `Connect`.
+- Secondary actions SHOULD use icon buttons, dropdown menus, context menus, command palette, or keyboard shortcuts.
+- Avoid showing every action at the same visual priority.
+
+## Interaction Rules
+
+- Prefer keyboard-friendly workflows.
+- Common actions SHOULD support: command palette, keyboard shortcuts, context menus, tab navigation, resizable panels, collapsible panels, and persistent layout state.
+- Use tooltips for icon-only actions.
+- Do not hide critical actions behind hover-only interactions.
+
+## Layout-Related Forbidden Patterns
+
+- Do not create module-specific shells.
+- Do not place full forms inside the sidebar; use dialogs or inspectors.
+- Do not place low-frequency settings directly in the main workspace.
+- Do not use dashboard card grids for developer workflows.
+- Do not use excessive shadows, random gradients, or oversized rounded corners.
+- Do not use unnecessary nested containers or excessive borders between every section.
+- Do not embed forms directly into navigation trees.
