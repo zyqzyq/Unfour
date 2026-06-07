@@ -27,7 +27,7 @@
 | Field | Value |
 |---|---|
 | Status | Completed in `test: establish quality gate foundation` |
-| Result | ESLint 10 flat config (`eslint.config.mjs`) added with typescript-eslint, eslint-plugin-react-hooks v7, eslint-plugin-react-refresh. Rules: no-explicit-any (error), no-unused-vars (warn with ignore patterns), react-hooks rules (warn for v7 advisory rules). `pnpm run lint` passes with 0 errors, 62 warnings. 3 `prefer-const` violations fixed in `command-client/src/tauri.ts`. |
+| Result | ESLint 10 flat config (`eslint.config.mjs`) added with typescript-eslint, eslint-plugin-react-hooks v7, eslint-plugin-react-refresh. Rules: no-explicit-any (error), no-unused-vars (warn with ignore patterns), react-hooks rules (warn for v7 advisory rules). `pnpm run lint` passes with 0 errors, 63 warnings. 3 `prefer-const` violations fixed in `command-client/src/tauri.ts`. |
 
 ---
 
@@ -48,7 +48,7 @@
 | Scope | `crates/ssh-engine/src/ssh.rs` (primary). May need changes in `apps/desktop/src-tauri/src/command_bus.rs` for async event streaming. Frontend `packages/terminal/` may need Tauri event listeners for real-time terminal output. |
 | Forbidden | Do not restructure the `SshService` public API (keep existing command signatures). Do not modify `packages/command-client/src/types.ts` (types are already correct). |
 | Risk | High. SSH transport involves async I/O, error handling, host-key verification, key format parsing, and cross-platform considerations. The `russh` API may require significant adaptation. |
-| Prerequisites | SSH host-key verification strategy decided (ISSUE from security.md). Windows NASM dependency resolved (already handled via `ring` backend). |
+| Prerequisites | SSH host-key verification strategy decided. Windows NASM dependency resolved (already handled via `ring` backend). `ssh-native` feature compiles cleanly. |
 | Acceptance criteria | `cargo check -p unfour-workspace --features ssh-native` passes. Connecting to a real SSH server (e.g., localhost with OpenSSH) succeeds. Terminal output appears in xterm. Session close cleans up resources. Existing tests still pass. |
 | Independent commit | Yes (can be split into: transport layer, auth, PTY, event streaming) |
 
@@ -82,7 +82,7 @@
 | Field | Value |
 |---|---|
 | Status | Completed in `test: establish quality gate foundation` |
-| Result | Local-storage: 6 tests added (3 in `local_db.rs`: migration creates all 7 tables, migration is idempotent, folder_path column migration; 3 in `activity_log.rs`: single event insert, multiple events, JSON details serialization). CommandBus: 3 integration tests added (`from_db` testability seam with in-memory SQLite + in-memory SecretStore): workspace create/list, API request save/list, workspace rename. `SecretStore::in_memory` made available outside `#[cfg(test)]` for cross-crate testing. Total Rust workspace: 39 tests passing. |
+| Result | Local-storage: 6 tests added (3 in `local_db.rs`: migration creates all 7 tables, migration is idempotent, folder_path column migration; 3 in `activity_log.rs`: single event insert, multiple events, JSON details serialization). CommandBus: 3 integration tests added (`from_db` testability seam with in-memory SQLite + in-memory SecretStore): workspace create/list, API request save/list, workspace rename. `SecretStore::in_memory` made available outside `#[cfg(test)]` for cross-crate testing. Total Rust workspace: 39 tests passing across 8 test targets. |
 
 ---
 

@@ -8,7 +8,7 @@
 |---|---|
 | Scan date | 2026-06-07 |
 | Branch | `main` |
-| Last commit | `test: establish quality gate foundation` |
+| Last commit | `245e63c test: establish quality gate foundation` |
 | Working tree | Clean (no staged or unstaged changes) |
 | Package manager | pnpm 10.23.0 |
 | Rust toolchain | Verified with `rustc 1.96.0` |
@@ -29,7 +29,7 @@
 
 The project is between **v0.4 (Database)** and **v0.5 (Hardening)** on its roadmap. The API Client (v0.2) and core workspace features are complete. SQLite database support is fully functional. SSH has a complete metadata CRUD boundary and session lifecycle simulation, but real SSH transport via russh is not yet connected. PostgreSQL and MySQL have metadata-only support; live connections are reserved for a future phase.
 
-Frontend hardening is in progress: the composition root has been extracted into focused components, hardcoded colors have been migrated to semantic tokens, and the production bundle is split into five chunks via Vite `manualChunks`. A quality gate foundation has been established with ESLint flat config, Vitest frontend tests, and Rust integration tests for the CommandBus.
+Frontend hardening is complete: the composition root has been extracted into focused components, hardcoded colors have been migrated to semantic tokens, and the production bundle is split into five chunks via Vite `manualChunks`. A quality gate foundation has been established with ESLint flat config, Vitest frontend tests, and Rust integration tests for the CommandBus. Secret-store boundary tests have been added.
 
 ## Verified Capabilities (Fully Implemented)
 
@@ -57,6 +57,7 @@ Frontend hardening is in progress: the composition root has been extracted into 
 - ESLint flat config with TypeScript, React Hooks, and no-explicit-any enforcement
 - Vitest frontend test suite covering Zustand store, API utilities, and database result utilities
 - Rust integration tests for CommandBus orchestration (workspace CRUD, API request save/list)
+- Rust unit tests for SecretStore credential reference lifecycle, rotation, and workspace boundary enforcement
 
 ## Partially Implemented
 
@@ -82,18 +83,19 @@ Frontend hardening is in progress: the composition root has been extracted into 
 
 | Command | Result | Details |
 |---|---|---|
-| `pnpm run lint` | PASS | 0 errors, 62 warnings (react-hooks v7 advisories + react-refresh export warnings). |
+| `pnpm run lint` | PASS | 0 errors, 63 warnings (react-hooks v7 advisories + react-refresh export warnings + 1 exhaustive-deps warning). |
 | `pnpm run test` | PASS | 48 tests passed across 3 test files (workspace-store: 12, request-utils: 20, result-utils: 16). |
-| `pnpm run build` | PASS | tsc + vite build succeeded. 1990 modules. Output: 5 JS chunks (monaco 15 KB, vendor-radix 88 KB, vendor-tanstack 101 KB, xterm 334 KB, index 378 KB), 2 CSS chunks (xterm 5 KB, index 35 KB). All chunks under 500 KB. |
+| `pnpm run build` | PASS | tsc + vite build succeeded. 1990 modules. Output: 5 JS chunks (monaco 15 KB, vendor-radix 88 KB, vendor-tanstack 101 KB, xterm 334 KB, index 378 KB), 2 CSS chunks (xterm 5 KB, index 35 KB). All chunks under 500 KB. Built in 2.44s. |
 | `cargo fmt --check` | PASS | No formatting issues. |
-| `cargo test --workspace` | PASS | 39 tests passed, 0 failed across 7 crates (including 6 new local-storage tests + 3 new CommandBus integration tests). |
-| `cargo check --workspace` | PASS | All 7 crates compile cleanly. |
+| `cargo test --workspace` | PASS | 39 tests passed, 0 failed across 8 test targets (unfour-core: 3, database-engine: 3, http-engine: 8, local-storage: 6, secret-store: 4, ssh-engine: 4, workspace-engine: 8, CommandBus integration: 3). |
+| `cargo check --workspace` | PASS | All crates compile cleanly (7 library crates + 1 Tauri adapter). |
 | `cargo check -p unfour-workspace --features ssh-native` | PASS | ssh-native feature compiles cleanly. |
 
 ## Known Limitations
 
-1. **Mock fallback size:** `packages/command-client/src/tauri.ts` contains ~900 lines of mock implementation for browser-only development. This is intentional but adds maintenance cost.
+1. **Mock fallback size:** `packages/command-client/src/tauri.ts` contains 972 lines of mock implementation for browser-only development. This is intentional but adds maintenance cost.
 2. **CSP disabled:** `tauri.conf.json` sets `security.csp: null`, meaning no Content Security Policy is enforced.
 3. **No package-level README:** None of the 7 frontend packages or 7 Rust crates have README files.
 4. **CSS overlay values:** `.workspace-card` in `styles.css` still uses raw `rgba(255, 255, 255, ...)` values; these are intentional light-overlay effects with no semantic token equivalent.
-5. **ESLint warnings:** 62 warnings from react-hooks v7 advisory rules (`refs`, `set-state-in-effect`, `immutability`) and react-refresh export checks. These are documented as non-blocking.
+5. **ESLint warnings:** 63 warnings from react-hooks v7 advisory rules (`refs`, `set-state-in-effect`, `immutability`, `exhaustive-deps`) and react-refresh export checks. These are documented as non-blocking.
+6. **App.tsx line count:** 199 lines (composition root delegating to extracted components and hooks).

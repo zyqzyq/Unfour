@@ -4,11 +4,11 @@
 
 ---
 
-## ISSUE-04: Mock fallback in command-client is ~900 lines
+## ISSUE-04: Mock fallback in command-client is 972 lines
 
 | Field | Value |
 |---|---|
-| Description | `packages/command-client/src/tauri.ts` contains approximately 900 lines of `mockInvoke` implementation simulating all 36 Tauri backend commands. This is intentional for browser-only development but is a significant maintenance burden. Any new Tauri command requires a corresponding mock implementation. The mock state is module-level mutable globals, which could cause issues in test scenarios. |
+| Description | `packages/command-client/src/tauri.ts` contains 972 lines of `mockInvoke` implementation simulating all Tauri backend commands. This is intentional for browser-only development but is a significant maintenance burden. Any new Tauri command requires a corresponding mock implementation. The mock state is module-level mutable globals, which could cause issues in test scenarios. |
 | File | `packages/command-client/src/tauri.ts` |
 | Type | Observed |
 | Priority | P2 |
@@ -69,7 +69,7 @@
 | Field | Value |
 |---|---|
 | Description | In `SshConnectionTree.tsx`, the "Duplicate Connection" context menu item is rendered with `disabled` prop. This is a planned feature with no implementation. |
-| File | `packages/terminal/src/components/SshConnectionTree.tsx` (line 167) |
+| File | `packages/terminal/src/components/SshConnectionTree.tsx` |
 | Type | Observed |
 | Priority | P3 |
 | Blocks development | No |
@@ -81,7 +81,7 @@
 | Field | Value |
 |---|---|
 | Description | In `DatabaseModuleToolbar.tsx`, the "Duplicate Tab" dropdown menu item has no onClick handler and no implementation. |
-| File | `packages/database/src/components/DatabaseModuleToolbar.tsx` (line 86) |
+| File | `packages/database/src/components/DatabaseModuleToolbar.tsx` |
 | Type | Observed |
 | Priority | P3 |
 | Blocks development | No |
@@ -140,8 +140,8 @@
 
 | Field | Value |
 |---|---|
-| Description | In `App.tsx`, the bottom panel (non-SSH mode) renders "Local activity and module diagnostics will appear here" and the right inspector renders "[module] details and properties will use this space." These are shell-level features that have been structurally created but never populated with real content. |
-| File | `apps/desktop/src/App.tsx` |
+| Description | The bottom panel (non-SSH mode) renders "Local activity and module diagnostics will appear here" and the right inspector renders "[module] details and properties will use this space." These are shell-level features that have been structurally created but never populated with real content. Components live in `apps/desktop/src/components/BottomPanelPlaceholder.tsx` and `RightInspectorPlaceholder.tsx`. |
+| Files | `apps/desktop/src/components/BottomPanelPlaceholder.tsx`, `apps/desktop/src/components/RightInspectorPlaceholder.tsx` |
 | Type | Observed |
 | Priority | P3 |
 | Blocks development | No |
