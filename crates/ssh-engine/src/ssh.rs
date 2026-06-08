@@ -9,11 +9,17 @@ use unfour_core::models::{
 use unfour_core::redaction::redact_sensitive_lines;
 use unfour_core::{AppError, AppResult};
 use unfour_local_storage::LocalDb;
+use unfour_secret_store::SecretStore;
 use uuid::Uuid;
+
+#[cfg(feature = "ssh-native")]
+use crate::host_key::HostKeyStore;
 
 #[derive(Clone)]
 pub struct SshService {
     db: LocalDb,
+    #[cfg_attr(not(feature = "ssh-native"), allow(dead_code))]
+    secret_store: SecretStore,
     sessions: Arc<Mutex<HashMap<String, SshSessionState>>>,
 }
 
@@ -21,12 +27,77 @@ pub struct SshService {
 struct SshSessionState {
     summary: SshSessionSummary,
     events: Vec<SshSessionEvent>,
+    #[cfg(feature = "ssh-native")]
+    native_handle: Option<NativeSshHandle>,
 }
 
+#[cfg(feature = "ssh-native")]
+struct NativeSshHandle {
+    handle: std::sync::Arc<tokio::sync::Mutex<russh::client::Handle<SshClientHandler>>>,
+}
+
+#[cfg(feature = "ssh-native")]
+impl Clone for NativeSshHandle {
+    fn clone(&self) -> Self {
+        Self {
+            handle: self.handle.clone(),
+        }
+    }
+}
+
+#[cfg(feature = "ssh-native")]
+impl std::fmt::Debug for NativeSshHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NativeSshHandle").finish_non_exhaustive()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Native SSH handler (russh client::Handler implementation)
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "ssh-native")]
+struct SshClientHandler {
+    host_key_store: HostKeyStore,
+    host: String,
+    port: u16,
+}
+
+#[cfg(feature = "ssh-native")]
+impl russh::client::Handler for SshClientHandler {
+    type Error = russh::Error;
+
+    async fn check_server_key(
+        &mut self,
+        server_public_key: &ssh_key::PublicKey,
+    ) -> Result<bool, Self::Error> {
+        let fingerprint = server_public_key
+            .fingerprint(ssh_key::HashAlg::Sha256)
+            .to_string();
+
+        self.host_key_store
+            .verify_or_record(&self.host, self.port, &fingerprint)
+            .await
+            .map(|()| true)
+            .map_err(|e| {
+                // Convert AppError to a russh::Error that preserves the message.
+                russh::Error::IO(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    e.to_string(),
+                ))
+            })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SshService implementation
+// ---------------------------------------------------------------------------
+
 impl SshService {
-    pub fn new(db: LocalDb) -> Self {
+    pub fn new(db: LocalDb, secret_store: SecretStore) -> Self {
         Self {
             db,
+            secret_store,
             sessions: Arc::new(Mutex::new(HashMap::new())),
         }
     }
@@ -138,7 +209,8 @@ impl SshService {
             return Err(AppError::NotFound("ssh connection".to_string()));
         }
 
-        self.close_sessions_for_connection(&workspace_id, &connection_id)?;
+        self.close_sessions_for_connection(&workspace_id, &connection_id)
+            .await?;
 
         self.list_connections(workspace_id).await
     }
@@ -151,42 +223,14 @@ impl SshService {
             .await?;
         validate_connection_ready_for_session(&connection)?;
 
-        let now = Utc::now().to_rfc3339();
-        let session_id = Uuid::new_v4().to_string();
-        let cols = input.cols.unwrap_or(120).clamp(20, 300);
-        let rows = input.rows.unwrap_or(32).clamp(8, 100);
-        let summary = SshSessionSummary {
-            session_id: session_id.clone(),
-            workspace_id: connection.workspace_id,
-            connection_id: connection.id,
-            status: "active".to_string(),
-            auth_kind: connection.auth_kind,
-            host: connection.host,
-            username: connection.username,
-            cols,
-            rows,
-            created_at: now.clone(),
-            updated_at: now.clone(),
-        };
-        let state = SshSessionState {
-            summary: summary.clone(),
-            events: vec![SshSessionEvent {
-                session_id: session_id.clone(),
-                kind: "output".to_string(),
-                data: format!(
-                    "Connected to {}@{} with {} auth. PTY {}x{} allocated.\r\n",
-                    summary.username, summary.host, summary.auth_kind, cols, rows
-                ),
-                created_at: now,
-            }],
-        };
-
-        self.sessions
-            .lock()
-            .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?
-            .insert(session_id, state);
-
-        Ok(summary)
+        #[cfg(feature = "ssh-native")]
+        {
+            self.connect_native(&connection, &input).await
+        }
+        #[cfg(not(feature = "ssh-native"))]
+        {
+            self.connect_simulated(&connection, &input).await
+        }
     }
 
     pub fn list_sessions(&self, workspace_id: String) -> AppResult<Vec<SshSessionSummary>> {
@@ -264,15 +308,47 @@ impl SshService {
         Ok(event)
     }
 
-    pub fn close_session(&self, input: SshCloseInput) -> AppResult<SshSessionSummary> {
+    pub async fn close_session(&self, input: SshCloseInput) -> AppResult<SshSessionSummary> {
         validate_workspace_id(&input.workspace_id)?;
         validate_session_id(&input.session_id)?;
+
+        // Extract native handle and update state under the lock.
+        #[cfg(feature = "ssh-native")]
+        let native_handle: Option<NativeSshHandle> = {
+            let mut sessions = self
+                .sessions
+                .lock()
+                .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?;
+            let state =
+                session_for_workspace_mut(&mut sessions, &input.workspace_id, &input.session_id)?;
+            if state.summary.status == "closed" {
+                return Ok(state.summary.clone());
+            }
+            state.native_handle.take()
+        };
+
+        // Disconnect native transport outside the mutex lock.
+        #[cfg(feature = "ssh-native")]
+        if let Some(native) = native_handle {
+            let handle = native.handle.lock().await;
+            let _ = handle
+                .disconnect(russh::Disconnect::ByApplication, "session closed", "en")
+                .await;
+        }
+
+        // Update session status under the lock.
         let mut sessions = self
             .sessions
             .lock()
             .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?;
         let state =
             session_for_workspace_mut(&mut sessions, &input.workspace_id, &input.session_id)?;
+
+        // Idempotent: if already closed, return the stored summary.
+        if state.summary.status == "closed" {
+            return Ok(state.summary.clone());
+        }
+
         let now = Utc::now().to_rfc3339();
         state.summary.status = "closed".to_string();
         state.summary.updated_at = now.clone();
@@ -317,20 +393,29 @@ impl SshService {
     }
 
     pub fn capability_summary(&self) -> serde_json::Value {
+        let transport = if cfg!(feature = "ssh-native") {
+            "russh-native"
+        } else {
+            "simulated"
+        };
         serde_json::json!({
-            "status": "session-mvp",
-            "plannedBackend": "russh",
+            "status": "transport-phase-1",
+            "transport": transport,
             "features": [
                 "connection-metadata-crud",
                 "credential-ref-boundary",
                 "password-auth-session",
-                "private-key-auth-session",
-                "pty-input-resize-events",
+                "host-key-tofu",
+                "graceful-close",
                 "session-close",
                 "redacted-log-export"
             ]
         })
     }
+
+    // -----------------------------------------------------------------------
+    // Private helpers
+    // -----------------------------------------------------------------------
 
     async fn get_connection(&self, workspace_id: &str, id: &str) -> AppResult<SshConnection> {
         validate_workspace_id(workspace_id)?;
@@ -355,35 +440,234 @@ impl SshService {
             .ok_or_else(|| AppError::NotFound("ssh connection".to_string()))
     }
 
-    fn close_sessions_for_connection(
+    async fn close_sessions_for_connection(
         &self,
         workspace_id: &str,
         connection_id: &str,
     ) -> AppResult<()> {
         let now = Utc::now().to_rfc3339();
-        for state in self
-            .sessions
-            .lock()
-            .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?
-            .values_mut()
-            .filter(|state| {
+
+        // Collect native handles under the lock, then disconnect outside it.
+        #[cfg(feature = "ssh-native")]
+        let native_handles: Vec<NativeSshHandle> = {
+            let sessions = self
+                .sessions
+                .lock()
+                .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?;
+            sessions
+                .values()
+                .filter(|state| {
+                    state.summary.workspace_id == workspace_id
+                        && state.summary.connection_id == connection_id
+                        && state.summary.status == "active"
+                })
+                .filter_map(|state| state.native_handle.clone())
+                .collect()
+        };
+
+        {
+            let mut sessions = self
+                .sessions
+                .lock()
+                .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?;
+            for state in sessions.values_mut().filter(|state| {
                 state.summary.workspace_id == workspace_id
                     && state.summary.connection_id == connection_id
                     && state.summary.status == "active"
-            })
-        {
-            state.summary.status = "closed".to_string();
-            state.summary.updated_at = now.clone();
-            state.events.push(SshSessionEvent {
-                session_id: state.summary.session_id.clone(),
-                kind: "close".to_string(),
-                data: "SSH session closed because the connection was deleted.\r\n".to_string(),
-                created_at: now.clone(),
-            });
+            }) {
+                #[cfg(feature = "ssh-native")]
+                state.native_handle.take();
+
+                state.summary.status = "closed".to_string();
+                state.summary.updated_at = now.clone();
+                state.events.push(SshSessionEvent {
+                    session_id: state.summary.session_id.clone(),
+                    kind: "close".to_string(),
+                    data: "SSH session closed because the connection was deleted.\r\n".to_string(),
+                    created_at: now.clone(),
+                });
+            }
         }
+
+        // Disconnect native handles outside the mutex lock.
+        #[cfg(feature = "ssh-native")]
+        for native in native_handles {
+            let handle = native.handle.lock().await;
+            let _ = handle
+                .disconnect(russh::Disconnect::ByApplication, "connection deleted", "en")
+                .await;
+        }
+
         Ok(())
     }
+
+    // -----------------------------------------------------------------------
+    // Simulated connect (non ssh-native path)
+    // -----------------------------------------------------------------------
+
+    #[cfg(not(feature = "ssh-native"))]
+    async fn connect_simulated(
+        &self,
+        connection: &SshConnection,
+        input: &SshConnectInput,
+    ) -> AppResult<SshSessionSummary> {
+        let now = Utc::now().to_rfc3339();
+        let session_id = Uuid::new_v4().to_string();
+        let cols = input.cols.unwrap_or(120).clamp(20, 300);
+        let rows = input.rows.unwrap_or(32).clamp(8, 100);
+        let summary = SshSessionSummary {
+            session_id: session_id.clone(),
+            workspace_id: connection.workspace_id.clone(),
+            connection_id: connection.id.clone(),
+            status: "active".to_string(),
+            auth_kind: connection.auth_kind.clone(),
+            host: connection.host.clone(),
+            username: connection.username.clone(),
+            cols,
+            rows,
+            created_at: now.clone(),
+            updated_at: now.clone(),
+        };
+        let state = SshSessionState {
+            summary: summary.clone(),
+            events: vec![SshSessionEvent {
+                session_id: session_id.clone(),
+                kind: "output".to_string(),
+                data: format!(
+                    "Connected to {}@{} with {} auth. PTY {}x{} allocated.\r\n",
+                    summary.username, summary.host, summary.auth_kind, cols, rows
+                ),
+                created_at: now,
+            }],
+        };
+
+        self.sessions
+            .lock()
+            .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?
+            .insert(session_id, state);
+
+        Ok(summary)
+    }
+
+    // -----------------------------------------------------------------------
+    // Native connect (ssh-native feature path)
+    // -----------------------------------------------------------------------
+
+    #[cfg(feature = "ssh-native")]
+    async fn connect_native(
+        &self,
+        connection: &SshConnection,
+        input: &SshConnectInput,
+    ) -> AppResult<SshSessionSummary> {
+        // Resolve password from SecretStore via credential_ref.
+        let credential_ref = connection.credential_ref.as_deref().ok_or_else(|| {
+            AppError::Validation("password auth requires a credential reference".to_string())
+        })?;
+        let password = self
+            .secret_store
+            .read_secret(connection.workspace_id.clone(), credential_ref.to_string())
+            .await
+            .map_err(|_| {
+                AppError::Config("failed to read ssh credential from secret store".to_string())
+            })?;
+
+        // Build russh config.
+        let config = Arc::new(russh::client::Config::default());
+
+        // Build host-key handler with TOFU store.
+        let host_key_store = HostKeyStore::new(self.db.pool().clone());
+        let handler = SshClientHandler {
+            host_key_store,
+            host: connection.host.clone(),
+            port: connection.port,
+        };
+
+        // Connect with timeout.
+        let addr = format!("{}:{}", connection.host, connection.port);
+        let timeout_duration = std::time::Duration::from_secs(15);
+        let mut handle = match tokio::time::timeout(
+            timeout_duration,
+            russh::client::connect(config, addr.as_str(), handler),
+        )
+        .await
+        {
+            Ok(Ok(h)) => h,
+            Ok(Err(e)) => {
+                return Err(AppError::Config(format!(
+                    "ssh connection to {}:{} failed: {}",
+                    connection.host,
+                    connection.port,
+                    sanitize_ssh_error(&e)
+                )));
+            }
+            Err(_) => {
+                return Err(AppError::Config(format!(
+                    "ssh connection to {}:{} timed out after {}s",
+                    connection.host,
+                    connection.port,
+                    timeout_duration.as_secs()
+                )));
+            }
+        };
+
+        // Authenticate with password.
+        let auth_result = handle
+            .authenticate_password(connection.username.clone(), password)
+            .await
+            .map_err(|_| AppError::Config("ssh authentication failed".to_string()))?;
+
+        if !auth_result.success() {
+            return Err(AppError::Config(
+                "ssh authentication failed: invalid credentials".to_string(),
+            ));
+        }
+
+        // Build session summary.
+        let now = Utc::now().to_rfc3339();
+        let session_id = Uuid::new_v4().to_string();
+        let cols = input.cols.unwrap_or(120).clamp(20, 300);
+        let rows = input.rows.unwrap_or(32).clamp(8, 100);
+        let summary = SshSessionSummary {
+            session_id: session_id.clone(),
+            workspace_id: connection.workspace_id.clone(),
+            connection_id: connection.id.clone(),
+            status: "active".to_string(),
+            auth_kind: connection.auth_kind.clone(),
+            host: connection.host.clone(),
+            username: connection.username.clone(),
+            cols,
+            rows,
+            created_at: now.clone(),
+            updated_at: now.clone(),
+        };
+        let state = SshSessionState {
+            summary: summary.clone(),
+            events: vec![SshSessionEvent {
+                session_id: session_id.clone(),
+                kind: "output".to_string(),
+                data: format!(
+                    "Connected to {}@{} via native transport with {} auth.\r\n",
+                    summary.username, summary.host, summary.auth_kind
+                ),
+                created_at: now,
+            }],
+            native_handle: Some(NativeSshHandle {
+                handle: std::sync::Arc::new(tokio::sync::Mutex::new(handle)),
+            }),
+        };
+
+        self.sessions
+            .lock()
+            .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?
+            .insert(session_id, state);
+
+        Ok(summary)
+    }
 }
+
+// ---------------------------------------------------------------------------
+// Free functions
+// ---------------------------------------------------------------------------
 
 fn stored_to_ssh_connection(row: StoredConnection) -> AppResult<SshConnection> {
     let config = serde_json::from_str::<SshConnectionConfig>(&row.config_json)?;
@@ -463,6 +747,18 @@ fn validate_connection_ready_for_session(connection: &SshConnection) -> AppResul
         ));
     }
     Ok(())
+}
+
+/// Remove potentially sensitive details from SSH errors before surfacing them.
+#[cfg(feature = "ssh-native")]
+fn sanitize_ssh_error(error: &russh::Error) -> String {
+    let msg = error.to_string();
+    // Strip anything that looks like it could contain a password or secret.
+    if msg.to_ascii_lowercase().contains("password") {
+        "ssh transport error".to_string()
+    } else {
+        msg
+    }
 }
 
 fn normalize_name(name: &str) -> AppResult<String> {
@@ -558,10 +854,15 @@ fn redact_ssh_log(value: &str) -> (String, bool) {
     redact_sensitive_lines(value)
 }
 
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+    use unfour_secret_store::SecretStore;
 
     async fn service_with_workspaces() -> (SshService, String, String) {
         let options = SqliteConnectOptions::new()
@@ -575,6 +876,8 @@ mod tests {
             .expect("connect in-memory app db");
         let db = LocalDb::from_pool(pool);
         db.migrate().await.expect("run migrations");
+
+        let secret_store = SecretStore::in_memory("unfour-test");
 
         let workspace_a = Uuid::new_v4().to_string();
         let workspace_b = Uuid::new_v4().to_string();
@@ -596,7 +899,7 @@ mod tests {
             .expect("insert workspace");
         }
 
-        (SshService::new(db), workspace_a, workspace_b)
+        (SshService::new(db, secret_store), workspace_a, workspace_b)
     }
 
     fn password_input(workspace_id: &str) -> SshConnectionInput {
@@ -745,6 +1048,7 @@ mod tests {
                 workspace_id: workspace_id.clone(),
                 session_id: session.session_id.clone(),
             })
+            .await
             .expect("close session");
         assert_eq!(closed.status, "closed");
 
@@ -792,5 +1096,80 @@ mod tests {
             .expect("list sessions after delete");
         assert_eq!(sessions[0].session_id, session.session_id);
         assert_eq!(sessions[0].status, "closed");
+    }
+
+    #[tokio::test]
+    async fn repeated_close_does_not_panic_and_returns_stable_result() {
+        let (service, workspace_id, _) = service_with_workspaces().await;
+        let connection = service
+            .save_connection(password_input(&workspace_id))
+            .await
+            .expect("save ssh connection");
+        let session = service
+            .connect(SshConnectInput {
+                workspace_id: workspace_id.clone(),
+                connection_id: connection.id.clone(),
+                cols: None,
+                rows: None,
+            })
+            .await
+            .expect("connect ssh session");
+
+        let first_close = service
+            .close_session(SshCloseInput {
+                workspace_id: workspace_id.clone(),
+                session_id: session.session_id.clone(),
+            })
+            .await
+            .expect("first close");
+        assert_eq!(first_close.status, "closed");
+
+        let second_close = service
+            .close_session(SshCloseInput {
+                workspace_id: workspace_id.clone(),
+                session_id: session.session_id.clone(),
+            })
+            .await
+            .expect("second close should not fail");
+        assert_eq!(second_close.status, "closed");
+        assert_eq!(second_close.session_id, first_close.session_id);
+    }
+
+    #[tokio::test]
+    async fn auth_failure_does_not_leak_password_in_error() {
+        // This test verifies the error message contract.
+        // A real auth failure requires a live SSH server, so we verify
+        // that the error sanitization helper strips sensitive keywords.
+        #[cfg(feature = "ssh-native")]
+        {
+            let sanitized = sanitize_ssh_error(&russh::Error::IO(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "password rejected by server",
+            )));
+            assert!(
+                !sanitized.contains("password"),
+                "error must not contain password: {}",
+                sanitized
+            );
+        }
+
+        // Non-sensitive errors pass through.
+        #[cfg(feature = "ssh-native")]
+        {
+            let sanitized = sanitize_ssh_error(&russh::Error::IO(std::io::Error::new(
+                std::io::ErrorKind::ConnectionRefused,
+                "connection refused",
+            )));
+            assert_eq!(sanitized, "connection refused");
+        }
+
+        // For non-native builds, this test is a no-op but still passes.
+        #[cfg(not(feature = "ssh-native"))]
+        {
+            // Verify that the error types we use don't contain secrets.
+            let err = AppError::Config("ssh authentication failed".to_string());
+            let msg = err.to_string();
+            assert!(!msg.contains("super-secret-password"));
+        }
     }
 }

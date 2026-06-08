@@ -167,6 +167,15 @@ const MIGRATIONS: &[&str] = &[
     "#,
     "CREATE INDEX IF NOT EXISTS idx_api_history_workspace_created ON api_history(workspace_id, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_connections_workspace_kind ON connections(workspace_id, kind)",
+    r#"
+    CREATE TABLE IF NOT EXISTS ssh_host_keys (
+      host TEXT NOT NULL,
+      port INTEGER NOT NULL,
+      fingerprint TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (host, port)
+    )
+    "#,
 ];
 
 #[cfg(test)]

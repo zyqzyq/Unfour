@@ -6103,9 +6103,11 @@ dependencies = [
  "russh",
  "serde_json",
  "sqlx",
+ "ssh-key",
  "tokio",
  "unfour-core",
  "unfour-local-storage",
+ "unfour-secret-store",
  "uuid",
 ]
 

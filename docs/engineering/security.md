@@ -62,7 +62,27 @@ Future AI/workflow actions should distinguish local reads, writes, and data egre
 ## Current Gaps
 
 - OS keychain/Stronghold write/read is reserved but not implemented.
-- SSH host-key verification is not implemented.
 - Database query cancellation and read-only guardrails are not implemented.
 - API request body redaction is not implemented.
 - Workspace environment values are not encrypted; do not store long-lived secrets there.
+
+## SSH Host-Key Verification (ADR: TOFU)
+
+**Decision:** Trust-on-first-use (TOFU) for SSH host-key verification.
+
+**Status:** Implemented in `crates/ssh-engine/src/host_key.rs`. Active under the `ssh-native` feature flag.
+
+**Behavior:**
+
+- On first connection to a host:port, the server's public key SHA-256 fingerprint is recorded in the `ssh_host_keys` SQLite table.
+- On subsequent connections, the stored fingerprint must match the server's presented key.
+- A fingerprint mismatch is rejected with a clear error message. The connection is not established.
+- Fingerprint changes are never silently accepted.
+
+**Storage:** Fingerprints are stored in `ssh_host_keys (host, port, fingerprint, created_at)` with `(host, port)` as the composite primary key.
+
+**Future extension points:**
+
+- OpenSSH `known_hosts` file integration for interoperability.
+- User confirmation UI for fingerprint changes (allow explicit trust updates).
+- Per-connection host-key policy overrides.

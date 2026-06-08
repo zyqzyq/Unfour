@@ -43,8 +43,8 @@ impl CommandBus {
             api_client: ApiClientService::new(db.clone()),
             activity_log,
             database: DatabaseService::new(db.clone()),
-            secret_store,
-            ssh: SshService::new(db.clone()),
+            secret_store: secret_store.clone(),
+            ssh: SshService::new(db.clone(), secret_store),
             workspace,
         })
     }
@@ -62,8 +62,8 @@ impl CommandBus {
             api_client: ApiClientService::new(db.clone()),
             activity_log,
             database: DatabaseService::new(db.clone()),
-            secret_store,
-            ssh: SshService::new(db.clone()),
+            secret_store: secret_store.clone(),
+            ssh: SshService::new(db.clone(), secret_store),
             workspace,
         })
     }
@@ -521,7 +521,7 @@ impl CommandBus {
     }
 
     pub async fn close_ssh_session(&self, input: SshCloseInput) -> AppResult<SshSessionSummary> {
-        let session = self.ssh.close_session(input.clone())?;
+        let session = self.ssh.close_session(input.clone()).await?;
         self.activity_log
             .record(
                 Some(&input.workspace_id),
