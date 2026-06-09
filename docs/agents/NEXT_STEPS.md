@@ -1,6 +1,6 @@
 # Next Steps
 
-## Recommended: SSH Phase 5 — Persistence & Polish
+## Recommended: Persistence & Polish
 
 Priority order:
 
@@ -28,14 +28,29 @@ Priority order:
 2. **known_hosts integration**
    - Goal: Import or export fingerprints from/to the system `known_hosts` file.
    - Scope: `crates/ssh-engine`, Tauri commands.
+   - Forbidden: Do not modify system `known_hosts` file contents without explicit user action.
+   - Risk: Medium — file I/O + security-sensitive parsing.
+   - Prerequisites: None.
+   - Acceptance criteria: User can export stored fingerprints to `known_hosts` format; user can import existing `known_hosts` entries; round-trip preserves fingerprint integrity.
+   - Independent commit: Yes.
    - Recommended model: Codex / stronger coding model (file I/O + security).
 
 3. **API body redaction**
    - Goal: Redact sensitive values in API request bodies before saving to history.
    - Scope: `crates/http-engine`, `packages/api-debugger`.
+   - Forbidden: Do not modify the actual request payload sent to servers; redaction applies only to stored history and logs.
+   - Risk: Low — additive filtering on the persistence path.
+   - Prerequisites: None.
+   - Acceptance criteria: Request bodies containing keys matching the existing sensitive-key list are redacted in history; JSON structure is preserved; non-sensitive fields are unchanged.
+   - Independent commit: Yes.
    - Recommended model: weaker cheaper model is sufficient.
 
 4. **Lint warning cleanup**
-   - Goal: Reduce `react-hooks/set-state-in-effect`, `react-hooks/exhaustive-deps`, and `react-hooks/refs` warnings.
+   - Goal: Reduce `react-hooks/set-state-in-effect`, `react-hooks/exhaustive-deps`, `react-hooks/refs`, and `react-refresh/only-export-components` warnings across the codebase.
    - Scope: `packages/api-debugger`, `packages/database`, `packages/terminal`, `apps/desktop`.
+   - Forbidden: Do not change component behavior or refactor hooks beyond what is needed to resolve the warnings.
+   - Risk: Low — targeted fixes per warning.
+   - Prerequisites: None.
+   - Acceptance criteria: `pnpm run lint` produces fewer warnings than the current 64; no new errors introduced; component rendering unchanged.
+   - Independent commit: Yes.
    - Recommended model: weaker cheaper model is sufficient.
