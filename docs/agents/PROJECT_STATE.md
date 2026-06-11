@@ -2,11 +2,11 @@
 
 ## Scan Metadata
 
-- **Scanned at:** 2026-06-10 (checkpoint refresh, security polish batch implemented)
+- **Scanned at:** 2026-06-11 (SSH authentication UX completion verification)
 - **Branch:** main
-- **Current commit:** uncommitted — feat(security): add redaction and host-key interoperability
-- **Working tree:** Dirty (security polish changes staged)
-- **Last checkpoint:** API body redaction, host-key trust dialog, and known_hosts import/export implemented and verified
+- **Current commit:** 53a2974 — feat(security): add redaction and host-key interoperability
+- **Working tree:** Clean
+- **Last checkpoint:** Private-key authentication, host-key fingerprint UI, and terminal streaming all verified end-to-end
 
 ## Tech Stack
 
@@ -18,7 +18,7 @@
 
 ## Current Phase
 
-Terminal streaming, SSH reliability integration, terminal session persistence, and **security polish** (body redaction + host-key interoperability) are **complete**. PTY lifecycle, stdin/stdout streaming, Tauri event streaming, frontend terminal input capture, resize propagation, search, keepalive monitoring, bounded reconnection, cancellation, cleanup, SQLite-backed output persistence with secret redaction and truncation, API request body redaction in persistence paths, host-key trust confirmation dialog, and known_hosts import/export are wired end-to-end.
+SSH authentication UX — including private-key authentication, SecretStore-backed key references, host-key fingerprint management, and terminal streaming — is **complete**. PTY lifecycle, stdin/stdout streaming, Tauri event streaming, frontend terminal input capture, resize propagation, search, keepalive monitoring, bounded reconnection, cancellation, cleanup, SQLite-backed output persistence with secret redaction and truncation, API request body redaction in persistence paths, host-key trust confirmation dialog, known_hosts import/export, password and private-key auth (unencrypted + passphrase-encrypted), credential boundary enforcement, and error sanitization are wired end-to-end.
 
 UI module split is **in progress**. Terminal and Database packages have been extracted from `packages/app-shell`. A shared `command-client` package provides the Tauri IPC abstraction, and a `workspace` package provides the Zustand workspace state store. Further Workspace extraction from app-shell is planned.
 
@@ -75,21 +75,21 @@ UI module split is **in progress**. Terminal and Database packages have been ext
 | Command | Result | Notes |
 |---|---|---|
 | `git diff --check` | PASS | No trailing whitespace issues |
-| `pnpm run lint` | PASS (warnings) | 0 errors, pre-existing warnings in api-debugger, database, terminal, desktop |
+| `pnpm run lint` | PASS (warnings) | 0 errors, pre-existing warnings in api-debugger, desktop |
 | `pnpm run test` | PASS | 59 tests, 5 files |
 | `pnpm run build` | PASS | Production build succeeds |
 | `cargo fmt --check` | PASS | No formatting issues |
 | `cargo test --workspace` | PARTIAL | 71 tests pass across 6 crates. `unfour-workspace` fails with Windows `STATUS_ENTRYPOINT_NOT_FOUND` (DLL loading issue) |
 | `cargo check --workspace` | PASS | All crates compile |
 | `cargo check -p unfour-workspace --features ssh-native` | PASS | SSH feature compiles |
-| `cargo test -p unfour-ssh-engine --features ssh-native` | PASS | 14 native-feature tests |
+| `cargo test -p unfour-ssh-engine --features ssh-native` | PASS | 25 native-feature tests |
 | Browser mock first viewport | NOT VERIFIED | No live browser available in this scan |
 
 ## Known Limitations
 
 - **Windows workspace tests:** `cargo test -p unfour-workspace` fails with `STATUS_ENTRYPOINT_NOT_FOUND`. Likely a native DLL dependency issue (OpenSSL/SQLite) on this Windows environment. Does not indicate code defects.
 - **Lint warnings:** Multiple packages have `react-hooks/set-state-in-effect`, `react-hooks/exhaustive-deps`, `react-hooks/refs`, and `react-refresh/only-export-components` warnings. These are pre-existing and do not block builds.
-- **Real SSH verification:** Native SSH transport drop detection, reconnect cancellation, retry exhaustion, and recovery after server return are `NOT VERIFIED` against a live SSH server in this environment.
+- **Real SSH verification:** Native SSH transport, private-key authentication, passphrase-encrypted key loading, host-key TOFU first-trust, mismatch rejection, and fingerprint reset are `NOT VERIFIED` against a live SSH server in this environment. Automated tests cover the full code path.
 
 ## Repository Structure
 

@@ -8,12 +8,11 @@ None.
 
 ### SSH Transport
 
-- **Private-key authentication:** Implemented for unencrypted keys. Encrypted key passphrase support is limited by ssh-key crate format constraints.
+- **Encrypted key passphrase:** The ssh-key crate 0.7.0-rc.10 has limited support for decrypting encrypted OpenSSH keys. Keys without passphrases work. Encrypted key loading returns a clear error guiding users to save a passphrase credential. Passphrase is read from SecretStore, never stored in SQLite.
 
 ## P2 — Medium priority
 
 - **Host-key UI:** View/reset fingerprint implemented. Trust confirmation dialog (first trust + mismatch) implemented. known_hosts import/export implemented. Fingerprint change confirmation without full reset is a future enhancement.
-- **Encrypted key passphrase:** The ssh-key crate 0.7.0-rc.10 has limited support for decrypting encrypted OpenSSH keys. Keys without passphrases work. Encrypted key loading returns a clear error guiding users to save a passphrase credential.
 
 ## P3 — Low priority / Future
 
@@ -30,7 +29,7 @@ None.
 ## Summary
 
 - P0: 0
-- P1: 1
-- P2: 2
+- P1: 1 (encrypted key format limitation)
+- P2: 1 (host-key UI enhancement)
 - P3: 3
 - Environment: 3
