@@ -2,11 +2,11 @@
 
 ## Scan Metadata
 
-- **Scanned at:** 2026-06-11 (SSH authentication UX completion verification)
+- **Scanned at:** 2026-06-11 (checkpoint refresh — no code changes since last scan)
 - **Branch:** main
-- **Current commit:** 53a2974 — feat(security): add redaction and host-key interoperability
+- **Current commit:** acba247 — docs(checkpoint): refresh state after SSH auth UX verification
 - **Working tree:** Clean
-- **Last checkpoint:** Private-key authentication, host-key fingerprint UI, and terminal streaming all verified end-to-end
+- **Last checkpoint:** SSH authentication UX fully verified; all Rust tests (71), frontend tests (59), and production build passing
 
 ## Tech Stack
 
@@ -50,7 +50,7 @@ UI module split is **in progress**. Terminal and Database packages have been ext
 ### Build
 
 - **Frontend production build:** PASS
-- **Frontend bundle chunks:** index (384 kB), xterm (367 kB), vendor-tanstack (101 kB), vendor-radix (88 kB), monaco (15 kB)
+- **Frontend bundle chunks:** index (392 kB), xterm (367 kB), vendor-tanstack (101 kB), vendor-radix (88 kB), monaco (15 kB)
 - **Total Rust tests:** 71 passing across 6 crates (unfour-workspace blocked by Windows DLL issue)
 - **Total frontend tests:** 59 passing (5 files)
 
@@ -75,7 +75,7 @@ UI module split is **in progress**. Terminal and Database packages have been ext
 | Command | Result | Notes |
 |---|---|---|
 | `git diff --check` | PASS | No trailing whitespace issues |
-| `pnpm run lint` | PASS (warnings) | 0 errors, pre-existing warnings in api-debugger, desktop |
+| `pnpm run lint` | PASS (warnings) | 0 errors, ~65 pre-existing warnings (react-hooks/refs in api-debugger, react-hooks/set-state-in-effect, react-hooks/exhaustive-deps, react-refresh/only-export-components in desktop) |
 | `pnpm run test` | PASS | 59 tests, 5 files |
 | `pnpm run build` | PASS | Production build succeeds |
 | `cargo fmt --check` | PASS | No formatting issues |
@@ -88,7 +88,7 @@ UI module split is **in progress**. Terminal and Database packages have been ext
 ## Known Limitations
 
 - **Windows workspace tests:** `cargo test -p unfour-workspace` fails with `STATUS_ENTRYPOINT_NOT_FOUND`. Likely a native DLL dependency issue (OpenSSL/SQLite) on this Windows environment. Does not indicate code defects.
-- **Lint warnings:** Multiple packages have `react-hooks/set-state-in-effect`, `react-hooks/exhaustive-deps`, `react-hooks/refs`, and `react-refresh/only-export-components` warnings. These are pre-existing and do not block builds.
+- **Lint warnings:** ~65 warnings across `packages/api-debugger` (primarily `react-hooks/refs` in ApiDebuggerPage), `apps/desktop` (`react-hooks/set-state-in-effect`, `react-hooks/exhaustive-deps`, `react-refresh/only-export-components`). All pre-existing; none block builds.
 - **Real SSH verification:** Native SSH transport, private-key authentication, passphrase-encrypted key loading, host-key TOFU first-trust, mismatch rejection, and fingerprint reset are `NOT VERIFIED` against a live SSH server in this environment. Automated tests cover the full code path.
 
 ## Repository Structure

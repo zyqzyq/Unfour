@@ -1,5 +1,7 @@
 # Open Issues
 
+> Last scanned: 2026-06-11. No changes since previous checkpoint — all issues remain current.
+
 ## P0 — Blocks core usage
 
 None.

@@ -1,5 +1,7 @@
 # Next Steps
 
+> Last scanned: 2026-06-11. No changes since previous checkpoint — task list remains current.
+
 ## Recommended: Polish & Integration
 
 Priority order:
@@ -13,6 +15,26 @@ Priority order:
    - Acceptance criteria: `pnpm run lint` produces fewer warnings than the current baseline; no new errors introduced; component rendering unchanged.
    - Independent commit: Yes.
    - Recommended model: weaker cheaper model is sufficient.
+
+2. **Semantic token replacement in App.tsx**
+   - Goal: Replace 23 hardcoded Tailwind color classes (`slate-*`, `white`, `rose-*`, `teal-*`) in `apps/desktop/src/App.tsx` with semantic `--u-color-*` CSS custom properties.
+   - Scope: `apps/desktop/src/App.tsx` only.
+   - Forbidden: Do not restructure components, move code to other packages, or change rendered output.
+   - Risk: Low — visual-only change, verified by build and viewport inspection.
+   - Prerequisites: None.
+   - Acceptance criteria: No hardcoded color utility classes remain in App.tsx; `pnpm run build` succeeds; visual output unchanged.
+   - Independent commit: Yes.
+   - Recommended model: weaker cheaper model is sufficient.
+
+3. **Workspace dialog extraction from App.tsx**
+   - Goal: Extract workspace CRUD dialogs (`WorkspaceMenu`, `WorkspaceDialog`) and window controls (`WindowControls`, `TitlebarWindowButton`, `AppTitleBar`) out of `apps/desktop/src/App.tsx` into dedicated component files within `apps/desktop`.
+   - Scope: `apps/desktop/src/App.tsx` and new component files within `apps/desktop/src/`.
+   - Forbidden: Do not move logic into feature packages. Do not change business behavior or Tauri command calls.
+   - Risk: Medium — touches the composition root; must preserve all existing wiring.
+   - Prerequisites: Task 2 (semantic tokens) completed first to avoid merge conflicts.
+   - Acceptance criteria: App.tsx is significantly shorter; all workspace CRUD and window control functionality preserved; `pnpm run build` succeeds; no new lint errors.
+   - Independent commit: Yes.
+   - Recommended model: Codex / stronger coding model.
 
 ## Completed
 
