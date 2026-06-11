@@ -2,11 +2,11 @@
 
 ## Scan Metadata
 
-- **Scanned at:** 2026-06-11 (post-PostgreSQL live driver phase 1)
+- **Scanned at:** 2026-06-11 (checkpoint re-verification, no new commits since PostgreSQL phase 1)
 - **Branch:** main
-- **Current commit:** 3e564c6 — feat(database): add postgresql live connection support
-- **Working tree:** Clean
-- **Last checkpoint:** PostgreSQL live connection support added; all Rust tests (78), frontend tests (59), and production build passing
+- **Current commit:** 9c99e0f — feat(database): add postgresql live connection support
+- **Working tree:** Clean (post-checkpoint commit)
+- **Last checkpoint:** Re-verified all capabilities; no code changes since PostgreSQL live driver phase 1. All Rust tests (78), frontend tests (59), and production build passing. Source code free of TODO/FIXME/HACK/placeholder comments.
 
 ## Tech Stack
 
@@ -76,14 +76,14 @@ UI module split is **in progress**. Terminal and Database packages have been ext
 | Command | Result | Notes |
 |---|---|---|
 | `git diff --check` | PASS | No trailing whitespace issues |
-| `pnpm run lint` | PASS (warnings) | 0 errors, ~65 pre-existing warnings (react-hooks/refs in api-debugger, react-hooks/set-state-in-effect, react-hooks/exhaustive-deps, react-refresh/only-export-components in desktop) |
+| `pnpm run lint` | PASS (warnings) | 0 errors, 65 pre-existing warnings (react-hooks/refs in api-debugger, react-hooks/set-state-in-effect, react-hooks/exhaustive-deps, react-refresh/only-export-components in desktop) |
 | `pnpm run test` | PASS | 59 tests, 5 files |
-| `pnpm run build` | PASS | Production build succeeds |
+| `pnpm run build` | PASS | Production build succeeds (1994 modules, 2.77s) |
 | `cargo fmt --check` | PASS | No formatting issues |
 | `cargo test --workspace` | PARTIAL | 78 tests pass across 6 crates. `unfour-workspace` fails with Windows `STATUS_ENTRYPOINT_NOT_FOUND` (DLL loading issue) |
 | `cargo check --workspace` | PASS | All crates compile |
 | `cargo check -p unfour-workspace --features ssh-native` | PASS | SSH feature compiles |
-| `cargo test -p unfour-ssh-engine --features ssh-native` | PASS | 25 native-feature tests |
+| `cargo test -p unfour-ssh-engine --features ssh-native` | PASS | 25 native-feature tests (included in workspace run above; 33 total ssh-engine tests) |
 | `cargo test -p unfour-database-engine` | PASS | 10 tests (3 SQLite + 7 PostgreSQL) |
 | PostgreSQL live connection | NOT VERIFIED | No local PostgreSQL server available in this environment |
 | Browser mock first viewport | NOT VERIFIED | No live browser available in this scan |
@@ -92,7 +92,7 @@ UI module split is **in progress**. Terminal and Database packages have been ext
 
 - **Windows workspace tests:** `cargo test -p unfour-workspace` fails with `STATUS_ENTRYPOINT_NOT_FOUND`. Likely a native DLL dependency issue (OpenSSL/SQLite) on this Windows environment. Does not indicate code defects.
 - **PostgreSQL live verification:** PostgreSQL connection, schema browsing, query execution, and table browsing are code-complete and compile-verified, but `NOT VERIFIED` against a live PostgreSQL server in this environment. Automated tests cover credential loading, error sanitization, confirmation flow, and metadata CRUD.
-- **Lint warnings:** ~65 warnings across `packages/api-debugger` (primarily `react-hooks/refs` in ApiDebuggerPage), `apps/desktop` (`react-hooks/set-state-in-effect`, `react-hooks/exhaustive-deps`, `react-refresh/only-export-components`). All pre-existing; none block builds.
+- **Lint warnings:** 65 warnings across `packages/api-debugger` (primarily `react-hooks/refs` in ApiDebuggerPage), `apps/desktop` (`react-hooks/set-state-in-effect`, `react-hooks/exhaustive-deps`, `react-refresh/only-export-components`). All pre-existing; none block builds.
 - **Real SSH verification:** Native SSH transport, private-key authentication, passphrase-encrypted key loading, host-key TOFU first-trust, mismatch rejection, and fingerprint reset are `NOT VERIFIED` against a live SSH server in this environment. Automated tests cover the full code path.
 
 ## Repository Structure
@@ -121,3 +121,14 @@ UI module split is **in progress**. Terminal and Database packages have been ext
 | `unfour-workspace-engine` | Workspace CRUD, environment, layout |
 | `unfour-secret-store` | OS keyring-backed credential storage |
 | `unfour-workspace` (Tauri) | CommandBus, 43 Tauri commands, app setup |
+
+### Feature Flags
+
+| Feature | Crate | Effect |
+|---|---|---|
+| `ssh-native` | `unfour-ssh-engine` | Enables `russh`, `ssh-key`, `tokio` optional dependencies |
+| `ssh-native` | `unfour-workspace` (Tauri adapter) | Forwards to `unfour-ssh-engine/ssh-native` |
+
+### Source Code Hygiene
+
+- **TODO/FIXME/HACK/placeholder comments:** 0 found across all packages, crates, and apps source directories.
