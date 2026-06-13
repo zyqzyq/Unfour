@@ -1,6 +1,6 @@
 # Open Issues
 
-> Last scanned: 2026-06-11 (checkpoint re-verification, no code changes since PostgreSQL phase 1).
+> Last scanned: 2026-06-13 (checkpoint refresh, working tree clean at commit `c6927c6`).
 
 ## P0 — Blocks core usage
 
@@ -16,6 +16,7 @@ None.
 
 - **Host-key UI enhancement** (Observed): View/reset fingerprint implemented. Trust confirmation dialog (first trust + mismatch) implemented. known_hosts import/export implemented. Fingerprint change confirmation without full reset is a future enhancement.
 - **PostgreSQL live verification** (Observed): Code is complete for PostgreSQL connection, schema browsing, query execution, and table browsing. Automated tests cover credential loading, error sanitization, confirmation flow, and metadata CRUD. Live server verification remains `NOT VERIFIED`.
+- **Lint warning cleanup** (Observed): 64 pre-existing warnings across `packages/api-debugger` (primarily `react-hooks/refs` in ApiDebuggerPage), `apps/desktop` (`react-hooks/set-state-in-effect` in WorkspaceDialogs, `react-hooks/exhaustive-deps` in useLayoutPersistence, `react-refresh/only-export-components` in utils.tsx). Reduced from 65 to 64 since last checkpoint. No errors; none block builds.
 
 ## P3 — Low priority / Future
 
@@ -34,6 +35,6 @@ None.
 
 - P0: 0
 - P1: 1 (encrypted key format limitation)
-- P2: 2 (host-key UI enhancement, PostgreSQL live verification)
+- P2: 3 (host-key UI enhancement, PostgreSQL live verification, lint warning cleanup)
 - P3: 3 (terminal multiplexing, SCP/SFTP, MySQL driver)
 - Environment: 4 (OS keychain, Windows workspace tests, SSH live, PostgreSQL live)
