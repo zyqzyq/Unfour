@@ -476,6 +476,7 @@ async function mockInvoke<T>(
         connectionId,
         tables: [
           {
+            schema: "public",
             name: "users",
             kind: "table",
             columns: [
@@ -485,6 +486,7 @@ async function mockInvoke<T>(
             ],
           },
           {
+            schema: "public",
             name: "orders",
             kind: "table",
             columns: [

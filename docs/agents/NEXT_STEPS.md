@@ -1,6 +1,6 @@
 # Next Steps
 
-> Last scanned: 2026-06-13 (MySQL live driver phase 1 completion).
+> Last scanned: 2026-06-13 (database live verification and hardening).
 
 ## Recommended: Polish & Integration
 
@@ -17,32 +17,13 @@ Priority order:
    - Evidence: `pnpm run lint` output — 64 warnings confirmed at commit `c6927c6`. Primary sources: `ApiDebuggerPage.tsx` (react-hooks/refs), `WorkspaceDialogs.tsx` (set-state-in-effect), `useLayoutPersistence.ts` (exhaustive-deps), `utils.tsx` (only-export-components). See PROJECT_STATE.md Lint warnings, OPEN_ISSUES.md P2.
    - Recommended model: weaker cheaper model is sufficient
 
-2. **PostgreSQL live driver phase 2 — live verification**
-   - Goal: Verify PostgreSQL connection, schema browsing, query execution, and table browsing against a real PostgreSQL server.
-   - Scope: No code changes expected. Run the app with a local PostgreSQL instance and verify all database operations.
-   - Risk: Low — verification only.
-   - Prerequisites: A local PostgreSQL server with test data.
-   - Acceptance criteria: All PostgreSQL operations verified against live server; any bugs found are documented and fixed.
-   - Independent commit: If fixes needed.
-   - Evidence: OPEN_ISSUES.md P2 (PostgreSQL live verification) — `NOT VERIFIED` at commit `c6927c6`. PROJECT_STATE.md Known Limitations confirms no live PostgreSQL available in scan environment.
-   - Needs human review: Requires live PostgreSQL server not available in automated environment.
-
-3. **MySQL live driver phase 2 — live verification**
-   - Goal: Verify MySQL connection, multi-database schema browsing, query execution, mutation confirmation, sanitized authentication failure, and table pagination against a real MySQL server.
-   - Scope: No code changes expected. Run the app with a local MySQL instance and test data.
-   - Risk: Low — verification only.
-   - Prerequisites: A local MySQL server with test data.
-   - Acceptance criteria: All MySQL operations verified against a live server; any bugs found are documented and fixed.
-   - Independent commit: If fixes are needed.
-   - Evidence: OPEN_ISSUES.md P2 (MySQL live verification) remains `NOT VERIFIED`.
-   - Needs human review: Requires live MySQL server not available in the automated environment.
-
 ## Completed
 
-- **MySQL live driver phase 1:** SecretStore-backed password loading, `sqlx::MySqlPool` lifecycle, live `test_connection`, multi-database/schema browsing, columns, read-only query execution, existing mutation confirmation, schema-qualified paginated table browsing, sanitized errors, browser mock compatibility, and focused Rust/TypeScript tests. Public contracts gained optional `schema` metadata for tables and browse requests; SQLite and PostgreSQL behavior remain unchanged. 17 database-engine tests and 60 frontend tests pass. Live MySQL verification is `NOT VERIFIED`.
+- **Database live verification and hardening:** PostgreSQL 18 and MariaDB 12.3.2 verified against isolated localhost servers with seeded `users`, `orders`, empty tables, and Unicode data. SecretStore-backed passwords, connection tests, schema/database/table/column browsing, reads, pagination, mutation confirmation and confirmed writes, syntax errors, invalid credentials, and unavailable ports all passed. Fixed PostgreSQL non-`public` schema qualification and MariaDB signed `COUNT(*)` decoding. SQLite and browser mocks remain green.
+- **MySQL live driver phase 1:** SecretStore-backed password loading, `sqlx::MySqlPool` lifecycle, live `test_connection`, multi-database/schema browsing, columns, read-only query execution, existing mutation confirmation, schema-qualified paginated table browsing, sanitized errors, browser mock compatibility, and focused Rust/TypeScript tests. Public contracts gained optional `schema` metadata for tables and browse requests; SQLite and PostgreSQL behavior remain unchanged. Later live-verified in the database hardening batch.
 - **Semantic token replacement in App.tsx:** All hardcoded Tailwind color classes (`slate-*`, `white`, `rose-*`, `teal-*`) replaced with semantic `--u-color-*` CSS custom properties across `apps/desktop/src/App.tsx` and all desktop component files. Zero hardcoded color utility classes remain in any desktop source file. Verified by grep and production build. — Commit `fbc7330` (refactor(desktop): extract app shell components) + `002e54f` (refactor(ui): replace hardcoded colors with semantic tokens)
 - **Workspace dialog extraction from App.tsx:** All workspace CRUD dialogs (`WorkspaceMenu`, `WorkspaceDialogs`), window controls (`WindowControls`, `TitlebarWindowButton`), and the title bar (`AppTitleBar`) extracted from `apps/desktop/src/App.tsx` into dedicated component files within `apps/desktop/src/components/`. App.tsx reduced to 199 lines, containing only high-level component composition. All workspace CRUD and window control functionality preserved. Production build succeeds. — Commit `fbc7330` (refactor(desktop): extract app shell components)
-- **PostgreSQL live driver phase 1:** Full PostgreSQL connection support in `unfour-database-engine`. Credential loading from SecretStore via `resolve_pg_password()`, `sqlx::PgPool` lifecycle in `DatabaseService`, live `test_connection`, schema browsing (schemas, tables, columns via `information_schema`), read-only query execution with mutation confirmation policy, table browsing with pagination, error sanitization without credential leaks. Browser mock updated for PostgreSQL test_connection, schema_get, and query_execute. Frontend schema tree and connection tree updated to enable PostgreSQL. 7 new PostgreSQL tests (config mapping, credential loading with/without SecretStore, credential-not-leaked in errors, mutation confirmation, metadata CRUD, schema failure without server). All 10 database-engine tests pass. All 78 Rust tests across 6 crates pass. 59 frontend tests pass. Production build succeeds. Live PostgreSQL verification is `NOT VERIFIED` (no local PostgreSQL server available). — Commit `9c99e0f`
+- **PostgreSQL live driver phase 1:** Full PostgreSQL connection support in `unfour-database-engine`. Credential loading from SecretStore, `sqlx::PgPool` lifecycle, live `test_connection`, schema browsing, read-only query execution with mutation confirmation policy, table browsing with pagination, error sanitization, browser mocks, and frontend enablement. Later live-verified and schema-qualified in the database hardening batch. — Commit `9c99e0f`
 - **SSH authentication UX completion:** Full verification pass confirming private-key authentication (unencrypted + passphrase-encrypted via SecretStore), host-key fingerprint management (view/reset/mismatch), connection form auth-type selection, browser mock compatibility, and error sanitization. 25 native-feature tests pass. All 71 Rust tests across 6 crates pass. 59 frontend tests pass. Production build succeeds. — Commit `acba247`
 - **API body redaction:** JSON body redaction via `redact_json_body` in `crates/unfour-core/src/redaction.rs`. Applied in `crates/http-engine/src/api_client.rs` for both `save_request` and `insert_history` persistence paths. Applied in browser mock (`packages/command-client/src/tauri.ts`) for `api_request_save` and `api_send_request`. Sensitive keys (authorization, cookie, proxy-authorization, x-api-key, x-auth-token) recursively replaced with `<redacted>` while preserving JSON structure. 7 Rust unit tests + 2 Rust integration tests + 3 browser mock tests. — Commit `53a2974`
 - **Host-key trust confirmation dialog:** `HostKeyTrustDialog` component in `packages/terminal/src/components/HostKeyTrustDialog.tsx`. Pre-connect fingerprint check via `getSshHostFingerprint`, confirmation required for first trust, clear mismatch display. Integrated into `TerminalPage.tsx` connect flow. — Commit `13c4b28`

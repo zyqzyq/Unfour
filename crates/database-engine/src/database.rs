@@ -247,7 +247,7 @@ impl DatabaseService {
                 let pool = self.postgres_pool(&connection).await?;
                 let table_rows = sqlx::query(
                     r#"
-                    SELECT table_name, table_type
+                    SELECT table_schema, table_name, table_type
                     FROM information_schema.tables
                     WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
                     ORDER BY table_schema, table_name
@@ -259,6 +259,7 @@ impl DatabaseService {
 
                 let mut tables = Vec::with_capacity(table_rows.len());
                 for row in table_rows {
+                    let schema: String = row.try_get("table_schema").map_err(sanitize_pg_error)?;
                     let name: String = row.try_get("table_name").map_err(sanitize_pg_error)?;
                     let table_type: String =
                         row.try_get("table_type").map_err(sanitize_pg_error)?;
@@ -267,15 +268,10 @@ impl DatabaseService {
                     } else {
                         "table".to_string()
                     };
-                    let columns = postgres_columns(&pool, &name)
+                    let columns = postgres_columns(&pool, &schema, &name)
                         .await
                         .map_err(sanitize_pg_app_error)?;
-                    tables.push(DatabaseTable {
-                        schema: None,
-                        name,
-                        kind,
-                        columns,
-                    });
+                    tables.push(postgres_table_from_metadata(schema, name, kind, columns));
                 }
 
                 Ok(DatabaseSchema {
@@ -545,21 +541,22 @@ impl DatabaseService {
             }
             "postgres" => {
                 let pool = self.postgres_pool(&connection).await?;
-                ensure_postgres_table_exists(&pool, table_name)
+                let schema = input
+                    .schema
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or("public");
+                ensure_postgres_table_exists(&pool, schema, table_name)
                     .await
                     .map_err(sanitize_pg_app_error)?;
 
                 let limit = input.limit.unwrap_or(100).clamp(1, 1_000);
                 let offset = input.offset.unwrap_or(0);
-                let total_rows = postgres_table_row_count(&pool, table_name)
+                let total_rows = postgres_table_row_count(&pool, schema, table_name)
                     .await
                     .map_err(sanitize_pg_app_error)?;
-                let sql = format!(
-                    "SELECT * FROM {} LIMIT {} OFFSET {}",
-                    quote_identifier(table_name),
-                    limit,
-                    offset
-                );
+                let sql = postgres_browse_sql(schema, table_name, limit, offset);
                 let started = Instant::now();
                 let rows = sqlx::query(&sql)
                     .fetch_all(&pool)
@@ -568,7 +565,7 @@ impl DatabaseService {
                 let columns = if let Some(row) = rows.first() {
                     postgres_result_columns(row)
                 } else {
-                    postgres_table_result_columns(&pool, table_name)
+                    postgres_table_result_columns(&pool, schema, table_name)
                         .await
                         .map_err(sanitize_pg_app_error)?
                 };
@@ -815,16 +812,18 @@ async fn resolve_database_password(
 
 async fn postgres_columns(
     pool: &sqlx::PgPool,
+    schema: &str,
     table_name: &str,
 ) -> Result<Vec<DatabaseTableColumn>, AppError> {
     let rows = sqlx::query(
         r#"
         SELECT column_name, data_type, is_nullable, column_default
         FROM information_schema.columns
-        WHERE table_name = $1
+        WHERE table_schema = $1 AND table_name = $2
         ORDER BY ordinal_position
         "#,
     )
+    .bind(schema)
     .bind(table_name)
     .fetch_all(pool)
     .await?;
@@ -856,17 +855,20 @@ async fn postgres_columns(
 
 async fn ensure_postgres_table_exists(
     pool: &sqlx::PgPool,
+    schema: &str,
     table_name: &str,
 ) -> Result<(), AppError> {
     let row: Option<(String,)> = sqlx::query_as(
         r#"
         SELECT table_name
         FROM information_schema.tables
-        WHERE table_name = $1
+        WHERE table_schema = $1
+          AND table_name = $2
           AND table_schema NOT IN ('pg_catalog', 'information_schema')
         LIMIT 1
         "#,
     )
+    .bind(schema)
     .bind(table_name)
     .fetch_optional(pool)
     .await?;
@@ -875,10 +877,14 @@ async fn ensure_postgres_table_exists(
         .ok_or_else(|| AppError::NotFound("database table".to_string()))
 }
 
-async fn postgres_table_row_count(pool: &sqlx::PgPool, table_name: &str) -> Result<u64, AppError> {
+async fn postgres_table_row_count(
+    pool: &sqlx::PgPool,
+    schema: &str,
+    table_name: &str,
+) -> Result<u64, AppError> {
     let sql = format!(
         "SELECT COUNT(*) AS total_rows FROM {}",
-        quote_identifier(table_name)
+        quote_qualified_identifier(schema, table_name)
     );
     let row = sqlx::query(&sql).fetch_one(pool).await?;
     let total_rows: i64 = row.try_get("total_rows")?;
@@ -887,9 +893,10 @@ async fn postgres_table_row_count(pool: &sqlx::PgPool, table_name: &str) -> Resu
 
 async fn postgres_table_result_columns(
     pool: &sqlx::PgPool,
+    schema: &str,
     table_name: &str,
 ) -> Result<Vec<DatabaseResultColumn>, AppError> {
-    Ok(postgres_columns(pool, table_name)
+    Ok(postgres_columns(pool, schema, table_name)
         .await?
         .into_iter()
         .map(|column| DatabaseResultColumn {
@@ -907,6 +914,20 @@ fn postgres_result_columns(row: &sqlx::postgres::PgRow) -> Vec<DatabaseResultCol
             data_type: column.type_info().name().to_string(),
         })
         .collect()
+}
+
+fn postgres_table_from_metadata(
+    schema: String,
+    name: String,
+    kind: String,
+    columns: Vec<DatabaseTableColumn>,
+) -> DatabaseTable {
+    DatabaseTable {
+        schema: Some(schema),
+        name,
+        kind,
+        columns,
+    }
 }
 
 fn postgres_row_values(row: &sqlx::postgres::PgRow) -> AppResult<Vec<Option<String>>> {
@@ -1085,7 +1106,8 @@ async fn mysql_table_row_count(
         quote_mysql_qualified_identifier(schema, table_name)
     );
     let row = sqlx::query(&sql).fetch_one(pool).await?;
-    row.try_get("total_rows").map_err(AppError::from)
+    let total_rows: i64 = row.try_get("total_rows")?;
+    Ok(total_rows.max(0) as u64)
 }
 
 async fn mysql_table_result_columns(
@@ -1449,6 +1471,23 @@ fn quote_identifier(value: &str) -> String {
 
 fn quote_mysql_identifier(value: &str) -> String {
     format!("`{}`", value.replace('`', "``"))
+}
+
+fn quote_qualified_identifier(schema: &str, table_name: &str) -> String {
+    format!(
+        "{}.{}",
+        quote_identifier(schema),
+        quote_identifier(table_name)
+    )
+}
+
+fn postgres_browse_sql(schema: &str, table_name: &str, limit: u32, offset: u32) -> String {
+    format!(
+        "SELECT * FROM {} LIMIT {} OFFSET {}",
+        quote_qualified_identifier(schema, table_name),
+        limit,
+        offset
+    )
 }
 
 fn quote_mysql_qualified_identifier(schema: &str, table_name: &str) -> String {
@@ -1923,6 +1962,33 @@ mod tests {
         assert_eq!(config.database.as_deref(), Some("mydb"));
         assert_eq!(config.username.as_deref(), Some("admin"));
         assert!(config.sqlite_path.is_none());
+    }
+
+    #[test]
+    fn postgres_table_browse_sql_is_schema_qualified_and_escaped() {
+        assert_eq!(
+            postgres_browse_sql("app\"data", "user\"events", 50, 100),
+            "SELECT * FROM \"app\"\"data\".\"user\"\"events\" LIMIT 50 OFFSET 100"
+        );
+    }
+
+    #[test]
+    fn postgres_schema_metadata_preserves_schema_name() {
+        let table = postgres_table_from_metadata(
+            "app_data".to_string(),
+            "users".to_string(),
+            "table".to_string(),
+            vec![DatabaseTableColumn {
+                name: "id".to_string(),
+                data_type: "bigint".to_string(),
+                nullable: false,
+                primary_key: true,
+            }],
+        );
+
+        assert_eq!(table.schema.as_deref(), Some("app_data"));
+        assert_eq!(table.name, "users");
+        assert!(table.columns[0].primary_key);
     }
 
     #[tokio::test]

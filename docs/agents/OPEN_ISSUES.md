@@ -1,6 +1,6 @@
 # Open Issues
 
-> Last scanned: 2026-06-13 (MySQL live driver phase 1 completion).
+> Last scanned: 2026-06-13 (database live verification and hardening).
 
 ## P0 — Blocks core usage
 
@@ -15,8 +15,6 @@ None.
 ## P2 — Medium priority
 
 - **Host-key UI enhancement** (Observed): View/reset fingerprint implemented. Trust confirmation dialog (first trust + mismatch) implemented. known_hosts import/export implemented. Fingerprint change confirmation without full reset is a future enhancement.
-- **PostgreSQL live verification** (Observed): Code is complete for PostgreSQL connection, schema browsing, query execution, and table browsing. Automated tests cover credential loading, error sanitization, confirmation flow, and metadata CRUD. Live server verification remains `NOT VERIFIED`.
-- **MySQL live verification** (Observed): Code is complete for MySQL connection, multi-database schema browsing, query execution, and table browsing. Automated tests cover SecretStore loading, no-plaintext persistence, sanitized errors, schema mapping, read execution path, pagination, mutation confirmation, and browser mocks. Live server verification remains `NOT VERIFIED`.
 - **Lint warning cleanup** (Observed): 64 pre-existing warnings across `packages/api-debugger` (primarily `react-hooks/refs` in ApiDebuggerPage), `apps/desktop` (`react-hooks/set-state-in-effect` in WorkspaceDialogs, `react-hooks/exhaustive-deps` in useLayoutPersistence, `react-refresh/only-export-components` in utils.tsx). Reduced from 65 to 64 since last checkpoint. No errors; none block builds.
 
 ## P3 — Low priority / Future
@@ -29,13 +27,11 @@ None.
 - **OS keychain** (Inferred): The `keyring` crate is used for production but has not been verified on all target platforms (macOS, Windows, Linux).
 - **Windows workspace tests** (Observed): `cargo test -p unfour-workspace` fails with `STATUS_ENTRYPOINT_NOT_FOUND` on this Windows environment. Likely a native DLL dependency issue, not a code defect.
 - **Real SSH connection verification** (Observed): Native keepalive, bounded reconnect, cancellation, retry exhaustion, and recovery after server return have automated coverage but remain `NOT VERIFIED` against a live SSH server in this environment.
-- **Real PostgreSQL verification** (Observed): Connection, schema browsing, query execution, and table browsing are code-complete but `NOT VERIFIED` against a live PostgreSQL server in this environment.
-- **Real MySQL verification** (Observed): Connection, multi-database schema browsing, query execution, and table browsing are code-complete but `NOT VERIFIED` against a live MySQL server in this environment.
 
 ## Summary
 
 - P0: 0
 - P1: 1 (encrypted key format limitation)
-- P2: 4 (host-key UI enhancement, PostgreSQL live verification, MySQL live verification, lint warning cleanup)
+- P2: 2 (host-key UI enhancement, lint warning cleanup)
 - P3: 2 (terminal multiplexing, SCP/SFTP)
-- Environment: 5 (OS keychain, Windows workspace tests, SSH live, PostgreSQL live, MySQL live)
+- Environment: 3 (OS keychain, Windows workspace tests, SSH live)
