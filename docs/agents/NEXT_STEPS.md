@@ -1,6 +1,6 @@
 # Next Steps
 
-> Last scanned: 2026-06-13 (database live verification and hardening).
+> Last scanned: 2026-06-14 (checkpoint refresh — no code changes since database hardening).
 
 ## Recommended: Polish & Integration
 
@@ -14,7 +14,7 @@ Priority order:
    - Prerequisites: None.
    - Acceptance criteria: `pnpm run lint` produces fewer warnings than the current baseline (64); no new errors introduced; component rendering unchanged.
    - Independent commit: Yes.
-   - Evidence: `pnpm run lint` output — 64 warnings confirmed at commit `c6927c6`. Primary sources: `ApiDebuggerPage.tsx` (react-hooks/refs), `WorkspaceDialogs.tsx` (set-state-in-effect), `useLayoutPersistence.ts` (exhaustive-deps), `utils.tsx` (only-export-components). See PROJECT_STATE.md Lint warnings, OPEN_ISSUES.md P2.
+   - Evidence: `pnpm run lint` output — 64 warnings confirmed at commit `bfedcf8`. Primary sources: `ApiDebuggerPage.tsx` (react-hooks/refs), `WorkspaceDialogs.tsx` (set-state-in-effect), `useLayoutPersistence.ts` (exhaustive-deps), `utils.tsx` (only-export-components). See PROJECT_STATE.md Lint warnings, OPEN_ISSUES.md P2.
    - Recommended model: weaker cheaper model is sufficient
 
 ## Completed

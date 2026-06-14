@@ -1,6 +1,6 @@
 # Open Issues
 
-> Last scanned: 2026-06-13 (database live verification and hardening).
+> Last scanned: 2026-06-14 (checkpoint refresh — no code changes since database hardening).
 
 ## P0 — Blocks core usage
 

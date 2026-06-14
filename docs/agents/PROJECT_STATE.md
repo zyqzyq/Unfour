@@ -2,11 +2,11 @@
 
 ## Scan Metadata
 
-- **Scanned at:** 2026-06-13 (database live verification and hardening)
+- **Scanned at:** 2026-06-14 (checkpoint refresh — no code changes since database hardening)
 - **Branch:** main
-- **Current commit:** Database live verification batch (see Git history)
-- **Working tree:** Clean after batch commit
-- **Last checkpoint:** PostgreSQL 18 and MariaDB 12.3.2 were verified against isolated local servers with SecretStore-backed credentials and seeded Unicode data. Live verification confirmed and fixed PostgreSQL schema qualification and MariaDB `COUNT(*)` decoding. SQLite and browser mocks remain green.
+- **Current commit:** `bfedcf8` — fix(database): harden live postgres and mysql drivers
+- **Working tree:** Clean
+- **Last checkpoint:** PostgreSQL 18 and MariaDB 12.3.2 were verified against isolated local servers with SecretStore-backed credentials and seeded Unicode data. Live verification confirmed and fixed PostgreSQL schema qualification and MariaDB `COUNT(*)` decoding. SQLite and browser mocks remain green. MySQL live driver (commit `017b41d`) and hardening pass (commit `bfedcf8`) are now committed as ancestors of HEAD.
 
 ## Tech Stack
 
