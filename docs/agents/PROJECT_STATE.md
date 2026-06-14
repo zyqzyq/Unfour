@@ -2,25 +2,25 @@
 
 ## Scan Metadata
 
-- **Scanned at:** 2026-06-14 (release-readiness smoke verification)
+- **Scanned at:** 2026-06-14 (post-fix verification sweep)
 - **Branch:** main
-- **Base commit:** `bfedcf8` — fix(database): harden live postgres and mysql drivers
-- **Working tree:** Clean after the release-readiness task commit
-- **Last checkpoint:** Windows native startup, browser first viewport/navigation/dialogs, API GET/POST/history redaction, all frontend tests, and the full Rust workspace suite pass. A confirmed release blocker was found and fixed: `keyring` 3 had no platform features enabled, so production used its non-persistent mock backend. Windows Credential Manager create/read/delete now passes for SSH passwords, SSH key passphrases, PostgreSQL passwords, and MySQL passwords.
+- **Base commit:** `1a542cb` — fix(release): address smoke verification blockers
+- **Working tree:** Clean
+- **Last checkpoint:** Three fix commits landed since the previous checkpoint (`bfedcf8`): lint warning reduction (64 → 53), Windows workspace test stabilization (`STATUS_ENTRYPOINT_NOT_FOUND` resolved), and keyring platform feature flags enabled (production was silently using the non-persistent mock backend). All 98 Rust tests and 60 frontend tests pass. Production build succeeds.
 
 ## Tech Stack
 
 - **Desktop shell:** Tauri 2 (Rust + WebView)
 - **Frontend:** React 19, TypeScript, Vite, Tailwind CSS, Radix UI, TanStack Query, Zustand
-- **Backend:** Rust, Tokio, SQLite, PostgreSQL, and MySQL via sqlx, russh (SSH native), keyring (OS credential storage)
+- **Backend:** Rust, Tokio, SQLite, PostgreSQL, and MySQL via sqlx, russh (SSH native), keyring (OS credential storage with platform-native backends)
 - **Build:** pnpm workspace (7 packages), Cargo workspace (7 crates + Tauri adapter)
-- **Test:** Vitest (frontend), Cargo test (Rust)
+- **Test:** Vitest (frontend), Cargo Test (Rust)
 
 ## Current Phase
 
-SSH authentication UX — including private-key authentication, SecretStore-backed key references, host-key fingerprint management, and terminal streaming — is **complete**. SQLite, PostgreSQL, and MySQL/MariaDB database paths are implemented and live-verified: SecretStore credential loading, connection tests, schema/database browsing, read queries, mutation confirmation, pagination, Unicode data, empty tables, syntax errors, and sanitized connection failures all pass. Windows Credential Manager is now compile-enabled and runtime-verified; Apple Keychain and Linux Secret Service are configured but not runtime-verified in this batch.
+SSH authentication UX — including private-key authentication, SecretStore-backed key references, host-key fingerprint management, and terminal streaming — is **complete**. SQLite, PostgreSQL, and MySQL/MariaDB database paths are implemented and live-verified. The `keyring` crate now uses platform-native backends: `windows-native` (Windows Credential Manager), `apple-native` (Apple Keychain), and `crypto-rust` + `sync-secret-service` (Linux Secret Service). Windows Credential Manager create/read/delete is runtime-verified for four credential categories. Apple Keychain and Linux Secret Service are configured but not runtime-verified.
 
-UI module split is **in progress**. Terminal, Database, Workspace, and Command-Client packages have been extracted from `packages/app-shell`. Workspace dialogs (`WorkspaceMenu`, `WorkspaceDialogs`), window controls (`WindowControls`, `TitlebarWindowButton`), and the title bar (`AppTitleBar`) have been extracted from `App.tsx` into dedicated component files within `apps/desktop/src/components/`. Semantic token replacement is complete — `App.tsx` and all desktop components use `--u-color-*` CSS custom properties exclusively. `packages/app-shell` now contains only the `AppShell` layout composition wrapper (2 source files). Further workspace UI extraction from desktop components is planned.
+UI module split is **in progress**. Terminal, Database, Workspace, and Command-Client packages have been extracted from `packages/app-shell`. Workspace dialogs, window controls, and the title bar are extracted into dedicated component files within `apps/desktop/src/components/`. Semantic token replacement is complete. Pure-function extraction (`module-helpers.ts`, `terminal-session-status.ts`) and `useEffect` sync-pattern refactoring reduced lint warnings from 64 to 53. `packages/app-shell` contains only the `AppShell` layout composition wrapper (2 source files). Further workspace UI extraction from desktop components is planned.
 
 ## Verified Capabilities
 
@@ -31,7 +31,7 @@ UI module split is **in progress**. Terminal, Database, Workspace, and Command-C
 | Core models & redaction | `unfour-core` | Complete | 10 pass |
 | Local storage & migrations | `unfour-local-storage` | Complete | 11 pass |
 | Activity logging | `unfour-local-storage` | Complete | Covered in local_storage |
-| SecretStore (OS keyring credential references) | `unfour-secret-store` | Complete on Windows; macOS/Linux runtime pending | 4 automated pass + Windows OS-keychain smoke pass |
+| SecretStore (OS keyring credential references) | `unfour-secret-store` | Complete on Windows; macOS/Linux runtime pending | 4 automated pass + 1 OS keychain smoke test (ignored, requires real keychain) + Windows runtime smoke pass |
 | Database engine (SQLite + PostgreSQL + MySQL CRUD, schema, queries) | `unfour-database-engine` | Complete | 19 pass |
 | HTTP engine (API client + history + body redaction) | `unfour-http-engine` | Complete | 10 pass |
 | SSH engine (simulated + native + known_hosts) | `unfour-ssh-engine` | Complete | 33 pass |
@@ -52,13 +52,13 @@ UI module split is **in progress**. Terminal, Database, Workspace, and Command-C
 - **Windows native startup:** PASS (`unfour-workspace.exe` launched with the expected title and remained responsive)
 - **Browser first viewport/navigation/dialogs:** PASS with no console warnings or errors
 - **Frontend production build:** PASS
-- **Frontend bundle chunks:** index (393 kB), xterm (367 kB), vendor-tanstack (101 kB), vendor-radix (88 kB), monaco (15 kB)
-- **Total Rust tests:** 98 passing across the full workspace
+- **Frontend bundle chunks:** index (394 kB), xterm (367 kB), vendor-tanstack (101 kB), vendor-radix (88 kB), monaco (15 kB)
+- **Total Rust tests:** 98 passing across the full workspace (1 ignored: OS keychain smoke test)
 - **Total frontend tests:** 60 passing (5 files)
 
 ## Partially Implemented
 
-- **UI module split:** Terminal, Database, Workspace, and Command-Client packages extracted. `packages/app-shell` contains only the `AppShell` layout wrapper (2 files). Desktop app components (AppTitleBar, ModuleSidebar, WorkspaceMenu, WorkspaceDialogs, WindowControls, placeholder components) are extracted into `apps/desktop/src/components/`. Semantic token replacement is complete across all desktop source files. Remaining work: potential extraction of placeholder components into feature packages, further workspace state extraction.
+- **UI module split:** Terminal, Database, Workspace, and Command-Client packages extracted. `packages/app-shell` contains only the `AppShell` layout wrapper (2 files). Desktop app components (AppTitleBar, ModuleSidebar, WorkspaceMenu, WorkspaceDialogs, WindowControls, placeholder components) are extracted into `apps/desktop/src/components/`. Pure-function helpers extracted to `module-helpers.ts`; terminal session status extracted to `model/terminal-session-status.ts`. Semantic token replacement is complete across all desktop source files. Remaining work: potential extraction of placeholder components into feature packages, further workspace state extraction.
 - **SSH authentication:** Password auth and private-key auth both work under `ssh-native`. Encrypted key passphrase loading has limited support (ssh-key crate format constraints).
 - **Host-key UI:** View trusted fingerprint, reset fingerprint, trust confirmation dialog (first trust + mismatch), and known_hosts import/export all implemented.
 - **Terminal session persistence:** SQLite-backed output history with per-session buffering, periodic flush, secret redaction, and UTF-8-safe truncation (256 KB retention). Hydration on app reopen. Browser mock mode compatible.
@@ -80,7 +80,7 @@ UI module split is **in progress**. Terminal, Database, Workspace, and Command-C
 | `pnpm run test` | PASS | 60 tests, 5 files |
 | `pnpm run build` | PASS | Production build succeeds (1996 modules) |
 | `cargo fmt --check` | PASS | No formatting issues |
-| `cargo test --workspace` | PASS | 98 tests pass, including Tauri adapter and workspace engine |
+| `cargo test --workspace` | PASS | 98 tests pass, 1 ignored (OS keychain smoke) |
 | `cargo check --workspace` | PASS | All crates compile |
 | `cargo check -p unfour-workspace --features ssh-native` | PASS | SSH feature compiles |
 | `cargo test -p unfour-ssh-engine --features ssh-native` | PASS | 25 native-feature tests (included in workspace run above; 33 total ssh-engine tests) |
@@ -95,8 +95,8 @@ UI module split is **in progress**. Terminal, Database, Workspace, and Command-C
 ## Known Limitations
 
 - **Native visual inspection:** Windows launched a responsive native window, but this environment could not capture or inspect WebView contents. Browser-rendered first viewport and interactions pass.
-- **macOS/Linux release smoke:** App startup and OS keychain behavior remain `NOT VERIFIED` on those platforms.
-- **Lint warnings:** 53 warnings across `packages/api-debugger`, `packages/database`, `packages/terminal`, `packages/ui`, and `apps/desktop`. No errors; none block builds.
+- **macOS/Linux release smoke:** App startup and OS keychain behavior remain `NOT VERIFIED` on those platforms. Platform features are configured in Cargo.toml but not runtime-tested.
+- **Lint warnings:** 53 warnings across `packages/api-debugger`, `packages/database`, `packages/terminal`, `packages/ui`, and `apps/desktop`. Predominantly `react-hooks/refs` false positives from TanStack Query destructuring patterns. No errors; none block builds.
 - **Real SSH verification:** Native SSH transport, private-key authentication, passphrase-encrypted key loading, host-key TOFU first-trust, mismatch rejection, and fingerprint reset are `NOT VERIFIED` against a live SSH server in this environment. Automated tests cover the full code path.
 
 ## Repository Structure
