@@ -1,6 +1,11 @@
 mod command_bus;
 mod commands;
 
+// Tauri's resource selects Common Controls v6 before the Windows test harness starts.
+#[cfg(all(test, target_os = "windows"))]
+#[link(name = "resource", kind = "static")]
+unsafe extern "C" {}
+
 use command_bus::CommandBus;
 use tauri::Manager;
 
