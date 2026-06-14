@@ -1,6 +1,6 @@
 # Open Issues
 
-> Last scanned: 2026-06-14 (checkpoint refresh — no code changes since database hardening).
+> Last scanned: 2026-06-14 (release-readiness smoke verification).
 
 ## P0 — Blocks core usage
 
@@ -11,11 +11,12 @@ None.
 ### SSH Transport
 
 - **Encrypted key passphrase** (Observed): The ssh-key crate 0.7.0-rc.10 has limited support for decrypting encrypted OpenSSH keys. Keys without passphrases work. Encrypted key loading returns a clear error guiding users to save a passphrase credential. Passphrase is read from SecretStore, never stored in SQLite.
+- **Real SSH release smoke** (Observed): Password login, private-key login, PTY I/O, resize, search, history restore, TOFU first trust, mismatch rejection, fingerprint reset, and reconnect remain `NOT VERIFIED` against a reachable live SSH server in the current environment. Automated coverage passes.
 
 ## P2 — Medium priority
 
 - **Host-key UI enhancement** (Observed): View/reset fingerprint implemented. Trust confirmation dialog (first trust + mismatch) implemented. known_hosts import/export implemented. Fingerprint change confirmation without full reset is a future enhancement.
-- **Lint warning cleanup** (Observed): 64 pre-existing warnings across `packages/api-debugger` (primarily `react-hooks/refs` in ApiDebuggerPage), `apps/desktop` (`react-hooks/set-state-in-effect` in WorkspaceDialogs, `react-hooks/exhaustive-deps` in useLayoutPersistence, `react-refresh/only-export-components` in utils.tsx). Reduced from 65 to 64 since last checkpoint. No errors; none block builds.
+- **Lint warning cleanup** (Observed): 53 warnings across `packages/api-debugger`, `packages/database`, `packages/terminal`, `packages/ui`, and `apps/desktop`. No errors; none block builds.
 
 ## P3 — Low priority / Future
 
@@ -24,14 +25,13 @@ None.
 
 ## Environment / Tooling
 
-- **OS keychain** (Inferred): The `keyring` crate is used for production but has not been verified on all target platforms (macOS, Windows, Linux).
-- **Windows workspace tests** (Observed): `cargo test -p unfour-workspace` fails with `STATUS_ENTRYPOINT_NOT_FOUND` on this Windows environment. Likely a native DLL dependency issue, not a code defect.
-- **Real SSH connection verification** (Observed): Native keepalive, bounded reconnect, cancellation, retry exhaustion, and recovery after server return have automated coverage but remain `NOT VERIFIED` against a live SSH server in this environment.
+- **macOS/Linux startup and keychain** (Observed): Apple Keychain and Linux Secret Service are configured, but app startup and credential create/read/delete remain `NOT VERIFIED` on those platforms.
+- **Native Windows visual capture** (Observed): The app launches and remains responsive, but WebView content could not be captured or inspected through the available automation surface. Browser-mode UI smoke passes.
 
 ## Summary
 
 - P0: 0
-- P1: 1 (encrypted key format limitation)
+- P1: 2 (encrypted key format limitation, real SSH release smoke)
 - P2: 2 (host-key UI enhancement, lint warning cleanup)
 - P3: 2 (terminal multiplexing, SCP/SFTP)
-- Environment: 3 (OS keychain, Windows workspace tests, SSH live)
+- Environment: 2 (macOS/Linux startup and keychain, native Windows visual capture)

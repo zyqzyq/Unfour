@@ -4,10 +4,18 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-keyring = "3"
 serde_json = "1"
 unfour-core = { path = "../unfour-core" }
 uuid = { version = "1", features = ["serde", "v4"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["crypto-rust", "sync-secret-service"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }

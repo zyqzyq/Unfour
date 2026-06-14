@@ -1,24 +1,33 @@
 # Next Steps
 
-> Last scanned: 2026-06-14 (checkpoint refresh — no code changes since database hardening).
+> Last scanned: 2026-06-14 (release-readiness smoke verification).
 
-## Recommended: Polish & Integration
+## Recommended: Release Preparation
 
 Priority order:
 
-1. **Lint warning cleanup**
-   - Goal: Reduce `react-hooks/set-state-in-effect`, `react-hooks/exhaustive-deps`, `react-hooks/refs`, and `react-refresh/only-export-components` warnings across the codebase.
-   - Scope: `packages/api-debugger`, `packages/database`, `packages/terminal`, `apps/desktop`.
-   - Forbidden: Do not change component behavior or refactor hooks beyond what is needed to resolve the warnings.
-   - Risk: Low — targeted fixes per warning.
-   - Prerequisites: None.
-   - Acceptance criteria: `pnpm run lint` produces fewer warnings than the current baseline (64); no new errors introduced; component rendering unchanged.
+1. **Live SSH release smoke**
+   - Goal: Verify the complete password and private-key user journey against a reachable SSH server.
+   - Acceptance criteria: Login, terminal I/O, resize, search, history restore, first-trust TOFU, mismatch rejection, fingerprint reset, and reconnect are manually verified.
+   - Independent commit: No code change expected; fix only confirmed blockers.
+
+2. **macOS and Linux release smoke**
+   - Goal: Verify app startup and real OS keychain create/read/delete on both remaining desktop targets.
+   - Acceptance criteria: No startup crash or blank screen; Apple Keychain and Linux Secret Service pass all four credential categories.
+   - Independent commit: No code change expected; fix only confirmed blockers.
+
+3. **Packaging and installer smoke**
+   - Goal: Build release bundles and install/launch them on each target platform.
+   - Acceptance criteria: Clean install, first launch, upgrade over a prior basic build, and uninstall behavior are recorded.
+
+4. **Lint warning cleanup**
+   - Goal: Reduce the current 53 warnings without changing behavior.
+   - Scope: `packages/api-debugger`, `packages/database`, `packages/terminal`, `packages/ui`, `apps/desktop`.
    - Independent commit: Yes.
-   - Evidence: `pnpm run lint` output — 64 warnings confirmed at commit `bfedcf8`. Primary sources: `ApiDebuggerPage.tsx` (react-hooks/refs), `WorkspaceDialogs.tsx` (set-state-in-effect), `useLayoutPersistence.ts` (exhaustive-deps), `utils.tsx` (only-export-components). See PROJECT_STATE.md Lint warnings, OPEN_ISSUES.md P2.
-   - Recommended model: weaker cheaper model is sufficient
 
 ## Completed
 
+- **Release-readiness smoke and SecretStore backend fix:** Full frontend/Rust verification passes; Windows native startup and browser UI smoke pass. Found that `keyring` 3 had no platform features enabled and was using its mock backend in production. Enabled Windows Credential Manager, Apple Keychain, and Linux Secret Service. Real Windows create/read/delete passes for SSH passwords, SSH key passphrases, PostgreSQL passwords, and MySQL passwords.
 - **Database live verification and hardening:** PostgreSQL 18 and MariaDB 12.3.2 verified against isolated localhost servers with seeded `users`, `orders`, empty tables, and Unicode data. SecretStore-backed passwords, connection tests, schema/database/table/column browsing, reads, pagination, mutation confirmation and confirmed writes, syntax errors, invalid credentials, and unavailable ports all passed. Fixed PostgreSQL non-`public` schema qualification and MariaDB signed `COUNT(*)` decoding. SQLite and browser mocks remain green.
 - **MySQL live driver phase 1:** SecretStore-backed password loading, `sqlx::MySqlPool` lifecycle, live `test_connection`, multi-database/schema browsing, columns, read-only query execution, existing mutation confirmation, schema-qualified paginated table browsing, sanitized errors, browser mock compatibility, and focused Rust/TypeScript tests. Public contracts gained optional `schema` metadata for tables and browse requests; SQLite and PostgreSQL behavior remain unchanged. Later live-verified in the database hardening batch.
 - **Semantic token replacement in App.tsx:** All hardcoded Tailwind color classes (`slate-*`, `white`, `rose-*`, `teal-*`) replaced with semantic `--u-color-*` CSS custom properties across `apps/desktop/src/App.tsx` and all desktop component files. Zero hardcoded color utility classes remain in any desktop source file. Verified by grep and production build. — Commit `fbc7330` (refactor(desktop): extract app shell components) + `002e54f` (refactor(ui): replace hardcoded colors with semantic tokens)
