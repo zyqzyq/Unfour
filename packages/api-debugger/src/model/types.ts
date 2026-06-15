@@ -21,6 +21,9 @@ export type ApiRequestState =
 export type RequestParamsTab = "query" | "headers" | "body" | "auth";
 export type ResponsePanelTab = "response" | "history";
 export type ResponseTab = "body" | "headers" | "cookies" | "timing";
+export type ApiSplitDirection = "vertical" | "horizontal";
+export type ApiTabSource = "new" | "saved" | "history";
+export type ApiTabSaveState = "unsaved" | "saved" | "dirty" | "saving";
 
 export type RequestDraft = {
   body: string;
