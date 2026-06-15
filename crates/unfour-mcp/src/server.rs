@@ -1,7 +1,9 @@
 use std::io::{self, BufRead, Write};
+use std::sync::Arc;
 
 use serde_json::{json, Value};
 
+use crate::command_bus_adapter::{CommandBusAdapter, LocalCommandBusAdapter};
 use crate::protocol;
 use crate::tools::{ToolCallError, ToolRegistry};
 
@@ -11,15 +13,13 @@ pub struct McpServer {
     tools: ToolRegistry,
 }
 
-impl Default for McpServer {
-    fn default() -> Self {
+impl McpServer {
+    pub fn new(command_bus: Arc<dyn CommandBusAdapter>) -> Self {
         Self {
-            tools: ToolRegistry::mock(),
+            tools: ToolRegistry::with_command_bus(command_bus),
         }
     }
-}
 
-impl McpServer {
     pub fn handle_line(&self, line: &str) -> Option<String> {
         let response = match serde_json::from_str::<Value>(line) {
             Ok(message) => self.handle_message(&message),
@@ -89,7 +89,7 @@ impl McpServer {
                 "title": "Unfour MCP",
                 "version": env!("CARGO_PKG_VERSION"),
             },
-            "instructions": "Mock-only MCP skeleton. No Unfour business capabilities are connected.",
+            "instructions": "Read-only Unfour workspace and connection metadata is available through the command bus. API requests, database queries, and SSH execution are not available.",
         }))
     }
 
@@ -111,6 +111,9 @@ impl McpServer {
             .map_err(|error| match error {
                 ToolCallError::UnknownTool(name) => (-32602, format!("Unknown tool: {name}")),
                 ToolCallError::InvalidArguments(message) => (-32602, message),
+                ToolCallError::Execution { code, message } => {
+                    (-32000, format!("{code}: {message}"))
+                }
             })
     }
 }
@@ -120,7 +123,9 @@ where
     R: BufRead,
     W: Write,
 {
-    let server = McpServer::default();
+    let command_bus = LocalCommandBusAdapter::ephemeral()
+        .map_err(|error| io::Error::other(format!("{}: {}", error.code, error.message)))?;
+    let server = McpServer::new(command_bus);
 
     for line in reader.lines() {
         let line = line?;
@@ -140,14 +145,51 @@ where
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
+    use std::sync::Arc;
 
     use serde_json::{json, Value};
+    use unfour_command_bus::{
+        ConnectionListResult, CurrentWorkspaceResult, ReadCommand, ReadCommandResult,
+    };
 
     use super::{run_stdio, McpServer, SUPPORTED_PROTOCOL_VERSION};
+    use crate::command_bus_adapter::{CommandBusAdapter, CommandBusAdapterError};
+
+    struct StubCommandBus;
+
+    impl CommandBusAdapter for StubCommandBus {
+        fn execute_read(
+            &self,
+            command: ReadCommand,
+        ) -> Result<ReadCommandResult, CommandBusAdapterError> {
+            Ok(match command {
+                ReadCommand::CurrentWorkspace => {
+                    ReadCommandResult::CurrentWorkspace(CurrentWorkspaceResult {
+                        workspace_id: "workspace-1".to_string(),
+                        workspace_name: "Workspace".to_string(),
+                        workspace_root: None,
+                        mode: "local".to_string(),
+                        source: "command-bus".to_string(),
+                    })
+                }
+                ReadCommand::ListConnections { .. } => {
+                    ReadCommandResult::Connections(ConnectionListResult {
+                        connections: vec![],
+                        count: 0,
+                        source: "command-bus".to_string(),
+                    })
+                }
+            })
+        }
+    }
+
+    fn server() -> McpServer {
+        McpServer::new(Arc::new(StubCommandBus))
+    }
 
     #[test]
     fn initialize_declares_tools_capability() {
-        let response = McpServer::default()
+        let response = server()
             .handle_message(&json!({
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -226,7 +268,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(responses.len(), 3);
-        assert_eq!(responses[1]["result"]["tools"].as_array().unwrap().len(), 3);
+        assert_eq!(responses[1]["result"]["tools"].as_array().unwrap().len(), 5);
         assert_eq!(
             responses[2]["result"]["structuredContent"],
             json!({

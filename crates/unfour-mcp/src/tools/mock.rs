@@ -1,6 +1,6 @@
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 
-use super::{RegisteredTool, ToolCallError, ToolDefinition};
+use super::{object_with_allowed_keys, RegisteredTool, ToolCallError, ToolDefinition, ToolHandler};
 
 pub(super) fn registered_tools() -> Vec<RegisteredTool> {
     vec![
@@ -32,7 +32,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "additionalProperties": false
                 }),
             },
-            handler: ping,
+            handler: ToolHandler::Mock(ping),
         },
         RegisteredTool {
             definition: ToolDefinition {
@@ -56,7 +56,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "additionalProperties": false
                 }),
             },
-            handler: workspace_current,
+            handler: ToolHandler::Mock(workspace_current),
         },
         RegisteredTool {
             definition: ToolDefinition {
@@ -83,7 +83,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "additionalProperties": false
                 }),
             },
-            handler: echo,
+            handler: ToolHandler::Mock(echo),
         },
     ]
 }
@@ -128,24 +128,4 @@ fn echo(arguments: Value) -> Result<Value, ToolCallError> {
         "ok": true,
         "value": value,
     }))
-}
-
-fn object_with_allowed_keys(
-    arguments: Value,
-    allowed_keys: &[&str],
-) -> Result<Map<String, Value>, ToolCallError> {
-    let object = arguments.as_object().ok_or_else(|| {
-        ToolCallError::InvalidArguments("tool arguments must be a JSON object".to_string())
-    })?;
-
-    if let Some(key) = object
-        .keys()
-        .find(|key| !allowed_keys.contains(&key.as_str()))
-    {
-        return Err(ToolCallError::InvalidArguments(format!(
-            "unexpected tool argument `{key}`"
-        )));
-    }
-
-    Ok(object.clone())
 }

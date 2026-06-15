@@ -6204,6 +6204,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "unfour-command-bus"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "unfour-core",
+ "unfour-database-engine",
+ "unfour-http-engine",
+ "unfour-local-storage",
+ "unfour-secret-store",
+ "unfour-ssh-engine",
+ "unfour-workspace-engine",
+]
+
+[[package]]
 name = "unfour-core"
 version = "0.1.0"
 dependencies = [
@@ -6263,6 +6280,8 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "tokio",
+ "unfour-command-bus",
 ]
 
 [[package]]
@@ -6305,6 +6324,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "unfour-command-bus",
  "unfour-core",
  "unfour-database-engine",
  "unfour-http-engine",

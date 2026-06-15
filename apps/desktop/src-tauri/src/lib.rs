@@ -1,4 +1,3 @@
-mod command_bus;
 mod commands;
 
 // Tauri's resource selects Common Controls v6 before the Windows test harness starts.
@@ -6,8 +5,10 @@ mod commands;
 #[link(name = "resource", kind = "static")]
 unsafe extern "C" {}
 
-use command_bus::CommandBus;
 use tauri::Manager;
+use unfour_command_bus::CommandBus;
+use unfour_local_storage::LocalDb;
+use unfour_secret_store::SecretStore;
 
 pub struct AppState {
     pub command_bus: CommandBus,
@@ -26,7 +27,24 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let app_handle = app.handle().clone();
-            let command_bus = tauri::async_runtime::block_on(CommandBus::new(app_handle))?;
+            let command_bus = tauri::async_runtime::block_on(async {
+                let db = LocalDb::connect(&app_handle).await?;
+                db.migrate().await?;
+                CommandBus::from_db_with_secret_store(db, SecretStore::new("unfour-workspace"))
+                    .await
+            })?;
+
+            #[cfg(feature = "ssh-native")]
+            {
+                let event_app = app_handle.clone();
+                command_bus.set_terminal_output_callback(std::sync::Arc::new(move |payload| {
+                    use tauri::Emitter;
+                    if let Ok(payload) = serde_json::from_str::<serde_json::Value>(&payload) {
+                        let _ = event_app.emit("ssh://terminal-data", payload);
+                    }
+                }));
+            }
+
             app.manage(AppState { command_bus });
             Ok(())
         })

@@ -24,6 +24,7 @@ serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+unfour-command-bus = { path = "../../../crates/unfour-command-bus" }
 unfour-core = { path = "../../../crates/unfour-core" }
 unfour-database-engine = { path = "../../../crates/database-engine" }
 unfour-http-engine = { path = "../../../crates/http-engine" }
@@ -38,4 +39,4 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [features]
 default = []
-ssh-native = ["unfour-ssh-engine/ssh-native"]
+ssh-native = ["unfour-command-bus/ssh-native", "unfour-ssh-engine/ssh-native"]

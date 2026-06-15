@@ -8,6 +8,7 @@ members = [
   "crates/ssh-engine",
   "crates/workspace-engine",
   "crates/secret-store",
+  "crates/unfour-command-bus",
   "crates/unfour-mcp",
 ]
 resolver = "2"

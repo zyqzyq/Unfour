@@ -1,23 +1,90 @@
 # Unfour MCP Server
 
-`unfour-mcp` is the first local Model Context Protocol (MCP) server skeleton for
-Unfour. This version exists only to verify that an MCP client can start a local
-stdio process, initialize it, discover tools, and call deterministic mock tools.
+`unfour-mcp` is a local stdio Model Context Protocol server. It now verifies
+the first real read-only integration path:
 
-## Current Scope
+```text
+Codex / MCP client
+  -> unfour-mcp stdio server
+  -> MCP tool handler
+  -> command-bus adapter
+  -> unfour-command-bus
+  -> workspace / connection read services
+  -> structured MCP result
+```
 
-The server implements newline-delimited JSON-RPC over standard input and output
-with these MCP methods:
+The server implements newline-delimited JSON-RPC over standard input and
+output with `initialize`, `tools/list`, and `tools/call`. Standard output is
+reserved for MCP messages; process errors are written to standard error.
 
-- `initialize`
-- `tools/list`
-- `tools/call`
+## Real Tools
 
-The server advertises MCP protocol version `2025-06-18` and the `tools`
-capability. Standard output is reserved for MCP messages; process errors are
-written to standard error.
+| Tool | Input | Current behavior |
+| --- | --- | --- |
+| `unfour.workspace.current` | `{}` | Returns the active workspace from the command bus. |
+| `unfour.connection.list` | `{ "type": "all" }` | Returns safe database and SSH connection summaries. The optional type is `all`, `api`, `database`, or `ssh`; the default is `all`. |
+
+The standalone MCP process currently creates an isolated local command-bus
+instance with the normal default workspace. It does not yet attach to the
+running desktop process or its persisted SQLite database. Therefore the
+default `unfour.connection.list` result is empty. This phase validates the
+real command-bus call path without introducing a new database-path discovery
+contract.
+
+The workspace model does not currently persist a workspace root, so
+`workspaceRoot` is `null`. There is no API connection business model yet, so
+`type: "api"` returns an empty list instead of treating saved API requests as
+connections.
+
+Example workspace result:
+
+```json
+{
+  "workspaceId": "generated-workspace-id",
+  "workspaceName": "Default Workspace",
+  "workspaceRoot": null,
+  "mode": "local",
+  "source": "command-bus"
+}
+```
+
+Example connection result:
+
+```json
+{
+  "connections": [
+    {
+      "id": "connection-id",
+      "name": "Development Database",
+      "type": "database",
+      "workspaceId": "workspace-id",
+      "safeSummary": {
+        "host": "localhost",
+        "databaseType": "postgres"
+      }
+    }
+  ],
+  "count": 1,
+  "source": "command-bus"
+}
+```
+
+## Safety
+
+Connection output is built from allowlisted summary DTOs. It may contain only
+`host`, `databaseType`, and `apiBaseUrl`. A second recursive filter removes
+sensitive keys before MCP serialization.
+
+The server does not return passwords, tokens, private keys, credential
+references, Authorization headers, cookies, database connection strings,
+database usernames, SSH usernames, SSH key paths, or SQLite paths. Command-bus
+failures return a stable error code and generic message without forwarding
+underlying storage or credential details.
 
 ## Mock Tools
+
+The phase-one mock tools remain available and are implemented separately from
+the real tools:
 
 | Tool | Purpose |
 | --- | --- |
@@ -25,64 +92,55 @@ written to standard error.
 | `unfour.mock.workspace_current` | Returns fixed mock workspace metadata. |
 | `unfour.mock.echo` | Returns a supplied JSON value. |
 
-Tool results include both MCP `structuredContent` and a JSON-serialized text
-content block for client compatibility. The tools do not read application state,
-the filesystem, environment variables, credentials, or network resources.
-
-## Build and Run
+## Windows Build And Run
 
 From the repository root:
 
-```bash
+```powershell
 cargo build -p unfour-mcp
-cargo run -p unfour-mcp
+.\target\debug\unfour-mcp.exe
 ```
 
-An MCP client should configure the executable as a stdio server. During local
-development, the equivalent command and arguments are:
+The process waits for one JSON-RPC message per input line. Closing standard
+input shuts it down.
 
-```text
-command: cargo
-args: run -p unfour-mcp
-working directory: <path-to-unfour>
-```
-
-For a prebuilt binary, use:
-
-```text
-target/debug/unfour-mcp
-```
-
-The process waits for one JSON-RPC message per input line and writes one
-JSON-RPC response per output line. Closing standard input shuts down the server.
-
-## Manual Smoke Check
-
-PowerShell can send a minimal request sequence:
+Manual smoke check:
 
 ```powershell
 @'
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"manual-check","version":"0.1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
 {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
-{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"unfour.mock.ping","arguments":{"message":"hello"}}}
-'@ | cargo run -q -p unfour-mcp
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"unfour.workspace.current","arguments":{}}}
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"unfour.connection.list","arguments":{"type":"all"}}}
+'@ | .\target\debug\unfour-mcp.exe
 ```
 
-## Explicit Non-Goals
+## Codex MCP Configuration
 
-This version does not:
+Prefer the absolute path to the prebuilt executable:
 
-- connect to the Unfour Command Bus;
-- call API Debugger, Database, SSH, Terminal, or Workspace services;
-- implement HTTP or any other MCP transport;
-- implement workflows, resources, prompts, sampling, or system commands;
-- read or return passwords, tokens, private keys, environment variables, or
-  other sensitive data.
+```toml
+[mcp_servers.unfour]
+command = "E:\\project\\unfour\\target\\debug\\unfour-mcp.exe"
+args = []
+```
 
-## Next Phase
+Build the executable before starting Codex:
 
-A later phase can define an explicit MCP-to-Command-Bus adapter, permission and
-confirmation rules, audit and redaction behavior, and narrowly scoped tools for
-API, Database, SSH, and Workspace capabilities. Those integrations should be
-added only after their security and package boundaries are reviewed.
+```powershell
+cargo build -p unfour-mcp
+```
+
+## Current Non-Goals
+
+This phase does not:
+
+- send API Debugger requests;
+- execute database queries;
+- execute SSH commands or open SSH sessions;
+- implement `tail_log`;
+- implement workflows;
+- implement HTTP MCP transport;
+- read secrets or environment variables;
+- attach the MCP process to the running desktop application's state.

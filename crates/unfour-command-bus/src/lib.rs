@@ -1,4 +1,4 @@
-use tauri::AppHandle;
+use serde::{Deserialize, Serialize};
 use unfour_core::ai_reserved;
 use unfour_core::models::{
     ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest,
@@ -20,6 +20,67 @@ use unfour_secret_store::SecretStore;
 use unfour_ssh_engine::SshService;
 use unfour_workspace_engine::WorkspaceService;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ConnectionType {
+    All,
+    Api,
+    Database,
+    Ssh,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReadCommand {
+    CurrentWorkspace,
+    ListConnections { connection_type: ConnectionType },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReadCommandResult {
+    CurrentWorkspace(CurrentWorkspaceResult),
+    Connections(ConnectionListResult),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CurrentWorkspaceResult {
+    pub workspace_id: String,
+    pub workspace_name: String,
+    pub workspace_root: Option<String>,
+    pub mode: String,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionListResult {
+    pub connections: Vec<SafeConnection>,
+    pub count: usize,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SafeConnection {
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub connection_type: String,
+    pub workspace_id: String,
+    pub safe_summary: SafeConnectionSummary,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SafeConnectionSummary {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub database_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_base_url: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct CommandBus {
     api_client: ApiClientService,
@@ -28,51 +89,31 @@ pub struct CommandBus {
     secret_store: SecretStore,
     ssh: SshService,
     workspace: WorkspaceService,
-    #[allow(dead_code)]
-    app_handle: Option<AppHandle>,
 }
 
 impl CommandBus {
-    pub async fn new(app: AppHandle) -> AppResult<Self> {
-        let db = LocalDb::connect(&app).await?;
+    pub async fn ephemeral() -> AppResult<Self> {
+        use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+
+        let options = SqliteConnectOptions::new()
+            .filename(":memory:")
+            .create_if_missing(true)
+            .foreign_keys(true);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await?;
+        let db = LocalDb::from_pool(pool);
         db.migrate().await?;
 
-        let activity_log = ActivityLogService::new(db.clone());
-        let secret_store = SecretStore::new("unfour-workspace");
-        let workspace = WorkspaceService::new(db.clone());
-        workspace.ensure_default_workspace().await?;
-
-        let ssh = SshService::new(db.clone(), secret_store.clone());
-
-        // Wire up terminal output callback to emit Tauri events.
-        #[cfg(feature = "ssh-native")]
-        {
-            let event_app = app.clone();
-            ssh.set_terminal_output_callback(std::sync::Arc::new(move |payload| {
-                use tauri::Emitter;
-                if let Ok(payload) = serde_json::from_str::<serde_json::Value>(&payload) {
-                    let _ = event_app.emit("ssh://terminal-data", payload);
-                }
-            }));
-        }
-
-        Ok(Self {
-            api_client: ApiClientService::new(db.clone()),
-            activity_log,
-            database: DatabaseService::new(db.clone()).with_secret_store(secret_store.clone()),
-            secret_store,
-            ssh,
-            workspace,
-            app_handle: Some(app),
-        })
+        Self::from_db(db).await
     }
 
-    /// Construct a `CommandBus` from a pre-built `LocalDb` without requiring a
-    /// Tauri `AppHandle`. This is the primary testability seam for integration
-    /// tests that use in-memory SQLite.
-    pub async fn from_db(db: LocalDb) -> AppResult<Self> {
+    pub async fn from_db_with_secret_store(
+        db: LocalDb,
+        secret_store: SecretStore,
+    ) -> AppResult<Self> {
         let activity_log = ActivityLogService::new(db.clone());
-        let secret_store = SecretStore::in_memory("unfour-test");
         let workspace = WorkspaceService::new(db.clone());
         workspace.ensure_default_workspace().await?;
 
@@ -81,10 +122,24 @@ impl CommandBus {
             activity_log,
             database: DatabaseService::new(db.clone()).with_secret_store(secret_store.clone()),
             secret_store: secret_store.clone(),
-            ssh: SshService::new(db.clone(), secret_store),
+            ssh: SshService::new(db, secret_store),
             workspace,
-            app_handle: None,
         })
+    }
+
+    /// Construct a `CommandBus` with an in-memory secret store for tests and
+    /// local adapters that do not access credentials.
+    pub async fn from_db(db: LocalDb) -> AppResult<Self> {
+        let secret_store = SecretStore::in_memory("unfour-test");
+        Self::from_db_with_secret_store(db, secret_store).await
+    }
+
+    #[cfg(feature = "ssh-native")]
+    pub fn set_terminal_output_callback(
+        &self,
+        callback: unfour_ssh_engine::TerminalOutputCallback,
+    ) {
+        self.ssh.set_terminal_output_callback(callback);
     }
 
     pub async fn system_health(&self) -> AppResult<SystemHealth> {
@@ -99,6 +154,85 @@ impl CommandBus {
 
     pub async fn list_workspaces(&self) -> AppResult<WorkspaceState> {
         self.workspace.state().await
+    }
+
+    pub async fn execute_read(&self, command: ReadCommand) -> AppResult<ReadCommandResult> {
+        match command {
+            ReadCommand::CurrentWorkspace => {
+                let state = self.list_workspaces().await?;
+                let workspace = state
+                    .workspaces
+                    .into_iter()
+                    .find(|workspace| workspace.id == state.active_workspace_id)
+                    .ok_or_else(|| {
+                        unfour_core::AppError::NotFound(
+                            "active workspace is not available".to_string(),
+                        )
+                    })?;
+
+                Ok(ReadCommandResult::CurrentWorkspace(
+                    CurrentWorkspaceResult {
+                        workspace_id: workspace.id,
+                        workspace_name: workspace.name,
+                        workspace_root: None,
+                        mode: "local".to_string(),
+                        source: "command-bus".to_string(),
+                    },
+                ))
+            }
+            ReadCommand::ListConnections { connection_type } => {
+                let state = self.list_workspaces().await?;
+                let workspace_id = state.active_workspace_id;
+                let mut connections = Vec::new();
+
+                if matches!(
+                    connection_type,
+                    ConnectionType::All | ConnectionType::Database
+                ) {
+                    connections.extend(
+                        self.list_database_connections(workspace_id.clone())
+                            .await?
+                            .into_iter()
+                            .map(|connection| SafeConnection {
+                                id: connection.id,
+                                name: connection.name,
+                                connection_type: "database".to_string(),
+                                workspace_id: connection.workspace_id,
+                                safe_summary: SafeConnectionSummary {
+                                    host: connection.host,
+                                    database_type: Some(connection.driver),
+                                    api_base_url: None,
+                                },
+                            }),
+                    );
+                }
+
+                if matches!(connection_type, ConnectionType::All | ConnectionType::Ssh) {
+                    connections.extend(
+                        self.list_ssh_connections(workspace_id)
+                            .await?
+                            .into_iter()
+                            .map(|connection| SafeConnection {
+                                id: connection.id,
+                                name: connection.name,
+                                connection_type: "ssh".to_string(),
+                                workspace_id: connection.workspace_id,
+                                safe_summary: SafeConnectionSummary {
+                                    host: Some(connection.host),
+                                    database_type: None,
+                                    api_base_url: None,
+                                },
+                            }),
+                    );
+                }
+
+                Ok(ReadCommandResult::Connections(ConnectionListResult {
+                    count: connections.len(),
+                    connections,
+                    source: "command-bus".to_string(),
+                }))
+            }
+        }
     }
 
     pub async fn create_workspace(&self, name: String) -> AppResult<Workspace> {
@@ -647,7 +781,7 @@ impl CommandBus {
 mod tests {
     use super::*;
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-    use unfour_core::models::ApiRequestInput;
+    use unfour_core::models::{ApiRequestInput, DatabaseConnectionInput, SshConnectionInput};
     use unfour_local_storage::LocalDb;
 
     async fn test_bus() -> CommandBus {
@@ -790,5 +924,83 @@ mod tests {
             .find(|w| w.id == created.id)
             .expect("workspace should still exist");
         assert_eq!(ws.name, "Renamed Workspace");
+    }
+
+    #[tokio::test]
+    async fn read_commands_return_current_workspace_and_safe_connections() {
+        let bus = test_bus().await;
+        let workspace = bus
+            .execute_read(ReadCommand::CurrentWorkspace)
+            .await
+            .expect("read current workspace");
+        let ReadCommandResult::CurrentWorkspace(workspace) = workspace else {
+            panic!("expected current workspace result");
+        };
+        assert_eq!(workspace.source, "command-bus");
+        assert_eq!(workspace.workspace_root, None);
+
+        bus.save_database_connection(DatabaseConnectionInput {
+            id: None,
+            workspace_id: workspace.workspace_id.clone(),
+            name: "Database".to_string(),
+            driver: "postgres".to_string(),
+            host: Some("db.internal".to_string()),
+            port: Some(5432),
+            database: Some("app".to_string()),
+            username: Some("developer".to_string()),
+            sqlite_path: None,
+            credential_ref: Some("database-secret".to_string()),
+        })
+        .await
+        .expect("save database connection");
+        bus.save_ssh_connection(SshConnectionInput {
+            id: None,
+            workspace_id: workspace.workspace_id,
+            name: "SSH".to_string(),
+            host: "ssh.internal".to_string(),
+            port: Some(22),
+            username: "developer".to_string(),
+            auth_kind: "private-key".to_string(),
+            key_path: Some("C:\\sensitive\\id_ed25519".to_string()),
+            credential_ref: Some("ssh-secret".to_string()),
+        })
+        .await
+        .expect("save ssh connection");
+
+        let result = bus
+            .execute_read(ReadCommand::ListConnections {
+                connection_type: ConnectionType::All,
+            })
+            .await
+            .expect("list safe connections");
+        let ReadCommandResult::Connections(result) = result else {
+            panic!("expected connection list result");
+        };
+        assert_eq!(result.count, 2);
+        assert_eq!(result.source, "command-bus");
+
+        let json = serde_json::to_string(&result).expect("serialize safe result");
+        assert!(!json.contains("credential"));
+        assert!(!json.contains("developer"));
+        assert!(!json.contains("id_ed25519"));
+        assert!(json.contains("db.internal"));
+        assert!(json.contains("ssh.internal"));
+    }
+
+    #[tokio::test]
+    async fn api_connection_filter_is_empty_until_an_api_connection_model_exists() {
+        let bus = test_bus().await;
+        let result = bus
+            .execute_read(ReadCommand::ListConnections {
+                connection_type: ConnectionType::Api,
+            })
+            .await
+            .expect("list api connections");
+        let ReadCommandResult::Connections(result) = result else {
+            panic!("expected connection list result");
+        };
+
+        assert!(result.connections.is_empty());
+        assert_eq!(result.count, 0);
     }
 }

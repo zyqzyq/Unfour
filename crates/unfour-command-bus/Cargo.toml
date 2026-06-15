@@ -1,0 +1,23 @@
+[package]
+name = "unfour-command-bus"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sqlx = { version = "0.8", default-features = false, features = ["chrono", "json", "macros", "runtime-tokio-rustls", "sqlite"] }
+unfour-core = { path = "../unfour-core" }
+unfour-database-engine = { path = "../database-engine" }
+unfour-http-engine = { path = "../http-engine" }
+unfour-local-storage = { path = "../local-storage" }
+unfour-secret-store = { path = "../secret-store" }
+unfour-ssh-engine = { path = "../ssh-engine" }
+unfour-workspace-engine = { path = "../workspace-engine" }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[features]
+default = []
+ssh-native = ["unfour-ssh-engine/ssh-native"]

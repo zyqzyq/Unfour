@@ -2,6 +2,9 @@
 
 The Command Bus is the stable backend contract for manual UI actions and future automated actions.
 
+The reusable Rust entry point is `crates/unfour-command-bus`. Tauri commands
+and the stdio MCP server are adapters over that crate.
+
 ## Why
 
 If domain logic lives directly in `#[tauri::command]`, future AI/MCP/CLI/cloud runners would need to duplicate behavior. The bus keeps one execution path:
@@ -35,6 +38,8 @@ Cloud Workflow Adapter
 - `database_schema_get`
 - `database_query_execute`
 - `system_health`
+- `ReadCommand::CurrentWorkspace`
+- `ReadCommand::ListConnections`
 
 ## Rules
 
