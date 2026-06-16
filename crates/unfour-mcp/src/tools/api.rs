@@ -496,7 +496,10 @@ mod tests {
         ApiCollectionListResult, ApiCollectionSummary, ApiRequestDetailResult,
         ApiRequestListResult, ApiRequestSummary, ReadCommand, ReadCommandResult,
     };
-    use unfour_core::models::{ApiResponse, ApiSavedRequest, KeyValue};
+    use unfour_core::models::{
+        ApiResponse, ApiSavedRequest, DatabaseConnection, DatabaseQueryInput, DatabaseQueryResult,
+        DatabaseQuerySafety, DatabaseSchema, KeyValue,
+    };
 
     use crate::command_bus_adapter::{CommandBusAdapter, CommandBusAdapterError};
     use crate::tools::ToolRegistry;
@@ -603,6 +606,42 @@ mod tests {
                 duration_ms: 123,
             })
         }
+
+        fn list_db_connections(
+            &self,
+            _workspace_id: &str,
+        ) -> Result<Vec<DatabaseConnection>, CommandBusAdapterError> {
+            Ok(vec![])
+        }
+
+        fn get_db_schema(
+            &self,
+            _workspace_id: &str,
+            _connection_id: &str,
+        ) -> Result<DatabaseSchema, CommandBusAdapterError> {
+            Ok(DatabaseSchema {
+                connection_id: String::new(),
+                tables: vec![],
+            })
+        }
+
+        fn execute_db_query(
+            &self,
+            _input: DatabaseQueryInput,
+        ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
+            Ok(DatabaseQueryResult {
+                columns: vec![],
+                rows: vec![],
+                affected_rows: 0,
+                duration_ms: 0,
+                safety: DatabaseQuerySafety {
+                    classification: "read".to_string(),
+                    requires_confirmation: false,
+                    confirmed: true,
+                    message: None,
+                },
+            })
+        }
     }
 
     struct FailingApiCommandBus;
@@ -626,6 +665,37 @@ mod tests {
             Err(CommandBusAdapterError {
                 code: "COMMAND_BUS_API_SEND_FAILED",
                 message: "The command-bus API send operation failed.",
+            })
+        }
+
+        fn list_db_connections(
+            &self,
+            _workspace_id: &str,
+        ) -> Result<Vec<DatabaseConnection>, CommandBusAdapterError> {
+            Err(CommandBusAdapterError {
+                code: "COMMAND_BUS_DB_LIST_FAILED",
+                message: "The command-bus database list operation failed.",
+            })
+        }
+
+        fn get_db_schema(
+            &self,
+            _workspace_id: &str,
+            _connection_id: &str,
+        ) -> Result<DatabaseSchema, CommandBusAdapterError> {
+            Err(CommandBusAdapterError {
+                code: "COMMAND_BUS_DB_SCHEMA_FAILED",
+                message: "The command-bus database schema operation failed.",
+            })
+        }
+
+        fn execute_db_query(
+            &self,
+            _input: DatabaseQueryInput,
+        ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
+            Err(CommandBusAdapterError {
+                code: "COMMAND_BUS_DB_QUERY_FAILED",
+                message: "The command-bus database query operation failed.",
             })
         }
     }

@@ -3,7 +3,9 @@ use std::sync::Arc;
 
 use tokio::runtime::{Builder, Runtime};
 use unfour_command_bus::{CommandBus, ReadCommand, ReadCommandResult};
-use unfour_core::models::ApiResponse;
+use unfour_core::models::{
+    ApiResponse, DatabaseConnection, DatabaseQueryInput, DatabaseQueryResult, DatabaseSchema,
+};
 
 pub trait CommandBusAdapter: Send + Sync {
     fn execute_read(
@@ -16,6 +18,22 @@ pub trait CommandBusAdapter: Send + Sync {
         request_id: &str,
         timeout_ms: Option<u64>,
     ) -> Result<ApiResponse, CommandBusAdapterError>;
+
+    fn list_db_connections(
+        &self,
+        workspace_id: &str,
+    ) -> Result<Vec<DatabaseConnection>, CommandBusAdapterError>;
+
+    fn get_db_schema(
+        &self,
+        workspace_id: &str,
+        connection_id: &str,
+    ) -> Result<DatabaseSchema, CommandBusAdapterError>;
+
+    fn execute_db_query(
+        &self,
+        input: DatabaseQueryInput,
+    ) -> Result<DatabaseQueryResult, CommandBusAdapterError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,6 +108,43 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
                 message: "The command-bus API send operation failed.",
             })
     }
+
+    fn list_db_connections(
+        &self,
+        workspace_id: &str,
+    ) -> Result<Vec<DatabaseConnection>, CommandBusAdapterError> {
+        self.runtime
+            .block_on(self.bus.list_database_connections(workspace_id.to_string()))
+            .map_err(|_| CommandBusAdapterError {
+                code: "COMMAND_BUS_DB_LIST_FAILED",
+                message: "The command-bus database list operation failed.",
+            })
+    }
+
+    fn get_db_schema(
+        &self,
+        workspace_id: &str,
+        connection_id: &str,
+    ) -> Result<DatabaseSchema, CommandBusAdapterError> {
+        self.runtime
+            .block_on(self.bus.database_schema(workspace_id.to_string(), connection_id.to_string()))
+            .map_err(|_| CommandBusAdapterError {
+                code: "COMMAND_BUS_DB_SCHEMA_FAILED",
+                message: "The command-bus database schema operation failed.",
+            })
+    }
+
+    fn execute_db_query(
+        &self,
+        input: DatabaseQueryInput,
+    ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
+        self.runtime
+            .block_on(self.bus.execute_database_query(input))
+            .map_err(|_| CommandBusAdapterError {
+                code: "COMMAND_BUS_DB_QUERY_FAILED",
+                message: "The command-bus database query operation failed.",
+            })
+    }
 }
 
 impl CommandBusAdapterError {
@@ -133,6 +188,12 @@ mod tests {
         };
         assert_eq!(connections.count, 0);
         assert_eq!(connections.source, "command-bus");
+
+        // Database connections should also be listable through the adapter.
+        let db_connections = adapter
+            .list_db_connections(&workspace.workspace_id)
+            .expect("list db connections");
+        assert_eq!(db_connections.len(), 0);
     }
 
     #[test]

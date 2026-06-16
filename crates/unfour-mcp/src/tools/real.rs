@@ -192,6 +192,7 @@ fn is_sensitive_key(key: &str) -> bool {
             | "proxyauthorization"
             | "xapikey"
             | "xauthtoken"
+            | "credentialref"
     )
 }
 

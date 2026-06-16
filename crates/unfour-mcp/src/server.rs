@@ -89,7 +89,7 @@ impl McpServer {
                 "title": "Unfour MCP",
                 "version": env!("CARGO_PKG_VERSION"),
             },
-            "instructions": "Read-only Unfour workspace and connection metadata is available through the command bus. API requests, database queries, and SSH execution are not available.",
+            "instructions": "Read-only Unfour workspace metadata, database schema browsing, and read-only SQL queries are available through the command bus. Database mutations and SSH execution are not available.",
         }))
     }
 
@@ -152,7 +152,10 @@ mod tests {
         ApiCollectionListResult, ApiRequestDetailResult, ApiRequestListResult,
         ConnectionListResult, CurrentWorkspaceResult, ReadCommand, ReadCommandResult,
     };
-    use unfour_core::models::{ApiResponse, ApiSavedRequest};
+    use unfour_core::models::{
+        ApiResponse, ApiSavedRequest, DatabaseConnection, DatabaseQueryInput, DatabaseQueryResult,
+        DatabaseQuerySafety, DatabaseSchema,
+    };
 
     use super::{run_stdio, McpServer, SUPPORTED_PROTOCOL_VERSION};
     use crate::command_bus_adapter::{CommandBusAdapter, CommandBusAdapterError};
@@ -233,6 +236,42 @@ mod tests {
                 headers: vec![],
                 body: "{}".to_string(),
                 duration_ms: 10,
+            })
+        }
+
+        fn list_db_connections(
+            &self,
+            _workspace_id: &str,
+        ) -> Result<Vec<DatabaseConnection>, CommandBusAdapterError> {
+            Ok(vec![])
+        }
+
+        fn get_db_schema(
+            &self,
+            _workspace_id: &str,
+            _connection_id: &str,
+        ) -> Result<DatabaseSchema, CommandBusAdapterError> {
+            Ok(DatabaseSchema {
+                connection_id: String::new(),
+                tables: vec![],
+            })
+        }
+
+        fn execute_db_query(
+            &self,
+            _input: DatabaseQueryInput,
+        ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
+            Ok(DatabaseQueryResult {
+                columns: vec![],
+                rows: vec![],
+                affected_rows: 0,
+                duration_ms: 0,
+                safety: DatabaseQuerySafety {
+                    classification: "read".to_string(),
+                    requires_confirmation: false,
+                    confirmed: true,
+                    message: None,
+                },
             })
         }
     }
@@ -322,7 +361,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(responses.len(), 3);
-        assert_eq!(responses[1]["result"]["tools"].as_array().unwrap().len(), 9);
+        assert_eq!(responses[1]["result"]["tools"].as_array().unwrap().len(), 13);
         assert_eq!(
             responses[2]["result"]["structuredContent"],
             json!({

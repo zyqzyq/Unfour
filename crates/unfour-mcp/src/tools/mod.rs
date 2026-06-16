@@ -1,4 +1,5 @@
 mod api;
+mod database;
 mod mock;
 mod real;
 
@@ -61,6 +62,7 @@ impl ToolRegistry {
         let mut tools = mock::registered_tools();
         tools.extend(real::registered_tools());
         tools.extend(api::registered_tools());
+        tools.extend(database::registered_tools());
 
         Self {
             tools,
@@ -135,7 +137,10 @@ mod tests {
         ConnectionListResult, CurrentWorkspaceResult, ReadCommand, ReadCommandResult,
         SafeConnection, SafeConnectionSummary,
     };
-    use unfour_core::models::{ApiResponse, ApiSavedRequest, KeyValue};
+    use unfour_core::models::{
+        ApiResponse, ApiSavedRequest, DatabaseConnection, DatabaseQueryInput, DatabaseQueryResult,
+        DatabaseQuerySafety, DatabaseSchema, KeyValue,
+    };
 
     use crate::command_bus_adapter::{CommandBusAdapter, CommandBusAdapterError};
 
@@ -233,6 +238,42 @@ mod tests {
                 duration_ms: 42,
             })
         }
+
+        fn list_db_connections(
+            &self,
+            _workspace_id: &str,
+        ) -> Result<Vec<DatabaseConnection>, CommandBusAdapterError> {
+            Ok(vec![])
+        }
+
+        fn get_db_schema(
+            &self,
+            _workspace_id: &str,
+            _connection_id: &str,
+        ) -> Result<DatabaseSchema, CommandBusAdapterError> {
+            Ok(DatabaseSchema {
+                connection_id: String::new(),
+                tables: vec![],
+            })
+        }
+
+        fn execute_db_query(
+            &self,
+            _input: DatabaseQueryInput,
+        ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
+            Ok(DatabaseQueryResult {
+                columns: vec![],
+                rows: vec![],
+                affected_rows: 0,
+                duration_ms: 0,
+                safety: DatabaseQuerySafety {
+                    classification: "read".to_string(),
+                    requires_confirmation: false,
+                    confirmed: true,
+                    message: None,
+                },
+            })
+        }
     }
 
     struct FailingCommandBus;
@@ -256,6 +297,37 @@ mod tests {
             Err(CommandBusAdapterError {
                 code: "COMMAND_BUS_API_SEND_FAILED",
                 message: "The command-bus API send operation failed.",
+            })
+        }
+
+        fn list_db_connections(
+            &self,
+            _workspace_id: &str,
+        ) -> Result<Vec<DatabaseConnection>, CommandBusAdapterError> {
+            Err(CommandBusAdapterError {
+                code: "COMMAND_BUS_DB_LIST_FAILED",
+                message: "The command-bus database list operation failed.",
+            })
+        }
+
+        fn get_db_schema(
+            &self,
+            _workspace_id: &str,
+            _connection_id: &str,
+        ) -> Result<DatabaseSchema, CommandBusAdapterError> {
+            Err(CommandBusAdapterError {
+                code: "COMMAND_BUS_DB_SCHEMA_FAILED",
+                message: "The command-bus database schema operation failed.",
+            })
+        }
+
+        fn execute_db_query(
+            &self,
+            _input: DatabaseQueryInput,
+        ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
+            Err(CommandBusAdapterError {
+                code: "COMMAND_BUS_DB_QUERY_FAILED",
+                message: "The command-bus database query operation failed.",
             })
         }
     }
@@ -293,7 +365,7 @@ mod tests {
     fn real_tool_schemas_are_available_separately_from_mocks() {
         let definitions = ToolRegistry::with_command_bus(Arc::new(StubCommandBus)).definitions();
 
-        assert_eq!(definitions.len(), 9);
+        assert_eq!(definitions.len(), 13);
         assert!(definitions
             .iter()
             .any(|definition| definition.name == "unfour.workspace.current"));
@@ -312,6 +384,18 @@ mod tests {
         assert!(definitions
             .iter()
             .any(|definition| definition.name == "unfour.api.send_request"));
+        assert!(definitions
+            .iter()
+            .any(|definition| definition.name == "unfour.db.list_connections"));
+        assert!(definitions
+            .iter()
+            .any(|definition| definition.name == "unfour.db.list_tables"));
+        assert!(definitions
+            .iter()
+            .any(|definition| definition.name == "unfour.db.describe_table"));
+        assert!(definitions
+            .iter()
+            .any(|definition| definition.name == "unfour.db.query_readonly"));
         assert_eq!(
             definitions
                 .iter()

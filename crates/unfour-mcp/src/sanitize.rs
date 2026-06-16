@@ -28,6 +28,8 @@ pub fn is_sensitive_key(name: &str) -> bool {
             | "xauthtoken"
             | "privatekey"
             | "connectionstring"
+            | "databaseurl"
+            | "credentialref"
     )
 }
 
@@ -151,6 +153,10 @@ mod tests {
         assert!(is_sensitive_key("connectionString"));
         assert!(is_sensitive_key("client_secret"));
         assert!(is_sensitive_key("refresh_token"));
+        assert!(is_sensitive_key("database_url"));
+        assert!(is_sensitive_key("databaseUrl"));
+        assert!(is_sensitive_key("credential_ref"));
+        assert!(is_sensitive_key("credentialRef"));
     }
 
     #[test]
