@@ -1,3 +1,4 @@
+mod api;
 mod mock;
 mod real;
 
@@ -59,6 +60,7 @@ impl ToolRegistry {
     pub fn with_command_bus(command_bus: Arc<dyn CommandBusAdapter>) -> Self {
         let mut tools = mock::registered_tools();
         tools.extend(real::registered_tools());
+        tools.extend(api::registered_tools());
 
         Self {
             tools,
@@ -129,9 +131,11 @@ mod tests {
 
     use serde_json::json;
     use unfour_command_bus::{
+        ApiCollectionListResult, ApiRequestDetailResult, ApiRequestListResult,
         ConnectionListResult, CurrentWorkspaceResult, ReadCommand, ReadCommandResult,
         SafeConnection, SafeConnectionSummary,
     };
+    use unfour_core::models::{ApiResponse, ApiSavedRequest, KeyValue};
 
     use crate::command_bus_adapter::{CommandBusAdapter, CommandBusAdapterError};
 
@@ -171,6 +175,62 @@ mod tests {
                         source: "command-bus".to_string(),
                     })
                 }
+                ReadCommand::ApiListCollections { .. } => {
+                    ReadCommandResult::ApiCollections(ApiCollectionListResult {
+                        collections: vec![],
+                        count: 0,
+                        source: "command-bus".to_string(),
+                    })
+                }
+                ReadCommand::ApiListRequests { .. } => {
+                    ReadCommandResult::ApiRequests(ApiRequestListResult {
+                        requests: vec![],
+                        count: 0,
+                        source: "command-bus".to_string(),
+                    })
+                }
+                ReadCommand::ApiGetRequest { request_id } => {
+                    ReadCommandResult::ApiRequest(ApiRequestDetailResult {
+                        request: ApiSavedRequest {
+                            id: request_id,
+                            workspace_id: "workspace-1".to_string(),
+                            name: "Test Request".to_string(),
+                            folder_path: None,
+                            method: "GET".to_string(),
+                            url: "https://api.example.com/test".to_string(),
+                            headers_json: "[]".to_string(),
+                            query_json: "[]".to_string(),
+                            body: None,
+                            body_kind: "json".to_string(),
+                            created_at: String::new(),
+                            updated_at: String::new(),
+                            deleted_at: None,
+                            revision: 1,
+                            sync_status: "local".to_string(),
+                            remote_id: None,
+                        },
+                        source: "command-bus".to_string(),
+                    })
+                }
+            })
+        }
+
+        fn execute_saved_api_request(
+            &self,
+            _request_id: &str,
+            _timeout_ms: Option<u64>,
+        ) -> Result<ApiResponse, CommandBusAdapterError> {
+            Ok(ApiResponse {
+                history_id: "history-1".to_string(),
+                status: 200,
+                status_text: "OK".to_string(),
+                headers: vec![KeyValue {
+                    key: "content-type".to_string(),
+                    value: "application/json".to_string(),
+                    enabled: true,
+                }],
+                body: "{\"ok\":true}".to_string(),
+                duration_ms: 42,
             })
         }
     }
@@ -185,6 +245,17 @@ mod tests {
             Err(CommandBusAdapterError {
                 code: "COMMAND_BUS_READ_FAILED",
                 message: "The command-bus read operation failed.",
+            })
+        }
+
+        fn execute_saved_api_request(
+            &self,
+            _request_id: &str,
+            _timeout_ms: Option<u64>,
+        ) -> Result<ApiResponse, CommandBusAdapterError> {
+            Err(CommandBusAdapterError {
+                code: "COMMAND_BUS_API_SEND_FAILED",
+                message: "The command-bus API send operation failed.",
             })
         }
     }
@@ -222,13 +293,25 @@ mod tests {
     fn real_tool_schemas_are_available_separately_from_mocks() {
         let definitions = ToolRegistry::with_command_bus(Arc::new(StubCommandBus)).definitions();
 
-        assert_eq!(definitions.len(), 5);
+        assert_eq!(definitions.len(), 9);
         assert!(definitions
             .iter()
             .any(|definition| definition.name == "unfour.workspace.current"));
         assert!(definitions
             .iter()
             .any(|definition| definition.name == "unfour.connection.list"));
+        assert!(definitions
+            .iter()
+            .any(|definition| definition.name == "unfour.api.list_collections"));
+        assert!(definitions
+            .iter()
+            .any(|definition| definition.name == "unfour.api.list_requests"));
+        assert!(definitions
+            .iter()
+            .any(|definition| definition.name == "unfour.api.get_request"));
+        assert!(definitions
+            .iter()
+            .any(|definition| definition.name == "unfour.api.send_request"));
         assert_eq!(
             definitions
                 .iter()

@@ -1,6 +1,7 @@
 mod command_bus_adapter;
 mod protocol;
 mod response;
+mod sanitize;
 mod server;
 mod tools;
 

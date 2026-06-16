@@ -293,7 +293,7 @@ impl ApiClientService {
         self.list_saved_requests(workspace_id).await
     }
 
-    async fn get_saved_request(&self, id: &str) -> AppResult<ApiSavedRequest> {
+    pub async fn get_saved_request(&self, id: &str) -> AppResult<ApiSavedRequest> {
         let saved = sqlx::query_as::<_, ApiSavedRequest>(
             r#"
             SELECT

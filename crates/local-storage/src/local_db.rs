@@ -26,6 +26,10 @@ impl LocalDb {
         Self::connect_existing_read_only_path(app_data_path(identifier)?.join(DB_FILENAME)).await
     }
 
+    pub async fn connect_existing_app_data(identifier: &str) -> AppResult<Self> {
+        Self::connect_existing_path(app_data_path(identifier)?.join(DB_FILENAME)).await
+    }
+
     pub async fn connect_path(path: impl AsRef<Path>) -> AppResult<Self> {
         let db_path = path.as_ref();
         if let Some(parent) = db_path.parent() {
@@ -49,6 +53,20 @@ impl LocalDb {
             .filename(path.as_ref())
             .create_if_missing(false)
             .read_only(true)
+            .foreign_keys(true);
+
+        let pool = SqlitePoolOptions::new()
+            .max_connections(8)
+            .connect_with(options)
+            .await?;
+
+        Ok(Self { pool })
+    }
+
+    pub async fn connect_existing_path(path: impl AsRef<Path>) -> AppResult<Self> {
+        let options = SqliteConnectOptions::new()
+            .filename(path.as_ref())
+            .create_if_missing(false)
             .foreign_keys(true);
 
         let pool = SqlitePoolOptions::new()

@@ -3,12 +3,19 @@ use std::sync::Arc;
 
 use tokio::runtime::{Builder, Runtime};
 use unfour_command_bus::{CommandBus, ReadCommand, ReadCommandResult};
+use unfour_core::models::ApiResponse;
 
 pub trait CommandBusAdapter: Send + Sync {
     fn execute_read(
         &self,
         command: ReadCommand,
     ) -> Result<ReadCommandResult, CommandBusAdapterError>;
+
+    fn execute_saved_api_request(
+        &self,
+        request_id: &str,
+        timeout_ms: Option<u64>,
+    ) -> Result<ApiResponse, CommandBusAdapterError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,6 +32,10 @@ pub struct LocalCommandBusAdapter {
 impl LocalCommandBusAdapter {
     pub fn app_data() -> Result<Arc<dyn CommandBusAdapter>, CommandBusAdapterError> {
         Self::from_command_bus_future(CommandBus::from_existing_app_data_read_only())
+    }
+
+    pub fn send_app_data() -> Result<Arc<dyn CommandBusAdapter>, CommandBusAdapterError> {
+        Self::from_command_bus_future(CommandBus::from_existing_app_data())
     }
 
     pub fn from_app_data_dir(
@@ -64,6 +75,19 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
             .map_err(|_| CommandBusAdapterError {
                 code: "COMMAND_BUS_READ_FAILED",
                 message: "The command-bus read operation failed.",
+            })
+    }
+
+    fn execute_saved_api_request(
+        &self,
+        request_id: &str,
+        timeout_ms: Option<u64>,
+    ) -> Result<ApiResponse, CommandBusAdapterError> {
+        self.runtime
+            .block_on(self.bus.execute_saved_api_request(request_id, timeout_ms))
+            .map_err(|_| CommandBusAdapterError {
+                code: "COMMAND_BUS_API_SEND_FAILED",
+                message: "The command-bus API send operation failed.",
             })
     }
 }

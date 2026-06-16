@@ -35,12 +35,21 @@ pub enum ConnectionType {
 pub enum ReadCommand {
     CurrentWorkspace,
     ListConnections { connection_type: ConnectionType },
+    ApiListCollections { workspace_id: Option<String> },
+    ApiListRequests {
+        workspace_id: Option<String>,
+        collection_id: Option<String>,
+    },
+    ApiGetRequest { request_id: String },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum ReadCommandResult {
     CurrentWorkspace(CurrentWorkspaceResult),
     Connections(ConnectionListResult),
+    ApiCollections(ApiCollectionListResult),
+    ApiRequests(ApiRequestListResult),
+    ApiRequest(ApiRequestDetailResult),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -83,6 +92,51 @@ pub struct SafeConnectionSummary {
     pub api_base_url: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiCollectionListResult {
+    pub collections: Vec<ApiCollectionSummary>,
+    pub count: usize,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiCollectionSummary {
+    pub id: String,
+    pub name: String,
+    pub request_count: usize,
+    pub workspace_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiRequestListResult {
+    pub requests: Vec<ApiRequestSummary>,
+    pub count: usize,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiRequestSummary {
+    pub id: String,
+    pub name: String,
+    pub method: String,
+    pub url_preview: String,
+    pub collection_id: String,
+    pub workspace_id: String,
+    pub has_body: bool,
+    pub header_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiRequestDetailResult {
+    pub request: ApiSavedRequest,
+    pub source: String,
+}
+
 #[derive(Clone)]
 pub struct CommandBus {
     api_client: ApiClientService,
@@ -113,6 +167,11 @@ impl CommandBus {
 
     pub async fn from_existing_app_data_read_only() -> AppResult<Self> {
         let db = LocalDb::connect_existing_app_data_read_only(DEFAULT_APP_IDENTIFIER).await?;
+        Self::from_existing_db_read_only(db).await
+    }
+
+    pub async fn from_existing_app_data() -> AppResult<Self> {
+        let db = LocalDb::connect_existing_app_data(DEFAULT_APP_IDENTIFIER).await?;
         Self::from_existing_db_read_only(db).await
     }
 
@@ -274,6 +333,103 @@ impl CommandBus {
                     connections,
                     source: "command-bus".to_string(),
                 }))
+            }
+            ReadCommand::ApiListCollections { workspace_id } => {
+                let state = self.read_workspace_state().await?;
+                let ws_id = workspace_id.unwrap_or(state.active_workspace_id);
+                let requests = self.api_client.list_saved_requests(ws_id.clone()).await?;
+
+                let mut folder_counts: std::collections::BTreeMap<String, usize> =
+                    std::collections::BTreeMap::new();
+                for request in &requests {
+                    let folder = request.folder_path.clone().unwrap_or_default();
+                    *folder_counts.entry(folder).or_insert(0) += 1;
+                }
+
+                let collections = folder_counts
+                    .into_iter()
+                    .map(|(folder, count)| {
+                        let name = if folder.is_empty() {
+                            "General".to_string()
+                        } else {
+                            folder.clone()
+                        };
+                        let id = if folder.is_empty() {
+                            String::new()
+                        } else {
+                            folder.clone()
+                        };
+                        ApiCollectionSummary {
+                            id,
+                            name,
+                            request_count: count,
+                            workspace_id: ws_id.clone(),
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                Ok(ReadCommandResult::ApiCollections(
+                    ApiCollectionListResult {
+                        count: collections.len(),
+                        collections,
+                        source: "command-bus".to_string(),
+                    },
+                ))
+            }
+            ReadCommand::ApiListRequests {
+                workspace_id,
+                collection_id,
+            } => {
+                let state = self.read_workspace_state().await?;
+                let ws_id = workspace_id.unwrap_or(state.active_workspace_id);
+                let requests = self.api_client.list_saved_requests(ws_id.clone()).await?;
+
+                let filtered: Vec<_> = if let Some(ref cid) = collection_id {
+                    requests
+                        .into_iter()
+                        .filter(|r| r.folder_path.as_deref().unwrap_or("") == cid.as_str())
+                        .collect()
+                } else {
+                    requests
+                };
+
+                let summaries = filtered
+                    .into_iter()
+                    .map(|r| {
+                        let header_count = serde_json::from_str::<Vec<serde_json::Value>>(
+                            &r.headers_json,
+                        )
+                        .map(|v| v.len())
+                        .unwrap_or(0);
+                        let has_body = r.body.as_ref().is_some_and(|b| !b.is_empty());
+                        let url_preview = truncate_url_preview(&r.url);
+                        ApiRequestSummary {
+                            id: r.id,
+                            name: r.name,
+                            method: r.method,
+                            url_preview,
+                            collection_id: r.folder_path.unwrap_or_default(),
+                            workspace_id: r.workspace_id,
+                            has_body,
+                            header_count,
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                Ok(ReadCommandResult::ApiRequests(ApiRequestListResult {
+                    count: summaries.len(),
+                    requests: summaries,
+                    source: "command-bus".to_string(),
+                }))
+            }
+            ReadCommand::ApiGetRequest { request_id } => {
+                let request = self.api_client.get_saved_request(&request_id).await?;
+                Ok(ReadCommandResult::ApiRequest(
+                    ApiRequestDetailResult {
+                        request,
+                        source: "command-bus".to_string(),
+                    },
+                ))
             }
         }
     }
@@ -464,6 +620,45 @@ impl CommandBus {
             )
             .await?;
         Ok(requests)
+    }
+
+    pub async fn execute_saved_api_request(
+        &self,
+        request_id: &str,
+        timeout_ms_override: Option<u64>,
+    ) -> AppResult<ApiResponse> {
+        let state = self.read_workspace_state().await?;
+        let workspace_id = state.active_workspace_id;
+        let saved = self.api_client.get_saved_request(request_id).await?;
+
+        if saved.workspace_id != workspace_id {
+            return Err(unfour_core::AppError::NotFound(
+                "api request".to_string(),
+            ));
+        }
+
+        let headers: Vec<KeyValue> =
+            serde_json::from_str(&saved.headers_json).unwrap_or_default();
+        let query: Vec<KeyValue> =
+            serde_json::from_str(&saved.query_json).unwrap_or_default();
+        let timeout_ms = timeout_ms_override
+            .map(|t| t.min(60_000));
+
+        let input = ApiRequestInput {
+            workspace_id: saved.workspace_id.clone(),
+            name: Some(saved.name.clone()),
+            folder_path: saved.folder_path.clone(),
+            method: saved.method.clone(),
+            url: saved.url.clone(),
+            headers,
+            query,
+            body: saved.body.clone(),
+            body_kind: saved.body_kind.clone(),
+            timeout_ms,
+        };
+
+        let environment = self.workspace.environment(workspace_id).await?;
+        self.api_client.send(input, &environment.variables).await
     }
 
     pub async fn create_credential(
@@ -817,6 +1012,17 @@ impl CommandBus {
             "database": self.database.capability_summary(),
             "secrets": self.secret_store.capability_summary()
         })
+    }
+}
+
+fn truncate_url_preview(url: &str) -> String {
+    const MAX_LEN: usize = 200;
+    if url.len() <= MAX_LEN {
+        url.to_string()
+    } else {
+        let mut truncated: String = url.chars().take(MAX_LEN).collect();
+        truncated.push_str("...");
+        truncated
     }
 }
 
