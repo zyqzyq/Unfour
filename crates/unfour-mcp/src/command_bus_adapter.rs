@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::Arc;
 
 use tokio::runtime::{Builder, Runtime};
@@ -22,13 +23,31 @@ pub struct LocalCommandBusAdapter {
 }
 
 impl LocalCommandBusAdapter {
+    pub fn app_data() -> Result<Arc<dyn CommandBusAdapter>, CommandBusAdapterError> {
+        Self::from_command_bus_future(CommandBus::from_existing_app_data_read_only())
+    }
+
+    pub fn from_app_data_dir(
+        app_data_dir: impl AsRef<Path>,
+    ) -> Result<Arc<dyn CommandBusAdapter>, CommandBusAdapterError> {
+        Self::from_command_bus_future(CommandBus::from_existing_app_data_dir_read_only(
+            app_data_dir,
+        ))
+    }
+
     pub fn ephemeral() -> Result<Arc<dyn CommandBusAdapter>, CommandBusAdapterError> {
+        Self::from_command_bus_future(CommandBus::ephemeral())
+    }
+
+    fn from_command_bus_future<E>(
+        command_bus: impl std::future::Future<Output = Result<CommandBus, E>>,
+    ) -> Result<Arc<dyn CommandBusAdapter>, CommandBusAdapterError> {
         let runtime = Builder::new_multi_thread()
             .enable_all()
             .build()
             .map_err(|_| CommandBusAdapterError::initialization_failed())?;
         let bus = runtime
-            .block_on(CommandBus::ephemeral())
+            .block_on(command_bus)
             .map_err(|_| CommandBusAdapterError::initialization_failed())?;
 
         Ok(Arc::new(Self { runtime, bus }))
@@ -63,6 +82,9 @@ mod tests {
     use unfour_command_bus::{ConnectionType, ReadCommand, ReadCommandResult};
 
     use super::LocalCommandBusAdapter;
+    use unfour_command_bus::CommandBus;
+    use unfour_core::models::SshConnectionInput;
+    use unfour_local_storage::LocalDb;
 
     #[test]
     fn ephemeral_adapter_executes_real_command_bus_reads() {
@@ -87,5 +109,65 @@ mod tests {
         };
         assert_eq!(connections.count, 0);
         assert_eq!(connections.source, "command-bus");
+    }
+
+    #[test]
+    fn app_data_adapter_reads_persisted_connection_metadata() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("build test runtime");
+        let app_data_dir = std::env::temp_dir().join(format!(
+            "unfour-mcp-app-data-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+
+        runtime.block_on(async {
+            let db_path = app_data_dir.join("unfour-workspace.sqlite");
+            let db = LocalDb::connect_path(&db_path).await.expect("create db");
+            db.migrate().await.expect("migrate db");
+            let bus = CommandBus::from_db(db).await.expect("create bus");
+            let state = bus.list_workspaces().await.expect("list workspaces");
+            bus.save_ssh_connection(SshConnectionInput {
+                id: None,
+                workspace_id: state.active_workspace_id,
+                name: "Manual SSH".to_string(),
+                host: "ssh.example.test".to_string(),
+                port: Some(22),
+                username: "developer".to_string(),
+                auth_kind: "password".to_string(),
+                key_path: None,
+                credential_ref: Some("ssh-secret".to_string()),
+            })
+            .await
+            .expect("save ssh connection");
+        });
+
+        let adapter =
+            LocalCommandBusAdapter::from_app_data_dir(&app_data_dir).expect("open app data");
+        let result = adapter
+            .execute_read(ReadCommand::ListConnections {
+                connection_type: ConnectionType::Ssh,
+            })
+            .expect("list ssh connections");
+        let ReadCommandResult::Connections(result) = result else {
+            panic!("expected connections");
+        };
+
+        assert_eq!(result.count, 1);
+        assert_eq!(result.connections[0].name, "Manual SSH");
+        assert_eq!(
+            result.connections[0].safe_summary.host.as_deref(),
+            Some("ssh.example.test")
+        );
+        let json = serde_json::to_string(&result).expect("serialize result");
+        assert!(!json.contains("developer"));
+        assert!(!json.contains("ssh-secret"));
+
+        let _ = std::fs::remove_dir_all(app_data_dir);
     }
 }

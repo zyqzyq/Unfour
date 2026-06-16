@@ -1,7 +1,11 @@
+use std::path::{Path, PathBuf};
+
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Manager};
-use unfour_core::AppResult;
+use unfour_core::{AppError, AppResult};
+
+const DB_FILENAME: &str = "unfour-workspace.sqlite";
 
 #[derive(Clone)]
 pub struct LocalDb {
@@ -11,12 +15,40 @@ pub struct LocalDb {
 impl LocalDb {
     pub async fn connect(app: &AppHandle) -> AppResult<Self> {
         let app_data_dir = app.path().app_data_dir()?;
-        std::fs::create_dir_all(&app_data_dir)?;
+        Self::connect_path(app_data_dir.join(DB_FILENAME)).await
+    }
 
-        let db_path = app_data_dir.join("unfour-workspace.sqlite");
+    pub async fn connect_app_data(identifier: &str) -> AppResult<Self> {
+        Self::connect_path(app_data_path(identifier)?).await
+    }
+
+    pub async fn connect_existing_app_data_read_only(identifier: &str) -> AppResult<Self> {
+        Self::connect_existing_read_only_path(app_data_path(identifier)?.join(DB_FILENAME)).await
+    }
+
+    pub async fn connect_path(path: impl AsRef<Path>) -> AppResult<Self> {
+        let db_path = path.as_ref();
+        if let Some(parent) = db_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         let options = SqliteConnectOptions::new()
             .filename(db_path)
             .create_if_missing(true)
+            .foreign_keys(true);
+
+        let pool = SqlitePoolOptions::new()
+            .max_connections(8)
+            .connect_with(options)
+            .await?;
+
+        Ok(Self { pool })
+    }
+
+    pub async fn connect_existing_read_only_path(path: impl AsRef<Path>) -> AppResult<Self> {
+        let options = SqliteConnectOptions::new()
+            .filename(path.as_ref())
+            .create_if_missing(false)
+            .read_only(true)
             .foreign_keys(true);
 
         let pool = SqlitePoolOptions::new()
@@ -58,6 +90,12 @@ impl LocalDb {
 
         Ok(())
     }
+}
+
+fn app_data_path(identifier: &str) -> AppResult<PathBuf> {
+    dirs::data_dir()
+        .map(|dir| dir.join(identifier))
+        .ok_or_else(|| AppError::Config("app data directory is not available".to_string()))
 }
 
 const MIGRATIONS: &[&str] = &[
@@ -239,6 +277,18 @@ mod tests {
         LocalDb::from_pool(pool)
     }
 
+    fn temp_db_path() -> PathBuf {
+        let unique = format!(
+            "unfour-local-storage-test-{}-{}.sqlite",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        std::env::temp_dir().join(unique)
+    }
+
     #[tokio::test]
     async fn migrate_creates_all_tables() {
         let db = test_db().await;
@@ -286,5 +336,25 @@ mod tests {
             columns.iter().any(|(name,)| name == "folder_path"),
             "api_requests should have folder_path column"
         );
+    }
+
+    #[tokio::test]
+    async fn connect_existing_read_only_path_reads_existing_database_without_creating() {
+        let path = temp_db_path();
+        let db = LocalDb::connect_path(&path).await.expect("create db");
+        db.migrate().await.expect("migrate db");
+        drop(db);
+
+        let read_only = LocalDb::connect_existing_read_only_path(&path)
+            .await
+            .expect("open read-only db");
+        let tables: Vec<(String,)> =
+            sqlx::query_as("SELECT name FROM sqlite_master WHERE type='table'")
+                .fetch_all(read_only.pool())
+                .await
+                .expect("list tables");
+
+        assert!(tables.iter().any(|(name,)| name == "workspaces"));
+        let _ = std::fs::remove_file(path);
     }
 }

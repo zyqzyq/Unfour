@@ -72,6 +72,16 @@ impl WorkspaceService {
         })
     }
 
+    pub async fn state_read_only(&self) -> AppResult<WorkspaceState> {
+        let workspaces = self.list().await?;
+        let active_workspace_id = self.active_workspace_id_read_only(&workspaces).await?;
+
+        Ok(WorkspaceState {
+            active_workspace_id,
+            workspaces,
+        })
+    }
+
     pub async fn list(&self) -> AppResult<Vec<Workspace>> {
         let items = sqlx::query_as::<_, Workspace>(
             r#"
@@ -337,6 +347,20 @@ impl WorkspaceService {
         self.write_setting("active_workspace_id", &fallback.id)
             .await?;
         Ok(fallback.id.clone())
+    }
+
+    async fn active_workspace_id_read_only(&self, workspaces: &[Workspace]) -> AppResult<String> {
+        let stored = self.read_setting("active_workspace_id").await?;
+        if let Some(id) = stored {
+            if workspaces.iter().any(|workspace| workspace.id == id) {
+                return Ok(id);
+            }
+        }
+
+        workspaces
+            .first()
+            .map(|workspace| workspace.id.clone())
+            .ok_or_else(|| AppError::NotFound("workspace".to_string()))
     }
 
     async fn read_setting(&self, key: &str) -> AppResult<Option<String>> {
@@ -778,5 +802,28 @@ mod tests {
             .await;
 
         assert!(matches!(result, Err(AppError::Validation(_))));
+    }
+
+    #[tokio::test]
+    async fn state_read_only_does_not_write_fallback_active_workspace() {
+        let service = service().await;
+        sqlx::query("DELETE FROM app_settings WHERE key = 'active_workspace_id'")
+            .execute(service.db.pool())
+            .await
+            .expect("remove active workspace setting");
+
+        let state = service
+            .state_read_only()
+            .await
+            .expect("read-only state should work");
+
+        assert!(!state.active_workspace_id.is_empty());
+        assert_eq!(
+            service
+                .read_setting("active_workspace_id")
+                .await
+                .expect("read active workspace setting"),
+            None
+        );
     }
 }

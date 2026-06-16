@@ -123,7 +123,7 @@ where
     R: BufRead,
     W: Write,
 {
-    let command_bus = LocalCommandBusAdapter::ephemeral()
+    let command_bus = LocalCommandBusAdapter::app_data()
         .map_err(|error| io::Error::other(format!("{}: {}", error.code, error.message)))?;
     let server = McpServer::new(command_bus);
 

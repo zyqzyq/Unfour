@@ -6266,6 +6266,7 @@ name = "unfour-local-storage"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "dirs",
  "serde_json",
  "sqlx",
  "tauri",
@@ -6282,6 +6283,8 @@ dependencies = [
  "serde_json",
  "tokio",
  "unfour-command-bus",
+ "unfour-core",
+ "unfour-local-storage",
 ]
 
 [[package]]

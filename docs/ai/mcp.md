@@ -24,12 +24,16 @@ reserved for MCP messages; process errors are written to standard error.
 | `unfour.workspace.current` | `{}` | Returns the active workspace from the command bus. |
 | `unfour.connection.list` | `{ "type": "all" }` | Returns safe database and SSH connection summaries. The optional type is `all`, `api`, `database`, or `ssh`; the default is `all`. |
 
-The standalone MCP process currently creates an isolated local command-bus
-instance with the normal default workspace. It does not yet attach to the
-running desktop process or its persisted SQLite database. Therefore the
-default `unfour.connection.list` result is empty. This phase validates the
-real command-bus call path without introducing a new database-path discovery
-contract.
+The standalone MCP process opens the same app data SQLite database used by
+the desktop app in read-only mode. On Windows this resolves to:
+
+```text
+%APPDATA%\com.unfour.workspace\unfour-workspace.sqlite
+```
+
+The MCP process does not run migrations, seed workspaces, or write fallback
+workspace settings. If the desktop database does not exist yet, start the
+desktop app once before starting the MCP server.
 
 The workspace model does not currently persist a workspace root, so
 `workspaceRoot` is `null`. There is no API connection business model yet, so
@@ -143,4 +147,4 @@ This phase does not:
 - implement workflows;
 - implement HTTP MCP transport;
 - read secrets or environment variables;
-- attach the MCP process to the running desktop application's state.
+- attach to the running desktop process over IPC.

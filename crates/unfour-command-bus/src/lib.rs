@@ -20,6 +20,8 @@ use unfour_secret_store::SecretStore;
 use unfour_ssh_engine::SshService;
 use unfour_workspace_engine::WorkspaceService;
 
+pub const DEFAULT_APP_IDENTIFIER: &str = "com.unfour.workspace";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ConnectionType {
@@ -109,6 +111,21 @@ impl CommandBus {
         Self::from_db(db).await
     }
 
+    pub async fn from_existing_app_data_read_only() -> AppResult<Self> {
+        let db = LocalDb::connect_existing_app_data_read_only(DEFAULT_APP_IDENTIFIER).await?;
+        Self::from_existing_db_read_only(db).await
+    }
+
+    pub async fn from_existing_app_data_dir_read_only(
+        app_data_dir: impl AsRef<std::path::Path>,
+    ) -> AppResult<Self> {
+        let db = LocalDb::connect_existing_read_only_path(
+            app_data_dir.as_ref().join("unfour-workspace.sqlite"),
+        )
+        .await?;
+        Self::from_existing_db_read_only(db).await
+    }
+
     pub async fn from_db_with_secret_store(
         db: LocalDb,
         secret_store: SecretStore,
@@ -134,6 +151,28 @@ impl CommandBus {
         Self::from_db_with_secret_store(db, secret_store).await
     }
 
+    pub async fn from_existing_db_read_only(db: LocalDb) -> AppResult<Self> {
+        Self::from_db_without_workspace_seed(db, SecretStore::in_memory("unfour-mcp-read-only"))
+            .await
+    }
+
+    async fn from_db_without_workspace_seed(
+        db: LocalDb,
+        secret_store: SecretStore,
+    ) -> AppResult<Self> {
+        let activity_log = ActivityLogService::new(db.clone());
+        let workspace = WorkspaceService::new(db.clone());
+
+        Ok(Self {
+            api_client: ApiClientService::new(db.clone()),
+            activity_log,
+            database: DatabaseService::new(db.clone()).with_secret_store(secret_store.clone()),
+            secret_store: secret_store.clone(),
+            ssh: SshService::new(db, secret_store),
+            workspace,
+        })
+    }
+
     #[cfg(feature = "ssh-native")]
     pub fn set_terminal_output_callback(
         &self,
@@ -156,10 +195,14 @@ impl CommandBus {
         self.workspace.state().await
     }
 
+    async fn read_workspace_state(&self) -> AppResult<WorkspaceState> {
+        self.workspace.state_read_only().await
+    }
+
     pub async fn execute_read(&self, command: ReadCommand) -> AppResult<ReadCommandResult> {
         match command {
             ReadCommand::CurrentWorkspace => {
-                let state = self.list_workspaces().await?;
+                let state = self.read_workspace_state().await?;
                 let workspace = state
                     .workspaces
                     .into_iter()
@@ -181,7 +224,7 @@ impl CommandBus {
                 ))
             }
             ReadCommand::ListConnections { connection_type } => {
-                let state = self.list_workspaces().await?;
+                let state = self.read_workspace_state().await?;
                 let workspace_id = state.active_workspace_id;
                 let mut connections = Vec::new();
 
