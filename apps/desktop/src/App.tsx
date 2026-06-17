@@ -1,6 +1,5 @@
 import {
   ApiDebuggerPage,
-  type ApiOpenIntent,
 } from "@unfour/api-client";
 import { AppShell } from "@unfour/app-shell";
 import { DatabasePage } from "@unfour/database";
@@ -33,11 +32,9 @@ function App() {
   const [rightInspectorCollapsed, setRightInspectorCollapsed] = useState(true);
   const [rightInspectorWidth, setRightInspectorWidth] = useState(300);
   const [sidebarWidth, setSidebarWidth] = useState(264);
-  const [apiOpenIntent, setApiOpenIntent] = useState<ApiOpenIntent | null>(null);
   const {
     activeTabId,
     activeWorkspaceId,
-    selectedApiRequestId,
     selectedDatabaseConnectionId,
     setActiveTab,
     setActiveWorkspace,
@@ -122,24 +119,14 @@ function App() {
             activeWorkspaceId={activeWorkspace?.id ?? ""}
             collapsed={sidebarCollapsed}
             databaseConnections={sidebarDatabaseConnectionsQuery.data ?? []}
-            onSelectApiRequest={(requestId) => {
-              setSelectedApiRequest(requestId);
-              setActiveTab("api-main");
-            }}
-            onOpenApiIntent={(intent) => {
-              setApiOpenIntent(intent);
-              setActiveTab("api-main");
-            }}
             onSelectDatabaseConnection={(connection) => {
               setSelectedDatabaseConnection(connection.id);
               setActiveTab("database-main");
             }}
             onToggle={toggleSidebar}
             onWidthChange={setSidebarWidth}
-            selectedApiRequestId={selectedApiRequestId}
             selectedDatabaseConnectionId={selectedDatabaseConnectionId}
             setActiveTab={setActiveTab}
-            setSelectedApiRequest={setSelectedApiRequest}
             width={sidebarWidth}
           />
         }
@@ -168,7 +155,7 @@ function App() {
                 <ApiDebuggerPage
                   key={activeWorkspace.id}
                   onActiveSavedRequestChange={setSelectedApiRequest}
-                  openIntent={apiOpenIntent}
+                  openIntent={null}
                   workspaceId={activeWorkspace.id}
                 />
               </div>

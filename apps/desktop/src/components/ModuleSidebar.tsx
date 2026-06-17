@@ -4,10 +4,6 @@ import {
   PanelLeftOpen,
 } from "lucide-react";
 import {
-  ApiCollectionTree,
-  type ApiOpenIntent,
-} from "@unfour/api-client";
-import {
   DatabaseConnectionTree,
 } from "@unfour/database";
 import {
@@ -32,15 +28,11 @@ export function ModuleSidebar({
   activeWorkspaceId,
   collapsed,
   databaseConnections,
-  onSelectApiRequest,
-  onOpenApiIntent,
   onSelectDatabaseConnection,
   onToggle,
   onWidthChange,
-  selectedApiRequestId,
   selectedDatabaseConnectionId,
   setActiveTab,
-  setSelectedApiRequest,
   width,
 }: {
   activeTab: WorkspaceTab;
@@ -48,15 +40,11 @@ export function ModuleSidebar({
   activeWorkspaceId: string;
   collapsed: boolean;
   databaseConnections: DatabaseConnection[];
-  onSelectApiRequest: (requestId: string) => void;
-  onOpenApiIntent: (intent: ApiOpenIntent) => void;
   onSelectDatabaseConnection: (connection: DatabaseConnection) => void;
   onToggle: () => void;
   onWidthChange: (width: number) => void;
-  selectedApiRequestId: string | null;
   selectedDatabaseConnectionId: string | null;
   setActiveTab: (tabId: string) => void;
-  setSelectedApiRequest: (requestId: string | null) => void;
   width: number;
 }) {
   return (
@@ -85,25 +73,7 @@ export function ModuleSidebar({
       resizable
       width={width}
     >
-      {activeTab.kind === "api" && (
-        <ApiCollectionTree
-          active={activeTabId === "api-main"}
-          collapsed={collapsed}
-          onOpenClient={() => {
-            setSelectedApiRequest(null);
-            onOpenApiIntent({ kind: "new", nonce: Date.now() });
-            setActiveTab("api-main");
-          }}
-          onOpenIntent={(intent) => {
-            if (intent.kind === "saved") {
-              onSelectApiRequest(intent.requestId);
-            }
-            onOpenApiIntent(intent);
-          }}
-          selectedId={selectedApiRequestId}
-          workspaceId={activeWorkspaceId}
-        />
-      )}
+      {activeTab.kind === "api" && null}
       {activeTab.kind === "ssh" && (
         <SshConnectionTree
           active={activeTabId === "ssh-main"}

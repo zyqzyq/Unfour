@@ -15,6 +15,8 @@ import { ApiRequestEditor } from "./components/ApiRequestEditor";
 import { ApiResponseViewer } from "./components/ApiResponseViewer";
 import { ApiSaveDialog } from "./components/ApiSaveDialog";
 import { ApiCloseRequestDialog } from "./components/ApiCloseRequestDialog";
+import { ApiClientSidebar } from "./components/ApiClientSidebar";
+import { ApiClientToolbar } from "./components/ApiClientToolbar";
 
 export function ApiDebuggerPage({
   onActiveSavedRequestChange,
@@ -175,6 +177,30 @@ export function ApiDebuggerPage({
     }
   }
 
+  function handleSidebarIntent(intent: ApiOpenIntent) {
+    if (intent.kind === "new") {
+      newRequest();
+      return;
+    }
+    if (intent.kind === "saved") {
+      if (intent.action === "send") {
+        pendingIntentAction.current = {
+          action: "send",
+          tabId: `saved:${intent.requestId}`,
+        };
+      }
+      openSaved(intent.requestId);
+      return;
+    }
+    if (intent.action === "save") {
+      pendingIntentAction.current = {
+        action: "save",
+        tabId: `history:${intent.historyId}`,
+      };
+    }
+    void openHistory(intent.historyId);
+  }
+
   function exportCollection() {
     const payload = {
       version: 1,
@@ -226,73 +252,87 @@ export function ApiDebuggerPage({
         ref={importInputRef}
         type="file"
       />
-      <ApiRequestTabs
-        activeId={state.activeTabId}
-        onClose={requestClose}
-        onNew={newRequest}
-        onSelect={selectTab}
-        tabs={state.tabs}
+      <ApiClientToolbar
+        onImport={() => importInputRef.current?.click()}
+        onNewRequest={newRequest}
       />
-      {!activeTab ? (
-        <EmptyState className="m-3 flex-1">
-          <div className="space-y-2">
-            <div>No request is open</div>
-            <Button onClick={newRequest} type="button">
-              New Request
-            </Button>
-          </div>
-        </EmptyState>
-      ) : (
-        <>
-          <ApiRequestBar
-            onDelete={() =>
-              activeTab.savedRequestId &&
-              deleteMutation.mutate(activeTab.savedRequestId)
-            }
-            onDuplicate={() =>
-              activeTab.savedRequestId &&
-              duplicateMutation.mutate(activeTab.savedRequestId)
-            }
-            onExport={exportCollection}
-            onImport={() => importInputRef.current?.click()}
-            onSave={() => requestSave(activeTab)}
-            onSend={() => sendTab(activeTab)}
-            onUpdate={(patch) => updateDraft(activeTab.id, patch)}
-            tab={activeTab}
+      <div className="flex min-h-0 flex-1">
+        <ApiClientSidebar
+          onNewRequest={newRequest}
+          onOpenIntent={handleSidebarIntent}
+          selectedId={activeTab?.savedRequestId ?? null}
+          workspaceId={workspaceId}
+        />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <ApiRequestTabs
+            activeId={state.activeTabId}
+            onClose={requestClose}
+            onNew={newRequest}
+            onSelect={selectTab}
+            tabs={state.tabs}
           />
-          {collectionStatus && (
-            <div className="shrink-0 border-b border-[var(--u-color-border)] px-2 py-1 text-[12px] text-[var(--u-color-text-muted)]">
-              {collectionStatus}
-            </div>
+          {!activeTab ? (
+            <EmptyState className="m-3 flex-1">
+              <div className="space-y-2">
+                <div>No request is open</div>
+                <Button onClick={newRequest} type="button">
+                  New Request
+                </Button>
+              </div>
+            </EmptyState>
+          ) : (
+            <>
+              <ApiRequestBar
+                onDelete={() =>
+                  activeTab.savedRequestId &&
+                  deleteMutation.mutate(activeTab.savedRequestId)
+                }
+                onDuplicate={() =>
+                  activeTab.savedRequestId &&
+                  duplicateMutation.mutate(activeTab.savedRequestId)
+                }
+                onExport={exportCollection}
+                onImport={() => importInputRef.current?.click()}
+                onSave={() => requestSave(activeTab)}
+                onSend={() => sendTab(activeTab)}
+                onUpdate={(patch) => updateDraft(activeTab.id, patch)}
+                tab={activeTab}
+              />
+              {collectionStatus && (
+                <div className="shrink-0 border-b border-[var(--u-color-border)] px-2 py-1 text-[12px] text-[var(--u-color-text-muted)]">
+                  {collectionStatus}
+                </div>
+              )}
+              <SplitPane
+                className="min-h-0 flex-1"
+                defaultRatio={52}
+                minPaneSize={180}
+                orientation="vertical"
+                resizable
+              >
+                <ApiRequestEditor
+                  body={activeTab.draft.body}
+                  envVariables={envDraft}
+                  headers={activeTab.draft.headers}
+                  onBodyChange={(body) => updateDraft(activeTab.id, { body })}
+                  onEnvVariablesChange={setEnvDraftOverride}
+                  onHeadersChange={(headers) => updateDraft(activeTab.id, { headers })}
+                  onQueryChange={(query) => updateDraft(activeTab.id, { query })}
+                  onSaveEnvironment={() => saveEnvironment(envDraft)}
+                  onTabChange={(tab) => setRequestTab(activeTab.id, tab)}
+                  query={activeTab.draft.query}
+                  savingEnvironment={saveEnvironmentMutation.isPending}
+                  tab={activeTab.requestTab}
+                />
+                <ApiResponseViewer
+                  onResponseTabChange={(tab) => setResponseTab(activeTab.id, tab)}
+                  tab={activeTab}
+                />
+              </SplitPane>
+            </>
           )}
-          <SplitPane
-            className="min-h-0 flex-1"
-            defaultRatio={52}
-            minPaneSize={180}
-            orientation="vertical"
-            resizable
-          >
-            <ApiRequestEditor
-              body={activeTab.draft.body}
-              envVariables={envDraft}
-              headers={activeTab.draft.headers}
-              onBodyChange={(body) => updateDraft(activeTab.id, { body })}
-              onEnvVariablesChange={setEnvDraftOverride}
-              onHeadersChange={(headers) => updateDraft(activeTab.id, { headers })}
-              onQueryChange={(query) => updateDraft(activeTab.id, { query })}
-              onSaveEnvironment={() => saveEnvironment(envDraft)}
-              onTabChange={(tab) => setRequestTab(activeTab.id, tab)}
-              query={activeTab.draft.query}
-              savingEnvironment={saveEnvironmentMutation.isPending}
-              tab={activeTab.requestTab}
-            />
-            <ApiResponseViewer
-              onResponseTabChange={(tab) => setResponseTab(activeTab.id, tab)}
-              tab={activeTab}
-            />
-          </SplitPane>
-        </>
-      )}
+        </div>
+      </div>
       {saveDialogTab && (
         <ApiSaveDialog
           defaultFolder={saveDialogTab.draft.folderPath}

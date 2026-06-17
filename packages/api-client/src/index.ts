@@ -1,4 +1,6 @@
 export { ApiDebuggerPage } from "./ApiDebuggerPage";
+export { ApiClientSidebar } from "./components/ApiClientSidebar";
+export { ApiClientToolbar } from "./components/ApiClientToolbar";
 export { ApiCollectionTree } from "./components/ApiCollectionTree";
 export { ApiRequestEditor } from "./components/ApiRequestEditor";
 export { ApiResponseViewer } from "./components/ApiResponseViewer";
