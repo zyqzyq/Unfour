@@ -13,10 +13,12 @@ import { WorkspaceDialogs } from "./WorkspaceDialogs";
 
 export function WorkspaceMenu({
   activeWorkspace,
+  className,
   onActivateWorkspace,
   workspaces,
 }: {
   activeWorkspace?: Workspace;
+  className?: string;
   onActivateWorkspace: (workspaceId: string) => void;
   workspaces: Workspace[];
 }) {
@@ -29,7 +31,10 @@ export function WorkspaceMenu({
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <Button
-            className="ml-2 max-w-[240px] justify-start gap-1 border-transparent bg-[var(--u-color-surface)] px-2 font-semibold shadow-none hover:bg-[var(--u-color-surface-hover)]"
+            className={cn(
+              "max-w-[240px] justify-start gap-1 border-transparent bg-[var(--u-color-surface)] px-2 font-semibold shadow-none hover:bg-[var(--u-color-surface-hover)]",
+              className,
+            )}
             size="sm"
             type="button"
             variant="outline"

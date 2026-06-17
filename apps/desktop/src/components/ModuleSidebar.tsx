@@ -1,5 +1,7 @@
 import {
   Database,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import {
   ApiCollectionTree,
@@ -16,6 +18,7 @@ import type {
   WorkspaceTab,
 } from "@unfour/command-client";
 import {
+  IconButton,
   Sidebar,
   SidebarHeader,
   SidebarRow,
@@ -33,10 +36,12 @@ export function ModuleSidebar({
   onOpenApiIntent,
   onSelectDatabaseConnection,
   onToggle,
+  onWidthChange,
   selectedApiRequestId,
   selectedDatabaseConnectionId,
   setActiveTab,
   setSelectedApiRequest,
+  width,
 }: {
   activeTab: WorkspaceTab;
   activeTabId: string;
@@ -47,25 +52,38 @@ export function ModuleSidebar({
   onOpenApiIntent: (intent: ApiOpenIntent) => void;
   onSelectDatabaseConnection: (connection: DatabaseConnection) => void;
   onToggle: () => void;
+  onWidthChange: (width: number) => void;
   selectedApiRequestId: string | null;
   selectedDatabaseConnectionId: string | null;
   setActiveTab: (tabId: string) => void;
   setSelectedApiRequest: (requestId: string | null) => void;
+  width: number;
 }) {
   return (
     <Sidebar
       collapsed={collapsed}
       className="bg-[var(--u-color-surface-subtle)]"
       header={
-        <SidebarHeader className="h-auto p-2">
+        <SidebarHeader className="h-auto flex-col items-stretch gap-2 p-2">
+          <div className="flex w-full justify-end">
+            <IconButton
+              className={collapsed ? "w-full" : "shrink-0"}
+              label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              onClick={onToggle}
+            >
+              {collapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
+            </IconButton>
+          </div>
           <ModuleSwitcher
             activeKind={activeTab.kind}
             collapsed={collapsed}
             onSelect={(tabId) => setActiveTab(tabId)}
-            onToggle={onToggle}
           />
         </SidebarHeader>
       }
+      onWidthChange={onWidthChange}
+      resizable
+      width={width}
     >
       {activeTab.kind === "api" && (
         <ApiCollectionTree

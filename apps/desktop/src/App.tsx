@@ -31,7 +31,8 @@ function App() {
   const [bottomPanelHeight, setBottomPanelHeight] = useState(220);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [rightInspectorCollapsed, setRightInspectorCollapsed] = useState(true);
-  const [rightInspectorWidth] = useState(300);
+  const [rightInspectorWidth, setRightInspectorWidth] = useState(300);
+  const [sidebarWidth, setSidebarWidth] = useState(264);
   const [apiOpenIntent, setApiOpenIntent] = useState<ApiOpenIntent | null>(null);
   const {
     activeTabId,
@@ -110,6 +111,7 @@ function App() {
             activeTab={activeTab}
             collapsed={rightInspectorCollapsed}
             onCollapse={() => setRightInspectorCollapsed(true)}
+            onWidthChange={setRightInspectorWidth}
             width={rightInspectorWidth}
           />
         }
@@ -133,10 +135,12 @@ function App() {
               setActiveTab("database-main");
             }}
             onToggle={toggleSidebar}
+            onWidthChange={setSidebarWidth}
             selectedApiRequestId={selectedApiRequestId}
             selectedDatabaseConnectionId={selectedDatabaseConnectionId}
             setActiveTab={setActiveTab}
             setSelectedApiRequest={setSelectedApiRequest}
+            width={sidebarWidth}
           />
         }
         statusBar={

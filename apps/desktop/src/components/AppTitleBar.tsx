@@ -47,20 +47,10 @@ export function AppTitleBar({
           <span className="mr-3 text-[13px] font-semibold text-[var(--u-color-text)]">
             Unfour
           </span>
-          <nav className="flex items-center gap-1 text-[12px] text-[var(--u-color-text-muted)]">
-            {["File", "Edit", "View", "Help"].map((item) => (
-              <button
-                className="rounded-[var(--u-radius-sm)] px-2 py-1 hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]"
-                key={item}
-                type="button"
-              >
-                {item}
-              </button>
-            ))}
-          </nav>
-          <div className="mx-2 h-5 w-px bg-[var(--u-color-border)]" />
+          <div className="mx-1 h-5 w-px bg-[var(--u-color-border)]" />
           <WorkspaceMenu
             activeWorkspace={activeWorkspace}
+            className="ml-1"
             onActivateWorkspace={onActivateWorkspace}
             workspaces={workspaces}
           />

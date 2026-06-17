@@ -1,11 +1,9 @@
 import {
   Database,
   Globe2,
-  PanelLeftClose,
-  PanelLeftOpen,
   TerminalSquare,
 } from "lucide-react";
-import { IconButton, SidebarRow, cn } from "@unfour/ui";
+import { SidebarRow, cn } from "@unfour/ui";
 import {
   getModuleSwitcherItems,
   type ModuleSwitcherItem,
@@ -14,18 +12,12 @@ import {
 export function ModuleSwitcher({
   activeKind,
   collapsed,
-  onToggle,
   onSelect,
 }: {
   activeKind: ModuleSwitcherItem["kind"];
   collapsed: boolean;
-  onToggle: () => void;
   onSelect: (tabId: ModuleSwitcherItem["id"]) => void;
 }) {
-  const activeItem =
-    getModuleSwitcherItems().find((item) => item.kind === activeKind) ??
-    getModuleSwitcherItems()[0];
-
   return (
     <nav
       aria-label="Modules"
@@ -36,24 +28,11 @@ export function ModuleSwitcher({
           : "rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-surface)] p-1",
       )}
     >
-      {!collapsed && (
-        <div className="flex items-center gap-2 px-1.5 py-1">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[var(--u-radius-sm)] bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]">
-            <ModuleIcon kind={activeItem.kind} />
-          </span>
-          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--u-color-text)]">
-            {activeItem.label}
-          </span>
-          <IconButton label="Toggle sidebar" onClick={onToggle}>
-            <PanelLeftClose size={15} />
-          </IconButton>
-        </div>
-      )}
       <div
         className={cn(
           collapsed
             ? "space-y-1"
-            : "grid grid-cols-3 gap-1 border-t border-[var(--u-color-border)] pt-1",
+            : "grid grid-cols-3 gap-1",
         )}
       >
         {getModuleSwitcherItems().map((item) => (
@@ -74,11 +53,6 @@ export function ModuleSwitcher({
           </SidebarRow>
         ))}
       </div>
-      {collapsed && (
-        <IconButton className="w-full" label="Toggle sidebar" onClick={onToggle}>
-          <PanelLeftOpen size={15} />
-        </IconButton>
-      )}
     </nav>
   );
 }

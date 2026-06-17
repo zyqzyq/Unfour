@@ -7,6 +7,19 @@ export type ShellTab = {
   meta?: string;
 };
 
+export function clampResizablePaneSize(
+  nextSize: number,
+  minSize: number,
+  maxSize: number,
+  currentSize: number,
+) {
+  if (!Number.isFinite(nextSize)) {
+    return currentSize;
+  }
+
+  return Math.min(Math.max(nextSize, minSize), maxSize);
+}
+
 export function AppShellFrame({
   bottomPanel,
   children,
@@ -85,21 +98,75 @@ export function Sidebar({
   collapsed,
   footer,
   header,
+  maxWidth = 320,
+  minWidth = 220,
+  onWidthChange,
+  resizable = false,
+  width = 264,
 }: {
   children: React.ReactNode;
   className?: string;
   collapsed?: boolean;
   footer?: React.ReactNode;
   header?: React.ReactNode;
+  maxWidth?: number;
+  minWidth?: number;
+  onWidthChange?: (width: number) => void;
+  resizable?: boolean;
+  width?: number;
 }) {
+  const hostRef = React.useRef<HTMLElement | null>(null);
+  const canResize = resizable && !collapsed && Boolean(onWidthChange);
+
+  function startResize(event: React.PointerEvent<HTMLDivElement>) {
+    const initialLeft = hostRef.current?.getBoundingClientRect().left;
+    if (initialLeft === undefined || !onWidthChange) {
+      return;
+    }
+    const panelLeft: number = initialLeft;
+    const resizePane = onWidthChange;
+
+    event.preventDefault();
+
+    function move(moveEvent: PointerEvent) {
+      resizePane(
+        clampResizablePaneSize(
+          moveEvent.clientX - panelLeft,
+          minWidth,
+          maxWidth,
+          width,
+        ),
+      );
+    }
+
+    function stop() {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+    }
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop, { once: true });
+  }
+
   return (
     <aside
       className={cn(
-        "flex min-h-0 shrink-0 flex-col border-r border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] transition-[width] duration-150",
-        collapsed ? "w-[52px]" : "w-[264px] max-[900px]:w-[220px]",
+        "relative flex min-h-0 shrink-0 flex-col border-r border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] transition-[width] duration-150",
+        collapsed && "w-[52px]",
         className,
       )}
+      ref={hostRef}
+      style={collapsed ? undefined : { width }}
     >
+      {canResize && (
+        <div
+          aria-label="Resize sidebar"
+          aria-orientation="vertical"
+          className="absolute inset-y-0 right-0 z-10 w-1 cursor-col-resize hover:bg-[var(--u-color-focus)]"
+          onPointerDown={startResize}
+          role="separator"
+        />
+      )}
       {header}
       <div className="min-h-0 flex-1 overflow-y-auto p-2">{children}</div>
       {footer}
@@ -237,25 +304,75 @@ export function RightInspector({
   children,
   className,
   collapsed,
+  maxWidth = 420,
+  minWidth = 260,
+  onWidthChange,
+  resizable = false,
   width = 300,
 }: {
   children?: React.ReactNode;
   className?: string;
   collapsed?: boolean;
+  maxWidth?: number;
+  minWidth?: number;
+  onWidthChange?: (width: number) => void;
+  resizable?: boolean;
   width?: number;
 }) {
+  const hostRef = React.useRef<HTMLElement | null>(null);
+
   if (collapsed) {
     return null;
+  }
+
+  function startResize(event: React.PointerEvent<HTMLDivElement>) {
+    const initialRight = hostRef.current?.getBoundingClientRect().right;
+    if (initialRight === undefined || !onWidthChange) {
+      return;
+    }
+    const panelRight: number = initialRight;
+    const resizePane = onWidthChange;
+
+    event.preventDefault();
+
+    function move(moveEvent: PointerEvent) {
+      resizePane(
+        clampResizablePaneSize(
+          panelRight - moveEvent.clientX,
+          minWidth,
+          maxWidth,
+          width,
+        ),
+      );
+    }
+
+    function stop() {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+    }
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop, { once: true });
   }
 
   return (
     <aside
       className={cn(
-        "min-h-0 shrink-0 border-l border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)]",
+        "relative min-h-0 shrink-0 border-l border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)]",
         className,
       )}
+      ref={hostRef}
       style={{ width }}
     >
+      {resizable && onWidthChange && (
+        <div
+          aria-label="Resize inspector"
+          aria-orientation="vertical"
+          className="absolute inset-y-0 left-0 z-10 w-1 cursor-col-resize hover:bg-[var(--u-color-focus)]"
+          onPointerDown={startResize}
+          role="separator"
+        />
+      )}
       {children}
     </aside>
   );

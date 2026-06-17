@@ -7,15 +7,22 @@ export function RightInspectorPlaceholder({
   activeTab,
   collapsed,
   onCollapse,
+  onWidthChange,
   width,
 }: {
   activeTab: WorkspaceTab;
   collapsed: boolean;
   onCollapse: () => void;
+  onWidthChange: (width: number) => void;
   width: number;
 }) {
   return (
-    <RightInspector collapsed={collapsed} width={width}>
+    <RightInspector
+      collapsed={collapsed}
+      onWidthChange={onWidthChange}
+      resizable
+      width={width}
+    >
       <div className="flex h-[var(--u-size-section-toolbar)] items-center justify-between border-b border-[var(--u-color-border)] px-2">
         <div className="text-[12px] font-semibold text-[var(--u-color-text)]">
           Inspector
