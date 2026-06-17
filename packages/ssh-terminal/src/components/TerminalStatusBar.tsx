@@ -1,10 +1,14 @@
 import { useMemo } from "react";
-import { StatusBar } from "@unfour/ui";
+import { ConnectionStatus, StatusBar } from "@unfour/ui";
 import { useWorkspaceStore } from "@unfour/workspace-core";
 import { useSshConnections } from "../hooks/useSshConnections";
 import { useTerminalSessions } from "../hooks/useTerminalSessions";
 import { useTerminalStore } from "../model/terminal-state";
 import { sshEndpointLabel } from "../model/ssh-connection-state";
+import {
+  terminalSessionStatus,
+  terminalSessionStatusLabel,
+} from "../model/terminal-session-status";
 
 export function TerminalStatusBar({
   workspaceId,
@@ -31,7 +35,10 @@ export function TerminalStatusBar({
       <div className="flex min-w-0 items-center gap-3">
         <span className="truncate">{workspaceName}</span>
         <span className="truncate">{sshEndpointLabel(selectedConnection)}</span>
-        <span>{activeSession?.status ?? "disconnected"}</span>
+        <ConnectionStatus
+          label={terminalSessionStatusLabel(activeSession)}
+          status={terminalSessionStatus(activeSession)}
+        />
       </div>
       <div className="flex shrink-0 items-center gap-3">
         <span>{activeSession ? `${activeSession.cols}x${activeSession.rows}` : "no pty"}</span>

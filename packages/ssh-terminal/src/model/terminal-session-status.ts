@@ -13,3 +13,18 @@ export function terminalSessionStatus(session: SshSessionSummary | null | undefi
   }
   return session.status;
 }
+
+export function terminalSessionStatusLabel(
+  session: SshSessionSummary | null | undefined,
+) {
+  if (!session) {
+    return "disconnected";
+  }
+  if (session.status === "reconnecting") {
+    return `reconnecting ${session.reconnectAttempt}/3`;
+  }
+  if (session.status === "degraded") {
+    return "connection degraded";
+  }
+  return session.status;
+}

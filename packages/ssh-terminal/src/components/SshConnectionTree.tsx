@@ -30,8 +30,12 @@ import {
 } from "@unfour/ui";
 import { useSshConnections } from "../hooks/useSshConnections";
 import { useTerminalSessions } from "../hooks/useTerminalSessions";
+import { formatTerminalError } from "../model/errors";
 import { useTerminalStore } from "../model/terminal-state";
-import { terminalSessionStatus } from "../model/terminal-session-status";
+import {
+  terminalSessionStatus,
+  terminalSessionStatusLabel,
+} from "../model/terminal-session-status";
 
 export function SshConnectionTree({
   active,
@@ -50,6 +54,7 @@ export function SshConnectionTree({
 }) {
   const queryClient = useQueryClient();
   const { selectedSshConnectionId, setSelectedSshConnection } = useWorkspaceStore();
+  const activeSessionId = useTerminalStore((state) => state.activeSessionId);
   const setActiveSessionId = useTerminalStore((state) => state.setActiveSessionId);
   const appendTerminalEvents = useTerminalStore((state) => state.appendTerminalEvents);
   const setSplitMode = useTerminalStore((state) => state.setSplitMode);
@@ -109,6 +114,16 @@ export function SshConnectionTree({
     connectMutation.mutate({ connectionId: connection.id, split });
   }
 
+  function disconnect(session: SshSessionSummary) {
+    if (!["disconnected", "failed"].includes(session.status)) {
+      const confirmed = window.confirm(`Disconnect SSH session ${session.username}@${session.host}?`);
+      if (!confirmed) {
+        return;
+      }
+    }
+    closeMutation.mutate(session.sessionId);
+  }
+
   function select(connection: SshConnection) {
     setSelectedSshConnection(connection.id);
     onOpenTerminal?.();
@@ -130,26 +145,40 @@ export function SshConnectionTree({
     .filter((session) =>
       ["connected", "degraded", "reconnecting"].includes(session.status),
     )
-    .forEach((session) => activeSessionByConnection.set(session.connectionId, session));
+    .forEach((session) => {
+      if (!activeSessionByConnection.has(session.connectionId)) {
+        activeSessionByConnection.set(session.connectionId, session);
+      }
+    });
 
   const connectionItems: TreeViewItem[] = connections.map((connection) => {
     const activeSession = activeSessionByConnection.get(connection.id);
     const connecting =
       connectMutation.isPending &&
       connectMutation.variables?.connectionId === connection.id;
-    const connectionStatus = connectMutation.error && selectedSshConnectionId === connection.id
+    const connectionFailed =
+      Boolean(connectMutation.error) &&
+      connectMutation.variables?.connectionId === connection.id;
+    const connectionStatus = connectionFailed
       ? "error"
       : connecting
         ? "connecting"
         : activeSession
           ? terminalSessionStatus(activeSession)
           : "disconnected";
+    const connectionStatusLabel = connectionFailed
+      ? "failed"
+      : connecting
+        ? "connecting"
+        : activeSession
+          ? terminalSessionStatusLabel(activeSession)
+          : "disconnected";
     const menu = (
       <>
         <ContextMenuItem onSelect={() => connect(connection)}>Connect</ContextMenuItem>
         <ContextMenuItem
           disabled={!activeSession || closeMutation.isPending}
-          onSelect={() => activeSession && closeMutation.mutate(activeSession.sessionId)}
+          onSelect={() => activeSession && disconnect(activeSession)}
         >
           Disconnect
         </ContextMenuItem>
@@ -216,7 +245,7 @@ export function SshConnectionTree({
       icon: <TerminalSquare size={13} />,
       id: connection.id,
       label: connection.name,
-      meta: <ConnectionStatus status={connectionStatus} />,
+      meta: <ConnectionStatus label={connectionStatusLabel} status={connectionStatus} />,
       title: `${connection.name} ${connection.username}@${connection.host}`,
     };
   });
@@ -235,11 +264,7 @@ export function SshConnectionTree({
         label: `${session.username}@${session.host}`,
         meta: (
           <ConnectionStatus
-            label={
-              session.status === "reconnecting"
-                ? `retry ${session.reconnectAttempt}/3`
-                : session.status
-            }
+            label={terminalSessionStatusLabel(session)}
             status={terminalSessionStatus(session)}
           />
         ),
@@ -274,7 +299,7 @@ export function SshConnectionTree({
               onOpenTerminal?.();
             }
           }}
-          selectedId={selectedSshConnectionId}
+          selectedId={activeSessionId ? `session:${activeSessionId}` : selectedSshConnectionId}
         />
       ) : (
         <EmptyState className="min-h-[72px]">No SSH connections</EmptyState>
@@ -282,8 +307,16 @@ export function SshConnectionTree({
       {connectionsQuery.error && (
         <StatusBadge tone="danger">Connections failed to load</StatusBadge>
       )}
-      {connectMutation.error && <StatusBadge tone="danger">Connection failed</StatusBadge>}
-      {closeMutation.error && <StatusBadge tone="danger">Disconnect failed</StatusBadge>}
+      {connectMutation.error && (
+        <StatusBadge className="max-w-full" tone="danger">
+          {formatTerminalError(connectMutation.error)}
+        </StatusBadge>
+      )}
+      {closeMutation.error && (
+        <StatusBadge className="max-w-full" tone="danger">
+          {formatTerminalError(closeMutation.error)}
+        </StatusBadge>
+      )}
     </SidebarSection>
   );
 }

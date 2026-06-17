@@ -24,6 +24,7 @@ import { useSshConnections } from "./hooks/useSshConnections";
 import { useTerminalSessions } from "./hooks/useTerminalSessions";
 import { useTerminalSplit } from "./hooks/useTerminalSplit";
 import {
+  redactTerminalLog,
   useTerminalStore,
 } from "./model/terminal-state";
 import {
@@ -87,6 +88,20 @@ export function TerminalPage({ workspaceId }: { workspaceId: string }) {
     () => sessions.find((item) => item.sessionId === activeSessionId) ?? null,
     [activeSessionId, sessions],
   );
+  const selectedConnectionSession = useMemo(() => {
+    if (!selectedConnectionId) {
+      return null;
+    }
+    return (
+      sessions.find(
+        (item) =>
+          item.connectionId === selectedConnectionId &&
+          ["connected", "degraded", "reconnecting"].includes(item.status),
+      ) ??
+      sessions.find((item) => item.connectionId === selectedConnectionId) ??
+      null
+    );
+  }, [selectedConnectionId, sessions]);
   const sessionTabs = useMemo(
     () => buildTerminalSessionTabs({ connections, sessions }),
     [connections, sessions],
@@ -254,6 +269,21 @@ export function TerminalPage({ workspaceId }: { workspaceId: string }) {
       queryClient.invalidateQueries({ queryKey: ["ssh-sessions", workspaceId] });
     },
   });
+  const selectedConnectionStatus = useMemo(() => {
+    if (connectMutation.isPending) {
+      return "connecting" as const;
+    }
+    if (connectMutation.error && connectMutation.variables === selectedConnectionId) {
+      return "failed" as const;
+    }
+    return selectedConnectionSession?.status ?? "disconnected";
+  }, [
+    connectMutation.error,
+    connectMutation.isPending,
+    connectMutation.variables,
+    selectedConnectionId,
+    selectedConnectionSession?.status,
+  ]);
 
   const closeMutation = useMutation({
     mutationFn: (sessionId: string) => closeSshSession({ workspaceId, sessionId }),
@@ -355,6 +385,36 @@ export function TerminalPage({ workspaceId }: { workspaceId: string }) {
     connectMutation.mutate(trustDialogState.connectionId);
   }
 
+  function requestCloseSession(sessionId: string) {
+    const session = sessions.find((item) => item.sessionId === sessionId);
+    const needsConfirmation =
+      session && !["disconnected", "failed"].includes(session.status);
+    if (needsConfirmation) {
+      const label = `${session.username}@${session.host}`;
+      const confirmed = window.confirm(`Close SSH session ${label}?`);
+      if (!confirmed) {
+        return;
+      }
+    }
+    closeMutation.mutate(sessionId);
+  }
+
+  function copyActiveSessionLog() {
+    if (!activeSessionId) {
+      return;
+    }
+    const content = terminalEvents
+      .filter((event) => event.sessionId === activeSessionId)
+      .map(
+        (event) =>
+          `[${event.createdAt}] ${event.kind} ${redactTerminalLog(event.data).trim()}`,
+      )
+      .join("\n");
+    if (content) {
+      void navigator.clipboard?.writeText(content);
+    }
+  }
+
   // Detect host-key mismatch errors from connect failures.
   useEffect(() => {
     const error = connectMutation.error;
@@ -376,9 +436,8 @@ export function TerminalPage({ workspaceId }: { workspaceId: string }) {
     }
   }, [connectMutation.error, selectedConnection]);
 
-  const activeError =
-    connectionsQuery.error ??
-    sessionsQuery.error ??
+  const blockingError = connectionsQuery.error ?? sessionsQuery.error;
+  const actionError =
     connectMutation.error ??
     closeMutation.error ??
     cancelReconnectMutation.error ??
@@ -399,7 +458,8 @@ export function TerminalPage({ workspaceId }: { workspaceId: string }) {
           activeSessionId && cancelReconnectMutation.mutate(activeSessionId)
         }
         onClear={() => clearTerminalSessionEvents(activeSessionId)}
-        onCloseSession={() => activeSessionId && closeMutation.mutate(activeSessionId)}
+        onCloseSession={() => activeSessionId && requestCloseSession(activeSessionId)}
+        onCopyLog={copyActiveSessionLog}
         onExportLog={() => exportMutation.mutate()}
         onNewConnection={newConnection}
         onNewSession={connectSelectedConnection}
@@ -417,15 +477,21 @@ export function TerminalPage({ workspaceId }: { workspaceId: string }) {
         <TerminalWorkspace
           activeSession={activeSession}
           activeSessionId={activeSessionId}
-          error={activeError}
+          actionError={actionError}
+          canStartSession={Boolean(selectedConnectionId)}
+          error={blockingError}
           events={terminalEvents}
           emptyMessage={
             connections.length
               ? "Select an SSH connection and start a session."
               : "No SSH connections are configured for this workspace."
           }
-          onCloseSession={(sessionId) => closeMutation.mutate(sessionId)}
+          onCloseSession={requestCloseSession}
+          onNewConnection={newConnection}
+          onNewSession={connectSelectedConnection}
           onSelectSession={setActiveSessionId}
+          selectedConnection={selectedConnection}
+          selectedConnectionStatus={selectedConnectionStatus}
           sessions={sessionTabs}
           splitMode={split.mode}
         />

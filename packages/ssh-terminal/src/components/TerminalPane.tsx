@@ -3,7 +3,12 @@ import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { Terminal as XTerm } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import type { SshSessionEvent, SshSessionSummary } from "@unfour/command-client";
+import {
+  resizeSshSession,
+  sendSshInput,
+  type SshSessionEvent,
+  type SshSessionSummary,
+} from "@unfour/command-client";
 import { cn } from "@unfour/ui";
 import { redactTerminalLog, useTerminalStore } from "../model/terminal-state";
 
@@ -29,7 +34,7 @@ export function TerminalPane({
   const renderedEventsRef = useRef(0);
   const renderedSessionIdRef = useRef<string | null>(null);
 
-  const activeSessionId = useTerminalStore((s) => s.activeSessionId);
+  const appendTerminalEvents = useTerminalStore((s) => s.appendTerminalEvents);
   const setTerminalSearchAddon = useTerminalStore((s) => s.setTerminalSearchAddon);
 
   // Mutable callback refs – updated in useEffect (not during render).
@@ -37,47 +42,54 @@ export function TerminalPane({
   const onResizeRef = useRef<
     ((sessionId: string, cols: number, rows: number) => void) | null
   >(null);
-  const activeSessionIdRef = useRef(activeSessionId);
+  const inputDisabledRef = useRef(inputDisabled);
+  const readOnlyRef = useRef(readOnly);
+  const sessionIdRef = useRef(session?.sessionId ?? null);
 
   // Keep callback refs in sync with latest store / prop values.
   useEffect(() => {
-    activeSessionIdRef.current = activeSessionId;
+    const sessionId = session?.sessionId ?? null;
+    const workspaceId = session?.workspaceId ?? "";
 
     onSendInputRef.current =
-      activeSessionId && !readOnly && !inputDisabled
+      sessionId && workspaceId && !readOnly && !inputDisabled
         ? (data: string) => {
-            import("@unfour/command-client").then(({ sendSshInput }) => {
-              sendSshInput({
-                workspaceId: session?.workspaceId ?? "",
-                sessionId: activeSessionId,
-                data,
-              }).catch(() => {
+            sendSshInput({
+              workspaceId,
+              sessionId,
+              data,
+            })
+              .then((event) => {
+                if (!isTauriRuntime()) {
+                  appendTerminalEvents([event]);
+                }
+              })
+              .catch(() => {
                 /* swallow – output stream still works */
               });
-            });
           }
         : null;
 
-    onResizeRef.current = activeSessionId
+    onResizeRef.current =
+      sessionId && workspaceId && !readOnly && !inputDisabled
       ? (sessionId: string, cols: number, rows: number) => {
-          import("@unfour/command-client").then(({ resizeSshSession }) => {
-            resizeSshSession({
-              workspaceId: session?.workspaceId ?? "",
-              sessionId,
-              cols,
-              rows,
-            }).catch(() => {
-              /* resize failures are non-fatal */
-            });
+          resizeSshSession({
+            workspaceId,
+            sessionId,
+            cols,
+            rows,
+          }).catch(() => {
+            /* resize failures are non-fatal */
           });
         }
       : null;
-  }, [
-    activeSessionId,
-    inputDisabled,
-    readOnly,
-    session?.workspaceId,
-  ]);
+  }, [appendTerminalEvents, inputDisabled, readOnly, session?.sessionId, session?.workspaceId]);
+
+  useEffect(() => {
+    inputDisabledRef.current = inputDisabled;
+    readOnlyRef.current = readOnly;
+    sessionIdRef.current = session?.sessionId ?? null;
+  }, [inputDisabled, readOnly, session?.sessionId]);
 
   // ------------------------------------------------------------------
   // Terminal initialisation
@@ -110,13 +122,40 @@ export function TerminalPane({
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
     searchAddonRef.current = searchAddon;
-    setTerminalSearchAddon(searchAddon);
 
     // ---------------------------------------------------------------
     // Capture keyboard input from xterm
     // ---------------------------------------------------------------
     const dataDisposable = terminal.onData((data: string) => {
       onSendInputRef.current?.(data);
+    });
+    terminal.attachCustomKeyEventHandler((event) => {
+      const key = event.key.toLowerCase();
+      const modified = event.ctrlKey || event.metaKey;
+      if (!modified) {
+        return true;
+      }
+
+      if (key === "c" && terminal.hasSelection()) {
+        void navigator.clipboard?.writeText(terminal.getSelection());
+        return false;
+      }
+
+      if (
+        key === "v" &&
+        !readOnlyRef.current &&
+        !inputDisabledRef.current &&
+        sessionIdRef.current
+      ) {
+        void navigator.clipboard?.readText().then((text) => {
+          if (text) {
+            onSendInputRef.current?.(text);
+          }
+        });
+        return false;
+      }
+
+      return true;
     });
 
     // ---------------------------------------------------------------
@@ -128,7 +167,7 @@ export function TerminalPane({
       if (cols !== lastCols || rows !== lastRows) {
         lastCols = cols;
         lastRows = rows;
-        const sid = activeSessionIdRef.current;
+        const sid = sessionIdRef.current;
         if (sid) {
           onResizeRef.current?.(sid, cols, rows);
         }
@@ -155,10 +194,18 @@ export function TerminalPane({
       fitAddonRef.current = null;
       searchAddonRef.current = null;
       renderedEventsRef.current = 0;
-      setTerminalSearchAddon(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-time init
   }, []);
+
+  useEffect(() => {
+    if (active) {
+      setTerminalSearchAddon(searchAddonRef.current);
+      window.requestAnimationFrame(() => terminalRef.current?.focus());
+      return () => setTerminalSearchAddon(null);
+    }
+    return undefined;
+  }, [active, setTerminalSearchAddon]);
 
   // ------------------------------------------------------------------
   // Re-fit on active / session changes
@@ -167,7 +214,12 @@ export function TerminalPane({
   useEffect(() => {
     const fitAddon = fitAddonRef.current;
     if (fitAddon) {
-      window.requestAnimationFrame(() => safeFit(fitAddon));
+      window.requestAnimationFrame(() => {
+        safeFit(fitAddon);
+        if (active) {
+          terminalRef.current?.focus();
+        }
+      });
     }
   }, [active, readOnly, session?.cols, session?.rows]);
 
@@ -210,7 +262,7 @@ export function TerminalPane({
         event.kind === "input"
           ? `$ ${redactTerminalLog(event.data)}`
           : redactTerminalLog(event.data);
-      terminal.write(data.endsWith("\r\n") ? data : `${data}\r\n`);
+      terminal.write(event.kind === "output" ? data : ensureNewline(data));
     });
     renderedEventsRef.current = events.length;
   }, [events, session]);
@@ -223,7 +275,11 @@ export function TerminalPane({
         className,
       )}
     >
-      <div className="min-h-0 flex-1 overflow-hidden p-2" ref={hostRef} />
+      <div
+        className="min-h-0 flex-1 overflow-hidden p-2"
+        onClick={() => terminalRef.current?.focus()}
+        ref={hostRef}
+      />
     </div>
   );
 }
@@ -234,4 +290,15 @@ function safeFit(fitAddon: FitAddon) {
   } catch {
     // The pane may be hidden during a shell resize. ResizeObserver retries once visible.
   }
+}
+
+function ensureNewline(value: string) {
+  return value.endsWith("\r\n") || value.endsWith("\n") ? value : `${value}\r\n`;
+}
+
+function isTauriRuntime() {
+  return (
+    typeof window !== "undefined" &&
+    Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__)
+  );
 }

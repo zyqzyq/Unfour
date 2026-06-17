@@ -22,6 +22,7 @@ export function TerminalSplitView({
     <TerminalPane
       active
       events={activeEvents}
+      inputDisabled={activeSession?.status !== "connected"}
       session={activeSession}
     />
   );

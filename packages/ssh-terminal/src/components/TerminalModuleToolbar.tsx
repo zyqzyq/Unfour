@@ -36,6 +36,7 @@ export function TerminalModuleToolbar({
   onCancelReconnect,
   onClear,
   onCloseSession,
+  onCopyLog,
   onExportLog,
   onNewConnection,
   onNewSession,
@@ -55,6 +56,7 @@ export function TerminalModuleToolbar({
   onCancelReconnect: () => void;
   onClear: () => void;
   onCloseSession: () => void;
+  onCopyLog: () => void;
   onExportLog: () => void;
   onNewConnection: () => void;
   onNewSession: () => void;
@@ -154,8 +156,12 @@ export function TerminalModuleToolbar({
               Close Session
             </DropdownMenuItem>
             <DropdownMenuItem disabled={!canUseSessionActions} onSelect={onClear}>
-              <Copy size={13} />
+              <CircleX size={13} />
               Clear Terminal
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={!canUseSessionActions} onSelect={onCopyLog}>
+              <Copy size={13} />
+              Copy Session Log
             </DropdownMenuItem>
             <DropdownMenuItem disabled={!canUseSessionActions || !onResize} onSelect={onResize}>
               <RotateCw size={13} />
