@@ -1,3 +1,4 @@
+import { useState } from "react";
 import Editor from "@monaco-editor/react";
 import { Loader2 } from "lucide-react";
 import { Badge, EmptyState, ErrorState } from "@unfour/ui";
@@ -102,6 +103,7 @@ function ResponseStatus({
 }
 
 function ResponseBodyView({ response }: { response: ApiResponse | null }) {
+  const [mode, setMode] = useState<"pretty" | "raw">("pretty");
   if (!response) {
     return (
       <div className="flex h-full items-center justify-center text-[13px] text-[var(--u-color-text-muted)]">
@@ -112,21 +114,40 @@ function ResponseBodyView({ response }: { response: ApiResponse | null }) {
   if (!response.body.trim()) {
     return (
       <EmptyState className="m-3 h-[calc(100%-24px)]">
-        Response received with an empty body
+        Empty response
       </EmptyState>
     );
   }
   const bodySize = new TextEncoder().encode(response.body).length;
+  const isJson = looksLikeJson(response.body);
+  const displayBody = mode === "pretty" && isJson
+    ? formatResponseBody(response.body)
+    : response.body;
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {bodySize > 100_000 && (
-        <div className="shrink-0 border-b border-[var(--u-color-border)] px-3 py-1 text-[12px] text-[var(--u-color-text-muted)]">
-          Long response: {formatByteSize(bodySize)}
+      <div className="flex min-h-[32px] shrink-0 items-center justify-between border-b border-[var(--u-color-border)] px-3 py-1 text-[12px] text-[var(--u-color-text-muted)]">
+        <span>{bodySize > 100_000 ? `Long response: ${formatByteSize(bodySize)}` : "Body"}</span>
+        <div className="flex overflow-hidden rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)]">
+          {(["pretty", "raw"] as const).map((item) => (
+            <button
+              aria-pressed={mode === item}
+              className={
+                mode === item
+                  ? "h-6 bg-[var(--u-color-surface-active)] px-2 text-[var(--u-color-text)]"
+                  : "h-6 bg-[var(--u-color-bg)] px-2 text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]"
+              }
+              key={item}
+              onClick={() => setMode(item)}
+              type="button"
+            >
+              {item === "pretty" ? "Pretty" : "Raw"}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
       <div className="min-h-0 flex-1">
         <Editor
-          defaultLanguage={looksLikeJson(response.body) ? "json" : "plaintext"}
+          defaultLanguage={isJson && mode === "pretty" ? "json" : "plaintext"}
           options={{
             fontSize: 12,
             minimap: { enabled: false },
@@ -135,7 +156,7 @@ function ResponseBodyView({ response }: { response: ApiResponse | null }) {
             wordWrap: "on",
           }}
           theme="vs-dark"
-          value={formatResponseBody(response.body)}
+          value={displayBody}
         />
       </div>
     </div>
@@ -194,5 +215,24 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 function responseCookies(response: ApiResponse | null) {
-  return response?.headers.filter((item) => item.key.toLowerCase() === "set-cookie") ?? [];
+  return (
+    response?.headers
+      .filter((item) => item.key.toLowerCase() === "set-cookie")
+      .flatMap((item) => parseSetCookieHeader(item.value)) ?? []
+  );
+}
+
+function parseSetCookieHeader(value: string): KeyValue[] {
+  const [pair] = value.split(";");
+  const separator = pair.indexOf("=");
+  if (separator < 0) {
+    return [];
+  }
+  return [
+    {
+      enabled: true,
+      key: pair.slice(0, separator).trim(),
+      value: pair.slice(separator + 1).trim(),
+    },
+  ];
 }

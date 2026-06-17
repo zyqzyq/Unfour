@@ -29,14 +29,27 @@ export type ApiOpenIntent =
   | { action?: "open" | "send"; kind: "saved"; nonce: number; requestId: string }
   | { action?: "open" | "save"; historyId: string; kind: "history"; nonce: number };
 
+export type RequestBodyMode = "none" | "raw" | "form";
+export type RequestRawBodyType = "json" | "text";
+export type ApiAuthPlacement = "header" | "query";
+export type ApiAuthConfig =
+  | { type: "none" }
+  | { token: string; type: "bearer" }
+  | { password: string; type: "basic"; username: string }
+  | { addTo: ApiAuthPlacement; key: string; type: "api-key"; value: string };
+
 export type RequestDraft = {
+  auth: ApiAuthConfig;
   body: string;
+  bodyMode: RequestBodyMode;
   envVariables: KeyValue[];
   folderPath: string;
+  formBody: KeyValue[];
   headers: KeyValue[];
   method: string;
   name: string;
   query: KeyValue[];
+  rawBodyType: RequestRawBodyType;
   url: string;
 };
 

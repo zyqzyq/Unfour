@@ -5,9 +5,15 @@ import type {
   ApiSavedRequest,
 } from "@unfour/command-client";
 import {
+  bodyFieldsFromInput,
+  defaultAuthConfig,
   historyDetailToInput,
   parseKeyValues,
+  queryFromUrl,
+  reconcileDraftPatch,
   savedRequestToInput,
+  splitAuthMetadata,
+  syncUrlQuery,
 } from "../request-utils";
 import type {
   ApiSplitDirection,
@@ -205,7 +211,7 @@ export function updateTabDraft(
 ): ApiTabsState {
   return updateTab(state, tabId, (tab) => ({
     ...tab,
-    draft: { ...tab.draft, ...patch },
+    draft: reconcileDraftPatch(tab.draft, patch),
     saveError: null,
   }));
 }
@@ -298,17 +304,20 @@ export function completeTabSave(
     .filter((_, index) => index !== existingIndex)
     .map((tab) =>
       tab.id === tabId
-        ? {
-            ...tab,
-            baseline: normalizeRequestDraft(savedDraft),
-            draft: savedDraft,
+        ? (() => {
+            const draft = preserveUnsavedSecretsAfterSave(savedDraft, tab.draft);
+            return {
+              ...tab,
+              baseline: normalizeRequestDraft(draft),
+              draft,
             id: nextId,
             saveError: null,
             savedRequestId: saved.id,
             saving: false,
             source: "saved" as const,
             sourceId: saved.id,
-          }
+            };
+          })()
         : tab,
     );
 
@@ -416,12 +425,16 @@ export function setApiSplitDirection(
 
 export function normalizeRequestDraft(draft: RequestDraft): string {
   return JSON.stringify({
+    auth: draft.auth,
     body: draft.body,
+    bodyMode: draft.bodyMode,
     folderPath: draft.folderPath.trim() || null,
+    formBody: normalizeKeyValues(draft.formBody),
     headers: normalizeKeyValues(draft.headers),
     method: draft.method.toUpperCase(),
     name: draft.name.trim(),
     query: normalizeKeyValues(draft.query),
+    rawBodyType: draft.rawBodyType,
     url: draft.url.trim(),
   });
 }
@@ -470,27 +483,35 @@ function updateTab(
 
 function emptyDraft(): RequestDraft {
   return {
+    auth: defaultAuthConfig(),
     body: "",
+    bodyMode: "none",
     envVariables: [],
     folderPath: "",
+    formBody: [],
     headers: [],
     method: "GET",
     name: "Untitled Request",
     query: [],
+    rawBodyType: "json",
     url: "",
   };
 }
 
 function inputToDraft(input: ReturnType<typeof savedRequestToInput>): RequestDraft {
+  const { auth, headers } = splitAuthMetadata(input.headers);
+  const query = input.query.length ? input.query : queryFromUrl(input.url);
+  const bodyFields = bodyFieldsFromInput(input.bodyKind, input.body);
   return {
-    body: input.body ?? "",
+    auth,
+    ...bodyFields,
     envVariables: [],
     folderPath: input.folderPath ?? "",
-    headers: input.headers,
+    headers,
     method: input.method,
     name: input.name ?? `${input.method} ${input.url}`,
-    query: input.query,
-    url: input.url,
+    query,
+    url: syncUrlQuery(input.url, query),
   };
 }
 
@@ -514,6 +535,31 @@ function normalizeKeyValues(items: RequestDraft["headers"]) {
     key: item.key,
     value: item.value,
   }));
+}
+
+function preserveUnsavedSecretsAfterSave(
+  savedDraft: RequestDraft,
+  currentDraft: RequestDraft,
+): RequestDraft {
+  if (savedDraft.auth.type === "bearer" && currentDraft.auth.type === "bearer") {
+    return {
+      ...savedDraft,
+      auth: { ...savedDraft.auth, token: currentDraft.auth.token },
+    };
+  }
+  if (savedDraft.auth.type === "basic" && currentDraft.auth.type === "basic") {
+    return {
+      ...savedDraft,
+      auth: { ...savedDraft.auth, password: currentDraft.auth.password },
+    };
+  }
+  if (savedDraft.auth.type === "api-key" && currentDraft.auth.type === "api-key") {
+    return {
+      ...savedDraft,
+      auth: { ...savedDraft.auth, value: currentDraft.auth.value },
+    };
+  }
+  return savedDraft;
 }
 
 function calendarDayDifference(left: Date, right: Date) {

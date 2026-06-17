@@ -21,9 +21,9 @@ export function ApiHistoryTree({
     label: group.label,
     children: group.items.map((item) => ({
       id: `history-item:${item.id}`,
-      label: item.name || item.url,
-      title: item.url,
-      meta: <MethodMeta method={item.method} />,
+      label: item.url,
+      title: `${item.method} ${item.url}`,
+      meta: <HistoryMeta item={item} />,
       contextMenu: (
         <>
           <ContextMenuItem
@@ -73,10 +73,22 @@ export function ApiHistoryTree({
   );
 }
 
-function MethodMeta({ method }: { method: string }) {
+function HistoryMeta({ item }: { item: ApiHistoryItem }) {
   return (
-    <span className="rounded-[var(--u-radius-sm)] bg-[var(--u-color-surface-muted)] px-1 text-[10px] font-semibold uppercase">
-      {method}
+    <span className="flex min-w-0 items-center gap-1 text-[10px] text-[var(--u-color-text-soft)]">
+      <span className="rounded-[var(--u-radius-sm)] bg-[var(--u-color-surface-muted)] px-1 font-semibold uppercase text-[var(--u-color-text-muted)]">
+        {item.method}
+      </span>
+      {item.status !== null && <span>{item.status}</span>}
+      {item.durationMs !== null && <span>{item.durationMs}ms</span>}
+      <span>{formatHistoryTime(item.createdAt)}</span>
     </span>
   );
+}
+
+function formatHistoryTime(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }

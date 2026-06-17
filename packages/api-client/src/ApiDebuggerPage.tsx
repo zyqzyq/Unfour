@@ -57,6 +57,7 @@ export function ApiDebuggerPage({
   const [saveDialogTabId, setSaveDialogTabId] = useState<string | null>(null);
   const [closeDialogTabId, setCloseDialogTabId] = useState<string | null>(null);
   const closeAfterSaveRef = useRef<string | null>(null);
+  const urlInputRef = useRef<HTMLInputElement>(null);
   const pendingIntentAction = useRef<{
     action: "save" | "send";
     tabId: string;
@@ -131,6 +132,11 @@ export function ApiDebuggerPage({
       if (event.key.toLowerCase() === "s") {
         event.preventDefault();
         requestSave(activeTab);
+      }
+      if (event.key.toLowerCase() === "l") {
+        event.preventDefault();
+        urlInputRef.current?.focus();
+        urlInputRef.current?.select();
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -297,6 +303,7 @@ export function ApiDebuggerPage({
                 onSend={() => sendTab(activeTab)}
                 onUpdate={(patch) => updateDraft(activeTab.id, patch)}
                 tab={activeTab}
+                urlInputRef={urlInputRef}
               />
               {collectionStatus && (
                 <div className="shrink-0 border-b border-[var(--u-color-border)] px-2 py-1 text-[12px] text-[var(--u-color-text-muted)]">
@@ -311,16 +318,30 @@ export function ApiDebuggerPage({
                 resizable
               >
                 <ApiRequestEditor
+                  auth={activeTab.draft.auth}
                   body={activeTab.draft.body}
+                  bodyMode={activeTab.draft.bodyMode}
                   envVariables={envDraft}
+                  formBody={activeTab.draft.formBody}
                   headers={activeTab.draft.headers}
+                  onAuthChange={(auth) => updateDraft(activeTab.id, { auth })}
                   onBodyChange={(body) => updateDraft(activeTab.id, { body })}
+                  onBodyModeChange={(bodyMode) =>
+                    updateDraft(activeTab.id, { bodyMode })
+                  }
                   onEnvVariablesChange={setEnvDraftOverride}
+                  onFormBodyChange={(formBody) =>
+                    updateDraft(activeTab.id, { formBody })
+                  }
                   onHeadersChange={(headers) => updateDraft(activeTab.id, { headers })}
                   onQueryChange={(query) => updateDraft(activeTab.id, { query })}
+                  onRawBodyTypeChange={(rawBodyType) =>
+                    updateDraft(activeTab.id, { rawBodyType })
+                  }
                   onSaveEnvironment={() => saveEnvironment(envDraft)}
                   onTabChange={(tab) => setRequestTab(activeTab.id, tab)}
                   query={activeTab.draft.query}
+                  rawBodyType={activeTab.draft.rawBodyType}
                   savingEnvironment={saveEnvironmentMutation.isPending}
                   tab={activeTab.requestTab}
                 />

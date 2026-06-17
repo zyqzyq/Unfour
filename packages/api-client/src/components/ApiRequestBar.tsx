@@ -1,3 +1,4 @@
+import type { Ref } from "react";
 import { Save, Send } from "lucide-react";
 import { Button, Input, cn } from "@unfour/ui";
 import {
@@ -16,6 +17,7 @@ export function ApiRequestBar({
   onSend,
   onUpdate,
   tab,
+  urlInputRef,
 }: {
   onDelete: () => void;
   onDuplicate: () => void;
@@ -25,6 +27,7 @@ export function ApiRequestBar({
   onSend: () => void;
   onUpdate: (patch: Partial<ApiRequestTab["draft"]>) => void;
   tab: ApiRequestTab;
+  urlInputRef?: Ref<HTMLInputElement>;
 }) {
   return (
     <div className="flex min-h-[48px] shrink-0 items-center gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3 py-2">
@@ -47,6 +50,7 @@ export function ApiRequestBar({
           className="min-w-0 flex-1 border-0 bg-transparent font-mono focus:border-0"
           onChange={(event) => onUpdate({ url: event.target.value })}
           placeholder="https://api.example.com/resource"
+          ref={urlInputRef}
           value={tab.draft.url}
         />
       </div>

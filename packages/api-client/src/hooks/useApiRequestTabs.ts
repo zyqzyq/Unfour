@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   deleteApiRequest,
@@ -33,6 +33,16 @@ import {
   updateTabDraft,
   type ApiRequestTab,
 } from "../model/request-tabs";
+import {
+  addHeaderIfMissing,
+  addQueryIfMissing,
+  bodyFieldsToInput,
+  hasHeader,
+  headersWithAuthMetadata,
+  resolveTemplateLoose,
+  sendableKeyValues,
+  stripUrlQuery,
+} from "../request-utils";
 import type {
   ApiSplitDirection,
   RequestDraft,
@@ -129,7 +139,10 @@ export function useApiRequestTabs(workspaceId: string) {
 
   const activeTab =
     state.tabs.find((tab) => tab.id === state.activeTabId) ?? null;
-  const envVariables = environmentQuery.data?.variables ?? [];
+  const envVariables = useMemo(
+    () => environmentQuery.data?.variables ?? [],
+    [environmentQuery.data?.variables],
+  );
 
   const newRequest = useCallback(() => {
     nextNewId.current += 1;
@@ -154,9 +167,20 @@ export function useApiRequestTabs(workspaceId: string) {
   }
 
   const sendTab = useCallback((tab: ApiRequestTab) => {
+    const validationError = validateBeforeSend(tab);
+    if (validationError) {
+      setState((current) => failTabSend(current, tab.id, validationError));
+      return;
+    }
     setState((current) => startTabSend(current, tab.id));
-    sendRequest({ input: tabToInput(tab, workspaceId), tabId: tab.id });
-  }, [sendRequest, workspaceId]);
+    sendRequest({
+      input: tabToInput(tab, workspaceId, {
+        envVariables,
+        purpose: "send",
+      }),
+      tabId: tab.id,
+    });
+  }, [envVariables, sendRequest, workspaceId]);
 
   const saveTab = useCallback(async (
     tab: ApiRequestTab,
@@ -169,14 +193,17 @@ export function useApiRequestTabs(workspaceId: string) {
     setState((current) => startTabSave(current, tab.id));
     try {
       const saved = await saveRequest({
-        input: tabToInput({ ...tab, draft }, workspaceId),
+        input: tabToInput({ ...tab, draft }, workspaceId, {
+          envVariables,
+          purpose: "save",
+        }),
         tabId: tab.id,
       });
       return saved.id;
     } catch {
       return null;
     }
-  }, [saveRequest, workspaceId]);
+  }, [envVariables, saveRequest, workspaceId]);
 
   return {
     activeTab,
@@ -215,20 +242,133 @@ export function useApiRequestTabs(workspaceId: string) {
 export function tabToInput(
   tab: ApiRequestTab,
   workspaceId: string,
+  options: {
+    envVariables?: KeyValue[];
+    purpose?: "save" | "send";
+  } = {},
 ): ApiRequestInput {
+  const purpose = options.purpose ?? "send";
+  const body = bodyFieldsToInput(tab.draft, purpose);
+  const headers =
+    purpose === "save"
+      ? headersWithAuthMetadata(tab.draft.headers, tab.draft.auth)
+      : applyGeneratedHeaders(tab.draft, options.envVariables ?? []);
+  const query =
+    purpose === "save"
+      ? tab.draft.query
+      : applyGeneratedQuery(tab.draft, options.envVariables ?? []);
   return {
     workspaceId,
     name: tab.draft.name,
     folderPath: tab.draft.folderPath || null,
     method: tab.draft.method,
-    url: tab.draft.url,
-    headers: tab.draft.headers,
-    query: tab.draft.query,
+    url: stripUrlQuery(tab.draft.url),
+    headers,
+    query,
     body:
       tab.draft.method === "GET" || tab.draft.method === "HEAD"
         ? undefined
-        : tab.draft.body,
-    bodyKind: "json",
+        : body.body,
+    bodyKind: body.bodyKind,
     timeoutMs: 60_000,
   };
+}
+
+function validateBeforeSend(tab: ApiRequestTab): string | null {
+  if (
+    tab.draft.bodyMode === "raw" &&
+    tab.draft.rawBodyType === "json" &&
+    tab.draft.body.trim()
+  ) {
+    try {
+      JSON.parse(tab.draft.body);
+    } catch (error) {
+      return `Request body is not valid JSON: ${formatError(error)}`;
+    }
+  }
+  return null;
+}
+
+function applyGeneratedHeaders(
+  draft: RequestDraft,
+  envVariables: KeyValue[],
+): KeyValue[] {
+  let headers = sendableKeyValues(draft.headers);
+  if (draft.bodyMode === "raw" && draft.rawBodyType === "json" && draft.body.trim()) {
+    headers = addHeaderIfMissing(headers, "Content-Type", "application/json");
+  }
+  if (draft.bodyMode === "form" && sendableKeyValues(draft.formBody).length) {
+    headers = addHeaderIfMissing(
+      headers,
+      "Content-Type",
+      "application/x-www-form-urlencoded",
+    );
+  }
+
+  // Explicit Authorization in the Headers table wins over generated Auth headers.
+  if (draft.auth.type === "bearer" && draft.auth.token.trim() && !hasHeader(headers, "Authorization")) {
+    headers = [
+      ...headers,
+      {
+        enabled: true,
+        key: "Authorization",
+        value: `Bearer ${draft.auth.token}`,
+      },
+    ];
+  }
+  if (draft.auth.type === "basic" && !hasHeader(headers, "Authorization")) {
+    const username = resolveTemplateLoose(draft.auth.username, envVariables);
+    const password = resolveTemplateLoose(draft.auth.password, envVariables);
+    if (username || password) {
+      headers = [
+        ...headers,
+        {
+          enabled: true,
+          key: "Authorization",
+          value: `Basic ${encodeBasicCredential(username, password)}`,
+        },
+      ];
+    }
+  }
+  if (
+    draft.auth.type === "api-key" &&
+    draft.auth.addTo === "header" &&
+    draft.auth.key.trim() &&
+    !hasHeader(headers, draft.auth.key)
+  ) {
+    headers = [
+      ...headers,
+      {
+        enabled: true,
+        key: draft.auth.key.trim(),
+        value: draft.auth.value,
+      },
+    ];
+  }
+  return headers;
+}
+
+function applyGeneratedQuery(
+  draft: RequestDraft,
+  _envVariables: KeyValue[],
+): KeyValue[] {
+  let query = sendableKeyValues(draft.query);
+  if (
+    draft.auth.type === "api-key" &&
+    draft.auth.addTo === "query" &&
+    draft.auth.key.trim()
+  ) {
+    query = addQueryIfMissing(query, draft.auth.key, draft.auth.value);
+  }
+  return query;
+}
+
+function encodeBasicCredential(username: string, password: string): string {
+  const value = `${username}:${password}`;
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
 }

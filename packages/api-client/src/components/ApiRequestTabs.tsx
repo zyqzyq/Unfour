@@ -64,8 +64,10 @@ export function ApiRequestTabs({
               {(saveState === "dirty" || saveState === "unsaved") && (
                 <span
                   aria-label={saveState}
-                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--u-color-primary)]"
-                />
+                  className="shrink-0 text-[13px] font-semibold text-[var(--u-color-primary)]"
+                >
+                  *
+                </span>
               )}
               {tab.sending && (
                 <Loader2
