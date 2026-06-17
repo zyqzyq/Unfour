@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   serializeDatabaseResult,
+  serializeDatabaseRow,
+  serializeDatabaseCell,
   isConfirmationRequired,
   confirmationMessage,
+  describeDatabaseError,
   formatDatabaseError,
 } from "./result-utils";
 import type { DatabaseQueryResult } from "@unfour/command-client";
@@ -12,11 +15,11 @@ function makeResult(
   rows: (string | null)[][],
 ): DatabaseQueryResult {
   return {
-    columns: columns.map((name) => ({ name, type: "TEXT" })),
+    columns: columns.map((name) => ({ name, dataType: "TEXT" })),
     rows: rows as string[][],
     affectedRows: 0,
-    safety: { classification: "read", confirmed: true },
-    executionTimeMs: 1,
+    durationMs: 1,
+    safety: { classification: "read", confirmed: true, message: null, requiresConfirmation: false },
   };
 }
 
@@ -61,6 +64,15 @@ describe("serializeDatabaseResult", () => {
     const result = makeResult(["col"], [[null]]);
     const csv = serializeDatabaseResult(result, ",");
     expect(csv).toBe("col\r\n");
+  });
+
+  it("serializes a single row", () => {
+    const result = makeResult(["id", "name"], [["1", "Alice"]]);
+    expect(serializeDatabaseRow(result, result.rows[0], "\t")).toBe("1\tAlice");
+  });
+
+  it("serializes a single cell with escaping", () => {
+    expect(serializeDatabaseCell("hello\tworld", "\t")).toBe('"hello\tworld"');
   });
 });
 
@@ -113,5 +125,30 @@ describe("formatDatabaseError", () => {
     expect(formatDatabaseError(null)).toBe("Unknown database error");
     expect(formatDatabaseError(42)).toBe("Unknown database error");
     expect(formatDatabaseError(undefined)).toBe("Unknown database error");
+  });
+
+  it("extracts serialized AppError objects", () => {
+    expect(formatDatabaseError({ code: "DATABASE_ERROR", message: "database error: syntax error" })).toBe(
+      "database error: syntax error",
+    );
+  });
+});
+
+describe("describeDatabaseError", () => {
+  it("categorizes confirmation errors", () => {
+    const description = describeDatabaseError({ code: "CONFIRMATION_REQUIRED", message: "confirmation required" });
+    expect(description.category).toBe("confirmation");
+    expect(description.title).toBe("Confirmation required");
+  });
+
+  it("categorizes syntax errors", () => {
+    const description = describeDatabaseError({ code: "DATABASE_ERROR", message: "database error: syntax error near FROM" });
+    expect(description.category).toBe("syntax");
+  });
+
+  it("preserves technical details", () => {
+    const description = describeDatabaseError({ code: "DATABASE_ERROR", message: "connection refused" });
+    expect(description.category).toBe("connection");
+    expect(description.technicalDetail).toContain("DATABASE_ERROR");
   });
 });

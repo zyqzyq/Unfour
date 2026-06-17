@@ -5,6 +5,7 @@ import { isConfirmationRequired } from "../result-utils";
 export function useSqlExecution({
   connectionId,
   onConfirmationRequired,
+  onError,
   onExecuteStart,
   onSuccess,
   sql,
@@ -12,9 +13,10 @@ export function useSqlExecution({
 }: {
   connectionId: string | null;
   onConfirmationRequired: (required: boolean) => void;
+  onError?: (error: unknown, confirmMutation: boolean) => void;
   onExecuteStart: () => void;
   onSuccess: ReturnType<typeof executeDatabaseQuery> extends Promise<infer Result>
-    ? (result: Result) => void
+    ? (result: Result, confirmMutation: boolean) => void
     : never;
   sql: string;
   workspaceId: string;
@@ -29,10 +31,13 @@ export function useSqlExecution({
         limit: 100,
         confirmMutation,
       }),
-    onError: (error) => onConfirmationRequired(isConfirmationRequired(error)),
-    onSuccess: (result) => {
+    onError: (error, confirmMutation) => {
+      onConfirmationRequired(isConfirmationRequired(error));
+      onError?.(error, confirmMutation);
+    },
+    onSuccess: (result, confirmMutation) => {
       onConfirmationRequired(false);
-      onSuccess(result);
+      onSuccess(result, confirmMutation);
     },
   });
 }

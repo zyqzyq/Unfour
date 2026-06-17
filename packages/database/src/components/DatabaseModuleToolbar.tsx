@@ -1,21 +1,15 @@
-import { MoreHorizontal, Play, Plug, RefreshCw, Square, WandSparkles } from "lucide-react";
+import { Eraser, Play, Plug, RefreshCw, Square, Unplug } from "lucide-react";
 import type { DatabaseConnection } from "@unfour/command-client";
-import {
-  Button,
-  ConnectionStatus,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  IconButton,
-  Select,
-  Toolbar,
-  ToolbarGroup,
-} from "@unfour/ui";
+import { Button, ConnectionStatus, IconButton, Select, Toolbar, ToolbarGroup } from "@unfour/ui";
+import type { DatabaseConnectionStatus } from "../model/types";
 
 export function DatabaseModuleToolbar({
+  connectionStatus,
   connections,
   executePending,
+  onClearSql,
+  onConnect,
+  onDisconnect,
   onNewQuery,
   onRefresh,
   onRun,
@@ -23,9 +17,14 @@ export function DatabaseModuleToolbar({
   onStop,
   pendingConfirmation,
   selectedConnectionId,
+  sqlDirty,
 }: {
+  connectionStatus: DatabaseConnectionStatus;
   connections: DatabaseConnection[];
   executePending: boolean;
+  onClearSql: () => void;
+  onConnect: () => void;
+  onDisconnect: () => void;
   onNewQuery: () => void;
   onRefresh: () => void;
   onRun: () => void;
@@ -33,8 +32,11 @@ export function DatabaseModuleToolbar({
   onStop: () => void;
   pendingConfirmation: boolean;
   selectedConnectionId: string | null;
+  sqlDirty: boolean;
 }) {
   const selected = connections.find((connection) => connection.id === selectedConnectionId);
+  const connected = connectionStatus === "connected" || connectionStatus === "connecting";
+
   return (
     <Toolbar>
       <ToolbarGroup>
@@ -48,12 +50,15 @@ export function DatabaseModuleToolbar({
         <IconButton disabled={!executePending} label="Stop SQL execution" onClick={onStop}>
           <Square size={14} />
         </IconButton>
+        <IconButton disabled={!sqlDirty || executePending} label="Clear SQL" onClick={onClearSql}>
+          <Eraser size={14} />
+        </IconButton>
         <IconButton label="Refresh database module" onClick={onRefresh}>
           <RefreshCw size={14} />
         </IconButton>
       </ToolbarGroup>
-      <ToolbarGroup className="max-w-[520px]">
-        <ConnectionStatus connected={Boolean(selected)} label={selected ? selected.name : "disconnected"} />
+      <ToolbarGroup className="max-w-[560px]">
+        <ConnectionStatus label={connectionStatus} status={connectionStatus === "failed" ? "error" : connectionStatus} />
         <Select
           aria-label="Database connection"
           className="w-[220px]"
@@ -64,30 +69,20 @@ export function DatabaseModuleToolbar({
           }))}
           value={selectedConnectionId ?? ""}
         >
+          {!selectedConnectionId && <option value="">Select connection</option>}
           {!connections.length && <option value="">No connections</option>}
         </Select>
-        <IconButton disabled={!selected} label="Connect database">
-          <Plug size={14} />
-        </IconButton>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <IconButton label="More database actions">
-              <MoreHorizontal size={14} />
-            </IconButton>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem>
-              <WandSparkles size={13} />
-              Format SQL
-            </DropdownMenuItem>
-            <DropdownMenuItem>Explain Query</DropdownMenuItem>
-            <DropdownMenuItem>Export Result</DropdownMenuItem>
-            <DropdownMenuItem>Import SQL</DropdownMenuItem>
-            <DropdownMenuItem>Duplicate Tab</DropdownMenuItem>
-            <DropdownMenuItem>Close Other Tabs</DropdownMenuItem>
-            <DropdownMenuItem>Connection Settings</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {connected ? (
+          <Button disabled={!selected || executePending} onClick={onDisconnect} size="sm" type="button" variant="outline">
+            <Unplug size={13} />
+            Disconnect
+          </Button>
+        ) : (
+          <Button disabled={!selected || executePending} onClick={onConnect} size="sm" type="button" variant="outline">
+            <Plug size={13} />
+            Connect
+          </Button>
+        )}
       </ToolbarGroup>
     </Toolbar>
   );

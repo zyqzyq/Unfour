@@ -5,14 +5,16 @@ import type { DatabaseConnection } from "@unfour/command-client";
 export function useSchemaTree({
   connection,
   connectionId,
+  enabled = true,
   workspaceId,
 }: {
   connection: DatabaseConnection | null;
   connectionId: string | null;
+  enabled?: boolean;
   workspaceId: string;
 }) {
   return useQuery({
-    enabled: Boolean(workspaceId && connectionId && connection),
+    enabled: Boolean(enabled && workspaceId && connectionId && connection),
     queryKey: ["database-schema", workspaceId, connectionId],
     queryFn: () => getDatabaseSchema(workspaceId, connectionId ?? ""),
   });
