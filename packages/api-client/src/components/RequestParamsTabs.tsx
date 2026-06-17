@@ -62,7 +62,12 @@ export function RequestParamsTabs({
             <p className="mb-2 text-[11px] text-[var(--u-color-text-muted)]">
               Query parameters appended to the request URL.
             </p>
-            <KeyValueEditor items={query} onChange={onQueryChange} title="Query params" />
+            <KeyValueEditor
+              items={query}
+              onChange={onQueryChange}
+              showTitle={false}
+              title="Query params"
+            />
           </PaneScroll>
         )}
         {tab === "headers" && (
@@ -70,7 +75,12 @@ export function RequestParamsTabs({
             <p className="mb-2 text-[11px] text-[var(--u-color-text-muted)]">
               Request headers sent with this call.
             </p>
-            <KeyValueEditor items={headers} onChange={onHeadersChange} title="Headers" />
+            <KeyValueEditor
+              items={headers}
+              onChange={onHeadersChange}
+              showTitle={false}
+              title="Headers"
+            />
           </PaneScroll>
         )}
         {tab === "body" && (
@@ -140,16 +150,16 @@ export function CompactTabs<T extends string>({
   return (
     <div
       className={cn(
-        "flex h-[var(--u-size-tabbar)] shrink-0 items-end gap-1 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2",
+        "flex h-[var(--u-size-tabbar)] shrink-0 items-end gap-4 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-3",
         className,
       )}
     >
       {items.map((item) => (
         <button
           className={cn(
-            "flex h-[29px] min-w-0 items-center gap-1.5 rounded-t-[var(--u-radius-sm)] border border-transparent px-2 text-[12px] font-medium text-[var(--u-color-text-muted)] transition-colors",
+            "relative flex h-full min-w-0 items-center gap-1.5 px-1 text-[12px] font-medium text-[var(--u-color-text-muted)] transition-colors after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:bg-transparent",
             active === item.id
-              ? "border-[var(--u-color-border)] border-b-[var(--u-color-surface)] bg-[var(--u-color-surface)] text-[var(--u-color-text)]"
+              ? "text-[var(--u-color-text)] after:bg-[var(--u-color-primary)]"
               : "hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
           )}
           key={item.id}
@@ -176,23 +186,30 @@ function KeyValueEditor({
   items,
   maskSensitiveValues = false,
   onChange,
+  showTitle = true,
   title,
 }: {
   items: KeyValue[];
   maskSensitiveValues?: boolean;
   onChange: (items: KeyValue[]) => void;
+  showTitle?: boolean;
   title: string;
 }) {
   function update(index: number, patch: Partial<KeyValue>) {
     onChange(items.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
   }
 
+  const cellInputClass =
+    "h-[32px] rounded-none border-0 bg-transparent px-0 text-[12px] hover:border-0 focus:border-0 focus:ring-0 disabled:bg-transparent disabled:text-[var(--u-color-text-soft)]";
+
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-[var(--u-color-text-muted)]">
-          {title}
-        </span>
+    <div className="space-y-1.5">
+      <div className={cn("flex items-center", showTitle ? "justify-between" : "justify-end")}>
+        {showTitle && (
+          <span className="text-xs font-semibold uppercase text-[var(--u-color-text-muted)]">
+            {title}
+          </span>
+        )}
         <Button
           onClick={() => onChange([...items, { key: "", value: "", enabled: true }])}
           size="sm"
@@ -223,19 +240,26 @@ function KeyValueEditor({
               type="checkbox"
             />
             <Input
+              className={cellInputClass}
               disabled={!items.length}
               onChange={(event) => update(index, { key: event.target.value })}
               placeholder="Key"
               value={item.key}
             />
             <Input
+              className={cellInputClass}
               disabled={!items.length}
               onChange={(event) => update(index, { value: event.target.value })}
               placeholder="Value"
               type={maskSensitiveValues && isSensitiveKey(item.key) ? "password" : "text"}
               value={item.value}
             />
-            <Input disabled placeholder="Description" value="" />
+            <Input
+              className={cellInputClass}
+              disabled
+              placeholder="Description"
+              value=""
+            />
           </div>
         ))}
       </div>

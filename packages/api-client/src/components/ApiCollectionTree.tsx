@@ -207,7 +207,7 @@ function MethodMeta({ method }: { method: string }) {
 
 function SidebarEmpty({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-[var(--u-radius-sm)] border border-dashed border-[var(--u-color-border)] px-2 py-2 text-[12px] text-[var(--u-color-text-muted)]">
+    <div className="px-2 py-1.5 text-[12px] text-[var(--u-color-text-muted)]">
       {children}
     </div>
   );

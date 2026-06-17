@@ -15,8 +15,6 @@ export function ResponseTabs({
   onResponseTabChange,
   tab,
 }: {
-  layoutDirection: "vertical" | "horizontal";
-  onLayoutDirectionChange: (direction: "vertical" | "horizontal") => void;
   onResponseTabChange: (tab: ResponseTab) => void;
   tab: ApiRequestTab;
 }) {
@@ -43,7 +41,7 @@ export function ResponseTabs({
           <ResponseStatus response={tab.response} state={responseState} />
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-hidden pb-9">
+      <div className="min-h-0 flex-1 overflow-hidden">
         {responseState === "sending" && (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-[var(--u-color-text-muted)]">
             <Loader2 className="animate-spin text-[var(--u-color-primary)]" size={24} />

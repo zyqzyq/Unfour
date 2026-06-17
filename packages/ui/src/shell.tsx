@@ -96,7 +96,7 @@ export function Sidebar({
     <aside
       className={cn(
         "flex min-h-0 shrink-0 flex-col border-r border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] transition-[width] duration-150",
-        collapsed ? "w-[52px]" : "w-[280px] max-[900px]:w-[220px]",
+        collapsed ? "w-[52px]" : "w-[264px] max-[900px]:w-[220px]",
         className,
       )}
     >
@@ -343,7 +343,7 @@ export function StatusBar({
   return (
     <footer
       className={cn(
-        "flex h-[var(--u-size-statusbar)] shrink-0 items-center justify-between gap-3 border-t border-[var(--u-color-border)] bg-[var(--u-color-surface-muted)] px-2 text-[12px] text-[var(--u-color-text-muted)]",
+        "flex h-[var(--u-size-statusbar)] shrink-0 items-center justify-between gap-3 border-t border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2 text-[11px] text-[var(--u-color-text-muted)]",
         className,
       )}
     >
@@ -429,7 +429,7 @@ export function SplitPane({
         aria-label={`Resize ${orientation === "horizontal" ? "horizontal" : "vertical"} split`}
         aria-orientation={orientation}
         className={cn(
-          "shrink-0 bg-[var(--u-color-terminal-border)] hover:bg-[var(--u-color-focus)]",
+          "shrink-0 bg-[var(--u-color-border)] hover:bg-[var(--u-color-focus)]",
           orientation === "horizontal"
             ? "w-px cursor-col-resize"
             : "h-px cursor-row-resize",

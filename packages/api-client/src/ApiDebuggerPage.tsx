@@ -46,7 +46,6 @@ export function ApiDebuggerPage({
     setCollectionStatus,
     setRequestTab,
     setResponseTab,
-    setSplitDirection,
     state,
     updateDraft,
   } = useApiRequestTabs(workspaceId);
@@ -288,8 +287,6 @@ export function ApiDebuggerPage({
               tab={activeTab.requestTab}
             />
             <ApiResponseViewer
-              layoutDirection="vertical"
-              onLayoutDirectionChange={setSplitDirection}
               onResponseTabChange={(tab) => setResponseTab(activeTab.id, tab)}
               tab={activeTab}
             />

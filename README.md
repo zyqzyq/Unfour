@@ -59,5 +59,6 @@ The project currently expects a modern stable Rust toolchain. This workspace was
 - `AGENTS.md`: rules for coding agents.
 - `docs/engineering`: architecture and implementation notes.
 - `docs/engineering/progress.md`: current progress and next work slices.
+- `docs/testing/playwright.md`: Playwright usage and troubleshooting.
 - `docs/decisions`: ADRs.
 - `docs/user/USER_GUIDE.md`: user-facing guide.
