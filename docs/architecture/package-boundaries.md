@@ -1,10 +1,17 @@
 # Package Boundaries
 
+This is an architecture reference for intended dependency directions and module
+ownership. Current package and crate status lives in
+`docs/project/PACKAGE_STATUS.md`; when status differs, treat
+`PACKAGE_STATUS.md` as the source of truth.
+
 ## packages/app-shell
 
 ### Current State
 
-`packages/app-shell` is a thin wrapper. `src/AppShell.tsx` is the only source file; it receives props and delegates rendering to `AppShellFrame` from `packages/ui`.
+`packages/app-shell` is a thin wrapper. `src/AppShell.tsx` is the main source
+file; it receives props and delegates rendering to `AppShellFrame` from
+`packages/ui`.
 
 ### Target Responsibility
 
@@ -146,8 +153,12 @@ Exports `useWorkspaceStore` (a Zustand store) and re-exports the existing shared
 | --- | --- | --- | --- |
 | `packages/api-client` | Existing | Collection tree, request editor, response viewer, request state, history, environment variables | Database logic, SSH logic, top-level sidebar |
 | `packages/command-client` | Existing | Typed Tauri command wrappers, shared frontend types, browser-dev mocks | React components, feature business logic, feature state |
-| `packages/command-bus` | **Does not exist** | — | — |
-| `packages/extension-contracts` | **Does not exist** | — | — |
+| `crates/unfour-command-bus` | Existing Rust crate | Reusable command entry point for Tauri, MCP, and future AI/CLI adapters | UI components, Tauri-specific UI concerns, raw secret exposure |
+| `extension-contracts` | **Does not exist in this checkout** | Future scope待确认 | Do not invent contracts without an explicit task |
+
+There is no frontend command-bus package; command-bus behavior lives in
+`crates/unfour-command-bus`. There is also no current `packages/extension-contracts`
+or `crates/extension-contracts` workspace member.
 
 ### packages/command-client
 
@@ -200,5 +211,6 @@ Forbidden:
 3. **Feature packages depend on `packages/workspace-core`.**
    `packages/database` and `packages/ssh-terminal` import `useWorkspaceStore`. This is a transitional exception documented above.
 
-4. **`packages/api-client` defines a local `EmptyState`.**
-   `ResponseTabs.tsx` contains a page-local `EmptyState` component even though `packages/ui` exports one.
+4. **Historical note — `packages/api-client` local `EmptyState`.**
+   This was previously listed as an issue. `ResponseTabs.tsx` now imports
+   `EmptyState` from `packages/ui`.

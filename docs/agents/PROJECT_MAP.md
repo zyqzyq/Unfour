@@ -1,6 +1,8 @@
 # PROJECT_MAP.md
 
-> Read-only checkpoint scan. This file records the structural facts of the repository.
+> Architecture/reference snapshot. Current package and crate status lives in
+> `docs/project/PACKAGE_STATUS.md`. If this file and `PACKAGE_STATUS.md`
+> disagree on current status, treat `PACKAGE_STATUS.md` as authoritative.
 
 ## Top-Level Directory Structure
 
@@ -18,13 +20,14 @@ unfour/
   apps/
     desktop/                 -- Tauri 2 desktop application
   packages/
-    api-debugger/            -- API client frontend module
+    api-client/              -- API Debugger frontend module
     app-shell/               -- Global shell composition layer
     command-client/          -- Typed Tauri command wrappers + shared types
     database/                -- Database frontend module
-    terminal/                -- Terminal/SSH frontend module
+    ssh-terminal/            -- Terminal/SSH frontend module
     ui/                      -- Shared UI primitives (leaf package)
-    workspace/               -- Shared workspace Zustand store
+    workspace-core/          -- Shared workspace Zustand store
+    workspace-local/         -- Compatibility boundary for future local workspace behavior
   crates/
     unfour-core/             -- Foundation: models, errors, redaction
     local-storage/           -- SQLite persistence (LocalDb, ActivityLog)
@@ -33,6 +36,8 @@ unfour/
     ssh-engine/              -- SSH connection + session service
     workspace-engine/        -- Workspace lifecycle + layout service
     secret-store/            -- OS keychain credential service
+    unfour-command-bus/      -- Reusable Rust command entry point
+    unfour-mcp/              -- Local stdio MCP server
   docs/
     agents/                  -- AI agent documentation
     architecture/            -- Package and module boundary specs
@@ -54,7 +59,7 @@ unfour/
 | Field | Value |
 |---|---|
 | Entry | `./src/index.ts` |
-| Files | 16 (flat structure) |
+| Source layout | Shared primitives and stateless layout helpers under `src/` |
 | Internal deps | None (leaf package) |
 | External deps | @radix-ui/react-dialog, @radix-ui/react-dropdown-menu, @radix-ui/react-slot, class-variance-authority, clsx, lucide-react, react, tailwind-merge |
 
@@ -65,7 +70,7 @@ unfour/
 | Field | Value |
 |---|---|
 | Entry | `./src/index.ts` |
-| Files | 3 (flat structure) |
+| Source layout | Typed command wrappers, shared types, and browser mock fallback |
 | Internal deps | None (leaf package) |
 | External deps | @tauri-apps/api |
 
@@ -76,7 +81,7 @@ unfour/
 | Field | Value |
 |---|---|
 | Entry | `./src/index.ts` |
-| Files | 2 (flat structure) |
+| Source layout | Thin shell wrapper and package export |
 | Internal deps | @unfour/ui |
 | External deps | react |
 
@@ -87,7 +92,7 @@ unfour/
 | Field | Value |
 |---|---|
 | Entry | `./src/index.ts` |
-| Files | 2 (flat structure) |
+| Source layout | Workspace Zustand store and type re-exports |
 | Internal deps | @unfour/command-client |
 | External deps | zustand |
 
@@ -98,7 +103,7 @@ unfour/
 | Field | Value |
 |---|---|
 | Entry | `./src/index.ts` |
-| Files | 1 (flat structure) |
+| Source layout | Compatibility re-export only |
 | Internal deps | @unfour/workspace-core |
 | External deps | None |
 
@@ -109,18 +114,22 @@ unfour/
 | Field | Value |
 |---|---|
 | Entry | `./src/index.ts` |
-| Files | 15 (3 root + components/ + hooks/ + model/) |
+| Source layout | Feature page plus `components/`, `hooks/`, and `model/` |
 | Internal deps | @unfour/command-client, @unfour/ui |
 | External deps | @monaco-editor/react, @radix-ui/react-dropdown-menu, @tanstack/react-query, @tanstack/react-table, lucide-react, react |
 
-**Exports:** Full barrel: ApiDebuggerPage, ApiCollectionTree, ApiRequestEditor, ApiRequestToolbar, ApiResponseViewer, RequestActionsMenu, RequestParamsTabs, ResponseTabs, useApiHistory, useApiLayout, useApiRequest, api-request-state, types, request-utils.
+**Exports:** Full barrel: ApiDebuggerPage, ApiClientSidebar, ApiClientToolbar,
+ApiCollectionTree, ApiRequestEditor, ApiRequestTabs, ApiRequestBar,
+ApiResponseViewer, RequestActionsMenu, RequestParamsTabs, ResponseTabs,
+useApiHistory, useApiLayout, useApiRequest, useApiRequestTabs,
+api-request-state, request-tabs, types, request-utils.
 
 ### `@unfour/database` (packages/database)
 
 | Field | Value |
 |---|---|
 | Entry | `./src/index.ts` |
-| Files | 22 (3 root + components/ + hooks/ + model/) |
+| Source layout | Feature page plus `components/`, `hooks/`, and `model/` |
 | Internal deps | @unfour/command-client, @unfour/ui, @unfour/workspace-core |
 | External deps | @monaco-editor/react, @tanstack/react-query, lucide-react, react |
 
@@ -131,7 +140,7 @@ unfour/
 | Field | Value |
 |---|---|
 | Entry | `./src/index.ts` |
-| Files | 25 (3 root + components/ + hooks/ + model/) |
+| Source layout | Feature page plus `components/`, `hooks/`, and `model/` |
 | Internal deps | @unfour/command-client, @unfour/ui, @unfour/workspace-core |
 | External deps | @tanstack/react-query, @xterm/addon-fit, @xterm/xterm, lucide-react, react, zustand |
 
@@ -142,8 +151,8 @@ unfour/
 | Field | Value |
 |---|---|
 | Entry | `src/main.tsx` (Vite HTML entry) |
-| Files | 4 root + assets/ + components/ (empty) |
-| Internal deps | 7 runtime packages above (excluding the workspace-local compatibility package) |
+| Source layout | Desktop composition root, app components, assets, and Tauri adapter |
+| Internal deps | Runtime frontend packages above except `@unfour/workspace-local`, which is a compatibility package |
 | External deps | @monaco-editor/react, @radix-ui/*, @tailwindcss/vite, @tanstack/react-query, @tanstack/react-table, @tauri-apps/api, @tauri-apps/plugin-opener, react/react-dom, tailwindcss, zustand |
 
 **Role:** Composition root. Wires together AppShell, all feature pages, sidebar trees, status bars, workspace management, and window controls.
@@ -158,10 +167,12 @@ unfour/
 @unfour/workspace-core             --> command-client
 
 @unfour/api-client          --> command-client, ui
-@unfour/database              --> command-client, ui, workspace
-@unfour/ssh-terminal              --> command-client, ui, workspace
+@unfour/workspace-local       --> workspace-core
 
-@unfour/desktop               --> ALL 7 packages
+@unfour/database              --> command-client, ui, workspace-core
+@unfour/ssh-terminal          --> command-client, ui, workspace-core
+
+@unfour/desktop               --> app-shell, api-client, database, ssh-terminal, workspace-core, command-client, ui
 ```
 
 No circular dependencies detected. The graph is a clean DAG.
@@ -182,11 +193,17 @@ Depends on: `unfour-core`, `unfour-local-storage`. `ApiClientService`: HTTP exec
 
 ### `unfour-database-engine` (crates/database-engine)
 
-Depends on: `unfour-core`, `unfour-local-storage`. `DatabaseService`: connection CRUD, SQLite test/schema/query/browse, mutation confirmation policy. PostgreSQL/MySQL reserved. 3 tests.
+Depends on: `unfour-core`, `unfour-local-storage`, and related database
+driver dependencies. `DatabaseService`: connection CRUD, SQLite/PostgreSQL/MySQL
+test/schema/query/browse behavior, and mutation confirmation policy. See
+`docs/project/PACKAGE_STATUS.md` for current verification status.
 
 ### `unfour-ssh-engine` (crates/ssh-engine)
 
-Depends on: `unfour-core`, `unfour-local-storage`. `SshService`: connection CRUD, simulated session lifecycle, credential boundary enforcement, log export with redaction. `russh` behind `ssh-native` feature (not yet connected). 4 tests.
+Depends on: `unfour-core`, `unfour-local-storage`, and `unfour-secret-store`.
+`SshService`: connection CRUD, native SSH session lifecycle behind the
+`ssh-native` feature, host-key handling, terminal history, reconnect behavior,
+and log export with redaction. Live SSH verification remains a release gate.
 
 ### `unfour-workspace-engine` (crates/workspace-engine)
 
@@ -196,9 +213,21 @@ Depends on: `unfour-core`, `unfour-local-storage`. `WorkspaceService`: workspace
 
 Depends on: `unfour-core` only (intentionally decoupled from `local-storage`). OS keychain backend via `keyring` crate. Credential CRUD with workspace-scoped references. 4 tests.
 
+### `unfour-command-bus` (crates/unfour-command-bus)
+
+Depends on: `unfour-core`, `unfour-local-storage`, `unfour-secret-store`, and
+the HTTP, Database, SSH, and Workspace engine crates. Provides the reusable
+Rust command entry point for Tauri, MCP, and future AI/CLI adapters.
+
+### `unfour-mcp` (crates/unfour-mcp)
+
+Depends on: `unfour-command-bus` and `unfour-core`. Provides the local stdio
+MCP server and routes real tool behavior through the command bus.
+
 ### `unfour-workspace` (apps/desktop/src-tauri)
 
-Depends on: ALL 7 crates. Tauri adapter and composition layer. `CommandBus` orchestrates all services. 36 `#[tauri::command]` functions. `tracing-subscriber` for structured logging.
+Depends on the command bus plus the core engine crates. It is the Tauri adapter
+and composition layer for desktop commands, app setup, and event wiring.
 
 ### Rust Inter-Crate Dependency Graph
 
@@ -214,7 +243,9 @@ unfour-core  (foundation)
     |
     +---unfour-secret-store  (core only, NOT local-storage)
 
-unfour-workspace (desktop)  --> ALL 7 crates via CommandBus
+unfour-command-bus --> unfour-core, local-storage, secret-store, http-engine, database-engine, ssh-engine, workspace-engine
+unfour-mcp         --> unfour-command-bus, unfour-core
+unfour-workspace (desktop)  --> unfour-command-bus and core engine crates
 ```
 
 ## Frontend-to-Rust Call Chain
@@ -240,7 +271,7 @@ React component
 | Feature-local state (frontend) | React `useState` / `useReducer` | Form drafts, panel visibility, UI toggles |
 | Persistent storage (backend) | SQLite via sqlx | Workspaces, settings, API requests/history, connections, activity events |
 | Credential storage (backend) | OS keychain via `keyring` crate | SSH passwords, DB passwords, API tokens (stored as credential references only) |
-| In-memory (backend) | `HashMap` behind `Mutex` | SSH session state (simulated) |
+| In-memory (backend) | Runtime service state | SSH session lifecycle and event buffering |
 
 ## app-shell Current Responsibilities
 
@@ -252,17 +283,10 @@ This package is correctly minimal and contains no feature logic.
 
 ## app-shell Residual Concerns (in apps/desktop/src/App.tsx)
 
-`apps/desktop/src/App.tsx` (954 lines) is the composition root but contains significant inline logic:
-
-- **Workspace CRUD dialogs:** `WorkspaceMenu`, `WorkspaceDialog` (create, rename, delete) -- 200+ lines of workspace management UI with mutations
-- **Window controls:** `WindowControls`, `TitlebarWindowButton`, `AppTitleBar` -- ~100 lines of custom title bar logic
-- **Module sidebar:** `ModuleSidebar`, `ResourceGroup`, `SidebarAction` -- ~100 lines of sidebar routing and layout
-- **Hardcoded Tailwind colors:** 23 instances of `slate-*`, `white`, `rose-*`, `teal-*` classes instead of semantic `--u-color-*` tokens
-- **Bottom panel placeholder:** Inline diagnostics placeholder content
-- **Right inspector placeholder:** Inline placeholder content
-- **Layout persistence:** `layoutMutation` and debounce logic for persisting workspace layout
-
-Per AGENTS.md, `apps/desktop` is allowed to be the composition layer, but the workspace CRUD dialogs, window controls, and sidebar could be extracted into dedicated components or packages for clarity.
+`apps/desktop/src/App.tsx` is the composition root. It should remain an adapter
+and composition layer rather than absorbing API, SSH, Database, or Workspace
+business logic. Historical line counts and extraction progress should not be
+maintained here; use `docs/project/PACKAGE_STATUS.md` for current status.
 
 ## Tauri Configuration
 
