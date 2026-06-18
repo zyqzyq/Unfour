@@ -4,7 +4,7 @@
   "projectId": "9cef98f4-dab7-4995-a840-06a1dc6dc43f",
   "shape": "package",
   "tsconfig": "tsconfig.json",
-  "buildCmd": "node .ds-sync/package-build.mjs --config .design-sync/config.json --node-modules packages/ui/node_modules --entry packages/ui/src/index.ts --out ./ds-bundle && node .design-sync/strip-tw-vars.mjs",
+  "buildCmd": "node .design-sync/build-css.mjs && npx tsc -p packages/ui/tsconfig.dts.json && node .ds-sync/package-build.mjs --config .design-sync/config.json --node-modules packages/ui/node_modules --entry packages/ui/src/index.ts --out ./ds-bundle && node .design-sync/strip-tw-vars.mjs",
   "cssEntry": "dist/styles.css",
   "runtimeFontPrefixes": ["Inter"],
   "readmeHeader": ".design-sync/conventions.md",
