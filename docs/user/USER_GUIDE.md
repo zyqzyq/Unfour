@@ -2,7 +2,7 @@
 
 This document is for people using the app. It avoids implementation details that belong in `docs/engineering`.
 
-## Current Preview
+## Current MVP
 
 Unfour Workspace opens into a single workspace surface:
 
@@ -11,15 +11,19 @@ Unfour Workspace opens into a single workspace surface:
 - API client, SSH terminal, and database panels in the center
 - Local-first storage by default
 
-## Current Progress
+## Current Capabilities
 
 The app is currently an MVP workbench:
 
 - The workspace shell is usable.
-- API debugging is the most complete tool today.
-- SQLite database workflows have a first usable version.
-- SSH is still a preview screen while the real session engine is being built.
-- AI calls and cloud sync are not visible product features yet; the codebase only reserves their future integration points.
+- API debugging supports request editing, Send, response viewing, history,
+  saved requests, collections, environments, import, and export.
+- SQLite database workflows are usable.
+- PostgreSQL and MySQL/MariaDB database workflows are experimental and should be
+  verified against your own database before relying on them.
+- SSH Terminal workflows are experimental until the live SSH verification gate
+  is completed.
+- AI calls and cloud sync are planned, not visible product features.
 
 ## API Client
 
@@ -38,7 +42,14 @@ Saved requests are stored inside the active workspace.
 
 ## SSH Terminal
 
-The SSH screen is present as a preview. Real connection support is planned for the SSH MVP.
+The SSH Terminal is experimental. It supports saved SSH connections, credential
+references, terminal sessions, PTY input/output, resize, search, redacted log
+export, host-key trust, and reconnect behavior in the current implementation.
+
+Use non-critical hosts until the live SSH verification gate is completed. The
+full password/private-key, host-key, history restore, keepalive, and reconnect
+journey still needs release-level manual verification against a reachable SSH
+server.
 
 ## Database
 
@@ -49,13 +60,16 @@ The database screen can save workspace-scoped database connections.
 3. Choose `SQLite`.
 4. Enter a local SQLite file path.
 5. Click `Save`.
-6. Select the saved connection and click `Test`.
+6. Select the saved connection and click `Connect`.
 7. Review tables and columns in `Schema`.
 8. Write SQL in `SQL Editor`.
 9. Click `Run`.
 10. Review result rows, affected rows, and duration.
 
-PostgreSQL and MySQL/MariaDB connection metadata can be prepared, but live credential-backed connections are still reserved for the next implementation phase.
+PostgreSQL and MySQL/MariaDB workflows are experimental. You can create
+connections using credential references and use the same connect, schema,
+query, and table-preview flow, but live behavior depends on your database
+environment. Re-verify before using them for important work.
 
 ## Code Architecture Overview
 
@@ -69,7 +83,8 @@ Unfour has two halves:
 The frontend is responsible for what you see and edit:
 
 - `apps/desktop/src/App.tsx` mounts the composed desktop shell.
-- `packages/app-shell` builds the main workspace window, left resource area, tabs, and current API/SSH/Database panels.
+- `packages/app-shell` provides a thin shell slot wrapper. The desktop app
+  composes the current workspace window while the module split is in progress.
 - `packages/command-client` is the bridge used by React to call Rust commands. It also contains browser-only mocks so the interface can run during frontend development.
 - `packages/workspace-core` keeps temporary UI state such as the active workspace, active tab, and sidebar state.
 - `packages/workspace-local` is the frontend boundary reserved for local workspace persistence and currently provides a compatibility re-export.
@@ -80,19 +95,29 @@ The Rust backend is responsible for actions that should not live only in the bro
 
 - `apps/desktop/src-tauri/src/lib.rs` starts the Tauri app and registers all commands.
 - `apps/desktop/src-tauri/src/commands.rs` exposes thin Tauri commands.
-- `apps/desktop/src-tauri/src/command_bus.rs` routes commands to the correct service. This is the same path future AI, CLI, or sync automation should use.
+- `crates/unfour-command-bus` routes commands to the correct service. Tauri,
+  MCP, and future AI/CLI automation should use this same command boundary.
 - `crates/local-storage` opens and migrates the local SQLite database and records local activity.
 - `crates/workspace-engine` handles workspace data.
 - `crates/http-engine` sends HTTP requests and stores API history/templates.
-- `crates/database-engine` stores database connections and currently runs SQLite test/schema/query actions.
-- `crates/ssh-engine` is the reserved boundary for real SSH sessions.
-- `crates/secret-store` is the reserved boundary for OS keychain or Stronghold credentials.
+- `crates/database-engine` stores database connections and runs database
+  test/schema/query/table-browse actions.
+- `crates/ssh-engine` owns SSH sessions, host-key trust, reconnect behavior,
+  and terminal log export.
+- `crates/secret-store` owns OS keychain-backed credential references in
+  production and in-memory credentials for tests.
 
 The important idea is that API, SSH, and Database are not separate apps. They share the same Workspace, tabs, local database, local activity trail, credential boundary, and future sync model.
 
 ## Data And Privacy
 
-The app is local-first. Workspace metadata is stored locally. High-value actions such as writes, credential changes, external API sends, SSH session lifecycle events, and future AI-triggered actions keep redacted local activity records for troubleshooting. Routine reads and UI layout changes are not treated as activity events. Secret storage is reserved for OS keychain/Stronghold integration; until that work lands, do not place long-lived secrets into saved request bodies.
+The app is local-first. Workspace metadata is stored locally. High-value actions
+such as writes, credential changes, external API sends, SSH session lifecycle
+events, and future AI-triggered actions keep redacted local activity records for
+troubleshooting. Routine reads and UI layout changes are not treated as activity
+events. Use credential references for SSH and database secrets where available;
+do not place long-lived secrets in workspace environment variables or saved
+request bodies.
 
 ## Documentation Split
 

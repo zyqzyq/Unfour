@@ -28,3 +28,4 @@ playwright-report
 *.njsproj
 *.sln
 *.sw?
+*.pyc

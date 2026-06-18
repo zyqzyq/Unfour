@@ -18,28 +18,19 @@ Cloud Workflow Adapter
         -> CommandBus -> Service -> Driver
 ```
 
-## Current Commands
+## Current Command Families
 
-- `workspace_list`
-- `workspace_create`
-- `workspace_rename`
-- `workspace_delete`
-- `workspace_set_active`
-- `workspace_environment_get`
-- `workspace_environment_update`
-- `api_send_request`
-- `api_history_list`
-- `api_request_save`
-- `api_saved_requests`
-- `database_connections_list`
-- `database_connection_save`
-- `database_connection_delete`
-- `database_connection_test`
-- `database_schema_get`
-- `database_query_execute`
-- `system_health`
-- `ReadCommand::CurrentWorkspace`
-- `ReadCommand::ListConnections`
+The exact Tauri command names live in the Tauri adapter and
+`@unfour/command-client`. The current command bus covers these families:
+
+- Workspace list/create/rename/delete/set-active operations.
+- Workspace environment and layout reads/writes.
+- API send, history, saved-request, duplicate, delete, and collection reads.
+- Credential create/inspect/rotate/delete operations through credential refs.
+- Database connection save/delete/test, schema, query, and table-browse paths.
+- SSH connection save/delete, session connect/list/history/input/resize/close,
+  reconnect cancellation, log export, host-key, and known_hosts paths.
+- System health and safe read commands for MCP/future AI adapters.
 
 ## Rules
 

@@ -66,7 +66,9 @@ Future AI/workflow actions should distinguish local reads, writes, and data egre
   create/read/delete behavior was release-smoke verified on 2026-06-14 for SSH
   passwords, SSH private-key passphrases, PostgreSQL passwords, and MySQL
   passwords. macOS and Linux runtime verification remains pending.
-- Database query cancellation and read-only guardrails are not implemented.
+- Database query cancellation remains pending. Query safety classification and
+  confirmation guardrails exist, and MCP database tools enforce read-only
+  allowlists before reaching the command bus.
 - Workspace environment values are not encrypted; do not store long-lived secrets there.
 - Encrypted SSH private key passphrase decryption is limited by the ssh-key crate's format support.
 

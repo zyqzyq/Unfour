@@ -1,8 +1,13 @@
 # Progress
 
-This document records the current implementation state and the next work slices. It is a development progress log, not a user guide.
+> Historical/reference engineering log. Current package and crate status lives
+> in `docs/project/PACKAGE_STATUS.md`; use that file as the source of truth
+> when status here looks stale.
 
-## Current State
+This document records historical implementation state and work slices. It is a
+development progress log, not a user guide.
+
+## Historical State Snapshot
 
 ### Foundation
 
@@ -53,8 +58,11 @@ This document records the current implementation state and the next work slices.
 - DONE: DatabaseService has automated tests for connection CRUD, SQLite test, schema browsing, query execution, and table browsing.
 - DONE: Mutating, schema-changing, transaction-control, and unknown SQL require explicit confirmation before execution.
 - DONE: Database result grids use frontend pagination, stable column widths, large-result row virtualization, TSV copy, and CSV export.
-- PARTIAL: PostgreSQL/MySQL metadata can be saved, but live credential-backed connections are still reserved.
-- TODO: PostgreSQL/MySQL connection tests, schema browsing, and controlled editing.
+- DONE: PostgreSQL/MySQL/MariaDB connection, schema, query, and table-browse
+  paths exist behind credential references.
+- EXPERIMENTAL: Live PostgreSQL/MySQL/MariaDB behavior is environment
+  dependent and should be re-verified when database behavior changes.
+- PLANNED: Controlled table editing is not a confirmed current user workflow.
 
 ### Secret Store
 
@@ -67,11 +75,13 @@ This document records the current implementation state and the next work slices.
 ### SSH
 
 - DONE: Frontend has an SSH work surface and xterm preview component.
-- DONE: Rust service boundary and dependency strategy are reserved.
+- DONE: Rust SSH service boundary and `ssh-native` dependency path are in
+  place.
 - DONE: SSH connection metadata CRUD stores host/user/auth metadata with `credential_ref` only.
 - DONE: SSH connection metadata is workspace-scoped and covered by Rust service tests.
 - DONE: Session lifecycle command surface supports password/private-key connection sessions, PTY sizing, input events, resize events, close, redacted log export, and cleanup when a connection is deleted.
-- TODO: Replace the local session MVP stream with real remote `russh` channel IO under the existing command surface.
+- EXPERIMENTAL: Real SSH server workflows remain a live verification gate
+  before release-level confidence.
 
 ## Verification Status
 
@@ -103,20 +113,22 @@ Goal: make the workspace shell remember layout and open tabs.
 
 ### Slice 2: Database Hardening
 
-Goal: turn the SQLite database MVP into a dependable local database tool.
+Goal: harden the database tool across supported drivers.
 
 - DONE: Add backend tests around connection CRUD, SQLite test, schema browsing, query execution, and table browsing.
 - DONE: Add query safety policy for mutating SQL, including confirmation metadata for future AI/automation.
 - DONE: Add table data browse action that generates safe `SELECT * FROM table LIMIT/OFFSET` queries.
 - DONE: Add read-only table data mode with backend offset pagination and total row metadata.
 - DONE: Add result pagination, column width handling, and large-result virtualization in the frontend.
-- Add Postgres/MySQL live connection tests after secret storage is ready.
+- Re-run PostgreSQL/MySQL/MariaDB live verification whenever database behavior
+  changes.
 
 ### Slice 3: Secret Store
 
-Goal: stop all credential-bearing workflows at a real OS secret boundary.
+Goal: keep credential-bearing workflows at a real OS secret boundary.
 
-- DONE: Implement `SecretStore` using OS keychain or Stronghold.
+- DONE: Implement `SecretStore` using OS keychain backends in production and an
+  in-memory backend for tests.
 - DONE: Add commands for creating, reading metadata for, rotating, and deleting credentials.
 - DONE: Store only `credential_ref` in SQLite.
 - DONE: Add redaction helpers shared by API, SSH, database, local activity, and future sync.
@@ -126,17 +138,19 @@ Goal: stop all credential-bearing workflows at a real OS secret boundary.
 
 Goal: implement a real multi-session terminal flow.
 
-- Add SSH connection metadata CRUD under the shared `connections` table.
-- Implement password auth and return `session_id`.
-- Implement private-key auth with passphrase referenced through `SecretStore`.
-- Allocate PTY and stream backend output to the frontend with Tauri events.
-- Wire xterm input, resize, close, and session log export.
+- DONE: Add SSH connection metadata CRUD under the shared `connections` table.
+- DONE: Implement password auth and return `session_id`.
+- DONE: Implement private-key auth with passphrase referenced through `SecretStore`.
+- DONE: Allocate PTY and stream backend output to the frontend with Tauri events.
+- DONE: Wire xterm input, resize, close, and session log export.
+- PENDING VERIFICATION: Exercise the complete SSH flow against a reachable live
+  SSH server.
 
 ### Slice 5: API Client Polish
 
 Goal: move from functional request runner to Postman-like daily tool.
 
-- Add collections and folders.
+- DONE: Add collections and folders.
 - DONE: Add response headers, cookies, timing, and size panels.
 - DONE: Add history replay into the editable request form.
 - DONE: Add import/export without secrets.

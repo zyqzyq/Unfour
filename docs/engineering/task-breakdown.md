@@ -1,5 +1,9 @@
 # Task Breakdown
 
+> Historical/reference task log. Current package and crate status lives in
+> `docs/project/PACKAGE_STATUS.md`; use that file as the source of truth
+> when task status here looks stale.
+
 ## P0: Engineering Base
 
 - DONE TASK-CORE-001: Initialize Tauri 2 + React + TypeScript + Vite.
@@ -7,7 +11,7 @@
 - DONE TASK-CORE-003: Add Rust `AppError` and structured command responses.
 - DONE TASK-CORE-004: Add Command Bus and route Tauri commands through it.
 - DONE TASK-CORE-005: Add SQLite local store and migrations.
-- DONE TASK-CORE-006: Reserve secret store boundary.
+- DONE TASK-CORE-006: Add SecretStore boundary.
 - DONE TASK-CORE-007: Add local activity log and redaction rules.
 - DONE TASK-CORE-008: Add automated tests for WorkspaceService and ApiClientService.
 - DONE TASK-CORE-009: Add automated tests for DatabaseService SQLite flows.
@@ -48,17 +52,25 @@
 
 - DONE TASK-DB-001: Connection metadata CRUD with `credential_ref`.
 - DONE TASK-DB-002: SQLite connection test.
-- TODO TASK-DB-003: PostgreSQL/MySQL connection tests.
-- PARTIAL TASK-DB-004: Schema tree for tables and columns. SQLite is implemented; PostgreSQL/MySQL remain.
-- PARTIAL TASK-DB-005: SQL editor execution and paginated results. SQLite execution and frontend result pagination are implemented; PostgreSQL/MySQL remain.
-- PARTIAL TASK-DB-006: Read-only table data view, then controlled edit support. SQLite read-only browsing is implemented; controlled editing remains.
+- PARTIAL TASK-DB-003: PostgreSQL/MySQL/MariaDB connection paths exist, but
+  live verification is environment-dependent and should be rerun for DB
+  behavior changes.
+- DONE TASK-DB-004: Schema tree for tables and columns across supported
+  database drivers.
+- DONE TASK-DB-005: SQL editor execution and paginated results across supported
+  database drivers.
+- PARTIAL TASK-DB-006: Read-only table data view is implemented; controlled
+  editing remains planned.
 - DONE TASK-DB-007: Add safe table browse action from schema tree.
 - DONE TASK-DB-008: Add frontend pagination, copy/export, and large result virtualization.
 - DONE TASK-DB-009: Add mutation confirmation policy for destructive SQL and future AI calls.
 
 ## P2: Reserved Extensions
 
-- DONE TASK-SECRET-001: Implement OS keychain or Stronghold-backed `SecretStore`. OS keychain backend, credential create/inspect/rotate/delete command surface, shared redaction helpers, and frontend credential reference management UI are implemented.
+- DONE TASK-SECRET-001: Implement OS keychain-backed `SecretStore`. OS
+  keychain backend, credential create/inspect/rotate/delete command surface,
+  shared redaction helpers, and frontend credential reference management UI are
+  implemented. macOS/Linux runtime verification remains pending.
 - TODO TASK-AI-001: Expose Command Bus through an AI adapter.
 - TODO TASK-AI-002: Add capability metadata, confirmation policy, and dry-run summaries for risky actions.
 - TODO TASK-SYNC-001: Add cloud account model and workspace sync queue.

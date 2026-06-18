@@ -42,11 +42,16 @@ Global records, such as `app_settings`, do not require `workspace_id`.
 
 Workspace environments are stored in `workspace_settings.env_json` as an array of enabled key/value pairs. API requests resolve placeholders such as `{{base_url}}` in URL, headers, query parameters, and body before sending.
 
-Environment values are ordinary workspace data, not secret storage. API tokens and passwords should move to the secret store once that implementation lands.
+Environment values are ordinary workspace data, not secret storage. Do not put
+long-lived secrets in workspace environment variables. Connection passwords and
+SSH private-key passphrases should be stored through credential references where
+the feature supports them.
 
 ## Credential Boundary
 
-Connection tables may store `credential_ref`, but not secret material. The credential provider is reserved behind `SecretStore` so the later implementation can choose OS keychain or Stronghold without changing feature services.
+Connection tables may store `credential_ref`, but not secret material.
+`SecretStore` is the credential boundary: production builds use OS keychain
+backends, while tests can use an in-memory backend.
 
 ## Sync Posture
 
