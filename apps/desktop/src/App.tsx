@@ -17,6 +17,7 @@ import {
 import { useWorkspaceStore } from "@unfour/workspace-core";
 import { AppTitleBar } from "./components/AppTitleBar";
 import { BottomPanelPlaceholder } from "./components/BottomPanelPlaceholder";
+import { ModuleActivityBar } from "./components/ModuleActivityBar";
 import { ModuleSidebar } from "./components/ModuleSidebar";
 import { RightInspectorPlaceholder } from "./components/RightInspectorPlaceholder";
 import { StatusBarPlaceholder } from "./components/StatusBarPlaceholder";
@@ -74,6 +75,14 @@ function App() {
   return (
     <>
       <AppShell
+        activityBar={
+          <ModuleActivityBar
+            activeKind={activeTab.kind}
+            sidebarCollapsed={sidebarCollapsed}
+            onSelect={setActiveTab}
+            onToggleSidebar={toggleSidebar}
+          />
+        }
         bottomPanel={
           activeTab.kind === "ssh" && activeWorkspace ? (
             <TerminalLogPanel
@@ -124,7 +133,6 @@ function App() {
               setSelectedDatabaseConnection(connection.id);
               setActiveTab("database-main");
             }}
-            onToggle={toggleSidebar}
             onWidthChange={setSidebarWidth}
             selectedDatabaseConnectionId={selectedDatabaseConnectionId}
             setActiveTab={setActiveTab}

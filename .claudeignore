@@ -1,0 +1,46 @@
+# Dependencies
+**/node_modules/
+.pnp/
+.pnp.js
+
+# Build outputs
+**/dist/
+build/
+out/
+.next/
+.nuxt/
+.output/
+
+# Cache
+.cache/
+.turbo/
+.parcel-cache/
+**/.cache/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+
+# Env
+.env*
+
+# Large media
+public/videos/
+public/assets/raw/
+*.mp4
+*.mov
+*.psd
+*.sketch
+*.fig

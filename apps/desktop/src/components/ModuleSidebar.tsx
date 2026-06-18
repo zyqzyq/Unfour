@@ -1,8 +1,4 @@
-import {
-  Database,
-  PanelLeftClose,
-  PanelLeftOpen,
-} from "lucide-react";
+import { Database } from "lucide-react";
 import {
   DatabaseConnectionTree,
 } from "@unfour/database";
@@ -14,14 +10,11 @@ import type {
   WorkspaceTab,
 } from "@unfour/command-client";
 import {
-  IconButton,
   Sidebar,
-  SidebarHeader,
   SidebarRow,
   SidebarSection,
   useI18n,
 } from "@unfour/ui";
-import { ModuleSwitcher } from "./ModuleSwitcher";
 
 export function ModuleSidebar({
   activeTab,
@@ -30,7 +23,6 @@ export function ModuleSidebar({
   collapsed,
   databaseConnections,
   onSelectDatabaseConnection,
-  onToggle,
   onWidthChange,
   selectedDatabaseConnectionId,
   setActiveTab,
@@ -42,7 +34,6 @@ export function ModuleSidebar({
   collapsed: boolean;
   databaseConnections: DatabaseConnection[];
   onSelectDatabaseConnection: (connection: DatabaseConnection) => void;
-  onToggle: () => void;
   onWidthChange: (width: number) => void;
   selectedDatabaseConnectionId: string | null;
   setActiveTab: (tabId: string) => void;
@@ -50,28 +41,12 @@ export function ModuleSidebar({
 }) {
   const { t } = useI18n();
 
+  if (collapsed) {
+    return null;
+  }
+
   return (
     <Sidebar
-      collapsed={collapsed}
-      className="bg-[var(--u-color-surface-subtle)]"
-      header={
-        <SidebarHeader className="h-auto flex-col items-stretch gap-2 p-2">
-          <div className="flex w-full justify-end">
-            <IconButton
-              className={collapsed ? "w-full" : "shrink-0"}
-              label={collapsed ? t("app.sidebar.expand") : t("app.sidebar.collapse")}
-              onClick={onToggle}
-            >
-              {collapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
-            </IconButton>
-          </div>
-          <ModuleSwitcher
-            activeKind={activeTab.kind}
-            collapsed={collapsed}
-            onSelect={(tabId) => setActiveTab(tabId)}
-          />
-        </SidebarHeader>
-      }
       onWidthChange={onWidthChange}
       resizable
       width={width}
@@ -80,69 +55,32 @@ export function ModuleSidebar({
       {activeTab.kind === "ssh" && (
         <SshConnectionTree
           active={activeTabId === "ssh-main"}
-          collapsed={collapsed}
+          collapsed={false}
           onOpenTerminal={() => setActiveTab("ssh-main")}
           workspaceId={activeWorkspaceId}
         />
       )}
       {activeTab.kind === "database" && (
         <div className="space-y-3">
-          <ResourceGroup collapsed={collapsed} title={t("app.nav.database")}>
-            <SidebarAction
-              collapsed={collapsed}
-              icon={<Database size={14} />}
-              label={t("app.sidebar.sqlWorkspace")}
-              onClick={() => setActiveTab("database-main")}
-              selected={activeTabId === "database-main" && (collapsed || !selectedDatabaseConnectionId)}
-            />
-            {!collapsed && (
+          <SidebarSection title={t("app.nav.database")}>
+            <div className="space-y-1">
+              <SidebarRow
+                active={activeTabId === "database-main" && !selectedDatabaseConnectionId}
+                onClick={() => setActiveTab("database-main")}
+              >
+                <Database size={14} />
+                <span className="truncate">{t("app.sidebar.sqlWorkspace")}</span>
+              </SidebarRow>
               <DatabaseConnectionTree
                 connections={databaseConnections}
                 onNewQuery={() => setActiveTab("database-main")}
                 onSelectConnection={onSelectDatabaseConnection}
                 selectedConnectionId={selectedDatabaseConnectionId}
               />
-            )}
-          </ResourceGroup>
+            </div>
+          </SidebarSection>
         </div>
       )}
     </Sidebar>
-  );
-}
-
-function ResourceGroup({
-  children,
-  collapsed,
-  title,
-}: {
-  children: React.ReactNode;
-  collapsed: boolean;
-  title: string;
-}) {
-  return (
-    <SidebarSection title={collapsed ? undefined : title}>
-      <div className="space-y-1">{children}</div>
-    </SidebarSection>
-  );
-}
-
-function SidebarAction({
-  collapsed,
-  icon,
-  label,
-  onClick,
-  selected,
-}: {
-  collapsed: boolean;
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  selected: boolean;
-}) {
-  return (
-    <SidebarRow active={selected} onClick={onClick}>
-      {icon}
-      {!collapsed && <span className="truncate">{label}</span>}
-    </SidebarRow>
   );
 }

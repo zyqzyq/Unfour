@@ -102,6 +102,23 @@ export function methodToneClass(method: string) {
   }
 }
 
+export function methodBadgeToneClass(method: string) {
+  switch (method.trim().toUpperCase()) {
+    case "GET":
+      return "bg-[var(--u-color-success-soft)] text-[var(--u-color-success)]";
+    case "POST":
+      return "bg-[var(--u-color-warning-soft)] text-[var(--u-color-warning-text)]";
+    case "PUT":
+      return "bg-[var(--u-color-info-soft)] text-[var(--u-color-info-text)]";
+    case "PATCH":
+      return "bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]";
+    case "DELETE":
+      return "bg-[var(--u-color-danger-soft)] text-[var(--u-color-danger-text)]";
+    default:
+      return "bg-[var(--u-color-surface-muted)] text-[var(--u-color-text-muted)]";
+  }
+}
+
 export function emptyApiTabsState(workspaceId: string): ApiTabsState {
   return {
     activeTabId: null,

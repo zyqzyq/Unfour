@@ -21,6 +21,7 @@ export function clampResizablePaneSize(
 }
 
 export function AppShellFrame({
+  activityBar,
   bottomPanel,
   children,
   className,
@@ -29,6 +30,7 @@ export function AppShellFrame({
   sidebar,
   statusBar,
 }: {
+  activityBar?: React.ReactNode;
   bottomPanel?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
@@ -46,6 +48,7 @@ export function AppShellFrame({
     >
       {globalToolbar}
       <div className="flex min-h-0 flex-1">
+        {activityBar}
         {sidebar}
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1">
@@ -57,6 +60,25 @@ export function AppShellFrame({
       </div>
       {statusBar}
     </div>
+  );
+}
+
+export function ActivityBar({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <aside
+      className={cn(
+        "flex w-[48px] shrink-0 flex-col items-center border-r border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] py-2",
+        className,
+      )}
+    >
+      {children}
+    </aside>
   );
 }
 

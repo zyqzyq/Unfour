@@ -2,7 +2,7 @@ import type { Ref } from "react";
 import { Save, Send } from "lucide-react";
 import { Button, Input, cn, useI18n } from "@unfour/ui";
 import {
-  methodToneClass,
+  methodBadgeToneClass,
   type ApiRequestTab,
 } from "../model/request-tabs";
 import { methods } from "../hooks/useApiRequest";
@@ -33,12 +33,12 @@ export function ApiRequestBar({
 
   return (
     <div className="flex min-h-[48px] shrink-0 items-center gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3 py-2">
-      <div className="flex min-w-0 flex-1 items-stretch overflow-hidden rounded-[var(--u-radius-md)] border border-[var(--u-color-input)] bg-[var(--u-color-bg)] focus-within:border-[var(--u-color-focus)]">
+      <div className="flex min-w-0 flex-1 items-stretch gap-1.5 overflow-hidden rounded-[var(--u-radius-md)] border border-[var(--u-color-input)] bg-[var(--u-color-surface)] p-1 focus-within:border-[var(--u-color-focus)] focus-within:ring-1 focus-within:ring-[color:color-mix(in_srgb,var(--u-color-focus)_30%,transparent)]">
         <select
           aria-label="HTTP method"
           className={cn(
-            "h-[var(--u-size-input)] w-[86px] border-0 border-r border-[var(--u-color-border)] bg-transparent px-2 text-[12px] font-bold uppercase outline-none",
-            methodToneClass(tab.draft.method),
+            "h-[26px] shrink-0 cursor-pointer rounded-[var(--u-radius-sm)] border-0 px-2 text-[12px] font-bold uppercase tracking-wide outline-none",
+            methodBadgeToneClass(tab.draft.method),
           )}
           onChange={(event) => onUpdate({ method: event.target.value })}
           value={tab.draft.method}
@@ -49,7 +49,7 @@ export function ApiRequestBar({
         </select>
         <Input
           aria-label="Request URL"
-          className="min-w-0 flex-1 border-0 bg-transparent font-mono focus:border-0"
+          className="min-w-0 flex-1 border-0 bg-transparent font-mono focus:border-0 focus:ring-0"
           onChange={(event) => onUpdate({ url: event.target.value })}
           placeholder="https://api.example.com/resource"
           ref={urlInputRef}

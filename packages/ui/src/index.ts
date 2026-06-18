@@ -43,6 +43,7 @@ export {
 } from "./menus";
 export { Select, type SelectOption } from "./select";
 export {
+  ActivityBar,
   AppShellFrame,
   BottomPanel,
   CommandPalette,

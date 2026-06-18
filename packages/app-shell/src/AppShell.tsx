@@ -2,6 +2,7 @@ import * as React from "react";
 import { AppShellFrame } from "@unfour/ui";
 
 export type AppShellProps = {
+  activityBar?: React.ReactNode;
   bottomPanel?: React.ReactNode;
   className?: string;
   globalToolbar?: React.ReactNode;
@@ -12,6 +13,7 @@ export type AppShellProps = {
 };
 
 export default function AppShell({
+  activityBar,
   bottomPanel,
   className,
   globalToolbar,
@@ -22,6 +24,7 @@ export default function AppShell({
 }: AppShellProps) {
   return (
     <AppShellFrame
+      activityBar={activityBar}
       bottomPanel={bottomPanel}
       className={className}
       globalToolbar={globalToolbar ?? null}

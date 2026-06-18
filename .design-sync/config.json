@@ -1,0 +1,39 @@
+{
+  "pkg": "@unfour/ui",
+  "globalName": "UnfourUI",
+  "projectId": "9cef98f4-dab7-4995-a840-06a1dc6dc43f",
+  "shape": "package",
+  "tsconfig": "tsconfig.json",
+  "buildCmd": "node .ds-sync/package-build.mjs --config .design-sync/config.json --node-modules packages/ui/node_modules --entry packages/ui/src/index.ts --out ./ds-bundle",
+  "cssEntry": "dist/styles.css",
+  "runtimeFontPrefixes": ["Inter"],
+  "readmeHeader": ".design-sync/conventions.md",
+  "overrides": {
+    "Dialog": { "cardMode": "single" },
+    "DropdownMenu": { "cardMode": "single" },
+    "ContextMenu": { "cardMode": "single" },
+    "DataTable": { "cardMode": "column" },
+    "EmptyState": { "cardMode": "column" },
+    "ErrorState": { "cardMode": "column" },
+    "LoadingState": { "cardMode": "column" },
+    "Tabs": { "cardMode": "column" },
+    "Toolbar": { "cardMode": "column" }
+  },
+  "componentSrcMap": {
+    "ActivityBar": null,
+    "AppShellFrame": null,
+    "BottomPanel": null,
+    "CommandPalette": null,
+    "GlobalToolbar": null,
+    "MainWorkspace": null,
+    "RightInspector": null,
+    "Sidebar": null,
+    "SidebarHeader": null,
+    "SidebarRow": null,
+    "SidebarSection": null,
+    "SplitPane": null,
+    "StatusBar": null,
+    "TabBar": null,
+    "I18nProvider": null
+  }
+}
