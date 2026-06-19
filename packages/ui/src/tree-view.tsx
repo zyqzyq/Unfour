@@ -81,7 +81,8 @@ function TreeRow({
       aria-expanded={hasChildren ? expanded : undefined}
       className={cn(
         "group flex h-[var(--u-size-sidebar-row)] min-w-0 items-center gap-1 rounded-[var(--u-radius-sm)] px-1 text-[12px] text-[var(--u-color-text-muted)]",
-        selectedId === item.id && "bg-[var(--u-color-surface-active)] text-[var(--u-color-text)]",
+        selectedId === item.id &&
+          "bg-[var(--u-color-primary-soft)] font-semibold text-[var(--u-color-primary)]",
         item.disabled ? "opacity-60" : "hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
       )}
       role="treeitem"

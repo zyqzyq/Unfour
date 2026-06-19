@@ -3,7 +3,8 @@
     "commandPalette": {
       "openApiClient": "Open API Debugger",
       "openDatabase": "Open Database",
-      "openSshTerminal": "Open SSH Terminal"
+      "openSshTerminal": "Open SSH Terminal",
+      "placeholder": "Search commands"
     },
     "language": {
       "label": "Language",
@@ -32,7 +33,9 @@
     },
     "titlebar": {
       "moreActions": "More actions",
-      "settings": "Settings"
+      "settings": "Settings",
+      "toggleBottomPanel": "Toggle bottom panel",
+      "toggleInspector": "Toggle inspector"
     },
     "workspace": {
       "deleteCurrent": "Delete current",
@@ -104,6 +107,60 @@
       "restClient": "REST Client",
       "searchAria": "Search API requests",
       "searchPlaceholder": "Search requests"
+    },
+    "request": {
+      "method": "HTTP method",
+      "url": "Request URL",
+      "urlPlaceholder": "https://api.example.com/resource"
+    },
+    "response": {
+      "copyBody": "Copy response body",
+      "emptyBodyDescription": "The request succeeded. This endpoint returned an empty body.",
+      "emptyBodyTitle": "{status} · No Content",
+      "emptyDescription": "Send this request to see the response here.",
+      "emptyTitle": "No response yet",
+      "errorDescription": "The request could not be completed. Check the request details and try again.",
+      "failedTitle": "Request failed",
+      "longBody": "Long response: {size}",
+      "metrics": {
+        "bodySize": "Body size",
+        "headers": "Headers",
+        "status": "Status",
+        "total": "Total"
+      },
+      "networkTitle": "Couldn’t reach the server",
+      "noCookies": "No response cookies",
+      "noHeaders": "No response headers",
+      "noTiming": "No timing data",
+      "openAuthSettings": "Open Auth settings",
+      "pretty": "Pretty",
+      "raw": "Raw",
+      "rejectedDescription": "The server rejected this request. Review authorization or headers and retry.",
+      "rejectedTitle": "Request rejected",
+      "retry": "Retry",
+      "sendingDescription": "Sending request…",
+      "status": {
+        "failed": "failed",
+        "network": "no response",
+        "noResponse": "no response",
+        "sending": "sending",
+        "timeout": "timeout"
+      },
+      "tabs": {
+        "body": "Body",
+        "cookies": "Cookies",
+        "headers": "Headers",
+        "timing": "Timing"
+      },
+      "timeoutDescription": "The request timed out before the server responded.",
+      "timeoutTitle": "Request timed out",
+      "title": "Response"
+    },
+    "tabs": {
+      "close": "Close {title}",
+      "dirty": "Unsaved changes",
+      "openRequests": "Open API requests",
+      "unsaved": "Unsaved request"
     },
     "title": "API Debugger"
   },

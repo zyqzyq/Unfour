@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Clock, FolderOpen, Settings2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -14,7 +14,7 @@ import { ApiHistoryTree } from "./ApiHistoryTree";
 
 type SidebarTab = "collections" | "history" | "environments";
 
-const sidebarTabs: Array<{ id: SidebarTab; icon: React.ReactNode; labelKey: string }> = [
+const sidebarTabs: Array<{ id: SidebarTab; icon: ReactNode; labelKey: string }> = [
   { id: "collections", icon: <FolderOpen size={14} />, labelKey: "api.sidebar.collections" },
   { id: "history", icon: <Clock size={14} />, labelKey: "api.sidebar.history" },
   { id: "environments", icon: <Settings2 size={14} />, labelKey: "api.sidebar.environments" },
@@ -24,11 +24,13 @@ export function ApiClientSidebar({
   onNewRequest,
   onOpenIntent,
   selectedId,
+  shellSlot = false,
   workspaceId,
 }: {
   onNewRequest: () => void;
   onOpenIntent: (intent: ApiOpenIntent) => void;
   selectedId: string | null;
+  shellSlot?: boolean;
   workspaceId: string;
 }) {
   const { t } = useI18n();
@@ -46,24 +48,37 @@ export function ApiClientSidebar({
   });
 
   return (
-    <div className="flex w-[248px] shrink-0 flex-col border-r border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)]">
-      <div className="flex h-[var(--u-size-tabbar)] shrink-0 items-end border-b border-[var(--u-color-border)] px-1">
-        {sidebarTabs.map((tab) => (
-          <button
-            className={cn(
-              "flex h-[29px] items-center gap-1.5 rounded-t-[var(--u-radius-sm)] border border-transparent px-2 text-[12px] font-medium transition-colors",
-              activeTab === tab.id
-                ? "border-[var(--u-color-border)] border-b-[var(--u-color-surface-subtle)] bg-[var(--u-color-surface-subtle)] text-[var(--u-color-text)]"
-                : "text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
-            )}
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            type="button"
-          >
-            {tab.icon}
-            <span>{t(tab.labelKey)}</span>
-          </button>
-        ))}
+    <div
+      className={cn(
+        "flex h-full min-h-0 flex-col bg-[var(--u-color-surface)]",
+        !shellSlot &&
+          "w-[248px] shrink-0 border-r border-[var(--u-color-border)]",
+      )}
+    >
+      <div className="flex h-[var(--u-size-tabbar)] shrink-0 items-center gap-2 border-b border-[var(--u-color-border)] px-2">
+        <h2 className="min-w-0 flex-1 truncate text-[11px] font-bold uppercase tracking-[0.07em] text-[var(--u-color-text-muted)]">
+          {t("api.sidebar.restClient")}
+        </h2>
+        <div className="flex shrink-0 items-center gap-1">
+          {sidebarTabs.map((tab) => (
+            <button
+              aria-label={t(tab.labelKey)}
+              aria-pressed={activeTab === tab.id}
+              className={cn(
+                "flex h-[26px] w-[26px] items-center justify-center rounded-[var(--u-radius-md)] border border-transparent text-[var(--u-color-text-muted)] transition-colors",
+                activeTab === tab.id
+                  ? "bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]"
+                  : "text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
+              )}
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              title={t(tab.labelKey)}
+              type="button"
+            >
+              {tab.icon}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">

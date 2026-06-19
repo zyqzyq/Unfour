@@ -1,5 +1,5 @@
 import { Loader2, X } from "lucide-react";
-import { cn } from "@unfour/ui";
+import { cn, useI18n } from "@unfour/ui";
 import {
   getTabSaveState,
   methodBadgeLabel,
@@ -22,9 +22,11 @@ export function ApiRequestTabs({
   onSelect: (tabId: string) => void;
   tabs: ApiRequestTab[];
 }) {
+  const { t } = useI18n();
+
   return (
     <div
-      aria-label="Open API requests"
+      aria-label={t("api.tabs.openRequests")}
       className="flex h-[var(--u-size-tabbar)] shrink-0 items-stretch overflow-x-auto border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)]"
       role="tablist"
     >
@@ -63,15 +65,13 @@ export function ApiRequestTabs({
               </span>
               {(saveState === "dirty" || saveState === "unsaved") && (
                 <span
-                  aria-label={saveState}
-                  className="shrink-0 text-[13px] font-semibold text-[var(--u-color-primary)]"
-                >
-                  *
-                </span>
+                  aria-label={t(`api.tabs.${saveState}`)}
+                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--u-color-primary)]"
+                />
               )}
               {tab.sending && (
                 <Loader2
-                  aria-label="sending"
+                  aria-label={t("api.actions.sending")}
                   className="shrink-0 animate-spin text-[var(--u-color-primary)]"
                   size={12}
                 />
@@ -79,7 +79,7 @@ export function ApiRequestTabs({
               <span className="truncate">{requestTabTitle(tab)}</span>
             </button>
             <button
-              aria-label={`Close ${requestTabTitle(tab)}`}
+              aria-label={t("api.tabs.close", { title: requestTabTitle(tab) })}
               className="grid h-5 w-5 shrink-0 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] hover:bg-[var(--u-color-surface-hover)]"
               onClick={() => onClose(tab)}
               type="button"
@@ -90,10 +90,10 @@ export function ApiRequestTabs({
         );
       })}
       <button
-        aria-label="New request"
+        aria-label={t("common.actions.newRequest")}
         className="grid w-10 shrink-0 place-items-center border-r border-[var(--u-color-border)] text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]"
         onClick={onNew}
-        title="New request"
+        title={t("common.actions.newRequest")}
         type="button"
       >
         +

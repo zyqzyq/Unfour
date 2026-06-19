@@ -88,11 +88,11 @@ export function methodBadgeLabel(method: string) {
 export function methodToneClass(method: string) {
   switch (method.trim().toUpperCase()) {
     case "GET":
-      return "text-[var(--u-color-success)]";
+      return "text-[var(--u-color-info-text)]";
     case "POST":
-      return "text-[var(--u-color-warning)]";
+      return "text-[var(--u-color-success)]";
     case "PUT":
-      return "text-[var(--u-color-info)]";
+      return "text-[var(--u-color-warning-text)]";
     case "PATCH":
       return "text-[var(--u-color-primary)]";
     case "DELETE":
@@ -105,11 +105,11 @@ export function methodToneClass(method: string) {
 export function methodBadgeToneClass(method: string) {
   switch (method.trim().toUpperCase()) {
     case "GET":
-      return "bg-[var(--u-color-success-soft)] text-[var(--u-color-success)]";
-    case "POST":
-      return "bg-[var(--u-color-warning-soft)] text-[var(--u-color-warning-text)]";
-    case "PUT":
       return "bg-[var(--u-color-info-soft)] text-[var(--u-color-info-text)]";
+    case "POST":
+      return "bg-[var(--u-color-success-soft)] text-[var(--u-color-success)]";
+    case "PUT":
+      return "bg-[var(--u-color-warning-soft)] text-[var(--u-color-warning-text)]";
     case "PATCH":
       return "bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]";
     case "DELETE":

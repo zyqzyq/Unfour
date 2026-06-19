@@ -4,7 +4,7 @@ import {
 import { AppShell } from "@unfour/app-shell";
 import { DatabasePage } from "@unfour/database";
 import { TerminalLogPanel, TerminalPage, TerminalStatusBar } from "@unfour/ssh-terminal";
-import { useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CommandPalette, MainWorkspace, useI18n } from "@unfour/ui";
 import {
@@ -31,9 +31,10 @@ function App() {
   const [bottomPanelCollapsed, setBottomPanelCollapsed] = useState(true);
   const [bottomPanelHeight, setBottomPanelHeight] = useState(220);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [apiSidebarContent, setApiSidebarContent] = useState<ReactNode>(null);
   const [rightInspectorCollapsed, setRightInspectorCollapsed] = useState(true);
   const [rightInspectorWidth, setRightInspectorWidth] = useState(300);
-  const [sidebarWidth, setSidebarWidth] = useState(264);
+  const [sidebarWidth, setSidebarWidth] = useState(248);
   const {
     activeTabId,
     activeWorkspaceId,
@@ -71,6 +72,9 @@ function App() {
       queryClient.invalidateQueries({ queryKey: ["workspaces"] });
     },
   });
+  const handleApiSidebarChange = useCallback((content: ReactNode | null) => {
+    setApiSidebarContent(content);
+  }, []);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
   return (
     <>
@@ -104,11 +108,15 @@ function App() {
         globalToolbar={
           <AppTitleBar
             activeWorkspace={activeWorkspace}
+            bottomPanelCollapsed={bottomPanelCollapsed}
             healthReady={healthQuery.data?.storageReady === true}
             onActivateWorkspace={(id) => activateWorkspaceMutation.mutate(id)}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
             onToggleBottomPanel={() => setBottomPanelCollapsed((c) => !c)}
             onToggleInspector={() => setRightInspectorCollapsed((c) => !c)}
+            onToggleSidebar={toggleSidebar}
+            rightInspectorCollapsed={rightInspectorCollapsed}
+            sidebarCollapsed={sidebarCollapsed}
             syncStrategy={healthQuery.data?.syncStrategy ?? "local-first"}
             workspaces={workspaceQuery.data?.workspaces ?? []}
           />
@@ -127,6 +135,7 @@ function App() {
             activeTab={activeTab}
             activeTabId={activeTabId}
             activeWorkspaceId={activeWorkspace?.id ?? ""}
+            apiSidebarContent={apiSidebarContent}
             collapsed={sidebarCollapsed}
             databaseConnections={sidebarDatabaseConnectionsQuery.data ?? []}
             onSelectDatabaseConnection={(connection) => {
@@ -163,6 +172,7 @@ function App() {
               <div className={activeTab.kind === "api" ? "h-full" : "hidden"}>
                 <ApiDebuggerPage
                   key={activeWorkspace.id}
+                  onShellSidebarChange={handleApiSidebarChange}
                   onActiveSavedRequestChange={setSelectedApiRequest}
                   openIntent={null}
                   workspaceId={activeWorkspace.id}

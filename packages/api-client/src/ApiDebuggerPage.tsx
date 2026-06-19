@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, EmptyState, SplitPane, useI18n } from "@unfour/ui";
 import { useApiRequestTabs } from "./hooks/useApiRequestTabs";
 import {
@@ -16,14 +16,15 @@ import { ApiResponseViewer } from "./components/ApiResponseViewer";
 import { ApiSaveDialog } from "./components/ApiSaveDialog";
 import { ApiCloseRequestDialog } from "./components/ApiCloseRequestDialog";
 import { ApiClientSidebar } from "./components/ApiClientSidebar";
-import { ApiClientToolbar } from "./components/ApiClientToolbar";
 
 export function ApiDebuggerPage({
   onActiveSavedRequestChange,
+  onShellSidebarChange,
   openIntent,
   workspaceId,
 }: {
   onActiveSavedRequestChange?: (requestId: string | null) => void;
+  onShellSidebarChange?: (sidebar: ReactNode | null) => void;
   openIntent: ApiOpenIntent | null;
   workspaceId: string;
 }) {
@@ -184,29 +185,60 @@ export function ApiDebuggerPage({
     }
   }
 
-  function handleSidebarIntent(intent: ApiOpenIntent) {
-    if (intent.kind === "new") {
-      newRequest();
-      return;
-    }
-    if (intent.kind === "saved") {
-      if (intent.action === "send") {
+  const handleSidebarIntent = useCallback(
+    (intent: ApiOpenIntent) => {
+      if (intent.kind === "new") {
+        newRequest();
+        return;
+      }
+      if (intent.kind === "saved") {
+        if (intent.action === "send") {
+          pendingIntentAction.current = {
+            action: "send",
+            tabId: `saved:${intent.requestId}`,
+          };
+        }
+        openSaved(intent.requestId);
+        return;
+      }
+      if (intent.action === "save") {
         pendingIntentAction.current = {
-          action: "send",
-          tabId: `saved:${intent.requestId}`,
+          action: "save",
+          tabId: `history:${intent.historyId}`,
         };
       }
-      openSaved(intent.requestId);
+      void openHistory(intent.historyId);
+    },
+    [newRequest, openHistory, openSaved],
+  );
+
+  const usesShellSidebar = Boolean(onShellSidebarChange);
+  const sidebar = useMemo(
+    () => (
+      <ApiClientSidebar
+        onNewRequest={newRequest}
+        onOpenIntent={handleSidebarIntent}
+        selectedId={activeTab?.savedRequestId ?? null}
+        shellSlot={usesShellSidebar}
+        workspaceId={workspaceId}
+      />
+    ),
+    [
+      activeTab?.savedRequestId,
+      handleSidebarIntent,
+      newRequest,
+      usesShellSidebar,
+      workspaceId,
+    ],
+  );
+
+  useEffect(() => {
+    if (!onShellSidebarChange) {
       return;
     }
-    if (intent.action === "save") {
-      pendingIntentAction.current = {
-        action: "save",
-        tabId: `history:${intent.historyId}`,
-      };
-    }
-    void openHistory(intent.historyId);
-  }
+    onShellSidebarChange(sidebar);
+    return () => onShellSidebarChange(null);
+  }, [onShellSidebarChange, sidebar]);
 
   function exportCollection() {
     const payload = {
@@ -248,7 +280,7 @@ export function ApiDebuggerPage({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[var(--u-color-surface)]">
+    <div className="flex h-full min-h-0 flex-col bg-[var(--u-color-bg)]">
       <input
         accept="application/json"
         className="sr-only"
@@ -259,17 +291,8 @@ export function ApiDebuggerPage({
         ref={importInputRef}
         type="file"
       />
-      <ApiClientToolbar
-        onImport={() => importInputRef.current?.click()}
-        onNewRequest={newRequest}
-      />
       <div className="flex min-h-0 flex-1">
-        <ApiClientSidebar
-          onNewRequest={newRequest}
-          onOpenIntent={handleSidebarIntent}
-          selectedId={activeTab?.savedRequestId ?? null}
-          workspaceId={workspaceId}
-        />
+        {!usesShellSidebar && sidebar}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <ApiRequestTabs
             activeId={state.activeTabId}
@@ -313,9 +336,9 @@ export function ApiDebuggerPage({
               )}
               <SplitPane
                 className="min-h-0 flex-1"
-                defaultRatio={52}
-                minPaneSize={180}
-                orientation="vertical"
+                defaultRatio={46}
+                minPaneSize={280}
+                orientation="horizontal"
                 resizable
               >
                 <ApiRequestEditor
@@ -347,7 +370,9 @@ export function ApiDebuggerPage({
                   tab={activeTab.requestTab}
                 />
                 <ApiResponseViewer
+                  onOpenAuthSettings={() => setRequestTab(activeTab.id, "auth")}
                   onResponseTabChange={(tab) => setResponseTab(activeTab.id, tab)}
+                  onRetry={() => sendTab(activeTab)}
                   tab={activeTab}
                 />
               </SplitPane>

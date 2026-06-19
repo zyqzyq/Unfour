@@ -3,7 +3,8 @@
     "commandPalette": {
       "openApiClient": "打开 API 调试器",
       "openDatabase": "打开数据库",
-      "openSshTerminal": "打开 SSH 终端"
+      "openSshTerminal": "打开 SSH 终端",
+      "placeholder": "搜索命令"
     },
     "language": {
       "label": "语言",
@@ -32,7 +33,9 @@
     },
     "titlebar": {
       "moreActions": "更多操作",
-      "settings": "设置"
+      "settings": "设置",
+      "toggleBottomPanel": "切换底部面板",
+      "toggleInspector": "切换检查器"
     },
     "workspace": {
       "deleteCurrent": "删除当前工作区",
@@ -104,6 +107,60 @@
       "restClient": "REST 客户端",
       "searchAria": "搜索 API 请求",
       "searchPlaceholder": "搜索请求"
+    },
+    "request": {
+      "method": "HTTP 方法",
+      "url": "请求 URL",
+      "urlPlaceholder": "https://api.example.com/resource"
+    },
+    "response": {
+      "copyBody": "复制响应正文",
+      "emptyBodyDescription": "请求已成功。此端点返回了空正文。",
+      "emptyBodyTitle": "{status} · 无内容",
+      "emptyDescription": "发送此请求后，响应会显示在这里。",
+      "emptyTitle": "尚无响应",
+      "errorDescription": "请求未能完成。请检查请求详情后重试。",
+      "failedTitle": "请求失败",
+      "longBody": "长响应：{size}",
+      "metrics": {
+        "bodySize": "正文大小",
+        "headers": "响应头",
+        "status": "状态",
+        "total": "总耗时"
+      },
+      "networkTitle": "无法连接到服务器",
+      "noCookies": "没有响应 Cookie",
+      "noHeaders": "没有响应头",
+      "noTiming": "没有耗时数据",
+      "openAuthSettings": "打开 Auth 设置",
+      "pretty": "格式化",
+      "raw": "原始",
+      "rejectedDescription": "服务器拒绝了此请求。请检查授权或请求头后重试。",
+      "rejectedTitle": "请求被拒绝",
+      "retry": "重试",
+      "sendingDescription": "正在发送请求…",
+      "status": {
+        "failed": "失败",
+        "network": "无响应",
+        "noResponse": "无响应",
+        "sending": "发送中",
+        "timeout": "超时"
+      },
+      "tabs": {
+        "body": "正文",
+        "cookies": "Cookie",
+        "headers": "响应头",
+        "timing": "耗时"
+      },
+      "timeoutDescription": "服务器响应前，请求已超时。",
+      "timeoutTitle": "请求超时",
+      "title": "响应"
+    },
+    "tabs": {
+      "close": "关闭 {title}",
+      "dirty": "未保存的更改",
+      "openRequests": "已打开的 API 请求",
+      "unsaved": "未保存的请求"
     },
     "title": "API 调试器"
   },

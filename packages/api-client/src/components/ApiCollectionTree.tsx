@@ -99,9 +99,9 @@ export function ApiCollectionTree({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
-      <div className="px-1">
-        <label className="flex h-[var(--u-size-input)] items-center gap-2 rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-bg)] px-2 text-[12px] text-[var(--u-color-text-muted)]">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="px-2 py-2">
+        <label className="flex h-7 items-center gap-2 rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2 text-[12px] text-[var(--u-color-text-muted)]">
           <Search size={14} />
           <input
             aria-label={t("api.sidebar.searchAria")}
@@ -112,7 +112,7 @@ export function ApiCollectionTree({
           />
         </label>
       </div>
-      <SidebarSection className="min-h-0 flex-1 overflow-y-auto" title={t("api.sidebar.collections")}>
+      <SidebarSection className="min-h-0 flex-1 overflow-y-auto px-2 pb-2" title={t("api.sidebar.collections")}>
         <SidebarRow active={active && !selectedId} onClick={onOpenClient}>
           <Send size={14} />
           <span>{t("common.actions.newRequest")}</span>
@@ -137,7 +137,7 @@ export function ApiCollectionTree({
         )}
       </SidebarSection>
       <SidebarSection
-        className="max-h-[220px] shrink-0 overflow-y-auto border-t border-[var(--u-color-border)] pt-2"
+        className="max-h-[220px] shrink-0 overflow-y-auto border-t border-[var(--u-color-border)] px-2 pb-2 pt-2"
         title={t("api.sidebar.history")}
       >
         {historyItems.length > 0 ? (

@@ -1,4 +1,5 @@
 import { Database } from "lucide-react";
+import type { ReactNode } from "react";
 import {
   DatabaseConnectionTree,
 } from "@unfour/database";
@@ -20,6 +21,7 @@ export function ModuleSidebar({
   activeTab,
   activeTabId,
   activeWorkspaceId,
+  apiSidebarContent,
   collapsed,
   databaseConnections,
   onSelectDatabaseConnection,
@@ -31,6 +33,7 @@ export function ModuleSidebar({
   activeTab: WorkspaceTab;
   activeTabId: string;
   activeWorkspaceId: string;
+  apiSidebarContent?: ReactNode;
   collapsed: boolean;
   databaseConnections: DatabaseConnection[];
   onSelectDatabaseConnection: (connection: DatabaseConnection) => void;
@@ -47,11 +50,12 @@ export function ModuleSidebar({
 
   return (
     <Sidebar
+      contentClassName={activeTab.kind === "api" ? "overflow-hidden p-0" : undefined}
       onWidthChange={onWidthChange}
       resizable
       width={width}
     >
-      {activeTab.kind === "api" && null}
+      {activeTab.kind === "api" && apiSidebarContent}
       {activeTab.kind === "ssh" && (
         <SshConnectionTree
           active={activeTabId === "ssh-main"}

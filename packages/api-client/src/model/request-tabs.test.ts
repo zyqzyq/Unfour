@@ -50,8 +50,8 @@ describe("API request tab state", () => {
   it("derives stable method badge labels and tones", () => {
     expect(methodBadgeLabel("DELETE")).toBe("DEL");
     expect(methodBadgeLabel("patch")).toBe("PATCH");
-    expect(methodToneClass("POST")).toContain("warning");
-    expect(methodToneClass("GET")).toContain("success");
+    expect(methodToneClass("POST")).toContain("success");
+    expect(methodToneClass("GET")).toContain("info");
   });
 
   it("opens or activates one tab per saved request", () => {

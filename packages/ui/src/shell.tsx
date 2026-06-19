@@ -98,7 +98,7 @@ export function GlobalToolbar({
   return (
     <header
       className={cn(
-        "flex h-[var(--u-size-global-toolbar)] shrink-0 items-center border-b border-[var(--u-color-border)] bg-[var(--u-color-surface)] text-[var(--u-color-text)]",
+        "flex h-[var(--u-size-global-toolbar)] shrink-0 items-center border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] text-[var(--u-color-text)]",
         className,
       )}
     >
@@ -118,6 +118,7 @@ export function Sidebar({
   children,
   className,
   collapsed,
+  contentClassName,
   footer,
   header,
   maxWidth = 320,
@@ -129,6 +130,7 @@ export function Sidebar({
   children: React.ReactNode;
   className?: string;
   collapsed?: boolean;
+  contentClassName?: string;
   footer?: React.ReactNode;
   header?: React.ReactNode;
   maxWidth?: number;
@@ -173,7 +175,7 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        "relative flex min-h-0 shrink-0 flex-col border-r border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] transition-[width] duration-150",
+        "relative flex min-h-0 shrink-0 flex-col border-r border-[var(--u-color-border)] bg-[var(--u-color-surface)] transition-[width] duration-150",
         collapsed && "w-[52px]",
         className,
       )}
@@ -190,7 +192,9 @@ export function Sidebar({
         />
       )}
       {header}
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">{children}</div>
+      <div className={cn("min-h-0 flex-1 overflow-y-auto p-2", contentClassName)}>
+        {children}
+      </div>
       {footer}
     </aside>
   );
@@ -249,7 +253,7 @@ export function SidebarRow({
       className={cn(
         "flex h-[var(--u-size-sidebar-row)] w-full items-center gap-2 rounded-[var(--u-radius-sm)] px-2 text-left text-[12px] text-[var(--u-color-text-muted)] transition-colors duration-150 hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--u-color-focus)_28%,transparent)]",
         active &&
-          "bg-[var(--u-color-surface-active)] text-[var(--u-color-text)] ring-1 ring-inset ring-[var(--u-color-border)]",
+          "bg-[var(--u-color-primary-soft)] font-semibold text-[var(--u-color-primary)]",
         className,
       )}
       type="button"
@@ -315,7 +319,7 @@ export function MainWorkspace({
   tabBar: React.ReactNode;
 }) {
   return (
-    <main className={cn("flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--u-color-surface)]", className)}>
+    <main className={cn("flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--u-color-bg)]", className)}>
       {tabBar}
       <section className="min-h-0 flex-1 overflow-hidden p-2">{children}</section>
     </main>

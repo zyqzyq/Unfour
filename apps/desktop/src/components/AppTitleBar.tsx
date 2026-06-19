@@ -1,6 +1,10 @@
 import {
   Activity,
   MoreHorizontal,
+  PanelBottom,
+  PanelLeft,
+  PanelRight,
+  Search,
   Settings,
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -19,24 +23,37 @@ import { WorkspaceMenu } from "./WorkspaceMenu";
 
 export function AppTitleBar({
   activeWorkspace,
+  bottomPanelCollapsed,
   healthReady,
   onActivateWorkspace,
   onOpenCommandPalette,
+  onToggleBottomPanel,
+  onToggleInspector,
+  onToggleSidebar,
+  rightInspectorCollapsed,
+  sidebarCollapsed,
   syncStrategy,
   workspaces,
 }: {
   activeWorkspace?: Workspace;
+  bottomPanelCollapsed: boolean;
   healthReady: boolean;
   onActivateWorkspace: (workspaceId: string) => void;
   onOpenCommandPalette: () => void;
   onToggleBottomPanel: () => void;
   onToggleInspector: () => void;
+  onToggleSidebar: () => void;
+  rightInspectorCollapsed: boolean;
+  sidebarCollapsed: boolean;
   syncStrategy: string;
   workspaces: Workspace[];
 }) {
   const { locale, locales, setLocale, t } = useI18n();
 
   async function dragWindow(event: React.MouseEvent<HTMLDivElement>) {
+    if ((event.target as HTMLElement).closest("button,input,select,a")) {
+      return;
+    }
     if (event.button !== 0 || !isTauriRuntime()) {
       return;
     }
@@ -46,8 +63,26 @@ export function AppTitleBar({
 
   return (
     <GlobalToolbar
-      center={<div className="h-full min-w-0 flex-1" />}
-      className="bg-[var(--u-color-surface-subtle)]"
+      center={
+        <button
+          className="flex h-7 w-[min(440px,100%)] min-w-[160px] items-center gap-2 rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-2.5 text-left text-[12px] text-[var(--u-color-text-soft)] transition-colors duration-150 hover:border-[var(--u-color-border-strong)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--u-color-focus)_32%,transparent)]"
+          onClick={onOpenCommandPalette}
+          type="button"
+        >
+          <Search size={14} />
+          <span className="min-w-0 flex-1 truncate">
+            {t("app.commandPalette.placeholder")}
+          </span>
+          <span className="flex shrink-0 items-center gap-1">
+            <kbd className="rounded border border-[var(--u-color-border)] bg-[var(--u-color-surface-muted)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--u-color-text-muted)]">
+              Ctrl
+            </kbd>
+            <kbd className="rounded border border-[var(--u-color-border)] bg-[var(--u-color-surface-muted)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--u-color-text-muted)]">
+              K
+            </kbd>
+          </span>
+        </button>
+      }
       left={
         <>
           <div className="flex h-[26px] w-[26px] items-center justify-center rounded-[var(--u-radius-sm)] bg-[var(--u-color-primary)] text-[var(--u-color-primary-foreground)]">
@@ -68,11 +103,52 @@ export function AppTitleBar({
       onDragRegionMouseDown={dragWindow}
       right={
         <>
+          <IconButton
+            aria-pressed={!sidebarCollapsed}
+            className={
+              !sidebarCollapsed
+                ? "bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]"
+                : undefined
+            }
+            label={
+              sidebarCollapsed
+                ? t("app.sidebar.expand")
+                : t("app.sidebar.collapse")
+            }
+            onClick={onToggleSidebar}
+          >
+            <PanelLeft size={15} />
+          </IconButton>
+          <IconButton
+            aria-pressed={!bottomPanelCollapsed}
+            className={
+              !bottomPanelCollapsed
+                ? "bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]"
+                : undefined
+            }
+            label={t("app.titlebar.toggleBottomPanel")}
+            onClick={onToggleBottomPanel}
+          >
+            <PanelBottom size={15} />
+          </IconButton>
+          <IconButton
+            aria-pressed={!rightInspectorCollapsed}
+            className={
+              !rightInspectorCollapsed
+                ? "bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]"
+                : undefined
+            }
+            label={t("app.titlebar.toggleInspector")}
+            onClick={onToggleInspector}
+          >
+            <PanelRight size={15} />
+          </IconButton>
           <span
-            className="rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] px-2 py-0.5 font-mono text-[11px] text-[var(--u-color-text-muted)]"
+            className="flex h-7 items-center gap-1.5 px-1 text-[12px] text-[var(--u-color-text-muted)]"
             title={`${healthReady ? t("app.status.storageReady") : t("app.status.checkingStorage")} · ${syncStrategy}`}
           >
-            v0.1.0
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--u-color-success)] shadow-[0_0_0_3px_var(--u-color-success-soft)]" />
+            {healthReady ? t("app.status.ready") : t("app.status.checkingStorage")}
           </span>
           <Select
             aria-label={t("app.language.label")}

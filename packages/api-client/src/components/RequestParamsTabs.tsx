@@ -171,17 +171,17 @@ export function CompactTabs<T extends string>({
   return (
     <div
       className={cn(
-        "flex h-[var(--u-size-tabbar)] shrink-0 items-end gap-4 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-3",
+        "flex h-[var(--u-size-tabbar)] shrink-0 items-center gap-1 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-3",
         className,
       )}
     >
       {items.map((item) => (
         <button
           className={cn(
-            "relative flex h-full min-w-0 items-center gap-1.5 px-1 text-[12px] font-medium text-[var(--u-color-text-muted)] transition-colors after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:bg-transparent",
+            "relative flex h-full min-w-0 items-center gap-1.5 px-2 text-[12px] font-medium text-[var(--u-color-text-muted)] transition-colors after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:bg-transparent",
             active === item.id
               ? "text-[var(--u-color-text)] after:bg-[var(--u-color-primary)]"
-              : "hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
+              : "hover:text-[var(--u-color-text)]",
           )}
           key={item.id}
           onClick={() => onChange(item.id)}

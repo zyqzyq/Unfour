@@ -40,7 +40,7 @@ export function ModuleActivityBar({
               "flex h-9 w-9 items-center justify-center rounded-[var(--u-radius-md)] text-[var(--u-color-text-muted)] transition-colors duration-150 hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--u-color-focus)]",
               item.kind === activeKind &&
                 !sidebarCollapsed &&
-                "bg-[var(--u-color-surface-active)] text-[var(--u-color-text)] ring-1 ring-inset ring-[var(--u-color-border)]",
+                "bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]",
             )}
             key={item.id}
             onClick={() => handleClick(item)}
