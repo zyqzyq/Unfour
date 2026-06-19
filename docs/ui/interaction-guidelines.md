@@ -786,7 +786,7 @@ Result Cell：
 - `packages/api-client/src/components/RequestParamsTabs.tsx`
 - `packages/api-client/src/components/ResponseTabs.tsx`
 - `packages/api-client/src/hooks/useApiLayout.ts`
-- `packages/api-client/src/hooks/useApiRequest.ts`
+- `packages/api-client/src/hooks/useApiRequestTabs.ts`
 - `packages/api-client/src/model/*`
 - 必要的 `packages/ui/src/*` 兼容增强
 

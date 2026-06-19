@@ -121,7 +121,7 @@ unfour/
 **Exports:** Full barrel: ApiDebuggerPage, ApiClientSidebar, ApiClientToolbar,
 ApiCollectionTree, ApiRequestEditor, ApiRequestTabs, ApiRequestBar,
 ApiResponseViewer, RequestActionsMenu, RequestParamsTabs, ResponseTabs,
-useApiHistory, useApiLayout, useApiRequest, useApiRequestTabs,
+useApiHistory, useApiLayout, useApiRequestTabs,
 api-request-state, request-tabs, types, request-utils.
 
 ### `@unfour/database` (packages/database)
@@ -252,7 +252,7 @@ unfour-workspace (desktop)  --> unfour-command-bus and core engine crates
 
 ```
 React component
-  --> hook (useApiRequest, useSqlExecution, etc.)
+  --> hook (useApiRequestTabs, useSqlExecution, etc.)
     --> @unfour/command-client function (sendApiRequest, executeDatabaseQuery, etc.)
       --> Tauri invoke("command_name", args)   [in Tauri runtime]
       --> mockInvoke("command_name", args)      [in browser fallback]

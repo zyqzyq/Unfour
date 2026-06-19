@@ -2,7 +2,7 @@ import type { Ref } from "react";
 import { Save, Send } from "lucide-react";
 import { Button, Input, cn, useI18n } from "@unfour/ui";
 import type { ApiRequestTab } from "../model/request-tabs";
-import { methods } from "../hooks/useApiRequest";
+import { httpMethods } from "../constants/http-methods";
 import { RequestActionsMenu } from "./RequestActionsMenu";
 
 export function ApiRequestBar({
@@ -39,7 +39,7 @@ export function ApiRequestBar({
         onChange={(event) => onUpdate({ method: event.target.value })}
         value={tab.draft.method}
       >
-        {methods.map((method) => (
+        {httpMethods.map((method) => (
           <option key={method}>{method}</option>
         ))}
       </select>

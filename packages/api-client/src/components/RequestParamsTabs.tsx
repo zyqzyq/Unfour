@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type * as React from "react";
 import Editor from "@monaco-editor/react";
-import { Info, Plus, Save, Trash2, Wand2 } from "lucide-react";
+import { Plus, Save, Trash2, Wand2 } from "lucide-react";
 import { Button, Input, cn, useTheme } from "@unfour/ui";
 import type { KeyValue } from "@unfour/command-client";
 import {
@@ -145,11 +145,6 @@ export function RequestParamsTabs({
               title="Variables"
             />
             <EnvironmentHints variables={envVariables} />
-          </PaneScroll>
-        )}
-        {tab === "settings" && (
-          <PaneScroll>
-            <SettingsPanel />
           </PaneScroll>
         )}
       </div>
@@ -580,42 +575,6 @@ function getJsonError(value: string): string | null {
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
   }
-}
-
-function SettingsPanel() {
-  return (
-    <div className="max-w-xl overflow-hidden rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)]">
-      {[
-        ["Follow redirects", "Handled by the current request execution defaults."],
-        ["Verify TLS certificates", "Controlled by the backend execution boundary."],
-        ["Request timeout", "Uses the existing Command Bus request timeout behavior."],
-      ].map(([label, description]) => (
-        <div
-          className="flex min-h-[52px] items-center justify-between gap-4 border-b border-[var(--u-color-border)] p-3 last:border-b-0"
-          key={label}
-        >
-          <div className="min-w-0">
-            <div className="text-[13px] font-medium text-[var(--u-color-text)]">
-              {label}
-            </div>
-            <div className="text-[12px] text-[var(--u-color-text-muted)]">
-              {description}
-            </div>
-          </div>
-          <span className="rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2 py-1 text-[11px] text-[var(--u-color-text-soft)]">
-            Current
-          </span>
-        </div>
-      ))}
-      <div className="flex items-start gap-2 border-t border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-3 text-[12px] text-[var(--u-color-text-muted)]">
-        <Info className="mt-0.5 shrink-0 text-[var(--u-color-primary)]" size={14} />
-        <span>
-          Settings are shown for layout parity. Changing request execution policy
-          requires a separate backend contract update.
-        </span>
-      </div>
-    </div>
-  );
 }
 
 function EnvironmentHints({ variables }: { variables: KeyValue[] }) {

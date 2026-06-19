@@ -77,7 +77,6 @@ export const requestConfigTabs: Array<{ id: RequestParamsTab; label: string }> =
   { id: "auth", label: "Auth" },
   { id: "headers", label: "Headers" },
   { id: "body", label: "Body" },
-  { id: "settings", label: "Settings" },
 ];
 
 export function methodBadgeLabel(method: string) {

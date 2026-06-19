@@ -18,7 +18,6 @@
 - `src/ApiDebuggerPage.tsx` - top-level API Debugger page composition.
 - `src/hooks/useApiRequestTabs.ts` - request tab, send, save, history, and
   collection state orchestration.
-- `src/hooks/useApiRequest.ts` - request send behavior.
 - `src/request-utils.ts` - request conversion, import/export, auth metadata,
   query/header/body utilities.
 - `src/components/ApiRequestEditor.tsx` - request editor panels.

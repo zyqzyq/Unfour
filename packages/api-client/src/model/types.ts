@@ -18,7 +18,7 @@ export type ApiRequestState =
   | "network"
   | "timeout";
 
-export type RequestParamsTab = "query" | "auth" | "headers" | "body" | "settings";
+export type RequestParamsTab = "query" | "auth" | "headers" | "body";
 export type ResponsePanelTab = "response" | "history";
 export type ResponseTab = "body" | "headers" | "cookies" | "timing";
 export type ApiSplitDirection = "vertical" | "horizontal";

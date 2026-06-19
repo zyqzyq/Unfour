@@ -36,14 +36,12 @@ describe("API request tab state", () => {
       "auth",
       "headers",
       "body",
-      "settings",
     ]);
     expect(requestConfigTabs.map((tab) => tab.label)).toEqual([
       "Params",
       "Auth",
       "Headers",
       "Body",
-      "Settings",
     ]);
   });
 

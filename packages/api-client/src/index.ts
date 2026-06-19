@@ -9,7 +9,6 @@ export { RequestParamsTabs } from "./components/RequestParamsTabs";
 export { ResponseTabs } from "./components/ResponseTabs";
 export { useApiHistory } from "./hooks/useApiHistory";
 export { useApiLayout } from "./hooks/useApiLayout";
-export { useApiRequest } from "./hooks/useApiRequest";
 export { useApiRequestTabs } from "./hooks/useApiRequestTabs";
 export * from "./model/request-tabs";
 export * from "./model/api-request-state";
