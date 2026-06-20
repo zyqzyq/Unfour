@@ -66,7 +66,9 @@ Before changing files:
 2. Read `docs/agents/START_HERE.md` and follow its scoped reading strategy.
 3. Read `docs/architecture/package-boundaries.md` for package or boundary
    changes.
-4. Read `docs/ui/ui-guidelines.md` for UI changes.
+4. For UI, layout, component, style, or interaction optimization tasks, read
+   root `design.md` first, then follow its guidance into the relevant
+   `docs/ui/*` documents; at minimum read `docs/ui/ui-guidelines.md`.
 5. Read the relevant package or crate `AGENTS.md` / `README.md`, if present.
 6. Inspect the current implementation only as needed for the task.
 7. Review `git status --short` and the current diff before editing.

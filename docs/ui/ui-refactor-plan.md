@@ -85,8 +85,10 @@ Recommended order:
 
 When implementing or refactoring UI:
 
-1. Read `docs/ui/ui-guidelines.md` first.
-2. Read `docs/ui/ui-layouts.md` and `docs/ui/ui-tokens.md`.
+1. Read root `design.md` first for the UI design entry point, reading order,
+   source of truth, and conflict resolution.
+2. Then read `docs/ui/ui-guidelines.md`, `docs/ui/ui-layouts.md`,
+   `docs/ui/ui-tokens.md`, and `docs/ui/ui-components.md` in that order.
 3. Inspect `packages/ui` for reusable components.
 4. Reuse shared layout components.
 5. Use design tokens only; do not hardcode colors unless adding a token.
