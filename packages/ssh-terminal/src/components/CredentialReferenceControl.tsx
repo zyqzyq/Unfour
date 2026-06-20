@@ -36,6 +36,7 @@ export function CredentialReferenceControl({
   const credentialRef = value?.trim() ?? "";
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- clearing derived metadata/status when credentialRef prop changes
     setMetadata(null);
     setStatus("");
   }, [credentialRef]);

@@ -1,5 +1,5 @@
 import { CheckCircle2, Database, Plus, RefreshCw, Save, Table2, Trash2, XCircle } from "lucide-react";
-import { FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   deleteDatabaseConnection,
@@ -79,6 +79,7 @@ export function DatabasePage({ workspaceId }: { workspaceId: string }) {
     () => connections.find((item) => item.id === selectedConnectionId) ?? null,
     [connections, selectedConnectionId],
   );
+  const prevSelectedConnectionIdRef = useRef(selectedConnectionId);
   const selectedSession = selectedConnectionId ? connectionStates[selectedConnectionId] : undefined;
   const selectedConnectionStatus: DatabaseConnectionStatus = selectedSession?.status ?? "disconnected";
   const schemaEnabled = Boolean(
@@ -98,6 +99,7 @@ export function DatabasePage({ workspaceId }: { workspaceId: string }) {
   useEffect(() => {
     if (selectedConnectionId && !connections.some((connection) => connection.id === selectedConnectionId)) {
       setSelectedDatabaseConnection(null);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clearing derived state when parent selection is removed
       setSelectedTable(null);
       setTableView(null);
     }
@@ -114,29 +116,25 @@ export function DatabasePage({ workspaceId }: { workspaceId: string }) {
     });
   }, [connections, selectedConnectionId, setSelectedDatabaseConnection]);
 
-  useEffect(() => {
-    setForm((current) => ({ ...current, workspaceId }));
-  }, [workspaceId]);
-
-  useEffect(() => {
-    if (!selectedConnection) {
-      return;
+  // Sync form state when the selected connection changes (render-time adjustment pattern).
+  if (selectedConnectionId !== prevSelectedConnectionIdRef.current) {
+    prevSelectedConnectionIdRef.current = selectedConnectionId;
+    if (selectedConnection) {
+      setForm({
+        id: selectedConnection.id,
+        workspaceId,
+        name: selectedConnection.name,
+        driver: selectedConnection.driver,
+        host: selectedConnection.host,
+        port: selectedConnection.port,
+        database: selectedConnection.database,
+        username: selectedConnection.username,
+        sqlitePath: selectedConnection.sqlitePath,
+        credentialRef: selectedConnection.credentialRef,
+      });
+      setTestResult(null);
     }
-
-    setForm({
-      id: selectedConnection.id,
-      workspaceId,
-      name: selectedConnection.name,
-      driver: selectedConnection.driver,
-      host: selectedConnection.host,
-      port: selectedConnection.port,
-      database: selectedConnection.database,
-      username: selectedConnection.username,
-      sqlitePath: selectedConnection.sqlitePath,
-      credentialRef: selectedConnection.credentialRef,
-    });
-    setTestResult(null);
-  }, [selectedConnection, workspaceId]);
+  }
 
   useEffect(() => {
     if (!selectedConnectionId || !schemaEnabled || !schemaQuery.data) {
@@ -329,6 +327,7 @@ export function DatabasePage({ workspaceId }: { workspaceId: string }) {
     event.preventDefault();
     saveMutation.mutate({
       ...form,
+      workspaceId,
       credentialRef: form.credentialRef?.trim() || null,
       sqlitePath: form.sqlitePath?.trim() || null,
       host: form.host?.trim() || null,

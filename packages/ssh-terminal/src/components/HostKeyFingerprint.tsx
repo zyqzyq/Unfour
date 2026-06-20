@@ -11,16 +11,25 @@ export function HostKeyFingerprint({
   host: string;
   port: number;
 }) {
-  const [info, setInfo] = useState<SshHostFingerprintInfo | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   const trimmedHost = host.trim();
   const validPort = port > 0;
 
-  if (!trimmedHost || !validPort) {
-    if (info !== null) setInfo(null);
-    if (error !== null) setError(null);
+  const [state, setState] = useState<{
+    error: string | null;
+    info: SshHostFingerprintInfo | null;
+    requestedKey: string;
+    resolvedKey: string;
+  }>({ error: null, info: null, requestedKey: "", resolvedKey: "" });
+
+  const currentKey = trimmedHost && validPort ? `${trimmedHost}:${port}` : "";
+  const loading = state.requestedKey !== "" && state.resolvedKey !== state.requestedKey;
+
+  // Render-time sync: mark a new fetch request when host/port changes.
+  if (currentKey && state.requestedKey !== currentKey) {
+    setState({ error: null, info: null, requestedKey: currentKey, resolvedKey: "" });
+  }
+  if (!currentKey && (state.info !== null || state.error !== null)) {
+    setState({ error: null, info: null, requestedKey: "", resolvedKey: "" });
   }
 
   useEffect(() => {
@@ -28,38 +37,42 @@ export function HostKeyFingerprint({
       return;
     }
     let cancelled = false;
-    setLoading(true);
-    setError(null);
     getSshHostFingerprint({ host: trimmedHost, port })
-      .then((result) => {
-        if (!cancelled) setInfo(result);
+      .then((info) => {
+        if (!cancelled) setState((prev) => ({ ...prev, info, error: null, resolvedKey: currentKey }));
       })
       .catch((err) => {
-        if (!cancelled) setError(String(err?.message ?? err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled)
+          setState((prev) => ({
+            ...prev,
+            error: String(err?.message ?? err),
+            info: null,
+            resolvedKey: currentKey,
+          }));
       });
     return () => {
       cancelled = true;
     };
-  }, [trimmedHost, port, validPort]);
+  }, [trimmedHost, port, validPort, currentKey]);
 
   function handleReset() {
     if (!trimmedHost || !validPort) return;
-    setLoading(true);
-    setError(null);
+    setState((prev) => ({ ...prev, error: null, info: null, resolvedKey: "" }));
     resetSshHostFingerprint({ host: trimmedHost, port })
-      .then(() => {
-        setInfo(null);
-      })
-      .catch((err) => {
-        setError(String(err?.message ?? err));
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+      .then(() =>
+        setState((prev) => ({ ...prev, info: null, error: null, resolvedKey: currentKey })),
+      )
+      .catch((err) =>
+        setState((prev) => ({
+          ...prev,
+          error: String(err?.message ?? err),
+          info: null,
+          resolvedKey: currentKey,
+        })),
+      );
   }
+
+  const { error, info } = state;
 
   if (!trimmedHost || !validPort) return null;
 

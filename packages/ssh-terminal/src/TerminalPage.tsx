@@ -85,6 +85,7 @@ export function TerminalPage({ workspaceId }: { workspaceId: string }) {
     () => connections.find((item) => item.id === selectedConnectionId) ?? null,
     [connections, selectedConnectionId],
   );
+  const prevSelectedConnectionIdRef = useRef(selectedConnectionId);
   const activeSession = useMemo(
     () => sessions.find((item) => item.sessionId === activeSessionId) ?? null,
     [activeSessionId, sessions],
@@ -190,10 +191,6 @@ export function TerminalPage({ workspaceId }: { workspaceId: string }) {
   }, [hydrateTerminalSession, sessions, workspaceId]);
 
   useEffect(() => {
-    setForm((current) => ({ ...current, workspaceId }));
-  }, [workspaceId]);
-
-  useEffect(() => {
     if (!connections.length) {
       if (selectedConnectionId) {
         setSelectedSshConnection(null);
@@ -206,13 +203,15 @@ export function TerminalPage({ workspaceId }: { workspaceId: string }) {
     }
   }, [connections, selectedConnectionId, setSelectedSshConnection]);
 
-  useEffect(() => {
-    if (!selectedConnection) {
-      return;
+  // Sync form state when the selected connection changes (render-time adjustment pattern).
+  /* eslint-disable react-hooks/refs -- render-time ref read/write is React's recommended pattern for adjusting state when a derived value changes */
+  if (selectedConnectionId !== prevSelectedConnectionIdRef.current) {
+    prevSelectedConnectionIdRef.current = selectedConnectionId;
+    /* eslint-enable react-hooks/refs */
+    if (selectedConnection) {
+      setForm(sshConnectionToInput(selectedConnection, workspaceId));
     }
-
-    setForm(sshConnectionToInput(selectedConnection, workspaceId));
-  }, [selectedConnection, workspaceId]);
+  }
 
   useEffect(() => {
     if (!sessions.length) {
@@ -354,6 +353,7 @@ export function TerminalPage({ workspaceId }: { workspaceId: string }) {
     event.preventDefault();
     saveMutation.mutate({
       ...form,
+      workspaceId,
       credentialRef: form.credentialRef?.trim() || null,
       keyPath: form.keyPath?.trim() || null,
     });
@@ -440,6 +440,7 @@ export function TerminalPage({ workspaceId }: { workspaceId: string }) {
       message.includes("fingerprint does not match")
     ) {
       const conn = selectedConnection;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- surfacing mutation error as trust dialog is an external-system sync
       setTrustDialogState({
         open: true,
         connectionId: null,
