@@ -308,6 +308,62 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
             },
             handler: ToolHandler::Real(api_get_history),
         },
+        RegisteredTool {
+            definition: ToolDefinition {
+                name: "unfour.api.list_environments",
+                title: "List API Environments",
+                description:
+                    "Lists API environments and their variables for the active workspace through the Unfour command bus. Sensitive variable values are masked; non-sensitive values (e.g. base URLs) are shown so requests using variables can be understood.",
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "workspaceId": {
+                            "type": "string",
+                            "description": "Optional workspace ID. Uses the active workspace if omitted."
+                        }
+                    },
+                    "additionalProperties": false
+                }),
+                output_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "environments": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": { "type": "string" },
+                                    "name": { "type": "string" },
+                                    "isActive": { "type": "boolean" },
+                                    "variableCount": { "type": "integer", "minimum": 0 },
+                                    "variables": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "key": { "type": "string" },
+                                                "value": { "type": "string" },
+                                                "enabled": { "type": "boolean" }
+                                            },
+                                            "required": ["key", "value", "enabled"],
+                                            "additionalProperties": false
+                                        }
+                                    },
+                                    "workspaceId": { "type": "string" }
+                                },
+                                "required": ["id", "name", "isActive", "variableCount", "variables", "workspaceId"],
+                                "additionalProperties": false
+                            }
+                        },
+                        "count": { "type": "integer", "minimum": 0 },
+                        "source": { "type": "string", "const": "command-bus" }
+                    },
+                    "required": ["environments", "count", "source"],
+                    "additionalProperties": false
+                }),
+            },
+            handler: ToolHandler::Real(api_list_environments),
+        },
     ]
 }
 
@@ -576,6 +632,58 @@ fn api_get_history(
     }))
 }
 
+fn api_list_environments(
+    command_bus: &dyn CommandBusAdapter,
+    arguments: Value,
+) -> Result<Value, ToolCallError> {
+    let arguments = object_with_allowed_keys(arguments, &["workspaceId"])?;
+    let workspace_id = parse_optional_string(&arguments, "workspaceId")?;
+
+    let result = command_bus
+        .execute_read(ReadCommand::ApiListEnvironments { workspace_id })
+        .map_err(|error| ToolCallError::Execution {
+            code: error.code,
+            message: error.message,
+        })?;
+
+    let ReadCommandResult::ApiEnvironments(environments) = result else {
+        return Err(unexpected_result());
+    };
+
+    let environments: Vec<Value> = environments
+        .environments
+        .iter()
+        .map(|env| {
+            let variables: Vec<Value> = env
+                .variables
+                .iter()
+                .map(|kv| {
+                    let value = if is_sensitive_key(&kv.key) {
+                        mask_secret(&kv.value)
+                    } else {
+                        kv.value.clone()
+                    };
+                    json!({ "key": kv.key, "value": value, "enabled": kv.enabled })
+                })
+                .collect();
+            json!({
+                "id": env.id,
+                "name": env.name,
+                "isActive": env.is_active,
+                "variableCount": env.variables.len(),
+                "variables": variables,
+                "workspaceId": env.workspace_id
+            })
+        })
+        .collect();
+
+    Ok(json!({
+        "environments": environments,
+        "count": environments.len(),
+        "source": "command-bus"
+    }))
+}
+
 // --- Helpers ---
 
 /// Parse a JSON array of `{ key, value }` entries and mask sensitive values.
@@ -730,13 +838,14 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use unfour_command_bus::{
-        ApiCollectionListResult, ApiCollectionSummary, ApiHistoryDetailResult,
-        ApiHistoryListResult, ApiRequestDetailResult, ApiRequestListResult, ApiRequestSummary,
-        ReadCommand, ReadCommandResult,
+        ApiCollectionListResult, ApiCollectionSummary, ApiEnvironmentListResult,
+        ApiHistoryDetailResult, ApiHistoryListResult, ApiRequestDetailResult, ApiRequestListResult,
+        ApiRequestSummary, ReadCommand, ReadCommandResult,
     };
     use unfour_core::models::{
-        ApiHistoryDetail, ApiHistoryItem, ApiResponse, ApiSavedRequest, DatabaseConnection,
-        DatabaseQueryInput, DatabaseQueryResult, DatabaseQuerySafety, DatabaseSchema, KeyValue,
+        ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiResponse, ApiSavedRequest,
+        DatabaseConnection, DatabaseQueryInput, DatabaseQueryResult, DatabaseQuerySafety,
+        DatabaseSchema, KeyValue,
     };
 
     use crate::command_bus_adapter::{CommandBusAdapter, CommandBusAdapterError};
@@ -855,6 +964,32 @@ mod tests {
                             sync_status: "local".to_string(),
                             remote_id: None,
                         },
+                        source: "command-bus".to_string(),
+                    })
+                }
+                ReadCommand::ApiListEnvironments { .. } => {
+                    ReadCommandResult::ApiEnvironments(ApiEnvironmentListResult {
+                        environments: vec![ApiEnvironment {
+                            id: "env-1".to_string(),
+                            workspace_id: "ws-1".to_string(),
+                            name: "Staging".to_string(),
+                            variables: vec![
+                                KeyValue {
+                                    key: "baseUrl".to_string(),
+                                    value: "https://api.staging.example.com".to_string(),
+                                    enabled: true,
+                                },
+                                KeyValue {
+                                    key: "token".to_string(),
+                                    value: "Bearer secret-token".to_string(),
+                                    enabled: true,
+                                },
+                            ],
+                            is_active: true,
+                            created_at: String::new(),
+                            updated_at: String::new(),
+                        }],
+                        count: 1,
                         source: "command-bus".to_string(),
                     })
                 }
@@ -1272,6 +1407,32 @@ mod tests {
     fn get_history_requires_history_id() {
         let result = api_registry().call("unfour.api.get_history", json!({}));
         assert!(result.is_err(), "should fail without historyId");
+    }
+
+    // --- environment tests ---
+
+    #[test]
+    fn list_environments_masks_sensitive_variables_only() {
+        let result = api_registry()
+            .call("unfour.api.list_environments", json!({}))
+            .expect("should succeed");
+
+        assert_eq!(result["isError"], false);
+        let env = &result["structuredContent"]["environments"][0];
+        assert_eq!(env["name"], "Staging");
+        assert_eq!(env["isActive"], true);
+        assert_eq!(env["variableCount"], 2);
+
+        let vars = env["variables"].as_array().unwrap();
+        let base = vars.iter().find(|v| v["key"] == "baseUrl").unwrap();
+        // Non-sensitive value is shown verbatim so requests are intelligible.
+        assert_eq!(base["value"], "https://api.staging.example.com");
+
+        let token = vars.iter().find(|v| v["key"] == "token").unwrap();
+        let token_val = token["value"].as_str().unwrap();
+        assert!(token_val.starts_with("[mask "));
+        assert!(token_val.contains("scheme=Bearer"));
+        assert!(!token_val.contains("secret-token"));
     }
 
     #[test]

@@ -135,9 +135,10 @@ mod tests {
 
     use serde_json::json;
     use unfour_command_bus::{
-        ApiCollectionListResult, ApiHistoryDetailResult, ApiHistoryListResult,
-        ApiRequestDetailResult, ApiRequestListResult, ConnectionListResult, CurrentWorkspaceResult,
-        ReadCommand, ReadCommandResult, SafeConnection, SafeConnectionSummary,
+        ApiCollectionListResult, ApiEnvironmentListResult, ApiHistoryDetailResult,
+        ApiHistoryListResult, ApiRequestDetailResult, ApiRequestListResult, ConnectionListResult,
+        CurrentWorkspaceResult, ReadCommand, ReadCommandResult, SafeConnection,
+        SafeConnectionSummary, WorkspaceListResult, WorkspaceSummary,
     };
     use unfour_core::models::{
         ApiHistoryDetail, ApiResponse, ApiSavedRequest, DatabaseConnection, DatabaseQueryInput,
@@ -162,6 +163,29 @@ mod tests {
                         workspace_name: "Local Workspace".to_string(),
                         workspace_root: None,
                         mode: "local".to_string(),
+                        source: "command-bus".to_string(),
+                    })
+                }
+                ReadCommand::ListWorkspaces => {
+                    ReadCommandResult::Workspaces(WorkspaceListResult {
+                        workspaces: vec![
+                            WorkspaceSummary {
+                                id: "workspace-1".to_string(),
+                                name: "Local Workspace".to_string(),
+                                is_default: true,
+                                is_active: true,
+                                last_opened_at: Some("2026-06-20T00:00:00Z".to_string()),
+                            },
+                            WorkspaceSummary {
+                                id: "workspace-2".to_string(),
+                                name: "Scratch".to_string(),
+                                is_default: false,
+                                is_active: false,
+                                last_opened_at: None,
+                            },
+                        ],
+                        active_workspace_id: "workspace-1".to_string(),
+                        count: 2,
                         source: "command-bus".to_string(),
                     })
                 }
@@ -249,6 +273,13 @@ mod tests {
                             sync_status: "local".to_string(),
                             remote_id: None,
                         },
+                        source: "command-bus".to_string(),
+                    })
+                }
+                ReadCommand::ApiListEnvironments { .. } => {
+                    ReadCommandResult::ApiEnvironments(ApiEnvironmentListResult {
+                        environments: vec![],
+                        count: 0,
                         source: "command-bus".to_string(),
                     })
                 }
@@ -400,7 +431,7 @@ mod tests {
     fn real_tool_schemas_are_available_separately_from_mocks() {
         let definitions = ToolRegistry::with_command_bus(Arc::new(StubCommandBus)).definitions();
 
-        assert_eq!(definitions.len(), 17);
+        assert_eq!(definitions.len(), 19);
         assert!(definitions
             .iter()
             .any(|definition| definition.name == "unfour.workspace.current"));
@@ -443,6 +474,12 @@ mod tests {
         assert!(definitions
             .iter()
             .any(|definition| definition.name == "unfour.system.health"));
+        assert!(definitions
+            .iter()
+            .any(|definition| definition.name == "unfour.api.list_environments"));
+        assert!(definitions
+            .iter()
+            .any(|definition| definition.name == "unfour.workspace.list"));
         assert_eq!(
             definitions
                 .iter()
@@ -466,6 +503,22 @@ mod tests {
         );
         assert_eq!(result["structuredContent"]["source"], "command-bus");
         assert_eq!(result["isError"], false);
+    }
+
+    #[test]
+    fn workspace_list_returns_all_workspaces_marking_active() {
+        let result = ToolRegistry::with_command_bus(Arc::new(StubCommandBus))
+            .call("unfour.workspace.list", json!({}))
+            .expect("workspace list tool should succeed");
+
+        let content = &result["structuredContent"];
+        assert_eq!(content["count"], 2);
+        assert_eq!(content["activeWorkspaceId"], "workspace-1");
+        assert_eq!(content["workspaces"][0]["id"], "workspace-1");
+        assert_eq!(content["workspaces"][0]["isActive"], true);
+        assert_eq!(content["workspaces"][0]["isDefault"], true);
+        assert_eq!(content["workspaces"][1]["isActive"], false);
+        assert_eq!(content["source"], "command-bus");
     }
 
     #[test]

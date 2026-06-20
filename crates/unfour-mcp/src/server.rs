@@ -149,9 +149,9 @@ mod tests {
 
     use serde_json::{json, Value};
     use unfour_command_bus::{
-        ApiCollectionListResult, ApiHistoryDetailResult, ApiHistoryListResult,
-        ApiRequestDetailResult, ApiRequestListResult, ConnectionListResult, CurrentWorkspaceResult,
-        ReadCommand, ReadCommandResult,
+        ApiCollectionListResult, ApiEnvironmentListResult, ApiHistoryDetailResult,
+        ApiHistoryListResult, ApiRequestDetailResult, ApiRequestListResult, ConnectionListResult,
+        CurrentWorkspaceResult, ReadCommand, ReadCommandResult, WorkspaceListResult,
     };
     use unfour_core::models::{
         ApiHistoryDetail, ApiResponse, ApiSavedRequest, DatabaseConnection, DatabaseQueryInput,
@@ -175,6 +175,14 @@ mod tests {
                         workspace_name: "Workspace".to_string(),
                         workspace_root: None,
                         mode: "local".to_string(),
+                        source: "command-bus".to_string(),
+                    })
+                }
+                ReadCommand::ListWorkspaces => {
+                    ReadCommandResult::Workspaces(WorkspaceListResult {
+                        workspaces: vec![],
+                        active_workspace_id: "workspace-1".to_string(),
+                        count: 0,
                         source: "command-bus".to_string(),
                     })
                 }
@@ -252,6 +260,13 @@ mod tests {
                             sync_status: "local".to_string(),
                             remote_id: None,
                         },
+                        source: "command-bus".to_string(),
+                    })
+                }
+                ReadCommand::ApiListEnvironments { .. } => {
+                    ReadCommandResult::ApiEnvironments(ApiEnvironmentListResult {
+                        environments: vec![],
+                        count: 0,
                         source: "command-bus".to_string(),
                     })
                 }
@@ -397,7 +412,7 @@ mod tests {
         assert_eq!(responses.len(), 3);
         assert_eq!(
             responses[1]["result"]["tools"].as_array().unwrap().len(),
-            17
+            19
         );
         assert_eq!(
             responses[2]["result"]["structuredContent"],

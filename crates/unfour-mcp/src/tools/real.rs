@@ -41,6 +41,45 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
         },
         RegisteredTool {
             definition: ToolDefinition {
+                name: "unfour.workspace.list",
+                title: "List Unfour Workspaces",
+                description:
+                    "Lists all local workspaces through the Unfour command bus, marking which one is active.",
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": false
+                }),
+                output_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "workspaces": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": { "type": "string" },
+                                    "name": { "type": "string" },
+                                    "isDefault": { "type": "boolean" },
+                                    "isActive": { "type": "boolean" },
+                                    "lastOpenedAt": { "type": ["string", "null"] }
+                                },
+                                "required": ["id", "name", "isDefault", "isActive"],
+                                "additionalProperties": false
+                            }
+                        },
+                        "activeWorkspaceId": { "type": "string" },
+                        "count": { "type": "integer", "minimum": 0 },
+                        "source": { "type": "string", "const": "command-bus" }
+                    },
+                    "required": ["workspaces", "activeWorkspaceId", "count", "source"],
+                    "additionalProperties": false
+                }),
+            },
+            handler: ToolHandler::Real(workspace_list),
+        },
+        RegisteredTool {
+            definition: ToolDefinition {
                 name: "unfour.connection.list",
                 title: "List Unfour Connections",
                 description:
@@ -114,6 +153,24 @@ fn workspace_current(
     };
 
     serialize_safe(workspace)
+}
+
+fn workspace_list(
+    command_bus: &dyn CommandBusAdapter,
+    arguments: Value,
+) -> Result<Value, ToolCallError> {
+    object_with_allowed_keys(arguments, &[])?;
+    let result = command_bus
+        .execute_read(ReadCommand::ListWorkspaces)
+        .map_err(|error| ToolCallError::Execution {
+            code: error.code,
+            message: error.message,
+        })?;
+    let ReadCommandResult::Workspaces(workspaces) = result else {
+        return Err(unexpected_result());
+    };
+
+    serialize_safe(workspaces)
 }
 
 fn connection_list(

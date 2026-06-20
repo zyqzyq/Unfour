@@ -31,7 +31,9 @@ pub enum AppError {
 }
 
 impl AppError {
-    fn code(&self) -> &'static str {
+    /// Stable, safe error classification code. Contains no dynamic detail, so it
+    /// is safe to surface to external consumers (e.g. the MCP/LLM boundary).
+    pub fn code(&self) -> &'static str {
         match self {
             AppError::Config(_) => "CONFIG_ERROR",
             AppError::Database(_) => "DATABASE_ERROR",

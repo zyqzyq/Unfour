@@ -22,6 +22,7 @@ reserved for MCP messages; process errors are written to standard error.
 | Tool | Input | Current behavior |
 | --- | --- | --- |
 | `unfour.workspace.current` | `{}` | Returns the active workspace from the command bus. |
+| `unfour.workspace.list` | `{}` | Lists all local workspaces, marking which one is active. |
 | `unfour.connection.list` | `{ "type": "all" }` | Returns safe database and SSH connection summaries. The optional type is `all`, `api`, `database`, or `ssh`; the default is `all`. |
 | `unfour.api.list_collections` | `{ "workspaceId": "optional" }` | Lists API request collections (derived from folder paths). |
 | `unfour.api.list_requests` | `{ "workspaceId": "optional", "collectionId": "optional" }` | Lists saved API requests with sensitive URL parameters redacted. |
@@ -29,6 +30,7 @@ reserved for MCP messages; process errors are written to standard error.
 | `unfour.api.send_request` | `{ "requestId": "required", "environmentId": "optional", "timeoutMs": "optional" }` | Sends a previously saved API request and returns the response summary with sensitive data masked. |
 | `unfour.api.list_history` | `{ "workspaceId": "optional", "limit": "optional" }` | Lists recent API request/response history with sensitive URL parameters masked. Default limit 50, max 200. Useful for diagnosing when a request started failing. |
 | `unfour.api.get_history` | `{ "historyId": "required", "workspaceId": "optional" }` | Returns a single history entry's request/response detail with sensitive headers, query params, and body fields masked. |
+| `unfour.api.list_environments` | `{ "workspaceId": "optional" }` | Lists API environments and their variables. Sensitive variable values are masked; non-sensitive values (e.g. base URLs) are shown verbatim. |
 | `unfour.db.list_connections` | `{ "workspaceId": "optional" }` | Lists saved database connections as safe summaries (no passwords or connection strings). |
 | `unfour.db.list_tables` | `{ "connectionId": "required", "workspaceId": "optional", "limit": "optional" }` | Lists tables and views for a saved database connection. Default limit 200, max 500. |
 | `unfour.db.describe_table` | `{ "connectionId": "required", "tableName": "required", "schema": "optional", "workspaceId": "optional" }` | Describes a table's columns (name, type, nullable, primaryKey). Does not read table data. |
@@ -219,6 +221,17 @@ the desktop app. The database is opened in read-write mode to support
 read-only operations plus sending saved requests — no create, edit, or
 delete tools are exposed.
 
+Because the desktop app and the MCP process can open the database
+concurrently, all connections set a 5-second `busy_timeout` to avoid spurious
+"database is locked" failures under contention.
+
+Database connection credentials are resolved from the OS keychain under the
+same service name the desktop app uses (`unfour-workspace`). The MCP only reads
+credentials to open database connections; it never creates, rotates, or deletes
+them. On platforms where keychain items are ACL'd per-application (notably
+macOS), the first credential read from the MCP process may require user
+approval.
+
 On Windows this resolves to:
 
 ```text
@@ -295,6 +308,7 @@ Example Codex prompts:
 请通过 unfour MCP 列出最近的 API 请求历史，找出最早开始返回非 2xx 的请求。
 请通过 unfour MCP 获取 historyId 为 xxx 的历史详情，对照请求/响应头里的 auth 掩码信息判断鉴权问题。
 请通过 unfour MCP 测试 connectionId 为 xxx 的数据库连通性。
+请通过 unfour MCP 列出当前 workspace 的 API 环境与变量（敏感值会被掩码）。
 请通过 unfour MCP 检查系统健康状态。
 ```
 
@@ -310,5 +324,6 @@ This phase does not:
 - implement `tail_log`;
 - implement workflows;
 - implement HTTP MCP transport;
-- read secrets or environment variable values;
+- return raw secret values (sensitive headers, tokens, passwords, and sensitive
+  environment variables are masked — never returned in usable form);
 - attach to the running desktop process over IPC.

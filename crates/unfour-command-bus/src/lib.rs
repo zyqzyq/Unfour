@@ -23,6 +23,12 @@ use unfour_workspace_engine::WorkspaceService;
 
 pub const DEFAULT_APP_IDENTIFIER: &str = "com.unfour.workspace";
 
+/// OS keychain service name under which credentials are stored. Must match the
+/// value the desktop app passes to `SecretStore::new` (see
+/// `apps/desktop/src-tauri/src/lib.rs`) so satellite processes read the same
+/// credential entries.
+pub const DEFAULT_SECRET_SERVICE: &str = "unfour-workspace";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ConnectionType {
@@ -35,6 +41,7 @@ pub enum ConnectionType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReadCommand {
     CurrentWorkspace,
+    ListWorkspaces,
     ListConnections {
         connection_type: ConnectionType,
     },
@@ -56,17 +63,22 @@ pub enum ReadCommand {
         workspace_id: Option<String>,
         history_id: String,
     },
+    ApiListEnvironments {
+        workspace_id: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone)]
 pub enum ReadCommandResult {
     CurrentWorkspace(CurrentWorkspaceResult),
+    Workspaces(WorkspaceListResult),
     Connections(ConnectionListResult),
     ApiCollections(ApiCollectionListResult),
     ApiRequests(ApiRequestListResult),
     ApiRequest(ApiRequestDetailResult),
     ApiHistory(ApiHistoryListResult),
     ApiHistoryDetailResult(ApiHistoryDetailResult),
+    ApiEnvironments(ApiEnvironmentListResult),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -77,6 +89,25 @@ pub struct CurrentWorkspaceResult {
     pub workspace_root: Option<String>,
     pub mode: String,
     pub source: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceListResult {
+    pub workspaces: Vec<WorkspaceSummary>,
+    pub active_workspace_id: String,
+    pub count: usize,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceSummary {
+    pub id: String,
+    pub name: String,
+    pub is_default: bool,
+    pub is_active: bool,
+    pub last_opened_at: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -169,6 +200,14 @@ pub struct ApiHistoryDetailResult {
     pub source: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiEnvironmentListResult {
+    pub environments: Vec<ApiEnvironment>,
+    pub count: usize,
+    pub source: String,
+}
+
 #[derive(Clone)]
 pub struct CommandBus {
     api_client: ApiClientService,
@@ -243,8 +282,11 @@ impl CommandBus {
     }
 
     pub async fn from_existing_db_read_only(db: LocalDb) -> AppResult<Self> {
-        Self::from_db_without_workspace_seed(db, SecretStore::in_memory("unfour-mcp-read-only"))
-            .await
+        // Use the real OS keychain (same service the desktop app writes to) so
+        // satellite processes such as the MCP server can resolve saved
+        // credentials for database connections. Only read operations are
+        // exercised here; no tool creates, rotates, or deletes credentials.
+        Self::from_db_without_workspace_seed(db, SecretStore::new(DEFAULT_SECRET_SERVICE)).await
     }
 
     async fn from_db_without_workspace_seed(
@@ -313,6 +355,28 @@ impl CommandBus {
                         source: "command-bus".to_string(),
                     },
                 ))
+            }
+            ReadCommand::ListWorkspaces => {
+                let state = self.read_workspace_state().await?;
+                let active_workspace_id = state.active_workspace_id.clone();
+                let workspaces = state
+                    .workspaces
+                    .into_iter()
+                    .map(|workspace| WorkspaceSummary {
+                        is_active: workspace.id == active_workspace_id,
+                        id: workspace.id,
+                        name: workspace.name,
+                        is_default: workspace.is_default,
+                        last_opened_at: workspace.last_opened_at,
+                    })
+                    .collect::<Vec<_>>();
+
+                Ok(ReadCommandResult::Workspaces(WorkspaceListResult {
+                    count: workspaces.len(),
+                    workspaces,
+                    active_workspace_id,
+                    source: "command-bus".to_string(),
+                }))
             }
             ReadCommand::ListConnections { connection_type } => {
                 let state = self.read_workspace_state().await?;
@@ -489,6 +553,18 @@ impl CommandBus {
                 Ok(ReadCommandResult::ApiHistoryDetailResult(
                     ApiHistoryDetailResult {
                         detail,
+                        source: "command-bus".to_string(),
+                    },
+                ))
+            }
+            ReadCommand::ApiListEnvironments { workspace_id } => {
+                let state = self.read_workspace_state().await?;
+                let ws_id = workspace_id.unwrap_or(state.active_workspace_id);
+                let environments = self.api_client.list_environments(ws_id).await?;
+                Ok(ReadCommandResult::ApiEnvironments(
+                    ApiEnvironmentListResult {
+                        count: environments.len(),
+                        environments,
                         source: "command-bus".to_string(),
                     },
                 ))

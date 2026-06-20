@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use tokio::runtime::{Builder, Runtime};
 use unfour_command_bus::{CommandBus, ReadCommand, ReadCommandResult};
+use unfour_core::AppError;
 use unfour_core::models::{
     ApiResponse, DatabaseConnection, DatabaseQueryInput, DatabaseQueryResult, DatabaseSchema,
     DatabaseTestResult, SystemHealth,
@@ -113,9 +114,8 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
     ) -> Result<ReadCommandResult, CommandBusAdapterError> {
         self.runtime
             .block_on(self.bus.execute_read(command))
-            .map_err(|_| CommandBusAdapterError {
-                code: "COMMAND_BUS_READ_FAILED",
-                message: "The command-bus read operation failed.",
+            .map_err(|e| {
+                CommandBusAdapterError::from_app_error("The command-bus read operation failed.", &e)
             })
     }
 
@@ -126,9 +126,11 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
     ) -> Result<ApiResponse, CommandBusAdapterError> {
         self.runtime
             .block_on(self.bus.execute_saved_api_request(request_id, timeout_ms))
-            .map_err(|_| CommandBusAdapterError {
-                code: "COMMAND_BUS_API_SEND_FAILED",
-                message: "The command-bus API send operation failed.",
+            .map_err(|e| {
+                CommandBusAdapterError::from_app_error(
+                    "The command-bus API send operation failed.",
+                    &e,
+                )
             })
     }
 
@@ -138,9 +140,11 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
     ) -> Result<Vec<DatabaseConnection>, CommandBusAdapterError> {
         self.runtime
             .block_on(self.bus.list_database_connections(workspace_id.to_string()))
-            .map_err(|_| CommandBusAdapterError {
-                code: "COMMAND_BUS_DB_LIST_FAILED",
-                message: "The command-bus database list operation failed.",
+            .map_err(|e| {
+                CommandBusAdapterError::from_app_error(
+                    "The command-bus database list operation failed.",
+                    &e,
+                )
             })
     }
 
@@ -151,9 +155,11 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
     ) -> Result<DatabaseSchema, CommandBusAdapterError> {
         self.runtime
             .block_on(self.bus.database_schema(workspace_id.to_string(), connection_id.to_string()))
-            .map_err(|_| CommandBusAdapterError {
-                code: "COMMAND_BUS_DB_SCHEMA_FAILED",
-                message: "The command-bus database schema operation failed.",
+            .map_err(|e| {
+                CommandBusAdapterError::from_app_error(
+                    "The command-bus database schema operation failed.",
+                    &e,
+                )
             })
     }
 
@@ -163,9 +169,11 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
     ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
         self.runtime
             .block_on(self.bus.execute_database_query(input))
-            .map_err(|_| CommandBusAdapterError {
-                code: "COMMAND_BUS_DB_QUERY_FAILED",
-                message: "The command-bus database query operation failed.",
+            .map_err(|e| {
+                CommandBusAdapterError::from_app_error(
+                    "The command-bus database query operation failed.",
+                    &e,
+                )
             })
     }
 
@@ -179,23 +187,37 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
                 self.bus
                     .test_database_connection(workspace_id.to_string(), connection_id.to_string()),
             )
-            .map_err(|_| CommandBusAdapterError {
-                code: "COMMAND_BUS_DB_TEST_FAILED",
-                message: "The command-bus database connection test failed.",
+            .map_err(|e| {
+                CommandBusAdapterError::from_app_error(
+                    "The command-bus database connection test failed.",
+                    &e,
+                )
             })
     }
 
     fn system_health(&self) -> Result<SystemHealth, CommandBusAdapterError> {
-        self.runtime
-            .block_on(self.bus.system_health())
-            .map_err(|_| CommandBusAdapterError {
-                code: "COMMAND_BUS_HEALTH_FAILED",
-                message: "The command-bus system health read failed.",
-            })
+        self.runtime.block_on(self.bus.system_health()).map_err(|e| {
+            CommandBusAdapterError::from_app_error(
+                "The command-bus system health read failed.",
+                &e,
+            )
+        })
     }
 }
 
 impl CommandBusAdapterError {
+    /// Build an adapter error that surfaces the underlying `AppError`'s stable
+    /// classification code (e.g. `NOT_FOUND`, `DATABASE_ERROR`,
+    /// `UNSUPPORTED_OPERATION`) alongside a safe, operation-specific message.
+    /// The `AppError` `Display` text is intentionally not propagated because it
+    /// may embed hosts, DSNs, or other sensitive detail.
+    fn from_app_error(message: &'static str, error: &AppError) -> Self {
+        Self {
+            code: error.code(),
+            message,
+        }
+    }
+
     fn initialization_failed() -> Self {
         Self {
             code: "COMMAND_BUS_INITIALIZATION_FAILED",

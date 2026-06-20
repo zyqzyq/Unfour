@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::SqlitePool;
@@ -6,6 +7,12 @@ use tauri::{AppHandle, Manager};
 use unfour_core::{AppError, AppResult};
 
 const DB_FILENAME: &str = "unfour-workspace.sqlite";
+
+/// How long a connection waits for a held lock before returning
+/// `SQLITE_BUSY`. The desktop app and satellite processes (e.g. the MCP server)
+/// can open the same database file concurrently, so a non-zero busy timeout
+/// avoids spurious "database is locked" failures.
+const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Clone)]
 pub struct LocalDb {
@@ -38,6 +45,7 @@ impl LocalDb {
         let options = SqliteConnectOptions::new()
             .filename(db_path)
             .create_if_missing(true)
+            .busy_timeout(BUSY_TIMEOUT)
             .foreign_keys(true);
 
         let pool = SqlitePoolOptions::new()
@@ -53,6 +61,7 @@ impl LocalDb {
             .filename(path.as_ref())
             .create_if_missing(false)
             .read_only(true)
+            .busy_timeout(BUSY_TIMEOUT)
             .foreign_keys(true);
 
         let pool = SqlitePoolOptions::new()
@@ -67,6 +76,7 @@ impl LocalDb {
         let options = SqliteConnectOptions::new()
             .filename(path.as_ref())
             .create_if_missing(false)
+            .busy_timeout(BUSY_TIMEOUT)
             .foreign_keys(true);
 
         let pool = SqlitePoolOptions::new()
