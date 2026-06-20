@@ -1,7 +1,7 @@
 export { useWorkspaceStore } from "./workspace-store";
 export type {
+  ApiEnvironment,
   Workspace,
-  WorkspaceEnvironment,
   WorkspaceLayout,
   WorkspaceState,
   WorkspaceTab,

@@ -1,26 +1,33 @@
-import type { Ref } from "react";
+import type { CSSProperties, Ref } from "react";
 import { Save, Send } from "lucide-react";
-import { Button, Input, cn, useI18n } from "@unfour/ui";
+import { Button, Input, useI18n } from "@unfour/ui";
+import type { ApiEnvironment } from "@unfour/command-client";
 import type { ApiRequestTab } from "../model/request-tabs";
 import { httpMethods } from "../constants/http-methods";
 import { RequestActionsMenu } from "./RequestActionsMenu";
 
 export function ApiRequestBar({
+  activeEnvironmentId,
+  environments,
   onDelete,
   onDuplicate,
   onExport,
   onImport,
   onSave,
+  onSelectEnvironment,
   onSend,
   onUpdate,
   tab,
   urlInputRef,
 }: {
+  activeEnvironmentId: string | null;
+  environments: ApiEnvironment[];
   onDelete: () => void;
   onDuplicate: () => void;
   onExport: () => void;
   onImport: () => void;
   onSave: () => void;
+  onSelectEnvironment: (environmentId: string | null) => void;
   onSend: () => void;
   onUpdate: (patch: Partial<ApiRequestTab["draft"]>) => void;
   tab: ApiRequestTab;
@@ -32,15 +39,15 @@ export function ApiRequestBar({
     <div className="flex min-h-[52px] shrink-0 items-center gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3 py-2.5">
       <select
         aria-label={t("api.request.method")}
-        className={cn(
-          "h-[var(--u-size-input)] shrink-0 cursor-pointer rounded-[var(--u-radius-md)] border bg-[var(--u-color-surface)] px-2.5 font-mono text-[12px] font-bold uppercase tracking-wide outline-none transition-colors duration-150 focus:border-[var(--u-color-focus)] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--u-color-focus)_16%,transparent)]",
-          methodSelectToneClass(tab.draft.method),
-        )}
+        className="h-[var(--u-size-input)] shrink-0 cursor-pointer rounded-[var(--u-radius-md)] border bg-[var(--u-color-surface)] px-2.5 font-mono text-[12px] font-bold uppercase tracking-wide outline-none transition-colors duration-150 focus:border-[var(--u-color-focus)] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--u-color-focus)_16%,transparent)]"
         onChange={(event) => onUpdate({ method: event.target.value })}
+        style={methodSelectStyle(tab.draft.method)}
         value={tab.draft.method}
       >
         {httpMethods.map((method) => (
-          <option key={method}>{method}</option>
+          <option key={method} style={{ color: methodColor(method) }}>
+            {method}
+          </option>
         ))}
       </select>
       <Input
@@ -71,6 +78,20 @@ export function ApiRequestBar({
       >
         <Save size={14} />
       </Button>
+      <select
+        aria-label={t("api.environment.active")}
+        className="h-[var(--u-size-input)] max-w-[150px] shrink-0 cursor-pointer truncate rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-2 text-[12px] text-[var(--u-color-text)] outline-none focus:border-[var(--u-color-focus)]"
+        onChange={(event) => onSelectEnvironment(event.target.value || null)}
+        title={t("api.environment.active")}
+        value={activeEnvironmentId ?? ""}
+      >
+        <option value="">{t("api.environment.none")}</option>
+        {environments.map((environment) => (
+          <option key={environment.id} value={environment.id}>
+            {environment.name}
+          </option>
+        ))}
+      </select>
       <RequestActionsMenu
         canDelete={Boolean(tab.savedRequestId)}
         canDuplicate={Boolean(tab.savedRequestId)}
@@ -91,19 +112,51 @@ export function ApiRequestBar({
   );
 }
 
-function methodSelectToneClass(method: string) {
+function methodSelectStyle(method: string): CSSProperties {
+  return {
+    borderColor: methodBorderColor(method),
+    color: methodColor(method),
+  };
+}
+
+function methodColor(method: string): string {
   switch (method.trim().toUpperCase()) {
     case "GET":
-      return "border-[color:color-mix(in_srgb,var(--u-color-info)_40%,var(--u-color-border))] text-[var(--u-color-info-text)]";
+      return "var(--u-color-info-text)";
     case "POST":
-      return "border-[color:color-mix(in_srgb,var(--u-color-success)_40%,var(--u-color-border))] text-[var(--u-color-success)]";
+      return "var(--u-color-success)";
     case "PUT":
-      return "border-[color:color-mix(in_srgb,var(--u-color-warning)_40%,var(--u-color-border))] text-[var(--u-color-warning-text)]";
+      return "var(--u-color-warning-text)";
     case "PATCH":
-      return "border-[color:color-mix(in_srgb,var(--u-color-primary)_42%,var(--u-color-border))] text-[var(--u-color-primary)]";
+      return "var(--u-color-primary)";
     case "DELETE":
-      return "border-[color:color-mix(in_srgb,var(--u-color-danger)_40%,var(--u-color-border))] text-[var(--u-color-danger-text)]";
+      return "var(--u-color-danger-text)";
+    case "HEAD":
+      return "var(--u-color-secondary-text)";
+    case "OPTIONS":
+      return "var(--u-color-neutral-text)";
     default:
-      return "border-[var(--u-color-border-strong)] text-[var(--u-color-text-muted)]";
+      return "var(--u-color-text-muted)";
+  }
+}
+
+function methodBorderColor(method: string): string {
+  switch (method.trim().toUpperCase()) {
+    case "GET":
+      return "color-mix(in srgb, var(--u-color-info) 40%, var(--u-color-border))";
+    case "POST":
+      return "color-mix(in srgb, var(--u-color-success) 40%, var(--u-color-border))";
+    case "PUT":
+      return "color-mix(in srgb, var(--u-color-warning) 40%, var(--u-color-border))";
+    case "PATCH":
+      return "color-mix(in srgb, var(--u-color-primary) 42%, var(--u-color-border))";
+    case "DELETE":
+      return "color-mix(in srgb, var(--u-color-danger) 40%, var(--u-color-border))";
+    case "HEAD":
+      return "color-mix(in srgb, var(--u-color-secondary) 40%, var(--u-color-border))";
+    case "OPTIONS":
+      return "color-mix(in srgb, var(--u-color-neutral) 40%, var(--u-color-border))";
+    default:
+      return "var(--u-color-border-strong)";
   }
 }

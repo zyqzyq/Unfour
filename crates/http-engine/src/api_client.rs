@@ -1,9 +1,11 @@
 use chrono::Utc;
 use reqwest::header::{HeaderName, HeaderValue, CONTENT_TYPE};
 use reqwest::{Client, Method, Url};
+use std::collections::HashSet;
 use std::time::{Duration, Instant};
 use unfour_core::models::{
-    ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest, KeyValue,
+    ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse,
+    ApiSavedRequest, KeyValue,
 };
 use unfour_core::redaction::{redact_json_body, redact_key_values};
 use unfour_core::{AppError, AppResult};
@@ -24,14 +26,11 @@ impl ApiClientService {
         }
     }
 
-    pub async fn send(
-        &self,
-        input: ApiRequestInput,
-        environment: &[KeyValue],
-    ) -> AppResult<ApiResponse> {
+    pub async fn send(&self, input: ApiRequestInput) -> AppResult<ApiResponse> {
         validate_workspace_id(&input.workspace_id)?;
         let method = parse_method(&input.method)?;
-        let resolved = resolve_input(input.clone(), environment)?;
+        let environment = self.active_environment_variables(&input.workspace_id).await?;
+        let resolved = resolve_input(input.clone(), &environment)?;
         let url = build_url(&resolved.url, &resolved.query)?;
         let timeout =
             Duration::from_millis(input.timeout_ms.unwrap_or(60_000).clamp(1_000, 300_000));
@@ -96,6 +95,247 @@ impl ApiClientService {
             body,
             duration_ms,
         })
+    }
+
+    pub async fn list_environments(
+        &self,
+        workspace_id: String,
+    ) -> AppResult<Vec<ApiEnvironment>> {
+        validate_workspace_id(&workspace_id)?;
+        let rows = sqlx::query_as::<_, EnvironmentRow>(
+            r#"
+            SELECT id, workspace_id, name, variables_json, is_active, created_at, updated_at
+            FROM api_environments
+            WHERE workspace_id = ?1 AND deleted_at IS NULL
+            ORDER BY name COLLATE NOCASE
+            "#,
+        )
+        .bind(workspace_id)
+        .fetch_all(self.db.pool())
+        .await?;
+
+        Ok(rows.into_iter().map(ApiEnvironment::from).collect())
+    }
+
+    pub async fn create_environment(
+        &self,
+        workspace_id: String,
+        name: String,
+    ) -> AppResult<ApiEnvironment> {
+        validate_workspace_id(&workspace_id)?;
+        let name = name.trim().to_string();
+        if name.is_empty() {
+            return Err(AppError::Validation(
+                "environment name cannot be empty".to_string(),
+            ));
+        }
+
+        // The first environment in a workspace becomes the active one.
+        let existing: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM api_environments WHERE workspace_id = ?1 AND deleted_at IS NULL",
+        )
+        .bind(&workspace_id)
+        .fetch_one(self.db.pool())
+        .await?;
+        let is_active = existing == 0;
+        let id = Uuid::new_v4().to_string();
+        let now = Utc::now().to_rfc3339();
+
+        sqlx::query(
+            r#"
+            INSERT INTO api_environments (
+              id, workspace_id, name, variables_json, is_active, created_at, updated_at,
+              revision, sync_status
+            )
+            VALUES (?1, ?2, ?3, '[]', ?4, ?5, ?5, 1, 'local')
+            "#,
+        )
+        .bind(&id)
+        .bind(&workspace_id)
+        .bind(&name)
+        .bind(is_active)
+        .bind(&now)
+        .execute(self.db.pool())
+        .await?;
+
+        self.get_environment(&workspace_id, &id).await
+    }
+
+    pub async fn update_environment(
+        &self,
+        workspace_id: String,
+        environment_id: String,
+        name: String,
+        variables: Vec<KeyValue>,
+    ) -> AppResult<ApiEnvironment> {
+        validate_workspace_id(&workspace_id)?;
+        let name = name.trim().to_string();
+        if name.is_empty() {
+            return Err(AppError::Validation(
+                "environment name cannot be empty".to_string(),
+            ));
+        }
+        validate_environment(&variables)?;
+        let now = Utc::now().to_rfc3339();
+        let variables_json = serde_json::to_string(&variables)?;
+
+        let result = sqlx::query(
+            r#"
+            UPDATE api_environments
+            SET name = ?1, variables_json = ?2, updated_at = ?3,
+                revision = revision + 1, sync_status = 'pending'
+            WHERE workspace_id = ?4 AND id = ?5 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(&name)
+        .bind(&variables_json)
+        .bind(&now)
+        .bind(&workspace_id)
+        .bind(&environment_id)
+        .execute(self.db.pool())
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound("api environment".to_string()));
+        }
+
+        self.get_environment(&workspace_id, &environment_id).await
+    }
+
+    pub async fn delete_environment(
+        &self,
+        workspace_id: String,
+        environment_id: String,
+    ) -> AppResult<Vec<ApiEnvironment>> {
+        validate_workspace_id(&workspace_id)?;
+        let now = Utc::now().to_rfc3339();
+
+        let result = sqlx::query(
+            r#"
+            UPDATE api_environments
+            SET deleted_at = ?1, updated_at = ?1, is_active = 0,
+                revision = revision + 1, sync_status = 'deleted'
+            WHERE workspace_id = ?2 AND id = ?3 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(&now)
+        .bind(&workspace_id)
+        .bind(&environment_id)
+        .execute(self.db.pool())
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound("api environment".to_string()));
+        }
+
+        self.list_environments(workspace_id).await
+    }
+
+    /// Activate one environment (clearing any other active flag) for the
+    /// workspace. Passing `None`/empty deactivates all of them ("No
+    /// Environment").
+    pub async fn activate_environment(
+        &self,
+        workspace_id: String,
+        environment_id: Option<String>,
+    ) -> AppResult<Vec<ApiEnvironment>> {
+        validate_workspace_id(&workspace_id)?;
+        let now = Utc::now().to_rfc3339();
+        let mut tx = self.db.pool().begin().await?;
+
+        let target_id = environment_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|id| !id.is_empty());
+
+        if let Some(id) = target_id {
+            let result = sqlx::query(
+                r#"
+                UPDATE api_environments
+                SET is_active = 1, updated_at = ?1,
+                    revision = revision + 1, sync_status = 'pending'
+                WHERE workspace_id = ?2 AND id = ?3 AND deleted_at IS NULL
+                "#,
+            )
+            .bind(&now)
+            .bind(&workspace_id)
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+            if result.rows_affected() == 0 {
+                // tx is dropped without commit -> rolled back.
+                return Err(AppError::NotFound("api environment".to_string()));
+            }
+
+            sqlx::query(
+                r#"
+                UPDATE api_environments
+                SET is_active = 0, updated_at = ?1,
+                    revision = revision + 1, sync_status = 'pending'
+                WHERE workspace_id = ?2 AND id != ?3 AND deleted_at IS NULL AND is_active = 1
+                "#,
+            )
+            .bind(&now)
+            .bind(&workspace_id)
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        } else {
+            sqlx::query(
+                r#"
+                UPDATE api_environments
+                SET is_active = 0, updated_at = ?1,
+                    revision = revision + 1, sync_status = 'pending'
+                WHERE workspace_id = ?2 AND deleted_at IS NULL AND is_active = 1
+                "#,
+            )
+            .bind(&now)
+            .bind(&workspace_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+        self.list_environments(workspace_id).await
+    }
+
+    async fn get_environment(
+        &self,
+        workspace_id: &str,
+        environment_id: &str,
+    ) -> AppResult<ApiEnvironment> {
+        let row = sqlx::query_as::<_, EnvironmentRow>(
+            r#"
+            SELECT id, workspace_id, name, variables_json, is_active, created_at, updated_at
+            FROM api_environments
+            WHERE workspace_id = ?1 AND id = ?2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(environment_id)
+        .fetch_optional(self.db.pool())
+        .await?;
+
+        row.map(ApiEnvironment::from)
+            .ok_or_else(|| AppError::NotFound("api environment".to_string()))
+    }
+
+    async fn active_environment_variables(&self, workspace_id: &str) -> AppResult<Vec<KeyValue>> {
+        let row: Option<(String,)> = sqlx::query_as(
+            r#"
+            SELECT variables_json
+            FROM api_environments
+            WHERE workspace_id = ?1 AND is_active = 1 AND deleted_at IS NULL
+            LIMIT 1
+            "#,
+        )
+        .bind(workspace_id)
+        .fetch_optional(self.db.pool())
+        .await?;
+
+        Ok(row
+            .map(|(json,)| serde_json::from_str::<Vec<KeyValue>>(&json).unwrap_or_default())
+            .unwrap_or_default())
     }
 
     pub async fn list_history(
@@ -379,6 +619,58 @@ fn parse_method(method: &str) -> AppResult<Method> {
         .map_err(|_| AppError::Validation(format!("invalid HTTP method: {}", method)))
 }
 
+#[derive(sqlx::FromRow)]
+struct EnvironmentRow {
+    id: String,
+    workspace_id: String,
+    name: String,
+    variables_json: String,
+    is_active: bool,
+    created_at: String,
+    updated_at: String,
+}
+
+impl From<EnvironmentRow> for ApiEnvironment {
+    fn from(row: EnvironmentRow) -> Self {
+        ApiEnvironment {
+            id: row.id,
+            workspace_id: row.workspace_id,
+            name: row.name,
+            variables: serde_json::from_str(&row.variables_json).unwrap_or_default(),
+            is_active: row.is_active,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        }
+    }
+}
+
+fn validate_environment(variables: &[KeyValue]) -> AppResult<()> {
+    let mut seen = HashSet::new();
+    for variable in variables {
+        let key = variable.key.trim();
+        if key.is_empty() {
+            continue;
+        }
+        let valid = key
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'));
+        if !valid {
+            return Err(AppError::Validation(format!(
+                "invalid environment variable name: {}",
+                variable.key
+            )));
+        }
+        if variable.enabled && !seen.insert(key.to_ascii_lowercase()) {
+            return Err(AppError::Validation(format!(
+                "duplicate environment variable name: {}",
+                variable.key
+            )));
+        }
+    }
+
+    Ok(())
+}
+
 fn build_url(raw_url: &str, query: &[KeyValue]) -> AppResult<Url> {
     let mut url = Url::parse(raw_url.trim())
         .map_err(|_| AppError::Validation(format!("invalid URL: {}", raw_url)))?;
@@ -534,10 +826,10 @@ mod tests {
         sqlx::query(
             r#"
             INSERT INTO workspace_settings (
-              workspace_id, layout_json, env_json, created_at, updated_at,
+              workspace_id, layout_json, created_at, updated_at,
               revision, sync_status
             )
-            VALUES (?1, '{}', '[]', ?2, ?2, 1, 'local')
+            VALUES (?1, '{}', ?2, ?2, 1, 'local')
             "#,
         )
         .bind(workspace_id)
@@ -545,6 +837,140 @@ mod tests {
         .execute(db.pool())
         .await
         .expect("insert workspace settings");
+    }
+
+    #[tokio::test]
+    async fn environment_lifecycle_create_update_activate_delete() {
+        let service = service().await;
+
+        // First environment auto-activates.
+        let dev = service
+            .create_environment("workspace-a".to_string(), "Dev".to_string())
+            .await
+            .expect("create dev");
+        assert!(dev.is_active);
+
+        // Second does not.
+        let prod = service
+            .create_environment("workspace-a".to_string(), "Prod".to_string())
+            .await
+            .expect("create prod");
+        assert!(!prod.is_active);
+
+        // Update variables on prod.
+        let prod = service
+            .update_environment(
+                "workspace-a".to_string(),
+                prod.id.clone(),
+                "Prod".to_string(),
+                vec![KeyValue {
+                    key: "base_url".to_string(),
+                    value: "https://api.example.test".to_string(),
+                    enabled: true,
+                }],
+            )
+            .await
+            .expect("update prod");
+        assert_eq!(prod.variables.len(), 1);
+
+        // Activating prod clears dev's active flag (single-active invariant).
+        let list = service
+            .activate_environment("workspace-a".to_string(), Some(prod.id.clone()))
+            .await
+            .expect("activate prod");
+        assert_eq!(list.iter().filter(|e| e.is_active).count(), 1);
+        assert!(list.iter().find(|e| e.id == prod.id).unwrap().is_active);
+        assert!(!list.iter().find(|e| e.id == dev.id).unwrap().is_active);
+
+        let meta_rows: Vec<(String, i64, String)> = sqlx::query_as(
+            r#"
+            SELECT id, revision, sync_status
+            FROM api_environments
+            WHERE id = ?1 OR id = ?2
+            "#,
+        )
+        .bind(&dev.id)
+        .bind(&prod.id)
+        .fetch_all(service.db.pool())
+        .await
+        .expect("environment metadata");
+        let dev_meta = meta_rows
+            .iter()
+            .find(|(id, _, _)| id == &dev.id)
+            .expect("dev metadata");
+        let prod_meta = meta_rows
+            .iter()
+            .find(|(id, _, _)| id == &prod.id)
+            .expect("prod metadata");
+        assert_eq!(dev_meta.1, 2);
+        assert_eq!(dev_meta.2, "pending");
+        assert_eq!(prod_meta.1, 3);
+        assert_eq!(prod_meta.2, "pending");
+
+        // send() should resolve {{base_url}} from the active (prod) environment.
+        let resolved = service
+            .active_environment_variables("workspace-a")
+            .await
+            .expect("active vars");
+        assert_eq!(resolved[0].value, "https://api.example.test");
+
+        // Deleting the active environment leaves no active env ("No Environment").
+        let remaining = service
+            .delete_environment("workspace-a".to_string(), prod.id.clone())
+            .await
+            .expect("delete prod");
+        assert!(remaining.iter().all(|e| !e.is_active));
+        assert!(!remaining.iter().any(|e| e.id == prod.id));
+    }
+
+    #[tokio::test]
+    async fn environment_is_scoped_to_workspace() {
+        let service = service().await;
+        let env_a = service
+            .create_environment("workspace-a".to_string(), "Shared".to_string())
+            .await
+            .expect("create in a");
+
+        let wrong = service
+            .activate_environment("workspace-b".to_string(), Some(env_a.id.clone()))
+            .await;
+        assert!(matches!(wrong, Err(AppError::NotFound(_))));
+
+        let list_b = service
+            .list_environments("workspace-b".to_string())
+            .await
+            .expect("list b");
+        assert!(list_b.is_empty());
+    }
+
+    #[tokio::test]
+    async fn environment_update_rejects_duplicate_enabled_names() {
+        let service = service().await;
+        let env = service
+            .create_environment("workspace-a".to_string(), "Dev".to_string())
+            .await
+            .expect("create");
+
+        let result = service
+            .update_environment(
+                "workspace-a".to_string(),
+                env.id,
+                "Dev".to_string(),
+                vec![
+                    KeyValue {
+                        key: "token".to_string(),
+                        value: "a".to_string(),
+                        enabled: true,
+                    },
+                    KeyValue {
+                        key: "TOKEN".to_string(),
+                        value: "b".to_string(),
+                        enabled: true,
+                    },
+                ],
+            )
+            .await;
+        assert!(matches!(result, Err(AppError::Validation(_))));
     }
 
     #[tokio::test]

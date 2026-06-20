@@ -1,7 +1,7 @@
 use crate::AppState;
 use tauri::State;
 use unfour_core::models::{
-    ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest,
+    ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest,
     CredentialCreateInput, CredentialDeleteInput, CredentialInspectInput, CredentialMetadata,
     CredentialRotateInput, DatabaseBrowseInput, DatabaseBrowseResult, DatabaseConnection,
     DatabaseConnectionInput, DatabaseQueryInput, DatabaseQueryResult, DatabaseSchema,
@@ -9,7 +9,7 @@ use unfour_core::models::{
     SshConnectionInput, SshHostFingerprintInfo, SshHostKeyInput, SshKnownHostsExportResult,
     SshKnownHostsImportInput, SshKnownHostsImportResult, SshLogExport, SshLogExportInput,
     SshReconnectCancelInput, SshResizeInput, SshSessionEvent, SshSessionInput, SshSessionSummary,
-    SystemHealth, Workspace, WorkspaceEnvironment, WorkspaceLayout, WorkspaceState,
+    SystemHealth, Workspace, WorkspaceLayout, WorkspaceState,
 };
 use unfour_core::AppResult;
 
@@ -54,22 +54,60 @@ pub async fn workspace_set_active(
 }
 
 #[tauri::command]
-pub async fn workspace_environment_get(
+pub async fn api_environments_list(
     workspace_id: String,
     state: State<'_, AppState>,
-) -> AppResult<WorkspaceEnvironment> {
-    state.command_bus.workspace_environment(workspace_id).await
+) -> AppResult<Vec<ApiEnvironment>> {
+    state.command_bus.api_environments_list(workspace_id).await
 }
 
 #[tauri::command]
-pub async fn workspace_environment_update(
+pub async fn api_environment_create(
     workspace_id: String,
-    variables: Vec<KeyValue>,
+    name: String,
     state: State<'_, AppState>,
-) -> AppResult<WorkspaceEnvironment> {
+) -> AppResult<ApiEnvironment> {
     state
         .command_bus
-        .workspace_environment_update(workspace_id, variables)
+        .api_environment_create(workspace_id, name)
+        .await
+}
+
+#[tauri::command]
+pub async fn api_environment_update(
+    workspace_id: String,
+    environment_id: String,
+    name: String,
+    variables: Vec<KeyValue>,
+    state: State<'_, AppState>,
+) -> AppResult<ApiEnvironment> {
+    state
+        .command_bus
+        .api_environment_update(workspace_id, environment_id, name, variables)
+        .await
+}
+
+#[tauri::command]
+pub async fn api_environment_delete(
+    workspace_id: String,
+    environment_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<ApiEnvironment>> {
+    state
+        .command_bus
+        .api_environment_delete(workspace_id, environment_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn api_environment_activate(
+    workspace_id: String,
+    environment_id: Option<String>,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<ApiEnvironment>> {
+    state
+        .command_bus
+        .api_environment_activate(workspace_id, environment_id)
         .await
 }
 

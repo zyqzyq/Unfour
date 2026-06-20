@@ -22,9 +22,13 @@ export type KeyValue = {
   enabled: boolean;
 };
 
-export type WorkspaceEnvironment = {
+export type ApiEnvironment = {
+  id: string;
   workspaceId: string;
+  name: string;
   variables: KeyValue[];
+  isActive: boolean;
+  createdAt: string;
   updatedAt: string;
 };
 

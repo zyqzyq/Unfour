@@ -113,10 +113,6 @@ export function ApiCollectionTree({
         </label>
       </div>
       <SidebarSection className="min-h-0 flex-1 overflow-y-auto px-2 pb-2" title={t("api.sidebar.collections")}>
-        <SidebarRow active={active && !selectedId} onClick={onOpenClient}>
-          <Send size={14} />
-          <span>{t("common.actions.newRequest")}</span>
-        </SidebarRow>
         {collectionItems.length ? (
           <TreeView
             defaultExpandedIds={collectionItems.map((item) => item.id)}

@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use unfour_core::ai_reserved;
 use unfour_core::models::{
-    ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest,
+    ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse,
+    ApiSavedRequest,
     CredentialCreateInput, CredentialDeleteInput, CredentialInspectInput, CredentialMetadata,
     CredentialRotateInput, DatabaseBrowseInput, DatabaseBrowseResult, DatabaseConnection,
     DatabaseConnectionInput, DatabaseQueryInput, DatabaseQueryResult, DatabaseSchema,
@@ -9,7 +10,7 @@ use unfour_core::models::{
     SshConnectionInput, SshHostFingerprintInfo, SshHostKeyInput, SshKnownHostsExportResult,
     SshKnownHostsImportInput, SshKnownHostsImportResult, SshLogExport, SshLogExportInput,
     SshReconnectCancelInput, SshResizeInput, SshSessionEvent, SshSessionInput, SshSessionSummary,
-    SystemHealth, Workspace, WorkspaceEnvironment, WorkspaceLayout, WorkspaceState,
+    SystemHealth, Workspace, WorkspaceLayout, WorkspaceState,
 };
 use unfour_core::sync_reserved;
 use unfour_core::AppResult;
@@ -481,31 +482,83 @@ impl CommandBus {
         self.workspace.set_active(workspace_id).await
     }
 
-    pub async fn workspace_environment(
+    pub async fn api_environments_list(
         &self,
         workspace_id: String,
-    ) -> AppResult<WorkspaceEnvironment> {
-        self.workspace.environment(workspace_id).await
+    ) -> AppResult<Vec<ApiEnvironment>> {
+        self.api_client.list_environments(workspace_id).await
     }
 
-    pub async fn workspace_environment_update(
+    pub async fn api_environment_create(
         &self,
         workspace_id: String,
-        variables: Vec<KeyValue>,
-    ) -> AppResult<WorkspaceEnvironment> {
+        name: String,
+    ) -> AppResult<ApiEnvironment> {
         let environment = self
-            .workspace
-            .update_environment(workspace_id.clone(), variables)
+            .api_client
+            .create_environment(workspace_id.clone(), name)
             .await?;
         self.activity_log
             .record(
                 Some(&workspace_id),
-                "workspace.environment.update",
+                "api.environment.create",
+                Some(&environment.id),
+                serde_json::json!({ "name": environment.name }),
+            )
+            .await?;
+        Ok(environment)
+    }
+
+    pub async fn api_environment_update(
+        &self,
+        workspace_id: String,
+        environment_id: String,
+        name: String,
+        variables: Vec<KeyValue>,
+    ) -> AppResult<ApiEnvironment> {
+        let environment = self
+            .api_client
+            .update_environment(workspace_id.clone(), environment_id, name, variables)
+            .await?;
+        self.activity_log
+            .record(
                 Some(&workspace_id),
+                "api.environment.update",
+                Some(&environment.id),
                 serde_json::json!({ "variableCount": environment.variables.len() }),
             )
             .await?;
         Ok(environment)
+    }
+
+    pub async fn api_environment_delete(
+        &self,
+        workspace_id: String,
+        environment_id: String,
+    ) -> AppResult<Vec<ApiEnvironment>> {
+        let environments = self
+            .api_client
+            .delete_environment(workspace_id.clone(), environment_id.clone())
+            .await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "api.environment.delete",
+                Some(&environment_id),
+                serde_json::json!({ "softDelete": true }),
+            )
+            .await?;
+        Ok(environments)
+    }
+
+    pub async fn api_environment_activate(
+        &self,
+        workspace_id: String,
+        environment_id: Option<String>,
+    ) -> AppResult<Vec<ApiEnvironment>> {
+        self.api_client
+            .activate_environment(workspace_id, environment_id)
+            .await
     }
 
     pub async fn workspace_layout(&self, workspace_id: String) -> AppResult<WorkspaceLayout> {
@@ -521,14 +574,7 @@ impl CommandBus {
     }
 
     pub async fn send_api_request(&self, input: ApiRequestInput) -> AppResult<ApiResponse> {
-        let environment = self
-            .workspace
-            .environment(input.workspace_id.clone())
-            .await?;
-        let response = self
-            .api_client
-            .send(input.clone(), &environment.variables)
-            .await?;
+        let response = self.api_client.send(input.clone()).await?;
         self.activity_log
             .record(
                 Some(&input.workspace_id),
@@ -657,8 +703,7 @@ impl CommandBus {
             timeout_ms,
         };
 
-        let environment = self.workspace.environment(workspace_id).await?;
-        self.api_client.send(input, &environment.variables).await
+        self.api_client.send(input).await
     }
 
     pub async fn create_credential(

@@ -95,9 +95,29 @@
       "noRequestOpen": "当前没有打开的请求"
     },
     "environment": {
+      "active": "当前环境",
+      "activate": "设为当前",
+      "delete": "删除环境",
+      "defaultName": "新建环境",
+      "nameLabel": "名称",
+      "new": "新建",
       "none": "无环境",
-      "noneConfigured": "尚未配置环境变量。可在请求编辑器的 Auth 标签中添加变量。",
+      "noneConfigured": "尚未创建环境。新建一个以定义可复用的 {{variables}}。",
+      "save": "保存",
+      "selectHint": "选择一个环境以编辑其变量。",
+      "variablesLabel": "变量",
       "workspaceVariables": "工作区变量（{count}）"
+    },
+    "keyValue": {
+      "add": "添加",
+      "deleteRow": "删除 {title} 行",
+      "duplicateVariables": "重复变量：{keys}",
+      "formFields": "表单字段",
+      "headers": "请求头",
+      "key": "键",
+      "queryParams": "查询参数",
+      "sensitiveMasked": "疑似敏感值已在本地遮罩：{keys}",
+      "value": "值"
     },
     "import": {
       "empty": "没有可导入的请求",

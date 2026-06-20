@@ -1,15 +1,15 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  activateApiEnvironment,
   deleteApiRequest,
   duplicateApiRequest,
   getApiHistoryDetail,
-  getWorkspaceEnvironment,
+  listApiEnvironments,
   listApiHistory,
   listSavedApiRequests,
   saveApiRequest,
   sendApiRequest,
-  updateWorkspaceEnvironment,
   type ApiRequestInput,
   type KeyValue,
 } from "@unfour/command-client";
@@ -69,10 +69,10 @@ export function useApiRequestTabs(workspaceId: string) {
     queryKey: ["api-history", workspaceId],
     queryFn: () => listApiHistory(workspaceId),
   });
-  const environmentQuery = useQuery({
+  const environmentsQuery = useQuery({
     enabled: Boolean(workspaceId),
-    queryKey: ["workspace-environment", workspaceId],
-    queryFn: () => getWorkspaceEnvironment(workspaceId),
+    queryKey: ["api-environments", workspaceId],
+    queryFn: () => listApiEnvironments(workspaceId),
   });
 
   const sendMutation = useMutation({
@@ -113,12 +113,12 @@ export function useApiRequestTabs(workspaceId: string) {
       queryClient.invalidateQueries({ queryKey: ["api-saved", workspaceId] });
     },
   });
-  const saveEnvironmentMutation = useMutation({
-    mutationFn: (variables: KeyValue[]) =>
-      updateWorkspaceEnvironment(workspaceId, variables),
+  const activateEnvironmentMutation = useMutation({
+    mutationFn: (environmentId: string | null) =>
+      activateApiEnvironment(workspaceId, environmentId),
     onSuccess: () =>
       queryClient.invalidateQueries({
-        queryKey: ["workspace-environment", workspaceId],
+        queryKey: ["api-environments", workspaceId],
       }),
   });
   const importCollectionMutation = useMutation({
@@ -139,9 +139,17 @@ export function useApiRequestTabs(workspaceId: string) {
 
   const activeTab =
     state.tabs.find((tab) => tab.id === state.activeTabId) ?? null;
+  const environments = useMemo(
+    () => environmentsQuery.data ?? [],
+    [environmentsQuery.data],
+  );
+  const activeEnvironment = useMemo(
+    () => environments.find((environment) => environment.isActive) ?? null,
+    [environments],
+  );
   const envVariables = useMemo(
-    () => environmentQuery.data?.variables ?? [],
-    [environmentQuery.data?.variables],
+    () => activeEnvironment?.variables ?? [],
+    [activeEnvironment],
   );
 
   const newRequest = useCallback(() => {
@@ -206,24 +214,25 @@ export function useApiRequestTabs(workspaceId: string) {
   }, [envVariables, saveRequest, workspaceId]);
 
   return {
+    activeEnvironment,
     activeTab,
     collectionStatus,
     deleteMutation,
     duplicateMutation,
+    environments,
     envVariables,
     historyItems: historyQuery.data ?? [],
     importInputRef,
     savedRequests: savedQuery.data ?? [],
     state,
+    activateEnvironment: (environmentId: string | null) =>
+      activateEnvironmentMutation.mutate(environmentId),
     closeTab: (tabId: string) =>
       setState((current) => closeApiTab(current, tabId)),
     importCollectionMutation,
     newRequest,
     openHistory,
     openSaved,
-    saveEnvironment: (variables: KeyValue[]) =>
-      saveEnvironmentMutation.mutate(variables),
-    saveEnvironmentMutation,
     saveTab,
     selectTab: (tabId: string) =>
       setState((current) => setActiveApiTab(current, tabId)),

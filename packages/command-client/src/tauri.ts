@@ -18,6 +18,7 @@ import type {
   DatabaseQueryResult,
   DatabaseSchema,
   DatabaseTestResult,
+  KeyValue,
   SshCloseInput,
   SshConnectInput,
   SshConnection,
@@ -35,8 +36,8 @@ import type {
   SshSessionInput,
   SshSessionSummary,
   SystemHealth,
+  ApiEnvironment,
   Workspace,
-  WorkspaceEnvironment,
   WorkspaceLayout,
   WorkspaceState,
 } from "./types";
@@ -75,14 +76,33 @@ const mockSshEvents: SshSessionEvent[] = [];
 const MOCK_TERMINAL_HISTORY_MAX_BYTES = 256 * 1024;
 const mockHostKeyFingerprints: Record<string, SshHostFingerprintInfo> = {};
 const mockCredentials: Record<string, string> = {};
-let mockEnvironment: WorkspaceEnvironment = {
-  workspaceId: mockWorkspace.id,
-  variables: [
-    { key: "base_url", value: "https://httpbin.org", enabled: true },
-    { key: "source", value: "unfour", enabled: true },
-  ],
-  updatedAt: new Date().toISOString(),
-};
+let mockEnvironments: ApiEnvironment[] = [
+  {
+    id: "env-default-mock",
+    workspaceId: mockWorkspace.id,
+    name: "Default",
+    variables: [
+      { key: "base_url", value: "https://httpbin.org", enabled: true },
+      { key: "source", value: "unfour", enabled: true },
+    ],
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+
+function mockEnvList(workspaceId: string) {
+  return mockEnvironments
+    .filter((env) => env.workspaceId === workspaceId)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function mockActiveEnvVariables(workspaceId: string): KeyValue[] {
+  return (
+    mockEnvironments.find((env) => env.workspaceId === workspaceId && env.isActive)
+      ?.variables ?? []
+  );
+}
 const mockLayouts: Record<string, WorkspaceLayout> = {};
 
 function isTauriRuntime() {
@@ -155,20 +175,59 @@ async function mockInvoke<T>(
     return mockState as T;
   }
 
-  if (command === "workspace_environment_get") {
-    return {
-      ...mockEnvironment,
-      workspaceId: String(args?.workspaceId ?? mockState.activeWorkspaceId),
-    } as T;
+  if (command === "api_environments_list") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    return mockEnvList(workspaceId) as T;
   }
 
-  if (command === "workspace_environment_update") {
-    mockEnvironment = {
-      workspaceId: String(args?.workspaceId ?? mockState.activeWorkspaceId),
-      variables: (args?.variables as WorkspaceEnvironment["variables"]) ?? [],
-      updatedAt: new Date().toISOString(),
+  if (command === "api_environment_create") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    const isActive = mockEnvList(workspaceId).length === 0;
+    const now = new Date().toISOString();
+    const environment: ApiEnvironment = {
+      id: crypto.randomUUID(),
+      workspaceId,
+      name: String(args?.name ?? "New Environment").trim() || "New Environment",
+      variables: [],
+      isActive,
+      createdAt: now,
+      updatedAt: now,
     };
-    return mockEnvironment as T;
+    mockEnvironments = [...mockEnvironments, environment];
+    return environment as T;
+  }
+
+  if (command === "api_environment_update") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    const environmentId = String(args?.environmentId ?? "");
+    const environment = mockEnvironments.find(
+      (env) => env.workspaceId === workspaceId && env.id === environmentId,
+    );
+    if (!environment) throw new Error("api environment not found");
+    environment.name = String(args?.name ?? environment.name);
+    environment.variables = (args?.variables as KeyValue[]) ?? [];
+    environment.updatedAt = new Date().toISOString();
+    return environment as T;
+  }
+
+  if (command === "api_environment_delete") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    const environmentId = String(args?.environmentId ?? "");
+    mockEnvironments = mockEnvironments.filter(
+      (env) => !(env.workspaceId === workspaceId && env.id === environmentId),
+    );
+    return mockEnvList(workspaceId) as T;
+  }
+
+  if (command === "api_environment_activate") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    const environmentId = args?.environmentId ? String(args.environmentId) : null;
+    mockEnvironments = mockEnvironments.map((env) =>
+      env.workspaceId === workspaceId
+        ? { ...env, isActive: env.id === environmentId }
+        : env,
+    );
+    return mockEnvList(workspaceId) as T;
   }
 
   if (command === "workspace_layout_get") {
@@ -265,7 +324,7 @@ async function mockInvoke<T>(
   if (command === "api_send_request") {
     const input = args?.input as ApiRequestInput;
     const started = performance.now();
-    const resolved = resolveInput(input, mockEnvironment.variables);
+    const resolved = resolveInput(input, mockActiveEnvVariables(input.workspaceId));
     const url = new URL(resolved.url);
     resolved.query
       .filter((item) => item.enabled && item.key)
@@ -911,17 +970,42 @@ export function setActiveWorkspace(workspaceId: string) {
   return call<WorkspaceState>("workspace_set_active", { workspaceId });
 }
 
-export function getWorkspaceEnvironment(workspaceId: string) {
-  return call<WorkspaceEnvironment>("workspace_environment_get", { workspaceId });
+export function listApiEnvironments(workspaceId: string) {
+  return call<ApiEnvironment[]>("api_environments_list", { workspaceId });
 }
 
-export function updateWorkspaceEnvironment(
+export function createApiEnvironment(workspaceId: string, name: string) {
+  return call<ApiEnvironment>("api_environment_create", { workspaceId, name });
+}
+
+export function updateApiEnvironment(
   workspaceId: string,
-  variables: WorkspaceEnvironment["variables"],
+  environmentId: string,
+  name: string,
+  variables: KeyValue[],
 ) {
-  return call<WorkspaceEnvironment>("workspace_environment_update", {
+  return call<ApiEnvironment>("api_environment_update", {
     workspaceId,
+    environmentId,
+    name,
     variables,
+  });
+}
+
+export function deleteApiEnvironment(workspaceId: string, environmentId: string) {
+  return call<ApiEnvironment[]>("api_environment_delete", {
+    workspaceId,
+    environmentId,
+  });
+}
+
+export function activateApiEnvironment(
+  workspaceId: string,
+  environmentId: string | null,
+) {
+  return call<ApiEnvironment[]>("api_environment_activate", {
+    workspaceId,
+    environmentId,
   });
 }
 
@@ -1084,7 +1168,7 @@ export function exportSshKnownHosts() {
   return call<SshKnownHostsExportResult>("ssh_known_hosts_export");
 }
 
-function resolveInput(input: ApiRequestInput, variables: WorkspaceEnvironment["variables"]) {
+function resolveInput(input: ApiRequestInput, variables: KeyValue[]) {
   return {
     ...input,
     url: resolveTemplate(input.url, variables),
@@ -1119,7 +1203,7 @@ function trimMockSshHistory(sessionId: string) {
   }
 }
 
-function resolveTemplate(value: string, variables: WorkspaceEnvironment["variables"]) {
+function resolveTemplate(value: string, variables: KeyValue[]) {
   return variables
     .filter((item) => item.enabled && item.key)
     .reduce(

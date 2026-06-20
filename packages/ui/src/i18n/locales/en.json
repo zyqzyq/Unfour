@@ -95,9 +95,29 @@
       "noRequestOpen": "No request is open"
     },
     "environment": {
+      "active": "Active environment",
+      "activate": "Set active",
+      "delete": "Delete environment",
+      "defaultName": "New Environment",
+      "nameLabel": "Name",
+      "new": "New",
       "none": "No Environment",
-      "noneConfigured": "No environment variables configured. Use the Auth tab in the request editor to add variables.",
+      "noneConfigured": "No environments yet. Create one to define reusable {{variables}}.",
+      "save": "Save",
+      "selectHint": "Select an environment to edit its variables.",
+      "variablesLabel": "Variables",
       "workspaceVariables": "Workspace variables ({count})"
+    },
+    "keyValue": {
+      "add": "Add",
+      "deleteRow": "Delete {title} row",
+      "duplicateVariables": "Duplicate variables: {keys}",
+      "formFields": "Form fields",
+      "headers": "Headers",
+      "key": "Key",
+      "queryParams": "Query params",
+      "sensitiveMasked": "Sensitive-looking values are masked locally: {keys}",
+      "value": "Value"
     },
     "import": {
       "empty": "No importable requests found",

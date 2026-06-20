@@ -87,34 +87,42 @@ export function methodBadgeLabel(method: string) {
 export function methodToneClass(method: string) {
   switch (method.trim().toUpperCase()) {
     case "GET":
-      return "text-[var(--u-color-info-text)]";
+      return "text-[color:var(--u-color-info-text)]";
     case "POST":
-      return "text-[var(--u-color-success)]";
+      return "text-[color:var(--u-color-success)]";
     case "PUT":
-      return "text-[var(--u-color-warning-text)]";
+      return "text-[color:var(--u-color-warning-text)]";
     case "PATCH":
-      return "text-[var(--u-color-primary)]";
+      return "text-[color:var(--u-color-primary)]";
     case "DELETE":
-      return "text-[var(--u-color-danger)]";
+      return "text-[color:var(--u-color-danger)]";
+    case "HEAD":
+      return "text-[color:var(--u-color-secondary-text)]";
+    case "OPTIONS":
+      return "text-[color:var(--u-color-neutral-text)]";
     default:
-      return "text-[var(--u-color-text-muted)]";
+      return "text-[color:var(--u-color-text-muted)]";
   }
 }
 
 export function methodBadgeToneClass(method: string) {
   switch (method.trim().toUpperCase()) {
     case "GET":
-      return "bg-[var(--u-color-info-soft)] text-[var(--u-color-info-text)]";
+      return "bg-[var(--u-color-info-soft)] text-[color:var(--u-color-info-text)]";
     case "POST":
-      return "bg-[var(--u-color-success-soft)] text-[var(--u-color-success)]";
+      return "bg-[var(--u-color-success-soft)] text-[color:var(--u-color-success)]";
     case "PUT":
-      return "bg-[var(--u-color-warning-soft)] text-[var(--u-color-warning-text)]";
+      return "bg-[var(--u-color-warning-soft)] text-[color:var(--u-color-warning-text)]";
     case "PATCH":
-      return "bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]";
+      return "bg-[var(--u-color-primary-soft)] text-[color:var(--u-color-primary)]";
     case "DELETE":
-      return "bg-[var(--u-color-danger-soft)] text-[var(--u-color-danger-text)]";
+      return "bg-[var(--u-color-danger-soft)] text-[color:var(--u-color-danger-text)]";
+    case "HEAD":
+      return "bg-[var(--u-color-secondary-soft)] text-[color:var(--u-color-secondary-text)]";
+    case "OPTIONS":
+      return "bg-[var(--u-color-neutral-soft)] text-[color:var(--u-color-neutral-text)]";
     default:
-      return "bg-[var(--u-color-surface-muted)] text-[var(--u-color-text-muted)]";
+      return "bg-[var(--u-color-surface-muted)] text-[color:var(--u-color-text-muted)]";
   }
 }
 

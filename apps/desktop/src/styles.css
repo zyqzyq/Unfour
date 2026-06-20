@@ -33,6 +33,12 @@
   --u-color-info-text: #1d4ed8;
   --u-color-danger-hover: #b91c1c;
   --u-color-danger-text: #b91c1c;
+  --u-color-secondary: #7c3aed;
+  --u-color-secondary-soft: #ede9fe;
+  --u-color-secondary-text: #6d28d9;
+  --u-color-neutral: #64748b;
+  --u-color-neutral-soft: #f1f5f9;
+  --u-color-neutral-text: #475569;
   --u-color-text-on-color: #ffffff;
   --u-color-scrollbar: #c7ced5;
   --u-color-scrollbar-hover: #a7b1bb;
@@ -130,6 +136,12 @@
   --u-color-danger-soft: #3a1d1d;
   --u-color-danger-hover: #fca5a5;
   --u-color-danger-text: #fca5a5;
+  --u-color-secondary: #a78bfa;
+  --u-color-secondary-soft: #2a1f4e;
+  --u-color-secondary-text: #c4b5fd;
+  --u-color-neutral: #94a3b8;
+  --u-color-neutral-soft: #1e293b;
+  --u-color-neutral-text: #cbd5e1;
   --u-color-success: #4ade80;
   --u-color-success-soft: #16331f;
   --u-color-warning: #fbbf24;

@@ -1,8 +1,7 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use unfour_core::models::{
-    KeyValue, Workspace, WorkspaceEnvironment, WorkspaceLayout, WorkspaceLayoutTab, WorkspaceState,
+    Workspace, WorkspaceLayout, WorkspaceLayoutTab, WorkspaceState,
 };
 use unfour_core::{AppError, AppResult};
 use unfour_local_storage::LocalDb;
@@ -48,10 +47,10 @@ impl WorkspaceService {
         sqlx::query(
             r#"
             INSERT INTO workspace_settings (
-              workspace_id, layout_json, env_json, created_at, updated_at,
+              workspace_id, layout_json, created_at, updated_at,
               revision, sync_status
             )
-            VALUES (?1, '{}', '{}', ?2, ?2, 1, 'local')
+            VALUES (?1, '{}', ?2, ?2, 1, 'local')
             "#,
         )
         .bind(&id)
@@ -122,10 +121,10 @@ impl WorkspaceService {
         sqlx::query(
             r#"
             INSERT INTO workspace_settings (
-              workspace_id, layout_json, env_json, created_at, updated_at,
+              workspace_id, layout_json, created_at, updated_at,
               revision, sync_status
             )
-            VALUES (?1, '{}', '{}', ?2, ?2, 1, 'local')
+            VALUES (?1, '{}', ?2, ?2, 1, 'local')
             "#,
         )
         .bind(&id)
@@ -221,56 +220,6 @@ impl WorkspaceService {
         self.write_setting("active_workspace_id", &workspace_id)
             .await?;
         self.state().await
-    }
-
-    pub async fn environment(&self, workspace_id: String) -> AppResult<WorkspaceEnvironment> {
-        self.get(&workspace_id).await?;
-
-        let row: (String, String) = sqlx::query_as(
-            r#"
-            SELECT env_json, updated_at
-            FROM workspace_settings
-            WHERE workspace_id = ?1 AND deleted_at IS NULL
-            "#,
-        )
-        .bind(&workspace_id)
-        .fetch_one(self.db.pool())
-        .await?;
-
-        let variables = serde_json::from_str::<Vec<KeyValue>>(&row.0).unwrap_or_default();
-
-        Ok(WorkspaceEnvironment {
-            workspace_id,
-            variables,
-            updated_at: row.1,
-        })
-    }
-
-    pub async fn update_environment(
-        &self,
-        workspace_id: String,
-        variables: Vec<KeyValue>,
-    ) -> AppResult<WorkspaceEnvironment> {
-        self.get(&workspace_id).await?;
-        validate_environment(&variables)?;
-
-        let now = Utc::now().to_rfc3339();
-        let env_json = serde_json::to_string(&variables)?;
-
-        sqlx::query(
-            r#"
-            UPDATE workspace_settings
-            SET env_json = ?1, updated_at = ?2, revision = revision + 1, sync_status = 'pending'
-            WHERE workspace_id = ?3 AND deleted_at IS NULL
-            "#,
-        )
-        .bind(env_json)
-        .bind(&now)
-        .bind(&workspace_id)
-        .execute(self.db.pool())
-        .await?;
-
-        self.environment(workspace_id).await
     }
 
     pub async fn layout(&self, workspace_id: String) -> AppResult<WorkspaceLayout> {
@@ -404,33 +353,6 @@ fn normalize_name(name: String) -> AppResult<String> {
         ));
     }
     Ok(trimmed.to_string())
-}
-
-fn validate_environment(variables: &[KeyValue]) -> AppResult<()> {
-    let mut seen = HashSet::new();
-    for variable in variables {
-        let key = variable.key.trim();
-        if key.is_empty() {
-            continue;
-        }
-        let valid = key
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'));
-        if !valid {
-            return Err(AppError::Validation(format!(
-                "invalid environment variable name: {}",
-                variable.key
-            )));
-        }
-        if variable.enabled && !seen.insert(key.to_ascii_lowercase()) {
-            return Err(AppError::Validation(format!(
-                "duplicate environment variable name: {}",
-                variable.key
-            )));
-        }
-    }
-
-    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -655,32 +577,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn environment_update_rejects_duplicate_enabled_names() {
-        let service = service().await;
-        let state = service.state().await.expect("workspace state");
-
-        let result = service
-            .update_environment(
-                state.active_workspace_id,
-                vec![
-                    KeyValue {
-                        key: "base_url".to_string(),
-                        value: "https://example.test".to_string(),
-                        enabled: true,
-                    },
-                    KeyValue {
-                        key: "BASE_URL".to_string(),
-                        value: "https://other.test".to_string(),
-                        enabled: true,
-                    },
-                ],
-            )
-            .await;
-
-        assert!(matches!(result, Err(AppError::Validation(_))));
-    }
-
-    #[tokio::test]
     async fn create_switch_rename_and_delete_preserve_active_workspace() {
         let service = service().await;
         let default_id = service
@@ -741,67 +637,6 @@ mod tests {
 
         assert_eq!(state.active_workspace_id, default_id);
         assert_eq!(state.workspaces.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn environment_update_persists_valid_variables() {
-        let service = service().await;
-        let workspace_id = service
-            .state()
-            .await
-            .expect("workspace state")
-            .active_workspace_id;
-
-        let environment = service
-            .update_environment(
-                workspace_id.clone(),
-                vec![
-                    KeyValue {
-                        key: "base_url".to_string(),
-                        value: "https://api.example.test".to_string(),
-                        enabled: true,
-                    },
-                    KeyValue {
-                        key: "disabled_duplicate_is_allowed".to_string(),
-                        value: "ignored".to_string(),
-                        enabled: false,
-                    },
-                    KeyValue {
-                        key: "DISABLED_DUPLICATE_IS_ALLOWED".to_string(),
-                        value: "also ignored".to_string(),
-                        enabled: false,
-                    },
-                ],
-            )
-            .await
-            .expect("update environment");
-        let loaded = service
-            .environment(workspace_id)
-            .await
-            .expect("load environment");
-
-        assert_eq!(environment.variables.len(), 3);
-        assert_eq!(loaded.variables[0].key, "base_url");
-        assert_eq!(loaded.variables[0].value, "https://api.example.test");
-    }
-
-    #[tokio::test]
-    async fn environment_update_rejects_invalid_variable_names() {
-        let service = service().await;
-        let state = service.state().await.expect("workspace state");
-
-        let result = service
-            .update_environment(
-                state.active_workspace_id,
-                vec![KeyValue {
-                    key: "bad name".to_string(),
-                    value: "nope".to_string(),
-                    enabled: true,
-                }],
-            )
-            .await;
-
-        assert!(matches!(result, Err(AppError::Validation(_))));
     }
 
     #[tokio::test]

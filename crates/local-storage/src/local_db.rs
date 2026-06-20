@@ -91,17 +91,72 @@ impl LocalDb {
         }
         self.ensure_api_request_folder_path().await?;
         self.ensure_host_key_columns().await?;
+        // Order matters: backfill the legacy single environment into
+        // api_environments before dropping the column it reads from.
+        self.ensure_environments_backfilled().await?;
+        self.ensure_workspace_settings_env_dropped().await?;
 
         Ok(())
     }
 
+    async fn column_exists(&self, table: &str, column: &str) -> AppResult<bool> {
+        let columns = sqlx::query_as::<_, (String,)>(&format!(
+            "SELECT name FROM pragma_table_info('{table}')"
+        ))
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(columns.iter().any(|(name,)| name == column))
+    }
+
     async fn ensure_api_request_folder_path(&self) -> AppResult<()> {
-        let columns =
-            sqlx::query_as::<_, (String,)>("SELECT name FROM pragma_table_info('api_requests')")
-                .fetch_all(&self.pool)
-                .await?;
-        if !columns.iter().any(|(name,)| name == "folder_path") {
+        if !self.column_exists("api_requests", "folder_path").await? {
             sqlx::query("ALTER TABLE api_requests ADD COLUMN folder_path TEXT")
+                .execute(&self.pool)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Migrate the legacy single `workspace_settings.env_json` bag into a
+    /// `Default` row in `api_environments`. Idempotent and a no-op once the
+    /// `env_json` column has been dropped.
+    async fn ensure_environments_backfilled(&self) -> AppResult<()> {
+        if !self.column_exists("workspace_settings", "env_json").await? {
+            return Ok(());
+        }
+        sqlx::query(
+            r#"
+            INSERT INTO api_environments (
+              id, workspace_id, name, variables_json, is_active, created_at, updated_at
+            )
+            SELECT
+              'env-default-' || ws.workspace_id,
+              ws.workspace_id,
+              'Default',
+              ws.env_json,
+              1,
+              ws.created_at,
+              ws.updated_at
+            FROM workspace_settings ws
+            WHERE ws.deleted_at IS NULL
+              AND json_valid(ws.env_json)
+              AND json_type(ws.env_json) = 'array'
+              AND json_array_length(ws.env_json) > 0
+              AND NOT EXISTS (
+                SELECT 1 FROM api_environments e WHERE e.workspace_id = ws.workspace_id
+              )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn ensure_workspace_settings_env_dropped(&self) -> AppResult<()> {
+        if self.column_exists("workspace_settings", "env_json").await? {
+            sqlx::query("ALTER TABLE workspace_settings DROP COLUMN env_json")
                 .execute(&self.pool)
                 .await?;
         }
@@ -142,7 +197,6 @@ const MIGRATIONS: &[&str] = &[
     CREATE TABLE IF NOT EXISTS workspace_settings (
       workspace_id TEXT PRIMARY KEY,
       layout_json TEXT NOT NULL DEFAULT '{}',
-      env_json TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       deleted_at TEXT,
@@ -255,6 +309,23 @@ const MIGRATIONS: &[&str] = &[
     "#,
     "CREATE INDEX IF NOT EXISTS idx_ssh_terminal_history_workspace_updated ON ssh_terminal_history(workspace_id, updated_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_ssh_terminal_history_connection ON ssh_terminal_history(workspace_id, connection_id)",
+    r#"
+    CREATE TABLE IF NOT EXISTS api_environments (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      variables_json TEXT NOT NULL DEFAULT '[]',
+      is_active INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      deleted_at TEXT,
+      revision INTEGER NOT NULL DEFAULT 1,
+      sync_status TEXT NOT NULL DEFAULT 'local',
+      remote_id TEXT,
+      FOREIGN KEY(workspace_id) REFERENCES workspaces(id)
+    )
+    "#,
+    "CREATE INDEX IF NOT EXISTS idx_api_environments_workspace ON api_environments(workspace_id)",
 ];
 
 impl LocalDb {
@@ -354,6 +425,88 @@ mod tests {
             columns.iter().any(|(name,)| name == "folder_path"),
             "api_requests should have folder_path column"
         );
+    }
+
+    #[tokio::test]
+    async fn migrate_backfills_legacy_environment_and_drops_env_json() {
+        let db = test_db().await;
+        // Simulate a pre-migration database: workspace_settings still carries the
+        // legacy env_json column with a populated single environment.
+        sqlx::query(
+            r#"
+            CREATE TABLE workspaces (
+              id TEXT PRIMARY KEY, name TEXT NOT NULL, is_default INTEGER NOT NULL DEFAULT 0,
+              last_opened_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+              deleted_at TEXT, revision INTEGER NOT NULL DEFAULT 1,
+              sync_status TEXT NOT NULL DEFAULT 'local', remote_id TEXT
+            )
+            "#,
+        )
+        .execute(db.pool())
+        .await
+        .expect("legacy workspaces table");
+        sqlx::query(
+            r#"
+            CREATE TABLE workspace_settings (
+              workspace_id TEXT PRIMARY KEY, layout_json TEXT NOT NULL DEFAULT '{}',
+              env_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+              deleted_at TEXT, revision INTEGER NOT NULL DEFAULT 1,
+              sync_status TEXT NOT NULL DEFAULT 'local', remote_id TEXT
+            )
+            "#,
+        )
+        .execute(db.pool())
+        .await
+        .expect("legacy workspace_settings table");
+        sqlx::query(
+            "INSERT INTO workspaces (id, name, created_at, updated_at) VALUES ('ws1', 'WS', 't', 't')",
+        )
+        .execute(db.pool())
+        .await
+        .expect("workspace row");
+        sqlx::query(
+            r#"
+            INSERT INTO workspace_settings (workspace_id, layout_json, env_json, created_at, updated_at)
+            VALUES ('ws1', '{}', '[{"key":"base_url","value":"https://api.example.test","enabled":true}]', 't', 't')
+            "#,
+        )
+        .execute(db.pool())
+        .await
+        .expect("settings row");
+
+        db.migrate().await.expect("migrate legacy db");
+
+        // The env_json column is gone.
+        let columns: Vec<(String,)> =
+            sqlx::query_as("SELECT name FROM pragma_table_info('workspace_settings')")
+                .fetch_all(db.pool())
+                .await
+                .expect("settings columns");
+        assert!(
+            !columns.iter().any(|(name,)| name == "env_json"),
+            "env_json column should be dropped"
+        );
+
+        // A Default environment was backfilled and marked active.
+        let rows: Vec<(String, i64, String)> = sqlx::query_as(
+            "SELECT name, is_active, variables_json FROM api_environments WHERE workspace_id = 'ws1' AND deleted_at IS NULL",
+        )
+        .fetch_all(db.pool())
+        .await
+        .expect("environments");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].0, "Default");
+        assert_eq!(rows[0].1, 1);
+        assert!(rows[0].2.contains("base_url"));
+
+        // Re-running migration does not duplicate the backfilled environment.
+        db.migrate().await.expect("second migrate");
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM api_environments WHERE workspace_id = 'ws1'")
+                .fetch_one(db.pool())
+                .await
+                .expect("count");
+        assert_eq!(count, 1);
     }
 
     #[tokio::test]

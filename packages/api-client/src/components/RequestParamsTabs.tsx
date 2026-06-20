@@ -1,13 +1,10 @@
 import { useState } from "react";
 import type * as React from "react";
 import Editor from "@monaco-editor/react";
-import { Plus, Save, Trash2, Wand2 } from "lucide-react";
-import { Button, Input, cn, useTheme } from "@unfour/ui";
+import { Wand2 } from "lucide-react";
+import { Button, Input, cn, useI18n, useTheme } from "@unfour/ui";
 import type { KeyValue } from "@unfour/command-client";
-import {
-  duplicateEnvironmentKeys,
-  isSensitiveKey,
-} from "../request-utils";
+import { KeyValueEditor } from "./KeyValueEditor";
 import { requestConfigTabs } from "../model/request-tabs";
 import type {
   ApiAuthConfig,
@@ -21,45 +18,39 @@ export function RequestParamsTabs({
   auth,
   body,
   bodyMode,
-  envVariables,
   formBody,
   headers,
   onAuthChange,
   onBodyChange,
   onBodyModeChange,
-  onEnvVariablesChange,
   onFormBodyChange,
   onHeadersChange,
   onQueryChange,
   onRawBodyTypeChange,
-  onSaveEnvironment,
   onTabChange,
   query,
   rawBodyType,
-  savingEnvironment,
   tab,
 }: {
   auth: ApiAuthConfig;
   body: string;
   bodyMode: RequestBodyMode;
-  envVariables: KeyValue[];
   formBody: KeyValue[];
   headers: KeyValue[];
   onAuthChange: (value: ApiAuthConfig) => void;
   onBodyChange: (value: string) => void;
   onBodyModeChange: (value: RequestBodyMode) => void;
-  onEnvVariablesChange: (items: KeyValue[]) => void;
   onFormBodyChange: (items: KeyValue[]) => void;
   onHeadersChange: (items: KeyValue[]) => void;
   onQueryChange: (items: KeyValue[]) => void;
   onRawBodyTypeChange: (value: RequestRawBodyType) => void;
-  onSaveEnvironment: () => void;
   onTabChange: (tab: RequestParamsTab) => void;
   query: KeyValue[];
   rawBodyType: RequestRawBodyType;
-  savingEnvironment: boolean;
   tab: RequestParamsTab;
 }) {
+  const { t } = useI18n();
+
   return (
     <>
       <CompactTabs
@@ -94,7 +85,7 @@ export function RequestParamsTabs({
               items={query}
               onChange={onQueryChange}
               showTitle={false}
-              title="Query params"
+              title={t("api.keyValue.queryParams")}
             />
           </PaneScroll>
         )}
@@ -104,7 +95,7 @@ export function RequestParamsTabs({
               items={headers}
               onChange={onHeadersChange}
               showTitle={false}
-              title="Headers"
+              title={t("api.keyValue.headers")}
             />
           </PaneScroll>
         )}
@@ -123,28 +114,6 @@ export function RequestParamsTabs({
         {tab === "auth" && (
           <PaneScroll>
             <AuthPanel auth={auth} onAuthChange={onAuthChange} />
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-[12px] font-semibold uppercase text-[var(--u-color-text-soft)]">
-                Environment variables
-              </span>
-              <Button
-                disabled={savingEnvironment}
-                onClick={onSaveEnvironment}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                <Save size={13} />
-                Save
-              </Button>
-            </div>
-            <KeyValueEditor
-              items={envVariables}
-              maskSensitiveValues
-              onChange={onEnvVariablesChange}
-              title="Variables"
-            />
-            <EnvironmentHints variables={envVariables} />
           </PaneScroll>
         )}
       </div>
@@ -198,100 +167,6 @@ function PaneScroll({ children }: { children: React.ReactNode }) {
   return <div className="h-full min-h-0 overflow-auto p-3">{children}</div>;
 }
 
-function KeyValueEditor({
-  items,
-  maskSensitiveValues = false,
-  onChange,
-  showTitle = true,
-  title,
-}: {
-  items: KeyValue[];
-  maskSensitiveValues?: boolean;
-  onChange: (items: KeyValue[]) => void;
-  showTitle?: boolean;
-  title: string;
-}) {
-  function update(index: number, patch: Partial<KeyValue>) {
-    if (index === items.length) {
-      onChange([...items, { enabled: true, key: "", value: "", ...patch }]);
-      return;
-    }
-    onChange(items.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
-  }
-
-  function remove(index: number) {
-    onChange(items.filter((_, itemIndex) => itemIndex !== index));
-  }
-
-  const cellInputClass =
-    "h-[32px] rounded-none border-0 bg-transparent px-0 text-[12px] hover:border-0 focus:border-0 focus:ring-0 disabled:bg-transparent disabled:text-[var(--u-color-text-soft)]";
-  const rows = [...items, { key: "", value: "", enabled: true }];
-
-  return (
-    <div className="space-y-1.5">
-      <div className={cn("flex items-center", showTitle ? "justify-between" : "justify-end")}>
-        {showTitle && (
-          <span className="text-xs font-semibold uppercase text-[var(--u-color-text-muted)]">
-            {title}
-          </span>
-        )}
-        <Button
-          onClick={() => onChange([...items, { key: "", value: "", enabled: true }])}
-          size="sm"
-          type="button"
-          variant="ghost"
-        >
-          <Plus size={13} />
-          Add
-        </Button>
-      </div>
-      <div className="overflow-hidden rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)]">
-        <div className="grid min-h-[28px] grid-cols-[28px_minmax(120px,1fr)_minmax(120px,1fr)_32px] items-center border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2 text-[11px] font-semibold uppercase text-[var(--u-color-text-soft)]">
-          <span />
-          <span>Key</span>
-          <span>Value</span>
-          <span />
-        </div>
-        {rows.map((item, index) => (
-          <div
-            className="grid min-h-[34px] grid-cols-[28px_minmax(120px,1fr)_minmax(120px,1fr)_32px] items-center gap-2 border-b border-[var(--u-color-border)] px-2 last:border-b-0"
-            key={`${title}-${index}`}
-          >
-            <input
-              checked={item.enabled}
-              className="h-4 w-4"
-              onChange={(event) => update(index, { enabled: event.target.checked })}
-              type="checkbox"
-            />
-            <Input
-              className={cellInputClass}
-              onChange={(event) => update(index, { key: event.target.value })}
-              placeholder="Key"
-              value={item.key}
-            />
-            <Input
-              className={cellInputClass}
-              onChange={(event) => update(index, { value: event.target.value })}
-              placeholder="Value"
-              type={maskSensitiveValues && isSensitiveKey(item.key) ? "password" : "text"}
-              value={item.value}
-            />
-            <button
-              aria-label={`Delete ${title} row`}
-              className="grid h-7 w-7 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-danger)] disabled:pointer-events-none disabled:opacity-0"
-              disabled={index === items.length}
-              onClick={() => remove(index)}
-              type="button"
-            >
-              <Trash2 size={13} />
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function BodyEditor({
   body,
   bodyMode,
@@ -311,6 +186,7 @@ function BodyEditor({
   onRawBodyTypeChange: (value: RequestRawBodyType) => void;
   rawBodyType: RequestRawBodyType;
 }) {
+  const { t } = useI18n();
   const { theme } = useTheme();
   const [formatError, setFormatError] = useState<string | null>(null);
   const jsonError =
@@ -396,7 +272,7 @@ function BodyEditor({
               items={formBody}
               onChange={onFormBodyChange}
               showTitle={false}
-              title="Form fields"
+              title={t("api.keyValue.formFields")}
             />
           </PaneScroll>
         )}
@@ -575,32 +451,6 @@ function getJsonError(value: string): string | null {
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
   }
-}
-
-function EnvironmentHints({ variables }: { variables: KeyValue[] }) {
-  const duplicateKeys = duplicateEnvironmentKeys(variables);
-  const sensitiveKeys = variables
-    .filter((item) => item.enabled && isSensitiveKey(item.key) && item.value.trim())
-    .map((item) => item.key.trim());
-
-  if (!duplicateKeys.length && !sensitiveKeys.length) {
-    return null;
-  }
-
-  return (
-    <div className="mt-2 space-y-1 text-xs">
-      {duplicateKeys.length > 0 && (
-        <div className="rounded-md bg-[var(--u-color-warning-soft)] px-2 py-1 text-[var(--u-color-warning-text)] ring-1 ring-inset ring-[var(--u-badge-warning-ring)]">
-          Duplicate variables: {duplicateKeys.join(", ")}
-        </div>
-      )}
-      {sensitiveKeys.length > 0 && (
-        <div className="rounded-md bg-[var(--u-badge-neutral-bg)] px-2 py-1 text-[var(--u-color-text-muted)] ring-1 ring-inset ring-[var(--u-badge-neutral-ring)]">
-          Sensitive-looking values are masked locally: {sensitiveKeys.join(", ")}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function enabledCount(items: KeyValue[]) {

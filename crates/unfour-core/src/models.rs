@@ -25,9 +25,13 @@ pub struct WorkspaceState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceEnvironment {
+pub struct ApiEnvironment {
+    pub id: String,
     pub workspace_id: String,
+    pub name: String,
     pub variables: Vec<KeyValue>,
+    pub is_active: bool,
+    pub created_at: String,
     pub updated_at: String,
 }
 

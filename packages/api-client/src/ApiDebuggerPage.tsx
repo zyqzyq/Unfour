@@ -30,19 +30,19 @@ export function ApiDebuggerPage({
 }) {
   const { t } = useI18n();
   const {
+    activateEnvironment,
+    activeEnvironment,
     activeTab,
     closeTab,
     collectionStatus,
     deleteMutation,
     duplicateMutation,
-    envVariables,
+    environments,
     importCollectionMutation,
     importInputRef,
     newRequest,
     openHistory,
     openSaved,
-    saveEnvironment,
-    saveEnvironmentMutation,
     saveTab,
     savedRequests,
     selectTab,
@@ -53,9 +53,6 @@ export function ApiDebuggerPage({
     state,
     updateDraft,
   } = useApiRequestTabs(workspaceId);
-  const [envDraftOverride, setEnvDraftOverride] = useState<
-    typeof envVariables | null
-  >(null);
   const [saveDialogTabId, setSaveDialogTabId] = useState<string | null>(null);
   const [closeDialogTabId, setCloseDialogTabId] = useState<string | null>(null);
   const closeAfterSaveRef = useRef<string | null>(null);
@@ -64,7 +61,6 @@ export function ApiDebuggerPage({
     action: "save" | "send";
     tabId: string;
   } | null>(null);
-  const envDraft = envDraftOverride ?? envVariables;
 
   const requestSave = useCallback(
     (tab: ApiRequestTab) => {
@@ -313,6 +309,8 @@ export function ApiDebuggerPage({
           ) : (
             <>
               <ApiRequestBar
+                activeEnvironmentId={activeEnvironment?.id ?? null}
+                environments={environments}
                 onDelete={() =>
                   activeTab.savedRequestId &&
                   deleteMutation.mutate(activeTab.savedRequestId)
@@ -324,6 +322,7 @@ export function ApiDebuggerPage({
                 onExport={exportCollection}
                 onImport={() => importInputRef.current?.click()}
                 onSave={() => requestSave(activeTab)}
+                onSelectEnvironment={activateEnvironment}
                 onSend={() => sendTab(activeTab)}
                 onUpdate={(patch) => updateDraft(activeTab.id, patch)}
                 tab={activeTab}
@@ -345,7 +344,6 @@ export function ApiDebuggerPage({
                   auth={activeTab.draft.auth}
                   body={activeTab.draft.body}
                   bodyMode={activeTab.draft.bodyMode}
-                  envVariables={envDraft}
                   formBody={activeTab.draft.formBody}
                   headers={activeTab.draft.headers}
                   onAuthChange={(auth) => updateDraft(activeTab.id, { auth })}
@@ -353,7 +351,6 @@ export function ApiDebuggerPage({
                   onBodyModeChange={(bodyMode) =>
                     updateDraft(activeTab.id, { bodyMode })
                   }
-                  onEnvVariablesChange={setEnvDraftOverride}
                   onFormBodyChange={(formBody) =>
                     updateDraft(activeTab.id, { formBody })
                   }
@@ -362,11 +359,9 @@ export function ApiDebuggerPage({
                   onRawBodyTypeChange={(rawBodyType) =>
                     updateDraft(activeTab.id, { rawBodyType })
                   }
-                  onSaveEnvironment={() => saveEnvironment(envDraft)}
                   onTabChange={(tab) => setRequestTab(activeTab.id, tab)}
                   query={activeTab.draft.query}
                   rawBodyType={activeTab.draft.rawBodyType}
-                  savingEnvironment={saveEnvironmentMutation.isPending}
                   tab={activeTab.requestTab}
                 />
                 <ApiResponseViewer
