@@ -195,7 +195,6 @@ export function TerminalPane({
       searchAddonRef.current = null;
       renderedEventsRef.current = 0;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-time init
   }, []);
 
   useEffect(() => {
