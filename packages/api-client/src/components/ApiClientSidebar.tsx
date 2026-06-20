@@ -1,22 +1,17 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { Check, Clock, FolderOpen, Plus, Settings2, Trash2 } from "lucide-react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, type ReactNode } from "react";
+import { Check, Clock, FolderOpen, Pencil, Plus, Settings2, Trash2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import {
-  activateApiEnvironment,
-  createApiEnvironment,
-  deleteApiEnvironment,
-  listApiEnvironments,
   listApiHistory,
-  updateApiEnvironment,
-  type ApiEnvironment,
   type ApiHistoryItem,
   type KeyValue,
 } from "@unfour/command-client";
-import { Button, Input, cn, useI18n } from "@unfour/ui";
+import { Badge, Button, cn, useI18n } from "@unfour/ui";
 import type { ApiOpenIntent } from "../model/types";
+import { useApiEnvironments } from "../hooks/useApiEnvironments";
 import { ApiCollectionTree } from "./ApiCollectionTree";
 import { ApiHistoryTree } from "./ApiHistoryTree";
-import { EnvironmentHints, KeyValueEditor } from "./KeyValueEditor";
+import { EnvironmentEditor } from "./EnvironmentEditor";
 
 type SidebarTab = "collections" | "history" | "environments";
 
@@ -127,59 +122,33 @@ function HistoryPanel({
 
 function EnvironmentsPanel({ workspaceId }: { workspaceId: string }) {
   const { t } = useI18n();
-  const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [nameDraft, setNameDraft] = useState("");
-  const [variablesDraft, setVariablesDraft] = useState<KeyValue[]>([]);
-
-  const environmentsQuery = useQuery({
-    enabled: Boolean(workspaceId),
-    queryKey: ["api-environments", workspaceId],
-    queryFn: () => listApiEnvironments(workspaceId),
-  });
-  const environments = environmentsQuery.data ?? [];
+  const { activateMut, createMut, deleteMut, environments, updateMut } =
+    useApiEnvironments(workspaceId);
   const selected = environments.find((env) => env.id === selectedId) ?? null;
 
-  useEffect(() => {
+  function handleCreate() {
+    createMut.mutate(t("api.environment.defaultName"), {
+      onSuccess: (environment) => setSelectedId(environment.id),
+    });
+  }
+
+  function handleDelete(environmentId: string) {
+    deleteMut.mutate(environmentId, {
+      onSuccess: () => {
+        if (selectedId === environmentId) {
+          setSelectedId(null);
+        }
+      },
+    });
+  }
+
+  function handleSave(name: string, variables: KeyValue[]) {
     if (!selected) {
-      setNameDraft("");
-      setVariablesDraft([]);
       return;
     }
-    setNameDraft(selected.name);
-    setVariablesDraft(selected.variables);
-  }, [workspaceId, selected?.id, selected?.updatedAt]);
-
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: ["api-environments", workspaceId] });
-
-  const createMutation = useMutation({
-    mutationFn: () => createApiEnvironment(workspaceId, t("api.environment.defaultName")),
-    onSuccess: (environment) => {
-      invalidate();
-      setSelectedId(environment.id);
-    },
-  });
-  const saveMutation = useMutation({
-    mutationFn: (environment: ApiEnvironment) =>
-      updateApiEnvironment(workspaceId, environment.id, nameDraft, variablesDraft),
-    onSuccess: invalidate,
-  });
-  const deleteMutation = useMutation({
-    mutationFn: (environmentId: string) =>
-      deleteApiEnvironment(workspaceId, environmentId),
-    onSuccess: (_environments, environmentId) => {
-      invalidate();
-      if (selectedId === environmentId) {
-        setSelectedId(null);
-      }
-    },
-  });
-  const activateMutation = useMutation({
-    mutationFn: (environmentId: string | null) =>
-      activateApiEnvironment(workspaceId, environmentId),
-    onSuccess: invalidate,
-  });
+    updateMut.mutate({ id: selected.id, name, variables });
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -188,8 +157,8 @@ function EnvironmentsPanel({ workspaceId }: { workspaceId: string }) {
           {t("api.sidebar.environments")}
         </span>
         <Button
-          disabled={createMutation.isPending}
-          onClick={() => createMutation.mutate()}
+          disabled={createMut.isPending}
+          onClick={handleCreate}
           size="sm"
           type="button"
           variant="ghost"
@@ -216,7 +185,11 @@ function EnvironmentsPanel({ workspaceId }: { workspaceId: string }) {
               key={environment.id}
             >
               <button
-                aria-label={t("api.environment.activate")}
+                aria-label={
+                  environment.isActive
+                    ? t("api.environment.deactivate")
+                    : t("api.environment.activate")
+                }
                 className={cn(
                   "grid h-5 w-5 shrink-0 place-items-center rounded-full border",
                   environment.isActive
@@ -224,24 +197,42 @@ function EnvironmentsPanel({ workspaceId }: { workspaceId: string }) {
                     : "border-[var(--u-color-border)] text-transparent hover:border-[var(--u-color-primary)]",
                 )}
                 onClick={() =>
-                  activateMutation.mutate(environment.isActive ? null : environment.id)
+                  activateMut.mutate(environment.isActive ? null : environment.id)
                 }
-                title={t("api.environment.activate")}
+                title={
+                  environment.isActive
+                    ? t("api.environment.deactivate")
+                    : t("api.environment.activate")
+                }
                 type="button"
               >
                 <Check size={11} />
               </button>
               <button
-                className="min-w-0 flex-1 truncate text-left font-medium text-[var(--u-color-text)]"
+                className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-left font-medium text-[var(--u-color-text)]"
                 onClick={() => setSelectedId(environment.id)}
                 type="button"
               >
-                {environment.name}
+                <span className="min-w-0 truncate">{environment.name}</span>
+                {environment.isActive && (
+                  <Badge className="bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)] ring-[color:color-mix(in_srgb,var(--u-color-primary)_30%,transparent)]">
+                    {t("api.environment.activeBadge")}
+                  </Badge>
+                )}
+              </button>
+              <button
+                aria-label={t("api.environment.edit")}
+                className="grid h-6 w-6 shrink-0 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] opacity-0 hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)] group-hover:opacity-100"
+                onClick={() => setSelectedId(environment.id)}
+                title={t("api.environment.edit")}
+                type="button"
+              >
+                <Pencil size={13} />
               </button>
               <button
                 aria-label={t("api.environment.delete")}
                 className="grid h-6 w-6 shrink-0 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] opacity-0 hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-danger)] group-hover:opacity-100"
-                onClick={() => deleteMutation.mutate(environment.id)}
+                onClick={() => handleDelete(environment.id)}
                 title={t("api.environment.delete")}
                 type="button"
               >
@@ -253,40 +244,19 @@ function EnvironmentsPanel({ workspaceId }: { workspaceId: string }) {
       )}
 
       {selected ? (
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
-          <label className="grid gap-1 text-[12px] text-[var(--u-color-text-muted)]">
-            {t("api.environment.nameLabel")}
-            <Input
-              onChange={(event) => setNameDraft(event.target.value)}
-              value={nameDraft}
-            />
-          </label>
-          <KeyValueEditor
-            items={variablesDraft}
-            maskSensitiveValues
-            onChange={setVariablesDraft}
-            title={t("api.environment.variablesLabel")}
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          <EnvironmentEditor
+            environment={selected}
+            onSave={handleSave}
+            saveError={
+              updateMut.isError
+                ? updateMut.error instanceof Error
+                  ? updateMut.error.message
+                  : String(updateMut.error)
+                : null
+            }
+            saving={updateMut.isPending}
           />
-          <EnvironmentHints variables={variablesDraft} />
-          <div className="flex justify-end">
-            <Button
-              disabled={saveMutation.isPending || !nameDraft.trim()}
-              onClick={() => saveMutation.mutate(selected)}
-              size="sm"
-              type="button"
-            >
-              {saveMutation.isPending
-                ? t("api.actions.saving")
-                : t("api.environment.save")}
-            </Button>
-          </div>
-          {saveMutation.isError && (
-            <div className="text-[12px] text-[var(--u-color-danger)]">
-              {saveMutation.error instanceof Error
-                ? saveMutation.error.message
-                : String(saveMutation.error)}
-            </div>
-          )}
         </div>
       ) : (
         environments.length > 0 && (

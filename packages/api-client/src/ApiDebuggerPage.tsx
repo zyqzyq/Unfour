@@ -37,7 +37,6 @@ export function ApiDebuggerPage({
     collectionStatus,
     deleteMutation,
     duplicateMutation,
-    environments,
     importCollectionMutation,
     importInputRef,
     newRequest,
@@ -310,7 +309,6 @@ export function ApiDebuggerPage({
             <>
               <ApiRequestBar
                 activeEnvironmentId={activeEnvironment?.id ?? null}
-                environments={environments}
                 onDelete={() =>
                   activeTab.savedRequestId &&
                   deleteMutation.mutate(activeTab.savedRequestId)
@@ -327,6 +325,7 @@ export function ApiDebuggerPage({
                 onUpdate={(patch) => updateDraft(activeTab.id, patch)}
                 tab={activeTab}
                 urlInputRef={urlInputRef}
+                workspaceId={workspaceId}
               />
               {collectionStatus && (
                 <div className="shrink-0 border-b border-[var(--u-color-border)] px-2 py-1 text-[12px] text-[var(--u-color-text-muted)]">

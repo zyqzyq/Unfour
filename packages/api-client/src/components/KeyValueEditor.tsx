@@ -65,7 +65,7 @@ export function KeyValueEditor({
             key={`${title}-${index}`}
           >
             <input
-              checked={item.enabled}
+              checked={index === items.length ? false : item.enabled}
               className="h-4 w-4"
               onChange={(event) => update(index, { enabled: event.target.checked })}
               type="checkbox"

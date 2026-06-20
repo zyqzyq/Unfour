@@ -1,14 +1,13 @@
 import type { CSSProperties, Ref } from "react";
 import { Save, Send } from "lucide-react";
 import { Button, Input, useI18n } from "@unfour/ui";
-import type { ApiEnvironment } from "@unfour/command-client";
 import type { ApiRequestTab } from "../model/request-tabs";
 import { httpMethods } from "../constants/http-methods";
+import { EnvironmentControl } from "./EnvironmentControl";
 import { RequestActionsMenu } from "./RequestActionsMenu";
 
 export function ApiRequestBar({
   activeEnvironmentId,
-  environments,
   onDelete,
   onDuplicate,
   onExport,
@@ -19,9 +18,9 @@ export function ApiRequestBar({
   onUpdate,
   tab,
   urlInputRef,
+  workspaceId,
 }: {
   activeEnvironmentId: string | null;
-  environments: ApiEnvironment[];
   onDelete: () => void;
   onDuplicate: () => void;
   onExport: () => void;
@@ -32,6 +31,7 @@ export function ApiRequestBar({
   onUpdate: (patch: Partial<ApiRequestTab["draft"]>) => void;
   tab: ApiRequestTab;
   urlInputRef?: Ref<HTMLInputElement>;
+  workspaceId: string;
 }) {
   const { t } = useI18n();
 
@@ -78,20 +78,11 @@ export function ApiRequestBar({
       >
         <Save size={14} />
       </Button>
-      <select
-        aria-label={t("api.environment.active")}
-        className="h-[var(--u-size-input)] max-w-[150px] shrink-0 cursor-pointer truncate rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-2 text-[12px] text-[var(--u-color-text)] outline-none focus:border-[var(--u-color-focus)]"
-        onChange={(event) => onSelectEnvironment(event.target.value || null)}
-        title={t("api.environment.active")}
-        value={activeEnvironmentId ?? ""}
-      >
-        <option value="">{t("api.environment.none")}</option>
-        {environments.map((environment) => (
-          <option key={environment.id} value={environment.id}>
-            {environment.name}
-          </option>
-        ))}
-      </select>
+      <EnvironmentControl
+        activeEnvironmentId={activeEnvironmentId}
+        onSelectEnvironment={onSelectEnvironment}
+        workspaceId={workspaceId}
+      />
       <RequestActionsMenu
         canDelete={Boolean(tab.savedRequestId)}
         canDuplicate={Boolean(tab.savedRequestId)}

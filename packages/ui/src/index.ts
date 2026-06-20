@@ -41,6 +41,13 @@ export {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./menus";
+export {
+  Popover,
+  PopoverAnchor,
+  PopoverClose,
+  PopoverContent,
+  PopoverTrigger,
+} from "./popover";
 export { Select, type SelectOption } from "./select";
 export {
   ActivityBar,
