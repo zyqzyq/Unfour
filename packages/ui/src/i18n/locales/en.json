@@ -133,6 +133,7 @@
     "keyValue": {
       "add": "Add",
       "deleteRow": "Delete {title} row",
+      "duplicateKeys": "Duplicate keys: {keys}",
       "duplicateVariables": "Duplicate variables: {keys}",
       "formFields": "Form fields",
       "headers": "Headers",
@@ -247,6 +248,9 @@
       "refresh": "Refresh",
       "save": "Save"
     },
+    "confirm": {
+      "cancel": "Cancel"
+    },
     "state": {
       "loading": "Loading...",
       "unavailable": "Unavailable"
@@ -325,6 +329,14 @@
     "sidebar": {
       "connections": "Connections"
     },
+    "tree": {
+      "actionsLabel": "Database actions for {name}",
+      "copyName": "Copy Connection Name",
+      "deleteBody": "Delete connection \"{name}\"? This removes its saved settings and cannot be undone.",
+      "deleteConnection": "Delete Connection",
+      "deleteTitle": "Delete connection?",
+      "editConnection": "Edit Connection"
+    },
     "title": "Database"
   },
   "ssh": {
@@ -360,8 +372,24 @@
     },
     "session": {
       "closed": "SSH session closed.",
+      "closeTitle": "Close session?",
       "disconnectConfirm": "Disconnect SSH session {label}?",
+      "disconnectTitle": "Disconnect session?",
       "connected": "Connected to {username}@{host}. PTY {cols}x{rows} allocated."
+    },
+    "tree": {
+      "actionsLabel": "SSH actions for {name}",
+      "connect": "Connect",
+      "copyHost": "Copy Host",
+      "copySshCommand": "Copy SSH Command",
+      "deleteBody": "Delete connection \"{name}\"? This removes its saved settings and cannot be undone.",
+      "deleteConnection": "Delete Connection",
+      "deleteTitle": "Delete connection?",
+      "disconnect": "Disconnect",
+      "editConnection": "Edit Connection",
+      "open": "Open",
+      "openInNewTab": "Open in New Tab",
+      "openInSplit": "Open in Split Pane"
     },
     "status": {
       "noAuth": "no auth",

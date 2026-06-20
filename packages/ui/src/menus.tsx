@@ -122,6 +122,25 @@ export function ContextMenuContent({
   className?: string;
 }) {
   const context = React.useContext(ContextMenuContext);
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [offset, setOffset] = React.useState({ x: 0, y: 0 });
+
+  // Keep the menu inside the viewport instead of overflowing past the right
+  // edge or below the status bar when opened near a window boundary.
+  React.useLayoutEffect(() => {
+    if (!context?.open || !ref.current) {
+      return;
+    }
+    const rect = ref.current.getBoundingClientRect();
+    const margin = 8;
+    // Measure against the raw click position and the menu size so the result is
+    // independent of any offset already applied this open.
+    const overflowX = Math.max(0, context.position.x + rect.width + margin - window.innerWidth);
+    const overflowY = Math.max(0, context.position.y + rect.height + margin - window.innerHeight);
+    if (overflowX !== offset.x || overflowY !== offset.y) {
+      setOffset({ x: overflowX, y: overflowY });
+    }
+  }, [context?.open, context?.position, offset.x, offset.y]);
 
   if (!context?.open) {
     return null;
@@ -131,11 +150,12 @@ export function ContextMenuContent({
     <div
       className={cn(menuContent, className)}
       onClick={(event) => event.stopPropagation()}
+      ref={ref}
       role="menu"
       style={{
-        left: context.position.x,
+        left: Math.max(8, context.position.x - offset.x),
         position: "fixed",
-        top: context.position.y,
+        top: Math.max(8, context.position.y - offset.y),
       }}
     >
       {children}
@@ -148,17 +168,25 @@ export function ContextMenuItem({
   className,
   disabled,
   onSelect,
+  tone = "default",
 }: {
   children?: React.ReactNode;
   className?: string;
   disabled?: boolean;
   onSelect?: () => void;
+  tone?: "default" | "danger";
 }) {
   const context = React.useContext(ContextMenuContext);
 
   return (
     <button
-      className={cn("w-full text-left", menuItem, className)}
+      className={cn(
+        "w-full text-left",
+        menuItem,
+        tone === "danger" &&
+          "text-[var(--u-color-danger)] data-[highlighted]:bg-[var(--u-color-danger-soft)] hover:bg-[var(--u-color-danger-soft)]",
+        className,
+      )}
       disabled={disabled}
       onClick={() => {
         onSelect?.();

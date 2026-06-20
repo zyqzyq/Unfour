@@ -16,6 +16,8 @@ const buttonVariants = cva(
           "border border-transparent text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
         outline:
           "border border-[var(--u-color-border-strong)] bg-[var(--u-color-surface)] text-[var(--u-color-text)] hover:border-[var(--u-color-border-strong)] hover:bg-[var(--u-color-surface-hover)]",
+        danger:
+          "border border-[var(--u-color-danger)] bg-[var(--u-color-danger)] text-[var(--u-color-primary-foreground)] hover:bg-[var(--u-color-danger-hover)]",
       },
       size: {
         default: "h-[var(--u-size-button)] px-3",

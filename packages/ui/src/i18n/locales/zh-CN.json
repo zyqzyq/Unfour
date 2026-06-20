@@ -133,6 +133,7 @@
     "keyValue": {
       "add": "添加",
       "deleteRow": "删除 {title} 行",
+      "duplicateKeys": "重复键：{keys}",
       "duplicateVariables": "重复变量：{keys}",
       "formFields": "表单字段",
       "headers": "请求头",
@@ -247,6 +248,9 @@
       "refresh": "刷新",
       "save": "保存"
     },
+    "confirm": {
+      "cancel": "取消"
+    },
     "state": {
       "loading": "加载中..."
     }
@@ -324,6 +328,14 @@
     "sidebar": {
       "connections": "连接"
     },
+    "tree": {
+      "actionsLabel": "{name} 的数据库操作",
+      "copyName": "复制连接名称",
+      "deleteBody": "删除连接“{name}”？这会移除其已保存的设置，且无法撤销。",
+      "deleteConnection": "删除连接",
+      "deleteTitle": "删除连接？",
+      "editConnection": "编辑连接"
+    },
     "title": "数据库"
   },
   "ssh": {
@@ -359,8 +371,24 @@
     },
     "session": {
       "closed": "SSH 会话已关闭。",
+      "closeTitle": "关闭会话？",
       "disconnectConfirm": "断开 SSH 会话 {label}？",
+      "disconnectTitle": "断开会话？",
       "connected": "已连接到 {username}@{host}，已分配 PTY {cols}x{rows}。"
+    },
+    "tree": {
+      "actionsLabel": "{name} 的 SSH 操作",
+      "connect": "连接",
+      "copyHost": "复制主机",
+      "copySshCommand": "复制 SSH 命令",
+      "deleteBody": "删除连接“{name}”？这会移除其已保存的设置，且无法撤销。",
+      "deleteConnection": "删除连接",
+      "deleteTitle": "删除连接？",
+      "disconnect": "断开连接",
+      "editConnection": "编辑连接",
+      "open": "打开",
+      "openInNewTab": "在新标签页打开",
+      "openInSplit": "在拆分窗格打开"
     },
     "status": {
       "noAuth": "无认证",

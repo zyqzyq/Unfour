@@ -1,5 +1,6 @@
 export { Badge } from "./badge";
 export { Button, type ButtonProps } from "./button";
+export { ConfirmDialog } from "./confirm-dialog";
 export { DataTable, type DataTableColumn } from "./data-table";
 export { Dialog, DialogClose, DialogTrigger } from "./dialog-primitives";
 export {
