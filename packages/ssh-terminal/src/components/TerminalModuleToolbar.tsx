@@ -4,14 +4,15 @@ import {
   Copy,
   CircleX,
   Download,
+  Eraser,
   FilePlus2,
   MoreHorizontal,
-  RotateCw,
   Rows2,
+  Scaling,
   Search,
   SquareSplitHorizontal,
   TerminalSquare,
-  Trash2,
+  Unplug,
 } from "lucide-react";
 import {
   Button,
@@ -104,13 +105,6 @@ export function TerminalModuleToolbar({
             {connecting ? t("common.actions.connecting") : t("ssh.actions.newSession")}
           </span>
         </Button>
-        <IconButton
-          disabled={!canConnect || connecting}
-          label={t("ssh.actions.reconnect")}
-          onClick={onNewSession}
-        >
-          <RotateCw size={14} />
-        </IconButton>
         {reconnecting && (
           <Button onClick={onCancelReconnect} size="sm" type="button" variant="outline">
             <CircleX size={14} />
@@ -157,11 +151,11 @@ export function TerminalModuleToolbar({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem disabled={!canUseSessionActions} onSelect={onCloseSession}>
-              <Trash2 size={13} />
+              <Unplug size={13} />
               {t("ssh.actions.closeSession")}
             </DropdownMenuItem>
             <DropdownMenuItem disabled={!canUseSessionActions} onSelect={onClear}>
-              <CircleX size={13} />
+              <Eraser size={13} />
               {t("ssh.actions.clearTerminal")}
             </DropdownMenuItem>
             <DropdownMenuItem disabled={!canUseSessionActions} onSelect={onCopyLog}>
@@ -169,7 +163,7 @@ export function TerminalModuleToolbar({
               {t("ssh.actions.copySessionLog")}
             </DropdownMenuItem>
             <DropdownMenuItem disabled={!canUseSessionActions || !onResize} onSelect={onResize}>
-              <RotateCw size={13} />
+              <Scaling size={13} />
               {t("ssh.actions.resizePty")}
             </DropdownMenuItem>
             <DropdownMenuItem disabled={!canUseSessionActions} onSelect={onExportLog}>

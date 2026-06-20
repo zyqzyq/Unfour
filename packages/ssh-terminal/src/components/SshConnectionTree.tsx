@@ -1,19 +1,24 @@
+import { useState } from "react";
 import {
   Copy,
   ExternalLink,
   MoreHorizontal,
+  Pencil,
   Plug,
   TerminalSquare,
+  Trash2,
 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   closeSshSession,
   connectSshSession,
+  deleteSshConnection,
   type SshConnection,
   type SshSessionSummary,
 } from "@unfour/command-client";
 import { useWorkspaceStore } from "@unfour/workspace-core";
 import {
+  ConfirmDialog,
   ConnectionStatus,
   ContextMenuItem,
   DropdownMenu,
@@ -65,6 +70,11 @@ export function SshConnectionTree({
   const sessionsQuery = useTerminalSessions(workspaceId);
   const connections = connectionsQuery.data ?? [];
   const sessions = sessionsQuery.data ?? [];
+  const [confirm, setConfirm] = useState<
+    | { kind: "disconnect"; session: SshSessionSummary }
+    | { kind: "delete"; connection: SshConnection }
+    | null
+  >(null);
 
   const connectMutation = useMutation({
     mutationFn: ({
@@ -115,6 +125,17 @@ export function SshConnectionTree({
       queryClient.invalidateQueries({ queryKey: ["ssh-sessions", workspaceId] });
     },
   });
+  const deleteMutation = useMutation({
+    mutationFn: (connectionId: string) => deleteSshConnection(workspaceId, connectionId),
+    onSuccess: (_result, connectionId) => {
+      if (selectedSshConnectionId === connectionId) {
+        setSelectedSshConnection(null);
+      }
+      setConfirm(null);
+      queryClient.invalidateQueries({ queryKey: ["ssh-connections", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["ssh-sessions", workspaceId] });
+    },
+  });
 
   function connect(connection: SshConnection, split = false) {
     connectMutation.reset();
@@ -124,13 +145,22 @@ export function SshConnectionTree({
 
   function disconnect(session: SshSessionSummary) {
     if (!["disconnected", "failed"].includes(session.status)) {
-      const label = `${session.username}@${session.host}`;
-      const confirmed = window.confirm(t("ssh.session.disconnectConfirm", { label }));
-      if (!confirmed) {
-        return;
-      }
+      setConfirm({ kind: "disconnect", session });
+      return;
     }
     closeMutation.mutate(session.sessionId);
+  }
+
+  function confirmAction() {
+    if (!confirm) {
+      return;
+    }
+    if (confirm.kind === "disconnect") {
+      closeMutation.mutate(confirm.session.sessionId);
+      setConfirm(null);
+      return;
+    }
+    deleteMutation.mutate(confirm.connection.id);
   }
 
   function select(connection: SshConnection) {
@@ -184,15 +214,14 @@ export function SshConnectionTree({
           : "disconnected";
     const menu = (
       <>
-        <ContextMenuItem onSelect={() => connect(connection)}>Connect</ContextMenuItem>
+        <ContextMenuItem onSelect={() => connect(connection)}>{t("ssh.tree.connect")}</ContextMenuItem>
         <ContextMenuItem
           disabled={!activeSession || closeMutation.isPending}
           onSelect={() => activeSession && disconnect(activeSession)}
         >
-          Disconnect
+          {t("ssh.tree.disconnect")}
         </ContextMenuItem>
-        <ContextMenuItem onSelect={() => connect(connection)}>Reconnect</ContextMenuItem>
-        <ContextMenuItem onSelect={() => select(connection)}>Open in New Tab</ContextMenuItem>
+        <ContextMenuItem onSelect={() => select(connection)}>{t("ssh.tree.openInNewTab")}</ContextMenuItem>
         <ContextMenuItem
           onSelect={() => {
             setSelectedSshConnection(connection.id);
@@ -200,14 +229,15 @@ export function SshConnectionTree({
             onOpenTerminalSplit?.(connection);
           }}
         >
-          Open in Split Pane
+          {t("ssh.tree.openInSplit")}
         </ContextMenuItem>
-        <ContextMenuItem disabled={!onEditConnection} onSelect={() => onEditConnection?.(connection)}>
-          Edit Connection
-        </ContextMenuItem>
-        <ContextMenuItem disabled>Duplicate Connection</ContextMenuItem>
+        {onEditConnection && (
+          <ContextMenuItem onSelect={() => onEditConnection(connection)}>
+            {t("ssh.tree.editConnection")}
+          </ContextMenuItem>
+        )}
         <ContextMenuItem onSelect={() => void navigator.clipboard?.writeText(connection.host)}>
-          Copy Host
+          {t("ssh.tree.copyHost")}
         </ContextMenuItem>
         <ContextMenuItem
           onSelect={() =>
@@ -216,10 +246,11 @@ export function SshConnectionTree({
             )
           }
         >
-          Copy SSH Command
+          {t("ssh.tree.copySshCommand")}
         </ContextMenuItem>
-        <ContextMenuItem disabled>Move to Group</ContextMenuItem>
-        <ContextMenuItem disabled>Delete Connection</ContextMenuItem>
+        <ContextMenuItem onSelect={() => setConfirm({ kind: "delete", connection })} tone="danger">
+          {t("ssh.tree.deleteConnection")}
+        </ContextMenuItem>
       </>
     );
 
@@ -227,25 +258,35 @@ export function SshConnectionTree({
       actions: (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <IconButton label={`SSH actions for ${connection.name}`}>
+            <IconButton label={t("ssh.tree.actionsLabel", { name: connection.name })}>
               <MoreHorizontal size={13} />
             </IconButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
             <DropdownMenuItem onSelect={() => connect(connection)}>
               <Plug size={13} />
-              Connect
+              {t("ssh.tree.connect")}
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => select(connection)}>
               <ExternalLink size={13} />
-              Open
+              {t("ssh.tree.open")}
             </DropdownMenuItem>
-            <DropdownMenuItem disabled={!onEditConnection} onSelect={() => onEditConnection?.(connection)}>
-              Edit Connection
-            </DropdownMenuItem>
+            {onEditConnection && (
+              <DropdownMenuItem onSelect={() => onEditConnection(connection)}>
+                <Pencil size={13} />
+                {t("ssh.tree.editConnection")}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onSelect={() => void navigator.clipboard?.writeText(connection.host)}>
               <Copy size={13} />
-              Copy Host
+              {t("ssh.tree.copyHost")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="text-[var(--u-color-danger)]"
+              onSelect={() => setConfirm({ kind: "delete", connection })}
+            >
+              <Trash2 size={13} />
+              {t("ssh.tree.deleteConnection")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -326,6 +367,36 @@ export function SshConnectionTree({
           {formatTerminalError(closeMutation.error)}
         </StatusBadge>
       )}
+      {deleteMutation.error && (
+        <StatusBadge className="max-w-full" tone="danger">
+          {formatTerminalError(deleteMutation.error)}
+        </StatusBadge>
+      )}
+      <ConfirmDialog
+        confirmLabel={
+          confirm?.kind === "delete"
+            ? t("common.actions.delete")
+            : t("common.actions.disconnect")
+        }
+        description={
+          confirm?.kind === "delete"
+            ? t("ssh.tree.deleteBody", { name: confirm.connection.name })
+            : confirm
+              ? t("ssh.session.disconnectConfirm", {
+                  label: `${confirm.session.username}@${confirm.session.host}`,
+                })
+              : ""
+        }
+        onConfirm={confirmAction}
+        onOpenChange={(open) => !open && setConfirm(null)}
+        open={confirm !== null}
+        pending={confirm?.kind === "delete" ? deleteMutation.isPending : closeMutation.isPending}
+        title={
+          confirm?.kind === "delete"
+            ? t("ssh.tree.deleteTitle")
+            : t("ssh.session.disconnectTitle")
+        }
+      />
     </SidebarSection>
   );
 }

@@ -15,7 +15,7 @@ import {
   type SshSessionSummary,
 } from "@unfour/command-client";
 import { useWorkspaceStore } from "@unfour/workspace-core";
-import { LoadingState, useI18n } from "@unfour/ui";
+import { ConfirmDialog, LoadingState, useI18n } from "@unfour/ui";
 import { TerminalModuleToolbar } from "./components/TerminalModuleToolbar";
 import { TerminalWorkspace } from "./components/TerminalWorkspace";
 import { SshConnectionDialog } from "./components/SshConnectionDialog";
@@ -57,6 +57,7 @@ export function TerminalPage({ workspaceId }: { workspaceId: string }) {
   const startTerminalSession = useTerminalStore((state) => state.startTerminalSession);
   const terminalEvents = useTerminalStore((state) => state.terminalEvents);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [closeConfirmSessionId, setCloseConfirmSessionId] = useState<string | null>(null);
   const [trustDialogState, setTrustDialogState] = useState<{
     open: boolean;
     connectionId: string | null;
@@ -405,14 +406,15 @@ export function TerminalPage({ workspaceId }: { workspaceId: string }) {
     const needsConfirmation =
       session && !["disconnected", "failed"].includes(session.status);
     if (needsConfirmation) {
-      const label = `${session.username}@${session.host}`;
-      const confirmed = window.confirm(t("ssh.confirmClose", { label }));
-      if (!confirmed) {
-        return;
-      }
+      setCloseConfirmSessionId(sessionId);
+      return;
     }
     closeMutation.mutate(sessionId);
   }
+
+  const closeConfirmSession = closeConfirmSessionId
+    ? sessions.find((item) => item.sessionId === closeConfirmSessionId)
+    : null;
 
   function copyActiveSessionLog() {
     if (!activeSessionId) {
@@ -523,6 +525,26 @@ export function TerminalPage({ workspaceId }: { workspaceId: string }) {
         open={dialogOpen}
         pending={saveMutation.isPending || deleteMutation.isPending}
         workspaceId={workspaceId}
+      />
+      <ConfirmDialog
+        confirmLabel={t("ssh.actions.closeSession")}
+        description={
+          closeConfirmSession
+            ? t("ssh.confirmClose", {
+                label: `${closeConfirmSession.username}@${closeConfirmSession.host}`,
+              })
+            : ""
+        }
+        onConfirm={() => {
+          if (closeConfirmSessionId) {
+            closeMutation.mutate(closeConfirmSessionId);
+          }
+          setCloseConfirmSessionId(null);
+        }}
+        onOpenChange={(open) => !open && setCloseConfirmSessionId(null)}
+        open={closeConfirmSessionId !== null}
+        pending={closeMutation.isPending}
+        title={t("ssh.session.closeTitle")}
       />
       <HostKeyTrustDialog
         existingFingerprint={trustDialogState.fingerprint}
