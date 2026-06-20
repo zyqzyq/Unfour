@@ -1247,10 +1247,7 @@ mod tests {
 
         // Body password masked
         let body = request["bodyPreview"].as_str().unwrap();
-        assert!(
-            body.contains("[mask "),
-            "password should be masked in body"
-        );
+        assert!(body.contains("[mask "), "password should be masked in body");
         assert!(
             !body.contains("secret123"),
             "raw password should not appear"

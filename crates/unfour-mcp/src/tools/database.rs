@@ -305,10 +305,8 @@ fn db_list_tables(
     command_bus: &dyn CommandBusAdapter,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
-    let arguments =
-        object_with_allowed_keys(arguments, &["connectionId", "workspaceId", "limit"])?;
-    let connection_id =
-        parse_required_string(&arguments, "connectionId", "unfour.db.list_tables")?;
+    let arguments = object_with_allowed_keys(arguments, &["connectionId", "workspaceId", "limit"])?;
+    let connection_id = parse_required_string(&arguments, "connectionId", "unfour.db.list_tables")?;
     let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
     let limit = parse_optional_limit(&arguments, "limit", DEFAULT_TABLE_LIMIT, MAX_TABLE_LIMIT)?;
 
@@ -356,8 +354,7 @@ fn db_describe_table(
     )?;
     let connection_id =
         parse_required_string(&arguments, "connectionId", "unfour.db.describe_table")?;
-    let table_name =
-        parse_required_string(&arguments, "tableName", "unfour.db.describe_table")?;
+    let table_name = parse_required_string(&arguments, "tableName", "unfour.db.describe_table")?;
     let schema_filter = parse_optional_string(&arguments, "schema")?;
     let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
 
@@ -532,7 +529,8 @@ fn validate_readonly_sql(sql: &str) -> Result<(), ToolCallError> {
         "select" | "with" | "show" | "describe" | "desc" | "explain" => Ok(()),
         _ => Err(ToolCallError::Execution {
             code: "READONLY_SQL_REJECTED",
-            message: "Only read-only SQL is permitted (SELECT, WITH, SHOW, DESCRIBE, DESC, EXPLAIN).",
+            message:
+                "Only read-only SQL is permitted (SELECT, WITH, SHOW, DESCRIBE, DESC, EXPLAIN).",
         }),
     }
 }
@@ -1063,13 +1061,15 @@ mod tests {
                 &self,
                 _command: ReadCommand,
             ) -> Result<ReadCommandResult, CommandBusAdapterError> {
-                Ok(ReadCommandResult::CurrentWorkspace(CurrentWorkspaceResult {
-                    workspace_id: "ws-1".to_string(),
-                    workspace_name: "W".to_string(),
-                    workspace_root: None,
-                    mode: "local".to_string(),
-                    source: "command-bus".to_string(),
-                }))
+                Ok(ReadCommandResult::CurrentWorkspace(
+                    CurrentWorkspaceResult {
+                        workspace_id: "ws-1".to_string(),
+                        workspace_name: "W".to_string(),
+                        workspace_root: None,
+                        mode: "local".to_string(),
+                        source: "command-bus".to_string(),
+                    },
+                ))
             }
             fn execute_saved_api_request(
                 &self,
@@ -1099,8 +1099,7 @@ mod tests {
             }
         }
 
-        let reg =
-            super::super::ToolRegistry::with_command_bus(Arc::new(EmptyDbStub));
+        let reg = super::super::ToolRegistry::with_command_bus(Arc::new(EmptyDbStub));
         let result = reg
             .call("unfour.db.list_connections", json!({}))
             .expect("should succeed");
@@ -1112,10 +1111,7 @@ mod tests {
     #[test]
     fn list_tables_returns_table_summaries() {
         let result = registry()
-            .call(
-                "unfour.db.list_tables",
-                json!({ "connectionId": "conn-1" }),
-            )
+            .call("unfour.db.list_tables", json!({ "connectionId": "conn-1" }))
             .expect("should succeed");
 
         let content = &result["structuredContent"];
@@ -1395,13 +1391,15 @@ mod tests {
                 &self,
                 _: ReadCommand,
             ) -> Result<ReadCommandResult, CommandBusAdapterError> {
-                Ok(ReadCommandResult::CurrentWorkspace(CurrentWorkspaceResult {
-                    workspace_id: "ws-1".to_string(),
-                    workspace_name: "W".to_string(),
-                    workspace_root: None,
-                    mode: "local".to_string(),
-                    source: "command-bus".to_string(),
-                }))
+                Ok(ReadCommandResult::CurrentWorkspace(
+                    CurrentWorkspaceResult {
+                        workspace_id: "ws-1".to_string(),
+                        workspace_name: "W".to_string(),
+                        workspace_root: None,
+                        mode: "local".to_string(),
+                        source: "command-bus".to_string(),
+                    },
+                ))
             }
             fn execute_saved_api_request(
                 &self,
@@ -1456,8 +1454,7 @@ mod tests {
             }
         }
 
-        let reg =
-            super::super::ToolRegistry::with_command_bus(Arc::new(LargeResultStub));
+        let reg = super::super::ToolRegistry::with_command_bus(Arc::new(LargeResultStub));
         let result = reg
             .call(
                 "unfour.db.query_readonly",
@@ -1477,8 +1474,7 @@ mod tests {
 
     #[test]
     fn query_readonly_command_bus_failure() {
-        let reg =
-            super::super::ToolRegistry::with_command_bus(Arc::new(DbFailingCommandBus));
+        let reg = super::super::ToolRegistry::with_command_bus(Arc::new(DbFailingCommandBus));
         let result = reg
             .call(
                 "unfour.db.query_readonly",

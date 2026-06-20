@@ -7,6 +7,7 @@ import type {
 } from "@unfour/command-client";
 import {
   closeApiTab,
+  closeApiTabs,
   completeTabSave,
   completeTabSend,
   createNewRequestTab,
@@ -158,6 +159,26 @@ describe("API request tab state", () => {
 
     expect(closed.activeTabId).toBe("new:3");
     expect(closed.tabs.map((tab) => tab.id)).toEqual(["new:1", "new:3"]);
+  });
+
+  it("closes multiple tabs and keeps the active tab when it remains open", () => {
+    const first = createNewRequestTab(emptyApiTabsState("ws-1"), "new:1");
+    const second = createNewRequestTab(first, "new:2");
+    const third = createNewRequestTab(second, "new:3");
+    const closed = closeApiTabs(third, ["new:1", "new:2"]);
+
+    expect(closed.activeTabId).toBe("new:3");
+    expect(closed.tabs.map((tab) => tab.id)).toEqual(["new:3"]);
+  });
+
+  it("selects the nearest remaining tab after closing multiple tabs including active", () => {
+    const first = createNewRequestTab(emptyApiTabsState("ws-1"), "new:1");
+    const second = createNewRequestTab(first, "new:2");
+    const third = createNewRequestTab(second, "new:3");
+    const closed = closeApiTabs(third, ["new:2", "new:3"]);
+
+    expect(closed.activeTabId).toBe("new:1");
+    expect(closed.tabs.map((tab) => tab.id)).toEqual(["new:1"]);
   });
 
   it("derives tab title and visual state independently", () => {

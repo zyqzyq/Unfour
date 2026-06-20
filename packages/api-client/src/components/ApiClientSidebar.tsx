@@ -9,6 +9,7 @@ import {
 import { Badge, Button, cn, useI18n } from "@unfour/ui";
 import type { ApiOpenIntent } from "../model/types";
 import { useApiEnvironments } from "../hooks/useApiEnvironments";
+import { nextEnvironmentName } from "../request-utils";
 import { ApiCollectionTree } from "./ApiCollectionTree";
 import { ApiHistoryTree } from "./ApiHistoryTree";
 import { EnvironmentEditor } from "./EnvironmentEditor";
@@ -128,7 +129,7 @@ function EnvironmentsPanel({ workspaceId }: { workspaceId: string }) {
   const selected = environments.find((env) => env.id === selectedId) ?? null;
 
   function handleCreate() {
-    createMut.mutate(t("api.environment.defaultName"), {
+    createMut.mutate(nextEnvironmentName(t("api.environment.defaultName"), environments), {
       onSuccess: (environment) => setSelectedId(environment.id),
     });
   }
@@ -247,6 +248,7 @@ function EnvironmentsPanel({ workspaceId }: { workspaceId: string }) {
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
           <EnvironmentEditor
             environment={selected}
+            environments={environments}
             onSave={handleSave}
             saveError={
               updateMut.isError

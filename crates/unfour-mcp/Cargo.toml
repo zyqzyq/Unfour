@@ -13,3 +13,10 @@ unfour-core = { path = "../unfour-core" }
 [dev-dependencies]
 unfour-core = { path = "../unfour-core" }
 unfour-local-storage = { path = "../local-storage" }
+
+[features]
+default = []
+# Forward to the command bus / SSH engine native transport so the MCP binary can
+# actually execute `unfour.ssh.run_diagnostic`. Without it, the tool is still
+# registered but returns COMMAND_BUS_OPERATION_UNSUPPORTED.
+ssh-native = ["unfour-command-bus/ssh-native"]

@@ -35,6 +35,7 @@ export function ApiDebuggerPage({
     activeEnvironment,
     activeTab,
     closeTab,
+    closeTabs,
     collectionStatus,
     deleteMutation,
     duplicateMutation,
@@ -58,6 +59,7 @@ export function ApiDebuggerPage({
   const [saveDialogTabId, setSaveDialogTabId] = useState<string | null>(null);
   const [closeDialogTabId, setCloseDialogTabId] = useState<string | null>(null);
   const closeAfterSaveRef = useRef<string | null>(null);
+  const pendingCloseQueueRef = useRef<string[]>([]);
   const urlInputRef = useRef<HTMLInputElement>(null);
   const pendingIntentAction = useRef<{
     action: "save" | "send";
@@ -148,11 +150,55 @@ export function ApiDebuggerPage({
   const closeDialogTab =
     state.tabs.find((tab) => tab.id === closeDialogTabId) ?? null;
 
-  function requestClose(tab: ApiRequestTab) {
-    if (getTabSaveState(tab) === "saved") {
-      closeTab(tab.id);
-    } else {
+  function continuePendingCloseQueue() {
+    const immediateIds: string[] = [];
+    while (pendingCloseQueueRef.current.length) {
+      const tabId = pendingCloseQueueRef.current.shift();
+      const tab = state.tabs.find((item) => item.id === tabId);
+      if (!tab) {
+        continue;
+      }
+      if (getTabSaveState(tab) === "saved") {
+        immediateIds.push(tab.id);
+        continue;
+      }
+      if (immediateIds.length) {
+        closeTabs(immediateIds);
+      }
       setCloseDialogTabId(tab.id);
+      return;
+    }
+    if (immediateIds.length) {
+      closeTabs(immediateIds);
+    }
+  }
+
+  function requestClose(tab: ApiRequestTab) {
+    requestCloseMany([tab]);
+  }
+
+  function requestCloseMany(tabsToClose: ApiRequestTab[]) {
+    pendingCloseQueueRef.current = tabsToClose.map((tab) => tab.id);
+    continuePendingCloseQueue();
+  }
+
+  function requestCloseSavedTabs() {
+    requestCloseMany(
+      state.tabs.filter((tab) => getTabSaveState(tab) === "saved"),
+    );
+  }
+
+  function requestCloseTabsLeftOf(anchor: ApiRequestTab) {
+    const index = state.tabs.findIndex((tab) => tab.id === anchor.id);
+    if (index > 0) {
+      requestCloseMany(state.tabs.slice(0, index));
+    }
+  }
+
+  function requestCloseTabsRightOf(anchor: ApiRequestTab) {
+    const index = state.tabs.findIndex((tab) => tab.id === anchor.id);
+    if (index >= 0) {
+      requestCloseMany(state.tabs.slice(index + 1));
     }
   }
 
@@ -182,6 +228,7 @@ export function ApiDebuggerPage({
       if (closeAfterSaveRef.current === originalId) {
         closeAfterSaveRef.current = null;
         closeTab(`saved:${savedRequestId}`);
+        continuePendingCloseQueue();
       }
     }
   }
@@ -195,6 +242,7 @@ export function ApiDebuggerPage({
     }
     if (await saveTab(tab)) {
       closeTab(tab.id);
+      continuePendingCloseQueue();
     }
   }
 
@@ -310,6 +358,10 @@ export function ApiDebuggerPage({
           <ApiRequestTabs
             activeId={state.activeTabId}
             onClose={requestClose}
+            onCloseAll={() => requestCloseMany(state.tabs)}
+            onCloseLeft={requestCloseTabsLeftOf}
+            onCloseRight={requestCloseTabsRightOf}
+            onCloseSaved={requestCloseSavedTabs}
             onNew={newRequest}
             onSelect={selectTab}
             tabs={state.tabs}
@@ -402,6 +454,7 @@ export function ApiDebuggerPage({
           savedRequests={savedRequests}
           onCancel={() => {
             closeAfterSaveRef.current = null;
+            pendingCloseQueueRef.current = [];
             setSaveDialogTabId(null);
           }}
           onSave={(identity) => void saveWithIdentity(identity)}
@@ -410,12 +463,16 @@ export function ApiDebuggerPage({
         />
       )}
       <ApiCloseRequestDialog
-        onCancel={() => setCloseDialogTabId(null)}
+        onCancel={() => {
+          pendingCloseQueueRef.current = [];
+          setCloseDialogTabId(null);
+        }}
         onDiscard={() => {
           if (closeDialogTab) {
             closeTab(closeDialogTab.id);
           }
           setCloseDialogTabId(null);
+          continuePendingCloseQueue();
         }}
         onSave={() => closeDialogTab && void saveThenClose(closeDialogTab)}
         open={Boolean(closeDialogTab)}

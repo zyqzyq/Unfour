@@ -178,14 +178,12 @@ mod tests {
                         source: "command-bus".to_string(),
                     })
                 }
-                ReadCommand::ListWorkspaces => {
-                    ReadCommandResult::Workspaces(WorkspaceListResult {
-                        workspaces: vec![],
-                        active_workspace_id: "workspace-1".to_string(),
-                        count: 0,
-                        source: "command-bus".to_string(),
-                    })
-                }
+                ReadCommand::ListWorkspaces => ReadCommandResult::Workspaces(WorkspaceListResult {
+                    workspaces: vec![],
+                    active_workspace_id: "workspace-1".to_string(),
+                    count: 0,
+                    source: "command-bus".to_string(),
+                }),
                 ReadCommand::ListConnections { .. } => {
                     ReadCommandResult::Connections(ConnectionListResult {
                         connections: vec![],
@@ -266,6 +264,13 @@ mod tests {
                 ReadCommand::ApiListEnvironments { .. } => {
                     ReadCommandResult::ApiEnvironments(ApiEnvironmentListResult {
                         environments: vec![],
+                        count: 0,
+                        source: "command-bus".to_string(),
+                    })
+                }
+                ReadCommand::ListActivity { .. } => {
+                    ReadCommandResult::Activity(unfour_command_bus::ActivityListResult {
+                        activity: vec![],
                         count: 0,
                         source: "command-bus".to_string(),
                     })
@@ -412,7 +417,7 @@ mod tests {
         assert_eq!(responses.len(), 3);
         assert_eq!(
             responses[1]["result"]["tools"].as_array().unwrap().len(),
-            19
+            21
         );
         assert_eq!(
             responses[2]["result"]["structuredContent"],

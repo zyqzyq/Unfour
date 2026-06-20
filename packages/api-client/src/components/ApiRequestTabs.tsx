@@ -1,5 +1,12 @@
 import { Loader2, X } from "lucide-react";
-import { cn, useI18n } from "@unfour/ui";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+  cn,
+  useI18n,
+} from "@unfour/ui";
 import {
   getTabSaveState,
   methodBadgeLabel,
@@ -12,17 +19,26 @@ import {
 export function ApiRequestTabs({
   activeId,
   onClose,
+  onCloseAll,
+  onCloseLeft,
+  onCloseRight,
+  onCloseSaved,
   onNew,
   onSelect,
   tabs,
 }: {
   activeId: string | null;
   onClose: (tab: ApiRequestTab) => void;
+  onCloseAll: () => void;
+  onCloseLeft: (tab: ApiRequestTab) => void;
+  onCloseRight: (tab: ApiRequestTab) => void;
+  onCloseSaved: () => void;
   onNew: () => void;
   onSelect: (tabId: string) => void;
   tabs: ApiRequestTab[];
 }) {
   const { t } = useI18n();
+  const savedTabCount = tabs.filter((tab) => getTabSaveState(tab) === "saved").length;
 
   return (
     <div
@@ -30,11 +46,11 @@ export function ApiRequestTabs({
       className="flex h-[var(--u-size-tabbar)] shrink-0 items-stretch overflow-x-auto border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)]"
       role="tablist"
     >
-      {tabs.map((tab) => {
+      {tabs.map((tab, index) => {
         const active = tab.id === activeId;
         const saveState = getTabSaveState(tab);
         const visualState = requestTabVisualState(tab);
-        return (
+        const tabNode = (
           <div
             className={cn(
               "group relative flex min-w-[150px] max-w-[230px] items-center gap-1 border-r border-[var(--u-color-border)] px-2 text-[12px]",
@@ -42,7 +58,6 @@ export function ApiRequestTabs({
                 ? "bg-[var(--u-color-surface)] text-[var(--u-color-text)]"
                 : "text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)]",
             )}
-            key={tab.id}
           >
             {active && (
               <span className="absolute inset-x-0 top-0 h-0.5 bg-[var(--u-color-primary)]" />
@@ -87,6 +102,31 @@ export function ApiRequestTabs({
               <X size={12} />
             </button>
           </div>
+        );
+        return (
+          <ContextMenu key={tab.id}>
+            <ContextMenuTrigger asChild>{tabNode}</ContextMenuTrigger>
+            <ContextMenuContent>
+              <ContextMenuItem onSelect={() => onClose(tab)}>
+                {t("api.tabs.closeTab")}
+              </ContextMenuItem>
+              <ContextMenuItem onSelect={onCloseAll}>
+                {t("api.tabs.closeAll")}
+              </ContextMenuItem>
+              <ContextMenuItem disabled={!savedTabCount} onSelect={onCloseSaved}>
+                {t("api.tabs.closeSaved")}
+              </ContextMenuItem>
+              <ContextMenuItem disabled={index === 0} onSelect={() => onCloseLeft(tab)}>
+                {t("api.tabs.closeLeft")}
+              </ContextMenuItem>
+              <ContextMenuItem
+                disabled={index === tabs.length - 1}
+                onSelect={() => onCloseRight(tab)}
+              >
+                {t("api.tabs.closeRight")}
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
         );
       })}
       <button

@@ -117,6 +117,7 @@
       "deactivate": "Unset active",
       "delete": "Delete environment",
       "defaultName": "New Environment",
+      "duplicateName": "An environment named {name} already exists in this workspace.",
       "edit": "Edit variables",
       "nameLabel": "Name",
       "new": "New",
@@ -175,6 +176,8 @@
     },
     "request": {
       "method": "HTTP method",
+      "name": "Request name",
+      "namePlaceholder": "Request name",
       "url": "Request URL",
       "urlPlaceholder": "https://api.example.com/resource"
     },
@@ -223,6 +226,11 @@
     },
     "tabs": {
       "close": "Close {title}",
+      "closeAll": "Close All",
+      "closeLeft": "Close Tabs to the Left",
+      "closeSaved": "Close Saved",
+      "closeTab": "Close",
+      "closeRight": "Close Tabs to the Right",
       "dirty": "Unsaved changes",
       "openRequests": "Open API requests",
       "unsaved": "Unsaved request"

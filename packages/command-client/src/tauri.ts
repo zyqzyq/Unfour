@@ -119,6 +119,29 @@ function mockEnvList(workspaceId: string) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+function normalizeMockEnvironmentName(name: string) {
+  return name.trim().toLowerCase();
+}
+
+function assertMockEnvironmentNameAvailable(
+  workspaceId: string,
+  name: string,
+  excludeId?: string,
+) {
+  const normalized = normalizeMockEnvironmentName(name);
+  if (
+    normalized &&
+    mockEnvironments.some(
+      (env) =>
+        env.workspaceId === workspaceId &&
+        env.id !== excludeId &&
+        normalizeMockEnvironmentName(env.name) === normalized,
+    )
+  ) {
+    throw new Error(`environment name already exists in this workspace: ${name}`);
+  }
+}
+
 function mockActiveEnvVariables(workspaceId: string): KeyValue[] {
   return (
     mockEnvironments.find((env) => env.workspaceId === workspaceId && env.isActive)
@@ -204,12 +227,14 @@ async function mockInvoke<T>(
 
   if (command === "api_environment_create") {
     const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    const name = String(args?.name ?? "New Environment").trim() || "New Environment";
+    assertMockEnvironmentNameAvailable(workspaceId, name);
     const isActive = mockEnvList(workspaceId).length === 0;
     const now = new Date().toISOString();
     const environment: ApiEnvironment = {
       id: crypto.randomUUID(),
       workspaceId,
-      name: String(args?.name ?? "New Environment").trim() || "New Environment",
+      name,
       variables: [],
       isActive,
       createdAt: now,
@@ -226,7 +251,9 @@ async function mockInvoke<T>(
       (env) => env.workspaceId === workspaceId && env.id === environmentId,
     );
     if (!environment) throw new Error("api environment not found");
-    environment.name = String(args?.name ?? environment.name);
+    const name = String(args?.name ?? environment.name).trim() || environment.name;
+    assertMockEnvironmentNameAvailable(workspaceId, name, environmentId);
+    environment.name = name;
     environment.variables = (args?.variables as KeyValue[]) ?? [];
     environment.updatedAt = new Date().toISOString();
     return environment as T;

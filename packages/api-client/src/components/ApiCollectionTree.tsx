@@ -494,8 +494,12 @@ function requestTreeItem(
   );
   return {
     id: `request:${request.id}`,
-    icon: <MethodMeta method={request.method} />,
-    label: request.name,
+    label: (
+      <span className="flex min-w-0 items-center gap-1.5">
+        <MethodMeta method={request.method} />
+        <span className="min-w-0 truncate">{request.name}</span>
+      </span>
+    ),
     title: request.url,
     contextMenu: (
       <>

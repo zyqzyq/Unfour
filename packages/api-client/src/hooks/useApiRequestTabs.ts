@@ -17,6 +17,7 @@ import {
 import { formatError } from "../model/api-request-state";
 import {
   closeApiTab,
+  closeApiTabs,
   completeTabSave,
   completeTabSend,
   createNewRequestTab,
@@ -240,6 +241,8 @@ export function useApiRequestTabs(workspaceId: string) {
       activateEnvironmentMutation.mutate(environmentId),
     closeTab: (tabId: string) =>
       setState((current) => closeApiTab(current, tabId)),
+    closeTabs: (tabIds: string[]) =>
+      setState((current) => closeApiTabs(current, tabIds)),
     importCollectionMutation,
     newRequest,
     openHistory,

@@ -128,6 +128,8 @@ impl ApiClientService {
                 "environment name cannot be empty".to_string(),
             ));
         }
+        self.ensure_environment_name_available(&workspace_id, &name, None)
+            .await?;
 
         // The first environment in a workspace becomes the active one.
         let existing: i64 = sqlx::query_scalar(
@@ -174,6 +176,9 @@ impl ApiClientService {
                 "environment name cannot be empty".to_string(),
             ));
         }
+        self.get_environment(&workspace_id, &environment_id).await?;
+        self.ensure_environment_name_available(&workspace_id, &name, Some(&environment_id))
+            .await?;
         validate_environment(&variables)?;
         let now = Utc::now().to_rfc3339();
         let variables_json = serde_json::to_string(&variables)?;
@@ -317,6 +322,58 @@ impl ApiClientService {
 
         row.map(ApiEnvironment::from)
             .ok_or_else(|| AppError::NotFound("api environment".to_string()))
+    }
+
+    async fn ensure_environment_name_available(
+        &self,
+        workspace_id: &str,
+        name: &str,
+        exclude_id: Option<&str>,
+    ) -> AppResult<()> {
+        let existing: Option<(String,)> = match exclude_id {
+            Some(environment_id) => {
+                sqlx::query_as(
+                    r#"
+                    SELECT id
+                    FROM api_environments
+                    WHERE workspace_id = ?1
+                      AND id != ?2
+                      AND name COLLATE NOCASE = ?3
+                      AND deleted_at IS NULL
+                    LIMIT 1
+                    "#,
+                )
+                .bind(workspace_id)
+                .bind(environment_id)
+                .bind(name)
+                .fetch_optional(self.db.pool())
+                .await?
+            }
+            None => {
+                sqlx::query_as(
+                    r#"
+                    SELECT id
+                    FROM api_environments
+                    WHERE workspace_id = ?1
+                      AND name COLLATE NOCASE = ?2
+                      AND deleted_at IS NULL
+                    LIMIT 1
+                    "#,
+                )
+                .bind(workspace_id)
+                .bind(name)
+                .fetch_optional(self.db.pool())
+                .await?
+            }
+        };
+
+        if existing.is_some() {
+            return Err(AppError::Validation(format!(
+                "environment name already exists in this workspace: {name}"
+            )));
+        }
+
+        Ok(())
     }
 
     async fn active_environment_variables(&self, workspace_id: &str) -> AppResult<Vec<KeyValue>> {
@@ -1285,6 +1342,57 @@ mod tests {
             .await
             .expect("list b");
         assert!(list_b.is_empty());
+    }
+
+    #[tokio::test]
+    async fn environment_names_are_unique_within_workspace() {
+        let service = service().await;
+        let dev = service
+            .create_environment("workspace-a".to_string(), "Dev".to_string())
+            .await
+            .expect("create dev");
+        let prod = service
+            .create_environment("workspace-a".to_string(), "Prod".to_string())
+            .await
+            .expect("create prod");
+
+        let duplicate_create = service
+            .create_environment("workspace-a".to_string(), "dev".to_string())
+            .await;
+        assert!(matches!(
+            duplicate_create,
+            Err(AppError::Validation(message)) if message.contains("already exists")
+        ));
+
+        let same_name_other_workspace = service
+            .create_environment("workspace-b".to_string(), "dev".to_string())
+            .await
+            .expect("same name in another workspace");
+        assert_eq!(same_name_other_workspace.workspace_id, "workspace-b");
+
+        let duplicate_update = service
+            .update_environment(
+                "workspace-a".to_string(),
+                prod.id.clone(),
+                "DEV".to_string(),
+                vec![],
+            )
+            .await;
+        assert!(matches!(
+            duplicate_update,
+            Err(AppError::Validation(message)) if message.contains("already exists")
+        ));
+
+        let own_name_update = service
+            .update_environment(
+                "workspace-a".to_string(),
+                dev.id,
+                "dev".to_string(),
+                vec![],
+            )
+            .await
+            .expect("same environment can keep its name");
+        assert_eq!(own_name_update.name, "dev");
     }
 
     #[tokio::test]

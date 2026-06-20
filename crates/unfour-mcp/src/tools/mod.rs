@@ -1,7 +1,9 @@
+mod activity;
 mod api;
 mod database;
 mod mock;
 mod real;
+mod ssh;
 mod system;
 
 use std::sync::Arc;
@@ -65,6 +67,8 @@ impl ToolRegistry {
         tools.extend(api::registered_tools());
         tools.extend(database::registered_tools());
         tools.extend(system::registered_tools());
+        tools.extend(activity::registered_tools());
+        tools.extend(ssh::registered_tools());
 
         Self {
             tools,
@@ -166,29 +170,27 @@ mod tests {
                         source: "command-bus".to_string(),
                     })
                 }
-                ReadCommand::ListWorkspaces => {
-                    ReadCommandResult::Workspaces(WorkspaceListResult {
-                        workspaces: vec![
-                            WorkspaceSummary {
-                                id: "workspace-1".to_string(),
-                                name: "Local Workspace".to_string(),
-                                is_default: true,
-                                is_active: true,
-                                last_opened_at: Some("2026-06-20T00:00:00Z".to_string()),
-                            },
-                            WorkspaceSummary {
-                                id: "workspace-2".to_string(),
-                                name: "Scratch".to_string(),
-                                is_default: false,
-                                is_active: false,
-                                last_opened_at: None,
-                            },
-                        ],
-                        active_workspace_id: "workspace-1".to_string(),
-                        count: 2,
-                        source: "command-bus".to_string(),
-                    })
-                }
+                ReadCommand::ListWorkspaces => ReadCommandResult::Workspaces(WorkspaceListResult {
+                    workspaces: vec![
+                        WorkspaceSummary {
+                            id: "workspace-1".to_string(),
+                            name: "Local Workspace".to_string(),
+                            is_default: true,
+                            is_active: true,
+                            last_opened_at: Some("2026-06-20T00:00:00Z".to_string()),
+                        },
+                        WorkspaceSummary {
+                            id: "workspace-2".to_string(),
+                            name: "Scratch".to_string(),
+                            is_default: false,
+                            is_active: false,
+                            last_opened_at: None,
+                        },
+                    ],
+                    active_workspace_id: "workspace-1".to_string(),
+                    count: 2,
+                    source: "command-bus".to_string(),
+                }),
                 ReadCommand::ListConnections { .. } => {
                     ReadCommandResult::Connections(ConnectionListResult {
                         connections: vec![SafeConnection {
@@ -279,6 +281,13 @@ mod tests {
                 ReadCommand::ApiListEnvironments { .. } => {
                     ReadCommandResult::ApiEnvironments(ApiEnvironmentListResult {
                         environments: vec![],
+                        count: 0,
+                        source: "command-bus".to_string(),
+                    })
+                }
+                ReadCommand::ListActivity { .. } => {
+                    ReadCommandResult::Activity(unfour_command_bus::ActivityListResult {
+                        activity: vec![],
                         count: 0,
                         source: "command-bus".to_string(),
                     })
@@ -431,7 +440,7 @@ mod tests {
     fn real_tool_schemas_are_available_separately_from_mocks() {
         let definitions = ToolRegistry::with_command_bus(Arc::new(StubCommandBus)).definitions();
 
-        assert_eq!(definitions.len(), 19);
+        assert_eq!(definitions.len(), 21);
         assert!(definitions
             .iter()
             .any(|definition| definition.name == "unfour.workspace.current"));
@@ -480,6 +489,12 @@ mod tests {
         assert!(definitions
             .iter()
             .any(|definition| definition.name == "unfour.workspace.list"));
+        assert!(definitions
+            .iter()
+            .any(|definition| definition.name == "unfour.activity.list"));
+        assert!(definitions
+            .iter()
+            .any(|definition| definition.name == "unfour.ssh.run_diagnostic"));
         assert_eq!(
             definitions
                 .iter()

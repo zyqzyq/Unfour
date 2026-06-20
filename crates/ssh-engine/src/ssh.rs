@@ -3,9 +3,10 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use unfour_core::models::{
     SshCloseInput, SshConnectInput, SshConnection, SshConnectionConfig, SshConnectionInput,
-    SshHostFingerprintInfo, SshHostKeyInput, SshKnownHostsExportResult, SshKnownHostsImportInput,
-    SshKnownHostsImportResult, SshLogExport, SshLogExportInput, SshReconnectCancelInput,
-    SshResizeInput, SshSessionEvent, SshSessionInput, SshSessionSummary, StoredConnection,
+    SshDiagnosticInput, SshDiagnosticResult, SshHostFingerprintInfo, SshHostKeyInput,
+    SshKnownHostsExportResult, SshKnownHostsImportInput, SshKnownHostsImportResult, SshLogExport,
+    SshLogExportInput, SshReconnectCancelInput, SshResizeInput, SshSessionEvent, SshSessionInput,
+    SshSessionSummary, StoredConnection,
 };
 use unfour_core::redaction::redact_sensitive_lines;
 use unfour_core::{AppError, AppResult};
@@ -282,6 +283,40 @@ impl SshService {
             )
             .await?;
         Ok(summary)
+    }
+
+    /// Run a single, read-only diagnostic command over SSH and capture its
+    /// output. The command is validated against a fixed allowlist of read-only
+    /// utilities (no shell, no chaining, no write/control operations) before it
+    /// is executed. Captured output is line-redacted for sensitive material.
+    /// Requires the `ssh-native` feature; otherwise returns an unsupported error.
+    pub async fn run_diagnostic(
+        &self,
+        input: SshDiagnosticInput,
+    ) -> AppResult<SshDiagnosticResult> {
+        validate_workspace_id(&input.workspace_id)?;
+        validate_connection_id(&input.connection_id)?;
+        let command = validate_diagnostic_command(&input.command)?;
+        let timeout = std::time::Duration::from_millis(
+            input.timeout_ms.unwrap_or(15_000).clamp(1_000, 60_000),
+        );
+        let connection = self
+            .get_connection(&input.workspace_id, &input.connection_id)
+            .await?;
+        validate_connection_ready_for_session(&connection)?;
+
+        #[cfg(feature = "ssh-native")]
+        {
+            self.run_diagnostic_native(&connection, &command, timeout)
+                .await
+        }
+        #[cfg(not(feature = "ssh-native"))]
+        {
+            let _ = (timeout, &connection, &command);
+            Err(AppError::Unsupported(
+                "ssh diagnostics require a build with the ssh-native feature".to_string(),
+            ))
+        }
     }
 
     pub async fn list_sessions(&self, workspace_id: String) -> AppResult<Vec<SshSessionSummary>> {
@@ -1033,6 +1068,114 @@ impl SshService {
         })
     }
 
+    /// Open a fresh native connection, run a single command via `exec` (no PTY),
+    /// capture stdout/stderr to EOF (bounded and timed), then disconnect.
+    #[cfg(feature = "ssh-native")]
+    async fn run_diagnostic_native(
+        &self,
+        connection: &SshConnection,
+        command: &str,
+        timeout: std::time::Duration,
+    ) -> AppResult<SshDiagnosticResult> {
+        let config = Arc::new(native_client_config());
+        let handler = SshClientHandler {
+            host_key_store: HostKeyStore::new(self.db.pool().clone()),
+            host: connection.host.clone(),
+            port: connection.port,
+        };
+        let addr = format!("{}:{}", connection.host, connection.port);
+        let connect_timeout = std::time::Duration::from_secs(15);
+        let mut handle = match tokio::time::timeout(
+            connect_timeout,
+            russh::client::connect(config, addr.as_str(), handler),
+        )
+        .await
+        {
+            Ok(Ok(handle)) => handle,
+            Ok(Err(error)) => {
+                return Err(AppError::Config(format!(
+                    "ssh connection to {}:{} failed: {}",
+                    connection.host,
+                    connection.port,
+                    sanitize_ssh_error(&error)
+                )));
+            }
+            Err(_) => {
+                return Err(AppError::Config(format!(
+                    "ssh connection to {}:{} timed out after {}s",
+                    connection.host,
+                    connection.port,
+                    connect_timeout.as_secs()
+                )));
+            }
+        };
+
+        self.authenticate_native(&mut handle, connection).await?;
+        let mut channel = handle
+            .channel_open_session()
+            .await
+            .map_err(|error| AppError::Config(format!("failed to open ssh channel: {}", error)))?;
+        channel
+            .exec(true, command.as_bytes())
+            .await
+            .map_err(|error| {
+                AppError::Config(format!("failed to run ssh diagnostic command: {}", error))
+            })?;
+
+        let mut stdout: Vec<u8> = Vec::new();
+        let mut stderr: Vec<u8> = Vec::new();
+        let mut exit_status: Option<i32> = None;
+        let mut truncated = false;
+
+        let capture = async {
+            loop {
+                match channel.wait().await {
+                    Some(russh::ChannelMsg::Data { data }) => {
+                        append_capped(&mut stdout, &data[..], &mut truncated);
+                    }
+                    Some(russh::ChannelMsg::ExtendedData { data, ext }) => {
+                        if ext == 1 {
+                            append_capped(&mut stderr, &data[..], &mut truncated);
+                        } else {
+                            append_capped(&mut stdout, &data[..], &mut truncated);
+                        }
+                    }
+                    Some(russh::ChannelMsg::ExitStatus { exit_status: code }) => {
+                        exit_status = Some(code as i32);
+                    }
+                    Some(russh::ChannelMsg::Eof) | Some(russh::ChannelMsg::Close) | None => break,
+                    _ => {}
+                }
+            }
+        };
+
+        let timed_out = tokio::time::timeout(timeout, capture).await.is_err();
+        if timed_out {
+            truncated = true;
+        }
+
+        let _ = channel.close().await;
+        let _ = handle
+            .disconnect(
+                russh::Disconnect::ByApplication,
+                "diagnostic complete",
+                "en",
+            )
+            .await;
+
+        let (stdout_text, _) = redact_sensitive_lines(&String::from_utf8_lossy(&stdout));
+        let (stderr_text, _) = redact_sensitive_lines(&String::from_utf8_lossy(&stderr));
+
+        Ok(SshDiagnosticResult {
+            connection_id: connection.id.clone(),
+            command: command.to_string(),
+            stdout: stdout_text,
+            stderr: stderr_text,
+            exit_status,
+            truncated,
+        })
+    }
+
     #[cfg(feature = "ssh-native")]
     async fn authenticate_native(
         &self,
@@ -1466,6 +1609,147 @@ fn sanitize_ssh_error(error: &russh::Error) -> String {
     }
 }
 
+/// Leading command words permitted for read-only SSH diagnostics. Each is a
+/// non-mutating utility; commands that can also write/control state (notably
+/// `systemctl` and `journalctl`) get additional subcommand/flag restrictions in
+/// `validate_diagnostic_command`.
+const SSH_DIAGNOSTIC_ALLOWED_COMMANDS: &[&str] = &[
+    "df",
+    "du",
+    "free",
+    "uptime",
+    "uname",
+    "hostname",
+    "whoami",
+    "id",
+    "date",
+    "ps",
+    "ss",
+    "netstat",
+    "ip",
+    "ifconfig",
+    "vmstat",
+    "iostat",
+    "mount",
+    "stat",
+    "wc",
+    "ls",
+    "cat",
+    "tail",
+    "head",
+    "systemctl",
+    "journalctl",
+];
+
+/// Validate a one-shot SSH diagnostic command. Returns the trimmed command on
+/// success. Enforces: non-empty, length bound, no control characters, no shell
+/// metacharacters (so no chaining/piping/redirection/subshells), a bare
+/// allowlisted leading utility, and read-only subcommands/flags for utilities
+/// that could otherwise mutate state.
+fn validate_diagnostic_command(command: &str) -> AppResult<String> {
+    let trimmed = command.trim();
+    if trimmed.is_empty() {
+        return Err(AppError::Validation(
+            "ssh diagnostic command cannot be empty".to_string(),
+        ));
+    }
+    if trimmed.chars().count() > 512 {
+        return Err(AppError::Validation(
+            "ssh diagnostic command must be 512 characters or fewer".to_string(),
+        ));
+    }
+    if trimmed.chars().any(char::is_control) {
+        return Err(AppError::Validation(
+            "ssh diagnostic command cannot contain control characters".to_string(),
+        ));
+    }
+    const FORBIDDEN: &[char] = &[
+        ';', '|', '&', '$', '`', '>', '<', '(', ')', '{', '}', '\\', '*', '?', '~', '!', '#', '\'',
+        '"',
+    ];
+    if let Some(found) = trimmed.chars().find(|c| FORBIDDEN.contains(c)) {
+        return Err(AppError::Validation(format!(
+            "ssh diagnostic command cannot contain the shell metacharacter `{}`",
+            found
+        )));
+    }
+
+    let mut tokens = trimmed.split_whitespace();
+    let head = tokens.next().unwrap_or_default();
+    if head.contains('/') {
+        return Err(AppError::Validation(
+            "ssh diagnostic command must be a bare allowlisted utility (no path)".to_string(),
+        ));
+    }
+    if !SSH_DIAGNOSTIC_ALLOWED_COMMANDS.contains(&head) {
+        return Err(AppError::Validation(format!(
+            "`{}` is not an allowed read-only diagnostic command",
+            head
+        )));
+    }
+
+    match head {
+        "systemctl" => {
+            const SYSTEMCTL_READONLY: &[&str] = &[
+                "status",
+                "is-active",
+                "is-enabled",
+                "is-failed",
+                "show",
+                "cat",
+                "list-units",
+                "list-unit-files",
+                "list-timers",
+                "list-sockets",
+                "get-default",
+            ];
+            let sub = tokens.find(|token| !token.starts_with('-')).unwrap_or("");
+            if !SYSTEMCTL_READONLY.contains(&sub) {
+                return Err(AppError::Validation(
+                    "systemctl diagnostics are limited to read-only subcommands (status, is-active, show, list-units, ...)".to_string(),
+                ));
+            }
+        }
+        "journalctl" => {
+            if tokens.any(|token| {
+                token.starts_with("--vacuum")
+                    || token == "--rotate"
+                    || token == "--flush"
+                    || token == "--sync"
+                    || token == "--relinquish-var"
+            }) {
+                return Err(AppError::Validation(
+                    "journalctl diagnostics cannot use log-management flags".to_string(),
+                ));
+            }
+        }
+        _ => {}
+    }
+
+    Ok(trimmed.to_string())
+}
+
+/// Maximum bytes captured per stream (stdout/stderr) for a diagnostic command.
+#[cfg(feature = "ssh-native")]
+const SSH_DIAGNOSTIC_MAX_OUTPUT_BYTES: usize = 64 * 1024;
+
+/// Append `data` to `buf`, capping at the diagnostic output limit and marking
+/// `truncated` when the limit is reached.
+#[cfg(feature = "ssh-native")]
+fn append_capped(buf: &mut Vec<u8>, data: &[u8], truncated: &mut bool) {
+    let remaining = SSH_DIAGNOSTIC_MAX_OUTPUT_BYTES.saturating_sub(buf.len());
+    if remaining == 0 {
+        *truncated = true;
+        return;
+    }
+    if data.len() > remaining {
+        buf.extend_from_slice(&data[..remaining]);
+        *truncated = true;
+    } else {
+        buf.extend_from_slice(data);
+    }
+}
+
 fn normalize_name(name: &str) -> AppResult<String> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
@@ -1600,6 +1884,102 @@ mod tests {
     use super::*;
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
     use unfour_secret_store::SecretStore;
+
+    #[test]
+    fn diagnostic_command_allows_read_only_utilities() {
+        for cmd in [
+            "df -h",
+            "free -m",
+            "uptime",
+            "tail -n 200 /var/log/syslog",
+            "cat /etc/os-release",
+            "systemctl status nginx",
+            "systemctl is-active sshd",
+            "journalctl -u nginx -n 100",
+            "ps aux",
+        ] {
+            assert!(
+                validate_diagnostic_command(cmd).is_ok(),
+                "expected `{cmd}` to be allowed"
+            );
+        }
+    }
+
+    #[test]
+    fn diagnostic_command_rejects_shell_metacharacters() {
+        for cmd in [
+            "cat /etc/passwd; rm -rf /",
+            "df -h | grep sda",
+            "uptime && reboot",
+            "cat $(which sh)",
+            "tail -f /var/log/x > /tmp/y",
+            "echo `whoami`",
+        ] {
+            assert!(
+                validate_diagnostic_command(cmd).is_err(),
+                "expected `{cmd}` to be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn diagnostic_command_rejects_non_allowlisted_and_paths() {
+        assert!(validate_diagnostic_command("rm -rf /").is_err());
+        assert!(validate_diagnostic_command("curl http://evil").is_err());
+        assert!(validate_diagnostic_command("/usr/bin/df").is_err());
+        assert!(validate_diagnostic_command("").is_err());
+    }
+
+    #[test]
+    fn diagnostic_command_restricts_systemctl_and_journalctl() {
+        assert!(validate_diagnostic_command("systemctl restart nginx").is_err());
+        assert!(validate_diagnostic_command("systemctl stop sshd").is_err());
+        assert!(validate_diagnostic_command("systemctl daemon-reload").is_err());
+        assert!(validate_diagnostic_command("journalctl --vacuum-size=1M").is_err());
+        assert!(validate_diagnostic_command("journalctl --rotate").is_err());
+    }
+
+    #[tokio::test]
+    async fn run_diagnostic_validates_before_connecting() {
+        // An invalid command must be rejected by validation, independent of any
+        // SSH transport or feature flag.
+        let (service, workspace_a, connection_id) = diagnostic_fixture().await;
+        let result = service
+            .run_diagnostic(SshDiagnosticInput {
+                workspace_id: workspace_a,
+                connection_id,
+                command: "rm -rf /".to_string(),
+                timeout_ms: None,
+            })
+            .await;
+        assert!(matches!(result, Err(AppError::Validation(_))));
+    }
+
+    #[cfg(not(feature = "ssh-native"))]
+    #[tokio::test]
+    async fn run_diagnostic_is_unsupported_without_native() {
+        let (service, workspace_a, connection_id) = diagnostic_fixture().await;
+        let result = service
+            .run_diagnostic(SshDiagnosticInput {
+                workspace_id: workspace_a,
+                connection_id,
+                command: "uptime".to_string(),
+                timeout_ms: None,
+            })
+            .await;
+        assert!(matches!(result, Err(AppError::Unsupported(_))));
+    }
+
+    /// Build a service with one saved password SSH connection ready for a
+    /// session, returning (service, workspace_id, connection_id).
+    async fn diagnostic_fixture() -> (SshService, String, String) {
+        let (service, workspace_a, _workspace_b) = service_with_workspaces().await;
+        let connection = service
+            .save_connection(password_input(&workspace_a))
+            .await
+            .expect("save ssh connection");
+        (service, workspace_a, connection.id)
+    }
 
     async fn service_with_workspaces() -> (SshService, String, String) {
         let options = SqliteConnectOptions::new()

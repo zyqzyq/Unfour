@@ -9,9 +9,11 @@ import {
   buildFolderTree,
   collectTreeRequests,
   duplicateEnvironmentKeys,
+  findDuplicateEnvironmentName,
   headersWithAuthMetadata,
   isSensitiveKey,
   formatByteSize,
+  nextEnvironmentName,
   parseCollectionImport,
   queryFromUrl,
   splitAuthMetadata,
@@ -20,6 +22,7 @@ import {
 } from "./request-utils";
 import type {
   ApiCollection,
+  ApiEnvironment,
   ApiSavedRequest,
   KeyValue,
 } from "@unfour/command-client";
@@ -305,6 +308,30 @@ describe("duplicateEnvironmentKeys", () => {
       { key: "B", value: "2", enabled: true },
     ];
     expect(duplicateEnvironmentKeys(vars)).toEqual([]);
+  });
+});
+
+describe("environment name helpers", () => {
+  it("detects duplicate environment names inside one workspace list", () => {
+    const environments: Array<Pick<ApiEnvironment, "id" | "name">> = [
+      { id: "env-1", name: "Dev" },
+      { id: "env-2", name: "Prod" },
+    ];
+
+    expect(findDuplicateEnvironmentName(environments, " dev ")).toBe("Dev");
+    expect(findDuplicateEnvironmentName(environments, "dev", "env-1")).toBeNull();
+    expect(findDuplicateEnvironmentName(environments, "Stage")).toBeNull();
+  });
+
+  it("generates the next available default environment name", () => {
+    const environments: Array<Pick<ApiEnvironment, "id" | "name">> = [
+      { id: "env-1", name: "New Environment" },
+      { id: "env-2", name: "New Environment 2" },
+    ];
+
+    expect(nextEnvironmentName("New Environment", environments)).toBe(
+      "New Environment 3",
+    );
   });
 });
 

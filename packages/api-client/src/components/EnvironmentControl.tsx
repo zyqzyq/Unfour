@@ -11,6 +11,7 @@ import {
 } from "@unfour/ui";
 import type { KeyValue } from "@unfour/command-client";
 import { useApiEnvironments } from "../hooks/useApiEnvironments";
+import { nextEnvironmentName } from "../request-utils";
 import { EnvironmentEditor } from "./EnvironmentEditor";
 
 /**
@@ -53,7 +54,7 @@ export function EnvironmentControl({
   }
 
   function handleCreate() {
-    createMut.mutate(t("api.environment.defaultName"), {
+    createMut.mutate(nextEnvironmentName(t("api.environment.defaultName"), environments), {
       onSuccess: (environment) => setEditingId(environment.id),
     });
   }
@@ -100,6 +101,7 @@ export function EnvironmentControl({
             <div className="max-h-[60vh] overflow-y-auto p-2.5">
               <EnvironmentEditor
                 environment={editing}
+                environments={environments}
                 onSave={handleSave}
                 saveError={
                   updateMut.isError

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button, Input, useI18n } from "@unfour/ui";
 import type { ApiEnvironment, KeyValue } from "@unfour/command-client";
+import { findDuplicateEnvironmentName } from "../request-utils";
 import { EnvironmentHints, KeyValueEditor } from "./KeyValueEditor";
 
 type EnvironmentDraft = {
@@ -19,11 +20,13 @@ type EnvironmentDraft = {
  */
 export function EnvironmentEditor({
   environment,
+  environments = [],
   onSave,
   saveError,
   saving,
 }: {
   environment: ApiEnvironment;
+  environments?: ApiEnvironment[];
   onSave: (name: string, variables: KeyValue[]) => void;
   saveError?: string | null;
   saving?: boolean;
@@ -48,18 +51,31 @@ export function EnvironmentEditor({
   }
 
   const dirty = isDraftDirty(currentDraft);
+  const duplicateName = findDuplicateEnvironmentName(
+    environments,
+    currentDraft.name,
+    environment.id,
+  );
 
   return (
     <div className="space-y-2">
       <label className="grid gap-1 text-[12px] text-[var(--u-color-text-muted)]">
         {t("api.environment.nameLabel")}
         <Input
+          aria-invalid={duplicateName ? true : undefined}
           onChange={(event) =>
             setDraft((current) => ({ ...current, name: event.target.value }))
           }
           value={currentDraft.name}
         />
       </label>
+      {duplicateName && (
+        <div className="text-[12px] text-[var(--u-color-danger)]">
+          {t("api.environment.duplicateName", {
+            name: currentDraft.name.trim(),
+          })}
+        </div>
+      )}
       <KeyValueEditor
         items={currentDraft.variables}
         maskSensitiveValues
@@ -76,7 +92,7 @@ export function EnvironmentEditor({
           </span>
         )}
         <Button
-          disabled={saving || !currentDraft.name.trim() || !dirty}
+          disabled={saving || !currentDraft.name.trim() || Boolean(duplicateName) || !dirty}
           onClick={() => onSave(currentDraft.name.trim(), currentDraft.variables)}
           size="sm"
           type="button"

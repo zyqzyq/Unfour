@@ -3,11 +3,11 @@ use std::sync::Arc;
 
 use tokio::runtime::{Builder, Runtime};
 use unfour_command_bus::{CommandBus, ReadCommand, ReadCommandResult};
-use unfour_core::AppError;
 use unfour_core::models::{
     ApiResponse, DatabaseConnection, DatabaseQueryInput, DatabaseQueryResult, DatabaseSchema,
-    DatabaseTestResult, SystemHealth,
+    DatabaseTestResult, SshDiagnosticInput, SshDiagnosticResult, SystemHealth,
 };
+use unfour_core::AppError;
 
 pub trait CommandBusAdapter: Send + Sync {
     fn execute_read(
@@ -56,6 +56,20 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support system health reads.",
+        })
+    }
+
+    /// Run a read-only, allowlist-validated SSH diagnostic command. Diagnostic
+    /// action with a side effect (opens a connection and executes a command), so
+    /// it is not a `ReadCommand`. Adapters that cannot run diagnostics may use
+    /// the default unsupported response.
+    fn run_ssh_diagnostic(
+        &self,
+        _input: SshDiagnosticInput,
+    ) -> Result<SshDiagnosticResult, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "This command-bus adapter does not support SSH diagnostics.",
         })
     }
 }
@@ -154,7 +168,10 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         connection_id: &str,
     ) -> Result<DatabaseSchema, CommandBusAdapterError> {
         self.runtime
-            .block_on(self.bus.database_schema(workspace_id.to_string(), connection_id.to_string()))
+            .block_on(
+                self.bus
+                    .database_schema(workspace_id.to_string(), connection_id.to_string()),
+            )
             .map_err(|e| {
                 CommandBusAdapterError::from_app_error(
                     "The command-bus database schema operation failed.",
@@ -196,12 +213,25 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
     }
 
     fn system_health(&self) -> Result<SystemHealth, CommandBusAdapterError> {
-        self.runtime.block_on(self.bus.system_health()).map_err(|e| {
-            CommandBusAdapterError::from_app_error(
-                "The command-bus system health read failed.",
-                &e,
-            )
-        })
+        self.runtime
+            .block_on(self.bus.system_health())
+            .map_err(|e| {
+                CommandBusAdapterError::from_app_error(
+                    "The command-bus system health read failed.",
+                    &e,
+                )
+            })
+    }
+
+    fn run_ssh_diagnostic(
+        &self,
+        input: SshDiagnosticInput,
+    ) -> Result<SshDiagnosticResult, CommandBusAdapterError> {
+        self.runtime
+            .block_on(self.bus.run_ssh_diagnostic(input))
+            .map_err(|e| {
+                CommandBusAdapterError::from_app_error("The command-bus SSH diagnostic failed.", &e)
+            })
     }
 }
 

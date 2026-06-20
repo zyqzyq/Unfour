@@ -36,6 +36,8 @@ reserved for MCP messages; process errors are written to standard error.
 | `unfour.db.describe_table` | `{ "connectionId": "required", "tableName": "required", "schema": "optional", "workspaceId": "optional" }` | Describes a table's columns (name, type, nullable, primaryKey). Does not read table data. |
 | `unfour.db.query_readonly` | `{ "connectionId": "required", "sql": "required", "limit": "optional", "workspaceId": "optional" }` | Executes a read-only SQL query. Only SELECT, WITH, SHOW, DESCRIBE, DESC, EXPLAIN are allowed. Default limit 100, max 1000. |
 | `unfour.db.test_connection` | `{ "connectionId": "required", "workspaceId": "optional" }` | Tests connectivity to a saved database connection and returns success plus server version when available. |
+| `unfour.activity.list` | `{ "workspaceId": "optional", "limit": "optional" }` | Lists recent workspace activity events (workspace/connection/API/database/SSH changes) newest first, with sensitive fields in event details masked. Default limit 50, max 200. Useful for diagnosing what changed before a failure started. |
+| `unfour.ssh.run_diagnostic` | `{ "connectionId": "required", "command": "required", "workspaceId": "optional", "timeoutMs": "optional" }` | Runs a single read-only diagnostic command on a saved SSH connection and returns captured stdout/stderr. Only a fixed allowlist of read-only utilities is permitted; shells, pipes, redirection, chaining, and write/control operations are rejected. Output is line-redacted. Requires an `ssh-native` build. |
 | `unfour.system.health` | `{}` | Returns command-bus and storage readiness for diagnostics. |
 
 ### API Debugger Tools
@@ -168,6 +170,89 @@ Example query_readonly result:
 }
 ```
 
+### Activity Tool
+
+`unfour.activity.list` returns the recent local activity trail recorded by the
+command bus (workspace, connection, API, database, and SSH lifecycle events),
+newest first. Results are scoped to the active workspace unless `workspaceId`
+is provided. `limit` defaults to 50 and is clamped to a maximum of 200.
+
+Event `details` are stored as already-redacted summaries; the MCP layer applies
+an additional recursive masking pass over the details payload before returning
+it, so sensitive fields (passwords, tokens, credential references, etc.) are
+masked even if a future writer records one by mistake.
+
+This tool is read-only diagnostic context. It helps an AI client answer
+"what changed just before this started failing?" by correlating activity
+timestamps with API history or database/connection state.
+
+Example list result:
+
+```json
+{
+  "activity": [
+    {
+      "id": "evt-2",
+      "workspaceId": "ws-1",
+      "action": "database.connection.create",
+      "target": "conn-1",
+      "details": { "name": "Prod DB" },
+      "createdAt": "2026-06-20T01:00:00Z"
+    }
+  ],
+  "count": 1,
+  "source": "command-bus"
+}
+```
+
+### SSH Diagnostics Tool
+
+`unfour.ssh.run_diagnostic` runs a single, read-only command on a saved SSH
+connection and returns its captured `stdout`/`stderr` and exit status. It is the
+only SSH capability exposed over MCP — there is no interactive shell, no session
+state, and no write/control access.
+
+The command is gated by a strict allowlist before it ever reaches the host:
+
+- The leading word must be a bare allowlisted read-only utility (no path):
+  `df`, `du`, `free`, `uptime`, `uname`, `hostname`, `whoami`, `id`, `date`,
+  `ps`, `ss`, `netstat`, `ip`, `ifconfig`, `vmstat`, `iostat`, `mount`, `stat`,
+  `wc`, `ls`, `cat`, `tail`, `head`, `systemctl`, `journalctl`.
+- Shell metacharacters are rejected entirely (`; | & $ \` > < ( ) { } \ * ? ~ !
+  # ' "`), so chaining, piping, redirection, and subshells are impossible.
+- `systemctl` is restricted to read-only subcommands (`status`, `is-active`,
+  `is-enabled`, `is-failed`, `show`, `cat`, `list-units`, `list-unit-files`,
+  `list-timers`, `list-sockets`, `get-default`); start/stop/restart/enable/etc.
+  are rejected.
+- `journalctl` log-management flags (`--vacuum*`, `--rotate`, `--flush`,
+  `--sync`, `--relinquish-var`) are rejected.
+
+Captured output is line-redacted by the SSH engine (the same redaction applied
+to terminal history): any line that looks like a sensitive `key: value` /
+`key=value` pair is replaced. This is best-effort over free-form command output;
+the allowlist is the primary control. Each stream is capped (64 KB) and the whole
+command runs under a timeout (default 15s, max 60s); `truncated` is `true` when a
+cap or the timeout is hit.
+
+This tool requires the binary to be built with the `ssh-native` feature
+(`cargo build -p unfour-mcp --features ssh-native`). Without it the tool is still
+listed but returns `COMMAND_BUS_OPERATION_UNSUPPORTED`. Live SSH transport
+remains pending end-to-end verification against a real server.
+
+Example result:
+
+```json
+{
+  "connectionId": "conn-1",
+  "command": "df -h",
+  "stdout": "Filesystem      Size  Used Avail Use% Mounted on\n/dev/sda1        50G   20G   30G  40% /",
+  "stderr": "",
+  "exitStatus": 0,
+  "truncated": false,
+  "source": "command-bus"
+}
+```
+
 ## Sensitive Data Masking
 
 All API tools apply a sanitization layer before returning results. The
@@ -295,6 +380,12 @@ Build the executable before starting Codex:
 cargo build -p unfour-mcp
 ```
 
+To enable `unfour.ssh.run_diagnostic`, build with the native SSH feature:
+
+```powershell
+cargo build -p unfour-mcp --features ssh-native
+```
+
 Example Codex prompts:
 
 ```text
@@ -309,6 +400,9 @@ Example Codex prompts:
 请通过 unfour MCP 获取 historyId 为 xxx 的历史详情，对照请求/响应头里的 auth 掩码信息判断鉴权问题。
 请通过 unfour MCP 测试 connectionId 为 xxx 的数据库连通性。
 请通过 unfour MCP 列出当前 workspace 的 API 环境与变量（敏感值会被掩码）。
+请通过 unfour MCP 列出最近的 workspace 活动事件，结合 API 历史判断"故障开始前发生了什么变化"。
+请通过 unfour MCP 在 connectionId 为 xxx 的 SSH 主机上执行只读诊断：df -h，并判断磁盘是否快满。
+请通过 unfour MCP 在 connectionId 为 xxx 上查看 systemctl status nginx，判断服务是否异常。
 请通过 unfour MCP 检查系统健康状态。
 ```
 
@@ -320,8 +414,9 @@ This phase does not:
 - support arbitrary URL requests (only saved `requestId`);
 - execute database write operations (INSERT, UPDATE, DELETE, DDL);
 - accept ad-hoc database connection strings (only saved `connectionId`);
-- execute SSH commands or open SSH sessions;
-- implement `tail_log`;
+- open interactive SSH sessions, run arbitrary (non-allowlisted) SSH commands,
+  or perform any SSH write/control operation (only the read-only allowlisted
+  `unfour.ssh.run_diagnostic` is exposed);
 - implement workflows;
 - implement HTTP MCP transport;
 - return raw secret values (sensitive headers, tokens, passwords, and sensitive

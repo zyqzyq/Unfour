@@ -440,6 +440,29 @@ export function closeApiTab(
   };
 }
 
+export function closeApiTabs(
+  state: ApiTabsState,
+  tabIds: string[],
+): ApiTabsState {
+  const closingIds = new Set(tabIds);
+  if (!closingIds.size) {
+    return state;
+  }
+  const firstClosedIndex = state.tabs.findIndex((tab) => closingIds.has(tab.id));
+  if (firstClosedIndex < 0) {
+    return state;
+  }
+  const tabs = state.tabs.filter((tab) => !closingIds.has(tab.id));
+  if (!state.activeTabId || !closingIds.has(state.activeTabId)) {
+    return { ...state, tabs };
+  }
+  return {
+    ...state,
+    activeTabId: tabs[Math.min(firstClosedIndex, tabs.length - 1)]?.id ?? null,
+    tabs,
+  };
+}
+
 export function setApiSplitDirection(
   state: ApiTabsState,
   splitDirection: ApiSplitDirection,

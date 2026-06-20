@@ -3,8 +3,7 @@ use serde_json::Value;
 pub const MAX_BODY_PREVIEW_BYTES: usize = 20 * 1024;
 
 fn normalize(name: &str) -> String {
-    name.to_ascii_lowercase()
-        .replace(['-', '_'], "")
+    name.to_ascii_lowercase().replace(['-', '_'], "")
 }
 
 pub fn is_sensitive_key(name: &str) -> bool {
@@ -72,10 +71,7 @@ pub fn mask_secret(value: &str) -> String {
 fn split_scheme(value: &str) -> (Option<&str>, &str) {
     if let Some((head, rest)) = value.split_once(char::is_whitespace) {
         let rest = rest.trim();
-        if !head.is_empty()
-            && head.chars().all(|c| c.is_ascii_alphabetic())
-            && !rest.is_empty()
-        {
+        if !head.is_empty() && head.chars().all(|c| c.is_ascii_alphabetic()) && !rest.is_empty() {
             return (Some(head), rest);
         }
     }
@@ -223,6 +219,13 @@ pub fn redact_body(body: &str, body_kind: &str) -> String {
 
     redact_json_value(&mut json);
     serde_json::to_string(&json).unwrap_or_else(|_| body.to_string())
+}
+
+/// Recursively mask sensitive fields within an arbitrary JSON value in place.
+/// Used as defense-in-depth over already-redacted stored summaries such as
+/// activity-event details before they are surfaced to an LLM client.
+pub fn redact_json_in_place(value: &mut Value) {
+    redact_json_value(value);
 }
 
 fn redact_json_value(value: &mut Value) {
@@ -393,14 +396,18 @@ mod tests {
 
     #[test]
     fn body_redaction_replaces_sensitive_json_keys() {
-        let body = r#"{"user":"alice","password":"secret123","data":"safe","nested":{"token":"abc"}}"#;
+        let body =
+            r#"{"user":"alice","password":"secret123","data":"safe","nested":{"token":"abc"}}"#;
         let redacted = redact_body(body, "json");
         let parsed: Value = serde_json::from_str(&redacted).unwrap();
 
         assert_eq!(parsed["user"], "alice");
         assert!(parsed["password"].as_str().unwrap().starts_with("[mask "));
         assert_eq!(parsed["data"], "safe");
-        assert!(parsed["nested"]["token"].as_str().unwrap().starts_with("[mask "));
+        assert!(parsed["nested"]["token"]
+            .as_str()
+            .unwrap()
+            .starts_with("[mask "));
         assert!(!redacted.contains("secret123"));
     }
 

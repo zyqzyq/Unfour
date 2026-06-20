@@ -4,6 +4,19 @@ use serde_json::Value;
 use unfour_core::AppResult;
 use uuid::Uuid;
 
+/// A single persisted activity-trail row, returned verbatim from storage. The
+/// `details_json` payload is the redacted summary recorded by `record`; callers
+/// that expose it (e.g. the MCP layer) still apply defense-in-depth masking.
+#[derive(Debug, Clone)]
+pub struct ActivityEntry {
+    pub id: String,
+    pub workspace_id: Option<String>,
+    pub action: String,
+    pub target: Option<String>,
+    pub details_json: String,
+    pub created_at: String,
+}
+
 #[derive(Clone)]
 pub struct ActivityLogService {
     db: LocalDb,
@@ -39,6 +52,70 @@ impl ActivityLogService {
         .await?;
 
         Ok(())
+    }
+
+    /// List the most recent activity events, newest first. When `workspace_id`
+    /// is provided, results are scoped to that workspace; otherwise events from
+    /// every workspace are returned. `limit` is the maximum number of rows; the
+    /// caller is responsible for clamping it to a sane range.
+    pub async fn list_recent(
+        &self,
+        workspace_id: Option<&str>,
+        limit: i64,
+    ) -> AppResult<Vec<ActivityEntry>> {
+        type Row = (
+            String,
+            Option<String>,
+            String,
+            Option<String>,
+            String,
+            String,
+        );
+
+        let rows: Vec<Row> = match workspace_id {
+            Some(ws) => {
+                sqlx::query_as(
+                    r#"
+                SELECT id, workspace_id, action, target, details_json, created_at
+                FROM activity_events
+                WHERE workspace_id = ?1
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?2
+                "#,
+                )
+                .bind(ws)
+                .bind(limit)
+                .fetch_all(self.db.pool())
+                .await?
+            }
+            None => {
+                sqlx::query_as(
+                    r#"
+                SELECT id, workspace_id, action, target, details_json, created_at
+                FROM activity_events
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?1
+                "#,
+                )
+                .bind(limit)
+                .fetch_all(self.db.pool())
+                .await?
+            }
+        };
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(id, workspace_id, action, target, details_json, created_at)| ActivityEntry {
+                    id,
+                    workspace_id,
+                    action,
+                    target,
+                    details_json,
+                    created_at,
+                },
+            )
+            .collect())
     }
 }
 
@@ -133,5 +210,40 @@ mod tests {
         let parsed: Value = serde_json::from_str(&details.0).expect("parse json");
         assert_eq!(parsed["count"], 42);
         assert_eq!(parsed["label"], "hello");
+    }
+
+    #[tokio::test]
+    async fn list_recent_returns_newest_first_scoped_and_limited() {
+        let svc = service().await;
+        svc.record(Some("ws-1"), "first", None, serde_json::json!({}))
+            .await
+            .unwrap();
+        svc.record(Some("ws-1"), "second", None, serde_json::json!({}))
+            .await
+            .unwrap();
+        svc.record(Some("ws-1"), "third", None, serde_json::json!({}))
+            .await
+            .unwrap();
+        svc.record(Some("ws-2"), "other", None, serde_json::json!({}))
+            .await
+            .unwrap();
+
+        // Scoped to ws-1, newest first.
+        let scoped = svc.list_recent(Some("ws-1"), 50).await.expect("list ws-1");
+        assert_eq!(scoped.len(), 3);
+        assert_eq!(scoped[0].action, "third");
+        assert_eq!(scoped[2].action, "first");
+        assert!(scoped
+            .iter()
+            .all(|e| e.workspace_id.as_deref() == Some("ws-1")));
+
+        // Limit is honored.
+        let limited = svc.list_recent(Some("ws-1"), 2).await.expect("limit ws-1");
+        assert_eq!(limited.len(), 2);
+        assert_eq!(limited[0].action, "third");
+
+        // No workspace filter returns every workspace's events.
+        let all = svc.list_recent(None, 50).await.expect("list all");
+        assert_eq!(all.len(), 4);
     }
 }

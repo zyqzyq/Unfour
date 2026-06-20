@@ -6,11 +6,11 @@ use unfour_core::models::{
     CredentialMetadata, CredentialRotateInput, DatabaseBrowseInput, DatabaseBrowseResult,
     DatabaseConnection, DatabaseConnectionInput, DatabaseQueryInput, DatabaseQueryResult,
     DatabaseSchema, DatabaseTestResult, DbQueryHistoryEntry, DbQueryHistoryRecordInput, KeyValue,
-    SshCloseInput, SshConnectInput, SshConnection, SshConnectionInput, SshHostFingerprintInfo,
-    SshHostKeyInput, SshKnownHostsExportResult, SshKnownHostsImportInput,
-    SshKnownHostsImportResult, SshLogExport, SshLogExportInput, SshReconnectCancelInput,
-    SshResizeInput, SshSessionEvent, SshSessionInput, SshSessionSummary, SystemHealth, Workspace,
-    WorkspaceLayout, WorkspaceState,
+    SshCloseInput, SshConnectInput, SshConnection, SshConnectionInput, SshDiagnosticInput,
+    SshDiagnosticResult, SshHostFingerprintInfo, SshHostKeyInput, SshKnownHostsExportResult,
+    SshKnownHostsImportInput, SshKnownHostsImportResult, SshLogExport, SshLogExportInput,
+    SshReconnectCancelInput, SshResizeInput, SshSessionEvent, SshSessionInput, SshSessionSummary,
+    SystemHealth, Workspace, WorkspaceLayout, WorkspaceState,
 };
 use unfour_core::sync_reserved;
 use unfour_core::AppResult;
@@ -28,6 +28,10 @@ pub const DEFAULT_APP_IDENTIFIER: &str = "com.unfour.workspace";
 /// `apps/desktop/src-tauri/src/lib.rs`) so satellite processes read the same
 /// credential entries.
 pub const DEFAULT_SECRET_SERVICE: &str = "unfour-workspace";
+
+/// Default and maximum number of activity events returned by `ListActivity`.
+const DEFAULT_ACTIVITY_LIMIT: i64 = 50;
+const MAX_ACTIVITY_LIMIT: i64 = 200;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -66,6 +70,10 @@ pub enum ReadCommand {
     ApiListEnvironments {
         workspace_id: Option<String>,
     },
+    ListActivity {
+        workspace_id: Option<String>,
+        limit: Option<i64>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -79,6 +87,7 @@ pub enum ReadCommandResult {
     ApiHistory(ApiHistoryListResult),
     ApiHistoryDetailResult(ApiHistoryDetailResult),
     ApiEnvironments(ApiEnvironmentListResult),
+    Activity(ActivityListResult),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -206,6 +215,27 @@ pub struct ApiEnvironmentListResult {
     pub environments: Vec<ApiEnvironment>,
     pub count: usize,
     pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityListResult {
+    pub activity: Vec<ActivityItem>,
+    pub count: usize,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityItem {
+    pub id: String,
+    pub workspace_id: Option<String>,
+    pub action: String,
+    pub target: Option<String>,
+    /// Redacted summary payload recorded with the event. Consumers that surface
+    /// this to an LLM apply an additional masking pass as defense-in-depth.
+    pub details: serde_json::Value,
+    pub created_at: String,
 }
 
 #[derive(Clone)]
@@ -568,6 +598,34 @@ impl CommandBus {
                         source: "command-bus".to_string(),
                     },
                 ))
+            }
+            ReadCommand::ListActivity {
+                workspace_id,
+                limit,
+            } => {
+                let state = self.read_workspace_state().await?;
+                let ws_id = workspace_id.unwrap_or(state.active_workspace_id);
+                let limit = limit
+                    .unwrap_or(DEFAULT_ACTIVITY_LIMIT)
+                    .clamp(1, MAX_ACTIVITY_LIMIT);
+                let entries = self.activity_log.list_recent(Some(&ws_id), limit).await?;
+                let activity = entries
+                    .into_iter()
+                    .map(|entry| ActivityItem {
+                        id: entry.id,
+                        workspace_id: entry.workspace_id,
+                        action: entry.action,
+                        target: entry.target,
+                        details: serde_json::from_str(&entry.details_json)
+                            .unwrap_or(serde_json::Value::Null),
+                        created_at: entry.created_at,
+                    })
+                    .collect::<Vec<_>>();
+                Ok(ReadCommandResult::Activity(ActivityListResult {
+                    count: activity.len(),
+                    activity,
+                    source: "command-bus".to_string(),
+                }))
             }
         }
     }
@@ -1158,6 +1216,31 @@ impl CommandBus {
         workspace_id: String,
     ) -> AppResult<Vec<SshConnection>> {
         self.ssh.list_connections(workspace_id).await
+    }
+
+    /// Run a read-only SSH diagnostic command against a saved connection. The
+    /// command is allowlist-validated and output line-redacted by the SSH
+    /// engine; this records an activity event (command + exit status only, never
+    /// the captured output).
+    pub async fn run_ssh_diagnostic(
+        &self,
+        input: SshDiagnosticInput,
+    ) -> AppResult<SshDiagnosticResult> {
+        let workspace_id = input.workspace_id.clone();
+        let result = self.ssh.run_diagnostic(input).await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "ssh.diagnostic",
+                Some(&result.connection_id),
+                serde_json::json!({
+                    "command": result.command,
+                    "exitStatus": result.exit_status,
+                    "truncated": result.truncated,
+                }),
+            )
+            .await?;
+        Ok(result)
     }
 
     pub async fn save_ssh_connection(&self, input: SshConnectionInput) -> AppResult<SshConnection> {

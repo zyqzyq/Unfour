@@ -1,5 +1,6 @@
 import type {
   ApiCollection,
+  ApiEnvironment,
   ApiHistoryDetail,
   ApiRequestInput,
   ApiSavedRequest,
@@ -13,6 +14,44 @@ import type {
 } from "./model/types";
 
 export const AUTH_METADATA_HEADER = "x-unfour-auth-config";
+
+export function normalizeEnvironmentName(name: string) {
+  return name.trim().toLowerCase();
+}
+
+export function findDuplicateEnvironmentName(
+  environments: Array<Pick<ApiEnvironment, "id" | "name">>,
+  name: string,
+  excludeId?: string,
+) {
+  const normalized = normalizeEnvironmentName(name);
+  if (!normalized) {
+    return null;
+  }
+  return (
+    environments.find(
+      (environment) =>
+        environment.id !== excludeId &&
+        normalizeEnvironmentName(environment.name) === normalized,
+    )?.name ?? null
+  );
+}
+
+export function nextEnvironmentName(
+  baseName: string,
+  environments: Array<Pick<ApiEnvironment, "id" | "name">>,
+) {
+  const base = baseName.trim() || "New Environment";
+  if (!findDuplicateEnvironmentName(environments, base)) {
+    return base;
+  }
+
+  let suffix = 2;
+  while (findDuplicateEnvironmentName(environments, `${base} ${suffix}`)) {
+    suffix += 1;
+  }
+  return `${base} ${suffix}`;
+}
 
 export function defaultAuthConfig(): ApiAuthConfig {
   return { type: "none" };

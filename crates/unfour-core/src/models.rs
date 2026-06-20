@@ -264,6 +264,32 @@ pub struct SshConnectInput {
     pub rows: Option<u16>,
 }
 
+/// Input for a one-shot, read-only SSH diagnostic command. The `command` is
+/// validated against a fixed allowlist of read-only utilities before it is run;
+/// it is never an interactive shell and never a write/control operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshDiagnosticInput {
+    pub workspace_id: String,
+    pub connection_id: String,
+    pub command: String,
+    pub timeout_ms: Option<u64>,
+}
+
+/// Result of a one-shot SSH diagnostic command. Captured stdout/stderr are
+/// best-effort secret-scrubbed by the surfacing adapter before reaching a
+/// client; this struct carries the raw engine output.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshDiagnosticResult {
+    pub connection_id: String,
+    pub command: String,
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_status: Option<i32>,
+    pub truncated: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SshSessionInput {

@@ -36,69 +36,80 @@ export function ApiRequestBar({
   const { t } = useI18n();
 
   return (
-    <div className="flex min-h-[52px] shrink-0 items-center gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3 py-2.5">
-      <select
-        aria-label={t("api.request.method")}
-        className="h-[var(--u-size-input)] shrink-0 cursor-pointer rounded-[var(--u-radius-md)] border bg-[var(--u-color-surface)] px-2.5 font-mono text-[12px] font-bold uppercase tracking-wide outline-none transition-colors duration-150 focus:border-[var(--u-color-focus)] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--u-color-focus)_16%,transparent)]"
-        onChange={(event) => onUpdate({ method: event.target.value })}
-        style={methodSelectStyle(tab.draft.method)}
-        value={tab.draft.method}
-      >
-        {httpMethods.map((method) => (
-          <option key={method} style={{ color: methodColor(method) }}>
-            {method}
-          </option>
-        ))}
-      </select>
-      <Input
-        aria-label={t("api.request.url")}
-        className="min-w-0 flex-1 rounded-[var(--u-radius-md)] border-[var(--u-color-border-strong)] bg-[var(--u-color-surface)] font-mono text-[12px]"
-        onChange={(event) => onUpdate({ url: event.target.value })}
-        placeholder={t("api.request.urlPlaceholder")}
-        ref={urlInputRef}
-        value={tab.draft.url}
-      />
-      <Button
-        disabled={tab.sending || !tab.draft.url.trim()}
-        size="sm"
-        onClick={onSend}
-        type="button"
-      >
-        <Send size={14} />
-        {tab.sending ? t("api.actions.sending") : t("api.actions.send")}
-      </Button>
-      <Button
-        aria-label={tab.saving ? t("api.actions.saving") : t("api.actions.save")}
-        disabled={tab.saving}
-        size="icon"
-        onClick={onSave}
-        title={tab.saving ? t("api.actions.saving") : t("api.actions.save")}
-        type="button"
-        variant="outline"
-      >
-        <Save size={14} />
-      </Button>
-      <EnvironmentControl
-        activeEnvironmentId={activeEnvironmentId}
-        onSelectEnvironment={onSelectEnvironment}
-        workspaceId={workspaceId}
-      />
-      <RequestActionsMenu
-        canDelete={Boolean(tab.savedRequestId)}
-        canDuplicate={Boolean(tab.savedRequestId)}
-        onDelete={onDelete}
-        onDuplicate={onDuplicate}
-        onExport={onExport}
-        onImport={onImport}
-      />
-      {tab.saveError && (
-        <span
-          className="max-w-[180px] truncate text-[12px] text-[var(--u-color-danger)]"
-          title={tab.saveError}
+    <div className="grid shrink-0 gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2">
+        <Input
+          aria-label={t("api.request.name")}
+          className="min-w-[160px] max-w-[280px] flex-[0_1_240px] rounded-[var(--u-radius-md)] bg-[var(--u-color-surface)] text-[12px]"
+          onChange={(event) => onUpdate({ name: event.target.value })}
+          placeholder={t("api.request.namePlaceholder")}
+          value={tab.draft.name}
+        />
+        <EnvironmentControl
+          activeEnvironmentId={activeEnvironmentId}
+          onSelectEnvironment={onSelectEnvironment}
+          workspaceId={workspaceId}
+        />
+        <RequestActionsMenu
+          canDelete={Boolean(tab.savedRequestId)}
+          canDuplicate={Boolean(tab.savedRequestId)}
+          onDelete={onDelete}
+          onDuplicate={onDuplicate}
+          onExport={onExport}
+          onImport={onImport}
+        />
+        {tab.saveError && (
+          <span
+            className="min-w-0 flex-1 truncate text-[12px] text-[var(--u-color-danger)]"
+            title={tab.saveError}
+          >
+            {tab.saveError}
+          </span>
+        )}
+      </div>
+      <div className="flex min-w-0 items-center gap-2">
+        <select
+          aria-label={t("api.request.method")}
+          className="h-[var(--u-size-input)] shrink-0 cursor-pointer rounded-[var(--u-radius-md)] border bg-[var(--u-color-surface)] px-2.5 font-mono text-[12px] font-bold uppercase tracking-wide outline-none transition-colors duration-150 focus:border-[var(--u-color-focus)] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--u-color-focus)_16%,transparent)]"
+          onChange={(event) => onUpdate({ method: event.target.value })}
+          style={methodSelectStyle(tab.draft.method)}
+          value={tab.draft.method}
         >
-          {tab.saveError}
-        </span>
-      )}
+          {httpMethods.map((method) => (
+            <option key={method} style={{ color: methodColor(method) }}>
+              {method}
+            </option>
+          ))}
+        </select>
+        <Input
+          aria-label={t("api.request.url")}
+          className="min-w-0 flex-1 rounded-[var(--u-radius-md)] border-[var(--u-color-border-strong)] bg-[var(--u-color-surface)] font-mono text-[12px]"
+          onChange={(event) => onUpdate({ url: event.target.value })}
+          placeholder={t("api.request.urlPlaceholder")}
+          ref={urlInputRef}
+          value={tab.draft.url}
+        />
+        <Button
+          disabled={tab.sending || !tab.draft.url.trim()}
+          size="sm"
+          onClick={onSend}
+          type="button"
+        >
+          <Send size={14} />
+          {tab.sending ? t("api.actions.sending") : t("api.actions.send")}
+        </Button>
+        <Button
+          aria-label={tab.saving ? t("api.actions.saving") : t("api.actions.save")}
+          disabled={tab.saving}
+          size="icon"
+          onClick={onSave}
+          title={tab.saving ? t("api.actions.saving") : t("api.actions.save")}
+          type="button"
+          variant="outline"
+        >
+          <Save size={14} />
+        </Button>
+      </div>
     </div>
   );
 }
