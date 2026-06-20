@@ -37,6 +37,18 @@ pub struct ApiEnvironment {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ApiCollection {
+    pub id: String,
+    pub workspace_id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub folders: Vec<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkspaceLayout {
     pub workspace_id: String,
     pub sidebar_collapsed: bool,
@@ -70,6 +82,7 @@ pub struct ApiRequestInput {
     pub workspace_id: String,
     pub name: Option<String>,
     pub folder_path: Option<String>,
+    pub collection_id: Option<String>,
     pub method: String,
     pub url: String,
     pub headers: Vec<KeyValue>,
@@ -138,6 +151,7 @@ pub struct ApiSavedRequest {
     pub workspace_id: String,
     pub name: String,
     pub folder_path: Option<String>,
+    pub collection_id: Option<String>,
     pub method: String,
     pub url: String,
     pub headers_json: String,

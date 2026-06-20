@@ -452,6 +452,7 @@ export function normalizeRequestDraft(draft: RequestDraft): string {
     auth: draft.auth,
     body: draft.body,
     bodyMode: draft.bodyMode,
+    collectionId: draft.collectionId,
     folderPath: draft.folderPath.trim() || null,
     formBody: normalizeKeyValues(draft.formBody),
     headers: normalizeKeyValues(draft.headers),
@@ -510,6 +511,7 @@ function emptyDraft(): RequestDraft {
     auth: defaultAuthConfig(),
     body: "",
     bodyMode: "none",
+    collectionId: null,
     envVariables: [],
     folderPath: "",
     formBody: [],
@@ -529,6 +531,7 @@ function inputToDraft(input: ReturnType<typeof savedRequestToInput>): RequestDra
   return {
     auth,
     ...bodyFields,
+    collectionId: input.collectionId ?? null,
     envVariables: [],
     folderPath: input.folderPath ?? "",
     headers,

@@ -1,11 +1,11 @@
 use crate::AppState;
 use tauri::State;
 use unfour_core::models::{
-    ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest,
-    CredentialCreateInput, CredentialDeleteInput, CredentialInspectInput, CredentialMetadata,
-    CredentialRotateInput, DatabaseBrowseInput, DatabaseBrowseResult, DatabaseConnection,
-    DatabaseConnectionInput, DatabaseQueryInput, DatabaseQueryResult, DatabaseSchema,
-    DatabaseTestResult, KeyValue, SshCloseInput, SshConnectInput, SshConnection,
+    ApiCollection, ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse,
+    ApiSavedRequest, CredentialCreateInput, CredentialDeleteInput, CredentialInspectInput,
+    CredentialMetadata, CredentialRotateInput, DatabaseBrowseInput, DatabaseBrowseResult,
+    DatabaseConnection, DatabaseConnectionInput, DatabaseQueryInput, DatabaseQueryResult,
+    DatabaseSchema, DatabaseTestResult, KeyValue, SshCloseInput, SshConnectInput, SshConnection,
     SshConnectionInput, SshHostFingerprintInfo, SshHostKeyInput, SshKnownHostsExportResult,
     SshKnownHostsImportInput, SshKnownHostsImportResult, SshLogExport, SshLogExportInput,
     SshReconnectCancelInput, SshResizeInput, SshSessionEvent, SshSessionInput, SshSessionSummary,
@@ -112,6 +112,78 @@ pub async fn api_environment_activate(
 }
 
 #[tauri::command]
+pub async fn api_collection_list(
+    workspace_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<ApiCollection>> {
+    state.command_bus.api_collection_list(workspace_id).await
+}
+
+#[tauri::command]
+pub async fn api_collection_create(
+    workspace_id: String,
+    name: String,
+    state: State<'_, AppState>,
+) -> AppResult<ApiCollection> {
+    state
+        .command_bus
+        .api_collection_create(workspace_id, name)
+        .await
+}
+
+#[tauri::command]
+pub async fn api_collection_rename(
+    workspace_id: String,
+    collection_id: String,
+    name: String,
+    state: State<'_, AppState>,
+) -> AppResult<ApiCollection> {
+    state
+        .command_bus
+        .api_collection_rename(workspace_id, collection_id, name)
+        .await
+}
+
+#[tauri::command]
+pub async fn api_collection_delete(
+    workspace_id: String,
+    collection_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<ApiCollection>> {
+    state
+        .command_bus
+        .api_collection_delete(workspace_id, collection_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn api_collection_add_folder(
+    workspace_id: String,
+    collection_id: String,
+    folder_path: String,
+    state: State<'_, AppState>,
+) -> AppResult<ApiCollection> {
+    state
+        .command_bus
+        .api_collection_add_folder(workspace_id, collection_id, folder_path)
+        .await
+}
+
+#[tauri::command]
+pub async fn api_request_move(
+    workspace_id: String,
+    request_id: String,
+    collection_id: Option<String>,
+    folder_path: Option<String>,
+    state: State<'_, AppState>,
+) -> AppResult<ApiSavedRequest> {
+    state
+        .command_bus
+        .api_request_move(workspace_id, request_id, collection_id, folder_path)
+        .await
+}
+
+#[tauri::command]
 pub async fn workspace_layout_get(
     workspace_id: String,
     state: State<'_, AppState>,
@@ -169,6 +241,19 @@ pub async fn api_request_save(
     state: State<'_, AppState>,
 ) -> AppResult<ApiSavedRequest> {
     state.command_bus.save_api_request(input).await
+}
+
+#[tauri::command]
+pub async fn api_request_update(
+    workspace_id: String,
+    request_id: String,
+    input: ApiRequestInput,
+    state: State<'_, AppState>,
+) -> AppResult<ApiSavedRequest> {
+    state
+        .command_bus
+        .update_api_request(workspace_id, request_id, input)
+        .await
 }
 
 #[tauri::command]

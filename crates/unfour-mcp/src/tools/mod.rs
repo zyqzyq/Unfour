@@ -201,6 +201,7 @@ mod tests {
                             workspace_id: "workspace-1".to_string(),
                             name: "Test Request".to_string(),
                             folder_path: None,
+                            collection_id: None,
                             method: "GET".to_string(),
                             url: "https://api.example.com/test".to_string(),
                             headers_json: "[]".to_string(),

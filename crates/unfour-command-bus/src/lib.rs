@@ -1,12 +1,11 @@
 use serde::{Deserialize, Serialize};
 use unfour_core::ai_reserved;
 use unfour_core::models::{
-    ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse,
-    ApiSavedRequest,
-    CredentialCreateInput, CredentialDeleteInput, CredentialInspectInput, CredentialMetadata,
-    CredentialRotateInput, DatabaseBrowseInput, DatabaseBrowseResult, DatabaseConnection,
-    DatabaseConnectionInput, DatabaseQueryInput, DatabaseQueryResult, DatabaseSchema,
-    DatabaseTestResult, KeyValue, SshCloseInput, SshConnectInput, SshConnection,
+    ApiCollection, ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse,
+    ApiSavedRequest, CredentialCreateInput, CredentialDeleteInput, CredentialInspectInput,
+    CredentialMetadata, CredentialRotateInput, DatabaseBrowseInput, DatabaseBrowseResult,
+    DatabaseConnection, DatabaseConnectionInput, DatabaseQueryInput, DatabaseQueryResult,
+    DatabaseSchema, DatabaseTestResult, KeyValue, SshCloseInput, SshConnectInput, SshConnection,
     SshConnectionInput, SshHostFingerprintInfo, SshHostKeyInput, SshKnownHostsExportResult,
     SshKnownHostsImportInput, SshKnownHostsImportResult, SshLogExport, SshLogExportInput,
     SshReconnectCancelInput, SshResizeInput, SshSessionEvent, SshSessionInput, SshSessionSummary,
@@ -35,13 +34,19 @@ pub enum ConnectionType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReadCommand {
     CurrentWorkspace,
-    ListConnections { connection_type: ConnectionType },
-    ApiListCollections { workspace_id: Option<String> },
+    ListConnections {
+        connection_type: ConnectionType,
+    },
+    ApiListCollections {
+        workspace_id: Option<String>,
+    },
     ApiListRequests {
         workspace_id: Option<String>,
         collection_id: Option<String>,
     },
-    ApiGetRequest { request_id: String },
+    ApiGetRequest {
+        request_id: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -338,44 +343,49 @@ impl CommandBus {
             ReadCommand::ApiListCollections { workspace_id } => {
                 let state = self.read_workspace_state().await?;
                 let ws_id = workspace_id.unwrap_or(state.active_workspace_id);
+                let collections = self.api_client.list_collections(ws_id.clone()).await?;
                 let requests = self.api_client.list_saved_requests(ws_id.clone()).await?;
 
-                let mut folder_counts: std::collections::BTreeMap<String, usize> =
+                let mut request_counts: std::collections::BTreeMap<String, usize> =
                     std::collections::BTreeMap::new();
+                let mut unfiled_count = 0;
                 for request in &requests {
-                    let folder = request.folder_path.clone().unwrap_or_default();
-                    *folder_counts.entry(folder).or_insert(0) += 1;
+                    if let Some(collection_id) = request.collection_id.as_deref() {
+                        *request_counts.entry(collection_id.to_string()).or_insert(0) += 1;
+                    } else {
+                        unfiled_count += 1;
+                    }
                 }
 
-                let collections = folder_counts
+                let mut summaries = collections
                     .into_iter()
-                    .map(|(folder, count)| {
-                        let name = if folder.is_empty() {
-                            "General".to_string()
-                        } else {
-                            folder.clone()
-                        };
-                        let id = if folder.is_empty() {
-                            String::new()
-                        } else {
-                            folder.clone()
-                        };
+                    .map(|collection| {
+                        let count = request_counts.remove(&collection.id).unwrap_or(0);
                         ApiCollectionSummary {
-                            id,
-                            name,
+                            id: collection.id,
+                            name: collection.name,
                             request_count: count,
-                            workspace_id: ws_id.clone(),
+                            workspace_id: collection.workspace_id,
                         }
                     })
                     .collect::<Vec<_>>();
+                if unfiled_count > 0 {
+                    summaries.insert(
+                        0,
+                        ApiCollectionSummary {
+                            id: String::new(),
+                            name: "General".to_string(),
+                            request_count: unfiled_count,
+                            workspace_id: ws_id.clone(),
+                        },
+                    );
+                }
 
-                Ok(ReadCommandResult::ApiCollections(
-                    ApiCollectionListResult {
-                        count: collections.len(),
-                        collections,
-                        source: "command-bus".to_string(),
-                    },
-                ))
+                Ok(ReadCommandResult::ApiCollections(ApiCollectionListResult {
+                    count: summaries.len(),
+                    collections: summaries,
+                    source: "command-bus".to_string(),
+                }))
             }
             ReadCommand::ApiListRequests {
                 workspace_id,
@@ -386,9 +396,10 @@ impl CommandBus {
                 let requests = self.api_client.list_saved_requests(ws_id.clone()).await?;
 
                 let filtered: Vec<_> = if let Some(ref cid) = collection_id {
+                    let cid = cid.trim();
                     requests
                         .into_iter()
-                        .filter(|r| r.folder_path.as_deref().unwrap_or("") == cid.as_str())
+                        .filter(|r| r.collection_id.as_deref().unwrap_or("") == cid)
                         .collect()
                 } else {
                     requests
@@ -397,11 +408,10 @@ impl CommandBus {
                 let summaries = filtered
                     .into_iter()
                     .map(|r| {
-                        let header_count = serde_json::from_str::<Vec<serde_json::Value>>(
-                            &r.headers_json,
-                        )
-                        .map(|v| v.len())
-                        .unwrap_or(0);
+                        let header_count =
+                            serde_json::from_str::<Vec<serde_json::Value>>(&r.headers_json)
+                                .map(|v| v.len())
+                                .unwrap_or(0);
                         let has_body = r.body.as_ref().is_some_and(|b| !b.is_empty());
                         let url_preview = truncate_url_preview(&r.url);
                         ApiRequestSummary {
@@ -409,7 +419,7 @@ impl CommandBus {
                             name: r.name,
                             method: r.method,
                             url_preview,
-                            collection_id: r.folder_path.unwrap_or_default(),
+                            collection_id: r.collection_id.unwrap_or_default(),
                             workspace_id: r.workspace_id,
                             has_body,
                             header_count,
@@ -425,12 +435,10 @@ impl CommandBus {
             }
             ReadCommand::ApiGetRequest { request_id } => {
                 let request = self.api_client.get_saved_request(&request_id).await?;
-                Ok(ReadCommandResult::ApiRequest(
-                    ApiRequestDetailResult {
-                        request,
-                        source: "command-bus".to_string(),
-                    },
-                ))
+                Ok(ReadCommandResult::ApiRequest(ApiRequestDetailResult {
+                    request,
+                    source: "command-bus".to_string(),
+                }))
             }
         }
     }
@@ -561,6 +569,114 @@ impl CommandBus {
             .await
     }
 
+    pub async fn api_collection_list(&self, workspace_id: String) -> AppResult<Vec<ApiCollection>> {
+        self.api_client.list_collections(workspace_id).await
+    }
+
+    pub async fn api_collection_create(
+        &self,
+        workspace_id: String,
+        name: String,
+    ) -> AppResult<ApiCollection> {
+        let collection = self
+            .api_client
+            .create_collection(workspace_id.clone(), name)
+            .await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "api.collection.create",
+                Some(&collection.id),
+                serde_json::json!({ "name": collection.name }),
+            )
+            .await?;
+        Ok(collection)
+    }
+
+    pub async fn api_collection_rename(
+        &self,
+        workspace_id: String,
+        collection_id: String,
+        name: String,
+    ) -> AppResult<ApiCollection> {
+        let collection = self
+            .api_client
+            .rename_collection(workspace_id.clone(), collection_id, name)
+            .await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "api.collection.rename",
+                Some(&collection.id),
+                serde_json::json!({ "name": collection.name }),
+            )
+            .await?;
+        Ok(collection)
+    }
+
+    pub async fn api_collection_delete(
+        &self,
+        workspace_id: String,
+        collection_id: String,
+    ) -> AppResult<Vec<ApiCollection>> {
+        let collections = self
+            .api_client
+            .delete_collection(workspace_id.clone(), collection_id.clone())
+            .await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "api.collection.delete",
+                Some(&collection_id),
+                serde_json::json!({ "softDelete": true, "cascade": true }),
+            )
+            .await?;
+        Ok(collections)
+    }
+
+    pub async fn api_collection_add_folder(
+        &self,
+        workspace_id: String,
+        collection_id: String,
+        folder_path: String,
+    ) -> AppResult<ApiCollection> {
+        let collection = self
+            .api_client
+            .add_collection_folder(workspace_id.clone(), collection_id, folder_path)
+            .await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "api.collection.add_folder",
+                Some(&collection.id),
+                serde_json::json!({ "folderCount": collection.folders.len() }),
+            )
+            .await?;
+        Ok(collection)
+    }
+
+    pub async fn api_request_move(
+        &self,
+        workspace_id: String,
+        request_id: String,
+        collection_id: Option<String>,
+        folder_path: Option<String>,
+    ) -> AppResult<ApiSavedRequest> {
+        let saved = self
+            .api_client
+            .move_request(workspace_id.clone(), request_id, collection_id, folder_path)
+            .await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "api.request.move",
+                Some(&saved.id),
+                serde_json::json!({ "collectionId": saved.collection_id }),
+            )
+            .await?;
+        Ok(saved)
+    }
+
     pub async fn workspace_layout(&self, workspace_id: String) -> AppResult<WorkspaceLayout> {
         self.workspace.layout(workspace_id).await
     }
@@ -614,6 +730,27 @@ impl CommandBus {
             .record(
                 Some(&saved.workspace_id),
                 "api.save_request",
+                Some(&saved.id),
+                serde_json::json!({ "name": saved.name, "method": saved.method }),
+            )
+            .await?;
+        Ok(saved)
+    }
+
+    pub async fn update_api_request(
+        &self,
+        workspace_id: String,
+        request_id: String,
+        input: ApiRequestInput,
+    ) -> AppResult<ApiSavedRequest> {
+        let saved = self
+            .api_client
+            .update_request(workspace_id.clone(), request_id, input)
+            .await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "api.update_request",
                 Some(&saved.id),
                 serde_json::json!({ "name": saved.name, "method": saved.method }),
             )
@@ -678,22 +815,18 @@ impl CommandBus {
         let saved = self.api_client.get_saved_request(request_id).await?;
 
         if saved.workspace_id != workspace_id {
-            return Err(unfour_core::AppError::NotFound(
-                "api request".to_string(),
-            ));
+            return Err(unfour_core::AppError::NotFound("api request".to_string()));
         }
 
-        let headers: Vec<KeyValue> =
-            serde_json::from_str(&saved.headers_json).unwrap_or_default();
-        let query: Vec<KeyValue> =
-            serde_json::from_str(&saved.query_json).unwrap_or_default();
-        let timeout_ms = timeout_ms_override
-            .map(|t| t.min(60_000));
+        let headers: Vec<KeyValue> = serde_json::from_str(&saved.headers_json).unwrap_or_default();
+        let query: Vec<KeyValue> = serde_json::from_str(&saved.query_json).unwrap_or_default();
+        let timeout_ms = timeout_ms_override.map(|t| t.min(60_000));
 
         let input = ApiRequestInput {
             workspace_id: saved.workspace_id.clone(),
             name: Some(saved.name.clone()),
             folder_path: saved.folder_path.clone(),
+            collection_id: saved.collection_id.clone(),
             method: saved.method.clone(),
             url: saved.url.clone(),
             headers,
@@ -1145,6 +1278,7 @@ mod tests {
             workspace_id: workspace_id.clone(),
             name: Some("Test GET request".to_string()),
             folder_path: None,
+            collection_id: None,
             method: "GET".to_string(),
             url: "https://httpbin.org/get".to_string(),
             headers: vec![],
@@ -1173,6 +1307,7 @@ mod tests {
             workspace_id: workspace_id.clone(),
             name: Some("Test POST request".to_string()),
             folder_path: Some("auth".to_string()),
+            collection_id: None,
             method: "POST".to_string(),
             url: "https://httpbin.org/post".to_string(),
             headers: vec![],
@@ -1296,5 +1431,70 @@ mod tests {
 
         assert!(result.connections.is_empty());
         assert_eq!(result.count, 0);
+    }
+
+    #[tokio::test]
+    async fn api_read_commands_use_real_collection_ids() {
+        let bus = test_bus().await;
+        let state = bus.list_workspaces().await.expect("list workspaces");
+        let workspace_id = state.active_workspace_id;
+        let collection = bus
+            .api_collection_create(workspace_id.clone(), "Public APIs".to_string())
+            .await
+            .expect("create collection");
+        let empty_collection = bus
+            .api_collection_create(workspace_id.clone(), "Empty APIs".to_string())
+            .await
+            .expect("create empty collection");
+        let saved = bus
+            .save_api_request(ApiRequestInput {
+                workspace_id: workspace_id.clone(),
+                name: Some("List users".to_string()),
+                folder_path: Some("Users".to_string()),
+                collection_id: Some(collection.id.clone()),
+                method: "GET".to_string(),
+                url: "https://example.test/users".to_string(),
+                headers: vec![],
+                query: vec![],
+                body: None,
+                body_kind: "json".to_string(),
+                timeout_ms: None,
+            })
+            .await
+            .expect("save request");
+
+        let collections = bus
+            .execute_read(ReadCommand::ApiListCollections {
+                workspace_id: Some(workspace_id.clone()),
+            })
+            .await
+            .expect("list api collections");
+        let ReadCommandResult::ApiCollections(collections) = collections else {
+            panic!("expected api collections");
+        };
+        let public = collections
+            .collections
+            .iter()
+            .find(|item| item.id == collection.id)
+            .expect("public collection summary");
+        assert_eq!(public.request_count, 1);
+        assert!(collections
+            .collections
+            .iter()
+            .any(|item| item.id == empty_collection.id && item.request_count == 0));
+
+        let requests = bus
+            .execute_read(ReadCommand::ApiListRequests {
+                workspace_id: Some(workspace_id),
+                collection_id: Some(collection.id.clone()),
+            })
+            .await
+            .expect("list api requests");
+        let ReadCommandResult::ApiRequests(requests) = requests else {
+            panic!("expected api requests");
+        };
+        assert_eq!(requests.count, 1);
+        assert_eq!(requests.requests[0].id, saved.id);
+        assert_eq!(requests.requests[0].collection_id, collection.id);
     }
 }

@@ -42,6 +42,7 @@ export type RequestDraft = {
   auth: ApiAuthConfig;
   body: string;
   bodyMode: RequestBodyMode;
+  collectionId: string | null;
   envVariables: KeyValue[];
   folderPath: string;
   formBody: KeyValue[];

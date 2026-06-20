@@ -32,10 +32,21 @@ export type ApiEnvironment = {
   updatedAt: string;
 };
 
+export type ApiCollection = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string | null;
+  folders: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ApiRequestInput = {
   workspaceId: string;
   name?: string;
   folderPath?: string | null;
+  collectionId?: string | null;
   method: string;
   url: string;
   headers: KeyValue[];
@@ -96,6 +107,7 @@ export type ApiSavedRequest = {
   workspaceId: string;
   name: string;
   folderPath: string | null;
+  collectionId: string | null;
   method: string;
   url: string;
   headersJson: string;

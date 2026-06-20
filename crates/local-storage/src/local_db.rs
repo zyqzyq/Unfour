@@ -90,6 +90,8 @@ impl LocalDb {
             sqlx::query(statement).execute(&self.pool).await?;
         }
         self.ensure_api_request_folder_path().await?;
+        self.ensure_api_request_collection_id().await?;
+        self.ensure_api_collection_folders_json().await?;
         self.ensure_host_key_columns().await?;
         // Order matters: backfill the legacy single environment into
         // api_environments before dropping the column it reads from.
@@ -113,6 +115,31 @@ impl LocalDb {
             sqlx::query("ALTER TABLE api_requests ADD COLUMN folder_path TEXT")
                 .execute(&self.pool)
                 .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn ensure_api_request_collection_id(&self) -> AppResult<()> {
+        if !self.column_exists("api_requests", "collection_id").await? {
+            sqlx::query("ALTER TABLE api_requests ADD COLUMN collection_id TEXT")
+                .execute(&self.pool)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn ensure_api_collection_folders_json(&self) -> AppResult<()> {
+        if !self
+            .column_exists("api_collections", "folders_json")
+            .await?
+        {
+            sqlx::query(
+                "ALTER TABLE api_collections ADD COLUMN folders_json TEXT NOT NULL DEFAULT '[]'",
+            )
+            .execute(&self.pool)
+            .await?;
         }
 
         Ok(())
@@ -326,6 +353,23 @@ const MIGRATIONS: &[&str] = &[
     )
     "#,
     "CREATE INDEX IF NOT EXISTS idx_api_environments_workspace ON api_environments(workspace_id)",
+    r#"
+    CREATE TABLE IF NOT EXISTS api_collections (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      folders_json TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      deleted_at TEXT,
+      revision INTEGER NOT NULL DEFAULT 1,
+      sync_status TEXT NOT NULL DEFAULT 'local',
+      remote_id TEXT,
+      FOREIGN KEY(workspace_id) REFERENCES workspaces(id)
+    )
+    "#,
+    "CREATE INDEX IF NOT EXISTS idx_api_collections_workspace ON api_collections(workspace_id)",
 ];
 
 impl LocalDb {
@@ -397,6 +441,7 @@ mod tests {
         assert!(names.contains(&"app_settings"));
         assert!(names.contains(&"workspace_settings"));
         assert!(names.contains(&"ssh_terminal_history"));
+        assert!(names.contains(&"api_collections"));
     }
 
     #[tokio::test]
@@ -424,6 +469,26 @@ mod tests {
         assert!(
             columns.iter().any(|(name,)| name == "folder_path"),
             "api_requests should have folder_path column"
+        );
+        assert!(
+            columns.iter().any(|(name,)| name == "collection_id"),
+            "api_requests should have collection_id column"
+        );
+    }
+
+    #[tokio::test]
+    async fn migrate_ensures_collection_folders_json_column() {
+        let db = test_db().await;
+        db.migrate().await.expect("migration");
+
+        let columns: Vec<(String,)> =
+            sqlx::query_as("SELECT name FROM pragma_table_info('api_collections')")
+                .fetch_all(db.pool())
+                .await
+                .expect("list columns");
+        assert!(
+            columns.iter().any(|(name,)| name == "folders_json"),
+            "api_collections should have folders_json column"
         );
     }
 

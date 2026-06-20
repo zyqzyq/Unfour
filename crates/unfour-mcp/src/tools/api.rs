@@ -16,7 +16,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                 name: "unfour.api.list_collections",
                 title: "List API Collections",
                 description:
-                    "Lists API request collections (derived from folder paths) for the active workspace through the Unfour command bus.",
+                    "Lists API request collections for the active workspace through the Unfour command bus.",
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -68,7 +68,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                         },
                         "collectionId": {
                             "type": "string",
-                            "description": "Optional collection (folder path) filter."
+                            "description": "Optional collection ID filter."
                         }
                     },
                     "additionalProperties": false
@@ -336,7 +336,7 @@ fn api_get_request(
         "bodyType": saved.body_kind,
         "truncated": body_truncated,
         "workspaceId": saved.workspace_id,
-        "collectionId": saved.folder_path.unwrap_or_default()
+        "collectionId": saved.collection_id.unwrap_or_default()
     });
 
     Ok(json!({
@@ -351,8 +351,7 @@ fn api_send_request(
 ) -> Result<Value, ToolCallError> {
     let arguments =
         object_with_allowed_keys(arguments, &["requestId", "environmentId", "timeoutMs"])?;
-    let request_id =
-        parse_required_string(&arguments, "requestId", "unfour.api.send_request")?;
+    let request_id = parse_required_string(&arguments, "requestId", "unfour.api.send_request")?;
     let timeout_ms = parse_optional_timeout(&arguments)?;
 
     match command_bus.execute_saved_api_request(&request_id, timeout_ms) {
@@ -557,6 +556,7 @@ mod tests {
                             workspace_id: "ws-1".to_string(),
                             name: "Create User".to_string(),
                             folder_path: Some("users".to_string()),
+                            collection_id: Some("users".to_string()),
                             method: "POST".to_string(),
                             url: "https://api.example.com/users?api_key=secret".to_string(),
                             headers_json: r#"[{"key":"Authorization","value":"Bearer secret-token","enabled":true},{"key":"Content-Type","value":"application/json","enabled":true}]"#.to_string(),
@@ -709,10 +709,18 @@ mod tests {
     #[test]
     fn api_tools_are_registered() {
         let definitions = api_registry().definitions();
-        assert!(definitions.iter().any(|d| d.name == "unfour.api.list_collections"));
-        assert!(definitions.iter().any(|d| d.name == "unfour.api.list_requests"));
-        assert!(definitions.iter().any(|d| d.name == "unfour.api.get_request"));
-        assert!(definitions.iter().any(|d| d.name == "unfour.api.send_request"));
+        assert!(definitions
+            .iter()
+            .any(|d| d.name == "unfour.api.list_collections"));
+        assert!(definitions
+            .iter()
+            .any(|d| d.name == "unfour.api.list_requests"));
+        assert!(definitions
+            .iter()
+            .any(|d| d.name == "unfour.api.get_request"));
+        assert!(definitions
+            .iter()
+            .any(|d| d.name == "unfour.api.send_request"));
     }
 
     #[test]
@@ -725,7 +733,11 @@ mod tests {
             "unfour.api.send_request",
         ] {
             let def = definitions.iter().find(|d| d.name == *name).unwrap();
-            assert_eq!(def.input_schema["type"], "object", "{} should have object input schema", name);
+            assert_eq!(
+                def.input_schema["type"], "object",
+                "{} should have object input schema",
+                name
+            );
         }
     }
 
@@ -739,8 +751,14 @@ mod tests {
 
         assert_eq!(result["isError"], false);
         assert_eq!(result["structuredContent"]["count"], 2);
-        assert_eq!(result["structuredContent"]["collections"][0]["name"], "Users");
-        assert_eq!(result["structuredContent"]["collections"][0]["requestCount"], 3);
+        assert_eq!(
+            result["structuredContent"]["collections"][0]["name"],
+            "Users"
+        );
+        assert_eq!(
+            result["structuredContent"]["collections"][0]["requestCount"],
+            3
+        );
         assert_eq!(result["structuredContent"]["source"], "command-bus");
     }
 
@@ -757,8 +775,14 @@ mod tests {
         assert_eq!(requests[0]["id"], "req-1");
         // token should be redacted in urlPreview
         let url_preview = requests[0]["urlPreview"].as_str().unwrap();
-        assert!(url_preview.contains("[REDACTED]"), "token should be redacted in urlPreview");
-        assert!(!url_preview.contains("secret123"), "raw token should not appear");
+        assert!(
+            url_preview.contains("[REDACTED]"),
+            "token should be redacted in urlPreview"
+        );
+        assert!(
+            !url_preview.contains("secret123"),
+            "raw token should not appear"
+        );
         assert!(url_preview.contains("page=1"), "safe params preserved");
     }
 
@@ -775,12 +799,18 @@ mod tests {
 
         // URL query params redacted
         let url = request["url"].as_str().unwrap();
-        assert!(url.contains("[REDACTED]"), "api_key should be redacted in URL");
+        assert!(
+            url.contains("[REDACTED]"),
+            "api_key should be redacted in URL"
+        );
         assert!(!url.contains("secret"), "raw secret should not appear");
 
         // Authorization header redacted
         let headers = request["headers"].as_array().unwrap();
-        let auth_header = headers.iter().find(|h| h["key"] == "Authorization").unwrap();
+        let auth_header = headers
+            .iter()
+            .find(|h| h["key"] == "Authorization")
+            .unwrap();
         assert_eq!(auth_header["value"], "[REDACTED]");
 
         // Content-Type preserved
@@ -794,17 +824,23 @@ mod tests {
 
         // Body password redacted
         let body = request["bodyPreview"].as_str().unwrap();
-        assert!(body.contains("[REDACTED]"), "password should be redacted in body");
-        assert!(!body.contains("secret123"), "raw password should not appear");
+        assert!(
+            body.contains("[REDACTED]"),
+            "password should be redacted in body"
+        );
+        assert!(
+            !body.contains("secret123"),
+            "raw password should not appear"
+        );
         assert!(body.contains("test"), "non-sensitive body values preserved");
 
+        assert_eq!(request["collectionId"], "users");
         assert_eq!(result["structuredContent"]["source"], "command-bus");
     }
 
     #[test]
     fn get_request_requires_request_id() {
-        let result = api_registry()
-            .call("unfour.api.get_request", json!({}));
+        let result = api_registry().call("unfour.api.get_request", json!({}));
         assert!(result.is_err(), "should fail without requestId");
     }
 
@@ -831,7 +867,10 @@ mod tests {
 
         // Body token redacted
         let body = content["bodyPreview"].as_str().unwrap();
-        assert!(body.contains("[REDACTED]"), "token should be redacted in response body");
+        assert!(
+            body.contains("[REDACTED]"),
+            "token should be redacted in response body"
+        );
         assert!(!body.contains("secret-jwt"), "raw token should not appear");
     }
 
@@ -840,15 +879,17 @@ mod tests {
         // Sending with 120000ms should be clamped - the stub ignores timeout,
         // but we verify the tool doesn't reject the call
         let result = api_registry()
-            .call("unfour.api.send_request", json!({ "requestId": "req-1", "timeoutMs": 120000 }))
+            .call(
+                "unfour.api.send_request",
+                json!({ "requestId": "req-1", "timeoutMs": 120000 }),
+            )
             .expect("should succeed");
         assert_eq!(result["structuredContent"]["ok"], true);
     }
 
     #[test]
     fn send_request_rejects_missing_request_id() {
-        let result = api_registry()
-            .call("unfour.api.send_request", json!({}));
+        let result = api_registry().call("unfour.api.send_request", json!({}));
         assert!(result.is_err(), "should fail without requestId");
     }
 
@@ -882,8 +923,7 @@ mod tests {
 
     #[test]
     fn unknown_tool_returns_error() {
-        let result = api_registry()
-            .call("unfour.api.nonexistent", json!({}));
+        let result = api_registry().call("unfour.api.nonexistent", json!({}));
         assert!(result.is_err());
         match result.unwrap_err() {
             ToolCallError::UnknownTool(name) => assert_eq!(name, "unfour.api.nonexistent"),

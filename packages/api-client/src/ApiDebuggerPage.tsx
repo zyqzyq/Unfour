@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, EmptyState, SplitPane, useI18n } from "@unfour/ui";
 import { useApiRequestTabs } from "./hooks/useApiRequestTabs";
+import { useApiCollections } from "./hooks/useApiCollections";
 import {
   getTabSaveState,
   requestTabTitle,
@@ -13,7 +14,7 @@ import { ApiRequestTabs } from "./components/ApiRequestTabs";
 import { ApiRequestBar } from "./components/ApiRequestBar";
 import { ApiRequestEditor } from "./components/ApiRequestEditor";
 import { ApiResponseViewer } from "./components/ApiResponseViewer";
-import { ApiSaveDialog } from "./components/ApiSaveDialog";
+import { ApiSaveDialog, type SaveIdentity } from "./components/ApiSaveDialog";
 import { ApiCloseRequestDialog } from "./components/ApiCloseRequestDialog";
 import { ApiClientSidebar } from "./components/ApiClientSidebar";
 
@@ -52,6 +53,8 @@ export function ApiDebuggerPage({
     state,
     updateDraft,
   } = useApiRequestTabs(workspaceId);
+  const { collections, createMut: createCollectionMut } =
+    useApiCollections(workspaceId);
   const [saveDialogTabId, setSaveDialogTabId] = useState<string | null>(null);
   const [closeDialogTabId, setCloseDialogTabId] = useState<string | null>(null);
   const closeAfterSaveRef = useRef<string | null>(null);
@@ -153,12 +156,27 @@ export function ApiDebuggerPage({
     }
   }
 
-  async function saveWithIdentity(identity: { folderPath: string; name: string }) {
+  async function saveWithIdentity(identity: SaveIdentity) {
     if (!saveDialogTab) {
       return;
     }
     const originalId = saveDialogTab.id;
-    const savedRequestId = await saveTab(saveDialogTab, identity);
+    let collectionId = identity.collectionId;
+    if (identity.createCollectionName) {
+      try {
+        const created = await createCollectionMut.mutateAsync(
+          identity.createCollectionName,
+        );
+        collectionId = created.id;
+      } catch {
+        return;
+      }
+    }
+    const savedRequestId = await saveTab(saveDialogTab, {
+      collectionId,
+      folderPath: identity.folderPath,
+      name: identity.name,
+    });
     if (savedRequestId) {
       setSaveDialogTabId(null);
       if (closeAfterSaveRef.current === originalId) {
@@ -376,9 +394,12 @@ export function ApiDebuggerPage({
       </div>
       {saveDialogTab && (
         <ApiSaveDialog
+          collections={collections}
+          defaultCollectionId={saveDialogTab.draft.collectionId}
           defaultFolder={saveDialogTab.draft.folderPath}
           defaultName={saveDialogTab.draft.name}
           key={saveDialogTab.id}
+          savedRequests={savedRequests}
           onCancel={() => {
             closeAfterSaveRef.current = null;
             setSaveDialogTabId(null);

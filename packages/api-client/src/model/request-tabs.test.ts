@@ -214,6 +214,7 @@ function savedRequest(id: string): ApiSavedRequest {
     workspaceId: "ws-1",
     name: "Health check",
     folderPath: "Examples",
+    collectionId: null,
     method: "GET",
     url: "https://example.test",
     headersJson: "[]",

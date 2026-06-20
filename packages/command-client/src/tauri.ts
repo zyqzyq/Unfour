@@ -36,6 +36,7 @@ import type {
   SshSessionInput,
   SshSessionSummary,
   SystemHealth,
+  ApiCollection,
   ApiEnvironment,
   Workspace,
   WorkspaceLayout,
@@ -90,6 +91,26 @@ let mockEnvironments: ApiEnvironment[] = [
     updatedAt: new Date().toISOString(),
   },
 ];
+
+let mockCollections: ApiCollection[] = [];
+
+function mockCollectionList(workspaceId: string) {
+  return mockCollections
+    .filter((collection) => collection.workspaceId === workspaceId)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function assertMockCollection(workspaceId: string, collectionId: string | null | undefined) {
+  if (
+    collectionId &&
+    !mockCollections.some(
+      (collection) =>
+        collection.workspaceId === workspaceId && collection.id === collectionId,
+    )
+  ) {
+    throw new Error("api collection not found");
+  }
+}
 
 function mockEnvList(workspaceId: string) {
   return mockEnvironments
@@ -230,6 +251,98 @@ async function mockInvoke<T>(
     return mockEnvList(workspaceId) as T;
   }
 
+  if (command === "api_collection_list") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    return mockCollectionList(workspaceId) as T;
+  }
+
+  if (command === "api_collection_create") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    const now = new Date().toISOString();
+    const collection: ApiCollection = {
+      id: crypto.randomUUID(),
+      workspaceId,
+      name: String(args?.name ?? "New Collection").trim() || "New Collection",
+      description: null,
+      folders: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    mockCollections = [...mockCollections, collection];
+    return collection as T;
+  }
+
+  if (command === "api_collection_rename") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    const collectionId = String(args?.collectionId ?? "");
+    const collection = mockCollections.find(
+      (item) => item.workspaceId === workspaceId && item.id === collectionId,
+    );
+    if (!collection) throw new Error("api collection not found");
+    collection.name = String(args?.name ?? collection.name).trim() || collection.name;
+    collection.updatedAt = new Date().toISOString();
+    return collection as T;
+  }
+
+  if (command === "api_collection_delete") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    const collectionId = String(args?.collectionId ?? "");
+    const existed = mockCollections.some(
+      (item) => item.workspaceId === workspaceId && item.id === collectionId,
+    );
+    if (!existed) throw new Error("api collection not found");
+    mockCollections = mockCollections.filter(
+      (item) => !(item.workspaceId === workspaceId && item.id === collectionId),
+    );
+    // Cascade: drop the collection's saved requests.
+    mockSavedRequests = mockSavedRequests.filter(
+      (item) => !(item.workspaceId === workspaceId && item.collectionId === collectionId),
+    );
+    return mockCollectionList(workspaceId) as T;
+  }
+
+  if (command === "api_collection_add_folder") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    const collectionId = String(args?.collectionId ?? "");
+    const folderPath = normalizeFolderPath(
+      (args?.folderPath as string | null | undefined) ?? null,
+    );
+    const collection = mockCollections.find(
+      (item) => item.workspaceId === workspaceId && item.id === collectionId,
+    );
+    if (!collection) throw new Error("api collection not found");
+    if (folderPath && !collection.folders.includes(folderPath)) {
+      collection.folders = [...collection.folders, folderPath].sort();
+    }
+    collection.updatedAt = new Date().toISOString();
+    return collection as T;
+  }
+
+  if (command === "api_request_move") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    const requestId = String(args?.requestId ?? "");
+    const collectionId = args?.collectionId ? String(args.collectionId) : null;
+    const folderPath = normalizeFolderPath(
+      (args?.folderPath as string | null | undefined) ?? null,
+    );
+    const request = mockSavedRequests.find(
+      (item) => item.workspaceId === workspaceId && item.id === requestId,
+    );
+    if (!request) throw new Error("api request not found");
+    if (
+      collectionId &&
+      !mockCollections.some(
+        (item) => item.workspaceId === workspaceId && item.id === collectionId,
+      )
+    ) {
+      throw new Error("api collection not found");
+    }
+    request.collectionId = collectionId;
+    request.folderPath = folderPath;
+    request.updatedAt = new Date().toISOString();
+    return request as T;
+  }
+
   if (command === "workspace_layout_get") {
     const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
     return getMockLayout(workspaceId) as T;
@@ -261,16 +374,19 @@ async function mockInvoke<T>(
   }
 
   if (command === "api_saved_requests") {
-    return mockSavedRequests as T;
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    return mockSavedRequests.filter((item) => item.workspaceId === workspaceId) as T;
   }
 
   if (command === "api_request_save") {
     const input = args?.input as ApiRequestInput;
+    assertMockCollection(input.workspaceId, input.collectionId);
     const saved: ApiSavedRequest = {
       id: crypto.randomUUID(),
       workspaceId: input.workspaceId,
       name: input.name || `${input.method} ${input.url}`,
       folderPath: normalizeFolderPath(input.folderPath),
+      collectionId: input.collectionId ?? null,
       method: input.method,
       url: input.url,
       headersJson: JSON.stringify(redactHeaders(input.headers)),
@@ -285,6 +401,40 @@ async function mockInvoke<T>(
       remoteId: null,
     };
     mockSavedRequests = [saved, ...mockSavedRequests];
+    return saved as T;
+  }
+
+  if (command === "api_request_update") {
+    const input = args?.input as ApiRequestInput;
+    const workspaceId = String(args?.workspaceId ?? input.workspaceId);
+    const requestId = String(args?.requestId ?? "");
+    if (workspaceId !== input.workspaceId) throw new Error("api request workspace mismatch");
+    assertMockCollection(workspaceId, input.collectionId);
+    const index = mockSavedRequests.findIndex(
+      (item) => item.workspaceId === workspaceId && item.id === requestId,
+    );
+    if (index === -1) throw new Error("api request not found");
+    const current = mockSavedRequests[index];
+    const saved: ApiSavedRequest = {
+      ...current,
+      name: input.name || `${input.method} ${input.url}`,
+      folderPath: normalizeFolderPath(input.folderPath),
+      collectionId: input.collectionId ?? null,
+      method: input.method,
+      url: input.url,
+      headersJson: JSON.stringify(redactHeaders(input.headers)),
+      queryJson: JSON.stringify(input.query),
+      body: redactJsonBody(input.body),
+      bodyKind: input.bodyKind,
+      updatedAt: new Date().toISOString(),
+      revision: current.revision + 1,
+      syncStatus: "pending",
+    };
+    mockSavedRequests = [
+      ...mockSavedRequests.slice(0, index),
+      saved,
+      ...mockSavedRequests.slice(index + 1),
+    ];
     return saved as T;
   }
 
@@ -1009,6 +1159,59 @@ export function activateApiEnvironment(
   });
 }
 
+export function listApiCollections(workspaceId: string) {
+  return call<ApiCollection[]>("api_collection_list", { workspaceId });
+}
+
+export function createApiCollection(workspaceId: string, name: string) {
+  return call<ApiCollection>("api_collection_create", { workspaceId, name });
+}
+
+export function renameApiCollection(
+  workspaceId: string,
+  collectionId: string,
+  name: string,
+) {
+  return call<ApiCollection>("api_collection_rename", {
+    workspaceId,
+    collectionId,
+    name,
+  });
+}
+
+export function deleteApiCollection(workspaceId: string, collectionId: string) {
+  return call<ApiCollection[]>("api_collection_delete", {
+    workspaceId,
+    collectionId,
+  });
+}
+
+export function addApiCollectionFolder(
+  workspaceId: string,
+  collectionId: string,
+  folderPath: string,
+) {
+  return call<ApiCollection>("api_collection_add_folder", {
+    workspaceId,
+    collectionId,
+    folderPath,
+  });
+}
+
+export function moveApiRequest(
+  workspaceId: string,
+  requestId: string,
+  collectionId: string | null,
+  folderPath: string | null,
+) {
+  return call<ApiSavedRequest>("api_request_move", {
+    workspaceId,
+    requestId,
+    collectionId,
+    folderPath,
+  });
+}
+
 export function getWorkspaceLayout(workspaceId: string) {
   return call<WorkspaceLayout>("workspace_layout_get", { workspaceId });
 }
@@ -1026,6 +1229,18 @@ export function sendApiRequest(input: ApiRequestInput) {
 
 export function saveApiRequest(input: ApiRequestInput) {
   return call<ApiSavedRequest>("api_request_save", { input });
+}
+
+export function updateApiRequest(
+  workspaceId: string,
+  requestId: string,
+  input: ApiRequestInput,
+) {
+  return call<ApiSavedRequest>("api_request_update", {
+    workspaceId,
+    requestId,
+    input,
+  });
 }
 
 export function duplicateApiRequest(workspaceId: string, requestId: string) {

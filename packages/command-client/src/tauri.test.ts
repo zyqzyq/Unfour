@@ -4,14 +4,17 @@ import {
   cancelSshReconnect,
   closeSshSession,
   connectSshSession,
+  createApiCollection,
   executeDatabaseQuery,
   getDatabaseSchema,
   getSshSessionHistory,
+  listSavedApiRequests,
   saveApiRequest,
   saveDatabaseConnection,
   saveSshConnection,
   sendSshInput,
   testDatabaseConnection,
+  updateApiRequest,
 } from "./tauri";
 
 describe("SSH browser mock lifecycle", () => {
@@ -183,6 +186,54 @@ describe("API body redaction in browser mock", () => {
       bodyKind: "none",
     });
     expect(emptySaved.body).toBeNull();
+  });
+
+  it("updates an existing saved request without creating a duplicate", async () => {
+    const workspaceId = `mock-update-${crypto.randomUUID()}`;
+    const collection = await createApiCollection(workspaceId, "Public APIs");
+    const saved = await saveApiRequest({
+      workspaceId,
+      name: "Original",
+      collectionId: collection.id,
+      method: "GET",
+      url: "https://api.example.com/original",
+      headers: [],
+      query: [],
+      body: undefined,
+      bodyKind: "none",
+    });
+
+    const updated = await updateApiRequest(workspaceId, saved.id, {
+      workspaceId,
+      name: "Updated",
+      collectionId: null,
+      folderPath: "Moved",
+      method: "POST",
+      url: "https://api.example.com/updated",
+      headers: [],
+      query: [],
+      body: "{}",
+      bodyKind: "json",
+    });
+
+    expect(updated.id).toBe(saved.id);
+    expect(updated.name).toBe("Updated");
+    expect(updated.collectionId).toBeNull();
+    expect(updated.folderPath).toBe("Moved");
+    await expect(listSavedApiRequests(workspaceId)).resolves.toHaveLength(1);
+    await expect(
+      saveApiRequest({
+        workspaceId,
+        name: "Bad collection",
+        collectionId: "missing",
+        method: "GET",
+        url: "https://api.example.com/bad",
+        headers: [],
+        query: [],
+        body: undefined,
+        bodyKind: "none",
+      }),
+    ).rejects.toThrow("api collection not found");
   });
 });
 

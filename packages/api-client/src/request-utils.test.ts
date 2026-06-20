@@ -5,6 +5,9 @@ import {
   parseKeyValues,
   savedRequestToInput,
   groupSavedRequests,
+  groupRequestsByCollection,
+  buildFolderTree,
+  collectTreeRequests,
   duplicateEnvironmentKeys,
   headersWithAuthMetadata,
   isSensitiveKey,
@@ -15,7 +18,11 @@ import {
   stripUrlQuery,
   syncUrlQuery,
 } from "./request-utils";
-import type { ApiSavedRequest, KeyValue } from "@unfour/command-client";
+import type {
+  ApiCollection,
+  ApiSavedRequest,
+  KeyValue,
+} from "@unfour/command-client";
 
 describe("parseKeyValues", () => {
   it("parses valid JSON array", () => {
@@ -97,6 +104,7 @@ describe("body field helpers", () => {
       auth: { type: "none" as const },
       body: "",
       bodyMode: "form" as const,
+      collectionId: null,
       envVariables: [],
       folderPath: "",
       formBody: [
@@ -140,6 +148,7 @@ describe("savedRequestToInput", () => {
       workspaceId: "ws-1",
       name: "Get Users",
       folderPath: "Examples / Auth",
+      collectionId: null,
       method: "GET",
       url: "https://api.example.com/users",
       headersJson: JSON.stringify([
@@ -193,6 +202,79 @@ describe("groupSavedRequests", () => {
 
   it("returns empty for no items", () => {
     expect(groupSavedRequests([])).toEqual([]);
+  });
+});
+
+describe("buildFolderTree", () => {
+  it("nests folders by path segment and keeps folderless requests at root", () => {
+    const tree = buildFolderTree([
+      makeSavedRequest("Login", "Auth"),
+      makeSavedRequest("Refresh", "Auth/Tokens"),
+      makeSavedRequest("Root Request", null),
+    ]);
+    expect(tree.rootRequests.map((r) => r.name)).toEqual(["Root Request"]);
+    const auth = tree.folders.find((f) => f.name === "Auth");
+    expect(auth?.path).toBe("Auth");
+    expect(auth?.requests.map((r) => r.name)).toEqual(["Login"]);
+    const tokens = auth?.folders.find((f) => f.name === "Tokens");
+    expect(tokens?.path).toBe("Auth/Tokens");
+    expect(tokens?.requests.map((r) => r.name)).toEqual(["Refresh"]);
+  });
+
+  it("includes empty extra folders that have no requests", () => {
+    const tree = buildFolderTree([], ["Drafts", "Auth/Tokens"]);
+    expect(tree.folders.map((f) => f.name).sort()).toEqual(["Auth", "Drafts"]);
+    const auth = tree.folders.find((f) => f.name === "Auth");
+    expect(auth?.folders[0].name).toBe("Tokens");
+    expect(collectTreeRequests(tree)).toEqual([]);
+  });
+});
+
+describe("groupRequestsByCollection", () => {
+  const collections: ApiCollection[] = [
+    makeCollection("c-1", "Beta"),
+    makeCollection("c-2", "Alpha", ["Drafts"]),
+  ];
+
+  it("returns collections sorted by name, with empty collections kept", () => {
+    const groups = groupRequestsByCollection(
+      [makeSavedRequest("In Beta", null, "c-1")],
+      collections,
+      "Unfiled",
+    );
+    expect(groups.map((group) => group.name)).toEqual(["Alpha", "Beta"]);
+    const alpha = groups.find((group) => group.id === "c-2");
+    // Empty collection still surfaces its persisted empty folder.
+    expect(alpha?.tree.rootRequests).toEqual([]);
+    expect(alpha?.tree.folders[0].name).toBe("Drafts");
+    const beta = groups.find((group) => group.id === "c-1");
+    expect(beta?.tree.rootRequests[0].name).toBe("In Beta");
+  });
+
+  it("places uncollected and orphaned requests under Unfiled first", () => {
+    const groups = groupRequestsByCollection(
+      [
+        makeSavedRequest("No Collection", null, null),
+        makeSavedRequest("Orphan", null, "missing-collection"),
+        makeSavedRequest("In Beta", "Auth", "c-1"),
+      ],
+      collections,
+      "Unfiled",
+    );
+    expect(groups[0].id).toBeNull();
+    expect(groups[0].name).toBe("Unfiled");
+    const unfiledNames = collectTreeRequests(groups[0].tree).map((r) => r.name);
+    expect(unfiledNames).toContain("No Collection");
+    expect(unfiledNames).toContain("Orphan");
+  });
+
+  it("omits Unfiled when every request belongs to a collection", () => {
+    const groups = groupRequestsByCollection(
+      [makeSavedRequest("In Beta", null, "c-1")],
+      collections,
+      "Unfiled",
+    );
+    expect(groups.some((group) => group.id === null)).toBe(false);
   });
 });
 
@@ -300,12 +382,17 @@ describe("parseCollectionImport", () => {
   });
 });
 
-function makeSavedRequest(name: string, folderPath: string | null): ApiSavedRequest {
+function makeSavedRequest(
+  name: string,
+  folderPath: string | null,
+  collectionId: string | null = null,
+): ApiSavedRequest {
   return {
     id: `id-${name}`,
     workspaceId: "ws-1",
     name,
     folderPath,
+    collectionId,
     method: "GET",
     url: "https://example.com",
     headersJson: "[]",
@@ -318,5 +405,21 @@ function makeSavedRequest(name: string, folderPath: string | null): ApiSavedRequ
     revision: 1,
     syncStatus: "local",
     remoteId: null,
+  };
+}
+
+function makeCollection(
+  id: string,
+  name: string,
+  folders: string[] = [],
+): ApiCollection {
+  return {
+    id,
+    workspaceId: "ws-1",
+    name,
+    description: null,
+    folders,
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
   };
 }

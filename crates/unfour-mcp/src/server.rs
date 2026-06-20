@@ -205,6 +205,7 @@ mod tests {
                             workspace_id: "workspace-1".to_string(),
                             name: "Test".to_string(),
                             folder_path: None,
+                            collection_id: None,
                             method: "GET".to_string(),
                             url: "https://example.com".to_string(),
                             headers_json: "[]".to_string(),
@@ -361,7 +362,10 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(responses.len(), 3);
-        assert_eq!(responses[1]["result"]["tools"].as_array().unwrap().len(), 13);
+        assert_eq!(
+            responses[1]["result"]["tools"].as_array().unwrap().len(),
+            13
+        );
         assert_eq!(
             responses[2]["result"]["structuredContent"],
             json!({

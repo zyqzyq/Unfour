@@ -94,6 +94,21 @@
     "empty": {
       "noRequestOpen": "当前没有打开的请求"
     },
+    "collection": {
+      "new": "新建集合",
+      "newCollection": "新建集合",
+      "newFolder": "新建目录",
+      "addFolder": "添加子目录",
+      "namePlaceholder": "名称",
+      "defaultName": "新建集合",
+      "rename": "重命名集合",
+      "delete": "删除集合",
+      "deleteConfirm": "删除该集合及其全部已保存请求？此操作无法撤销。",
+      "export": "导出集合",
+      "moveTo": "移动到",
+      "unfiled": "未分组",
+      "none": "还没有集合。新建一个来组织请求。"
+    },
     "environment": {
       "active": "当前环境",
       "activate": "设为当前",
@@ -139,6 +154,24 @@
       "restClient": "REST 客户端",
       "searchAria": "搜索 API 请求",
       "searchPlaceholder": "搜索请求"
+    },
+    "save": {
+      "title": "保存请求",
+      "description": "选择易识别的名称、集合和文件夹。",
+      "name": "名称",
+      "collection": "集合",
+      "location": "保存到",
+      "subfolder": "新建子目录（可选）",
+      "subfolderPlaceholder": "子目录名称",
+      "unfiled": "未分组",
+      "newCollection": "+ 新建集合",
+      "newCollectionLabel": "新集合名称",
+      "newCollectionPlaceholder": "集合名称",
+      "folder": "文件夹",
+      "folderPlaceholder": "Examples / Auth",
+      "cancel": "取消",
+      "save": "保存",
+      "saving": "保存中"
     },
     "request": {
       "method": "HTTP 方法",

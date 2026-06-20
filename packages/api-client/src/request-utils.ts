@@ -1,4 +1,5 @@
 import type {
+  ApiCollection,
   ApiHistoryDetail,
   ApiRequestInput,
   ApiSavedRequest,
@@ -48,6 +49,7 @@ export function savedRequestToInput(
     workspaceId,
     name: saved.name,
     folderPath: saved.folderPath,
+    collectionId: saved.collectionId,
     method: saved.method,
     url: saved.url,
     headers: parseKeyValues(saved.headersJson),
@@ -63,6 +65,7 @@ export function historyDetailToInput(history: ApiHistoryDetail): ApiRequestInput
     workspaceId: history.workspaceId,
     name: history.name ?? `${history.method} ${history.url}`,
     folderPath: null,
+    collectionId: null,
     method: history.method,
     url: history.url,
     headers: parseKeyValues(history.requestHeadersJson),
@@ -107,6 +110,8 @@ function normalizeImportedRequest(
     workspaceId,
     name: typeof candidate.name === "string" ? candidate.name : undefined,
     folderPath: typeof candidate.folderPath === "string" ? candidate.folderPath : null,
+    collectionId:
+      typeof candidate.collectionId === "string" ? candidate.collectionId : null,
     method: candidate.method.toUpperCase(),
     url: candidate.url,
     headers: parseKeyValues(candidate.headers),
@@ -155,6 +160,139 @@ export function groupSavedRequests(items: ApiSavedRequest[]) {
       folder,
       items: groupItems.sort((left, right) => left.name.localeCompare(right.name)),
     }));
+}
+
+export type FolderNode = {
+  folders: FolderNode[];
+  name: string;
+  path: string;
+  requests: ApiSavedRequest[];
+};
+
+export type FolderTree = {
+  folders: FolderNode[];
+  rootRequests: ApiSavedRequest[];
+};
+
+export type ApiCollectionGroup = {
+  collection: ApiCollection | null;
+  id: string | null;
+  name: string;
+  tree: FolderTree;
+};
+
+/**
+ * Build a nested folder tree from `folderPath` segments. `extraFolders` are
+ * empty folder paths (persisted on the collection) that should appear even
+ * without any saved request. Folderless requests land at the root.
+ */
+export function buildFolderTree(
+  requests: ApiSavedRequest[],
+  extraFolders: string[] = [],
+): FolderTree {
+  const root: FolderNode = { folders: [], name: "", path: "", requests: [] };
+
+  function ensureFolder(rawPath: string): FolderNode {
+    const segments = rawPath
+      .split("/")
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+    let node = root;
+    let accumulated = "";
+    for (const segment of segments) {
+      accumulated = accumulated ? `${accumulated}/${segment}` : segment;
+      let child = node.folders.find((folder) => folder.name === segment);
+      if (!child) {
+        child = { folders: [], name: segment, path: accumulated, requests: [] };
+        node.folders.push(child);
+      }
+      node = child;
+    }
+    return node;
+  }
+
+  for (const folder of extraFolders) {
+    if (folder.trim()) {
+      ensureFolder(folder);
+    }
+  }
+  for (const request of requests) {
+    const path = request.folderPath?.trim();
+    if (path) {
+      ensureFolder(path).requests.push(request);
+    } else {
+      root.requests.push(request);
+    }
+  }
+
+  sortFolderNode(root);
+  return { folders: root.folders, rootRequests: root.requests };
+}
+
+function sortFolderNode(node: FolderNode) {
+  node.folders.sort((left, right) => left.name.localeCompare(right.name));
+  node.requests.sort((left, right) => left.name.localeCompare(right.name));
+  for (const child of node.folders) {
+    sortFolderNode(child);
+  }
+}
+
+/** Flatten every request in a folder tree (root + all nested folders). */
+export function collectTreeRequests(tree: FolderTree): ApiSavedRequest[] {
+  const result = [...tree.rootRequests];
+  const walk = (folders: FolderNode[]) => {
+    for (const folder of folders) {
+      result.push(...folder.requests);
+      walk(folder.folders);
+    }
+  };
+  walk(tree.folders);
+  return result;
+}
+
+/**
+ * Group saved requests under their owning collection, then into a nested folder
+ * tree (collection-owned empty folders included). Empty collections are still
+ * returned so they remain visible. Requests with no collection — or whose
+ * collection no longer exists — fall under a synthetic "Unfiled" group first.
+ */
+export function groupRequestsByCollection(
+  requests: ApiSavedRequest[],
+  collections: ApiCollection[],
+  unfiledLabel: string,
+): ApiCollectionGroup[] {
+  const byCollection = new Map<string | null, ApiSavedRequest[]>();
+  for (const request of requests) {
+    const key = request.collectionId ?? null;
+    byCollection.set(key, [...(byCollection.get(key) ?? []), request]);
+  }
+
+  const known = new Set(collections.map((collection) => collection.id));
+  const groups: ApiCollectionGroup[] = [...collections]
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .map((collection) => ({
+      collection,
+      id: collection.id,
+      name: collection.name,
+      tree: buildFolderTree(
+        byCollection.get(collection.id) ?? [],
+        collection.folders,
+      ),
+    }));
+
+  const unfiled = requests.filter(
+    (request) => !request.collectionId || !known.has(request.collectionId),
+  );
+  if (unfiled.length) {
+    groups.unshift({
+      collection: null,
+      id: null,
+      name: unfiledLabel,
+      tree: buildFolderTree(unfiled),
+    });
+  }
+
+  return groups;
 }
 
 export function duplicateEnvironmentKeys(variables: KeyValue[]) {

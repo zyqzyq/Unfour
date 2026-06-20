@@ -4,7 +4,7 @@ use reqwest::{Client, Method, Url};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 use unfour_core::models::{
-    ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse,
+    ApiCollection, ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse,
     ApiSavedRequest, KeyValue,
 };
 use unfour_core::redaction::{redact_json_body, redact_key_values};
@@ -29,7 +29,9 @@ impl ApiClientService {
     pub async fn send(&self, input: ApiRequestInput) -> AppResult<ApiResponse> {
         validate_workspace_id(&input.workspace_id)?;
         let method = parse_method(&input.method)?;
-        let environment = self.active_environment_variables(&input.workspace_id).await?;
+        let environment = self
+            .active_environment_variables(&input.workspace_id)
+            .await?;
         let resolved = resolve_input(input.clone(), &environment)?;
         let url = build_url(&resolved.url, &resolved.query)?;
         let timeout =
@@ -97,10 +99,7 @@ impl ApiClientService {
         })
     }
 
-    pub async fn list_environments(
-        &self,
-        workspace_id: String,
-    ) -> AppResult<Vec<ApiEnvironment>> {
+    pub async fn list_environments(&self, workspace_id: String) -> AppResult<Vec<ApiEnvironment>> {
         validate_workspace_id(&workspace_id)?;
         let rows = sqlx::query_as::<_, EnvironmentRow>(
             r#"
@@ -397,27 +396,24 @@ impl ApiClientService {
 
     pub async fn save_request(&self, input: ApiRequestInput) -> AppResult<ApiSavedRequest> {
         validate_workspace_id(&input.workspace_id)?;
-        let folder_path = normalize_folder_path(input.folder_path.clone())?;
-        let name = input
-            .name
-            .clone()
-            .unwrap_or_else(|| format!("{} {}", input.method.to_uppercase(), input.url));
+        let (name, folder_path, collection_id) = self.saved_request_fields(&input).await?;
         let now = Utc::now().to_rfc3339();
         let id = Uuid::new_v4().to_string();
 
         sqlx::query(
             r#"
             INSERT INTO api_requests (
-              id, workspace_id, name, folder_path, method, url, headers_json, query_json, body,
-              body_kind, created_at, updated_at, revision, sync_status
+              id, workspace_id, name, folder_path, collection_id, method, url, headers_json,
+              query_json, body, body_kind, created_at, updated_at, revision, sync_status
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11, 1, 'local')
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12, 1, 'local')
             "#,
         )
         .bind(&id)
         .bind(&input.workspace_id)
         .bind(name)
         .bind(folder_path)
+        .bind(collection_id)
         .bind(input.method.to_uppercase())
         .bind(input.url)
         .bind(serde_json::to_string(&redact_headers(&input.headers))?)
@@ -431,6 +427,60 @@ impl ApiClientService {
         self.get_saved_request(&id).await
     }
 
+    pub async fn update_request(
+        &self,
+        workspace_id: String,
+        request_id: String,
+        input: ApiRequestInput,
+    ) -> AppResult<ApiSavedRequest> {
+        validate_workspace_id(&workspace_id)?;
+        validate_workspace_id(&input.workspace_id)?;
+        if workspace_id != input.workspace_id {
+            return Err(AppError::Validation(
+                "api request workspace mismatch".to_string(),
+            ));
+        }
+        if request_id.trim().is_empty() {
+            return Err(AppError::Validation(
+                "api request id cannot be empty".to_string(),
+            ));
+        }
+
+        let (name, folder_path, collection_id) = self.saved_request_fields(&input).await?;
+        let now = Utc::now().to_rfc3339();
+
+        let result = sqlx::query(
+            r#"
+            UPDATE api_requests
+            SET name = ?1, folder_path = ?2, collection_id = ?3, method = ?4, url = ?5,
+                headers_json = ?6, query_json = ?7, body = ?8, body_kind = ?9,
+                updated_at = ?10, revision = revision + 1, sync_status = 'pending'
+            WHERE workspace_id = ?11 AND id = ?12 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(name)
+        .bind(folder_path)
+        .bind(collection_id)
+        .bind(input.method.to_uppercase())
+        .bind(input.url)
+        .bind(serde_json::to_string(&redact_headers(&input.headers))?)
+        .bind(serde_json::to_string(&input.query)?)
+        .bind(input.body.as_deref().map(|b| redact_json_body(b).0))
+        .bind(input.body_kind)
+        .bind(now)
+        .bind(&workspace_id)
+        .bind(&request_id)
+        .execute(self.db.pool())
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound("api request".to_string()));
+        }
+
+        self.get_saved_request_for_workspace(&workspace_id, &request_id)
+            .await
+    }
+
     pub async fn list_saved_requests(
         &self,
         workspace_id: String,
@@ -440,8 +490,9 @@ impl ApiClientService {
         let items = sqlx::query_as::<_, ApiSavedRequest>(
             r#"
             SELECT
-              id, workspace_id, name, folder_path, method, url, headers_json, query_json, body,
-              body_kind, created_at, updated_at, deleted_at, revision, sync_status, remote_id
+              id, workspace_id, name, folder_path, collection_id, method, url, headers_json,
+              query_json, body, body_kind, created_at, updated_at, deleted_at, revision,
+              sync_status, remote_id
             FROM api_requests
             WHERE workspace_id = ?1 AND deleted_at IS NULL
             ORDER BY COALESCE(folder_path, ''), updated_at DESC
@@ -476,16 +527,17 @@ impl ApiClientService {
         sqlx::query(
             r#"
             INSERT INTO api_requests (
-              id, workspace_id, name, folder_path, method, url, headers_json, query_json, body,
-              body_kind, created_at, updated_at, revision, sync_status
+              id, workspace_id, name, folder_path, collection_id, method, url, headers_json,
+              query_json, body, body_kind, created_at, updated_at, revision, sync_status
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11, 1, 'local')
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12, 1, 'local')
             "#,
         )
         .bind(&id)
         .bind(&workspace_id)
         .bind(name)
         .bind(source.folder_path)
+        .bind(source.collection_id)
         .bind(source.method)
         .bind(source.url)
         .bind(source.headers_json)
@@ -533,12 +585,272 @@ impl ApiClientService {
         self.list_saved_requests(workspace_id).await
     }
 
+    pub async fn list_collections(&self, workspace_id: String) -> AppResult<Vec<ApiCollection>> {
+        validate_workspace_id(&workspace_id)?;
+        let rows = sqlx::query_as::<_, CollectionRow>(
+            r#"
+            SELECT id, workspace_id, name, description, folders_json, created_at, updated_at
+            FROM api_collections
+            WHERE workspace_id = ?1 AND deleted_at IS NULL
+            ORDER BY name COLLATE NOCASE
+            "#,
+        )
+        .bind(workspace_id)
+        .fetch_all(self.db.pool())
+        .await?;
+
+        Ok(rows.into_iter().map(ApiCollection::from).collect())
+    }
+
+    pub async fn create_collection(
+        &self,
+        workspace_id: String,
+        name: String,
+    ) -> AppResult<ApiCollection> {
+        validate_workspace_id(&workspace_id)?;
+        let name = name.trim().to_string();
+        if name.is_empty() {
+            return Err(AppError::Validation(
+                "collection name cannot be empty".to_string(),
+            ));
+        }
+        let id = Uuid::new_v4().to_string();
+        let now = Utc::now().to_rfc3339();
+
+        sqlx::query(
+            r#"
+            INSERT INTO api_collections (
+              id, workspace_id, name, created_at, updated_at, revision, sync_status
+            )
+            VALUES (?1, ?2, ?3, ?4, ?4, 1, 'local')
+            "#,
+        )
+        .bind(&id)
+        .bind(&workspace_id)
+        .bind(&name)
+        .bind(&now)
+        .execute(self.db.pool())
+        .await?;
+
+        self.get_collection(&workspace_id, &id).await
+    }
+
+    pub async fn rename_collection(
+        &self,
+        workspace_id: String,
+        collection_id: String,
+        name: String,
+    ) -> AppResult<ApiCollection> {
+        validate_workspace_id(&workspace_id)?;
+        let name = name.trim().to_string();
+        if name.is_empty() {
+            return Err(AppError::Validation(
+                "collection name cannot be empty".to_string(),
+            ));
+        }
+        let now = Utc::now().to_rfc3339();
+
+        let result = sqlx::query(
+            r#"
+            UPDATE api_collections
+            SET name = ?1, updated_at = ?2, revision = revision + 1, sync_status = 'pending'
+            WHERE workspace_id = ?3 AND id = ?4 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(&name)
+        .bind(&now)
+        .bind(&workspace_id)
+        .bind(&collection_id)
+        .execute(self.db.pool())
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound("api collection".to_string()));
+        }
+
+        self.get_collection(&workspace_id, &collection_id).await
+    }
+
+    /// Add an (initially empty) folder to a collection. Folders persist on the
+    /// collection so they remain visible without any saved request. Idempotent
+    /// when the folder path already exists.
+    pub async fn add_collection_folder(
+        &self,
+        workspace_id: String,
+        collection_id: String,
+        folder_path: String,
+    ) -> AppResult<ApiCollection> {
+        validate_workspace_id(&workspace_id)?;
+        let normalized = normalize_folder_path(Some(folder_path))?
+            .ok_or_else(|| AppError::Validation("folder path cannot be empty".to_string()))?;
+
+        let mut collection = self.get_collection(&workspace_id, &collection_id).await?;
+        if !collection
+            .folders
+            .iter()
+            .any(|folder| folder == &normalized)
+        {
+            collection.folders.push(normalized);
+            collection.folders.sort();
+            let folders_json = serde_json::to_string(&collection.folders)?;
+            let now = Utc::now().to_rfc3339();
+            sqlx::query(
+                r#"
+                UPDATE api_collections
+                SET folders_json = ?1, updated_at = ?2,
+                    revision = revision + 1, sync_status = 'pending'
+                WHERE workspace_id = ?3 AND id = ?4 AND deleted_at IS NULL
+                "#,
+            )
+            .bind(&folders_json)
+            .bind(&now)
+            .bind(&workspace_id)
+            .bind(&collection_id)
+            .execute(self.db.pool())
+            .await?;
+        }
+
+        self.get_collection(&workspace_id, &collection_id).await
+    }
+
+    /// Soft-delete a collection and cascade soft-delete its saved requests in a
+    /// single transaction.
+    pub async fn delete_collection(
+        &self,
+        workspace_id: String,
+        collection_id: String,
+    ) -> AppResult<Vec<ApiCollection>> {
+        validate_workspace_id(&workspace_id)?;
+        let now = Utc::now().to_rfc3339();
+        let mut tx = self.db.pool().begin().await?;
+
+        let result = sqlx::query(
+            r#"
+            UPDATE api_collections
+            SET deleted_at = ?1, updated_at = ?1, revision = revision + 1, sync_status = 'deleted'
+            WHERE workspace_id = ?2 AND id = ?3 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(&now)
+        .bind(&workspace_id)
+        .bind(&collection_id)
+        .execute(&mut *tx)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            // tx is dropped without commit -> rolled back.
+            return Err(AppError::NotFound("api collection".to_string()));
+        }
+
+        sqlx::query(
+            r#"
+            UPDATE api_requests
+            SET deleted_at = ?1, updated_at = ?1, revision = revision + 1, sync_status = 'deleted'
+            WHERE workspace_id = ?2 AND collection_id = ?3 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(&now)
+        .bind(&workspace_id)
+        .bind(&collection_id)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        self.list_collections(workspace_id).await
+    }
+
+    /// Reassign a saved request to a different collection and/or folder. Passing
+    /// `None` for `collection_id` moves the request back to "Unfiled".
+    pub async fn move_request(
+        &self,
+        workspace_id: String,
+        request_id: String,
+        collection_id: Option<String>,
+        folder_path: Option<String>,
+    ) -> AppResult<ApiSavedRequest> {
+        validate_workspace_id(&workspace_id)?;
+        if request_id.trim().is_empty() {
+            return Err(AppError::Validation(
+                "api request id cannot be empty".to_string(),
+            ));
+        }
+        let collection_id = normalize_collection_id(collection_id);
+        let folder_path = normalize_folder_path(folder_path)?;
+        // Reject a move into a collection that does not belong to the workspace.
+        if let Some(target) = &collection_id {
+            self.get_collection(&workspace_id, target).await?;
+        }
+        let now = Utc::now().to_rfc3339();
+
+        let result = sqlx::query(
+            r#"
+            UPDATE api_requests
+            SET collection_id = ?1, folder_path = ?2, updated_at = ?3,
+                revision = revision + 1, sync_status = 'pending'
+            WHERE workspace_id = ?4 AND id = ?5 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(collection_id)
+        .bind(folder_path)
+        .bind(&now)
+        .bind(&workspace_id)
+        .bind(&request_id)
+        .execute(self.db.pool())
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound("api request".to_string()));
+        }
+
+        self.get_saved_request_for_workspace(&workspace_id, &request_id)
+            .await
+    }
+
+    async fn get_collection(
+        &self,
+        workspace_id: &str,
+        collection_id: &str,
+    ) -> AppResult<ApiCollection> {
+        let row = sqlx::query_as::<_, CollectionRow>(
+            r#"
+            SELECT id, workspace_id, name, description, folders_json, created_at, updated_at
+            FROM api_collections
+            WHERE workspace_id = ?1 AND id = ?2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(collection_id)
+        .fetch_optional(self.db.pool())
+        .await?;
+
+        row.map(ApiCollection::from)
+            .ok_or_else(|| AppError::NotFound("api collection".to_string()))
+    }
+
+    async fn saved_request_fields(
+        &self,
+        input: &ApiRequestInput,
+    ) -> AppResult<(String, Option<String>, Option<String>)> {
+        let folder_path = normalize_folder_path(input.folder_path.clone())?;
+        let collection_id = normalize_collection_id(input.collection_id.clone());
+        if let Some(target) = &collection_id {
+            self.get_collection(&input.workspace_id, target).await?;
+        }
+        let name = input
+            .name
+            .clone()
+            .unwrap_or_else(|| format!("{} {}", input.method.to_uppercase(), input.url));
+
+        Ok((name, folder_path, collection_id))
+    }
+
     pub async fn get_saved_request(&self, id: &str) -> AppResult<ApiSavedRequest> {
         let saved = sqlx::query_as::<_, ApiSavedRequest>(
             r#"
             SELECT
-              id, workspace_id, name, folder_path, method, url, headers_json, query_json, body,
-              body_kind, created_at, updated_at, deleted_at, revision, sync_status, remote_id
+              id, workspace_id, name, folder_path, collection_id, method, url, headers_json,
+              query_json, body, body_kind, created_at, updated_at, deleted_at, revision,
+              sync_status, remote_id
             FROM api_requests
             WHERE id = ?1 AND deleted_at IS NULL
             "#,
@@ -558,8 +870,9 @@ impl ApiClientService {
         let saved = sqlx::query_as::<_, ApiSavedRequest>(
             r#"
             SELECT
-              id, workspace_id, name, folder_path, method, url, headers_json, query_json, body,
-              body_kind, created_at, updated_at, deleted_at, revision, sync_status, remote_id
+              id, workspace_id, name, folder_path, collection_id, method, url, headers_json,
+              query_json, body, body_kind, created_at, updated_at, deleted_at, revision,
+              sync_status, remote_id
             FROM api_requests
             WHERE workspace_id = ?1 AND id = ?2 AND deleted_at IS NULL
             "#,
@@ -642,6 +955,37 @@ impl From<EnvironmentRow> for ApiEnvironment {
             updated_at: row.updated_at,
         }
     }
+}
+
+#[derive(sqlx::FromRow)]
+struct CollectionRow {
+    id: String,
+    workspace_id: String,
+    name: String,
+    description: Option<String>,
+    folders_json: String,
+    created_at: String,
+    updated_at: String,
+}
+
+impl From<CollectionRow> for ApiCollection {
+    fn from(row: CollectionRow) -> Self {
+        ApiCollection {
+            id: row.id,
+            workspace_id: row.workspace_id,
+            name: row.name,
+            description: row.description,
+            folders: serde_json::from_str(&row.folders_json).unwrap_or_default(),
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        }
+    }
+}
+
+fn normalize_collection_id(value: Option<String>) -> Option<String> {
+    value
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
 }
 
 fn validate_environment(variables: &[KeyValue]) -> AppResult<()> {
@@ -982,6 +1326,7 @@ mod tests {
                 workspace_id: "workspace-a".to_string(),
                 name: Some("Secret request".to_string()),
                 folder_path: None,
+                collection_id: None,
                 method: "GET".to_string(),
                 url: "https://example.test".to_string(),
                 headers: vec![KeyValue {
@@ -1010,6 +1355,7 @@ mod tests {
                 workspace_id: "workspace-a".to_string(),
                 name: Some("Body redaction test".to_string()),
                 folder_path: None,
+                collection_id: None,
                 method: "POST".to_string(),
                 url: "https://example.test".to_string(),
                 headers: vec![],
@@ -1051,6 +1397,7 @@ mod tests {
                 workspace_id: "workspace-a".to_string(),
                 name: Some("Plain text body".to_string()),
                 folder_path: None,
+                collection_id: None,
                 method: "POST".to_string(),
                 url: "https://example.test".to_string(),
                 headers: vec![],
@@ -1104,6 +1451,7 @@ mod tests {
             workspace_id: "workspace-a".to_string(),
             name: Some("Templated".to_string()),
             folder_path: Some("Users".to_string()),
+            collection_id: None,
             method: "POST".to_string(),
             url: "{{base_url}}/users/{{user_id}}".to_string(),
             headers: vec![KeyValue {
@@ -1160,6 +1508,7 @@ mod tests {
             workspace_id: "workspace-a".to_string(),
             name: None,
             folder_path: None,
+            collection_id: None,
             method: "GET".to_string(),
             url: "https://example.test/{{missing}}".to_string(),
             headers: vec![],
@@ -1214,6 +1563,7 @@ mod tests {
                 workspace_id: "workspace-a".to_string(),
                 name: None,
                 folder_path: Some("Users".to_string()),
+                collection_id: None,
                 method: "post".to_string(),
                 url: "https://example.test/users".to_string(),
                 headers: vec![],
@@ -1229,6 +1579,7 @@ mod tests {
                 workspace_id: "workspace-b".to_string(),
                 name: Some("Other workspace".to_string()),
                 folder_path: None,
+                collection_id: None,
                 method: "GET".to_string(),
                 url: "https://other.example.test".to_string(),
                 headers: vec![],
@@ -1259,6 +1610,7 @@ mod tests {
                 workspace_id: "workspace-a".to_string(),
                 name: Some("Create user".to_string()),
                 folder_path: Some("Users/Admin".to_string()),
+                collection_id: None,
                 method: "POST".to_string(),
                 url: "https://example.test/users".to_string(),
                 headers: vec![KeyValue {
@@ -1297,6 +1649,7 @@ mod tests {
                 workspace_id: "workspace-a".to_string(),
                 name: Some("First".to_string()),
                 folder_path: None,
+                collection_id: None,
                 method: "GET".to_string(),
                 url: "https://example.test/first".to_string(),
                 headers: vec![],
@@ -1312,6 +1665,7 @@ mod tests {
                 workspace_id: "workspace-a".to_string(),
                 name: Some("Second".to_string()),
                 folder_path: Some("Folder".to_string()),
+                collection_id: None,
                 method: "GET".to_string(),
                 url: "https://example.test/second".to_string(),
                 headers: vec![],
@@ -1334,5 +1688,279 @@ mod tests {
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].id, second.id);
         assert!(matches!(deleted_again, Err(AppError::NotFound(_))));
+    }
+
+    async fn save_in_collection(
+        service: &ApiClientService,
+        workspace_id: &str,
+        name: &str,
+        collection_id: Option<String>,
+    ) -> ApiSavedRequest {
+        service
+            .save_request(ApiRequestInput {
+                workspace_id: workspace_id.to_string(),
+                name: Some(name.to_string()),
+                folder_path: None,
+                collection_id,
+                method: "GET".to_string(),
+                url: "https://example.test".to_string(),
+                headers: vec![],
+                query: vec![],
+                body: None,
+                body_kind: "json".to_string(),
+                timeout_ms: None,
+            })
+            .await
+            .expect("save request")
+    }
+
+    #[tokio::test]
+    async fn collection_lifecycle_create_rename_delete_cascades_requests() {
+        let service = service().await;
+        let collection = service
+            .create_collection("workspace-a".to_string(), "APIs".to_string())
+            .await
+            .expect("create collection");
+
+        let in_collection = save_in_collection(
+            &service,
+            "workspace-a",
+            "Inside",
+            Some(collection.id.clone()),
+        )
+        .await;
+        assert_eq!(
+            in_collection.collection_id.as_deref(),
+            Some(collection.id.as_str())
+        );
+        let unfiled = save_in_collection(&service, "workspace-a", "Unfiled", None).await;
+
+        let renamed = service
+            .rename_collection(
+                "workspace-a".to_string(),
+                collection.id.clone(),
+                "Public APIs".to_string(),
+            )
+            .await
+            .expect("rename collection");
+        assert_eq!(renamed.name, "Public APIs");
+
+        let remaining_collections = service
+            .delete_collection("workspace-a".to_string(), collection.id.clone())
+            .await
+            .expect("delete collection");
+        assert!(remaining_collections.is_empty());
+
+        // The request inside the collection was cascade soft-deleted; the
+        // Unfiled request survives.
+        let saved = service
+            .list_saved_requests("workspace-a".to_string())
+            .await
+            .expect("list saved");
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].id, unfiled.id);
+
+        let deleted_again = service
+            .delete_collection("workspace-a".to_string(), collection.id)
+            .await;
+        assert!(matches!(deleted_again, Err(AppError::NotFound(_))));
+    }
+
+    #[tokio::test]
+    async fn add_collection_folder_persists_and_dedupes() {
+        let service = service().await;
+        let collection = service
+            .create_collection("workspace-a".to_string(), "APIs".to_string())
+            .await
+            .expect("create collection");
+        assert!(collection.folders.is_empty());
+
+        let updated = service
+            .add_collection_folder(
+                "workspace-a".to_string(),
+                collection.id.clone(),
+                "Auth".to_string(),
+            )
+            .await
+            .expect("add folder");
+        assert_eq!(updated.folders, vec!["Auth".to_string()]);
+
+        let nested = service
+            .add_collection_folder(
+                "workspace-a".to_string(),
+                collection.id.clone(),
+                "Auth/Tokens".to_string(),
+            )
+            .await
+            .expect("add nested folder");
+        assert_eq!(
+            nested.folders,
+            vec!["Auth".to_string(), "Auth/Tokens".to_string()]
+        );
+
+        // Adding the same folder again is a no-op (no duplicate).
+        let again = service
+            .add_collection_folder(
+                "workspace-a".to_string(),
+                collection.id.clone(),
+                "Auth".to_string(),
+            )
+            .await
+            .expect("add duplicate folder");
+        assert_eq!(again.folders.len(), 2);
+
+        // Folders survive a reload via list.
+        let listed = service
+            .list_collections("workspace-a".to_string())
+            .await
+            .expect("list collections");
+        assert_eq!(listed[0].folders.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn collection_is_scoped_to_workspace() {
+        let service = service().await;
+        let collection = service
+            .create_collection("workspace-a".to_string(), "Shared".to_string())
+            .await
+            .expect("create in a");
+
+        let wrong = service
+            .rename_collection(
+                "workspace-b".to_string(),
+                collection.id.clone(),
+                "Renamed".to_string(),
+            )
+            .await;
+        assert!(matches!(wrong, Err(AppError::NotFound(_))));
+
+        let list_b = service
+            .list_collections("workspace-b".to_string())
+            .await
+            .expect("list b");
+        assert!(list_b.is_empty());
+
+        let save_wrong_workspace = service
+            .save_request(ApiRequestInput {
+                workspace_id: "workspace-b".to_string(),
+                name: Some("Wrong workspace".to_string()),
+                folder_path: None,
+                collection_id: Some(collection.id),
+                method: "GET".to_string(),
+                url: "https://example.test".to_string(),
+                headers: vec![],
+                query: vec![],
+                body: None,
+                body_kind: "json".to_string(),
+                timeout_ms: None,
+            })
+            .await;
+        assert!(matches!(save_wrong_workspace, Err(AppError::NotFound(_))));
+    }
+
+    #[tokio::test]
+    async fn move_request_reassigns_collection_and_folder() {
+        let service = service().await;
+        let collection = service
+            .create_collection("workspace-a".to_string(), "APIs".to_string())
+            .await
+            .expect("create collection");
+        let request = save_in_collection(&service, "workspace-a", "Movable", None).await;
+        assert!(request.collection_id.is_none());
+
+        let moved = service
+            .move_request(
+                "workspace-a".to_string(),
+                request.id.clone(),
+                Some(collection.id.clone()),
+                Some("Sub".to_string()),
+            )
+            .await
+            .expect("move into collection");
+        assert_eq!(moved.collection_id.as_deref(), Some(collection.id.as_str()));
+        assert_eq!(moved.folder_path.as_deref(), Some("Sub"));
+
+        // Moving with None returns the request to "Unfiled".
+        let unfiled = service
+            .move_request("workspace-a".to_string(), request.id.clone(), None, None)
+            .await
+            .expect("move to unfiled");
+        assert!(unfiled.collection_id.is_none());
+
+        // Moving into a collection that does not exist is rejected.
+        let missing = service
+            .move_request(
+                "workspace-a".to_string(),
+                request.id,
+                Some("does-not-exist".to_string()),
+                None,
+            )
+            .await;
+        assert!(matches!(missing, Err(AppError::NotFound(_))));
+    }
+
+    #[tokio::test]
+    async fn update_request_reuses_existing_record_and_validates_collection() {
+        let service = service().await;
+        let collection = service
+            .create_collection("workspace-a".to_string(), "APIs".to_string())
+            .await
+            .expect("create collection");
+        let request =
+            save_in_collection(&service, "workspace-a", "Original", Some(collection.id)).await;
+
+        let updated = service
+            .update_request(
+                "workspace-a".to_string(),
+                request.id.clone(),
+                ApiRequestInput {
+                    workspace_id: "workspace-a".to_string(),
+                    name: Some("Updated".to_string()),
+                    folder_path: Some("Moved".to_string()),
+                    collection_id: None,
+                    method: "POST".to_string(),
+                    url: "https://example.test/updated".to_string(),
+                    headers: vec![],
+                    query: vec![],
+                    body: Some("{}".to_string()),
+                    body_kind: "json".to_string(),
+                    timeout_ms: None,
+                },
+            )
+            .await
+            .expect("update request");
+
+        assert_eq!(updated.id, request.id);
+        assert_eq!(updated.name, "Updated");
+        assert_eq!(updated.method, "POST");
+        assert!(updated.collection_id.is_none());
+        assert_eq!(updated.folder_path.as_deref(), Some("Moved"));
+
+        let saved = service
+            .list_saved_requests("workspace-a".to_string())
+            .await
+            .expect("list saved");
+        assert_eq!(saved.len(), 1);
+
+        let missing_collection = service
+            .update_request(
+                "workspace-a".to_string(),
+                request.id,
+                ApiRequestInput {
+                    workspace_id: "workspace-a".to_string(),
+                    name: Some("Bad collection".to_string()),
+                    folder_path: None,
+                    collection_id: Some("does-not-exist".to_string()),
+                    method: "GET".to_string(),
+                    url: "https://example.test".to_string(),
+                    headers: vec![],
+                    query: vec![],
+                    body: None,
+                    body_kind: "json".to_string(),
+                    timeout_ms: None,
+                },
+            )
+            .await;
+        assert!(matches!(missing_collection, Err(AppError::NotFound(_))));
     }
 }

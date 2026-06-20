@@ -94,6 +94,21 @@
     "empty": {
       "noRequestOpen": "No request is open"
     },
+    "collection": {
+      "new": "New collection",
+      "newCollection": "New collection",
+      "newFolder": "New folder",
+      "addFolder": "Add folder",
+      "namePlaceholder": "Name",
+      "defaultName": "New Collection",
+      "rename": "Rename collection",
+      "delete": "Delete collection",
+      "deleteConfirm": "Delete this collection and all of its saved requests? This cannot be undone.",
+      "export": "Export collection",
+      "moveTo": "Move to",
+      "unfiled": "Unfiled",
+      "none": "No collections yet. Create one to organize requests."
+    },
     "environment": {
       "active": "Active environment",
       "activate": "Set active",
@@ -139,6 +154,24 @@
       "restClient": "REST Client",
       "searchAria": "Search API requests",
       "searchPlaceholder": "Search requests"
+    },
+    "save": {
+      "title": "Save request",
+      "description": "Choose a recognizable name, collection, and folder.",
+      "name": "Name",
+      "collection": "Collection",
+      "location": "Save to",
+      "subfolder": "New subfolder (optional)",
+      "subfolderPlaceholder": "Subfolder name",
+      "unfiled": "Unfiled",
+      "newCollection": "+ New collection",
+      "newCollectionLabel": "New collection name",
+      "newCollectionPlaceholder": "Collection name",
+      "folder": "Folder",
+      "folderPlaceholder": "Examples / Auth",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving"
     },
     "request": {
       "method": "HTTP method",

@@ -10,6 +10,7 @@ import {
   listSavedApiRequests,
   saveApiRequest,
   sendApiRequest,
+  updateApiRequest,
   type ApiRequestInput,
   type KeyValue,
 } from "@unfour/command-client";
@@ -89,8 +90,17 @@ export function useApiRequestTabs(workspaceId: string) {
   });
 
   const saveMutation = useMutation({
-    mutationFn: ({ input }: { input: ApiRequestInput; tabId: string }) =>
-      saveApiRequest(input),
+    mutationFn: ({
+      input,
+      requestId,
+    }: {
+      input: ApiRequestInput;
+      requestId?: string | null;
+      tabId: string;
+    }) =>
+      requestId
+        ? updateApiRequest(input.workspaceId, requestId, input)
+        : saveApiRequest(input),
     onSuccess: (saved, variables) => {
       setState((current) => completeTabSave(current, variables.tabId, saved));
       queryClient.invalidateQueries({ queryKey: ["api-saved", workspaceId] });
@@ -192,7 +202,7 @@ export function useApiRequestTabs(workspaceId: string) {
 
   const saveTab = useCallback(async (
     tab: ApiRequestTab,
-    identity?: { folderPath: string; name: string },
+    identity?: { collectionId: string | null; folderPath: string; name: string },
   ) => {
     const draft = identity ? { ...tab.draft, ...identity } : tab.draft;
     if (identity) {
@@ -205,6 +215,7 @@ export function useApiRequestTabs(workspaceId: string) {
           envVariables,
           purpose: "save",
         }),
+        requestId: tab.savedRequestId,
         tabId: tab.id,
       });
       return saved.id;
@@ -270,6 +281,7 @@ export function tabToInput(
     workspaceId,
     name: tab.draft.name,
     folderPath: tab.draft.folderPath || null,
+    collectionId: tab.draft.collectionId,
     method: tab.draft.method,
     url: stripUrlQuery(tab.draft.url),
     headers,
