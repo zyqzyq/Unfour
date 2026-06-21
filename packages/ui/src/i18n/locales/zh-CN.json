@@ -308,6 +308,8 @@
       "driver": "驱动",
       "host": "主机",
       "name": "名称",
+      "password": "密码",
+      "passwordKeep": "留空则保留当前密码",
       "port": "端口",
       "sqlitePath": "SQLite 路径",
       "username": "用户名"

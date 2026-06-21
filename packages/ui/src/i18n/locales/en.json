@@ -309,6 +309,8 @@
       "driver": "Driver",
       "host": "Host",
       "name": "Name",
+      "password": "Password",
+      "passwordKeep": "Leave blank to keep current password",
       "port": "Port",
       "sqlitePath": "SQLite Path",
       "username": "Username"

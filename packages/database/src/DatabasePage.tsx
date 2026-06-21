@@ -2,7 +2,9 @@ import { CheckCircle2, Save, Trash2, XCircle } from "lucide-react";
 import { FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  createCredential,
   deleteDatabaseConnection,
+  rotateCredential,
   saveDatabaseConnection,
   testDatabaseConnection,
 } from "@unfour/command-client";
@@ -78,6 +80,7 @@ export function DatabasePage({
   const [sql, setSql] = useState(defaultSql);
   const [tableView, setTableView] = useState<DatabaseTableViewState | null>(null);
   const [selectedTable, setSelectedTable] = useState<DatabaseTable | null>(null);
+  const [password, setPassword] = useState("");
   const [form, setForm] = useState<DatabaseConnectionInput>({
     workspaceId,
     name: "Local SQLite",
@@ -137,6 +140,7 @@ export function DatabasePage({
   // Sync form state when the selected connection changes (render-time adjustment pattern).
   if (selectedConnectionId !== prevSelectedConnectionIdRef.current) {
     prevSelectedConnectionIdRef.current = selectedConnectionId;
+    setPassword("");
     if (selectedConnection) {
       setForm({
         id: selectedConnection.id,
@@ -179,8 +183,28 @@ export function DatabasePage({
   }, [schemaEnabled, schemaQuery.error, selectedConnectionId]);
 
   const saveMutation = useMutation({
-    mutationFn: saveDatabaseConnection,
+    mutationFn: async ({ input, secret }: { input: DatabaseConnectionInput; secret: string }) => {
+      let credentialRef = input.credentialRef ?? null;
+      // Non-SQLite drivers persist the password through SecretStore and store
+      // only the returned reference. An empty secret while editing keeps the
+      // existing credential untouched.
+      if (input.driver !== "sqlite" && secret.trim()) {
+        if (credentialRef) {
+          await rotateCredential({ workspaceId, credentialRef, secret });
+        } else {
+          const metadata = await createCredential({
+            workspaceId,
+            kind: "database",
+            label: input.name,
+            secret,
+          });
+          credentialRef = metadata.credentialRef;
+        }
+      }
+      return saveDatabaseConnection({ ...input, credentialRef });
+    },
     onSuccess: (connection) => {
+      setPassword("");
       setSelectedDatabaseConnection(connection.id);
       setEditorOpen(false);
       setConnectionState(connection.id, {
@@ -350,13 +374,16 @@ export function DatabasePage({
   function submitConnection(event: FormEvent) {
     event.preventDefault();
     saveMutation.mutate({
-      ...form,
-      workspaceId,
-      credentialRef: form.credentialRef?.trim() || null,
-      sqlitePath: form.sqlitePath?.trim() || null,
-      host: form.host?.trim() || null,
-      database: form.database?.trim() || null,
-      username: form.username?.trim() || null,
+      input: {
+        ...form,
+        workspaceId,
+        credentialRef: form.credentialRef?.trim() || null,
+        sqlitePath: form.sqlitePath?.trim() || null,
+        host: form.host?.trim() || null,
+        database: form.database?.trim() || null,
+        username: form.username?.trim() || null,
+      },
+      secret: password,
     });
   }
 
@@ -399,6 +426,7 @@ export function DatabasePage({
 
   function newConnection() {
     selectConnection(null);
+    setPassword("");
     setForm({ workspaceId, name: "Local SQLite", driver: "sqlite", sqlitePath: "" });
   }
 
@@ -712,10 +740,12 @@ export function DatabasePage({
           }
         }}
         onOpenChange={setEditorOpen}
+        onPasswordChange={setPassword}
         onSubmit={submitConnection}
         onTest={connectSelectedConnection}
         onUpdate={updateForm}
         open={editorOpen}
+        password={password}
         result={testResult}
         savePending={saveMutation.isPending}
         selectedConnectionId={selectedConnectionId}
@@ -741,10 +771,12 @@ function DatabaseConnectionDialog({
   form,
   onDelete,
   onOpenChange,
+  onPasswordChange,
   onSubmit,
   onTest,
   onUpdate,
   open,
+  password,
   result,
   savePending,
   selectedConnectionId,
@@ -754,10 +786,12 @@ function DatabaseConnectionDialog({
   form: DatabaseConnectionInput;
   onDelete: () => void;
   onOpenChange: (open: boolean) => void;
+  onPasswordChange: (value: string) => void;
   onSubmit: (event: FormEvent) => void;
   onTest: () => void;
   onUpdate: (patch: Partial<DatabaseConnectionInput>) => void;
   open: boolean;
+  password: string;
   result: DatabaseTestResult | null;
   savePending: boolean;
   selectedConnectionId: string | null;
@@ -818,8 +852,14 @@ function DatabaseConnectionDialog({
                 <Field title={t("database.fields.username")}>
                   <Input onChange={(event) => onUpdate({ username: event.target.value })} value={form.username ?? ""} />
                 </Field>
-                <Field title={t("database.fields.credentialRef")}>
-                  <Input onChange={(event) => onUpdate({ credentialRef: event.target.value })} value={form.credentialRef ?? ""} />
+                <Field title={t("database.fields.password")}>
+                  <Input
+                    autoComplete="off"
+                    onChange={(event) => onPasswordChange(event.target.value)}
+                    placeholder={form.credentialRef ? t("database.fields.passwordKeep") : ""}
+                    type="password"
+                    value={password}
+                  />
                 </Field>
               </>
             )}
