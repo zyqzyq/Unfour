@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -10,6 +10,7 @@ import {
   getSshHostFingerprint,
   getSshSessionHistory,
   saveSshConnection,
+  type SshConnection,
   type SshConnectionInput,
   type SshHostFingerprintInfo,
   type SshSessionSummary,
@@ -18,6 +19,7 @@ import { useWorkspaceStore } from "@unfour/workspace-core";
 import { ConfirmDialog, LoadingState, useI18n } from "@unfour/ui";
 import { TerminalModuleToolbar } from "./components/TerminalModuleToolbar";
 import { TerminalWorkspace } from "./components/TerminalWorkspace";
+import { SshConnectionTree } from "./components/SshConnectionTree";
 import { SshConnectionDialog } from "./components/SshConnectionDialog";
 import { HostKeyTrustDialog } from "./components/HostKeyTrustDialog";
 import { useSshConnections } from "./hooks/useSshConnections";
@@ -33,11 +35,18 @@ import {
 } from "./model/ssh-connection-state";
 import { buildTerminalSessionTabs } from "./model/terminal-tabs";
 
-export function TerminalPage({ workspaceId }: { workspaceId: string }) {
+export function TerminalPage({
+  onShellSidebarChange,
+  workspaceId,
+}: {
+  onShellSidebarChange?: (sidebar: ReactNode | null) => void;
+  workspaceId: string;
+}) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const {
     selectedSshConnectionId: selectedConnectionId,
+    setActiveTab,
     setSelectedSshConnection,
   } = useWorkspaceStore();
   const split = useTerminalSplit();
@@ -349,6 +358,49 @@ export function TerminalPage({ workspaceId }: { workspaceId: string }) {
     setTrustDialogState((prev) => ({ ...prev, open: false }));
     setDialogOpen(true);
   }
+
+  function editConnection(connection: SshConnection) {
+    connectMutation.reset();
+    deleteMutation.reset();
+    saveMutation.reset();
+    setSelectedSshConnection(connection.id);
+    setForm(sshConnectionToInput(connection, workspaceId));
+    setTrustDialogState((prev) => ({ ...prev, open: false }));
+    setDialogOpen(true);
+  }
+
+  // Keep a stable callback identity for the pushed sidebar so re-renders do not
+  // continually replace the shell sidebar node (which would loop via setState
+  // in the parent).
+  const editConnectionRef = useRef(editConnection);
+  useEffect(() => {
+    editConnectionRef.current = editConnection;
+  });
+  const handleEditConnection = useCallback((connection: SshConnection) => {
+    editConnectionRef.current(connection);
+  }, []);
+  const openTerminalTab = useCallback(() => setActiveTab("ssh-main"), [setActiveTab]);
+
+  const shellSidebar = useMemo(
+    () => (
+      <SshConnectionTree
+        active
+        collapsed={false}
+        onEditConnection={handleEditConnection}
+        onOpenTerminal={openTerminalTab}
+        workspaceId={workspaceId}
+      />
+    ),
+    [handleEditConnection, openTerminalTab, workspaceId],
+  );
+
+  useEffect(() => {
+    if (!onShellSidebarChange) {
+      return;
+    }
+    onShellSidebarChange(shellSidebar);
+    return () => onShellSidebarChange(null);
+  }, [onShellSidebarChange, shellSidebar]);
 
   function submitConnection(event: FormEvent) {
     event.preventDefault();
