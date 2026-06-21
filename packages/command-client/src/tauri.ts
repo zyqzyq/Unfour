@@ -18,6 +18,8 @@ import type {
   DatabaseQueryInput,
   DatabaseQueryResult,
   DatabaseSchema,
+  DatabaseTableStructure,
+  DatabaseTableStructureInput,
   DatabaseTestResult,
   KeyValue,
   SshCloseInput,
@@ -857,6 +859,29 @@ async function mockInvoke<T>(
     } satisfies DatabaseBrowseResult) as T;
   }
 
+  if (command === "database_table_structure") {
+    const input = args?.input as DatabaseTableStructureInput;
+    return ({
+      schema: input.schema ?? null,
+      name: input.tableName,
+      kind: "table",
+      columns: [
+        { name: "id", dataType: "TEXT", nullable: false, primaryKey: true, defaultValue: null },
+        { name: "name", dataType: "TEXT", nullable: false, primaryKey: false, defaultValue: null },
+        {
+          name: "sync_status",
+          dataType: "TEXT",
+          nullable: true,
+          primaryKey: false,
+          defaultValue: "'local'",
+        },
+      ],
+      indexes: [{ name: "PRIMARY", columns: ["id"], unique: true, primary: true }],
+      foreignKeys: [],
+      ddl: `CREATE TABLE ${input.tableName} (\n  id TEXT PRIMARY KEY,\n  name TEXT NOT NULL,\n  sync_status TEXT DEFAULT 'local'\n);`,
+    } satisfies DatabaseTableStructure) as T;
+  }
+
   if (command === "ssh_connections_list") {
     const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
     return mockSshConnections.filter((item) => item.workspaceId === workspaceId) as T;
@@ -1366,6 +1391,10 @@ export function clearDatabaseQueryHistory(workspaceId: string) {
 
 export function browseDatabaseTable(input: DatabaseBrowseInput) {
   return call<DatabaseBrowseResult>("database_table_browse", { input });
+}
+
+export function getDatabaseTableStructure(input: DatabaseTableStructureInput) {
+  return call<DatabaseTableStructure>("database_table_structure", { input });
 }
 
 export function listSshConnections(workspaceId: string) {

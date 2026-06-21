@@ -43,6 +43,7 @@ import { useQueryHistory } from "./hooks/useQueryHistory";
 import { useSchemaTree } from "./hooks/useSchemaTree";
 import { useSqlExecution } from "./hooks/useSqlExecution";
 import { useTableData } from "./hooks/useTableData";
+import { useTableStructure } from "./hooks/useTableStructure";
 import { defaultSql } from "./model/database-state";
 import { databaseTableTreeId } from "./model/database-tree";
 import type {
@@ -112,6 +113,18 @@ export function DatabasePage({
     workspaceId,
   });
   const visibleSchema = schemaEnabled ? schemaQuery.data : undefined;
+  const structureEnabled = Boolean(
+    selectedConnection &&
+      selectedTable &&
+      layout.activeTabId === "table-structure" &&
+      (selectedConnectionStatus === "connecting" || selectedConnectionStatus === "connected"),
+  );
+  const structureQuery = useTableStructure({
+    connectionId: selectedConnectionId,
+    enabled: structureEnabled,
+    table: selectedTable,
+    workspaceId,
+  });
   const selectedTableId =
     selectedConnectionId && selectedTable ? databaseTableTreeId(selectedConnectionId, selectedTable) : null;
 
@@ -733,6 +746,9 @@ export function DatabasePage({
           selectedConnectionId={selectedConnectionId}
           selectedTable={selectedTable}
           sql={sql}
+          structure={structureQuery.data}
+          structureError={structureQuery.error}
+          structureLoading={structureEnabled && structureQuery.isFetching}
           tableView={tableView}
         />
       </div>

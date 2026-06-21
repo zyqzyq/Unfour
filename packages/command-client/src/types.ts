@@ -330,6 +330,38 @@ export type DatabaseTableColumn = {
   dataType: string;
   nullable: boolean;
   primaryKey: boolean;
+  defaultValue?: string | null;
+};
+
+export type DatabaseIndex = {
+  name: string;
+  columns: string[];
+  unique: boolean;
+  primary: boolean;
+};
+
+export type DatabaseForeignKey = {
+  name: string;
+  columns: string[];
+  referencedTable: string;
+  referencedColumns: string[];
+};
+
+export type DatabaseTableStructureInput = {
+  workspaceId: string;
+  connectionId: string;
+  schema?: string | null;
+  tableName: string;
+};
+
+export type DatabaseTableStructure = {
+  schema?: string | null;
+  name: string;
+  kind: string;
+  columns: DatabaseTableColumn[];
+  indexes: DatabaseIndex[];
+  foreignKeys: DatabaseForeignKey[];
+  ddl?: string | null;
 };
 
 export type DatabaseQueryInput = {

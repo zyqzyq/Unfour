@@ -1,7 +1,9 @@
 import { Play, RefreshCw } from "lucide-react";
-import type { DatabaseTable } from "@unfour/command-client";
+import type { DatabaseTable, DatabaseTableStructure } from "@unfour/command-client";
 import { Button, EmptyState, ErrorState, IconButton, LoadingState, StatusBadge, Tabs, Toolbar, ToolbarGroup } from "@unfour/ui";
 import { DatabaseErrorDetails } from "./DatabaseErrorDetails";
+
+type StructureTab = "columns" | "indexes" | "constraints" | "properties" | "ddl";
 
 export function TableInspector({
   activeTab,
@@ -11,15 +13,17 @@ export function TableInspector({
   onRefresh,
   onSelectTab,
   previewPending = false,
+  structure,
   table,
 }: {
-  activeTab: "columns" | "indexes" | "constraints" | "properties" | "ddl";
+  activeTab: StructureTab;
   error?: unknown;
   loading?: boolean;
   onPreview?: () => void;
   onRefresh?: () => void;
-  onSelectTab: (tab: "columns" | "indexes" | "constraints" | "properties" | "ddl") => void;
+  onSelectTab: (tab: StructureTab) => void;
   previewPending?: boolean;
+  structure?: DatabaseTableStructure | null;
   table: DatabaseTable | null;
 }) {
   return (
@@ -44,7 +48,7 @@ export function TableInspector({
       <Tabs
         activeId={activeTab}
         className="h-[30px] px-1"
-        onSelect={(tabId) => onSelectTab(tabId as "columns" | "indexes" | "constraints" | "properties" | "ddl")}
+        onSelect={(tabId) => onSelectTab(tabId as StructureTab)}
         tabs={[
           { id: "columns", title: "Columns" },
           { id: "indexes", title: "Indexes" },
@@ -53,7 +57,7 @@ export function TableInspector({
           { id: "ddl", title: "DDL" },
         ]}
       />
-      {renderTableInspectorContent({ activeTab, error, loading, table })}
+      {renderTableInspectorContent({ activeTab, error, loading, structure, table })}
     </div>
   );
 }
@@ -62,11 +66,13 @@ function renderTableInspectorContent({
   activeTab,
   error,
   loading,
+  structure,
   table,
 }: {
-  activeTab: "columns" | "indexes" | "constraints" | "properties" | "ddl";
+  activeTab: StructureTab;
   error?: unknown;
   loading: boolean;
+  structure?: DatabaseTableStructure | null;
   table: DatabaseTable | null;
 }) {
   if (error) {
@@ -85,8 +91,12 @@ function renderTableInspectorContent({
     return <EmptyState className="m-2 min-h-0 flex-1">Select a table from the connection tree to view its structure.</EmptyState>;
   }
 
+  // Prefer the on-demand structure (with defaults) but fall back to the
+  // lightweight schema columns while it loads.
+  const columns = structure?.columns ?? table.columns;
+
   if (activeTab === "columns") {
-    if (!table.columns.length) {
+    if (!columns.length) {
       return <EmptyState className="m-2 min-h-0 flex-1">No columns were returned for this table.</EmptyState>;
     }
 
@@ -110,7 +120,7 @@ function renderTableInspectorContent({
             </tr>
           </thead>
           <tbody>
-            {table.columns.map((column) => (
+            {columns.map((column) => (
               <tr
                 className="border-b border-[color:color-mix(in_srgb,var(--u-color-border)_62%,transparent)] hover:bg-[var(--u-color-surface-hover)]"
                 key={column.name}
@@ -122,8 +132,91 @@ function renderTableInspectorContent({
                     {column.nullable ? "yes" : "no"}
                   </StatusBadge>
                 </Cell>
-                <Cell muted>Unavailable</Cell>
+                {column.defaultValue != null ? (
+                  <Cell>{column.defaultValue}</Cell>
+                ) : (
+                  <Cell muted>—</Cell>
+                )}
                 <Cell>{column.primaryKey ? <StatusBadge tone="success">PK</StatusBadge> : ""}</Cell>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  if (activeTab === "indexes") {
+    const indexes = structure?.indexes ?? [];
+    if (!indexes.length) {
+      return <EmptyState className="m-2 min-h-0 flex-1">No indexes were found for this table.</EmptyState>;
+    }
+    return (
+      <div className="min-h-0 flex-1 overflow-auto">
+        <table className="w-full table-fixed text-left text-[12px]">
+          <colgroup>
+            <col className="w-[34%]" />
+            <col className="w-[40%]" />
+            <col className="w-[13%]" />
+            <col className="w-[13%]" />
+          </colgroup>
+          <thead className="sticky top-0 z-10 bg-[var(--u-color-surface-subtle)] text-[var(--u-color-text-muted)]">
+            <tr>
+              <ColumnHeader>Name</ColumnHeader>
+              <ColumnHeader>Columns</ColumnHeader>
+              <ColumnHeader>Unique</ColumnHeader>
+              <ColumnHeader>Primary</ColumnHeader>
+            </tr>
+          </thead>
+          <tbody>
+            {indexes.map((index) => (
+              <tr
+                className="border-b border-[color:color-mix(in_srgb,var(--u-color-border)_62%,transparent)] hover:bg-[var(--u-color-surface-hover)]"
+                key={index.name}
+              >
+                <Cell strong>{index.name}</Cell>
+                <Cell>{index.columns.join(", ")}</Cell>
+                <Cell>{index.unique ? <StatusBadge tone="success">yes</StatusBadge> : ""}</Cell>
+                <Cell>{index.primary ? <StatusBadge tone="success">PK</StatusBadge> : ""}</Cell>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  if (activeTab === "constraints") {
+    const foreignKeys = structure?.foreignKeys ?? [];
+    if (!foreignKeys.length) {
+      return <EmptyState className="m-2 min-h-0 flex-1">No foreign keys were found for this table.</EmptyState>;
+    }
+    return (
+      <div className="min-h-0 flex-1 overflow-auto">
+        <table className="w-full table-fixed text-left text-[12px]">
+          <colgroup>
+            <col className="w-[28%]" />
+            <col className="w-[32%]" />
+            <col className="w-[40%]" />
+          </colgroup>
+          <thead className="sticky top-0 z-10 bg-[var(--u-color-surface-subtle)] text-[var(--u-color-text-muted)]">
+            <tr>
+              <ColumnHeader>Name</ColumnHeader>
+              <ColumnHeader>Columns</ColumnHeader>
+              <ColumnHeader>References</ColumnHeader>
+            </tr>
+          </thead>
+          <tbody>
+            {foreignKeys.map((fk) => (
+              <tr
+                className="border-b border-[color:color-mix(in_srgb,var(--u-color-border)_62%,transparent)] hover:bg-[var(--u-color-surface-hover)]"
+                key={fk.name}
+              >
+                <Cell strong>{fk.name}</Cell>
+                <Cell>{fk.columns.join(", ")}</Cell>
+                <Cell>
+                  {fk.referencedTable} ({fk.referencedColumns.join(", ")})
+                </Cell>
               </tr>
             ))}
           </tbody>
@@ -138,17 +231,23 @@ function renderTableInspectorContent({
         <Property label="Schema" value={table.schema ?? "default"} />
         <Property label="Name" value={table.name} />
         <Property label="Kind" value={table.kind} />
-        <Property label="Columns" value={String(table.columns.length)} />
+        <Property label="Columns" value={String(columns.length)} />
+        <Property label="Indexes" value={String(structure?.indexes.length ?? 0)} />
+        <Property label="Foreign keys" value={String(structure?.foreignKeys.length ?? 0)} />
       </div>
     );
   }
 
+  // ddl
+  if (!structure?.ddl) {
+    return <EmptyState className="m-2 min-h-0 flex-1">DDL is not available for this object.</EmptyState>;
+  }
   return (
-    <EmptyState className="m-2 min-h-0 flex-1">
-      {activeTab === "indexes"
-        ? "Index metadata is not exposed by the current backend."
-        : "This metadata is not exposed by the current backend."}
-    </EmptyState>
+    <div className="min-h-0 flex-1 overflow-auto p-2">
+      <pre className="whitespace-pre-wrap break-words rounded border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-2 font-mono text-[12px] text-[var(--u-color-text)]">
+        {structure.ddl}
+      </pre>
+    </div>
   );
 }
 

@@ -57,6 +57,7 @@ pub fn run() {
             unfour_app::commands::database_query_history_record,
             unfour_app::commands::database_schema_get,
             unfour_app::commands::database_table_browse,
+            unfour_app::commands::database_table_structure,
             unfour_app::commands::ssh_connection_delete,
             unfour_app::commands::ssh_connection_save,
             unfour_app::commands::ssh_connections_list,

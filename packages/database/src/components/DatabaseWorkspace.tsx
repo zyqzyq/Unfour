@@ -1,4 +1,10 @@
-import type { DatabaseConnection, DatabaseQueryResult, DatabaseSchema, DatabaseTable } from "@unfour/command-client";
+import type {
+  DatabaseConnection,
+  DatabaseQueryResult,
+  DatabaseSchema,
+  DatabaseTable,
+  DatabaseTableStructure,
+} from "@unfour/command-client";
 import type { DatabaseResultTab, DatabaseTableViewState, SqlHistoryEntry } from "../model/types";
 import { Tabs, useI18n } from "@unfour/ui";
 import { QueryResultPanel } from "./QueryResultPanel";
@@ -35,6 +41,9 @@ export function DatabaseWorkspace({
   selectedConnectionId,
   selectedTable,
   sql,
+  structure,
+  structureError,
+  structureLoading,
   tableView,
 }: {
   activeResultTab: DatabaseResultTab;
@@ -65,6 +74,9 @@ export function DatabaseWorkspace({
   selectedConnectionId: string | null;
   selectedTable: DatabaseTable | null;
   sql: string;
+  structure?: DatabaseTableStructure | null;
+  structureError?: unknown;
+  structureLoading?: boolean;
   tableView: DatabaseTableViewState | null;
 }) {
   const { t } = useI18n();
@@ -107,12 +119,13 @@ export function DatabaseWorkspace({
         ) : activeTabId === "table-structure" ? (
           <TableInspector
             activeTab={activeStructureTab}
-            error={schemaError}
-            loading={schemaLoading}
+            error={structureError ?? schemaError}
+            loading={Boolean(structureLoading)}
             onPreview={onPreviewSelectedTable}
             onRefresh={onRefreshSchema}
             onSelectTab={onSelectStructureTab}
             previewPending={executePending}
+            structure={structure}
             table={selectedTable}
           />
         ) : (
