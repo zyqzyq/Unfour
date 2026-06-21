@@ -126,7 +126,17 @@ where
     let command_bus = LocalCommandBusAdapter::send_app_data()
         .map_err(|error| io::Error::other(format!("{}: {}", error.code, error.message)))?;
     let server = McpServer::new(command_bus);
+    run_stdio_with_server(&server, reader, &mut writer)
+}
 
+/// Drive the stdio read/write loop with an already-built server. Splitting this
+/// out keeps the transport logic testable without opening the real OS app-data
+/// store (which does not exist in CI).
+fn run_stdio_with_server<R, W>(server: &McpServer, reader: R, writer: &mut W) -> io::Result<()>
+where
+    R: BufRead,
+    W: Write,
+{
     for line in reader.lines() {
         let line = line?;
         if line.trim().is_empty() {
@@ -158,8 +168,10 @@ mod tests {
         DatabaseQueryResult, DatabaseQuerySafety, DatabaseSchema,
     };
 
-    use super::{run_stdio, McpServer, SUPPORTED_PROTOCOL_VERSION};
-    use crate::command_bus_adapter::{CommandBusAdapter, CommandBusAdapterError};
+    use super::{run_stdio_with_server, McpServer, SUPPORTED_PROTOCOL_VERSION};
+    use crate::command_bus_adapter::{
+        CommandBusAdapter, CommandBusAdapterError, LocalCommandBusAdapter,
+    };
 
     struct StubCommandBus;
 
@@ -404,7 +416,13 @@ mod tests {
         .join("\n");
         let mut output = Vec::new();
 
-        run_stdio(Cursor::new(input), &mut output).expect("stdio server should complete");
+        // Use an ephemeral in-memory command bus rather than the real OS
+        // app-data store, which does not exist in CI.
+        let command_bus =
+            LocalCommandBusAdapter::ephemeral().expect("ephemeral command bus should initialize");
+        let server = McpServer::new(command_bus);
+        run_stdio_with_server(&server, Cursor::new(input), &mut output)
+            .expect("stdio server should complete");
 
         let responses = String::from_utf8(output)
             .unwrap()
