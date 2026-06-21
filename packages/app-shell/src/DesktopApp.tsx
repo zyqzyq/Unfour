@@ -32,6 +32,7 @@ export function DesktopApp() {
   const [bottomPanelHeight, setBottomPanelHeight] = useState(220);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [apiSidebarContent, setApiSidebarContent] = useState<ReactNode>(null);
+  const [sshSidebarContent, setSshSidebarContent] = useState<ReactNode>(null);
   const [rightInspectorCollapsed, setRightInspectorCollapsed] = useState(true);
   const [rightInspectorWidth, setRightInspectorWidth] = useState(300);
   const [sidebarWidth, setSidebarWidth] = useState(248);
@@ -42,7 +43,6 @@ export function DesktopApp() {
     setActiveTab,
     setActiveWorkspace,
     setSelectedApiRequest,
-    setSelectedDatabaseConnection,
     sidebarCollapsed,
     toggleSidebar,
     tabs,
@@ -74,6 +74,9 @@ export function DesktopApp() {
   });
   const handleApiSidebarChange = useCallback((content: ReactNode | null) => {
     setApiSidebarContent(content);
+  }, []);
+  const handleSshSidebarChange = useCallback((content: ReactNode | null) => {
+    setSshSidebarContent(content);
   }, []);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
   return (
@@ -135,17 +138,12 @@ export function DesktopApp() {
           <ModuleSidebar
             activeTab={activeTab}
             activeTabId={activeTabId}
-            activeWorkspaceId={activeWorkspace?.id ?? ""}
             apiSidebarContent={apiSidebarContent}
             collapsed={sidebarCollapsed}
-            databaseConnections={sidebarDatabaseConnectionsQuery.data ?? []}
-            onSelectDatabaseConnection={(connection) => {
-              setSelectedDatabaseConnection(connection.id);
-              setActiveTab("database-main");
-            }}
             onWidthChange={setSidebarWidth}
             selectedDatabaseConnectionId={selectedDatabaseConnectionId}
             setActiveTab={setActiveTab}
+            sshSidebarContent={sshSidebarContent}
             width={sidebarWidth}
           />
         }
@@ -181,7 +179,10 @@ export function DesktopApp() {
               </div>
             )}
             {activeTab.kind === "ssh" && activeWorkspace && (
-              <TerminalPage workspaceId={activeWorkspace.id} />
+              <TerminalPage
+                onShellSidebarChange={handleSshSidebarChange}
+                workspaceId={activeWorkspace.id}
+              />
             )}
             {activeTab.kind === "database" && activeWorkspace && (
               <DatabasePage workspaceId={activeWorkspace.id} />
