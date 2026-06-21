@@ -2,13 +2,17 @@ import { useMutation } from "@tanstack/react-query";
 import { executeDatabaseQuery } from "@unfour/command-client";
 import { isConfirmationRequired } from "../result-utils";
 
+export type RunSqlParams = {
+  confirmMutation: boolean;
+  sql: string;
+};
+
 export function useSqlExecution({
   connectionId,
   onConfirmationRequired,
   onError,
   onExecuteStart,
   onSuccess,
-  sql,
   workspaceId,
 }: {
   connectionId: string | null;
@@ -18,12 +22,11 @@ export function useSqlExecution({
   onSuccess: ReturnType<typeof executeDatabaseQuery> extends Promise<infer Result>
     ? (result: Result, confirmMutation: boolean) => void
     : never;
-  sql: string;
   workspaceId: string;
 }) {
   return useMutation({
     onMutate: onExecuteStart,
-    mutationFn: (confirmMutation: boolean) =>
+    mutationFn: ({ confirmMutation, sql }: RunSqlParams) =>
       executeDatabaseQuery({
         workspaceId,
         connectionId: connectionId ?? "",
@@ -31,13 +34,13 @@ export function useSqlExecution({
         limit: 100,
         confirmMutation,
       }),
-    onError: (error, confirmMutation) => {
+    onError: (error, variables) => {
       onConfirmationRequired(isConfirmationRequired(error));
-      onError?.(error, confirmMutation);
+      onError?.(error, variables.confirmMutation);
     },
-    onSuccess: (result, confirmMutation) => {
+    onSuccess: (result, variables) => {
       onConfirmationRequired(false);
-      onSuccess(result, confirmMutation);
+      onSuccess(result, variables.confirmMutation);
     },
   });
 }

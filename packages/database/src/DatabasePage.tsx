@@ -2,11 +2,15 @@ import { CheckCircle2, Save, Trash2, XCircle } from "lucide-react";
 import { FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  createCredential,
   deleteDatabaseConnection,
+  mutateDatabaseRow,
+  rotateCredential,
   saveDatabaseConnection,
   testDatabaseConnection,
 } from "@unfour/command-client";
 import type {
+  DatabaseCellValue,
   DatabaseConnection,
   DatabaseConnectionInput,
   DatabaseQueryResult,
@@ -41,6 +45,7 @@ import { useQueryHistory } from "./hooks/useQueryHistory";
 import { useSchemaTree } from "./hooks/useSchemaTree";
 import { useSqlExecution } from "./hooks/useSqlExecution";
 import { useTableData } from "./hooks/useTableData";
+import { useTableStructure } from "./hooks/useTableStructure";
 import { defaultSql } from "./model/database-state";
 import { databaseTableTreeId } from "./model/database-tree";
 import type {
@@ -48,6 +53,7 @@ import type {
   DatabaseConnectionStatus,
   DatabaseTableViewState,
   SqlHistoryEntry,
+  TableEditing,
 } from "./model/types";
 import { describeDatabaseError, formatDatabaseError, isConfirmationRequired } from "./result-utils";
 
@@ -78,6 +84,7 @@ export function DatabasePage({
   const [sql, setSql] = useState(defaultSql);
   const [tableView, setTableView] = useState<DatabaseTableViewState | null>(null);
   const [selectedTable, setSelectedTable] = useState<DatabaseTable | null>(null);
+  const [password, setPassword] = useState("");
   const [form, setForm] = useState<DatabaseConnectionInput>({
     workspaceId,
     name: "Local SQLite",
@@ -93,6 +100,9 @@ export function DatabasePage({
     [connections, selectedConnectionId],
   );
   const prevSelectedConnectionIdRef = useRef(selectedConnectionId);
+  // Tracks the SQL actually sent to the backend (may be a highlighted
+  // selection rather than the full editor contents) so history reflects it.
+  const executedSqlRef = useRef(sql);
   const selectedSession = selectedConnectionId ? connectionStates[selectedConnectionId] : undefined;
   const selectedConnectionStatus: DatabaseConnectionStatus = selectedSession?.status ?? "disconnected";
   const schemaEnabled = Boolean(
@@ -106,6 +116,18 @@ export function DatabasePage({
     workspaceId,
   });
   const visibleSchema = schemaEnabled ? schemaQuery.data : undefined;
+  const structureEnabled = Boolean(
+    selectedConnection &&
+      selectedTable &&
+      layout.activeTabId === "table-structure" &&
+      (selectedConnectionStatus === "connecting" || selectedConnectionStatus === "connected"),
+  );
+  const structureQuery = useTableStructure({
+    connectionId: selectedConnectionId,
+    enabled: structureEnabled,
+    table: selectedTable,
+    workspaceId,
+  });
   const selectedTableId =
     selectedConnectionId && selectedTable ? databaseTableTreeId(selectedConnectionId, selectedTable) : null;
 
@@ -137,6 +159,7 @@ export function DatabasePage({
   // Sync form state when the selected connection changes (render-time adjustment pattern).
   if (selectedConnectionId !== prevSelectedConnectionIdRef.current) {
     prevSelectedConnectionIdRef.current = selectedConnectionId;
+    setPassword("");
     if (selectedConnection) {
       setForm({
         id: selectedConnection.id,
@@ -179,8 +202,28 @@ export function DatabasePage({
   }, [schemaEnabled, schemaQuery.error, selectedConnectionId]);
 
   const saveMutation = useMutation({
-    mutationFn: saveDatabaseConnection,
+    mutationFn: async ({ input, secret }: { input: DatabaseConnectionInput; secret: string }) => {
+      let credentialRef = input.credentialRef ?? null;
+      // Non-SQLite drivers persist the password through SecretStore and store
+      // only the returned reference. An empty secret while editing keeps the
+      // existing credential untouched.
+      if (input.driver !== "sqlite" && secret.trim()) {
+        if (credentialRef) {
+          await rotateCredential({ workspaceId, credentialRef, secret });
+        } else {
+          const metadata = await createCredential({
+            workspaceId,
+            kind: "database",
+            label: input.name,
+            secret,
+          });
+          credentialRef = metadata.credentialRef;
+        }
+      }
+      return saveDatabaseConnection({ ...input, credentialRef });
+    },
     onSuccess: (connection) => {
+      setPassword("");
       setSelectedDatabaseConnection(connection.id);
       setEditorOpen(false);
       setConnectionState(connection.id, {
@@ -283,7 +326,6 @@ export function DatabasePage({
       }
       recordSuccessfulHistory(result);
     },
-    sql,
     workspaceId,
   });
 
@@ -315,6 +357,18 @@ export function DatabasePage({
       }
     },
     workspaceId,
+  });
+
+  const rowMutation = useMutation({
+    mutationFn: mutateDatabaseRow,
+    onSuccess: () => {
+      // Re-read the current page so the grid reflects the committed change.
+      refreshTablePage();
+    },
+    onError: (error) => {
+      layout.setResultTab("results");
+      setClientError(error);
+    },
   });
 
   useEffect(() => {
@@ -350,13 +404,16 @@ export function DatabasePage({
   function submitConnection(event: FormEvent) {
     event.preventDefault();
     saveMutation.mutate({
-      ...form,
-      workspaceId,
-      credentialRef: form.credentialRef?.trim() || null,
-      sqlitePath: form.sqlitePath?.trim() || null,
-      host: form.host?.trim() || null,
-      database: form.database?.trim() || null,
-      username: form.username?.trim() || null,
+      input: {
+        ...form,
+        workspaceId,
+        credentialRef: form.credentialRef?.trim() || null,
+        sqlitePath: form.sqlitePath?.trim() || null,
+        host: form.host?.trim() || null,
+        database: form.database?.trim() || null,
+        username: form.username?.trim() || null,
+      },
+      secret: password,
     });
   }
 
@@ -399,6 +456,7 @@ export function DatabasePage({
 
   function newConnection() {
     selectConnection(null);
+    setPassword("");
     setForm({ workspaceId, name: "Local SQLite", driver: "sqlite", sqlitePath: "" });
   }
 
@@ -469,7 +527,33 @@ export function DatabasePage({
     browseTablePage(selectedTable, 0, tableView?.pageSize ?? DEFAULT_PREVIEW_PAGE_SIZE);
   }
 
-  function runSql() {
+  function refreshTablePage() {
+    if (selectedTable && tableView) {
+      browseTablePage(selectedTable, tableView.pageIndex, tableView.pageSize);
+    }
+  }
+
+  function mutateRow(
+    operation: "insert" | "update" | "delete",
+    values: DatabaseCellValue[],
+    primaryKey: DatabaseCellValue[],
+  ) {
+    if (!selectedConnectionId || !selectedTable) {
+      return;
+    }
+    setClientError(null);
+    rowMutation.mutate({
+      workspaceId,
+      connectionId: selectedConnectionId,
+      schema: selectedTable.schema,
+      tableName: selectedTable.name,
+      operation,
+      values,
+      primaryKey,
+    });
+  }
+
+  function runSql(overrideSql?: string) {
     executeMutation.reset();
     browseMutation.reset();
     setClientError(null);
@@ -484,7 +568,10 @@ export function DatabasePage({
       return;
     }
 
-    if (!sql.trim()) {
+    // Run the highlighted statement when the editor reports a non-empty
+    // selection; otherwise fall back to the full editor contents.
+    const effectiveSql = overrideSql && overrideSql.trim() ? overrideSql : sql;
+    if (!effectiveSql.trim()) {
       setQueryResult(null);
       setClientError({
         code: "VALIDATION_ERROR",
@@ -494,7 +581,8 @@ export function DatabasePage({
       return;
     }
 
-    executeMutation.mutate(pendingSqlConfirmation);
+    executedSqlRef.current = effectiveSql;
+    executeMutation.mutate({ confirmMutation: pendingSqlConfirmation, sql: effectiveSql });
   }
 
   function clearSql() {
@@ -520,7 +608,7 @@ export function DatabasePage({
       connectionName: selectedConnection?.name ?? t("database.query.unknownConnection"),
       durationMs: result.durationMs,
       rowCount: result.rows.length,
-      sql,
+      sql: executedSqlRef.current,
       status: "success",
     });
   }
@@ -530,7 +618,7 @@ export function DatabasePage({
       connectionId: selectedConnectionId,
       connectionName: selectedConnection?.name ?? t("database.query.unknownConnection"),
       error: formatDatabaseError(error),
-      sql,
+      sql: executedSqlRef.current,
       status: "failed",
     });
   }
@@ -559,6 +647,15 @@ export function DatabasePage({
     layout.setActiveTabId("sql-editor");
   }
 
+  // Load generated SQL (e.g. from a table context-menu action) into the editor.
+  function loadSqlIntoEditor(generatedSql: string) {
+    setSql(generatedSql);
+    setClientError(null);
+    setPendingSqlConfirmation(false);
+    layout.setActiveTabId("sql-editor");
+    layout.setResultTab("results");
+  }
+
   function handleNewConnection() {
     newConnection();
     setEditorOpen(true);
@@ -584,6 +681,7 @@ export function DatabasePage({
     refreshSchema: (connection: DatabaseConnection) => void;
     selectConnection: (connection: DatabaseConnection) => void;
     selectTable: (table: DatabaseTable) => void;
+    useSql: (sql: string) => void;
   } | null>(null);
   sidebarActionsRef.current = {
     connect: connectConnection,
@@ -597,6 +695,7 @@ export function DatabasePage({
     refreshSchema: refreshConnectionSchema,
     selectConnection: (connection) => selectConnection(connection.id),
     selectTable,
+    useSql: loadSqlIntoEditor,
   };
 
   const sidebarHandlers = useMemo(
@@ -612,6 +711,7 @@ export function DatabasePage({
       onRefreshSchema: (connection: DatabaseConnection) => sidebarActionsRef.current?.refreshSchema(connection),
       onSelectConnection: (connection: DatabaseConnection) => sidebarActionsRef.current?.selectConnection(connection),
       onSelectTable: (table: DatabaseTable) => sidebarActionsRef.current?.selectTable(table),
+      onUseSql: (sql: string) => sidebarActionsRef.current?.useSql(sql),
     }),
     [],
   );
@@ -650,6 +750,24 @@ export function DatabasePage({
 
   const activeError = clientError ?? (layout.activeTabId === "table-data" ? browseMutation.error : executeMutation.error);
   const executePending = executeMutation.isPending || browseMutation.isPending;
+
+  // Inline editing is available when a real table with a primary key is being
+  // browsed on a connected session; the primary key locates rows for the
+  // update/delete row commands.
+  const primaryKeyColumns = (selectedTable?.columns ?? [])
+    .filter((column) => column.primaryKey)
+    .map((column) => column.name);
+  const tableEditing: TableEditing | null =
+    selectedTable && tableView && selectedConnectionStatus === "connected" && primaryKeyColumns.length > 0
+      ? {
+          pending: rowMutation.isPending,
+          primaryKeyColumns,
+          onDeleteRow: (primaryKey) => mutateRow("delete", [], primaryKey),
+          onInsertRow: (values) => mutateRow("insert", values, []),
+          onUpdateCell: (columnName, value, primaryKey) =>
+            mutateRow("update", [{ column: columnName, value }], primaryKey),
+        }
+      : null;
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col bg-[var(--u-color-surface)]">
@@ -693,11 +811,16 @@ export function DatabasePage({
           onTablePageChange={(pageIndex, pageSize) => selectedTable && browseTablePage(selectedTable, pageIndex, pageSize)}
           pendingConfirmation={pendingSqlConfirmation}
           queryResult={queryResult}
+          schema={visibleSchema}
           schemaError={schemaQuery.error}
           schemaLoading={schemaEnabled && schemaQuery.isFetching}
           selectedConnectionId={selectedConnectionId}
           selectedTable={selectedTable}
           sql={sql}
+          structure={structureQuery.data}
+          structureError={structureQuery.error}
+          structureLoading={structureEnabled && structureQuery.isFetching}
+          tableEditing={tableEditing}
           tableView={tableView}
         />
       </div>
@@ -712,10 +835,12 @@ export function DatabasePage({
           }
         }}
         onOpenChange={setEditorOpen}
+        onPasswordChange={setPassword}
         onSubmit={submitConnection}
         onTest={connectSelectedConnection}
         onUpdate={updateForm}
         open={editorOpen}
+        password={password}
         result={testResult}
         savePending={saveMutation.isPending}
         selectedConnectionId={selectedConnectionId}
@@ -741,10 +866,12 @@ function DatabaseConnectionDialog({
   form,
   onDelete,
   onOpenChange,
+  onPasswordChange,
   onSubmit,
   onTest,
   onUpdate,
   open,
+  password,
   result,
   savePending,
   selectedConnectionId,
@@ -754,10 +881,12 @@ function DatabaseConnectionDialog({
   form: DatabaseConnectionInput;
   onDelete: () => void;
   onOpenChange: (open: boolean) => void;
+  onPasswordChange: (value: string) => void;
   onSubmit: (event: FormEvent) => void;
   onTest: () => void;
   onUpdate: (patch: Partial<DatabaseConnectionInput>) => void;
   open: boolean;
+  password: string;
   result: DatabaseTestResult | null;
   savePending: boolean;
   selectedConnectionId: string | null;
@@ -818,8 +947,14 @@ function DatabaseConnectionDialog({
                 <Field title={t("database.fields.username")}>
                   <Input onChange={(event) => onUpdate({ username: event.target.value })} value={form.username ?? ""} />
                 </Field>
-                <Field title={t("database.fields.credentialRef")}>
-                  <Input onChange={(event) => onUpdate({ credentialRef: event.target.value })} value={form.credentialRef ?? ""} />
+                <Field title={t("database.fields.password")}>
+                  <Input
+                    autoComplete="off"
+                    onChange={(event) => onPasswordChange(event.target.value)}
+                    placeholder={form.credentialRef ? t("database.fields.passwordKeep") : ""}
+                    type="password"
+                    value={password}
+                  />
                 </Field>
               </>
             )}

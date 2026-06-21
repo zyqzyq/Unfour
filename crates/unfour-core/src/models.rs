@@ -497,6 +497,78 @@ pub struct DatabaseTableColumn {
     pub data_type: String,
     pub nullable: bool,
     pub primary_key: bool,
+    #[serde(default)]
+    pub default_value: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseIndex {
+    pub name: String,
+    pub columns: Vec<String>,
+    pub unique: bool,
+    pub primary: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseForeignKey {
+    pub name: String,
+    pub columns: Vec<String>,
+    pub referenced_table: String,
+    pub referenced_columns: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseTableStructureInput {
+    pub workspace_id: String,
+    pub connection_id: String,
+    pub schema: Option<String>,
+    pub table_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseCellValue {
+    pub column: String,
+    pub value: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseRowMutationInput {
+    pub workspace_id: String,
+    pub connection_id: String,
+    pub schema: Option<String>,
+    pub table_name: String,
+    /// One of: "insert", "update", "delete".
+    pub operation: String,
+    /// Column values to write for insert/update operations.
+    #[serde(default)]
+    pub values: Vec<DatabaseCellValue>,
+    /// Primary-key columns identifying the row for update/delete operations.
+    #[serde(default)]
+    pub primary_key: Vec<DatabaseCellValue>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseRowMutationResult {
+    pub affected_rows: u64,
+    pub sql: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseTableStructure {
+    pub schema: Option<String>,
+    pub name: String,
+    pub kind: String,
+    pub columns: Vec<DatabaseTableColumn>,
+    pub indexes: Vec<DatabaseIndex>,
+    pub foreign_keys: Vec<DatabaseForeignKey>,
+    pub ddl: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

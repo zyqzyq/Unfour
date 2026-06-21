@@ -28,6 +28,7 @@ export function DatabaseSidebar({
   onRefreshSchema,
   onSelectConnection,
   onSelectTable,
+  onUseSql,
   schema,
   schemaLoading,
   selectedConnectionId,
@@ -46,6 +47,7 @@ export function DatabaseSidebar({
   onRefreshSchema: (connection: DatabaseConnection) => void;
   onSelectConnection: (connection: DatabaseConnection) => void;
   onSelectTable: (table: DatabaseTable) => void;
+  onUseSql: (sql: string) => void;
   schema?: DatabaseSchema;
   schemaLoading?: boolean;
   selectedConnectionId: string | null;
@@ -84,6 +86,7 @@ export function DatabaseSidebar({
           onRefreshSchema={onRefreshSchema}
           onSelectConnection={onSelectConnection}
           onSelectTable={onSelectTable}
+          onUseSql={onUseSql}
           schema={schema}
           schemaLoading={schemaLoading}
           selectedConnectionId={selectedConnectionId}

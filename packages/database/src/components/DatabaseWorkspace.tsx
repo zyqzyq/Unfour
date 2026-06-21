@@ -1,5 +1,11 @@
-import type { DatabaseConnection, DatabaseQueryResult, DatabaseTable } from "@unfour/command-client";
-import type { DatabaseResultTab, DatabaseTableViewState, SqlHistoryEntry } from "../model/types";
+import type {
+  DatabaseConnection,
+  DatabaseQueryResult,
+  DatabaseSchema,
+  DatabaseTable,
+  DatabaseTableStructure,
+} from "@unfour/command-client";
+import type { DatabaseResultTab, DatabaseTableViewState, SqlHistoryEntry, TableEditing } from "../model/types";
 import { Tabs, useI18n } from "@unfour/ui";
 import { QueryResultPanel } from "./QueryResultPanel";
 import { SqlEditorTab } from "./SqlEditorTab";
@@ -29,11 +35,16 @@ export function DatabaseWorkspace({
   onTablePageChange,
   pendingConfirmation,
   queryResult,
+  schema,
   schemaError,
   schemaLoading,
   selectedConnectionId,
   selectedTable,
   sql,
+  structure,
+  structureError,
+  structureLoading,
+  tableEditing,
   tableView,
 }: {
   activeResultTab: DatabaseResultTab;
@@ -47,7 +58,7 @@ export function DatabaseWorkspace({
   onClearSql: () => void;
   onPreviewSelectedTable: () => void;
   onRefreshSchema: () => void;
-  onRun: () => void;
+  onRun: (selectedSql?: string) => void;
   onSelectConnection: (connectionId: string) => void;
   onSelectHistory: (entry: SqlHistoryEntry) => void;
   onSelectStructureTab: (tab: "columns" | "indexes" | "constraints" | "properties" | "ddl") => void;
@@ -58,11 +69,16 @@ export function DatabaseWorkspace({
   onTablePageChange: (pageIndex: number, pageSize: number) => void;
   pendingConfirmation: boolean;
   queryResult: DatabaseQueryResult | null;
+  schema?: DatabaseSchema;
   schemaError: unknown;
   schemaLoading: boolean;
   selectedConnectionId: string | null;
   selectedTable: DatabaseTable | null;
   sql: string;
+  structure?: DatabaseTableStructure | null;
+  structureError?: unknown;
+  structureLoading?: boolean;
+  tableEditing?: TableEditing | null;
   tableView: DatabaseTableViewState | null;
 }) {
   const { t } = useI18n();
@@ -96,6 +112,7 @@ export function DatabaseWorkspace({
       <div className="flex min-h-0 flex-1 flex-col">
         {activeTabId === "table-data" ? (
           <TableDataTab
+            editing={tableEditing}
             executePending={executePending}
             onPageChange={onTablePageChange}
             onRefresh={() => tableView && onTablePageChange(tableView.pageIndex, tableView.pageSize)}
@@ -105,12 +122,13 @@ export function DatabaseWorkspace({
         ) : activeTabId === "table-structure" ? (
           <TableInspector
             activeTab={activeStructureTab}
-            error={schemaError}
-            loading={schemaLoading}
+            error={structureError ?? schemaError}
+            loading={Boolean(structureLoading)}
             onPreview={onPreviewSelectedTable}
             onRefresh={onRefreshSchema}
             onSelectTab={onSelectStructureTab}
             previewPending={executePending}
+            structure={structure}
             table={selectedTable}
           />
         ) : (
@@ -123,6 +141,7 @@ export function DatabaseWorkspace({
             onSqlChange={onSqlChange}
             onStop={onStop}
             pendingConfirmation={pendingConfirmation}
+            schema={schema}
             selectedConnectionId={selectedConnectionId}
             sql={sql}
           />

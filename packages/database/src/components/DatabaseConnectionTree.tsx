@@ -30,6 +30,7 @@ export function DatabaseConnectionTree({
   onRefreshSchema,
   onSelectConnection,
   onSelectTable,
+  onUseSql,
   schema,
   schemaLoading = false,
   selectedConnectionId,
@@ -47,6 +48,7 @@ export function DatabaseConnectionTree({
   onRefreshSchema?: (connection: DatabaseConnection) => void;
   onSelectConnection: (connection: DatabaseConnection) => void;
   onSelectTable?: (table: DatabaseTable) => void;
+  onUseSql?: (sql: string) => void;
   schema?: DatabaseSchema;
   schemaLoading?: boolean;
   selectedConnectionId: string | null;
@@ -107,9 +109,11 @@ export function DatabaseConnectionTree({
             defaultExpandedIds,
             onPreviewTable,
             onRefreshSchema,
+            onUseSql,
             schema,
             schemaLoading,
             status,
+            t,
             tableLookup,
           })
         : undefined,
@@ -155,18 +159,22 @@ function buildSelectedConnectionChildren({
   defaultExpandedIds,
   onPreviewTable,
   onRefreshSchema,
+  onUseSql,
   schema,
   schemaLoading,
   status,
+  t,
   tableLookup,
 }: {
   connection: DatabaseConnection;
   defaultExpandedIds: Set<string>;
   onPreviewTable?: (table: DatabaseTable) => void;
   onRefreshSchema?: (connection: DatabaseConnection) => void;
+  onUseSql?: (sql: string) => void;
   schema?: DatabaseSchema;
   schemaLoading: boolean;
   status: DatabaseConnectionStatus;
+  t: ReturnType<typeof useI18n>["t"];
   tableLookup: Map<string, DatabaseTable>;
 }): TreeViewItem[] {
   if (status === "disconnected") {
@@ -225,7 +233,9 @@ function buildSelectedConnectionChildren({
   if (connection.driver === "sqlite") {
     return [
       {
-        children: schema.tables.map((table) => tableItem(connection, table, tableLookup, onPreviewTable)),
+        children: schema.tables.map((table) =>
+          tableItem({ connection, onPreviewTable, onUseSql, t, table, tableLookup }),
+        ),
         icon: <Database size={13} />,
         id: databaseNodeId,
         label: databaseLabel(connection),
@@ -250,7 +260,9 @@ function buildSelectedConnectionChildren({
               <RefreshCw size={12} />
             </IconButton>
           ) : undefined,
-          children: tables.map((table) => tableItem(connection, table, tableLookup, onPreviewTable)),
+          children: tables.map((table) =>
+            tableItem({ connection, onPreviewTable, onUseSql, t, table, tableLookup }),
+          ),
           icon: <Columns3 size={13} />,
           id: schemaNodeId,
           label: schemaName,
@@ -265,12 +277,21 @@ function buildSelectedConnectionChildren({
   ];
 }
 
-function tableItem(
-  connection: DatabaseConnection,
-  table: DatabaseTable,
-  tableLookup: Map<string, DatabaseTable>,
-  onPreviewTable?: (table: DatabaseTable) => void,
-): TreeViewItem {
+function tableItem({
+  connection,
+  onPreviewTable,
+  onUseSql,
+  t,
+  table,
+  tableLookup,
+}: {
+  connection: DatabaseConnection;
+  onPreviewTable?: (table: DatabaseTable) => void;
+  onUseSql?: (sql: string) => void;
+  t: ReturnType<typeof useI18n>["t"];
+  table: DatabaseTable;
+  tableLookup: Map<string, DatabaseTable>;
+}): TreeViewItem {
   const id = databaseTableTreeId(connection.id, table);
   tableLookup.set(id, table);
   return {
@@ -279,6 +300,15 @@ function tableItem(
         <Play size={12} />
       </IconButton>
     ) : undefined,
+    contextMenu: (
+      <TableContextMenu
+        connection={connection}
+        onPreviewTable={onPreviewTable}
+        onUseSql={onUseSql}
+        t={t}
+        table={table}
+      />
+    ),
     children: table.columns.map((column) => ({
       icon: <Columns3 size={12} />,
       id: `${id}:column:${column.name}`,
@@ -292,6 +322,71 @@ function tableItem(
     meta: <Badge tone="neutral">{table.kind}</Badge>,
     title: table.schema ? `${table.schema}.${table.name}` : table.name,
   };
+}
+
+function TableContextMenu({
+  connection,
+  onPreviewTable,
+  onUseSql,
+  t,
+  table,
+}: {
+  connection: DatabaseConnection;
+  onPreviewTable?: (table: DatabaseTable) => void;
+  onUseSql?: (sql: string) => void;
+  t: ReturnType<typeof useI18n>["t"];
+  table: DatabaseTable;
+}) {
+  return (
+    <>
+      {onPreviewTable && (
+        <ContextMenuItem onSelect={() => onPreviewTable(table)}>
+          {t("database.tree.previewData")}
+        </ContextMenuItem>
+      )}
+      {onUseSql && (
+        <ContextMenuItem onSelect={() => onUseSql(generateSelectSql(connection.driver, table))}>
+          {t("database.tree.generateSelect")}
+        </ContextMenuItem>
+      )}
+      {onUseSql && (
+        <ContextMenuItem onSelect={() => onUseSql(generateInsertSql(connection.driver, table))}>
+          {t("database.tree.generateInsert")}
+        </ContextMenuItem>
+      )}
+      <ContextMenuItem onSelect={() => void navigator.clipboard?.writeText(table.name)}>
+        {t("database.tree.copyTableName")}
+      </ContextMenuItem>
+    </>
+  );
+}
+
+function quoteDbIdentifier(driver: string, value: string) {
+  if (driver === "mysql") {
+    return `\`${value.split("`").join("``")}\``;
+  }
+  return `"${value.split('"').join('""')}"`;
+}
+
+function qualifiedSqlName(driver: string, table: DatabaseTable) {
+  const name = quoteDbIdentifier(driver, table.name);
+  return table.schema ? `${quoteDbIdentifier(driver, table.schema)}.${name}` : name;
+}
+
+function generateSelectSql(driver: string, table: DatabaseTable) {
+  const columns = table.columns.length
+    ? table.columns.map((column) => quoteDbIdentifier(driver, column.name)).join(", ")
+    : "*";
+  return `SELECT ${columns}\nFROM ${qualifiedSqlName(driver, table)}\nLIMIT 100;`;
+}
+
+function generateInsertSql(driver: string, table: DatabaseTable) {
+  if (!table.columns.length) {
+    return `INSERT INTO ${qualifiedSqlName(driver, table)} () VALUES ();`;
+  }
+  const columns = table.columns.map((column) => quoteDbIdentifier(driver, column.name)).join(", ");
+  const placeholders = table.columns.map(() => "NULL").join(", ");
+  return `INSERT INTO ${qualifiedSqlName(driver, table)} (${columns})\nVALUES (${placeholders});`;
 }
 
 function ConnectionActions({

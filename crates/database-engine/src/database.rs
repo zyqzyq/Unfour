@@ -6,9 +6,11 @@ use sqlx::{Column, Row, TypeInfo, ValueRef};
 use std::path::Path;
 use std::time::{Duration, Instant};
 use unfour_core::models::{
-    DatabaseBrowseInput, DatabaseBrowseResult, DatabaseConnection, DatabaseConnectionConfig,
-    DatabaseConnectionInput, DatabaseQueryInput, DatabaseQueryResult, DatabaseQuerySafety,
-    DatabaseResultColumn, DatabaseSchema, DatabaseTable, DatabaseTableColumn, DatabaseTestResult,
+    DatabaseBrowseInput, DatabaseBrowseResult, DatabaseCellValue, DatabaseConnection,
+    DatabaseConnectionConfig, DatabaseConnectionInput, DatabaseForeignKey, DatabaseIndex,
+    DatabaseQueryInput, DatabaseQueryResult, DatabaseQuerySafety, DatabaseResultColumn,
+    DatabaseRowMutationInput, DatabaseRowMutationResult, DatabaseSchema, DatabaseTable,
+    DatabaseTableColumn, DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult,
     DbQueryHistoryEntry, DbQueryHistoryRecordInput, StoredConnection,
 };
 use unfour_core::{AppError, AppResult};
@@ -770,6 +772,223 @@ impl DatabaseService {
         }
     }
 
+    /// Load the full structure (columns, indexes, foreign keys, DDL) for a
+    /// single table on demand. Kept separate from `schema` so browsing the
+    /// connection tree stays lightweight.
+    pub async fn table_structure(
+        &self,
+        input: DatabaseTableStructureInput,
+    ) -> AppResult<DatabaseTableStructure> {
+        validate_workspace_id(&input.workspace_id)?;
+        validate_connection_id(&input.connection_id)?;
+        let table_name = input.table_name.trim();
+        if table_name.is_empty() {
+            return Err(AppError::Validation(
+                "table name cannot be empty".to_string(),
+            ));
+        }
+
+        let connection = self
+            .get_connection(&input.workspace_id, &input.connection_id)
+            .await?;
+
+        match connection.driver.as_str() {
+            "sqlite" => {
+                let pool = sqlite_pool(&connection).await?;
+                ensure_sqlite_table_exists(&pool, table_name).await?;
+                let columns = sqlite_columns(&pool, table_name).await?;
+                let indexes = sqlite_indexes(&pool, table_name).await?;
+                let foreign_keys = sqlite_foreign_keys(&pool, table_name).await?;
+                let kind = sqlite_table_kind(&pool, table_name).await?;
+                let ddl = sqlite_ddl(&pool, table_name).await?;
+                Ok(DatabaseTableStructure {
+                    schema: None,
+                    name: table_name.to_string(),
+                    kind,
+                    columns,
+                    indexes,
+                    foreign_keys,
+                    ddl,
+                })
+            }
+            "postgres" => {
+                let pool = self.postgres_pool(&connection).await?;
+                let schema = input
+                    .schema
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or("public");
+                ensure_postgres_table_exists(&pool, schema, table_name)
+                    .await
+                    .map_err(sanitize_pg_app_error)?;
+                let columns = postgres_columns(&pool, schema, table_name)
+                    .await
+                    .map_err(sanitize_pg_app_error)?;
+                let indexes = postgres_indexes(&pool, schema, table_name)
+                    .await
+                    .map_err(sanitize_pg_app_error)?;
+                let foreign_keys = postgres_foreign_keys(&pool, schema, table_name)
+                    .await
+                    .map_err(sanitize_pg_app_error)?;
+                Ok(DatabaseTableStructure {
+                    schema: Some(schema.to_string()),
+                    name: table_name.to_string(),
+                    kind: "table".to_string(),
+                    columns,
+                    indexes,
+                    foreign_keys,
+                    ddl: None,
+                })
+            }
+            "mysql" => {
+                let pool = self.mysql_pool(&connection).await?;
+                let schema = input
+                    .schema
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .or(connection.database.as_deref())
+                    .ok_or_else(|| {
+                        AppError::Validation("MySQL database name is required".to_string())
+                    })?;
+                ensure_mysql_table_exists(&pool, schema, table_name)
+                    .await
+                    .map_err(sanitize_mysql_app_error)?;
+                let columns = mysql_columns(&pool, schema, table_name)
+                    .await
+                    .map_err(sanitize_mysql_app_error)?;
+                let indexes = mysql_indexes(&pool, schema, table_name)
+                    .await
+                    .map_err(sanitize_mysql_app_error)?;
+                let foreign_keys = mysql_foreign_keys(&pool, schema, table_name)
+                    .await
+                    .map_err(sanitize_mysql_app_error)?;
+                let ddl = mysql_ddl(&pool, schema, table_name)
+                    .await
+                    .map_err(sanitize_mysql_app_error)?;
+                Ok(DatabaseTableStructure {
+                    schema: Some(schema.to_string()),
+                    name: table_name.to_string(),
+                    kind: "table".to_string(),
+                    columns,
+                    indexes,
+                    foreign_keys,
+                    ddl,
+                })
+            }
+            driver => Err(AppError::Unsupported(format!(
+                "{} table structure is not yet supported",
+                display_driver(driver)
+            ))),
+        }
+    }
+
+    /// Insert, update, or delete a single table row. Update and delete require
+    /// a non-empty primary key so a malformed request can never rewrite a whole
+    /// table. Values are emitted as escaped, coercible string literals.
+    pub async fn mutate_table_row(
+        &self,
+        input: DatabaseRowMutationInput,
+    ) -> AppResult<DatabaseRowMutationResult> {
+        validate_workspace_id(&input.workspace_id)?;
+        validate_connection_id(&input.connection_id)?;
+        let table_name = input.table_name.trim();
+        if table_name.is_empty() {
+            return Err(AppError::Validation(
+                "table name cannot be empty".to_string(),
+            ));
+        }
+        let operation = input.operation.trim().to_ascii_lowercase();
+
+        let connection = self
+            .get_connection(&input.workspace_id, &input.connection_id)
+            .await?;
+
+        match connection.driver.as_str() {
+            "sqlite" => {
+                let pool = sqlite_pool(&connection).await?;
+                ensure_sqlite_table_exists(&pool, table_name).await?;
+                let sql = build_row_mutation_sql(
+                    SqlDialect::Standard,
+                    None,
+                    table_name,
+                    &operation,
+                    &input.values,
+                    &input.primary_key,
+                )?;
+                let result = sqlx::query(&sql).execute(&pool).await?;
+                Ok(DatabaseRowMutationResult {
+                    affected_rows: result.rows_affected(),
+                    sql,
+                })
+            }
+            "postgres" => {
+                let pool = self.postgres_pool(&connection).await?;
+                let schema = input
+                    .schema
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or("public");
+                ensure_postgres_table_exists(&pool, schema, table_name)
+                    .await
+                    .map_err(sanitize_pg_app_error)?;
+                let sql = build_row_mutation_sql(
+                    SqlDialect::Standard,
+                    Some(schema),
+                    table_name,
+                    &operation,
+                    &input.values,
+                    &input.primary_key,
+                )?;
+                let result = sqlx::query(&sql)
+                    .execute(&pool)
+                    .await
+                    .map_err(sanitize_pg_error)?;
+                Ok(DatabaseRowMutationResult {
+                    affected_rows: result.rows_affected(),
+                    sql,
+                })
+            }
+            "mysql" => {
+                let pool = self.mysql_pool(&connection).await?;
+                let schema = input
+                    .schema
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .or(connection.database.as_deref())
+                    .ok_or_else(|| {
+                        AppError::Validation("MySQL database name is required".to_string())
+                    })?;
+                ensure_mysql_table_exists(&pool, schema, table_name)
+                    .await
+                    .map_err(sanitize_mysql_app_error)?;
+                let sql = build_row_mutation_sql(
+                    SqlDialect::MySql,
+                    Some(schema),
+                    table_name,
+                    &operation,
+                    &input.values,
+                    &input.primary_key,
+                )?;
+                let result = sqlx::query(&sql)
+                    .execute(&pool)
+                    .await
+                    .map_err(sanitize_mysql_error)?;
+                Ok(DatabaseRowMutationResult {
+                    affected_rows: result.rows_affected(),
+                    sql,
+                })
+            }
+            driver => Err(AppError::Unsupported(format!(
+                "{} row editing is not yet supported",
+                display_driver(driver)
+            ))),
+        }
+    }
+
     pub fn capability_summary(&self) -> serde_json::Value {
         serde_json::json!({
             "status": "mvp",
@@ -791,7 +1010,8 @@ impl DatabaseService {
                 "mysql-sql-editor",
                 "mysql-read-only-table-data",
                 "paged-query-results",
-                "credential-backed-auth"
+                "credential-backed-auth",
+                "on-demand-table-structure"
             ]
         })
     }
@@ -957,9 +1177,110 @@ async fn postgres_columns(
                 data_type,
                 nullable: is_nullable == "YES",
                 primary_key,
+                default_value: column_default,
             })
         })
         .collect()
+}
+
+async fn postgres_indexes(
+    pool: &sqlx::PgPool,
+    schema: &str,
+    table_name: &str,
+) -> Result<Vec<DatabaseIndex>, AppError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT i.relname AS index_name,
+               ix.indisunique AS is_unique,
+               ix.indisprimary AS is_primary,
+               a.attname AS column_name,
+               array_position(ix.indkey::int2[], a.attnum) AS ord
+        FROM pg_class t
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        JOIN pg_index ix ON ix.indrelid = t.oid
+        JOIN pg_class i ON i.oid = ix.indexrelid
+        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey::int2[])
+        WHERE n.nspname = $1 AND t.relname = $2
+        ORDER BY index_name, ord
+        "#,
+    )
+    .bind(schema)
+    .bind(table_name)
+    .fetch_all(pool)
+    .await?;
+
+    let mut indexes: Vec<DatabaseIndex> = Vec::new();
+    for row in rows {
+        let name: String = row.try_get("index_name")?;
+        let unique: bool = row.try_get("is_unique")?;
+        let primary: bool = row.try_get("is_primary")?;
+        let column_name: String = row.try_get("column_name")?;
+
+        if let Some(existing) = indexes.iter_mut().find(|idx| idx.name == name) {
+            existing.columns.push(column_name);
+        } else {
+            indexes.push(DatabaseIndex {
+                name,
+                columns: vec![column_name],
+                unique,
+                primary,
+            });
+        }
+    }
+
+    Ok(indexes)
+}
+
+async fn postgres_foreign_keys(
+    pool: &sqlx::PgPool,
+    schema: &str,
+    table_name: &str,
+) -> Result<Vec<DatabaseForeignKey>, AppError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT con.conname AS name,
+               att.attname AS column_name,
+               cl.relname AS referenced_table,
+               fatt.attname AS referenced_column,
+               k.ord AS ord
+        FROM pg_constraint con
+        JOIN pg_class c ON c.oid = con.conrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS k(attnum, ord) ON true
+        JOIN pg_attribute att ON att.attrelid = con.conrelid AND att.attnum = k.attnum
+        JOIN pg_class cl ON cl.oid = con.confrelid
+        JOIN LATERAL unnest(con.confkey) WITH ORDINALITY AS fk(attnum, ford) ON fk.ford = k.ord
+        JOIN pg_attribute fatt ON fatt.attrelid = con.confrelid AND fatt.attnum = fk.attnum
+        WHERE con.contype = 'f' AND n.nspname = $1 AND c.relname = $2
+        ORDER BY name, ord
+        "#,
+    )
+    .bind(schema)
+    .bind(table_name)
+    .fetch_all(pool)
+    .await?;
+
+    let mut keys: Vec<DatabaseForeignKey> = Vec::new();
+    for row in rows {
+        let name: String = row.try_get("name")?;
+        let column_name: String = row.try_get("column_name")?;
+        let referenced_table: String = row.try_get("referenced_table")?;
+        let referenced_column: String = row.try_get("referenced_column")?;
+
+        if let Some(existing) = keys.iter_mut().find(|fk| fk.name == name) {
+            existing.columns.push(column_name);
+            existing.referenced_columns.push(referenced_column);
+        } else {
+            keys.push(DatabaseForeignKey {
+                name,
+                columns: vec![column_name],
+                referenced_table,
+                referenced_columns: vec![referenced_column],
+            });
+        }
+    }
+
+    Ok(keys)
 }
 
 async fn ensure_postgres_table_exists(
@@ -1156,7 +1477,7 @@ async fn mysql_columns(
 ) -> Result<Vec<DatabaseTableColumn>, AppError> {
     let rows = sqlx::query(
         r#"
-        SELECT column_name, column_type, is_nullable, column_key
+        SELECT column_name, column_type, is_nullable, column_key, column_default
         FROM information_schema.columns
         WHERE table_schema = ? AND table_name = ?
         ORDER BY ordinal_position
@@ -1173,14 +1494,109 @@ async fn mysql_columns(
             let data_type: String = row.try_get("column_type")?;
             let is_nullable: String = row.try_get("is_nullable")?;
             let column_key: String = row.try_get("column_key")?;
+            let default_value: Option<String> = row.try_get("column_default")?;
             Ok(DatabaseTableColumn {
                 name,
                 data_type,
                 nullable: is_nullable == "YES",
                 primary_key: column_key == "PRI",
+                default_value,
             })
         })
         .collect()
+}
+
+async fn mysql_indexes(
+    pool: &sqlx::MySqlPool,
+    schema: &str,
+    table_name: &str,
+) -> Result<Vec<DatabaseIndex>, AppError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT index_name, non_unique, seq_in_index, column_name
+        FROM information_schema.statistics
+        WHERE table_schema = ? AND table_name = ?
+        ORDER BY index_name, seq_in_index
+        "#,
+    )
+    .bind(schema)
+    .bind(table_name)
+    .fetch_all(pool)
+    .await?;
+
+    let mut indexes: Vec<DatabaseIndex> = Vec::new();
+    for row in rows {
+        let name: String = row.try_get("index_name")?;
+        let non_unique: i64 = row.try_get("non_unique")?;
+        let column_name: String = row.try_get("column_name")?;
+
+        if let Some(existing) = indexes.iter_mut().find(|idx| idx.name == name) {
+            existing.columns.push(column_name);
+        } else {
+            indexes.push(DatabaseIndex {
+                primary: name == "PRIMARY",
+                unique: non_unique == 0,
+                name,
+                columns: vec![column_name],
+            });
+        }
+    }
+
+    Ok(indexes)
+}
+
+async fn mysql_foreign_keys(
+    pool: &sqlx::MySqlPool,
+    schema: &str,
+    table_name: &str,
+) -> Result<Vec<DatabaseForeignKey>, AppError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT constraint_name, column_name, referenced_table_name, referenced_column_name
+        FROM information_schema.key_column_usage
+        WHERE table_schema = ? AND table_name = ? AND referenced_table_name IS NOT NULL
+        ORDER BY constraint_name, ordinal_position
+        "#,
+    )
+    .bind(schema)
+    .bind(table_name)
+    .fetch_all(pool)
+    .await?;
+
+    let mut keys: Vec<DatabaseForeignKey> = Vec::new();
+    for row in rows {
+        let name: String = row.try_get("constraint_name")?;
+        let column_name: String = row.try_get("column_name")?;
+        let referenced_table: String = row.try_get("referenced_table_name")?;
+        let referenced_column: String = row.try_get("referenced_column_name")?;
+
+        if let Some(existing) = keys.iter_mut().find(|fk| fk.name == name) {
+            existing.columns.push(column_name);
+            existing.referenced_columns.push(referenced_column);
+        } else {
+            keys.push(DatabaseForeignKey {
+                name,
+                columns: vec![column_name],
+                referenced_table,
+                referenced_columns: vec![referenced_column],
+            });
+        }
+    }
+
+    Ok(keys)
+}
+
+async fn mysql_ddl(
+    pool: &sqlx::MySqlPool,
+    schema: &str,
+    table_name: &str,
+) -> Result<Option<String>, AppError> {
+    let sql = format!(
+        "SHOW CREATE TABLE {}",
+        quote_mysql_qualified_identifier(schema, table_name)
+    );
+    let row = sqlx::query(&sql).fetch_one(pool).await?;
+    Ok(row.try_get::<String, _>("Create Table").ok())
 }
 
 async fn ensure_mysql_table_exists(
@@ -1354,15 +1770,102 @@ async fn sqlite_columns(
             let data_type: String = row.try_get("type")?;
             let notnull: i64 = row.try_get("notnull")?;
             let primary_key: i64 = row.try_get("pk")?;
+            let default_value: Option<String> = row.try_get("dflt_value")?;
 
             Ok(DatabaseTableColumn {
                 name,
                 data_type,
                 nullable: notnull == 0,
                 primary_key: primary_key > 0,
+                default_value,
             })
         })
         .collect()
+}
+
+async fn sqlite_table_kind(pool: &sqlx::SqlitePool, table_name: &str) -> AppResult<String> {
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT type FROM sqlite_master WHERE name = ?1 LIMIT 1")
+            .bind(table_name)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row
+        .map(|value| value.0)
+        .unwrap_or_else(|| "table".to_string()))
+}
+
+async fn sqlite_ddl(pool: &sqlx::SqlitePool, table_name: &str) -> AppResult<Option<String>> {
+    let row: Option<(Option<String>,)> =
+        sqlx::query_as("SELECT sql FROM sqlite_master WHERE name = ?1 LIMIT 1")
+            .bind(table_name)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row.and_then(|value| value.0))
+}
+
+async fn sqlite_indexes(
+    pool: &sqlx::SqlitePool,
+    table_name: &str,
+) -> AppResult<Vec<DatabaseIndex>> {
+    let list_sql = format!("PRAGMA index_list({})", quote_identifier(table_name));
+    let list_rows = sqlx::query(&list_sql).fetch_all(pool).await?;
+
+    let mut indexes = Vec::with_capacity(list_rows.len());
+    for row in list_rows {
+        let name: String = row.try_get("name")?;
+        let unique: i64 = row.try_get("unique")?;
+        let origin: String = row.try_get("origin").unwrap_or_default();
+
+        let info_sql = format!("PRAGMA index_info({})", quote_identifier(&name));
+        let info_rows = sqlx::query(&info_sql).fetch_all(pool).await?;
+        let columns = info_rows
+            .iter()
+            .map(|info| info.try_get::<String, _>("name"))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        indexes.push(DatabaseIndex {
+            name,
+            columns,
+            unique: unique != 0,
+            primary: origin == "pk",
+        });
+    }
+
+    Ok(indexes)
+}
+
+async fn sqlite_foreign_keys(
+    pool: &sqlx::SqlitePool,
+    table_name: &str,
+) -> AppResult<Vec<DatabaseForeignKey>> {
+    let sql = format!("PRAGMA foreign_key_list({})", quote_identifier(table_name));
+    let rows = sqlx::query(&sql).fetch_all(pool).await?;
+
+    // Rows for the same foreign key share an `id`; group them in order.
+    let mut grouped: Vec<(i64, DatabaseForeignKey)> = Vec::new();
+    for row in rows {
+        let id: i64 = row.try_get("id")?;
+        let referenced_table: String = row.try_get("table")?;
+        let from: String = row.try_get("from")?;
+        let to: String = row.try_get("to")?;
+
+        if let Some((_, fk)) = grouped.iter_mut().find(|(existing, _)| *existing == id) {
+            fk.columns.push(from);
+            fk.referenced_columns.push(to);
+        } else {
+            grouped.push((
+                id,
+                DatabaseForeignKey {
+                    name: format!("fk_{}_{}", table_name, id),
+                    columns: vec![from],
+                    referenced_table,
+                    referenced_columns: vec![to],
+                },
+            ));
+        }
+    }
+
+    Ok(grouped.into_iter().map(|(_, fk)| fk).collect())
 }
 
 async fn ensure_sqlite_table_exists(pool: &sqlx::SqlitePool, table_name: &str) -> AppResult<()> {
@@ -1614,6 +2117,135 @@ fn mysql_browse_sql(schema: &str, table_name: &str, limit: u32, offset: u32) -> 
         limit,
         offset
     )
+}
+
+#[derive(Clone, Copy)]
+enum SqlDialect {
+    /// SQLite and PostgreSQL: double-quoted identifiers, `''` escapes only.
+    Standard,
+    /// MySQL/MariaDB: backtick identifiers and backslash escaping.
+    MySql,
+}
+
+impl SqlDialect {
+    fn quote_ident(&self, value: &str) -> String {
+        match self {
+            SqlDialect::Standard => quote_identifier(value),
+            SqlDialect::MySql => quote_mysql_identifier(value),
+        }
+    }
+
+    fn quote_qualified(&self, schema: Option<&str>, table: &str) -> String {
+        match schema {
+            Some(schema) => format!("{}.{}", self.quote_ident(schema), self.quote_ident(table)),
+            None => self.quote_ident(table),
+        }
+    }
+
+    fn literal(&self, value: Option<&str>) -> String {
+        match value {
+            None => "NULL".to_string(),
+            Some(value) => match self {
+                SqlDialect::Standard => format!("'{}'", value.replace('\'', "''")),
+                SqlDialect::MySql => {
+                    format!("'{}'", value.replace('\\', "\\\\").replace('\'', "''"))
+                }
+            },
+        }
+    }
+}
+
+fn build_row_mutation_sql(
+    dialect: SqlDialect,
+    schema: Option<&str>,
+    table_name: &str,
+    operation: &str,
+    values: &[DatabaseCellValue],
+    primary_key: &[DatabaseCellValue],
+) -> AppResult<String> {
+    let qualified = dialect.quote_qualified(schema, table_name);
+
+    let predicate = |cell: &DatabaseCellValue| match cell.value.as_deref() {
+        None => format!("{} IS NULL", dialect.quote_ident(&cell.column)),
+        Some(value) => format!(
+            "{} = {}",
+            dialect.quote_ident(&cell.column),
+            dialect.literal(Some(value))
+        ),
+    };
+
+    match operation {
+        "insert" => {
+            if values.is_empty() {
+                return Err(AppError::Validation(
+                    "insert requires at least one column value".to_string(),
+                ));
+            }
+            let columns = values
+                .iter()
+                .map(|cell| dialect.quote_ident(&cell.column))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let literals = values
+                .iter()
+                .map(|cell| dialect.literal(cell.value.as_deref()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            Ok(format!(
+                "INSERT INTO {} ({}) VALUES ({})",
+                qualified, columns, literals
+            ))
+        }
+        "update" => {
+            if values.is_empty() {
+                return Err(AppError::Validation(
+                    "update requires at least one column value".to_string(),
+                ));
+            }
+            if primary_key.is_empty() {
+                return Err(AppError::Validation(
+                    "update requires a primary key to identify the row".to_string(),
+                ));
+            }
+            let assignments = values
+                .iter()
+                .map(|cell| {
+                    format!(
+                        "{} = {}",
+                        dialect.quote_ident(&cell.column),
+                        dialect.literal(cell.value.as_deref())
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            let where_clause = primary_key
+                .iter()
+                .map(predicate)
+                .collect::<Vec<_>>()
+                .join(" AND ");
+            Ok(format!(
+                "UPDATE {} SET {} WHERE {}",
+                qualified, assignments, where_clause
+            ))
+        }
+        "delete" => {
+            if primary_key.is_empty() {
+                return Err(AppError::Validation(
+                    "delete requires a primary key to identify the row".to_string(),
+                ));
+            }
+            let where_clause = primary_key
+                .iter()
+                .map(predicate)
+                .collect::<Vec<_>>()
+                .join(" AND ");
+            Ok(format!("DELETE FROM {} WHERE {}", qualified, where_clause))
+        }
+        other => Err(AppError::Validation(format!(
+            "unsupported row operation: {}",
+            other
+        ))),
+    }
 }
 
 fn returns_rows(sql: &str) -> bool {
@@ -2102,6 +2734,139 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn sqlite_table_structure_exposes_columns_indexes_and_ddl() {
+        let (service, workspace_id) = service_with_workspace().await;
+        let path = sqlite_fixture().await;
+        let connection = service
+            .save_connection(sqlite_input(&workspace_id, &path))
+            .await
+            .expect("save connection");
+
+        let structure = service
+            .table_structure(DatabaseTableStructureInput {
+                workspace_id: workspace_id.clone(),
+                connection_id: connection.id.clone(),
+                schema: None,
+                table_name: "deploys".to_string(),
+            })
+            .await
+            .expect("table structure");
+
+        assert_eq!(structure.name, "deploys");
+        assert!(structure
+            .columns
+            .iter()
+            .any(|column| column.name == "version"));
+        let ddl = structure.ddl.expect("ddl present");
+        assert!(ddl.to_ascii_uppercase().contains("CREATE TABLE"));
+
+        let missing = service
+            .table_structure(DatabaseTableStructureInput {
+                workspace_id,
+                connection_id: connection.id,
+                schema: None,
+                table_name: "missing".to_string(),
+            })
+            .await;
+        assert!(matches!(missing, Err(AppError::NotFound(_))));
+        let _ = fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn sqlite_row_mutation_inserts_updates_and_deletes_by_primary_key() {
+        let (service, workspace_id) = service_with_workspace().await;
+        let path = sqlite_fixture().await;
+        let connection = service
+            .save_connection(sqlite_input(&workspace_id, &path))
+            .await
+            .expect("save connection");
+
+        let insert = service
+            .mutate_table_row(DatabaseRowMutationInput {
+                workspace_id: workspace_id.clone(),
+                connection_id: connection.id.clone(),
+                schema: None,
+                table_name: "deploys".to_string(),
+                operation: "insert".to_string(),
+                values: vec![
+                    DatabaseCellValue {
+                        column: "id".to_string(),
+                        value: Some("99".to_string()),
+                    },
+                    DatabaseCellValue {
+                        column: "service".to_string(),
+                        // Embedded quote must be escaped, not break the statement.
+                        value: Some("ai'gent".to_string()),
+                    },
+                    DatabaseCellValue {
+                        column: "version".to_string(),
+                        value: Some("9.9.9".to_string()),
+                    },
+                ],
+                primary_key: vec![],
+            })
+            .await
+            .expect("insert row");
+        assert_eq!(insert.affected_rows, 1);
+
+        let update = service
+            .mutate_table_row(DatabaseRowMutationInput {
+                workspace_id: workspace_id.clone(),
+                connection_id: connection.id.clone(),
+                schema: None,
+                table_name: "deploys".to_string(),
+                operation: "update".to_string(),
+                values: vec![DatabaseCellValue {
+                    column: "version".to_string(),
+                    value: Some("10.0.0".to_string()),
+                }],
+                primary_key: vec![DatabaseCellValue {
+                    column: "id".to_string(),
+                    value: Some("99".to_string()),
+                }],
+            })
+            .await
+            .expect("update row");
+        assert_eq!(update.affected_rows, 1);
+
+        // Update/delete without a primary key must be rejected outright.
+        let unsafe_update = service
+            .mutate_table_row(DatabaseRowMutationInput {
+                workspace_id: workspace_id.clone(),
+                connection_id: connection.id.clone(),
+                schema: None,
+                table_name: "deploys".to_string(),
+                operation: "update".to_string(),
+                values: vec![DatabaseCellValue {
+                    column: "version".to_string(),
+                    value: Some("0".to_string()),
+                }],
+                primary_key: vec![],
+            })
+            .await;
+        assert!(matches!(unsafe_update, Err(AppError::Validation(_))));
+
+        let delete = service
+            .mutate_table_row(DatabaseRowMutationInput {
+                workspace_id: workspace_id.clone(),
+                connection_id: connection.id.clone(),
+                schema: None,
+                table_name: "deploys".to_string(),
+                operation: "delete".to_string(),
+                values: vec![],
+                primary_key: vec![DatabaseCellValue {
+                    column: "id".to_string(),
+                    value: Some("99".to_string()),
+                }],
+            })
+            .await
+            .expect("delete row");
+        assert_eq!(delete.affected_rows, 1);
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[tokio::test]
     async fn mutating_sql_requires_confirmation_and_rejects_multiple_statements() {
         let (service, workspace_id) = service_with_workspace().await;
         let path = sqlite_fixture().await;
@@ -2198,6 +2963,7 @@ mod tests {
                 data_type: "bigint".to_string(),
                 nullable: false,
                 primary_key: true,
+                default_value: None,
             }],
         );
 
@@ -2463,6 +3229,7 @@ mod tests {
                 data_type: "bigint unsigned".to_string(),
                 nullable: false,
                 primary_key: true,
+                default_value: None,
             }],
         );
 

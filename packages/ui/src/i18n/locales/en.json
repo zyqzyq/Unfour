@@ -277,6 +277,15 @@
       "tableData": "Table Data",
       "tableStructure": "Table Structure"
     },
+    "editing": {
+      "addRow": "Add Row",
+      "deleteRow": "Delete Row",
+      "deleteRowBody": "Delete this row? This cannot be undone.",
+      "deleteRowTitle": "Delete row?",
+      "editHint": "Double-click to edit",
+      "insert": "Insert",
+      "nullPlaceholder": "Leave blank for NULL"
+    },
     "connection": {
       "connectBeforeRefresh": "Connect to the database before refreshing schema.",
       "connected": "connected",
@@ -309,9 +318,26 @@
       "driver": "Driver",
       "host": "Host",
       "name": "Name",
+      "password": "Password",
+      "passwordKeep": "Leave blank to keep current password",
       "port": "Port",
       "sqlitePath": "SQLite Path",
       "username": "Username"
+    },
+    "grid": {
+      "cellCopied": "Cell copied",
+      "clearSort": "Clear sort",
+      "copyFailed": "Copy failed",
+      "copyHint": "Click a cell to inspect, or a row icon to copy",
+      "copyValue": "Copy value",
+      "empty": "This result set is empty.",
+      "filterPlaceholder": "Filter rows",
+      "noMatches": "No rows match the filter.",
+      "rowCopied": "Row copied",
+      "rowsRendered": "{count} rows rendered",
+      "showingFirst": "Showing first {shown} of {total} rows",
+      "sortBy": "Sort by {column}",
+      "valueViewer": "Cell value"
     },
     "history": {
       "empty": "Executed SQL history will appear here.",
@@ -332,10 +358,14 @@
     "tree": {
       "actionsLabel": "Database actions for {name}",
       "copyName": "Copy Connection Name",
+      "copyTableName": "Copy Table Name",
       "deleteBody": "Delete connection \"{name}\"? This removes its saved settings and cannot be undone.",
       "deleteConnection": "Delete Connection",
       "deleteTitle": "Delete connection?",
-      "editConnection": "Edit Connection"
+      "editConnection": "Edit Connection",
+      "generateInsert": "Generate INSERT Statement",
+      "generateSelect": "Generate SELECT Statement",
+      "previewData": "Preview Data"
     },
     "title": "Database"
   },
