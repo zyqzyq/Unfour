@@ -15,9 +15,11 @@ unfour-core = { path = "../unfour-core" }
 unfour-core = { path = "../unfour-core" }
 unfour-local-storage = { path = "../local-storage" }
 
+# `ssh-native` is enabled by default so the released MCP binary can actually
+# execute `unfour.ssh.run_diagnostic` — SSH log/service inspection is a core
+# backend-troubleshooting capability. Build with `--no-default-features` to
+# produce a binary without native SSH transport; the tool stays registered but
+# returns COMMAND_BUS_OPERATION_UNSUPPORTED.
 [features]
-default = []
-# Forward to the command bus / SSH engine native transport so the MCP binary can
-# actually execute `unfour.ssh.run_diagnostic`. Without it, the tool is still
-# registered but returns COMMAND_BUS_OPERATION_UNSUPPORTED.
+default = ["ssh-native"]
 ssh-native = ["unfour-command-bus/ssh-native"]

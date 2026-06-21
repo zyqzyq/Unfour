@@ -4,7 +4,7 @@ use unfour_command_bus::{ReadCommand, ReadCommandResult};
 use crate::command_bus_adapter::CommandBusAdapter;
 use crate::sanitize::redact_json_in_place;
 
-use super::{object_with_allowed_keys, RegisteredTool, ToolCallError, ToolDefinition, ToolHandler};
+use super::{object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition};
 
 const DEFAULT_ACTIVITY_LIMIT: i64 = 50;
 const MAX_ACTIVITY_LIMIT: i64 = 200;
@@ -55,8 +55,9 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                 "required": ["activity", "count", "source"],
                 "additionalProperties": false
             }),
+            annotations: ToolAnnotations::local_read(),
         },
-        handler: ToolHandler::Real(activity_list),
+        handler: activity_list,
     }]
 }
 

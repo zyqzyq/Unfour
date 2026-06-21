@@ -89,7 +89,7 @@ impl McpServer {
                 "title": "Unfour MCP",
                 "version": env!("CARGO_PKG_VERSION"),
             },
-            "instructions": "Read-only Unfour workspace metadata, database schema browsing, and read-only SQL queries are available through the command bus. Database mutations and SSH execution are not available.",
+            "instructions": "Unfour exposes read-only backend diagnostics over the command bus, scoped to the active workspace. Recommended troubleshooting flow: (1) unfour.system.health to confirm the store is ready; (2) unfour.activity.list to see what changed recently before a failure started; (3) for API issues, unfour.api.list_history then unfour.api.get_history to find the first failing request and inspect masked auth, and unfour.api.send_request to replay a saved request; (4) for database issues, unfour.db.list_connections, unfour.db.list_tables, unfour.db.describe_table, and unfour.db.query_readonly (SELECT/WITH/SHOW/EXPLAIN only); (5) for host/service issues, unfour.ssh.run_diagnostic with read-only commands (df, free, journalctl, grep, docker logs, kubectl get/logs, ...). Every tool is read-only or replay-only and never mutates your data; secrets are masked and never returned in usable form. Check each tool's annotations: openWorldHint marks tools that reach an external database or SSH host.",
         }))
     }
 
@@ -393,10 +393,8 @@ mod tests {
                 "id": 3,
                 "method": "tools/call",
                 "params": {
-                    "name": "unfour.mock.ping",
-                    "arguments": {
-                        "message": "hello"
-                    }
+                    "name": "unfour.workspace.current",
+                    "arguments": {}
                 }
             }),
         ]
@@ -417,15 +415,14 @@ mod tests {
         assert_eq!(responses.len(), 3);
         assert_eq!(
             responses[1]["result"]["tools"].as_array().unwrap().len(),
-            21
+            18
         );
+        // `run_stdio` opens the real app-data store, so assert only on stable,
+        // data-independent fields rather than a specific workspace id.
+        assert_eq!(responses[2]["result"]["isError"], false);
         assert_eq!(
-            responses[2]["result"]["structuredContent"],
-            json!({
-                "ok": true,
-                "message": "pong",
-                "echo": "hello"
-            })
+            responses[2]["result"]["structuredContent"]["source"],
+            "command-bus"
         );
     }
 }

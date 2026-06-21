@@ -7,7 +7,7 @@ use crate::sanitize::{
     truncate_body, MAX_BODY_PREVIEW_BYTES,
 };
 
-use super::{object_with_allowed_keys, RegisteredTool, ToolCallError, ToolDefinition, ToolHandler};
+use super::{object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition};
 
 pub(super) fn registered_tools() -> Vec<RegisteredTool> {
     vec![
@@ -50,8 +50,9 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["collections", "count", "source"],
                     "additionalProperties": false
                 }),
+                annotations: ToolAnnotations::local_read(),
             },
-            handler: ToolHandler::Real(api_list_collections),
+            handler: api_list_collections,
         },
         RegisteredTool {
             definition: ToolDefinition {
@@ -100,8 +101,9 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["requests", "count", "source"],
                     "additionalProperties": false
                 }),
+                annotations: ToolAnnotations::local_read(),
             },
-            handler: ToolHandler::Real(api_list_requests),
+            handler: api_list_requests,
         },
         RegisteredTool {
             definition: ToolDefinition {
@@ -150,8 +152,9 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["request", "source"],
                     "additionalProperties": false
                 }),
+                annotations: ToolAnnotations::local_read(),
             },
-            handler: ToolHandler::Real(api_get_request),
+            handler: api_get_request,
         },
         RegisteredTool {
             definition: ToolDefinition {
@@ -203,8 +206,9 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["ok", "source"],
                     "additionalProperties": false
                 }),
+                annotations: ToolAnnotations::remote_action(),
             },
-            handler: ToolHandler::Real(api_send_request),
+            handler: api_send_request,
         },
         RegisteredTool {
             definition: ToolDefinition {
@@ -252,8 +256,9 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["history", "count", "source"],
                     "additionalProperties": false
                 }),
+                annotations: ToolAnnotations::local_read(),
             },
-            handler: ToolHandler::Real(api_list_history),
+            handler: api_list_history,
         },
         RegisteredTool {
             definition: ToolDefinition {
@@ -305,8 +310,9 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["history", "source"],
                     "additionalProperties": false
                 }),
+                annotations: ToolAnnotations::local_read(),
             },
-            handler: ToolHandler::Real(api_get_history),
+            handler: api_get_history,
         },
         RegisteredTool {
             definition: ToolDefinition {
@@ -361,8 +367,9 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["environments", "count", "source"],
                     "additionalProperties": false
                 }),
+                annotations: ToolAnnotations::local_read(),
             },
-            handler: ToolHandler::Real(api_list_environments),
+            handler: api_list_environments,
         },
     ]
 }

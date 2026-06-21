@@ -17,7 +17,41 @@ The server implements newline-delimited JSON-RPC over standard input and
 output with `initialize`, `tools/list`, and `tools/call`. Standard output is
 reserved for MCP messages; process errors are written to standard error.
 
-## Real Tools
+## Recommended Diagnostic Flow
+
+The `initialize` response returns an `instructions` string that gives MCP
+clients a suggested backend-troubleshooting flow:
+
+1. `unfour.system.health` — confirm the store is ready.
+2. `unfour.activity.list` — see what changed recently before a failure started.
+3. API issues — `unfour.api.list_history` → `unfour.api.get_history` to find the
+   first failing request and inspect masked auth, then `unfour.api.send_request`
+   to replay a saved request.
+4. Database issues — `unfour.db.list_connections`, `unfour.db.list_tables`,
+   `unfour.db.describe_table`, and `unfour.db.query_readonly`
+   (SELECT/WITH/SHOW/EXPLAIN only).
+5. Host/service issues — `unfour.ssh.run_diagnostic` with read-only commands
+   (`df`, `free`, `journalctl`, `grep`, `docker logs`, `kubectl get/logs`, ...).
+
+## Tool Annotations
+
+Every tool in `tools/list` carries MCP behavior hints so a client can reason
+about safety without parsing descriptions:
+
+- `readOnlyHint` — `true` when the tool does not mutate any state.
+- `destructiveHint` — always `false`; no tool performs destructive operations.
+- `idempotentHint` — `true` for repeatable reads.
+- `openWorldHint` — `true` when the tool reaches a system outside the local app
+  data store (a remote database or SSH host) or performs an external action.
+
+The only tools with `openWorldHint: true` are the database tools that connect to
+a remote server (`list_tables`, `describe_table`, `query_readonly`,
+`test_connection`), `unfour.ssh.run_diagnostic`, and `unfour.api.send_request`
+(the one tool with `readOnlyHint: false`, since it issues an HTTP request and
+records history). All local-store reads are `readOnlyHint: true`,
+`openWorldHint: false`.
+
+## Tools
 
 | Tool | Input | Current behavior |
 | --- | --- | --- |
@@ -217,15 +251,30 @@ The command is gated by a strict allowlist before it ever reaches the host:
 - The leading word must be a bare allowlisted read-only utility (no path):
   `df`, `du`, `free`, `uptime`, `uname`, `hostname`, `whoami`, `id`, `date`,
   `ps`, `ss`, `netstat`, `ip`, `ifconfig`, `vmstat`, `iostat`, `mount`, `stat`,
-  `wc`, `ls`, `cat`, `tail`, `head`, `systemctl`, `journalctl`.
+  `wc`, `ls`, `cat`, `tail`, `head`, `grep`, `systemctl`, `journalctl`,
+  `docker`, `podman`, `kubectl`.
 - Shell metacharacters are rejected entirely (`; | & $ \` > < ( ) { } \ * ? ~ !
-  # ' "`), so chaining, piping, redirection, and subshells are impossible.
+  # ' "`), so chaining, piping, redirection, and subshells are impossible. As a
+  consequence `grep` is limited to literal patterns without those characters and
+  without spaces (e.g. `grep ERROR /var/log/app.log`); piping into `grep` is not
+  possible.
 - `systemctl` is restricted to read-only subcommands (`status`, `is-active`,
   `is-enabled`, `is-failed`, `show`, `cat`, `list-units`, `list-unit-files`,
   `list-timers`, `list-sockets`, `get-default`); start/stop/restart/enable/etc.
   are rejected.
 - `journalctl` log-management flags (`--vacuum*`, `--rotate`, `--flush`,
   `--sync`, `--relinquish-var`) are rejected.
+- `docker` and `podman` are restricted to read-only subcommands (`ps`, `logs`,
+  `inspect`, `images`, `version`, `info`, `stats`, `top`, `port`, `diff`);
+  `run`, `exec`, `rm`, `stop`, `kill`, and other mutating verbs are rejected.
+- `kubectl` is restricted to read-only subcommands (`get`, `describe`, `logs`,
+  `top`, `version`, `api-resources`, `explain`, `cluster-info`); mutating verbs
+  (`apply`, `delete`, `edit`, `scale`, `exec`, `cp`, `port-forward`, ...) and
+  `config` (which can expose credentials) are rejected.
+- For `docker`, `podman`, and `kubectl` the read-only subcommand must come
+  **first** (e.g. `kubectl get pods -n prod`, not `kubectl -n prod get pods`).
+  Global flags before the subcommand are rejected so a value-taking flag cannot
+  smuggle a mutating verb in as its argument.
 
 Captured output is line-redacted by the SSH engine (the same redaction applied
 to terminal history): any line that looks like a sensitive `key: value` /
@@ -234,8 +283,9 @@ the allowlist is the primary control. Each stream is capped (64 KB) and the whol
 command runs under a timeout (default 15s, max 60s); `truncated` is `true` when a
 cap or the timeout is hit.
 
-This tool requires the binary to be built with the `ssh-native` feature
-(`cargo build -p unfour-mcp --features ssh-native`). Without it the tool is still
+This tool relies on the `ssh-native` feature, which is **enabled by default** in
+`unfour-mcp`, so a plain `cargo build -p unfour-mcp` produces a binary that can
+run SSH diagnostics. If you build with `--no-default-features`, the tool is still
 listed but returns `COMMAND_BUS_OPERATION_UNSUPPORTED`. Live SSH transport
 remains pending end-to-end verification against a real server.
 
@@ -327,17 +377,6 @@ The MCP process does not run migrations, seed workspaces, or write fallback
 workspace settings. If the desktop database does not exist yet, start the
 desktop app once before starting the MCP server.
 
-## Mock Tools
-
-The phase-one mock tools remain available for testing and are implemented
-separately from the real tools:
-
-| Tool | Purpose |
-| --- | --- |
-| `unfour.mock.ping` | Returns `pong` and echoes a supplied string. |
-| `unfour.mock.workspace_current` | Returns fixed mock workspace metadata. |
-| `unfour.mock.echo` | Returns a supplied JSON value. |
-
 ## Windows Build And Run
 
 From the repository root:
@@ -380,11 +419,9 @@ Build the executable before starting Codex:
 cargo build -p unfour-mcp
 ```
 
-To enable `unfour.ssh.run_diagnostic`, build with the native SSH feature:
-
-```powershell
-cargo build -p unfour-mcp --features ssh-native
-```
+The default build already includes native SSH transport, so
+`unfour.ssh.run_diagnostic` works out of the box. To build a binary without it,
+use `cargo build -p unfour-mcp --no-default-features`.
 
 Example Codex prompts:
 

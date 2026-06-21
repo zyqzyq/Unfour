@@ -1,7 +1,6 @@
 mod activity;
 mod api;
 mod database;
-mod mock;
 mod real;
 mod ssh;
 mod system;
@@ -14,8 +13,7 @@ use serde_json::{Map, Value};
 use crate::command_bus_adapter::CommandBusAdapter;
 use crate::response::{structured_tool_error, structured_tool_result};
 
-type MockToolHandler = fn(Value) -> Result<Value, ToolCallError>;
-type RealToolHandler = fn(&dyn CommandBusAdapter, Value) -> Result<Value, ToolCallError>;
+type ToolHandler = fn(&dyn CommandBusAdapter, Value) -> Result<Value, ToolCallError>;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,6 +23,52 @@ pub struct ToolDefinition {
     pub description: &'static str,
     pub input_schema: Value,
     pub output_schema: Value,
+    pub annotations: ToolAnnotations,
+}
+
+/// MCP tool behavior hints (`tools/list` `annotations`). They let a client
+/// reason about safety without parsing descriptions: whether a tool mutates
+/// state, and whether it reaches systems outside the local app data store.
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolAnnotations {
+    pub read_only_hint: bool,
+    pub destructive_hint: bool,
+    pub idempotent_hint: bool,
+    pub open_world_hint: bool,
+}
+
+impl ToolAnnotations {
+    /// Read-only against the local app-data store only (no external systems).
+    pub(super) const fn local_read() -> Self {
+        Self {
+            read_only_hint: true,
+            destructive_hint: false,
+            idempotent_hint: true,
+            open_world_hint: false,
+        }
+    }
+
+    /// Read-only, but reaches an external system (a remote database or SSH host).
+    pub(super) const fn remote_read() -> Self {
+        Self {
+            read_only_hint: true,
+            destructive_hint: false,
+            idempotent_hint: true,
+            open_world_hint: true,
+        }
+    }
+
+    /// Performs an external action with a side effect (e.g. sends an HTTP
+    /// request and records history). Not destructive, but not idempotent.
+    pub(super) const fn remote_action() -> Self {
+        Self {
+            read_only_hint: false,
+            destructive_hint: false,
+            idempotent_hint: false,
+            open_world_hint: true,
+        }
+    }
 }
 
 struct RegisteredTool {
@@ -32,15 +76,9 @@ struct RegisteredTool {
     handler: ToolHandler,
 }
 
-#[derive(Clone, Copy)]
-enum ToolHandler {
-    Mock(MockToolHandler),
-    Real(RealToolHandler),
-}
-
 pub struct ToolRegistry {
     tools: Vec<RegisteredTool>,
-    command_bus: Option<Arc<dyn CommandBusAdapter>>,
+    command_bus: Arc<dyn CommandBusAdapter>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -54,26 +92,15 @@ pub enum ToolCallError {
 }
 
 impl ToolRegistry {
-    pub fn mock() -> Self {
-        Self {
-            tools: mock::registered_tools(),
-            command_bus: None,
-        }
-    }
-
     pub fn with_command_bus(command_bus: Arc<dyn CommandBusAdapter>) -> Self {
-        let mut tools = mock::registered_tools();
-        tools.extend(real::registered_tools());
+        let mut tools = real::registered_tools();
         tools.extend(api::registered_tools());
         tools.extend(database::registered_tools());
         tools.extend(system::registered_tools());
         tools.extend(activity::registered_tools());
         tools.extend(ssh::registered_tools());
 
-        Self {
-            tools,
-            command_bus: Some(command_bus),
-        }
+        Self { tools, command_bus }
     }
 
     pub fn definitions(&self) -> Vec<ToolDefinition> {
@@ -89,19 +116,7 @@ impl ToolRegistry {
             .iter()
             .find(|tool| tool.definition.name == name)
             .ok_or_else(|| ToolCallError::UnknownTool(name.to_string()))?;
-        let result = match tool.handler {
-            ToolHandler::Mock(handler) => handler(arguments),
-            ToolHandler::Real(handler) => {
-                let command_bus = self
-                    .command_bus
-                    .as_deref()
-                    .ok_or(ToolCallError::Execution {
-                        code: "COMMAND_BUS_UNAVAILABLE",
-                        message: "The command-bus adapter is unavailable.",
-                    })?;
-                handler(command_bus, arguments)
-            }
-        };
+        let result = (tool.handler)(self.command_bus.as_ref(), arguments);
 
         match result {
             Ok(value) => Ok(structured_tool_result(value)),
@@ -408,39 +423,43 @@ mod tests {
     }
 
     #[test]
-    fn mock_tool_schemas_are_available() {
-        let definitions = ToolRegistry::mock().definitions();
+    fn tool_annotations_classify_side_effects() {
+        let definitions = ToolRegistry::with_command_bus(Arc::new(StubCommandBus)).definitions();
+        let annotations = |name: &str| {
+            definitions
+                .iter()
+                .find(|d| d.name == name)
+                .unwrap_or_else(|| panic!("missing tool {name}"))
+                .annotations
+        };
 
-        assert_eq!(definitions.len(), 3);
-        assert!(definitions
-            .iter()
-            .all(|definition| definition.name.starts_with("unfour.mock.")));
+        // Local read-only tool: no external reach, no mutation.
+        let ws = annotations("unfour.workspace.current");
+        assert!(ws.read_only_hint);
+        assert!(!ws.open_world_hint);
+
+        // Reaches an external system (SSH host) but does not mutate it.
+        let ssh = annotations("unfour.ssh.run_diagnostic");
+        assert!(ssh.read_only_hint);
+        assert!(ssh.open_world_hint);
+
+        // Performs an external side effect (sends an HTTP request).
+        let send = annotations("unfour.api.send_request");
+        assert!(!send.read_only_hint);
+        assert!(send.open_world_hint);
+    }
+
+    #[test]
+    fn tool_schemas_are_available() {
+        let definitions = ToolRegistry::with_command_bus(Arc::new(StubCommandBus)).definitions();
+
+        assert_eq!(definitions.len(), 18);
         assert!(definitions
             .iter()
             .all(|definition| definition.input_schema["type"] == "object"));
-    }
-
-    #[test]
-    fn mock_echo_returns_structured_json() {
-        let result = ToolRegistry::mock()
-            .call("unfour.mock.echo", json!({ "value": "anything" }))
-            .expect("mock echo should succeed");
-
-        assert_eq!(
-            result["structuredContent"],
-            json!({
-                "ok": true,
-                "value": "anything"
-            })
-        );
-        assert_eq!(result["isError"], false);
-    }
-
-    #[test]
-    fn real_tool_schemas_are_available_separately_from_mocks() {
-        let definitions = ToolRegistry::with_command_bus(Arc::new(StubCommandBus)).definitions();
-
-        assert_eq!(definitions.len(), 21);
+        assert!(definitions
+            .iter()
+            .all(|definition| !definition.name.starts_with("unfour.mock.")));
         assert!(definitions
             .iter()
             .any(|definition| definition.name == "unfour.workspace.current"));

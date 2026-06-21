@@ -3,7 +3,7 @@ use unfour_command_bus::{ConnectionType, ReadCommand, ReadCommandResult};
 
 use crate::command_bus_adapter::CommandBusAdapter;
 
-use super::{object_with_allowed_keys, RegisteredTool, ToolCallError, ToolDefinition, ToolHandler};
+use super::{object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition};
 
 pub(super) fn registered_tools() -> Vec<RegisteredTool> {
     vec![
@@ -36,8 +36,9 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     ],
                     "additionalProperties": false
                 }),
+                annotations: ToolAnnotations::local_read(),
             },
-            handler: ToolHandler::Real(workspace_current),
+            handler: workspace_current,
         },
         RegisteredTool {
             definition: ToolDefinition {
@@ -75,8 +76,9 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["workspaces", "activeWorkspaceId", "count", "source"],
                     "additionalProperties": false
                 }),
+                annotations: ToolAnnotations::local_read(),
             },
-            handler: ToolHandler::Real(workspace_list),
+            handler: workspace_list,
         },
         RegisteredTool {
             definition: ToolDefinition {
@@ -131,8 +133,9 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["connections", "count", "source"],
                     "additionalProperties": false
                 }),
+                annotations: ToolAnnotations::local_read(),
             },
-            handler: ToolHandler::Real(connection_list),
+            handler: connection_list,
         },
     ]
 }

@@ -1611,8 +1611,8 @@ fn sanitize_ssh_error(error: &russh::Error) -> String {
 
 /// Leading command words permitted for read-only SSH diagnostics. Each is a
 /// non-mutating utility; commands that can also write/control state (notably
-/// `systemctl` and `journalctl`) get additional subcommand/flag restrictions in
-/// `validate_diagnostic_command`.
+/// `systemctl`, `journalctl`, `docker`, `podman`, and `kubectl`) get additional
+/// subcommand/flag restrictions in `validate_diagnostic_command`.
 const SSH_DIAGNOSTIC_ALLOWED_COMMANDS: &[&str] = &[
     "df",
     "du",
@@ -1637,8 +1637,32 @@ const SSH_DIAGNOSTIC_ALLOWED_COMMANDS: &[&str] = &[
     "cat",
     "tail",
     "head",
+    "grep",
     "systemctl",
     "journalctl",
+    "docker",
+    "podman",
+    "kubectl",
+];
+
+/// Read-only `docker`/`podman` subcommands. Anything that can create, mutate,
+/// remove, or exec into containers/images is excluded.
+const CONTAINER_READONLY_SUBCOMMANDS: &[&str] = &[
+    "ps", "logs", "inspect", "images", "version", "info", "stats", "top", "port", "diff",
+];
+
+/// Read-only `kubectl` subcommands. Mutating verbs (apply, delete, edit, scale,
+/// exec, cp, port-forward, drain, ...) and `config` (which can expose
+/// credentials) are excluded.
+const KUBECTL_READONLY_SUBCOMMANDS: &[&str] = &[
+    "get",
+    "describe",
+    "logs",
+    "top",
+    "version",
+    "api-resources",
+    "explain",
+    "cluster-info",
 ];
 
 /// Validate a one-shot SSH diagnostic command. Returns the trimmed command on
@@ -1720,6 +1744,26 @@ fn validate_diagnostic_command(command: &str) -> AppResult<String> {
             }) {
                 return Err(AppError::Validation(
                     "journalctl diagnostics cannot use log-management flags".to_string(),
+                ));
+            }
+        }
+        // For container CLIs the subcommand must come first (e.g. `docker logs
+        // -n 100 web`, `kubectl get pods -n prod`). Global flags before the
+        // subcommand are rejected so a value-taking flag (`-n ns`, `-H host`)
+        // cannot disguise a mutating verb as its argument.
+        "docker" | "podman" => {
+            let sub = tokens.next().unwrap_or("");
+            if !CONTAINER_READONLY_SUBCOMMANDS.contains(&sub) {
+                return Err(AppError::Validation(
+                    "docker/podman diagnostics are limited to read-only subcommands placed first (ps, logs, inspect, images, stats, ...)".to_string(),
+                ));
+            }
+        }
+        "kubectl" => {
+            let sub = tokens.next().unwrap_or("");
+            if !KUBECTL_READONLY_SUBCOMMANDS.contains(&sub) {
+                return Err(AppError::Validation(
+                    "kubectl diagnostics are limited to read-only subcommands placed first (get, describe, logs, top, ...)".to_string(),
                 ));
             }
         }
@@ -1893,10 +1937,18 @@ mod tests {
             "uptime",
             "tail -n 200 /var/log/syslog",
             "cat /etc/os-release",
+            "grep ERROR /var/log/app.log",
+            "grep -i timeout /var/log/syslog",
             "systemctl status nginx",
             "systemctl is-active sshd",
             "journalctl -u nginx -n 100",
             "ps aux",
+            "docker ps -a",
+            "docker logs web",
+            "podman inspect db",
+            "kubectl get pods -n prod",
+            "kubectl logs web -n prod",
+            "kubectl describe pod web",
         ] {
             assert!(
                 validate_diagnostic_command(cmd).is_ok(),
@@ -1937,6 +1989,23 @@ mod tests {
         assert!(validate_diagnostic_command("systemctl daemon-reload").is_err());
         assert!(validate_diagnostic_command("journalctl --vacuum-size=1M").is_err());
         assert!(validate_diagnostic_command("journalctl --rotate").is_err());
+    }
+
+    #[test]
+    fn diagnostic_command_restricts_container_clis() {
+        // Mutating / exec-capable container verbs must be rejected.
+        assert!(validate_diagnostic_command("docker rm web").is_err());
+        assert!(validate_diagnostic_command("docker exec web sh").is_err());
+        assert!(validate_diagnostic_command("docker run nginx").is_err());
+        assert!(validate_diagnostic_command("podman stop db").is_err());
+        assert!(validate_diagnostic_command("kubectl delete pod web").is_err());
+        assert!(validate_diagnostic_command("kubectl apply -f x.yaml").is_err());
+        assert!(validate_diagnostic_command("kubectl exec web sh").is_err());
+        // `kubectl config` can leak credentials and is excluded.
+        assert!(validate_diagnostic_command("kubectl config view").is_err());
+        // A value-taking global flag before the subcommand is rejected so it
+        // cannot smuggle a mutating verb in as the flag's argument.
+        assert!(validate_diagnostic_command("kubectl -n prod delete pod web").is_err());
     }
 
     #[tokio::test]

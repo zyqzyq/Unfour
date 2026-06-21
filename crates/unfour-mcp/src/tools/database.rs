@@ -4,7 +4,7 @@ use unfour_core::models::{DatabaseConnection, DatabaseQueryInput};
 
 use crate::command_bus_adapter::CommandBusAdapter;
 
-use super::{object_with_allowed_keys, RegisteredTool, ToolCallError, ToolDefinition, ToolHandler};
+use super::{object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition};
 
 const DEFAULT_QUERY_LIMIT: u32 = 100;
 const MAX_QUERY_LIMIT: u32 = 1000;
@@ -56,8 +56,9 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["connections", "count", "source"],
                     "additionalProperties": false
                 }),
+                annotations: ToolAnnotations::local_read(),
             },
-            handler: ToolHandler::Real(db_list_connections),
+            handler: db_list_connections,
         },
         RegisteredTool {
             definition: ToolDefinition {
@@ -110,8 +111,9 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["connectionId", "tables", "count", "totalTables", "truncated", "source"],
                     "additionalProperties": false
                 }),
+                annotations: ToolAnnotations::remote_read(),
             },
-            handler: ToolHandler::Real(db_list_tables),
+            handler: db_list_tables,
         },
         RegisteredTool {
             definition: ToolDefinition {
@@ -176,8 +178,9 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["connectionId", "table", "source"],
                     "additionalProperties": false
                 }),
+                annotations: ToolAnnotations::remote_read(),
             },
-            handler: ToolHandler::Real(db_describe_table),
+            handler: db_describe_table,
         },
         RegisteredTool {
             definition: ToolDefinition {
@@ -234,8 +237,9 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["ok", "connectionId", "source"],
                     "additionalProperties": false
                 }),
+                annotations: ToolAnnotations::remote_read(),
             },
-            handler: ToolHandler::Real(db_query_readonly),
+            handler: db_query_readonly,
         },
         RegisteredTool {
             definition: ToolDefinition {
@@ -270,8 +274,9 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["ok", "connectionId", "message", "source"],
                     "additionalProperties": false
                 }),
+                annotations: ToolAnnotations::remote_read(),
             },
-            handler: ToolHandler::Real(db_test_connection),
+            handler: db_test_connection,
         },
     ]
 }

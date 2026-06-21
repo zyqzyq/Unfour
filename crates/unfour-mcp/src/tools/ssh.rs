@@ -4,7 +4,7 @@ use unfour_core::models::SshDiagnosticInput;
 
 use crate::command_bus_adapter::CommandBusAdapter;
 
-use super::{object_with_allowed_keys, RegisteredTool, ToolCallError, ToolDefinition, ToolHandler};
+use super::{object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition};
 
 const MAX_DIAGNOSTIC_TIMEOUT_MS: u64 = 60_000;
 
@@ -14,7 +14,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
             name: "unfour.ssh.run_diagnostic",
             title: "Run SSH Diagnostic Command",
             description:
-                "Runs a single read-only diagnostic command on a saved SSH connection through the Unfour command bus and returns captured stdout/stderr. Only a fixed allowlist of read-only utilities is permitted (df, free, uptime, ps, ss, ip, tail, cat, systemctl status, journalctl, ...); shells, pipes, redirection, chaining, and any write/control operation are rejected. Output is line-redacted for sensitive material. Requires an SSH-native build.",
+                "Runs a single read-only diagnostic command on a saved SSH connection through the Unfour command bus and returns captured stdout/stderr. Only a fixed allowlist of read-only utilities is permitted (df, free, uptime, ps, ss, ip, tail, cat, grep, systemctl status, journalctl, plus read-only container subcommands: docker/podman ps|logs|inspect|stats and kubectl get|describe|logs|top); shells, pipes, redirection, chaining, and any write/control operation are rejected. For container CLIs the read-only subcommand must come first (e.g. `docker logs web`, `kubectl get pods -n prod`). Output is line-redacted for sensitive material. Requires an SSH-native build.",
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -24,7 +24,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     },
                     "command": {
                         "type": "string",
-                        "description": "A single read-only diagnostic command from the allowlist (e.g. \"df -h\", \"systemctl status nginx\", \"tail -n 200 /var/log/syslog\")."
+                        "description": "A single read-only diagnostic command from the allowlist (e.g. \"df -h\", \"systemctl status nginx\", \"tail -n 200 /var/log/syslog\", \"grep ERROR /var/log/app.log\", \"docker logs web\", \"kubectl get pods -n prod\")."
                     },
                     "workspaceId": {
                         "type": "string",
@@ -52,8 +52,9 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                 "required": ["connectionId", "command", "stdout", "stderr", "truncated", "source"],
                 "additionalProperties": false
             }),
+            annotations: ToolAnnotations::remote_read(),
         },
-        handler: ToolHandler::Real(ssh_run_diagnostic),
+        handler: ssh_run_diagnostic,
     }]
 }
 
