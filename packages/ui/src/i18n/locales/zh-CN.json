@@ -276,6 +276,15 @@
       "tableData": "表数据",
       "tableStructure": "表结构"
     },
+    "editing": {
+      "addRow": "新增行",
+      "deleteRow": "删除行",
+      "deleteRowBody": "确定删除此行？此操作无法撤销。",
+      "deleteRowTitle": "删除行？",
+      "editHint": "双击进行编辑",
+      "insert": "插入",
+      "nullPlaceholder": "留空表示 NULL"
+    },
     "connection": {
       "connectBeforeRefresh": "刷新 schema 前请先连接数据库。",
       "connected": "已连接",

@@ -1,9 +1,18 @@
 import type {
+  DatabaseCellValue,
   DatabaseConnection,
   DatabaseQueryResult,
   DatabaseSchema,
   DatabaseTable,
 } from "@unfour/command-client";
+
+export type TableEditing = {
+  pending: boolean;
+  primaryKeyColumns: string[];
+  onDeleteRow: (primaryKey: DatabaseCellValue[]) => void;
+  onInsertRow: (values: DatabaseCellValue[]) => void;
+  onUpdateCell: (columnName: string, value: string | null, primaryKey: DatabaseCellValue[]) => void;
+};
 
 export type DatabaseTableViewState = {
   pageIndex: number;

@@ -4,11 +4,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   createCredential,
   deleteDatabaseConnection,
+  mutateDatabaseRow,
   rotateCredential,
   saveDatabaseConnection,
   testDatabaseConnection,
 } from "@unfour/command-client";
 import type {
+  DatabaseCellValue,
   DatabaseConnection,
   DatabaseConnectionInput,
   DatabaseQueryResult,
@@ -51,6 +53,7 @@ import type {
   DatabaseConnectionStatus,
   DatabaseTableViewState,
   SqlHistoryEntry,
+  TableEditing,
 } from "./model/types";
 import { describeDatabaseError, formatDatabaseError, isConfirmationRequired } from "./result-utils";
 
@@ -356,6 +359,18 @@ export function DatabasePage({
     workspaceId,
   });
 
+  const rowMutation = useMutation({
+    mutationFn: mutateDatabaseRow,
+    onSuccess: () => {
+      // Re-read the current page so the grid reflects the committed change.
+      refreshTablePage();
+    },
+    onError: (error) => {
+      layout.setResultTab("results");
+      setClientError(error);
+    },
+  });
+
   useEffect(() => {
     if (!selectedConnectionId || !browseMutation.error) {
       return;
@@ -510,6 +525,32 @@ export function DatabasePage({
       return;
     }
     browseTablePage(selectedTable, 0, tableView?.pageSize ?? DEFAULT_PREVIEW_PAGE_SIZE);
+  }
+
+  function refreshTablePage() {
+    if (selectedTable && tableView) {
+      browseTablePage(selectedTable, tableView.pageIndex, tableView.pageSize);
+    }
+  }
+
+  function mutateRow(
+    operation: "insert" | "update" | "delete",
+    values: DatabaseCellValue[],
+    primaryKey: DatabaseCellValue[],
+  ) {
+    if (!selectedConnectionId || !selectedTable) {
+      return;
+    }
+    setClientError(null);
+    rowMutation.mutate({
+      workspaceId,
+      connectionId: selectedConnectionId,
+      schema: selectedTable.schema,
+      tableName: selectedTable.name,
+      operation,
+      values,
+      primaryKey,
+    });
   }
 
   function runSql(overrideSql?: string) {
@@ -710,6 +751,24 @@ export function DatabasePage({
   const activeError = clientError ?? (layout.activeTabId === "table-data" ? browseMutation.error : executeMutation.error);
   const executePending = executeMutation.isPending || browseMutation.isPending;
 
+  // Inline editing is available when a real table with a primary key is being
+  // browsed on a connected session; the primary key locates rows for the
+  // update/delete row commands.
+  const primaryKeyColumns = (selectedTable?.columns ?? [])
+    .filter((column) => column.primaryKey)
+    .map((column) => column.name);
+  const tableEditing: TableEditing | null =
+    selectedTable && tableView && selectedConnectionStatus === "connected" && primaryKeyColumns.length > 0
+      ? {
+          pending: rowMutation.isPending,
+          primaryKeyColumns,
+          onDeleteRow: (primaryKey) => mutateRow("delete", [], primaryKey),
+          onInsertRow: (values) => mutateRow("insert", values, []),
+          onUpdateCell: (columnName, value, primaryKey) =>
+            mutateRow("update", [{ column: columnName, value }], primaryKey),
+        }
+      : null;
+
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col bg-[var(--u-color-surface)]">
       <DatabaseModuleToolbar
@@ -761,6 +820,7 @@ export function DatabasePage({
           structure={structureQuery.data}
           structureError={structureQuery.error}
           structureLoading={structureEnabled && structureQuery.isFetching}
+          tableEditing={tableEditing}
           tableView={tableView}
         />
       </div>

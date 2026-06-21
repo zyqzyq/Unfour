@@ -1,22 +1,43 @@
-import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
-import type { DatabaseQueryResult } from "@unfour/command-client";
-import { Button, EmptyState, IconButton, Select, Toolbar, ToolbarGroup } from "@unfour/ui";
-import type { DatabaseTableViewState } from "../model/types";
+import { ChevronLeft, ChevronRight, Plus, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import type { DatabaseCellValue, DatabaseQueryResult } from "@unfour/command-client";
+import {
+  Button,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  EmptyState,
+  IconButton,
+  Input,
+  Select,
+  Toolbar,
+  ToolbarGroup,
+  useI18n,
+} from "@unfour/ui";
+import type { DatabaseTableViewState, TableEditing } from "../model/types";
 import { TableDataGrid } from "./TableDataGrid";
 
 export function TableDataTab({
+  editing,
   executePending,
   onPageChange,
   onRefresh,
   result,
   tableView,
 }: {
+  editing?: TableEditing | null;
   executePending: boolean;
   onPageChange: (pageIndex: number, pageSize: number) => void;
   onRefresh: () => void;
   result: DatabaseQueryResult | null;
   tableView: DatabaseTableViewState | null;
 }) {
+  const { t } = useI18n();
+  const [addOpen, setAddOpen] = useState(false);
+
   if (!result || !tableView) {
     return <EmptyState className="m-2 min-h-0 flex-1">Open table preview from the connection tree or table structure.</EmptyState>;
   }
@@ -36,6 +57,18 @@ export function TableDataTab({
           </span>
         </ToolbarGroup>
         <ToolbarGroup>
+          {editing ? (
+            <Button
+              disabled={editing.pending}
+              onClick={() => setAddOpen(true)}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              <Plus size={13} />
+              {t("database.editing.addRow")}
+            </Button>
+          ) : null}
           <Select
             aria-label="Table preview page size"
             className="w-[88px]"
@@ -73,7 +106,76 @@ export function TableDataTab({
           </Button>
         </ToolbarGroup>
       </Toolbar>
-      <TableDataGrid result={result} />
+      <TableDataGrid editing={editing} result={result} />
+      {editing ? (
+        <AddRowDialog
+          columns={result.columns.map((column) => column.name)}
+          onOpenChange={setAddOpen}
+          onSubmit={(values) => {
+            editing.onInsertRow(values);
+            setAddOpen(false);
+          }}
+          open={addOpen}
+          pending={editing.pending}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function AddRowDialog({
+  columns,
+  onOpenChange,
+  onSubmit,
+  open,
+  pending,
+}: {
+  columns: string[];
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (values: DatabaseCellValue[]) => void;
+  open: boolean;
+  pending: boolean;
+}) {
+  const { t } = useI18n();
+  const [draft, setDraft] = useState<Record<string, string>>({});
+
+  function submit() {
+    // Empty inputs are sent as NULL; non-empty inputs as the typed text.
+    const values: DatabaseCellValue[] = columns.map((column) => ({
+      column,
+      value: draft[column]?.length ? draft[column] : null,
+    }));
+    onSubmit(values);
+    setDraft({});
+  }
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent title={t("database.editing.addRow")}>
+        <DialogHeader>
+          <DialogTitle>{t("database.editing.addRow")}</DialogTitle>
+        </DialogHeader>
+        <DialogBody className="space-y-2">
+          {columns.map((column) => (
+            <label className="block space-y-1" key={column}>
+              <span className="text-[11px] font-medium uppercase text-[var(--u-color-text-soft)]">{column}</span>
+              <Input
+                onChange={(event) => setDraft((current) => ({ ...current, [column]: event.target.value }))}
+                placeholder={t("database.editing.nullPlaceholder")}
+                value={draft[column] ?? ""}
+              />
+            </label>
+          ))}
+        </DialogBody>
+        <DialogFooter>
+          <Button onClick={() => onOpenChange(false)} size="sm" type="button" variant="ghost">
+            {t("common.confirm.cancel")}
+          </Button>
+          <Button disabled={pending} onClick={submit} size="sm" type="button">
+            {t("database.editing.insert")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -277,6 +277,15 @@
       "tableData": "Table Data",
       "tableStructure": "Table Structure"
     },
+    "editing": {
+      "addRow": "Add Row",
+      "deleteRow": "Delete Row",
+      "deleteRowBody": "Delete this row? This cannot be undone.",
+      "deleteRowTitle": "Delete row?",
+      "editHint": "Double-click to edit",
+      "insert": "Insert",
+      "nullPlaceholder": "Leave blank for NULL"
+    },
     "connection": {
       "connectBeforeRefresh": "Connect to the database before refreshing schema.",
       "connected": "connected",

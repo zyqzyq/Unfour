@@ -1,8 +1,9 @@
-import { ArrowDown, ArrowUp, ChevronsUpDown, Clipboard, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronsUpDown, Clipboard, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { DatabaseQueryResult } from "@unfour/command-client";
+import type { DatabaseCellValue, DatabaseQueryResult } from "@unfour/command-client";
 import {
   Button,
+  ConfirmDialog,
   DataTable,
   Dialog,
   DialogBody,
@@ -15,19 +16,51 @@ import {
   useI18n,
   type DataTableColumn,
 } from "@unfour/ui";
+import type { TableEditing } from "../model/types";
 import { serializeDatabaseCell, serializeDatabaseRow } from "../result-utils";
 
 const MAX_RENDERED_ROWS = 500;
 
 type SortState = { columnIndex: number; direction: "asc" | "desc" };
 type CellViewer = { columnName: string; value: string | null };
+type EditTarget = { row: Array<string | null>; columnIndex: number };
+type DataRow = Array<string | null>;
 
-export function TableDataGrid({ result }: { result: DatabaseQueryResult }) {
+export function TableDataGrid({
+  editing,
+  result,
+}: {
+  editing?: TableEditing | null;
+  result: DatabaseQueryResult;
+}) {
   const { t } = useI18n();
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied-cell" | "copied-row" | "failed">("idle");
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<SortState | null>(null);
   const [viewer, setViewer] = useState<CellViewer | null>(null);
+  const [edit, setEdit] = useState<EditTarget | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [deleteRow, setDeleteRow] = useState<DataRow | null>(null);
+
+  function buildPrimaryKey(row: DataRow): DatabaseCellValue[] {
+    return (editing?.primaryKeyColumns ?? []).map((name) => {
+      const index = result.columns.findIndex((column) => column.name === name);
+      return { column: name, value: index >= 0 ? row[index] ?? null : null };
+    });
+  }
+
+  function commitEdit() {
+    if (!edit || !editing) {
+      setEdit(null);
+      return;
+    }
+    const columnName = result.columns[edit.columnIndex]?.name;
+    const original = edit.row[edit.columnIndex] ?? "";
+    if (columnName && editValue !== original) {
+      editing.onUpdateCell(columnName, editValue, buildPrimaryKey(edit.row));
+    }
+    setEdit(null);
+  }
 
   const processedRows = useMemo(() => {
     const needle = filter.trim().toLowerCase();
@@ -75,17 +108,29 @@ export function TableDataGrid({ result }: { result: DatabaseQueryResult }) {
 
   const rowActionColumn: DataTableColumn<Array<string | null>> = {
     cell: (row, rowIndex) => (
-      <IconButton
-        label={`Copy row ${rowIndex + 1}`}
-        onClick={() => copyText(serializeDatabaseRow(result, row, "\t"), "copied-row")}
-        size="compact"
-      >
-        <Clipboard size={12} />
-      </IconButton>
+      <div className="flex items-center gap-0.5">
+        <IconButton
+          label={`Copy row ${rowIndex + 1}`}
+          onClick={() => copyText(serializeDatabaseRow(result, row, "\t"), "copied-row")}
+          size="compact"
+        >
+          <Clipboard size={12} />
+        </IconButton>
+        {editing ? (
+          <IconButton
+            disabled={editing.pending}
+            label={t("database.editing.deleteRow")}
+            onClick={() => setDeleteRow(row)}
+            size="compact"
+          >
+            <Trash2 className="text-[var(--u-color-danger)]" size={12} />
+          </IconButton>
+        ) : null}
+      </div>
     ),
     header: "#",
     id: "__row_actions",
-    width: 48,
+    width: editing ? 72 : 48,
   };
 
   const columns: DataTableColumn<Array<string | null>>[] = [
@@ -93,11 +138,39 @@ export function TableDataGrid({ result }: { result: DatabaseQueryResult }) {
     ...result.columns.map((column, columnIndex) => ({
       cell: (row: Array<string | null>) => {
         const value = row[columnIndex];
+        if (edit && edit.row === row && edit.columnIndex === columnIndex) {
+          return (
+            <input
+              autoFocus
+              className="block w-full rounded-sm border border-[var(--u-color-focus)] bg-[var(--u-color-surface)] px-1 font-mono text-[12px] text-[var(--u-color-text)] focus-visible:outline-none"
+              onBlur={commitEdit}
+              onChange={(event) => setEditValue(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  commitEdit();
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  setEdit(null);
+                }
+              }}
+              value={editValue}
+            />
+          );
+        }
         return (
           <button
             className="block w-full cursor-pointer truncate text-left font-mono text-[12px] text-[var(--u-color-text)] hover:text-[var(--u-color-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--u-color-focus)]"
             onClick={() => setViewer({ columnName: column.name, value: value ?? null })}
-            title={value ?? "NULL"}
+            onDoubleClick={
+              editing
+                ? () => {
+                    setEditValue(value ?? "");
+                    setEdit({ row, columnIndex });
+                  }
+                : undefined
+            }
+            title={editing ? t("database.editing.editHint") : (value ?? "NULL")}
             type="button"
           >
             {renderCell(value)}
@@ -187,6 +260,22 @@ export function TableDataGrid({ result }: { result: DatabaseQueryResult }) {
           </DialogBody>
         </DialogContent>
       </Dialog>
+      {editing ? (
+        <ConfirmDialog
+          confirmLabel={t("database.editing.deleteRow")}
+          description={t("database.editing.deleteRowBody")}
+          onConfirm={() => {
+            if (deleteRow) {
+              editing.onDeleteRow(buildPrimaryKey(deleteRow));
+            }
+            setDeleteRow(null);
+          }}
+          onOpenChange={(open) => !open && setDeleteRow(null)}
+          open={deleteRow !== null}
+          pending={editing.pending}
+          title={t("database.editing.deleteRowTitle")}
+        />
+      ) : null}
     </div>
   );
 }

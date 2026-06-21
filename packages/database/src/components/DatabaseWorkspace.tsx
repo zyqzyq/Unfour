@@ -5,7 +5,7 @@ import type {
   DatabaseTable,
   DatabaseTableStructure,
 } from "@unfour/command-client";
-import type { DatabaseResultTab, DatabaseTableViewState, SqlHistoryEntry } from "../model/types";
+import type { DatabaseResultTab, DatabaseTableViewState, SqlHistoryEntry, TableEditing } from "../model/types";
 import { Tabs, useI18n } from "@unfour/ui";
 import { QueryResultPanel } from "./QueryResultPanel";
 import { SqlEditorTab } from "./SqlEditorTab";
@@ -44,6 +44,7 @@ export function DatabaseWorkspace({
   structure,
   structureError,
   structureLoading,
+  tableEditing,
   tableView,
 }: {
   activeResultTab: DatabaseResultTab;
@@ -77,6 +78,7 @@ export function DatabaseWorkspace({
   structure?: DatabaseTableStructure | null;
   structureError?: unknown;
   structureLoading?: boolean;
+  tableEditing?: TableEditing | null;
   tableView: DatabaseTableViewState | null;
 }) {
   const { t } = useI18n();
@@ -110,6 +112,7 @@ export function DatabaseWorkspace({
       <div className="flex min-h-0 flex-1 flex-col">
         {activeTabId === "table-data" ? (
           <TableDataTab
+            editing={tableEditing}
             executePending={executePending}
             onPageChange={onTablePageChange}
             onRefresh={() => tableView && onTablePageChange(tableView.pageIndex, tableView.pageSize)}
