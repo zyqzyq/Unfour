@@ -40,14 +40,13 @@ describe("useSqlExecution", () => {
       () =>
         useSqlExecution({
           connectionId: "conn-1",
-          sql: "select 1",
           workspaceId: "ws-1",
           ...callbacks,
         }),
       { wrapper: createWrapper() },
     );
 
-    result.current.mutate(false);
+    result.current.mutate({ confirmMutation: false, sql: "select 1" });
 
     await waitFor(() => expect(callbacks.onSuccess).toHaveBeenCalled());
     expect(callbacks.onExecuteStart).toHaveBeenCalled();
@@ -75,13 +74,12 @@ describe("useSqlExecution", () => {
           onError,
           onExecuteStart: vi.fn(),
           onSuccess: vi.fn(),
-          sql: "delete from t",
           workspaceId: "ws-1",
         }),
       { wrapper: createWrapper() },
     );
 
-    result.current.mutate(false);
+    result.current.mutate({ confirmMutation: false, sql: "delete from t" });
 
     await waitFor(() => expect(onError).toHaveBeenCalled());
     expect(onConfirmationRequired).toHaveBeenCalledWith(true);
@@ -98,13 +96,12 @@ describe("useSqlExecution", () => {
           onConfirmationRequired,
           onExecuteStart: vi.fn(),
           onSuccess: vi.fn(),
-          sql: "selct 1",
           workspaceId: "ws-1",
         }),
       { wrapper: createWrapper() },
     );
 
-    result.current.mutate(true);
+    result.current.mutate({ confirmMutation: true, sql: "selct 1" });
 
     await waitFor(() => expect(onConfirmationRequired).toHaveBeenCalled());
     expect(onConfirmationRequired).toHaveBeenCalledWith(false);

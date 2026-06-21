@@ -1,4 +1,4 @@
-import type { DatabaseConnection, DatabaseQueryResult, DatabaseTable } from "@unfour/command-client";
+import type { DatabaseConnection, DatabaseQueryResult, DatabaseSchema, DatabaseTable } from "@unfour/command-client";
 import type { DatabaseResultTab, DatabaseTableViewState, SqlHistoryEntry } from "../model/types";
 import { Tabs, useI18n } from "@unfour/ui";
 import { QueryResultPanel } from "./QueryResultPanel";
@@ -29,6 +29,7 @@ export function DatabaseWorkspace({
   onTablePageChange,
   pendingConfirmation,
   queryResult,
+  schema,
   schemaError,
   schemaLoading,
   selectedConnectionId,
@@ -47,7 +48,7 @@ export function DatabaseWorkspace({
   onClearSql: () => void;
   onPreviewSelectedTable: () => void;
   onRefreshSchema: () => void;
-  onRun: () => void;
+  onRun: (selectedSql?: string) => void;
   onSelectConnection: (connectionId: string) => void;
   onSelectHistory: (entry: SqlHistoryEntry) => void;
   onSelectStructureTab: (tab: "columns" | "indexes" | "constraints" | "properties" | "ddl") => void;
@@ -58,6 +59,7 @@ export function DatabaseWorkspace({
   onTablePageChange: (pageIndex: number, pageSize: number) => void;
   pendingConfirmation: boolean;
   queryResult: DatabaseQueryResult | null;
+  schema?: DatabaseSchema;
   schemaError: unknown;
   schemaLoading: boolean;
   selectedConnectionId: string | null;
@@ -123,6 +125,7 @@ export function DatabaseWorkspace({
             onSqlChange={onSqlChange}
             onStop={onStop}
             pendingConfirmation={pendingConfirmation}
+            schema={schema}
             selectedConnectionId={selectedConnectionId}
             sql={sql}
           />

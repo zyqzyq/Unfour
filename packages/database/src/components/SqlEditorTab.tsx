@@ -1,8 +1,18 @@
 import Editor, { type OnMount } from "@monaco-editor/react";
 import { Eraser, Play, Square } from "lucide-react";
 import { useEffect, useRef } from "react";
-import type { DatabaseConnection } from "@unfour/command-client";
+import type { DatabaseConnection, DatabaseSchema } from "@unfour/command-client";
 import { Button, EmptyState, IconButton, Select, Toolbar, ToolbarGroup, useI18n } from "@unfour/ui";
+
+type MonacoEditor = Parameters<OnMount>[0];
+
+// Minimal structural types for the Monaco completion callback. The full
+// `monaco-editor` types are not resolvable from this package, so we annotate
+// only the members the provider actually reads.
+type CompletionPosition = { lineNumber: number; column: number };
+type CompletionModel = {
+  getWordUntilPosition(position: CompletionPosition): { startColumn: number; endColumn: number };
+};
 
 export function SqlEditorTab({
   connections,
@@ -13,30 +23,96 @@ export function SqlEditorTab({
   onSqlChange,
   onStop,
   pendingConfirmation,
+  schema,
   selectedConnectionId,
   sql,
 }: {
   connections: DatabaseConnection[];
   executePending: boolean;
   onClearSql: () => void;
-  onRun: () => void;
+  onRun: (selectedSql?: string) => void;
   onSelectConnection: (connectionId: string) => void;
   onSqlChange: (sql: string) => void;
   onStop: () => void;
   pendingConfirmation: boolean;
+  schema?: DatabaseSchema;
   selectedConnectionId: string | null;
   sql: string;
 }) {
   const { t } = useI18n();
   const onRunRef = useRef(onRun);
+  const editorRef = useRef<MonacoEditor | null>(null);
+  const schemaRef = useRef<DatabaseSchema | undefined>(schema);
+  const completionDisposable = useRef<{ dispose: () => void } | null>(null);
   const selectedConnection = connections.find((connection) => connection.id === selectedConnectionId);
 
   useEffect(() => {
     onRunRef.current = onRun;
   }, [onRun]);
 
+  useEffect(() => {
+    schemaRef.current = schema;
+  }, [schema]);
+
+  useEffect(() => () => completionDisposable.current?.dispose(), []);
+
+  // Run the current selection when present, otherwise the full editor body.
+  const runFromEditor = () => {
+    const editor = editorRef.current;
+    const selection = editor?.getSelection();
+    const selected = selection ? editor?.getModel()?.getValueInRange(selection) : "";
+    onRunRef.current(selected?.trim() ? selected : undefined);
+  };
+
   const handleMount: OnMount = (editor, monaco) => {
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => onRunRef.current());
+    editorRef.current = editor;
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, runFromEditor);
+
+    completionDisposable.current?.dispose();
+    const provider = {
+      provideCompletionItems(model: CompletionModel, position: CompletionPosition) {
+        const word = model.getWordUntilPosition(position);
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: word.startColumn,
+          endColumn: word.endColumn,
+        };
+        const tables = schemaRef.current?.tables ?? [];
+        const suggestions: Array<{
+          label: string;
+          kind: number;
+          insertText: string;
+          detail?: string;
+          range: typeof range;
+        }> = [];
+        const seenColumns = new Set<string>();
+        for (const table of tables) {
+          suggestions.push({
+            label: table.name,
+            kind: monaco.languages.CompletionItemKind.Struct,
+            insertText: table.name,
+            detail: table.schema ? `${table.schema} · ${table.kind}` : table.kind,
+            range,
+          });
+          for (const column of table.columns) {
+            if (seenColumns.has(column.name)) {
+              continue;
+            }
+            seenColumns.add(column.name);
+            suggestions.push({
+              label: column.name,
+              kind: monaco.languages.CompletionItemKind.Field,
+              insertText: column.name,
+              detail: column.dataType,
+              range,
+            });
+          }
+        }
+        return { suggestions };
+      },
+    };
+    completionDisposable.current = monaco.languages.registerCompletionItemProvider("sql", provider);
   };
 
   return (
@@ -61,7 +137,7 @@ export function SqlEditorTab({
           <IconButton disabled={!sql.trim() || executePending} label={t("database.actions.clearSql")} onClick={onClearSql}>
             <Eraser size={13} />
           </IconButton>
-          <Button disabled={!selectedConnectionId || executePending} onClick={onRun} size="sm" type="button">
+          <Button disabled={!selectedConnectionId || executePending} onClick={runFromEditor} size="sm" type="button">
             <Play size={13} />
             {pendingConfirmation ? t("database.actions.confirmRun") : t("database.actions.run")}
           </Button>

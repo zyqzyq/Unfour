@@ -96,6 +96,9 @@ export function DatabasePage({
     [connections, selectedConnectionId],
   );
   const prevSelectedConnectionIdRef = useRef(selectedConnectionId);
+  // Tracks the SQL actually sent to the backend (may be a highlighted
+  // selection rather than the full editor contents) so history reflects it.
+  const executedSqlRef = useRef(sql);
   const selectedSession = selectedConnectionId ? connectionStates[selectedConnectionId] : undefined;
   const selectedConnectionStatus: DatabaseConnectionStatus = selectedSession?.status ?? "disconnected";
   const schemaEnabled = Boolean(
@@ -307,7 +310,6 @@ export function DatabasePage({
       }
       recordSuccessfulHistory(result);
     },
-    sql,
     workspaceId,
   });
 
@@ -497,7 +499,7 @@ export function DatabasePage({
     browseTablePage(selectedTable, 0, tableView?.pageSize ?? DEFAULT_PREVIEW_PAGE_SIZE);
   }
 
-  function runSql() {
+  function runSql(overrideSql?: string) {
     executeMutation.reset();
     browseMutation.reset();
     setClientError(null);
@@ -512,7 +514,10 @@ export function DatabasePage({
       return;
     }
 
-    if (!sql.trim()) {
+    // Run the highlighted statement when the editor reports a non-empty
+    // selection; otherwise fall back to the full editor contents.
+    const effectiveSql = overrideSql && overrideSql.trim() ? overrideSql : sql;
+    if (!effectiveSql.trim()) {
       setQueryResult(null);
       setClientError({
         code: "VALIDATION_ERROR",
@@ -522,7 +527,8 @@ export function DatabasePage({
       return;
     }
 
-    executeMutation.mutate(pendingSqlConfirmation);
+    executedSqlRef.current = effectiveSql;
+    executeMutation.mutate({ confirmMutation: pendingSqlConfirmation, sql: effectiveSql });
   }
 
   function clearSql() {
@@ -548,7 +554,7 @@ export function DatabasePage({
       connectionName: selectedConnection?.name ?? t("database.query.unknownConnection"),
       durationMs: result.durationMs,
       rowCount: result.rows.length,
-      sql,
+      sql: executedSqlRef.current,
       status: "success",
     });
   }
@@ -558,7 +564,7 @@ export function DatabasePage({
       connectionId: selectedConnectionId,
       connectionName: selectedConnection?.name ?? t("database.query.unknownConnection"),
       error: formatDatabaseError(error),
-      sql,
+      sql: executedSqlRef.current,
       status: "failed",
     });
   }
@@ -721,6 +727,7 @@ export function DatabasePage({
           onTablePageChange={(pageIndex, pageSize) => selectedTable && browseTablePage(selectedTable, pageIndex, pageSize)}
           pendingConfirmation={pendingSqlConfirmation}
           queryResult={queryResult}
+          schema={visibleSchema}
           schemaError={schemaQuery.error}
           schemaLoading={schemaEnabled && schemaQuery.isFetching}
           selectedConnectionId={selectedConnectionId}
