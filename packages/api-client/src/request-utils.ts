@@ -13,8 +13,6 @@ import type {
   RequestRawBodyType,
 } from "./model/types";
 
-export const AUTH_METADATA_HEADER = "x-unfour-auth-config";
-
 export function normalizeEnvironmentName(name: string) {
   return name.trim().toLowerCase();
 }
@@ -366,40 +364,6 @@ export function formatByteSize(bytes: number) {
   return `${mb.toFixed(mb >= 10 ? 0 : 1)} MB`;
 }
 
-export function splitAuthMetadata(headers: KeyValue[]): {
-  auth: ApiAuthConfig;
-  headers: KeyValue[];
-} {
-  let auth = defaultAuthConfig();
-  const visibleHeaders: KeyValue[] = [];
-  for (const header of headers) {
-    if (header.key.trim().toLowerCase() === AUTH_METADATA_HEADER) {
-      auth = parseAuthMetadata(header.value);
-    } else {
-      visibleHeaders.push(header);
-    }
-  }
-  return { auth, headers: visibleHeaders };
-}
-
-export function headersWithAuthMetadata(
-  headers: KeyValue[],
-  auth: ApiAuthConfig,
-): KeyValue[] {
-  if (auth.type === "none") {
-    return headers;
-  }
-
-  return [
-    ...headers,
-    {
-      enabled: false,
-      key: AUTH_METADATA_HEADER,
-      value: JSON.stringify(redactAuthForStorage(auth)),
-    },
-  ];
-}
-
 export function bodyFieldsFromInput(
   bodyKind: string,
   body?: string,
@@ -572,57 +536,6 @@ export function resolveTemplateLoose(
         current.split(`{{${item.key.trim()}}}`).join(item.value),
       value,
     );
-}
-
-function parseAuthMetadata(value: string): ApiAuthConfig {
-  try {
-    const parsed = JSON.parse(value) as Partial<ApiAuthConfig> | null;
-    if (!parsed || typeof parsed !== "object") {
-      return defaultAuthConfig();
-    }
-    if (parsed.type === "bearer") {
-      return { type: "bearer", token: "" };
-    }
-    if (parsed.type === "basic") {
-      return {
-        type: "basic",
-        username:
-          "username" in parsed && typeof parsed.username === "string"
-            ? parsed.username
-            : "",
-        password: "",
-      };
-    }
-    if (parsed.type === "api-key") {
-      return {
-        type: "api-key",
-        addTo: parsed.addTo === "query" ? "query" : "header",
-        key: "key" in parsed && typeof parsed.key === "string" ? parsed.key : "",
-        value: "",
-      };
-    }
-  } catch {
-    return defaultAuthConfig();
-  }
-  return defaultAuthConfig();
-}
-
-function redactAuthForStorage(auth: ApiAuthConfig): ApiAuthConfig {
-  if (auth.type === "bearer") {
-    return { type: "bearer", token: "" };
-  }
-  if (auth.type === "basic") {
-    return { type: "basic", username: auth.username, password: "" };
-  }
-  if (auth.type === "api-key") {
-    return {
-      type: "api-key",
-      addTo: auth.addTo,
-      key: auth.key,
-      value: "",
-    };
-  }
-  return auth;
 }
 
 function parseFormBody(body: string): KeyValue[] {

@@ -40,7 +40,6 @@ import {
   addQueryIfMissing,
   bodyFieldsToInput,
   hasHeader,
-  headersWithAuthMetadata,
   resolveTemplateLoose,
   sendableKeyValues,
   stripUrlQuery,
@@ -275,7 +274,7 @@ export function tabToInput(
   const body = bodyFieldsToInput(tab.draft, purpose);
   const headers =
     purpose === "save"
-      ? headersWithAuthMetadata(tab.draft.headers, tab.draft.auth)
+      ? tab.draft.headers
       : applyGeneratedHeaders(tab.draft, options.envVariables ?? []);
   const query =
     purpose === "save"

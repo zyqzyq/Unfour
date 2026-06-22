@@ -10,13 +10,11 @@ import {
   collectTreeRequests,
   duplicateEnvironmentKeys,
   findDuplicateEnvironmentName,
-  headersWithAuthMetadata,
   isSensitiveKey,
   formatByteSize,
   nextEnvironmentName,
   parseCollectionImport,
   queryFromUrl,
-  splitAuthMetadata,
   stripUrlQuery,
   syncUrlQuery,
 } from "./request-utils";
@@ -127,20 +125,6 @@ describe("body field helpers", () => {
       bodyKind: "form-urlencoded",
     });
     expect(bodyFieldsToInput(draft, "save").body).toContain('"key":"a"');
-  });
-});
-
-describe("auth metadata helpers", () => {
-  it("stores auth metadata without persisted secret values", () => {
-    const headers = headersWithAuthMetadata([], {
-      type: "bearer",
-      token: "secret",
-    });
-    const { auth, headers: visibleHeaders } = splitAuthMetadata(headers);
-
-    expect(visibleHeaders).toEqual([]);
-    expect(auth).toEqual({ type: "bearer", token: "" });
-    expect(headers[0].value).not.toContain("secret");
   });
 });
 

@@ -13,7 +13,6 @@ import {
   queryFromUrl,
   reconcileDraftPatch,
   savedRequestToInput,
-  splitAuthMetadata,
   syncUrlQuery,
 } from "../request-utils";
 import type {
@@ -336,20 +335,17 @@ export function completeTabSave(
     .filter((_, index) => index !== existingIndex)
     .map((tab) =>
       tab.id === tabId
-        ? (() => {
-            const draft = preserveUnsavedSecretsAfterSave(savedDraft, tab.draft);
-            return {
-              ...tab,
-              baseline: normalizeRequestDraft(draft),
-              draft,
+        ? {
+            ...tab,
+            baseline: normalizeRequestDraft(savedDraft),
+            draft: savedDraft,
             id: nextId,
             saveError: null,
             savedRequestId: saved.id,
             saving: false,
             source: "saved" as const,
             sourceId: saved.id,
-            };
-          })()
+          }
         : tab,
     );
 
@@ -556,16 +552,15 @@ function emptyDraft(): RequestDraft {
 }
 
 function inputToDraft(input: ReturnType<typeof savedRequestToInput>): RequestDraft {
-  const { auth, headers } = splitAuthMetadata(input.headers);
   const query = input.query.length ? input.query : queryFromUrl(input.url);
   const bodyFields = bodyFieldsFromInput(input.bodyKind, input.body);
   return {
-    auth,
+    auth: defaultAuthConfig(),
     ...bodyFields,
     collectionId: input.collectionId ?? null,
     envVariables: [],
     folderPath: input.folderPath ?? "",
-    headers,
+    headers: input.headers,
     method: input.method,
     name: input.name ?? `${input.method} ${input.url}`,
     query,
@@ -593,31 +588,6 @@ function normalizeKeyValues(items: RequestDraft["headers"]) {
     key: item.key,
     value: item.value,
   }));
-}
-
-function preserveUnsavedSecretsAfterSave(
-  savedDraft: RequestDraft,
-  currentDraft: RequestDraft,
-): RequestDraft {
-  if (savedDraft.auth.type === "bearer" && currentDraft.auth.type === "bearer") {
-    return {
-      ...savedDraft,
-      auth: { ...savedDraft.auth, token: currentDraft.auth.token },
-    };
-  }
-  if (savedDraft.auth.type === "basic" && currentDraft.auth.type === "basic") {
-    return {
-      ...savedDraft,
-      auth: { ...savedDraft.auth, password: currentDraft.auth.password },
-    };
-  }
-  if (savedDraft.auth.type === "api-key" && currentDraft.auth.type === "api-key") {
-    return {
-      ...savedDraft,
-      auth: { ...savedDraft.auth, value: currentDraft.auth.value },
-    };
-  }
-  return savedDraft;
 }
 
 function calendarDayDifference(left: Date, right: Date) {

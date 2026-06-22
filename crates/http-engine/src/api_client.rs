@@ -7,7 +7,6 @@ use unfour_core::models::{
     ApiCollection, ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse,
     ApiSavedRequest, KeyValue,
 };
-use unfour_core::redaction::{redact_json_body, redact_key_values};
 use unfour_core::{AppError, AppResult};
 use unfour_local_storage::LocalDb;
 use uuid::Uuid;
@@ -473,9 +472,9 @@ impl ApiClientService {
         .bind(collection_id)
         .bind(input.method.to_uppercase())
         .bind(input.url)
-        .bind(serde_json::to_string(&redact_headers(&input.headers))?)
+        .bind(serde_json::to_string(&input.headers)?)
         .bind(serde_json::to_string(&input.query)?)
-        .bind(input.body.as_deref().map(|b| redact_json_body(b).0))
+        .bind(input.body.clone())
         .bind(input.body_kind)
         .bind(now)
         .execute(self.db.pool())
@@ -520,9 +519,9 @@ impl ApiClientService {
         .bind(collection_id)
         .bind(input.method.to_uppercase())
         .bind(input.url)
-        .bind(serde_json::to_string(&redact_headers(&input.headers))?)
+        .bind(serde_json::to_string(&input.headers)?)
         .bind(serde_json::to_string(&input.query)?)
-        .bind(input.body.as_deref().map(|b| redact_json_body(b).0))
+        .bind(input.body.clone())
         .bind(input.body_kind)
         .bind(now)
         .bind(&workspace_id)
@@ -969,9 +968,9 @@ impl ApiClientService {
         .bind(&input.name)
         .bind(input.method.to_uppercase())
         .bind(&input.url)
-        .bind(serde_json::to_string(&redact_headers(&input.headers))?)
+        .bind(serde_json::to_string(&input.headers)?)
         .bind(serde_json::to_string(&input.query)?)
-        .bind(input.body.as_deref().map(|b| redact_json_body(b).0))
+        .bind(input.body.clone())
         .bind(i64::from(status))
         .bind(i64::try_from(duration_ms).unwrap_or(i64::MAX))
         .bind(serde_json::to_string(response_headers)?)
@@ -1087,16 +1086,6 @@ fn build_url(raw_url: &str, query: &[KeyValue]) -> AppResult<Url> {
     }
 
     Ok(url)
-}
-
-fn redact_headers(headers: &[KeyValue]) -> Vec<KeyValue> {
-    redact_key_values(
-        headers.to_vec(),
-        |item| &item.key,
-        |item, value| {
-            item.value = value;
-        },
-    )
 }
 
 fn validate_workspace_id(workspace_id: &str) -> AppResult<()> {
@@ -1423,76 +1412,6 @@ mod tests {
             )
             .await;
         assert!(matches!(result, Err(AppError::Validation(_))));
-    }
-
-    #[tokio::test]
-    async fn save_request_redacts_sensitive_headers() {
-        let service = service().await;
-
-        let saved = service
-            .save_request(ApiRequestInput {
-                workspace_id: "workspace-a".to_string(),
-                name: Some("Secret request".to_string()),
-                folder_path: None,
-                collection_id: None,
-                method: "GET".to_string(),
-                url: "https://example.test".to_string(),
-                headers: vec![KeyValue {
-                    key: "Authorization".to_string(),
-                    value: "Bearer secret".to_string(),
-                    enabled: true,
-                }],
-                query: vec![],
-                body: None,
-                body_kind: "json".to_string(),
-                timeout_ms: None,
-            })
-            .await
-            .expect("save request");
-
-        assert!(saved.headers_json.contains("<redacted>"));
-        assert!(!saved.headers_json.contains("Bearer secret"));
-    }
-
-    #[tokio::test]
-    async fn save_request_redacts_sensitive_body_fields() {
-        let service = service().await;
-
-        let saved = service
-            .save_request(ApiRequestInput {
-                workspace_id: "workspace-a".to_string(),
-                name: Some("Body redaction test".to_string()),
-                folder_path: None,
-                collection_id: None,
-                method: "POST".to_string(),
-                url: "https://example.test".to_string(),
-                headers: vec![],
-                query: vec![],
-                body: Some(
-                    r#"{"user":"alice","Authorization":"Bearer secret","data":"safe"}"#.to_string(),
-                ),
-                body_kind: "json".to_string(),
-                timeout_ms: None,
-            })
-            .await
-            .expect("save request");
-
-        assert!(
-            saved.body.as_deref().unwrap_or("").contains("<redacted>"),
-            "saved body should be redacted"
-        );
-        assert!(
-            !saved
-                .body
-                .as_deref()
-                .unwrap_or("")
-                .contains("Bearer secret"),
-            "saved body should not contain the secret"
-        );
-        assert!(
-            saved.body.as_deref().unwrap_or("").contains("alice"),
-            "non-sensitive values should be preserved"
-        );
     }
 
     #[tokio::test]
