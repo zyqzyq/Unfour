@@ -78,7 +78,6 @@ export function EnvironmentEditor({
       )}
       <KeyValueEditor
         items={currentDraft.variables}
-        maskSensitiveValues
         onChange={(variables) =>
           setDraft((current) => ({ ...current, variables }))
         }

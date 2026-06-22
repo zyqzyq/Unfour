@@ -1,17 +1,15 @@
 import { Plus, Trash2 } from "lucide-react";
 import { Button, Input, cn, useI18n } from "@unfour/ui";
 import type { KeyValue } from "@unfour/command-client";
-import { duplicateEnvironmentKeys, isSensitiveKey } from "../request-utils";
+import { duplicateEnvironmentKeys } from "../request-utils";
 
 export function KeyValueEditor({
   items,
-  maskSensitiveValues = false,
   onChange,
   showTitle = true,
   title,
 }: {
   items: KeyValue[];
-  maskSensitiveValues?: boolean;
   onChange: (items: KeyValue[]) => void;
   showTitle?: boolean;
   title: string;
@@ -81,7 +79,7 @@ export function KeyValueEditor({
               className={cellInputClass}
               onChange={(event) => update(index, { value: event.target.value })}
               placeholder={t("api.keyValue.value")}
-              type={maskSensitiveValues && isSensitiveKey(item.key) ? "password" : "text"}
+              type="text"
               value={item.value}
             />
             <button
@@ -128,11 +126,8 @@ function findDuplicateKeys(items: KeyValue[]): string[] {
 export function EnvironmentHints({ variables }: { variables: KeyValue[] }) {
   const { t } = useI18n();
   const duplicateKeys = duplicateEnvironmentKeys(variables);
-  const sensitiveKeys = variables
-    .filter((item) => item.enabled && isSensitiveKey(item.key) && item.value.trim())
-    .map((item) => item.key.trim());
 
-  if (!duplicateKeys.length && !sensitiveKeys.length) {
+  if (!duplicateKeys.length) {
     return null;
   }
 
@@ -141,11 +136,6 @@ export function EnvironmentHints({ variables }: { variables: KeyValue[] }) {
       {duplicateKeys.length > 0 && (
         <div className="rounded-md bg-[var(--u-color-warning-soft)] px-2 py-1 text-[var(--u-color-warning-text)] ring-1 ring-inset ring-[var(--u-badge-warning-ring)]">
           {t("api.keyValue.duplicateVariables", { keys: duplicateKeys.join(", ") })}
-        </div>
-      )}
-      {sensitiveKeys.length > 0 && (
-        <div className="rounded-md bg-[var(--u-badge-neutral-bg)] px-2 py-1 text-[var(--u-color-text-muted)] ring-1 ring-inset ring-[var(--u-badge-neutral-ring)]">
-          {t("api.keyValue.sensitiveMasked", { keys: sensitiveKeys.join(", ") })}
         </div>
       )}
     </div>

@@ -273,7 +273,6 @@ export function EnvironmentManagerPage({
             <div className="min-h-0 flex-1 overflow-y-auto">
               <KeyValueEditor
                 items={draft.variables}
-                maskSensitiveValues
                 onChange={(variables) =>
                   setDraft((current) =>
                     current.kind === "none" ? current : { ...current, variables },

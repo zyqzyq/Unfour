@@ -321,7 +321,7 @@ function AuthPanel({
               onAuthChange({ ...auth, token: event.target.value })
             }
             placeholder="{{token}}"
-            type="password"
+            type="text"
             value={auth.token}
           />
         </label>
@@ -343,7 +343,7 @@ function AuthPanel({
               onChange={(event) =>
                 onAuthChange({ ...auth, password: event.target.value })
               }
-              type="password"
+              type="text"
               value={auth.password}
             />
           </label>
@@ -367,7 +367,7 @@ function AuthPanel({
               onChange={(event) =>
                 onAuthChange({ ...auth, value: event.target.value })
               }
-              type="password"
+              type="text"
               value={auth.value}
             />
           </label>
