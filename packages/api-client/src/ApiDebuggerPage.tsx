@@ -146,6 +146,7 @@ export function ApiDebuggerPage({
     if (!openIntent) {
       return;
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: imperative intent drives view switch
     setWorkspaceView("request");
     if (openIntent.kind === "new") {
       newRequest();

@@ -78,6 +78,7 @@ export function EnvironmentManagerPage({
   }, [onSelectionChange, selectedId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: reset error on mode change
     setSaveError(null);
     if (initialMode.kind === "new") {
       setDraft({
@@ -97,6 +98,7 @@ export function EnvironmentManagerPage({
     const target =
       environments.find((environment) => environment.isActive) ?? environments[0] ?? null;
     setDraft(target ? draftFromEnvironment(target) : { kind: "none" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: only re-init when nonce changes
   }, [initialMode.nonce]);
 
   useEffect(() => {
@@ -108,6 +110,7 @@ export function EnvironmentManagerPage({
         (environment) => environment.id === initialMode.environmentId,
       );
       if (target) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: sync draft when environments list changes
         setDraft(draftFromEnvironment(target));
       }
       return;
@@ -125,6 +128,7 @@ export function EnvironmentManagerPage({
     }
     if (!selectedEnvironment) {
       const next = environments[0] ?? null;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: sync draft when selection changes
       setDraft(next ? draftFromEnvironment(next) : { kind: "none" });
       return;
     }

@@ -39,8 +39,8 @@ describe("ResponseTabs", () => {
 
     const details = screen.getByText(/invalid_token/).closest("pre");
 
-    expect(details?.textContent).toContain('
-  "error"');
+    expect(details?.textContent).toContain(`
+  "error"`);
     expect(details).toHaveClass("whitespace-pre-wrap");
     expect(details).toHaveClass("break-words");
   });

@@ -64,6 +64,7 @@ export function ApiClientSidebar({
 
   useEffect(() => {
     if (environmentPanelActive) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: external prop drives tab sync
       setActiveTab("environments");
     }
   }, [environmentPanelActive]);
