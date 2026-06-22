@@ -111,6 +111,7 @@
     },
     "environment": {
       "active": "当前环境",
+      "actions": "环境操作",
       "activate": "设为当前",
       "activeBadge": "当前",
       "back": "返回",
@@ -141,6 +142,7 @@
       "deleteRow": "删除 {title} 行",
       "duplicateKeys": "重复键：{keys}",
       "duplicateVariables": "重复变量：{keys}",
+      "empty": "没有条目",
       "formFields": "表单字段",
       "headers": "请求头",
       "key": "键",
@@ -211,6 +213,7 @@
       "networkTitle": "无法连接到服务器",
       "noCookies": "没有响应 Cookie",
       "noHeaders": "没有响应头",
+      "noRequest": "没有请求快照",
       "noTiming": "没有耗时数据",
       "openAuthSettings": "打开 Auth 设置",
       "pretty": "格式化",
@@ -226,10 +229,17 @@
         "sending": "发送中",
         "timeout": "超时"
       },
+      "request": {
+        "body": "请求正文",
+        "headers": "请求头",
+        "query": "查询参数",
+        "summary": "请求概要"
+      },
       "tabs": {
         "body": "正文",
         "cookies": "Cookie",
         "headers": "响应头",
+        "request": "请求",
         "timing": "耗时"
       },
       "timeoutDescription": "服务器响应前，请求已超时。",

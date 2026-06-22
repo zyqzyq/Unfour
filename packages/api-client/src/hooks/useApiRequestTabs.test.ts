@@ -62,6 +62,23 @@ describe("tabToInput", () => {
     expect(header(input, "Authorization")?.value).toBe("Bearer abc123");
   });
 
+
+  it("resolves environment variables inside generated bearer auth", () => {
+    const input = tabToInput(
+      tabWithDraft({
+        method: "POST",
+        url: "https://api.test",
+        auth: { type: "bearer", token: "{{access_token}}" },
+      }),
+      WORKSPACE,
+      {
+        envVariables: [{ enabled: true, key: "access_token", value: "abc123" }],
+      },
+    );
+
+    expect(header(input, "Authorization")?.value).toBe("Bearer abc123");
+  });
+
   it("generates a Basic Authorization header from basic auth", () => {
     const input = tabToInput(
       tabWithDraft({
@@ -90,6 +107,35 @@ describe("tabToInput", () => {
     expect(input.query.find((item) => item.key === "api_key")?.value).toBe(
       "secret",
     );
+  });
+
+
+  it("resolves environment variables inside generated api-key auth", () => {
+    const queryInput = tabToInput(
+      tabWithDraft({
+        method: "GET",
+        url: "https://api.test",
+        auth: { type: "api-key", addTo: "query", key: "api_key", value: "{{api_key}}" },
+      }),
+      WORKSPACE,
+      {
+        envVariables: [{ enabled: true, key: "api_key", value: "secret" }],
+      },
+    );
+    const headerInput = tabToInput(
+      tabWithDraft({
+        method: "GET",
+        url: "https://api.test",
+        auth: { type: "api-key", addTo: "header", key: "X-API-Key", value: "{{api_key}}" },
+      }),
+      WORKSPACE,
+      {
+        envVariables: [{ enabled: true, key: "api_key", value: "secret" }],
+      },
+    );
+
+    expect(queryInput.query.find((item) => item.key === "api_key")?.value).toBe("secret");
+    expect(header(headerInput, "X-API-Key")?.value).toBe("secret");
   });
 
   it("preserves an explicit Authorization header over generated auth", () => {

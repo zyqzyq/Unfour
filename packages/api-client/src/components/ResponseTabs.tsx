@@ -9,8 +9,8 @@ import {
   WifiOff,
 } from "lucide-react";
 import { Badge, Button, EmptyState, cn, useI18n, useTheme } from "@unfour/ui";
-import type { ApiResponse, KeyValue } from "@unfour/command-client";
-import { formatByteSize } from "../request-utils";
+import type { ApiRequestInput, ApiResponse, KeyValue } from "@unfour/command-client";
+import { formatByteSize, isSensitiveKey } from "../request-utils";
 import { formatResponseBody, looksLikeJson } from "../model/api-request-state";
 import {
   deriveTabResponseState,
@@ -35,7 +35,7 @@ export function ResponseTabs({
   const responseSize = tab.response
     ? formatByteSize(new TextEncoder().encode(tab.response.body).length)
     : null;
-  const showResponseTabs = tab.sending || Boolean(tab.response);
+  const showResponseTabs = tab.sending || Boolean(tab.response) || Boolean(tab.lastRequest);
   const canRetry = Boolean(tab.draft.url.trim()) && !tab.sending;
 
   return (
@@ -82,13 +82,14 @@ export function ResponseTabs({
               meta: responseCookies(tab.response).length,
             },
             { id: "timing", label: t("api.response.tabs.timing") },
+            { id: "request", label: t("api.response.tabs.request") },
           ]}
           onChange={onResponseTabChange}
         />
       )}
       <div className="min-h-0 flex-1 overflow-hidden">
         {responseState === "sending" && <SendingState />}
-        {responseState === "idle" && (
+        {responseState === "idle" && tab.responseTab !== "request" && (
           <ResponsePaneState
             description={t("api.response.emptyDescription")}
             icon={<Send size={24} />}
@@ -117,7 +118,8 @@ export function ResponseTabs({
         )}
         {(responseState === "network" ||
           responseState === "timeout" ||
-          responseState === "failed") && (
+          responseState === "failed") &&
+          tab.responseTab !== "request" && (
           <ResponsePaneState
             description={
               tab.sendError ||
@@ -145,6 +147,9 @@ export function ResponseTabs({
               {t("api.response.retry")}
             </Button>
           </ResponsePaneState>
+        )}
+        {responseState !== "sending" && tab.responseTab === "request" && (
+          <RequestSnapshot request={tab.lastRequest} />
         )}
         {responseState !== "sending" &&
           !tab.sendError &&
@@ -220,6 +225,9 @@ function ResponseBodyView({
   }
 
   if (response.status >= 400) {
+    const body = response.body.trim();
+    const displayBody = looksLikeJson(body) ? formatResponseBody(body) : body;
+
     return (
       <ResponsePaneState
         description={t("api.response.rejectedDescription")}
@@ -227,9 +235,9 @@ function ResponseBodyView({
         title={t("api.response.rejectedTitle")}
         tone="error"
       >
-        {response.body.trim() && (
-          <pre className="max-h-28 max-w-[min(520px,100%)] overflow-auto rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-bg)] px-3 py-2 text-left font-mono text-[12px] text-[var(--u-color-text-muted)]">
-            {response.body}
+        {body && (
+          <pre className="max-h-60 w-full max-w-3xl overflow-auto whitespace-pre-wrap break-words rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-bg)] px-3 py-2 text-left font-mono text-[12px] leading-5 text-[var(--u-color-text-muted)]">
+            {displayBody}
           </pre>
         )}
         <Button onClick={onOpenAuthSettings} size="sm" type="button" variant="outline">
@@ -299,6 +307,102 @@ function ResponseBodyView({
         />
       </div>
     </div>
+  );
+}
+
+function RequestSnapshot({ request }: { request: ApiRequestInput | null }) {
+  const { t } = useI18n();
+
+  if (!request) {
+    return <EmptyState className="m-3 h-[calc(100%-24px)]">{t("api.response.noRequest")}</EmptyState>;
+  }
+
+  const headers = redactKeyValues(request.headers);
+  const query = redactKeyValues(request.query);
+
+  return (
+    <div className="h-full overflow-auto p-3 text-[12px] text-[var(--u-color-text)]">
+      <div className="mb-3 rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-2">
+        <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--u-color-text-soft)]">
+          {t("api.response.request.summary")}
+        </div>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="rounded-[var(--u-radius-sm)] bg-[var(--u-color-primary-soft)] px-1.5 py-0.5 font-mono text-[11px] font-semibold text-[var(--u-color-primary)]">
+            {request.method}
+          </span>
+          <span className="min-w-0 break-all font-mono text-[var(--u-color-text-muted)]">
+            {request.url}
+          </span>
+        </div>
+      </div>
+      <RequestKeyValueReadout
+        emptyLabel={t("api.keyValue.empty")}
+        items={query}
+        title={t("api.response.request.query")}
+      />
+      <RequestKeyValueReadout
+        emptyLabel={t("api.response.noHeaders")}
+        items={headers}
+        title={t("api.response.request.headers")}
+      />
+      <section className="mt-3">
+        <h4 className="mb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--u-color-text-soft)]">
+          {t("api.response.request.body")}
+        </h4>
+        {request.body?.trim() ? (
+          <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-bg)] px-3 py-2 font-mono text-[12px] leading-5 text-[var(--u-color-text-muted)]">
+            {request.body}
+          </pre>
+        ) : (
+          <div className="rounded-[var(--u-radius-sm)] border border-dashed border-[var(--u-color-border)] px-3 py-2 text-[var(--u-color-text-soft)]">
+            {t("api.keyValue.empty")}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function RequestKeyValueReadout({
+  emptyLabel,
+  items,
+  title,
+}: {
+  emptyLabel: string;
+  items: KeyValue[];
+  title: string;
+}) {
+  return (
+    <section className="mt-3">
+      <h4 className="mb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--u-color-text-soft)]">
+        {title}
+      </h4>
+      {items.length ? (
+        <div className="rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)]">
+          {items.map((item, index) => (
+            <div
+              className="grid min-h-[var(--u-size-table-row)] grid-cols-[minmax(120px,0.32fr)_minmax(0,1fr)] items-start gap-3 border-b border-[var(--u-color-border)] px-2 py-1.5 last:border-b-0"
+              key={`${item.key}-${index}`}
+            >
+              <span className="break-all font-medium">{item.key}</span>
+              <span className="break-all font-mono text-[var(--u-color-text-muted)]">
+                {item.value}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-[var(--u-radius-sm)] border border-dashed border-[var(--u-color-border)] px-3 py-2 text-[var(--u-color-text-soft)]">
+          {emptyLabel}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function redactKeyValues(items: KeyValue[]): KeyValue[] {
+  return items.map((item) =>
+    isSensitiveKey(item.key) ? { ...item, value: "<redacted>" } : item,
   );
 }
 

@@ -6,7 +6,7 @@ import {
   type ApiEnvironment,
   type ApiHistoryItem,
 } from "@unfour/command-client";
-import { Badge, Button, cn, useI18n } from "@unfour/ui";
+import { Button, cn, useI18n } from "@unfour/ui";
 import { useApiEnvironments } from "../hooks/useApiEnvironments";
 import type { ApiOpenIntent } from "../model/types";
 import { ApiCollectionTree } from "./ApiCollectionTree";
@@ -203,7 +203,10 @@ function EnvironmentRow({
     >
       <span className="min-w-0 truncate font-medium">{environment.name}</span>
       {environment.isActive && (
-        <Badge tone="teal">{t("api.environment.activeBadge")}</Badge>
+        <span
+          className="ml-auto inline-flex h-2 w-2 shrink-0 rounded-full bg-[var(--u-color-primary)]"
+          title={t("api.environment.activeBadge")}
+        />
       )}
     </button>
   );

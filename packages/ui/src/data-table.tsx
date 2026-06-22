@@ -23,9 +23,14 @@ export function DataTable<T>({
   getRowKey?: (row: T, rowIndex: number) => React.Key;
   rows: T[];
 }) {
+  const explicitWidth = columns.reduce((total, column) => total + (column.width ?? 0), 0);
+
   return (
     <div className={cn("min-h-0 overflow-auto", className)}>
-      <table className="w-max min-w-full table-fixed text-left text-[12px]">
+      <table
+        className="w-full table-fixed text-left text-[12px]"
+        style={explicitWidth ? { minWidth: explicitWidth } : undefined}
+      >
         <colgroup>
           {columns.map((column) => (
             <col key={column.id} style={column.width ? { width: column.width } : undefined} />
@@ -36,12 +41,17 @@ export function DataTable<T>({
             {columns.map((column) => (
               <th
                 className={cn(
-                  "h-[var(--u-size-table-row)] border-b border-[var(--u-color-border)] px-2 font-medium",
+                  "box-border h-[var(--u-size-table-row)] border-b border-[var(--u-color-border)] px-2 font-medium",
                   column.align === "right" && "text-right",
                 )}
                 key={column.id}
               >
-                <div className="flex min-w-0 items-center gap-2">
+                <div
+                  className={cn(
+                    "flex min-w-0 items-center gap-2",
+                    column.align === "right" && "justify-end",
+                  )}
+                >
                   <span className="truncate">{column.header}</span>
                   {column.meta && <span className="shrink-0 text-[10px] uppercase text-[var(--u-color-text-soft)]">{column.meta}</span>}
                 </div>
@@ -68,7 +78,7 @@ export function DataTable<T>({
                 {columns.map((column) => (
                   <td
                     className={cn(
-                      "h-[var(--u-size-table-row)] truncate px-2 text-[var(--u-color-text)]",
+                      "box-border h-[var(--u-size-table-row)] truncate px-2 text-[var(--u-color-text)]",
                       column.align === "right" && "text-right",
                     )}
                     key={column.id}

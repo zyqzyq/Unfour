@@ -191,12 +191,13 @@ export function useApiRequestTabs(workspaceId: string) {
       setState((current) => failTabSend(current, tab.id, validationError));
       return;
     }
-    setState((current) => startTabSend(current, tab.id));
+    const input = tabToInput(tab, workspaceId, {
+      envVariables,
+      purpose: "send",
+    });
+    setState((current) => startTabSend(current, tab.id, input));
     sendRequest({
-      input: tabToInput(tab, workspaceId, {
-        envVariables,
-        purpose: "send",
-      }),
+      input,
       tabId: tab.id,
     });
   }, [envVariables, sendRequest, workspaceId]);
@@ -330,15 +331,18 @@ function applyGeneratedHeaders(
   }
 
   // Explicit Authorization in the Headers table wins over generated Auth headers.
-  if (draft.auth.type === "bearer" && draft.auth.token.trim() && !hasHeader(headers, "Authorization")) {
-    headers = [
-      ...headers,
-      {
-        enabled: true,
-        key: "Authorization",
-        value: `Bearer ${draft.auth.token}`,
-      },
-    ];
+  if (draft.auth.type === "bearer" && !hasHeader(headers, "Authorization")) {
+    const token = resolveTemplateLoose(draft.auth.token, envVariables);
+    if (token.trim()) {
+      headers = [
+        ...headers,
+        {
+          enabled: true,
+          key: "Authorization",
+          value: `Bearer ${token}`,
+        },
+      ];
+    }
   }
   if (draft.auth.type === "basic" && !hasHeader(headers, "Authorization")) {
     const username = resolveTemplateLoose(draft.auth.username, envVariables);
@@ -354,35 +358,34 @@ function applyGeneratedHeaders(
       ];
     }
   }
-  if (
-    draft.auth.type === "api-key" &&
-    draft.auth.addTo === "header" &&
-    draft.auth.key.trim() &&
-    !hasHeader(headers, draft.auth.key)
-  ) {
-    headers = [
-      ...headers,
-      {
-        enabled: true,
-        key: draft.auth.key.trim(),
-        value: draft.auth.value,
-      },
-    ];
+  if (draft.auth.type === "api-key" && draft.auth.addTo === "header") {
+    const key = resolveTemplateLoose(draft.auth.key, envVariables).trim();
+    const value = resolveTemplateLoose(draft.auth.value, envVariables);
+    if (key && !hasHeader(headers, key)) {
+      headers = [
+        ...headers,
+        {
+          enabled: true,
+          key,
+          value,
+        },
+      ];
+    }
   }
   return headers;
 }
 
 function applyGeneratedQuery(
   draft: RequestDraft,
-  _envVariables: KeyValue[],
+  envVariables: KeyValue[],
 ): KeyValue[] {
   let query = sendableKeyValues(draft.query);
-  if (
-    draft.auth.type === "api-key" &&
-    draft.auth.addTo === "query" &&
-    draft.auth.key.trim()
-  ) {
-    query = addQueryIfMissing(query, draft.auth.key, draft.auth.value);
+  if (draft.auth.type === "api-key" && draft.auth.addTo === "query") {
+    const key = resolveTemplateLoose(draft.auth.key, envVariables).trim();
+    const value = resolveTemplateLoose(draft.auth.value, envVariables);
+    if (key) {
+      query = addQueryIfMissing(query, key, value);
+    }
   }
   return query;
 }

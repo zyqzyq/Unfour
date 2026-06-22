@@ -1,6 +1,7 @@
 import type {
   ApiHistoryDetail,
   ApiHistoryItem,
+  ApiRequestInput,
   ApiResponse,
   ApiSavedRequest,
 } from "@unfour/command-client";
@@ -29,6 +30,7 @@ export type ApiRequestTab = {
   draft: RequestDraft;
   id: string;
   requestTab: RequestParamsTab;
+  lastRequest: ApiRequestInput | null;
   response: ApiResponse | null;
   responseTab: ResponseTab;
   saveError: string | null;
@@ -144,6 +146,7 @@ export function createNewRequestTab(
     draft: emptyDraft(),
     id,
     requestTab: "query",
+    lastRequest: null,
     response: null,
     responseTab: "body",
     saveError: null,
@@ -181,6 +184,7 @@ export function openSavedRequest(
         draft,
         id,
         requestTab: "query",
+        lastRequest: null,
         response: null,
         responseTab: "body",
         saveError: null,
@@ -200,6 +204,7 @@ export function openHistoryRequest(
   history: ApiHistoryDetail,
 ): ApiTabsState {
   const id = `history:${history.id}`;
+  const request = historyDetailToInput(history);
   if (state.tabs.some((tab) => tab.id === id)) {
     return { ...state, activeTabId: id };
   }
@@ -211,9 +216,10 @@ export function openHistoryRequest(
       ...state.tabs,
       {
         baseline: null,
-        draft: inputToDraft(historyDetailToInput(history)),
+        draft: inputToDraft(request),
         id,
         requestTab: "query",
+        lastRequest: request,
         response: historyResponse(history),
         responseTab: "body",
         saveError: null,
@@ -268,9 +274,11 @@ export function setTabResponsePanel(
 export function startTabSend(
   state: ApiTabsState,
   tabId: string,
+  request: ApiRequestInput | null = null,
 ): ApiTabsState {
   return updateTab(state, tabId, (tab) => ({
     ...tab,
+    lastRequest: request ?? tab.lastRequest,
     response: null,
     sendError: null,
     sending: true,

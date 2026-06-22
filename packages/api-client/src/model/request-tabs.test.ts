@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   ApiHistoryDetail,
   ApiHistoryItem,
+  ApiRequestInput,
   ApiResponse,
   ApiSavedRequest,
 } from "@unfour/command-client";
@@ -94,6 +95,7 @@ describe("API request tab state", () => {
     expect(second.tabs).toHaveLength(1);
     expect(second.activeTabId).toBe("history:history-1");
     expect(getTabSaveState(second.tabs[0])).toBe("unsaved");
+    expect(second.tabs[0].lastRequest?.url).toBe("https://history.test");
   });
 
   it("keeps persistence state unchanged while sending", () => {
@@ -121,6 +123,16 @@ describe("API request tab state", () => {
     expect(completed.activeTabId).toBe("new:2");
     expect(completed.tabs.find((tab) => tab.id === "new:1")?.response?.status).toBe(200);
     expect(completed.tabs.find((tab) => tab.id === "new:2")?.response).toBeNull();
+  });
+
+  it("keeps the request snapshot used for the latest send", () => {
+    const opened = createNewRequestTab(emptyApiTabsState("ws-1"), "new:1");
+    const input = requestInput();
+    const sending = startTabSend(opened, "new:1", input);
+    const completed = completeTabSend(sending, "new:1", response());
+
+    expect(sending.tabs[0].lastRequest).toEqual(input);
+    expect(completed.tabs[0].lastRequest).toEqual(input);
   });
 
   it("updates the saved baseline only after successful save", () => {
@@ -282,6 +294,22 @@ function response(): ApiResponse {
     headers: [],
     body: "{}",
     durationMs: 12,
+  };
+}
+
+function requestInput(): ApiRequestInput {
+  return {
+    workspaceId: "ws-1",
+    name: "Snapshot",
+    folderPath: null,
+    collectionId: null,
+    method: "POST",
+    url: "https://example.test/users",
+    headers: [{ enabled: true, key: "Content-Type", value: "application/json" }],
+    query: [{ enabled: true, key: "page", value: "1" }],
+    body: '{"name":"Ada"}',
+    bodyKind: "json",
+    timeoutMs: 60_000,
   };
 }
 

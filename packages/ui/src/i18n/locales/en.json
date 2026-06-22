@@ -111,6 +111,7 @@
     },
     "environment": {
       "active": "Active environment",
+      "actions": "Environment actions",
       "activate": "Set active",
       "activeBadge": "Active",
       "back": "Back",
@@ -141,6 +142,7 @@
       "deleteRow": "Delete {title} row",
       "duplicateKeys": "Duplicate keys: {keys}",
       "duplicateVariables": "Duplicate variables: {keys}",
+      "empty": "No entries",
       "formFields": "Form fields",
       "headers": "Headers",
       "key": "Key",
@@ -211,6 +213,7 @@
       "networkTitle": "Couldn’t reach the server",
       "noCookies": "No response cookies",
       "noHeaders": "No response headers",
+      "noRequest": "No request snapshot",
       "noTiming": "No timing data",
       "openAuthSettings": "Open Auth settings",
       "pretty": "Pretty",
@@ -226,10 +229,17 @@
         "sending": "sending",
         "timeout": "timeout"
       },
+      "request": {
+        "body": "Request body",
+        "headers": "Request headers",
+        "query": "Query params",
+        "summary": "Request summary"
+      },
       "tabs": {
         "body": "Body",
         "cookies": "Cookies",
         "headers": "Headers",
+        "request": "Request",
         "timing": "Timing"
       },
       "timeoutDescription": "The request timed out before the server responded.",

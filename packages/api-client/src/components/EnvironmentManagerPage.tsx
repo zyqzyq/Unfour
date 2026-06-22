@@ -1,7 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { MoreHorizontal, Trash2 } from "lucide-react";
 import type { ApiEnvironment, KeyValue } from "@unfour/command-client";
-import { Badge, Button, ConfirmDialog, Input, useI18n } from "@unfour/ui";
+import {
+  Button,
+  ConfirmDialog,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  IconButton,
+  Input,
+  useI18n,
+} from "@unfour/ui";
 import { useApiEnvironments } from "../hooks/useApiEnvironments";
 import { formatError } from "../model/api-request-state";
 import {
@@ -221,7 +231,10 @@ export function EnvironmentManagerPage({
                       : draft.sourceName}
                   </h2>
                   {selectedEnvironment?.isActive && (
-                    <Badge tone="teal">{t("api.environment.activeBadge")}</Badge>
+                    <span className="inline-flex h-5 items-center gap-1.5 rounded-[var(--u-radius-sm)] px-1.5 text-[11px] font-medium text-[var(--u-color-primary)]">
+                      <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                      {t("api.environment.activeBadge")}
+                    </span>
                   )}
                   {dirty && (
                     <span className="text-[11px] text-[var(--u-color-text-soft)]">
@@ -235,16 +248,27 @@ export function EnvironmentManagerPage({
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {draft.kind === "existing" && selectedEnvironment && (
-                  <Button
-                    disabled={deleteMut.isPending}
-                    onClick={() => requestDelete(selectedEnvironment)}
-                    size="sm"
-                    type="button"
-                    variant="danger"
-                  >
-                    <Trash2 size={13} />
-                    {t("api.environment.delete")}
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <IconButton
+                        disabled={deleteMut.isPending}
+                        label={t("api.environment.actions")}
+                        size="compact"
+                        tooltip={t("api.environment.actions")}
+                      >
+                        <MoreHorizontal size={15} />
+                      </IconButton>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem
+                        className="text-[var(--u-color-danger)]"
+                        onSelect={() => requestDelete(selectedEnvironment)}
+                      >
+                        <Trash2 size={13} />
+                        {t("api.environment.delete")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
                 <Button disabled={saveDisabled} onClick={() => void saveDraft()} size="sm" type="button">
                   {saving ? t("api.actions.saving") : t("api.environment.save")}
