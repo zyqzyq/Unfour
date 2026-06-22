@@ -33,9 +33,9 @@ describe("terminalSessionStatus", () => {
     expect(terminalSessionStatus(session("failed"))).toBe("error");
   });
 
-  it("collapses degraded and reconnecting into a connecting state", () => {
-    expect(terminalSessionStatus(session("degraded"))).toBe("connecting");
-    expect(terminalSessionStatus(session("reconnecting"))).toBe("connecting");
+  it("maps degraded and reconnecting to a reconnecting state", () => {
+    expect(terminalSessionStatus(session("degraded"))).toBe("reconnecting");
+    expect(terminalSessionStatus(session("reconnecting"))).toBe("reconnecting");
   });
 
   it("passes through connected and disconnected states", () => {

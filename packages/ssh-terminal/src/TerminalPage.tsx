@@ -17,7 +17,6 @@ import {
 } from "@unfour/command-client";
 import { useWorkspaceStore } from "@unfour/workspace-core";
 import { ConfirmDialog, LoadingState, useI18n } from "@unfour/ui";
-import { TerminalModuleToolbar } from "./components/TerminalModuleToolbar";
 import { TerminalWorkspace } from "./components/TerminalWorkspace";
 import { SshConnectionTree } from "./components/SshConnectionTree";
 import { SshConnectionDialog } from "./components/SshConnectionDialog";
@@ -298,7 +297,7 @@ export function TerminalPage({
   });
 
   const exportMutation = useMutation({
-    mutationFn: () => exportSshLog({ workspaceId, sessionId: activeSessionId ?? "" }),
+    mutationFn: (sessionId: string) => exportSshLog({ workspaceId, sessionId }),
     onSuccess: (log) => setExportedLog(log.content),
   });
 
@@ -316,12 +315,14 @@ export function TerminalPage({
     setDialogOpen(true);
   }
 
-  function openConnectionSettings() {
+  function openConnectionSettings(connection?: SshConnection | null) {
     connectMutation.reset();
     deleteMutation.reset();
     saveMutation.reset();
-    if (selectedConnection) {
-      setForm(sshConnectionToInput(selectedConnection, workspaceId));
+    const target = connection ?? selectedConnection;
+    if (target) {
+      setSelectedSshConnection(target.id);
+      setForm(sshConnectionToInput(target, workspaceId));
     } else {
       setForm(defaultSshConnectionInput(workspaceId));
     }
@@ -349,6 +350,13 @@ export function TerminalPage({
   const handleEditConnection = useCallback((connection: SshConnection) => {
     editConnectionRef.current(connection);
   }, []);
+  const newConnectionRef = useRef(newConnection);
+  useEffect(() => {
+    newConnectionRef.current = newConnection;
+  });
+  const handleNewConnection = useCallback(() => {
+    newConnectionRef.current();
+  }, []);
   const openTerminalTab = useCallback(() => setActiveTab("ssh-main"), [setActiveTab]);
 
   const shellSidebar = useMemo(
@@ -357,11 +365,12 @@ export function TerminalPage({
         active
         collapsed={false}
         onEditConnection={handleEditConnection}
+        onNewConnection={handleNewConnection}
         onOpenTerminal={openTerminalTab}
         workspaceId={workspaceId}
       />
     ),
-    [handleEditConnection, openTerminalTab, workspaceId],
+    [handleEditConnection, handleNewConnection, openTerminalTab, workspaceId],
   );
 
   useEffect(() => {
@@ -443,12 +452,9 @@ export function TerminalPage({
     ? sessions.find((item) => item.sessionId === closeConfirmSessionId)
     : null;
 
-  function copyActiveSessionLog() {
-    if (!activeSessionId) {
-      return;
-    }
+  function copySessionLog(sessionId: string) {
     const content = terminalEvents
-      .filter((event) => event.sessionId === activeSessionId)
+      .filter((event) => event.sessionId === sessionId)
       .map(
         (event) =>
           `[${event.createdAt}] ${event.kind} ${redactTerminalLog(event.data).trim()}`,
@@ -481,6 +487,18 @@ export function TerminalPage({
     }
   }, [connectMutation.error, selectedConnection]);
 
+  // Search has no toolbar button anymore; Ctrl/Cmd+F opens the in-terminal search.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && (event.key === "f" || event.key === "F")) {
+        event.preventDefault();
+        setSearchOpen(true);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [setSearchOpen]);
+
   const blockingError = connectionsQuery.error ?? sessionsQuery.error;
   const actionError =
     connectMutation.error ??
@@ -490,30 +508,6 @@ export function TerminalPage({
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col bg-[var(--u-color-surface)]">
-      <TerminalModuleToolbar
-        activeSessionCount={sessions.length}
-        canConnect={Boolean(selectedConnectionId)}
-        canSplit={sessions.filter((session) => session.status === "connected").length > 1}
-        canUseSessionActions={Boolean(activeSessionId)}
-        connecting={connectMutation.isPending}
-        reconnecting={
-          activeSession?.status === "degraded" || activeSession?.status === "reconnecting"
-        }
-        onCancelReconnect={() =>
-          activeSessionId && cancelReconnectMutation.mutate(activeSessionId)
-        }
-        onClear={() => clearTerminalSessionEvents(activeSessionId)}
-        onCloseSession={() => activeSessionId && requestCloseSession(activeSessionId)}
-        onCopyLog={copyActiveSessionLog}
-        onExportLog={() => exportMutation.mutate()}
-        onNewConnection={newConnection}
-        onNewSession={connectSelectedConnection}
-        onOpenPreferences={openConnectionSettings}
-        onSearch={() => setSearchOpen(true)}
-        onSplit={split.setMode}
-        selectedConnectionName={selectedConnection?.name}
-        splitMode={split.mode}
-      />
       {connectionsQuery.isLoading || sessionsQuery.isLoading ? (
         <LoadingState className="min-h-0 flex-1 rounded-none border-0">
           {t("ssh.state.loadingWorkspace")}
@@ -523,6 +517,7 @@ export function TerminalPage({
           activeSession={activeSession}
           activeSessionId={activeSessionId}
           actionError={actionError}
+          canSplit={sessions.filter((session) => session.status === "connected").length > 1}
           error={blockingError}
           events={terminalEvents}
           emptyMessage={
@@ -530,12 +525,17 @@ export function TerminalPage({
               ? t("ssh.empty.selectConnection")
               : t("ssh.empty.noConnections")
           }
+          onCancelReconnect={(sessionId) => cancelReconnectMutation.mutate(sessionId)}
+          onClear={(sessionId) => clearTerminalSessionEvents(sessionId)}
           onCloseSession={requestCloseSession}
-          onEditConnection={openConnectionSettings}
+          onCopyLog={copySessionLog}
+          onExportLog={(sessionId) => exportMutation.mutate(sessionId)}
           onNewConnection={newConnection}
           onNewSession={connectSelectedConnection}
+          onOpenPreferences={openConnectionSettings}
           onRetry={retryConnection}
           onSelectSession={setActiveSessionId}
+          onSplit={split.setMode}
           selectedConnection={selectedConnection}
           sessions={sessionTabs}
           splitMode={split.mode}

@@ -5,6 +5,7 @@ import {
   MoreHorizontal,
   Pencil,
   Plug,
+  Plus,
   TerminalSquare,
   Trash2,
 } from "lucide-react";
@@ -47,6 +48,7 @@ export function SshConnectionTree({
   active,
   collapsed,
   onEditConnection,
+  onNewConnection,
   onOpenTerminal,
   onOpenTerminalSplit,
   workspaceId,
@@ -54,6 +56,7 @@ export function SshConnectionTree({
   active?: boolean;
   collapsed?: boolean;
   onEditConnection?: (connection: SshConnection) => void;
+  onNewConnection?: () => void;
   onOpenTerminal?: () => void;
   onOpenTerminalSplit?: (connection: SshConnection) => void;
   workspaceId: string;
@@ -61,8 +64,6 @@ export function SshConnectionTree({
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const { selectedSshConnectionId, setSelectedSshConnection } = useWorkspaceStore();
-  const activeSessionId = useTerminalStore((state) => state.activeSessionId);
-  const setActiveSessionId = useTerminalStore((state) => state.setActiveSessionId);
   const appendTerminalEvents = useTerminalStore((state) => state.appendTerminalEvents);
   const setSplitMode = useTerminalStore((state) => state.setSplitMode);
   const startTerminalSession = useTerminalStore((state) => state.startTerminalSession);
@@ -321,74 +322,38 @@ export function SshConnectionTree({
     };
   });
 
-  const items: TreeViewItem[] = [
-    {
-      children: connectionItems,
-      id: "ssh-connections",
-      label: t("ssh.status.sshConnections"),
-      meta: <StatusBadge>{connections.length}</StatusBadge>,
-    },
-    {
-      children: sessions.map((session) => ({
-        icon: <TerminalSquare size={13} />,
-        id: `session:${session.sessionId}`,
-        label: (
-          <span className="truncate font-mono text-[11.5px]">
-            {session.username}@{session.host}
-          </span>
-        ),
-        meta: (
-          <ConnectionStatus
-            dotOnly
-            label={terminalSessionStatusLabel(session, t)}
-            status={terminalSessionStatus(session)}
-            variant="dot"
-          />
-        ),
-        title: `${session.username}@${session.host} ${session.cols}x${session.rows}`,
-      })),
-      id: "ssh-sessions",
-      label: t("ssh.status.sessions"),
-      meta: <StatusBadge>{sessions.length}</StatusBadge>,
-    },
-  ];
-
   return (
-    <SidebarSection title={t("app.nav.sshTerminalShort")}>
-      <SidebarRow active={active && !selectedSshConnectionId} onClick={onOpenTerminal}>
-        <TerminalSquare size={14} />
-        <span className="min-w-0 flex-1 truncate">{t("ssh.status.sshSessions")}</span>
-        <StatusBadge>{sessions.length}</StatusBadge>
-      </SidebarRow>
+    <SidebarSection>
+      <div className="flex h-7 items-center justify-between gap-2 px-1">
+        <span className="text-[11px] font-semibold uppercase text-[var(--u-color-text-soft)]">
+          {t("ssh.status.sshConnections")}
+        </span>
+        {onNewConnection && (
+          <IconButton
+            label={t("ssh.actions.newConnection")}
+            onClick={onNewConnection}
+            size="compact"
+          >
+            <Plus size={14} />
+          </IconButton>
+        )}
+      </div>
       {connections.length ? (
         <TreeView
-          defaultExpandedIds={["ssh-connections", "ssh-sessions"]}
-          items={items}
+          items={connectionItems}
           onActivate={(item) => {
             const connection = connections.find((candidate) => candidate.id === item.id);
             if (connection) {
               connect(connection);
-              return;
-            }
-
-            if (item.id.startsWith("session:")) {
-              setActiveSessionId(item.id.slice("session:".length));
-              onOpenTerminal?.();
             }
           }}
           onSelect={(item) => {
             const connection = connections.find((candidate) => candidate.id === item.id);
             if (connection) {
               select(connection);
-              return;
-            }
-
-            if (item.id.startsWith("session:")) {
-              setActiveSessionId(item.id.slice("session:".length));
-              onOpenTerminal?.();
             }
           }}
-          selectedId={activeSessionId ? `session:${activeSessionId}` : selectedSshConnectionId}
+          selectedId={selectedSshConnectionId}
         />
       ) : (
         <EmptyState className="min-h-[72px]">{t("ssh.empty.noConnectionsShort")}</EmptyState>

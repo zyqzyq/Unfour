@@ -1,8 +1,11 @@
 import * as React from "react";
 import { X } from "lucide-react";
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "./menus";
 import { cn } from "./utils";
 
 export type WorkspaceTab = {
+  /** Right-click menu content (ContextMenuItem nodes) for this tab. */
+  contextMenu?: React.ReactNode;
   id: string;
   loading?: boolean;
   meta?: React.ReactNode;
@@ -33,7 +36,7 @@ export function Tabs({
     >
       {tabs.map((tab) => {
         const active = tab.id === activeId;
-        return (
+        const tabNode = (
           <div
             className={cn(
               "group flex h-[30px] min-w-[120px] max-w-[220px] items-center gap-2 rounded-t-[var(--u-radius-sm)] border border-transparent px-2 text-[12px] font-medium text-[var(--u-color-text-muted)] transition-colors",
@@ -41,7 +44,6 @@ export function Tabs({
                 ? "border-[var(--u-color-border)] border-b-[var(--u-color-surface)] bg-[var(--u-color-surface)] text-[var(--u-color-text)]"
                 : "hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
             )}
-            key={tab.id}
           >
             <button
               aria-selected={active}
@@ -74,6 +76,17 @@ export function Tabs({
               </button>
             )}
           </div>
+        );
+
+        if (!tab.contextMenu) {
+          return <React.Fragment key={tab.id}>{tabNode}</React.Fragment>;
+        }
+
+        return (
+          <ContextMenu key={tab.id}>
+            <ContextMenuTrigger asChild>{tabNode}</ContextMenuTrigger>
+            <ContextMenuContent>{tab.contextMenu}</ContextMenuContent>
+          </ContextMenu>
         );
       })}
     </div>

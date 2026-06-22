@@ -1,10 +1,30 @@
-import { FilePlus2, Pencil, Plug, TerminalSquare } from "lucide-react";
+import {
+  Columns2,
+  Copy,
+  CircleX,
+  Download,
+  Eraser,
+  FilePlus2,
+  Pencil,
+  Plug,
+  Rows2,
+  SquareSplitHorizontal,
+  TerminalSquare,
+  Unplug,
+} from "lucide-react";
 import type {
   SshConnection,
   SshSessionEvent,
   SshSessionSummary,
 } from "@unfour/command-client";
-import { Button, EmptyState, ErrorState, Tabs, useI18n } from "@unfour/ui";
+import {
+  Button,
+  ContextMenuItem,
+  EmptyState,
+  ErrorState,
+  Tabs,
+  useI18n,
+} from "@unfour/ui";
 import type { TerminalSplitMode, TerminalSessionTabState } from "../model/types";
 import { formatTerminalError } from "../model/errors";
 import { sshEndpointLabel } from "../model/ssh-connection-state";
@@ -16,15 +36,21 @@ export function TerminalWorkspace({
   activeSession,
   activeSessionId,
   actionError,
+  canSplit,
   emptyMessage,
   error,
   events,
-  onEditConnection,
+  onCancelReconnect,
+  onClear,
+  onCloseSession,
+  onCopyLog,
+  onExportLog,
   onNewConnection,
   onNewSession,
-  onCloseSession,
+  onOpenPreferences,
   onRetry,
   onSelectSession,
+  onSplit,
   selectedConnection,
   sessions,
   splitMode,
@@ -32,15 +58,21 @@ export function TerminalWorkspace({
   activeSession: SshSessionSummary | null;
   activeSessionId: string | null;
   actionError?: unknown;
+  canSplit: boolean;
   emptyMessage: string;
   error?: unknown;
   events: SshSessionEvent[];
-  onEditConnection: () => void;
+  onCancelReconnect: (sessionId: string) => void;
+  onClear: (sessionId: string) => void;
+  onCloseSession: (sessionId: string) => void;
+  onCopyLog: (sessionId: string) => void;
+  onExportLog: (sessionId: string) => void;
   onNewConnection: () => void;
   onNewSession: () => void;
-  onCloseSession: (sessionId: string) => void;
+  onOpenPreferences: (connection?: SshConnection | null) => void;
   onRetry: (connectionId: string) => void;
   onSelectSession: (sessionId: string) => void;
+  onSplit: (mode: TerminalSplitMode) => void;
   selectedConnection: SshConnection | null;
   sessions: TerminalSessionTabState[];
   splitMode: TerminalSplitMode;
@@ -74,6 +106,56 @@ export function TerminalWorkspace({
       }
     : null;
 
+  function tabContextMenu(item: TerminalSessionTabState) {
+    const { sessionId, status } = item.session;
+    const reconnecting = status === "degraded" || status === "reconnecting";
+    return (
+      <>
+        <ContextMenuItem disabled={!canSplit} onSelect={() => onSplit("vertical")}>
+          <Columns2 size={13} />
+          {t("ssh.actions.splitRight")}
+        </ContextMenuItem>
+        <ContextMenuItem disabled={!canSplit} onSelect={() => onSplit("horizontal")}>
+          <Rows2 size={13} />
+          {t("ssh.actions.splitDown")}
+        </ContextMenuItem>
+        <ContextMenuItem
+          disabled={splitMode === "single"}
+          onSelect={() => onSplit("single")}
+        >
+          <SquareSplitHorizontal size={13} />
+          {t("ssh.actions.singlePane")}
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => onClear(sessionId)}>
+          <Eraser size={13} />
+          {t("ssh.actions.clearTerminal")}
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => onCopyLog(sessionId)}>
+          <Copy size={13} />
+          {t("ssh.actions.copySessionLog")}
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => onExportLog(sessionId)}>
+          <Download size={13} />
+          {t("ssh.actions.exportLogs")}
+        </ContextMenuItem>
+        {reconnecting && (
+          <ContextMenuItem onSelect={() => onCancelReconnect(sessionId)}>
+            <CircleX size={13} />
+            {t("ssh.actions.cancelReconnect")}
+          </ContextMenuItem>
+        )}
+        <ContextMenuItem onSelect={() => onOpenPreferences(item.connection)}>
+          <Pencil size={13} />
+          {t("ssh.actions.preferences")}
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => onCloseSession(sessionId)} tone="danger">
+          <Unplug size={13} />
+          {t("ssh.actions.closeSession")}
+        </ContextMenuItem>
+      </>
+    );
+  }
+
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       {hasSessions ? (
@@ -82,6 +164,7 @@ export function TerminalWorkspace({
           onClose={onCloseSession}
           onSelect={onSelectSession}
           tabs={sessions.map((item) => ({
+            contextMenu: tabContextMenu(item),
             id: item.session.sessionId,
             loading:
               item.session.status === "connected" &&
@@ -113,7 +196,7 @@ export function TerminalWorkspace({
         ) : selectedConnection ? (
           <ReadyToConnectState
             connection={selectedConnection}
-            onEditConnection={onEditConnection}
+            onEditConnection={() => onOpenPreferences()}
             onNewSession={onNewSession}
           />
         ) : (
