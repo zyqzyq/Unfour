@@ -1,14 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { MoreHorizontal, Trash2 } from "lucide-react";
 import type { ApiEnvironment, KeyValue } from "@unfour/command-client";
 import {
   Button,
-  ConfirmDialog,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  IconButton,
   Input,
   useI18n,
 } from "@unfour/ui";
@@ -54,13 +47,11 @@ export function EnvironmentManagerPage({
   const { t } = useI18n();
   const {
     createMut,
-    deleteMut,
     environments,
     isLoading,
     updateMut,
   } = useApiEnvironments(workspaceId);
   const [draft, setDraft] = useState<EnvironmentDraft>({ kind: "none" });
-  const [deleteTarget, setDeleteTarget] = useState<ApiEnvironment | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const dirty = isDraftDirty(draft);
@@ -187,23 +178,6 @@ export function EnvironmentManagerPage({
     }
   }
 
-  function requestDelete(environment: ApiEnvironment) {
-    setDeleteTarget(environment);
-  }
-
-  function confirmDelete() {
-    if (!deleteTarget) {
-      return;
-    }
-    deleteMut.mutate(deleteTarget.id, {
-      onSuccess: (nextEnvironments) => {
-        setDeleteTarget(null);
-        const next = nextEnvironments[0] ?? null;
-        setDraft(next ? draftFromEnvironment(next) : { kind: "none" });
-      },
-    });
-  }
-
   const variableCount = useMemo(
     () => (draft.kind === "none" ? 0 : persistableVariables(draft.variables).length),
     [draft],
@@ -247,29 +221,6 @@ export function EnvironmentManagerPage({
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                {draft.kind === "existing" && selectedEnvironment && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <IconButton
-                        disabled={deleteMut.isPending}
-                        label={t("api.environment.actions")}
-                        size="compact"
-                        tooltip={t("api.environment.actions")}
-                      >
-                        <MoreHorizontal size={15} />
-                      </IconButton>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start">
-                      <DropdownMenuItem
-                        className="text-[var(--u-color-danger)]"
-                        onSelect={() => requestDelete(selectedEnvironment)}
-                      >
-                        <Trash2 size={13} />
-                        {t("api.environment.delete")}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
                 <Button disabled={saveDisabled} onClick={() => void saveDraft()} size="sm" type="button">
                   {saving ? t("api.actions.saving") : t("api.environment.save")}
                 </Button>
@@ -312,23 +263,6 @@ export function EnvironmentManagerPage({
           </div>
         )}
       </main>
-      <ConfirmDialog
-        confirmLabel={t("api.environment.delete")}
-        description={
-          deleteTarget
-            ? t("api.environment.deleteConfirm", { name: deleteTarget.name })
-            : undefined
-        }
-        onConfirm={confirmDelete}
-        onOpenChange={(open) => {
-          if (!open) {
-            setDeleteTarget(null);
-          }
-        }}
-        open={Boolean(deleteTarget)}
-        pending={deleteMut.isPending}
-        title={t("api.environment.delete")}
-      />
     </div>
   );
 }

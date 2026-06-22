@@ -1,12 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Clock, FolderOpen, Plus, Settings2 } from "lucide-react";
+import { Circle, Clock, FolderOpen, Plus, Settings2, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import {
   listApiHistory,
   type ApiEnvironment,
   type ApiHistoryItem,
 } from "@unfour/command-client";
-import { Button, cn, useI18n } from "@unfour/ui";
+import { Button, ConfirmDialog, cn, useI18n } from "@unfour/ui";
 import { useApiEnvironments } from "../hooks/useApiEnvironments";
 import type { ApiOpenIntent } from "../model/types";
 import { ApiCollectionTree } from "./ApiCollectionTree";
@@ -139,7 +139,8 @@ function EnvironmentsPanel({
   workspaceId: string;
 }) {
   const { t } = useI18n();
-  const { environments, isLoading } = useApiEnvironments(workspaceId);
+  const { activateMut, deleteMut, environments, isLoading } = useApiEnvironments(workspaceId);
+  const [deleteTarget, setDeleteTarget] = useState<ApiEnvironment | null>(null);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -167,6 +168,10 @@ function EnvironmentsPanel({
               <EnvironmentRow
                 environment={environment}
                 key={environment.id}
+                onActivate={() =>
+                  activateMut.mutate(environment.isActive ? null : environment.id)
+                }
+                onDelete={() => setDeleteTarget(environment)}
                 onSelect={() => onEditEnvironment(environment.id)}
                 selected={selectedEnvironmentId === environment.id}
               />
@@ -174,41 +179,101 @@ function EnvironmentsPanel({
           </div>
         )}
       </div>
+      <ConfirmDialog
+        confirmLabel={t("api.environment.delete")}
+        description={
+          deleteTarget
+            ? t("api.environment.deleteConfirm", { name: deleteTarget.name })
+            : undefined
+        }
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteMut.mutate(deleteTarget.id, {
+              onSuccess: () => setDeleteTarget(null),
+            });
+          }
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null);
+          }
+        }}
+        open={Boolean(deleteTarget)}
+        pending={deleteMut.isPending}
+        title={t("api.environment.delete")}
+      />
     </div>
   );
 }
 
 function EnvironmentRow({
   environment,
+  onActivate,
+  onDelete,
   onSelect,
   selected,
 }: {
   environment: ApiEnvironment;
+  onActivate: () => void;
+  onDelete: () => void;
   onSelect: () => void;
   selected: boolean;
 }) {
   const { t } = useI18n();
 
   return (
-    <button
-      aria-label={environment.name}
+    <div
       className={cn(
-        "flex w-full min-w-0 items-center justify-between gap-2 rounded-[var(--u-radius-md)] px-2 py-1.5 text-left text-[12px] transition-colors",
+        "group flex w-full min-w-0 items-center gap-1.5 rounded-[var(--u-radius-md)] px-2 py-1.5 text-left text-[12px] transition-colors",
         selected
           ? "bg-[var(--u-color-surface-active)] text-[var(--u-color-text)]"
           : "text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
       )}
-      onClick={onSelect}
-      type="button"
     >
-      <span className="min-w-0 truncate font-medium">{environment.name}</span>
-      {environment.isActive && (
-        <span
-          className="ml-auto inline-flex h-2 w-2 shrink-0 rounded-full bg-[var(--u-color-primary)]"
-          title={t("api.environment.activeBadge")}
+      <button
+        aria-label={environment.name}
+        className="min-w-0 flex-1 truncate font-medium"
+        onClick={onSelect}
+        type="button"
+      >
+        {environment.name}
+      </button>
+      <button
+        aria-label={
+          environment.isActive
+            ? t("api.environment.deactivate")
+            : t("api.environment.activate")
+        }
+        className={cn(
+          "inline-flex shrink-0 items-center justify-center rounded-full transition-colors",
+          environment.isActive
+            ? "text-[var(--u-color-primary)]"
+            : "text-[var(--u-color-text-muted)] opacity-0 group-hover:opacity-100",
+        )}
+        onClick={onActivate}
+        title={
+          environment.isActive
+            ? t("api.environment.deactivate")
+            : t("api.environment.activate")
+        }
+        type="button"
+      >
+        <Circle
+          fill={environment.isActive ? "currentColor" : "none"}
+          size={10}
+          strokeWidth={2}
         />
-      )}
-    </button>
+      </button>
+      <button
+        aria-label={t("api.environment.delete")}
+        className="inline-flex shrink-0 items-center justify-center text-[var(--u-color-text-muted)] opacity-0 transition-opacity hover:text-[var(--u-color-danger)] group-hover:opacity-100"
+        onClick={onDelete}
+        title={t("api.environment.delete")}
+        type="button"
+      >
+        <Trash2 size={12} />
+      </button>
+    </div>
   );
 }
 
