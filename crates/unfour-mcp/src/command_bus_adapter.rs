@@ -332,6 +332,7 @@ mod tests {
                 auth_kind: "password".to_string(),
                 key_path: None,
                 credential_ref: Some("ssh-secret".to_string()),
+                secret: None,
             })
             .await
             .expect("save ssh connection");

@@ -399,6 +399,9 @@ export function TerminalPage({
       workspaceId,
       credentialRef: form.credentialRef?.trim() || null,
       keyPath: form.keyPath?.trim() || null,
+      // Preserve the secret verbatim (passwords may contain spaces); an empty
+      // field means "keep the saved password".
+      secret: form.secret ? form.secret : null,
     });
   }
 
@@ -569,7 +572,6 @@ export function TerminalPage({
         onUpdate={updateForm}
         open={dialogOpen}
         pending={saveMutation.isPending || deleteMutation.isPending}
-        workspaceId={workspaceId}
       />
       <ConfirmDialog
         confirmLabel={t("ssh.actions.closeSession")}

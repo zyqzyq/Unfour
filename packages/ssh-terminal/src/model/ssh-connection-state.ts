@@ -9,6 +9,7 @@ export function defaultSshConnectionInput(workspaceId: string): SshConnectionInp
     username: "deploy",
     authKind: "password",
     credentialRef: null,
+    secret: null,
   };
 }
 
@@ -26,6 +27,8 @@ export function sshConnectionToInput(
     authKind: connection.authKind,
     keyPath: connection.keyPath,
     credentialRef: connection.credentialRef,
+    // Never surface the stored secret; blank means "keep the saved password".
+    secret: null,
   };
 }
 

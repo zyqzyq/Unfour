@@ -1639,6 +1639,7 @@ mod tests {
             auth_kind: "private-key".to_string(),
             key_path: Some("C:\\sensitive\\id_ed25519".to_string()),
             credential_ref: Some("ssh-secret".to_string()),
+            secret: None,
         })
         .await
         .expect("save ssh connection");

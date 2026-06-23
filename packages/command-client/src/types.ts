@@ -135,6 +135,8 @@ export type DatabaseConnectionInput = {
   credentialRef?: string | null;
 };
 
+export type SshAuthKind = "password" | "private-key" | "none";
+
 export type SshConnectionInput = {
   id?: string;
   workspaceId: string;
@@ -142,9 +144,12 @@ export type SshConnectionInput = {
   host: string;
   port?: number | null;
   username: string;
-  authKind: "password" | "private-key";
+  authKind: SshAuthKind;
   keyPath?: string | null;
   credentialRef?: string | null;
+  /** Plaintext password / key passphrase; stored in the OS keychain on save,
+   * never persisted to SQLite. Leave null when editing to keep the saved one. */
+  secret?: string | null;
 };
 
 export type CredentialCreateInput = {
@@ -184,7 +189,7 @@ export type SshConnection = {
   host: string;
   port: number;
   username: string;
-  authKind: "password" | "private-key";
+  authKind: SshAuthKind;
   keyPath: string | null;
   credentialRef: string | null;
   createdAt: string;
@@ -236,7 +241,7 @@ export type SshSessionSummary = {
   connectionId: string;
   status: "connected" | "degraded" | "reconnecting" | "disconnected" | "failed";
   reconnectAttempt: number;
-  authKind: "password" | "private-key";
+  authKind: SshAuthKind;
   host: string;
   username: string;
   cols: number;

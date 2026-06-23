@@ -1,5 +1,5 @@
 import type { FormEvent, ReactNode } from "react";
-import { KeyRound, Lock, Save, Trash2 } from "lucide-react";
+import { KeyRound, Lock, Save, ShieldOff, Trash2 } from "lucide-react";
 import type { SshConnectionInput } from "@unfour/command-client";
 import {
   Button,
@@ -17,7 +17,6 @@ import {
   SegmentedControl,
   useI18n,
 } from "@unfour/ui";
-import { CredentialReferenceControl } from "./CredentialReferenceControl";
 import { HostKeyFingerprint } from "./HostKeyFingerprint";
 import { formatTerminalError } from "../model/errors";
 
@@ -31,7 +30,6 @@ export function SshConnectionDialog({
   onUpdate,
   open,
   pending,
-  workspaceId,
 }: {
   canDelete: boolean;
   error?: unknown;
@@ -42,7 +40,6 @@ export function SshConnectionDialog({
   onUpdate: (patch: Partial<SshConnectionInput>) => void;
   open: boolean;
   pending?: boolean;
-  workspaceId: string;
 }) {
   const { t } = useI18n();
 
@@ -93,6 +90,9 @@ export function SshConnectionDialog({
                   onUpdate({
                     authKind,
                     keyPath: authKind === "private-key" ? form.keyPath : null,
+                    // Drop any typed secret when switching modes so a password is
+                    // never sent as a passphrase (or vice versa).
+                    secret: null,
                   })
                 }
                 options={[
@@ -106,26 +106,61 @@ export function SshConnectionDialog({
                     label: t("ssh.dialog.authPrivateKey"),
                     value: "private-key",
                   },
+                  {
+                    icon: <ShieldOff size={14} />,
+                    label: t("ssh.dialog.authNone"),
+                    value: "none",
+                  },
                 ]}
                 value={form.authKind}
               />
             </FieldGroup>
-            {form.authKind === "private-key" && (
-              <FieldGroup title={t("ssh.dialog.keyPath")}>
+            {form.authKind === "password" && (
+              <FieldGroup title={t("ssh.dialog.authPassword")}>
                 <Input
-                  onChange={(event) => onUpdate({ keyPath: event.target.value })}
-                  placeholder={t("ssh.dialog.keyPathPlaceholder")}
-                  value={form.keyPath ?? ""}
+                  autoComplete="off"
+                  onChange={(event) => onUpdate({ secret: event.target.value })}
+                  placeholder={t("ssh.dialog.passwordPlaceholder")}
+                  type="password"
+                  value={form.secret ?? ""}
                 />
+                {Boolean(form.id) && (
+                  <span className="text-[11.5px] text-[var(--u-color-text-muted)]">
+                    {t("ssh.dialog.passwordEditHint")}
+                  </span>
+                )}
               </FieldGroup>
             )}
-            <CredentialReferenceControl
-              kind={form.authKind === "private-key" ? "ssh-key-passphrase" : "ssh-password"}
-              label={`${form.name || "SSH"} credential`}
-              onChange={(credentialRef) => onUpdate({ credentialRef })}
-              value={form.credentialRef}
-              workspaceId={workspaceId}
-            />
+            {form.authKind === "private-key" && (
+              <>
+                <FieldGroup title={t("ssh.dialog.keyPath")}>
+                  <Input
+                    onChange={(event) => onUpdate({ keyPath: event.target.value })}
+                    placeholder={t("ssh.dialog.keyPathPlaceholder")}
+                    value={form.keyPath ?? ""}
+                  />
+                </FieldGroup>
+                <FieldGroup title={t("ssh.dialog.passphrase")}>
+                  <Input
+                    autoComplete="off"
+                    onChange={(event) => onUpdate({ secret: event.target.value })}
+                    placeholder={t("ssh.dialog.passphrasePlaceholder")}
+                    type="password"
+                    value={form.secret ?? ""}
+                  />
+                  {Boolean(form.id) && (
+                    <span className="text-[11.5px] text-[var(--u-color-text-muted)]">
+                      {t("ssh.dialog.passwordEditHint")}
+                    </span>
+                  )}
+                </FieldGroup>
+              </>
+            )}
+            {form.authKind === "none" && (
+              <p className="text-[11.5px] leading-relaxed text-[var(--u-color-text-muted)]">
+                {t("ssh.dialog.authNoneHint")}
+              </p>
+            )}
             {Boolean(form.host) && (
               <HostKeyFingerprint host={form.host} port={form.port ?? 22} />
             )}

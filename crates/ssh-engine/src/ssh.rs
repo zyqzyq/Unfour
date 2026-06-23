@@ -165,8 +165,14 @@ impl SshService {
         validate_workspace_id(&input.workspace_id)?;
         let name = normalize_name(&input.name)?;
         let config = input_to_config(&input)?;
-        let credential_ref = empty_to_none(input.credential_ref);
-        validate_credential_boundary(&config, credential_ref.as_deref())?;
+        let credential_ref = self
+            .resolve_credential_ref(
+                &input.workspace_id,
+                &config.auth_kind,
+                empty_to_none(input.credential_ref.clone()),
+                input.secret.clone(),
+            )
+            .await?;
         let now = Utc::now().to_rfc3339();
         let config_json = serde_json::to_string(&config)?;
 
@@ -700,6 +706,7 @@ impl SshService {
                 "credential-ref-boundary",
                 "password-auth-session",
                 "private-key-auth-session",
+                "no-auth-session",
                 "host-key-tofu",
                 "host-key-fingerprint-management",
                 "graceful-close",
@@ -802,6 +809,77 @@ impl SshService {
     // -----------------------------------------------------------------------
     // Private helpers
     // -----------------------------------------------------------------------
+
+    /// Resolve the credential reference to persist for a connection. A plaintext
+    /// `secret` is written to the OS keychain (creating a new reference, or
+    /// rotating the existing one) so SQLite only ever stores the reference.
+    async fn resolve_credential_ref(
+        &self,
+        workspace_id: &str,
+        auth_kind: &str,
+        existing_ref: Option<String>,
+        secret: Option<String>,
+    ) -> AppResult<Option<String>> {
+        let secret = secret.filter(|value| !value.is_empty());
+        match auth_kind {
+            // No authentication: never keep a stored secret.
+            "none" => Ok(None),
+            "password" => match secret {
+                Some(secret) => Ok(Some(
+                    self.store_secret(workspace_id, "ssh-password", existing_ref, secret)
+                        .await?,
+                )),
+                // Editing without changing the password keeps the existing
+                // reference; a brand-new password connection must supply one.
+                None => match existing_ref {
+                    Some(existing) => Ok(Some(existing)),
+                    None => Err(AppError::Validation(
+                        "password ssh auth requires a password".to_string(),
+                    )),
+                },
+            },
+            // Private-key passphrase is optional (unencrypted keys need none).
+            "private-key" => match secret {
+                Some(secret) => Ok(Some(
+                    self.store_secret(workspace_id, "ssh-key-passphrase", existing_ref, secret)
+                        .await?,
+                )),
+                None => Ok(existing_ref),
+            },
+            _ => Ok(existing_ref),
+        }
+    }
+
+    /// Persist a plaintext secret to the keychain, rotating an existing
+    /// reference when present so the stored reference stays stable.
+    async fn store_secret(
+        &self,
+        workspace_id: &str,
+        kind: &str,
+        existing_ref: Option<String>,
+        secret: String,
+    ) -> AppResult<String> {
+        match existing_ref {
+            Some(existing) => {
+                self.secret_store
+                    .rotate_credential(workspace_id.to_string(), existing.clone(), secret)
+                    .await?;
+                Ok(existing)
+            }
+            None => {
+                let metadata = self
+                    .secret_store
+                    .create_credential(
+                        workspace_id.to_string(),
+                        kind.to_string(),
+                        format!("ssh {} credential", kind),
+                        secret,
+                    )
+                    .await?;
+                Ok(metadata.credential_ref)
+            }
+        }
+    }
 
     async fn get_connection(&self, workspace_id: &str, id: &str) -> AppResult<SshConnection> {
         validate_workspace_id(workspace_id)?;
@@ -1273,6 +1351,18 @@ impl SshService {
                     ));
                 }
             }
+            "none" => {
+                let result = handle
+                    .authenticate_none(connection.username.clone())
+                    .await
+                    .map_err(|_| AppError::Config("ssh authentication failed".to_string()))?;
+                if !result.success() {
+                    return Err(AppError::Config(
+                        "ssh authentication failed: server rejected unauthenticated access"
+                            .to_string(),
+                    ));
+                }
+            }
             _ => {
                 return Err(AppError::Validation(format!(
                     "unsupported ssh auth kind: {}",
@@ -1548,7 +1638,7 @@ fn input_to_config(input: &SshConnectionInput) -> AppResult<SshConnectionConfig>
     let host = normalize_required(&input.host, "ssh host")?;
     let username = normalize_required(&input.username, "ssh username")?;
     let auth_kind = input.auth_kind.trim().to_ascii_lowercase();
-    if !matches!(auth_kind.as_str(), "password" | "private-key") {
+    if !matches!(auth_kind.as_str(), "password" | "private-key" | "none") {
         return Err(AppError::Validation(format!(
             "unsupported ssh auth kind: {}",
             input.auth_kind
@@ -1576,23 +1666,10 @@ fn input_to_config(input: &SshConnectionInput) -> AppResult<SshConnectionConfig>
     })
 }
 
-fn validate_credential_boundary(
-    config: &SshConnectionConfig,
-    credential_ref: Option<&str>,
-) -> AppResult<()> {
-    if config.auth_kind == "password" && credential_ref.is_none() {
-        return Err(AppError::Validation(
-            "password ssh auth requires a credential reference".to_string(),
-        ));
-    }
-
-    Ok(())
-}
-
 fn validate_connection_ready_for_session(connection: &SshConnection) -> AppResult<()> {
     if connection.auth_kind == "password" && connection.credential_ref.is_none() {
         return Err(AppError::Validation(
-            "password ssh session requires a credential reference".to_string(),
+            "password ssh session requires a stored password".to_string(),
         ));
     }
     if connection.auth_kind == "private-key" && connection.key_path.is_none() {
@@ -2106,6 +2183,7 @@ mod tests {
             auth_kind: "password".to_string(),
             key_path: None,
             credential_ref: Some("ssh-password-1".to_string()),
+            secret: None,
         }
     }
 

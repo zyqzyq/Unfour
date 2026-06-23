@@ -193,6 +193,11 @@ pub struct SshConnectionInput {
     pub auth_kind: String,
     pub key_path: Option<String>,
     pub credential_ref: Option<String>,
+    /// Transient plaintext password (password auth) or key passphrase
+    /// (private-key auth). It is written to the OS keychain on save and never
+    /// persisted to SQLite; only the resulting credential reference is stored.
+    #[serde(default)]
+    pub secret: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
