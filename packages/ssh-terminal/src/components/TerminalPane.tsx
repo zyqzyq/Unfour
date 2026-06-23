@@ -331,8 +331,9 @@ export function TerminalPane({
         className,
       )}
       onClick={() => terminalRef.current?.focus()}
-      ref={hostRef}
-    />
+    >
+      <div className="h-full min-h-0 w-full overflow-hidden" ref={hostRef} />
+    </div>
   );
 }
 

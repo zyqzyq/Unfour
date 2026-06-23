@@ -34,7 +34,9 @@ vi.mock("@xterm/xterm", () => ({
         terminalState.resizeHandlers.push(handler);
         return { dispose: vi.fn() };
       }),
-      open: vi.fn(),
+      open: vi.fn((element: HTMLElement) => {
+        terminalState.openElement = element;
+      }),
       reset: vi.fn(),
       write: vi.fn(),
     };
@@ -122,6 +124,23 @@ describe("TerminalPane", () => {
         rows: 28,
       }),
     );
+  });
+
+  it("opens xterm in an unpadded fit host so padding cannot overflow the pane", () => {
+    render(
+      <TerminalPane
+        active
+        events={[]}
+        inputDisabled={false}
+        readOnly={false}
+        session={session}
+      />,
+    );
+
+    expect(terminalState.openElement).not.toBeNull();
+    expect(terminalState.openElement).not.toHaveClass("p-2");
+    expect(terminalState.openElement).toHaveClass("h-full", "w-full", "overflow-hidden");
+    expect(terminalState.openElement?.parentElement).toHaveClass("p-2");
   });
 
   it("resyncs the current terminal size when switching to a different SSH session", async () => {
