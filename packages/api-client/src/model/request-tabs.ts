@@ -10,6 +10,7 @@ import {
   defaultAuthConfig,
   historyDetailToInput,
   parseKeyValues,
+  parseAuthConfig,
   queryFromUrl,
   reconcileDraftPatch,
   savedRequestToInput,
@@ -555,7 +556,7 @@ function inputToDraft(input: ReturnType<typeof savedRequestToInput>): RequestDra
   const query = input.query.length ? input.query : queryFromUrl(input.url);
   const bodyFields = bodyFieldsFromInput(input.bodyKind, input.body);
   return {
-    auth: defaultAuthConfig(),
+    auth: parseAuthConfig(input.authJson),
     ...bodyFields,
     collectionId: input.collectionId ?? null,
     envVariables: [],

@@ -83,6 +83,8 @@ pub struct ApiRequestInput {
     pub name: Option<String>,
     pub folder_path: Option<String>,
     pub collection_id: Option<String>,
+    #[serde(default)]
+    pub auth_json: Option<String>,
     pub method: String,
     pub url: String,
     pub headers: Vec<KeyValue>,
@@ -152,6 +154,7 @@ pub struct ApiSavedRequest {
     pub name: String,
     pub folder_path: Option<String>,
     pub collection_id: Option<String>,
+    pub auth_json: String,
     pub method: String,
     pub url: String,
     pub headers_json: String,

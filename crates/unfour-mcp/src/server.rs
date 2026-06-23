@@ -225,6 +225,7 @@ mod tests {
                             name: "Test".to_string(),
                             folder_path: None,
                             collection_id: None,
+                            auth_json: r#"{"type":"none"}"#.to_string(),
                             method: "GET".to_string(),
                             url: "https://example.com".to_string(),
                             headers_json: "[]".to_string(),

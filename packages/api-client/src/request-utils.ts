@@ -55,6 +55,43 @@ export function defaultAuthConfig(): ApiAuthConfig {
   return { type: "none" };
 }
 
+export function parseAuthConfig(value: unknown): ApiAuthConfig {
+  if (typeof value === "string") {
+    try {
+      return parseAuthConfig(JSON.parse(value));
+    } catch {
+      return defaultAuthConfig();
+    }
+  }
+  if (!value || typeof value !== "object") {
+    return defaultAuthConfig();
+  }
+
+  const candidate = value as Record<string, unknown>;
+  if (candidate.type === "bearer") {
+    return {
+      type: "bearer",
+      token: typeof candidate.token === "string" ? candidate.token : "",
+    };
+  }
+  if (candidate.type === "basic") {
+    return {
+      type: "basic",
+      username: typeof candidate.username === "string" ? candidate.username : "",
+      password: typeof candidate.password === "string" ? candidate.password : "",
+    };
+  }
+  if (candidate.type === "api-key") {
+    return {
+      type: "api-key",
+      addTo: candidate.addTo === "query" ? "query" : "header",
+      key: typeof candidate.key === "string" ? candidate.key : "",
+      value: typeof candidate.value === "string" ? candidate.value : "",
+    };
+  }
+  return defaultAuthConfig();
+}
+
 export function parseKeyValues(value: unknown): KeyValue[] {
   if (Array.isArray(value)) {
     return sanitizeKeyValues(value);
@@ -87,6 +124,7 @@ export function savedRequestToInput(
     name: saved.name,
     folderPath: saved.folderPath,
     collectionId: saved.collectionId,
+    authJson: saved.authJson,
     method: saved.method,
     url: saved.url,
     headers: parseKeyValues(saved.headersJson),
@@ -149,6 +187,7 @@ function normalizeImportedRequest(
     folderPath: typeof candidate.folderPath === "string" ? candidate.folderPath : null,
     collectionId:
       typeof candidate.collectionId === "string" ? candidate.collectionId : null,
+    authJson: typeof candidate.authJson === "string" ? candidate.authJson : undefined,
     method: candidate.method.toUpperCase(),
     url: candidate.url,
     headers: parseKeyValues(candidate.headers),

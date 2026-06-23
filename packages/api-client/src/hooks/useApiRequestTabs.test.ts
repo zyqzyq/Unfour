@@ -33,6 +33,23 @@ describe("tabToInput", () => {
     expect(input.workspaceId).toBe(WORKSPACE);
   });
 
+  it("preserves configured GET bodies when saving but omits them when sending", () => {
+    const tab = tabWithDraft({
+      method: "GET",
+      url: "https://api.test/items",
+      bodyMode: "raw",
+      rawBodyType: "json",
+      body: '{"saved":true}',
+    });
+
+    const saveInput = tabToInput(tab, WORKSPACE, { purpose: "save" });
+    const sendInput = tabToInput(tab, WORKSPACE, { purpose: "send" });
+
+    expect(saveInput.body).toBe('{"saved":true}');
+    expect(saveInput.bodyKind).toBe("json");
+    expect(sendInput.body).toBeUndefined();
+  });
+
   it("adds a JSON content-type and keeps the body for raw JSON POSTs", () => {
     const input = tabToInput(
       tabWithDraft({

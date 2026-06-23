@@ -62,6 +62,19 @@ describe("API request tab state", () => {
     expect(second.activeTabId).toBe("saved:req-1");
   });
 
+  it("hydrates auth config from a saved request", () => {
+    const state = openSavedRequest(
+      emptyApiTabsState("ws-1"),
+      savedRequestWithAuth("req-auth"),
+    );
+
+    expect(state.tabs[0].draft.auth).toEqual({
+      type: "bearer",
+      token: "{{api_token}}",
+    });
+    expect(getTabSaveState(state.tabs[0])).toBe("saved");
+  });
+
   it("creates independent new request tabs", () => {
     const first = createNewRequestTab(emptyApiTabsState("ws-1"), "new:1");
     const second = createNewRequestTab(first, "new:2");
@@ -260,6 +273,13 @@ function savedRequest(id: string): ApiSavedRequest {
     revision: 1,
     syncStatus: "local",
     remoteId: null,
+  };
+}
+
+function savedRequestWithAuth(id: string): ApiSavedRequest & { authJson: string } {
+  return {
+    ...savedRequest(id),
+    authJson: JSON.stringify({ type: "bearer", token: "{{api_token}}" }),
   };
 }
 

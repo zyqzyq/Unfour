@@ -47,6 +47,7 @@ export type ApiRequestInput = {
   name?: string;
   folderPath?: string | null;
   collectionId?: string | null;
+  authJson?: string;
   method: string;
   url: string;
   headers: KeyValue[];
@@ -108,6 +109,7 @@ export type ApiSavedRequest = {
   name: string;
   folderPath: string | null;
   collectionId: string | null;
+  authJson?: string;
   method: string;
   url: string;
   headersJson: string;

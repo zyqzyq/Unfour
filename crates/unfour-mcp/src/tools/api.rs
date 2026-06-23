@@ -7,7 +7,9 @@ use crate::sanitize::{
     truncate_body, MAX_BODY_PREVIEW_BYTES,
 };
 
-use super::{object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition};
+use super::{
+    object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition,
+};
 
 pub(super) fn registered_tools() -> Vec<RegisteredTool> {
     vec![
@@ -912,6 +914,7 @@ mod tests {
                             name: "Create User".to_string(),
                             folder_path: Some("users".to_string()),
                             collection_id: Some("users".to_string()),
+                            auth_json: r#"{"type":"none"}"#.to_string(),
                             method: "POST".to_string(),
                             url: "https://api.example.com/users?api_key=secret".to_string(),
                             headers_json: r#"[{"key":"Authorization","value":"Bearer secret-token","enabled":true},{"key":"Content-Type","value":"application/json","enabled":true}]"#.to_string(),

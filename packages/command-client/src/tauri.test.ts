@@ -201,7 +201,9 @@ describe("API body redaction in browser mock", () => {
       query: [],
       body: undefined,
       bodyKind: "none",
+      authJson: JSON.stringify({ type: "bearer", token: "{{api_token}}" }),
     });
+    expect(saved.authJson).toBe(JSON.stringify({ type: "bearer", token: "{{api_token}}" }));
 
     const updated = await updateApiRequest(workspaceId, saved.id, {
       workspaceId,
@@ -214,12 +216,26 @@ describe("API body redaction in browser mock", () => {
       query: [],
       body: "{}",
       bodyKind: "json",
+      authJson: JSON.stringify({
+        type: "api-key",
+        addTo: "header",
+        key: "X-API-Key",
+        value: "{{api_key}}",
+      }),
     });
 
     expect(updated.id).toBe(saved.id);
     expect(updated.name).toBe("Updated");
     expect(updated.collectionId).toBeNull();
     expect(updated.folderPath).toBe("Moved");
+    expect(updated.authJson).toBe(
+      JSON.stringify({
+        type: "api-key",
+        addTo: "header",
+        key: "X-API-Key",
+        value: "{{api_key}}",
+      }),
+    );
     await expect(listSavedApiRequests(workspaceId)).resolves.toHaveLength(1);
     await expect(
       saveApiRequest({

@@ -11,6 +11,8 @@ use unfour_core::{AppError, AppResult};
 use unfour_local_storage::LocalDb;
 use uuid::Uuid;
 
+const DEFAULT_AUTH_JSON: &str = r#"{"type":"none"}"#;
+
 #[derive(Clone)]
 pub struct ApiClientService {
     client: Client,
@@ -459,10 +461,11 @@ impl ApiClientService {
         sqlx::query(
             r#"
             INSERT INTO api_requests (
-              id, workspace_id, name, folder_path, collection_id, method, url, headers_json,
-              query_json, body, body_kind, created_at, updated_at, revision, sync_status
+              id, workspace_id, name, folder_path, collection_id, auth_json, method, url,
+              headers_json, query_json, body, body_kind, created_at, updated_at, revision,
+              sync_status
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12, 1, 'local')
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13, 1, 'local')
             "#,
         )
         .bind(&id)
@@ -470,6 +473,7 @@ impl ApiClientService {
         .bind(name)
         .bind(folder_path)
         .bind(collection_id)
+        .bind(input.auth_json.as_deref().unwrap_or(DEFAULT_AUTH_JSON))
         .bind(input.method.to_uppercase())
         .bind(input.url)
         .bind(serde_json::to_string(&input.headers)?)
@@ -508,15 +512,17 @@ impl ApiClientService {
         let result = sqlx::query(
             r#"
             UPDATE api_requests
-            SET name = ?1, folder_path = ?2, collection_id = ?3, method = ?4, url = ?5,
-                headers_json = ?6, query_json = ?7, body = ?8, body_kind = ?9,
-                updated_at = ?10, revision = revision + 1, sync_status = 'pending'
-            WHERE workspace_id = ?11 AND id = ?12 AND deleted_at IS NULL
+            SET name = ?1, folder_path = ?2, collection_id = ?3, auth_json = ?4,
+                method = ?5, url = ?6, headers_json = ?7, query_json = ?8, body = ?9,
+                body_kind = ?10, updated_at = ?11, revision = revision + 1,
+                sync_status = 'pending'
+            WHERE workspace_id = ?12 AND id = ?13 AND deleted_at IS NULL
             "#,
         )
         .bind(name)
         .bind(folder_path)
         .bind(collection_id)
+        .bind(input.auth_json.as_deref().unwrap_or(DEFAULT_AUTH_JSON))
         .bind(input.method.to_uppercase())
         .bind(input.url)
         .bind(serde_json::to_string(&input.headers)?)
@@ -546,9 +552,9 @@ impl ApiClientService {
         let items = sqlx::query_as::<_, ApiSavedRequest>(
             r#"
             SELECT
-              id, workspace_id, name, folder_path, collection_id, method, url, headers_json,
-              query_json, body, body_kind, created_at, updated_at, deleted_at, revision,
-              sync_status, remote_id
+              id, workspace_id, name, folder_path, collection_id, auth_json, method, url,
+              headers_json, query_json, body, body_kind, created_at, updated_at, deleted_at,
+              revision, sync_status, remote_id
             FROM api_requests
             WHERE workspace_id = ?1 AND deleted_at IS NULL
             ORDER BY COALESCE(folder_path, ''), updated_at DESC
@@ -583,10 +589,11 @@ impl ApiClientService {
         sqlx::query(
             r#"
             INSERT INTO api_requests (
-              id, workspace_id, name, folder_path, collection_id, method, url, headers_json,
-              query_json, body, body_kind, created_at, updated_at, revision, sync_status
+              id, workspace_id, name, folder_path, collection_id, auth_json, method, url,
+              headers_json, query_json, body, body_kind, created_at, updated_at, revision,
+              sync_status
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12, 1, 'local')
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13, 1, 'local')
             "#,
         )
         .bind(&id)
@@ -594,6 +601,7 @@ impl ApiClientService {
         .bind(name)
         .bind(source.folder_path)
         .bind(source.collection_id)
+        .bind(source.auth_json)
         .bind(source.method)
         .bind(source.url)
         .bind(source.headers_json)
@@ -904,9 +912,9 @@ impl ApiClientService {
         let saved = sqlx::query_as::<_, ApiSavedRequest>(
             r#"
             SELECT
-              id, workspace_id, name, folder_path, collection_id, method, url, headers_json,
-              query_json, body, body_kind, created_at, updated_at, deleted_at, revision,
-              sync_status, remote_id
+              id, workspace_id, name, folder_path, collection_id, auth_json, method, url,
+              headers_json, query_json, body, body_kind, created_at, updated_at, deleted_at,
+              revision, sync_status, remote_id
             FROM api_requests
             WHERE id = ?1 AND deleted_at IS NULL
             "#,
@@ -926,9 +934,9 @@ impl ApiClientService {
         let saved = sqlx::query_as::<_, ApiSavedRequest>(
             r#"
             SELECT
-              id, workspace_id, name, folder_path, collection_id, method, url, headers_json,
-              query_json, body, body_kind, created_at, updated_at, deleted_at, revision,
-              sync_status, remote_id
+              id, workspace_id, name, folder_path, collection_id, auth_json, method, url,
+              headers_json, query_json, body, body_kind, created_at, updated_at, deleted_at,
+              revision, sync_status, remote_id
             FROM api_requests
             WHERE workspace_id = ?1 AND id = ?2 AND deleted_at IS NULL
             "#,
@@ -1373,12 +1381,7 @@ mod tests {
         ));
 
         let own_name_update = service
-            .update_environment(
-                "workspace-a".to_string(),
-                dev.id,
-                "dev".to_string(),
-                vec![],
-            )
+            .update_environment("workspace-a".to_string(), dev.id, "dev".to_string(), vec![])
             .await
             .expect("same environment can keep its name");
         assert_eq!(own_name_update.name, "dev");
@@ -1425,6 +1428,7 @@ mod tests {
                 name: Some("Plain text body".to_string()),
                 folder_path: None,
                 collection_id: None,
+                auth_json: None,
                 method: "POST".to_string(),
                 url: "https://example.test".to_string(),
                 headers: vec![],
@@ -1479,6 +1483,7 @@ mod tests {
             name: Some("Templated".to_string()),
             folder_path: Some("Users".to_string()),
             collection_id: None,
+            auth_json: None,
             method: "POST".to_string(),
             url: "{{base_url}}/users/{{user_id}}".to_string(),
             headers: vec![KeyValue {
@@ -1536,6 +1541,7 @@ mod tests {
             name: None,
             folder_path: None,
             collection_id: None,
+            auth_json: None,
             method: "GET".to_string(),
             url: "https://example.test/{{missing}}".to_string(),
             headers: vec![],
@@ -1591,6 +1597,7 @@ mod tests {
                 name: None,
                 folder_path: Some("Users".to_string()),
                 collection_id: None,
+                auth_json: Some(r#"{"type":"bearer","token":"{{api_token}}"}"#.to_string()),
                 method: "post".to_string(),
                 url: "https://example.test/users".to_string(),
                 headers: vec![],
@@ -1607,6 +1614,7 @@ mod tests {
                 name: Some("Other workspace".to_string()),
                 folder_path: None,
                 collection_id: None,
+                auth_json: None,
                 method: "GET".to_string(),
                 url: "https://other.example.test".to_string(),
                 headers: vec![],
@@ -1627,6 +1635,10 @@ mod tests {
         assert_eq!(workspace_a[0].workspace_id, "workspace-a");
         assert_eq!(workspace_a[0].folder_path.as_deref(), Some("Users"));
         assert_eq!(workspace_a[0].name, "POST https://example.test/users");
+        assert_eq!(
+            workspace_a[0].auth_json,
+            r#"{"type":"bearer","token":"{{api_token}}"}"#
+        );
     }
 
     #[tokio::test]
@@ -1638,6 +1650,7 @@ mod tests {
                 name: Some("Create user".to_string()),
                 folder_path: Some("Users/Admin".to_string()),
                 collection_id: None,
+                auth_json: None,
                 method: "POST".to_string(),
                 url: "https://example.test/users".to_string(),
                 headers: vec![KeyValue {
@@ -1677,6 +1690,7 @@ mod tests {
                 name: Some("First".to_string()),
                 folder_path: None,
                 collection_id: None,
+                auth_json: None,
                 method: "GET".to_string(),
                 url: "https://example.test/first".to_string(),
                 headers: vec![],
@@ -1693,6 +1707,7 @@ mod tests {
                 name: Some("Second".to_string()),
                 folder_path: Some("Folder".to_string()),
                 collection_id: None,
+                auth_json: None,
                 method: "GET".to_string(),
                 url: "https://example.test/second".to_string(),
                 headers: vec![],
@@ -1729,6 +1744,7 @@ mod tests {
                 name: Some(name.to_string()),
                 folder_path: None,
                 collection_id,
+                auth_json: None,
                 method: "GET".to_string(),
                 url: "https://example.test".to_string(),
                 headers: vec![],
@@ -1873,6 +1889,7 @@ mod tests {
                 name: Some("Wrong workspace".to_string()),
                 folder_path: None,
                 collection_id: Some(collection.id),
+                auth_json: None,
                 method: "GET".to_string(),
                 url: "https://example.test".to_string(),
                 headers: vec![],
@@ -1945,6 +1962,7 @@ mod tests {
                     name: Some("Updated".to_string()),
                     folder_path: Some("Moved".to_string()),
                     collection_id: None,
+                    auth_json: None,
                     method: "POST".to_string(),
                     url: "https://example.test/updated".to_string(),
                     headers: vec![],
@@ -1978,6 +1996,7 @@ mod tests {
                     name: Some("Bad collection".to_string()),
                     folder_path: None,
                     collection_id: Some("does-not-exist".to_string()),
+                    auth_json: None,
                     method: "GET".to_string(),
                     url: "https://example.test".to_string(),
                     headers: vec![],

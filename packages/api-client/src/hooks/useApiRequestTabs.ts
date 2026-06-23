@@ -285,12 +285,14 @@ export function tabToInput(
     name: tab.draft.name,
     folderPath: tab.draft.folderPath || null,
     collectionId: tab.draft.collectionId,
+    authJson: JSON.stringify(tab.draft.auth),
     method: tab.draft.method,
     url: stripUrlQuery(tab.draft.url),
     headers,
     query,
     body:
-      tab.draft.method === "GET" || tab.draft.method === "HEAD"
+      purpose === "send" &&
+      (tab.draft.method === "GET" || tab.draft.method === "HEAD")
         ? undefined
         : body.body,
     bodyKind: body.bodyKind,
