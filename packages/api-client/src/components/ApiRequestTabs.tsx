@@ -182,16 +182,16 @@ export function ApiRequestTabs({
             </button>
           </div>
         )}
-        <button
-          aria-label={t("common.actions.newRequest")}
-          className="grid h-full w-8 shrink-0 place-items-center text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]"
-          onClick={onNew}
-          title={t("common.actions.newRequest")}
-          type="button"
-        >
-          +
-        </button>
       </div>
+      <button
+        aria-label={t("common.actions.newRequest")}
+        className="grid h-full w-8 shrink-0 place-items-center border-r border-[var(--u-color-border)] text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]"
+        onClick={onNew}
+        title={t("common.actions.newRequest")}
+        type="button"
+      >
+        +
+      </button>
       {endControl && (
         <div className="flex shrink-0 items-center border-l border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2">
           <div className="flex shrink-0 items-center">{endControl}</div>
