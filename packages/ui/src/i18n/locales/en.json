@@ -484,7 +484,7 @@
       "closeTitle": "Close session?",
       "disconnectConfirm": "Disconnect SSH session {label}?",
       "disconnectTitle": "Disconnect session?",
-      "connected": "Connected to {username}@{host}. PTY {cols}x{rows} allocated."
+      "connected": "Connected to {username}@{host}."
     },
     "tree": {
       "actionsLabel": "SSH actions for {name}",
