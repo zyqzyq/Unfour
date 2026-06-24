@@ -90,9 +90,7 @@ export function SshConnectionTree({
           sessionId: session.sessionId,
           kind: "output",
           data: `${t("ssh.session.connected", {
-            cols: session.cols,
             host: session.host,
-            rows: session.rows,
             username: session.username,
           })}\r\n`,
           createdAt: session.createdAt,
@@ -307,14 +305,7 @@ export function SshConnectionTree({
       contextMenu: menu,
       icon: <TerminalSquare size={13} />,
       id: connection.id,
-      label: (
-        <span className="truncate">
-          {connection.name}{" "}
-          <span className="font-mono text-[10.5px] text-[var(--u-color-text-soft)]">
-            {connection.username}@{connection.host}
-          </span>
-        </span>
-      ),
+      label: <span className="truncate">{connection.name}</span>,
       meta: (
         <ConnectionStatus dotOnly label={connectionStatusLabel} status={connectionStatus} variant="dot" />
       ),

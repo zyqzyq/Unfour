@@ -93,9 +93,19 @@ export function TerminalPage({
   // active work, while preserving the currently selected session if it disconnects.
   const visibleSessions = useMemo(
     () =>
-      sessions.filter((session) =>
-        shouldShowTerminalSessionTab({ activeSessionId, dismissedSessionIds, session }),
-      ),
+      sessions
+        .filter((session) =>
+          shouldShowTerminalSessionTab({ activeSessionId, dismissedSessionIds, session }),
+        )
+        // The backend lists sessions by updated_at DESC, so the active session's
+        // tab would jump to the front on every 2s poll as its activity timestamp
+        // advances — making the highlighted tab appear to switch on its own. Pin
+        // the tab strip to a stable creation order instead.
+        .sort(
+          (a, b) =>
+            a.createdAt.localeCompare(b.createdAt) ||
+            a.sessionId.localeCompare(b.sessionId),
+        ),
     [activeSessionId, dismissedSessionIds, sessions],
   );
   const selectedConnection = useMemo(
@@ -283,9 +293,7 @@ export function TerminalPage({
           sessionId: session.sessionId,
           kind: "output",
           data: `${t("ssh.session.connected", {
-            cols: session.cols,
             host: session.host,
-            rows: session.rows,
             username: session.username,
           })}\r\n`,
           createdAt: session.createdAt,

@@ -430,7 +430,7 @@
       "closeTitle": "关闭会话？",
       "disconnectConfirm": "断开 SSH 会话 {label}？",
       "disconnectTitle": "断开会话？",
-      "connected": "已连接到 {username}@{host}，已分配 PTY {cols}x{rows}。"
+      "connected": "已连接到 {username}@{host}。"
     },
     "tree": {
       "actionsLabel": "{name} 的 SSH 操作",

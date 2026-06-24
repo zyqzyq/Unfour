@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { Terminal as XTerm } from "@xterm/xterm";
@@ -243,7 +242,7 @@ export function TerminalPane({
   }, [active, readOnly, session?.cols, session?.rows, session?.sessionId]);
 
   // ------------------------------------------------------------------
-  // Render polling-based events (fallback for non-Tauri / mock mode)
+  // Paint terminal output from the store (single source of truth)
   // ------------------------------------------------------------------
 
   useEffect(() => {
@@ -275,54 +274,25 @@ export function TerminalPane({
       return;
     }
 
-    // Replay the full backlog when (re)entering a session. Afterwards, under the
-    // Tauri runtime live output is painted straight to xterm by the listener
-    // below, so skip the diff-write here to avoid duplicating it. Mock mode (no
-    // event stream) keeps rendering incremental output through this path.
-    if (sessionChanged || !isTauriRuntime()) {
-      events.slice(renderedEventsRef.current).forEach((event) => {
-        const data =
-          event.kind === "input"
-            ? `$ ${redactTerminalLog(event.data)}`
-            : redactTerminalLog(event.data);
-        terminal.write(event.kind === "output" ? data : ensureNewline(data));
-      });
-    }
+    // Replay the full backlog when (re)entering a session, then paint each
+    // incremental diff as new events land. Live output reaches the store via the
+    // single global listener in TerminalPage (coalesced ~once per frame), so
+    // this one store-driven writer covers both Tauri and mock mode. A separate
+    // per-pane live listener used to paint Tauri output directly, but it
+    // registered asynchronously after mount and therefore missed the burst of
+    // early output (login banner, first prompt) — which then only surfaced after
+    // a tab switch forced a full replay. Painting solely from the store removes
+    // that race without adding re-renders (the global listener drives them
+    // either way).
+    events.slice(renderedEventsRef.current).forEach((event) => {
+      const data =
+        event.kind === "input"
+          ? `$ ${redactTerminalLog(event.data)}`
+          : redactTerminalLog(event.data);
+      terminal.write(event.kind === "output" ? data : ensureNewline(data));
+    });
     renderedEventsRef.current = events.length;
   }, [events, session]);
-
-  // Live terminal output: write directly to xterm so keystroke echo appears
-  // instantly, independent of React state updates and re-renders. Tauri runtime
-  // only; the effect above replays history and covers mock mode.
-  useEffect(() => {
-    const sessionId = session?.sessionId;
-    if (!sessionId || !isTauriRuntime()) {
-      return;
-    }
-    let disposed = false;
-    let unlisten: (() => void) | null = null;
-    listen<{ sessionId: string; data?: string }>("ssh://terminal-data", (event) => {
-      const payload = event.payload;
-      if (payload?.sessionId !== sessionId || !payload.data) {
-        return;
-      }
-      terminalRef.current?.write(redactTerminalLog(payload.data));
-    })
-      .then((dispose) => {
-        if (disposed) {
-          dispose();
-        } else {
-          unlisten = dispose;
-        }
-      })
-      .catch(() => {
-        /* mock mode has no Tauri event transport */
-      });
-    return () => {
-      disposed = true;
-      unlisten?.();
-    };
-  }, [session?.sessionId]);
 
   return (
     <div

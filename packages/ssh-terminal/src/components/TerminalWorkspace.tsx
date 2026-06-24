@@ -169,9 +169,6 @@ export function TerminalWorkspace({
           tabs={sessions.map((item) => ({
             contextMenu: tabContextMenu(item),
             id: item.session.sessionId,
-            loading:
-              item.session.status === "connected" &&
-              item.session.sessionId !== activeSessionId,
             meta: <TerminalSessionTabMeta session={item.session} />,
             modified: item.modified,
             title: `${item.session.username}@${item.session.host}`,
