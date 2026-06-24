@@ -79,8 +79,17 @@ export function QueryResultPanel({
       />
       <Toolbar className="h-8">
         <ToolbarGroup>
+          {error ? (
+            <StatusBadge tone="danger">{t("database.result.statusFailed")}</StatusBadge>
+          ) : result ? (
+            <StatusBadge tone="success">{t("database.result.statusOk")}</StatusBadge>
+          ) : null}
           <span className="text-[12px] text-[var(--u-color-text-muted)]">
-            {result ? `${result.rows.length} rows in ${result.durationMs}ms` : error ? "Execution failed" : "No execution yet"}
+            {result
+              ? t("database.result.rowsInMs", { rows: result.rows.length, durationMs: result.durationMs })
+              : error
+                ? t("database.result.executionFailed")
+                : t("database.result.noExecution")}
           </span>
         </ToolbarGroup>
         <ToolbarGroup>

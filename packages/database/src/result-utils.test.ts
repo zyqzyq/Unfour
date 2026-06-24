@@ -7,6 +7,8 @@ import {
   confirmationMessage,
   describeDatabaseError,
   formatDatabaseError,
+  formatSql,
+  buildPreviewSql,
 } from "./result-utils";
 import type { DatabaseQueryResult } from "@unfour/command-client";
 
@@ -73,6 +75,46 @@ describe("serializeDatabaseResult", () => {
 
   it("serializes a single cell with escaping", () => {
     expect(serializeDatabaseCell("hello\tworld", "\t")).toBe('"hello\tworld"');
+  });
+});
+
+describe("formatSql", () => {
+  it("upper-cases keywords and breaks major clauses onto their own lines", () => {
+    const formatted = formatSql("select id, name from users where id = 1 order by name");
+    expect(formatted).toBe("SELECT id, name\nFROM users\nWHERE id = 1\nORDER BY name");
+  });
+
+  it("keeps multi-word joins intact instead of splitting them", () => {
+    const formatted = formatSql("select * from a left join b on a.id = b.a_id");
+    expect(formatted).toBe("SELECT *\nFROM a\nLEFT JOIN b ON a.id = b.a_id");
+  });
+
+  it("does not rewrite the contents of string literals", () => {
+    const formatted = formatSql("select 'from where select' as label from t");
+    expect(formatted).toBe("SELECT 'from where select' AS label\nFROM t");
+  });
+
+  it("preserves numeric literals such as LIMIT 100 OFFSET 0", () => {
+    const formatted = formatSql("select * from t limit 100 offset 0");
+    expect(formatted).toBe("SELECT *\nFROM t\nLIMIT 100\nOFFSET 0");
+  });
+
+  it("returns blank input unchanged", () => {
+    expect(formatSql("   ")).toBe("   ");
+  });
+});
+
+describe("buildPreviewSql", () => {
+  it("builds a paged SELECT for a simple identifier", () => {
+    expect(buildPreviewSql("users", 100, 0)).toBe("SELECT * FROM users LIMIT 100 OFFSET 0");
+  });
+
+  it("computes the offset from the page index", () => {
+    expect(buildPreviewSql("users", 50, 2)).toBe("SELECT * FROM users LIMIT 50 OFFSET 100");
+  });
+
+  it("quotes identifiers that are not bare names", () => {
+    expect(buildPreviewSql("public.users", 25, 0)).toBe('SELECT * FROM "public.users" LIMIT 25 OFFSET 0');
   });
 });
 

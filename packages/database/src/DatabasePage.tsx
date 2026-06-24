@@ -119,7 +119,8 @@ export function DatabasePage({
   const structureEnabled = Boolean(
     selectedConnection &&
       selectedTable &&
-      layout.activeTabId === "table-structure" &&
+      layout.activeTabId === "table" &&
+      layout.tableSegment === "structure" &&
       (selectedConnectionStatus === "connecting" || selectedConnectionStatus === "connected"),
   );
   const structureQuery = useTableStructure({
@@ -309,7 +310,7 @@ export function DatabasePage({
     onExecuteStart: () => {
       setClientError(null);
       setTableView(null);
-      layout.setActiveTabId("sql-editor");
+      layout.setActiveTabId("query");
       layout.setResultTab("results");
     },
     onSuccess: (result) => {
@@ -334,7 +335,8 @@ export function DatabasePage({
     onBrowseStart: () => {
       setClientError(null);
       setPendingSqlConfirmation(false);
-      layout.setActiveTabId("table-data");
+      layout.setActiveTabId("table");
+      layout.setTableSegment("data");
       layout.setResultTab("results");
     },
     onSuccess: (browse) => {
@@ -495,7 +497,8 @@ export function DatabasePage({
   function selectTable(table: DatabaseTable) {
     setSelectedTable(table);
     setClientError(null);
-    layout.setActiveTabId("table-structure");
+    layout.setActiveTabId("table");
+    layout.setTableSegment("structure");
   }
 
   function browseTablePage(table: DatabaseTable, pageIndex: number, pageSize: number) {
@@ -596,8 +599,13 @@ export function DatabasePage({
     clearSql();
     setQueryResult(null);
     setTableView(null);
-    layout.setActiveTabId("sql-editor");
+    layout.setActiveTabId("query");
     layout.setResultTab("results");
+  }
+
+  function showQueryHistory() {
+    layout.setActiveTabId("query");
+    layout.setResultTab("history");
   }
 
   function recordSuccessfulHistory(result: DatabaseQueryResult) {
@@ -644,7 +652,7 @@ export function DatabasePage({
     if (entry.connectionId && connections.some((connection) => connection.id === entry.connectionId)) {
       setSelectedDatabaseConnection(entry.connectionId);
     }
-    layout.setActiveTabId("sql-editor");
+    layout.setActiveTabId("query");
   }
 
   // Load generated SQL (e.g. from a table context-menu action) into the editor.
@@ -652,7 +660,7 @@ export function DatabasePage({
     setSql(generatedSql);
     setClientError(null);
     setPendingSqlConfirmation(false);
-    layout.setActiveTabId("sql-editor");
+    layout.setActiveTabId("query");
     layout.setResultTab("results");
   }
 
@@ -748,7 +756,7 @@ export function DatabasePage({
     return () => onShellSidebarChange(null);
   }, [onShellSidebarChange, shellSidebar]);
 
-  const activeError = clientError ?? (layout.activeTabId === "table-data" ? browseMutation.error : executeMutation.error);
+  const activeError = clientError ?? (layout.activeTabId === "table" ? browseMutation.error : executeMutation.error);
   const executePending = executeMutation.isPending || browseMutation.isPending;
 
   // Inline editing is available when a real table with a primary key is being
@@ -806,6 +814,8 @@ export function DatabasePage({
           onSelectResultTab={layout.setResultTab}
           onSelectStructureTab={layout.setInspectorTab}
           onSelectTab={layout.setActiveTabId}
+          onSelectTableSegment={layout.setTableSegment}
+          onShowHistory={showQueryHistory}
           onSqlChange={setSql}
           onStop={() => undefined}
           onTablePageChange={(pageIndex, pageSize) => selectedTable && browseTablePage(selectedTable, pageIndex, pageSize)}
@@ -813,7 +823,6 @@ export function DatabasePage({
           queryResult={queryResult}
           schema={visibleSchema}
           schemaError={schemaQuery.error}
-          schemaLoading={schemaEnabled && schemaQuery.isFetching}
           selectedConnectionId={selectedConnectionId}
           selectedTable={selectedTable}
           sql={sql}
@@ -821,6 +830,7 @@ export function DatabasePage({
           structureError={structureQuery.error}
           structureLoading={structureEnabled && structureQuery.isFetching}
           tableEditing={tableEditing}
+          tableSegment={layout.tableSegment}
           tableView={tableView}
         />
       </div>

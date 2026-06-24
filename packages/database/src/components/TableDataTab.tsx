@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Plus, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Database, Plus, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import type { DatabaseCellValue, DatabaseQueryResult } from "@unfour/command-client";
 import {
@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
   EmptyState,
+  ErrorState,
   IconButton,
   Input,
   Select,
@@ -18,10 +19,13 @@ import {
   useI18n,
 } from "@unfour/ui";
 import type { DatabaseTableViewState, TableEditing } from "../model/types";
+import { buildPreviewSql } from "../result-utils";
+import { DatabaseErrorDetails } from "./DatabaseErrorDetails";
 import { TableDataGrid } from "./TableDataGrid";
 
 export function TableDataTab({
   editing,
+  error,
   executePending,
   onPageChange,
   onRefresh,
@@ -29,6 +33,7 @@ export function TableDataTab({
   tableView,
 }: {
   editing?: TableEditing | null;
+  error?: unknown;
   executePending: boolean;
   onPageChange: (pageIndex: number, pageSize: number) => void;
   onRefresh: () => void;
@@ -38,14 +43,24 @@ export function TableDataTab({
   const { t } = useI18n();
   const [addOpen, setAddOpen] = useState(false);
 
+  if (error) {
+    return (
+      <ErrorState className="m-2 min-h-0 flex-1">
+        <DatabaseErrorDetails error={error} />
+      </ErrorState>
+    );
+  }
+
   if (!result || !tableView) {
-    return <EmptyState className="m-2 min-h-0 flex-1">Open table preview from the connection tree or table structure.</EmptyState>;
+    return <EmptyState className="m-2 min-h-0 flex-1">{t("database.editor.tableDataEmpty")}</EmptyState>;
   }
 
   const firstRow = tableView.totalRows === 0 ? 0 : tableView.pageIndex * tableView.pageSize + 1;
   const lastRow = Math.min(tableView.totalRows, (tableView.pageIndex + 1) * tableView.pageSize);
   const hasPrevious = tableView.pageIndex > 0;
   const hasNext = lastRow < tableView.totalRows;
+  const totalPages = Math.max(1, Math.ceil(tableView.totalRows / Math.max(1, tableView.pageSize)));
+  const previewSql = buildPreviewSql(tableView.tableName, tableView.pageSize, tableView.pageIndex);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -70,7 +85,7 @@ export function TableDataTab({
             </Button>
           ) : null}
           <Select
-            aria-label="Table preview page size"
+            aria-label={t("database.grid.pageSizeAria")}
             className="w-[88px]"
             disabled={executePending}
             onChange={(event) => onPageChange(0, Number(event.target.value))}
@@ -81,32 +96,42 @@ export function TableDataTab({
             ]}
             value={String(tableView.pageSize)}
           />
-          <IconButton disabled={executePending} label="Refresh table preview" onClick={onRefresh}>
+          <IconButton disabled={executePending} label={t("database.grid.refreshPreview")} onClick={onRefresh}>
             <RefreshCw size={13} />
           </IconButton>
-          <Button
-            disabled={!hasPrevious || executePending}
-            onClick={() => onPageChange(tableView.pageIndex - 1, tableView.pageSize)}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            <ChevronLeft size={13} />
-            Prev
-          </Button>
-          <Button
-            disabled={!hasNext || executePending}
-            onClick={() => onPageChange(tableView.pageIndex + 1, tableView.pageSize)}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            Next
-            <ChevronRight size={13} />
-          </Button>
         </ToolbarGroup>
       </Toolbar>
       <TableDataGrid editing={editing} result={result} />
+      <div className="flex h-9 shrink-0 items-center gap-3 border-t border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3">
+        <Database className="shrink-0 text-[var(--u-color-text-soft)]" size={13} />
+        <code
+          className="min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--u-color-text-muted)]"
+          title={previewSql}
+        >
+          {previewSql}
+        </code>
+        <div className="flex shrink-0 items-center gap-1 text-[var(--u-color-text-soft)]">
+          <IconButton
+            disabled={!hasPrevious || executePending}
+            label={t("database.grid.prevPage")}
+            onClick={() => onPageChange(tableView.pageIndex - 1, tableView.pageSize)}
+            size="compact"
+          >
+            <ChevronLeft size={14} />
+          </IconButton>
+          <span className="px-1 text-[11px] tabular-nums text-[var(--u-color-text-muted)]">
+            {t("database.grid.page", { page: tableView.pageIndex + 1, pages: totalPages })}
+          </span>
+          <IconButton
+            disabled={!hasNext || executePending}
+            label={t("database.grid.nextPage")}
+            onClick={() => onPageChange(tableView.pageIndex + 1, tableView.pageSize)}
+            size="compact"
+          >
+            <ChevronRight size={14} />
+          </IconButton>
+        </div>
+      </div>
       {editing ? (
         <AddRowDialog
           columns={result.columns.map((column) => column.name)}

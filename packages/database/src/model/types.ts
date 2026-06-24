@@ -47,11 +47,17 @@ export type SqlHistoryEntry = {
 
 export type DatabaseResultTab = "results" | "messages" | "logs" | "history";
 
-export type DatabaseWorkspaceTabKind = "sql" | "table-data" | "table-structure" | "view-data";
+// Object-level workspace tabs: the Table object tab (with an inner Data /
+// Structure segment) and the Query Console tab.
+export type DatabaseWorkspaceTabId = "table" | "query";
+
+export type TableSegment = "data" | "structure";
+
+export type DatabaseWorkspaceTabKind = "query" | "table";
 
 export type DatabaseWorkspaceTab = {
   connectionId?: string | null;
-  id: string;
+  id: DatabaseWorkspaceTabId;
   kind: DatabaseWorkspaceTabKind;
   loading?: boolean;
   modified?: boolean;
