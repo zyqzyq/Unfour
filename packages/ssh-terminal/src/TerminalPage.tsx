@@ -49,12 +49,18 @@ export function TerminalPage({
   const split = useTerminalSplit();
   const activeSessionId = useTerminalStore((state) => state.activeSessionId);
   const activateWorkspace = useTerminalStore((state) => state.activateWorkspace);
+  const addFrontendFailedSession = useTerminalStore(
+    (state) => state.addFrontendFailedSession,
+  );
   const appendTerminalEvents = useTerminalStore((state) => state.appendTerminalEvents);
   const clearTerminalSessionEvents = useTerminalStore(
     (state) => state.clearTerminalSessionEvents,
   );
   const dismissSession = useTerminalStore((state) => state.dismissSession);
   const dismissedSessionIds = useTerminalStore((state) => state.dismissedSessionIds);
+  const frontendFailedSessions = useTerminalStore(
+    (state) => state.frontendFailedSessions,
+  );
   const hydrateTerminalSession = useTerminalStore(
     (state) => state.hydrateTerminalSession,
   );
@@ -91,7 +97,20 @@ export function TerminalPage({
   const connectionsQuery = useSshConnections(workspaceId);
   const sessionsQuery = useTerminalSessions(workspaceId);
   const connections = useMemo(() => connectionsQuery.data ?? [], [connectionsQuery.data]);
-  const sessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data]);
+  const backendSessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data]);
+  // Merge frontend-only failed sessions (created when connect fails before the
+  // backend can produce a session record) with the backend session list.
+  const sessions = useMemo(() => {
+    const failed = Object.values(frontendFailedSessions);
+    if (failed.length === 0) return backendSessions;
+    // Auto-clean: drop frontend failed entries whose connectionId already has a
+    // real backend session (e.g. after a successful retry).
+    const backendConnectionIds = new Set(backendSessions.map((s) => s.connectionId));
+    const surviving = failed.filter(
+      (f) => !backendConnectionIds.has(f.connectionId),
+    );
+    return [...backendSessions, ...surviving];
+  }, [backendSessions, frontendFailedSessions]);
   // The backend returns disconnected sessions as history. Keep the tab strip focused on
   // active work, while preserving the currently selected session if it disconnects.
   const visibleSessions = useMemo(
@@ -329,6 +348,36 @@ export function TerminalPage({
         ],
       );
       queryClient.invalidateQueries({ queryKey: ["ssh-sessions", workspaceId] });
+    },
+    onError: (error, connectionId) => {
+      const connection = connections.find((c) => c.id === connectionId);
+      if (!connection) return;
+      const syntheticId = `__frontend_failed_${connectionId}_${Date.now()}`;
+      const now = new Date().toISOString();
+      const failedSession: SshSessionSummary = {
+        sessionId: syntheticId,
+        workspaceId,
+        connectionId,
+        status: "disconnected",
+        reconnectAttempt: 0,
+        authKind: connection.authKind,
+        host: connection.host,
+        username: connection.username,
+        cols: 120,
+        rows: 32,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const errorMessage = formatTerminalError(error);
+      startTerminalSession(syntheticId, [
+        {
+          sessionId: syntheticId,
+          kind: "output",
+          data: `\x1b[31mConnection failed: ${errorMessage}\x1b[0m\r\n`,
+          createdAt: now,
+        },
+      ]);
+      addFrontendFailedSession(failedSession);
     },
   });
   const closeMutation = useMutation({
@@ -616,6 +665,7 @@ export function TerminalPage({
           activeSession={activeSession}
           activeSessionId={activeSessionId}
           actionError={actionError}
+          connecting={connectMutation.isPending}
           error={blockingError}
           events={terminalEvents}
           emptyMessage={

@@ -5,6 +5,7 @@ import {
   CopyPlus,
   Eraser,
   FilePlus2,
+  Loader2,
   Pencil,
   Plug,
   RefreshCw,
@@ -37,6 +38,7 @@ export function TerminalWorkspace({
   activeSession,
   activeSessionId,
   actionError,
+  connecting,
   emptyMessage,
   error,
   events,
@@ -60,6 +62,7 @@ export function TerminalWorkspace({
   activeSession: SshSessionSummary | null;
   activeSessionId: string | null;
   actionError?: unknown;
+  connecting?: boolean;
   emptyMessage: string;
   error?: unknown;
   events: SshSessionEvent[];
@@ -192,6 +195,7 @@ export function TerminalWorkspace({
           />
         ) : selectedConnection ? (
           <ReadyToConnectState
+            connecting={connecting}
             connection={selectedConnection}
             onEditConnection={() => onOpenPreferences()}
             onNewSession={onNewSession}
@@ -218,10 +222,12 @@ export function TerminalWorkspace({
 }
 
 function ReadyToConnectState({
+  connecting,
   connection,
   onEditConnection,
   onNewSession,
 }: {
+  connecting?: boolean;
   connection: SshConnection;
   onEditConnection: () => void;
   onNewSession: () => void;
@@ -231,26 +237,45 @@ function ReadyToConnectState({
     <EmptyState className="h-full min-h-0 flex-1 rounded-none border-0">
       <div className="flex max-w-[520px] flex-col items-center gap-3">
         <div className="grid h-[52px] w-[52px] place-items-center rounded-[var(--u-radius-lg)] bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]">
-          <Plug size={24} />
+          {connecting ? (
+            <Loader2 className="animate-spin" size={24} />
+          ) : (
+            <Plug size={24} />
+          )}
         </div>
         <div className="space-y-1">
           <div className="text-[14px] font-semibold text-[var(--u-color-text)]">
-            {t("ssh.pane.readyTitle")}
+            {connecting ? t("ssh.pane.connecting") : t("ssh.pane.readyTitle")}
           </div>
           <div>
-            {t("ssh.pane.readyDetail", {
-              endpoint: sshEndpointLabel(connection),
-              name: connection.name,
-            })}
+            {connecting
+              ? t("ssh.pane.connectingDetail", {
+                  host: connection.host,
+                  port: connection.port ?? 22,
+                })
+              : t("ssh.pane.readyDetail", {
+                  endpoint: sshEndpointLabel(connection),
+                  name: connection.name,
+                })}
           </div>
         </div>
         <div className="flex flex-wrap justify-center gap-2">
-          <Button onClick={onEditConnection} size="sm" type="button" variant="outline">
+          <Button
+            disabled={connecting}
+            onClick={onEditConnection}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
             <Pencil size={14} />
             {t("ssh.pane.editConnection")}
           </Button>
-          <Button onClick={onNewSession} size="sm" type="button">
-            <TerminalSquare size={14} />
+          <Button disabled={connecting} onClick={onNewSession} size="sm" type="button">
+            {connecting ? (
+              <Loader2 className="animate-spin" size={14} />
+            ) : (
+              <TerminalSquare size={14} />
+            )}
             {t("ssh.pane.openSession")}
           </Button>
         </div>

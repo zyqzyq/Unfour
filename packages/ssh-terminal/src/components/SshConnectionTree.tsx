@@ -68,6 +68,9 @@ export function SshConnectionTree({
   const queryClient = useQueryClient();
   const { selectedSshConnectionId, setSelectedSshConnection } = useWorkspaceStore();
   const appendTerminalEvents = useTerminalStore((state) => state.appendTerminalEvents);
+  const addFrontendFailedSession = useTerminalStore(
+    (state) => state.addFrontendFailedSession,
+  );
   const setSplitMode = useTerminalStore((state) => state.setSplitMode);
   const startTerminalSession = useTerminalStore((state) => state.startTerminalSession);
   const connectionsQuery = useSshConnections(workspaceId);
@@ -110,6 +113,37 @@ export function SshConnectionTree({
         ],
       );
       queryClient.invalidateQueries({ queryKey: ["ssh-sessions", workspaceId] });
+      onOpenTerminal?.();
+    },
+    onError: (error, variables) => {
+      const connection = connections.find((c) => c.id === variables.connectionId);
+      if (!connection) return;
+      const syntheticId = `__frontend_failed_${variables.connectionId}_${Date.now()}`;
+      const now = new Date().toISOString();
+      const failedSession: SshSessionSummary = {
+        sessionId: syntheticId,
+        workspaceId,
+        connectionId: variables.connectionId,
+        status: "disconnected",
+        reconnectAttempt: 0,
+        authKind: connection.authKind,
+        host: connection.host,
+        username: connection.username,
+        cols: 120,
+        rows: 32,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const errorMessage = formatTerminalError(error);
+      startTerminalSession(syntheticId, [
+        {
+          sessionId: syntheticId,
+          kind: "output",
+          data: `\x1b[31mConnection failed: ${errorMessage}\x1b[0m\r\n`,
+          createdAt: now,
+        },
+      ]);
+      addFrontendFailedSession(failedSession);
       onOpenTerminal?.();
     },
   });

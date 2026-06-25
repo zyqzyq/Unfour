@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { SshSessionEvent } from "@unfour/command-client";
+import type { SshSessionEvent, SshSessionSummary } from "@unfour/command-client";
 import type { TerminalSplitMode } from "./types";
 
 type SearchAddonLike = {
@@ -13,6 +13,7 @@ type TerminalStore = {
   activeSessionId: string | null;
   dismissedSessionIds: string[];
   exportedLog: string | null;
+  frontendFailedSessions: Record<string, SshSessionSummary>;
   searchOpen: boolean;
   searchQuery: string;
   splitMode: TerminalSplitMode;
@@ -21,6 +22,7 @@ type TerminalStore = {
   terminalSearchAddon: SearchAddonLike | null;
   workspaceId: string | null;
   activateWorkspace: (workspaceId: string) => void;
+  addFrontendFailedSession: (session: SshSessionSummary) => void;
   appendTerminalEvents: (events: SshSessionEvent[]) => void;
   clearTerminalSessionEvents: (sessionId: string | null) => void;
   dismissSession: (sessionId: string) => void;
@@ -45,6 +47,7 @@ export const useTerminalStore = create<TerminalStore>((set) => ({
   activeSessionId: null,
   dismissedSessionIds: [],
   exportedLog: null,
+  frontendFailedSessions: {},
   searchOpen: false,
   searchQuery: "",
   splitMode: "single",
@@ -60,6 +63,7 @@ export const useTerminalStore = create<TerminalStore>((set) => ({
             activeSessionId: null,
             dismissedSessionIds: [],
             exportedLog: null,
+            frontendFailedSessions: {},
             searchOpen: false,
             searchQuery: "",
             splitMode: "single",
@@ -69,6 +73,19 @@ export const useTerminalStore = create<TerminalStore>((set) => ({
             workspaceId,
           },
     ),
+  addFrontendFailedSession: (session) =>
+    set((state) => {
+      // Remove any previous failed session for the same connectionId so only
+      // one stale tab per connection accumulates.
+      const next = { ...state.frontendFailedSessions };
+      for (const [id, existing] of Object.entries(next)) {
+        if (existing.connectionId === session.connectionId) {
+          delete next[id];
+        }
+      }
+      next[session.sessionId] = session;
+      return { frontendFailedSessions: next };
+    }),
   appendTerminalEvents: (events) =>
     set((state) => ({
       terminalEvents: appendCoalescedTerminalEvents(state.terminalEvents, events),
@@ -81,16 +98,21 @@ export const useTerminalStore = create<TerminalStore>((set) => ({
         : [],
     })),
   dismissSession: (sessionId) =>
-    set((state) => ({
+    set((state) => {
       // The backend keeps closed sessions in its list as history, so a closed
       // tab would otherwise reappear on the next poll. Track dismissed ids and
       // filter them out of the visible tab strip.
-      activeSessionId: state.activeSessionId === sessionId ? null : state.activeSessionId,
-      dismissedSessionIds: state.dismissedSessionIds.includes(sessionId)
-        ? state.dismissedSessionIds
-        : [...state.dismissedSessionIds, sessionId],
-      terminalEvents: state.terminalEvents.filter((event) => event.sessionId !== sessionId),
-    })),
+      const nextFailed = { ...state.frontendFailedSessions };
+      delete nextFailed[sessionId];
+      return {
+        activeSessionId: state.activeSessionId === sessionId ? null : state.activeSessionId,
+        dismissedSessionIds: state.dismissedSessionIds.includes(sessionId)
+          ? state.dismissedSessionIds
+          : [...state.dismissedSessionIds, sessionId],
+        frontendFailedSessions: nextFailed,
+        terminalEvents: state.terminalEvents.filter((event) => event.sessionId !== sessionId),
+      };
+    }),
   hydrateTerminalSession: (sessionId, events) =>
     set((state) => {
       if (state.terminalEvents.some((event) => event.sessionId === sessionId)) {
@@ -105,6 +127,7 @@ export const useTerminalStore = create<TerminalStore>((set) => ({
       activeSessionId: null,
       dismissedSessionIds: [],
       exportedLog: null,
+      frontendFailedSessions: {},
       terminalEvents: [],
       terminalInput: defaultTerminalInput(),
     }),
