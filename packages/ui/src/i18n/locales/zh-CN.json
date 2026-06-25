@@ -112,6 +112,7 @@
     "environment": {
       "active": "当前环境",
       "actions": "环境操作",
+      "actionsLabel": "{name} 的环境操作",
       "activate": "设为当前",
       "activeBadge": "当前",
       "back": "返回",

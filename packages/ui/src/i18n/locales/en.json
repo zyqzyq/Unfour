@@ -112,6 +112,7 @@
     "environment": {
       "active": "Active environment",
       "actions": "Environment actions",
+      "actionsLabel": "Environment actions for {name}",
       "activate": "Set active",
       "activeBadge": "Active",
       "back": "Back",

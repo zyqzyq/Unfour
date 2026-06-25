@@ -288,7 +288,7 @@ function EnvironmentRow({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
-            aria-label={environment.name}
+            aria-label={t("api.environment.actionsLabel", { name: environment.name })}
             className="grid h-5 w-5 shrink-0 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] opacity-0 hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)] focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
