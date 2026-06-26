@@ -274,6 +274,22 @@ export function DatabasePage({
     setCatalogNamesByConn((prev) => ({ ...prev, [selectedConnectionId]: names }));
   }, [selectedConnectionId, catalogsQuery.data]);
 
+  // Eagerly load the first tree level (database list for PostgreSQL/MySQL, file
+  // schema for SQLite) for every connected connection. Only the active
+  // connection loads through its own queries; without this a second connected
+  // connection would sit empty until manually expanded.
+  useEffect(() => {
+    for (const connection of connections) {
+      const status = connectionStates[connection.id]?.status;
+      if (status === "connected" || status === "connecting") {
+        loadConnectionRoot(connection);
+      }
+    }
+    // loadConnectionRoot is recreated each render and guards against duplicate
+    // fetches internally, so it is intentionally excluded from the deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connections, connectionStates]);
+
   // Feed the selected connection's loaded schema into the cache, grouped by
   // catalog (the connected database for PostgreSQL, every database for MySQL,
   // the file for SQLite under the "" catalog key).

@@ -77,17 +77,53 @@ export function TreeView({
   const containerRef = React.useRef<HTMLDivElement>(null);
   const typeAheadRef = React.useRef<{ buffer: string; at: number }>({ buffer: "", at: 0 });
 
+  // Auto-expand ids already applied. Lets lazily-loaded content (e.g. a database
+  // schema fetched on expand) auto-expand as new defaults appear, without
+  // re-expanding nodes the user has since collapsed. Without this the tree only
+  // honors defaultExpandedIds at mount, so content loaded later stays hidden.
+  const appliedDefaultsRef = React.useRef<Set<string>>(new Set(defaultExpandedIds));
+  const defaultsKey = defaultExpandedIds.join("|");
+  React.useEffect(() => {
+    const applied = appliedDefaultsRef.current;
+    const added = defaultExpandedIds.filter((id) => !applied.has(id));
+    if (!added.length) {
+      return;
+    }
+    for (const id of added) {
+      applied.add(id);
+    }
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      for (const id of added) {
+        next.add(id);
+      }
+      return next;
+    });
+    // Auto-expansion must drive the same lazy load as a manual expand, so
+    // consumers fetch children that only appear once a node is opened. The
+    // appliedDefaultsRef guard above makes this a no-op when onToggle's identity
+    // changes without new defaults, so listing it in deps cannot double-fire.
+    for (const id of added) {
+      onToggle?.(id, true);
+    }
+    // defaultsKey captures the meaningful change in defaultExpandedIds contents.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultsKey, onToggle]);
+
   const flat = React.useMemo(() => flatten(items, expandedIds), [items, expandedIds]);
 
   function toggle(id: string) {
-    let nowExpanded = false;
+    // Derive the next state from current expandedIds rather than from inside the
+    // updater: React runs the updater during render, after this function returns,
+    // so reading a flag set inside it would always see the stale initial value
+    // and report the wrong expanded state to onToggle (breaking lazy loading).
+    const nowExpanded = !expandedIds.has(id);
     setExpandedIds((current) => {
       const next = new Set(current);
       if (next.has(id)) {
         next.delete(id);
       } else {
         next.add(id);
-        nowExpanded = true;
       }
       return next;
     });

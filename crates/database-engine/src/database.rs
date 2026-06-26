@@ -304,15 +304,20 @@ impl DatabaseService {
             }
             "mysql" => {
                 let pool = self.mysql_pool(&connection).await?;
-                // Optionally scope the listing to one database (catalog). Bound as
-                // a parameter so an identifier with quotes cannot break the query.
-                let mut sql = String::from(
-                    "SELECT table_schema, table_name, table_type \
-                     FROM information_schema.tables \
-                     WHERE table_schema NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys')",
-                );
+                // Scope to one database (catalog) when given; bound as a
+                // parameter so an identifier with quotes cannot break the query.
+                // When a specific catalog is requested we list its tables even if
+                // it is a system schema (the user opened it explicitly). The
+                // unscoped "load everything" path still skips the system schemas
+                // so selecting a connection does not eagerly pull them all in.
+                let mut sql =
+                    String::from("SELECT table_schema, table_name, table_type FROM information_schema.tables");
                 if catalog.is_some() {
-                    sql.push_str(" AND table_schema = ?");
+                    sql.push_str(" WHERE table_schema = ?");
+                } else {
+                    sql.push_str(
+                        " WHERE table_schema NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys')",
+                    );
                 }
                 sql.push_str(" ORDER BY table_schema, table_name");
                 let mut query = sqlx::query(&sql);
@@ -326,11 +331,13 @@ impl DatabaseService {
 
                 let mut tables = Vec::with_capacity(table_rows.len());
                 for row in table_rows {
-                    let schema: String =
-                        row.try_get("table_schema").map_err(sanitize_mysql_error)?;
-                    let name: String = row.try_get("table_name").map_err(sanitize_mysql_error)?;
+                    // Read positionally (table_schema, table_name, table_type)
+                    // and tolerate the binary charset MySQL reports for
+                    // information_schema columns.
+                    let schema: String = mysql_text(&row, 0).map_err(sanitize_mysql_app_error)?;
+                    let name: String = mysql_text(&row, 1).map_err(sanitize_mysql_app_error)?;
                     let table_type: String =
-                        row.try_get("table_type").map_err(sanitize_mysql_error)?;
+                        mysql_text(&row, 2).map_err(sanitize_mysql_app_error)?;
                     let columns = mysql_columns(&pool, &schema, &name)
                         .await
                         .map_err(sanitize_mysql_app_error)?;
@@ -383,22 +390,24 @@ impl DatabaseService {
             }
             "mysql" => {
                 let pool = self.mysql_pool(&connection).await?;
+                // List every schema, including the system databases
+                // (information_schema, mysql, performance_schema, sys), so they
+                // are browsable from the tree like any other database.
                 let rows = sqlx::query(
                     r#"
                     SELECT schema_name
                     FROM information_schema.schemata
-                    WHERE schema_name NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys')
                     ORDER BY schema_name
                     "#,
                 )
                 .fetch_all(&pool)
                 .await
                 .map_err(sanitize_mysql_error)?;
-                rows.into_iter()
-                    .map(|row| {
-                        row.try_get::<String, _>("schema_name")
-                            .map_err(AppError::from)
-                    })
+                rows.iter()
+                    // Read positionally and tolerate the binary charset MySQL
+                    // reports for information_schema columns (a by-name
+                    // "schema_name" lookup can also miss the uppercase column).
+                    .map(|row| mysql_text(row, 0))
                     .collect()
             }
             driver => Err(AppError::Unsupported(format!(
@@ -1618,6 +1627,33 @@ async fn mysql_connect_options(
     Ok(options)
 }
 
+/// Read a MySQL text column positionally, tolerating the binary character set
+/// that MySQL/MariaDB often report for `information_schema` columns: sqlx
+/// refuses to decode those as `String`, so fall back to raw bytes.
+fn mysql_text(row: &sqlx::mysql::MySqlRow, index: usize) -> Result<String, AppError> {
+    match row.try_get::<String, _>(index) {
+        Ok(value) => Ok(value),
+        Err(_) => {
+            let bytes: Vec<u8> = row.try_get(index)?;
+            Ok(String::from_utf8_lossy(&bytes).into_owned())
+        }
+    }
+}
+
+/// Nullable counterpart to [`mysql_text`] for columns such as `column_default`.
+fn mysql_text_opt(
+    row: &sqlx::mysql::MySqlRow,
+    index: usize,
+) -> Result<Option<String>, AppError> {
+    match row.try_get::<Option<String>, _>(index) {
+        Ok(value) => Ok(value),
+        Err(_) => {
+            let bytes: Option<Vec<u8>> = row.try_get(index)?;
+            Ok(bytes.map(|bytes| String::from_utf8_lossy(&bytes).into_owned()))
+        }
+    }
+}
+
 async fn mysql_columns(
     pool: &sqlx::MySqlPool,
     schema: &str,
@@ -1636,13 +1672,16 @@ async fn mysql_columns(
     .fetch_all(pool)
     .await?;
 
-    rows.into_iter()
+    rows.iter()
         .map(|row| {
-            let name: String = row.try_get("column_name")?;
-            let data_type: String = row.try_get("column_type")?;
-            let is_nullable: String = row.try_get("is_nullable")?;
-            let column_key: String = row.try_get("column_key")?;
-            let default_value: Option<String> = row.try_get("column_default")?;
+            // Read positionally (column_name, column_type, is_nullable,
+            // column_key, column_default) and tolerate the binary charset MySQL
+            // reports for information_schema columns.
+            let name: String = mysql_text(row, 0)?;
+            let data_type: String = mysql_text(row, 1)?;
+            let is_nullable: String = mysql_text(row, 2)?;
+            let column_key: String = mysql_text(row, 3)?;
+            let default_value: Option<String> = mysql_text_opt(row, 4)?;
             Ok(DatabaseTableColumn {
                 name,
                 data_type,
@@ -1673,10 +1712,15 @@ async fn mysql_indexes(
     .await?;
 
     let mut indexes: Vec<DatabaseIndex> = Vec::new();
-    for row in rows {
-        let name: String = row.try_get("index_name")?;
-        let non_unique: i64 = row.try_get("non_unique")?;
-        let column_name: String = row.try_get("column_name")?;
+    for row in &rows {
+        // Read positionally (index_name, non_unique, seq_in_index, column_name)
+        // and tolerate the binary charset MySQL reports for information_schema
+        // text columns. NON_UNIQUE widened to BIGINT in MySQL 8, so accept i32.
+        let name: String = mysql_text(row, 0)?;
+        let non_unique: i64 = row
+            .try_get::<i64, _>(1)
+            .or_else(|_| row.try_get::<i32, _>(1).map(i64::from))?;
+        let column_name: String = mysql_text(row, 3)?;
 
         if let Some(existing) = indexes.iter_mut().find(|idx| idx.name == name) {
             existing.columns.push(column_name);
@@ -1712,11 +1756,14 @@ async fn mysql_foreign_keys(
     .await?;
 
     let mut keys: Vec<DatabaseForeignKey> = Vec::new();
-    for row in rows {
-        let name: String = row.try_get("constraint_name")?;
-        let column_name: String = row.try_get("column_name")?;
-        let referenced_table: String = row.try_get("referenced_table_name")?;
-        let referenced_column: String = row.try_get("referenced_column_name")?;
+    for row in &rows {
+        // Read positionally (constraint_name, column_name,
+        // referenced_table_name, referenced_column_name) and tolerate the binary
+        // charset MySQL reports for information_schema columns.
+        let name: String = mysql_text(row, 0)?;
+        let column_name: String = mysql_text(row, 1)?;
+        let referenced_table: String = mysql_text(row, 2)?;
+        let referenced_column: String = mysql_text(row, 3)?;
 
         if let Some(existing) = keys.iter_mut().find(|fk| fk.name == name) {
             existing.columns.push(column_name);
@@ -1744,7 +1791,9 @@ async fn mysql_ddl(
         quote_mysql_qualified_identifier(schema, table_name)
     );
     let row = sqlx::query(&sql).fetch_one(pool).await?;
-    Ok(row.try_get::<String, _>("Create Table").ok())
+    // SHOW CREATE TABLE returns (Table, Create Table); read the DDL positionally
+    // so the result is not tied to the server's column-name casing.
+    Ok(row.try_get::<String, _>(1).ok())
 }
 
 async fn ensure_mysql_table_exists(
@@ -1752,9 +1801,12 @@ async fn ensure_mysql_table_exists(
     schema: &str,
     table_name: &str,
 ) -> Result<(), AppError> {
-    let row: Option<(String,)> = sqlx::query_as(
+    // Select a literal rather than table_name: MySQL returns information_schema
+    // text columns as VARBINARY, which cannot decode into a Rust String. We only
+    // need to know whether the row exists.
+    let row: Option<(i64,)> = sqlx::query_as(
         r#"
-        SELECT table_name
+        SELECT 1
         FROM information_schema.tables
         WHERE table_schema = ? AND table_name = ?
         LIMIT 1
