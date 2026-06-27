@@ -2489,6 +2489,62 @@ fn validate_single_statement(sql: &str) -> AppResult<()> {
     Ok(())
 }
 
+/// Data-modifying keywords used to detect a write hidden behind an
+/// `EXPLAIN`/`WITH` wrapper. PostgreSQL executes `EXPLAIN ANALYZE <write>` and
+/// data-modifying CTEs (`WITH t AS (DELETE ... RETURNING *) ...`), both of which
+/// the leading keyword alone would misread as a safe, no-confirmation read.
+const WRITE_KEYWORDS: &[&str] = &["insert", "update", "delete", "replace", "merge", "upsert"];
+const SCHEMA_KEYWORDS: &[&str] = &[
+    "create", "alter", "drop", "truncate", "vacuum", "reindex", "grant", "revoke",
+];
+
+/// Scan a statement's tokens for a data-modifying or schema-changing keyword.
+/// Returns the matching safety classification when one is found. This errs
+/// toward over-detection: a keyword appearing inside a string literal only
+/// triggers an extra confirmation prompt, it never lets a real write through.
+fn detect_wrapped_write(sql: &str) -> Option<DatabaseQuerySafety> {
+    let mut has_write = false;
+    let mut has_schema = false;
+    for token in sql.split(|c: char| !c.is_ascii_alphanumeric() && c != '_') {
+        if token.is_empty() {
+            continue;
+        }
+        let lowered = token.to_ascii_lowercase();
+        if SCHEMA_KEYWORDS.contains(&lowered.as_str()) {
+            has_schema = true;
+        } else if WRITE_KEYWORDS.contains(&lowered.as_str()) {
+            has_write = true;
+        }
+    }
+
+    let classification = if has_schema {
+        "schema-change"
+    } else if has_write {
+        "mutation"
+    } else {
+        return None;
+    };
+
+    Some(DatabaseQuerySafety {
+        classification: classification.to_string(),
+        requires_confirmation: true,
+        confirmed: false,
+        message: Some(
+            "This statement can modify data or schema despite its EXPLAIN/WITH prefix. Confirm to execute it."
+                .to_string(),
+        ),
+    })
+}
+
+fn read_safety() -> DatabaseQuerySafety {
+    DatabaseQuerySafety {
+        classification: "read".to_string(),
+        requires_confirmation: false,
+        confirmed: true,
+        message: None,
+    }
+}
+
 fn classify_query(sql: &str) -> DatabaseQuerySafety {
     let keyword = sql
         .split_whitespace()
@@ -2497,12 +2553,11 @@ fn classify_query(sql: &str) -> DatabaseQuerySafety {
         .to_ascii_lowercase();
 
     match keyword.as_str() {
-        "select" | "with" | "pragma" | "explain" | "show" => DatabaseQuerySafety {
-            classification: "read".to_string(),
-            requires_confirmation: false,
-            confirmed: true,
-            message: None,
-        },
+        "select" | "pragma" | "show" => read_safety(),
+        // EXPLAIN and WITH can wrap a statement that actually writes (EXPLAIN
+        // ANALYZE <write> and data-modifying CTEs in PostgreSQL), so look past
+        // the wrapper before trusting them as no-confirmation reads.
+        "explain" | "with" => detect_wrapped_write(sql).unwrap_or_else(read_safety),
         "insert" | "update" | "delete" | "replace" => DatabaseQuerySafety {
             classification: "mutation".to_string(),
             requires_confirmation: true,
@@ -3587,5 +3642,61 @@ mod tests {
             })
             .await;
         assert!(matches!(result, Err(AppError::ConfirmationRequired { .. })));
+    }
+
+    #[test]
+    fn classify_query_flags_writes_hidden_behind_explain_and_with() {
+        // Plain reads stay no-confirmation, including read-only EXPLAIN ANALYZE.
+        assert!(!classify_query("SELECT * FROM users").requires_confirmation);
+        assert!(!classify_query("EXPLAIN SELECT * FROM users").requires_confirmation);
+        assert!(!classify_query("EXPLAIN ANALYZE SELECT * FROM users").requires_confirmation);
+        assert!(!classify_query("WITH c AS (SELECT 1) SELECT * FROM c").requires_confirmation);
+
+        // EXPLAIN ANALYZE <write> executes the write in PostgreSQL.
+        let explain_write = classify_query("EXPLAIN ANALYZE DELETE FROM users");
+        assert!(explain_write.requires_confirmation);
+        assert_eq!(explain_write.classification, "mutation");
+
+        // Data-modifying CTEs execute in PostgreSQL.
+        let write_cte = classify_query("WITH d AS (DELETE FROM users RETURNING *) SELECT * FROM d");
+        assert!(write_cte.requires_confirmation);
+        assert_eq!(write_cte.classification, "mutation");
+
+        // A schema change wrapped in EXPLAIN is flagged as schema-change.
+        let explain_ddl = classify_query("EXPLAIN CREATE TABLE t (id INT)");
+        assert!(explain_ddl.requires_confirmation);
+        assert_eq!(explain_ddl.classification, "schema-change");
+
+        // A column whose name merely contains a keyword is not a false positive.
+        assert!(!classify_query("SELECT updated_at, created_at FROM users").requires_confirmation);
+    }
+
+    #[tokio::test]
+    async fn explain_analyze_write_requires_confirmation_before_execution() {
+        let (service, workspace_id) = service_with_workspace().await;
+        let path = sqlite_fixture().await;
+        let connection = service
+            .save_connection(sqlite_input(&workspace_id, &path))
+            .await
+            .expect("save connection");
+
+        // The classification gate runs before the connection is opened, so the
+        // wrapped write is rejected without confirmation regardless of driver.
+        let unconfirmed = service
+            .execute_query(DatabaseQueryInput {
+                workspace_id: workspace_id.clone(),
+                connection_id: connection.id.clone(),
+                sql: "EXPLAIN ANALYZE DELETE FROM deploys".to_string(),
+                limit: Some(100),
+                confirm_mutation: None,
+                catalog: None,
+                schema: None,
+            })
+            .await;
+        assert!(matches!(
+            unconfirmed,
+            Err(AppError::ConfirmationRequired { .. })
+        ));
+        let _ = fs::remove_file(path);
     }
 }
