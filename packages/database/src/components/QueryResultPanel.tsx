@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { DatabaseQueryResult } from "@unfour/command-client";
 import { Button, EmptyState, ErrorState, LoadingState, StatusBadge, Tabs, Toolbar, ToolbarGroup, useI18n } from "@unfour/ui";
 import type { DatabaseResultTab, SqlHistoryEntry } from "../model/types";
-import { describeDatabaseError, serializeDatabaseResult } from "../result-utils";
+import { describeDatabaseError, serializeDatabaseResult, serializeDatabaseResultJson } from "../result-utils";
 import { DatabaseErrorDetails } from "./DatabaseErrorDetails";
 import { TableDataGrid } from "./TableDataGrid";
 
@@ -49,19 +49,30 @@ export function QueryResultPanel({
     }
   }
 
-  function exportCsv() {
-    if (!result) {
-      return;
-    }
-    const blob = new Blob([serializeDatabaseResult(result, ",")], { type: "text/csv;charset=utf-8" });
+  function downloadResult(content: string, mime: string, extension: string) {
+    const blob = new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `unfour-query-results-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.csv`;
+    link.download = `unfour-query-results-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.${extension}`;
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+  }
+
+  function exportCsv() {
+    if (!result) {
+      return;
+    }
+    downloadResult(serializeDatabaseResult(result, ","), "text/csv;charset=utf-8", "csv");
+  }
+
+  function exportJson() {
+    if (!result) {
+      return;
+    }
+    downloadResult(serializeDatabaseResultJson(result), "application/json;charset=utf-8", "json");
   }
 
   return (
@@ -107,6 +118,10 @@ export function QueryResultPanel({
               <Button disabled={!result} onClick={exportCsv} size="sm" type="button" variant="outline">
                 <Download size={13} />
                 Export CSV
+              </Button>
+              <Button disabled={!result} onClick={exportJson} size="sm" type="button" variant="outline">
+                <Download size={13} />
+                Export JSON
               </Button>
             </>
           )}

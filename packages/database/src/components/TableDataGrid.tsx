@@ -17,7 +17,7 @@ import {
   type DataTableColumn,
 } from "@unfour/ui";
 import type { TableEditing } from "../model/types";
-import { serializeDatabaseCell, serializeDatabaseRow } from "../result-utils";
+import { serializeDatabaseCell, serializeDatabaseRow, tryFormatJson } from "../result-utils";
 
 const MAX_RENDERED_ROWS = 500;
 
@@ -54,6 +54,8 @@ export function TableDataGrid({
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<SortState | null>(null);
   const [viewer, setViewer] = useState<CellViewer | null>(null);
+  const [viewerRaw, setViewerRaw] = useState(false);
+  const viewerJson = viewer && viewer.value !== null ? tryFormatJson(viewer.value) : null;
   const [edit, setEdit] = useState<EditTarget | null>(null);
   const [editValue, setEditValue] = useState("");
   const [deleteRow, setDeleteRow] = useState<DataRow | null>(null);
@@ -190,7 +192,10 @@ export function TableDataGrid({
         return (
           <button
             className="block w-full cursor-pointer truncate text-left font-mono text-[12px] text-[var(--u-color-text)] hover:text-[var(--u-color-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--u-color-focus)]"
-            onClick={() => setViewer({ columnName: column.name, value: value ?? null })}
+            onClick={() => {
+              setViewerRaw(false);
+              setViewer({ columnName: column.name, value: value ?? null });
+            }}
             onDoubleClick={
               editing
                 ? () => {
@@ -270,9 +275,23 @@ export function TableDataGrid({
             {viewer?.value === null ? (
               <StatusBadge>NULL</StatusBadge>
             ) : (
-              <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap break-words rounded border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-2 font-mono text-[12px] text-[var(--u-color-text)]">
-                {viewer?.value}
-              </pre>
+              <>
+                {viewerJson?.isJson ? (
+                  <div className="flex items-center justify-between">
+                    <StatusBadge>JSON</StatusBadge>
+                    <button
+                      className="text-[11px] text-[var(--u-color-text-soft)] hover:text-[var(--u-color-text)]"
+                      onClick={() => setViewerRaw((current) => !current)}
+                      type="button"
+                    >
+                      {viewerRaw ? t("database.grid.viewFormatted") : t("database.grid.viewRaw")}
+                    </button>
+                  </div>
+                ) : null}
+                <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap break-words rounded border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-2 font-mono text-[12px] text-[var(--u-color-text)]">
+                  {viewerJson?.isJson && !viewerRaw ? viewerJson.formatted : viewer?.value}
+                </pre>
+              </>
             )}
             <div className="flex justify-end">
               <Button

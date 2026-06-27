@@ -378,7 +378,9 @@
       "rowsRendered": "{count} rows rendered",
       "showingFirst": "Showing first {shown} of {total} rows",
       "sortBy": "Sort by {column}",
-      "valueViewer": "Cell value"
+      "valueViewer": "Cell value",
+      "viewFormatted": "Formatted",
+      "viewRaw": "Raw"
     },
     "history": {
       "empty": "Executed SQL history will appear here.",

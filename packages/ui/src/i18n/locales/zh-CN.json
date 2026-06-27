@@ -377,7 +377,9 @@
       "rowsRendered": "已渲染 {count} 行",
       "showingFirst": "显示前 {shown} 行，共 {total} 行",
       "sortBy": "按 {column} 排序",
-      "valueViewer": "单元格值"
+      "valueViewer": "单元格值",
+      "viewFormatted": "格式化",
+      "viewRaw": "原始"
     },
     "history": {
       "empty": "执行过的 SQL 历史会显示在这里。",
