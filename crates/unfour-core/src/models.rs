@@ -623,6 +623,10 @@ pub struct DatabaseQueryInput {
     /// resolve unqualified names against. Applied before execution.
     #[serde(default)]
     pub schema: Option<String>,
+    /// Optional per-statement timeout in milliseconds. Clamped server-side; when
+    /// absent a default timeout protects against runaway queries.
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -680,6 +684,9 @@ pub struct DatabaseBrowseInput {
     /// the browse query (and the total-row count) so it filters the whole table.
     #[serde(default)]
     pub filter: Option<String>,
+    /// Optional per-statement timeout in milliseconds. Clamped server-side.
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

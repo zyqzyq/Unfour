@@ -25,6 +25,8 @@ pub enum AppError {
     Validation(String),
     #[error("read-only: {0}")]
     ReadOnly(String),
+    #[error("timeout: {0}")]
+    Timeout(String),
     #[error("confirmation required: {message}")]
     ConfirmationRequired {
         message: String,
@@ -47,6 +49,7 @@ impl AppError {
             AppError::Unsupported(_) => "UNSUPPORTED_OPERATION",
             AppError::Validation(_) => "VALIDATION_ERROR",
             AppError::ReadOnly(_) => "READ_ONLY_CONNECTION",
+            AppError::Timeout(_) => "QUERY_TIMEOUT",
             AppError::ConfirmationRequired { .. } => "CONFIRMATION_REQUIRED",
         }
     }

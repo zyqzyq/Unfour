@@ -389,6 +389,7 @@
       "tab": "History"
     },
     "query": {
+      "cancelled": "Query stopped",
       "completed": "Query completed in {durationMs}ms",
       "previewLoaded": "Preview loaded: {count} rows",
       "unknownConnection": "Unknown connection"

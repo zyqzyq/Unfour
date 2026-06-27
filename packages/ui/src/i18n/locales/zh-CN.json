@@ -388,6 +388,7 @@
       "tab": "历史"
     },
     "query": {
+      "cancelled": "查询已停止",
       "completed": "查询完成，用时 {durationMs}ms",
       "previewLoaded": "预览已加载：{count} 行",
       "unknownConnection": "未知连接"

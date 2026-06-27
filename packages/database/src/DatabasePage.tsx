@@ -101,6 +101,10 @@ export function DatabasePage({
   }>({ orderBy: null, orderDescending: false, filter: "" });
   const filterDebounceRef = useRef<number | null>(null);
   const emptyTableQuery = { orderBy: null, orderDescending: false, filter: "" } as const;
+  // Set when the user stops a running query so a late-arriving backend result
+  // (the statement keeps running server-side until it finishes or times out) is
+  // ignored instead of replacing the cancelled state.
+  const cancelledRef = useRef(false);
   // Per-connection tree data so multiple connections can be browsed at once.
   // catalogNamesByConn: connectionId -> database names (PostgreSQL/MySQL).
   // treeSchemaCache: `${connectionId}::${catalog}` -> that database's schema
@@ -466,12 +470,16 @@ export function DatabasePage({
       }
     },
     onExecuteStart: () => {
+      cancelledRef.current = false;
       setClientError(null);
       setTableView(null);
       layout.setActiveTabId("query");
       layout.setResultTab("results");
     },
     onSuccess: (result) => {
+      if (cancelledRef.current) {
+        return;
+      }
       setTableView(null);
       setQueryResult(result);
       layout.setResultTab("results");
@@ -490,6 +498,7 @@ export function DatabasePage({
 
   const browseMutation = useTableData({
     onBrowseStart: () => {
+      cancelledRef.current = false;
       setClientError(null);
       setPendingSqlConfirmation(false);
       layout.setActiveTabId("table");
@@ -497,6 +506,9 @@ export function DatabasePage({
       layout.setResultTab("results");
     },
     onSuccess: (browse) => {
+      if (cancelledRef.current) {
+        return;
+      }
       setPendingSqlConfirmation(false);
       setQueryResult(browse.result);
       setTableView({
@@ -941,6 +953,28 @@ export function DatabasePage({
     executeMutation.reset();
   }
 
+  // Stop a running query/preview. The mutation is abandoned so the UI is
+  // responsive immediately; the statement keeps running server-side until it
+  // finishes or hits its timeout, but its late result is ignored.
+  function stopQuery() {
+    const wasRunning = executeMutation.isPending || browseMutation.isPending;
+    if (!wasRunning) {
+      return;
+    }
+    cancelledRef.current = true;
+    executeMutation.reset();
+    browseMutation.reset();
+    setPendingSqlConfirmation(false);
+    setClientError({ code: "QUERY_CANCELLED", message: t("database.query.cancelled") });
+    layout.setResultTab("results");
+    if (selectedConnectionId) {
+      setConnectionState(selectedConnectionId, {
+        message: t("database.query.cancelled"),
+        status: "connected",
+      });
+    }
+  }
+
   function startNewQuery() {
     clearSql();
     setQueryResult(null);
@@ -1154,7 +1188,7 @@ export function DatabasePage({
         onRefresh={refreshConnectionsAndSchema}
         onRun={runSql}
         onSelectConnection={(connectionId) => selectConnection(connectionId || null)}
-        onStop={() => undefined}
+        onStop={stopQuery}
         pendingConfirmation={pendingSqlConfirmation}
         selectedConnectionId={selectedConnectionId}
         sqlDirty={sql.trim().length > 0}
@@ -1186,7 +1220,7 @@ export function DatabasePage({
           onSelectTableSegment={layout.setTableSegment}
           onShowHistory={showQueryHistory}
           onSqlChange={setSql}
-          onStop={() => undefined}
+          onStop={stopQuery}
           onTableFilter={applyTableFilter}
           onTablePageChange={(pageIndex, pageSize) =>
             selectedConnectionId &&

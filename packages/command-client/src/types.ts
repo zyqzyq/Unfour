@@ -415,6 +415,8 @@ export type DatabaseQueryInput = {
   catalog?: string | null;
   /** Query context: schema (PostgreSQL) for unqualified name resolution. */
   schema?: string | null;
+  /** Optional per-statement timeout in milliseconds; clamped server-side. */
+  timeoutMs?: number;
 };
 
 export type DbQueryHistoryEntry = {
@@ -443,6 +445,7 @@ export type DatabaseBrowseInput = {
   orderBy?: string | null;
   orderDescending?: boolean;
   filter?: string | null;
+  timeoutMs?: number;
 };
 
 export type DatabaseBrowseResult = {

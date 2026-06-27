@@ -453,6 +453,8 @@ impl DatabaseService {
             });
         }
 
+        let timeout = resolve_timeout(input.timeout_ms);
+        let run = async {
         match connection.driver.as_str() {
             "sqlite" => {
                 let pool = sqlite_pool(&connection).await?;
@@ -604,6 +606,14 @@ impl DatabaseService {
                 display_driver(driver)
             ))),
         }
+        };
+        match tokio::time::timeout(timeout, run).await {
+            Ok(result) => result,
+            Err(_) => Err(AppError::Timeout(format!(
+                "query exceeded the {} ms timeout",
+                timeout.as_millis()
+            ))),
+        }
     }
 
     pub async fn record_query_history(&self, input: DbQueryHistoryRecordInput) -> AppResult<()> {
@@ -736,11 +746,13 @@ impl DatabaseService {
             .filter(|value| !value.is_empty());
         let descending = input.order_descending;
         let needs_columns = filter.is_some() || order_by.is_some();
+        let timeout = resolve_timeout(input.timeout_ms);
 
         let connection = self
             .get_connection(&input.workspace_id, &input.connection_id)
             .await?;
 
+        let run = async {
         match connection.driver.as_str() {
             "sqlite" => {
                 let pool = sqlite_pool(&connection).await?;
@@ -979,6 +991,14 @@ impl DatabaseService {
             driver => Err(AppError::Unsupported(format!(
                 "{} table browsing is not yet supported",
                 display_driver(driver)
+            ))),
+        }
+        };
+        match tokio::time::timeout(timeout, run).await {
+            Ok(result) => result,
+            Err(_) => Err(AppError::Timeout(format!(
+                "table browse exceeded the {} ms timeout",
+                timeout.as_millis()
             ))),
         }
     }
@@ -2446,6 +2466,19 @@ fn mysql_browse_sql(
     )
 }
 
+const DEFAULT_QUERY_TIMEOUT_MS: u64 = 30_000;
+const MIN_QUERY_TIMEOUT_MS: u64 = 1_000;
+const MAX_QUERY_TIMEOUT_MS: u64 = 300_000;
+
+/// Resolve a per-statement timeout, clamping caller input into a sane band and
+/// applying a default so a runaway query cannot hang a session indefinitely.
+fn resolve_timeout(timeout_ms: Option<u64>) -> Duration {
+    let ms = timeout_ms
+        .unwrap_or(DEFAULT_QUERY_TIMEOUT_MS)
+        .clamp(MIN_QUERY_TIMEOUT_MS, MAX_QUERY_TIMEOUT_MS);
+    Duration::from_millis(ms)
+}
+
 /// Trim a browse filter to a non-empty needle, or `None` when blank.
 fn normalize_filter(filter: Option<&str>) -> Option<String> {
     filter
@@ -3149,6 +3182,7 @@ mod tests {
                 confirm_mutation: None,
                 catalog: None,
                 schema: None,
+                timeout_ms: None,
             })
             .await
             .expect("query");
@@ -3169,6 +3203,7 @@ mod tests {
                 order_by: None,
                 order_descending: false,
                 filter: None,
+                timeout_ms: None,
             })
             .await
             .expect("browse table");
@@ -3193,6 +3228,7 @@ mod tests {
                 order_by: None,
                 order_descending: false,
                 filter: None,
+                timeout_ms: None,
             })
             .await
             .expect("browse first page");
@@ -3210,6 +3246,7 @@ mod tests {
                 order_by: None,
                 order_descending: false,
                 filter: None,
+                timeout_ms: None,
             })
             .await
             .expect("browse empty table");
@@ -3230,6 +3267,7 @@ mod tests {
                 order_by: None,
                 order_descending: false,
                 filter: None,
+                timeout_ms: None,
             })
             .await;
         assert!(matches!(missing, Err(AppError::NotFound(_))));
@@ -3393,6 +3431,7 @@ mod tests {
                 confirm_mutation: None,
                 catalog: None,
                 schema: None,
+                timeout_ms: None,
             })
             .await;
         assert!(matches!(
@@ -3409,6 +3448,7 @@ mod tests {
                 confirm_mutation: Some(true),
                 catalog: None,
                 schema: None,
+                timeout_ms: None,
             })
             .await
             .expect("confirmed update");
@@ -3425,6 +3465,7 @@ mod tests {
                 confirm_mutation: Some(true),
                 catalog: None,
                 schema: None,
+                timeout_ms: None,
             })
             .await;
         assert!(matches!(multiple, Err(AppError::Validation(_))));
@@ -3637,6 +3678,7 @@ mod tests {
                 confirm_mutation: None,
                 catalog: None,
                 schema: None,
+                timeout_ms: None,
             })
             .await;
         assert!(
@@ -3833,6 +3875,7 @@ mod tests {
                 confirm_mutation: None,
                 catalog: None,
                 schema: None,
+                timeout_ms: None,
             })
             .await
             .expect_err("closed local port should reject MySQL query");
@@ -3860,6 +3903,7 @@ mod tests {
                 confirm_mutation: None,
                 catalog: None,
                 schema: None,
+                timeout_ms: None,
             })
             .await;
         assert!(matches!(result, Err(AppError::ConfirmationRequired { .. })));
@@ -3912,6 +3956,7 @@ mod tests {
                 confirm_mutation: None,
                 catalog: None,
                 schema: None,
+                timeout_ms: None,
             })
             .await;
         assert!(matches!(
@@ -3919,6 +3964,23 @@ mod tests {
             Err(AppError::ConfirmationRequired { .. })
         ));
         let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn resolve_timeout_applies_default_and_clamps() {
+        assert_eq!(
+            resolve_timeout(None),
+            Duration::from_millis(DEFAULT_QUERY_TIMEOUT_MS)
+        );
+        assert_eq!(
+            resolve_timeout(Some(0)),
+            Duration::from_millis(MIN_QUERY_TIMEOUT_MS)
+        );
+        assert_eq!(resolve_timeout(Some(5_000)), Duration::from_millis(5_000));
+        assert_eq!(
+            resolve_timeout(Some(10_000_000)),
+            Duration::from_millis(MAX_QUERY_TIMEOUT_MS)
+        );
     }
 
     #[tokio::test]
@@ -3944,6 +4006,7 @@ mod tests {
                 order_by: Some("service".to_string()),
                 order_descending: true,
                 filter: None,
+                timeout_ms: None,
             })
             .await
             .expect("sorted browse");
@@ -3964,6 +4027,7 @@ mod tests {
                 order_by: None,
                 order_descending: false,
                 filter: Some("worker".to_string()),
+                timeout_ms: None,
             })
             .await
             .expect("filtered browse");
@@ -3985,6 +4049,7 @@ mod tests {
                 order_by: Some("not_a_column".to_string()),
                 order_descending: false,
                 filter: None,
+                timeout_ms: None,
             })
             .await;
         assert!(matches!(bad_sort, Err(AppError::Validation(_))));
@@ -4015,6 +4080,7 @@ mod tests {
                 confirm_mutation: None,
                 catalog: None,
                 schema: None,
+                timeout_ms: None,
             })
             .await
             .expect("read query allowed");
@@ -4030,6 +4096,7 @@ mod tests {
                 confirm_mutation: Some(true),
                 catalog: None,
                 schema: None,
+                timeout_ms: None,
             })
             .await;
         assert!(matches!(write, Err(AppError::ReadOnly(_))));

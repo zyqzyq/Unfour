@@ -441,6 +441,7 @@ fn db_query_readonly(
         confirm_mutation: None,
         catalog: None,
         schema: None,
+        timeout_ms: None,
     };
 
     match command_bus.execute_db_query(input) {
