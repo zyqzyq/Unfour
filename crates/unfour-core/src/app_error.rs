@@ -23,6 +23,8 @@ pub enum AppError {
     Unsupported(String),
     #[error("validation error: {0}")]
     Validation(String),
+    #[error("read-only: {0}")]
+    ReadOnly(String),
     #[error("confirmation required: {message}")]
     ConfirmationRequired {
         message: String,
@@ -44,6 +46,7 @@ impl AppError {
             AppError::Tauri(_) => "TAURI_ERROR",
             AppError::Unsupported(_) => "UNSUPPORTED_OPERATION",
             AppError::Validation(_) => "VALIDATION_ERROR",
+            AppError::ReadOnly(_) => "READ_ONLY_CONNECTION",
             AppError::ConfirmationRequired { .. } => "CONFIRMATION_REQUIRED",
         }
     }

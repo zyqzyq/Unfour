@@ -135,6 +135,7 @@ export type DatabaseConnectionInput = {
   username?: string | null;
   sqlitePath?: string | null;
   credentialRef?: string | null;
+  readOnly?: boolean;
 };
 
 export type SshAuthKind = "password" | "private-key" | "none";
@@ -312,6 +313,7 @@ export type DatabaseConnection = {
   username: string | null;
   sqlitePath: string | null;
   credentialRef: string | null;
+  readOnly: boolean;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;

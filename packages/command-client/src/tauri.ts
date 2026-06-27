@@ -639,6 +639,7 @@ async function mockInvoke<T>(
       username: input.username ?? null,
       sqlitePath: input.sqlitePath ?? null,
       credentialRef: input.credentialRef ?? null,
+      readOnly: input.readOnly ?? false,
       createdAt:
         existingIndex >= 0 ? mockDatabaseConnections[existingIndex].createdAt : now,
       updatedAt: now,

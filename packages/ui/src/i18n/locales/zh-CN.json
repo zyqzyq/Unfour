@@ -351,6 +351,8 @@
       "password": "密码",
       "passwordKeep": "留空则保留当前密码",
       "port": "端口",
+      "readOnly": "只读",
+      "readOnlyHint": "禁止此连接的所有写入与结构变更",
       "sqlitePath": "SQLite 路径",
       "username": "用户名"
     },

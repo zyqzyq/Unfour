@@ -234,6 +234,7 @@ export function DatabasePage({
         username: selectedConnection.username,
         sqlitePath: selectedConnection.sqlitePath,
         credentialRef: selectedConnection.credentialRef,
+        readOnly: selectedConnection.readOnly,
       });
       setTestResult(null);
     }
@@ -1060,7 +1061,11 @@ export function DatabasePage({
     .filter((column) => column.primaryKey)
     .map((column) => column.name);
   const tableEditing: TableEditing | null =
-    selectedTable && tableView && selectedConnectionStatus === "connected" && primaryKeyColumns.length > 0
+    selectedTable &&
+    tableView &&
+    selectedConnectionStatus === "connected" &&
+    primaryKeyColumns.length > 0 &&
+    !selectedConnection?.readOnly
       ? {
           pending: rowMutation.isPending,
           primaryKeyColumns,
@@ -1271,6 +1276,22 @@ function DatabaseConnectionDialog({
                 </Field>
               </>
             )}
+            <label className="flex items-start gap-2 pt-1">
+              <input
+                checked={Boolean(form.readOnly)}
+                className="mt-0.5"
+                onChange={(event) => onUpdate({ readOnly: event.target.checked })}
+                type="checkbox"
+              />
+              <span className="min-w-0">
+                <span className="block text-[12px] font-medium text-[var(--u-color-text)]">
+                  {t("database.fields.readOnly")}
+                </span>
+                <span className="block text-[11px] text-[var(--u-color-text-soft)]">
+                  {t("database.fields.readOnlyHint")}
+                </span>
+              </span>
+            </label>
             {error ? (
               <ErrorState className="min-h-[48px]">
                 <DatabaseErrorDetails error={error} />

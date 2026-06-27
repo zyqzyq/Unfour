@@ -1642,6 +1642,7 @@ mod tests {
             username: Some("developer".to_string()),
             sqlite_path: None,
             credential_ref: Some("database-secret".to_string()),
+            read_only: false,
         })
         .await
         .expect("save database connection");

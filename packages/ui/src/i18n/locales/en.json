@@ -352,6 +352,8 @@
       "password": "Password",
       "passwordKeep": "Leave blank to keep current password",
       "port": "Port",
+      "readOnly": "Read-only",
+      "readOnlyHint": "Block all writes and schema changes on this connection",
       "sqlitePath": "SQLite Path",
       "username": "Username"
     },

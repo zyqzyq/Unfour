@@ -426,6 +426,20 @@ impl DatabaseService {
         }
         validate_single_statement(sql)?;
         let safety = classify_query(sql);
+
+        let connection = self
+            .get_connection(&input.workspace_id, &input.connection_id)
+            .await?;
+
+        // A read-only connection blocks anything other than a read, taking
+        // precedence over the confirmation prompt: confirming cannot override it.
+        if connection.read_only && safety.classification != "read" {
+            return Err(AppError::ReadOnly(format!(
+                "this connection is read-only; {} statements are not allowed",
+                safety.classification
+            )));
+        }
+
         if safety.requires_confirmation && input.confirm_mutation != Some(true) {
             return Err(AppError::ConfirmationRequired {
                 message: safety.message.clone().unwrap_or_else(|| {
@@ -438,10 +452,6 @@ impl DatabaseService {
                 }),
             });
         }
-
-        let connection = self
-            .get_connection(&input.workspace_id, &input.connection_id)
-            .await?;
 
         match connection.driver.as_str() {
             "sqlite" => {
@@ -1046,6 +1056,12 @@ impl DatabaseService {
         let connection = self
             .get_connection(&input.workspace_id, &input.connection_id)
             .await?;
+
+        if connection.read_only {
+            return Err(AppError::ReadOnly(
+                "this connection is read-only; row edits are not allowed".to_string(),
+            ));
+        }
 
         match connection.driver.as_str() {
             "sqlite" => {
@@ -2193,6 +2209,7 @@ fn stored_to_database_connection(row: StoredConnection) -> AppResult<DatabaseCon
         username: config.username,
         sqlite_path: config.sqlite_path,
         credential_ref: row.credential_ref,
+        read_only: config.read_only,
         created_at: row.created_at,
         updated_at: row.updated_at,
         deleted_at: row.deleted_at,
@@ -2226,6 +2243,7 @@ fn input_to_config(input: &DatabaseConnectionInput) -> AppResult<DatabaseConnect
             database: None,
             username: None,
             sqlite_path: Some(sqlite_path.to_string()),
+            read_only: input.read_only,
         });
     }
 
@@ -2236,6 +2254,7 @@ fn input_to_config(input: &DatabaseConnectionInput) -> AppResult<DatabaseConnect
         database: empty_to_none(input.database.clone()),
         username: empty_to_none(input.username.clone()),
         sqlite_path: None,
+        read_only: input.read_only,
     })
 }
 
@@ -2821,6 +2840,7 @@ mod tests {
             username: None,
             sqlite_path: Some(path.to_string_lossy().to_string()),
             credential_ref: Some("  ".to_string()),
+            read_only: false,
         }
     }
 
@@ -2836,6 +2856,7 @@ mod tests {
             username: Some("testuser".to_string()),
             sqlite_path: None,
             credential_ref: None,
+            read_only: false,
         }
     }
 
@@ -2851,6 +2872,7 @@ mod tests {
             username: Some("testuser".to_string()),
             sqlite_path: None,
             credential_ref,
+            read_only: false,
         }
     }
 
@@ -3231,6 +3253,7 @@ mod tests {
             username: Some("admin".to_string()),
             sqlite_path: None,
             credential_ref: Some("unfour:ws:database-password:abc".to_string()),
+            read_only: false,
         };
 
         let config = input_to_config(&input).expect("config");
@@ -3289,6 +3312,7 @@ mod tests {
                 username: Some("testuser".to_string()),
                 sqlite_path: None,
                 credential_ref: None,
+                read_only: false,
             })
             .await
             .expect("save pg connection");
@@ -3318,6 +3342,7 @@ mod tests {
             username: Some("dev".to_string()),
             sqlite_path: None,
             credential_ref: None,
+            read_only: false,
             created_at: String::new(),
             updated_at: String::new(),
             deleted_at: None,
@@ -3382,6 +3407,7 @@ mod tests {
             username: Some("dev".to_string()),
             sqlite_path: None,
             credential_ref: Some(credential_ref.credential_ref),
+            read_only: false,
             created_at: String::new(),
             updated_at: String::new(),
             deleted_at: None,
@@ -3697,6 +3723,69 @@ mod tests {
             unconfirmed,
             Err(AppError::ConfirmationRequired { .. })
         ));
+        let _ = fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn read_only_connection_blocks_writes_and_row_edits() {
+        let (service, workspace_id) = service_with_workspace().await;
+        let path = sqlite_fixture().await;
+        let connection = service
+            .save_connection(DatabaseConnectionInput {
+                read_only: true,
+                ..sqlite_input(&workspace_id, &path)
+            })
+            .await
+            .expect("save read-only connection");
+        assert!(connection.read_only);
+
+        // Reads still work on a read-only connection.
+        let read = service
+            .execute_query(DatabaseQueryInput {
+                workspace_id: workspace_id.clone(),
+                connection_id: connection.id.clone(),
+                sql: "SELECT * FROM deploys".to_string(),
+                limit: Some(10),
+                confirm_mutation: None,
+                catalog: None,
+                schema: None,
+            })
+            .await
+            .expect("read query allowed");
+        assert!(!read.rows.is_empty());
+
+        // A confirmed mutation is still blocked: read-only overrides confirmation.
+        let write = service
+            .execute_query(DatabaseQueryInput {
+                workspace_id: workspace_id.clone(),
+                connection_id: connection.id.clone(),
+                sql: "DELETE FROM deploys".to_string(),
+                limit: Some(10),
+                confirm_mutation: Some(true),
+                catalog: None,
+                schema: None,
+            })
+            .await;
+        assert!(matches!(write, Err(AppError::ReadOnly(_))));
+
+        // Inline row edits are blocked too.
+        let row = service
+            .mutate_table_row(DatabaseRowMutationInput {
+                workspace_id: workspace_id.clone(),
+                connection_id: connection.id.clone(),
+                catalog: None,
+                schema: None,
+                table_name: "deploys".to_string(),
+                operation: "delete".to_string(),
+                values: vec![],
+                primary_key: vec![DatabaseCellValue {
+                    column: "id".to_string(),
+                    value: Some("1".to_string()),
+                }],
+            })
+            .await;
+        assert!(matches!(row, Err(AppError::ReadOnly(_))));
+
         let _ = fs::remove_file(path);
     }
 }

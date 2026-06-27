@@ -182,6 +182,11 @@ pub struct DatabaseConnectionInput {
     pub username: Option<String>,
     pub sqlite_path: Option<String>,
     pub credential_ref: Option<String>,
+    /// When true, the connection rejects any data- or schema-modifying SQL and
+    /// row edits. Defaults to false so existing callers and stored rows are
+    /// unaffected.
+    #[serde(default)]
+    pub read_only: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -444,6 +449,8 @@ pub struct DatabaseConnection {
     pub username: Option<String>,
     pub sqlite_path: Option<String>,
     pub credential_ref: Option<String>,
+    #[serde(default)]
+    pub read_only: bool,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: Option<String>,
@@ -478,6 +485,10 @@ pub struct DatabaseConnectionConfig {
     pub database: Option<String>,
     pub username: Option<String>,
     pub sqlite_path: Option<String>,
+    /// Persisted in `config_json`; `serde(default)` keeps connections saved
+    /// before this field deserializable as read-write.
+    #[serde(default)]
+    pub read_only: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
