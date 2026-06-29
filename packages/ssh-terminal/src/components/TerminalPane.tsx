@@ -11,20 +11,8 @@ import {
 } from "@unfour/command-client";
 import { cn } from "@unfour/ui";
 import { useTerminalStore } from "../model/terminal-state";
+import { sanitizeTerminalWriteChunk } from "../model/terminal-write-sanitizer";
 
-export type SanitizedTerminalWriteChunk = {
-  value: string;
-  removedSequences: string[];
-};
-
-export function sanitizeTerminalWriteChunk(chunk: string): SanitizedTerminalWriteChunk {
-  const removedSequences: string[] = [];
-  const value = chunk.replace(/\x1b\[[0-?]*\$p/g, (sequence) => {
-    removedSequences.push(escapeTerminalText(sequence));
-    return "";
-  });
-  return { value, removedSequences };
-}
 export function TerminalPane({
   active,
   className,
@@ -405,24 +393,6 @@ function resumeTerminalRendering(terminal: XTerm) {
   }
 }
 
-function escapeTerminalText(value: string) {
-  return value.replace(/[\x00-\x1f\x7f-\x9f\\]/g, (char) => {
-    switch (char) {
-      case "\x1b":
-        return "\\x1b";
-      case "\r":
-        return "\\r";
-      case "\n":
-        return "\\n";
-      case "\t":
-        return "\\t";
-      case "\\":
-        return "\\\\";
-      default:
-        return `\\x${char.charCodeAt(0).toString(16).padStart(2, "0")}`;
-    }
-  });
-}
 function safeFit(fitAddon: FitAddon) {
   try {
     fitAddon.fit();
@@ -456,3 +426,4 @@ function isTauriRuntime() {
     Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__)
   );
 }
+

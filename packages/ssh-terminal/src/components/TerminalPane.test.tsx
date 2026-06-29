@@ -2,7 +2,8 @@
 import { render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SshSessionEvent, SshSessionSummary } from "@unfour/command-client";
-import { sanitizeTerminalWriteChunk, TerminalPane } from "./TerminalPane";
+import { sanitizeTerminalWriteChunk } from "../model/terminal-write-sanitizer";
+import { TerminalPane } from "./TerminalPane";
 
 const terminalState = vi.hoisted(() => ({
   cols: 120,
@@ -286,3 +287,4 @@ describe("TerminalPane", () => {
     );
   });
 });
+
