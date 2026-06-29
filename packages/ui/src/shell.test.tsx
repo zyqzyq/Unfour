@@ -1,8 +1,20 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { SplitPane } from "./shell";
 import { clampResizablePaneSize } from "./shell-utils";
+
+vi.mock("react-resizable-panels", () => ({
+  Group: ({ children, orientation }: { children: React.ReactNode; orientation: string }) => (
+    <div data-panel-group orientation={orientation}>{children}</div>
+  ),
+  Panel: ({ children, className }: { children: React.ReactNode; className?: string }) => (
+    <div data-panel className={className}>{children}</div>
+  ),
+  Separator: ({ "aria-label": ariaLabel, className }: { "aria-label": string; className?: string }) => (
+    <div aria-label={ariaLabel} className={className} data-panel-separator role="separator" />
+  ),
+}));
 
 afterEach(cleanup);
 
