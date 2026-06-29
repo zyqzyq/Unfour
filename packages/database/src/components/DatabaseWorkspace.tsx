@@ -181,7 +181,7 @@ export function DatabaseWorkspace({
             )}
           </>
         ) : (
-          <SplitPane className="min-h-0 flex-1" defaultRatio={48} minPaneSize={140} orientation="vertical" resizable>
+          <SplitPane className="min-h-0 flex-1" defaultRatio={62} minPaneSize={220} orientation="vertical" resizable>
             <SqlEditorTab
               catalogOptions={catalogOptions}
               connections={connections}

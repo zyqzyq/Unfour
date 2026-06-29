@@ -8,8 +8,20 @@ vi.mock("react-resizable-panels", () => ({
   Group: ({ children, orientation }: { children: React.ReactNode; orientation: string }) => (
     <div data-panel-group orientation={orientation}>{children}</div>
   ),
-  Panel: ({ children, className }: { children: React.ReactNode; className?: string }) => (
-    <div data-panel className={className}>{children}</div>
+  Panel: ({
+    children,
+    className,
+    defaultSize,
+    minSize,
+  }: {
+    children: React.ReactNode;
+    className?: string;
+    defaultSize?: number | string;
+    minSize?: number | string;
+  }) => (
+    <div data-default-size={defaultSize} data-min-size={minSize} data-panel className={className}>
+      {children}
+    </div>
   ),
   Separator: ({ "aria-label": ariaLabel, className }: { "aria-label": string; className?: string }) => (
     <div aria-label={ariaLabel} className={className} data-panel-separator role="separator" />
@@ -42,5 +54,19 @@ describe("SplitPane", () => {
     expect(screen.getByText("Primary").closest("[data-panel]")).not.toBeNull();
     expect(screen.getByText("Secondary").closest("[data-panel]")).not.toBeNull();
     expect(screen.getByRole("separator", { name: "Resize horizontal split" })).toBeInTheDocument();
+  });
+
+  it("passes split ratios to the adapter as percentages", () => {
+    render(
+      <SplitPane defaultRatio={62} minPaneSize={220} orientation="vertical" resizable>
+        <section>SQL</section>
+        <section>Results</section>
+      </SplitPane>,
+    );
+
+    expect(screen.getByText("SQL").closest("[data-panel]")).toHaveAttribute("data-default-size", "62%");
+    expect(screen.getByText("Results").closest("[data-panel]")).toHaveAttribute("data-default-size", "38%");
+    expect(screen.getByText("SQL").closest("[data-panel]")).toHaveAttribute("data-min-size", "10%");
+    expect(screen.getByRole("separator", { name: "Resize vertical split" })).toBeInTheDocument();
   });
 });

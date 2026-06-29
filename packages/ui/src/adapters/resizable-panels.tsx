@@ -19,6 +19,7 @@ export function ResizableSplitPane({
   const [totalSize, setTotalSize] = React.useState(0);
   const minSizePercent = totalSize > 0 ? Math.min((minPaneSize / totalSize) * 100, 45) : 10;
   const firstPaneSize = Math.min(Math.max(defaultRatio, minSizePercent), 100 - minSizePercent);
+  const secondPaneSize = 100 - firstPaneSize;
 
   React.useLayoutEffect(() => {
     const host = hostRef.current;
@@ -47,7 +48,7 @@ export function ResizableSplitPane({
       orientation={orientation}
       elementRef={hostRef}
     >
-      <Panel className="flex min-h-0 min-w-0" defaultSize={firstPaneSize} minSize={minSizePercent}>
+      <Panel className="flex min-h-0 min-w-0" defaultSize={`${firstPaneSize}%`} minSize={`${minSizePercent}%`}>
         {children[0]}
       </Panel>
       <Separator
@@ -57,7 +58,7 @@ export function ResizableSplitPane({
           orientation === "horizontal" ? "w-px cursor-col-resize" : "h-px cursor-row-resize",
         )}
       />
-      <Panel className="flex min-h-0 min-w-0" minSize={minSizePercent}>
+      <Panel className="flex min-h-0 min-w-0" defaultSize={`${secondPaneSize}%`} minSize={`${minSizePercent}%`}>
         {children[1]}
       </Panel>
     </Group>
