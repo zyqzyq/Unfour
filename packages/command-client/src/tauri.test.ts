@@ -5,12 +5,15 @@ import {
   closeSshSession,
   connectSshSession,
   createApiCollection,
+  deleteSavedSql,
   executeDatabaseQuery,
   getDatabaseSchema,
   getSshSessionHistory,
+  listSavedSql,
   listSavedApiRequests,
   saveApiRequest,
   saveDatabaseConnection,
+  saveSavedSql,
   saveSshConnection,
   sendSshInput,
   testDatabaseConnection,
@@ -250,6 +253,49 @@ describe("API body redaction in browser mock", () => {
         bodyKind: "none",
       }),
     ).rejects.toThrow("api collection not found");
+  });
+});
+
+describe("Database saved SQL browser mock", () => {
+  it("saves, updates, lists, and deletes workspace-scoped snippets", async () => {
+    const workspaceId = `mock-saved-sql-${crypto.randomUUID()}`;
+    const otherWorkspaceId = `mock-saved-sql-other-${crypto.randomUUID()}`;
+
+    const saved = await saveSavedSql({
+      workspaceId,
+      connectionId: "conn-1",
+      name: " Recent users ",
+      sql: " SELECT * FROM users ",
+    });
+
+    expect(saved.name).toBe("Recent users");
+    expect(saved.sql).toBe("SELECT * FROM users");
+    await expect(listSavedSql(workspaceId)).resolves.toEqual([saved]);
+    await expect(listSavedSql(otherWorkspaceId)).resolves.toEqual([]);
+
+    const updated = await saveSavedSql({
+      id: saved.id,
+      workspaceId,
+      connectionId: null,
+      name: "Active users",
+      sql: "SELECT * FROM users WHERE active",
+    });
+
+    expect(updated.id).toBe(saved.id);
+    expect(updated.connectionId).toBeNull();
+    expect(updated.createdAt).toBe(saved.createdAt);
+    expect(updated.updatedAt >= saved.updatedAt).toBe(true);
+    await expect(
+      saveSavedSql({
+        id: saved.id,
+        workspaceId: otherWorkspaceId,
+        name: "Wrong workspace",
+        sql: "SELECT 1",
+      }),
+    ).rejects.toThrow("saved SQL not found");
+
+    await expect(deleteSavedSql(workspaceId, saved.id)).resolves.toEqual([]);
+    await expect(deleteSavedSql(workspaceId, saved.id)).rejects.toThrow("saved SQL not found");
   });
 });
 

@@ -156,6 +156,7 @@ mod tests {
         assert!(names.contains(&"api_requests"));
         assert!(names.contains(&"api_history"));
         assert!(names.contains(&"db_query_history"));
+        assert!(names.contains(&"saved_sql"));
         assert!(names.contains(&"connections"));
         assert!(names.contains(&"activity_events"));
         assert!(names.contains(&"app_settings"));

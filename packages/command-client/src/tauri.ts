@@ -24,6 +24,8 @@ import type {
   DatabaseTableStructureInput,
   DatabaseTestResult,
   KeyValue,
+  SavedSql,
+  SavedSqlInput,
   SshCloseInput,
   SshConnectInput,
   SshConnection,
@@ -76,6 +78,7 @@ let mockHistory: ApiHistoryItem[] = [];
 let mockHistoryDetails: ApiHistoryDetail[] = [];
 let mockSavedRequests: ApiSavedRequest[] = [];
 let mockDatabaseConnections: DatabaseConnection[] = [];
+let mockSavedSql: SavedSql[] = [];
 let mockSshConnections: SshConnection[] = [];
 let mockSshSessions: SshSessionSummary[] = [];
 const mockSshEvents: SshSessionEvent[] = [];
@@ -639,6 +642,7 @@ async function mockInvoke<T>(
       username: input.username ?? null,
       sqlitePath: input.sqlitePath ?? null,
       credentialRef: input.credentialRef ?? null,
+      readOnly: input.readOnly ?? false,
       createdAt:
         existingIndex >= 0 ? mockDatabaseConnections[existingIndex].createdAt : now,
       updatedAt: now,
@@ -812,6 +816,56 @@ async function mockInvoke<T>(
 
   if (command === "database_query_history_clear") {
     return undefined as T;
+  }
+
+  if (command === "database_saved_sql_list") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    return mockSavedSql.filter((item) => item.workspaceId === workspaceId) as T;
+  }
+
+  if (command === "database_saved_sql_save") {
+    const input = args?.input as SavedSqlInput;
+    const workspaceId = input.workspaceId;
+    const id = input.id?.trim();
+    const name = input.name.trim();
+    const sql = input.sql.trim();
+    if (!name) throw new Error("saved SQL name cannot be empty");
+    if (name.length > 120) throw new Error("saved SQL name must be 120 characters or fewer");
+    if (!sql) throw new Error("saved SQL cannot be empty");
+    const now = new Date().toISOString();
+    const existingIndex = id
+      ? mockSavedSql.findIndex((item) => item.id === id && item.workspaceId === workspaceId)
+      : -1;
+    if (id && existingIndex === -1) throw new Error("saved SQL not found");
+    const saved: SavedSql = {
+      id: id || crypto.randomUUID(),
+      workspaceId,
+      connectionId: input.connectionId ?? null,
+      name,
+      sql,
+      createdAt: existingIndex >= 0 ? mockSavedSql[existingIndex].createdAt : now,
+      updatedAt: now,
+    };
+    if (existingIndex >= 0) {
+      mockSavedSql = [
+        saved,
+        ...mockSavedSql.filter((_item, index) => index !== existingIndex),
+      ];
+    } else {
+      mockSavedSql = [saved, ...mockSavedSql];
+    }
+    return saved as T;
+  }
+
+  if (command === "database_saved_sql_delete") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    const id = String(args?.id ?? "");
+    const initialLength = mockSavedSql.length;
+    mockSavedSql = mockSavedSql.filter(
+      (item) => !(item.workspaceId === workspaceId && item.id === id),
+    );
+    if (mockSavedSql.length === initialLength) throw new Error("saved SQL not found");
+    return mockSavedSql.filter((item) => item.workspaceId === workspaceId) as T;
   }
 
   if (command === "database_query_execute") {
@@ -1449,6 +1503,18 @@ export function listDatabaseQueryHistory(workspaceId: string, limit = 200) {
 
 export function clearDatabaseQueryHistory(workspaceId: string) {
   return call<void>("database_query_history_clear", { workspaceId });
+}
+
+export function listSavedSql(workspaceId: string) {
+  return call<SavedSql[]>("database_saved_sql_list", { workspaceId });
+}
+
+export function saveSavedSql(input: SavedSqlInput) {
+  return call<SavedSql>("database_saved_sql_save", { input });
+}
+
+export function deleteSavedSql(workspaceId: string, id: string) {
+  return call<SavedSql[]>("database_saved_sql_delete", { workspaceId, id });
 }
 
 export function browseDatabaseTable(input: DatabaseBrowseInput) {

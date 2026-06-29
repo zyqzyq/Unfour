@@ -290,6 +290,8 @@
       "refreshModule": "刷新数据库模块",
       "refreshSchema": "刷新 Schema",
       "run": "运行",
+      "savedSql": "已保存",
+      "saveSql": "保存 SQL",
       "stopSql": "停止 SQL 执行"
     },
     "editor": {
@@ -309,12 +311,15 @@
     },
     "editing": {
       "addRow": "新增行",
+      "confirmUpdate": "更新",
       "deleteRow": "删除行",
       "deleteRowBody": "确定删除此行？此操作无法撤销。",
       "deleteRowTitle": "删除行？",
       "editHint": "双击进行编辑",
       "insert": "插入",
-      "nullPlaceholder": "留空表示 NULL"
+      "nullPlaceholder": "留空表示 NULL",
+      "updateCellBody": "将列 {column} 更新为：{value}",
+      "updateCellTitle": "更新单元格？"
     },
     "connection": {
       "connectBeforeRefresh": "刷新 schema 前请先连接数据库。",
@@ -351,6 +356,8 @@
       "password": "密码",
       "passwordKeep": "留空则保留当前密码",
       "port": "端口",
+      "readOnly": "只读",
+      "readOnlyHint": "禁止此连接的所有写入与结构变更",
       "sqlitePath": "SQLite 路径",
       "username": "用户名"
     },
@@ -372,7 +379,9 @@
       "rowsRendered": "已渲染 {count} 行",
       "showingFirst": "显示前 {shown} 行，共 {total} 行",
       "sortBy": "按 {column} 排序",
-      "valueViewer": "单元格值"
+      "valueViewer": "单元格值",
+      "viewFormatted": "格式化",
+      "viewRaw": "原始"
     },
     "history": {
       "empty": "执行过的 SQL 历史会显示在这里。",
@@ -383,9 +392,23 @@
       "tab": "历史"
     },
     "query": {
+      "cancelled": "查询已停止",
       "completed": "查询完成，用时 {durationMs}ms",
       "previewLoaded": "预览已加载：{count} 行",
       "unknownConnection": "未知连接"
+    },
+    "saved": {
+      "allConnections": "所有连接",
+      "connectionScope": "保存到 {name}",
+      "defaultName": "已保存 SQL",
+      "deleteLabel": "删除已保存 SQL {name}",
+      "empty": "已保存 SQL 片段会显示在这里。",
+      "listTitle": "已保存 SQL",
+      "missingConnection": "连接已不存在",
+      "name": "名称",
+      "namePlaceholder": "片段名称",
+      "saveTitle": "保存 SQL",
+      "saving": "保存中"
     },
     "result": {
       "executionFailed": "执行失败",

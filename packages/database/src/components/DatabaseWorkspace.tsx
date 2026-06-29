@@ -48,7 +48,9 @@ export function DatabaseWorkspace({
   onShowHistory,
   onSqlChange,
   onStop,
+  onTableFilter,
   onTablePageChange,
+  onTableSort,
   pendingConfirmation,
   queryResult,
   schema,
@@ -60,8 +62,11 @@ export function DatabaseWorkspace({
   structureError,
   structureLoading,
   tableEditing,
+  tableFilter,
   tableSegment,
+  tableSort,
   tableView,
+  workspaceId,
 }: {
   activeResultTab: DatabaseResultTab;
   activeStructureTab: StructureTab;
@@ -89,7 +94,9 @@ export function DatabaseWorkspace({
   onShowHistory: () => void;
   onSqlChange: (sql: string) => void;
   onStop: () => void;
+  onTableFilter: (filter: string) => void;
   onTablePageChange: (pageIndex: number, pageSize: number) => void;
+  onTableSort: (column: string) => void;
   pendingConfirmation: boolean;
   queryResult: DatabaseQueryResult | null;
   schema?: DatabaseSchema;
@@ -101,8 +108,11 @@ export function DatabaseWorkspace({
   structureError?: unknown;
   structureLoading?: boolean;
   tableEditing?: TableEditing | null;
+  tableFilter: string;
   tableSegment: TableSegment;
+  tableSort: { column: string; descending: boolean } | null;
   tableView: DatabaseTableViewState | null;
+  workspaceId: string;
 }) {
   const { t } = useI18n();
   const isTableTab = activeTabId === "table";
@@ -149,7 +159,11 @@ export function DatabaseWorkspace({
                 executePending={executePending}
                 onPageChange={onTablePageChange}
                 onRefresh={() => tableView && onTablePageChange(tableView.pageIndex, tableView.pageSize)}
+                onTableFilter={onTableFilter}
+                onTableSort={onTableSort}
                 result={queryResult}
+                tableFilter={tableFilter}
+                tableSort={tableSort}
                 tableView={tableView}
               />
             ) : (
@@ -186,6 +200,7 @@ export function DatabaseWorkspace({
               schemaOptions={schemaOptions}
               selectedConnectionId={selectedConnectionId}
               sql={sql}
+              workspaceId={workspaceId}
             />
             <QueryResultPanel
               activeTab={activeResultTab}

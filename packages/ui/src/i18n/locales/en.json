@@ -291,6 +291,8 @@
       "refreshModule": "Refresh database module",
       "refreshSchema": "Refresh Schema",
       "run": "Run",
+      "savedSql": "Saved",
+      "saveSql": "Save SQL",
       "stopSql": "Stop SQL execution"
     },
     "editor": {
@@ -310,12 +312,15 @@
     },
     "editing": {
       "addRow": "Add Row",
+      "confirmUpdate": "Update",
       "deleteRow": "Delete Row",
       "deleteRowBody": "Delete this row? This cannot be undone.",
       "deleteRowTitle": "Delete row?",
       "editHint": "Double-click to edit",
       "insert": "Insert",
-      "nullPlaceholder": "Leave blank for NULL"
+      "nullPlaceholder": "Leave blank for NULL",
+      "updateCellBody": "Update column {column} to: {value}",
+      "updateCellTitle": "Update cell?"
     },
     "connection": {
       "connectBeforeRefresh": "Connect to the database before refreshing schema.",
@@ -352,6 +357,8 @@
       "password": "Password",
       "passwordKeep": "Leave blank to keep current password",
       "port": "Port",
+      "readOnly": "Read-only",
+      "readOnlyHint": "Block all writes and schema changes on this connection",
       "sqlitePath": "SQLite Path",
       "username": "Username"
     },
@@ -373,7 +380,9 @@
       "rowsRendered": "{count} rows rendered",
       "showingFirst": "Showing first {shown} of {total} rows",
       "sortBy": "Sort by {column}",
-      "valueViewer": "Cell value"
+      "valueViewer": "Cell value",
+      "viewFormatted": "Formatted",
+      "viewRaw": "Raw"
     },
     "history": {
       "empty": "Executed SQL history will appear here.",
@@ -384,9 +393,23 @@
       "tab": "History"
     },
     "query": {
+      "cancelled": "Query stopped",
       "completed": "Query completed in {durationMs}ms",
       "previewLoaded": "Preview loaded: {count} rows",
       "unknownConnection": "Unknown connection"
+    },
+    "saved": {
+      "allConnections": "All connections",
+      "connectionScope": "Saved for {name}",
+      "defaultName": "Saved SQL",
+      "deleteLabel": "Delete saved SQL {name}",
+      "empty": "Saved SQL snippets will appear here.",
+      "listTitle": "Saved SQL",
+      "missingConnection": "Missing connection",
+      "name": "Name",
+      "namePlaceholder": "Snippet name",
+      "saveTitle": "Save SQL",
+      "saving": "Saving"
     },
     "result": {
       "executionFailed": "Execution failed",

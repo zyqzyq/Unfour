@@ -8,6 +8,7 @@ license = "Apache-2.0"
 chrono = { version = "0.4", features = ["serde"] }
 serde_json = "1"
 sqlx = { version = "0.8", default-features = false, features = ["chrono", "json", "macros", "mysql", "postgres", "runtime-tokio-rustls", "sqlite", "uuid"] }
+tokio = { version = "1", default-features = false, features = ["time"] }
 unfour-core = { path = "../unfour-core" }
 unfour-local-storage = { path = "../local-storage" }
 unfour-secret-store = { path = "../secret-store" }

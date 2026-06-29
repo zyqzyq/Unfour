@@ -30,6 +30,37 @@ export function serializeDatabaseResult(
   return [header, ...rows].join("\r\n");
 }
 
+/**
+ * Serialize a result set as a JSON array of row objects keyed by column name.
+ * NULL cells are preserved as JSON null.
+ */
+export function serializeDatabaseResultJson(result: DatabaseQueryResult): string {
+  const rows = result.rows.map((row) => {
+    const record: Record<string, string | null> = {};
+    result.columns.forEach((column, index) => {
+      record[column.name] = row[index] ?? null;
+    });
+    return record;
+  });
+  return JSON.stringify(rows, null, 2);
+}
+
+/**
+ * Pretty-print a cell value when it parses as a JSON object or array, otherwise
+ * return it unchanged. `isJson` lets the UI flag JSON values and offer a raw view.
+ */
+export function tryFormatJson(value: string): { formatted: string; isJson: boolean } {
+  const trimmed = value.trim();
+  if (!trimmed || !(trimmed.startsWith("{") || trimmed.startsWith("["))) {
+    return { formatted: value, isJson: false };
+  }
+  try {
+    return { formatted: JSON.stringify(JSON.parse(trimmed), null, 2), isJson: true };
+  } catch {
+    return { formatted: value, isJson: false };
+  }
+}
+
 export function serializeDatabaseRow(
   result: DatabaseQueryResult,
   row: Array<string | null>,

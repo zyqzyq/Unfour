@@ -11,7 +11,7 @@ use unfour_core::models::{
     DatabaseQueryInput, DatabaseQueryResult, DatabaseQuerySafety, DatabaseResultColumn,
     DatabaseRowMutationInput, DatabaseRowMutationResult, DatabaseSchema, DatabaseTable,
     DatabaseTableColumn, DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult,
-    DbQueryHistoryEntry, DbQueryHistoryRecordInput, StoredConnection,
+    DbQueryHistoryEntry, DbQueryHistoryRecordInput, SavedSql, SavedSqlInput, StoredConnection,
 };
 use unfour_core::{AppError, AppResult};
 use unfour_local_storage::LocalDb;
@@ -426,6 +426,20 @@ impl DatabaseService {
         }
         validate_single_statement(sql)?;
         let safety = classify_query(sql);
+
+        let connection = self
+            .get_connection(&input.workspace_id, &input.connection_id)
+            .await?;
+
+        // A read-only connection blocks anything other than a read, taking
+        // precedence over the confirmation prompt: confirming cannot override it.
+        if connection.read_only && safety.classification != "read" {
+            return Err(AppError::ReadOnly(format!(
+                "this connection is read-only; {} statements are not allowed",
+                safety.classification
+            )));
+        }
+
         if safety.requires_confirmation && input.confirm_mutation != Some(true) {
             return Err(AppError::ConfirmationRequired {
                 message: safety.message.clone().unwrap_or_else(|| {
@@ -439,10 +453,8 @@ impl DatabaseService {
             });
         }
 
-        let connection = self
-            .get_connection(&input.workspace_id, &input.connection_id)
-            .await?;
-
+        let timeout = resolve_timeout(input.timeout_ms);
+        let run = async {
         match connection.driver.as_str() {
             "sqlite" => {
                 let pool = sqlite_pool(&connection).await?;
@@ -594,6 +606,14 @@ impl DatabaseService {
                 display_driver(driver)
             ))),
         }
+        };
+        match tokio::time::timeout(timeout, run).await {
+            Ok(result) => result,
+            Err(_) => Err(AppError::Timeout(format!(
+                "query exceeded the {} ms timeout",
+                timeout.as_millis()
+            ))),
+        }
     }
 
     pub async fn record_query_history(&self, input: DbQueryHistoryRecordInput) -> AppResult<()> {
@@ -705,6 +725,125 @@ impl DatabaseService {
         Ok(())
     }
 
+    pub async fn list_saved_sql(&self, workspace_id: String) -> AppResult<Vec<SavedSql>> {
+        validate_workspace_id(&workspace_id)?;
+        let rows = sqlx::query_as::<_, SavedSql>(
+            r#"
+            SELECT id, workspace_id, connection_id, name, sql, created_at, updated_at
+            FROM saved_sql
+            WHERE workspace_id = ?1
+            ORDER BY updated_at DESC
+            "#,
+        )
+        .bind(workspace_id)
+        .fetch_all(self.db.pool())
+        .await?;
+        Ok(rows)
+    }
+
+    pub async fn save_sql(&self, input: SavedSqlInput) -> AppResult<SavedSql> {
+        validate_workspace_id(&input.workspace_id)?;
+        let name = input.name.trim().to_string();
+        if name.is_empty() {
+            return Err(AppError::Validation(
+                "saved SQL name cannot be empty".to_string(),
+            ));
+        }
+        if name.chars().count() > 120 {
+            return Err(AppError::Validation(
+                "saved SQL name must be 120 characters or fewer".to_string(),
+            ));
+        }
+        let sql = input.sql.trim().to_string();
+        if sql.is_empty() {
+            return Err(AppError::Validation("saved SQL cannot be empty".to_string()));
+        }
+        let connection_id = empty_to_none(input.connection_id);
+        let now = Utc::now().to_rfc3339();
+
+        if let Some(id) = input
+            .id
+            .as_deref()
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+        {
+            let result = sqlx::query(
+                r#"
+                UPDATE saved_sql
+                SET name = ?1, sql = ?2, connection_id = ?3, updated_at = ?4
+                WHERE id = ?5 AND workspace_id = ?6
+                "#,
+            )
+            .bind(&name)
+            .bind(&sql)
+            .bind(&connection_id)
+            .bind(&now)
+            .bind(id)
+            .bind(&input.workspace_id)
+            .execute(self.db.pool())
+            .await?;
+            if result.rows_affected() == 0 {
+                return Err(AppError::NotFound("saved SQL".to_string()));
+            }
+            return self.get_saved_sql(&input.workspace_id, id).await;
+        }
+
+        let id = Uuid::new_v4().to_string();
+        sqlx::query(
+            r#"
+            INSERT INTO saved_sql (id, workspace_id, connection_id, name, sql, created_at, updated_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)
+            "#,
+        )
+        .bind(&id)
+        .bind(&input.workspace_id)
+        .bind(&connection_id)
+        .bind(&name)
+        .bind(&sql)
+        .bind(&now)
+        .execute(self.db.pool())
+        .await?;
+        self.get_saved_sql(&input.workspace_id, &id).await
+    }
+
+    pub async fn delete_saved_sql(
+        &self,
+        workspace_id: String,
+        id: String,
+    ) -> AppResult<Vec<SavedSql>> {
+        validate_workspace_id(&workspace_id)?;
+        let id = id.trim().to_string();
+        if id.is_empty() {
+            return Err(AppError::Validation(
+                "saved SQL id cannot be empty".to_string(),
+            ));
+        }
+        let result = sqlx::query("DELETE FROM saved_sql WHERE id = ?1 AND workspace_id = ?2")
+            .bind(&id)
+            .bind(&workspace_id)
+            .execute(self.db.pool())
+            .await?;
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound("saved SQL".to_string()));
+        }
+        self.list_saved_sql(workspace_id).await
+    }
+
+    async fn get_saved_sql(&self, workspace_id: &str, id: &str) -> AppResult<SavedSql> {
+        let row = sqlx::query_as::<_, SavedSql>(
+            r#"
+            SELECT id, workspace_id, connection_id, name, sql, created_at, updated_at
+            FROM saved_sql
+            WHERE id = ?1 AND workspace_id = ?2
+            "#,
+        )
+        .bind(id)
+        .bind(workspace_id)
+        .fetch_optional(self.db.pool())
+        .await?;
+        row.ok_or_else(|| AppError::NotFound("saved SQL".to_string()))
+    }
+
     pub async fn browse_table(
         &self,
         input: DatabaseBrowseInput,
@@ -718,10 +857,21 @@ impl DatabaseService {
             ));
         }
 
+        let filter = normalize_filter(input.filter.as_deref());
+        let order_by = input
+            .order_by
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        let descending = input.order_descending;
+        let needs_columns = filter.is_some() || order_by.is_some();
+        let timeout = resolve_timeout(input.timeout_ms);
+
         let connection = self
             .get_connection(&input.workspace_id, &input.connection_id)
             .await?;
 
+        let run = async {
         match connection.driver.as_str() {
             "sqlite" => {
                 let pool = sqlite_pool(&connection).await?;
@@ -729,15 +879,49 @@ impl DatabaseService {
 
                 let limit = input.limit.unwrap_or(100).clamp(1, 1_000);
                 let offset = input.offset.unwrap_or(0);
-                let total_rows = sqlite_table_row_count(&pool, table_name).await?;
+
+                let column_names = if needs_columns {
+                    sqlite_columns(&pool, table_name)
+                        .await?
+                        .into_iter()
+                        .map(|column| column.name)
+                        .collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                };
+                let order_sql =
+                    order_by_clause(order_by, descending, &column_names, quote_identifier)?;
+                let active_filter = filter.as_ref().filter(|_| !column_names.is_empty());
+                let where_sql = active_filter
+                    .map(|_| format!(" WHERE {}", sqlite_filter_where(&column_names)))
+                    .unwrap_or_default();
+                let quoted = quote_identifier(table_name);
+
+                let total_rows = if let Some(needle) = active_filter {
+                    let count_sql =
+                        format!("SELECT COUNT(*) AS total_rows FROM {}{}", quoted, where_sql);
+                    let mut count = sqlx::query(&count_sql);
+                    for _ in &column_names {
+                        count = count.bind(format!("%{}%", needle));
+                    }
+                    let row = count.fetch_one(&pool).await?;
+                    row.try_get::<i64, _>("total_rows")?.max(0) as u64
+                } else {
+                    sqlite_table_row_count(&pool, table_name).await?
+                };
+
                 let sql = format!(
-                    "SELECT * FROM {} LIMIT {} OFFSET {}",
-                    quote_identifier(table_name),
-                    limit,
-                    offset
+                    "SELECT * FROM {}{}{} LIMIT {} OFFSET {}",
+                    quoted, where_sql, order_sql, limit, offset
                 );
                 let started = Instant::now();
-                let rows = sqlx::query(&sql).fetch_all(&pool).await?;
+                let mut query = sqlx::query(&sql);
+                if let Some(needle) = active_filter {
+                    for _ in &column_names {
+                        query = query.bind(format!("%{}%", needle));
+                    }
+                }
+                let rows = query.fetch_all(&pool).await?;
                 let columns = if let Some(row) = rows.first() {
                     sqlite_result_columns(row)
                 } else {
@@ -748,26 +932,9 @@ impl DatabaseService {
                     .map(sqlite_row_values)
                     .collect::<AppResult<Vec<_>>>()?;
 
-                Ok(DatabaseBrowseResult {
-                    table_name: table_name.to_string(),
-                    sql,
-                    limit,
-                    offset,
-                    total_rows,
-                    read_only: true,
-                    result: DatabaseQueryResult {
-                        columns,
-                        rows: values,
-                        affected_rows: 0,
-                        duration_ms: started.elapsed().as_millis(),
-                        safety: DatabaseQuerySafety {
-                            classification: "read".to_string(),
-                            requires_confirmation: false,
-                            confirmed: true,
-                            message: None,
-                        },
-                    },
-                })
+                Ok(browse_result(
+                    table_name, sql, limit, offset, total_rows, columns, values, started,
+                ))
             }
             "postgres" => {
                 let pool = self.postgres_pool(&connection).await?;
@@ -783,15 +950,53 @@ impl DatabaseService {
 
                 let limit = input.limit.unwrap_or(100).clamp(1, 1_000);
                 let offset = input.offset.unwrap_or(0);
-                let total_rows = postgres_table_row_count(&pool, schema, table_name)
-                    .await
-                    .map_err(sanitize_pg_app_error)?;
-                let sql = postgres_browse_sql(schema, table_name, limit, offset);
+
+                let column_names = if needs_columns {
+                    postgres_columns(&pool, schema, table_name)
+                        .await
+                        .map_err(sanitize_pg_app_error)?
+                        .into_iter()
+                        .map(|column| column.name)
+                        .collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                };
+                let order_sql =
+                    order_by_clause(order_by, descending, &column_names, quote_identifier)?;
+                let active_filter = filter.as_ref().filter(|_| !column_names.is_empty());
+                let where_sql = active_filter
+                    .map(|_| format!(" WHERE {}", postgres_filter_where(&column_names)))
+                    .unwrap_or_default();
+
+                let total_rows = if let Some(needle) = active_filter {
+                    // The same $1 bind is reused by every column predicate.
+                    let count_sql = format!(
+                        "SELECT COUNT(*) AS total_rows FROM {}{}",
+                        quote_qualified_identifier(schema, table_name),
+                        where_sql
+                    );
+                    let row = sqlx::query(&count_sql)
+                        .bind(format!("%{}%", needle))
+                        .fetch_one(&pool)
+                        .await
+                        .map_err(sanitize_pg_error)?;
+                    row.try_get::<i64, _>("total_rows")
+                        .map_err(sanitize_pg_error)?
+                        .max(0) as u64
+                } else {
+                    postgres_table_row_count(&pool, schema, table_name)
+                        .await
+                        .map_err(sanitize_pg_app_error)?
+                };
+
+                let sql =
+                    postgres_browse_sql(schema, table_name, &where_sql, &order_sql, limit, offset);
                 let started = Instant::now();
-                let rows = sqlx::query(&sql)
-                    .fetch_all(&pool)
-                    .await
-                    .map_err(sanitize_pg_error)?;
+                let mut query = sqlx::query(&sql);
+                if let Some(needle) = active_filter {
+                    query = query.bind(format!("%{}%", needle));
+                }
+                let rows = query.fetch_all(&pool).await.map_err(sanitize_pg_error)?;
                 let columns = if let Some(row) = rows.first() {
                     postgres_result_columns(row)
                 } else {
@@ -804,26 +1009,9 @@ impl DatabaseService {
                     .map(postgres_row_values)
                     .collect::<AppResult<Vec<_>>>()?;
 
-                Ok(DatabaseBrowseResult {
-                    table_name: table_name.to_string(),
-                    sql,
-                    limit,
-                    offset,
-                    total_rows,
-                    read_only: true,
-                    result: DatabaseQueryResult {
-                        columns,
-                        rows: values,
-                        affected_rows: 0,
-                        duration_ms: started.elapsed().as_millis(),
-                        safety: DatabaseQuerySafety {
-                            classification: "read".to_string(),
-                            requires_confirmation: false,
-                            confirmed: true,
-                            message: None,
-                        },
-                    },
-                })
+                Ok(browse_result(
+                    table_name, sql, limit, offset, total_rows, columns, values, started,
+                ))
             }
             "mysql" => {
                 let pool = self.mysql_pool(&connection).await?;
@@ -852,12 +1040,54 @@ impl DatabaseService {
 
                 let limit = input.limit.unwrap_or(100).clamp(1, 1_000);
                 let offset = input.offset.unwrap_or(0);
-                let total_rows = mysql_table_row_count(&pool, schema, table_name)
-                    .await
-                    .map_err(sanitize_mysql_app_error)?;
-                let sql = mysql_browse_sql(schema, table_name, limit, offset);
+
+                let column_names = if needs_columns {
+                    mysql_columns(&pool, schema, table_name)
+                        .await
+                        .map_err(sanitize_mysql_app_error)?
+                        .into_iter()
+                        .map(|column| column.name)
+                        .collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                };
+                let order_sql =
+                    order_by_clause(order_by, descending, &column_names, quote_mysql_identifier)?;
+                let active_filter = filter.as_ref().filter(|_| !column_names.is_empty());
+                let where_sql = active_filter
+                    .map(|_| format!(" WHERE {}", mysql_filter_where(&column_names)))
+                    .unwrap_or_default();
+
+                let total_rows = if let Some(needle) = active_filter {
+                    let count_sql = format!(
+                        "SELECT COUNT(*) AS total_rows FROM {}{}",
+                        quote_mysql_qualified_identifier(schema, table_name),
+                        where_sql
+                    );
+                    let mut count = sqlx::query(&count_sql);
+                    for _ in &column_names {
+                        count = count.bind(format!("%{}%", needle));
+                    }
+                    let row = count.fetch_one(&pool).await.map_err(sanitize_mysql_error)?;
+                    row.try_get::<i64, _>("total_rows")
+                        .map_err(sanitize_mysql_error)?
+                        .max(0) as u64
+                } else {
+                    mysql_table_row_count(&pool, schema, table_name)
+                        .await
+                        .map_err(sanitize_mysql_app_error)?
+                };
+
+                let sql =
+                    mysql_browse_sql(schema, table_name, &where_sql, &order_sql, limit, offset);
                 let started = Instant::now();
-                let rows = sqlx::query(&sql)
+                let mut query = sqlx::query(&sql);
+                if let Some(needle) = active_filter {
+                    for _ in &column_names {
+                        query = query.bind(format!("%{}%", needle));
+                    }
+                }
+                let rows = query
                     .fetch_all(&pool)
                     .await
                     .map_err(sanitize_mysql_error)?;
@@ -873,30 +1103,21 @@ impl DatabaseService {
                     .map(mysql_row_values)
                     .collect::<AppResult<Vec<_>>>()?;
 
-                Ok(DatabaseBrowseResult {
-                    table_name: table_name.to_string(),
-                    sql,
-                    limit,
-                    offset,
-                    total_rows,
-                    read_only: true,
-                    result: DatabaseQueryResult {
-                        columns,
-                        rows: values,
-                        affected_rows: 0,
-                        duration_ms: started.elapsed().as_millis(),
-                        safety: DatabaseQuerySafety {
-                            classification: "read".to_string(),
-                            requires_confirmation: false,
-                            confirmed: true,
-                            message: None,
-                        },
-                    },
-                })
+                Ok(browse_result(
+                    table_name, sql, limit, offset, total_rows, columns, values, started,
+                ))
             }
             driver => Err(AppError::Unsupported(format!(
                 "{} table browsing is not yet supported",
                 display_driver(driver)
+            ))),
+        }
+        };
+        match tokio::time::timeout(timeout, run).await {
+            Ok(result) => result,
+            Err(_) => Err(AppError::Timeout(format!(
+                "table browse exceeded the {} ms timeout",
+                timeout.as_millis()
             ))),
         }
     }
@@ -1046,6 +1267,12 @@ impl DatabaseService {
         let connection = self
             .get_connection(&input.workspace_id, &input.connection_id)
             .await?;
+
+        if connection.read_only {
+            return Err(AppError::ReadOnly(
+                "this connection is read-only; row edits are not allowed".to_string(),
+            ));
+        }
 
         match connection.driver.as_str() {
             "sqlite" => {
@@ -2193,6 +2420,7 @@ fn stored_to_database_connection(row: StoredConnection) -> AppResult<DatabaseCon
         username: config.username,
         sqlite_path: config.sqlite_path,
         credential_ref: row.credential_ref,
+        read_only: config.read_only,
         created_at: row.created_at,
         updated_at: row.updated_at,
         deleted_at: row.deleted_at,
@@ -2226,6 +2454,7 @@ fn input_to_config(input: &DatabaseConnectionInput) -> AppResult<DatabaseConnect
             database: None,
             username: None,
             sqlite_path: Some(sqlite_path.to_string()),
+            read_only: input.read_only,
         });
     }
 
@@ -2236,6 +2465,7 @@ fn input_to_config(input: &DatabaseConnectionInput) -> AppResult<DatabaseConnect
         database: empty_to_none(input.database.clone()),
         username: empty_to_none(input.username.clone()),
         sqlite_path: None,
+        read_only: input.read_only,
     })
 }
 
@@ -2311,10 +2541,19 @@ fn quote_qualified_identifier(schema: &str, table_name: &str) -> String {
     )
 }
 
-fn postgres_browse_sql(schema: &str, table_name: &str, limit: u32, offset: u32) -> String {
+fn postgres_browse_sql(
+    schema: &str,
+    table_name: &str,
+    where_sql: &str,
+    order_sql: &str,
+    limit: u32,
+    offset: u32,
+) -> String {
     format!(
-        "SELECT * FROM {} LIMIT {} OFFSET {}",
+        "SELECT * FROM {}{}{} LIMIT {} OFFSET {}",
         quote_qualified_identifier(schema, table_name),
+        where_sql,
+        order_sql,
         limit,
         offset
     )
@@ -2328,13 +2567,128 @@ fn quote_mysql_qualified_identifier(schema: &str, table_name: &str) -> String {
     )
 }
 
-fn mysql_browse_sql(schema: &str, table_name: &str, limit: u32, offset: u32) -> String {
+fn mysql_browse_sql(
+    schema: &str,
+    table_name: &str,
+    where_sql: &str,
+    order_sql: &str,
+    limit: u32,
+    offset: u32,
+) -> String {
     format!(
-        "SELECT * FROM {} LIMIT {} OFFSET {}",
+        "SELECT * FROM {}{}{} LIMIT {} OFFSET {}",
         quote_mysql_qualified_identifier(schema, table_name),
+        where_sql,
+        order_sql,
         limit,
         offset
     )
+}
+
+const DEFAULT_QUERY_TIMEOUT_MS: u64 = 30_000;
+const MIN_QUERY_TIMEOUT_MS: u64 = 1_000;
+const MAX_QUERY_TIMEOUT_MS: u64 = 300_000;
+
+/// Resolve a per-statement timeout, clamping caller input into a sane band and
+/// applying a default so a runaway query cannot hang a session indefinitely.
+fn resolve_timeout(timeout_ms: Option<u64>) -> Duration {
+    let ms = timeout_ms
+        .unwrap_or(DEFAULT_QUERY_TIMEOUT_MS)
+        .clamp(MIN_QUERY_TIMEOUT_MS, MAX_QUERY_TIMEOUT_MS);
+    Duration::from_millis(ms)
+}
+
+/// Trim a browse filter to a non-empty needle, or `None` when blank.
+fn normalize_filter(filter: Option<&str>) -> Option<String> {
+    filter
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+/// Build a validated, quoted `ORDER BY` fragment. The column must be one of the
+/// table's real columns (defense in depth on top of identifier quoting); an
+/// empty/absent column yields no clause.
+fn order_by_clause(
+    order_by: Option<&str>,
+    descending: bool,
+    columns: &[String],
+    quote: fn(&str) -> String,
+) -> AppResult<String> {
+    let Some(column) = order_by.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(String::new());
+    };
+    if !columns.iter().any(|name| name == column) {
+        return Err(AppError::Validation(format!(
+            "unknown sort column: {}",
+            column
+        )));
+    }
+    Ok(format!(
+        " ORDER BY {} {}",
+        quote(column),
+        if descending { "DESC" } else { "ASC" }
+    ))
+}
+
+/// `(CAST(col AS TEXT) LIKE ? OR ...)` for SQLite. One placeholder per column.
+fn sqlite_filter_where(columns: &[String]) -> String {
+    let parts = columns
+        .iter()
+        .map(|name| format!("CAST({} AS TEXT) LIKE ?", quote_identifier(name)))
+        .collect::<Vec<_>>();
+    format!("({})", parts.join(" OR "))
+}
+
+/// `(CAST(col AS TEXT) ILIKE $1 OR ...)` for PostgreSQL. Reuses a single bind.
+fn postgres_filter_where(columns: &[String]) -> String {
+    let parts = columns
+        .iter()
+        .map(|name| format!("CAST({} AS TEXT) ILIKE $1", quote_identifier(name)))
+        .collect::<Vec<_>>();
+    format!("({})", parts.join(" OR "))
+}
+
+/// `(CAST(col AS CHAR) LIKE ? OR ...)` for MySQL. One placeholder per column.
+fn mysql_filter_where(columns: &[String]) -> String {
+    let parts = columns
+        .iter()
+        .map(|name| format!("CAST({} AS CHAR) LIKE ?", quote_mysql_identifier(name)))
+        .collect::<Vec<_>>();
+    format!("({})", parts.join(" OR "))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn browse_result(
+    table_name: &str,
+    sql: String,
+    limit: u32,
+    offset: u32,
+    total_rows: u64,
+    columns: Vec<DatabaseResultColumn>,
+    rows: Vec<Vec<Option<String>>>,
+    started: Instant,
+) -> DatabaseBrowseResult {
+    DatabaseBrowseResult {
+        table_name: table_name.to_string(),
+        sql,
+        limit,
+        offset,
+        total_rows,
+        read_only: true,
+        result: DatabaseQueryResult {
+            columns,
+            rows,
+            affected_rows: 0,
+            duration_ms: started.elapsed().as_millis(),
+            safety: DatabaseQuerySafety {
+                classification: "read".to_string(),
+                requires_confirmation: false,
+                confirmed: true,
+                message: None,
+            },
+        },
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -2489,6 +2843,62 @@ fn validate_single_statement(sql: &str) -> AppResult<()> {
     Ok(())
 }
 
+/// Data-modifying keywords used to detect a write hidden behind an
+/// `EXPLAIN`/`WITH` wrapper. PostgreSQL executes `EXPLAIN ANALYZE <write>` and
+/// data-modifying CTEs (`WITH t AS (DELETE ... RETURNING *) ...`), both of which
+/// the leading keyword alone would misread as a safe, no-confirmation read.
+const WRITE_KEYWORDS: &[&str] = &["insert", "update", "delete", "replace", "merge", "upsert"];
+const SCHEMA_KEYWORDS: &[&str] = &[
+    "create", "alter", "drop", "truncate", "vacuum", "reindex", "grant", "revoke",
+];
+
+/// Scan a statement's tokens for a data-modifying or schema-changing keyword.
+/// Returns the matching safety classification when one is found. This errs
+/// toward over-detection: a keyword appearing inside a string literal only
+/// triggers an extra confirmation prompt, it never lets a real write through.
+fn detect_wrapped_write(sql: &str) -> Option<DatabaseQuerySafety> {
+    let mut has_write = false;
+    let mut has_schema = false;
+    for token in sql.split(|c: char| !c.is_ascii_alphanumeric() && c != '_') {
+        if token.is_empty() {
+            continue;
+        }
+        let lowered = token.to_ascii_lowercase();
+        if SCHEMA_KEYWORDS.contains(&lowered.as_str()) {
+            has_schema = true;
+        } else if WRITE_KEYWORDS.contains(&lowered.as_str()) {
+            has_write = true;
+        }
+    }
+
+    let classification = if has_schema {
+        "schema-change"
+    } else if has_write {
+        "mutation"
+    } else {
+        return None;
+    };
+
+    Some(DatabaseQuerySafety {
+        classification: classification.to_string(),
+        requires_confirmation: true,
+        confirmed: false,
+        message: Some(
+            "This statement can modify data or schema despite its EXPLAIN/WITH prefix. Confirm to execute it."
+                .to_string(),
+        ),
+    })
+}
+
+fn read_safety() -> DatabaseQuerySafety {
+    DatabaseQuerySafety {
+        classification: "read".to_string(),
+        requires_confirmation: false,
+        confirmed: true,
+        message: None,
+    }
+}
+
 fn classify_query(sql: &str) -> DatabaseQuerySafety {
     let keyword = sql
         .split_whitespace()
@@ -2497,12 +2907,11 @@ fn classify_query(sql: &str) -> DatabaseQuerySafety {
         .to_ascii_lowercase();
 
     match keyword.as_str() {
-        "select" | "with" | "pragma" | "explain" | "show" => DatabaseQuerySafety {
-            classification: "read".to_string(),
-            requires_confirmation: false,
-            confirmed: true,
-            message: None,
-        },
+        "select" | "pragma" | "show" => read_safety(),
+        // EXPLAIN and WITH can wrap a statement that actually writes (EXPLAIN
+        // ANALYZE <write> and data-modifying CTEs in PostgreSQL), so look past
+        // the wrapper before trusting them as no-confirmation reads.
+        "explain" | "with" => detect_wrapped_write(sql).unwrap_or_else(read_safety),
         "insert" | "update" | "delete" | "replace" => DatabaseQuerySafety {
             classification: "mutation".to_string(),
             requires_confirmation: true,
@@ -2710,6 +3119,69 @@ mod tests {
         assert_eq!(other[0].id, "history-other");
     }
 
+    #[tokio::test]
+    async fn saved_sql_crud_is_workspace_scoped_and_validated() {
+        let (service, workspace_id) = service_with_workspace().await;
+
+        let created = service
+            .save_sql(SavedSqlInput {
+                id: None,
+                workspace_id: workspace_id.clone(),
+                connection_id: Some("conn-1".to_string()),
+                name: "Recent users".to_string(),
+                sql: "SELECT * FROM users".to_string(),
+            })
+            .await
+            .expect("create saved sql");
+        assert_eq!(created.name, "Recent users");
+        assert_eq!(created.connection_id.as_deref(), Some("conn-1"));
+
+        let updated = service
+            .save_sql(SavedSqlInput {
+                id: Some(created.id.clone()),
+                workspace_id: workspace_id.clone(),
+                connection_id: None,
+                name: "Active users".to_string(),
+                sql: "SELECT * FROM users WHERE active".to_string(),
+            })
+            .await
+            .expect("update saved sql");
+        assert_eq!(updated.id, created.id);
+        assert_eq!(updated.name, "Active users");
+        assert!(updated.connection_id.is_none());
+
+        let listed = service
+            .list_saved_sql(workspace_id.clone())
+            .await
+            .expect("list saved sql");
+        assert_eq!(listed.len(), 1);
+
+        // Blank name and blank SQL are rejected.
+        assert!(matches!(
+            service
+                .save_sql(SavedSqlInput {
+                    id: None,
+                    workspace_id: workspace_id.clone(),
+                    connection_id: None,
+                    name: "   ".to_string(),
+                    sql: "SELECT 1".to_string(),
+                })
+                .await,
+            Err(AppError::Validation(_))
+        ));
+
+        let remaining = service
+            .delete_saved_sql(workspace_id.clone(), created.id.clone())
+            .await
+            .expect("delete saved sql");
+        assert!(remaining.is_empty());
+
+        assert!(matches!(
+            service.delete_saved_sql(workspace_id, created.id).await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
     async fn sqlite_fixture() -> PathBuf {
         let path =
             std::env::temp_dir().join(format!("unfour-database-service-{}.sqlite", Uuid::new_v4()));
@@ -2766,6 +3238,7 @@ mod tests {
             username: None,
             sqlite_path: Some(path.to_string_lossy().to_string()),
             credential_ref: Some("  ".to_string()),
+            read_only: false,
         }
     }
 
@@ -2781,6 +3254,7 @@ mod tests {
             username: Some("testuser".to_string()),
             sqlite_path: None,
             credential_ref: None,
+            read_only: false,
         }
     }
 
@@ -2796,6 +3270,7 @@ mod tests {
             username: Some("testuser".to_string()),
             sqlite_path: None,
             credential_ref,
+            read_only: false,
         }
     }
 
@@ -2889,6 +3364,7 @@ mod tests {
                 confirm_mutation: None,
                 catalog: None,
                 schema: None,
+                timeout_ms: None,
             })
             .await
             .expect("query");
@@ -2906,6 +3382,10 @@ mod tests {
                 table_name: "deploys".to_string(),
                 limit: Some(2),
                 offset: Some(1),
+                order_by: None,
+                order_descending: false,
+                filter: None,
+                timeout_ms: None,
             })
             .await
             .expect("browse table");
@@ -2927,6 +3407,10 @@ mod tests {
                 table_name: "deploys".to_string(),
                 limit: Some(2),
                 offset: None,
+                order_by: None,
+                order_descending: false,
+                filter: None,
+                timeout_ms: None,
             })
             .await
             .expect("browse first page");
@@ -2941,6 +3425,10 @@ mod tests {
                 table_name: "empty_deploys".to_string(),
                 limit: Some(10),
                 offset: None,
+                order_by: None,
+                order_descending: false,
+                filter: None,
+                timeout_ms: None,
             })
             .await
             .expect("browse empty table");
@@ -2958,6 +3446,10 @@ mod tests {
                 table_name: "missing".to_string(),
                 limit: Some(10),
                 offset: None,
+                order_by: None,
+                order_descending: false,
+                filter: None,
+                timeout_ms: None,
             })
             .await;
         assert!(matches!(missing, Err(AppError::NotFound(_))));
@@ -3121,6 +3613,7 @@ mod tests {
                 confirm_mutation: None,
                 catalog: None,
                 schema: None,
+                timeout_ms: None,
             })
             .await;
         assert!(matches!(
@@ -3137,6 +3630,7 @@ mod tests {
                 confirm_mutation: Some(true),
                 catalog: None,
                 schema: None,
+                timeout_ms: None,
             })
             .await
             .expect("confirmed update");
@@ -3153,6 +3647,7 @@ mod tests {
                 confirm_mutation: Some(true),
                 catalog: None,
                 schema: None,
+                timeout_ms: None,
             })
             .await;
         assert!(matches!(multiple, Err(AppError::Validation(_))));
@@ -3176,6 +3671,7 @@ mod tests {
             username: Some("admin".to_string()),
             sqlite_path: None,
             credential_ref: Some("unfour:ws:database-password:abc".to_string()),
+            read_only: false,
         };
 
         let config = input_to_config(&input).expect("config");
@@ -3190,7 +3686,7 @@ mod tests {
     #[test]
     fn postgres_table_browse_sql_is_schema_qualified_and_escaped() {
         assert_eq!(
-            postgres_browse_sql("app\"data", "user\"events", 50, 100),
+            postgres_browse_sql("app\"data", "user\"events", "", "", 50, 100),
             "SELECT * FROM \"app\"\"data\".\"user\"\"events\" LIMIT 50 OFFSET 100"
         );
     }
@@ -3234,6 +3730,7 @@ mod tests {
                 username: Some("testuser".to_string()),
                 sqlite_path: None,
                 credential_ref: None,
+                read_only: false,
             })
             .await
             .expect("save pg connection");
@@ -3263,6 +3760,7 @@ mod tests {
             username: Some("dev".to_string()),
             sqlite_path: None,
             credential_ref: None,
+            read_only: false,
             created_at: String::new(),
             updated_at: String::new(),
             deleted_at: None,
@@ -3327,6 +3825,7 @@ mod tests {
             username: Some("dev".to_string()),
             sqlite_path: None,
             credential_ref: Some(credential_ref.credential_ref),
+            read_only: false,
             created_at: String::new(),
             updated_at: String::new(),
             deleted_at: None,
@@ -3361,6 +3860,7 @@ mod tests {
                 confirm_mutation: None,
                 catalog: None,
                 schema: None,
+                timeout_ms: None,
             })
             .await;
         assert!(
@@ -3504,7 +4004,7 @@ mod tests {
     #[test]
     fn mysql_table_browse_sql_is_qualified_paginated_and_escaped() {
         assert_eq!(
-            mysql_browse_sql("app`data", "user`events", 50, 100),
+            mysql_browse_sql("app`data", "user`events", "", "", 50, 100),
             "SELECT * FROM `app``data`.`user``events` LIMIT 50 OFFSET 100"
         );
     }
@@ -3557,6 +4057,7 @@ mod tests {
                 confirm_mutation: None,
                 catalog: None,
                 schema: None,
+                timeout_ms: None,
             })
             .await
             .expect_err("closed local port should reject MySQL query");
@@ -3584,8 +4085,222 @@ mod tests {
                 confirm_mutation: None,
                 catalog: None,
                 schema: None,
+                timeout_ms: None,
             })
             .await;
         assert!(matches!(result, Err(AppError::ConfirmationRequired { .. })));
+    }
+
+    #[test]
+    fn classify_query_flags_writes_hidden_behind_explain_and_with() {
+        // Plain reads stay no-confirmation, including read-only EXPLAIN ANALYZE.
+        assert!(!classify_query("SELECT * FROM users").requires_confirmation);
+        assert!(!classify_query("EXPLAIN SELECT * FROM users").requires_confirmation);
+        assert!(!classify_query("EXPLAIN ANALYZE SELECT * FROM users").requires_confirmation);
+        assert!(!classify_query("WITH c AS (SELECT 1) SELECT * FROM c").requires_confirmation);
+
+        // EXPLAIN ANALYZE <write> executes the write in PostgreSQL.
+        let explain_write = classify_query("EXPLAIN ANALYZE DELETE FROM users");
+        assert!(explain_write.requires_confirmation);
+        assert_eq!(explain_write.classification, "mutation");
+
+        // Data-modifying CTEs execute in PostgreSQL.
+        let write_cte = classify_query("WITH d AS (DELETE FROM users RETURNING *) SELECT * FROM d");
+        assert!(write_cte.requires_confirmation);
+        assert_eq!(write_cte.classification, "mutation");
+
+        // A schema change wrapped in EXPLAIN is flagged as schema-change.
+        let explain_ddl = classify_query("EXPLAIN CREATE TABLE t (id INT)");
+        assert!(explain_ddl.requires_confirmation);
+        assert_eq!(explain_ddl.classification, "schema-change");
+
+        // A column whose name merely contains a keyword is not a false positive.
+        assert!(!classify_query("SELECT updated_at, created_at FROM users").requires_confirmation);
+    }
+
+    #[tokio::test]
+    async fn explain_analyze_write_requires_confirmation_before_execution() {
+        let (service, workspace_id) = service_with_workspace().await;
+        let path = sqlite_fixture().await;
+        let connection = service
+            .save_connection(sqlite_input(&workspace_id, &path))
+            .await
+            .expect("save connection");
+
+        // The classification gate runs before the connection is opened, so the
+        // wrapped write is rejected without confirmation regardless of driver.
+        let unconfirmed = service
+            .execute_query(DatabaseQueryInput {
+                workspace_id: workspace_id.clone(),
+                connection_id: connection.id.clone(),
+                sql: "EXPLAIN ANALYZE DELETE FROM deploys".to_string(),
+                limit: Some(100),
+                confirm_mutation: None,
+                catalog: None,
+                schema: None,
+                timeout_ms: None,
+            })
+            .await;
+        assert!(matches!(
+            unconfirmed,
+            Err(AppError::ConfirmationRequired { .. })
+        ));
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn resolve_timeout_applies_default_and_clamps() {
+        assert_eq!(
+            resolve_timeout(None),
+            Duration::from_millis(DEFAULT_QUERY_TIMEOUT_MS)
+        );
+        assert_eq!(
+            resolve_timeout(Some(0)),
+            Duration::from_millis(MIN_QUERY_TIMEOUT_MS)
+        );
+        assert_eq!(resolve_timeout(Some(5_000)), Duration::from_millis(5_000));
+        assert_eq!(
+            resolve_timeout(Some(10_000_000)),
+            Duration::from_millis(MAX_QUERY_TIMEOUT_MS)
+        );
+    }
+
+    #[tokio::test]
+    async fn browse_table_pushes_sort_and_filter_into_the_query() {
+        let (service, workspace_id) = service_with_workspace().await;
+        let path = sqlite_fixture().await;
+        let connection = service
+            .save_connection(sqlite_input(&workspace_id, &path))
+            .await
+            .expect("save connection");
+
+        // Sort descending by service: 'worker' comes before 'api', and the SQL
+        // carries the ORDER BY so it orders the whole table, not just the page.
+        let sorted = service
+            .browse_table(DatabaseBrowseInput {
+                workspace_id: workspace_id.clone(),
+                connection_id: connection.id.clone(),
+                catalog: None,
+                schema: None,
+                table_name: "deploys".to_string(),
+                limit: Some(100),
+                offset: None,
+                order_by: Some("service".to_string()),
+                order_descending: true,
+                filter: None,
+                timeout_ms: None,
+            })
+            .await
+            .expect("sorted browse");
+        assert!(sorted.sql.contains("ORDER BY \"service\" DESC"));
+        assert_eq!(sorted.result.rows[0][1].as_deref(), Some("worker"));
+        assert_eq!(sorted.result.rows[1][1].as_deref(), Some("api"));
+
+        // Filter narrows both the rows and the total count.
+        let filtered = service
+            .browse_table(DatabaseBrowseInput {
+                workspace_id: workspace_id.clone(),
+                connection_id: connection.id.clone(),
+                catalog: None,
+                schema: None,
+                table_name: "deploys".to_string(),
+                limit: Some(100),
+                offset: None,
+                order_by: None,
+                order_descending: false,
+                filter: Some("worker".to_string()),
+                timeout_ms: None,
+            })
+            .await
+            .expect("filtered browse");
+        assert!(filtered.sql.contains("WHERE"));
+        assert_eq!(filtered.total_rows, 1);
+        assert_eq!(filtered.result.rows.len(), 1);
+        assert_eq!(filtered.result.rows[0][1].as_deref(), Some("worker"));
+
+        // An unknown sort column is rejected rather than silently ignored.
+        let bad_sort = service
+            .browse_table(DatabaseBrowseInput {
+                workspace_id: workspace_id.clone(),
+                connection_id: connection.id.clone(),
+                catalog: None,
+                schema: None,
+                table_name: "deploys".to_string(),
+                limit: Some(100),
+                offset: None,
+                order_by: Some("not_a_column".to_string()),
+                order_descending: false,
+                filter: None,
+                timeout_ms: None,
+            })
+            .await;
+        assert!(matches!(bad_sort, Err(AppError::Validation(_))));
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn read_only_connection_blocks_writes_and_row_edits() {
+        let (service, workspace_id) = service_with_workspace().await;
+        let path = sqlite_fixture().await;
+        let connection = service
+            .save_connection(DatabaseConnectionInput {
+                read_only: true,
+                ..sqlite_input(&workspace_id, &path)
+            })
+            .await
+            .expect("save read-only connection");
+        assert!(connection.read_only);
+
+        // Reads still work on a read-only connection.
+        let read = service
+            .execute_query(DatabaseQueryInput {
+                workspace_id: workspace_id.clone(),
+                connection_id: connection.id.clone(),
+                sql: "SELECT * FROM deploys".to_string(),
+                limit: Some(10),
+                confirm_mutation: None,
+                catalog: None,
+                schema: None,
+                timeout_ms: None,
+            })
+            .await
+            .expect("read query allowed");
+        assert!(!read.rows.is_empty());
+
+        // A confirmed mutation is still blocked: read-only overrides confirmation.
+        let write = service
+            .execute_query(DatabaseQueryInput {
+                workspace_id: workspace_id.clone(),
+                connection_id: connection.id.clone(),
+                sql: "DELETE FROM deploys".to_string(),
+                limit: Some(10),
+                confirm_mutation: Some(true),
+                catalog: None,
+                schema: None,
+                timeout_ms: None,
+            })
+            .await;
+        assert!(matches!(write, Err(AppError::ReadOnly(_))));
+
+        // Inline row edits are blocked too.
+        let row = service
+            .mutate_table_row(DatabaseRowMutationInput {
+                workspace_id: workspace_id.clone(),
+                connection_id: connection.id.clone(),
+                catalog: None,
+                schema: None,
+                table_name: "deploys".to_string(),
+                operation: "delete".to_string(),
+                values: vec![],
+                primary_key: vec![DatabaseCellValue {
+                    column: "id".to_string(),
+                    value: Some("1".to_string()),
+                }],
+            })
+            .await;
+        assert!(matches!(row, Err(AppError::ReadOnly(_))));
+
+        let _ = fs::remove_file(path);
     }
 }

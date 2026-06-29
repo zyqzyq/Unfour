@@ -182,6 +182,11 @@ pub struct DatabaseConnectionInput {
     pub username: Option<String>,
     pub sqlite_path: Option<String>,
     pub credential_ref: Option<String>,
+    /// When true, the connection rejects any data- or schema-modifying SQL and
+    /// row edits. Defaults to false so existing callers and stored rows are
+    /// unaffected.
+    #[serde(default)]
+    pub read_only: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -444,6 +449,8 @@ pub struct DatabaseConnection {
     pub username: Option<String>,
     pub sqlite_path: Option<String>,
     pub credential_ref: Option<String>,
+    #[serde(default)]
+    pub read_only: bool,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: Option<String>,
@@ -478,6 +485,10 @@ pub struct DatabaseConnectionConfig {
     pub database: Option<String>,
     pub username: Option<String>,
     pub sqlite_path: Option<String>,
+    /// Persisted in `config_json`; `serde(default)` keeps connections saved
+    /// before this field deserializable as read-write.
+    #[serde(default)]
+    pub read_only: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -612,6 +623,10 @@ pub struct DatabaseQueryInput {
     /// resolve unqualified names against. Applied before execution.
     #[serde(default)]
     pub schema: Option<String>,
+    /// Optional per-statement timeout in milliseconds. Clamped server-side; when
+    /// absent a default timeout protects against runaway queries.
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -648,6 +663,29 @@ pub struct DbQueryHistoryRecordInput {
     pub executed_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedSql {
+    pub id: String,
+    pub workspace_id: String,
+    pub connection_id: Option<String>,
+    pub name: String,
+    pub sql: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedSqlInput {
+    /// Present when updating an existing snippet; absent to create a new one.
+    pub id: Option<String>,
+    pub workspace_id: String,
+    pub connection_id: Option<String>,
+    pub name: String,
+    pub sql: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DatabaseBrowseInput {
@@ -659,6 +697,19 @@ pub struct DatabaseBrowseInput {
     pub table_name: String,
     pub limit: Option<u32>,
     pub offset: Option<u32>,
+    /// Optional column to sort by, pushed into the browse query so it orders the
+    /// whole table rather than only the loaded page.
+    #[serde(default)]
+    pub order_by: Option<String>,
+    #[serde(default)]
+    pub order_descending: bool,
+    /// Optional case-insensitive text matched across every column, pushed into
+    /// the browse query (and the total-row count) so it filters the whole table.
+    #[serde(default)]
+    pub filter: Option<String>,
+    /// Optional per-statement timeout in milliseconds. Clamped server-side.
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -29,7 +29,11 @@ export function TableDataTab({
   executePending,
   onPageChange,
   onRefresh,
+  onTableFilter,
+  onTableSort,
   result,
+  tableFilter,
+  tableSort,
   tableView,
 }: {
   editing?: TableEditing | null;
@@ -37,7 +41,11 @@ export function TableDataTab({
   executePending: boolean;
   onPageChange: (pageIndex: number, pageSize: number) => void;
   onRefresh: () => void;
+  onTableFilter: (filter: string) => void;
+  onTableSort: (column: string) => void;
   result: DatabaseQueryResult | null;
+  tableFilter: string;
+  tableSort: { column: string; descending: boolean } | null;
   tableView: DatabaseTableViewState | null;
 }) {
   const { t } = useI18n();
@@ -101,7 +109,16 @@ export function TableDataTab({
           </IconButton>
         </ToolbarGroup>
       </Toolbar>
-      <TableDataGrid editing={editing} result={result} />
+      <TableDataGrid
+        editing={editing}
+        result={result}
+        server={{
+          filter: tableFilter,
+          onFilter: onTableFilter,
+          onSort: onTableSort,
+          sort: tableSort,
+        }}
+      />
       <div className="flex h-9 shrink-0 items-center gap-3 border-t border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3">
         <Database className="shrink-0 text-[var(--u-color-text-soft)]" size={13} />
         <code

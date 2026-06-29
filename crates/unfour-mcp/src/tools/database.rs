@@ -441,6 +441,7 @@ fn db_query_readonly(
         confirm_mutation: None,
         catalog: None,
         schema: None,
+        timeout_ms: None,
     };
 
     match command_bus.execute_db_query(input) {
@@ -540,13 +541,40 @@ fn validate_readonly_sql(sql: &str) -> Result<(), ToolCallError> {
         .to_ascii_lowercase();
 
     match keyword.as_str() {
-        "select" | "with" | "show" | "describe" | "desc" | "explain" => Ok(()),
+        "select" | "show" | "describe" | "desc" => Ok(()),
+        // EXPLAIN and WITH can wrap a statement that actually writes (EXPLAIN
+        // ANALYZE <write> and data-modifying CTEs execute in PostgreSQL), so a
+        // read-only tool must reject them when they contain a write keyword.
+        "with" | "explain" => {
+            if statement_has_write(&stripped) {
+                Err(ToolCallError::Execution {
+                    code: "READONLY_SQL_REJECTED",
+                    message:
+                        "EXPLAIN/WITH statements that modify data or schema are not allowed in read-only mode.",
+                })
+            } else {
+                Ok(())
+            }
+        }
         _ => Err(ToolCallError::Execution {
             code: "READONLY_SQL_REJECTED",
             message:
                 "Only read-only SQL is permitted (SELECT, WITH, SHOW, DESCRIBE, DESC, EXPLAIN).",
         }),
     }
+}
+
+/// Scan a statement's tokens for a data-modifying or schema-changing keyword.
+/// Used to reject writes hidden behind an `EXPLAIN`/`WITH` wrapper. Errs toward
+/// over-detection: a keyword inside a string literal only causes a rejection,
+/// never a missed write.
+fn statement_has_write(sql: &str) -> bool {
+    const WRITE: &[&str] = &[
+        "insert", "update", "delete", "replace", "merge", "upsert", "create", "alter", "drop",
+        "truncate", "vacuum", "reindex", "grant", "revoke",
+    ];
+    sql.split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+        .any(|token| !token.is_empty() && WRITE.contains(&token.to_ascii_lowercase().as_str()))
 }
 
 /// Strip leading SQL line comments (`--`) and block comments (`/* ... */`).
@@ -798,6 +826,7 @@ mod tests {
                 username: Some("admin".to_string()),
                 sqlite_path: None,
                 credential_ref: Some("secret-ref-123".to_string()),
+                read_only: false,
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 updated_at: "2026-01-01T00:00:00Z".to_string(),
                 deleted_at: None,
@@ -1574,6 +1603,24 @@ mod tests {
         // Multiple comments then valid query.
         assert!(validate_readonly_sql("-- a\n-- b\nSELECT 1").is_ok());
         assert!(validate_readonly_sql("/* a */ /* b */ SELECT 1").is_ok());
+    }
+
+    #[test]
+    fn validate_readonly_sql_rejects_writes_behind_explain_and_with() {
+        // Genuinely read-only EXPLAIN/CTE statements remain allowed.
+        assert!(validate_readonly_sql("EXPLAIN SELECT * FROM users").is_ok());
+        assert!(validate_readonly_sql("EXPLAIN ANALYZE SELECT * FROM users").is_ok());
+        assert!(validate_readonly_sql("WITH c AS (SELECT 1) SELECT * FROM c").is_ok());
+
+        // EXPLAIN ANALYZE <write> and data-modifying CTEs execute in PostgreSQL,
+        // so a read-only tool must reject them.
+        assert!(validate_readonly_sql("EXPLAIN ANALYZE DELETE FROM users").is_err());
+        assert!(validate_readonly_sql("EXPLAIN ANALYZE INSERT INTO users VALUES (1)").is_err());
+        assert!(
+            validate_readonly_sql("WITH d AS (DELETE FROM users RETURNING *) SELECT * FROM d")
+                .is_err()
+        );
+        assert!(validate_readonly_sql("EXPLAIN DROP TABLE users").is_err());
     }
 
     // --- Truncation unit tests ---

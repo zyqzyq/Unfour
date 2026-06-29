@@ -135,6 +135,7 @@ export type DatabaseConnectionInput = {
   username?: string | null;
   sqlitePath?: string | null;
   credentialRef?: string | null;
+  readOnly?: boolean;
 };
 
 export type SshAuthKind = "password" | "private-key" | "none";
@@ -312,6 +313,7 @@ export type DatabaseConnection = {
   username: string | null;
   sqlitePath: string | null;
   credentialRef: string | null;
+  readOnly: boolean;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -413,6 +415,8 @@ export type DatabaseQueryInput = {
   catalog?: string | null;
   /** Query context: schema (PostgreSQL) for unqualified name resolution. */
   schema?: string | null;
+  /** Optional per-statement timeout in milliseconds; clamped server-side. */
+  timeoutMs?: number;
 };
 
 export type DbQueryHistoryEntry = {
@@ -430,6 +434,24 @@ export type DbQueryHistoryEntry = {
   executedAt: string;
 };
 
+export type SavedSql = {
+  id: string;
+  workspaceId: string;
+  connectionId: string | null;
+  name: string;
+  sql: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SavedSqlInput = {
+  id?: string | null;
+  workspaceId: string;
+  connectionId?: string | null;
+  name: string;
+  sql: string;
+};
+
 export type DatabaseBrowseInput = {
   workspaceId: string;
   connectionId: string;
@@ -438,6 +460,10 @@ export type DatabaseBrowseInput = {
   tableName: string;
   limit?: number;
   offset?: number;
+  orderBy?: string | null;
+  orderDescending?: boolean;
+  filter?: string | null;
+  timeoutMs?: number;
 };
 
 export type DatabaseBrowseResult = {

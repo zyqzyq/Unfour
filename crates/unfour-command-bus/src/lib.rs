@@ -7,7 +7,8 @@ use unfour_core::models::{
     DatabaseConnection, DatabaseConnectionInput, DatabaseQueryInput, DatabaseQueryResult,
     DatabaseRowMutationInput, DatabaseRowMutationResult, DatabaseSchema, DatabaseTableStructure,
     DatabaseTableStructureInput, DatabaseTestResult, DbQueryHistoryEntry,
-    DbQueryHistoryRecordInput, KeyValue, SshCloseInput, SshConnectInput, SshConnection,
+    DbQueryHistoryRecordInput, KeyValue, SavedSql, SavedSqlInput, SshCloseInput, SshConnectInput,
+    SshConnection,
     SshConnectionInput, SshDiagnosticInput, SshDiagnosticResult, SshHostFingerprintInfo,
     SshHostKeyInput, SshKnownHostsExportResult, SshKnownHostsImportInput,
     SshKnownHostsImportResult, SshLogExport, SshLogExportInput, SshReconnectCancelInput,
@@ -1241,6 +1242,43 @@ impl CommandBus {
         self.database.clear_query_history(workspace_id).await
     }
 
+    pub async fn list_saved_sql(&self, workspace_id: String) -> AppResult<Vec<SavedSql>> {
+        self.database.list_saved_sql(workspace_id).await
+    }
+
+    pub async fn save_saved_sql(&self, input: SavedSqlInput) -> AppResult<SavedSql> {
+        let saved = self.database.save_sql(input).await?;
+        self.activity_log
+            .record(
+                Some(&saved.workspace_id),
+                "database.saved_sql.save",
+                Some(&saved.id),
+                serde_json::json!({ "name": saved.name }),
+            )
+            .await?;
+        Ok(saved)
+    }
+
+    pub async fn delete_saved_sql(
+        &self,
+        workspace_id: String,
+        id: String,
+    ) -> AppResult<Vec<SavedSql>> {
+        let remaining = self
+            .database
+            .delete_saved_sql(workspace_id.clone(), id.clone())
+            .await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "database.saved_sql.delete",
+                Some(&id),
+                serde_json::json!({}),
+            )
+            .await?;
+        Ok(remaining)
+    }
+
     pub async fn list_ssh_connections(
         &self,
         workspace_id: String,
@@ -1642,6 +1680,7 @@ mod tests {
             username: Some("developer".to_string()),
             sqlite_path: None,
             credential_ref: Some("database-secret".to_string()),
+            read_only: false,
         })
         .await
         .expect("save database connection");

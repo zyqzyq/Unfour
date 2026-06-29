@@ -61,6 +61,9 @@ describe("useTableData", () => {
       tableName: "users",
       limit: 25,
       offset: 50,
+      orderBy: null,
+      orderDescending: false,
+      filter: null,
     });
   });
 

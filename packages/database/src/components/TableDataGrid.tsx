@@ -17,7 +17,7 @@ import {
   type DataTableColumn,
 } from "@unfour/ui";
 import type { TableEditing } from "../model/types";
-import { serializeDatabaseCell, serializeDatabaseRow } from "../result-utils";
+import { serializeDatabaseCell, serializeDatabaseRow, tryFormatJson } from "../result-utils";
 
 const MAX_RENDERED_ROWS = 500;
 
@@ -25,22 +25,41 @@ type SortState = { columnIndex: number; direction: "asc" | "desc" };
 type CellViewer = { columnName: string; value: string | null };
 type EditTarget = { row: Array<string | null>; columnIndex: number };
 type DataRow = Array<string | null>;
+type PendingUpdate = {
+  columnName: string;
+  value: string;
+  primaryKey: DatabaseCellValue[];
+};
+type ServerControls = {
+  sort: { column: string; descending: boolean } | null;
+  filter: string;
+  onSort: (column: string) => void;
+  onFilter: (filter: string) => void;
+};
 
 export function TableDataGrid({
   editing,
   result,
+  server,
 }: {
   editing?: TableEditing | null;
   result: DatabaseQueryResult;
+  // When present (table browse), sort and filter are applied server-side across
+  // the whole table; the grid reflects state and delegates instead of doing its
+  // own page-local sort/filter. Absent for ad-hoc query results.
+  server?: ServerControls | null;
 }) {
   const { t } = useI18n();
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied-cell" | "copied-row" | "failed">("idle");
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<SortState | null>(null);
   const [viewer, setViewer] = useState<CellViewer | null>(null);
+  const [viewerRaw, setViewerRaw] = useState(false);
+  const viewerJson = viewer && viewer.value !== null ? tryFormatJson(viewer.value) : null;
   const [edit, setEdit] = useState<EditTarget | null>(null);
   const [editValue, setEditValue] = useState("");
   const [deleteRow, setDeleteRow] = useState<DataRow | null>(null);
+  const [pendingUpdate, setPendingUpdate] = useState<PendingUpdate | null>(null);
 
   function buildPrimaryKey(row: DataRow): DatabaseCellValue[] {
     return (editing?.primaryKeyColumns ?? []).map((name) => {
@@ -57,12 +76,24 @@ export function TableDataGrid({
     const columnName = result.columns[edit.columnIndex]?.name;
     const original = edit.row[edit.columnIndex] ?? "";
     if (columnName && editValue !== original) {
-      editing.onUpdateCell(columnName, editValue, buildPrimaryKey(edit.row));
+      // Stage the change behind a confirmation step rather than writing to the
+      // database the moment the input blurs.
+      setPendingUpdate({
+        columnName,
+        value: editValue,
+        primaryKey: buildPrimaryKey(edit.row),
+      });
     }
     setEdit(null);
   }
 
   const processedRows = useMemo(() => {
+    // In server mode the rows arrive already sorted and filtered for the whole
+    // table, so the grid renders them as-is.
+    if (server) {
+      return result.rows;
+    }
+
     const needle = filter.trim().toLowerCase();
     const filtered = needle
       ? result.rows.filter((row) => row.some((value) => (value ?? "").toLowerCase().includes(needle)))
@@ -80,7 +111,7 @@ export function TableDataGrid({
       return sort.direction === "asc" ? compared : -compared;
     });
     return sorted;
-  }, [filter, result.rows, sort]);
+  }, [filter, result.rows, sort, server]);
 
   const visibleRows = processedRows.slice(0, MAX_RENDERED_ROWS);
 
@@ -161,7 +192,10 @@ export function TableDataGrid({
         return (
           <button
             className="block w-full cursor-pointer truncate text-left font-mono text-[12px] text-[var(--u-color-text)] hover:text-[var(--u-color-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--u-color-focus)]"
-            onClick={() => setViewer({ columnName: column.name, value: value ?? null })}
+            onClick={() => {
+              setViewerRaw(false);
+              setViewer({ columnName: column.name, value: value ?? null });
+            }}
             onDoubleClick={
               editing
                 ? () => {
@@ -180,12 +214,12 @@ export function TableDataGrid({
       header: (
         <button
           className="flex w-full min-w-0 cursor-pointer items-center gap-1 text-left hover:text-[var(--u-color-text)] focus-visible:outline-none"
-          onClick={() => toggleSort(columnIndex)}
+          onClick={() => (server ? server.onSort(column.name) : toggleSort(columnIndex))}
           title={t("database.grid.sortBy", { column: column.name })}
           type="button"
         >
           <span className="truncate">{column.name}</span>
-          {renderSortIcon(sort, columnIndex)}
+          {server ? renderServerSortIcon(server.sort, column.name) : renderSortIcon(sort, columnIndex)}
         </button>
       ),
       id: column.name || `column-${columnIndex}`,
@@ -203,11 +237,11 @@ export function TableDataGrid({
         <Input
           aria-label={t("database.grid.filterPlaceholder")}
           className="h-6 max-w-[260px]"
-          onChange={(event) => setFilter(event.target.value)}
+          onChange={(event) => (server ? server.onFilter(event.target.value) : setFilter(event.target.value))}
           placeholder={t("database.grid.filterPlaceholder")}
-          value={filter}
+          value={server ? server.filter : filter}
         />
-        {sort ? (
+        {!server && sort ? (
           <button
             className="text-[11px] text-[var(--u-color-text-soft)] hover:text-[var(--u-color-text)]"
             onClick={() => setSort(null)}
@@ -220,7 +254,7 @@ export function TableDataGrid({
       <DataTable
         className="flex-1"
         columns={columns}
-        empty={filter ? t("database.grid.noMatches") : t("database.grid.empty")}
+        empty={(server ? server.filter : filter) ? t("database.grid.noMatches") : t("database.grid.empty")}
         getRowKey={(_, index) => index}
         rows={visibleRows}
       />
@@ -241,9 +275,23 @@ export function TableDataGrid({
             {viewer?.value === null ? (
               <StatusBadge>NULL</StatusBadge>
             ) : (
-              <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap break-words rounded border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-2 font-mono text-[12px] text-[var(--u-color-text)]">
-                {viewer?.value}
-              </pre>
+              <>
+                {viewerJson?.isJson ? (
+                  <div className="flex items-center justify-between">
+                    <StatusBadge>JSON</StatusBadge>
+                    <button
+                      className="text-[11px] text-[var(--u-color-text-soft)] hover:text-[var(--u-color-text)]"
+                      onClick={() => setViewerRaw((current) => !current)}
+                      type="button"
+                    >
+                      {viewerRaw ? t("database.grid.viewFormatted") : t("database.grid.viewRaw")}
+                    </button>
+                  </div>
+                ) : null}
+                <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap break-words rounded border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-2 font-mono text-[12px] text-[var(--u-color-text)]">
+                  {viewerJson?.isJson && !viewerRaw ? viewerJson.formatted : viewer?.value}
+                </pre>
+              </>
             )}
             <div className="flex justify-end">
               <Button
@@ -276,8 +324,32 @@ export function TableDataGrid({
           title={t("database.editing.deleteRowTitle")}
         />
       ) : null}
+      {editing ? (
+        <ConfirmDialog
+          confirmLabel={t("database.editing.confirmUpdate")}
+          description={t("database.editing.updateCellBody", {
+            column: pendingUpdate?.columnName ?? "",
+            value: pendingUpdate ? truncatePreview(pendingUpdate.value) : "",
+          })}
+          onConfirm={() => {
+            if (pendingUpdate) {
+              editing.onUpdateCell(pendingUpdate.columnName, pendingUpdate.value, pendingUpdate.primaryKey);
+            }
+            setPendingUpdate(null);
+          }}
+          onOpenChange={(open) => !open && setPendingUpdate(null)}
+          open={pendingUpdate !== null}
+          pending={editing.pending}
+          title={t("database.editing.updateCellTitle")}
+        />
+      ) : null}
     </div>
   );
+}
+
+function truncatePreview(value: string) {
+  const text = value.length === 0 ? "''" : value;
+  return text.length > 120 ? `${text.slice(0, 120)}…` : text;
 }
 
 function compareCells(a: string | null, b: string | null) {
@@ -301,6 +373,20 @@ function renderSortIcon(sort: SortState | null, columnIndex: number) {
     <ArrowUp className="shrink-0 text-[var(--u-color-primary)]" size={12} />
   ) : (
     <ArrowDown className="shrink-0 text-[var(--u-color-primary)]" size={12} />
+  );
+}
+
+function renderServerSortIcon(
+  sort: { column: string; descending: boolean } | null,
+  columnName: string,
+) {
+  if (!sort || sort.column !== columnName) {
+    return <ChevronsUpDown className="shrink-0 text-[var(--u-color-text-soft)]" size={12} />;
+  }
+  return sort.descending ? (
+    <ArrowDown className="shrink-0 text-[var(--u-color-primary)]" size={12} />
+  ) : (
+    <ArrowUp className="shrink-0 text-[var(--u-color-primary)]" size={12} />
   );
 }
 

@@ -16,6 +16,9 @@ export function useTableData({
     mutationFn: ({
       catalog,
       connectionId,
+      filter,
+      orderBy,
+      orderDescending,
       pageIndex,
       pageSize,
       schema,
@@ -23,6 +26,9 @@ export function useTableData({
     }: {
       catalog?: string | null;
       connectionId: string;
+      filter?: string | null;
+      orderBy?: string | null;
+      orderDescending?: boolean;
       pageIndex: number;
       pageSize: number;
       schema?: string | null;
@@ -36,6 +42,9 @@ export function useTableData({
         tableName,
         limit: pageSize,
         offset: pageIndex * pageSize,
+        orderBy: orderBy ?? null,
+        orderDescending: orderDescending ?? false,
+        filter: filter ?? null,
       }),
     onSuccess,
   });

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   serializeDatabaseResult,
+  serializeDatabaseResultJson,
   serializeDatabaseRow,
   serializeDatabaseCell,
+  tryFormatJson,
   isConfirmationRequired,
   confirmationMessage,
   describeDatabaseError,
@@ -24,6 +26,29 @@ function makeResult(
     safety: { classification: "read", confirmed: true, message: null, requiresConfirmation: false },
   };
 }
+
+describe("serializeDatabaseResultJson", () => {
+  it("serializes rows as JSON objects keyed by column, preserving null", () => {
+    const result = makeResult(["id", "name"], [["1", "Alice"], ["2", null]]);
+    expect(JSON.parse(serializeDatabaseResultJson(result))).toEqual([
+      { id: "1", name: "Alice" },
+      { id: "2", name: null },
+    ]);
+  });
+});
+
+describe("tryFormatJson", () => {
+  it("pretty-prints JSON objects and arrays", () => {
+    const objectResult = tryFormatJson('{"a":1,"b":[2,3]}');
+    expect(objectResult.isJson).toBe(true);
+    expect(objectResult.formatted).toBe('{\n  "a": 1,\n  "b": [\n    2,\n    3\n  ]\n}');
+  });
+
+  it("leaves non-JSON values untouched", () => {
+    expect(tryFormatJson("hello")).toEqual({ formatted: "hello", isJson: false });
+    expect(tryFormatJson("{not valid")).toEqual({ formatted: "{not valid", isJson: false });
+  });
+});
 
 describe("serializeDatabaseResult", () => {
   it("serializes a simple CSV result", () => {

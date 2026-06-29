@@ -7,7 +7,8 @@ use unfour_core::models::{
     DatabaseConnection, DatabaseConnectionInput, DatabaseQueryInput, DatabaseQueryResult,
     DatabaseRowMutationInput, DatabaseRowMutationResult, DatabaseSchema, DatabaseTableStructure,
     DatabaseTableStructureInput, DatabaseTestResult, DbQueryHistoryEntry,
-    DbQueryHistoryRecordInput, KeyValue, SshCloseInput, SshConnectInput, SshConnection,
+    DbQueryHistoryRecordInput, KeyValue, SavedSql, SavedSqlInput, SshCloseInput, SshConnectInput,
+    SshConnection,
     SshConnectionInput, SshHostFingerprintInfo, SshHostKeyInput, SshKnownHostsExportResult,
     SshKnownHostsImportInput, SshKnownHostsImportResult, SshLogExport, SshLogExportInput,
     SshReconnectCancelInput, SshResizeInput, SshSessionEvent, SshSessionInput, SshSessionSummary,
@@ -430,6 +431,31 @@ pub async fn database_query_history_clear(
         .command_bus
         .clear_database_query_history(workspace_id)
         .await
+}
+
+#[tauri::command]
+pub async fn database_saved_sql_list(
+    workspace_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<SavedSql>> {
+    state.command_bus.list_saved_sql(workspace_id).await
+}
+
+#[tauri::command]
+pub async fn database_saved_sql_save(
+    input: SavedSqlInput,
+    state: State<'_, AppState>,
+) -> AppResult<SavedSql> {
+    state.command_bus.save_saved_sql(input).await
+}
+
+#[tauri::command]
+pub async fn database_saved_sql_delete(
+    workspace_id: String,
+    id: String,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<SavedSql>> {
+    state.command_bus.delete_saved_sql(workspace_id, id).await
 }
 
 #[tauri::command]

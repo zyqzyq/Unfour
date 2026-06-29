@@ -92,6 +92,19 @@ export function DatabasePage({
     catalog: null,
     schema: null,
   });
+  // Server-side sort/filter for the table data view, pushed into browse_table so
+  // it applies to the whole table rather than only the loaded page.
+  const [tableQuery, setTableQuery] = useState<{
+    orderBy: string | null;
+    orderDescending: boolean;
+    filter: string;
+  }>({ orderBy: null, orderDescending: false, filter: "" });
+  const filterDebounceRef = useRef<number | null>(null);
+  const emptyTableQuery = { orderBy: null, orderDescending: false, filter: "" } as const;
+  // Set when the user stops a running query so a late-arriving backend result
+  // (the statement keeps running server-side until it finishes or times out) is
+  // ignored instead of replacing the cancelled state.
+  const cancelledRef = useRef(false);
   // Per-connection tree data so multiple connections can be browsed at once.
   // catalogNamesByConn: connectionId -> database names (PostgreSQL/MySQL).
   // treeSchemaCache: `${connectionId}::${catalog}` -> that database's schema
@@ -234,6 +247,7 @@ export function DatabasePage({
         username: selectedConnection.username,
         sqlitePath: selectedConnection.sqlitePath,
         credentialRef: selectedConnection.credentialRef,
+        readOnly: selectedConnection.readOnly,
       });
       setTestResult(null);
     }
@@ -456,12 +470,16 @@ export function DatabasePage({
       }
     },
     onExecuteStart: () => {
+      cancelledRef.current = false;
       setClientError(null);
       setTableView(null);
       layout.setActiveTabId("query");
       layout.setResultTab("results");
     },
     onSuccess: (result) => {
+      if (cancelledRef.current) {
+        return;
+      }
       setTableView(null);
       setQueryResult(result);
       layout.setResultTab("results");
@@ -480,6 +498,7 @@ export function DatabasePage({
 
   const browseMutation = useTableData({
     onBrowseStart: () => {
+      cancelledRef.current = false;
       setClientError(null);
       setPendingSqlConfirmation(false);
       layout.setActiveTabId("table");
@@ -487,6 +506,9 @@ export function DatabasePage({
       layout.setResultTab("results");
     },
     onSuccess: (browse) => {
+      if (cancelledRef.current) {
+        return;
+      }
       setPendingSqlConfirmation(false);
       setQueryResult(browse.result);
       setTableView({
@@ -574,6 +596,7 @@ export function DatabasePage({
     setSelectedTable(null);
     setTableView(null);
     setQueryResult(null);
+    setTableQuery(emptyTableQuery);
     // Drop the previous datasource's context; the schema-load effect repopulates
     // a valid default for the newly selected connection. The per-connection tree
     // caches are kept so other connections stay expanded.
@@ -778,9 +801,18 @@ export function DatabasePage({
     table: DatabaseTable,
     pageIndex: number,
     pageSize: number,
+    query?: { orderBy: string | null; orderDescending: boolean; filter: string },
   ) {
     if (connectionId !== selectedConnectionId) {
       selectConnection(connectionId);
+    }
+    // Switching to a different table drops any prior sort/filter so it does not
+    // leak onto an unrelated table; an explicit query (sort/filter action or
+    // pagination) takes precedence over that reset.
+    const isNewTable = table.name !== selectedTable?.name || connectionId !== selectedConnectionId;
+    const effectiveQuery = query ?? (isNewTable ? emptyTableQuery : tableQuery);
+    if (!query && isNewTable) {
+      setTableQuery(emptyTableQuery);
     }
     setSelectedTable(table);
     setClientError(null);
@@ -794,7 +826,53 @@ export function DatabasePage({
       pageSize,
       schema: table.schema,
       tableName: table.name,
+      orderBy: effectiveQuery.orderBy,
+      orderDescending: effectiveQuery.orderDescending,
+      filter: effectiveQuery.filter || null,
     });
+  }
+
+  // Cycle a column through ascending -> descending -> unsorted, re-querying the
+  // first page server-side each time.
+  function applyTableSort(column: string) {
+    if (!selectedConnectionId || !selectedTable) {
+      return;
+    }
+    const current = tableQuery;
+    let next: { orderBy: string | null; orderDescending: boolean; filter: string };
+    if (current.orderBy !== column) {
+      next = { ...current, orderBy: column, orderDescending: false };
+    } else if (!current.orderDescending) {
+      next = { ...current, orderDescending: true };
+    } else {
+      next = { ...current, orderBy: null, orderDescending: false };
+    }
+    setTableQuery(next);
+    browseTablePage(
+      selectedConnectionId,
+      selectedTable,
+      0,
+      tableView?.pageSize ?? DEFAULT_PREVIEW_PAGE_SIZE,
+      next,
+    );
+  }
+
+  // Debounce the cross-column filter so typing does not fire a query per key.
+  function applyTableFilter(text: string) {
+    if (!selectedConnectionId || !selectedTable) {
+      return;
+    }
+    const next = { ...tableQuery, filter: text };
+    setTableQuery(next);
+    if (filterDebounceRef.current) {
+      window.clearTimeout(filterDebounceRef.current);
+    }
+    const connectionId = selectedConnectionId;
+    const table = selectedTable;
+    const pageSize = tableView?.pageSize ?? DEFAULT_PREVIEW_PAGE_SIZE;
+    filterDebounceRef.current = window.setTimeout(() => {
+      browseTablePage(connectionId, table, 0, pageSize, next);
+    }, 350);
   }
 
   function previewSelectedTable() {
@@ -873,6 +951,28 @@ export function DatabasePage({
     setClientError(null);
     setPendingSqlConfirmation(false);
     executeMutation.reset();
+  }
+
+  // Stop a running query/preview. The mutation is abandoned so the UI is
+  // responsive immediately; the statement keeps running server-side until it
+  // finishes or hits its timeout, but its late result is ignored.
+  function stopQuery() {
+    const wasRunning = executeMutation.isPending || browseMutation.isPending;
+    if (!wasRunning) {
+      return;
+    }
+    cancelledRef.current = true;
+    executeMutation.reset();
+    browseMutation.reset();
+    setPendingSqlConfirmation(false);
+    setClientError({ code: "QUERY_CANCELLED", message: t("database.query.cancelled") });
+    layout.setResultTab("results");
+    if (selectedConnectionId) {
+      setConnectionState(selectedConnectionId, {
+        message: t("database.query.cancelled"),
+        status: "connected",
+      });
+    }
   }
 
   function startNewQuery() {
@@ -1060,7 +1160,11 @@ export function DatabasePage({
     .filter((column) => column.primaryKey)
     .map((column) => column.name);
   const tableEditing: TableEditing | null =
-    selectedTable && tableView && selectedConnectionStatus === "connected" && primaryKeyColumns.length > 0
+    selectedTable &&
+    tableView &&
+    selectedConnectionStatus === "connected" &&
+    primaryKeyColumns.length > 0 &&
+    !selectedConnection?.readOnly
       ? {
           pending: rowMutation.isPending,
           primaryKeyColumns,
@@ -1084,7 +1188,7 @@ export function DatabasePage({
         onRefresh={refreshConnectionsAndSchema}
         onRun={runSql}
         onSelectConnection={(connectionId) => selectConnection(connectionId || null)}
-        onStop={() => undefined}
+        onStop={stopQuery}
         pendingConfirmation={pendingSqlConfirmation}
         selectedConnectionId={selectedConnectionId}
         sqlDirty={sql.trim().length > 0}
@@ -1116,12 +1220,14 @@ export function DatabasePage({
           onSelectTableSegment={layout.setTableSegment}
           onShowHistory={showQueryHistory}
           onSqlChange={setSql}
-          onStop={() => undefined}
+          onStop={stopQuery}
+          onTableFilter={applyTableFilter}
           onTablePageChange={(pageIndex, pageSize) =>
             selectedConnectionId &&
             selectedTable &&
             browseTablePage(selectedConnectionId, selectedTable, pageIndex, pageSize)
           }
+          onTableSort={applyTableSort}
           pendingConfirmation={pendingSqlConfirmation}
           queryResult={queryResult}
           schema={visibleSchema}
@@ -1133,8 +1239,15 @@ export function DatabasePage({
           structureError={structureQuery.error}
           structureLoading={structureEnabled && structureQuery.isFetching}
           tableEditing={tableEditing}
+          tableFilter={tableQuery.filter}
           tableSegment={layout.tableSegment}
+          tableSort={
+            tableQuery.orderBy
+              ? { column: tableQuery.orderBy, descending: tableQuery.orderDescending }
+              : null
+          }
           tableView={tableView}
+          workspaceId={workspaceId}
         />
       </div>
       <DatabaseStatusBar connection={selectedConnection} executing={executePending} session={selectedSession} />
@@ -1271,6 +1384,22 @@ function DatabaseConnectionDialog({
                 </Field>
               </>
             )}
+            <label className="flex items-start gap-2 pt-1">
+              <input
+                checked={Boolean(form.readOnly)}
+                className="mt-0.5"
+                onChange={(event) => onUpdate({ readOnly: event.target.checked })}
+                type="checkbox"
+              />
+              <span className="min-w-0">
+                <span className="block text-[12px] font-medium text-[var(--u-color-text)]">
+                  {t("database.fields.readOnly")}
+                </span>
+                <span className="block text-[11px] text-[var(--u-color-text-soft)]">
+                  {t("database.fields.readOnlyHint")}
+                </span>
+              </span>
+            </label>
             {error ? (
               <ErrorState className="min-h-[48px]">
                 <DatabaseErrorDetails error={error} />
