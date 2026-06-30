@@ -269,6 +269,7 @@
       "delete": "Delete",
       "newRequest": "New Request",
       "refresh": "Refresh",
+      "replace": "Replace",
       "save": "Save"
     },
     "confirm": {
@@ -391,6 +392,8 @@
     "history": {
       "empty": "Executed SQL history will appear here.",
       "failedFallback": "failed",
+      "replaceConfirm": "The current SQL has unsaved changes. Replace it with the selected history entry?",
+      "replaceTitle": "Replace Current SQL",
       "rows": "{count} rows",
       "statusFailed": "failed",
       "statusSuccess": "success",
@@ -474,6 +477,7 @@
       "generateSelect": "Generate SELECT Statement",
       "loadingSchema": "Loading…",
       "noDatabases": "No databases found",
+      "designTable": "Design Table",
       "previewData": "Preview Data",
       "tablesGroup": "Tables",
       "viewsGroup": "Views"

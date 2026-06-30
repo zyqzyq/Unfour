@@ -269,6 +269,7 @@
       "delete": "删除",
       "newRequest": "新建请求",
       "refresh": "刷新",
+      "replace": "替换",
       "save": "保存"
     },
     "confirm": {
@@ -390,6 +391,8 @@
     "history": {
       "empty": "执行过的 SQL 历史会显示在这里。",
       "failedFallback": "失败",
+      "replaceConfirm": "当前 SQL 有未保存的修改。是否用选中的历史记录替换？",
+      "replaceTitle": "替换当前 SQL",
       "rows": "{count} 行",
       "statusFailed": "失败",
       "statusSuccess": "成功",
@@ -473,6 +476,7 @@
       "generateSelect": "生成 SELECT 语句",
       "loadingSchema": "加载中…",
       "noDatabases": "未找到数据库",
+      "designTable": "设计表",
       "previewData": "预览数据",
       "tablesGroup": "表",
       "viewsGroup": "视图"

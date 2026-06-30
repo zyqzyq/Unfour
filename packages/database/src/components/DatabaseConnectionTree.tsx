@@ -24,6 +24,7 @@ export function DatabaseConnectionTree({
   loadingKeys,
   loadErrors,
   onConnect,
+  onDesignTable,
   onDeleteConnection,
   onDisconnect,
   onEditConnection,
@@ -49,6 +50,7 @@ export function DatabaseConnectionTree({
   /** Error messages keyed the same way, surfaced inline in the tree. */
   loadErrors?: Record<string, string>;
   onConnect?: (connection: DatabaseConnection) => void;
+  onDesignTable?: (connectionId: string, table: DatabaseTable) => void;
   onDeleteConnection?: (connection: DatabaseConnection) => void;
   onDisconnect?: (connection: DatabaseConnection) => void;
   onEditConnection?: (connection: DatabaseConnection) => void;
@@ -125,6 +127,7 @@ export function DatabaseConnectionTree({
         defaultExpandedIds,
         loadErrors,
         loadingKeys,
+        onDesignTable,
         onPreviewTable,
         onRefreshSchema,
         onUseSql,
@@ -155,7 +158,21 @@ export function DatabaseConnectionTree({
       key={connections.map((connection) => connection.id).join(",")}
       defaultExpandedIds={[...defaultExpandedIds]}
       items={items}
+      onActivate={(item) => {
+        // Double-click a table -> preview data (Navicat convention)
+        const tableEntry = tableLookup.get(item.id);
+        if (tableEntry) {
+          onPreviewTable?.(tableEntry.connectionId, tableEntry.table);
+          return;
+        }
+        // Double-click a connection -> connect (Navicat convention)
+        const connection = connections.find((candidate) => candidate.id === item.id);
+        if (connection) {
+          onConnect?.(connection);
+        }
+      }}
       onSelect={(item) => {
+        // Single click a table -> select only (lightweight highlight, no Tab switch)
         const entry = tableLookup.get(item.id);
         if (entry) {
           onSelectTable?.(entry.connectionId, entry.table);
@@ -193,6 +210,7 @@ function buildConnectionChildren({
   defaultExpandedIds,
   loadErrors,
   loadingKeys,
+  onDesignTable,
   onPreviewTable,
   onRefreshSchema,
   onUseSql,
@@ -207,6 +225,7 @@ function buildConnectionChildren({
   defaultExpandedIds: Set<string>;
   loadErrors?: Record<string, string>;
   loadingKeys?: string[];
+  onDesignTable?: (connectionId: string, table: DatabaseTable) => void;
   onPreviewTable?: (connectionId: string, table: DatabaseTable) => void;
   onRefreshSchema?: (connection: DatabaseConnection) => void;
   onUseSql?: (sql: string) => void;
@@ -287,6 +306,7 @@ function buildConnectionChildren({
       children = renderCatalogContents({
         connection,
         defaultExpandedIds,
+        onDesignTable,
         onPreviewTable,
         onRefreshSchema,
         onUseSql,
@@ -339,6 +359,7 @@ function statusChild(
 function renderCatalogContents({
   connection,
   defaultExpandedIds,
+  onDesignTable,
   onPreviewTable,
   onRefreshSchema,
   onUseSql,
@@ -349,6 +370,7 @@ function renderCatalogContents({
 }: {
   connection: DatabaseConnection;
   defaultExpandedIds: Set<string>;
+  onDesignTable?: (connectionId: string, table: DatabaseTable) => void;
   onPreviewTable?: (connectionId: string, table: DatabaseTable) => void;
   onRefreshSchema?: (connection: DatabaseConnection) => void;
   onUseSql?: (sql: string) => void;
@@ -372,6 +394,7 @@ function renderCatalogContents({
     return buildTableGroups({
       connection,
       defaultExpandedIds,
+      onDesignTable,
       onPreviewTable,
       onUseSql,
       parentId,
@@ -393,6 +416,7 @@ function renderCatalogContents({
       children: buildTableGroups({
         connection,
         defaultExpandedIds,
+        onDesignTable,
         onPreviewTable,
         onUseSql,
         parentId: schemaNodeId,
@@ -415,6 +439,7 @@ function renderCatalogContents({
 function buildTableGroups({
   connection,
   defaultExpandedIds,
+  onDesignTable,
   onPreviewTable,
   onUseSql,
   parentId,
@@ -424,6 +449,7 @@ function buildTableGroups({
 }: {
   connection: DatabaseConnection;
   defaultExpandedIds: Set<string>;
+  onDesignTable?: (connectionId: string, table: DatabaseTable) => void;
   onPreviewTable?: (connectionId: string, table: DatabaseTable) => void;
   onUseSql?: (sql: string) => void;
   parentId: string;
@@ -440,7 +466,7 @@ function buildTableGroups({
     defaultExpandedIds.add(groupId);
     groups.push({
       children: baseTables.map((table) =>
-        tableItem({ connection, onPreviewTable, onUseSql, t, table, tableLookup }),
+        tableItem({ connection, onDesignTable, onPreviewTable, onUseSql, t, table, tableLookup }),
       ),
       icon: <Table2 size={13} />,
       id: groupId,
@@ -453,7 +479,7 @@ function buildTableGroups({
     const groupId = `${parentId}:views`;
     groups.push({
       children: views.map((table) =>
-        tableItem({ connection, onPreviewTable, onUseSql, t, table, tableLookup }),
+        tableItem({ connection, onDesignTable, onPreviewTable, onUseSql, t, table, tableLookup }),
       ),
       icon: <Eye size={13} />,
       id: groupId,
@@ -471,6 +497,7 @@ function isViewKind(kind: string) {
 
 function tableItem({
   connection,
+  onDesignTable,
   onPreviewTable,
   onUseSql,
   t,
@@ -478,6 +505,7 @@ function tableItem({
   tableLookup,
 }: {
   connection: DatabaseConnection;
+  onDesignTable?: (connectionId: string, table: DatabaseTable) => void;
   onPreviewTable?: (connectionId: string, table: DatabaseTable) => void;
   onUseSql?: (sql: string) => void;
   t: ReturnType<typeof useI18n>["t"];
@@ -495,6 +523,7 @@ function tableItem({
     contextMenu: (
       <TableContextMenu
         connection={connection}
+        onDesignTable={onDesignTable}
         onPreviewTable={onPreviewTable}
         onUseSql={onUseSql}
         t={t}
@@ -518,12 +547,14 @@ function tableItem({
 
 function TableContextMenu({
   connection,
+  onDesignTable,
   onPreviewTable,
   onUseSql,
   t,
   table,
 }: {
   connection: DatabaseConnection;
+  onDesignTable?: (connectionId: string, table: DatabaseTable) => void;
   onPreviewTable?: (connectionId: string, table: DatabaseTable) => void;
   onUseSql?: (sql: string) => void;
   t: ReturnType<typeof useI18n>["t"];
@@ -534,6 +565,11 @@ function TableContextMenu({
       {onPreviewTable && (
         <ContextMenuItem onSelect={() => onPreviewTable(connection.id, table)}>
           {t("database.tree.previewData")}
+        </ContextMenuItem>
+      )}
+      {onDesignTable && (
+        <ContextMenuItem onSelect={() => onDesignTable(connection.id, table)}>
+          {t("database.tree.designTable")}
         </ContextMenuItem>
       )}
       {onUseSql && (

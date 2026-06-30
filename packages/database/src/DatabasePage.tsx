@@ -398,6 +398,7 @@ export function DatabasePage({
   });
 
   const [deleteConfirm, setDeleteConfirm] = useState<DatabaseConnection | null>(null);
+  const [historyConfirm, setHistoryConfirm] = useState<SqlHistoryEntry | null>(null);
   const deleteMutation = useMutation({
     mutationFn: (connectionId: string) => deleteDatabaseConnection(workspaceId, connectionId),
     onSuccess: (_result, connectionId) => {
@@ -767,16 +768,14 @@ export function DatabasePage({
   }
 
   function selectTable(connectionId: string, table: DatabaseTable) {
-    // Selecting a table in another connection makes that connection active so
-    // structure, editing, and query context follow the object.
+    // Single click: lightweight selection only (Navicat convention).
+    // Does NOT switch Tab or load data -- that requires a double-click.
     if (connectionId !== selectedConnectionId) {
       selectConnection(connectionId);
     }
     setSelectedTable(table);
     setClientError(null);
     applyContextFromTable(table);
-    layout.setActiveTabId("table");
-    layout.setTableSegment("structure");
   }
 
   // Point the query context at the catalog/schema of a selected object so a
@@ -817,6 +816,9 @@ export function DatabasePage({
     setSelectedTable(table);
     setClientError(null);
     applyContextFromTable(table);
+    // Switch to the Table tab in Data view (triggered by double-click in tree).
+    layout.setActiveTabId("table");
+    layout.setTableSegment("data");
     executeMutation.reset();
     browseMutation.reset();
     browseMutation.mutate({
@@ -1028,11 +1030,20 @@ export function DatabasePage({
   }
 
   function loadHistoryEntry(entry: SqlHistoryEntry) {
+    if (sql.trim() !== defaultSql.trim()) {
+      setHistoryConfirm(entry);
+      return;
+    }
+    applyHistoryEntry(entry);
+  }
+
+  function applyHistoryEntry(entry: SqlHistoryEntry) {
     setSql(entry.sql);
     if (entry.connectionId && connections.some((connection) => connection.id === entry.connectionId)) {
       setSelectedDatabaseConnection(entry.connectionId);
     }
     layout.setActiveTabId("query");
+    setHistoryConfirm(null);
   }
 
   // Load generated SQL (e.g. from a table context-menu action) into the editor.
@@ -1060,6 +1071,7 @@ export function DatabasePage({
   const sidebarActionsRef = useRef<{
     connect: (connection: DatabaseConnection) => void;
     delete: (connection: DatabaseConnection) => void;
+    designTable: (connectionId: string, table: DatabaseTable) => void;
     disconnect: (connection: DatabaseConnection) => void;
     edit: (connection: DatabaseConnection) => void;
     newConnection: () => void;
@@ -1076,6 +1088,11 @@ export function DatabasePage({
   sidebarActionsRef.current = {
     connect: connectConnection,
     delete: setDeleteConfirm,
+    designTable: (connectionId, table) => {
+      selectTable(connectionId, table);
+      layout.setActiveTabId("table");
+      layout.setTableSegment("structure");
+    },
     disconnect: disconnectConnection,
     edit: handleEditConnection,
     newConnection: handleNewConnection,
@@ -1094,7 +1111,9 @@ export function DatabasePage({
   const sidebarHandlers = useMemo(
     () => ({
       onConnect: (connection: DatabaseConnection) => sidebarActionsRef.current?.connect(connection),
-      onDeleteConnection: (connection: DatabaseConnection) => sidebarActionsRef.current?.delete(connection),
+    onDesignTable: (connectionId: string, table: DatabaseTable) =>
+      sidebarActionsRef.current?.designTable(connectionId, table),
+    onDeleteConnection: (connection: DatabaseConnection) => sidebarActionsRef.current?.delete(connection),
       onDisconnect: (connection: DatabaseConnection) => sidebarActionsRef.current?.disconnect(connection),
       onEditConnection: (connection: DatabaseConnection) => sidebarActionsRef.current?.edit(connection),
       onNewConnection: () => sidebarActionsRef.current?.newConnection(),
@@ -1282,6 +1301,14 @@ export function DatabasePage({
         open={deleteConfirm !== null}
         pending={deleteMutation.isPending}
         title={t("database.tree.deleteTitle")}
+      />
+      <ConfirmDialog
+        confirmLabel={t("common.actions.replace")}
+        description={t("database.history.replaceConfirm")}
+        onConfirm={() => historyConfirm && applyHistoryEntry(historyConfirm)}
+        onOpenChange={(open) => !open && setHistoryConfirm(null)}
+        open={historyConfirm !== null}
+        title={t("database.history.replaceTitle")}
       />
     </div>
   );
