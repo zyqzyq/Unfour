@@ -792,7 +792,8 @@ impl ApiClientService {
         let result = sqlx::query(
             r#"
             UPDATE api_collections
-            SET deleted_at = ?1, updated_at = ?1, revision = revision + 1, sync_status = 'deleted'
+            SET folders_json = '[]', deleted_at = ?1, updated_at = ?1,
+                revision = revision + 1, sync_status = 'deleted'
             WHERE workspace_id = ?2 AND id = ?3 AND deleted_at IS NULL
             "#,
         )
@@ -1854,6 +1855,37 @@ mod tests {
             .delete_collection("workspace-a".to_string(), collection_a.id)
             .await;
         assert!(matches!(deleted_again, Err(AppError::NotFound(_))));
+    }
+
+    #[tokio::test]
+    async fn deleting_collection_clears_persisted_folders() {
+        let service = service().await;
+        let collection = service
+            .create_collection("workspace-a".to_string(), "APIs".to_string())
+            .await
+            .expect("create collection");
+        service
+            .add_collection_folder(
+                "workspace-a".to_string(),
+                collection.id.clone(),
+                "Auth/Tokens".to_string(),
+            )
+            .await
+            .expect("add nested folder");
+
+        service
+            .delete_collection("workspace-a".to_string(), collection.id.clone())
+            .await
+            .expect("delete collection");
+
+        let (folders_json,): (String,) =
+            sqlx::query_as("SELECT folders_json FROM api_collections WHERE id = ?1")
+                .bind(&collection.id)
+                .fetch_one(service.db.pool())
+                .await
+                .expect("read deleted collection folders");
+
+        assert_eq!(folders_json, "[]");
     }
 
     #[tokio::test]
