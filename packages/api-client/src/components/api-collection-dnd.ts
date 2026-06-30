@@ -9,12 +9,25 @@ type DropLocation = {
 
 type DropIndex = {
   folderById: Map<string, ApiCollectionFolder>;
+  folderLocationById: Map<string, DropLocation>;
+  folderSiblingIdsByLocation: Map<string, string[]>;
   requestById: Map<string, ApiSavedRequest>;
   requestLocationById: Map<string, DropLocation>;
   requestSiblingIdsByLocation: Map<string, string[]>;
 };
 
 export type ApiCollectionDropAction =
+  | {
+      kind: "move-folder";
+      folderId: string;
+      targetParentFolderId: string | null;
+    }
+  | {
+      kind: "reorder-folders";
+      collectionId: string;
+      folderIds: string[];
+      parentFolderId: string | null;
+    }
   | {
       kind: "move-request";
       collectionId: string;
@@ -56,6 +69,8 @@ function buildDropIndex(
 ): DropIndex {
   const index: DropIndex = {
     folderById: new Map(folders.map((folder) => [folder.id, folder])),
+    folderLocationById: new Map(),
+    folderSiblingIdsByLocation: new Map(),
     requestById: new Map(requests.map((request) => [request.id, request])),
     requestLocationById: new Map(),
     requestSiblingIdsByLocation: new Map(),
@@ -66,6 +81,10 @@ function buildDropIndex(
       collectionId: group.id,
       parentFolderId: null,
     };
+    index.folderSiblingIdsByLocation.set(
+      locationKey(rootLocation),
+      group.tree.folders.map((folder) => folder.id),
+    );
     index.requestSiblingIdsByLocation.set(
       locationKey(rootLocation),
       group.tree.rootRequests.map((request) => request.id),
@@ -74,14 +93,15 @@ function buildDropIndex(
       index.requestLocationById.set(request.id, rootLocation);
     }
     for (const folder of group.tree.folders) {
-    indexFolder(index, folder);
+      indexFolder(index, folder, rootLocation);
     }
   }
 
   return index;
 }
 
-function indexFolder(index: DropIndex, folder: FolderNode) {
+function indexFolder(index: DropIndex, folder: FolderNode, location: DropLocation) {
+  index.folderLocationById.set(folder.id, location);
   for (const request of folder.requests) {
     index.requestLocationById.set(request.id, {
       collectionId: folder.collectionId,
@@ -93,12 +113,16 @@ function indexFolder(index: DropIndex, folder: FolderNode) {
     collectionId: folder.collectionId,
     parentFolderId: folder.id,
   };
+  index.folderSiblingIdsByLocation.set(
+    locationKey(childLocation),
+    folder.folders.map((child) => child.id),
+  );
   index.requestSiblingIdsByLocation.set(
     locationKey(childLocation),
     folder.requests.map((request) => request.id),
   );
   for (const child of folder.folders) {
-    indexFolder(index, child);
+    indexFolder(index, child, childLocation);
   }
 }
 
@@ -110,6 +134,9 @@ function dropActionFor(
 ): ApiCollectionDropAction | null {
   if (source.id.startsWith("request:")) {
     return requestDropAction(index, source.id.slice("request:".length), target, position);
+  }
+  if (source.id.startsWith("folder:")) {
+    return folderDropAction(index, source.id.slice("folder:".length), target, position);
   }
   return null;
 }
@@ -160,6 +187,77 @@ function requestDropAction(
   );
 }
 
+function folderDropAction(
+  index: DropIndex,
+  folderId: string,
+  target: TreeViewItem,
+  position: TreeViewDropPosition,
+): ApiCollectionDropAction | null {
+  const folder = index.folderById.get(folderId);
+  if (!folder) {
+    return null;
+  }
+
+  if (position === "inside") {
+    const targetLocation = dropTargetLocation(index, target.id);
+    if (!targetLocation || targetLocation.collectionId !== folder.collectionId) {
+      return null;
+    }
+    if (
+      targetLocation.parentFolderId === folder.parentFolderId ||
+      targetLocation.parentFolderId === folderId ||
+      isDescendantFolder(index, targetLocation.parentFolderId, folderId)
+    ) {
+      return null;
+    }
+    return {
+      kind: "move-folder",
+      folderId,
+      targetParentFolderId: targetLocation.parentFolderId,
+    };
+  }
+
+  const targetFolderId = target.id.startsWith("folder:")
+    ? target.id.slice("folder:".length)
+    : null;
+  const targetLocation = targetFolderId
+    ? index.folderLocationById.get(targetFolderId)
+    : null;
+  const sourceLocation = index.folderLocationById.get(folderId);
+  if (!targetFolderId || !targetLocation || !sourceLocation) {
+    return null;
+  }
+  if (!sameLocation(sourceLocation, targetLocation)) {
+    return null;
+  }
+  return reorderFolderAction(
+    index.folderSiblingIdsByLocation.get(locationKey(targetLocation)) ?? [],
+    folderId,
+    targetFolderId,
+    position,
+    targetLocation,
+  );
+}
+
+function reorderFolderAction(
+  siblingIds: string[],
+  sourceId: string,
+  targetId: string,
+  position: "before" | "after",
+  location: DropLocation,
+): ApiCollectionDropAction | null {
+  const nextIds = reorderSiblingIds(siblingIds, sourceId, targetId, position);
+  if (!nextIds) {
+    return null;
+  }
+  return {
+    kind: "reorder-folders",
+    collectionId: location.collectionId,
+    folderIds: nextIds,
+    parentFolderId: location.parentFolderId,
+  };
+}
+
 function reorderRequestAction(
   siblingIds: string[],
   sourceId: string,
@@ -167,6 +265,24 @@ function reorderRequestAction(
   position: "before" | "after",
   location: DropLocation,
 ): ApiCollectionDropAction | null {
+  const nextIds = reorderSiblingIds(siblingIds, sourceId, targetId, position);
+  if (!nextIds) {
+    return null;
+  }
+  return {
+    kind: "reorder-requests",
+    collectionId: location.collectionId,
+    parentFolderId: location.parentFolderId,
+    requestIds: nextIds,
+  };
+}
+
+function reorderSiblingIds(
+  siblingIds: string[],
+  sourceId: string,
+  targetId: string,
+  position: "before" | "after",
+) {
   const nextIds = siblingIds.filter((id) => id !== sourceId);
   const targetIndex = nextIds.indexOf(targetId);
   if (targetIndex < 0) {
@@ -176,12 +292,7 @@ function reorderRequestAction(
   if (sameOrder(siblingIds, nextIds)) {
     return null;
   }
-  return {
-    kind: "reorder-requests",
-    collectionId: location.collectionId,
-    parentFolderId: location.parentFolderId,
-    requestIds: nextIds,
-  };
+  return nextIds;
 }
 
 function dropTargetLocation(index: DropIndex, itemId: string): DropLocation | null {
@@ -211,6 +322,21 @@ function sameLocation(
     left.collectionId === right.collectionId &&
     left.parentFolderId === right.parentFolderId
   );
+}
+
+function isDescendantFolder(
+  index: DropIndex,
+  maybeDescendantId: string | null,
+  ancestorId: string,
+) {
+  let currentId = maybeDescendantId;
+  while (currentId) {
+    if (currentId === ancestorId) {
+      return true;
+    }
+    currentId = index.folderById.get(currentId)?.parentFolderId ?? null;
+  }
+  return false;
 }
 
 function sameOrder(left: string[], right: string[]) {

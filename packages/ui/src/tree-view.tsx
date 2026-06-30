@@ -83,6 +83,9 @@ function preferredDropPosition(
 ): TreeViewDropPosition {
   const rect = row.getBoundingClientRect();
   if (!rect.height) {
+    if (clientY > 0 && clientY <= 8) {
+      return "before";
+    }
     return "inside";
   }
   const offset = clientY - rect.top;

@@ -84,8 +84,10 @@ export function ApiCollectionTree({
     createFolderMut,
     deleteFolderMut,
     folders,
+    moveFolderMut,
     moveRequestMut,
     renameFolderMut,
+    reorderFoldersMut,
     reorderRequestsMut,
   } = useApiCollectionFolders(workspaceId);
   const savedQuery = useQuery({
@@ -327,7 +329,9 @@ export function ApiCollectionTree({
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         {collectionItems.length ? (
           <TreeView
-            canDrag={(item) => item.id.startsWith("request:")}
+            canDrag={(item) =>
+              item.id.startsWith("request:") || item.id.startsWith("folder:")
+            }
             canDrop={dropController.canDrop}
             defaultExpandedIds={expandableIds}
             items={collectionItems}
@@ -614,11 +618,24 @@ export function ApiCollectionTree({
       return;
     }
     switch (action.kind) {
+      case "move-folder":
+        moveFolderMut.mutate({
+          folderId: action.folderId,
+          targetParentFolderId: action.targetParentFolderId,
+        });
+        break;
       case "move-request":
         moveRequestMut.mutate({
           collectionId: action.collectionId,
           parentFolderId: action.parentFolderId,
           requestId: action.requestId,
+        });
+        break;
+      case "reorder-folders":
+        reorderFoldersMut.mutate({
+          collectionId: action.collectionId,
+          folderIds: action.folderIds,
+          parentFolderId: action.parentFolderId,
         });
         break;
       case "reorder-requests":

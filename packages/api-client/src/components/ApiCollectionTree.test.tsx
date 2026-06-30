@@ -33,7 +33,9 @@ import {
   listApiCollectionFolders,
   listApiHistory,
   listSavedApiRequests,
+  moveApiCollectionFolder,
   moveApiRequest,
+  reorderApiCollectionFolders,
   reorderApiRequests,
   updateApiRequest,
 } from "@unfour/command-client";
@@ -43,7 +45,9 @@ const listFoldersMock = vi.mocked(listApiCollectionFolders);
 const listSavedMock = vi.mocked(listSavedApiRequests);
 const listHistoryMock = vi.mocked(listApiHistory);
 const duplicateMock = vi.mocked(duplicateApiRequest);
+const moveFolderMock = vi.mocked(moveApiCollectionFolder);
 const moveMock = vi.mocked(moveApiRequest);
+const reorderFoldersMock = vi.mocked(reorderApiCollectionFolders);
 const reorderRequestsMock = vi.mocked(reorderApiRequests);
 const updateMock = vi.mocked(updateApiRequest);
 
@@ -159,7 +163,9 @@ beforeEach(() => {
   listSavedMock.mockResolvedValue([savedRequest()]);
   listHistoryMock.mockResolvedValue([]);
   duplicateMock.mockResolvedValue(savedRequest({ id: "req-2", name: "Get Users Copy" }));
+  moveFolderMock.mockResolvedValue(folder({ parentFolderId: "folder-2" }));
   moveMock.mockResolvedValue(savedRequest({ parentFolderId: "folder-1" }));
+  reorderFoldersMock.mockResolvedValue([folder()]);
   reorderRequestsMock.mockResolvedValue([savedRequest()]);
   updateMock.mockResolvedValue(savedRequest({ name: "List Users" }));
 });
@@ -269,28 +275,35 @@ describe("ApiCollectionTree", () => {
     const targetRow = (await screen.findByText("Get Users")).closest("[role='treeitem']");
     expect(sourceRow).not.toBeNull();
     expect(targetRow).not.toBeNull();
-    vi.spyOn(targetRow as HTMLElement, "getBoundingClientRect").mockReturnValue({
-      bottom: 24,
-      height: 24,
-      left: 0,
-      right: 180,
-      top: 0,
-      width: 180,
-      x: 0,
-      y: 0,
-      toJSON: () => ({}),
-    });
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = () =>
+      ({
+        bottom: 24,
+        height: 24,
+        left: 0,
+        right: 180,
+        top: 0,
+        width: 180,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
 
-    const transfer = dataTransfer();
-    fireEvent.dragStart(sourceRow as HTMLElement, { dataTransfer: transfer });
-    fireEvent.dragOver(targetRow as HTMLElement, {
-      clientY: 1,
-      dataTransfer: transfer,
-    });
-    fireEvent.drop(targetRow as HTMLElement, {
-      clientY: 1,
-      dataTransfer: transfer,
-    });
+    try {
+      const transfer = dataTransfer();
+      fireEvent.dragStart(sourceRow as HTMLElement, { dataTransfer: transfer });
+      fireEvent.dragOver(targetRow as HTMLElement, {
+        clientY: 1,
+        dataTransfer: transfer,
+      });
+      expect(targetRow).toHaveAttribute("data-drop-position", "before");
+      fireEvent.drop(targetRow as HTMLElement, {
+        clientY: 1,
+        dataTransfer: transfer,
+      });
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+    }
 
     await waitFor(() =>
       expect(reorderRequestsMock).toHaveBeenCalledWith(
@@ -301,6 +314,112 @@ describe("ApiCollectionTree", () => {
       ),
     );
     expect(moveMock).not.toHaveBeenCalled();
+  });
+
+  it("reorders sibling folders by dragging before another folder", async () => {
+    listFoldersMock.mockResolvedValue([
+      folder({ id: "folder-1", name: "Auth", sortOrder: 0 }),
+      folder({ id: "folder-2", name: "Billing", sortOrder: 1 }),
+    ]);
+    listSavedMock.mockResolvedValue([]);
+    renderTree();
+
+    const sourceLabel = (await screen.findByText("Billing")).closest("button");
+    const targetRow = (await screen.findByText("Auth")).closest("[role='treeitem']");
+    expect(sourceLabel).not.toBeNull();
+    expect(targetRow).not.toBeNull();
+    expect(targetRow).toHaveAttribute("data-tree-id", "folder:folder-1");
+
+    const originalElementFromPoint = document.elementFromPoint;
+    Object.defineProperty(document, "elementFromPoint", {
+      configurable: true,
+      value: vi.fn(() => targetRow as Element),
+    });
+    try {
+      fireEvent.pointerDown(sourceLabel as HTMLElement, {
+        button: 0,
+        clientX: 12,
+        clientY: 12,
+        pointerId: 1,
+      });
+      fireEvent.pointerMove(sourceLabel as HTMLElement, {
+        clientX: 28,
+        clientY: 1,
+        pointerId: 1,
+      });
+      expect(targetRow).toHaveAttribute("data-drop-position", "before");
+      fireEvent.pointerUp(sourceLabel as HTMLElement, {
+        clientX: 28,
+        clientY: 1,
+        pointerId: 1,
+      });
+    } finally {
+      Object.defineProperty(document, "elementFromPoint", {
+        configurable: true,
+        value: originalElementFromPoint,
+      });
+    }
+
+    await waitFor(() =>
+      expect(reorderFoldersMock).toHaveBeenCalledWith(
+        "ws-1",
+        "col-1",
+        null,
+        ["folder-2", "folder-1"],
+      ),
+    );
+    expect(moveFolderMock).not.toHaveBeenCalled();
+  });
+
+  it("moves a folder into another folder by dragging onto it", async () => {
+    listFoldersMock.mockResolvedValue([
+      folder({ id: "folder-1", name: "Auth", sortOrder: 0 }),
+      folder({ id: "folder-2", name: "Billing", sortOrder: 1 }),
+    ]);
+    listSavedMock.mockResolvedValue([]);
+    renderTree();
+
+    const sourceRow = (await screen.findByText("Auth")).closest("[role='treeitem']");
+    const targetRow = (await screen.findByText("Billing")).closest("[role='treeitem']");
+    expect(sourceRow).not.toBeNull();
+    expect(targetRow).not.toBeNull();
+
+    const transfer = dataTransfer();
+    fireEvent.dragStart(sourceRow as HTMLElement, { dataTransfer: transfer });
+    fireEvent.dragOver(targetRow as HTMLElement, { dataTransfer: transfer });
+    fireEvent.drop(targetRow as HTMLElement, { dataTransfer: transfer });
+
+    await waitFor(() =>
+      expect(moveFolderMock).toHaveBeenCalledWith("ws-1", "folder-1", "folder-2"),
+    );
+    expect(reorderFoldersMock).not.toHaveBeenCalled();
+  });
+
+  it("does not move a folder into its own child folder", async () => {
+    listFoldersMock.mockResolvedValue([
+      folder({ id: "folder-1", name: "Auth", parentFolderId: null, sortOrder: 0 }),
+      folder({
+        id: "folder-2",
+        name: "Tokens",
+        parentFolderId: "folder-1",
+        sortOrder: 0,
+      }),
+    ]);
+    listSavedMock.mockResolvedValue([]);
+    renderTree();
+
+    const sourceRow = (await screen.findByText("Auth")).closest("[role='treeitem']");
+    const targetRow = (await screen.findByText("Tokens")).closest("[role='treeitem']");
+    expect(sourceRow).not.toBeNull();
+    expect(targetRow).not.toBeNull();
+
+    const transfer = dataTransfer();
+    fireEvent.dragStart(sourceRow as HTMLElement, { dataTransfer: transfer });
+    fireEvent.dragOver(targetRow as HTMLElement, { dataTransfer: transfer });
+    fireEvent.drop(targetRow as HTMLElement, { dataTransfer: transfer });
+
+    expect(moveFolderMock).not.toHaveBeenCalled();
+    expect(reorderFoldersMock).not.toHaveBeenCalled();
   });
 
   it("moves a saved request by pointer dragging the request label onto a folder", async () => {
