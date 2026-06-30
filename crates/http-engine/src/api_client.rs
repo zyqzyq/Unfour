@@ -3,9 +3,10 @@ use reqwest::header::{HeaderName, HeaderValue, CONTENT_TYPE};
 use reqwest::{Client, Method, Url};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
+use sqlx::{Sqlite, Transaction};
 use unfour_core::models::{
     ApiCollection, ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse,
-    ApiSavedRequest, KeyValue,
+    ApiCollectionFolder, ApiSavedRequest, KeyValue,
 };
 use unfour_core::{AppError, AppResult};
 use unfour_local_storage::LocalDb;
@@ -455,25 +456,28 @@ impl ApiClientService {
 
     pub async fn save_request(&self, input: ApiRequestInput) -> AppResult<ApiSavedRequest> {
         validate_workspace_id(&input.workspace_id)?;
-        let (name, folder_path, collection_id) = self.saved_request_fields(&input).await?;
         let now = Utc::now().to_rfc3339();
         let id = Uuid::new_v4().to_string();
+        let mut tx = self.db.pool().begin().await?;
+        let (name, collection_id, parent_folder_id, sort_order) =
+            self.saved_request_fields(&mut tx, &input, &now).await?;
 
         sqlx::query(
             r#"
             INSERT INTO api_requests (
-              id, workspace_id, name, folder_path, collection_id, auth_json, method, url,
-              headers_json, query_json, body, body_kind, created_at, updated_at, revision,
-              sync_status
+              id, workspace_id, name, collection_id, parent_folder_id, sort_order,
+              auth_json, method, url, headers_json, query_json, body, body_kind,
+              created_at, updated_at, revision, sync_status
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13, 1, 'local')
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?14, 1, 'local')
             "#,
         )
         .bind(&id)
         .bind(&input.workspace_id)
         .bind(name)
-        .bind(folder_path)
         .bind(collection_id)
+        .bind(parent_folder_id)
+        .bind(sort_order)
         .bind(input.auth_json.as_deref().unwrap_or(DEFAULT_AUTH_JSON))
         .bind(input.method.to_uppercase())
         .bind(input.url)
@@ -482,9 +486,10 @@ impl ApiClientService {
         .bind(input.body.clone())
         .bind(input.body_kind)
         .bind(now)
-        .execute(self.db.pool())
+        .execute(&mut *tx)
         .await?;
 
+        tx.commit().await?;
         self.get_saved_request(&id).await
     }
 
@@ -507,22 +512,24 @@ impl ApiClientService {
             ));
         }
 
-        let (name, folder_path, collection_id) = self.saved_request_fields(&input).await?;
         let now = Utc::now().to_rfc3339();
+        let mut tx = self.db.pool().begin().await?;
+        let (name, collection_id, parent_folder_id, _sort_order) =
+            self.saved_request_fields(&mut tx, &input, &now).await?;
 
         let result = sqlx::query(
             r#"
             UPDATE api_requests
-            SET name = ?1, folder_path = ?2, collection_id = ?3, auth_json = ?4,
-                method = ?5, url = ?6, headers_json = ?7, query_json = ?8, body = ?9,
-                body_kind = ?10, updated_at = ?11, revision = revision + 1,
-                sync_status = 'pending'
+            SET name = ?1, collection_id = ?2, parent_folder_id = ?3, auth_json = ?4,
+                method = ?5, url = ?6, headers_json = ?7, query_json = ?8,
+                body = ?9, body_kind = ?10, updated_at = ?11,
+                revision = revision + 1, sync_status = 'pending'
             WHERE workspace_id = ?12 AND id = ?13 AND deleted_at IS NULL
             "#,
         )
         .bind(name)
-        .bind(folder_path)
         .bind(collection_id)
+        .bind(parent_folder_id)
         .bind(input.auth_json.as_deref().unwrap_or(DEFAULT_AUTH_JSON))
         .bind(input.method.to_uppercase())
         .bind(input.url)
@@ -533,13 +540,14 @@ impl ApiClientService {
         .bind(now)
         .bind(&workspace_id)
         .bind(&request_id)
-        .execute(self.db.pool())
+        .execute(&mut *tx)
         .await?;
 
         if result.rows_affected() == 0 {
             return Err(AppError::NotFound("api request".to_string()));
         }
 
+        tx.commit().await?;
         self.get_saved_request_for_workspace(&workspace_id, &request_id)
             .await
     }
@@ -553,12 +561,12 @@ impl ApiClientService {
         let items = sqlx::query_as::<_, ApiSavedRequest>(
             r#"
             SELECT
-              id, workspace_id, name, folder_path, collection_id, auth_json, method, url,
-              headers_json, query_json, body, body_kind, created_at, updated_at, deleted_at,
-              revision, sync_status, remote_id
+              id, workspace_id, name, collection_id, parent_folder_id, sort_order,
+              auth_json, method, url, headers_json, query_json, body, body_kind,
+              created_at, updated_at, deleted_at, revision, sync_status, remote_id
             FROM api_requests
             WHERE workspace_id = ?1 AND deleted_at IS NULL
-            ORDER BY COALESCE(folder_path, ''), updated_at DESC
+            ORDER BY collection_id, COALESCE(parent_folder_id, ''), sort_order, updated_at DESC
             "#,
         )
         .bind(workspace_id)
@@ -590,18 +598,19 @@ impl ApiClientService {
         sqlx::query(
             r#"
             INSERT INTO api_requests (
-              id, workspace_id, name, folder_path, collection_id, auth_json, method, url,
-              headers_json, query_json, body, body_kind, created_at, updated_at, revision,
-              sync_status
+              id, workspace_id, name, collection_id, parent_folder_id, sort_order,
+              auth_json, method, url, headers_json, query_json, body, body_kind,
+              created_at, updated_at, revision, sync_status
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13, 1, 'local')
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?14, 1, 'local')
             "#,
         )
         .bind(&id)
         .bind(&workspace_id)
         .bind(name)
-        .bind(source.folder_path)
         .bind(source.collection_id)
+        .bind(source.parent_folder_id)
+        .bind(source.sort_order)
         .bind(source.auth_json)
         .bind(source.method)
         .bind(source.url)
@@ -654,7 +663,7 @@ impl ApiClientService {
         validate_workspace_id(&workspace_id)?;
         let rows = sqlx::query_as::<_, CollectionRow>(
             r#"
-            SELECT id, workspace_id, name, description, folders_json, created_at, updated_at
+            SELECT id, workspace_id, name, description, created_at, updated_at
             FROM api_collections
             WHERE workspace_id = ?1 AND deleted_at IS NULL
             ORDER BY name COLLATE NOCASE
@@ -736,46 +745,494 @@ impl ApiClientService {
         self.get_collection(&workspace_id, &collection_id).await
     }
 
-    /// Add an (initially empty) folder to a collection. Folders persist on the
-    /// collection so they remain visible without any saved request. Idempotent
-    /// when the folder path already exists.
-    pub async fn add_collection_folder(
+    pub async fn list_collection_folders(
+        &self,
+        workspace_id: String,
+        collection_id: Option<String>,
+    ) -> AppResult<Vec<ApiCollectionFolder>> {
+        validate_workspace_id(&workspace_id)?;
+        let collection_id = normalize_entity_id(collection_id);
+        let rows = match collection_id {
+            Some(collection_id) => {
+                self.get_collection(&workspace_id, &collection_id).await?;
+                sqlx::query_as::<_, ApiCollectionFolder>(
+                    r#"
+                    SELECT id, workspace_id, collection_id, parent_folder_id, name,
+                           sort_order, created_at, updated_at, deleted_at
+                    FROM api_collection_folders
+                    WHERE workspace_id = ?1 AND collection_id = ?2 AND deleted_at IS NULL
+                    ORDER BY COALESCE(parent_folder_id, ''), sort_order, name COLLATE NOCASE
+                    "#,
+                )
+                .bind(&workspace_id)
+                .bind(collection_id)
+                .fetch_all(self.db.pool())
+                .await?
+            }
+            None => {
+                sqlx::query_as::<_, ApiCollectionFolder>(
+                    r#"
+                    SELECT id, workspace_id, collection_id, parent_folder_id, name,
+                           sort_order, created_at, updated_at, deleted_at
+                    FROM api_collection_folders
+                    WHERE workspace_id = ?1 AND deleted_at IS NULL
+                    ORDER BY collection_id, COALESCE(parent_folder_id, ''), sort_order, name COLLATE NOCASE
+                    "#,
+                )
+                .bind(&workspace_id)
+                .fetch_all(self.db.pool())
+                .await?
+            }
+        };
+
+        Ok(rows)
+    }
+
+    pub async fn create_collection_folder(
         &self,
         workspace_id: String,
         collection_id: String,
-        folder_path: String,
-    ) -> AppResult<ApiCollection> {
+        parent_folder_id: Option<String>,
+        name: String,
+    ) -> AppResult<ApiCollectionFolder> {
         validate_workspace_id(&workspace_id)?;
-        let normalized = normalize_folder_path(Some(folder_path))?
-            .ok_or_else(|| AppError::Validation("folder path cannot be empty".to_string()))?;
-
-        let mut collection = self.get_collection(&workspace_id, &collection_id).await?;
-        if !collection
-            .folders
-            .iter()
-            .any(|folder| folder == &normalized)
-        {
-            collection.folders.push(normalized);
-            collection.folders.sort();
-            let folders_json = serde_json::to_string(&collection.folders)?;
-            let now = Utc::now().to_rfc3339();
-            sqlx::query(
-                r#"
-                UPDATE api_collections
-                SET folders_json = ?1, updated_at = ?2,
-                    revision = revision + 1, sync_status = 'pending'
-                WHERE workspace_id = ?3 AND id = ?4 AND deleted_at IS NULL
-                "#,
-            )
-            .bind(&folders_json)
-            .bind(&now)
-            .bind(&workspace_id)
-            .bind(&collection_id)
-            .execute(self.db.pool())
+        let name = normalize_folder_name(name)?;
+        let parent_folder_id = normalize_entity_id(parent_folder_id);
+        let mut tx = self.db.pool().begin().await?;
+        self.ensure_collection_exists_tx(&mut tx, &workspace_id, &collection_id)
             .await?;
+        if let Some(parent_id) = &parent_folder_id {
+            let parent = self
+                .get_collection_folder_tx(&mut tx, &workspace_id, parent_id)
+                .await?;
+            if parent.collection_id != collection_id {
+                return Err(AppError::Validation(
+                    "parent folder must belong to the target collection".to_string(),
+                ));
+            }
+        }
+        let now = Utc::now().to_rfc3339();
+        let id = Uuid::new_v4().to_string();
+        let sort_order = self
+            .next_folder_sort_order_tx(&mut tx, &workspace_id, &collection_id, parent_folder_id.as_deref())
+            .await?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO api_collection_folders (
+              id, workspace_id, collection_id, parent_folder_id, name, sort_order,
+              created_at, updated_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)
+            "#,
+        )
+        .bind(&id)
+        .bind(&workspace_id)
+        .bind(&collection_id)
+        .bind(&parent_folder_id)
+        .bind(&name)
+        .bind(sort_order)
+        .bind(&now)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        self.get_collection_folder(&workspace_id, &id).await
+    }
+
+    pub async fn rename_collection_folder(
+        &self,
+        workspace_id: String,
+        folder_id: String,
+        name: String,
+    ) -> AppResult<ApiCollectionFolder> {
+        validate_workspace_id(&workspace_id)?;
+        let name = normalize_folder_name(name)?;
+        let now = Utc::now().to_rfc3339();
+        let result = sqlx::query(
+            r#"
+            UPDATE api_collection_folders
+            SET name = ?1, updated_at = ?2
+            WHERE workspace_id = ?3 AND id = ?4 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(&name)
+        .bind(&now)
+        .bind(&workspace_id)
+        .bind(&folder_id)
+        .execute(self.db.pool())
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound("api collection folder".to_string()));
         }
 
-        self.get_collection(&workspace_id, &collection_id).await
+        self.get_collection_folder(&workspace_id, &folder_id).await
+    }
+
+    pub async fn delete_collection_folder(
+        &self,
+        workspace_id: String,
+        folder_id: String,
+    ) -> AppResult<Vec<ApiCollectionFolder>> {
+        validate_workspace_id(&workspace_id)?;
+        let now = Utc::now().to_rfc3339();
+        let mut tx = self.db.pool().begin().await?;
+        let folder = self
+            .get_collection_folder_tx(&mut tx, &workspace_id, &folder_id)
+            .await?;
+
+        sqlx::query(
+            r#"
+            WITH RECURSIVE folder_tree(id) AS (
+              SELECT id
+              FROM api_collection_folders
+              WHERE workspace_id = ?2 AND id = ?3 AND deleted_at IS NULL
+              UNION ALL
+              SELECT child.id
+              FROM api_collection_folders child
+              JOIN folder_tree parent ON child.parent_folder_id = parent.id
+              WHERE child.workspace_id = ?2 AND child.deleted_at IS NULL
+            )
+            UPDATE api_collection_folders
+            SET deleted_at = ?1, updated_at = ?1
+            WHERE id IN (SELECT id FROM folder_tree)
+            "#,
+        )
+        .bind(&now)
+        .bind(&workspace_id)
+        .bind(&folder_id)
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query(
+            r#"
+            WITH RECURSIVE folder_tree(id) AS (
+              SELECT id
+              FROM api_collection_folders
+              WHERE workspace_id = ?2 AND id = ?3
+              UNION ALL
+              SELECT child.id
+              FROM api_collection_folders child
+              JOIN folder_tree parent ON child.parent_folder_id = parent.id
+              WHERE child.workspace_id = ?2
+            )
+            UPDATE api_requests
+            SET deleted_at = ?1, updated_at = ?1, revision = revision + 1, sync_status = 'deleted'
+            WHERE workspace_id = ?2
+              AND parent_folder_id IN (SELECT id FROM folder_tree)
+              AND deleted_at IS NULL
+            "#,
+        )
+        .bind(&now)
+        .bind(&workspace_id)
+        .bind(&folder_id)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        self.list_collection_folders(workspace_id, Some(folder.collection_id))
+            .await
+    }
+
+    pub async fn move_collection_folder(
+        &self,
+        workspace_id: String,
+        folder_id: String,
+        target_parent_folder_id: Option<String>,
+    ) -> AppResult<ApiCollectionFolder> {
+        validate_workspace_id(&workspace_id)?;
+        let target_parent_folder_id = normalize_entity_id(target_parent_folder_id);
+        let now = Utc::now().to_rfc3339();
+        let mut tx = self.db.pool().begin().await?;
+        let folder = self
+            .get_collection_folder_tx(&mut tx, &workspace_id, &folder_id)
+            .await?;
+
+        if target_parent_folder_id.as_deref() == Some(folder.id.as_str()) {
+            return Err(AppError::Validation(
+                "moving folder would create a cycle".to_string(),
+            ));
+        }
+        if let Some(parent_id) = &target_parent_folder_id {
+            let parent = self
+                .get_collection_folder_tx(&mut tx, &workspace_id, parent_id)
+                .await?;
+            if parent.collection_id != folder.collection_id {
+                return Err(AppError::Validation(
+                    "target parent folder must belong to the same collection".to_string(),
+                ));
+            }
+            if self
+                .folder_contains_descendant_tx(&mut tx, &workspace_id, &folder.id, parent_id)
+                .await?
+            {
+                return Err(AppError::Validation(
+                    "moving folder would create a cycle".to_string(),
+                ));
+            }
+        }
+
+        let sort_order = self
+            .next_folder_sort_order_tx(
+                &mut tx,
+                &workspace_id,
+                &folder.collection_id,
+                target_parent_folder_id.as_deref(),
+            )
+            .await?;
+
+        let result = sqlx::query(
+            r#"
+            UPDATE api_collection_folders
+            SET parent_folder_id = ?1, sort_order = ?2, updated_at = ?3
+            WHERE workspace_id = ?4 AND id = ?5 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(&target_parent_folder_id)
+        .bind(sort_order)
+        .bind(&now)
+        .bind(&workspace_id)
+        .bind(&folder_id)
+        .execute(&mut *tx)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound("api collection folder".to_string()));
+        }
+
+        tx.commit().await?;
+        self.get_collection_folder(&workspace_id, &folder_id).await
+    }
+
+    pub async fn reorder_collection_folders(
+        &self,
+        workspace_id: String,
+        collection_id: String,
+        parent_folder_id: Option<String>,
+        folder_ids: Vec<String>,
+    ) -> AppResult<Vec<ApiCollectionFolder>> {
+        validate_workspace_id(&workspace_id)?;
+        let parent_folder_id = normalize_entity_id(parent_folder_id);
+        let mut tx = self.db.pool().begin().await?;
+        self.ensure_collection_exists_tx(&mut tx, &workspace_id, &collection_id)
+            .await?;
+        for (index, folder_id) in folder_ids.iter().enumerate() {
+            let folder = self
+                .get_collection_folder_tx(&mut tx, &workspace_id, folder_id)
+                .await?;
+            if folder.collection_id != collection_id || folder.parent_folder_id != parent_folder_id
+            {
+                return Err(AppError::Validation(
+                    "folder reorder ids must be siblings in the target collection".to_string(),
+                ));
+            }
+            sqlx::query(
+                r#"
+                UPDATE api_collection_folders
+                SET sort_order = ?1
+                WHERE workspace_id = ?2 AND id = ?3 AND deleted_at IS NULL
+                "#,
+            )
+            .bind(i64::try_from(index).unwrap_or(i64::MAX))
+            .bind(&workspace_id)
+            .bind(folder_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
+        self.list_collection_folders(workspace_id, Some(collection_id)).await
+    }
+
+    async fn get_collection_folder(
+        &self,
+        workspace_id: &str,
+        folder_id: &str,
+    ) -> AppResult<ApiCollectionFolder> {
+        let row = sqlx::query_as::<_, ApiCollectionFolder>(
+            r#"
+            SELECT id, workspace_id, collection_id, parent_folder_id, name,
+                   sort_order, created_at, updated_at, deleted_at
+            FROM api_collection_folders
+            WHERE workspace_id = ?1 AND id = ?2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(folder_id)
+        .fetch_optional(self.db.pool())
+        .await?;
+
+        row.ok_or_else(|| AppError::NotFound("api collection folder".to_string()))
+    }
+
+    async fn get_collection_folder_tx(
+        &self,
+        tx: &mut Transaction<'_, Sqlite>,
+        workspace_id: &str,
+        folder_id: &str,
+    ) -> AppResult<ApiCollectionFolder> {
+        let row = sqlx::query_as::<_, ApiCollectionFolder>(
+            r#"
+            SELECT id, workspace_id, collection_id, parent_folder_id, name,
+                   sort_order, created_at, updated_at, deleted_at
+            FROM api_collection_folders
+            WHERE workspace_id = ?1 AND id = ?2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(folder_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+
+        row.ok_or_else(|| AppError::NotFound("api collection folder".to_string()))
+    }
+
+    async fn ensure_collection_exists_tx(
+        &self,
+        tx: &mut Transaction<'_, Sqlite>,
+        workspace_id: &str,
+        collection_id: &str,
+    ) -> AppResult<()> {
+        let exists: Option<(String,)> = sqlx::query_as(
+            r#"
+            SELECT id
+            FROM api_collections
+            WHERE workspace_id = ?1 AND id = ?2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(collection_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+
+        if exists.is_none() {
+            return Err(AppError::NotFound("api collection".to_string()));
+        }
+        Ok(())
+    }
+
+    async fn first_or_create_collection_id_tx(
+        &self,
+        tx: &mut Transaction<'_, Sqlite>,
+        workspace_id: &str,
+        now: &str,
+    ) -> AppResult<String> {
+        let existing: Option<(String,)> = sqlx::query_as(
+            r#"
+            SELECT id
+            FROM api_collections
+            WHERE workspace_id = ?1 AND deleted_at IS NULL
+            ORDER BY name COLLATE NOCASE
+            LIMIT 1
+            "#,
+        )
+        .bind(workspace_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+        if let Some((id,)) = existing {
+            return Ok(id);
+        }
+
+        let id = Uuid::new_v4().to_string();
+        sqlx::query(
+            r#"
+            INSERT INTO api_collections (
+              id, workspace_id, name, created_at, updated_at, revision, sync_status
+            )
+            VALUES (?1, ?2, ?3, ?4, ?4, 1, 'local')
+            "#,
+        )
+        .bind(&id)
+        .bind(workspace_id)
+        .bind(DEFAULT_COLLECTION_NAME)
+        .bind(now)
+        .execute(&mut **tx)
+        .await?;
+
+        Ok(id)
+    }
+
+    async fn next_folder_sort_order_tx(
+        &self,
+        tx: &mut Transaction<'_, Sqlite>,
+        workspace_id: &str,
+        collection_id: &str,
+        parent_folder_id: Option<&str>,
+    ) -> AppResult<i64> {
+        let max_order: Option<i64> = sqlx::query_scalar(
+            r#"
+            SELECT MAX(sort_order)
+            FROM api_collection_folders
+            WHERE workspace_id = ?1
+              AND collection_id = ?2
+              AND parent_folder_id IS ?3
+              AND deleted_at IS NULL
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(collection_id)
+        .bind(parent_folder_id)
+        .fetch_one(&mut **tx)
+        .await?;
+
+        Ok(max_order.unwrap_or(-1) + 1)
+    }
+
+    async fn next_request_sort_order_tx(
+        &self,
+        tx: &mut Transaction<'_, Sqlite>,
+        workspace_id: &str,
+        collection_id: &str,
+        parent_folder_id: Option<&str>,
+    ) -> AppResult<i64> {
+        let max_order: Option<i64> = sqlx::query_scalar(
+            r#"
+            SELECT MAX(sort_order)
+            FROM api_requests
+            WHERE workspace_id = ?1
+              AND collection_id = ?2
+              AND parent_folder_id IS ?3
+              AND deleted_at IS NULL
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(collection_id)
+        .bind(parent_folder_id)
+        .fetch_one(&mut **tx)
+        .await?;
+
+        Ok(max_order.unwrap_or(-1) + 1)
+    }
+
+    async fn folder_contains_descendant_tx(
+        &self,
+        tx: &mut Transaction<'_, Sqlite>,
+        workspace_id: &str,
+        folder_id: &str,
+        candidate_descendant_id: &str,
+    ) -> AppResult<bool> {
+        let found: Option<(String,)> = sqlx::query_as(
+            r#"
+            WITH RECURSIVE folder_tree(id) AS (
+              SELECT id
+              FROM api_collection_folders
+              WHERE workspace_id = ?1 AND id = ?2 AND deleted_at IS NULL
+              UNION ALL
+              SELECT child.id
+              FROM api_collection_folders child
+              JOIN folder_tree parent ON child.parent_folder_id = parent.id
+              WHERE child.workspace_id = ?1 AND child.deleted_at IS NULL
+            )
+            SELECT id FROM folder_tree WHERE id = ?3 LIMIT 1
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(folder_id)
+        .bind(candidate_descendant_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+
+        Ok(found.is_some())
     }
 
     /// Soft-delete a collection and cascade soft-delete its saved requests in a
@@ -792,8 +1249,8 @@ impl ApiClientService {
         let result = sqlx::query(
             r#"
             UPDATE api_collections
-            SET folders_json = '[]', deleted_at = ?1, updated_at = ?1,
-                revision = revision + 1, sync_status = 'deleted'
+            SET deleted_at = ?1, updated_at = ?1, revision = revision + 1,
+                sync_status = 'deleted'
             WHERE workspace_id = ?2 AND id = ?3 AND deleted_at IS NULL
             "#,
         )
@@ -807,6 +1264,19 @@ impl ApiClientService {
             // tx is dropped without commit -> rolled back.
             return Err(AppError::NotFound("api collection".to_string()));
         }
+
+        sqlx::query(
+            r#"
+            UPDATE api_collection_folders
+            SET deleted_at = ?1, updated_at = ?1
+            WHERE workspace_id = ?2 AND collection_id = ?3 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(&now)
+        .bind(&workspace_id)
+        .bind(&collection_id)
+        .execute(&mut *tx)
+        .await?;
 
         sqlx::query(
             r#"
@@ -825,15 +1295,13 @@ impl ApiClientService {
         self.list_collections(workspace_id).await
     }
 
-    /// Reassign a saved request to a different collection and/or folder. If
-    /// `collection_id` is `None`, the request is moved to the first collection
-    /// in the workspace (creating a default collection if none exists).
+    /// Reassign a saved request to a different collection and/or folder.
     pub async fn move_request(
         &self,
         workspace_id: String,
         request_id: String,
         collection_id: Option<String>,
-        folder_path: Option<String>,
+        parent_folder_id: Option<String>,
     ) -> AppResult<ApiSavedRequest> {
         validate_workspace_id(&workspace_id)?;
         if request_id.trim().is_empty() {
@@ -841,49 +1309,100 @@ impl ApiClientService {
                 "api request id cannot be empty".to_string(),
             ));
         }
-        let collection_id = normalize_collection_id(collection_id);
-        let collection_id = match collection_id {
-            Some(id) => Some(id),
-            None => {
-                let collections = self.list_collections(workspace_id.clone()).await?;
-                if collections.is_empty() {
-                    let default = self
-                        .create_collection(workspace_id.clone(), DEFAULT_COLLECTION_NAME.to_string())
-                        .await?;
-                    Some(default.id)
-                } else {
-                    Some(collections[0].id.clone())
-                }
-            }
-        };
-        let folder_path = normalize_folder_path(folder_path)?;
-        if let Some(target) = &collection_id {
-            self.get_collection(&workspace_id, target).await?;
-        }
         let now = Utc::now().to_rfc3339();
+        let mut tx = self.db.pool().begin().await?;
+        let (collection_id, parent_folder_id) = self
+            .resolve_request_location_tx(
+                &mut tx,
+                &workspace_id,
+                collection_id,
+                parent_folder_id,
+                &now,
+            )
+            .await?;
+        let sort_order = self
+            .next_request_sort_order_tx(
+                &mut tx,
+                &workspace_id,
+                &collection_id,
+                parent_folder_id.as_deref(),
+            )
+            .await?;
 
         let result = sqlx::query(
             r#"
             UPDATE api_requests
-            SET collection_id = ?1, folder_path = ?2, updated_at = ?3,
+            SET collection_id = ?1, parent_folder_id = ?2, sort_order = ?3, updated_at = ?4,
                 revision = revision + 1, sync_status = 'pending'
-            WHERE workspace_id = ?4 AND id = ?5 AND deleted_at IS NULL
+            WHERE workspace_id = ?5 AND id = ?6 AND deleted_at IS NULL
             "#,
         )
-        .bind(collection_id)
-        .bind(folder_path)
+        .bind(&collection_id)
+        .bind(&parent_folder_id)
+        .bind(sort_order)
         .bind(&now)
         .bind(&workspace_id)
         .bind(&request_id)
-        .execute(self.db.pool())
+        .execute(&mut *tx)
         .await?;
 
         if result.rows_affected() == 0 {
             return Err(AppError::NotFound("api request".to_string()));
         }
 
+        tx.commit().await?;
         self.get_saved_request_for_workspace(&workspace_id, &request_id)
             .await
+    }
+
+    pub async fn reorder_requests(
+        &self,
+        workspace_id: String,
+        collection_id: String,
+        parent_folder_id: Option<String>,
+        request_ids: Vec<String>,
+    ) -> AppResult<Vec<ApiSavedRequest>> {
+        validate_workspace_id(&workspace_id)?;
+        let parent_folder_id = normalize_entity_id(parent_folder_id);
+        let mut tx = self.db.pool().begin().await?;
+        self.ensure_collection_exists_tx(&mut tx, &workspace_id, &collection_id)
+            .await?;
+        if let Some(parent_id) = &parent_folder_id {
+            let parent = self
+                .get_collection_folder_tx(&mut tx, &workspace_id, parent_id)
+                .await?;
+            if parent.collection_id != collection_id {
+                return Err(AppError::Validation(
+                    "request reorder parent must belong to the target collection".to_string(),
+                ));
+            }
+        }
+
+        for (index, request_id) in request_ids.iter().enumerate() {
+            let request = self
+                .get_saved_request_for_workspace_tx(&mut tx, &workspace_id, request_id)
+                .await?;
+            if request.collection_id != collection_id || request.parent_folder_id != parent_folder_id
+            {
+                return Err(AppError::Validation(
+                    "request reorder ids must be siblings in the target collection".to_string(),
+                ));
+            }
+            sqlx::query(
+                r#"
+                UPDATE api_requests
+                SET sort_order = ?1, revision = revision + 1, sync_status = 'pending'
+                WHERE workspace_id = ?2 AND id = ?3 AND deleted_at IS NULL
+                "#,
+            )
+            .bind(i64::try_from(index).unwrap_or(i64::MAX))
+            .bind(&workspace_id)
+            .bind(request_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
+        self.list_saved_requests(workspace_id).await
     }
 
     async fn get_collection(
@@ -893,7 +1412,7 @@ impl ApiClientService {
     ) -> AppResult<ApiCollection> {
         let row = sqlx::query_as::<_, CollectionRow>(
             r#"
-            SELECT id, workspace_id, name, description, folders_json, created_at, updated_at
+            SELECT id, workspace_id, name, description, created_at, updated_at
             FROM api_collections
             WHERE workspace_id = ?1 AND id = ?2 AND deleted_at IS NULL
             "#,
@@ -909,45 +1428,83 @@ impl ApiClientService {
 
     async fn saved_request_fields(
         &self,
+        tx: &mut Transaction<'_, Sqlite>,
         input: &ApiRequestInput,
-    ) -> AppResult<(String, Option<String>, Option<String>)> {
-        let folder_path = normalize_folder_path(input.folder_path.clone())?;
-        let collection_id = normalize_collection_id(input.collection_id.clone());
-        let collection_id = match collection_id {
-            Some(id) => Some(id),
-            None => {
-                let collections = self.list_collections(input.workspace_id.clone()).await?;
-                if collections.is_empty() {
-                    let default = self
-                        .create_collection(
-                            input.workspace_id.clone(),
-                            DEFAULT_COLLECTION_NAME.to_string(),
-                        )
-                        .await?;
-                    Some(default.id)
-                } else {
-                    Some(collections[0].id.clone())
-                }
-            }
-        };
-        if let Some(target) = &collection_id {
-            self.get_collection(&input.workspace_id, target).await?;
-        }
+        now: &str,
+    ) -> AppResult<(String, String, Option<String>, i64)> {
+        let (collection_id, parent_folder_id) = self
+            .resolve_request_location_tx(
+                tx,
+                &input.workspace_id,
+                input.collection_id.clone(),
+                input.parent_folder_id.clone(),
+                now,
+            )
+            .await?;
+        let sort_order = self
+            .next_request_sort_order_tx(
+                tx,
+                &input.workspace_id,
+                &collection_id,
+                parent_folder_id.as_deref(),
+            )
+            .await?;
         let name = input
             .name
             .clone()
             .unwrap_or_else(|| format!("{} {}", input.method.to_uppercase(), input.url));
 
-        Ok((name, folder_path, collection_id))
+        Ok((name, collection_id, parent_folder_id, sort_order))
+    }
+
+    async fn resolve_request_location_tx(
+        &self,
+        tx: &mut Transaction<'_, Sqlite>,
+        workspace_id: &str,
+        collection_id: Option<String>,
+        parent_folder_id: Option<String>,
+        now: &str,
+    ) -> AppResult<(String, Option<String>)> {
+        let parent_folder_id = normalize_entity_id(parent_folder_id);
+        let collection_id = normalize_collection_id(collection_id);
+
+        if let Some(parent_id) = &parent_folder_id {
+            let parent = self
+                .get_collection_folder_tx(tx, workspace_id, parent_id)
+                .await?;
+            if let Some(collection_id) = collection_id {
+                if collection_id != parent.collection_id {
+                    return Err(AppError::Validation(
+                        "parent folder must belong to the target collection".to_string(),
+                    ));
+                }
+                return Ok((collection_id, Some(parent_id.clone())));
+            }
+            return Ok((parent.collection_id, Some(parent_id.clone())));
+        }
+
+        let collection_id = match collection_id {
+            Some(collection_id) => {
+                self.ensure_collection_exists_tx(tx, workspace_id, &collection_id)
+                    .await?;
+                collection_id
+            }
+            None => {
+                self.first_or_create_collection_id_tx(tx, workspace_id, now)
+                    .await?
+            }
+        };
+
+        Ok((collection_id, None))
     }
 
     pub async fn get_saved_request(&self, id: &str) -> AppResult<ApiSavedRequest> {
         let saved = sqlx::query_as::<_, ApiSavedRequest>(
             r#"
             SELECT
-              id, workspace_id, name, folder_path, collection_id, auth_json, method, url,
-              headers_json, query_json, body, body_kind, created_at, updated_at, deleted_at,
-              revision, sync_status, remote_id
+              id, workspace_id, name, collection_id, parent_folder_id, sort_order,
+              auth_json, method, url, headers_json, query_json, body, body_kind,
+              created_at, updated_at, deleted_at, revision, sync_status, remote_id
             FROM api_requests
             WHERE id = ?1 AND deleted_at IS NULL
             "#,
@@ -967,9 +1524,9 @@ impl ApiClientService {
         let saved = sqlx::query_as::<_, ApiSavedRequest>(
             r#"
             SELECT
-              id, workspace_id, name, folder_path, collection_id, auth_json, method, url,
-              headers_json, query_json, body, body_kind, created_at, updated_at, deleted_at,
-              revision, sync_status, remote_id
+              id, workspace_id, name, collection_id, parent_folder_id, sort_order,
+              auth_json, method, url, headers_json, query_json, body, body_kind,
+              created_at, updated_at, deleted_at, revision, sync_status, remote_id
             FROM api_requests
             WHERE workspace_id = ?1 AND id = ?2 AND deleted_at IS NULL
             "#,
@@ -977,6 +1534,30 @@ impl ApiClientService {
         .bind(workspace_id)
         .bind(id)
         .fetch_optional(self.db.pool())
+        .await?;
+
+        saved.ok_or_else(|| AppError::NotFound("api request".to_string()))
+    }
+
+    async fn get_saved_request_for_workspace_tx(
+        &self,
+        tx: &mut Transaction<'_, Sqlite>,
+        workspace_id: &str,
+        id: &str,
+    ) -> AppResult<ApiSavedRequest> {
+        let saved = sqlx::query_as::<_, ApiSavedRequest>(
+            r#"
+            SELECT
+              id, workspace_id, name, collection_id, parent_folder_id, sort_order,
+              auth_json, method, url, headers_json, query_json, body, body_kind,
+              created_at, updated_at, deleted_at, revision, sync_status, remote_id
+            FROM api_requests
+            WHERE workspace_id = ?1 AND id = ?2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(id)
+        .fetch_optional(&mut **tx)
         .await?;
 
         saved.ok_or_else(|| AppError::NotFound("api request".to_string()))
@@ -1060,7 +1641,6 @@ struct CollectionRow {
     workspace_id: String,
     name: String,
     description: Option<String>,
-    folders_json: String,
     created_at: String,
     updated_at: String,
 }
@@ -1072,7 +1652,6 @@ impl From<CollectionRow> for ApiCollection {
             workspace_id: row.workspace_id,
             name: row.name,
             description: row.description,
-            folders: serde_json::from_str(&row.folders_json).unwrap_or_default(),
             created_at: row.created_at,
             updated_at: row.updated_at,
         }
@@ -1080,9 +1659,37 @@ impl From<CollectionRow> for ApiCollection {
 }
 
 fn normalize_collection_id(value: Option<String>) -> Option<String> {
+    normalize_entity_id(value)
+}
+
+fn normalize_entity_id(value: Option<String>) -> Option<String> {
     value
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty())
+}
+
+fn normalize_folder_name(value: String) -> AppResult<String> {
+    let name = value.trim();
+    if name.is_empty() {
+        return Err(AppError::Validation(
+            "folder name cannot be empty".to_string(),
+        ));
+    }
+    if name.chars().count() > 120 {
+        return Err(AppError::Validation(
+            "folder name must be 120 characters or fewer".to_string(),
+        ));
+    }
+    if name
+        .chars()
+        .any(|ch| ch.is_control() || matches!(ch, '<' | '>' | '"' | '|'))
+    {
+        return Err(AppError::Validation(format!(
+            "invalid folder name: {}",
+            value
+        )));
+    }
+    Ok(name.to_string())
 }
 
 fn validate_environment(variables: &[KeyValue]) -> AppResult<()> {
@@ -1136,32 +1743,6 @@ fn validate_workspace_id(workspace_id: &str) -> AppResult<()> {
         ));
     }
     Ok(())
-}
-
-fn normalize_folder_path(value: Option<String>) -> AppResult<Option<String>> {
-    let Some(value) = value else {
-        return Ok(None);
-    };
-    let trimmed = value.trim().trim_matches('/').trim_matches('\\');
-    if trimmed.is_empty() {
-        return Ok(None);
-    }
-    if trimmed.chars().count() > 160 {
-        return Err(AppError::Validation(
-            "api request folder path must be 160 characters or fewer".to_string(),
-        ));
-    }
-    if trimmed
-        .chars()
-        .any(|ch| ch.is_control() || matches!(ch, '<' | '>' | '"' | '|'))
-    {
-        return Err(AppError::Validation(format!(
-            "invalid api request folder path: {}",
-            value
-        )));
-    }
-
-    Ok(Some(trimmed.replace('\\', "/")))
 }
 
 fn resolve_input(
@@ -1459,7 +2040,7 @@ mod tests {
             .save_request(ApiRequestInput {
                 workspace_id: "workspace-a".to_string(),
                 name: Some("Plain text body".to_string()),
-                folder_path: None,
+                parent_folder_id: None,
                 collection_id: None,
                 auth_json: None,
                 method: "POST".to_string(),
@@ -1514,7 +2095,7 @@ mod tests {
         let input = ApiRequestInput {
             workspace_id: "workspace-a".to_string(),
             name: Some("Templated".to_string()),
-            folder_path: Some("Users".to_string()),
+            parent_folder_id: None,
             collection_id: None,
             auth_json: None,
             method: "POST".to_string(),
@@ -1572,7 +2153,7 @@ mod tests {
         let input = ApiRequestInput {
             workspace_id: "workspace-a".to_string(),
             name: None,
-            folder_path: None,
+            parent_folder_id: None,
             collection_id: None,
             auth_json: None,
             method: "GET".to_string(),
@@ -1628,7 +2209,7 @@ mod tests {
             .save_request(ApiRequestInput {
                 workspace_id: "workspace-a".to_string(),
                 name: None,
-                folder_path: Some("Users".to_string()),
+                parent_folder_id: None,
                 collection_id: None,
                 auth_json: Some(r#"{"type":"bearer","token":"{{api_token}}"}"#.to_string()),
                 method: "post".to_string(),
@@ -1645,7 +2226,7 @@ mod tests {
             .save_request(ApiRequestInput {
                 workspace_id: "workspace-b".to_string(),
                 name: Some("Other workspace".to_string()),
-                folder_path: None,
+                parent_folder_id: None,
                 collection_id: None,
                 auth_json: None,
                 method: "GET".to_string(),
@@ -1666,7 +2247,7 @@ mod tests {
 
         assert_eq!(workspace_a.len(), 1);
         assert_eq!(workspace_a[0].workspace_id, "workspace-a");
-        assert_eq!(workspace_a[0].folder_path.as_deref(), Some("Users"));
+        assert_eq!(workspace_a[0].parent_folder_id, None);
         assert_eq!(workspace_a[0].name, "POST https://example.test/users");
         assert_eq!(
             workspace_a[0].auth_json,
@@ -1681,7 +2262,7 @@ mod tests {
             .save_request(ApiRequestInput {
                 workspace_id: "workspace-a".to_string(),
                 name: Some("Create user".to_string()),
-                folder_path: Some("Users/Admin".to_string()),
+                parent_folder_id: None,
                 collection_id: None,
                 auth_json: None,
                 method: "POST".to_string(),
@@ -1709,7 +2290,7 @@ mod tests {
 
         assert_ne!(duplicate.id, saved.id);
         assert_eq!(duplicate.name, "Create user Copy");
-        assert_eq!(duplicate.folder_path.as_deref(), Some("Users/Admin"));
+        assert_eq!(duplicate.parent_folder_id, saved.parent_folder_id);
         assert_eq!(duplicate.url, saved.url);
         assert!(matches!(wrong_workspace, Err(AppError::NotFound(_))));
     }
@@ -1721,7 +2302,7 @@ mod tests {
             .save_request(ApiRequestInput {
                 workspace_id: "workspace-a".to_string(),
                 name: Some("First".to_string()),
-                folder_path: None,
+                parent_folder_id: None,
                 collection_id: None,
                 auth_json: None,
                 method: "GET".to_string(),
@@ -1738,7 +2319,7 @@ mod tests {
             .save_request(ApiRequestInput {
                 workspace_id: "workspace-a".to_string(),
                 name: Some("Second".to_string()),
-                folder_path: Some("Folder".to_string()),
+                parent_folder_id: None,
                 collection_id: None,
                 auth_json: None,
                 method: "GET".to_string(),
@@ -1775,7 +2356,7 @@ mod tests {
             .save_request(ApiRequestInput {
                 workspace_id: workspace_id.to_string(),
                 name: Some(name.to_string()),
-                folder_path: None,
+                parent_folder_id: None,
                 collection_id,
                 auth_json: None,
                 method: "GET".to_string(),
@@ -1809,10 +2390,7 @@ mod tests {
             Some(collection_a.id.clone()),
         )
         .await;
-        assert_eq!(
-            in_collection_a.collection_id.as_deref(),
-            Some(collection_a.id.as_str())
-        );
+        assert_eq!(in_collection_a.collection_id, collection_a.id);
         let in_collection_b = save_in_collection(
             &service,
             "workspace-a",
@@ -1820,10 +2398,7 @@ mod tests {
             Some(collection_b.id.clone()),
         )
         .await;
-        assert_eq!(
-            in_collection_b.collection_id.as_deref(),
-            Some(collection_b.id.as_str())
-        );
+        assert_eq!(in_collection_b.collection_id, collection_b.id);
 
         let renamed = service
             .rename_collection(
@@ -1858,85 +2433,365 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn deleting_collection_clears_persisted_folders() {
+    async fn folders_and_parent_folder_requests_drive_collection_tree() {
         let service = service().await;
         let collection = service
             .create_collection("workspace-a".to_string(), "APIs".to_string())
             .await
             .expect("create collection");
-        service
-            .add_collection_folder(
+
+        let root_request = service
+            .save_request(ApiRequestInput {
+                workspace_id: "workspace-a".to_string(),
+                name: Some("Root".to_string()),
+                parent_folder_id: None,
+                collection_id: Some(collection.id.clone()),
+                auth_json: None,
+                method: "GET".to_string(),
+                url: "https://example.test/root".to_string(),
+                headers: vec![],
+                query: vec![],
+                body: None,
+                body_kind: "json".to_string(),
+                timeout_ms: None,
+            })
+            .await
+            .expect("save root request");
+        assert_eq!(root_request.parent_folder_id, None);
+        assert_eq!(root_request.collection_id, collection.id);
+
+        let auth = service
+            .create_collection_folder(
                 "workspace-a".to_string(),
                 collection.id.clone(),
-                "Auth/Tokens".to_string(),
+                None,
+                "Auth".to_string(),
             )
             .await
-            .expect("add nested folder");
+            .expect("create folder");
+        let tokens = service
+            .create_collection_folder(
+                "workspace-a".to_string(),
+                collection.id.clone(),
+                Some(auth.id.clone()),
+                "Tokens".to_string(),
+            )
+            .await
+            .expect("create child folder");
+        let folders = service
+            .list_collection_folders("workspace-a".to_string(), Some(collection.id.clone()))
+            .await
+            .expect("list folders");
+        assert_eq!(folders.len(), 2);
+        assert!(folders.iter().any(|folder| folder.id == auth.id));
+        assert!(folders.iter().any(|folder| folder.id == tokens.id));
+
+        let child_request = service
+            .save_request(ApiRequestInput {
+                workspace_id: "workspace-a".to_string(),
+                name: Some("Token".to_string()),
+                parent_folder_id: Some(tokens.id.clone()),
+                collection_id: Some(collection.id.clone()),
+                auth_json: None,
+                method: "GET".to_string(),
+                url: "https://example.test/token".to_string(),
+                headers: vec![],
+                query: vec![],
+                body: None,
+                body_kind: "json".to_string(),
+                timeout_ms: None,
+            })
+            .await
+            .expect("save child request");
+        assert_eq!(child_request.parent_folder_id.as_deref(), Some(tokens.id.as_str()));
+        assert_eq!(child_request.collection_id, collection.id);
+
+        let renamed = service
+            .rename_collection_folder(
+                "workspace-a".to_string(),
+                tokens.id.clone(),
+                "Session tokens".to_string(),
+            )
+            .await
+            .expect("rename folder");
+        assert_eq!(renamed.name, "Session tokens");
+        let after_rename = service
+            .get_saved_request(&child_request.id)
+            .await
+            .expect("child request remains after folder rename");
+        assert_eq!(
+            after_rename.parent_folder_id.as_deref(),
+            Some(tokens.id.as_str())
+        );
+
+        let moved = service
+            .move_collection_folder("workspace-a".to_string(), tokens.id.clone(), None)
+            .await
+            .expect("move folder to root");
+        assert_eq!(moved.parent_folder_id, None);
+        let after_move = service
+            .get_saved_request(&child_request.id)
+            .await
+            .expect("child request remains after folder move");
+        assert_eq!(after_move.parent_folder_id.as_deref(), Some(tokens.id.as_str()));
+    }
+
+    #[tokio::test]
+    async fn folder_delete_recursively_soft_deletes_descendants_and_requests() {
+        let service = service().await;
+        let collection = service
+            .create_collection("workspace-a".to_string(), "APIs".to_string())
+            .await
+            .expect("create collection");
+        let parent = service
+            .create_collection_folder(
+                "workspace-a".to_string(),
+                collection.id.clone(),
+                None,
+                "Parent".to_string(),
+            )
+            .await
+            .expect("create parent folder");
+        let child = service
+            .create_collection_folder(
+                "workspace-a".to_string(),
+                collection.id.clone(),
+                Some(parent.id.clone()),
+                "Child".to_string(),
+            )
+            .await
+            .expect("create child folder");
+        let request = service
+            .save_request(ApiRequestInput {
+                workspace_id: "workspace-a".to_string(),
+                name: Some("Nested".to_string()),
+                parent_folder_id: Some(child.id.clone()),
+                collection_id: Some(collection.id.clone()),
+                auth_json: None,
+                method: "GET".to_string(),
+                url: "https://example.test/nested".to_string(),
+                headers: vec![],
+                query: vec![],
+                body: None,
+                body_kind: "json".to_string(),
+                timeout_ms: None,
+            })
+            .await
+            .expect("save nested request");
+
+        service
+            .delete_collection_folder("workspace-a".to_string(), parent.id.clone())
+            .await
+            .expect("delete parent recursively");
+
+        let active_folders = service
+            .list_collection_folders("workspace-a".to_string(), Some(collection.id))
+            .await
+            .expect("list active folders");
+        let active_requests = service
+            .list_saved_requests("workspace-a".to_string())
+            .await
+            .expect("list active requests");
+        assert!(active_folders.is_empty());
+        assert!(active_requests.iter().all(|saved| saved.id != request.id));
+
+        let (deleted_folder_count,): (i64,) = sqlx::query_as(
+            r#"
+            SELECT COUNT(*)
+            FROM api_collection_folders
+            WHERE id IN (?1, ?2) AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(&parent.id)
+        .bind(&child.id)
+        .fetch_one(service.db.pool())
+        .await
+        .expect("count soft-deleted folders");
+        let (deleted_request_count,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM api_requests WHERE id = ?1 AND deleted_at IS NOT NULL",
+        )
+        .bind(&request.id)
+        .fetch_one(service.db.pool())
+        .await
+        .expect("count soft-deleted request");
+
+        assert_eq!(deleted_folder_count, 2);
+        assert_eq!(deleted_request_count, 1);
+    }
+
+    #[tokio::test]
+    async fn collection_delete_soft_deletes_folders_and_requests() {
+        let service = service().await;
+        let collection = service
+            .create_collection("workspace-a".to_string(), "APIs".to_string())
+            .await
+            .expect("create collection");
+        let folder = service
+            .create_collection_folder(
+                "workspace-a".to_string(),
+                collection.id.clone(),
+                None,
+                "Auth".to_string(),
+            )
+            .await
+            .expect("create folder");
+        let request = service
+            .save_request(ApiRequestInput {
+                workspace_id: "workspace-a".to_string(),
+                name: Some("Nested".to_string()),
+                parent_folder_id: Some(folder.id.clone()),
+                collection_id: Some(collection.id.clone()),
+                auth_json: None,
+                method: "GET".to_string(),
+                url: "https://example.test/nested".to_string(),
+                headers: vec![],
+                query: vec![],
+                body: None,
+                body_kind: "json".to_string(),
+                timeout_ms: None,
+            })
+            .await
+            .expect("save request");
 
         service
             .delete_collection("workspace-a".to_string(), collection.id.clone())
             .await
             .expect("delete collection");
 
-        let (folders_json,): (String,) =
-            sqlx::query_as("SELECT folders_json FROM api_collections WHERE id = ?1")
-                .bind(&collection.id)
-                .fetch_one(service.db.pool())
-                .await
-                .expect("read deleted collection folders");
+        let (deleted_folder_count,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM api_collection_folders WHERE id = ?1 AND deleted_at IS NOT NULL",
+        )
+        .bind(&folder.id)
+        .fetch_one(service.db.pool())
+        .await
+        .expect("count soft-deleted folder");
+        let (deleted_request_count,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM api_requests WHERE id = ?1 AND deleted_at IS NOT NULL",
+        )
+        .bind(&request.id)
+        .fetch_one(service.db.pool())
+        .await
+        .expect("count soft-deleted request");
 
-        assert_eq!(folders_json, "[]");
+        assert_eq!(deleted_folder_count, 1);
+        assert_eq!(deleted_request_count, 1);
     }
 
     #[tokio::test]
-    async fn add_collection_folder_persists_and_dedupes() {
+    async fn folder_and_request_reorder_use_separate_sibling_sort_orders() {
         let service = service().await;
         let collection = service
             .create_collection("workspace-a".to_string(), "APIs".to_string())
             .await
             .expect("create collection");
-        assert!(collection.folders.is_empty());
-
-        let updated = service
-            .add_collection_folder(
+        let folder_b = service
+            .create_collection_folder(
                 "workspace-a".to_string(),
                 collection.id.clone(),
-                "Auth".to_string(),
+                None,
+                "B".to_string(),
             )
             .await
-            .expect("add folder");
-        assert_eq!(updated.folders, vec!["Auth".to_string()]);
-
-        let nested = service
-            .add_collection_folder(
+            .expect("create folder b");
+        let folder_a = service
+            .create_collection_folder(
                 "workspace-a".to_string(),
                 collection.id.clone(),
-                "Auth/Tokens".to_string(),
+                None,
+                "A".to_string(),
             )
             .await
-            .expect("add nested folder");
+            .expect("create folder a");
+        let request_b = save_in_collection(
+            &service,
+            "workspace-a",
+            "B Request",
+            Some(collection.id.clone()),
+        )
+        .await;
+        let request_a = save_in_collection(
+            &service,
+            "workspace-a",
+            "A Request",
+            Some(collection.id.clone()),
+        )
+        .await;
+
+        let folders = service
+            .reorder_collection_folders(
+                "workspace-a".to_string(),
+                collection.id.clone(),
+                None,
+                vec![folder_a.id.clone(), folder_b.id.clone()],
+            )
+            .await
+            .expect("reorder folders");
+        let requests = service
+            .reorder_requests(
+                "workspace-a".to_string(),
+                collection.id.clone(),
+                None,
+                vec![request_a.id.clone(), request_b.id.clone()],
+            )
+            .await
+            .expect("reorder requests");
+
         assert_eq!(
-            nested.folders,
-            vec!["Auth".to_string(), "Auth/Tokens".to_string()]
+            folders.iter().map(|folder| folder.id.as_str()).collect::<Vec<_>>(),
+            vec![folder_a.id.as_str(), folder_b.id.as_str()]
         );
+        assert_eq!(
+            requests
+                .iter()
+                .map(|request| request.id.as_str())
+                .collect::<Vec<_>>(),
+            vec![request_a.id.as_str(), request_b.id.as_str()]
+        );
+    }
 
-        // Adding the same folder again is a no-op (no duplicate).
-        let again = service
-            .add_collection_folder(
+    #[tokio::test]
+    async fn moving_folder_to_self_or_descendant_is_rejected() {
+        let service = service().await;
+        let collection = service
+            .create_collection("workspace-a".to_string(), "APIs".to_string())
+            .await
+            .expect("create collection");
+        let auth = service
+            .create_collection_folder(
                 "workspace-a".to_string(),
                 collection.id.clone(),
+                None,
                 "Auth".to_string(),
             )
             .await
-            .expect("add duplicate folder");
-        assert_eq!(again.folders.len(), 2);
-
-        // Folders survive a reload via list.
-        let listed = service
-            .list_collections("workspace-a".to_string())
+            .expect("create folder");
+        let tokens = service
+            .create_collection_folder(
+                "workspace-a".to_string(),
+                collection.id,
+                Some(auth.id.clone()),
+                "Tokens".to_string(),
+            )
             .await
-            .expect("list collections");
-        assert_eq!(listed[0].folders.len(), 2);
+            .expect("create child folder");
+
+        let into_self = service
+            .move_collection_folder(
+                "workspace-a".to_string(),
+                auth.id.clone(),
+                Some(auth.id.clone()),
+            )
+            .await;
+        let into_child = service
+            .move_collection_folder(
+                "workspace-a".to_string(),
+                auth.id,
+                Some(tokens.id),
+            )
+            .await;
+
+        assert!(matches!(into_self, Err(AppError::Validation(message)) if message.contains("cycle")));
+        assert!(matches!(into_child, Err(AppError::Validation(message)) if message.contains("cycle")));
     }
 
     #[tokio::test]
@@ -1966,7 +2821,7 @@ mod tests {
             .save_request(ApiRequestInput {
                 workspace_id: "workspace-b".to_string(),
                 name: Some("Wrong workspace".to_string()),
-                folder_path: None,
+                parent_folder_id: None,
                 collection_id: Some(collection.id),
                 auth_json: None,
                 method: "GET".to_string(),
@@ -1995,27 +2850,36 @@ mod tests {
         let request =
             save_in_collection(&service, "workspace-a", "Movable", Some(collection_a.id.clone()))
                 .await;
-        assert_eq!(request.collection_id.as_deref(), Some(collection_a.id.as_str()));
+        assert_eq!(request.collection_id, collection_a.id);
+
+        let target_folder = service
+            .create_collection_folder(
+                "workspace-a".to_string(),
+                collection_b.id.clone(),
+                None,
+                "Sub".to_string(),
+            )
+            .await
+            .expect("create target folder");
 
         let moved = service
             .move_request(
                 "workspace-a".to_string(),
                 request.id.clone(),
                 Some(collection_b.id.clone()),
-                Some("Sub".to_string()),
+                Some(target_folder.id.clone()),
             )
             .await
             .expect("move into collection B");
-        assert_eq!(moved.collection_id.as_deref(), Some(collection_b.id.as_str()));
-        assert_eq!(moved.folder_path.as_deref(), Some("Sub"));
+        assert_eq!(moved.collection_id, collection_b.id);
+        assert_eq!(moved.parent_folder_id.as_deref(), Some(target_folder.id.as_str()));
 
         // Moving with None moves the request to the first collection.
-        let first_id = collection_a.id.clone();
         let moved_to_first = service
             .move_request("workspace-a".to_string(), request.id.clone(), None, None)
             .await
             .expect("move to first collection");
-        assert_eq!(moved_to_first.collection_id.as_deref(), Some(first_id.as_str()));
+        assert_eq!(moved_to_first.collection_id, collection_a.id);
 
         // Moving into a collection that does not exist is rejected.
         let missing = service
@@ -2036,8 +2900,10 @@ mod tests {
             .create_collection("workspace-a".to_string(), "APIs".to_string())
             .await
             .expect("create collection");
+        let collection_id = collection.id.clone();
         let request =
-            save_in_collection(&service, "workspace-a", "Original", Some(collection.id)).await;
+            save_in_collection(&service, "workspace-a", "Original", Some(collection_id.clone()))
+                .await;
 
         let updated = service
             .update_request(
@@ -2046,7 +2912,7 @@ mod tests {
                 ApiRequestInput {
                     workspace_id: "workspace-a".to_string(),
                     name: Some("Updated".to_string()),
-                    folder_path: Some("Moved".to_string()),
+                    parent_folder_id: None,
                     collection_id: None,
                     auth_json: None,
                     method: "POST".to_string(),
@@ -2064,8 +2930,8 @@ mod tests {
         assert_eq!(updated.id, request.id);
         assert_eq!(updated.name, "Updated");
         assert_eq!(updated.method, "POST");
-        assert!(updated.collection_id.is_some());
-        assert_eq!(updated.folder_path.as_deref(), Some("Moved"));
+        assert_eq!(updated.collection_id, collection_id);
+        assert_eq!(updated.parent_folder_id, None);
 
         let saved = service
             .list_saved_requests("workspace-a".to_string())
@@ -2080,7 +2946,7 @@ mod tests {
                 ApiRequestInput {
                     workspace_id: "workspace-a".to_string(),
                     name: Some("Bad collection".to_string()),
-                    folder_path: None,
+                    parent_folder_id: None,
                     collection_id: Some("does-not-exist".to_string()),
                     auth_json: None,
                     method: "GET".to_string(),

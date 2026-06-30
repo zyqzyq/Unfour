@@ -2,8 +2,8 @@ use crate::AppState;
 use tauri::State;
 use unfour_core::models::{
     ApiCollection, ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse,
-    ApiSavedRequest, CredentialCreateInput, CredentialDeleteInput, CredentialInspectInput,
-    CredentialMetadata, CredentialRotateInput, DatabaseBrowseInput, DatabaseBrowseResult,
+    ApiCollectionFolder, ApiSavedRequest, CredentialCreateInput, CredentialDeleteInput,
+    CredentialInspectInput, CredentialMetadata, CredentialRotateInput, DatabaseBrowseInput, DatabaseBrowseResult,
     DatabaseConnection, DatabaseConnectionInput, DatabaseQueryInput, DatabaseQueryResult,
     DatabaseRowMutationInput, DatabaseRowMutationResult, DatabaseSchema, DatabaseTableStructure,
     DatabaseTableStructureInput, DatabaseTestResult, DbQueryHistoryEntry,
@@ -160,15 +160,80 @@ pub async fn api_collection_delete(
 }
 
 #[tauri::command]
-pub async fn api_collection_add_folder(
+pub async fn api_collection_folders_list(
     workspace_id: String,
-    collection_id: String,
-    folder_path: String,
+    collection_id: Option<String>,
     state: State<'_, AppState>,
-) -> AppResult<ApiCollection> {
+) -> AppResult<Vec<ApiCollectionFolder>> {
     state
         .command_bus
-        .api_collection_add_folder(workspace_id, collection_id, folder_path)
+        .api_collection_folders_list(workspace_id, collection_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn api_collection_folder_create(
+    workspace_id: String,
+    collection_id: String,
+    parent_folder_id: Option<String>,
+    name: String,
+    state: State<'_, AppState>,
+) -> AppResult<ApiCollectionFolder> {
+    state
+        .command_bus
+        .api_collection_folder_create(workspace_id, collection_id, parent_folder_id, name)
+        .await
+}
+
+#[tauri::command]
+pub async fn api_collection_folder_rename(
+    workspace_id: String,
+    folder_id: String,
+    name: String,
+    state: State<'_, AppState>,
+) -> AppResult<ApiCollectionFolder> {
+    state
+        .command_bus
+        .api_collection_folder_rename(workspace_id, folder_id, name)
+        .await
+}
+
+#[tauri::command]
+pub async fn api_collection_folder_delete(
+    workspace_id: String,
+    folder_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<ApiCollectionFolder>> {
+    state
+        .command_bus
+        .api_collection_folder_delete(workspace_id, folder_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn api_collection_folder_move(
+    workspace_id: String,
+    folder_id: String,
+    target_parent_folder_id: Option<String>,
+    state: State<'_, AppState>,
+) -> AppResult<ApiCollectionFolder> {
+    state
+        .command_bus
+        .api_collection_folder_move(workspace_id, folder_id, target_parent_folder_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn api_collection_folders_reorder(
+    workspace_id: String,
+    collection_id: String,
+    parent_folder_id: Option<String>,
+    folder_ids: Vec<String>,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<ApiCollectionFolder>> {
+    state
+        .command_bus
+        .api_collection_folders_reorder(workspace_id, collection_id, parent_folder_id, folder_ids)
         .await
 }
 
@@ -177,12 +242,26 @@ pub async fn api_request_move(
     workspace_id: String,
     request_id: String,
     collection_id: Option<String>,
-    folder_path: Option<String>,
+    parent_folder_id: Option<String>,
     state: State<'_, AppState>,
 ) -> AppResult<ApiSavedRequest> {
     state
         .command_bus
-        .api_request_move(workspace_id, request_id, collection_id, folder_path)
+        .api_request_move(workspace_id, request_id, collection_id, parent_folder_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn api_requests_reorder(
+    workspace_id: String,
+    collection_id: String,
+    parent_folder_id: Option<String>,
+    request_ids: Vec<String>,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<ApiSavedRequest>> {
+    state
+        .command_bus
+        .api_requests_reorder(workspace_id, collection_id, parent_folder_id, request_ids)
         .await
 }
 

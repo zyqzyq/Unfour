@@ -205,7 +205,11 @@ export function useApiRequestTabs(workspaceId: string) {
 
   const saveTab = useCallback(async (
     tab: ApiRequestTab,
-    identity?: { collectionId: string | null; folderPath: string; name: string },
+    identity?: {
+      collectionId: string | null;
+      name: string;
+      parentFolderId: string | null;
+    },
   ) => {
     const draft = identity ? { ...tab.draft, ...identity } : tab.draft;
     if (identity) {
@@ -285,7 +289,7 @@ export function tabToInput(
   return {
     workspaceId,
     name: tab.draft.name,
-    folderPath: tab.draft.folderPath || null,
+    parentFolderId: tab.draft.parentFolderId,
     collectionId: tab.draft.collectionId,
     authJson: JSON.stringify(tab.draft.auth),
     method: tab.draft.method,

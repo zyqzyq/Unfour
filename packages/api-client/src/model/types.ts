@@ -44,11 +44,11 @@ export type RequestDraft = {
   bodyMode: RequestBodyMode;
   collectionId: string | null;
   envVariables: KeyValue[];
-  folderPath: string;
   formBody: KeyValue[];
   headers: KeyValue[];
   method: string;
   name: string;
+  parentFolderId: string | null;
   query: KeyValue[];
   rawBodyType: RequestRawBodyType;
   url: string;

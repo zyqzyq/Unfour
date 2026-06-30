@@ -9,31 +9,39 @@ import { ApiClientSidebar } from "./ApiClientSidebar";
 
 vi.mock("@unfour/command-client", () => ({
   activateApiEnvironment: vi.fn(),
-  addApiCollectionFolder: vi.fn(),
   createApiCollection: vi.fn(),
+  createApiCollectionFolder: vi.fn(),
   createApiEnvironment: vi.fn(),
   deleteApiCollection: vi.fn(),
+  deleteApiCollectionFolder: vi.fn(),
   deleteApiEnvironment: vi.fn(),
   deleteApiRequest: vi.fn(),
   duplicateApiRequest: vi.fn(),
   listApiCollections: vi.fn(),
+  listApiCollectionFolders: vi.fn(),
   listApiEnvironments: vi.fn(),
   listApiHistory: vi.fn(),
   listSavedApiRequests: vi.fn(),
+  moveApiCollectionFolder: vi.fn(),
   moveApiRequest: vi.fn(),
   renameApiCollection: vi.fn(),
+  renameApiCollectionFolder: vi.fn(),
+  reorderApiCollectionFolders: vi.fn(),
+  reorderApiRequests: vi.fn(),
   updateApiEnvironment: vi.fn(),
   updateApiRequest: vi.fn(),
 }));
 
 import {
   listApiCollections,
+  listApiCollectionFolders,
   listApiEnvironments,
   listApiHistory,
   listSavedApiRequests,
 } from "@unfour/command-client";
 
 const listCollectionsMock = vi.mocked(listApiCollections);
+const listFoldersMock = vi.mocked(listApiCollectionFolders);
 const listSavedMock = vi.mocked(listSavedApiRequests);
 const listHistoryMock = vi.mocked(listApiHistory);
 const listEnvironmentsMock = vi.mocked(listApiEnvironments);
@@ -84,6 +92,7 @@ function renderSidebar(overrides: Partial<Parameters<typeof ApiClientSidebar>[0]
 beforeEach(() => {
   vi.clearAllMocks();
   listCollectionsMock.mockResolvedValue([]);
+  listFoldersMock.mockResolvedValue([]);
   listSavedMock.mockResolvedValue([]);
   listHistoryMock.mockResolvedValue([]);
   listEnvironmentsMock.mockResolvedValue([

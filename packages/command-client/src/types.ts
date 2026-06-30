@@ -37,15 +37,26 @@ export type ApiCollection = {
   workspaceId: string;
   name: string;
   description: string | null;
-  folders: string[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type ApiCollectionFolder = {
+  id: string;
+  workspaceId: string;
+  collectionId: string;
+  parentFolderId: string | null;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
 };
 
 export type ApiRequestInput = {
   workspaceId: string;
   name?: string;
-  folderPath?: string | null;
+  parentFolderId?: string | null;
   collectionId?: string | null;
   authJson?: string;
   method: string;
@@ -107,8 +118,9 @@ export type ApiSavedRequest = {
   id: string;
   workspaceId: string;
   name: string;
-  folderPath: string | null;
-  collectionId: string | null;
+  collectionId: string;
+  parentFolderId: string | null;
+  sortOrder: number;
   authJson?: string;
   method: string;
   url: string;

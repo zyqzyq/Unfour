@@ -5,6 +5,7 @@ import {
   closeSshSession,
   connectSshSession,
   createApiCollection,
+  createApiCollectionFolder,
   deleteSavedSql,
   executeDatabaseQuery,
   getDatabaseSchema,
@@ -207,12 +208,18 @@ describe("API body redaction in browser mock", () => {
       authJson: JSON.stringify({ type: "bearer", token: "{{api_token}}" }),
     });
     expect(saved.authJson).toBe(JSON.stringify({ type: "bearer", token: "{{api_token}}" }));
+    const folder = await createApiCollectionFolder(
+      workspaceId,
+      collection.id,
+      null,
+      "Moved",
+    );
 
     const updated = await updateApiRequest(workspaceId, saved.id, {
       workspaceId,
       name: "Updated",
-      collectionId: null,
-      folderPath: "Moved",
+      collectionId: collection.id,
+      parentFolderId: folder.id,
       method: "POST",
       url: "https://api.example.com/updated",
       headers: [],
@@ -229,8 +236,8 @@ describe("API body redaction in browser mock", () => {
 
     expect(updated.id).toBe(saved.id);
     expect(updated.name).toBe("Updated");
-    expect(updated.collectionId).toBeNull();
-    expect(updated.folderPath).toBe("Moved");
+    expect(updated.collectionId).toBe(collection.id);
+    expect(updated.parentFolderId).toBe(folder.id);
     expect(updated.authJson).toBe(
       JSON.stringify({
         type: "api-key",

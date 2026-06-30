@@ -27,20 +27,21 @@ import {
   duplicateApiRequest,
   listApiHistory,
   listSavedApiRequests,
-  moveApiRequest,
   updateApiRequest,
   type ApiCollection,
+  type ApiCollectionFolder,
   type ApiSavedRequest,
 } from "@unfour/command-client";
 import {
+  buildApiCollectionTree,
   collectTreeRequests,
-  groupRequestsByCollection,
   parseKeyValues,
   savedRequestToInput,
   type FolderNode,
 } from "../request-utils";
 import { methodBadgeLabel, methodToneClass } from "../model/request-tabs";
 import type { ApiOpenIntent } from "../model/types";
+import { useApiCollectionFolders } from "../hooks/useApiCollectionFolders";
 import { useApiCollections } from "../hooks/useApiCollections";
 import { ApiHistoryTree } from "./ApiHistoryTree";
 
@@ -49,7 +50,12 @@ type Translate = (key: string, params?: Record<string, string | number>) => stri
 type RequestMenuContext = {
   collections: ApiCollection[];
   duplicate: (requestId: string) => void;
-  move: (request: ApiSavedRequest, collectionId: string) => void;
+  folders: ApiCollectionFolder[];
+  move: (
+    request: ApiSavedRequest,
+    collectionId: string,
+    parentFolderId: string | null,
+  ) => void;
   onOpenIntent: (intent: ApiOpenIntent) => void;
   remove: (requestId: string) => void;
   rename: (request: ApiSavedRequest) => void;
@@ -58,7 +64,7 @@ type RequestMenuContext = {
 
 type NameTarget =
   | { kind: "collection" }
-  | { kind: "folder"; collectionId: string; parentPath: string };
+  | { kind: "folder"; collectionId: string; parentFolderId: string | null };
 
 export function ApiCollectionTree({
   active,
@@ -81,12 +87,21 @@ export function ApiCollectionTree({
   const [nameValue, setNameValue] = useState("");
   const [renameTarget, setRenameTarget] = useState<ApiCollection | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [renameFolderTarget, setRenameFolderTarget] = useState<FolderNode | null>(null);
+  const [renameFolderValue, setRenameFolderValue] = useState("");
   const [renameRequestTarget, setRenameRequestTarget] = useState<ApiSavedRequest | null>(null);
   const [renameRequestValue, setRenameRequestValue] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<ApiCollection | null>(null);
+  const [deleteFolderTarget, setDeleteFolderTarget] = useState<FolderNode | null>(null);
   const queryClient = useQueryClient();
-  const { addFolderMut, collections, createMut, deleteMut, renameMut } =
-    useApiCollections(workspaceId);
+  const { collections, createMut, deleteMut, renameMut } = useApiCollections(workspaceId);
+  const {
+    createFolderMut,
+    deleteFolderMut,
+    folders,
+    moveRequestMut,
+    renameFolderMut,
+  } = useApiCollectionFolders(workspaceId);
   const savedQuery = useQuery({
     enabled: Boolean(workspaceId),
     queryKey: ["api-saved", workspaceId],
@@ -107,19 +122,6 @@ export function ApiCollectionTree({
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["api-saved", workspaceId] }),
   });
-  const moveMutation = useMutation({
-    mutationFn: ({
-      collectionId,
-      folderPath,
-      requestId,
-    }: {
-      collectionId: string;
-      folderPath: string | null;
-      requestId: string;
-    }) => moveApiRequest(workspaceId, requestId, collectionId, folderPath),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["api-saved", workspaceId] }),
-  });
   const updateRequestMutation = useMutation({
     mutationFn: ({
       name,
@@ -136,6 +138,7 @@ export function ApiCollectionTree({
       queryClient.invalidateQueries({ queryKey: ["api-saved", workspaceId] }),
   });
 
+  const folderNameById = new Map(folders.map((folder) => [folder.id, folder.name]));
   const searchText = search.trim().toLowerCase();
   const savedRequests = (savedQuery.data ?? []).filter((request) =>
     searchText
@@ -143,7 +146,9 @@ export function ApiCollectionTree({
           request.name,
           request.url,
           request.method,
-          request.folderPath ?? "",
+          request.parentFolderId
+            ? (folderNameById.get(request.parentFolderId) ?? "")
+            : "",
         ].some((value) => value.toLowerCase().includes(searchText))
       : true,
   );
@@ -157,10 +162,11 @@ export function ApiCollectionTree({
   const menuContext: RequestMenuContext = {
     collections,
     duplicate: duplicateMutation.mutate,
-    move: (request, collectionId) =>
-      moveMutation.mutate({
+    folders,
+    move: (request, collectionId, parentFolderId) =>
+      moveRequestMut.mutate({
         collectionId,
-        folderPath: request.folderPath,
+        parentFolderId,
         requestId: request.id,
       }),
     onOpenIntent,
@@ -172,18 +178,24 @@ export function ApiCollectionTree({
     t,
   };
 
-  const openFolderDialog = (collectionId: string, parentPath: string) => {
+  const openFolderDialog = (
+    collectionId: string,
+    parentFolderId: string | null,
+  ) => {
     setNameValue("");
-    setNameTarget({ kind: "folder", collectionId, parentPath });
+    setNameTarget({ kind: "folder", collectionId, parentFolderId });
   };
 
-  const addFolderAction = (collectionId: string, parentPath: string) => (
+  const addFolderAction = (
+    collectionId: string,
+    parentFolderId: string | null,
+  ) => (
     <button
       aria-label={t("api.collection.addFolder")}
       className="grid h-4 w-4 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] opacity-0 hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)] group-hover:opacity-100"
       onClick={(event) => {
         event.stopPropagation();
-        openFolderDialog(collectionId, parentPath);
+        openFolderDialog(collectionId, parentFolderId);
       }}
       title={t("api.collection.addFolder")}
       type="button"
@@ -197,10 +209,31 @@ export function ApiCollectionTree({
     collectionId: string,
   ): TreeViewItem {
     return {
-      id: `folder:${collectionId}:${node.path}`,
+      id: `folder:${node.id}`,
       icon: <Folder size={13} />,
       label: node.name,
-      actions: addFolderAction(collectionId, node.path),
+      actions: addFolderAction(collectionId, node.id),
+      contextMenu: (
+        <>
+          <ContextMenuItem onSelect={() => openFolderDialog(collectionId, node.id)}>
+            {t("api.collection.addFolder")}
+          </ContextMenuItem>
+          <ContextMenuItem
+            onSelect={() => {
+              setRenameFolderTarget(node);
+              setRenameFolderValue(node.name);
+            }}
+          >
+            {t("api.collection.renameFolder")}
+          </ContextMenuItem>
+          <ContextMenuItem
+            className="text-[var(--u-color-danger)]"
+            onSelect={() => setDeleteFolderTarget(node)}
+          >
+            {t("api.collection.deleteFolder")}
+          </ContextMenuItem>
+        </>
+      ),
       children: [
         ...node.folders.map((child) => folderToTreeItem(child, collectionId)),
         ...node.requests.map((request) => requestTreeItem(request, menuContext)),
@@ -208,9 +241,10 @@ export function ApiCollectionTree({
     };
   }
 
-  const collectionGroups = groupRequestsByCollection(
-    savedRequests,
+  const collectionGroups = buildApiCollectionTree(
     collections,
+    folders,
+    savedRequests,
   );
   const collectionItems: TreeViewItem[] = collectionGroups.map((group) => ({
     id: `collection:${group.id}`,
@@ -221,7 +255,7 @@ export function ApiCollectionTree({
         {collectTreeRequests(group.tree).length}
       </span>
     ),
-    actions: addFolderAction(group.collection.id, ""),
+    actions: addFolderAction(group.collection.id, null),
     contextMenu: (
       <>
         <ContextMenuItem
@@ -234,7 +268,7 @@ export function ApiCollectionTree({
         </ContextMenuItem>
         <ContextMenuItem
           onSelect={() =>
-            group.collection && openFolderDialog(group.collection.id, "")
+            group.collection && openFolderDialog(group.collection.id, null)
           }
         >
           {t("api.collection.addFolder")}
@@ -379,7 +413,7 @@ export function ApiCollectionTree({
             </Button>
             <Button
               disabled={
-                !nameValue.trim() || createMut.isPending || addFolderMut.isPending
+                !nameValue.trim() || createMut.isPending || createFolderMut.isPending
               }
               onClick={confirmName}
               type="button"
@@ -417,6 +451,45 @@ export function ApiCollectionTree({
             <Button
               disabled={!renameValue.trim() || renameMut.isPending}
               onClick={confirmRename}
+              type="button"
+            >
+              {t("api.save.save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        onOpenChange={(next) => !next && setRenameFolderTarget(null)}
+        open={Boolean(renameFolderTarget)}
+      >
+        <DialogContent title={t("api.collection.renameFolder")}>
+          <DialogHeader>
+            <DialogTitle>{t("api.collection.renameFolder")}</DialogTitle>
+          </DialogHeader>
+          <DialogBody>
+            <Input
+              autoFocus
+              onChange={(event) => setRenameFolderValue(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  confirmFolderRename();
+                }
+              }}
+              value={renameFolderValue}
+            />
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              onClick={() => setRenameFolderTarget(null)}
+              type="button"
+              variant="ghost"
+            >
+              {t("api.save.cancel")}
+            </Button>
+            <Button
+              disabled={!renameFolderValue.trim() || renameFolderMut.isPending}
+              onClick={confirmFolderRename}
               type="button"
             >
               {t("api.save.save")}
@@ -488,6 +561,39 @@ export function ApiCollectionTree({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        onOpenChange={(next) => !next && setDeleteFolderTarget(null)}
+        open={Boolean(deleteFolderTarget)}
+      >
+        <DialogContent title={t("api.collection.deleteFolder")}>
+          <DialogHeader>
+            <DialogTitle>{t("api.collection.deleteFolder")}</DialogTitle>
+          </DialogHeader>
+          <DialogBody>
+            <DialogDescription>
+              {t("api.collection.deleteFolderConfirm")}
+            </DialogDescription>
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              onClick={() => setDeleteFolderTarget(null)}
+              type="button"
+              variant="ghost"
+            >
+              {t("api.save.cancel")}
+            </Button>
+            <Button
+              className="bg-[var(--u-color-danger)]"
+              disabled={deleteFolderMut.isPending}
+              onClick={confirmFolderDelete}
+              type="button"
+            >
+              {t("api.collection.deleteFolder")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 
@@ -500,11 +606,12 @@ export function ApiCollectionTree({
       createMut.mutate(name, { onSuccess: () => setNameTarget(null) });
       return;
     }
-    const folderPath = nameTarget.parentPath
-      ? `${nameTarget.parentPath}/${name}`
-      : name;
-    addFolderMut.mutate(
-      { collectionId: nameTarget.collectionId, folderPath },
+    createFolderMut.mutate(
+      {
+        collectionId: nameTarget.collectionId,
+        name,
+        parentFolderId: nameTarget.parentFolderId,
+      },
       { onSuccess: () => setNameTarget(null) },
     );
   }
@@ -517,6 +624,17 @@ export function ApiCollectionTree({
     renameMut.mutate(
       { id: renameTarget.id, name },
       { onSuccess: () => setRenameTarget(null) },
+    );
+  }
+
+  function confirmFolderRename() {
+    const name = renameFolderValue.trim();
+    if (!renameFolderTarget || !name) {
+      return;
+    }
+    renameFolderMut.mutate(
+      { folderId: renameFolderTarget.id, name },
+      { onSuccess: () => setRenameFolderTarget(null) },
     );
   }
 
@@ -536,6 +654,15 @@ export function ApiCollectionTree({
       return;
     }
     deleteMut.mutate(deleteTarget.id, { onSuccess: () => setDeleteTarget(null) });
+  }
+
+  function confirmFolderDelete() {
+    if (!deleteFolderTarget) {
+      return;
+    }
+    deleteFolderMut.mutate(deleteFolderTarget.id, {
+      onSuccess: () => setDeleteFolderTarget(null),
+    });
   }
 }
 
@@ -561,8 +688,10 @@ function requestTreeItem(
       nonce: Date.now(),
       requestId: request.id,
     });
-  const moveTargets = ctx.collections.filter(
-    (collection) => collection.id !== request.collectionId,
+  const moveTargets = requestMoveTargets(
+    request,
+    ctx.collections,
+    ctx.folders,
   );
   return {
     id: `request:${request.id}`,
@@ -601,10 +730,12 @@ function requestTreeItem(
         )}
         {moveTargets.map((collection) => (
           <ContextMenuItem
-            key={collection.id}
-            onSelect={() => ctx.move(request, collection.id)}
+            key={`${collection.collectionId}:${collection.parentFolderId ?? "root"}`}
+            onSelect={() =>
+              ctx.move(request, collection.collectionId, collection.parentFolderId)
+            }
           >
-            {collection.name}
+            {collection.label}
           </ContextMenuItem>
         ))}
         <ContextMenuItem
@@ -616,6 +747,73 @@ function requestTreeItem(
       </>
     ),
   };
+}
+
+function requestMoveTargets(
+  request: ApiSavedRequest,
+  collections: ApiCollection[],
+  folders: ApiCollectionFolder[],
+) {
+  const collectionById = new Map(collections.map((collection) => [collection.id, collection]));
+  const folderById = new Map(folders.map((folder) => [folder.id, folder]));
+  const targets: Array<{
+    collectionId: string;
+    label: string;
+    parentFolderId: string | null;
+  }> = [];
+
+  for (const collection of collections) {
+    if (!(request.collectionId === collection.id && request.parentFolderId === null)) {
+      targets.push({
+        collectionId: collection.id,
+        label: collection.name,
+        parentFolderId: null,
+      });
+    }
+  }
+
+  for (const folder of [...folders].sort(compareCollectionFoldersForMenu)) {
+    if (request.collectionId === folder.collectionId && request.parentFolderId === folder.id) {
+      continue;
+    }
+    const collection = collectionById.get(folder.collectionId);
+    if (!collection) continue;
+    targets.push({
+      collectionId: folder.collectionId,
+      label: `${collection.name} / ${folderTreeLabel(folder, folderById)}`,
+      parentFolderId: folder.id,
+    });
+  }
+
+  return targets;
+}
+
+function compareCollectionFoldersForMenu(
+  left: ApiCollectionFolder,
+  right: ApiCollectionFolder,
+) {
+  return (
+    left.collectionId.localeCompare(right.collectionId) ||
+    left.sortOrder - right.sortOrder ||
+    left.name.localeCompare(right.name)
+  );
+}
+
+function folderTreeLabel(
+  folder: ApiCollectionFolder,
+  folderById: Map<string, ApiCollectionFolder>,
+) {
+  const parts = [folder.name];
+  let current = folder.parentFolderId;
+  const seen = new Set<string>([folder.id]);
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    const parent = folderById.get(current);
+    if (!parent) break;
+    parts.unshift(parent.name);
+    current = parent.parentFolderId;
+  }
+  return parts.join(" / ");
 }
 
 function RequestActionMenu({
@@ -693,7 +891,8 @@ function SidebarEmpty({ children }: { children: React.ReactNode }) {
 function serializeRequest(request: ApiSavedRequest) {
   return {
     name: request.name,
-    folderPath: request.folderPath,
+    collectionId: request.collectionId,
+    parentFolderId: request.parentFolderId,
     method: request.method,
     url: request.url,
     headers: parseKeyValues(request.headersJson),

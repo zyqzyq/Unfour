@@ -1,5 +1,6 @@
 import type {
   ApiCollection,
+  ApiCollectionFolder,
   ApiEnvironment,
   ApiHistoryDetail,
   ApiRequestInput,
@@ -71,7 +72,7 @@ export function savedRequestToInput(
   return {
     workspaceId,
     name: saved.name,
-    folderPath: saved.folderPath,
+    parentFolderId: saved.parentFolderId,
     collectionId: saved.collectionId,
     authJson: saved.authJson,
     method: saved.method,
@@ -88,7 +89,7 @@ export function historyDetailToInput(history: ApiHistoryDetail): ApiRequestInput
   return {
     workspaceId: history.workspaceId,
     name: history.name ?? `${history.method} ${history.url}`,
-    folderPath: null,
+    parentFolderId: null,
     collectionId: null,
     method: history.method,
     url: history.url,
@@ -133,9 +134,8 @@ function normalizeImportedRequest(
   return {
     workspaceId,
     name: typeof candidate.name === "string" ? candidate.name : undefined,
-    folderPath: typeof candidate.folderPath === "string" ? candidate.folderPath : null,
-    collectionId:
-      typeof candidate.collectionId === "string" ? candidate.collectionId : null,
+    parentFolderId: null,
+    collectionId: null,
     authJson: typeof candidate.authJson === "string" ? candidate.authJson : undefined,
     method: candidate.method.toUpperCase(),
     url: candidate.url,
@@ -147,30 +147,14 @@ function normalizeImportedRequest(
   };
 }
 
-export function groupSavedRequests(items: ApiSavedRequest[]) {
-  const groups = new Map<string, ApiSavedRequest[]>();
-  for (const item of items) {
-    const folder = item.folderPath?.trim() || "Unfiled";
-    groups.set(folder, [...(groups.get(folder) ?? []), item]);
-  }
-
-  return Array.from(groups.entries())
-    .sort(([left], [right]) => {
-      if (left === "Unfiled") return -1;
-      if (right === "Unfiled") return 1;
-      return left.localeCompare(right);
-    })
-    .map(([folder, groupItems]) => ({
-      folder,
-      items: groupItems.sort((left, right) => left.name.localeCompare(right.name)),
-    }));
-}
-
 export type FolderNode = {
+  collectionId: string;
   folders: FolderNode[];
+  id: string;
   name: string;
-  path: string;
+  parentFolderId: string | null;
   requests: ApiSavedRequest[];
+  sortOrder: number;
 };
 
 export type FolderTree = {
@@ -184,62 +168,6 @@ export type ApiCollectionGroup = {
   name: string;
   tree: FolderTree;
 };
-
-/**
- * Build a nested folder tree from `folderPath` segments. `extraFolders` are
- * empty folder paths (persisted on the collection) that should appear even
- * without any saved request. Folderless requests land at the root.
- */
-export function buildFolderTree(
-  requests: ApiSavedRequest[],
-  extraFolders: string[] = [],
-): FolderTree {
-  const root: FolderNode = { folders: [], name: "", path: "", requests: [] };
-
-  function ensureFolder(rawPath: string): FolderNode {
-    const segments = rawPath
-      .split("/")
-      .map((segment) => segment.trim())
-      .filter(Boolean);
-    let node = root;
-    let accumulated = "";
-    for (const segment of segments) {
-      accumulated = accumulated ? `${accumulated}/${segment}` : segment;
-      let child = node.folders.find((folder) => folder.name === segment);
-      if (!child) {
-        child = { folders: [], name: segment, path: accumulated, requests: [] };
-        node.folders.push(child);
-      }
-      node = child;
-    }
-    return node;
-  }
-
-  for (const folder of extraFolders) {
-    if (folder.trim()) {
-      ensureFolder(folder);
-    }
-  }
-  for (const request of requests) {
-    const path = request.folderPath?.trim();
-    if (path) {
-      ensureFolder(path).requests.push(request);
-    } else {
-      root.requests.push(request);
-    }
-  }
-
-  sortFolderNode(root);
-  return { folders: root.folders, rootRequests: root.requests };
-}
-
-function sortFolderNode(node: FolderNode) {
-  node.folders.sort((left, right) => left.name.localeCompare(right.name));
-  node.requests.sort((left, right) => left.name.localeCompare(right.name));
-  for (const child of node.folders) {
-    sortFolderNode(child);
-  }
-}
 
 /** Flatten every request in a folder tree (root + all nested folders). */
 export function collectTreeRequests(tree: FolderTree): ApiSavedRequest[] {
@@ -255,42 +183,143 @@ export function collectTreeRequests(tree: FolderTree): ApiSavedRequest[] {
 }
 
 /**
- * Group saved requests under their owning collection, then into a nested folder
- * tree (collection-owned empty folders included). Empty collections are still
- * returned so they remain visible. Requests whose collection no longer exists
- * are grouped with the first collection.
+ * Build the visible API collection tree from persisted folder rows and request
+ * parent ids. Empty collections and empty folders remain visible.
  */
+export function buildApiCollectionTree(
+  collections: ApiCollection[],
+  folders: ApiCollectionFolder[],
+  requests: ApiSavedRequest[],
+): ApiCollectionGroup[] {
+  const byCollection = new Map<string, ApiSavedRequest[]>();
+  const collectionIds = new Set(collections.map((collection) => collection.id));
+  for (const request of requests) {
+    const key = collectionIds.has(request.collectionId)
+      ? request.collectionId
+      : collections[0]?.id ?? "";
+    byCollection.set(key, [...(byCollection.get(key) ?? []), request]);
+  }
+
+  const byCollectionFolders = new Map<string, ApiCollectionFolder[]>();
+  for (const folder of folders) {
+    if (!collectionIds.has(folder.collectionId)) {
+      continue;
+    }
+    byCollectionFolders.set(folder.collectionId, [
+      ...(byCollectionFolders.get(folder.collectionId) ?? []),
+      folder,
+    ]);
+  }
+
+  return [...collections]
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .map((collection) => ({
+      collection,
+      id: collection.id,
+      name: collection.name,
+      tree: buildCollectionFolderTree(
+        byCollectionFolders.get(collection.id) ?? [],
+        byCollection.get(collection.id) ?? [],
+      ),
+    }));
+}
+
 export function groupRequestsByCollection(
   requests: ApiSavedRequest[],
   collections: ApiCollection[],
 ): ApiCollectionGroup[] {
-  const byCollection = new Map<string, ApiSavedRequest[]>();
-  for (const request of requests) {
-    const key = request.collectionId ?? collections[0]?.id ?? "";
-    byCollection.set(key, [...(byCollection.get(key) ?? []), request]);
+  return buildApiCollectionTree(collections, [], requests);
+}
+
+function buildCollectionFolderTree(
+  folders: ApiCollectionFolder[],
+  requests: ApiSavedRequest[],
+): FolderTree {
+  const folderById = new Map(folders.map((folder) => [folder.id, folder]));
+  const nodeById = new Map<string, FolderNode>();
+  for (const folder of folders) {
+    nodeById.set(folder.id, {
+      collectionId: folder.collectionId,
+      folders: [],
+      id: folder.id,
+      name: folder.name,
+      parentFolderId: folder.parentFolderId,
+      requests: [],
+      sortOrder: folder.sortOrder,
+    });
   }
 
-  const known = new Set(collections.map((collection) => collection.id));
-  const orphaned = requests.filter(
-    (request) => !request.collectionId || !known.has(request.collectionId),
-  );
+  const root: FolderTree = { folders: [], rootRequests: [] };
+  for (const folder of folders) {
+    const node = nodeById.get(folder.id);
+    if (!node) continue;
+    const parent = folder.parentFolderId
+      ? nodeById.get(folder.parentFolderId)
+      : null;
+    if (
+      parent &&
+      parent.collectionId === folder.collectionId &&
+      !hasAncestor(folderById, folder.parentFolderId, folder.id)
+    ) {
+      parent.folders.push(node);
+    } else {
+      root.folders.push(node);
+    }
+  }
 
-  const groups: ApiCollectionGroup[] = [...collections]
-    .sort((left, right) => left.name.localeCompare(right.name))
-    .map((collection, index) => {
-      const collectionRequests =
-        index === 0 && orphaned.length
-          ? [...(byCollection.get(collection.id) ?? []), ...orphaned]
-          : byCollection.get(collection.id) ?? [];
-      return {
-        collection,
-        id: collection.id,
-        name: collection.name,
-        tree: buildFolderTree(collectionRequests, collection.folders),
-      };
-    });
+  for (const request of requests) {
+    const parent = request.parentFolderId
+      ? nodeById.get(request.parentFolderId)
+      : null;
+    if (parent && parent.collectionId === request.collectionId) {
+      parent.requests.push(request);
+    } else {
+      root.rootRequests.push(request);
+    }
+  }
 
-  return groups;
+  sortTree(root);
+  return root;
+}
+
+function hasAncestor(
+  folderById: Map<string, ApiCollectionFolder>,
+  parentFolderId: string | null,
+  targetId: string,
+) {
+  let current = parentFolderId;
+  const seen = new Set<string>();
+  while (current) {
+    if (current === targetId) return true;
+    if (seen.has(current)) return true;
+    seen.add(current);
+    current = folderById.get(current)?.parentFolderId ?? null;
+  }
+  return false;
+}
+
+function sortTree(tree: FolderTree) {
+  tree.folders.sort(compareFolderNodes);
+  tree.rootRequests.sort(compareRequests);
+  for (const folder of tree.folders) {
+    sortFolderNode(folder);
+  }
+}
+
+function sortFolderNode(node: FolderNode) {
+  node.folders.sort(compareFolderNodes);
+  node.requests.sort(compareRequests);
+  for (const child of node.folders) {
+    sortFolderNode(child);
+  }
+}
+
+function compareFolderNodes(left: FolderNode, right: FolderNode) {
+  return left.sortOrder - right.sortOrder || left.name.localeCompare(right.name);
+}
+
+function compareRequests(left: ApiSavedRequest, right: ApiSavedRequest) {
+  return left.sortOrder - right.sortOrder || left.name.localeCompare(right.name);
 }
 
 export function duplicateEnvironmentKeys(variables: KeyValue[]) {

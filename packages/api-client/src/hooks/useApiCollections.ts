@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  addApiCollectionFolder,
   createApiCollection,
   deleteApiCollection,
   listApiCollections,
@@ -41,22 +40,18 @@ export function useApiCollections(workspaceId: string) {
       deleteApiCollection(workspaceId, collectionId),
     onSuccess: () => {
       invalidate();
+      queryClient.invalidateQueries({
+        queryKey: ["api-collection-folders", workspaceId],
+      });
       queryClient.invalidateQueries({ queryKey: ["api-saved", workspaceId] });
     },
   });
-  const addFolderMut = useMutation({
-    mutationFn: (input: { collectionId: string; folderPath: string }) =>
-      addApiCollectionFolder(workspaceId, input.collectionId, input.folderPath),
-    onSuccess: invalidate,
-  });
-
   const collections = useMemo<ApiCollection[]>(
     () => query.data ?? [],
     [query.data],
   );
 
   return {
-    addFolderMut,
     collections,
     createMut,
     deleteMut,

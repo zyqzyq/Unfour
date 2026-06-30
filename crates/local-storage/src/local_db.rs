@@ -163,6 +163,7 @@ mod tests {
         assert!(names.contains(&"workspace_settings"));
         assert!(names.contains(&"ssh_terminal_history"));
         assert!(names.contains(&"api_collections"));
+        assert!(names.contains(&"api_collection_folders"));
     }
 
     #[tokio::test]
@@ -178,7 +179,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn migrate_ensures_folder_path_column() {
+    async fn migrate_ensures_api_request_collection_tree_columns() {
         let db = test_db().await;
         db.migrate().await.expect("migration");
 
@@ -188,28 +189,46 @@ mod tests {
                 .await
                 .expect("list columns");
         assert!(
-            columns.iter().any(|(name,)| name == "folder_path"),
-            "api_requests should have folder_path column"
+            columns.iter().any(|(name,)| name == "parent_folder_id"),
+            "api_requests should have parent_folder_id column"
         );
         assert!(
             columns.iter().any(|(name,)| name == "collection_id"),
             "api_requests should have collection_id column"
         );
+        assert!(
+            columns.iter().any(|(name,)| name == "sort_order"),
+            "api_requests should have sort_order column"
+        );
     }
 
     #[tokio::test]
-    async fn migrate_ensures_collection_folders_json_column() {
+    async fn migrate_ensures_api_collection_folders_table() {
         let db = test_db().await;
         db.migrate().await.expect("migration");
 
         let columns: Vec<(String,)> =
-            sqlx::query_as("SELECT name FROM pragma_table_info('api_collections')")
+            sqlx::query_as("SELECT name FROM pragma_table_info('api_collection_folders')")
                 .fetch_all(db.pool())
                 .await
                 .expect("list columns");
+        let names: Vec<&str> = columns.iter().map(|(name,)| name.as_str()).collect();
+
         assert!(
-            columns.iter().any(|(name,)| name == "folders_json"),
-            "api_collections should have folders_json column"
+            [
+                "id",
+                "workspace_id",
+                "collection_id",
+                "parent_folder_id",
+                "name",
+                "sort_order",
+                "created_at",
+                "updated_at",
+                "deleted_at",
+            ]
+            .iter()
+            .all(|expected| names.contains(expected)),
+            "api_collection_folders should have stable folder tree columns"
         );
     }
 

@@ -44,6 +44,7 @@ import type {
   SshSessionSummary,
   SystemHealth,
   ApiCollection,
+  ApiCollectionFolder,
   ApiEnvironment,
   Workspace,
   WorkspaceLayout,
@@ -101,11 +102,28 @@ let mockEnvironments: ApiEnvironment[] = [
 ];
 
 let mockCollections: ApiCollection[] = [];
+let mockCollectionFolders: ApiCollectionFolder[] = [];
 
 function mockCollectionList(workspaceId: string) {
   return mockCollections
     .filter((collection) => collection.workspaceId === workspaceId)
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function firstOrCreateMockCollectionId(workspaceId: string) {
+  const first = mockCollectionList(workspaceId)[0];
+  if (first) return first.id;
+  const now = new Date().toISOString();
+  const collection: ApiCollection = {
+    id: crypto.randomUUID(),
+    workspaceId,
+    name: "Default Collection",
+    description: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  mockCollections = [...mockCollections, collection];
+  return collection.id;
 }
 
 function assertMockCollection(workspaceId: string, collectionId: string | null | undefined) {
@@ -118,6 +136,107 @@ function assertMockCollection(workspaceId: string, collectionId: string | null |
   ) {
     throw new Error("api collection not found");
   }
+}
+
+function normalizeMockId(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function assertMockFolder(
+  workspaceId: string,
+  collectionId: string,
+  folderId: string | null | undefined,
+) {
+  if (
+    folderId &&
+    !mockCollectionFolders.some(
+      (folder) =>
+        folder.workspaceId === workspaceId &&
+        folder.collectionId === collectionId &&
+        folder.id === folderId,
+    )
+  ) {
+    throw new Error("api collection folder not found");
+  }
+}
+
+function mockFolderList(workspaceId: string, collectionId?: string | null) {
+  return mockCollectionFolders
+    .filter(
+      (folder) =>
+        folder.workspaceId === workspaceId &&
+        (!collectionId || folder.collectionId === collectionId),
+    )
+    .sort((left, right) => {
+      const collectionSort = left.collectionId.localeCompare(right.collectionId);
+      if (collectionSort !== 0) return collectionSort;
+      const parentSort = (left.parentFolderId ?? "").localeCompare(
+        right.parentFolderId ?? "",
+      );
+      if (parentSort !== 0) return parentSort;
+      return left.sortOrder - right.sortOrder || left.name.localeCompare(right.name);
+    });
+}
+
+function nextMockFolderSortOrder(
+  workspaceId: string,
+  collectionId: string,
+  parentFolderId: string | null,
+) {
+  return (
+    Math.max(
+      -1,
+      ...mockCollectionFolders
+        .filter(
+          (folder) =>
+            folder.workspaceId === workspaceId &&
+            folder.collectionId === collectionId &&
+            folder.parentFolderId === parentFolderId,
+        )
+        .map((folder) => folder.sortOrder),
+    ) + 1
+  );
+}
+
+function nextMockRequestSortOrder(
+  workspaceId: string,
+  collectionId: string,
+  parentFolderId: string | null,
+) {
+  return (
+    Math.max(
+      -1,
+      ...mockSavedRequests
+        .filter(
+          (request) =>
+            request.workspaceId === workspaceId &&
+            request.collectionId === collectionId &&
+            request.parentFolderId === parentFolderId,
+        )
+        .map((request) => request.sortOrder),
+    ) + 1
+  );
+}
+
+function descendantFolderIds(workspaceId: string, folderId: string) {
+  const ids = new Set<string>();
+  let frontier = [folderId];
+  while (frontier.length) {
+    const next: string[] = [];
+    for (const id of frontier) {
+      if (ids.has(id)) continue;
+      ids.add(id);
+      next.push(
+        ...mockCollectionFolders
+          .filter(
+            (folder) => folder.workspaceId === workspaceId && folder.parentFolderId === id,
+          )
+          .map((folder) => folder.id),
+      );
+    }
+    frontier = next;
+  }
+  return ids;
 }
 
 function mockEnvList(workspaceId: string) {
@@ -299,7 +418,6 @@ async function mockInvoke<T>(
       workspaceId,
       name: String(args?.name ?? "New Collection").trim() || "New Collection",
       description: null,
-      folders: [],
       createdAt: now,
       updatedAt: now,
     };
@@ -329,53 +447,170 @@ async function mockInvoke<T>(
     mockCollections = mockCollections.filter(
       (item) => !(item.workspaceId === workspaceId && item.id === collectionId),
     );
-    // Cascade: drop the collection's saved requests.
+    // Cascade: drop the collection's folder rows and saved requests.
+    mockCollectionFolders = mockCollectionFolders.filter(
+      (item) => !(item.workspaceId === workspaceId && item.collectionId === collectionId),
+    );
     mockSavedRequests = mockSavedRequests.filter(
       (item) => !(item.workspaceId === workspaceId && item.collectionId === collectionId),
     );
     return mockCollectionList(workspaceId) as T;
   }
 
-  if (command === "api_collection_add_folder") {
+  if (command === "api_collection_folders_list") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    const collectionId = normalizeMockId(args?.collectionId);
+    return mockFolderList(workspaceId, collectionId) as T;
+  }
+
+  if (command === "api_collection_folder_create") {
     const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
     const collectionId = String(args?.collectionId ?? "");
-    const folderPath = normalizeFolderPath(
-      (args?.folderPath as string | null | undefined) ?? null,
-    );
+    const parentFolderId = normalizeMockId(args?.parentFolderId);
+    const name = String(args?.name ?? "").trim() || "New Folder";
     const collection = mockCollections.find(
       (item) => item.workspaceId === workspaceId && item.id === collectionId,
     );
     if (!collection) throw new Error("api collection not found");
-    if (folderPath && !collection.folders.includes(folderPath)) {
-      collection.folders = [...collection.folders, folderPath].sort();
+    assertMockFolder(workspaceId, collectionId, parentFolderId);
+    const now = new Date().toISOString();
+    const folder: ApiCollectionFolder = {
+      id: crypto.randomUUID(),
+      workspaceId,
+      collectionId,
+      parentFolderId,
+      name,
+      sortOrder: nextMockFolderSortOrder(workspaceId, collectionId, parentFolderId),
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+    };
+    mockCollectionFolders = [...mockCollectionFolders, folder];
+    collection.updatedAt = now;
+    return folder as T;
+  }
+
+  if (command === "api_collection_folder_rename") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    const folderId = String(args?.folderId ?? "");
+    const folder = mockCollectionFolders.find(
+      (item) => item.workspaceId === workspaceId && item.id === folderId,
+    );
+    if (!folder) throw new Error("api collection folder not found");
+    folder.name = String(args?.name ?? folder.name).trim() || folder.name;
+    folder.updatedAt = new Date().toISOString();
+    return folder as T;
+  }
+
+  if (command === "api_collection_folder_delete") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    const folderId = String(args?.folderId ?? "");
+    const folder = mockCollectionFolders.find(
+      (item) => item.workspaceId === workspaceId && item.id === folderId,
+    );
+    if (!folder) throw new Error("api collection folder not found");
+    const ids = descendantFolderIds(workspaceId, folderId);
+    mockCollectionFolders = mockCollectionFolders.filter(
+      (item) => !(item.workspaceId === workspaceId && ids.has(item.id)),
+    );
+    mockSavedRequests = mockSavedRequests.filter(
+      (item) => !(item.workspaceId === workspaceId && ids.has(item.parentFolderId ?? "")),
+    );
+    return undefined as T;
+  }
+
+  if (command === "api_collection_folder_move") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    const folderId = String(args?.folderId ?? "");
+    const targetParentFolderId = normalizeMockId(args?.targetParentFolderId);
+    const folder = mockCollectionFolders.find(
+      (item) => item.workspaceId === workspaceId && item.id === folderId,
+    );
+    if (!folder) throw new Error("api collection folder not found");
+    if (targetParentFolderId === folderId) {
+      throw new Error("folder cannot be its own parent");
     }
-    collection.updatedAt = new Date().toISOString();
-    return collection as T;
+    assertMockFolder(workspaceId, folder.collectionId, targetParentFolderId);
+    if (
+      targetParentFolderId &&
+      descendantFolderIds(workspaceId, folderId).has(targetParentFolderId)
+    ) {
+      throw new Error("folder cannot be moved into its descendant");
+    }
+    folder.parentFolderId = targetParentFolderId;
+    folder.sortOrder = nextMockFolderSortOrder(
+      workspaceId,
+      folder.collectionId,
+      targetParentFolderId,
+    );
+    folder.updatedAt = new Date().toISOString();
+    return folder as T;
+  }
+
+  if (command === "api_collection_folders_reorder") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    const collectionId = String(args?.collectionId ?? "");
+    const parentFolderId = normalizeMockId(args?.parentFolderId);
+    const folderIds = Array.isArray(args?.folderIds)
+      ? (args.folderIds as string[])
+      : [];
+    assertMockCollection(workspaceId, collectionId);
+    assertMockFolder(workspaceId, collectionId, parentFolderId);
+    folderIds.forEach((folderId, index) => {
+      const folder = mockCollectionFolders.find(
+        (item) =>
+          item.workspaceId === workspaceId &&
+          item.collectionId === collectionId &&
+          item.parentFolderId === parentFolderId &&
+          item.id === folderId,
+      );
+      if (!folder) throw new Error("api collection folder not found");
+      folder.sortOrder = index;
+      folder.updatedAt = new Date().toISOString();
+    });
+    return mockFolderList(workspaceId, collectionId) as T;
   }
 
   if (command === "api_request_move") {
     const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
     const requestId = String(args?.requestId ?? "");
-    const collectionId = args?.collectionId ? String(args.collectionId) : null;
-    const folderPath = normalizeFolderPath(
-      (args?.folderPath as string | null | undefined) ?? null,
-    );
+    const collectionId = String(args?.collectionId ?? "");
+    const parentFolderId = normalizeMockId(args?.parentFolderId);
     const request = mockSavedRequests.find(
       (item) => item.workspaceId === workspaceId && item.id === requestId,
     );
     if (!request) throw new Error("api request not found");
-    if (
-      collectionId &&
-      !mockCollections.some(
-        (item) => item.workspaceId === workspaceId && item.id === collectionId,
-      )
-    ) {
-      throw new Error("api collection not found");
-    }
+    assertMockCollection(workspaceId, collectionId);
+    assertMockFolder(workspaceId, collectionId, parentFolderId);
     request.collectionId = collectionId;
-    request.folderPath = folderPath;
+    request.parentFolderId = parentFolderId;
+    request.sortOrder = nextMockRequestSortOrder(workspaceId, collectionId, parentFolderId);
     request.updatedAt = new Date().toISOString();
     return request as T;
+  }
+
+  if (command === "api_requests_reorder") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    const collectionId = String(args?.collectionId ?? "");
+    const parentFolderId = normalizeMockId(args?.parentFolderId);
+    const requestIds = Array.isArray(args?.requestIds)
+      ? (args.requestIds as string[])
+      : [];
+    assertMockCollection(workspaceId, collectionId);
+    assertMockFolder(workspaceId, collectionId, parentFolderId);
+    requestIds.forEach((requestId, index) => {
+      const request = mockSavedRequests.find(
+        (item) =>
+          item.workspaceId === workspaceId &&
+          item.collectionId === collectionId &&
+          item.parentFolderId === parentFolderId &&
+          item.id === requestId,
+      );
+      if (!request) throw new Error("api request not found");
+      request.sortOrder = index;
+      request.updatedAt = new Date().toISOString();
+    });
+    return mockSavedRequests.filter((item) => item.workspaceId === workspaceId) as T;
   }
 
   if (command === "workspace_layout_get") {
@@ -415,13 +650,17 @@ async function mockInvoke<T>(
 
   if (command === "api_request_save") {
     const input = args?.input as ApiRequestInput;
-    assertMockCollection(input.workspaceId, input.collectionId);
+    const collectionId = input.collectionId ?? firstOrCreateMockCollectionId(input.workspaceId);
+    const parentFolderId = normalizeMockId(input.parentFolderId);
+    assertMockCollection(input.workspaceId, collectionId);
+    assertMockFolder(input.workspaceId, collectionId, parentFolderId);
     const saved: ApiSavedRequest = {
       id: crypto.randomUUID(),
       workspaceId: input.workspaceId,
       name: input.name || `${input.method} ${input.url}`,
-      folderPath: normalizeFolderPath(input.folderPath),
-      collectionId: input.collectionId ?? null,
+      collectionId,
+      parentFolderId,
+      sortOrder: nextMockRequestSortOrder(input.workspaceId, collectionId, parentFolderId),
       authJson: input.authJson ?? JSON.stringify({ type: "none" }),
       method: input.method,
       url: input.url,
@@ -445,7 +684,10 @@ async function mockInvoke<T>(
     const workspaceId = String(args?.workspaceId ?? input.workspaceId);
     const requestId = String(args?.requestId ?? "");
     if (workspaceId !== input.workspaceId) throw new Error("api request workspace mismatch");
-    assertMockCollection(workspaceId, input.collectionId);
+    const collectionId = input.collectionId ?? firstOrCreateMockCollectionId(workspaceId);
+    const parentFolderId = normalizeMockId(input.parentFolderId);
+    assertMockCollection(workspaceId, collectionId);
+    assertMockFolder(workspaceId, collectionId, parentFolderId);
     const index = mockSavedRequests.findIndex(
       (item) => item.workspaceId === workspaceId && item.id === requestId,
     );
@@ -454,8 +696,12 @@ async function mockInvoke<T>(
     const saved: ApiSavedRequest = {
       ...current,
       name: input.name || `${input.method} ${input.url}`,
-      folderPath: normalizeFolderPath(input.folderPath),
-      collectionId: input.collectionId ?? null,
+      collectionId,
+      parentFolderId,
+      sortOrder:
+        current.collectionId === collectionId && current.parentFolderId === parentFolderId
+          ? current.sortOrder
+          : nextMockRequestSortOrder(workspaceId, collectionId, parentFolderId),
       authJson: input.authJson ?? JSON.stringify({ type: "none" }),
       method: input.method,
       url: input.url,
@@ -1355,29 +1601,100 @@ export function deleteApiCollection(workspaceId: string, collectionId: string) {
   });
 }
 
-export function addApiCollectionFolder(
+export function listApiCollectionFolders(
+  workspaceId: string,
+  collectionId?: string | null,
+) {
+  return call<ApiCollectionFolder[]>("api_collection_folders_list", {
+    workspaceId,
+    collectionId: collectionId ?? null,
+  });
+}
+
+export function createApiCollectionFolder(
   workspaceId: string,
   collectionId: string,
-  folderPath: string,
+  parentFolderId: string | null,
+  name: string,
 ) {
-  return call<ApiCollection>("api_collection_add_folder", {
+  return call<ApiCollectionFolder>("api_collection_folder_create", {
     workspaceId,
     collectionId,
-    folderPath,
+    parentFolderId,
+    name,
+  });
+}
+
+export function renameApiCollectionFolder(
+  workspaceId: string,
+  folderId: string,
+  name: string,
+) {
+  return call<ApiCollectionFolder>("api_collection_folder_rename", {
+    workspaceId,
+    folderId,
+    name,
+  });
+}
+
+export function deleteApiCollectionFolder(workspaceId: string, folderId: string) {
+  return call<void>("api_collection_folder_delete", {
+    workspaceId,
+    folderId,
+  });
+}
+
+export function moveApiCollectionFolder(
+  workspaceId: string,
+  folderId: string,
+  targetParentFolderId: string | null,
+) {
+  return call<ApiCollectionFolder>("api_collection_folder_move", {
+    workspaceId,
+    folderId,
+    targetParentFolderId,
+  });
+}
+
+export function reorderApiCollectionFolders(
+  workspaceId: string,
+  collectionId: string,
+  parentFolderId: string | null,
+  folderIds: string[],
+) {
+  return call<ApiCollectionFolder[]>("api_collection_folders_reorder", {
+    workspaceId,
+    collectionId,
+    parentFolderId,
+    folderIds,
   });
 }
 
 export function moveApiRequest(
   workspaceId: string,
   requestId: string,
-  collectionId: string | null,
-  folderPath: string | null,
+  collectionId: string,
+  parentFolderId: string | null,
 ) {
   return call<ApiSavedRequest>("api_request_move", {
     workspaceId,
     requestId,
     collectionId,
-    folderPath,
+    parentFolderId,
+  });
+}
+
+export function reorderApiRequests(
+  workspaceId: string,
+  collectionId: string,
+  parentFolderId: string | null,
+  requestIds: string[],
+) {
+  return call<ApiSavedRequest[]>("api_requests_reorder", {
+    workspaceId,
+    collectionId,
+    parentFolderId,
+    requestIds,
   });
 }
 
@@ -1722,11 +2039,6 @@ function redactJsonBody(body: string | null | undefined): string | null {
   } catch {
     return body;
   }
-}
-
-function normalizeFolderPath(value: ApiRequestInput["folderPath"]) {
-  const trimmed = value?.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
-  return trimmed ? trimmed : null;
 }
 
 function redactSshLog(value: string) {

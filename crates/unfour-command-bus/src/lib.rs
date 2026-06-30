@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 use unfour_core::ai_reserved;
 use unfour_core::models::{
     ApiCollection, ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse,
-    ApiSavedRequest, CredentialCreateInput, CredentialDeleteInput, CredentialInspectInput,
-    CredentialMetadata, CredentialRotateInput, DatabaseBrowseInput, DatabaseBrowseResult,
+    ApiCollectionFolder, ApiSavedRequest, CredentialCreateInput, CredentialDeleteInput,
+    CredentialInspectInput, CredentialMetadata, CredentialRotateInput, DatabaseBrowseInput, DatabaseBrowseResult,
     DatabaseConnection, DatabaseConnectionInput, DatabaseQueryInput, DatabaseQueryResult,
     DatabaseRowMutationInput, DatabaseRowMutationResult, DatabaseSchema, DatabaseTableStructure,
     DatabaseTableStructureInput, DatabaseTestResult, DbQueryHistoryEntry,
@@ -472,9 +472,7 @@ impl CommandBus {
                 let mut request_counts: std::collections::BTreeMap<String, usize> =
                     std::collections::BTreeMap::new();
                 for request in &requests {
-                    if let Some(collection_id) = request.collection_id.as_deref() {
-                        *request_counts.entry(collection_id.to_string()).or_insert(0) += 1;
-                    }
+                    *request_counts.entry(request.collection_id.clone()).or_insert(0) += 1;
                 }
 
                 let summaries = collections
@@ -508,7 +506,7 @@ impl CommandBus {
                     let cid = cid.trim();
                     requests
                         .into_iter()
-                        .filter(|r| r.collection_id.as_deref().unwrap_or("") == cid)
+                        .filter(|r| r.collection_id == cid)
                         .collect()
                 } else {
                     requests
@@ -528,7 +526,7 @@ impl CommandBus {
                             name: r.name,
                             method: r.method,
                             url_preview,
-                            collection_id: r.collection_id.unwrap_or_default(),
+                            collection_id: r.collection_id,
                             workspace_id: r.workspace_id,
                             has_body,
                             header_count,
@@ -810,25 +808,130 @@ impl CommandBus {
         Ok(collections)
     }
 
-    pub async fn api_collection_add_folder(
+    pub async fn api_collection_folders_list(
+        &self,
+        workspace_id: String,
+        collection_id: Option<String>,
+    ) -> AppResult<Vec<ApiCollectionFolder>> {
+        self.api_client
+            .list_collection_folders(workspace_id, collection_id)
+            .await
+    }
+
+    pub async fn api_collection_folder_create(
         &self,
         workspace_id: String,
         collection_id: String,
-        folder_path: String,
-    ) -> AppResult<ApiCollection> {
-        let collection = self
+        parent_folder_id: Option<String>,
+        name: String,
+    ) -> AppResult<ApiCollectionFolder> {
+        let folder = self
             .api_client
-            .add_collection_folder(workspace_id.clone(), collection_id, folder_path)
+            .create_collection_folder(
+                workspace_id.clone(),
+                collection_id,
+                parent_folder_id,
+                name,
+            )
             .await?;
         self.activity_log
             .record(
                 Some(&workspace_id),
-                "api.collection.add_folder",
-                Some(&collection.id),
-                serde_json::json!({ "folderCount": collection.folders.len() }),
+                "api.collection.folder.create",
+                Some(&folder.id),
+                serde_json::json!({ "collectionId": folder.collection_id, "parentFolderId": folder.parent_folder_id }),
             )
             .await?;
-        Ok(collection)
+        Ok(folder)
+    }
+
+    pub async fn api_collection_folder_rename(
+        &self,
+        workspace_id: String,
+        folder_id: String,
+        name: String,
+    ) -> AppResult<ApiCollectionFolder> {
+        let folder = self
+            .api_client
+            .rename_collection_folder(workspace_id.clone(), folder_id, name)
+            .await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "api.collection.folder.rename",
+                Some(&folder.id),
+                serde_json::json!({ "name": folder.name }),
+            )
+            .await?;
+        Ok(folder)
+    }
+
+    pub async fn api_collection_folder_delete(
+        &self,
+        workspace_id: String,
+        folder_id: String,
+    ) -> AppResult<Vec<ApiCollectionFolder>> {
+        let folders = self
+            .api_client
+            .delete_collection_folder(workspace_id.clone(), folder_id.clone())
+            .await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "api.collection.folder.delete",
+                Some(&folder_id),
+                serde_json::json!({ "softDelete": true, "recursive": true }),
+            )
+            .await?;
+        Ok(folders)
+    }
+
+    pub async fn api_collection_folder_move(
+        &self,
+        workspace_id: String,
+        folder_id: String,
+        target_parent_folder_id: Option<String>,
+    ) -> AppResult<ApiCollectionFolder> {
+        let folder = self
+            .api_client
+            .move_collection_folder(workspace_id.clone(), folder_id, target_parent_folder_id)
+            .await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "api.collection.folder.move",
+                Some(&folder.id),
+                serde_json::json!({ "parentFolderId": folder.parent_folder_id }),
+            )
+            .await?;
+        Ok(folder)
+    }
+
+    pub async fn api_collection_folders_reorder(
+        &self,
+        workspace_id: String,
+        collection_id: String,
+        parent_folder_id: Option<String>,
+        folder_ids: Vec<String>,
+    ) -> AppResult<Vec<ApiCollectionFolder>> {
+        let folders = self
+            .api_client
+            .reorder_collection_folders(
+                workspace_id.clone(),
+                collection_id.clone(),
+                parent_folder_id,
+                folder_ids,
+            )
+            .await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "api.collection.folder.reorder",
+                Some(&collection_id),
+                serde_json::json!({ "folderCount": folders.len() }),
+            )
+            .await?;
+        Ok(folders)
     }
 
     pub async fn api_request_move(
@@ -836,21 +939,48 @@ impl CommandBus {
         workspace_id: String,
         request_id: String,
         collection_id: Option<String>,
-        folder_path: Option<String>,
+        parent_folder_id: Option<String>,
     ) -> AppResult<ApiSavedRequest> {
         let saved = self
             .api_client
-            .move_request(workspace_id.clone(), request_id, collection_id, folder_path)
+            .move_request(workspace_id.clone(), request_id, collection_id, parent_folder_id)
             .await?;
         self.activity_log
             .record(
                 Some(&workspace_id),
                 "api.request.move",
                 Some(&saved.id),
-                serde_json::json!({ "collectionId": saved.collection_id }),
+                serde_json::json!({ "collectionId": saved.collection_id, "parentFolderId": saved.parent_folder_id }),
             )
             .await?;
         Ok(saved)
+    }
+
+    pub async fn api_requests_reorder(
+        &self,
+        workspace_id: String,
+        collection_id: String,
+        parent_folder_id: Option<String>,
+        request_ids: Vec<String>,
+    ) -> AppResult<Vec<ApiSavedRequest>> {
+        let requests = self
+            .api_client
+            .reorder_requests(
+                workspace_id.clone(),
+                collection_id.clone(),
+                parent_folder_id,
+                request_ids,
+            )
+            .await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "api.request.reorder",
+                Some(&collection_id),
+                serde_json::json!({ "requestCount": requests.len() }),
+            )
+            .await?;
+        Ok(requests)
     }
 
     pub async fn workspace_layout(&self, workspace_id: String) -> AppResult<WorkspaceLayout> {
@@ -1001,8 +1131,8 @@ impl CommandBus {
         let input = ApiRequestInput {
             workspace_id: saved.workspace_id.clone(),
             name: Some(saved.name.clone()),
-            folder_path: saved.folder_path.clone(),
-            collection_id: saved.collection_id.clone(),
+            parent_folder_id: saved.parent_folder_id.clone(),
+            collection_id: Some(saved.collection_id.clone()),
             auth_json: Some(saved.auth_json.clone()),
             method: saved.method.clone(),
             url: saved.url.clone(),
@@ -1562,7 +1692,7 @@ mod tests {
         let input = ApiRequestInput {
             workspace_id: workspace_id.clone(),
             name: Some("Test GET request".to_string()),
-            folder_path: None,
+            parent_folder_id: None,
             collection_id: None,
             auth_json: None,
             method: "GET".to_string(),
@@ -1592,7 +1722,7 @@ mod tests {
         let input2 = ApiRequestInput {
             workspace_id: workspace_id.clone(),
             name: Some("Test POST request".to_string()),
-            folder_path: Some("auth".to_string()),
+            parent_folder_id: None,
             collection_id: None,
             auth_json: None,
             method: "POST".to_string(),
@@ -1608,7 +1738,7 @@ mod tests {
             .save_api_request(input2)
             .await
             .expect("save second api request");
-        assert_eq!(saved2.folder_path.as_deref(), Some("auth"));
+        assert_eq!(saved2.parent_folder_id, None);
 
         let listed2 = bus
             .list_saved_api_requests(workspace_id)
@@ -1739,7 +1869,7 @@ mod tests {
             .save_api_request(ApiRequestInput {
                 workspace_id: workspace_id.clone(),
                 name: Some("List users".to_string()),
-                folder_path: Some("Users".to_string()),
+                parent_folder_id: None,
                 collection_id: Some(collection.id.clone()),
                 auth_json: None,
                 method: "GET".to_string(),

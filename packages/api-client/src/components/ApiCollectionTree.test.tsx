@@ -8,28 +8,36 @@ import { I18nProvider } from "@unfour/ui";
 import { ApiCollectionTree } from "./ApiCollectionTree";
 
 vi.mock("@unfour/command-client", () => ({
-  addApiCollectionFolder: vi.fn(),
   createApiCollection: vi.fn(),
+  createApiCollectionFolder: vi.fn(),
   deleteApiCollection: vi.fn(),
+  deleteApiCollectionFolder: vi.fn(),
   deleteApiRequest: vi.fn(),
   duplicateApiRequest: vi.fn(),
   listApiCollections: vi.fn(),
+  listApiCollectionFolders: vi.fn(),
   listApiHistory: vi.fn(),
   listSavedApiRequests: vi.fn(),
+  moveApiCollectionFolder: vi.fn(),
   moveApiRequest: vi.fn(),
   renameApiCollection: vi.fn(),
+  renameApiCollectionFolder: vi.fn(),
+  reorderApiCollectionFolders: vi.fn(),
+  reorderApiRequests: vi.fn(),
   updateApiRequest: vi.fn(),
 }));
 
 import {
   duplicateApiRequest,
   listApiCollections,
+  listApiCollectionFolders,
   listApiHistory,
   listSavedApiRequests,
   updateApiRequest,
 } from "@unfour/command-client";
 
 const listCollectionsMock = vi.mocked(listApiCollections);
+const listFoldersMock = vi.mocked(listApiCollectionFolders);
 const listSavedMock = vi.mocked(listSavedApiRequests);
 const listHistoryMock = vi.mocked(listApiHistory);
 const duplicateMock = vi.mocked(duplicateApiRequest);
@@ -41,7 +49,6 @@ function collection(overrides: Partial<ApiCollection> = {}): ApiCollection {
     workspaceId: "ws-1",
     name: "Users",
     description: null,
-    folders: [],
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
@@ -53,8 +60,9 @@ function savedRequest(overrides: Partial<ApiSavedRequest> = {}): ApiSavedRequest
     id: "req-1",
     workspaceId: "ws-1",
     name: "Get Users",
-    folderPath: null,
     collectionId: "col-1",
+    parentFolderId: null,
+    sortOrder: 0,
     method: "GET",
     url: "https://api.example.com/users",
     headersJson: "[]",
@@ -101,6 +109,7 @@ function renderTree() {
 beforeEach(() => {
   vi.clearAllMocks();
   listCollectionsMock.mockResolvedValue([collection()]);
+  listFoldersMock.mockResolvedValue([]);
   listSavedMock.mockResolvedValue([savedRequest()]);
   listHistoryMock.mockResolvedValue([]);
   duplicateMock.mockResolvedValue(savedRequest({ id: "req-2", name: "Get Users Copy" }));

@@ -485,7 +485,7 @@ fn api_get_request(
         "bodyType": saved.body_kind,
         "truncated": body_truncated,
         "workspaceId": saved.workspace_id,
-        "collectionId": saved.collection_id.unwrap_or_default()
+        "collectionId": saved.collection_id
     });
 
     Ok(json!({
@@ -906,8 +906,9 @@ mod tests {
                             id: request_id,
                             workspace_id: "ws-1".to_string(),
                             name: "Create User".to_string(),
-                            folder_path: Some("users".to_string()),
-                            collection_id: Some("users".to_string()),
+                            collection_id: "users".to_string(),
+                            parent_folder_id: Some("folder-users".to_string()),
+                            sort_order: 0,
                             auth_json: r#"{"type":"none"}"#.to_string(),
                             method: "POST".to_string(),
                             url: "https://api.example.com/users?api_key=secret".to_string(),

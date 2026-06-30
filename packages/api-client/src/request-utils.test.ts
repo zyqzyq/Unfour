@@ -4,9 +4,7 @@ import {
   bodyFieldsToInput,
   parseKeyValues,
   savedRequestToInput,
-  groupSavedRequests,
-  groupRequestsByCollection,
-  buildFolderTree,
+  buildApiCollectionTree,
   collectTreeRequests,
   duplicateEnvironmentKeys,
   findDuplicateEnvironmentName,
@@ -20,6 +18,7 @@ import {
 } from "./request-utils";
 import type {
   ApiCollection,
+  ApiCollectionFolder,
   ApiEnvironment,
   ApiSavedRequest,
   KeyValue,
@@ -107,7 +106,7 @@ describe("body field helpers", () => {
       bodyMode: "form" as const,
       collectionId: null,
       envVariables: [],
-      folderPath: "",
+      parentFolderId: null,
       formBody: [
         { key: "a", value: "1", enabled: true },
         { key: "b", value: "2", enabled: false },
@@ -134,8 +133,9 @@ describe("savedRequestToInput", () => {
       id: "req-1",
       workspaceId: "ws-1",
       name: "Get Users",
-      folderPath: "Examples / Auth",
-      collectionId: null,
+      collectionId: "c-1",
+      parentFolderId: "folder-auth",
+      sortOrder: 0,
       method: "GET",
       url: "https://api.example.com/users",
       headersJson: JSON.stringify([
@@ -155,78 +155,25 @@ describe("savedRequestToInput", () => {
     expect(result.workspaceId).toBe("ws-2");
     expect(result.name).toBe("Get Users");
     expect(result.method).toBe("GET");
+    expect(result.collectionId).toBe("c-1");
+    expect(result.parentFolderId).toBe("folder-auth");
     expect(result.headers).toHaveLength(1);
     expect(result.query).toEqual([]);
     expect(result.timeoutMs).toBe(60_000);
   });
 });
 
-describe("groupSavedRequests", () => {
-  it("groups by folderPath with Unfiled first", () => {
-    const items: ApiSavedRequest[] = [
-      makeSavedRequest("B Request", "Beta"),
-      makeSavedRequest("A Request", "Alpha"),
-      makeSavedRequest("Unfiled One", ""),
-      makeSavedRequest("Unfiled Two", null),
-    ];
-    const groups = groupSavedRequests(items);
-    expect(groups).toHaveLength(3);
-    expect(groups[0].folder).toBe("Unfiled");
-    expect(groups[0].items).toHaveLength(2);
-    expect(groups[1].folder).toBe("Alpha");
-    expect(groups[2].folder).toBe("Beta");
-  });
-
-  it("sorts items within groups by name", () => {
-    const items: ApiSavedRequest[] = [
-      makeSavedRequest("Zebra", "Group"),
-      makeSavedRequest("Apple", "Group"),
-    ];
-    const groups = groupSavedRequests(items);
-    expect(groups[0].items[0].name).toBe("Apple");
-    expect(groups[0].items[1].name).toBe("Zebra");
-  });
-
-  it("returns empty for no items", () => {
-    expect(groupSavedRequests([])).toEqual([]);
-  });
-});
-
-describe("buildFolderTree", () => {
-  it("nests folders by path segment and keeps folderless requests at root", () => {
-    const tree = buildFolderTree([
-      makeSavedRequest("Login", "Auth"),
-      makeSavedRequest("Refresh", "Auth/Tokens"),
-      makeSavedRequest("Root Request", null),
-    ]);
-    expect(tree.rootRequests.map((r) => r.name)).toEqual(["Root Request"]);
-    const auth = tree.folders.find((f) => f.name === "Auth");
-    expect(auth?.path).toBe("Auth");
-    expect(auth?.requests.map((r) => r.name)).toEqual(["Login"]);
-    const tokens = auth?.folders.find((f) => f.name === "Tokens");
-    expect(tokens?.path).toBe("Auth/Tokens");
-    expect(tokens?.requests.map((r) => r.name)).toEqual(["Refresh"]);
-  });
-
-  it("includes empty extra folders that have no requests", () => {
-    const tree = buildFolderTree([], ["Drafts", "Auth/Tokens"]);
-    expect(tree.folders.map((f) => f.name).sort()).toEqual(["Auth", "Drafts"]);
-    const auth = tree.folders.find((f) => f.name === "Auth");
-    expect(auth?.folders[0].name).toBe("Tokens");
-    expect(collectTreeRequests(tree)).toEqual([]);
-  });
-});
-
-describe("groupRequestsByCollection", () => {
+describe("buildApiCollectionTree", () => {
   const collections: ApiCollection[] = [
     makeCollection("c-1", "Beta"),
-    makeCollection("c-2", "Alpha", ["Drafts"]),
+    makeCollection("c-2", "Alpha"),
   ];
 
   it("returns collections sorted by name, with empty collections kept", () => {
-    const groups = groupRequestsByCollection(
-      [makeSavedRequest("In Beta", null, "c-1")],
+    const groups = buildApiCollectionTree(
       collections,
+      [makeFolder("folder-drafts", "c-2", null, "Drafts")],
+      [makeSavedRequest("In Beta", "c-1", null)],
     );
     expect(groups.map((group) => group.name)).toEqual(["Alpha", "Beta"]);
     const alpha = groups.find((group) => group.id === "c-2");
@@ -236,29 +183,94 @@ describe("groupRequestsByCollection", () => {
     expect(beta?.tree.rootRequests[0].name).toBe("In Beta");
   });
 
-  it("places uncollected and orphaned requests under the first collection", () => {
-    const groups = groupRequestsByCollection(
-      [
-        makeSavedRequest("No Collection", null, null),
-        makeSavedRequest("Orphan", null, "missing-collection"),
-        makeSavedRequest("In Beta", "Auth", "c-1"),
-      ],
+  it("builds folder rows by parentFolderId and keeps root requests at the collection root", () => {
+    const groups = buildApiCollectionTree(
       collections,
+      [
+        makeFolder("folder-auth", "c-1", null, "Auth"),
+        makeFolder("folder-tokens", "c-1", "folder-auth", "Tokens"),
+      ],
+      [
+        makeSavedRequest("Login", "c-1", "folder-auth"),
+        makeSavedRequest("Refresh", "c-1", "folder-tokens"),
+        makeSavedRequest("Root Request", "c-1", null),
+      ],
     );
-    expect(groups[0].id).toBe("c-2");
-    expect(groups[0].name).toBe("Alpha");
-    const firstNames = collectTreeRequests(groups[0].tree).map((r) => r.name);
-    expect(firstNames).toContain("No Collection");
-    expect(firstNames).toContain("Orphan");
+
+    const beta = groups.find((group) => group.id === "c-1");
+    expect(beta?.tree.rootRequests.map((r) => r.name)).toEqual(["Root Request"]);
+    const auth = beta?.tree.folders.find((folder) => folder.id === "folder-auth");
+    expect(auth?.requests.map((r) => r.name)).toEqual(["Login"]);
+    expect(auth?.folders[0]).toMatchObject({
+      id: "folder-tokens",
+      name: "Tokens",
+    });
+    expect(auth?.folders[0].requests.map((r) => r.name)).toEqual(["Refresh"]);
   });
 
-  it("works normally when every request belongs to a collection", () => {
-    const groups = groupRequestsByCollection(
-      [makeSavedRequest("In Beta", null, "c-1")],
+  it("keeps empty folders visible without relying on collection folders_json", () => {
+    const groups = buildApiCollectionTree(
       collections,
+      [
+        makeFolder("folder-auth", "c-1", null, "Auth"),
+        makeFolder("folder-tokens", "c-1", "folder-auth", "Tokens"),
+      ],
+      [],
     );
-    expect(groups).toHaveLength(2);
-    expect(groups.some((group) => group.id === null)).toBe(false);
+
+    const auth = groups
+      .find((group) => group.id === "c-1")
+      ?.tree.folders.find((folder) => folder.id === "folder-auth");
+    expect(auth?.folders[0].name).toBe("Tokens");
+    expect(collectTreeRequests(groups[1].tree)).toEqual([]);
+  });
+
+  it("sorts sibling folders and sibling requests by sortOrder with folders first", () => {
+    const groups = buildApiCollectionTree(
+      [makeCollection("c-1", "Only")],
+      [
+        makeFolder("folder-b", "c-1", null, "B Folder", 20),
+        makeFolder("folder-a", "c-1", null, "A Folder", 10),
+      ],
+      [
+        makeSavedRequest("B Request", "c-1", null, 20),
+        makeSavedRequest("A Request", "c-1", null, 10),
+      ],
+    );
+
+    const only = groups[0].tree;
+    expect(only.folders.map((folder) => folder.name)).toEqual([
+      "A Folder",
+      "B Folder",
+    ]);
+    expect(only.rootRequests.map((request) => request.name)).toEqual([
+      "A Request",
+      "B Request",
+    ]);
+    expect([
+      ...only.folders.map((folder) => `folder:${folder.name}`),
+      ...only.rootRequests.map((request) => `request:${request.name}`),
+    ]).toEqual([
+      "folder:A Folder",
+      "folder:B Folder",
+      "request:A Request",
+      "request:B Request",
+    ]);
+  });
+
+  it("ignores folderPath-shaped imported data when building the tree", () => {
+    const request = {
+      ...makeSavedRequest("Root Request", "c-1", null),
+      folderPath: "Legacy/Path",
+    } as ApiSavedRequest & { folderPath: string };
+    const groups = buildApiCollectionTree(
+      [makeCollection("c-1", "Only")],
+      [],
+      [request],
+    );
+
+    expect(groups[0].tree.folders).toEqual([]);
+    expect(groups[0].tree.rootRequests[0].name).toBe("Root Request");
   });
 });
 
@@ -392,15 +404,17 @@ describe("parseCollectionImport", () => {
 
 function makeSavedRequest(
   name: string,
-  folderPath: string | null,
-  collectionId: string | null = null,
+  collectionId: string,
+  parentFolderId: string | null,
+  sortOrder = 0,
 ): ApiSavedRequest {
   return {
     id: `id-${name}`,
     workspaceId: "ws-1",
     name,
-    folderPath,
     collectionId,
+    parentFolderId,
+    sortOrder,
     method: "GET",
     url: "https://example.com",
     headersJson: "[]",
@@ -419,15 +433,33 @@ function makeSavedRequest(
 function makeCollection(
   id: string,
   name: string,
-  folders: string[] = [],
 ): ApiCollection {
   return {
     id,
     workspaceId: "ws-1",
     name,
     description: null,
-    folders,
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",
+  };
+}
+
+function makeFolder(
+  id: string,
+  collectionId: string,
+  parentFolderId: string | null,
+  name: string,
+  sortOrder = 0,
+): ApiCollectionFolder {
+  return {
+    id,
+    workspaceId: "ws-1",
+    collectionId,
+    parentFolderId,
+    name,
+    sortOrder,
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+    deletedAt: null,
   };
 }

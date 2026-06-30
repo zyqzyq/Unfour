@@ -42,9 +42,22 @@ pub struct ApiCollection {
     pub workspace_id: String,
     pub name: String,
     pub description: Option<String>,
-    pub folders: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiCollectionFolder {
+    pub id: String,
+    pub workspace_id: String,
+    pub collection_id: String,
+    pub parent_folder_id: Option<String>,
+    pub name: String,
+    pub sort_order: i64,
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,7 +94,7 @@ pub struct KeyValue {
 pub struct ApiRequestInput {
     pub workspace_id: String,
     pub name: Option<String>,
-    pub folder_path: Option<String>,
+    pub parent_folder_id: Option<String>,
     pub collection_id: Option<String>,
     #[serde(default)]
     pub auth_json: Option<String>,
@@ -152,8 +165,9 @@ pub struct ApiSavedRequest {
     pub id: String,
     pub workspace_id: String,
     pub name: String,
-    pub folder_path: Option<String>,
-    pub collection_id: Option<String>,
+    pub collection_id: String,
+    pub parent_folder_id: Option<String>,
+    pub sort_order: i64,
     pub auth_json: String,
     pub method: String,
     pub url: String,

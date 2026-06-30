@@ -13,27 +13,33 @@ import {
   useI18n,
   type TreeViewItem,
 } from "@unfour/ui";
-import type { ApiCollection, ApiSavedRequest } from "@unfour/command-client";
-import { groupRequestsByCollection, type FolderNode } from "../request-utils";
+import type {
+  ApiCollection,
+  ApiCollectionFolder,
+  ApiSavedRequest,
+} from "@unfour/command-client";
+import { buildApiCollectionTree, type FolderNode } from "../request-utils";
 
 export type SaveIdentity = {
   collectionId: string | null;
   createCollectionName?: string;
-  folderPath: string;
   name: string;
+  newFolderName?: string;
+  parentFolderId: string | null;
 };
 
-type Target = { collectionId: string; folderPath: string };
+type Target = { collectionId: string; parentFolderId: string | null };
 
-function targetId(collectionId: string, folderPath: string) {
-  return `pick:${collectionId}:${folderPath}`;
+function targetId(collectionId: string, parentFolderId: string | null) {
+  return `pick:${collectionId}:${parentFolderId ?? "root"}`;
 }
 
 export function ApiSaveDialog({
   collections,
   defaultCollectionId,
-  defaultFolder,
+  defaultParentFolderId,
   defaultName,
+  folders,
   onCancel,
   onSave,
   open,
@@ -42,8 +48,9 @@ export function ApiSaveDialog({
 }: {
   collections: ApiCollection[];
   defaultCollectionId: string | null;
-  defaultFolder: string;
+  defaultParentFolderId: string | null;
   defaultName: string;
+  folders: ApiCollectionFolder[];
   onCancel: () => void;
   onSave: (identity: SaveIdentity) => void;
   open: boolean;
@@ -53,25 +60,25 @@ export function ApiSaveDialog({
   const { t } = useI18n();
 
   const targets = new Map<string, Target>();
-  const registerTarget = (collectionId: string, folderPath: string) => {
-    const id = targetId(collectionId, folderPath);
-    targets.set(id, { collectionId, folderPath });
+  const registerTarget = (collectionId: string, parentFolderId: string | null) => {
+    const id = targetId(collectionId, parentFolderId);
+    targets.set(id, { collectionId, parentFolderId });
     return id;
   };
 
   function folderItem(node: FolderNode, collectionId: string): TreeViewItem {
     return {
-      id: registerTarget(collectionId, node.path),
+      id: registerTarget(collectionId, node.id),
       icon: <Folder size={13} />,
       label: node.name,
       children: node.folders.map((child) => folderItem(child, collectionId)),
     };
   }
 
-  const groups = groupRequestsByCollection(savedRequests, collections);
+  const groups = buildApiCollectionTree(collections, folders, savedRequests);
   const items: TreeViewItem[] = groups.length
     ? groups.map<TreeViewItem>((group) => ({
-        id: registerTarget(group.id, ""),
+        id: registerTarget(group.id, null),
         icon: <FolderOpen size={13} />,
         label: group.name,
         children: group.tree.folders.map((folder) =>
@@ -80,7 +87,7 @@ export function ApiSaveDialog({
       }))
     : [
         {
-          id: registerTarget("__default__", ""),
+          id: registerTarget("__default__", null),
           icon: <FolderOpen size={13} />,
           label: t("api.collection.defaultCollection"),
           children: [],
@@ -88,7 +95,7 @@ export function ApiSaveDialog({
       ];
 
   const defaultId = defaultCollectionId
-    ? targetId(defaultCollectionId, defaultFolder)
+    ? targetId(defaultCollectionId, defaultParentFolderId)
     : "";
   const autoSelectedId =
     targets.has(defaultId) ? defaultId : items[0]?.id ?? "";
@@ -112,8 +119,9 @@ export function ApiSaveDialog({
       onSave({
         collectionId: null,
         createCollectionName: newCollectionName.trim(),
-        folderPath: sub,
         name: name.trim(),
+        newFolderName: sub || undefined,
+        parentFolderId: null,
       });
       return;
     }
@@ -123,12 +131,12 @@ export function ApiSaveDialog({
     const collectionId = isDefaultCollection
       ? null
       : (target?.collectionId ?? collections[0]?.id ?? null);
-    const folderPath = sub
-      ? target?.folderPath
-        ? `${target.folderPath}/${sub}`
-        : sub
-      : (target?.folderPath ?? "");
-    onSave({ collectionId, folderPath, name: name.trim() });
+    onSave({
+      collectionId,
+      name: name.trim(),
+      newFolderName: sub || undefined,
+      parentFolderId: target?.parentFolderId ?? null,
+    });
   }
 
   return (

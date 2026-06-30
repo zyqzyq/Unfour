@@ -6,7 +6,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 
 vi.mock("@unfour/command-client", () => ({
-  addApiCollectionFolder: vi.fn(),
   createApiCollection: vi.fn(),
   deleteApiCollection: vi.fn(),
   listApiCollections: vi.fn(),
@@ -14,7 +13,6 @@ vi.mock("@unfour/command-client", () => ({
 }));
 
 import {
-  addApiCollectionFolder,
   createApiCollection,
   deleteApiCollection,
   listApiCollections,
@@ -26,7 +24,6 @@ const listMock = vi.mocked(listApiCollections);
 const createMock = vi.mocked(createApiCollection);
 const renameMock = vi.mocked(renameApiCollection);
 const deleteMock = vi.mocked(deleteApiCollection);
-const addFolderMock = vi.mocked(addApiCollectionFolder);
 
 function collection(overrides: Partial<ApiCollection> = {}): ApiCollection {
   return { id: "col-1", name: "Default", ...overrides } as ApiCollection;
@@ -62,11 +59,10 @@ describe("useApiCollections", () => {
     expect(listMock).not.toHaveBeenCalled();
   });
 
-  it("wires create, rename, and add-folder mutations to their commands", async () => {
+  it("wires create and rename mutations to their commands", async () => {
     listMock.mockResolvedValue([]);
     createMock.mockResolvedValue(collection({ id: "c2" }));
     renameMock.mockResolvedValue(collection({ id: "c1", name: "Renamed" }));
-    addFolderMock.mockResolvedValue(collection({ id: "c1" }));
 
     const { result } = renderHook(() => useApiCollections("ws-1"), {
       wrapper: createWrapper(),
@@ -75,14 +71,10 @@ describe("useApiCollections", () => {
 
     result.current.createMut.mutate("New");
     result.current.renameMut.mutate({ id: "c1", name: "Renamed" });
-    result.current.addFolderMut.mutate({ collectionId: "c1", folderPath: "a/b" });
 
     await waitFor(() => expect(createMock).toHaveBeenCalledWith("ws-1", "New"));
     await waitFor(() =>
       expect(renameMock).toHaveBeenCalledWith("ws-1", "c1", "Renamed"),
-    );
-    await waitFor(() =>
-      expect(addFolderMock).toHaveBeenCalledWith("ws-1", "c1", "a/b"),
     );
   });
 

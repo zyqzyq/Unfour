@@ -86,7 +86,7 @@ function requestInput(): ApiRequestInput {
   return {
     workspaceId: "ws-1",
     name: "Create user",
-    folderPath: null,
+    parentFolderId: null,
     collectionId: null,
     method: "POST",
     url: "https://api.test/users",
