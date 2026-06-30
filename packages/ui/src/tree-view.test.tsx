@@ -145,10 +145,11 @@ describe("TreeView", () => {
     fireEvent.dragOver(folderRow as HTMLElement, { dataTransfer: transfer });
     fireEvent.drop(folderRow as HTMLElement, { dataTransfer: transfer });
 
-    expect(onDrop).toHaveBeenCalledWith({
+    expect(onDrop).toHaveBeenCalledWith(expect.objectContaining({
+      position: "inside",
       source: expect.objectContaining({ id: "request" }),
       target: expect.objectContaining({ id: "folder" }),
-    });
+    }));
   });
 
   it("keeps internal tree dragging out of native HTML drag mode", () => {
@@ -194,10 +195,64 @@ describe("TreeView", () => {
     fireEvent.dragOver(folderRow as HTMLElement, { dataTransfer: transfer });
     fireEvent.drop(folderRow as HTMLElement, { dataTransfer: transfer });
 
-    expect(onDrop).toHaveBeenCalledWith({
+    expect(onDrop).toHaveBeenCalledWith(expect.objectContaining({
+      position: "inside",
       source: expect.objectContaining({ id: "request" }),
       target: expect.objectContaining({ id: "folder" }),
+    }));
+  });
+
+  it("marks before drop positions for sortable rows", () => {
+    const onDrop = vi.fn();
+    render(
+      <TreeView
+        canDrag={(item) => item.id === "first"}
+        canDrop={(source, target, position) =>
+          source.id === "first" && target.id === "second" && position === "before"
+        }
+        items={[
+          { id: "first", label: "First" },
+          { id: "second", label: "Second" },
+        ]}
+        onDrop={onDrop}
+      />,
+    );
+
+    const firstRow = screen.getByText("First").closest("[role='treeitem']");
+    const secondRow = screen.getByText("Second").closest("[role='treeitem']");
+    expect(firstRow).not.toBeNull();
+    expect(secondRow).not.toBeNull();
+    vi.spyOn(secondRow as HTMLElement, "getBoundingClientRect").mockReturnValue({
+      bottom: 34,
+      height: 24,
+      left: 0,
+      right: 120,
+      top: 10,
+      width: 120,
+      x: 0,
+      y: 10,
+      toJSON: () => ({}),
     });
+
+    const transfer = dataTransfer();
+    fireEvent.dragStart(firstRow as HTMLElement, { dataTransfer: transfer });
+    fireEvent.dragOver(secondRow as HTMLElement, {
+      clientY: 11,
+      dataTransfer: transfer,
+    });
+
+    expect(secondRow).toHaveAttribute("data-drop-position", "before");
+
+    fireEvent.drop(secondRow as HTMLElement, {
+      clientY: 11,
+      dataTransfer: transfer,
+    });
+
+    expect(onDrop).toHaveBeenCalledWith(expect.objectContaining({
+      position: "before",
+      source: expect.objectContaining({ id: "first" }),
+      target: expect.objectContaining({ id: "second" }),
+    }));
   });
 
   it("drops with pointer dragging when native drag events are unavailable", () => {
@@ -249,10 +304,11 @@ describe("TreeView", () => {
       });
       fireEvent.click(requestLabel);
 
-      expect(onDrop).toHaveBeenCalledWith({
+      expect(onDrop).toHaveBeenCalledWith(expect.objectContaining({
+        position: "inside",
         source: expect.objectContaining({ id: "request" }),
         target: expect.objectContaining({ id: "folder" }),
-      });
+      }));
       expect(onSelect).not.toHaveBeenCalled();
     } finally {
       Object.defineProperty(document, "elementFromPoint", {

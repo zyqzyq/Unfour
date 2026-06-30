@@ -4,6 +4,7 @@ import { cn } from "./utils";
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "./menus";
 
 const TREE_DRAG_TYPE = "application/x-unfour-tree-item";
+const TREE_DROP_POSITIONS: TreeViewDropPosition[] = ["inside", "before", "after"];
 
 export type TreeViewItem = {
   actions?: React.ReactNode;
@@ -18,9 +19,12 @@ export type TreeViewItem = {
 };
 
 export type TreeViewDropEvent = {
+  position: TreeViewDropPosition;
   source: TreeViewItem;
   target: TreeViewItem;
 };
+
+export type TreeViewDropPosition = "before" | "inside" | "after";
 
 type FlatNode = {
   expanded: boolean;
@@ -36,6 +40,11 @@ type PointerDragState = {
   source: TreeViewItem;
   startX: number;
   startY: number;
+};
+
+type TreeViewDragTarget = {
+  id: string;
+  position: TreeViewDropPosition;
 };
 
 function flatten(
@@ -68,6 +77,64 @@ function escapeId(id: string): string {
   return id.replace(/["\\]/g, "\\$&");
 }
 
+function preferredDropPosition(
+  row: HTMLElement,
+  clientY: number,
+): TreeViewDropPosition {
+  const rect = row.getBoundingClientRect();
+  if (!rect.height) {
+    return "inside";
+  }
+  const offset = clientY - rect.top;
+  const threshold = Math.min(8, rect.height * 0.35);
+  if (offset <= threshold) {
+    return "before";
+  }
+  if (offset >= rect.height - threshold) {
+    return "after";
+  }
+  return "inside";
+}
+
+function dropPositionFallbacks(
+  preferred: TreeViewDropPosition,
+  row: HTMLElement,
+  clientY: number,
+): TreeViewDropPosition[] {
+  if (preferred === "before") {
+    return ["before", "inside", "after"];
+  }
+  if (preferred === "after") {
+    return ["after", "inside", "before"];
+  }
+  const rect = row.getBoundingClientRect();
+  const edge = clientY < rect.top + rect.height / 2 ? "before" : "after";
+  return ["inside", edge, edge === "before" ? "after" : "before"];
+}
+
+function resolveRowDropTarget(
+  source: TreeViewItem,
+  target: TreeViewItem,
+  row: HTMLElement,
+  clientY: number,
+  canDropOn: (
+    source: TreeViewItem,
+    target: TreeViewItem,
+    position: TreeViewDropPosition,
+  ) => boolean,
+): TreeViewDragTarget | null {
+  for (const position of dropPositionFallbacks(
+    preferredDropPosition(row, clientY),
+    row,
+    clientY,
+  )) {
+    if (canDropOn(source, target, position)) {
+      return { id: target.id, position };
+    }
+  }
+  return null;
+}
+
 export function TreeView({
   canDrag,
   canDrop,
@@ -81,7 +148,11 @@ export function TreeView({
   selectedId,
 }: {
   canDrag?: (item: TreeViewItem) => boolean;
-  canDrop?: (source: TreeViewItem, target: TreeViewItem) => boolean;
+  canDrop?: (
+    source: TreeViewItem,
+    target: TreeViewItem,
+    position: TreeViewDropPosition,
+  ) => boolean;
   className?: string;
   defaultExpandedIds?: string[];
   items: TreeViewItem[];
@@ -96,7 +167,7 @@ export function TreeView({
   const [expandedIds, setExpandedIds] = React.useState(() => new Set(defaultExpandedIds));
   const [focusedId, setFocusedId] = React.useState<string | null>(null);
   const [dragSource, setDragSource] = React.useState<TreeViewItem | null>(null);
-  const [dragTargetId, setDragTargetId] = React.useState<string | null>(null);
+  const [dragTarget, setDragTarget] = React.useState<TreeViewDragTarget | null>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
   const dragSourceRef = React.useRef<TreeViewItem | null>(null);
   const pointerDragRef = React.useRef<PointerDragState | null>(null);
@@ -183,11 +254,15 @@ export function TreeView({
     }
   }
 
-  function canDropOn(source: TreeViewItem, target: TreeViewItem) {
+  function canDropOn(
+    source: TreeViewItem,
+    target: TreeViewItem,
+    position: TreeViewDropPosition,
+  ) {
     if (!onDrop || source.id === target.id || target.disabled) {
       return false;
     }
-    return canDrop ? canDrop(source, target) : true;
+    return canDrop ? canDrop(source, target, position) : true;
   }
 
   function setDragSourceItem(item: TreeViewItem | null) {
@@ -205,11 +280,27 @@ export function TreeView({
     return sourceId ? (itemById.get(sourceId) ?? null) : null;
   }
 
-  function itemFromPoint(clientX: number, clientY: number) {
+  function rowFromPoint(clientX: number, clientY: number) {
     const target = document.elementFromPoint(clientX, clientY);
-    const row = target?.closest<HTMLElement>("[data-tree-id]");
+    return target?.closest<HTMLElement>("[data-tree-id]") ?? null;
+  }
+
+  function itemFromRow(row: HTMLElement | null) {
     const id = row?.dataset.treeId;
     return id ? (itemById.get(id) ?? null) : null;
+  }
+
+  function dropTargetFromPoint(
+    source: TreeViewItem,
+    clientX: number,
+    clientY: number,
+  ) {
+    const row = rowFromPoint(clientX, clientY);
+    const target = itemFromRow(row);
+    if (!row || !target) {
+      return null;
+    }
+    return resolveRowDropTarget(source, target, row, clientY, canDropOn);
   }
 
   function startPointerDrag(
@@ -243,8 +334,7 @@ export function TreeView({
     state.active = true;
     setDragSourceItem(state.source);
     event.preventDefault();
-    const target = itemFromPoint(event.clientX, event.clientY);
-    setDragTargetId(target && canDropOn(state.source, target) ? target.id : null);
+    setDragTarget(dropTargetFromPoint(state.source, event.clientX, event.clientY));
   }
 
   function endPointerDrag(event: React.PointerEvent<HTMLElement>) {
@@ -258,9 +348,14 @@ export function TreeView({
       event.preventDefault();
       event.stopPropagation();
       suppressClickRef.current = state.source.id;
-      const target = itemFromPoint(event.clientX, event.clientY);
-      if (target && canDropOn(state.source, target)) {
-        onDrop?.({ source: state.source, target });
+      const row = rowFromPoint(event.clientX, event.clientY);
+      const target = itemFromRow(row);
+      const dropTarget =
+        row && target
+          ? resolveRowDropTarget(state.source, target, row, event.clientY, canDropOn)
+          : null;
+      if (target && dropTarget) {
+        onDrop?.({ position: dropTarget.position, source: state.source, target });
       }
     }
     clearDrag();
@@ -286,7 +381,7 @@ export function TreeView({
   function clearDrag() {
     dragSourceRef.current = null;
     setDragSource(null);
-    setDragTargetId(null);
+    setDragTarget(null);
   }
 
   function step(fromIndex: number, direction: 1 | -1) {
@@ -394,14 +489,16 @@ export function TreeView({
           canDrag={canDrag}
           canDropOn={canDropOn}
           dragSource={dragSource}
-          dragTargetId={dragTargetId}
+          dragTarget={dragTarget}
           expandedIds={expandedIds}
           item={item}
           key={item.id}
           level={0}
           onActivate={onActivate}
           onClearDrag={clearDrag}
-          onDropItem={(source, target) => onDrop?.({ source, target })}
+          onDropItem={(source, target, position) =>
+            onDrop?.({ position, source, target })
+          }
           onFocusRow={setFocusedId}
           onGetDragSource={dragSourceFromEvent}
           onCancelPointerDrag={cancelPointerDrag}
@@ -411,7 +508,7 @@ export function TreeView({
           onUpdatePointerDrag={updatePointerDrag}
           onEndPointerDrag={endPointerDrag}
           onSetDragSource={setDragSourceItem}
-          onSetDragTarget={setDragTargetId}
+          onSetDragTarget={setDragTarget}
           rovingId={rovingId}
           selectedId={selectedId}
           toggle={toggle}
@@ -425,7 +522,7 @@ function TreeRow({
   canDrag,
   canDropOn,
   dragSource,
-  dragTargetId,
+  dragTarget,
   expandedIds,
   item,
   level,
@@ -447,15 +544,23 @@ function TreeRow({
   toggle,
 }: {
   canDrag?: (item: TreeViewItem) => boolean;
-  canDropOn: (source: TreeViewItem, target: TreeViewItem) => boolean;
+  canDropOn: (
+    source: TreeViewItem,
+    target: TreeViewItem,
+    position: TreeViewDropPosition,
+  ) => boolean;
   dragSource: TreeViewItem | null;
-  dragTargetId: string | null;
+  dragTarget: TreeViewDragTarget | null;
   expandedIds: Set<string>;
   item: TreeViewItem;
   level: number;
   onActivate?: (item: TreeViewItem) => void;
   onClearDrag: () => void;
-  onDropItem: (source: TreeViewItem, target: TreeViewItem) => void;
+  onDropItem: (
+    source: TreeViewItem,
+    target: TreeViewItem,
+    position: TreeViewDropPosition,
+  ) => void;
   onFocusRow: (id: string) => void;
   onGetDragSource: (event: React.DragEvent<HTMLDivElement>) => TreeViewItem | null;
   onCancelPointerDrag: (event: React.PointerEvent<HTMLElement>) => void;
@@ -468,7 +573,7 @@ function TreeRow({
   onUpdatePointerDrag: (event: React.PointerEvent<HTMLElement>) => void;
   onEndPointerDrag: (event: React.PointerEvent<HTMLElement>) => void;
   onSetDragSource: (item: TreeViewItem | null) => void;
-  onSetDragTarget: (id: string | null) => void;
+  onSetDragTarget: (target: TreeViewDragTarget | null) => void;
   rovingId: string | null;
   selectedId?: string | null;
   toggle: (id: string) => void;
@@ -476,8 +581,14 @@ function TreeRow({
   const hasChildren = Boolean(item.children?.length);
   const expanded = expandedIds.has(item.id);
   const draggable = !item.disabled && Boolean(canDrag?.(item));
-  const canReceiveDrop = dragSource ? canDropOn(dragSource, item) : false;
-  const isDropTarget = canReceiveDrop && dragTargetId === item.id;
+  const canReceiveDrop = dragSource
+    ? TREE_DROP_POSITIONS.some((position) => canDropOn(dragSource, item, position))
+    : false;
+  const dropPosition = canReceiveDrop && dragTarget?.id === item.id ? dragTarget.position : null;
+  const isDropInside = dropPosition === "inside";
+  const isDropBefore = dropPosition === "before";
+  const isDropAfter = dropPosition === "after";
+  const isDragSource = dragSource?.id === item.id;
 
   function handleDragStart(event: React.DragEvent<HTMLElement>) {
     if (!draggable) {
@@ -492,15 +603,18 @@ function TreeRow({
 
   function handleDragOver(event: React.DragEvent<HTMLDivElement>) {
     const source = onGetDragSource(event);
-    if (!source || !canDropOn(source, item)) {
-      if (dragTargetId === item.id) {
+    const target = source
+      ? resolveRowDropTarget(source, item, event.currentTarget, event.clientY, canDropOn)
+      : null;
+    if (!source || !target) {
+      if (dragTarget?.id === item.id) {
         onSetDragTarget(null);
       }
       return;
     }
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
-    onSetDragTarget(item.id);
+    onSetDragTarget(target);
   }
 
   function handleDragLeave(event: React.DragEvent<HTMLDivElement>) {
@@ -515,11 +629,14 @@ function TreeRow({
 
   function handleDrop(event: React.DragEvent<HTMLDivElement>) {
     const source = onGetDragSource(event);
-    if (!source || !canDropOn(source, item)) {
+    const target = source
+      ? resolveRowDropTarget(source, item, event.currentTarget, event.clientY, canDropOn)
+      : null;
+    if (!source || !target) {
       return;
     }
     event.preventDefault();
-    onDropItem(source, item);
+    onDropItem(source, item, target.position);
     onClearDrag();
   }
 
@@ -529,13 +646,17 @@ function TreeRow({
       aria-expanded={hasChildren ? expanded : undefined}
       aria-selected={selectedId === item.id || undefined}
       className={cn(
-        "group flex h-[var(--u-size-sidebar-row)] min-w-0 items-center gap-0.5 rounded-[var(--u-radius-sm)] px-1 text-[12px] text-[var(--u-color-text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--u-color-focus)_32%,transparent)]",
+        "group relative flex h-[var(--u-size-sidebar-row)] min-w-0 items-center gap-0.5 rounded-[var(--u-radius-sm)] px-1 text-[12px] text-[var(--u-color-text-muted)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--u-color-focus)_32%,transparent)]",
         selectedId === item.id &&
           "bg-[var(--u-color-primary-soft)] font-semibold text-[var(--u-color-primary)]",
-        isDropTarget &&
+        isDropInside &&
           "bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)] ring-1 ring-inset ring-[var(--u-color-border-strong)]",
-        item.disabled ? "opacity-60" : "hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
+        isDragSource && "opacity-40",
+        !isDragSource && !item.disabled && !isDropInside &&
+          "hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
+        item.disabled && "opacity-60",
       )}
+      data-drop-position={dropPosition ?? undefined}
       data-tree-id={item.id}
       onDragEnd={draggable ? onClearDrag : undefined}
       onDragLeave={handleDragLeave}
@@ -548,6 +669,8 @@ function TreeRow({
       tabIndex={rovingId === item.id ? 0 : -1}
       title={item.title}
     >
+      {isDropBefore && <DropLine position="before" />}
+      {isDropAfter && <DropLine position="after" />}
       <button
         aria-label={expanded ? "Collapse" : "Expand"}
         className="grid h-4 w-4 shrink-0 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] hover:bg-[var(--u-color-surface-hover)]"
@@ -564,7 +687,7 @@ function TreeRow({
       <button
         className={cn(
           "min-w-0 flex-1 truncate text-left disabled:cursor-not-allowed",
-          draggable && "cursor-grab active:cursor-grabbing",
+          draggable && "cursor-grab select-none touch-none active:cursor-grabbing",
         )}
         disabled={item.disabled}
         onClick={(event) => {
@@ -610,7 +733,7 @@ function TreeRow({
               canDrag={canDrag}
               canDropOn={canDropOn}
               dragSource={dragSource}
-              dragTargetId={dragTargetId}
+              dragTarget={dragTarget}
               expandedIds={expandedIds}
               item={child}
               key={child.id}
@@ -636,5 +759,17 @@ function TreeRow({
         </div>
       )}
     </>
+  );
+}
+
+function DropLine({ position }: { position: "before" | "after" }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "pointer-events-none absolute left-1 right-1 z-10 h-0.5 rounded-full bg-[var(--u-color-primary)] shadow-[0_0_0_1px_color-mix(in_srgb,var(--u-color-primary)_24%,transparent)]",
+        position === "before" ? "top-0" : "bottom-0",
+      )}
+    />
   );
 }

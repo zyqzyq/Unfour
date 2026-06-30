@@ -34,6 +34,7 @@ import {
   listApiHistory,
   listSavedApiRequests,
   moveApiRequest,
+  reorderApiRequests,
   updateApiRequest,
 } from "@unfour/command-client";
 
@@ -43,6 +44,7 @@ const listSavedMock = vi.mocked(listSavedApiRequests);
 const listHistoryMock = vi.mocked(listApiHistory);
 const duplicateMock = vi.mocked(duplicateApiRequest);
 const moveMock = vi.mocked(moveApiRequest);
+const reorderRequestsMock = vi.mocked(reorderApiRequests);
 const updateMock = vi.mocked(updateApiRequest);
 
 function collection(overrides: Partial<ApiCollection> = {}): ApiCollection {
@@ -158,6 +160,7 @@ beforeEach(() => {
   listHistoryMock.mockResolvedValue([]);
   duplicateMock.mockResolvedValue(savedRequest({ id: "req-2", name: "Get Users Copy" }));
   moveMock.mockResolvedValue(savedRequest({ parentFolderId: "folder-1" }));
+  reorderRequestsMock.mockResolvedValue([savedRequest()]);
   updateMock.mockResolvedValue(savedRequest({ name: "List Users" }));
 });
 
@@ -253,6 +256,51 @@ describe("ApiCollectionTree", () => {
     await waitFor(() =>
       expect(moveMock).toHaveBeenCalledWith("ws-1", "req-1", "col-1", "folder-1"),
     );
+  });
+
+  it("reorders sibling saved requests by dragging before another request", async () => {
+    listSavedMock.mockResolvedValue([
+      savedRequest({ id: "req-1", name: "Get Users", sortOrder: 0 }),
+      savedRequest({ id: "req-2", name: "List Teams", sortOrder: 1 }),
+    ]);
+    renderTree();
+
+    const sourceRow = (await screen.findByText("List Teams")).closest("[role='treeitem']");
+    const targetRow = (await screen.findByText("Get Users")).closest("[role='treeitem']");
+    expect(sourceRow).not.toBeNull();
+    expect(targetRow).not.toBeNull();
+    vi.spyOn(targetRow as HTMLElement, "getBoundingClientRect").mockReturnValue({
+      bottom: 24,
+      height: 24,
+      left: 0,
+      right: 180,
+      top: 0,
+      width: 180,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    const transfer = dataTransfer();
+    fireEvent.dragStart(sourceRow as HTMLElement, { dataTransfer: transfer });
+    fireEvent.dragOver(targetRow as HTMLElement, {
+      clientY: 1,
+      dataTransfer: transfer,
+    });
+    fireEvent.drop(targetRow as HTMLElement, {
+      clientY: 1,
+      dataTransfer: transfer,
+    });
+
+    await waitFor(() =>
+      expect(reorderRequestsMock).toHaveBeenCalledWith(
+        "ws-1",
+        "col-1",
+        null,
+        ["req-2", "req-1"],
+      ),
+    );
+    expect(moveMock).not.toHaveBeenCalled();
   });
 
   it("moves a saved request by pointer dragging the request label onto a folder", async () => {

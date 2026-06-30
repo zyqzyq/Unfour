@@ -15,6 +15,7 @@ import {
   SidebarRow,
   SidebarSection,
   TreeView,
+  type TreeViewDropPosition,
   useI18n,
   type TreeViewItem,
 } from "@unfour/ui";
@@ -44,6 +45,7 @@ import {
   RequestContextMenu,
   type RequestTreeActionContext,
 } from "./ApiRequestTreeActions";
+import { createApiCollectionDropController } from "./api-collection-dnd";
 
 type NameTarget =
   | { kind: "collection" }
@@ -84,6 +86,7 @@ export function ApiCollectionTree({
     folders,
     moveRequestMut,
     renameFolderMut,
+    reorderRequestsMut,
   } = useApiCollectionFolders(workspaceId);
   const savedQuery = useQuery({
     enabled: Boolean(workspaceId),
@@ -222,6 +225,11 @@ export function ApiCollectionTree({
     folders,
     savedRequests,
   );
+  const dropController = createApiCollectionDropController(
+    collectionGroups,
+    folders,
+    savedRequests,
+  );
   const collectionItems: TreeViewItem[] = collectionGroups.map((group) => ({
     id: `collection:${group.id}`,
     icon: <FolderOpen size={13} />,
@@ -271,61 +279,6 @@ export function ApiCollectionTree({
       ),
     ],
   }));
-  const requestById = new Map(savedRequests.map((request) => [request.id, request]));
-  const folderById = new Map(folders.map((folder) => [folder.id, folder]));
-
-  function dropTargetLocation(itemId: string) {
-    if (itemId.startsWith("collection:")) {
-      return {
-        collectionId: itemId.slice("collection:".length),
-        parentFolderId: null,
-      };
-    }
-    if (itemId.startsWith("folder:")) {
-      const folder = folderById.get(itemId.slice("folder:".length));
-      if (folder) {
-        return {
-          collectionId: folder.collectionId,
-          parentFolderId: folder.id,
-        };
-      }
-    }
-    return null;
-  }
-
-  function canDropRequest(source: TreeViewItem, target: TreeViewItem) {
-    if (!source.id.startsWith("request:")) {
-      return false;
-    }
-    const request = requestById.get(source.id.slice("request:".length));
-    const targetLocation = dropTargetLocation(target.id);
-    return Boolean(
-      request &&
-        targetLocation &&
-        (request.collectionId !== targetLocation.collectionId ||
-          request.parentFolderId !== targetLocation.parentFolderId),
-    );
-  }
-
-  function moveDroppedRequest(source: TreeViewItem, target: TreeViewItem) {
-    const request = requestById.get(source.id.slice("request:".length));
-    const targetLocation = dropTargetLocation(target.id);
-    if (!request || !targetLocation) {
-      return;
-    }
-    if (
-      request.collectionId === targetLocation.collectionId &&
-      request.parentFolderId === targetLocation.parentFolderId
-    ) {
-      return;
-    }
-    moveRequestMut.mutate({
-      collectionId: targetLocation.collectionId,
-      parentFolderId: targetLocation.parentFolderId,
-      requestId: request.id,
-    });
-  }
-
   // Re-key the tree on its expandable structure so newly created collections
   // and folders auto-expand (TreeView only reads defaultExpandedIds on mount).
   // Manual collapse of an unchanged structure is preserved (same key).
@@ -375,11 +328,13 @@ export function ApiCollectionTree({
         {collectionItems.length ? (
           <TreeView
             canDrag={(item) => item.id.startsWith("request:")}
-            canDrop={canDropRequest}
+            canDrop={dropController.canDrop}
             defaultExpandedIds={expandableIds}
             items={collectionItems}
             key={expandableIds.join("|")}
-            onDrop={({ source, target }) => moveDroppedRequest(source, target)}
+            onDrop={({ position, source, target }) =>
+              moveDroppedTreeItem(source, target, position)
+            }
             onSelect={(item) => {
               if (item.id.startsWith("request:")) {
                 onOpenIntent({
@@ -647,6 +602,33 @@ export function ApiCollectionTree({
       },
       { onSuccess: () => setNameTarget(null) },
     );
+  }
+
+  function moveDroppedTreeItem(
+    source: TreeViewItem,
+    target: TreeViewItem,
+    position: TreeViewDropPosition,
+  ) {
+    const action = dropController.dropAction(source, target, position);
+    if (!action) {
+      return;
+    }
+    switch (action.kind) {
+      case "move-request":
+        moveRequestMut.mutate({
+          collectionId: action.collectionId,
+          parentFolderId: action.parentFolderId,
+          requestId: action.requestId,
+        });
+        break;
+      case "reorder-requests":
+        reorderRequestsMut.mutate({
+          collectionId: action.collectionId,
+          parentFolderId: action.parentFolderId,
+          requestIds: action.requestIds,
+        });
+        break;
+    }
   }
 
   function confirmRename() {

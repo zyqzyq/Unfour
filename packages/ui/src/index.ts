@@ -85,5 +85,10 @@ export {
 } from "./status";
 export { Tabs, type WorkspaceTab } from "./tabs";
 export { Toolbar, ToolbarGroup } from "./toolbar";
-export { TreeView, type TreeViewDropEvent, type TreeViewItem } from "./tree-view";
+export {
+  TreeView,
+  type TreeViewDropEvent,
+  type TreeViewDropPosition,
+  type TreeViewItem,
+} from "./tree-view";
 export { cn } from "./utils";
