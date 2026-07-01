@@ -89,9 +89,9 @@ export function DatabaseConnectionTree({
     const status = resolveConnectionStatus({ session });
     const statusLabel = databaseConnectionStatusLabel(status, t);
 
-    // Auto-expand the selected connection so it shows its databases without an
-    // extra click; the rest stay collapsed until the user opens them.
-    if (selected) {
+    // Auto-expand only once the connection has succeeded, so saved but unopened
+    // connections stay as plain rows until they can actually reveal schema data.
+    if (selected && status === "connected") {
       defaultExpandedIds.add(connection.id);
     }
 
@@ -121,22 +121,25 @@ export function DatabaseConnectionTree({
           status={status}
         />
       ),
-      children: buildConnectionChildren({
-        catalogLookup,
-        catalogNames: catalogNamesByConnection?.[connection.id],
-        connection,
-        defaultExpandedIds,
-        loadErrors,
-        loadingKeys,
-        onDesignTable,
-        onPreviewTable,
-        onRefreshSchema,
-        onUseSql,
-        schemaCache,
-        status,
-        t,
-        tableLookup,
-      }),
+      children:
+        status === "connected"
+          ? buildConnectionChildren({
+              catalogLookup,
+              catalogNames: catalogNamesByConnection?.[connection.id],
+              connection,
+              defaultExpandedIds,
+              loadErrors,
+              loadingKeys,
+              onDesignTable,
+              onPreviewTable,
+              onRefreshSchema,
+              onUseSql,
+              schemaCache,
+              status,
+              t,
+              tableLookup,
+            })
+          : undefined,
       icon: <Database size={13} />,
       id: connection.id,
       label: connection.name,
