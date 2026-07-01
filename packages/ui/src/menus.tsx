@@ -26,7 +26,7 @@ export function DropdownMenuItem({
 }) {
   return (
     <DropdownMenuPrimitive.Item className={cn(menuItem, className)} {...props}>
-      <span className="flex-1 truncate">{children}</span>
+      {children}
       {shortcut && (
         <span className="ml-auto shrink-0 text-[11px] text-[var(--u-color-text-soft)]">{shortcut}</span>
       )}
@@ -89,7 +89,7 @@ export function ContextMenuItem({
       onSelect={onSelect}
       {...props}
     >
-      <span className="flex-1 truncate">{children}</span>
+      {children}
       {shortcut && (
         <span className="ml-auto shrink-0 text-[11px] text-[var(--u-color-text-soft)]">{shortcut}</span>
       )}

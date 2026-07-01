@@ -1,4 +1,4 @@
-import { Columns3, Copy, Database, Eye, MoreHorizontal, Pencil, Play, RefreshCw, Table2, Trash2 } from "lucide-react";
+import { Columns3, Copy, Database, Eye, MoreHorizontal, Pencil, Play, PlusCircle, RefreshCw, Square, Table2, Trash2 } from "lucide-react";
 import type { DatabaseConnection, DatabaseSchema, DatabaseTable } from "@unfour/command-client";
 import {
   Badge,
@@ -711,28 +711,37 @@ function ConnectionContextMenu({
   return (
     <>
       <ContextMenuItem onSelect={() => onConnect?.(connection)}>
+        <Play size={13} />
         {t("common.actions.connect")}
       </ContextMenuItem>
       <ContextMenuItem
         disabled={status === "disconnected"}
         onSelect={() => onDisconnect?.(connection)}
       >
+        <Square size={13} />
         {t("common.actions.disconnect")}
       </ContextMenuItem>
-      <ContextMenuItem onSelect={onNewQuery}>{t("database.actions.newQuery")}</ContextMenuItem>
+      <ContextMenuItem onSelect={onNewQuery}>
+        <PlusCircle size={13} />
+        {t("database.actions.newQuery")}
+      </ContextMenuItem>
       <ContextMenuItem onSelect={() => onRefreshSchema?.(connection)}>
+        <RefreshCw size={13} />
         {t("database.actions.refreshSchema")}
       </ContextMenuItem>
       {onEditConnection && (
         <ContextMenuItem onSelect={() => onEditConnection(connection)}>
+          <Pencil size={13} />
           {t("database.tree.editConnection")}
         </ContextMenuItem>
       )}
       <ContextMenuItem onSelect={() => void navigator.clipboard?.writeText(connection.name)}>
+        <Copy size={13} />
         {t("database.tree.copyName")}
       </ContextMenuItem>
       {onDeleteConnection && (
         <ContextMenuItem onSelect={() => onDeleteConnection(connection)} tone="danger">
+          <Trash2 size={13} />
           {t("database.tree.deleteConnection")}
         </ContextMenuItem>
       )}
