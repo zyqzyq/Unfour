@@ -66,10 +66,9 @@ export {
   SidebarSection,
   SplitPane,
   StatusBar,
-  TabBar,
-  type ShellTab,
+
 } from "./shell";
-export { EmptyState, ErrorState, LoadingState } from "./states";
+  export { EmptyState, ErrorState, LoadingState } from "./states";
 export {
   ThemeProvider,
   useTheme,

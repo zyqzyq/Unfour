@@ -120,7 +120,7 @@ export function TerminalWorkspace({
     const isLast = index === sessions.length - 1;
     return (
       <>
-        <ContextMenuItem onSelect={() => onCloseSession(sessionId)}>
+        <ContextMenuItem onSelect={() => onCloseSession(sessionId)} shortcut="Ctrl+W">
           <Unplug size={13} />
           {t("ssh.actions.closeConnection")}
         </ContextMenuItem>
@@ -151,7 +151,7 @@ export function TerminalWorkspace({
           {t("ssh.actions.duplicateSession")}
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => onClear(sessionId)}>
+        <ContextMenuItem onSelect={() => onClear(sessionId)} shortcut="Ctrl+L">
           <Eraser size={13} />
           {t("ssh.actions.clearTerminal")}
         </ContextMenuItem>

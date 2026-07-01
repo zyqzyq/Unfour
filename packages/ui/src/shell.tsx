@@ -3,12 +3,6 @@ import { cn } from "./utils";
 import { clampResizablePaneSize } from "./shell-utils";
 import { ResizableSplitPane } from "./adapters/resizable-panels";
 
-export type ShellTab = {
-  id: string;
-  title: string;
-  meta?: string;
-};
-
 export function AppShellFrame({
   activityBar,
   bottomPanel,
@@ -250,51 +244,6 @@ export function SidebarRow({
     >
       {children}
     </button>
-  );
-}
-
-export function TabBar({
-  activeTabId,
-  className,
-  onSelectTab,
-  tabs,
-}: {
-  activeTabId: string;
-  className?: string;
-  onSelectTab: (tabId: string) => void;
-  tabs: ShellTab[];
-}) {
-  return (
-    <div
-      className={cn(
-        "flex h-[var(--u-size-tabbar)] shrink-0 items-end border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2",
-        className,
-      )}
-    >
-      {tabs.map((tab) => {
-        const active = tab.id === activeTabId;
-        return (
-          <button
-            className={cn(
-              "flex h-[30px] min-w-[116px] max-w-[220px] items-center gap-2 rounded-t-[var(--u-radius-sm)] border border-transparent px-3 text-[12px] font-medium text-[var(--u-color-text-muted)] transition-colors duration-150",
-              active
-                ? "border-[var(--u-color-border)] border-b-[var(--u-color-surface)] bg-[var(--u-color-surface)] text-[var(--u-color-text)]"
-                : "hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
-            )}
-            key={tab.id}
-            onClick={() => onSelectTab(tab.id)}
-            type="button"
-          >
-            <span className="min-w-0 flex-1 truncate text-left">{tab.title}</span>
-            {tab.meta && (
-              <span className="shrink-0 text-[11px] text-[var(--u-color-text-soft)]">
-                {tab.meta}
-              </span>
-            )}
-          </button>
-        );
-      })}
-    </div>
   );
 }
 

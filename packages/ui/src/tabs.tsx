@@ -30,6 +30,7 @@ export type TabsAction =
 export function Tabs({
   activeId,
   className,
+  endControl,
   onAction,
   onClose,
   onReorder,
@@ -38,6 +39,8 @@ export function Tabs({
 }: {
   activeId: string;
   className?: string;
+  /** Optional element rendered at the right edge of the tab bar. */
+  endControl?: React.ReactNode;
   /** Unified handler for close/close-others/close-right actions and custom actions. */
   onAction?: (action: TabsAction) => void;
   onClose?: (tabId: string) => void;
@@ -156,12 +159,15 @@ export function Tabs({
     <>
       <div
         className={cn(
-          "flex h-[var(--u-size-tabbar)] shrink-0 items-end overflow-x-auto border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2",
+          "flex h-[var(--u-size-tabbar)] shrink-0 items-end border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2",
           className,
         )}
-        role="tablist"
       >
-        {tabs.map((tab, index) => {
+        <div
+          className="flex min-w-0 flex-1 items-end overflow-x-auto"
+          role="tablist"
+        >
+          {tabs.map((tab, index) => {
           const active = tab.id === activeId;
           const isDragging = dragRef.current?.index === index;
           const showDropIndicator = dragOverIndex === index && dragRef.current?.index !== index;
@@ -245,6 +251,10 @@ export function Tabs({
             </ContextMenu>
           );
         })}
+        </div>
+        {endControl && (
+          <div className="ml-auto shrink-0 flex items-center self-center pr-2">{endControl}</div>
+        )}
       </div>
 
       {/* Close confirmation popover */}

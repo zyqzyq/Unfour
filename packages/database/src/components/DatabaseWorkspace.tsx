@@ -13,7 +13,7 @@ import type {
   TableEditing,
   TableSegment,
 } from "../model/types";
-import { SplitPane, useI18n, type WorkspaceTab } from "@unfour/ui";
+import { SplitPane, Tabs, useI18n, type WorkspaceTab } from "@unfour/ui";
 import { QueryResultPanel } from "./QueryResultPanel";
 import { SqlEditorTab } from "./SqlEditorTab";
 import { TableDataTab } from "./TableDataTab";
@@ -136,46 +136,10 @@ export function DatabaseWorkspace({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* Merged Tab bar + SegmentedControl row: eliminates a separate SegmentedControl bar. */}
-      <div
-        className="flex h-[var(--u-size-tabbar)] shrink-0 items-end justify-between overflow-x-auto border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2"
-        role="tablist"
-      >
-        <div className="flex items-end">
-          {tabs.map((tab) => {
-            const active = tab.id === activeTabId;
-            return (
-              <div
-                className={
-                  "group flex h-[30px] min-w-[120px] max-w-[220px] items-center gap-2 rounded-t-[var(--u-radius-sm)] border px-2 text-[12px] font-medium transition-colors " +
-                  (active
-                    ? "border-[var(--u-color-border)] border-b-[var(--u-color-surface)] bg-[var(--u-color-surface)] text-[var(--u-color-text)]"
-                    : "border-transparent text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]")
-                }
-                key={tab.id}
-              >
-                <button
-                  aria-selected={active}
-                  className="flex min-w-0 flex-1 items-center gap-2 focus-visible:outline-none"
-                  onClick={() => onSelectTab(tab.id as DatabaseWorkspaceTabId)}
-                  role="tab"
-                  type="button"
-                >
-                  <span className="min-w-0 flex-1 truncate text-left">
-                    {tab.modified ? "* " : ""}
-                    {tab.title}
-                  </span>
-                  {tab.loading && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-[var(--u-color-primary)]" />
-                  )}
-                  {tab.meta}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-        {isTableTab && (
-          <div className="ml-3 shrink-0 pb-0.5">
+      <Tabs
+        activeId={activeTabId}
+        endControl={
+          isTableTab ? (
             <SegmentedControl
               onChange={onSelectTableSegment}
               options={[
@@ -184,9 +148,11 @@ export function DatabaseWorkspace({
               ]}
               value={tableSegment}
             />
-          </div>
-        )}
-      </div>
+          ) : null
+        }
+        onSelect={(tabId) => onSelectTab(tabId as DatabaseWorkspaceTabId)}
+        tabs={tabs}
+      />
       <div className="flex min-h-0 flex-1 flex-col">
         {isTableTab ? (
           <>
@@ -273,7 +239,7 @@ function SegmentedControl<T extends string>({
         const active = option.value === value;
         return (
           <button
-            className={`inline-flex h-[22px] items-center rounded-[5px] px-3 text-[12px] font-semibold ${
+            className={`inline-flex h-[22px] items-center rounded-[5px] px-3 text-[12px] font-semibold transition-colors duration-150 ${
               active
                 ? "bg-[var(--u-color-surface)] text-[var(--u-color-text)] shadow-[0_1px_2px_rgba(0,0,0,0.08)]"
                 : "text-[var(--u-color-text-muted)] hover:text-[var(--u-color-text)]"

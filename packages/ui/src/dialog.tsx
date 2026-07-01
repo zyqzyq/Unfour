@@ -14,10 +14,10 @@ export function DialogContent({
 }) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[color:color-mix(in_srgb,var(--u-color-text)_24%,transparent)]" />
+      <DialogPrimitive.Overlay className="u-dialog-overlay fixed inset-0 z-50 bg-[color:color-mix(in_srgb,var(--u-color-text)_24%,transparent)]" />
       <DialogPrimitive.Content
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 flex max-h-[min(760px,calc(100vh-48px))] w-[min(560px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[var(--u-radius-lg)] border border-[var(--u-color-border)] bg-[var(--u-color-surface)] text-[13px] text-[var(--u-color-text)] shadow-lg focus-visible:outline-none",
+          "u-dialog-content fixed left-1/2 top-1/2 z-50 flex max-h-[min(760px,calc(100vh-48px))] w-[min(560px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[var(--u-radius-lg)] border border-[var(--u-color-border)] bg-[var(--u-color-surface)] text-[13px] text-[var(--u-color-text)] shadow-lg focus-visible:outline-none",
           className,
         )}
         {...props}
