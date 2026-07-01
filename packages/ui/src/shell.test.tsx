@@ -53,7 +53,7 @@ describe("SplitPane", () => {
 
     expect(screen.getByText("Primary").closest("[data-panel]")).not.toBeNull();
     expect(screen.getByText("Secondary").closest("[data-panel]")).not.toBeNull();
-    expect(screen.getByRole("separator", { name: "Resize horizontal split" })).toBeInTheDocument();
+    expect(screen.getByRole("separator", { name: /Resize horizontal split/ })).toBeInTheDocument();
   });
 
   it("passes split ratios to the adapter as percentages", () => {
@@ -67,6 +67,6 @@ describe("SplitPane", () => {
     expect(screen.getByText("SQL").closest("[data-panel]")).toHaveAttribute("data-default-size", "62%");
     expect(screen.getByText("Results").closest("[data-panel]")).toHaveAttribute("data-default-size", "38%");
     expect(screen.getByText("SQL").closest("[data-panel]")).toHaveAttribute("data-min-size", "10%");
-    expect(screen.getByRole("separator", { name: "Resize vertical split" })).toBeInTheDocument();
+    expect(screen.getByRole("separator", { name: /Resize vertical split/ })).toBeInTheDocument();
   });
 });

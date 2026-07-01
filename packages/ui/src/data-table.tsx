@@ -52,7 +52,6 @@ export function DataTable<T>({
   /** Called when a column resize handle is dragged. Pass new width in px. */
   onColumnResize?: (columnId: string, newWidth: number) => void;
 }) {
-  const explicitWidth = columns.reduce((total, column) => total + (column.width ?? 0), 0);
   const tableRef = React.useRef<HTMLTableElement>(null);
   const resizingRef = React.useRef<{ colId: string; startX: number; startWidth: number } | null>(null);
   const [colWidths, setColWidths] = React.useState<Record<string, number>>(() => {
@@ -62,6 +61,14 @@ export function DataTable<T>({
     }
     return map;
   });
+  // Fixed table width = sum of current column widths (initial or after resize).
+  // The table does not stretch to fill its container; horizontal scrolling
+  // kicks in via the outer `overflow-auto` wrapper when the container is
+  // narrower than the summed column widths.
+  const tableWidth = columns.reduce(
+    (total, column) => total + (colWidths[column.id] ?? column.width ?? 0),
+    0,
+  );
 
   const isSelectable = !!onSelectionChange;
 
@@ -108,6 +115,9 @@ export function DataTable<T>({
   const handleResizeStart = React.useCallback(
     (colId: string, e: React.PointerEvent) => {
       const currentWidth = colWidths[colId] ?? 0;
+      // Track the latest width in a local so `onUp` reads the post-drag value
+      // instead of the stale `colWidths` captured in this closure.
+      let latestWidth = currentWidth;
       resizingRef.current = { colId, startX: e.clientX, startWidth: currentWidth };
 
       function onMove(moveEvent: PointerEvent) {
@@ -115,14 +125,13 @@ export function DataTable<T>({
         if (!ref) return;
         const delta = moveEvent.clientX - ref.startX;
         const newWidth = Math.max(40, ref.startWidth + delta);
+        latestWidth = newWidth;
         setColWidths((prev) => ({ ...prev, [colId]: newWidth }));
       }
 
       function onUp() {
-        const ref = resizingRef.current;
-        if (ref) {
-          const finalWidth = colWidths[colId] ?? ref.startWidth;
-          onColumnResize?.(colId, finalWidth);
+        if (resizingRef.current) {
+          onColumnResize?.(colId, latestWidth);
         }
         resizingRef.current = null;
         window.removeEventListener("pointermove", onMove);
@@ -154,9 +163,9 @@ export function DataTable<T>({
       tabIndex={isSelectable ? 0 : undefined}
     >
       <table
-        className="w-full table-fixed text-left text-[12px]"
+        className="table-fixed text-left text-[12px]"
         ref={tableRef}
-        style={explicitWidth ? { minWidth: explicitWidth } : undefined}
+        style={tableWidth ? { width: tableWidth } : undefined}
       >
         <colgroup>
           {columns.map((column) => (
@@ -168,7 +177,7 @@ export function DataTable<T>({
             {columns.map((column) => (
               <th
                 className={cn(
-                  "box-border h-[var(--u-size-table-row)] border-b border-[var(--u-color-border)] px-2 font-medium",
+                  "relative box-border h-[var(--u-size-table-row)] border-b border-[var(--u-color-border)] px-2 font-medium",
                   column.align === "right" && "text-right",
                 )}
                 key={column.id}
@@ -184,9 +193,11 @@ export function DataTable<T>({
                 </div>
                 {onColumnResize && colWidths[column.id] && (
                   <div
-                    className="absolute inset-y-0 right-0 w-1.5 cursor-col-resize hover:bg-[var(--u-color-focus)]"
+                    className="group absolute inset-y-0 right-0 z-10 w-2 cursor-col-resize"
                     onPointerDown={(e) => handleResizeStart(column.id, e)}
-                  />
+                  >
+                    <div className="absolute inset-y-2 right-0 w-px bg-[var(--u-color-primary)] opacity-0 transition-opacity duration-100 group-hover:opacity-100" />
+                  </div>
                 )}
               </th>
             ))}
