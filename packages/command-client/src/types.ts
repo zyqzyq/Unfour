@@ -1,8 +1,19 @@
+export type WorkspaceEnvironmentType = "dev" | "test" | "prod";
+
+export type WorkspaceMcpPolicy =
+  | "auto"
+  | "disabled"
+  | "read_only"
+  | "guarded"
+  | "full_access";
+
 export type Workspace = {
   id: string;
   name: string;
   isDefault: boolean;
   lastOpenedAt: string | null;
+  environmentType: WorkspaceEnvironmentType;
+  mcpPolicy: WorkspaceMcpPolicy;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;

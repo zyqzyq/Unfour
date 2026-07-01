@@ -4,10 +4,11 @@ import {
   Folder,
   Pencil,
   Plus,
+  ShieldCheck,
   Trash2,
 } from "lucide-react";
 import { useState } from "react";
-import type { Workspace } from "@unfour/command-client";
+import type { Workspace, WorkspaceMcpPolicy } from "@unfour/command-client";
 import { Badge, Button, cn, useI18n } from "@unfour/ui";
 import { WorkspaceDialogs } from "./WorkspaceDialogs";
 
@@ -25,6 +26,7 @@ export function WorkspaceMenu({
   const { t } = useI18n();
   const [createOpen, setCreateOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
+  const [environmentOpen, setEnvironmentOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   return (
@@ -33,7 +35,7 @@ export function WorkspaceMenu({
         <DropdownMenu.Trigger asChild>
           <Button
             className={cn(
-              "w-[180px] justify-start gap-1 border-transparent bg-[var(--u-color-surface)] px-2 font-semibold shadow-none hover:bg-[var(--u-color-surface-hover)]",
+              "w-[220px] justify-start gap-1 border-transparent bg-[var(--u-color-surface)] px-2 font-semibold shadow-none hover:bg-[var(--u-color-surface-hover)]",
               className,
             )}
             size="sm"
@@ -44,6 +46,11 @@ export function WorkspaceMenu({
             <span className="min-w-0  truncate">
               {activeWorkspace?.name ?? t("app.workspace.none")}
             </span>
+            {activeWorkspace && (
+              <Badge className="shrink-0 px-1.5 leading-4" tone={environmentTone(activeWorkspace.environmentType)}>
+                {environmentBadge(activeWorkspace.environmentType)}
+              </Badge>
+            )}
             <ChevronDown className="ml-auto shrink-0 text-[var(--u-color-text-muted)]" size={14} />
           </Button>
         </DropdownMenu.Trigger>
@@ -65,9 +72,19 @@ export function WorkspaceMenu({
                 key={workspace.id}
                 onSelect={() => onActivateWorkspace(workspace.id)}
               >
-                <Folder size={14} />
-                <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
-                {workspace.isDefault && <Badge tone="teal">{t("app.workspace.defaultBadge")}</Badge>}
+                <Folder className="shrink-0" size={14} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="min-w-0 truncate">{workspace.name}</span>
+                    <Badge className="shrink-0 px-1.5 leading-4" tone={environmentTone(workspace.environmentType)}>
+                      {environmentBadge(workspace.environmentType)}
+                    </Badge>
+                    {workspace.isDefault && <Badge tone="teal">{t("app.workspace.defaultBadge")}</Badge>}
+                  </span>
+                  <span className="block truncate text-xs text-[var(--u-color-text-muted)]">
+                    {t(policySummaryKey(workspace))}
+                  </span>
+                </span>
               </DropdownMenu.Item>
             ))}
             {workspaces.length === 0 && (
@@ -92,6 +109,14 @@ export function WorkspaceMenu({
               {t("app.workspace.renameCurrent")}
             </DropdownMenu.Item>
             <DropdownMenu.Item
+              className="flex h-8 cursor-pointer items-center gap-2 rounded px-2 outline-none hover:bg-[var(--u-color-surface-hover)] focus:bg-[var(--u-color-surface-hover)] disabled:pointer-events-none disabled:opacity-50"
+              disabled={!activeWorkspace}
+              onSelect={() => setEnvironmentOpen(true)}
+            >
+              <ShieldCheck size={14} />
+              {t("app.workspace.changeEnvironment")}
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
               className="flex h-8 cursor-pointer items-center gap-2 rounded px-2 text-[var(--u-color-danger-text)] outline-none hover:bg-[var(--u-color-danger-soft)] focus:bg-[var(--u-color-danger-soft)] disabled:pointer-events-none disabled:opacity-50"
               disabled={!activeWorkspace || activeWorkspace.isDefault || workspaces.length <= 1}
               onSelect={() => setDeleteOpen(true)}
@@ -109,10 +134,50 @@ export function WorkspaceMenu({
         deleteOpen={deleteOpen}
         onCreateClose={() => setCreateOpen(false)}
         onDeleteClose={() => setDeleteOpen(false)}
+        onEnvironmentClose={() => setEnvironmentOpen(false)}
         onRenameClose={() => setRenameOpen(false)}
+        environmentOpen={environmentOpen}
         renameOpen={renameOpen}
         workspaces={workspaces}
       />
     </>
   );
+}
+
+function environmentBadge(environmentType: Workspace["environmentType"]) {
+  return environmentType.toUpperCase();
+}
+
+function environmentTone(environmentType: Workspace["environmentType"]): "green" | "amber" | "red" {
+  if (environmentType === "prod") return "red";
+  if (environmentType === "test") return "amber";
+  return "green";
+}
+
+function policySummaryKey(workspace: Workspace) {
+  switch (resolveMcpPolicy(workspace)) {
+    case "disabled":
+      return "app.workspace.mcp.disabled";
+    case "read_only":
+      return "app.workspace.mcp.readOnly";
+    case "guarded":
+      return "app.workspace.mcp.guarded";
+    case "full_access":
+      return "app.workspace.mcp.fullAccess";
+    default:
+      return "app.workspace.mcp.guarded";
+  }
+}
+
+function resolveMcpPolicy(workspace: Workspace): Exclude<WorkspaceMcpPolicy, "auto"> {
+  if (workspace.mcpPolicy !== "auto") {
+    return workspace.mcpPolicy;
+  }
+  if (workspace.environmentType === "prod") {
+    return "read_only";
+  }
+  if (workspace.environmentType === "test") {
+    return "guarded";
+  }
+  return "full_access";
 }

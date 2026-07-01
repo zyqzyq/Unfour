@@ -35,3 +35,18 @@ pub fn structured_tool_error(code: &str, message: &str) -> Value {
         "isError": true,
     })
 }
+
+pub fn structured_policy_error(value: Value) -> Value {
+    let text = serde_json::to_string(&value).expect("serializing a JSON value cannot fail");
+
+    json!({
+        "content": [
+            {
+                "type": "text",
+                "text": text,
+            }
+        ],
+        "structuredContent": value,
+        "isError": true,
+    })
+}

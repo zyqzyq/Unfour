@@ -1,16 +1,15 @@
 use serde::{Deserialize, Serialize};
 use unfour_core::ai_reserved;
 use unfour_core::models::{
-    ApiCollection, ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse,
-    ApiCollectionFolder, ApiSavedRequest, CredentialCreateInput, CredentialDeleteInput,
-    CredentialInspectInput, CredentialMetadata, CredentialRotateInput, DatabaseBrowseInput, DatabaseBrowseResult,
-    DatabaseConnection, DatabaseConnectionInput, DatabaseQueryInput, DatabaseQueryResult,
-    DatabaseRowMutationInput, DatabaseRowMutationResult, DatabaseSchema, DatabaseTableStructure,
-    DatabaseTableStructureInput, DatabaseTestResult, DbQueryHistoryEntry,
+    ApiCollection, ApiCollectionFolder, ApiEnvironment, ApiHistoryDetail, ApiHistoryItem,
+    ApiRequestInput, ApiResponse, ApiSavedRequest, CredentialCreateInput, CredentialDeleteInput,
+    CredentialInspectInput, CredentialMetadata, CredentialRotateInput, DatabaseBrowseInput,
+    DatabaseBrowseResult, DatabaseConnection, DatabaseConnectionInput, DatabaseQueryInput,
+    DatabaseQueryResult, DatabaseRowMutationInput, DatabaseRowMutationResult, DatabaseSchema,
+    DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult, DbQueryHistoryEntry,
     DbQueryHistoryRecordInput, KeyValue, SavedSql, SavedSqlInput, SshCloseInput, SshConnectInput,
-    SshConnection,
-    SshConnectionInput, SshDiagnosticInput, SshDiagnosticResult, SshHostFingerprintInfo,
-    SshHostKeyInput, SshKnownHostsExportResult, SshKnownHostsImportInput,
+    SshConnection, SshConnectionInput, SshDiagnosticInput, SshDiagnosticResult,
+    SshHostFingerprintInfo, SshHostKeyInput, SshKnownHostsExportResult, SshKnownHostsImportInput,
     SshKnownHostsImportResult, SshLogExport, SshLogExportInput, SshReconnectCancelInput,
     SshResizeInput, SshSessionEvent, SshSessionInput, SshSessionSummary, SystemHealth, Workspace,
     WorkspaceLayout, WorkspaceState,
@@ -19,8 +18,8 @@ use unfour_core::sync_reserved;
 use unfour_core::AppResult;
 use unfour_database_engine::DatabaseService;
 use unfour_http_engine::ApiClientService;
-use unfour_local_storage::{ActivityLogService, LocalDb};
 pub use unfour_local_storage::DEFAULT_APP_IDENTIFIER;
+use unfour_local_storage::{ActivityLogService, LocalDb};
 use unfour_secret_store::SecretStore;
 use unfour_ssh_engine::SshService;
 use unfour_workspace_engine::WorkspaceService;
@@ -97,6 +96,8 @@ pub enum ReadCommandResult {
 pub struct CurrentWorkspaceResult {
     pub workspace_id: String,
     pub workspace_name: String,
+    pub environment_type: String,
+    pub mcp_policy: String,
     pub workspace_root: Option<String>,
     pub mode: String,
     pub source: String,
@@ -118,6 +119,8 @@ pub struct WorkspaceSummary {
     pub name: String,
     pub is_default: bool,
     pub is_active: bool,
+    pub environment_type: String,
+    pub mcp_policy: String,
     pub last_opened_at: Option<String>,
 }
 
@@ -281,10 +284,9 @@ impl CommandBus {
     pub async fn from_existing_app_data_dir_read_only(
         app_data_dir: impl AsRef<std::path::Path>,
     ) -> AppResult<Self> {
-        let db = LocalDb::connect_existing_read_only_path(
-            app_data_dir.as_ref().join("unfour.sqlite"),
-        )
-        .await?;
+        let db =
+            LocalDb::connect_existing_read_only_path(app_data_dir.as_ref().join("unfour.sqlite"))
+                .await?;
         Self::from_existing_db_read_only(db).await
     }
 
@@ -382,6 +384,8 @@ impl CommandBus {
                     CurrentWorkspaceResult {
                         workspace_id: workspace.id,
                         workspace_name: workspace.name,
+                        environment_type: workspace.environment_type,
+                        mcp_policy: workspace.mcp_policy,
                         workspace_root: None,
                         mode: "local".to_string(),
                         source: "command-bus".to_string(),
@@ -400,6 +404,8 @@ impl CommandBus {
                         name: workspace.name,
                         is_default: workspace.is_default,
                         last_opened_at: workspace.last_opened_at,
+                        environment_type: workspace.environment_type,
+                        mcp_policy: workspace.mcp_policy,
                     })
                     .collect::<Vec<_>>();
 
@@ -471,7 +477,9 @@ impl CommandBus {
                 let mut request_counts: std::collections::BTreeMap<String, usize> =
                     std::collections::BTreeMap::new();
                 for request in &requests {
-                    *request_counts.entry(request.collection_id.clone()).or_insert(0) += 1;
+                    *request_counts
+                        .entry(request.collection_id.clone())
+                        .or_insert(0) += 1;
                 }
 
                 let summaries = collections
@@ -617,13 +625,52 @@ impl CommandBus {
     }
 
     pub async fn create_workspace(&self, name: String) -> AppResult<Workspace> {
-        let workspace = self.workspace.create(name).await?;
+        self.create_workspace_with_options(name, None, None).await
+    }
+
+    pub async fn create_workspace_with_options(
+        &self,
+        name: String,
+        environment_type: Option<String>,
+        mcp_policy: Option<String>,
+    ) -> AppResult<Workspace> {
+        let workspace = self
+            .workspace
+            .create_with_options(name, environment_type, mcp_policy)
+            .await?;
         self.activity_log
             .record(
                 Some(&workspace.id),
                 "workspace.create",
                 Some(&workspace.id),
-                serde_json::json!({ "name": workspace.name }),
+                serde_json::json!({
+                    "name": workspace.name,
+                    "environment_type": workspace.environment_type,
+                    "mcp_policy": workspace.mcp_policy,
+                }),
+            )
+            .await?;
+        Ok(workspace)
+    }
+
+    pub async fn update_workspace_environment(
+        &self,
+        workspace_id: String,
+        environment_type: String,
+    ) -> AppResult<Workspace> {
+        let workspace = self
+            .workspace
+            .update_environment(workspace_id, environment_type)
+            .await?;
+        self.activity_log
+            .record(
+                Some(&workspace.id),
+                "workspace.environment.update",
+                Some(&workspace.id),
+                serde_json::json!({
+                    "environment_type": workspace.environment_type,
+                    "mcp_policy": workspace.mcp_policy,
+                }),
             )
             .await?;
         Ok(workspace)
@@ -826,12 +873,7 @@ impl CommandBus {
     ) -> AppResult<ApiCollectionFolder> {
         let folder = self
             .api_client
-            .create_collection_folder(
-                workspace_id.clone(),
-                collection_id,
-                parent_folder_id,
-                name,
-            )
+            .create_collection_folder(workspace_id.clone(), collection_id, parent_folder_id, name)
             .await?;
         self.activity_log
             .record(
@@ -942,7 +984,12 @@ impl CommandBus {
     ) -> AppResult<ApiSavedRequest> {
         let saved = self
             .api_client
-            .move_request(workspace_id.clone(), request_id, collection_id, parent_folder_id)
+            .move_request(
+                workspace_id.clone(),
+                request_id,
+                collection_id,
+                parent_folder_id,
+            )
             .await?;
         self.activity_log
             .record(

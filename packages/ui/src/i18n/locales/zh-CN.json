@@ -44,6 +44,7 @@
       "toggleInspector": "切换检查器"
     },
     "workspace": {
+      "changeEnvironment": "修改环境",
       "deleteCurrent": "删除当前工作区",
       "defaultBadge": "默认",
       "dialog": {
@@ -54,13 +55,30 @@
         "delete": "删除",
         "deleteDescription": "在本地删除 {name}。应用会切换到另一个可用工作区。",
         "deleteTitle": "删除工作区",
+        "environmentDescription": "选择用于 MCP 安全默认值的工作区环境。",
+        "environmentTitle": "修改环境",
         "namePlaceholder": "工作区名称",
         "rename": "重命名",
         "renameDescription": "重命名当前工作区。已有的工作区记录会继续关联到它。",
         "renameTitle": "重命名工作区",
+        "saveEnvironment": "保存",
         "thisWorkspace": "此工作区"
       },
+      "environment": {
+        "development": "开发",
+        "hint": "环境类型会影响 MCP 的默认操作权限。",
+        "label": "环境",
+        "prodWarning": "该 workspace 将使用生产环境安全默认值。MCP 默认只能读取，写入和执行类操作会被拦截。",
+        "production": "生产",
+        "test": "测试 / 预发"
+      },
       "label": "工作区",
+      "mcp": {
+        "disabled": "MCP：已禁用",
+        "fullAccess": "MCP：完全访问",
+        "guarded": "MCP：受保护",
+        "readOnly": "MCP：只读"
+      },
       "new": "新建工作区",
       "none": "未选择工作区",
       "noneAvailable": "暂无工作区",

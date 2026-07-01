@@ -1,6 +1,7 @@
 mod activity;
 mod api;
 mod database;
+mod policy;
 mod real;
 mod ssh;
 mod system;
@@ -11,7 +12,9 @@ use serde::Serialize;
 use serde_json::{Map, Value};
 
 use crate::command_bus_adapter::CommandBusAdapter;
-use crate::response::{structured_tool_error, structured_tool_result};
+use crate::response::{structured_policy_error, structured_tool_error, structured_tool_result};
+
+use self::policy::{check_tool_policy, McpPolicyDenial};
 
 type ToolHandler = fn(&dyn CommandBusAdapter, Value) -> Result<Value, ToolCallError>;
 
@@ -85,6 +88,7 @@ pub struct ToolRegistry {
 pub enum ToolCallError {
     UnknownTool(String),
     InvalidArguments(String),
+    PolicyBlocked(McpPolicyDenial),
     Execution {
         code: &'static str,
         message: &'static str,
@@ -116,15 +120,37 @@ impl ToolRegistry {
             .iter()
             .find(|tool| tool.definition.name == name)
             .ok_or_else(|| ToolCallError::UnknownTool(name.to_string()))?;
+        if let Err(error) = check_tool_policy(self.command_bus.as_ref(), name, &arguments) {
+            return policy_or_execution_error(error);
+        }
         let result = (tool.handler)(self.command_bus.as_ref(), arguments);
 
         match result {
             Ok(value) => Ok(structured_tool_result(value)),
+            Err(ToolCallError::PolicyBlocked(denial)) => Ok(structured_policy_error(
+                serde_json::to_value(denial).map_err(|_| ToolCallError::Execution {
+                    code: "TOOL_RESULT_SERIALIZATION_FAILED",
+                    message: "The tool result could not be serialized.",
+                })?,
+            )),
             Err(ToolCallError::Execution { code, message }) => {
                 Ok(structured_tool_error(code, message))
             }
             Err(error) => Err(error),
         }
+    }
+}
+
+fn policy_or_execution_error(error: ToolCallError) -> Result<Value, ToolCallError> {
+    match error {
+        ToolCallError::PolicyBlocked(denial) => Ok(structured_policy_error(
+            serde_json::to_value(denial).map_err(|_| ToolCallError::Execution {
+                code: "TOOL_RESULT_SERIALIZATION_FAILED",
+                message: "The tool result could not be serialized.",
+            })?,
+        )),
+        ToolCallError::Execution { code, message } => Ok(structured_tool_error(code, message)),
+        other => Err(other),
     }
 }
 
@@ -180,6 +206,8 @@ mod tests {
                     ReadCommandResult::CurrentWorkspace(CurrentWorkspaceResult {
                         workspace_id: "workspace-1".to_string(),
                         workspace_name: "Local Workspace".to_string(),
+                        environment_type: "prod".to_string(),
+                        mcp_policy: "auto".to_string(),
                         workspace_root: None,
                         mode: "local".to_string(),
                         source: "command-bus".to_string(),
@@ -192,6 +220,8 @@ mod tests {
                             name: "Local Workspace".to_string(),
                             is_default: true,
                             is_active: true,
+                            environment_type: "prod".to_string(),
+                            mcp_policy: "auto".to_string(),
                             last_opened_at: Some("2026-06-20T00:00:00Z".to_string()),
                         },
                         WorkspaceSummary {
@@ -199,6 +229,8 @@ mod tests {
                             name: "Scratch".to_string(),
                             is_default: false,
                             is_active: false,
+                            environment_type: "dev".to_string(),
+                            mcp_policy: "auto".to_string(),
                             last_opened_at: None,
                         },
                     ],
@@ -555,6 +587,27 @@ mod tests {
         assert_eq!(content["workspaces"][0]["isDefault"], true);
         assert_eq!(content["workspaces"][1]["isActive"], false);
         assert_eq!(content["source"], "command-bus");
+    }
+
+    #[test]
+    fn prod_workspace_blocks_ssh_execution_with_policy_payload() {
+        let result = ToolRegistry::with_command_bus(Arc::new(StubCommandBus))
+            .call(
+                "unfour.ssh.run_diagnostic",
+                json!({ "connectionId": "ssh-1", "command": "df -h" }),
+            )
+            .expect("policy denials are MCP tool results");
+
+        assert_eq!(result["isError"], true);
+        let content = &result["structuredContent"];
+        assert_eq!(content["blocked"], true);
+        assert_eq!(content["workspaceId"], "workspace-1");
+        assert_eq!(content["workspaceName"], "Local Workspace");
+        assert_eq!(content["environmentType"], "prod");
+        assert_eq!(content["mcpPolicy"], "auto");
+        assert_eq!(content["resolvedPolicy"], "read_only");
+        assert_eq!(content["capability"], "ssh:exec");
+        assert_eq!(content["risk"], "execute");
     }
 
     #[test]

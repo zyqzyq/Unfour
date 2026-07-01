@@ -111,6 +111,9 @@ impl McpServer {
             .map_err(|error| match error {
                 ToolCallError::UnknownTool(name) => (-32602, format!("Unknown tool: {name}")),
                 ToolCallError::InvalidArguments(message) => (-32602, message),
+                ToolCallError::PolicyBlocked(denial) => {
+                    (-32000, format!("{}: {}", denial.error.code, denial.reason))
+                }
                 ToolCallError::Execution { code, message } => {
                     (-32000, format!("{code}: {message}"))
                 }
@@ -185,6 +188,8 @@ mod tests {
                     ReadCommandResult::CurrentWorkspace(CurrentWorkspaceResult {
                         workspace_id: "workspace-1".to_string(),
                         workspace_name: "Workspace".to_string(),
+                        environment_type: "dev".to_string(),
+                        mcp_policy: "auto".to_string(),
                         workspace_root: None,
                         mode: "local".to_string(),
                         source: "command-bus".to_string(),

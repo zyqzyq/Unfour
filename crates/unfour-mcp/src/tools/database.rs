@@ -4,7 +4,9 @@ use unfour_core::models::{DatabaseConnection, DatabaseQueryInput};
 
 use crate::command_bus_adapter::CommandBusAdapter;
 
-use super::{object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition};
+use super::{
+    object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition,
+};
 
 const DEFAULT_QUERY_LIMIT: u32 = 100;
 const MAX_QUERY_LIMIT: u32 = 1000;
@@ -749,6 +751,7 @@ mod tests {
     use serde_json::json;
     use unfour_command_bus::{
         ConnectionListResult, CurrentWorkspaceResult, ReadCommand, ReadCommandResult,
+        WorkspaceListResult, WorkspaceSummary,
     };
     use unfour_core::models::{
         ApiResponse, DatabaseConnection, DatabaseQueryInput, DatabaseQueryResult,
@@ -774,11 +777,27 @@ mod tests {
                     ReadCommandResult::CurrentWorkspace(CurrentWorkspaceResult {
                         workspace_id: "workspace-1".to_string(),
                         workspace_name: "Workspace".to_string(),
+                        environment_type: "dev".to_string(),
+                        mcp_policy: "auto".to_string(),
                         workspace_root: None,
                         mode: "local".to_string(),
                         source: "command-bus".to_string(),
                     })
                 }
+                ReadCommand::ListWorkspaces => ReadCommandResult::Workspaces(WorkspaceListResult {
+                    workspaces: vec![WorkspaceSummary {
+                        id: "workspace-1".to_string(),
+                        name: "Workspace".to_string(),
+                        is_default: true,
+                        is_active: true,
+                        environment_type: "dev".to_string(),
+                        mcp_policy: "auto".to_string(),
+                        last_opened_at: None,
+                    }],
+                    active_workspace_id: "workspace-1".to_string(),
+                    count: 1,
+                    source: "command-bus".to_string(),
+                }),
                 ReadCommand::ListConnections { .. } => {
                     ReadCommandResult::Connections(ConnectionListResult {
                         connections: vec![],
@@ -789,6 +808,8 @@ mod tests {
                 _ => ReadCommandResult::CurrentWorkspace(CurrentWorkspaceResult {
                     workspace_id: "workspace-1".to_string(),
                     workspace_name: "Workspace".to_string(),
+                    environment_type: "dev".to_string(),
+                    mcp_policy: "auto".to_string(),
                     workspace_root: None,
                     mode: "local".to_string(),
                     source: "command-bus".to_string(),
@@ -959,12 +980,41 @@ mod tests {
     impl CommandBusAdapter for DbFailingCommandBus {
         fn execute_read(
             &self,
-            _command: ReadCommand,
+            command: ReadCommand,
         ) -> Result<ReadCommandResult, CommandBusAdapterError> {
-            Err(CommandBusAdapterError {
-                code: "COMMAND_BUS_READ_FAILED",
-                message: "The command-bus read operation failed.",
-            })
+            match command {
+                ReadCommand::CurrentWorkspace => Ok(ReadCommandResult::CurrentWorkspace(
+                    CurrentWorkspaceResult {
+                        workspace_id: "workspace-1".to_string(),
+                        workspace_name: "Workspace".to_string(),
+                        environment_type: "dev".to_string(),
+                        mcp_policy: "auto".to_string(),
+                        workspace_root: None,
+                        mode: "local".to_string(),
+                        source: "command-bus".to_string(),
+                    },
+                )),
+                ReadCommand::ListWorkspaces => {
+                    Ok(ReadCommandResult::Workspaces(WorkspaceListResult {
+                        workspaces: vec![WorkspaceSummary {
+                            id: "workspace-1".to_string(),
+                            name: "Workspace".to_string(),
+                            is_default: true,
+                            is_active: true,
+                            environment_type: "dev".to_string(),
+                            mcp_policy: "auto".to_string(),
+                            last_opened_at: None,
+                        }],
+                        active_workspace_id: "workspace-1".to_string(),
+                        count: 1,
+                        source: "command-bus".to_string(),
+                    }))
+                }
+                _ => Err(CommandBusAdapterError {
+                    code: "COMMAND_BUS_READ_FAILED",
+                    message: "The command-bus read operation failed.",
+                }),
+            }
         }
 
         fn execute_saved_api_request(
@@ -1117,6 +1167,8 @@ mod tests {
                     CurrentWorkspaceResult {
                         workspace_id: "ws-1".to_string(),
                         workspace_name: "W".to_string(),
+                        environment_type: "dev".to_string(),
+                        mcp_policy: "auto".to_string(),
                         workspace_root: None,
                         mode: "local".to_string(),
                         source: "command-bus".to_string(),
@@ -1447,6 +1499,8 @@ mod tests {
                     CurrentWorkspaceResult {
                         workspace_id: "ws-1".to_string(),
                         workspace_name: "W".to_string(),
+                        environment_type: "dev".to_string(),
+                        mcp_policy: "auto".to_string(),
                         workspace_root: None,
                         mode: "local".to_string(),
                         source: "command-bus".to_string(),

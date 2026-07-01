@@ -4,7 +4,9 @@ use unfour_command_bus::{ReadCommand, ReadCommandResult};
 use crate::command_bus_adapter::CommandBusAdapter;
 use crate::sanitize::redact_json_in_place;
 
-use super::{object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition};
+use super::{
+    object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition,
+};
 
 const DEFAULT_ACTIVITY_LIMIT: i64 = 50;
 const MAX_ACTIVITY_LIMIT: i64 = 200;
@@ -153,7 +155,9 @@ mod tests {
     use std::sync::Arc;
 
     use serde_json::json;
-    use unfour_command_bus::{ActivityItem, ActivityListResult, ReadCommand, ReadCommandResult};
+    use unfour_command_bus::{
+        ActivityItem, ActivityListResult, CurrentWorkspaceResult, ReadCommand, ReadCommandResult,
+    };
     use unfour_core::models::{
         ApiResponse, DatabaseConnection, DatabaseQueryInput, DatabaseQueryResult,
         DatabaseQuerySafety, DatabaseSchema,
@@ -170,6 +174,17 @@ mod tests {
             command: ReadCommand,
         ) -> Result<ReadCommandResult, CommandBusAdapterError> {
             match command {
+                ReadCommand::CurrentWorkspace => Ok(ReadCommandResult::CurrentWorkspace(
+                    CurrentWorkspaceResult {
+                        workspace_id: "ws-1".to_string(),
+                        workspace_name: "Local".to_string(),
+                        environment_type: "dev".to_string(),
+                        mcp_policy: "auto".to_string(),
+                        workspace_root: None,
+                        mode: "local".to_string(),
+                        source: "command-bus".to_string(),
+                    },
+                )),
                 ReadCommand::ListActivity { limit, .. } => {
                     // Verify the command-bus default limit is forwarded.
                     assert_eq!(limit, Some(50));

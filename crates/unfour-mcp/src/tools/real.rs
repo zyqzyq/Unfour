@@ -3,7 +3,9 @@ use unfour_command_bus::{ConnectionType, ReadCommand, ReadCommandResult};
 
 use crate::command_bus_adapter::CommandBusAdapter;
 
-use super::{object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition};
+use super::{
+    object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition,
+};
 
 pub(super) fn registered_tools() -> Vec<RegisteredTool> {
     vec![
@@ -23,6 +25,8 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "properties": {
                         "workspaceId": { "type": "string" },
                         "workspaceName": { "type": "string" },
+                        "environmentType": { "type": "string", "enum": ["dev", "test", "prod"] },
+                        "mcpPolicy": { "type": "string", "enum": ["auto", "disabled", "read_only", "guarded", "full_access"] },
                         "workspaceRoot": { "type": ["string", "null"] },
                         "mode": { "type": "string", "const": "local" },
                         "source": { "type": "string", "const": "command-bus" }
@@ -30,6 +34,8 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": [
                         "workspaceId",
                         "workspaceName",
+                        "environmentType",
+                        "mcpPolicy",
                         "workspaceRoot",
                         "mode",
                         "source"
@@ -63,9 +69,11 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                                     "name": { "type": "string" },
                                     "isDefault": { "type": "boolean" },
                                     "isActive": { "type": "boolean" },
+                                    "environmentType": { "type": "string", "enum": ["dev", "test", "prod"] },
+                                    "mcpPolicy": { "type": "string", "enum": ["auto", "disabled", "read_only", "guarded", "full_access"] },
                                     "lastOpenedAt": { "type": ["string", "null"] }
                                 },
-                                "required": ["id", "name", "isDefault", "isActive"],
+                                "required": ["id", "name", "isDefault", "isActive", "environmentType", "mcpPolicy"],
                                 "additionalProperties": false
                             }
                         },

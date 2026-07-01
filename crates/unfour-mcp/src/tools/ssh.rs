@@ -4,7 +4,9 @@ use unfour_core::models::SshDiagnosticInput;
 
 use crate::command_bus_adapter::CommandBusAdapter;
 
-use super::{object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition};
+use super::{
+    object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition,
+};
 
 const MAX_DIAGNOSTIC_TIMEOUT_MS: u64 = 60_000;
 
@@ -196,6 +198,8 @@ mod tests {
                     CurrentWorkspaceResult {
                         workspace_id: "ws-active".to_string(),
                         workspace_name: "Active".to_string(),
+                        environment_type: "dev".to_string(),
+                        mcp_policy: "auto".to_string(),
                         workspace_root: None,
                         mode: "local".to_string(),
                         source: "command-bus".to_string(),
@@ -280,6 +284,8 @@ mod tests {
                 CurrentWorkspaceResult {
                     workspace_id: "ws-active".to_string(),
                     workspace_name: "Active".to_string(),
+                    environment_type: "dev".to_string(),
+                    mcp_policy: "auto".to_string(),
                     workspace_root: None,
                     mode: "local".to_string(),
                     source: "command-bus".to_string(),

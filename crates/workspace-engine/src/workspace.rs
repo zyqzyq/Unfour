@@ -1,11 +1,12 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use unfour_core::models::{
-    Workspace, WorkspaceLayout, WorkspaceLayoutTab, WorkspaceState,
-};
+use unfour_core::models::{Workspace, WorkspaceLayout, WorkspaceLayoutTab, WorkspaceState};
 use unfour_core::{AppError, AppResult};
 use unfour_local_storage::LocalDb;
 use uuid::Uuid;
+
+const DEFAULT_ENVIRONMENT_TYPE: &str = "dev";
+const DEFAULT_MCP_POLICY: &str = "auto";
 
 #[derive(Clone)]
 pub struct WorkspaceService {
@@ -33,14 +34,16 @@ impl WorkspaceService {
         sqlx::query(
             r#"
             INSERT INTO workspaces (
-              id, name, is_default, last_opened_at, created_at, updated_at,
-              revision, sync_status
+              id, name, is_default, last_opened_at, environment_type, mcp_policy,
+              created_at, updated_at, revision, sync_status
             )
-            VALUES (?1, 'Default Workspace', 1, ?2, ?2, ?2, 1, 'local')
+            VALUES (?1, 'Default Workspace', 1, ?2, ?3, ?4, ?2, ?2, 1, 'local')
             "#,
         )
         .bind(&id)
         .bind(&now)
+        .bind(DEFAULT_ENVIRONMENT_TYPE)
+        .bind(DEFAULT_MCP_POLICY)
         .execute(self.db.pool())
         .await?;
 
@@ -85,8 +88,8 @@ impl WorkspaceService {
         let items = sqlx::query_as::<_, Workspace>(
             r#"
             SELECT
-              id, name, is_default, last_opened_at, created_at, updated_at,
-              deleted_at, revision, sync_status, remote_id
+              id, name, is_default, last_opened_at, environment_type, mcp_policy,
+              created_at, updated_at, deleted_at, revision, sync_status, remote_id
             FROM workspaces
             WHERE deleted_at IS NULL
             ORDER BY is_default DESC, last_opened_at DESC, created_at ASC
@@ -99,22 +102,35 @@ impl WorkspaceService {
     }
 
     pub async fn create(&self, name: String) -> AppResult<Workspace> {
+        self.create_with_options(name, None, None).await
+    }
+
+    pub async fn create_with_options(
+        &self,
+        name: String,
+        environment_type: Option<String>,
+        mcp_policy: Option<String>,
+    ) -> AppResult<Workspace> {
         let name = normalize_name(name)?;
+        let environment_type = normalize_environment_type(environment_type)?;
+        let mcp_policy = normalize_mcp_policy(mcp_policy)?;
         let now = Utc::now().to_rfc3339();
         let id = Uuid::new_v4().to_string();
 
         sqlx::query(
             r#"
             INSERT INTO workspaces (
-              id, name, is_default, last_opened_at, created_at, updated_at,
-              revision, sync_status
+              id, name, is_default, last_opened_at, environment_type, mcp_policy,
+              created_at, updated_at, revision, sync_status
             )
-            VALUES (?1, ?2, 0, ?3, ?3, ?3, 1, 'local')
+            VALUES (?1, ?2, 0, ?3, ?4, ?5, ?3, ?3, 1, 'local')
             "#,
         )
         .bind(&id)
         .bind(&name)
         .bind(&now)
+        .bind(&environment_type)
+        .bind(&mcp_policy)
         .execute(self.db.pool())
         .await?;
 
@@ -134,6 +150,34 @@ impl WorkspaceService {
 
         self.write_setting("active_workspace_id", &id).await?;
         self.get(&id).await
+    }
+
+    pub async fn update_environment(
+        &self,
+        workspace_id: String,
+        environment_type: String,
+    ) -> AppResult<Workspace> {
+        let environment_type = normalize_environment_type(Some(environment_type))?;
+        let now = Utc::now().to_rfc3339();
+
+        let result = sqlx::query(
+            r#"
+            UPDATE workspaces
+            SET environment_type = ?1, updated_at = ?2, revision = revision + 1, sync_status = 'pending'
+            WHERE id = ?3 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(environment_type)
+        .bind(now)
+        .bind(&workspace_id)
+        .execute(self.db.pool())
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound("workspace".to_string()));
+        }
+
+        self.get(&workspace_id).await
     }
 
     pub async fn rename(&self, workspace_id: String, name: String) -> AppResult<Workspace> {
@@ -269,8 +313,8 @@ impl WorkspaceService {
         let workspace = sqlx::query_as::<_, Workspace>(
             r#"
             SELECT
-              id, name, is_default, last_opened_at, created_at, updated_at,
-              deleted_at, revision, sync_status, remote_id
+              id, name, is_default, last_opened_at, environment_type, mcp_policy,
+              created_at, updated_at, deleted_at, revision, sync_status, remote_id
             FROM workspaces
             WHERE id = ?1 AND deleted_at IS NULL
             "#,
@@ -353,6 +397,52 @@ fn normalize_name(name: String) -> AppResult<String> {
         ));
     }
     Ok(trimmed.to_string())
+}
+
+fn normalize_environment_type(value: Option<String>) -> AppResult<String> {
+    let value = value
+        .and_then(|item| {
+            let trimmed = item.trim().to_ascii_lowercase();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed)
+            }
+        })
+        .unwrap_or_else(|| DEFAULT_ENVIRONMENT_TYPE.to_string());
+
+    if matches!(value.as_str(), "dev" | "test" | "prod") {
+        Ok(value)
+    } else {
+        Err(AppError::Validation(
+            "workspace environment_type must be one of: dev, test, prod".to_string(),
+        ))
+    }
+}
+
+fn normalize_mcp_policy(value: Option<String>) -> AppResult<String> {
+    let value = value
+        .and_then(|item| {
+            let trimmed = item.trim().to_ascii_lowercase();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed)
+            }
+        })
+        .unwrap_or_else(|| DEFAULT_MCP_POLICY.to_string());
+
+    if matches!(
+        value.as_str(),
+        "auto" | "disabled" | "read_only" | "guarded" | "full_access"
+    ) {
+        Ok(value)
+    } else {
+        Err(AppError::Validation(
+            "workspace mcp_policy must be one of: auto, disabled, read_only, guarded, full_access"
+                .to_string(),
+        ))
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -591,6 +681,8 @@ mod tests {
             .expect("create workspace");
         let created_state = service.state().await.expect("state after create");
         assert_eq!(created.name, "Client Ops");
+        assert_eq!(created.environment_type, "dev");
+        assert_eq!(created.mcp_policy, "auto");
         assert_eq!(created_state.active_workspace_id, created.id);
 
         let renamed = service
@@ -615,6 +707,23 @@ mod tests {
             .workspaces
             .iter()
             .any(|workspace| workspace.id == created.id));
+    }
+
+    #[tokio::test]
+    async fn create_with_options_stores_environment_and_policy() {
+        let service = service().await;
+
+        let created = service
+            .create_with_options(
+                "Production".to_string(),
+                Some("prod".to_string()),
+                Some("read_only".to_string()),
+            )
+            .await
+            .expect("create prod workspace");
+
+        assert_eq!(created.environment_type, "prod");
+        assert_eq!(created.mcp_policy, "read_only");
     }
 
     #[tokio::test]

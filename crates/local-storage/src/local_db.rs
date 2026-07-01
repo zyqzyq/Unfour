@@ -245,6 +245,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn workspace_policy_migration_defaults_legacy_rows() {
+        let db = test_db().await;
+        sqlx::query(
+            r#"
+            CREATE TABLE workspaces (
+              id TEXT PRIMARY KEY,
+              name TEXT NOT NULL,
+              is_default INTEGER NOT NULL DEFAULT 0,
+              last_opened_at TEXT,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              deleted_at TEXT,
+              revision INTEGER NOT NULL DEFAULT 1,
+              sync_status TEXT NOT NULL DEFAULT 'local',
+              remote_id TEXT
+            )
+            "#,
+        )
+        .execute(db.pool())
+        .await
+        .expect("create legacy workspaces table");
+        sqlx::query(
+            r#"
+            INSERT INTO workspaces (
+              id, name, is_default, created_at, updated_at, revision, sync_status
+            )
+            VALUES ('legacy-ws', 'Legacy', 1, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 1, 'local')
+            "#,
+        )
+        .execute(db.pool())
+        .await
+        .expect("insert legacy workspace");
+
+        db.migrate().await.expect("migrate legacy workspace table");
+
+        let row: (String, String) = sqlx::query_as(
+            "SELECT environment_type, mcp_policy FROM workspaces WHERE id = 'legacy-ws'",
+        )
+        .fetch_one(db.pool())
+        .await
+        .expect("read migrated workspace policy fields");
+        assert_eq!(row.0, "dev");
+        assert_eq!(row.1, "auto");
+    }
+
+    #[tokio::test]
     async fn connect_existing_read_only_path_reads_existing_database_without_creating() {
         let path = temp_db_path();
         let db = LocalDb::connect_path(&path).await.expect("create db");

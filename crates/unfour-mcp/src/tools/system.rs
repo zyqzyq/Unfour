@@ -2,7 +2,9 @@ use serde_json::{json, Value};
 
 use crate::command_bus_adapter::CommandBusAdapter;
 
-use super::{object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition};
+use super::{
+    object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition,
+};
 
 pub(super) fn registered_tools() -> Vec<RegisteredTool> {
     vec![RegisteredTool {

@@ -8,6 +8,8 @@ pub struct Workspace {
     pub name: String,
     pub is_default: bool,
     pub last_opened_at: Option<String>,
+    pub environment_type: String,
+    pub mcp_policy: String,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: Option<String>,

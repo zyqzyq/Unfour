@@ -2,8 +2,9 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const WARNING_THRESHOLD = 800;
-export const ERROR_THRESHOLD = 1200;
+export const WARNING_THRESHOLD = 600;
+export const ERROR_THRESHOLD = 1000;
+export const CRITICAL_THRESHOLD = 1500;
 
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".rs", ".css", ".mdx"]);
 const EXCLUDED_DIRS = new Set([
@@ -62,6 +63,13 @@ export function countLines(text) {
 }
 
 export function classifyLineCount(lineCount) {
+  if (lineCount > CRITICAL_THRESHOLD) {
+    return {
+      severity: "critical",
+      threshold: CRITICAL_THRESHOLD,
+    };
+  }
+
   if (lineCount > ERROR_THRESHOLD) {
     return {
       severity: "error",
@@ -194,10 +202,12 @@ async function loadBaseline(root, baselinePath) {
 }
 
 function applyBaseline(issues, baseline) {
+  const BLOCKING_SEVERITIES = new Set(["error", "critical"]);
+
   return issues.map((issue) => {
     const baselineEntry = baseline.get(issue.path);
     const baselineAllowed =
-      issue.severity === "error" &&
+      BLOCKING_SEVERITIES.has(issue.severity) &&
       baselineEntry &&
       issue.lineCount <= baselineEntry.maxLines;
 
@@ -211,9 +221,14 @@ function applyBaseline(issues, baseline) {
 }
 
 export function formatIssue(issue) {
-  const prefix = issue.severity === "error" ? "ERROR" : "WARN";
+  const prefix =
+    issue.severity === "critical"
+      ? "CRITICAL"
+      : issue.severity === "error"
+        ? "ERROR"
+        : "WARN";
   const baselineText = issue.baselineAllowed
-    ? ` (known baseline <= ${issue.baselineMaxLines}: ${issue.baselineReason})`
+    ? ` (grandfathered large file <= ${issue.baselineMaxLines}: ${issue.baselineReason})`
     : "";
 
   return [
@@ -257,26 +272,31 @@ export async function runLargeFileCheck(argv = process.argv.slice(2)) {
   const baseline = await loadBaseline(root, options.baselinePath);
   const annotatedIssues = applyBaseline(issues, baseline);
   const blockingErrors = annotatedIssues.filter(
-    (issue) => issue.severity === "error" && !issue.baselineAllowed,
+    (issue) =>
+      (issue.severity === "error" || issue.severity === "critical") &&
+      !issue.baselineAllowed,
   );
 
   if (annotatedIssues.length === 0) {
-    console.log("[large-files] OK: no supported source files exceed 800 lines.");
+    console.log("[large-files] OK: no supported source files exceed 600 lines.");
     return 0;
   }
 
   for (const issue of annotatedIssues) {
-    const writer = issue.severity === "error" && !issue.baselineAllowed
-      ? console.error
-      : console.warn;
+    const isBlocking =
+      (issue.severity === "error" || issue.severity === "critical") &&
+      !issue.baselineAllowed;
+    const writer = isBlocking ? console.error : console.warn;
     writer(formatIssue(issue));
   }
 
   const warningCount = annotatedIssues.filter((issue) => issue.severity === "warning").length;
-  const knownErrorCount = annotatedIssues.filter((issue) => issue.baselineAllowed).length;
+  const errorCount = annotatedIssues.filter((issue) => issue.severity === "error").length;
+  const criticalCount = annotatedIssues.filter((issue) => issue.severity === "critical").length;
+  const grandfatheredCount = annotatedIssues.filter((issue) => issue.baselineAllowed).length;
 
   console.log(
-    `[large-files] Summary: ${warningCount} warning(s), ${knownErrorCount} known error(s), ${blockingErrors.length} blocking error(s).`,
+    `[large-files] Summary: ${warningCount} warning(s), ${errorCount} error(s), ${criticalCount} critical(s), ${grandfatheredCount} grandfathered, ${blockingErrors.length} blocking.`,
   );
 
   if (blockingErrors.length > 0) {

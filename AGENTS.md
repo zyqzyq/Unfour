@@ -85,23 +85,41 @@ During modification:
 
 ## File Size Discipline
 
-- Do not keep adding complex logic to ordinary source files that are already
-  over 800 lines; prefer splitting the touched responsibility first.
-- When modifying a file over 800 lines, first look for low-risk extractions
-  such as types, constants, mock data, pure utilities, serializers, parsers,
-  adapters, hooks, services, or child components.
-- New ordinary source files should stay under 500 lines unless there is a
-  documented reason.
-- New complex pages or container files should stay under 800 lines unless
-  there is a documented reason.
-- If a file must exceed these thresholds, explain the reason in the final
-  report or the relevant code review context.
-- Generated files, lock files, snapshots, vendored files, and build output are
-  exempt from these size limits.
-- Splits must preserve module and package boundaries; feature packages must not
-  gain reverse dependencies on `packages/app-shell`.
-- Prefer responsibility-based splits through hooks, services, adapters,
-  components, types, constants, and utilities instead of arbitrary tiny files.
+Line count is a quality signal, not an absolute hard limit.
+
+Recommended ranges:
+
+- Small UI components / utilities: 80–250 lines.
+- Page-level React files: 300–600 lines.
+- Rust business modules: 300–700 lines.
+- Adapter / command gateway files: 300–800 lines.
+- Test files: 500–1200 lines.
+- Generated files, schema files, migrations, lock files, snapshots, vendored
+  files, and build output are excluded from these size limits.
+
+Review thresholds (enforced by `scripts/check-large-files.mjs`):
+
+- Over 600 lines: warning — check whether responsibilities are mixed.
+- Over 1000 lines: violation — split, or document why it should remain
+  together. Grandfathered baseline files in
+  `scripts/large-files-baseline.json` remain allowed while their line count
+  does not increase.
+- Over 1500 lines: Critical — should be scheduled for refactoring.
+
+When modifying a file that crosses a threshold, first look for low-risk
+extractions such as types, constants, mock data, pure utilities, serializers,
+parsers, adapters, hooks, services, or child components. If a file must
+exceed a threshold, explain the reason in the final report or the relevant
+code review context.
+
+Previously approved large files remain grandfathered for now and stay on the
+follow-up refactoring list until explicitly split. Do not change them just to
+satisfy line-count rules.
+
+Do not split files only to satisfy line-count rules. Prefer splitting by
+responsibility, public API boundary, testability, and change frequency.
+Splits must preserve module and package boundaries; feature packages must not
+gain reverse dependencies on `packages/app-shell`.
 
 For implementation-task workflow, verification defaults, commit discipline, and
 final reporting, follow `docs/agents/EXECUTION_PROTOCOL.md`.

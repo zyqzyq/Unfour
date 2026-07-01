@@ -4,11 +4,13 @@ import {
   cancelSshReconnect,
   closeSshSession,
   connectSshSession,
+  createWorkspace,
   createApiCollection,
   createApiCollectionFolder,
   deleteSavedSql,
   executeDatabaseQuery,
   getDatabaseSchema,
+  getWorkspaceState,
   getSshSessionHistory,
   listSavedSql,
   listSavedApiRequests,
@@ -20,6 +22,25 @@ import {
   testDatabaseConnection,
   updateApiRequest,
 } from "./tauri";
+
+describe("Workspace browser mock", () => {
+  it("creates workspaces with default and explicit MCP policy fields", async () => {
+    const created = await createWorkspace(`Mock Policy ${crypto.randomUUID()}`);
+    expect(created.environmentType).toBe("dev");
+    expect(created.mcpPolicy).toBe("auto");
+
+    const prod = await createWorkspace(`Mock Prod ${crypto.randomUUID()}`, "prod");
+    expect(prod.environmentType).toBe("prod");
+    expect(prod.mcpPolicy).toBe("auto");
+
+    const state = await getWorkspaceState();
+    expect(state.activeWorkspaceId).toBe(prod.id);
+    expect(state.workspaces.find((workspace) => workspace.id === prod.id)).toMatchObject({
+      environmentType: "prod",
+      mcpPolicy: "auto",
+    });
+  });
+});
 
 describe("SSH browser mock lifecycle", () => {
   it("supports the health-state contract and reconnect cancellation", async () => {

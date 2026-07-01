@@ -41,6 +41,7 @@ pub fn run() {
             unfour_app::commands::workspace_layout_update,
             unfour_app::commands::workspace_rename,
             unfour_app::commands::workspace_set_active,
+            unfour_app::commands::workspace_update_environment,
             unfour_app::commands::api_history_detail,
             unfour_app::commands::api_history_list,
             unfour_app::commands::api_request_delete,

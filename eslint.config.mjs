@@ -50,7 +50,7 @@ export default tseslint.config(
       "max-lines": [
         "warn",
         {
-          max: 800,
+          max: 600,
           skipBlankLines: true,
           skipComments: true,
         },

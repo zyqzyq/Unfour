@@ -16,15 +16,19 @@ function lines(count) {
   return Array.from({ length: count }, (_, index) => `line ${index + 1}`).join("\n");
 }
 
-test("classifyLineCount marks warning and error thresholds", () => {
-  assert.equal(classifyLineCount(800), null);
-  assert.deepEqual(classifyLineCount(801), {
+test("classifyLineCount marks warning, error, and critical thresholds", () => {
+  assert.equal(classifyLineCount(600), null);
+  assert.deepEqual(classifyLineCount(601), {
     severity: "warning",
-    threshold: 800,
+    threshold: 600,
   });
-  assert.deepEqual(classifyLineCount(1201), {
+  assert.deepEqual(classifyLineCount(1001), {
     severity: "error",
-    threshold: 1200,
+    threshold: 1000,
+  });
+  assert.deepEqual(classifyLineCount(1501), {
+    severity: "critical",
+    threshold: 1500,
   });
 });
 
@@ -56,10 +60,11 @@ test("scanLargeFiles reports only supported source files over thresholds", async
     await mkdir(path.join(root, "dist"), { recursive: true });
     await mkdir(path.join(root, "generated"), { recursive: true });
 
-    await writeFile(path.join(root, "src", "warning.ts"), lines(801));
-    await writeFile(path.join(root, "src", "error.tsx"), lines(1201));
+    await writeFile(path.join(root, "src", "warning.ts"), lines(601));
+    await writeFile(path.join(root, "src", "error.tsx"), lines(1001));
+    await writeFile(path.join(root, "src", "critical.rs"), lines(1501));
     await writeFile(path.join(root, "src", "ok.rs"), lines(500));
-    await writeFile(path.join(root, "src", "ignored.txt"), lines(1500));
+    await writeFile(path.join(root, "src", "ignored.txt"), lines(2000));
     await writeFile(path.join(root, "node_modules/pkg/index.ts"), lines(2000));
     await writeFile(path.join(root, "dist/index.js"), lines(2000));
     await writeFile(path.join(root, "generated/types.ts"), lines(2000));
@@ -75,16 +80,22 @@ test("scanLargeFiles reports only supported source files over thresholds", async
       })),
       [
         {
+          path: "src/critical.rs",
+          lineCount: 1501,
+          severity: "critical",
+          threshold: 1500,
+        },
+        {
           path: "src/error.tsx",
-          lineCount: 1201,
+          lineCount: 1001,
           severity: "error",
-          threshold: 1200,
+          threshold: 1000,
         },
         {
           path: "src/warning.ts",
-          lineCount: 801,
+          lineCount: 601,
           severity: "warning",
-          threshold: 800,
+          threshold: 600,
         },
       ],
     );
@@ -98,11 +109,27 @@ test("formatIssue includes actionable guidance", () => {
     path: "src/large.tsx",
     lineCount: 900,
     severity: "warning",
-    threshold: 800,
+    threshold: 600,
   });
 
   assert.match(message, /src\/large\.tsx/);
   assert.match(message, /900 lines/);
-  assert.match(message, /threshold 800/);
+  assert.match(message, /threshold 600/);
   assert.match(message, /Extract types/);
+});
+
+test("formatIssue marks critical severity and grandfathered files", () => {
+  const criticalMessage = formatIssue({
+    path: "src/huge.rs",
+    lineCount: 1800,
+    severity: "critical",
+    threshold: 1500,
+    baselineAllowed: true,
+    baselineMaxLines: 1900,
+    baselineReason: "Historical module; awaiting split.",
+  });
+
+  assert.match(criticalMessage, /CRITICAL/);
+  assert.match(criticalMessage, /grandfathered large file <= 1900/);
+  assert.match(criticalMessage, /Historical module; awaiting split\./);
 });

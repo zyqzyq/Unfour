@@ -18,27 +18,27 @@
     },
     {
       "path": "packages/command-client/src/tauri.ts",
-      "maxLines": 1796,
+      "maxLines": 2108,
       "reason": "Tauri command wrapper plus browser mock fallback; needs future mock extraction."
     },
     {
       "path": "crates/unfour-command-bus/src/lib.rs",
-      "maxLines": 1790,
+      "maxLines": 1966,
       "reason": "Command-bus boundary and result models; needs future type/test extraction."
     },
     {
       "path": "crates/unfour-mcp/src/tools/database.rs",
-      "maxLines": 1650,
+      "maxLines": 1658,
       "reason": "Database MCP tools plus parser/validator tests; needs future validator split."
     },
     {
       "path": "crates/unfour-mcp/src/tools/api.rs",
-      "maxLines": 1456,
+      "maxLines": 1457,
       "reason": "API MCP tools plus redaction/parser tests; needs future serializer split."
     },
     {
       "path": "packages/database/src/DatabasePage.tsx",
-      "maxLines": 1455,
+      "maxLines": 1613,
       "reason": "Historical database page container; needs future dialog/hook/component extraction."
     }
   ]

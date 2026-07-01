@@ -44,6 +44,7 @@
       "toggleInspector": "Toggle inspector"
     },
     "workspace": {
+      "changeEnvironment": "Change Environment",
       "deleteCurrent": "Delete current",
       "defaultBadge": "default",
       "dialog": {
@@ -54,13 +55,30 @@
         "delete": "Delete",
         "deleteDescription": "Delete {name} locally. The app will switch to another available workspace.",
         "deleteTitle": "Delete workspace",
+        "environmentDescription": "Choose the workspace environment used for MCP safety defaults.",
+        "environmentTitle": "Change environment",
         "namePlaceholder": "Workspace name",
         "rename": "Rename",
         "renameDescription": "Rename the active workspace. Existing workspace-scoped records stay attached to it.",
         "renameTitle": "Rename workspace",
+        "saveEnvironment": "Save",
         "thisWorkspace": "this workspace"
       },
+      "environment": {
+        "development": "Development",
+        "hint": "Environment controls the default MCP permission level.",
+        "label": "Environment",
+        "prodWarning": "This workspace will use production-safe MCP defaults. MCP write and execution actions will be blocked by default.",
+        "production": "Production",
+        "test": "Test / Staging"
+      },
       "label": "Workspaces",
+      "mcp": {
+        "disabled": "MCP: Disabled",
+        "fullAccess": "MCP: Full access",
+        "guarded": "MCP: Guarded",
+        "readOnly": "MCP: Read-only"
+      },
       "new": "New workspace",
       "none": "No workspace",
       "noneAvailable": "No workspaces",

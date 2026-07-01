@@ -1,18 +1,17 @@
 use crate::AppState;
 use tauri::State;
 use unfour_core::models::{
-    ApiCollection, ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse,
-    ApiCollectionFolder, ApiSavedRequest, CredentialCreateInput, CredentialDeleteInput,
-    CredentialInspectInput, CredentialMetadata, CredentialRotateInput, DatabaseBrowseInput, DatabaseBrowseResult,
-    DatabaseConnection, DatabaseConnectionInput, DatabaseQueryInput, DatabaseQueryResult,
-    DatabaseRowMutationInput, DatabaseRowMutationResult, DatabaseSchema, DatabaseTableStructure,
-    DatabaseTableStructureInput, DatabaseTestResult, DbQueryHistoryEntry,
+    ApiCollection, ApiCollectionFolder, ApiEnvironment, ApiHistoryDetail, ApiHistoryItem,
+    ApiRequestInput, ApiResponse, ApiSavedRequest, CredentialCreateInput, CredentialDeleteInput,
+    CredentialInspectInput, CredentialMetadata, CredentialRotateInput, DatabaseBrowseInput,
+    DatabaseBrowseResult, DatabaseConnection, DatabaseConnectionInput, DatabaseQueryInput,
+    DatabaseQueryResult, DatabaseRowMutationInput, DatabaseRowMutationResult, DatabaseSchema,
+    DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult, DbQueryHistoryEntry,
     DbQueryHistoryRecordInput, KeyValue, SavedSql, SavedSqlInput, SshCloseInput, SshConnectInput,
-    SshConnection,
-    SshConnectionInput, SshHostFingerprintInfo, SshHostKeyInput, SshKnownHostsExportResult,
-    SshKnownHostsImportInput, SshKnownHostsImportResult, SshLogExport, SshLogExportInput,
-    SshReconnectCancelInput, SshResizeInput, SshSessionEvent, SshSessionInput, SshSessionSummary,
-    SystemHealth, Workspace, WorkspaceLayout, WorkspaceState,
+    SshConnection, SshConnectionInput, SshHostFingerprintInfo, SshHostKeyInput,
+    SshKnownHostsExportResult, SshKnownHostsImportInput, SshKnownHostsImportResult, SshLogExport,
+    SshLogExportInput, SshReconnectCancelInput, SshResizeInput, SshSessionEvent, SshSessionInput,
+    SshSessionSummary, SystemHealth, Workspace, WorkspaceLayout, WorkspaceState,
 };
 use unfour_core::AppResult;
 
@@ -27,8 +26,28 @@ pub async fn workspace_list(state: State<'_, AppState>) -> AppResult<WorkspaceSt
 }
 
 #[tauri::command]
-pub async fn workspace_create(name: String, state: State<'_, AppState>) -> AppResult<Workspace> {
-    state.command_bus.create_workspace(name).await
+pub async fn workspace_create(
+    name: String,
+    environment_type: Option<String>,
+    mcp_policy: Option<String>,
+    state: State<'_, AppState>,
+) -> AppResult<Workspace> {
+    state
+        .command_bus
+        .create_workspace_with_options(name, environment_type, mcp_policy)
+        .await
+}
+
+#[tauri::command]
+pub async fn workspace_update_environment(
+    workspace_id: String,
+    environment_type: String,
+    state: State<'_, AppState>,
+) -> AppResult<Workspace> {
+    state
+        .command_bus
+        .update_workspace_environment(workspace_id, environment_type)
+        .await
 }
 
 #[tauri::command]

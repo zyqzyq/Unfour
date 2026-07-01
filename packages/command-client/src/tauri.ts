@@ -47,7 +47,9 @@ import type {
   ApiCollectionFolder,
   ApiEnvironment,
   Workspace,
+  WorkspaceEnvironmentType,
   WorkspaceLayout,
+  WorkspaceMcpPolicy,
   WorkspaceState,
 } from "./types";
 
@@ -62,6 +64,8 @@ const mockWorkspace: Workspace = {
   name: "Default Workspace",
   isDefault: true,
   lastOpenedAt: new Date().toISOString(),
+  environmentType: "dev",
+  mcpPolicy: "auto",
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
   deletedAt: null,
@@ -307,16 +311,31 @@ async function mockInvoke<T>(
   }
 
   if (command === "workspace_create") {
+    const environmentType = String(args?.environmentType ?? "dev") as WorkspaceEnvironmentType;
+    const mcpPolicy = String(args?.mcpPolicy ?? "auto") as WorkspaceMcpPolicy;
     const workspace: Workspace = {
       ...mockWorkspace,
       id: crypto.randomUUID(),
       name: String(args?.name ?? "New Workspace"),
       isDefault: false,
+      environmentType,
+      mcpPolicy,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     mockState.workspaces = [workspace, ...mockState.workspaces];
     mockState.activeWorkspaceId = workspace.id;
+    return workspace as T;
+  }
+
+  if (command === "workspace_update_environment") {
+    const workspaceId = String(args?.workspaceId ?? "");
+    const workspace = mockState.workspaces.find((item) => item.id === workspaceId);
+    if (!workspace) throw new Error("workspace not found");
+    workspace.environmentType = String(
+      args?.environmentType ?? workspace.environmentType,
+    ) as WorkspaceEnvironmentType;
+    workspace.updatedAt = new Date().toISOString();
     return workspace as T;
   }
 
@@ -1519,8 +1538,12 @@ export function getWorkspaceState() {
   return call<WorkspaceState>("workspace_list");
 }
 
-export function createWorkspace(name: string) {
-  return call<Workspace>("workspace_create", { name });
+export function createWorkspace(
+  name: string,
+  environmentType?: WorkspaceEnvironmentType,
+  mcpPolicy?: WorkspaceMcpPolicy,
+) {
+  return call<Workspace>("workspace_create", { name, environmentType, mcpPolicy });
 }
 
 export function renameWorkspace(workspaceId: string, name: string) {
@@ -1533,6 +1556,16 @@ export function deleteWorkspace(workspaceId: string) {
 
 export function setActiveWorkspace(workspaceId: string) {
   return call<WorkspaceState>("workspace_set_active", { workspaceId });
+}
+
+export function updateWorkspaceEnvironment(
+  workspaceId: string,
+  environmentType: WorkspaceEnvironmentType,
+) {
+  return call<Workspace>("workspace_update_environment", {
+    workspaceId,
+    environmentType,
+  });
 }
 
 export function listApiEnvironments(workspaceId: string) {

@@ -849,7 +849,8 @@ mod tests {
     use unfour_command_bus::{
         ApiCollectionListResult, ApiCollectionSummary, ApiEnvironmentListResult,
         ApiHistoryDetailResult, ApiHistoryListResult, ApiRequestDetailResult, ApiRequestListResult,
-        ApiRequestSummary, ReadCommand, ReadCommandResult,
+        ApiRequestSummary, CurrentWorkspaceResult, ReadCommand, ReadCommandResult,
+        WorkspaceListResult, WorkspaceSummary,
     };
     use unfour_core::models::{
         ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiResponse, ApiSavedRequest,
@@ -870,6 +871,31 @@ mod tests {
             command: ReadCommand,
         ) -> Result<ReadCommandResult, CommandBusAdapterError> {
             Ok(match command {
+                ReadCommand::CurrentWorkspace => {
+                    ReadCommandResult::CurrentWorkspace(CurrentWorkspaceResult {
+                        workspace_id: "ws-1".to_string(),
+                        workspace_name: "API Workspace".to_string(),
+                        environment_type: "dev".to_string(),
+                        mcp_policy: "auto".to_string(),
+                        workspace_root: None,
+                        mode: "local".to_string(),
+                        source: "command-bus".to_string(),
+                    })
+                }
+                ReadCommand::ListWorkspaces => ReadCommandResult::Workspaces(WorkspaceListResult {
+                    workspaces: vec![WorkspaceSummary {
+                        id: "ws-1".to_string(),
+                        name: "API Workspace".to_string(),
+                        is_default: true,
+                        is_active: true,
+                        environment_type: "dev".to_string(),
+                        mcp_policy: "auto".to_string(),
+                        last_opened_at: None,
+                    }],
+                    active_workspace_id: "ws-1".to_string(),
+                    count: 1,
+                    source: "command-bus".to_string(),
+                }),
                 ReadCommand::ApiListCollections { .. } => {
                     ReadCommandResult::ApiCollections(ApiCollectionListResult {
                         collections: vec![
@@ -1074,12 +1100,67 @@ mod tests {
     impl CommandBusAdapter for FailingApiCommandBus {
         fn execute_read(
             &self,
-            _command: ReadCommand,
+            command: ReadCommand,
         ) -> Result<ReadCommandResult, CommandBusAdapterError> {
-            Err(CommandBusAdapterError {
-                code: "COMMAND_BUS_READ_FAILED",
-                message: "The command-bus read operation failed.",
-            })
+            match command {
+                ReadCommand::CurrentWorkspace => Ok(ReadCommandResult::CurrentWorkspace(
+                    CurrentWorkspaceResult {
+                        workspace_id: "ws-1".to_string(),
+                        workspace_name: "API Workspace".to_string(),
+                        environment_type: "dev".to_string(),
+                        mcp_policy: "auto".to_string(),
+                        workspace_root: None,
+                        mode: "local".to_string(),
+                        source: "command-bus".to_string(),
+                    },
+                )),
+                ReadCommand::ListWorkspaces => {
+                    Ok(ReadCommandResult::Workspaces(WorkspaceListResult {
+                        workspaces: vec![WorkspaceSummary {
+                            id: "ws-1".to_string(),
+                            name: "API Workspace".to_string(),
+                            is_default: true,
+                            is_active: true,
+                            environment_type: "dev".to_string(),
+                            mcp_policy: "auto".to_string(),
+                            last_opened_at: None,
+                        }],
+                        active_workspace_id: "ws-1".to_string(),
+                        count: 1,
+                        source: "command-bus".to_string(),
+                    }))
+                }
+                ReadCommand::ApiGetRequest { request_id } => {
+                    Ok(ReadCommandResult::ApiRequest(ApiRequestDetailResult {
+                        request: ApiSavedRequest {
+                            id: request_id,
+                            workspace_id: "ws-1".to_string(),
+                            name: "Create User".to_string(),
+                            collection_id: "users".to_string(),
+                            parent_folder_id: None,
+                            sort_order: 0,
+                            auth_json: r#"{"type":"none"}"#.to_string(),
+                            method: "POST".to_string(),
+                            url: "https://api.example.com/users".to_string(),
+                            headers_json: "[]".to_string(),
+                            query_json: "[]".to_string(),
+                            body: None,
+                            body_kind: "json".to_string(),
+                            created_at: String::new(),
+                            updated_at: String::new(),
+                            deleted_at: None,
+                            revision: 1,
+                            sync_status: "local".to_string(),
+                            remote_id: None,
+                        },
+                        source: "command-bus".to_string(),
+                    }))
+                }
+                _ => Err(CommandBusAdapterError {
+                    code: "COMMAND_BUS_READ_FAILED",
+                    message: "The command-bus read operation failed.",
+                }),
+            }
         }
 
         fn execute_saved_api_request(
