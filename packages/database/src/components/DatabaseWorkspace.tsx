@@ -95,16 +95,11 @@ export function DatabaseWorkspace({
   tabs: DatabaseWorkspaceTab[];
   workspaceId: string;
 }) {
-  const { t } = useI18n();
   const activeQuery = activeTab?.kind === "query" ? activeTab : null;
   const activeTable = activeTab?.kind === "table" ? activeTab : null;
   const workspaceTabs: WorkspaceTab[] = tabs.map((tab) => ({
     id: tab.id,
     loading: Boolean(tab.loading),
-    meta:
-      tab.kind === "table" ? (
-        <span className="text-[11px] text-[var(--u-color-text-soft)]">{tab.table.name}</span>
-      ) : null,
     modified: tab.kind === "query" && tab.sql.trim().length > 0,
     title: tab.title,
   }));
@@ -113,18 +108,6 @@ export function DatabaseWorkspace({
     <div className="flex min-h-0 flex-1 flex-col">
       <Tabs
         activeId={activeTabId}
-        endControl={
-          activeTable ? (
-            <SegmentedControl
-              onChange={onSelectTableSegment}
-              options={[
-                { label: t("database.editor.dataView"), value: "data" },
-                { label: t("database.editor.structureView"), value: "structure" },
-              ]}
-              value={activeTable.segment}
-            />
-          ) : null
-        }
         onClose={onCloseTab}
         onReorder={onReorderTabs}
         onSelect={(tabId) => onSelectTab(tabId as DatabaseWorkspaceTabId)}
@@ -143,6 +126,7 @@ export function DatabaseWorkspace({
                   activeTable.tableView &&
                   onTablePageChange(activeTable.tableView.pageIndex, activeTable.tableView.pageSize)
                 }
+                onSwitchToStructure={() => onSelectTableSegment("structure")}
                 onTableFilter={onTableFilter}
                 onTableSort={onTableSort}
                 result={activeTable.queryResult}
@@ -165,6 +149,7 @@ export function DatabaseWorkspace({
                 onPreview={onPreviewSelectedTable}
                 onRefresh={onRefreshSchema}
                 onSelectTab={onSelectStructureTab}
+                onSwitchToData={() => onSelectTableSegment("data")}
                 previewPending={executePending}
                 structure={structure}
                 table={activeTable.table}
@@ -218,34 +203,3 @@ function EmptyWorkspace() {
   return <div className="p-3 text-[12px] text-[var(--u-color-text-soft)]">{t("database.editor.empty")}</div>;
 }
 
-function SegmentedControl<T extends string>({
-  onChange,
-  options,
-  value,
-}: {
-  onChange: (value: T) => void;
-  options: Array<{ label: string; value: T }>;
-  value: T;
-}) {
-  return (
-    <div className="inline-flex items-center gap-0.5 rounded-[7px] border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-0.5">
-      {options.map((option) => {
-        const active = option.value === value;
-        return (
-          <button
-            className={`inline-flex h-[22px] items-center rounded-[5px] px-3 text-[12px] font-semibold transition-colors duration-150 ${
-              active
-                ? "bg-[var(--u-color-surface)] text-[var(--u-color-text)] shadow-[0_1px_2px_rgba(0,0,0,0.08)]"
-                : "text-[var(--u-color-text-muted)] hover:text-[var(--u-color-text)]"
-            }`}
-            key={option.value}
-            onClick={() => onChange(option.value)}
-            type="button"
-          >
-            {option.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}

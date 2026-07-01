@@ -1329,21 +1329,9 @@ export function DatabasePage({
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col bg-[var(--u-color-surface)]">
       <DatabaseModuleToolbar
-        canRunSql={Boolean(activeQueryTab?.connectionId)}
         connectionStatus={toolbarConnectionStatus}
-        connections={connections}
-        executePending={executePending}
-        onClearSql={clearSql}
-        onConnect={connectSelectedConnection}
-        onDisconnect={() => toolbarConnection && disconnectConnection(toolbarConnection)}
         onNewQuery={startNewQuery}
-        onRefresh={refreshConnectionsAndSchema}
-        onRun={runSql}
-        onSelectConnection={(connectionId) => selectQueryConnection(connectionId || null)}
-        onStop={stopQuery}
-        pendingConfirmation={Boolean(activeQueryTab?.pendingConfirmation)}
-        selectedConnectionId={toolbarConnectionId}
-        sqlDirty={Boolean(activeQueryTab?.sql.trim())}
+        selectedConnectionName={toolbarConnection?.name ?? null}
       />
       <div className="flex min-h-0 flex-1 flex-col">
         <DatabaseWorkspace

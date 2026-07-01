@@ -1,13 +1,9 @@
-import { Columns3, Copy, Database, Eye, MoreHorizontal, Pencil, Play, PlusCircle, RefreshCw, Square, Table2, Trash2 } from "lucide-react";
+import { Columns3, Copy, Database, Eye, Pencil, Play, PlusCircle, RefreshCw, Square, Table2, Trash2 } from "lucide-react";
 import type { DatabaseConnection, DatabaseSchema, DatabaseTable } from "@unfour/command-client";
 import {
   Badge,
   ConnectionStatus,
   ContextMenuItem,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
   EmptyState,
   IconButton,
   TreeView,
@@ -30,7 +26,6 @@ export function DatabaseConnectionTree({
   onEditConnection,
   onNewQuery,
   onPreviewTable,
-  onRefresh,
   onRefreshSchema,
   onSelectConnection,
   onSelectTable,
@@ -56,7 +51,6 @@ export function DatabaseConnectionTree({
   onEditConnection?: (connection: DatabaseConnection) => void;
   onNewQuery?: (connection?: DatabaseConnection) => void;
   onPreviewTable?: (connectionId: string, table: DatabaseTable) => void;
-  onRefresh?: () => void;
   onRefreshSchema?: (connection: DatabaseConnection) => void;
   onSelectConnection: (connection: DatabaseConnection) => void;
   onSelectTable?: (connectionId: string, table: DatabaseTable) => void;
@@ -101,19 +95,6 @@ export function DatabaseConnectionTree({
     }
 
     return {
-      actions: (
-        <ConnectionActions
-          connection={connection}
-          onConnect={onConnect}
-          onDeleteConnection={onDeleteConnection}
-          onDisconnect={onDisconnect}
-          onEditConnection={onEditConnection}
-          onNewQuery={onNewQuery}
-          onRefresh={onRefresh}
-          onRefreshSchema={onRefreshSchema}
-          status={status}
-        />
-      ),
       contextMenu: (
         <ConnectionContextMenu
           connection={connection}
@@ -529,11 +510,6 @@ function tableItem({
   const id = databaseTableTreeId(connection.id, table);
   tableLookup.set(id, { connectionId: connection.id, table });
   return {
-    actions: onPreviewTable ? (
-      <IconButton label={`Open preview for ${table.name}`} onClick={() => onPreviewTable(connection.id, table)} size="compact">
-        <Play size={12} />
-      </IconButton>
-    ) : undefined,
     contextMenu: (
       <TableContextMenu
         connection={connection}
@@ -544,17 +520,9 @@ function tableItem({
         table={table}
       />
     ),
-    children: table.columns.map((column) => ({
-      icon: <Columns3 size={12} />,
-      id: `${id}:column:${column.name}`,
-      label: column.name,
-      meta: column.primaryKey ? <Badge tone="green">PK</Badge> : undefined,
-      title: `${column.name} ${column.dataType}`,
-    })),
     icon: <Table2 size={13} />,
     id,
     label: table.name,
-    meta: <Badge tone="neutral">{table.kind}</Badge>,
     title: [table.catalog, table.schema, table.name].filter(Boolean).join("."),
   };
 }
@@ -631,68 +599,6 @@ function generateInsertSql(driver: string, table: DatabaseTable) {
   const columns = table.columns.map((column) => quoteDbIdentifier(driver, column.name)).join(", ");
   const placeholders = table.columns.map(() => "NULL").join(", ");
   return `INSERT INTO ${qualifiedSqlName(driver, table)} (${columns})\nVALUES (${placeholders});`;
-}
-
-function ConnectionActions({
-  connection,
-  onConnect,
-  onDeleteConnection,
-  onDisconnect,
-  onEditConnection,
-  onNewQuery,
-  onRefresh,
-  onRefreshSchema,
-  status,
-}: {
-  connection: DatabaseConnection;
-  onConnect?: (connection: DatabaseConnection) => void;
-  onDeleteConnection?: (connection: DatabaseConnection) => void;
-  onDisconnect?: (connection: DatabaseConnection) => void;
-  onEditConnection?: (connection: DatabaseConnection) => void;
-  onNewQuery?: (connection?: DatabaseConnection) => void;
-  onRefresh?: () => void;
-  onRefreshSchema?: (connection: DatabaseConnection) => void;
-  status: DatabaseConnectionStatus;
-}) {
-  const { t } = useI18n();
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <IconButton label={t("database.tree.actionsLabel", { name: connection.name })} size="compact">
-          <MoreHorizontal size={13} />
-        </IconButton>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent>
-        <DropdownMenuItem onSelect={() => onConnect?.(connection)}>{t("common.actions.connect")}</DropdownMenuItem>
-        <DropdownMenuItem disabled={status === "disconnected"} onSelect={() => onDisconnect?.(connection)}>
-          {t("common.actions.disconnect")}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onNewQuery?.(connection)}>{t("database.actions.newQuery")}</DropdownMenuItem>
-        <DropdownMenuItem onSelect={onRefresh}>{t("database.actions.refreshConnections")}</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onRefreshSchema?.(connection)}>{t("database.actions.refreshSchema")}</DropdownMenuItem>
-        {onEditConnection && (
-          <DropdownMenuItem onSelect={() => onEditConnection(connection)}>
-            <Pencil size={13} />
-            {t("database.tree.editConnection")}
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuItem onSelect={() => void navigator.clipboard?.writeText(connection.name)}>
-          <Copy size={13} />
-          {t("database.tree.copyName")}
-        </DropdownMenuItem>
-        {onDeleteConnection && (
-          <DropdownMenuItem
-            className="text-[var(--u-color-danger)]"
-            onSelect={() => onDeleteConnection(connection)}
-          >
-            <Trash2 size={13} />
-            {t("database.tree.deleteConnection")}
-          </DropdownMenuItem>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
 }
 
 function ConnectionContextMenu({
@@ -781,25 +687,4 @@ function connectionStateTitle(
 ) {
   const message = session?.message ? ` - ${session.message}` : "";
   return `${connection.name} (${connection.driver})${message}`;
-}
-
-export function DatabaseSidebarToolbar({
-  onNewQuery,
-  onRefresh,
-}: {
-  onNewQuery?: () => void;
-  onRefresh?: () => void;
-}) {
-  const { t } = useI18n();
-
-  return (
-    <div className="flex items-center gap-1">
-      <IconButton label={t("database.actions.newQueryLabel")} onClick={onNewQuery}>
-        <Play size={13} />
-      </IconButton>
-      <IconButton label={t("database.connection.refreshLabel")} onClick={onRefresh}>
-        <RefreshCw size={13} />
-      </IconButton>
-    </div>
-  );
 }

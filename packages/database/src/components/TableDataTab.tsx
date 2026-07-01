@@ -29,6 +29,7 @@ export function TableDataTab({
   executePending,
   onPageChange,
   onRefresh,
+  onSwitchToStructure,
   onTableFilter,
   onTableSort,
   result,
@@ -41,6 +42,7 @@ export function TableDataTab({
   executePending: boolean;
   onPageChange: (pageIndex: number, pageSize: number) => void;
   onRefresh: () => void;
+  onSwitchToStructure?: () => void;
   onTableFilter: (filter: string) => void;
   onTableSort: (column: string) => void;
   result: DatabaseQueryResult | null;
@@ -80,6 +82,15 @@ export function TableDataTab({
           </span>
         </ToolbarGroup>
         <ToolbarGroup>
+          {onSwitchToStructure ? (
+            <button
+              className="inline-flex h-[22px] items-center rounded-[5px] px-2 text-[12px] font-medium text-[var(--u-color-text-muted)] transition-colors duration-150 hover:text-[var(--u-color-text)]"
+              onClick={onSwitchToStructure}
+              type="button"
+            >
+              {t("database.editor.structureView")}
+            </button>
+          ) : null}
           {editing ? (
             <Button
               disabled={editing.pending}

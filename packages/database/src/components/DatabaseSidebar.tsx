@@ -93,7 +93,6 @@ export function DatabaseSidebar({
           onEditConnection={onEditConnection}
           onNewQuery={onNewQuery}
           onPreviewTable={onPreviewTable}
-          onRefresh={onRefresh}
           onRefreshSchema={onRefreshSchema}
           onSelectConnection={onSelectConnection}
           onSelectTable={onSelectTable}

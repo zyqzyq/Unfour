@@ -25,6 +25,7 @@ export function TableInspector({
   onPreview,
   onRefresh,
   onSelectTab,
+  onSwitchToData,
   previewPending = false,
   structure,
   table,
@@ -35,6 +36,7 @@ export function TableInspector({
   onPreview?: () => void;
   onRefresh?: () => void;
   onSelectTab: (tab: StructureTab) => void;
+  onSwitchToData?: () => void;
   previewPending?: boolean;
   structure?: DatabaseTableStructure | null;
   table: DatabaseTable | null;
@@ -51,6 +53,15 @@ export function TableInspector({
           {table ? <StatusBadge>{table.kind}</StatusBadge> : null}
         </ToolbarGroup>
         <ToolbarGroup>
+          {onSwitchToData ? (
+            <button
+              className="inline-flex h-[22px] items-center rounded-[5px] px-2 text-[12px] font-medium text-[var(--u-color-text-muted)] transition-colors duration-150 hover:text-[var(--u-color-text)]"
+              onClick={onSwitchToData}
+              type="button"
+            >
+              {t("database.editor.dataView")}
+            </button>
+          ) : null}
           <IconButton disabled={loading} label={t("database.structure.refresh")} onClick={onRefresh}>
             <RefreshCw size={13} />
           </IconButton>

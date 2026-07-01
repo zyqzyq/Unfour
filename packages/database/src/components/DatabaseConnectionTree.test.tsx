@@ -129,14 +129,14 @@ describe("DatabaseConnectionTree", () => {
     expect(onPreviewTable).toHaveBeenCalledWith("conn-1", usersTable);
   });
 
-  it("passes connection context when New Query is selected from the connection menu", async () => {
+  it("passes connection context when New Query is selected from the connection context menu", async () => {
     const onNewQuery = vi.fn();
     renderTree({
       connectionStates: connectedState,
       onNewQuery,
     });
 
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Database actions for Local SQLite" }));
+    fireEvent.contextMenu(screen.getByText("Local SQLite"));
     fireEvent.click(await screen.findByRole("menuitem", { name: "New Query" }));
 
     expect(onNewQuery).toHaveBeenCalledWith(sqliteConnection);

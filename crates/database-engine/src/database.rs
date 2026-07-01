@@ -252,14 +252,7 @@ impl DatabaseService {
                 // PostgreSQL cannot cross-database query, so to browse a catalog
                 // other than the connection default we open a pool bound to that
                 // database. Every object in the listing belongs to this catalog.
-                let effective = match catalog.as_deref() {
-                    Some(name) => {
-                        let mut overridden = connection.clone();
-                        overridden.database = Some(name.to_string());
-                        overridden
-                    }
-                    None => connection.clone(),
-                };
+                let effective = Self::effective_connection(&connection, catalog.as_deref());
                 let pool = self.postgres_pool(&effective).await?;
                 let catalog = effective.database.clone();
                 let table_rows = sqlx::query(
@@ -493,7 +486,9 @@ impl DatabaseService {
                 })
             }
             "postgres" => {
-                let pool = self.postgres_pool(&connection).await?;
+                let effective =
+                    Self::effective_connection(&connection, input.catalog.as_deref());
+                let pool = self.postgres_pool(&effective).await?;
                 let limit = input.limit.unwrap_or(100).clamp(1, 1_000);
                 let started = Instant::now();
 
@@ -549,7 +544,9 @@ impl DatabaseService {
                 })
             }
             "mysql" => {
-                let pool = self.mysql_pool(&connection).await?;
+                let effective =
+                    Self::effective_connection(&connection, input.catalog.as_deref());
+                let pool = self.mysql_pool(&effective).await?;
                 let limit = input.limit.unwrap_or(100).clamp(1, 1_000);
                 let started = Instant::now();
 
@@ -937,7 +934,9 @@ impl DatabaseService {
                 ))
             }
             "postgres" => {
-                let pool = self.postgres_pool(&connection).await?;
+                let effective =
+                    Self::effective_connection(&connection, input.catalog.as_deref());
+                let pool = self.postgres_pool(&effective).await?;
                 let schema = input
                     .schema
                     .as_deref()
@@ -1014,7 +1013,9 @@ impl DatabaseService {
                 ))
             }
             "mysql" => {
-                let pool = self.mysql_pool(&connection).await?;
+                let effective =
+                    Self::effective_connection(&connection, input.catalog.as_deref());
+                let pool = self.mysql_pool(&effective).await?;
                 // MySQL addresses tables as `database`.`table`; the catalog is
                 // that database. Prefer the explicit catalog, then the legacy
                 // schema field, then the connection's default database.
@@ -1163,7 +1164,9 @@ impl DatabaseService {
                 })
             }
             "postgres" => {
-                let pool = self.postgres_pool(&connection).await?;
+                let effective =
+                    Self::effective_connection(&connection, input.catalog.as_deref());
+                let pool = self.postgres_pool(&effective).await?;
                 let schema = input
                     .schema
                     .as_deref()
@@ -1194,7 +1197,9 @@ impl DatabaseService {
                 })
             }
             "mysql" => {
-                let pool = self.mysql_pool(&connection).await?;
+                let effective =
+                    Self::effective_connection(&connection, input.catalog.as_deref());
+                let pool = self.mysql_pool(&effective).await?;
                 // MySQL addresses tables as `database`.`table`; the catalog is
                 // that database. Prefer the explicit catalog, then the legacy
                 // schema field, then the connection's default database.
@@ -1293,7 +1298,9 @@ impl DatabaseService {
                 })
             }
             "postgres" => {
-                let pool = self.postgres_pool(&connection).await?;
+                let effective =
+                    Self::effective_connection(&connection, input.catalog.as_deref());
+                let pool = self.postgres_pool(&effective).await?;
                 let schema = input
                     .schema
                     .as_deref()
@@ -1321,7 +1328,9 @@ impl DatabaseService {
                 })
             }
             "mysql" => {
-                let pool = self.mysql_pool(&connection).await?;
+                let effective =
+                    Self::effective_connection(&connection, input.catalog.as_deref());
+                let pool = self.mysql_pool(&effective).await?;
                 // MySQL addresses tables as `database`.`table`; the catalog is
                 // that database. Prefer the explicit catalog, then the legacy
                 // schema field, then the connection's default database.
@@ -1443,6 +1452,25 @@ impl DatabaseService {
             .connect_with(options)
             .await
             .map_err(sanitize_mysql_error)
+    }
+
+    /// Return a connection clone with `database` overridden to the given
+    /// catalog when the catalog differs from the connection's current database.
+    /// This is required for PostgreSQL (and MySQL) because they cannot
+    /// cross-database query; the pool must target the database that owns the
+    /// table being browsed, inspected, or mutated.
+    fn effective_connection(
+        connection: &DatabaseConnection,
+        catalog: Option<&str>,
+    ) -> DatabaseConnection {
+        match catalog {
+            Some(name) if connection.database.as_deref() != Some(name) => {
+                let mut overridden = connection.clone();
+                overridden.database = Some(name.to_string());
+                overridden
+            }
+            _ => connection.clone(),
+        }
     }
 }
 
@@ -1682,8 +1710,9 @@ async fn ensure_postgres_table_exists(
     .fetch_optional(pool)
     .await?;
 
-    row.map(|_| ())
-        .ok_or_else(|| AppError::NotFound("database table".to_string()))
+    row.map(|_| ()).ok_or_else(|| {
+        AppError::NotFound(format!("{schema}.{table_name}"))
+    })
 }
 
 async fn postgres_table_row_count(
@@ -1774,6 +1803,24 @@ fn postgres_row_values(row: &sqlx::postgres::PgRow) -> AppResult<Vec<Option<Stri
                 return Ok(Some(format!("<binary {} bytes>", value.len())));
             }
             if let Ok(value) = row.try_get::<serde_json::Value, _>(index) {
+                return Ok(Some(value.to_string()));
+            }
+            if let Ok(value) = row.try_get::<uuid::Uuid, _>(index) {
+                return Ok(Some(value.to_string()));
+            }
+            if let Ok(value) = row.try_get::<chrono::DateTime<chrono::Utc>, _>(index) {
+                return Ok(Some(value.to_rfc3339()));
+            }
+            if let Ok(value) = row.try_get::<chrono::DateTime<chrono::Local>, _>(index) {
+                return Ok(Some(value.to_rfc3339()));
+            }
+            if let Ok(value) = row.try_get::<chrono::NaiveDateTime, _>(index) {
+                return Ok(Some(value.to_string()));
+            }
+            if let Ok(value) = row.try_get::<chrono::NaiveDate, _>(index) {
+                return Ok(Some(value.to_string()));
+            }
+            if let Ok(value) = row.try_get::<chrono::NaiveTime, _>(index) {
                 return Ok(Some(value.to_string()));
             }
 
@@ -2044,8 +2091,9 @@ async fn ensure_mysql_table_exists(
     .fetch_optional(pool)
     .await?;
 
-    row.map(|_| ())
-        .ok_or_else(|| AppError::NotFound("database table".to_string()))
+    row.map(|_| ()).ok_or_else(|| {
+        AppError::NotFound(format!("{schema}.{table_name}"))
+    })
 }
 
 async fn mysql_table_row_count(
@@ -2152,6 +2200,15 @@ fn mysql_row_values(row: &sqlx::mysql::MySqlRow) -> AppResult<Vec<Option<String>
             }
             if let Ok(value) = row.try_get::<serde_json::Value, _>(index) {
                 return Ok(Some(value.to_string()));
+            }
+            if let Ok(value) = row.try_get::<uuid::Uuid, _>(index) {
+                return Ok(Some(value.to_string()));
+            }
+            if let Ok(value) = row.try_get::<chrono::DateTime<chrono::Utc>, _>(index) {
+                return Ok(Some(value.to_rfc3339()));
+            }
+            if let Ok(value) = row.try_get::<chrono::DateTime<chrono::Local>, _>(index) {
+                return Ok(Some(value.to_rfc3339()));
             }
 
             Ok(Some("<unsupported>".to_string()))
@@ -2309,8 +2366,9 @@ async fn ensure_sqlite_table_exists(pool: &sqlx::SqlitePool, table_name: &str) -
     .fetch_optional(pool)
     .await?;
 
-    row.map(|_| ())
-        .ok_or_else(|| AppError::NotFound("database table".to_string()))
+    row.map(|_| ()).ok_or_else(|| {
+        AppError::NotFound(table_name.to_string())
+    })
 }
 
 async fn sqlite_table_row_count(pool: &sqlx::SqlitePool, table_name: &str) -> AppResult<u64> {
@@ -2369,6 +2427,18 @@ fn sqlite_row_values(row: &sqlx::sqlite::SqliteRow) -> AppResult<Vec<Option<Stri
             }
             if let Ok(value) = row.try_get::<Vec<u8>, _>(index) {
                 return Ok(Some(format!("<binary {} bytes>", value.len())));
+            }
+            if let Ok(value) = row.try_get::<chrono::DateTime<chrono::Utc>, _>(index) {
+                return Ok(Some(value.to_rfc3339()));
+            }
+            if let Ok(value) = row.try_get::<chrono::NaiveDateTime, _>(index) {
+                return Ok(Some(value.to_string()));
+            }
+            if let Ok(value) = row.try_get::<chrono::NaiveDate, _>(index) {
+                return Ok(Some(value.to_string()));
+            }
+            if let Ok(value) = row.try_get::<chrono::NaiveTime, _>(index) {
+                return Ok(Some(value.to_string()));
             }
 
             Ok(Some("<unsupported>".to_string()))
