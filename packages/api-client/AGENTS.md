@@ -2,7 +2,7 @@
 
 ## Scope
 
-`packages/api-client` owns the API Debugger frontend: request editing, Send,
+`packages/api-client` owns the API Client frontend: request editing, Send,
 response display, history, saved requests, collections, environments, and
 import/export UI.
 
@@ -22,7 +22,7 @@ import/export UI.
 - Do not break saved-request, history, environment, or Send behavior.
 - Keep sensitive headers and auth metadata aligned with backend redaction
   expectations.
-- New user-visible API Debugger copy must use shared i18n keys. Do not localize
+- New user-visible API Client copy must use shared i18n keys. Do not localize
   command names, schema keys, request metadata keys, or error codes.
 
 ## Required Output

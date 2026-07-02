@@ -6,6 +6,10 @@ keep small unit/component tests close to the source they exercise while giving
 cross-module, business-flow, database, command-bus, and desktop smoke/e2e
 tests a separate, discoverable home.
 
+For release-candidate verification, use `docs/testing/release-verification.md`
+and `docs/testing/manual-test-cases.md`. This file explains test placement; it
+does not define release readiness.
+
 The layout is intentionally asymmetric: most tests stay near source, only the
 ones that cross module boundaries move out.
 

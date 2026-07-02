@@ -11,7 +11,7 @@
 - Should call backend behavior through `@unfour/command-client`.
 - May use `@unfour/workspace-core` for selected database connection state as
   the documented transitional boundary.
-- Should not own API Debugger, SSH Terminal, or app-shell behavior.
+- Should not own API Client, SSH Terminal, or app-shell behavior.
 
 ## Key Files
 
@@ -35,7 +35,7 @@
 
 ## Known Gaps
 
-- Current package status is centralized in `docs/project/PACKAGE_STATUS.md`.
+- Release readiness belongs in `docs/release/*` and `docs/testing/*`.
 - Real engine behavior should be manually verified for database behavior
   changes that automated tests cannot cover.
 

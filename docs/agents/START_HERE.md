@@ -1,56 +1,67 @@
-# START_HERE.md
+# AI Agent Start Here
 
-This is the entry point for AI coding tools working in the Unfour repository.
-Use it to choose the smallest useful context set before touching files.
+This is the stable repository onboarding entrypoint for AI coding tools working
+in Unfour. Use it to choose the smallest useful context set before touching
+files.
 
 ## Source Priority
 
 Use these sources in order when documents overlap:
 
-1. Root `AGENTS.md` for global long-term rules.
-2. This file for AI/Codex reading strategy.
-3. `docs/project/PACKAGE_STATUS.md` for current package and crate status.
-4. Package or crate `AGENTS.md` for local long-term rules.
-5. Package or crate `README.md` for local responsibilities and usage.
-6. `docs/architecture/*` for architecture explanation. These files must not
-   override current package status from `docs/project/PACKAGE_STATUS.md`.
+1. Root `AGENTS.md` for global rules, package boundaries, command-bus
+   expectations, verification defaults, and reporting requirements.
+2. The current user task for scope and acceptance criteria.
+3. This file for repository reading order.
+4. `docs/architecture/*` for durable architecture, storage, package boundary,
+   and security model details.
+5. `docs/ui/*` for UI design-system and interaction rules.
+6. `docs/testing/*` and `docs/release/*` for release-readiness and verification
+   expectations.
+7. Package or crate `AGENTS.md` / `README.md` for local ownership rules.
 
-## Default Reading Order
+Historical checkpoint, progress, task, and audit files live under
+`docs/archive/`. They are useful for archaeology only and must not override the
+active documents above.
 
-Read in this order, stopping when the task has enough context. Do not default
-to a full repository scan.
+## Recommended Reading Order
 
-1. Root `AGENTS.md`.
+Read in this order, stopping when the task has enough context:
+
+1. `AGENTS.md`.
 2. `docs/agents/START_HERE.md`.
-3. `docs/project/PROJECT_STATE.md`.
-   - Current legacy fallback: `docs/agents/PROJECT_STATE.md`.
-4. `docs/project/PACKAGE_STATUS.md`.
-5. `docs/project/NEXT_STEPS.md`.
-   - Current legacy fallback: `docs/agents/NEXT_STEPS.md`.
-6. `docs/project/OPEN_ISSUES.md`.
-   - Current legacy fallback: `docs/agents/OPEN_ISSUES.md`.
-7. The `AGENTS.md` and `README.md` for the package or crate involved in the
-   current task.
-8. Source files, only when necessary to understand or change the implementation.
-
-In this checkout, `docs/project/PACKAGE_STATUS.md` exists. The
-`docs/project/PROJECT_STATE.md`, `docs/project/NEXT_STEPS.md`, and
-`docs/project/OPEN_ISSUES.md` files may not exist yet; when absent, use the
-listed `docs/agents/*` fallback files only as legacy checkpoint context. They
-must not override `docs/project/PACKAGE_STATUS.md`. Do not create missing
-project-state or issue files unless the task explicitly asks for them.
+3. For package boundaries or dependency direction:
+   `docs/architecture/package-boundaries.md`.
+4. For repository shape or call chains:
+   `docs/architecture/project-structure.md`.
+5. For persistence, credentials, activity, or workspace scope:
+   `docs/architecture/data-storage.md` and
+   `docs/architecture/security-model.md`.
+6. For UI, layout, component, style, or interaction changes:
+   `design.md`, `docs/ui/design-system.md`, and
+   `docs/ui/interaction-guidelines.md`.
+7. For MCP work:
+   `docs/mcp/overview.md`, `docs/mcp/tools.md`, and
+   `docs/mcp/codex-setup.md`.
+8. For release or verification work:
+   `docs/testing/release-verification.md`,
+   `docs/testing/manual-test-cases.md`, and
+   `docs/release/release-checklist.md`.
+9. The relevant package or crate `AGENTS.md` / `README.md`, if present.
+10. Source files, only as needed to understand or change the implementation.
 
 ## Scoped Context Rules
 
 - Do not default to scanning the whole repository.
 - Do not default to modifying unrelated packages.
-- For a single-package task, read the root rules, this file, the central
-  package status, and that package's local `AGENTS.md` / `README.md`.
+- For a single-package task, read the root rules, this file, the relevant
+  architecture document, and that package's local `AGENTS.md` / `README.md`.
 - For a cross-module task, also read the relevant app-shell, command-bus, MCP,
-  or feature-package context before reading source.
-- For UI changes, read `docs/ui/ui-guidelines.md` before editing.
+  data-storage, or feature-package context before reading source.
+- For UI changes, read the active UI docs before editing.
 - For package boundary changes, read `docs/architecture/package-boundaries.md`
   before editing.
+- For release claims, read `docs/testing/release-verification.md` and report
+  only checks that were actually run or are backed by cited repository evidence.
 
 ## During Modification
 
@@ -65,10 +76,8 @@ project-state or issue files unless the task explicitly asks for them.
   locale keys; do not create package-local i18n variants.
 - Keep MCP tool names, command keys, schemas, and stable error codes in English.
   Localize only UI-facing messages.
-- Internal development and architecture docs are not required to be
-  multilingual.
-- Keep package progress centralized in `docs/project/PACKAGE_STATUS.md`; do not
-  create per-package `PROGRESS.md`, `NEXT_STEPS.md`, or `OPEN_ISSUES.md` files.
+- Keep current status, release gates, and verification evidence in the active
+  testing and release documents, not in temporary progress files.
 
 For the full execution workflow, verification matrix, commit discipline, and
 reporting format, see `docs/agents/EXECUTION_PROTOCOL.md`.

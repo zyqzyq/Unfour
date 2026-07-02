@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`@unfour/api-client` owns the API Debugger frontend experience.
+`@unfour/api-client` owns the API Client frontend experience.
 
 ## Boundaries
 
@@ -15,7 +15,7 @@
 
 ## Key Files
 
-- `src/ApiDebuggerPage.tsx` - top-level API Debugger page composition.
+- `src/ApiDebuggerPage.tsx` - top-level API Client page composition.
 - `src/hooks/useApiRequestTabs.ts` - request tab, send, save, history, and
   collection state orchestration.
 - `src/request-utils.ts` - request conversion, import/export, auth metadata,
@@ -34,7 +34,7 @@
 
 ## Known Gaps
 
-- Current package status is centralized in `docs/project/PACKAGE_STATUS.md`.
+- Release readiness belongs in `docs/release/*` and `docs/testing/*`.
 - Browser mock behavior in `@unfour/command-client` must stay aligned with real
   command-bus behavior.
 

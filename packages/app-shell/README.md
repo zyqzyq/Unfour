@@ -25,7 +25,7 @@ composition layer.
 
 ## Known Gaps
 
-- Current package status is centralized in `docs/project/PACKAGE_STATUS.md`.
+- Release readiness belongs in `docs/release/*` and `docs/testing/*`.
 - Shell layout primitives still live in `packages/ui` during the UI split.
 
 ## Test / Verify

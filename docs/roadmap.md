@@ -1,55 +1,41 @@
 # Roadmap
 
-## v0.1 Foundation
+This roadmap is a product-direction summary. It is not release evidence. Use
+`docs/testing/release-verification.md` and `docs/release/release-checklist.md`
+for release readiness.
 
-- Tauri 2 + React TypeScript app.
-- Workspace shell.
-- Command Bus.
-- SQLite migrations.
-- API request send/history/save.
-- Workspace environments.
-- Engineering docs.
+## v0.1 Public Preparation
 
-Status: implemented. Workspace layout restore, selected resource slots, and resource-tree navigation are in place.
+Release focus:
 
-## v0.2 API Client
+- local-first desktop workbench;
+- API Client request editing, Send, saved requests, collections, environments,
+  response inspection, and redacted history;
+- SSH Terminal connection/session workflows with host-key trust and redacted
+  logs;
+- Database connection, schema, SQL execution, table preview, and confirmation
+  guardrails;
+- workspace-scoped local data and layout state;
+- local stdio MCP diagnostics over the command bus;
+- release verification, distribution, and signing documentation.
 
-- Request collections and folders.
-- Response headers/cookies/timing panels.
-- Import/export without secrets.
+Remaining readiness work must be tracked through release verification, not
+through progress logs.
 
-Status: request execution, history, saved requests, environments, collections/folders, import/export, and richer response panels are implemented.
+## After v0.1
 
-## v0.3 SSH
+Likely follow-up areas:
 
-- Password and private-key login.
-- Multi-session tabs.
-- PTY resize and event streaming.
-- Session logs.
+- broader live SSH verification and platform hardening;
+- database driver smoke coverage across supported engines;
+- signed and notarized distribution;
+- screenshots and fuller user documentation;
+- query cancellation and richer database result interactions;
+- SSH file-transfer or multiplexing exploration;
+- optional AI/automation adapters over the command bus;
+- optional cloud sync and plugin extension points.
 
-Status: UI preview and backend boundary exist. Real session lifecycle is next.
+## Release Rule
 
-## v0.4 Database
-
-- PostgreSQL/MySQL/SQLite connection management.
-- Schema browser.
-- SQL execution.
-- Paginated result grids.
-
-Status: SQLite connection metadata, test, schema browsing, SQL execution, read-only table browsing, pagination, and result virtualization are implemented. PostgreSQL/MySQL live connections and controlled editing remain.
-
-## v0.5 Hardening
-
-- OS keychain/Stronghold.
-- Capability review.
-- Cross-platform packaging.
-- User guide with screenshots.
-
-Status: OS keychain-backed credential references are implemented with frontend attach/rotate/delete flows. Sync/AI boundaries, packaging, and screenshots remain.
-
-## Later
-
-- AI command adapter.
-- Optional cloud sync.
-- Workflow runner.
-- Plugin model.
+Do not claim a roadmap item is complete in release notes unless it is backed by
+current verification or repository evidence.

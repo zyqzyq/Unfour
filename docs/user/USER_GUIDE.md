@@ -1,6 +1,7 @@
 # Unfour User Guide
 
-This document is for people using the app. It avoids implementation details that belong in `docs/engineering`.
+This document is for people using the app. Implementation details live in
+`docs/architecture`, `docs/mcp`, `docs/testing`, and `docs/release`.
 
 ## Current MVP
 
@@ -122,5 +123,7 @@ request bodies.
 ## Documentation Split
 
 - This guide explains how to use the app.
-- `docs/engineering` explains how the app is built.
+- `docs/architecture` explains how the app is built.
+- `docs/mcp` explains the local MCP server.
+- `docs/testing` and `docs/release` explain release verification.
 - `AGENTS.md` explains how coding agents should work in this repository.

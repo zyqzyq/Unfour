@@ -27,7 +27,7 @@ frontend-facing types, and browser-development mock behavior for Tauri commands.
 
 ## Known Gaps
 
-- Current package status is centralized in `docs/project/PACKAGE_STATUS.md`.
+- Release readiness belongs in `docs/release/*` and `docs/testing/*`.
 - Mock behavior can drift from Rust command behavior if command contracts change
   without updating this package.
 

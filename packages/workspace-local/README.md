@@ -24,7 +24,7 @@ lifecycle, persistence, import/export, recent-workspace, and migration behavior.
 
 ## Known Gaps
 
-- Current package status is centralized in `docs/project/PACKAGE_STATUS.md`.
+- Release readiness belongs in `docs/release/*` and `docs/testing/*`.
 - Concrete local workspace persistence/import/export behavior is not implemented
   in this package yet.
 

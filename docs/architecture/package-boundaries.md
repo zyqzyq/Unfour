@@ -1,180 +1,120 @@
 # Package Boundaries
 
-This is an architecture reference for intended dependency directions and module
-ownership. Current package and crate status lives in
-`docs/project/PACKAGE_STATUS.md`; when status differs, treat
-`PACKAGE_STATUS.md` as the source of truth.
+This architecture reference defines intended ownership, dependency direction,
+and forbidden cross-package behavior. It is a stable boundary document, not a
+progress log.
 
 ## packages/app-shell
 
-### Current State
-
-`packages/app-shell` is a thin wrapper. `src/AppShell.tsx` is the main source
-file; it receives props and delegates rendering to `AppShellFrame` from
-`packages/ui`.
-
-### Target Responsibility
+### Responsibility
 
 - Own application shell composition.
-- Provide global layout, sidebar mounting surface, top-level navigation wiring, route assembly, cross-module container slots, and module mount points.
-- Be the single source of truth for shell-level behavior and shell-specific state (for example, layout persistence logic).
+- Provide global layout, sidebar mounting surface, top-level navigation wiring,
+  route assembly, cross-module container slots, and module mount points.
+- Own shell-level behavior only when it is not feature-specific.
 
-### Transitional Exceptions
+### Forbidden
 
-- Shell layout primitives (`AppShellFrame`, `GlobalToolbar`, `Sidebar`, `TabBar`, `MainWorkspace`, `BottomPanel`, `RightInspector`, `StatusBar`, `CommandPalette`) currently live in `packages/ui` and are consumed by both `packages/app-shell` and `apps/desktop`.
-- This overlap is temporarily allowed while the UI module split is in progress.
+- API request execution or request state.
+- SQL editing/execution or database state.
+- SSH session state, terminal buffers, or terminal feature logic.
+- Feature mock data.
+- Feature-specific large UI components.
 
-### Follow-up Work
-
-- Decide whether shell layout components should migrate from `packages/ui` into `packages/app-shell`, or remain in `packages/ui` as reusable stateless layout primitives.
-- If they remain in `packages/ui`, `packages/app-shell` should still own shell-level orchestration, composition, and any shell-specific state.
-
----
+`packages/app-shell` may compose slots and pass props, but feature behavior
+belongs in the owning package or crate.
 
 ## packages/ui
 
-### Current State
+### Responsibility
 
-`packages/ui` contains both low-level primitives (`Button`, `Input`, `Badge`, `IconButton`) and high-level shell layout components (`AppShellFrame`, `GlobalToolbar`, `Sidebar`, `SplitPane`, `CommandPalette`).
+- Own shared, reusable UI primitives and stateless layout helpers.
+- Stay free of feature business logic.
+- Export components that can be consumed by multiple modules without pulling in
+  API, SSH, Database, Workspace, or app-shell behavior.
 
-### Target Responsibility
+### Allowed Transitional Shape
 
-- Own shared, reusable UI primitives that can be consumed by any module without pulling in business logic.
-- Stateless layout helpers that are cross-module MAY remain here if they have no shell-specific state or orchestration.
+Some shell layout primitives live in `packages/ui` while the desktop workbench
+continues to stabilize. They are allowed only while they remain stateless and
+feature-neutral.
 
-### Transitional Exceptions
+### Forbidden
 
-- Shell layout components currently coexist with primitives. This is temporarily allowed during the UI refactor.
-- `packages/ui` exports `EmptyState`, `ErrorState`, `LoadingState`, which are used by feature packages.
-
-### Follow-up Work
-
-- Evaluate the primitive / shell split.
-- Add missing primitives (`Textarea`, `Checkbox`, `Switch`, `Popover`, `Tooltip`) when a clear cross-module consumer exists.
-
----
+- Importing feature packages.
+- Owning feature request, query, SSH session, or workspace business state.
+- Creating feature-specific variants that belong in a feature package.
 
 ## packages/workspace-core
 
-### Current State
+### Responsibility
 
-Exports `useWorkspaceStore` (a Zustand store) and re-exports the existing shared workspace types from `packages/command-client`. It is consumed by:
+- Own shared frontend workspace state: active workspace, active tab, sidebar
+  collapse, workspace tabs, and selected resource IDs that must be globally
+  visible.
+- Re-export shared workspace types from `packages/command-client`.
 
-- `apps/desktop` for layout and workspace mutations.
-- `packages/database` for `selectedDatabaseConnectionId`.
-- `packages/ssh-terminal` for `selectedSshConnectionId`.
+### Transitional Dependency
 
-### Target Responsibility
-
-- Own shared workspace state: active workspace, tab list, sidebar collapse, and selected resource IDs that must be globally accessible.
-
-### Transitional Exceptions
-
-- Direct imports of `useWorkspaceStore` from `packages/database` and `packages/ssh-terminal` are allowed during the UI refactor to avoid prop-drilling while module boundaries are still stabilizing.
-
-### Follow-up Work
-
-- After the UI refactor stabilizes, evaluate whether selected connection state should be passed via props from `apps/desktop` instead of being read directly from `packages/workspace-core` inside feature packages.
-- New feature-specific dependencies on `packages/workspace-core` MUST NOT be added without review.
-
----
+Feature packages may currently read selected connection/request IDs from
+`packages/workspace-core`. New dependencies on additional shared workspace
+state require review.
 
 ## packages/workspace-local
 
-### Current State
+### Responsibility
 
-- Exists as the frontend boundary for future local workspace persistence, import/export, recent-workspace, and migration implementations.
-- Temporarily re-exports `packages/workspace-core` so the split can land without changing behavior.
+- Own future local workspace lifecycle, persistence, import/export,
+  recent-workspace, and migration behavior.
+- Depend on `packages/workspace-core` for shared workspace contracts.
 
-### Target Responsibility
+### Current Boundary
 
-- Own frontend implementations that are specific to local workspace storage and lifecycle.
-- Depend on `packages/workspace-core` for shared workspace types and contracts.
-- MUST NOT absorb feature-specific API, database, or SSH state.
+`packages/workspace-local` is a compatibility boundary and may re-export
+`packages/workspace-core` until concrete local workspace behavior is scoped.
 
-### Transitional Exceptions
+### Forbidden
 
-- The compatibility re-export is allowed until concrete local implementations are migrated into this package.
+- API request state.
+- Database SQL state.
+- SSH terminal state.
+- App-shell orchestration.
 
----
+## Feature Packages
 
-## packages/database
+| Package | Responsibility | Forbidden |
+| --- | --- | --- |
+| `packages/api-client` | API Client UI: request drafts, request tabs, Send behavior, response display, history, saved requests, collections, environments, import/export. | Database logic, SSH logic, global shell behavior. |
+| `packages/ssh-terminal` | SSH Terminal UI: connections, sessions, terminal panes, split/search/log UI, host-key trust UI, terminal-local state. | API request logic, SQL/database logic, global shell behavior. |
+| `packages/database` | Database UI: connection tree, schema tree, SQL editor, query results, table inspector, database-local state. | API request logic, SSH session logic, global shell behavior. |
+| `packages/command-client` | Typed Tauri command wrappers, shared frontend command types, and browser-dev mocks. | React components, feature business logic, feature state. |
 
-### Current State
+Feature packages should call backend behavior through `packages/command-client`
+and should reuse `packages/ui` primitives where possible.
 
-- Owns connection tree, schema tree, SQL editor, query results, and table inspector.
-- Depends on `packages/workspace-core` for `useWorkspaceStore`.
-- Depends on `@monaco-editor/react` and `@tanstack/react-query`.
+## Rust Boundaries
 
-### Target Responsibility
+| Crate | Responsibility | Forbidden |
+| --- | --- | --- |
+| `crates/unfour-core` | Shared Rust models, error/result types, redaction helpers, reserved AI/sync contracts. | Tauri adapter logic, UI behavior. |
+| `crates/local-storage` | SQLite migrations, local database access, and local activity logging. | Raw secret storage. |
+| `crates/secret-store` | Credential reference management backed by OS keychain or test memory store. | SQLite plaintext secret persistence. |
+| `crates/http-engine` | API request execution, environment resolution, saved requests, history, redaction persistence. | UI state, database query execution, SSH sessions. |
+| `crates/database-engine` | Database connection CRUD, schema browsing, query execution, browse-table behavior, SQL safety classification. | API request execution, SSH sessions. |
+| `crates/ssh-engine` | SSH connection/session service, terminal events, host-key handling, reconnect, log export. | API request execution, SQL execution. |
+| `crates/workspace-engine` | Workspace CRUD, active workspace state, environment variables, layout persistence. | Feature-specific execution. |
+| `crates/unfour-command-bus` | Reusable Rust command entry point for Tauri, MCP, and future AI/CLI adapters. | UI components, duplicated domain logic. |
+| `crates/unfour-mcp` | Local stdio MCP server adapter over the command bus. | Bypassing command-bus safety, redaction, or tool policy. |
 
-- Own all database-specific frontend logic, components, and state.
-- MUST NOT contain API request logic or SSH session logic.
-
-### Transitional Exceptions
-
-- Dependency on `packages/workspace-core` is temporarily allowed (see `packages/workspace-core` section).
-
-### Follow-up Work
-
-- Remove hardcoded colors and local select/tab styles once shared primitives are available.
-- Re-evaluate `packages/workspace-core` dependency after the refactor.
-
----
-
-## packages/ssh-terminal
-
-### Current State
-
-- Owns SSH connection tree, session tabs, terminal pane, and connection status.
-- Maintains a local Zustand store for terminal events and session state.
-- Depends on `packages/workspace-core` for `useWorkspaceStore`.
-- Depends on `@xterm/xterm` and `@xterm/addon-fit`.
-
-### Target Responsibility
-
-- Own all terminal/SSH-specific frontend logic, components, and state.
-- MUST NOT contain SQL editors or API response viewers.
-
-### Transitional Exceptions
-
-- Dependency on `packages/workspace-core` is temporarily allowed (see `packages/workspace-core` section).
-
-### Follow-up Work
-
-- Evaluate whether the local Zustand store should remain in `packages/ssh-terminal` or move to a more general state boundary.
-- Re-evaluate `packages/workspace-core` dependency after the refactor.
-
----
-
-## Other Packages
-
-| Package | Status | Responsibility | Forbidden |
-| --- | --- | --- | --- |
-| `packages/api-client` | Existing | Collection tree, request editor, response viewer, request state, history, environment variables | Database logic, SSH logic, top-level sidebar |
-| `packages/command-client` | Existing | Typed Tauri command wrappers, shared frontend types, browser-dev mocks | React components, feature business logic, feature state |
-| `crates/unfour-command-bus` | Existing Rust crate | Reusable command entry point for Tauri, MCP, and future AI/CLI adapters | UI components, Tauri-specific UI concerns, raw secret exposure |
-| `extension-contracts` | **Does not exist in this checkout** | Future scope待确认 | Do not invent contracts without an explicit task |
-
-There is no frontend command-bus package; command-bus behavior lives in
-`crates/unfour-command-bus`. There is also no current `packages/extension-contracts`
-or `crates/extension-contracts` workspace member.
-
-### packages/command-client
-
-- `src/tauri.ts` exports typed `invoke` wrappers for every Tauri command (workspace, API, database, SSH, credentials, layout).
-- `src/types.ts` exports shared TypeScript interfaces used by the frontend and aligned with Rust models.
-- When Tauri is not available (for example, browser development), `tauri.ts` falls back to a comprehensive mock implementation that covers all commands.
-- MUST remain free of React components and feature-specific business logic.
-
----
+`apps/desktop/src-tauri` is the Tauri adapter and composition layer. Backend
+capability logic belongs in crates, not in Tauri command wrappers.
 
 ## Dependency Direction
 
-Allowed:
+Allowed frontend direction:
 
 ```text
-apps/*
+apps/desktop
   -> packages/app-shell
   -> feature packages (api-client, database, ssh-terminal)
   -> packages/workspace-core
@@ -185,32 +125,44 @@ packages/workspace-local
   -> packages/workspace-core
 ```
 
-Feature packages MAY depend on:
+Feature packages may depend on:
 
 - `packages/ui`
 - `packages/command-client`
-- `packages/workspace-core` (transitionally, during the UI refactor)
+- `packages/workspace-core` as a documented transitional dependency
 
 Forbidden:
 
 - Feature package -> `packages/app-shell`
 - `packages/ui` -> feature package
 - `packages/command-client` -> feature package
-- `packages/app-shell` -> feature package (except through composition slots in `apps/desktop`)
+- Feature package -> another feature package
+- Tauri command adapter -> duplicated domain logic
+- MCP tool handler -> duplicated domain logic
 
----
+## Command-Bus Rule
 
-## Known Boundary Issues
+Manual UI actions, MCP tools, and future AI/CLI adapters must use the same Rust
+command bus path:
 
-1. **`apps/desktop/src/App.tsx` hosts shell-level logic.**
-   `App.tsx` contains `AppTitleBar`, `WorkspaceMenu`, `ModuleSidebar`, window controls, command palette wiring, and workspace mutation hooks. This is acceptable because `apps/desktop` is the composition layer, but the file is large and mixes shell concerns with application bootstrapping.
+```text
+adapter -> CommandBus -> service -> driver
+```
 
-2. **`packages/ui` contains shell layout components.**
-   `AppShellFrame`, `GlobalToolbar`, `Sidebar`, `TabBar`, `MainWorkspace`, `BottomPanel`, `RightInspector`, and `CommandPalette` live in `packages/ui` rather than `packages/app-shell`. See the `packages/app-shell` and `packages/ui` sections above for the transitional plan.
+Tauri commands and MCP tools are adapters. They must not become parallel
+implementations of API, SSH, Database, Workspace, credential, or activity
+behavior.
 
-3. **Feature packages depend on `packages/workspace-core`.**
-   `packages/database` and `packages/ssh-terminal` import `useWorkspaceStore`. This is a transitional exception documented above.
+## Stable Exceptions To Revisit
 
-4. **Historical note — `packages/api-client` local `EmptyState`.**
-   This was previously listed as an issue. `ResponseTabs.tsx` now imports
-   `EmptyState` from `packages/ui`.
+- `apps/desktop/src/App.tsx` is broad because it is the desktop composition
+  root. It must remain a composition layer and must not absorb feature
+  business logic.
+- `packages/ui` contains stateless shell layout helpers. Keep them
+  feature-neutral.
+- Feature packages use `packages/workspace-core` for selected resource state.
+  Re-evaluate this after workspace ownership stabilizes.
+
+There is no current frontend `packages/command-bus` package and no current
+`extension-contracts` workspace member. Do not create either without an
+explicit task and boundary review.

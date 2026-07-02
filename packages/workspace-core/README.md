@@ -29,7 +29,7 @@ available across modules.
 
 ## Known Gaps
 
-- Current package status is centralized in `docs/project/PACKAGE_STATUS.md`.
+- Release readiness belongs in `docs/release/*` and `docs/testing/*`.
 - Selected resource state may need ownership review after the module split
   stabilizes.
 

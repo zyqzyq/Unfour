@@ -11,7 +11,7 @@
 - Should call backend behavior through `@unfour/command-client`.
 - May use `@unfour/workspace-core` for selected SSH connection state as the
   documented transitional boundary.
-- Should not own API Debugger, Database, or app-shell behavior.
+- Should not own API Client, Database, or app-shell behavior.
 
 ## Key Files
 
@@ -34,7 +34,7 @@
 
 ## Known Gaps
 
-- Current package status is centralized in `docs/project/PACKAGE_STATUS.md`.
+- Release readiness belongs in `docs/release/*` and `docs/testing/*`.
 - Real SSH behavior requires manual verification against a reachable SSH server.
 
 ## Test / Verify

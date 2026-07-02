@@ -3,16 +3,15 @@
 Unfour is a lightweight IDE-style desktop developer tool built on Tauri 2,
 React, TypeScript, and Rust.
 
-## Long-Term Direction
+## Product And Module Scope
 
-- Core modules are Terminal / SSH, Database, API Debugger, and Workspace.
-- Module extraction is in progress. Boundary clarity takes priority over new
-  page features during the split.
-- Keep project context lightweight and stable. Current status belongs in
-  `docs/project/PACKAGE_STATUS.md` or the central project docs, not in package
-  agent rules.
-- Architecture reference docs explain boundaries, but current package status
-  is centralized in `docs/project/PACKAGE_STATUS.md`.
+- Primary v0.1 modules are API Client, SSH Terminal, Database, and Workspace.
+- `workspace-core` owns shared frontend workspace state.
+- `workspace-local` is the reserved frontend boundary for local workspace
+  lifecycle, persistence, import/export, recent-workspace, and migration
+  behavior.
+- Current release readiness belongs in `docs/release/*` and
+  `docs/testing/*`, not in temporary progress logs.
 
 ## Package Boundary Rules
 
@@ -22,7 +21,7 @@ React, TypeScript, and Rust.
 - Do not add API request execution, SQL editing/execution, SSH session state,
   feature mock data, or feature-specific large UI components to
   `packages/app-shell`.
-- Terminal, Database, API Debugger, and Workspace business state and business
+- API Client, SSH Terminal, Database, and Workspace business state and business
   components must live in their owning packages or crates.
 - Shared UI primitives must be reused from or added to `packages/ui`.
 - `packages/ui` must not contain feature-specific business logic.
@@ -67,8 +66,8 @@ Before changing files:
 3. Read `docs/architecture/package-boundaries.md` for package or boundary
    changes.
 4. For UI, layout, component, style, or interaction optimization tasks, read
-   root `design.md` first, then follow its guidance into the relevant
-   `docs/ui/*` documents; at minimum read `docs/ui/ui-guidelines.md`.
+   root `design.md`, `docs/ui/design-system.md`, and
+   `docs/ui/interaction-guidelines.md`.
 5. Read the relevant package or crate `AGENTS.md` / `README.md`, if present.
 6. Inspect the current implementation only as needed for the task.
 7. Review `git status --short` and the current diff before editing.
@@ -89,28 +88,29 @@ Line count is a quality signal, not an absolute hard limit.
 
 Recommended ranges:
 
-- Small UI components / utilities: 80–250 lines.
-- Page-level React files: 300–600 lines.
-- Rust business modules: 300–700 lines.
-- Adapter / command gateway files: 300–800 lines.
-- Test files: 500–1200 lines.
+- Small UI components / utilities: 80-250 lines.
+- Page-level React files: 300-600 lines.
+- Rust business modules: 300-700 lines.
+- Adapter / command gateway files: 300-800 lines.
+- Test files: 500-1200 lines.
 - Generated files, schema files, migrations, lock files, snapshots, vendored
   files, and build output are excluded from these size limits.
 
 Review thresholds (enforced by `scripts/check-large-files.mjs`):
 
-- Over 600 lines: warning — check whether responsibilities are mixed.
-- Over 1000 lines: violation — split, or document why it should remain
+- Over 600 lines: warning; check whether responsibilities are mixed.
+- Over 1000 lines: violation; split, or document why it should remain
   together. Grandfathered baseline files in
   `scripts/large-files-baseline.json` remain allowed while their line count
   does not increase.
-- Over 1500 lines: Critical — should be scheduled for refactoring.
+- Over 1500 lines: critical; schedule refactoring unless there is a documented
+  reason to keep the file together.
 
 When modifying a file that crosses a threshold, first look for low-risk
 extractions such as types, constants, mock data, pure utilities, serializers,
-parsers, adapters, hooks, services, or child components. If a file must
-exceed a threshold, explain the reason in the final report or the relevant
-code review context.
+parsers, adapters, hooks, services, or child components. If a file must exceed
+a threshold, explain the reason in the final report or the relevant code review
+context.
 
 Previously approved large files remain grandfathered for now and stay on the
 follow-up refactoring list until explicitly split. Do not change them just to
@@ -123,6 +123,28 @@ gain reverse dependencies on `packages/app-shell`.
 
 For implementation-task workflow, verification defaults, commit discipline, and
 final reporting, follow `docs/agents/EXECUTION_PROTOCOL.md`.
+
+## Default Verification
+
+Run relevant commands from the repository root.
+
+For documentation-only changes:
+
+```bash
+git diff --check
+```
+
+For broad implementation work, prefer:
+
+```bash
+pnpm run build
+pnpm run check:rust
+pnpm run check:rust:ssh
+pnpm run test:rust
+```
+
+For release preparation, use the matrix in
+`docs/testing/release-verification.md`.
 
 ## Required Reporting
 
@@ -137,19 +159,3 @@ After completion, report:
 7. Commands not executed and why.
 8. Unresolved issues or follow-up risks.
 9. Files recommended for human review.
-
-## Default Verification
-
-Run relevant commands from the repository root. For broad implementation work,
-prefer:
-
-```bash
-pnpm run build
-pnpm run check:rust
-pnpm run check:rust:ssh
-pnpm run test:rust
-```
-
-For documentation-only changes, `git diff --check` is the default minimum.
-For UI changes, also run the local app and inspect the first viewport when
-practical.
