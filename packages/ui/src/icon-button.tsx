@@ -12,7 +12,7 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
     <button
       aria-label={label}
       className={cn(
-        "group relative inline-flex shrink-0 items-center justify-center rounded-[var(--u-radius-sm)] border border-transparent text-[var(--u-color-text-muted)] transition-colors duration-150 hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)] disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--u-color-focus)_32%,transparent)]",
+        "group relative inline-flex shrink-0 select-none items-center justify-center rounded-[var(--u-radius-sm)] border border-transparent text-[var(--u-color-text-muted)] transition-colors duration-150 hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)] disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--u-color-focus)_32%,transparent)]",
         size === "compact"
           ? "h-[var(--u-size-button-compact)] w-[var(--u-size-button-compact)]"
           : "h-[var(--u-size-button)] w-[var(--u-size-button)]",

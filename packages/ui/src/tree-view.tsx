@@ -704,8 +704,8 @@ function TreeRow({
       {item.icon && <span className="grid h-4 w-4 shrink-0 place-items-center">{item.icon}</span>}
       <button
         className={cn(
-          "min-w-0 flex-1 truncate text-left disabled:cursor-not-allowed",
-          draggable && "cursor-grab select-none touch-none active:cursor-grabbing",
+          "min-w-0 flex-1 select-none truncate text-left disabled:cursor-not-allowed",
+          draggable && "cursor-grab touch-none active:cursor-grabbing",
         )}
         disabled={item.disabled}
         onClick={(event) => {
