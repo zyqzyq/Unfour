@@ -3,17 +3,7 @@ use std::time::Duration;
 
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::SqlitePool;
-use unfour_core::{AppError, AppResult};
-
-const DB_FILENAME: &str = "unfour.sqlite";
-
-/// Directory name under the OS data dir where the desktop app and satellite
-/// processes (e.g. the MCP server) locate `unfour.sqlite`. Kept here so both
-/// the Tauri entry and the identifier-based entry resolve to the same path.
-/// Matches `productName` ("Unfour") to align with sibling apps under
-/// `%APPDATA%` / `~/Library/Application Support`. The Tauri `identifier`
-/// (`dev.unfour`) is unrelated and stays as the bundle/installer identity.
-pub const DEFAULT_APP_IDENTIFIER: &str = "Unfour";
+use unfour_core::AppResult;
 
 /// How long a connection waits for a held lock before returning
 /// `SQLITE_BUSY`. The desktop app and satellite processes (e.g. the MCP server)
@@ -27,26 +17,28 @@ pub struct LocalDb {
 }
 
 impl LocalDb {
-    /// Connect using the default app data directory (`<os_data_dir>/Unfour`).
+    /// Connect using Unfour's stable product data directory.
     ///
-    /// Both the desktop app and satellite processes must resolve to the same
-    /// directory, so this deliberately bypasses Tauri's `app_data_dir()` (which
-    /// derives from `identifier` and would yield `dev.unfour`) and uses the
-    /// shared `DEFAULT_APP_IDENTIFIER` instead.
+    /// Path resolution deliberately lives in `unfour-paths`, not in Tauri path
+    /// APIs, so the desktop app and satellite processes share the same SQLite
+    /// file regardless of the bundle identifier.
     pub async fn connect_default() -> AppResult<Self> {
-        Self::connect_app_data(DEFAULT_APP_IDENTIFIER).await
+        let paths = unfour_paths::initialize_unfour_storage()?;
+        Self::connect_path(paths.database_path).await
     }
 
-    pub async fn connect_app_data(identifier: &str) -> AppResult<Self> {
-        Self::connect_path(app_data_path(identifier)?.join(DB_FILENAME)).await
+    pub fn default_database_path() -> AppResult<PathBuf> {
+        Ok(unfour_paths::default_database_path()?)
     }
 
-    pub async fn connect_existing_app_data_read_only(identifier: &str) -> AppResult<Self> {
-        Self::connect_existing_read_only_path(app_data_path(identifier)?.join(DB_FILENAME)).await
+    pub async fn connect_existing_default_read_only() -> AppResult<Self> {
+        let paths = unfour_paths::initialize_unfour_storage()?;
+        Self::connect_existing_read_only_path(paths.database_path).await
     }
 
-    pub async fn connect_existing_app_data(identifier: &str) -> AppResult<Self> {
-        Self::connect_existing_path(app_data_path(identifier)?.join(DB_FILENAME)).await
+    pub async fn connect_existing_default() -> AppResult<Self> {
+        let paths = unfour_paths::initialize_unfour_storage()?;
+        Self::connect_existing_path(paths.database_path).await
     }
 
     pub async fn connect_path(path: impl AsRef<Path>) -> AppResult<Self> {
@@ -114,12 +106,6 @@ impl LocalDb {
             .map_err(sqlx::Error::from)?;
         Ok(())
     }
-}
-
-fn app_data_path(identifier: &str) -> AppResult<PathBuf> {
-    dirs::data_dir()
-        .map(|dir| dir.join(identifier))
-        .ok_or_else(|| AppError::Config("app data directory is not available".to_string()))
 }
 
 #[cfg(test)]
@@ -771,5 +757,17 @@ mod tests {
 
         assert!(tables.iter().any(|(name,)| name == "workspaces"));
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn default_database_path_comes_from_unfour_paths() {
+        let expected = unfour_paths::resolve_unfour_paths()
+            .expect("resolve paths")
+            .database_path;
+
+        assert_eq!(
+            LocalDb::default_database_path().expect("default database path"),
+            expected
+        );
     }
 }

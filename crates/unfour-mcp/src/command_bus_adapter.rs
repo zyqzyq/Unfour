@@ -85,30 +85,33 @@ pub struct LocalCommandBusAdapter {
     bus: CommandBus,
 }
 
+type AdapterResult = Result<Arc<dyn CommandBusAdapter>, CommandBusAdapterError>;
+
 impl LocalCommandBusAdapter {
-    pub fn app_data() -> Result<Arc<dyn CommandBusAdapter>, CommandBusAdapterError> {
-        Self::from_command_bus_future(CommandBus::from_existing_app_data_read_only())
+    pub fn default_storage_read_only() -> AdapterResult {
+        Self::from_command_bus_future(CommandBus::from_existing_default_storage_read_only())
     }
 
-    pub fn send_app_data() -> Result<Arc<dyn CommandBusAdapter>, CommandBusAdapterError> {
-        Self::from_command_bus_future(CommandBus::from_existing_app_data())
+    pub fn default_storage() -> AdapterResult {
+        Self::from_command_bus_future(CommandBus::from_existing_default_storage())
     }
 
-    pub fn from_app_data_dir(
-        app_data_dir: impl AsRef<Path>,
-    ) -> Result<Arc<dyn CommandBusAdapter>, CommandBusAdapterError> {
-        Self::from_command_bus_future(CommandBus::from_existing_app_data_dir_read_only(
-            app_data_dir,
-        ))
+    pub fn default_database_path() -> Result<std::path::PathBuf, CommandBusAdapterError> {
+        unfour_command_bus::default_database_path()
+            .map_err(|_| CommandBusAdapterError::initialization_failed())
     }
 
-    pub fn ephemeral() -> Result<Arc<dyn CommandBusAdapter>, CommandBusAdapterError> {
+    pub fn from_storage_dir_read_only(storage_dir: impl AsRef<Path>) -> AdapterResult {
+        Self::from_command_bus_future(CommandBus::from_existing_storage_dir_read_only(storage_dir))
+    }
+
+    pub fn ephemeral() -> AdapterResult {
         Self::from_command_bus_future(CommandBus::ephemeral())
     }
 
     fn from_command_bus_future<E>(
         command_bus: impl std::future::Future<Output = Result<CommandBus, E>>,
-    ) -> Result<Arc<dyn CommandBusAdapter>, CommandBusAdapterError> {
+    ) -> AdapterResult {
         let runtime = Builder::new_multi_thread()
             .enable_all()
             .build()
@@ -303,13 +306,13 @@ mod tests {
     }
 
     #[test]
-    fn app_data_adapter_reads_persisted_connection_metadata() {
+    fn storage_dir_adapter_reads_persisted_connection_metadata() {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("build test runtime");
-        let app_data_dir = std::env::temp_dir().join(format!(
-            "unfour-mcp-app-data-test-{}-{}",
+        let storage_dir = std::env::temp_dir().join(format!(
+            "unfour-mcp-storage-test-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -318,7 +321,7 @@ mod tests {
         ));
 
         runtime.block_on(async {
-            let db_path = app_data_dir.join("unfour.sqlite");
+            let db_path = storage_dir.join(unfour_command_bus::DEFAULT_DATABASE_FILE);
             let db = LocalDb::connect_path(&db_path).await.expect("create db");
             db.migrate().await.expect("run migrations");
             let bus = CommandBus::from_db(db).await.expect("create bus");
@@ -340,7 +343,7 @@ mod tests {
         });
 
         let adapter =
-            LocalCommandBusAdapter::from_app_data_dir(&app_data_dir).expect("open app data");
+            LocalCommandBusAdapter::from_storage_dir_read_only(&storage_dir).expect("open storage");
         let result = adapter
             .execute_read(ReadCommand::ListConnections {
                 connection_type: ConnectionType::Ssh,
@@ -360,6 +363,14 @@ mod tests {
         assert!(!json.contains("developer"));
         assert!(!json.contains("ssh-secret"));
 
-        let _ = std::fs::remove_dir_all(app_data_dir);
+        let _ = std::fs::remove_dir_all(storage_dir);
+    }
+
+    #[test]
+    fn default_storage_database_path_matches_command_bus_default() {
+        assert_eq!(
+            LocalCommandBusAdapter::default_database_path().expect("adapter database path"),
+            unfour_command_bus::default_database_path().expect("command bus database path")
+        );
     }
 }

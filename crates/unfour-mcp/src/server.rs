@@ -126,7 +126,7 @@ where
     R: BufRead,
     W: Write,
 {
-    let command_bus = LocalCommandBusAdapter::send_app_data()
+    let command_bus = LocalCommandBusAdapter::default_storage()
         .map_err(|error| io::Error::other(format!("{}: {}", error.code, error.message)))?;
     let server = McpServer::new(command_bus);
     run_stdio_with_server(&server, reader, &mut writer)

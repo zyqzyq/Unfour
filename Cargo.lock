@@ -6227,6 +6227,7 @@ dependencies = [
  "unfour-command-bus",
  "unfour-core",
  "unfour-local-storage",
+ "unfour-paths",
  "unfour-secret-store",
 ]
 
@@ -6242,6 +6243,7 @@ dependencies = [
  "unfour-database-engine",
  "unfour-http-engine",
  "unfour-local-storage",
+ "unfour-paths",
  "unfour-secret-store",
  "unfour-ssh-engine",
  "unfour-workspace-engine",
@@ -6293,11 +6295,11 @@ name = "unfour-local-storage"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "dirs",
  "serde_json",
  "sqlx",
  "tokio",
  "unfour-core",
+ "unfour-paths",
  "uuid",
 ]
 
@@ -6311,6 +6313,13 @@ dependencies = [
  "unfour-command-bus",
  "unfour-core",
  "unfour-local-storage",
+]
+
+[[package]]
+name = "unfour-paths"
+version = "0.1.0"
+dependencies = [
+ "dirs",
 ]
 
 [[package]]

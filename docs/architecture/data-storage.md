@@ -17,10 +17,37 @@ Workspace is the top-level product boundary. A workspace owns:
 Every persisted business record must carry `workspace_id` unless it is truly
 global application configuration.
 
+## Runtime Path Strategy
+
+SQLite runtime paths are resolved by `crates/unfour-paths`, not by Tauri path
+APIs. The stable product data directory is named `Unfour` so the desktop app
+and standalone MCP process share the same local SQLite file, while the Tauri
+identifier `dev.unfour` remains only the bundle/app identifier.
+
+The current stable SQLite path strategy is:
+
+- Windows: `%APPDATA%\Unfour\unfour.sqlite`.
+- macOS/Linux: `dirs::data_dir()/Unfour/unfour.sqlite`.
+
+Do not replace this with Tauri `app_data_dir()`: Tauri derives that path from
+`identifier = "dev.unfour"`, which would split data into a different
+`dev.unfour` directory. `dev.unfour` is not treated as a legacy data directory
+by the runtime path resolver.
+
+Config and cache directories are also resolved by `unfour-paths`:
+
+- config: `dirs::config_dir()/Unfour`, falling back to
+  `<product_data_dir>/config`;
+- cache: `dirs::cache_dir()/Unfour`, falling back to
+  `<product_data_dir>/cache`;
+- backups: `<product_data_dir>/backups`.
+
+Unfour has not introduced a file logging module. Runtime path governance does
+not currently include a logs directory or `tauri-plugin-log`.
+
 ## SQLite Storage
 
-The desktop app stores local data in the Tauri app data directory. The current
-SQLite-backed records include:
+The current SQLite-backed records include:
 
 - app settings;
 - workspaces;
@@ -132,6 +159,11 @@ material such as passwords, API tokens, or SSH private-key passphrases.
 - tests can use an in-memory backend;
 - metadata commands may return credential references and labels, but not raw
   secret values.
+
+The keychain service name is currently `unfour`, and credential references use
+the format `unfour:<workspace_id>:<kind>:<record_uuid>`. Keep that service name
+stable across desktop, MCP, and packaging channels unless a migration plan
+preserves access to existing credentials.
 
 ## Local Activity
 

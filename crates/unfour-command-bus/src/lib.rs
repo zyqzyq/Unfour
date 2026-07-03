@@ -1,4 +1,7 @@
+mod storage_paths;
+
 use serde::{Deserialize, Serialize};
+pub use storage_paths::{default_database_path, DEFAULT_DATABASE_FILE, DEFAULT_PRODUCT_DATA_DIR};
 use unfour_core::ai_reserved;
 use unfour_core::models::{
     ApiCollection, ApiCollectionFolder, ApiEnvironment, ApiHistoryDetail, ApiHistoryItem,
@@ -18,7 +21,6 @@ use unfour_core::sync_reserved;
 use unfour_core::AppResult;
 use unfour_database_engine::DatabaseService;
 use unfour_http_engine::ApiClientService;
-pub use unfour_local_storage::DEFAULT_APP_IDENTIFIER;
 use unfour_local_storage::{ActivityLogService, LocalDb};
 use unfour_secret_store::SecretStore;
 use unfour_ssh_engine::SshService;
@@ -269,25 +271,6 @@ impl CommandBus {
         db.migrate().await?;
 
         Self::from_db(db).await
-    }
-
-    pub async fn from_existing_app_data_read_only() -> AppResult<Self> {
-        let db = LocalDb::connect_existing_app_data_read_only(DEFAULT_APP_IDENTIFIER).await?;
-        Self::from_existing_db_read_only(db).await
-    }
-
-    pub async fn from_existing_app_data() -> AppResult<Self> {
-        let db = LocalDb::connect_existing_app_data(DEFAULT_APP_IDENTIFIER).await?;
-        Self::from_existing_db_read_only(db).await
-    }
-
-    pub async fn from_existing_app_data_dir_read_only(
-        app_data_dir: impl AsRef<std::path::Path>,
-    ) -> AppResult<Self> {
-        let db =
-            LocalDb::connect_existing_read_only_path(app_data_dir.as_ref().join("unfour.sqlite"))
-                .await?;
-        Self::from_existing_db_read_only(db).await
     }
 
     pub async fn from_db_with_secret_store(

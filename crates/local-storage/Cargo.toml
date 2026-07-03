@@ -6,10 +6,10 @@ license = "Apache-2.0"
 
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
-dirs = "6"
 serde_json = "1"
 sqlx = { version = "0.8", default-features = false, features = ["chrono", "json", "macros", "migrate", "mysql", "postgres", "runtime-tokio-rustls", "sqlite", "uuid"] }
 unfour-core = { path = "../unfour-core" }
+unfour-paths = { path = "../unfour-paths" }
 uuid = { version = "1", features = ["serde", "v4"] }
 
 [dev-dependencies]

@@ -35,7 +35,8 @@ pub struct AppState {
 pub fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
     builder.plugin(tauri_plugin_opener::init()).setup(|app| {
         let command_bus = tauri::async_runtime::block_on(async {
-            let db = LocalDb::connect_default().await?;
+            let paths = unfour_paths::initialize_unfour_storage()?;
+            let db = LocalDb::connect_path(paths.database_path).await?;
             db.migrate().await?;
             CommandBus::from_db_with_secret_store(db, SecretStore::new("unfour")).await
         })?;

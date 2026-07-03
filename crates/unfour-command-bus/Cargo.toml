@@ -12,6 +12,7 @@ unfour-core = { path = "../unfour-core" }
 unfour-database-engine = { path = "../database-engine" }
 unfour-http-engine = { path = "../http-engine" }
 unfour-local-storage = { path = "../local-storage" }
+unfour-paths = { path = "../unfour-paths" }
 unfour-secret-store = { path = "../secret-store" }
 unfour-ssh-engine = { path = "../ssh-engine" }
 unfour-workspace-engine = { path = "../workspace-engine" }
