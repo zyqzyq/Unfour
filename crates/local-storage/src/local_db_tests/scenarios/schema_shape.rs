@@ -1,0 +1,137 @@
+use super::*;
+
+#[tokio::test]
+async fn initial_schema_includes_saved_sql_soft_delete_fields() {
+    let db = test_db().await;
+    db.migrate().await.expect("run migrations");
+
+    let columns: Vec<(String,)> = sqlx::query_as("SELECT name FROM pragma_table_info('saved_sql')")
+        .fetch_all(db.pool())
+        .await
+        .expect("list columns");
+    let names: Vec<&str> = columns.iter().map(|(name,)| name.as_str()).collect();
+    assert!(names.contains(&"deleted_at"), "deleted_at added");
+    assert!(names.contains(&"revision"), "revision added");
+    assert!(names.contains(&"sync_status"), "sync_status added");
+    assert!(names.contains(&"remote_id"), "remote_id added");
+}
+
+#[tokio::test]
+async fn initial_schema_omits_legacy_folder_columns() {
+    let db = test_db().await;
+    db.migrate().await.expect("run migrations");
+
+    let req_cols: Vec<(String,)> =
+        sqlx::query_as("SELECT name FROM pragma_table_info('api_requests')")
+            .fetch_all(db.pool())
+            .await
+            .expect("list api_requests columns");
+    let req_names: Vec<&str> = req_cols.iter().map(|(n,)| n.as_str()).collect();
+    assert!(
+        !req_names.contains(&"folder_path"),
+        "folder_path should be dropped from api_requests"
+    );
+
+    let coll_cols: Vec<(String,)> =
+        sqlx::query_as("SELECT name FROM pragma_table_info('api_collections')")
+            .fetch_all(db.pool())
+            .await
+            .expect("list api_collections columns");
+    let coll_names: Vec<&str> = coll_cols.iter().map(|(n,)| n.as_str()).collect();
+    assert!(
+        !coll_names.contains(&"folders_json"),
+        "folders_json should be dropped from api_collections"
+    );
+}
+
+#[tokio::test]
+async fn migrate_is_idempotent() {
+    let db = test_db().await;
+    db.migrate().await.expect("run migrations");
+    db.migrate()
+        .await
+        .expect("second migration should succeed without error");
+    db.migrate()
+        .await
+        .expect("third migration should succeed without error");
+}
+
+#[tokio::test]
+async fn initial_schema_has_api_request_collection_tree_columns() {
+    let db = test_db().await;
+    db.migrate().await.expect("run migrations");
+
+    let columns: Vec<(String,)> =
+        sqlx::query_as("SELECT name FROM pragma_table_info('api_requests')")
+            .fetch_all(db.pool())
+            .await
+            .expect("list columns");
+    assert!(
+        columns.iter().any(|(name,)| name == "parent_folder_id"),
+        "api_requests should have parent_folder_id column"
+    );
+    assert!(
+        columns.iter().any(|(name,)| name == "collection_id"),
+        "api_requests should have collection_id column"
+    );
+    assert!(
+        columns.iter().any(|(name,)| name == "sort_order"),
+        "api_requests should have sort_order column"
+    );
+}
+
+#[tokio::test]
+async fn initial_schema_has_api_collection_folders_table() {
+    let db = test_db().await;
+    db.migrate().await.expect("run migrations");
+
+    let columns: Vec<(String,)> =
+        sqlx::query_as("SELECT name FROM pragma_table_info('api_collection_folders')")
+            .fetch_all(db.pool())
+            .await
+            .expect("list columns");
+    let names: Vec<&str> = columns.iter().map(|(name,)| name.as_str()).collect();
+
+    assert!(
+        [
+            "id",
+            "workspace_id",
+            "collection_id",
+            "parent_folder_id",
+            "name",
+            "sort_order",
+            "created_at",
+            "updated_at",
+            "deleted_at",
+        ]
+        .iter()
+        .all(|expected| names.contains(expected)),
+        "api_collection_folders should have stable folder tree columns"
+    );
+}
+
+#[tokio::test]
+async fn initial_schema_workspace_policy_defaults_are_valid() {
+    let db = test_db().await;
+    db.migrate().await.expect("run migrations");
+    sqlx::query(
+        r#"
+        INSERT INTO workspaces (
+          id, name, is_default, created_at, updated_at, revision, sync_status
+        )
+        VALUES ('default-ws', 'Default', 1, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 1, 'local')
+        "#,
+    )
+    .execute(db.pool())
+    .await
+    .expect("insert workspace with defaults");
+
+    let row: (String, String) = sqlx::query_as(
+        "SELECT environment_type, mcp_policy FROM workspaces WHERE id = 'default-ws'",
+    )
+    .fetch_one(db.pool())
+    .await
+    .expect("read workspace policy fields");
+    assert_eq!(row.0, "dev");
+    assert_eq!(row.1, "auto");
+}

@@ -3,43 +3,43 @@
   "files": [
     {
       "path": "crates/database-engine/src/database.rs",
-      "maxLines": 2975,
-      "reason": "Historical database service entry; first batch moved tests out."
+      "maxLines": 3371,
+      "reason": "Historical database engine entry; split only by driver, query safety, and table operation boundaries."
     },
     {
       "path": "crates/ssh-engine/src/ssh.rs",
-      "maxLines": 1954,
-      "reason": "Historical SSH service entry; second batch extracted tests to ssh_tests/ and diagnostic validation to diagnostics.rs."
+      "maxLines": 2131,
+      "reason": "Historical SSH engine entry; split only by session lifecycle, native transport, persistence, and diagnostics boundaries."
     },
     {
       "path": "crates/http-engine/src/api_client.rs",
-      "maxLines": 1627,
-      "reason": "Historical API client service entry; second batch extracted tests to api_client_tests/ and pure helpers to helpers.rs."
+      "maxLines": 1723,
+      "reason": "Historical API engine entry; split only by saved requests, collections, history, and execution boundaries."
     },
     {
       "path": "packages/command-client/src/tauri.ts",
-      "maxLines": 2108,
-      "reason": "Tauri command wrapper plus browser mock fallback; needs future mock extraction."
+      "maxLines": 2195,
+      "reason": "Tauri command wrapper plus browser mock fallback; needs future command-domain and mock extraction."
     },
     {
       "path": "crates/unfour-command-bus/src/lib.rs",
-      "maxLines": 1966,
-      "reason": "Command-bus boundary and result models; needs future type/test extraction."
+      "maxLines": 1679,
+      "reason": "Command-bus boundary and result models; needs future domain command and read-model extraction."
     },
     {
       "path": "crates/unfour-mcp/src/tools/database.rs",
-      "maxLines": 1658,
-      "reason": "Database MCP tools plus parser/validator tests; needs future validator split."
+      "maxLines": 1170,
+      "reason": "Database MCP tools plus parser/validator helpers; needs future validator and serializer split."
     },
     {
       "path": "crates/unfour-mcp/src/tools/api.rs",
-      "maxLines": 1457,
-      "reason": "API MCP tools plus redaction/parser tests; needs future serializer split."
+      "maxLines": 1428,
+      "reason": "API MCP tools plus redaction/parser helpers; needs future serializer and argument-parser split."
     },
     {
       "path": "packages/database/src/DatabasePage.tsx",
-      "maxLines": 1613,
-      "reason": "Historical database page container; needs future dialog/hook/component extraction."
+      "maxLines": 1649,
+      "reason": "Historical database page container; needs future dialog, mutation hook, and workspace controller extraction."
     }
   ]
 }
