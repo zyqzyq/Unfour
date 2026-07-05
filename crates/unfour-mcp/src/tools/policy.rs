@@ -196,6 +196,7 @@ pub(super) fn classify_mcp_action(
                 (McpCapability::DbDataWrite, McpRisk::Write)
             }
         }
+        "unfour.ssh.create_connection" => (McpCapability::SshConnect, McpRisk::Write),
         "unfour.ssh.list_connections" => (McpCapability::WorkspaceRead, McpRisk::Read),
         "unfour.ssh.run_diagnostic" | "unfour.ssh.read_file" | "unfour.ssh.list_dir" => {
             (McpCapability::SshExec, McpRisk::Read)

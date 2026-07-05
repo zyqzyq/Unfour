@@ -126,6 +126,41 @@ async fn save_and_list_api_requests() {
 }
 
 #[tokio::test]
+async fn execute_saved_api_request_rejects_mismatched_workspace() {
+    let bus = test_bus().await;
+    let state = bus.list_workspaces().await.expect("list workspaces");
+    let workspace_id = state.active_workspace_id.clone();
+    let saved = bus
+        .save_api_request(ApiRequestInput {
+            workspace_id: workspace_id.clone(),
+            name: Some("Saved GET".to_string()),
+            parent_folder_id: None,
+            collection_id: None,
+            auth_json: None,
+            method: "GET".to_string(),
+            url: "https://example.invalid/get".to_string(),
+            headers: vec![],
+            query: vec![],
+            body: None,
+            body_kind: "none".to_string(),
+            timeout_ms: None,
+        })
+        .await
+        .expect("save request");
+    let other_workspace = bus
+        .create_workspace("Other Workspace".to_string())
+        .await
+        .expect("create other workspace");
+
+    let error = bus
+        .execute_saved_api_request_in_workspace(Some(other_workspace.id), &saved.id, None)
+        .await
+        .expect_err("workspace mismatch should be rejected before sending");
+
+    assert_eq!(error.code(), "NOT_FOUND");
+}
+
+#[tokio::test]
 async fn workspace_rename_updates_state() {
     let bus = test_bus().await;
 

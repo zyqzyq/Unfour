@@ -698,7 +698,12 @@ fn api_send_request(
     let timeout_ms = parse_optional_timeout(&arguments)?;
 
     let response = if let Some(request_id) = parse_optional_string(&arguments, "requestId")? {
-        command_bus.execute_saved_api_request(&request_id, timeout_ms)
+        let workspace_id = parse_optional_string(&arguments, "workspaceId")?;
+        command_bus.execute_saved_api_request_in_workspace(
+            workspace_id.as_deref(),
+            &request_id,
+            timeout_ms,
+        )
     } else {
         let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
         let method = parse_required_string(&arguments, "method", "unfour.api.send_request")?;

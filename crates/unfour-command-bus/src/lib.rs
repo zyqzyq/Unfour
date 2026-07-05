@@ -1148,10 +1148,26 @@ impl CommandBus {
         timeout_ms_override: Option<u64>,
     ) -> AppResult<ApiResponse> {
         let state = self.read_workspace_state().await?;
-        let workspace_id = state.active_workspace_id;
+        self.execute_saved_api_request_in_workspace(
+            Some(state.active_workspace_id),
+            request_id,
+            timeout_ms_override,
+        )
+        .await
+    }
+
+    pub async fn execute_saved_api_request_in_workspace(
+        &self,
+        workspace_id: Option<String>,
+        request_id: &str,
+        timeout_ms_override: Option<u64>,
+    ) -> AppResult<ApiResponse> {
         let saved = self.api_client.get_saved_request(request_id).await?;
 
-        if saved.workspace_id != workspace_id {
+        if workspace_id
+            .as_deref()
+            .is_some_and(|id| saved.workspace_id != id)
+        {
             return Err(unfour_core::AppError::NotFound("api request".to_string()));
         }
 

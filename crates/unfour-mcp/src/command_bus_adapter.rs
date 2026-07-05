@@ -6,8 +6,8 @@ use unfour_command_bus::{CommandBus, ReadCommand, ReadCommandResult};
 use unfour_core::models::{
     ApiCollection, ApiRequestInput, ApiResponse, ApiSavedRequest, CredentialCreateInput,
     CredentialMetadata, DatabaseConnection, DatabaseConnectionInput, DatabaseQueryInput,
-    DatabaseQueryResult, DatabaseSchema, DatabaseTestResult, SshConnection, SshDiagnosticInput,
-    SshDiagnosticResult, SystemHealth,
+    DatabaseQueryResult, DatabaseSchema, DatabaseTestResult, SshConnection, SshConnectionInput,
+    SshDiagnosticInput, SshDiagnosticResult, SystemHealth,
 };
 use unfour_core::AppError;
 
@@ -22,6 +22,15 @@ pub trait CommandBusAdapter: Send + Sync {
         request_id: &str,
         timeout_ms: Option<u64>,
     ) -> Result<ApiResponse, CommandBusAdapterError>;
+
+    fn execute_saved_api_request_in_workspace(
+        &self,
+        _workspace_id: Option<&str>,
+        request_id: &str,
+        timeout_ms: Option<u64>,
+    ) -> Result<ApiResponse, CommandBusAdapterError> {
+        self.execute_saved_api_request(request_id, timeout_ms)
+    }
 
     fn send_api_request(
         &self,
@@ -182,6 +191,16 @@ pub trait CommandBusAdapter: Send + Sync {
         })
     }
 
+    fn save_ssh_connection(
+        &self,
+        _input: SshConnectionInput,
+    ) -> Result<SshConnection, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "This command-bus adapter does not support SSH connection saves.",
+        })
+    }
+
     fn run_ssh_command(
         &self,
         _input: SshDiagnosticInput,
@@ -262,6 +281,26 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
     ) -> Result<ApiResponse, CommandBusAdapterError> {
         self.runtime
             .block_on(self.bus.execute_saved_api_request(request_id, timeout_ms))
+            .map_err(|e| {
+                CommandBusAdapterError::from_app_error(
+                    "The command-bus API send operation failed.",
+                    &e,
+                )
+            })
+    }
+
+    fn execute_saved_api_request_in_workspace(
+        &self,
+        workspace_id: Option<&str>,
+        request_id: &str,
+        timeout_ms: Option<u64>,
+    ) -> Result<ApiResponse, CommandBusAdapterError> {
+        self.runtime
+            .block_on(self.bus.execute_saved_api_request_in_workspace(
+                workspace_id.map(str::to_string),
+                request_id,
+                timeout_ms,
+            ))
             .map_err(|e| {
                 CommandBusAdapterError::from_app_error(
                     "The command-bus API send operation failed.",
@@ -519,6 +558,20 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
             .map_err(|e| {
                 CommandBusAdapterError::from_app_error(
                     "The command-bus SSH connection list operation failed.",
+                    &e,
+                )
+            })
+    }
+
+    fn save_ssh_connection(
+        &self,
+        input: SshConnectionInput,
+    ) -> Result<SshConnection, CommandBusAdapterError> {
+        self.runtime
+            .block_on(self.bus.save_ssh_connection(input))
+            .map_err(|e| {
+                CommandBusAdapterError::from_app_error(
+                    "The command-bus SSH connection save operation failed.",
                     &e,
                 )
             })

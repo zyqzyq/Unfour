@@ -305,7 +305,7 @@ fn tool_annotations_classify_side_effects() {
 fn tool_schemas_are_available() {
     let definitions = ToolRegistry::with_command_bus(Arc::new(StubCommandBus)).definitions();
 
-    assert_eq!(definitions.len(), 33);
+    assert_eq!(definitions.len(), 34);
     assert!(definitions
         .iter()
         .all(|definition| definition.input_schema["type"] == "object"));
@@ -366,6 +366,9 @@ fn tool_schemas_are_available() {
     assert!(definitions
         .iter()
         .any(|definition| definition.name == "unfour.activity.list"));
+    assert!(definitions
+        .iter()
+        .any(|definition| definition.name == "unfour.ssh.create_connection"));
     assert!(definitions
         .iter()
         .any(|definition| definition.name == "unfour.ssh.run_diagnostic"));

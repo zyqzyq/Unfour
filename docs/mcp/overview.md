@@ -94,7 +94,9 @@ yet.
 Credential values are resolved from the OS keychain under the same service name
 as the desktop app. The MCP process reads credentials only when a tool needs to
 open a saved database connection, send an API request, or use a saved SSH
-connection. It never creates, rotates, or deletes credentials.
+connection. Connection creation tools may write supplied database passwords or
+SSH secrets to the OS credential store through the command bus; raw credential
+values are never returned.
 
 ## Current Non-Goals
 

@@ -1,6 +1,6 @@
 use serde_json::{json, Map, Value};
 use unfour_command_bus::{ReadCommand, ReadCommandResult};
-use unfour_core::models::SshDiagnosticInput;
+use unfour_core::models::{SshConnection, SshConnectionInput, SshDiagnosticInput};
 
 use crate::command_bus_adapter::CommandBusAdapter;
 
@@ -23,6 +23,36 @@ const MAX_FILE_LIMIT: u64 = 128 * 1024;
 
 pub(super) fn registered_tools() -> Vec<RegisteredTool> {
     vec![
+        RegisteredTool {
+            definition: ToolDefinition {
+                name: "unfour.ssh.create_connection",
+                title: "Create SSH Connection",
+                description:
+                    "Creates a saved SSH connection through the Unfour command bus. Optional secret input is stored in the OS credential store by the SSH engine and only a credential reference is persisted; the tool never returns the secret or credential reference.",
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "workspaceId": { "type": "string" },
+                        "name": { "type": "string" },
+                        "host": { "type": "string" },
+                        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+                        "username": { "type": "string" },
+                        "authKind": {
+                            "type": "string",
+                            "enum": ["password", "private-key", "none"]
+                        },
+                        "keyPath": { "type": "string" },
+                        "credentialRef": { "type": "string" },
+                        "secret": { "type": "string" }
+                    },
+                    "required": ["name", "host", "username", "authKind"],
+                    "additionalProperties": false
+                }),
+                output_schema: json!({ "type": "object" }),
+                annotations: ToolAnnotations::local_write(),
+            },
+            handler: ssh_create_connection,
+        },
         RegisteredTool {
             definition: ToolDefinition {
                 name: "unfour.ssh.list_connections",
@@ -191,6 +221,71 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
             handler: ssh_list_dir,
         },
     ]
+}
+
+fn ssh_create_connection(
+    command_bus: &dyn CommandBusAdapter,
+    arguments: Value,
+) -> Result<Value, ToolCallError> {
+    let arguments = object_with_allowed_keys(
+        arguments,
+        &[
+            "workspaceId",
+            "name",
+            "host",
+            "port",
+            "username",
+            "authKind",
+            "keyPath",
+            "credentialRef",
+            "secret",
+        ],
+    )?;
+    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let name = parse_required_string(&arguments, "name", "unfour.ssh.create_connection")?;
+    let host = parse_required_string(&arguments, "host", "unfour.ssh.create_connection")?;
+    let username = parse_required_string(&arguments, "username", "unfour.ssh.create_connection")?;
+    let auth_kind = parse_required_string(&arguments, "authKind", "unfour.ssh.create_connection")?;
+    let credential_ref = parse_optional_string(&arguments, "credentialRef")?;
+    let secret = parse_optional_secret(&arguments, "secret")?;
+    if credential_ref.is_some() && secret.is_some() {
+        return Err(ToolCallError::InvalidArguments(
+            "unfour.ssh.create_connection accepts either `secret` or `credentialRef`, not both"
+                .to_string(),
+        ));
+    }
+    let credential_source = if secret.is_some() {
+        "created"
+    } else if credential_ref.is_some() {
+        "provided"
+    } else {
+        "none"
+    };
+
+    let connection = command_bus
+        .save_ssh_connection(SshConnectionInput {
+            id: None,
+            workspace_id,
+            name,
+            host,
+            port: parse_optional_port(&arguments)?,
+            username,
+            auth_kind,
+            key_path: parse_optional_string(&arguments, "keyPath")?,
+            credential_ref,
+            secret,
+        })
+        .map_err(|error| ToolCallError::Execution {
+            code: error.code,
+            message: error.message,
+        })?;
+
+    Ok(json!({
+        "connection": safe_connection_summary(&connection),
+        "credentialStored": connection.credential_ref.is_some(),
+        "credentialSource": credential_source,
+        "source": "command-bus"
+    }))
 }
 
 fn ssh_run_diagnostic(
@@ -700,6 +795,45 @@ fn ssh_command_result(result: unfour_core::models::SshDiagnosticResult, source: 
         "truncated": result.truncated,
         "source": source
     })
+}
+
+fn safe_connection_summary(connection: &SshConnection) -> Value {
+    json!({
+        "connectionId": connection.id,
+        "id": connection.id,
+        "workspaceId": connection.workspace_id,
+        "name": connection.name,
+        "host": connection.host,
+        "port": connection.port,
+        "username": connection.username,
+        "authKind": connection.auth_kind
+    })
+}
+
+fn parse_optional_port(arguments: &Map<String, Value>) -> Result<Option<u16>, ToolCallError> {
+    let Some(value) = parse_optional_u64(arguments, "port")? else {
+        return Ok(None);
+    };
+    if !(1..=u16::MAX as u64).contains(&value) {
+        return Err(ToolCallError::InvalidArguments(
+            "argument `port` must be between 1 and 65535".to_string(),
+        ));
+    }
+    Ok(Some(value as u16))
+}
+
+fn parse_optional_secret(
+    arguments: &Map<String, Value>,
+    key: &str,
+) -> Result<Option<String>, ToolCallError> {
+    match arguments.get(key) {
+        None => Ok(None),
+        Some(Value::String(value)) if value.is_empty() => Ok(None),
+        Some(Value::String(value)) => Ok(Some(value.clone())),
+        Some(_) => Err(ToolCallError::InvalidArguments(format!(
+            "argument `{key}` must be a string"
+        ))),
+    }
 }
 
 fn python_write_file_command(

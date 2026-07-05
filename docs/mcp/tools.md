@@ -65,6 +65,7 @@ text to execute.
 | `unfour.db.execute` | `{ "connectionId": "required", "sql": "required", "workspaceId": "optional", "limit": "optional", "dryRun": "optional", "transaction": "optional", "confirm": "optional", "confirmation_text": "optional" }` | Executes one SQL statement when policy allows. High-risk writes such as `DELETE` without `WHERE` require confirmation. |
 | `unfour.db.explain` | `{ "connectionId": "required", "sql": "required", "workspaceId": "optional", "limit": "optional" }` | Runs `EXPLAIN` for a read-only statement or an existing explain query. |
 | `unfour.db.test_connection` | `{ "connectionId": "required", "workspaceId": "optional" }` | Tests connectivity for a saved database connection and returns server metadata when available. |
+| `unfour.ssh.create_connection` | `{ "workspaceId": "optional", "name": "required", "host": "required", "port": "optional", "username": "required", "authKind": "required", "keyPath": "optional", "credentialRef": "optional", "secret": "optional" }` | Creates a saved SSH connection. If `secret` is supplied for password or private-key auth, it is written to the OS credential store and only the resulting credential reference is persisted. |
 | `unfour.ssh.list_connections` | `{ "workspaceId": "optional" }` | Lists saved SSH connections as safe summaries. |
 | `unfour.ssh.run_diagnostic` | `{ "connectionId": "required", "command": "required", "workspaceId": "optional", "timeoutMs": "optional" }` | Runs a single allowlisted read-only diagnostic command on a saved SSH connection. Requires an `ssh-native` build. |
 | `unfour.ssh.exec` | `{ "connectionId": "required", "command": "required", "workspaceId": "optional", "cwd": "optional", "env": "optional", "timeoutMs": "optional", "confirm": "optional", "confirmation_text": "optional" }` | Executes one non-interactive SSH command when policy allows. High-risk commands require confirmation. |
@@ -182,6 +183,12 @@ Example `query_readonly` result:
 
 SSH tools use saved SSH connections and the command bus. They are
 non-interactive and require an `ssh-native` build for real remote execution.
+
+`unfour.ssh.create_connection` creates saved SSH connection metadata. It accepts
+`authKind` values `password`, `private-key`, or `none`; password auth requires
+either `secret` or an existing `credentialRef`, and private-key auth requires
+`keyPath`. Returned summaries never include secrets, private-key paths, or
+credential references.
 
 `unfour.ssh.run_diagnostic` is gated by a strict allowlist. The leading word
 must be a bare allowlisted utility, such as:

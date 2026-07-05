@@ -277,7 +277,7 @@ fn stdio_round_trip_lists_and_calls_tools() {
     assert_eq!(responses.len(), 3);
     assert_eq!(
         responses[1]["result"]["tools"].as_array().unwrap().len(),
-        33
+        34
     );
     // `run_stdio` opens the real app-data store, so assert only on stable,
     // data-independent fields rather than a specific workspace id.

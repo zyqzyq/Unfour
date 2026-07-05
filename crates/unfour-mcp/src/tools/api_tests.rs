@@ -204,6 +204,20 @@ impl CommandBusAdapter for ApiStubCommandBus {
         })
     }
 
+    fn execute_saved_api_request_in_workspace(
+        &self,
+        workspace_id: Option<&str>,
+        request_id: &str,
+        timeout_ms: Option<u64>,
+    ) -> Result<ApiResponse, CommandBusAdapterError> {
+        if request_id == "req-explicit-workspace" {
+            assert_eq!(workspace_id, Some("ws-1"));
+        } else {
+            assert_eq!(workspace_id, None);
+        }
+        self.execute_saved_api_request(request_id, timeout_ms)
+    }
+
     fn send_api_request(
         &self,
         input: ApiRequestInput,

@@ -31,6 +31,22 @@ fn send_request_returns_success_with_redacted_response() {
 }
 
 #[test]
+fn send_request_replays_saved_request_in_explicit_workspace() {
+    let result = api_registry()
+        .call(
+            "unfour.api.send_request",
+            json!({
+                "workspaceId": "ws-1",
+                "requestId": "req-explicit-workspace"
+            }),
+        )
+        .expect("should succeed");
+
+    assert_eq!(result["isError"], false);
+    assert_eq!(result["structuredContent"]["ok"], true);
+}
+
+#[test]
 fn send_request_allows_dev_post_ad_hoc() {
     let result = api_registry()
         .call(
