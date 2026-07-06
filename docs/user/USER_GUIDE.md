@@ -84,8 +84,11 @@ Unfour has two halves:
 The frontend is responsible for what you see and edit:
 
 - `apps/desktop/src/App.tsx` mounts the composed desktop shell.
-- `packages/app-shell` provides a thin shell slot wrapper. The desktop app
-  composes the current workspace window while the module split is in progress.
+
+- `packages/app-shell provides` the frontend desktop workbench composition root.
+  It wires the workspace switcher, module navigation, layout slots, command
+  palette, diagnostics actions, and mounts the API Client, Database, and SSH
+  Terminal modules without owning their feature internals.
 - `packages/command-client` is the bridge used by React to call Rust commands. It also contains browser-only mocks so the interface can run during frontend development.
 - `packages/workspace-core` keeps temporary UI state such as the active workspace, active tab, and sidebar state.
 - `packages/workspace-local` is the frontend boundary reserved for local workspace persistence and currently provides a compatibility re-export.

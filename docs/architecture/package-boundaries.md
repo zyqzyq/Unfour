@@ -128,8 +128,8 @@ and should reuse `packages/ui` primitives where possible.
 | `crates/unfour-command-bus` | Reusable Rust command entry point for Tauri, MCP, and future AI/CLI adapters. | UI components, duplicated domain logic. |
 | `crates/unfour-mcp` | Local stdio MCP server adapter over the command bus. | Bypassing command-bus safety, redaction, or tool policy. |
 
-`apps/desktop/src-tauri` is the Tauri adapter and composition layer. Backend
-capability logic belongs in crates, not in Tauri command wrappers.
+`apps/desktop/src-tauri` is the thin Tauri desktop binary and edition adapter.
+Shared Tauri composition lives in crates/unfour-app.
 
 ## Dependency Direction
 
