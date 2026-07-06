@@ -50,6 +50,50 @@
       "toggleBottomPanel": "Toggle bottom panel",
       "toggleInspector": "Toggle inspector"
     },
+    "settings": {
+      "title": "Settings",
+      "description": "Global preferences for this Unfour app.",
+      "close": "Close settings",
+      "navigationLabel": "Settings sections",
+      "sections": {
+        "general": "General",
+        "mcp": "MCP",
+        "about": "About"
+      },
+      "copy": {
+        "copied": "Copied",
+        "failed": "Copy failed"
+      },
+      "general": {
+        "title": "General",
+        "description": "Language and appearance preferences apply immediately.",
+        "languageLabel": "Language",
+        "languageDescription": "Choose the UI language.",
+        "themeLabel": "Theme",
+        "themeDescription": "Choose the workbench color theme."
+      },
+      "mcp": {
+        "title": "MCP",
+        "description": "Local MCP connection details for clients such as Codex, Claude, or Cursor.",
+        "statusLabel": "MCP status",
+        "statusValue": "Local MCP available",
+        "commandLabel": "MCP command",
+        "configLabel": "Config example",
+        "copyCommand": "Copy command",
+        "copyConfig": "Copy config",
+        "docsDescription": "The active setup guide is {path}. Build the MCP server first, then use an absolute command path in your client.",
+        "openDocs": "Open MCP docs"
+      },
+      "about": {
+        "title": "About",
+        "description": "Version and project links for support and feedback.",
+        "appName": "App name",
+        "version": "Version",
+        "website": "Website",
+        "github": "GitHub",
+        "copyVersionInfo": "Copy version info"
+      }
+    },
     "workspace": {
       "changeEnvironment": "Change Environment",
       "deleteCurrent": "Delete current",

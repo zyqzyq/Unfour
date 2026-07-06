@@ -50,6 +50,50 @@
       "toggleBottomPanel": "切换底部面板",
       "toggleInspector": "切换检查器"
     },
+    "settings": {
+      "title": "设置",
+      "description": "当前 Unfour 应用的全局偏好设置。",
+      "close": "关闭设置",
+      "navigationLabel": "设置分组",
+      "sections": {
+        "general": "通用",
+        "mcp": "MCP",
+        "about": "关于"
+      },
+      "copy": {
+        "copied": "已复制",
+        "failed": "复制失败"
+      },
+      "general": {
+        "title": "通用",
+        "description": "语言与外观偏好会立即生效。",
+        "languageLabel": "语言",
+        "languageDescription": "选择界面语言。",
+        "themeLabel": "主题",
+        "themeDescription": "选择工作台颜色主题。"
+      },
+      "mcp": {
+        "title": "MCP",
+        "description": "用于 Codex、Claude、Cursor 等客户端的本地 MCP 连接信息。",
+        "statusLabel": "MCP 状态",
+        "statusValue": "本地 MCP 可用",
+        "commandLabel": "MCP 命令",
+        "configLabel": "配置示例",
+        "copyCommand": "复制命令",
+        "copyConfig": "复制配置",
+        "docsDescription": "当前配置说明位于 {path}。请先构建 MCP server，再在客户端中使用绝对命令路径。",
+        "openDocs": "打开 MCP 文档"
+      },
+      "about": {
+        "title": "关于",
+        "description": "用于反馈和排查问题的版本与项目链接。",
+        "appName": "应用名称",
+        "version": "版本",
+        "website": "网站",
+        "github": "GitHub",
+        "copyVersionInfo": "复制版本信息"
+      }
+    },
     "workspace": {
       "changeEnvironment": "修改环境",
       "deleteCurrent": "删除当前工作区",

@@ -143,9 +143,7 @@ export function DesktopApp() {
         globalToolbar={
           <AppTitleBar
             activeWorkspace={activeWorkspace}
-            healthReady={healthQuery.data?.storageReady === true}
             onActivateWorkspace={(id) => activateWorkspaceMutation.mutate(id)}
-            syncStrategy={healthQuery.data?.syncStrategy ?? "local-first"}
             workspaces={workspaceQuery.data?.workspaces ?? []}
           />
         }

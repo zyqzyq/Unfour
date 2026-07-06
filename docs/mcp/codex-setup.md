@@ -44,7 +44,7 @@ Use an absolute path to the built executable.
 
 ```toml
 [mcp_servers.unfour]
-command = "D:\\path\\to\\Unfour\\target\\debug\\unfour-mcp.exe"
+command = "D:\\Program Files\\Unfour\\unfour-mcp.exe"
 args = []
 ```
 
