@@ -2,17 +2,19 @@
 
 ## Scope
 
-`packages/app-shell` owns the frontend shell mount surface: global layout
-composition, top-level slots, navigation/mount wiring, and cross-module
-container surfaces.
+`packages/app-shell` owns the frontend desktop workbench composition root:
+global layout composition, top-level slots, workspace switcher wiring,
+module navigation, command palette and diagnostics actions, and cross-module
+mount surfaces.
 
 ## Boundaries
 
-- It may compose shell slots and pass children into shared layout primitives.
+- It may compose shell slots, mount API Client, SSH Terminal, and Database
+  modules, and pass children into shared layout primitives.
 - It must not own API request execution, SQL editing/execution, SSH session
   state, feature mock data, or large feature-specific UI.
-- It must not depend on feature packages. Feature modules are composed by the
-  desktop app or another explicit composition layer.
+- Feature internals must stay in their owning packages; `app-shell` may only
+  wire them into the desktop workbench.
 
 ## Rules
 
@@ -20,8 +22,8 @@ container surfaces.
 - Prefer existing `@unfour/ui` shell primitives and shared components.
 - Do not introduce new dependencies unless the task explicitly requires them.
 - Do not move feature behavior into this package to simplify wiring.
-- Keep this package thin unless a task explicitly expands shell-level
-  orchestration.
+- Keep shell orchestration focused unless a task explicitly expands
+  workbench-level behavior.
 - Use the shared i18n provider/hook for user-visible shell copy. Feature
   packages must not depend on `packages/app-shell` to translate their own UI.
 

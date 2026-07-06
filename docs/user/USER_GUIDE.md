@@ -94,8 +94,8 @@ The frontend is responsible for what you see and edit:
 
 The Rust backend is responsible for actions that should not live only in the browser:
 
-- `apps/desktop/src-tauri/src/lib.rs` starts the Tauri app and registers all commands.
-- `apps/desktop/src-tauri/src/commands.rs` exposes thin Tauri commands.
+- Rust/Tauri commands are registered and shared through `crates/unfour-app`.
+- `apps/desktop/src-tauri` is the thin desktop binary wrapper.
 - `crates/unfour-command-bus` routes commands to the correct service. Tauri,
   MCP, and future AI/CLI automation should use this same command boundary.
 - `crates/local-storage` opens and migrates the local SQLite database and records local activity.

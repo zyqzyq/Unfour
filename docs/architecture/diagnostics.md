@@ -22,20 +22,25 @@ buffers, or MCP arguments.
 
 ## Runtime Files
 
-Runtime paths are resolved under the stable product data directory named
-`Unfour`.
+Runtime paths are resolved by `crates/unfour-paths` under the stable Unfour
+data root `~/.unfour`. The desktop app and standalone MCP server use the same
+path resolver so logs, diagnostics, backups, config, cache, and SQLite stay in
+one predictable location.
 
-- SQLite: `<product_data_dir>/unfour.sqlite`
-- logs: `<product_data_dir>/logs`
-- diagnostics bundles: `<product_data_dir>/diagnostics`
+- SQLite: `~/.unfour/unfour.sqlite`
+- logs: `~/.unfour/logs`
+- diagnostics bundles: `~/.unfour/diagnostics`
+- backups: `~/.unfour/backups`
+- config: `~/.unfour/config`
+- cache: `~/.unfour/cache`
 
 File logs use daily rolling files named `unfour.log*`. The default retention is
 7 days. Retention pruning runs during diagnostics initialization and only
 removes old files whose names start with `unfour.log`.
 
 The diagnostic bundle command creates a new directory under
-`<product_data_dir>/diagnostics`, writes a `manifest.json`, and copies the most
-recent local log files. It must not copy the SQLite database, keychain material,
+`~/.unfour/diagnostics`, writes a `manifest.json`, and copies the most recent
+local log files. It must not copy the SQLite database, keychain material,
 workspace exports, terminal buffers, or raw feature payloads.
 
 ## Event Model
@@ -114,4 +119,3 @@ The desktop Command Palette exposes user-facing diagnostics actions:
 - Open Log Directory
 - Open Diagnostics Directory
 - Export Diagnostics Bundle
-

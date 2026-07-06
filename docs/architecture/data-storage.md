@@ -17,6 +17,12 @@ Workspace is the top-level product boundary. A workspace owns:
 Every persisted business record must carry `workspace_id` unless it is truly
 global application configuration.
 
+Future Pro cloud support must preserve this local-first model. Local SQLite
+remains the runtime source of truth; cloud behavior should be implemented as a
+periodic sync overlay that reconciles local workspace data, not as a
+cloud-primary workspace provider that replaces local storage during normal app
+use.
+
 ## Runtime Path Strategy
 
 SQLite runtime paths are resolved by `crates/unfour-paths`, not by Tauri path
@@ -71,36 +77,55 @@ migration files after that. Persistence code belongs in `crates/local-storage`
 or the owning engine crate, not in frontend packages or Tauri command
 adapters.
 
-## Reserved Sync Fields
+## Syncable Business Records
 
-Core local records reserve sync-related fields from the beginning:
+Syncable business records should have stable local identity and workspace
+scope before any Pro sync layer is added:
 
-- `id`
-- `workspace_id`
-- `created_at`
-- `updated_at`
-- `deleted_at`
-- `revision`
-- `sync_status`
+- all syncable business records should have a stable `id`;
+- all syncable business records should have `workspace_id`;
+- important syncable records should have `created_at`;
+- important syncable records should have `updated_at`;
+- records whose deletion must propagate across devices should have nullable
+  `deleted_at` instead of only hard-delete behavior.
+
+Current local tables already reserve some forward-compatible fields such as
+`revision`, `sync_status`, or `remote_id`. Those fields are not a requirement
+for every OSS runtime table. Future sync metadata can be deferred to sync
+metadata tables or a Pro-owned sync layer unless the OSS runtime directly needs
+the field:
+
 - `remote_id`
+- `sync_version`
+- `last_synced_at`
+- `sync_status`
+- `device_id` / `origin_device_id`
 
-Tables that carry these fields today: `workspaces`, `workspace_settings`,
-`api_requests`, `api_collections`, `api_collection_folders`, `api_environments`,
-`connections`, `saved_sql`.
+The first good candidates for future sync are durable workspace business data:
 
-Two local-only log tables intentionally do **not** carry sync fields, because
-they are append-only local trails that are never synced:
+- `workspaces`
+- `workspace_settings`
+- `connections`
+- `ssh_connections`
+- `database_connections`
+- `api_collections`
+- `api_collection_folders`
+- `api_requests`
+- `api_environments`
+- `saved_sql`
 
-- `api_history` — request log (mirrors `db_query_history`).
-- `db_query_history` — SQL execution log.
+Data that can remain local-only for now:
 
-`api_collection_folders` and `saved_sql` carry sync metadata in the initial
-schema. `saved_sql` uses soft delete fields so saved snippets can be retained
-without active-list visibility.
+- `api_history`
+- `db_query_history`
+- `ssh_terminal_history`
+- `activity_events`
+- diagnostics logs
+- cache
+- temporary runtime state
 
-Cloud sync is not part of the v0.1 public release readiness criteria. Future
-sync behavior must remain workspace-scoped and must not overwrite secrets
-automatically.
+Future sync behavior must remain workspace-scoped and must not overwrite
+secrets automatically.
 
 ## Connection Subtype Tables
 

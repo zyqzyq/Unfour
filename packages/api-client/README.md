@@ -15,7 +15,7 @@
 
 ## Key Files
 
-- `src/ApiDebuggerPage.tsx` - top-level API Client page composition.
+- `src/ApiClientPage.tsx` - top-level API Client page composition.
 - `src/hooks/useApiRequestTabs.ts` - request tab, send, save, history, and
   collection state orchestration.
 - `src/request-utils.ts` - request conversion, import/export, auth metadata,

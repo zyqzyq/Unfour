@@ -28,7 +28,7 @@ type EnvironmentManagerOpenMode =
   | { kind: "new" }
   | { environmentId: string; kind: "edit" };
 
-export function ApiDebuggerPage({
+export function ApiClientPage({
   onActiveSavedRequestChange,
   onShellSidebarChange,
   openIntent,

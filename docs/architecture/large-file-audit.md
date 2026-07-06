@@ -72,7 +72,7 @@ TypeScript / React:
 | 18 | `packages/api-client/src/request-utils.ts` | 561 | P1 | No | No |
 | 19 | `packages/database/src/components/SqlEditorTab.tsx` | 560 | P1 | No | No |
 | 20 | `packages/command-client/src/types.ts` | 558 | P1 | No | No |
-| 21 | `packages/api-client/src/ApiDebuggerPage.tsx` | 542 | P1 | No | No |
+| 21 | `packages/api-client/src/ApiClientPage.tsx` | 542 | P1 | No | No |
 | 22 | `crates/unfour-mcp/src/tools/policy.rs` | 517 | P1 | No | No |
 | 23 | `packages/ui/src/shell.tsx` | 507 | P1 | No | No |
 
@@ -141,7 +141,7 @@ need future splits by responsibility, not by line count alone.
 | `packages/api-client/src/request-utils.ts` | Extract import/export, auth metadata, key-value utilities, and redaction helpers. | Medium |
 | `packages/database/src/components/SqlEditorTab.tsx` | Extract Monaco setup, saved SQL dialogs, SQL formatting helpers, and action toolbar. | Medium |
 | `packages/command-client/src/types.ts` | Split frontend command types by domain with re-exports; keep names and shape stable. | High |
-| `packages/api-client/src/ApiDebuggerPage.tsx` | Extract close/save workflow hook, environment tab controller, and sidebar intent handler. | Medium |
+| `packages/api-client/src/ApiClientPage.tsx` | Extract close/save workflow hook, environment tab controller, and sidebar intent handler. | Medium |
 | `crates/unfour-mcp/src/tools/policy.rs` | Extract confirmation text and policy classification helpers if the module grows further. | Medium |
 | `packages/ui/src/shell.tsx` | Extract resize behavior into hooks and split shell surface components if shell helpers continue growing. | Medium |
 

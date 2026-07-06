@@ -8,7 +8,7 @@ crate responsibilities, and frontend-to-backend call chain.
 ```text
 Unfour/
   apps/
-    desktop/                 Tauri/Vite desktop application
+    desktop/                 thin Tauri/Vite desktop binary and entrypoint
   packages/
     api-client/              API Client frontend module
     app-shell/               global shell composition and mount slots
@@ -28,6 +28,7 @@ Unfour/
     ssh-engine/              SSH connection and terminal session service
     workspace-engine/        workspace CRUD, environments, layout persistence
     secret-store/            OS keychain credential boundary
+    unfour-app/              shared Tauri composition layer
     unfour-command-bus/      reusable Rust command entry point
     unfour-mcp/              local stdio MCP server adapter
   docs/
@@ -45,15 +46,15 @@ Unfour/
 
 | Package | Role |
 | --- | --- |
-| `@unfour/app-shell` | Thin global shell composition layer. Accepts slots for toolbar, sidebar, main workspace, inspector, bottom panel, and status bar. |
+| `@unfour/app-shell` | Frontend desktop workbench composition root. Owns global shell wiring, workspace switcher, module navigation, layout slots, command palette, diagnostics actions, and mounts the API Client, SSH Terminal, and Database modules without owning their internal feature logic. |
 | `@unfour/ui` | Shared UI primitives, shell helpers, states, menus, tabs, tree, data table, dialogs, and styling utilities. |
 | `@unfour/command-client` | Typed Tauri `invoke` wrappers, shared frontend command types, and browser-development mock fallback. |
 | `@unfour/workspace-core` | Zustand workspace store and workspace type re-exports. |
-| `@unfour/workspace-local` | Reserved boundary for future local workspace lifecycle behavior; currently a compatibility package. |
+| `@unfour/workspace-local` | OSS local workspace lifecycle boundary; currently a compatibility/transitional package reserved for recent workspace, import/export, persistence lifecycle, and migration behavior. |
 | `@unfour/api-client` | API Client feature UI: requests, tabs, Send, responses, history, saved requests, collections, environments, import/export. |
 | `@unfour/database` | Database feature UI: connections, schema tree, SQL editor, query results, table preview, query history. |
 | `@unfour/ssh-terminal` | SSH Terminal feature UI: connections, sessions, xterm panes, split/search/logs, host-key trust. |
-| `@unfour/desktop` | Desktop composition root that mounts shell and feature packages. |
+| `@unfour/desktop` | Thin desktop frontend entrypoint that mounts `@unfour/app-shell`. |
 
 ## Rust Crates
 
@@ -68,9 +69,10 @@ Unfour/
 | `unfour-database-engine` | Database connection CRUD, schema browsing, SQL execution, table browsing, and SQL safety classification. |
 | `unfour-ssh-engine` | SSH connection/session lifecycle, PTY events, host-key trust, reconnect behavior, and redacted log export. |
 | `unfour-workspace-engine` | Workspace CRUD, active workspace state, environments, and layout persistence. |
+| `unfour-app` | Shared Tauri composition layer for plugins, command-bus setup, managed `AppState`, commands, and edition-independent wiring. |
 | `unfour-command-bus` | Shared command entry point used by Tauri, MCP, and future adapters. |
 | `unfour-mcp` | Local stdio MCP server that routes tools through the command bus. |
-| `unfour` | Tauri adapter in `apps/desktop/src-tauri`. |
+| `unfour` | Thin Tauri desktop binary and edition adapter in `apps/desktop/src-tauri`. |
 
 ## Frontend Dependency Shape
 
@@ -78,7 +80,8 @@ Unfour/
 @unfour/ui                 no @unfour package dependencies
 @unfour/command-client     no feature dependencies
 
-@unfour/app-shell          -> ui
+@unfour/app-shell          -> api-client, database, ssh-terminal,
+                              command-client, workspace-core, ui
 @unfour/workspace-core     -> command-client
 @unfour/workspace-local    -> workspace-core
 
@@ -86,12 +89,13 @@ Unfour/
 @unfour/database           -> command-client, ui, workspace-core
 @unfour/ssh-terminal       -> command-client, ui, workspace-core
 
-@unfour/desktop            -> app-shell, api-client, database,
-                              ssh-terminal, workspace-core,
-                              command-client, ui
+@unfour/desktop            -> app-shell
 ```
 
-Feature packages must not depend on each other or on `packages/app-shell`.
+Feature packages must not depend on each other, on `packages/app-shell`, on
+`packages/workspace-local`, or on any future Pro sync package. App-shell and
+edition composition layers choose local or Pro sync capabilities; feature
+packages consume only workspace contracts from `workspace-core`.
 
 ## Rust Dependency Shape
 
@@ -112,11 +116,15 @@ unfour-command-bus
   -> unfour-core, unfour-diag, unfour-local-storage, unfour-secret-store
   -> http, database, ssh, workspace engines
 
+unfour-app
+  -> unfour-command-bus, unfour-core, unfour-diag, unfour-local-storage,
+     unfour-paths, unfour-secret-store
+
 unfour-mcp
   -> unfour-command-bus, unfour-core, unfour-diag, unfour-paths
 
-unfour Tauri adapter
-  -> unfour-command-bus, unfour-diag, unfour-paths, core engine crates
+unfour Tauri binary
+  -> unfour-app
 ```
 
 ## Frontend-To-Rust Call Chain
@@ -127,7 +135,7 @@ React component
   -> @unfour/command-client function
   -> Tauri invoke(command, args) in desktop runtime
   -> browser mock fallback in Vite/browser development
-  -> Rust #[tauri::command] adapter
+  -> Rust #[tauri::command] adapter in crates/unfour-app
   -> CommandBus method
   -> service
   -> driver or local store
@@ -147,10 +155,12 @@ MCP client
 
 ## Tauri Configuration Snapshot
 
-The desktop adapter lives under `apps/desktop/src-tauri`. The product name is
-Unfour and the repository package version is `0.1.0`. Release readiness must be
-determined from the release verification documents, not from the version string
-alone.
+The desktop binary wrapper lives under `apps/desktop/src-tauri`. Shared Tauri
+composition lives in `crates/unfour-app`: plugins, command-bus setup,
+`AppState`, command adapters, and edition-independent wiring. The product name
+is Unfour and the repository package version is `0.1.0`. Release readiness
+must be determined from the release verification documents, not from the
+version string alone.
 
 See also:
 

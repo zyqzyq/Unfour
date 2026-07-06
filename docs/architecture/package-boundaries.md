@@ -8,9 +8,12 @@ progress log.
 
 ### Responsibility
 
-- Own application shell composition.
-- Provide global layout, sidebar mounting surface, top-level navigation wiring,
-  route assembly, cross-module container slots, and module mount points.
+- Own the frontend desktop workbench composition root.
+- Provide global shell composition, workspace switcher wiring, module
+  navigation, layout slots, command palette actions, diagnostics actions, and
+  module mount points.
+- Mount the API Client, SSH Terminal, and Database modules while keeping their
+  internal state and business components in the owning feature packages.
 - Own shell-level behavior only when it is not feature-specific.
 
 ### Forbidden
@@ -21,8 +24,8 @@ progress log.
 - Feature mock data.
 - Feature-specific large UI components.
 
-`packages/app-shell` may compose slots and pass props, but feature behavior
-belongs in the owning package or crate.
+`packages/app-shell` may compose feature modules and pass shell props, but
+feature behavior belongs in the owning package or crate.
 
 ## packages/ui
 
@@ -49,10 +52,12 @@ feature-neutral.
 
 ### Responsibility
 
-- Own shared frontend workspace state: active workspace, active tab, sidebar
-  collapse, workspace tabs, and selected resource IDs that must be globally
-  visible.
+- Own shared workspace frontend types, store, and contracts.
+- Own current workspace state, active tab, sidebar collapse, selected resource
+  IDs that must be globally visible, layout snapshot state, and future adapter
+  contract types.
 - Re-export shared workspace types from `packages/command-client`.
+- Avoid local workspace lifecycle, cloud, or sync implementation details.
 
 ### Transitional Dependency
 
@@ -64,14 +69,16 @@ state require review.
 
 ### Responsibility
 
-- Own future local workspace lifecycle, persistence, import/export,
-  recent-workspace, and migration behavior.
+- Own the OSS default local workspace lifecycle boundary.
+- Reserve local workspace lifecycle, recent workspace, import/export,
+  persistence lifecycle, and migration behavior.
 - Depend on `packages/workspace-core` for shared workspace contracts.
 
 ### Current Boundary
 
-`packages/workspace-local` is a compatibility boundary and may re-export
-`packages/workspace-core` until concrete local workspace behavior is scoped.
+`packages/workspace-local` is a compatibility/transitional package in v0.1 and
+may re-export `packages/workspace-core` until concrete local workspace behavior
+is scoped. It is not a completed cloud/local provider abstraction.
 
 ### Forbidden
 
@@ -79,6 +86,19 @@ state require review.
 - Database SQL state.
 - SSH terminal state.
 - App-shell orchestration.
+
+## Future Pro Sync
+
+Future Pro sync should be modeled as a local-first sync overlay, not as a
+cloud-primary workspace provider. `workspace-sync` is the recommended
+long-term package name because local SQLite remains the runtime source of truth
+and cloud support reconciles local workspace data periodically.
+
+Feature packages must not depend on `packages/workspace-local` or any future
+`packages/workspace-sync`. API Client, Database, and SSH Terminal should depend
+only on `packages/workspace-core`, `packages/command-client`, and
+`packages/ui` for shared frontend contracts. App-shell and edition composition
+layers choose whether local-only or Pro sync capabilities are wired in.
 
 ## Feature Packages
 
@@ -119,9 +139,7 @@ Allowed frontend direction:
 apps/desktop
   -> packages/app-shell
   -> feature packages (api-client, database, ssh-terminal)
-  -> packages/workspace-core
-  -> packages/ui
-  -> packages/command-client
+  -> packages/workspace-core, packages/command-client, packages/ui
 
 packages/workspace-local
   -> packages/workspace-core
@@ -139,6 +157,8 @@ Forbidden:
 - `packages/ui` -> feature package
 - `packages/command-client` -> feature package
 - Feature package -> another feature package
+- Feature package -> `packages/workspace-local`
+- Feature package -> future `packages/workspace-sync`
 - Tauri command adapter -> duplicated domain logic
 - MCP tool handler -> duplicated domain logic
 
@@ -157,9 +177,9 @@ behavior.
 
 ## Stable Exceptions To Revisit
 
-- `apps/desktop/src/App.tsx` is broad because it is the desktop composition
-  root. It must remain a composition layer and must not absorb feature
-  business logic.
+- `packages/app-shell/src/DesktopApp.tsx` is broad because it is the frontend
+  desktop workbench composition root. It must remain a composition layer and
+  must not absorb feature business logic.
 - `packages/ui` contains stateless shell layout helpers. Keep them
   feature-neutral.
 - Feature packages use `packages/workspace-core` for selected resource state.

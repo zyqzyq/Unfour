@@ -1,6 +1,4 @@
-import {
-  ApiDebuggerPage,
-} from "@unfour/api-client";
+import { ApiClientPage } from "@unfour/api-client";
 import AppShell from "./AppShell";
 import { DatabasePage } from "@unfour/database";
 import { TerminalLogPanel, TerminalPage, TerminalStatusBar } from "@unfour/ssh-terminal";
@@ -197,7 +195,7 @@ export function DesktopApp() {
           >
             {activeWorkspace && (
               <div className={activeTab.kind === "api" ? "h-full" : "hidden"}>
-                <ApiDebuggerPage
+                <ApiClientPage
                   key={activeWorkspace.id}
                   onShellSidebarChange={handleApiSidebarChange}
                   onActiveSavedRequestChange={setSelectedApiRequest}

@@ -48,8 +48,8 @@ text to execute.
 | `unfour.api.list_requests` | `{ "workspaceId": "optional", "collectionId": "optional" }` | Lists saved API requests with sensitive URL parameters redacted. |
 | `unfour.api.get_request` | `{ "requestId": "required", "includeBody": "optional bool" }` | Returns a saved API request with sensitive headers, query params, URL params, and body fields masked. |
 | `unfour.api.send_request` | `{ "requestId": "optional", "method": "optional", "url": "optional", "headers": "optional", "query": "optional", "body": "optional", "workspaceId": "optional", "environmentId": "optional", "timeoutMs": "optional" }` | Sends a saved request or an ad-hoc request and returns a masked response summary. Non-read methods are blocked by prod policy. |
-| `unfour.api.create_request` | `{ "workspaceId": "optional", "name": "required", "method": "required", "url": "required", "headers": "optional", "query": "optional", "body": "optional", "collectionId": "optional" }` | Creates a saved API request in an allowed workspace. |
-| `unfour.api.update_request` | `{ "requestId": "required", "workspaceId": "optional", "name": "optional", "method": "optional", "url": "optional", "headers": "optional", "query": "optional", "body": "optional", "collectionId": "optional" }` | Updates a saved API request. Omitted fields keep their current values. |
+| `unfour.api.create_request` | `{ "workspaceId": "optional", "collectionId": "optional", "parentId": "optional", "parentFolderId": "optional", "name": "required", "method": "required", "url": "required", "headers": "optional", "query": "optional", "body": "optional", "bodyKind": "optional", "auth": "optional", "authJson": "optional" }` | Creates a saved API request in an allowed workspace. `parentFolderId` is the current folder field; `parentId` is accepted as a compatibility alias. |
+| `unfour.api.update_request` | `{ "requestId": "required", "workspaceId": "optional", "collectionId": "optional", "parentId": "optional", "parentFolderId": "optional", "name": "optional", "method": "optional", "url": "optional", "headers": "optional", "query": "optional", "body": "optional", "bodyKind": "optional", "auth": "optional", "authJson": "optional" }` | Updates a saved API request. Omitted fields keep their current values. `parentFolderId` is the current folder field; `parentId` is accepted as a compatibility alias. |
 | `unfour.api.delete_request` | `{ "requestId": "required", "workspaceId": "optional", "confirm": "optional", "confirmation_text": "optional" }` | Soft-deletes a saved API request after confirmation. |
 | `unfour.api.create_collection` | `{ "workspaceId": "optional", "name": "required" }` | Creates an API collection/folder. |
 | `unfour.api.update_collection` | `{ "collectionId": "required", "workspaceId": "optional", "name": "required" }` | Renames an API collection/folder. |
@@ -62,14 +62,14 @@ text to execute.
 | `unfour.db.list_tables` | `{ "connectionId": "required", "workspaceId": "optional", "limit": "optional" }` | Lists tables and views for a saved connection. Default limit is 200; max is 500. |
 | `unfour.db.describe_table` | `{ "connectionId": "required", "tableName": "required", "schema": "optional", "workspaceId": "optional" }` | Describes a table's columns without reading table data. |
 | `unfour.db.query_readonly` | `{ "connectionId": "required", "sql": "required", "limit": "optional", "workspaceId": "optional" }` | Executes one read-only SQL statement. Default limit is 100; max is 1000. |
-| `unfour.db.execute` | `{ "connectionId": "required", "sql": "required", "workspaceId": "optional", "limit": "optional", "dryRun": "optional", "transaction": "optional", "confirm": "optional", "confirmation_text": "optional" }` | Executes one SQL statement when policy allows. High-risk writes such as `DELETE` without `WHERE` require confirmation. |
-| `unfour.db.explain` | `{ "connectionId": "required", "sql": "required", "workspaceId": "optional", "limit": "optional" }` | Runs `EXPLAIN` for a read-only statement or an existing explain query. |
+| `unfour.db.execute` | `{ "connectionId": "required", "sql": "required", "workspaceId": "optional", "limit": "optional", "catalog": "optional", "schema": "optional", "timeoutMs": "optional", "dryRun": "optional", "transaction": "optional", "confirm": "optional", "confirmationText": "optional", "confirmation_text": "optional" }` | Executes one SQL statement when policy allows. High-risk writes such as `DELETE` without `WHERE` require confirmation. |
+| `unfour.db.explain` | `{ "connectionId": "required", "sql": "required", "workspaceId": "optional", "limit": "optional", "catalog": "optional", "schema": "optional", "timeoutMs": "optional" }` | Runs `EXPLAIN` for a read-only statement or an existing explain query. |
 | `unfour.db.test_connection` | `{ "connectionId": "required", "workspaceId": "optional" }` | Tests connectivity for a saved database connection and returns server metadata when available. |
 | `unfour.ssh.create_connection` | `{ "workspaceId": "optional", "name": "required", "host": "required", "port": "optional", "username": "required", "authKind": "required", "keyPath": "optional", "credentialRef": "optional", "secret": "optional" }` | Creates a saved SSH connection. If `secret` is supplied for password or private-key auth, it is written to the OS credential store and only the resulting credential reference is persisted. |
 | `unfour.ssh.list_connections` | `{ "workspaceId": "optional" }` | Lists saved SSH connections as safe summaries. |
 | `unfour.ssh.run_diagnostic` | `{ "connectionId": "required", "command": "required", "workspaceId": "optional", "timeoutMs": "optional" }` | Runs a single allowlisted read-only diagnostic command on a saved SSH connection. Requires an `ssh-native` build. |
 | `unfour.ssh.exec` | `{ "connectionId": "required", "command": "required", "workspaceId": "optional", "cwd": "optional", "env": "optional", "timeoutMs": "optional", "confirm": "optional", "confirmation_text": "optional" }` | Executes one non-interactive SSH command when policy allows. High-risk commands require confirmation. |
-| `unfour.ssh.read_file` | `{ "connectionId": "required", "path": "required", "workspaceId": "optional", "offset": "optional", "limit": "optional", "tail": "optional", "timeoutMs": "optional" }` | Reads a capped remote file slice. |
+| `unfour.ssh.read_file` | `{ "connectionId": "required", "path": "required", "workspaceId": "optional", "offset": "optional", "limit": "optional", "tailLines": "optional", "timeoutMs": "optional" }` | Reads a capped remote file slice or tail. |
 | `unfour.ssh.write_file` | `{ "connectionId": "required", "path": "required", "content": "required", "workspaceId": "optional", "mode": "optional", "timeoutMs": "optional", "confirm": "optional", "confirmation_text": "optional" }` | Writes or appends a remote file when policy allows. Test workspaces and sensitive paths require confirmation. |
 | `unfour.ssh.patch_file` | `{ "connectionId": "required", "path": "required", "search": "required", "replace": "required", "workspaceId": "optional", "timeoutMs": "optional", "confirm": "optional", "confirmation_text": "optional" }` | Applies a search/replace patch. Multiple matches, test workspaces, and sensitive paths require confirmation. |
 | `unfour.ssh.list_dir` | `{ "connectionId": "required", "path": "required", "workspaceId": "optional", "limit": "optional", "timeoutMs": "optional" }` | Lists one remote directory with size and modified-time metadata. |
@@ -158,6 +158,11 @@ confirmation before execution:
 Set `dryRun=true` to return the detected risk and execution plan without
 running the statement. Query results exceeding the response cap are truncated
 and marked with `"truncated": true`.
+
+Use `catalog` and `schema` to pass database context where a driver supports it,
+and `timeoutMs` to cap execution time. Confirmation can be supplied as either
+`confirmationText` or `confirmation_text`; tool responses return
+`confirmation_text`.
 
 Example `query_readonly` result:
 

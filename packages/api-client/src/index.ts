@@ -1,4 +1,4 @@
-export { ApiDebuggerPage } from "./ApiDebuggerPage";
+export { ApiClientPage } from "./ApiClientPage";
 export { ApiClientSidebar } from "./components/ApiClientSidebar";
 export { ApiClientToolbar } from "./components/ApiClientToolbar";
 export { ApiCollectionTree } from "./components/ApiCollectionTree";
