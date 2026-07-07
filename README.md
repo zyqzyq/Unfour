@@ -1,8 +1,10 @@
 <div align="center">
 
+[English](README.md) · [简体中文](README.zh-CN.md)
+
 # Unfour
 
-**A local-first desktop workbench for APIs, SSH, and databases.**
+**A local-first desktop workspace for backend developers that combines API debugging, SSH terminals, and database management — and exposes them to your AI agent through a local MCP server.**
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![CI](https://github.com/zyqzyq/Unfour/actions/workflows/ci.yml/badge.svg)](https://github.com/zyqzyq/Unfour/actions/workflows/ci.yml)
@@ -20,9 +22,11 @@
 
 ## What Is Unfour?
 
-Unfour is a lightweight IDE-style desktop tool for backend and operations work.
+Unfour is a local-first desktop workspace for backend and operations work.
 It keeps API requests, SSH connections, database connections, local activity,
-and workspace layout in one local-first application.
+and workspace layout in one local-first application, and exposes those
+capabilities to your AI agent through a local MCP server. AI-assisted
+troubleshooting workflows built on this foundation are planned.
 
 The app is built with Tauri 2, React, TypeScript, and Rust. The frontend owns
 the workbench UI, while security-sensitive execution such as HTTP, SSH,
@@ -41,7 +45,9 @@ capability crates and the command bus.
 - **Workspace** - Scope saved requests, environments, connections, activity,
   tabs, and layout state to a local workspace.
 - **Local MCP server** - Expose safe local diagnostic tools to MCP clients
-  through the same command bus used by the desktop app.
+  (such as Codex, Claude Code, or Cursor) through the same command bus used by
+  the desktop app, so your AI agent can work with the same API, SSH, and
+  database context.
 
 ## Local Development
 
