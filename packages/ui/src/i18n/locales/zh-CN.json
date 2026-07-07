@@ -178,7 +178,8 @@
       "deleteFolderConfirm": "删除该目录、子目录及其中的已保存请求？此操作无法撤销。",
       "export": "导出集合",
       "defaultCollection": "默认集合",
-      "none": "还没有集合。新建一个来组织请求。"
+      "none": "还没有集合。新建一个来组织请求。",
+      "moveDuplicateName": "目标目录已存在名为 \"{name}\" 的请求。"
     },
     "environment": {
       "active": "当前环境",
@@ -251,7 +252,9 @@
       "folderPlaceholder": "Examples / Auth",
       "cancel": "取消",
       "save": "保存",
-      "saving": "保存中"
+      "saving": "保存中",
+      "duplicateName": "该位置已存在名为 \"{name}\" 的请求。",
+      "saveFailed": "保存失败"
     },
     "request": {
       "actionsLabel": "{name} 的请求操作",

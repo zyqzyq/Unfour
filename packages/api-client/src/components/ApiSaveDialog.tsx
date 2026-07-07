@@ -18,7 +18,7 @@ import type {
   ApiCollectionFolder,
   ApiSavedRequest,
 } from "@unfour/command-client";
-import { buildApiCollectionTree, type FolderNode } from "../request-utils";
+import { buildApiCollectionTree, findDuplicateRequestName, type FolderNode } from "../request-utils";
 
 export type SaveIdentity = {
   collectionId: string | null;
@@ -105,6 +105,7 @@ export function ApiSaveDialog({
   const [subfolder, setSubfolder] = useState("");
   const [creatingNew, setCreatingNew] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const effectiveSelectedId =
     selectedId && targets.has(selectedId) ? selectedId : autoSelectedId;
 
@@ -115,27 +116,47 @@ export function ApiSaveDialog({
 
   function handleSave() {
     const sub = subfolder.trim();
+    const trimmedName = name.trim();
+
     if (creatingNew) {
       onSave({
         collectionId: null,
         createCollectionName: newCollectionName.trim(),
-        name: name.trim(),
+        name: trimmedName,
         newFolderName: sub || undefined,
         parentFolderId: null,
       });
       return;
     }
+
     const target = targets.get(effectiveSelectedId);
     // __default__ means let backend create default collection
     const isDefaultCollection = target?.collectionId === "__default__";
     const collectionId = isDefaultCollection
       ? null
       : (target?.collectionId ?? collections[0]?.id ?? null);
+    const parentFolderId = target?.parentFolderId ?? null;
+
+    // Only check duplicates when saving to an existing location without a new subfolder
+    if (!sub) {
+      const duplicate = findDuplicateRequestName(
+        savedRequests,
+        trimmedName,
+        collectionId,
+        parentFolderId,
+      );
+      if (duplicate) {
+        setError(t("api.save.duplicateName", { name: trimmedName }));
+        return;
+      }
+    }
+
+    setError(null);
     onSave({
       collectionId,
-      name: name.trim(),
+      name: trimmedName,
       newFolderName: sub || undefined,
-      parentFolderId: target?.parentFolderId ?? null,
+      parentFolderId,
     });
   }
 
@@ -150,9 +171,17 @@ export function ApiSaveDialog({
             <span className="text-[12px] font-medium">{t("api.save.name")}</span>
             <Input
               autoFocus
-              onChange={(event) => setName(event.target.value)}
+              onChange={(event) => {
+                setName(event.target.value);
+                if (error) setError(null);
+              }}
               value={name}
             />
+            {error && (
+              <span className="text-[12px] text-[var(--u-color-danger)]">
+                {error}
+              </span>
+            )}
           </label>
 
           <div className="space-y-1">

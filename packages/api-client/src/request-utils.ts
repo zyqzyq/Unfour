@@ -37,6 +37,28 @@ export function findDuplicateEnvironmentName(
   );
 }
 
+export function findDuplicateRequestName(
+  savedRequests: ApiSavedRequest[],
+  name: string,
+  collectionId: string | null,
+  parentFolderId: string | null,
+  excludeRequestId?: string,
+) {
+  const normalized = name.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  return (
+    savedRequests.find(
+      (request) =>
+        request.id !== excludeRequestId &&
+        request.name.trim().toLowerCase() === normalized &&
+        request.collectionId === (collectionId ?? null) &&
+        request.parentFolderId === (parentFolderId ?? null),
+    )?.name ?? null
+  );
+}
+
 export function nextEnvironmentName(
   baseName: string,
   environments: Array<Pick<ApiEnvironment, "id" | "name">>,

@@ -16,6 +16,7 @@ import { ApiRequestEditor } from "./components/ApiRequestEditor";
 import { ApiResponseViewer } from "./components/ApiResponseViewer";
 import { ApiSaveDialog, type SaveIdentity } from "./components/ApiSaveDialog";
 import { ApiCloseRequestDialog } from "./components/ApiCloseRequestDialog";
+import { findDuplicateRequestName } from "./request-utils";
 import { ApiClientSidebar } from "./components/ApiClientSidebar";
 import {
   EnvironmentManagerPage,
@@ -54,6 +55,7 @@ export function ApiClientPage({
     savedRequests,
     selectTab,
     sendTab,
+    setCollectionStatus,
     setRequestTab,
     setResponseTab,
     state,
@@ -82,12 +84,23 @@ export function ApiClientPage({
   const requestSave = useCallback(
     (tab: ApiRequestTab) => {
       if (tab.savedRequestId) {
+        const duplicate = findDuplicateRequestName(
+          savedRequests,
+          tab.draft.name,
+          tab.draft.collectionId,
+          tab.draft.parentFolderId,
+          tab.savedRequestId,
+        );
+        if (duplicate) {
+          setCollectionStatus(t("api.save.duplicateName", { name: tab.draft.name }));
+          return;
+        }
         void saveTab(tab);
       } else {
         setSaveDialogTabId(tab.id);
       }
     },
-    [saveTab],
+    [saveTab, savedRequests, setCollectionStatus, t],
   );
 
   const openEnvironmentManager = useCallback(
@@ -316,6 +329,17 @@ export function ApiClientPage({
     if (!tab.savedRequestId) {
       closeAfterSaveRef.current = tab.id;
       setSaveDialogTabId(tab.id);
+      return;
+    }
+    const duplicate = findDuplicateRequestName(
+      savedRequests,
+      tab.draft.name,
+      tab.draft.collectionId,
+      tab.draft.parentFolderId,
+      tab.savedRequestId,
+    );
+    if (duplicate) {
+      setCollectionStatus(t("api.save.duplicateName", { name: tab.draft.name }));
       return;
     }
     if (await saveTab(tab)) {

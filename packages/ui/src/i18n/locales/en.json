@@ -178,7 +178,8 @@
       "deleteFolderConfirm": "Delete this folder, its subfolders, and saved requests inside them? This cannot be undone.",
       "export": "Export collection",
       "defaultCollection": "Default Collection",
-      "none": "No collections yet. Create one to organize requests."
+      "none": "No collections yet. Create one to organize requests.",
+      "moveDuplicateName": "A request named \"{name}\" already exists in the target folder."
     },
     "environment": {
       "active": "Active environment",
@@ -251,7 +252,9 @@
       "folderPlaceholder": "Examples / Auth",
       "cancel": "Cancel",
       "save": "Save",
-      "saving": "Saving"
+      "saving": "Saving",
+      "duplicateName": "A request named \"{name}\" already exists in this location.",
+      "saveFailed": "Save failed"
     },
     "request": {
       "actionsLabel": "Request actions for {name}",

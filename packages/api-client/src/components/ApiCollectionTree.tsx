@@ -31,6 +31,7 @@ import {
 import {
   buildApiCollectionTree,
   collectTreeRequests,
+  findDuplicateRequestName,
   parseKeyValues,
   savedRequestToInput,
   type FolderNode,
@@ -78,6 +79,7 @@ export function ApiCollectionTree({
   const [renameRequestValue, setRenameRequestValue] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<ApiCollection | null>(null);
   const [deleteFolderTarget, setDeleteFolderTarget] = useState<FolderNode | null>(null);
+  const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { collections, createMut, deleteMut, renameMut } = useApiCollections(workspaceId);
   const {
@@ -586,6 +588,25 @@ export function ApiCollectionTree({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        onOpenChange={(next) => !next && setErrorDialogMessage(null)}
+        open={errorDialogMessage !== null}
+      >
+        <DialogContent title={t("api.save.title")}>
+          <DialogHeader>
+            <DialogTitle>{t("api.save.saveFailed")}</DialogTitle>
+          </DialogHeader>
+          <DialogBody>
+            <DialogDescription>{errorDialogMessage}</DialogDescription>
+          </DialogBody>
+          <DialogFooter>
+            <Button onClick={() => setErrorDialogMessage(null)} type="button">
+              {t("api.save.cancel")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 
@@ -624,13 +645,30 @@ export function ApiCollectionTree({
           targetParentFolderId: action.targetParentFolderId,
         });
         break;
-      case "move-request":
+      case "move-request": {
+        const request = savedRequests.find((r) => r.id === action.requestId);
+        if (request) {
+          const duplicate = findDuplicateRequestName(
+            savedQuery.data ?? [],
+            request.name,
+            action.collectionId,
+            action.parentFolderId,
+            action.requestId,
+          );
+          if (duplicate) {
+            setErrorDialogMessage(
+              t("api.collection.moveDuplicateName", { name: request.name }),
+            );
+            return;
+          }
+        }
         moveRequestMut.mutate({
           collectionId: action.collectionId,
           parentFolderId: action.parentFolderId,
           requestId: action.requestId,
         });
         break;
+      }
       case "reorder-folders":
         reorderFoldersMut.mutate({
           collectionId: action.collectionId,
@@ -673,6 +711,17 @@ export function ApiCollectionTree({
   function confirmRequestRename() {
     const name = renameRequestValue.trim();
     if (!renameRequestTarget || !name) {
+      return;
+    }
+    const duplicate = findDuplicateRequestName(
+      savedQuery.data ?? [],
+      name,
+      renameRequestTarget.collectionId,
+      renameRequestTarget.parentFolderId,
+      renameRequestTarget.id,
+    );
+    if (duplicate) {
+      setErrorDialogMessage(t("api.save.duplicateName", { name }));
       return;
     }
     updateRequestMutation.mutate(
