@@ -398,6 +398,13 @@ pub struct SshLogExport {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SshTestResult {
+    pub ok: bool,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SshConnectionConfig {
     /// Advanced/private-key-only SSH metadata. Common endpoint and auth method
     /// fields live in `connections` / `ssh_connections` columns.

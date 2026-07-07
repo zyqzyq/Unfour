@@ -17,7 +17,7 @@ use unfour_core::models::{
     SshHostFingerprintInfo, SshHostKeyInput, SshKnownHostsExportInput, SshKnownHostsExportResult,
     SshKnownHostsImportInput, SshKnownHostsImportResult, SshLogExport, SshLogExportInput,
     SshReconnectCancelInput, SshResizeInput, SshSessionEvent, SshSessionInput, SshSessionSummary,
-    SystemHealth, Workspace, WorkspaceLayout, WorkspaceState,
+    SshTestResult, SystemHealth, Workspace, WorkspaceLayout, WorkspaceState,
 };
 use unfour_core::sync_reserved;
 use unfour_core::AppResult;
@@ -1517,6 +1517,23 @@ impl CommandBus {
             )
             .await?;
         Ok(connection)
+    }
+
+    pub async fn test_ssh_connection(&self, input: SshConnectionInput) -> AppResult<SshTestResult> {
+        let result = self.ssh.test_connection(input.clone()).await?;
+        self.activity_log
+            .record(
+                Some(&input.workspace_id),
+                "ssh.connection.test",
+                None,
+                serde_json::json!({
+                    "host": input.host,
+                    "authKind": input.auth_kind,
+                    "ok": result.ok
+                }),
+            )
+            .await?;
+        Ok(result)
     }
 
     pub async fn delete_ssh_connection(

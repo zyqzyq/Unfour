@@ -18,6 +18,7 @@ import type {
   SshSessionEvent,
   SshSessionInput,
   SshSessionSummary,
+  SshTestResult,
 } from "../types";
 
 export function listSshConnections(workspaceId: string) {
@@ -26,6 +27,10 @@ export function listSshConnections(workspaceId: string) {
 
 export function saveSshConnection(input: SshConnectionInput) {
   return call<SshConnection>("ssh_connection_save", { input });
+}
+
+export function testSshConnection(input: SshConnectionInput) {
+  return call<SshTestResult>("ssh_connection_test", { input });
 }
 
 export function deleteSshConnection(workspaceId: string, connectionId: string) {

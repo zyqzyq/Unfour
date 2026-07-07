@@ -6,7 +6,7 @@ use unfour_core::{
         SshHostKeyInput, SshKnownHostsExportInput, SshKnownHostsExportResult,
         SshKnownHostsImportInput, SshKnownHostsImportResult, SshLogExport, SshLogExportInput,
         SshReconnectCancelInput, SshResizeInput, SshSessionEvent, SshSessionInput,
-        SshSessionSummary,
+        SshSessionSummary, SshTestResult,
     },
     AppResult,
 };
@@ -27,6 +27,14 @@ pub async fn ssh_connection_save(
     state: State<'_, AppState>,
 ) -> AppResult<SshConnection> {
     state.command_bus.save_ssh_connection(input).await
+}
+
+#[tauri::command]
+pub async fn ssh_connection_test(
+    input: SshConnectionInput,
+    state: State<'_, AppState>,
+) -> AppResult<SshTestResult> {
+    state.command_bus.test_ssh_connection(input).await
 }
 
 #[tauri::command]

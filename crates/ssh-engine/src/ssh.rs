@@ -7,7 +7,7 @@ use unfour_core::models::{
     SshDiagnosticInput, SshDiagnosticResult, SshHostFingerprintInfo, SshHostKeyInput,
     SshKnownHostsExportInput, SshKnownHostsExportResult, SshKnownHostsImportInput,
     SshKnownHostsImportResult, SshLogExport, SshLogExportInput, SshReconnectCancelInput,
-    SshResizeInput, SshSessionEvent, SshSessionInput, SshSessionSummary,
+    SshResizeInput, SshSessionEvent, SshSessionInput, SshSessionSummary, SshTestResult,
 };
 use unfour_core::redaction::redact_sensitive_lines;
 use unfour_core::{AppError, AppResult};
@@ -349,6 +349,98 @@ impl SshService {
             .await?;
 
         self.list_connections(workspace_id).await
+    }
+
+    pub async fn test_connection(&self, input: SshConnectionInput) -> AppResult<SshTestResult> {
+        validate_workspace_id(&input.workspace_id)?;
+        let storage = input_to_storage(&input)?;
+        let now = Utc::now().to_rfc3339();
+        let temp_id = Uuid::new_v4().to_string();
+        let connection = SshConnection {
+            id: temp_id.clone(),
+            workspace_id: input.workspace_id.clone(),
+            name: input.name.trim().to_string(),
+            host: storage.host,
+            port: storage.port,
+            username: storage.username,
+            auth_kind: storage.auth_method,
+            key_path: storage.config.key_path,
+            credential_ref: input.credential_ref.clone(),
+            created_at: now.clone(),
+            updated_at: now,
+            deleted_at: None,
+            revision: 0,
+            sync_status: "new".to_string(),
+            remote_id: None,
+        };
+        let connect_input = SshConnectInput {
+            workspace_id: input.workspace_id.clone(),
+            connection_id: temp_id,
+            cols: Some(80),
+            rows: Some(24),
+            secret: input.secret.clone(),
+        };
+        let started = Instant::now();
+        let fields = serde_json::json!({
+            "auth_method": &connection.auth_kind,
+            "host": &connection.host,
+            "port": connection.port,
+        });
+        unfour_diag::log_operation_event(
+            "ssh_test_started",
+            "ssh",
+            "test_connection",
+            "started",
+            None,
+            None,
+            fields.clone(),
+        );
+
+        #[cfg(feature = "ssh-native")]
+        let result = self.connect_native(&connection, &connect_input).await;
+        #[cfg(not(feature = "ssh-native"))]
+        let result = self.connect_simulated(&connection, &connect_input).await;
+        match result {
+            Ok(summary) => {
+                unfour_diag::log_operation_event(
+                    "ssh_test_succeeded",
+                    "ssh",
+                    "test_connection",
+                    "ok",
+                    Some(started.elapsed().as_millis()),
+                    None,
+                    fields,
+                );
+                let _ = self
+                    .close_session(SshCloseInput {
+                        workspace_id: summary.workspace_id.clone(),
+                        session_id: summary.session_id.clone(),
+                    })
+                    .await;
+                Ok(SshTestResult {
+                    ok: true,
+                    message: format!(
+                        "Connected to {}@{} successfully",
+                        summary.username, summary.host
+                    ),
+                })
+            }
+            Err(error) => {
+                unfour_diag::log_operation_event(
+                    "ssh_test_failed",
+                    "ssh",
+                    "test_connection",
+                    "error",
+                    Some(started.elapsed().as_millis()),
+                    Some(unfour_diag::app_error_kind(&error)),
+                    fields,
+                );
+                Ok(SshTestResult {
+                    ok: false,
+                    message: error.to_string(),
+                })
+            }
+        }
     }
 
     pub async fn connect(&self, input: SshConnectInput) -> AppResult<SshSessionSummary> {

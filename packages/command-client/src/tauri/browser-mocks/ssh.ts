@@ -21,6 +21,7 @@ import type {
   SshSessionEvent,
   SshSessionInput,
   SshSessionSummary,
+  SshTestResult,
 } from "../../types";
 
 export function handleSshMock<T>(
@@ -63,6 +64,22 @@ export function handleSshMock<T>(
       mockStore.sshConnections = [connection, ...mockStore.sshConnections];
     }
     return connection as T;
+  }
+
+  if (command === "ssh_connection_test") {
+    const input = args?.input as SshConnectionInput;
+    const host = input.host?.trim() ?? "";
+    const username = input.username?.trim() ?? "";
+    if (!host || !username) {
+      return {
+        ok: false,
+        message: "Host and username are required",
+      } satisfies SshTestResult as T;
+    }
+    return {
+      ok: true,
+      message: `Connected to ${username}@${host} successfully`,
+    } satisfies SshTestResult as T;
   }
 
   if (command === "ssh_connection_delete") {

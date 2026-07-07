@@ -91,8 +91,6 @@ export function SshConnectionDialog({
                   onUpdate({
                     authKind,
                     keyPath: authKind === "private-key" ? form.keyPath : null,
-                    // Drop any typed secret when switching modes so a password is
-                    // never sent as a passphrase (or vice versa).
                     secret: null,
                   })
                 }

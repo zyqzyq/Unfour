@@ -227,6 +227,11 @@ export type SshConnection = {
   remoteId: string | null;
 };
 
+export type SshTestResult = {
+  ok: boolean;
+  message: string;
+};
+
 export type SshConnectInput = {
   workspaceId: string;
   connectionId: string;

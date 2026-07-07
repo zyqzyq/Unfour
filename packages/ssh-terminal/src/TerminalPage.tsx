@@ -8,6 +8,7 @@ import {
   getSshSessionHistory,
   registerSshTerminalChannel,
   saveSshConnection,
+  testSshConnection,
   type SshConnection,
   type SshConnectionInput,
   type SshHostFingerprintInfo,
@@ -71,6 +72,7 @@ export function TerminalPage({
   const startTerminalSession = useTerminalStore((state) => state.startTerminalSession);
   const terminalEvents = useTerminalStore((state) => state.terminalEvents);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<"new" | "edit" | null>(null);
   const [closeConfirmSessionId, setCloseConfirmSessionId] = useState<string | null>(null);
   const [trustDialogState, setTrustDialogState] = useState<{
     open: boolean;
@@ -249,17 +251,21 @@ export function TerminalPage({
       return;
     }
 
+    if (dialogMode === "new") {
+      return;
+    }
+
     if (!selectedConnectionId || !connections.some((connection) => connection.id === selectedConnectionId)) {
       setSelectedSshConnection(connections[0].id);
     }
-  }, [connections, selectedConnectionId, setSelectedSshConnection]);
+  }, [connections, selectedConnectionId, setSelectedSshConnection, dialogMode]);
 
   // Sync form state when the selected connection changes (render-time adjustment pattern).
   /* eslint-disable react-hooks/refs -- render-time ref read/write is React's recommended pattern for adjusting state when a derived value changes */
   if (selectedConnectionId !== prevSelectedConnectionIdRef.current) {
     prevSelectedConnectionIdRef.current = selectedConnectionId;
     /* eslint-enable react-hooks/refs */
-    if (selectedConnection) {
+    if (selectedConnection && dialogMode !== "new") {
       setForm(sshConnectionToInput(selectedConnection, workspaceId));
     }
   }
@@ -285,36 +291,26 @@ export function TerminalPage({
     onSuccess: (connection) => {
       setSelectedSshConnection(connection.id);
       setDialogOpen(false);
+      setDialogMode(null);
       queryClient.invalidateQueries({ queryKey: ["ssh-connections", workspaceId] });
     },
   });
 
-  // Reuse the regular connect path to validate credentials, then immediately
-  // close the throwaway session so the test leaves no lingering tab/session.
-  // A non-empty `secret` lets the user validate a not-yet-saved password without
-  // persisting it; an empty field falls back to the stored credential.
+  // Test a connection using the dedicated test endpoint, which accepts the full
+  // form payload. The backend resolves stored credentials via `credential_ref`
+  // (carried on the form for saved connections) and applies `secret` as an
+  // override, so a newly typed password/passphrase is honored as well. The
+  // endpoint spins up and tears down its own throwaway session.
   const testMutation = useMutation({
     mutationFn: async ({
-      connectionId,
-      secret,
+      form,
     }: {
-      connectionId: string;
-      secret: string | null;
+      form: SshConnectionInput;
     }) => {
-      const session = await connectSshSession({
-        workspaceId,
-        connectionId,
-        cols: 80,
-        rows: 24,
-        secret,
-      });
-      await closeSshSession({ workspaceId, sessionId: session.sessionId }).catch(() => {
-        // Best-effort cleanup; the backend reaps idle sessions regardless.
-      });
-      return session;
+      return testSshConnection({ ...form, workspaceId });
     },
-    onSuccess: () =>
-      setTestResult({ ok: true, message: t("ssh.dialog.testSuccessDetail") }),
+    onSuccess: (result) =>
+      setTestResult({ ok: result.ok, message: result.message }),
     onError: (error) =>
       setTestResult({ ok: false, message: formatTerminalError(error) }),
   });
@@ -407,6 +403,7 @@ export function TerminalPage({
     setSelectedSshConnection(null);
     setForm(defaultSshConnectionInput(workspaceId));
     setTrustDialogState((prev) => ({ ...prev, open: false }));
+    setDialogMode("new");
     setDialogOpen(true);
   }
 
@@ -419,8 +416,10 @@ export function TerminalPage({
     if (target) {
       setSelectedSshConnection(target.id);
       setForm(sshConnectionToInput(target, workspaceId));
+      setDialogMode("edit");
     } else {
       setForm(defaultSshConnectionInput(workspaceId));
+      setDialogMode("new");
     }
     setTrustDialogState((prev) => ({ ...prev, open: false }));
     setDialogOpen(true);
@@ -434,6 +433,7 @@ export function TerminalPage({
     setSelectedSshConnection(connection.id);
     setForm(sshConnectionToInput(connection, workspaceId));
     setTrustDialogState((prev) => ({ ...prev, open: false }));
+    setDialogMode("edit");
     setDialogOpen(true);
   }
 
@@ -492,12 +492,9 @@ export function TerminalPage({
   }
 
   function testConnection() {
-    if (!form.id) return;
     testMutation.reset();
     setTestResult(null);
-    // Pass the typed-but-unsaved secret through so the test validates the
-    // current form value; an empty field means "use the saved credential".
-    testMutation.mutate({ connectionId: form.id, secret: form.secret || null });
+    testMutation.mutate({ form });
   }
 
   function connectSelectedConnection() {
@@ -687,10 +684,23 @@ export function TerminalPage({
         />
       )}
       <SshConnectionDialog
-        canTest={Boolean(form.id)}
+        canTest={
+          Boolean(form.host?.trim()) &&
+          Boolean(form.username?.trim()) &&
+          (form.authKind !== "private-key" || Boolean(form.keyPath?.trim())) &&
+          (form.authKind !== "password" ||
+            Boolean(form.id) ||
+            Boolean(form.secret?.trim()))
+        }
         error={saveMutation.error}
         form={form}
-        onOpenChange={setDialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) {
+            setDialogMode(null);
+            setTestResult(null);
+          }
+        }}
         onSubmit={submitConnection}
         onTest={testConnection}
         onUpdate={updateForm}
