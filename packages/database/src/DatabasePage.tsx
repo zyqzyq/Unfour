@@ -53,6 +53,7 @@ import { useSqlExecution } from "./hooks/useSqlExecution";
 import { useTableData } from "./hooks/useTableData";
 import { useTableStructure } from "./hooks/useTableStructure";
 import { buildDatabaseTree, databaseTableTreeId, type DatabaseTreeModel } from "./model/database-tree";
+import { EMPTY_CONNECTION_STATES, useDatabaseConnectionStore } from "./model/database-connection-state";
 import type {
   DatabaseQueryWorkspaceTab,
   DatabaseConnectionSessionState,
@@ -89,9 +90,20 @@ export function DatabasePage({
   } = useWorkspaceStore();
   const databaseTabs = useDatabaseTabs({
     formatQueryTitle: (index) => t("database.editor.queryTitle", { index }),
+    workspaceId,
   });
   const [editorOpen, setEditorOpen] = useState(false);
-  const [connectionStates, setConnectionStates] = useState<Record<string, DatabaseConnectionSessionState>>({});
+  const connectionStates = useDatabaseConnectionStore(
+    (state) => state.byWorkspace[workspaceId] ?? EMPTY_CONNECTION_STATES,
+  );
+  const setConnectionStateAction = useDatabaseConnectionStore((state) => state.setConnectionState);
+  const pruneConnectionsAction = useDatabaseConnectionStore((state) => state.pruneConnections);
+  const removeConnectionAction = useDatabaseConnectionStore((state) => state.removeConnection);
+  // Bind the workspace id so the existing call sites keep their original
+  // `(connectionId, patch)` / `(connectionId)` signatures.
+  const setConnectionState = (connectionId: string, patch: Partial<DatabaseConnectionSessionState>) =>
+    setConnectionStateAction(workspaceId, connectionId, patch);
+  const removeConnection = (connectionId: string) => removeConnectionAction(workspaceId, connectionId);
   const [testResult, setTestResult] = useState<DatabaseTestResult | null>(null);
   const [queryHistory, setQueryHistory] = useState<SqlHistoryEntry[]>([]);
   const [selectedTable, setSelectedTable] = useState<DatabaseTable | null>(null);
@@ -219,7 +231,6 @@ export function DatabasePage({
     if (!activeTab) {
       return;
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- active workspace tab drives shell/tree selection after tab changes
     setSelectedDatabaseConnection(activeTab.connectionId);
     // eslint-disable-next-line react-hooks/set-state-in-effect -- active workspace tab drives shell/tree selection after tab changes
     setSelectedTable(activeTab.kind === "table" ? activeTab.table : null);
@@ -232,17 +243,15 @@ export function DatabasePage({
       setSelectedTable(null);
     }
 
-    setConnectionStates((current) => {
-      const connectionIds = new Set(connections.map((connection) => connection.id));
-      const next: Record<string, DatabaseConnectionSessionState> = {};
-      for (const [connectionId, state] of Object.entries(current)) {
-        if (connectionIds.has(connectionId)) {
-          next[connectionId] = state;
-        }
-      }
-      return next;
-    });
-  }, [connections, selectedConnectionId, setSelectedDatabaseConnection]);
+    // Drop state for connections that no longer exist. Read from the store
+    // directly (not a hook selector) so this effect does not re-run on every
+    // connection-state change and loop.
+    const liveIds = new Set(connections.map((connection) => connection.id));
+    const current = useDatabaseConnectionStore.getState().byWorkspace[workspaceId] ?? {};
+    if (Object.keys(current).some((id) => !liveIds.has(id))) {
+      pruneConnectionsAction(workspaceId, liveIds);
+    }
+  }, [connections, selectedConnectionId, setSelectedDatabaseConnection, workspaceId, pruneConnectionsAction]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing persisted query history into local optimistic UI state
@@ -363,7 +372,6 @@ export function DatabasePage({
     if (next.catalog === activeQueryTab.catalog && next.schema === activeQueryTab.schema) {
       return;
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- re-deriving context defaults when the loaded schema changes
     databaseTabs.updateQueryTab(activeQueryTab.id, next);
   }, [treeModel, activeQueryTab?.id, activeQueryTab?.catalog, activeQueryTab?.schema]);
 
@@ -404,11 +412,7 @@ export function DatabasePage({
   const deleteMutation = useMutation({
     mutationFn: (connectionId: string) => deleteDatabaseConnection(workspaceId, connectionId),
     onSuccess: (_result, connectionId) => {
-      setConnectionStates((current) => {
-        const next = { ...current };
-        delete next[connectionId];
-        return next;
-      });
+      removeConnection(connectionId);
       // Only reset the active workspace when the deleted connection was the one
       // in use; deleting another connection from the context menu must not clear
       // the current query or table view.
@@ -601,18 +605,6 @@ export function DatabasePage({
       });
     }
   }, [browseMutation.error]);
-
-  function setConnectionState(connectionId: string, patch: Partial<DatabaseConnectionSessionState>) {
-    setConnectionStates((current) => ({
-      ...current,
-      [connectionId]: {
-        message: patch.message ?? current[connectionId]?.message ?? null,
-        serverVersion: patch.serverVersion ?? current[connectionId]?.serverVersion ?? null,
-        status: patch.status ?? current[connectionId]?.status ?? "disconnected",
-        updatedAt: new Date().toISOString(),
-      },
-    }));
-  }
 
   function updateForm(patch: Partial<DatabaseConnectionInput>) {
     setForm((current) => ({ ...current, ...patch, workspaceId }));

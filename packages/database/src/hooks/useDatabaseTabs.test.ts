@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { DatabaseTable } from "@unfour/command-client";
 import { useDatabaseTabs } from "./useDatabaseTabs";
+import { resetDatabaseTabStore } from "../model/database-tab-state";
 
 function table(name: string, patch: Partial<DatabaseTable> = {}): DatabaseTable {
   return {
@@ -16,6 +17,12 @@ function table(name: string, patch: Partial<DatabaseTable> = {}): DatabaseTable 
 }
 
 describe("useDatabaseTabs", () => {
+  // The tab state now lives in a module-level store, so it persists across
+  // hook instances. Reset it between cases so each test starts clean.
+  beforeEach(() => {
+    resetDatabaseTabStore();
+  });
+
   it("opens with Query 1 as the active tab", () => {
     const { result } = renderHook(() => useDatabaseTabs());
 
@@ -169,5 +176,28 @@ describe("useDatabaseTabs", () => {
       kind: "query",
       connectionId: "conn-2",
     });
+  });
+
+  it("keeps tabs isolated per workspace", () => {
+    const wsA = renderHook(() => useDatabaseTabs({ workspaceId: "workspace-a" }));
+    const wsB = renderHook(() => useDatabaseTabs({ workspaceId: "workspace-b" }));
+
+    act(() => {
+      wsA.result.current.openQueryTab({ sql: "select a;" });
+    });
+    act(() => {
+      wsB.result.current.openQueryTab({ sql: "select b;" });
+    });
+
+    expect(wsA.result.current.tabs.map((tab) => (tab.kind === "query" ? tab.sql : null))).toEqual([
+      "",
+      "select a;",
+    ]);
+    expect(wsB.result.current.tabs.map((tab) => (tab.kind === "query" ? tab.sql : null))).toEqual([
+      "",
+      "select b;",
+    ]);
+    expect(wsA.result.current.activeTab).toMatchObject({ kind: "query", sql: "select a;" });
+    expect(wsB.result.current.activeTab).toMatchObject({ kind: "query", sql: "select b;" });
   });
 });
