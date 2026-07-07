@@ -9,7 +9,27 @@ type SearchAddonLike = {
   dispose: () => void;
 };
 
+// The slice of terminal UI state that is scoped to a single workspace. The
+// search addon is intentionally NOT part of the slice: it is a handle to the
+// live xterm instance owned by the mounted `TerminalPage`, so it stays global
+// and is never partitioned or cleared on workspace switch.
+type TerminalSlice = {
+  activeSessionId: string | null;
+  dismissedSessionIds: string[];
+  exportedLog: string | null;
+  frontendFailedSessions: Record<string, SshSessionSummary>;
+  searchOpen: boolean;
+  searchQuery: string;
+  splitMode: TerminalSplitMode;
+  terminalEvents: SshSessionEvent[];
+  terminalInput: string;
+};
+
 type TerminalStore = {
+  // Per-workspace archive. `activateWorkspace` swaps the flat fields below to
+  // the slice for the newly active workspace instead of clearing them, so each
+  // workspace keeps its own terminal buffer/sessions/input across switches.
+  byWorkspace: Record<string, TerminalSlice>;
   activeSessionId: string | null;
   dismissedSessionIds: string[];
   exportedLog: string | null;
@@ -43,7 +63,50 @@ export function defaultTerminalInput() {
   return "";
 }
 
+function createDefaultSlice(): TerminalSlice {
+  return {
+    activeSessionId: null,
+    dismissedSessionIds: [],
+    exportedLog: null,
+    frontendFailedSessions: {},
+    searchOpen: false,
+    searchQuery: "",
+    splitMode: "single",
+    terminalEvents: [],
+    terminalInput: defaultTerminalInput(),
+  };
+}
+
+function sliceFromFlat(state: TerminalStore): TerminalSlice {
+  return {
+    activeSessionId: state.activeSessionId,
+    dismissedSessionIds: state.dismissedSessionIds,
+    exportedLog: state.exportedLog,
+    frontendFailedSessions: state.frontendFailedSessions,
+    searchOpen: state.searchOpen,
+    searchQuery: state.searchQuery,
+    splitMode: state.splitMode,
+    terminalEvents: state.terminalEvents,
+    terminalInput: state.terminalInput,
+  };
+}
+
+function flatFromSlice(slice: TerminalSlice) {
+  return {
+    activeSessionId: slice.activeSessionId,
+    dismissedSessionIds: slice.dismissedSessionIds,
+    exportedLog: slice.exportedLog,
+    frontendFailedSessions: slice.frontendFailedSessions,
+    searchOpen: slice.searchOpen,
+    searchQuery: slice.searchQuery,
+    splitMode: slice.splitMode,
+    terminalEvents: slice.terminalEvents,
+    terminalInput: slice.terminalInput,
+  };
+}
+
 export const useTerminalStore = create<TerminalStore>((set) => ({
+  byWorkspace: {},
   activeSessionId: null,
   dismissedSessionIds: [],
   exportedLog: null,
@@ -56,23 +119,32 @@ export const useTerminalStore = create<TerminalStore>((set) => ({
   terminalSearchAddon: null,
   workspaceId: null,
   activateWorkspace: (workspaceId) =>
-    set((state) =>
-      state.workspaceId === workspaceId
-        ? state
-        : {
-            activeSessionId: null,
-            dismissedSessionIds: [],
-            exportedLog: null,
-            frontendFailedSessions: {},
-            searchOpen: false,
-            searchQuery: "",
-            splitMode: "single",
-            terminalEvents: [],
-            terminalInput: defaultTerminalInput(),
-            terminalSearchAddon: state.terminalSearchAddon,
-            workspaceId,
-          },
-    ),
+    set((state) => {
+      if (state.workspaceId === workspaceId) {
+        return state;
+      }
+      // Archive the current flat slice under the previously active workspace
+      // (if any), then load the target workspace's slice. This preserves each
+      // workspace's terminal buffer/sessions/input across switches instead of
+      // clearing them (the old behavior caused a flicker + selection reset and
+      // required an async backend refill).
+      const nextByWorkspace =
+        state.workspaceId !== null
+          ? { ...state.byWorkspace, [state.workspaceId]: sliceFromFlat(state) }
+          : state.byWorkspace;
+      const nextSlice =
+        workspaceId !== null
+          ? nextByWorkspace[workspaceId] ?? createDefaultSlice()
+          : createDefaultSlice();
+      return {
+        ...flatFromSlice(nextSlice),
+        byWorkspace: nextByWorkspace,
+        // The search addon belongs to the live xterm instance and must survive
+        // workspace switches untouched.
+        terminalSearchAddon: state.terminalSearchAddon,
+        workspaceId,
+      };
+    }),
   addFrontendFailedSession: (session) =>
     set((state) => {
       // Remove any previous failed session for the same connectionId so only

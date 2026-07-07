@@ -42,6 +42,7 @@ import { DatabaseErrorDetails } from "./components/DatabaseErrorDetails";
 import { DatabaseTestResultDialog } from "./components/DatabaseTestResultDialog";
 import { DatabaseModuleToolbar } from "./components/DatabaseModuleToolbar";
 import { DatabaseStatusBar } from "./components/DatabaseStatusBar";
+import { DatabaseConnectionErrorBanner } from "./components/DatabaseConnectionErrorBanner";
 import { DatabaseWorkspace } from "./components/DatabaseWorkspace";
 import { useDatabaseConnections } from "./hooks/useDatabaseConnections";
 import { databaseTableTabId, useDatabaseTabs } from "./hooks/useDatabaseTabs";
@@ -1399,6 +1400,14 @@ export function DatabasePage({
         selectedConnectionName={toolbarConnection?.name ?? null}
       />
       <div className="flex min-h-0 flex-1 flex-col">
+        {selectedConnection && selectedConnectionStatus === "failed" ? (
+          <DatabaseConnectionErrorBanner
+            connectionName={selectedConnection.name}
+            message={selectedSession?.message}
+            onEdit={() => handleEditConnection(selectedConnection)}
+            onRetry={() => connectConnection(selectedConnection)}
+          />
+        ) : null}
         <DatabaseWorkspace
           activeTab={activeTab}
           activeTabId={databaseTabs.activeTabId}

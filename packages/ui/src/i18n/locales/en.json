@@ -341,6 +341,7 @@
       "newRequest": "New Request",
       "refresh": "Refresh",
       "replace": "Replace",
+      "retry": "Retry",
       "save": "Save"
     },
     "confirm": {
@@ -405,6 +406,7 @@
       "disconnected": "Disconnected",
       "executingSql": "SQL executing",
       "failed": "failed",
+      "failedBanner": "Connection failed",
       "newLabel": "New database connection",
       "noActiveSession": "No active database session",
       "noConnection": "No database connection",

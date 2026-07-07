@@ -30,8 +30,9 @@ export function DatabaseModuleToolbar({
           label={selectedConnectionName
             ? `${selectedConnectionName} - ${connectionStatusLabel}`
             : connectionStatusLabel}
+          pulse={connectionStatus === "failed"}
           status={connectionStatus === "failed" ? "error" : connectionStatus}
-          variant="dot"
+          variant="badge"
         />
       </ToolbarGroup>
     </Toolbar>

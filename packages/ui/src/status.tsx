@@ -66,6 +66,7 @@ export function ConnectionStatus({
   connected,
   dotOnly,
   label,
+  pulse: pulseProp,
   status,
   variant = "badge",
 }: {
@@ -73,6 +74,8 @@ export function ConnectionStatus({
   /** Render only the status dot; the label is exposed via `title`. Implies `variant="dot"`. */
   dotOnly?: boolean;
   label?: string;
+  /** Force the pulse animation on (e.g. a failed connection that needs attention). Falls back to pulsing only while connecting/reconnecting. */
+  pulse?: boolean;
   status?: ConnectionStatusValue;
   /** `"badge"` (default) keeps the legacy pill look; `"dot"` renders a colored dot + label. */
   variant?: "badge" | "dot";
@@ -80,9 +83,10 @@ export function ConnectionStatus({
   const resolvedStatus = status ?? (connected ? "connected" : "disconnected");
   const tone = connectionTone(resolvedStatus);
   const text = label ?? resolvedStatus;
+  const pulse =
+    Boolean(pulseProp) || resolvedStatus === "connecting" || resolvedStatus === "reconnecting";
 
   if (variant === "dot" || dotOnly) {
-    const pulse = resolvedStatus === "connecting" || resolvedStatus === "reconnecting";
     return (
       <span
         className={cn(
@@ -106,5 +110,9 @@ export function ConnectionStatus({
     );
   }
 
-  return <StatusBadge tone={tone}>{text}</StatusBadge>;
+  return (
+    <span className={pulse ? "inline-flex animate-pulse" : undefined}>
+      <StatusBadge tone={tone}>{text}</StatusBadge>
+    </span>
+  );
 }

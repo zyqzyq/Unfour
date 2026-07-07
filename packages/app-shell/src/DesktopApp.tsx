@@ -194,7 +194,6 @@ export function DesktopApp() {
             {activeWorkspace && (
               <div className={activeTab.kind === "api" ? "h-full" : "hidden"}>
                 <ApiClientPage
-                  key={activeWorkspace.id}
                   onShellSidebarChange={handleApiSidebarChange}
                   onActiveSavedRequestChange={setSelectedApiRequest}
                   openIntent={null}

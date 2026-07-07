@@ -33,8 +33,9 @@ export function DatabaseStatusBar({
         <span className="truncate">{connection?.name ?? t("database.connection.noConnection")}</span>
         <ConnectionStatus
           label={databaseConnectionStatusLabel(status, t)}
+          pulse={status === "failed"}
           status={status === "failed" ? "error" : status}
-          variant="dot"
+          variant="badge"
         />
         {connection?.readOnly ? <StatusBadge tone="warning">{t("database.fields.readOnly")}</StatusBadge> : null}
       </div>

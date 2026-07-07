@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
   EmptyState,
   IconButton,
+  StatusBadge,
   TreeView,
   useI18n,
   type TreeViewItem,
@@ -147,6 +148,7 @@ export function DatabaseConnectionTree({
               catalogNames: catalogNamesByConnection?.[connection.id],
               connection,
               defaultExpandedIds,
+              failureMessage: session?.message,
               loadErrors,
               loadingKeys,
               onDeleteSavedSql,
@@ -167,14 +169,17 @@ export function DatabaseConnectionTree({
       id: connection.id,
       label: connection.name,
       loading: rootLoading,
-      meta: (
-        <ConnectionStatus
-          dotOnly
-          label={statusLabel}
-          status={status === "failed" ? "error" : status}
-          variant="dot"
-        />
-      ),
+      meta:
+        status === "failed" ? (
+          <StatusBadge tone="danger">{statusLabel}</StatusBadge>
+        ) : (
+          <ConnectionStatus
+            dotOnly
+            label={statusLabel}
+            status={status}
+            variant="dot"
+          />
+        ),
       title: connectionStateTitle(connection, session),
     };
   });
@@ -248,6 +253,7 @@ function buildConnectionChildren({
   catalogNames,
   connection,
   defaultExpandedIds,
+  failureMessage,
   loadErrors,
   loadingKeys,
   onDeleteSavedSql,
@@ -267,6 +273,8 @@ function buildConnectionChildren({
   catalogNames?: string[];
   connection: DatabaseConnection;
   defaultExpandedIds: Set<string>;
+  /** The real failure reason from the connection session, shown in the tree when status is `failed`. */
+  failureMessage?: string | null;
   loadErrors?: Record<string, string>;
   loadingKeys?: string[];
   onDeleteSavedSql?: (item: SavedSql) => void;
@@ -293,11 +301,13 @@ function buildConnectionChildren({
   }
 
   if (status === "failed") {
+    const failureLabel = failureMessage ?? t("database.tree.connectionFailed");
     return [
       {
         disabled: true,
         id: `${connection.id}:failed`,
-        label: t("database.tree.connectionFailed"),
+        label: failureLabel,
+        title: failureLabel,
       },
     ];
   }

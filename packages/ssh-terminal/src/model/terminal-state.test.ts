@@ -3,6 +3,7 @@ import { useTerminalStore } from "./terminal-state";
 
 function resetStore() {
   useTerminalStore.setState({
+    byWorkspace: {},
     activeSessionId: null,
     exportedLog: null,
     searchOpen: false,

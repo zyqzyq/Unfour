@@ -341,6 +341,7 @@
       "newRequest": "新建请求",
       "refresh": "刷新",
       "replace": "替换",
+      "retry": "重试",
       "save": "保存"
     },
     "confirm": {
@@ -404,6 +405,7 @@
       "disconnected": "已断开",
       "executingSql": "SQL 执行中",
       "failed": "失败",
+      "failedBanner": "连接失败",
       "newLabel": "新建数据库连接",
       "noActiveSession": "无活动数据库会话",
       "noConnection": "无数据库连接",
