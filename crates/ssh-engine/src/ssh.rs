@@ -1,4 +1,5 @@
 use chrono::Utc;
+use sqlx::Row;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -324,6 +325,22 @@ impl SshService {
         validate_connection_id(&connection_id)?;
         let now = Utc::now().to_rfc3339();
 
+        // Read the credential reference before soft-deleting so the stored
+        // secret can be purged from the OS keychain; otherwise it leaks as an
+        // orphaned credential.
+        let existing = sqlx::query(
+            "SELECT credential_ref FROM connections \
+             WHERE id = ?1 AND workspace_id = ?2 \
+               AND connection_type = 'ssh' AND deleted_at IS NULL",
+        )
+        .bind(&connection_id)
+        .bind(&workspace_id)
+        .fetch_optional(self.db.pool())
+        .await?;
+        let credential_ref: Option<String> = existing
+            .and_then(|row| row.try_get::<Option<String>, _>("credential_ref").ok())
+            .flatten();
+
         let result = sqlx::query(
             r#"
             UPDATE connections
@@ -340,6 +357,16 @@ impl SshService {
 
         if result.rows_affected() == 0 {
             return Err(AppError::NotFound("ssh connection".to_string()));
+        }
+
+        // Best-effort purge of the stored secret. A failure here (e.g. the
+        // credential was already removed) must not block the deletion itself;
+        // the keychain backend already logs failures.
+        if let Some(credential_ref) = credential_ref.filter(|value| !value.is_empty()) {
+            let _ = self
+                .secret_store
+                .delete_credential(workspace_id.clone(), credential_ref)
+                .await;
         }
 
         self.close_sessions_for_connection(&workspace_id, &connection_id)

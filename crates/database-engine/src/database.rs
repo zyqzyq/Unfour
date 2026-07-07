@@ -213,6 +213,22 @@ impl DatabaseService {
         validate_workspace_id(&workspace_id)?;
         validate_connection_id(&connection_id)?;
         let now = Utc::now().to_rfc3339();
+
+        // Read the credential reference before soft-deleting so the stored
+        // secret can be purged from the OS keychain.
+        let existing = sqlx::query(
+            "SELECT credential_ref FROM connections \
+             WHERE id = ?1 AND workspace_id = ?2 \
+               AND connection_type = 'database' AND deleted_at IS NULL",
+        )
+        .bind(&connection_id)
+        .bind(&workspace_id)
+        .fetch_optional(self.db.pool())
+        .await?;
+        let credential_ref: Option<String> = existing
+            .and_then(|row| row.try_get::<Option<String>, _>("credential_ref").ok())
+            .flatten();
+
         let mut tx = self.db.pool().begin().await?;
 
         let result = sqlx::query(
@@ -248,6 +264,20 @@ impl DatabaseService {
         .await?;
 
         tx.commit().await?;
+
+        // Best-effort purge of the stored secret from the OS keychain, only
+        // after the soft-delete transaction has committed. The secret store is
+        // optional (absent in some runtimes); only purge when it is configured.
+        // A failure here (e.g. the credential was already removed) must not
+        // surface as a delete error.
+        if let Some(credential_ref) = credential_ref.filter(|value| !value.is_empty()) {
+            if let Some(secret_store) = &self.secret_store {
+                let _ = secret_store
+                    .delete_credential(workspace_id.clone(), credential_ref)
+                    .await;
+            }
+        }
+
         self.list_connections(workspace_id).await
     }
 
@@ -257,6 +287,50 @@ impl DatabaseService {
         connection_id: String,
     ) -> AppResult<DatabaseTestResult> {
         let connection = self.get_connection(&workspace_id, &connection_id).await?;
+        self.test_connection_inner(connection, None).await
+    }
+
+    /// Test connectivity for a connection that may not yet be saved. The
+    /// transient `secret` (the password typed in the dialog) is used as an
+    /// override; when empty, the stored keychain credential referenced by
+    /// `credential_ref` is used instead. This lets the "test connection" action
+    /// validate a brand-new connection before it is persisted.
+    pub async fn test_connection_input(
+        &self,
+        input: DatabaseConnectionInput,
+        secret: Option<String>,
+    ) -> AppResult<DatabaseTestResult> {
+        validate_workspace_id(&input.workspace_id)?;
+        let storage = input_to_storage(&input)?;
+        let connection = DatabaseConnection {
+            id: input.id.clone().unwrap_or_default(),
+            workspace_id: input.workspace_id.clone(),
+            name: input.name.trim().to_string(),
+            driver: storage.driver.clone(),
+            host: storage.host.clone(),
+            port: storage.port,
+            database: storage.database_name.clone(),
+            username: storage.username.clone(),
+            ssl_mode: storage.ssl_mode.clone(),
+            sqlite_path: storage.config.sqlite_path.clone(),
+            credential_ref: empty_to_none(input.credential_ref.clone()),
+            read_only: storage.read_only,
+            created_at: String::new(),
+            updated_at: String::new(),
+            deleted_at: None,
+            revision: 0,
+            sync_status: "new".to_string(),
+            remote_id: None,
+        };
+        let password_override = secret.as_deref().filter(|value| !value.is_empty());
+        self.test_connection_inner(connection, password_override).await
+    }
+
+    async fn test_connection_inner(
+        &self,
+        connection: DatabaseConnection,
+        password_override: Option<&str>,
+    ) -> AppResult<DatabaseTestResult> {
         let started = Instant::now();
         let fields = serde_json::json!({ "driver": &connection.driver });
         unfour_diag::log_operation_event(
@@ -283,7 +357,7 @@ impl DatabaseService {
                 })
             }
             "postgres" => {
-                let pool = self.postgres_pool(&connection).await?;
+                let pool = self.postgres_pool_with_secret(&connection, password_override).await?;
                 let row: (String,) = sqlx::query_as("SELECT version()")
                     .fetch_one(&pool)
                     .await
@@ -296,7 +370,7 @@ impl DatabaseService {
                 })
             }
             "mysql" => {
-                let pool = self.mysql_pool(&connection).await?;
+                let pool = self.mysql_pool_with_secret(&connection, password_override).await?;
                 let row: (String,) = sqlx::query_as("SELECT VERSION()")
                     .fetch_one(&pool)
                     .await
@@ -1645,7 +1719,19 @@ impl DatabaseService {
     /// Create a PostgreSQL connection pool, loading the password from SecretStore
     /// if a credential reference is present on the connection.
     async fn postgres_pool(&self, connection: &DatabaseConnection) -> AppResult<sqlx::PgPool> {
-        let options = pg_connect_options(connection, self.secret_store.as_ref()).await?;
+        self.postgres_pool_with_secret(connection, None).await
+    }
+
+    /// PostgreSQL pool that prefers an inline `password_override` (the
+    /// not-yet-saved secret from the "test connection" dialog) over the stored
+    /// keychain credential. Falls back to the saved credential when no override
+    /// is supplied, preserving existing behavior for saved connections.
+    async fn postgres_pool_with_secret(
+        &self,
+        connection: &DatabaseConnection,
+        password_override: Option<&str>,
+    ) -> AppResult<sqlx::PgPool> {
+        let options = pg_connect_options(connection, self.secret_store.as_ref(), password_override).await?;
         PgPoolOptions::new()
             .max_connections(4)
             .connect_with(options)
@@ -1656,7 +1742,19 @@ impl DatabaseService {
     /// Create a MySQL connection pool, loading the password from SecretStore
     /// if a credential reference is present on the connection.
     async fn mysql_pool(&self, connection: &DatabaseConnection) -> AppResult<sqlx::MySqlPool> {
-        let options = mysql_connect_options(connection, self.secret_store.as_ref()).await?;
+        self.mysql_pool_with_secret(connection, None).await
+    }
+
+    /// MySQL pool that prefers an inline `password_override` (the not-yet-saved
+    /// secret from the "test connection" dialog) over the stored keychain
+    /// credential. Falls back to the saved credential when no override is
+    /// supplied, preserving existing behavior for saved connections.
+    async fn mysql_pool_with_secret(
+        &self,
+        connection: &DatabaseConnection,
+        password_override: Option<&str>,
+    ) -> AppResult<sqlx::MySqlPool> {
+        let options = mysql_connect_options(connection, self.secret_store.as_ref(), password_override).await?;
         MySqlPoolOptions::new()
             .max_connections(4)
             .acquire_timeout(Duration::from_secs(5))
@@ -1692,6 +1790,7 @@ impl DatabaseService {
 async fn pg_connect_options(
     connection: &DatabaseConnection,
     secret_store: Option<&SecretStore>,
+    password_override: Option<&str>,
 ) -> AppResult<PgConnectOptions> {
     let host = connection
         .host
@@ -1713,7 +1812,10 @@ async fn pg_connect_options(
         .filter(|v| !v.is_empty())
         .ok_or_else(|| AppError::Validation("PostgreSQL username is required".to_string()))?;
 
-    let password = resolve_database_password(connection, secret_store).await?;
+    let password = match password_override {
+        Some(secret) => Some(secret.to_string()),
+        None => resolve_database_password(connection, secret_store).await?,
+    };
 
     let mut options = PgConnectOptions::new()
         .host(host)
@@ -2107,6 +2209,7 @@ fn sanitize_pg_app_error(error: AppError) -> AppError {
 async fn mysql_connect_options(
     connection: &DatabaseConnection,
     secret_store: Option<&SecretStore>,
+    password_override: Option<&str>,
 ) -> AppResult<MySqlConnectOptions> {
     let host = connection
         .host
@@ -2128,7 +2231,10 @@ async fn mysql_connect_options(
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .ok_or_else(|| AppError::Validation("MySQL username is required".to_string()))?;
-    let password = resolve_database_password(connection, secret_store).await?;
+    let password = match password_override {
+        Some(secret) => Some(secret.to_string()),
+        None => resolve_database_password(connection, secret_store).await?,
+    };
 
     let mut options = MySqlConnectOptions::new()
         .host(host)

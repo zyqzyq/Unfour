@@ -414,7 +414,12 @@
       "select": "选择连接",
       "selectAria": "数据库连接",
       "settings": "连接设置",
-      "tableCountLoaded": "已加载 {count} 张表"
+      "tableCountLoaded": "已加载 {count} 张表",
+      "test": "测试连接",
+      "testClose": "关闭",
+      "testFailed": "连接失败",
+      "testSuccess": "连接成功",
+      "testing": "测试中…"
     },
     "driver": {
       "mysql": "MySQL / MariaDB",

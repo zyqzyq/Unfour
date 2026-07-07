@@ -1319,6 +1319,16 @@ impl CommandBus {
             .await
     }
 
+    pub async fn test_database_connection_input(
+        &self,
+        input: DatabaseConnectionInput,
+        secret: Option<String>,
+    ) -> AppResult<DatabaseTestResult> {
+        self.database
+            .test_connection_input(input, secret)
+            .await
+    }
+
     pub async fn database_schema(
         &self,
         workspace_id: String,

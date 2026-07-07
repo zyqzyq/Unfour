@@ -707,11 +707,12 @@ export function TerminalPage({
         open={dialogOpen}
         pending={saveMutation.isPending}
         testing={testMutation.isPending}
-      />
-      <SshTestResultDialog
-        onOpenChange={(open) => !open && setTestResult(null)}
-        result={testResult}
-      />
+      >
+        <SshTestResultDialog
+          onOpenChange={(open) => !open && setTestResult(null)}
+          result={testResult}
+        />
+      </SshConnectionDialog>
       <ConfirmDialog
         confirmLabel={t("ssh.actions.closeSession")}
         description={

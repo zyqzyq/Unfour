@@ -214,6 +214,7 @@ macro_rules! generate_handlers {
             unfour_app::commands::database_connection_save,
             unfour_app::commands::database_catalogs_list,
             unfour_app::commands::database_connection_test,
+            unfour_app::commands::database_connection_test_input,
             unfour_app::commands::database_connections_list,
             unfour_app::commands::database_query_execute,
             unfour_app::commands::database_row_mutate,

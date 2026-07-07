@@ -39,6 +39,13 @@ export function testDatabaseConnection(workspaceId: string, connectionId: string
   });
 }
 
+export function testDatabaseConnectionInput(input: DatabaseConnectionInput, secret: string | null) {
+  return call<DatabaseTestResult>("database_connection_test_input", {
+    input,
+    secret,
+  });
+}
+
 export function getDatabaseSchema(
   workspaceId: string,
   connectionId: string,

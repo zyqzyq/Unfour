@@ -415,7 +415,12 @@
       "select": "Select connection",
       "selectAria": "Database connection",
       "settings": "Connection Settings",
-      "tableCountLoaded": "{count} tables loaded"
+      "tableCountLoaded": "{count} tables loaded",
+      "test": "Test connection",
+      "testClose": "Close",
+      "testFailed": "Connection failed",
+      "testSuccess": "Connection succeeded",
+      "testing": "Testing…"
     },
     "driver": {
       "mysql": "MySQL / MariaDB",

@@ -1,4 +1,4 @@
-import { CheckCircle2, Save, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, Plug, Save, Trash2, XCircle } from "lucide-react";
 import { FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -10,6 +10,7 @@ import {
   rotateCredential,
   saveDatabaseConnection,
   testDatabaseConnection,
+  testDatabaseConnectionInput,
 } from "@unfour/command-client";
 import type {
   DatabaseCellValue,
@@ -35,11 +36,11 @@ import {
   IconButton,
   Input,
   Select,
-  StatusBadge,
   useI18n,
 } from "@unfour/ui";
 import { DatabaseSidebar } from "./components/DatabaseSidebar";
 import { DatabaseErrorDetails } from "./components/DatabaseErrorDetails";
+import { DatabaseTestResultDialog } from "./components/DatabaseTestResultDialog";
 import { DatabaseModuleToolbar } from "./components/DatabaseModuleToolbar";
 import { DatabaseStatusBar } from "./components/DatabaseStatusBar";
 import { DatabaseWorkspace } from "./components/DatabaseWorkspace";
@@ -451,6 +452,18 @@ export function DatabasePage({
     },
   });
 
+  // Validate a connection from the dialog form without persisting it. Used by
+  // the "Test connection" button, which must work for brand-new (unsaved)
+  // connections. Unlike `testMutation` (by saved id, which also opens a
+  // session), this only checks connectivity and leaves state disconnected.
+  const testInputMutation = useMutation({
+    mutationFn: ({ input, secret }: { input: DatabaseConnectionInput; secret: string | null }) =>
+      testDatabaseConnectionInput(input, secret),
+    onSuccess: (result) => setTestResult(result),
+    onError: (error) =>
+      setTestResult({ ok: false, message: formatDatabaseError(error), serverVersion: null }),
+  });
+
   const executeMutation = useSqlExecution({
     connectionId: activeQueryTab?.connectionId ?? null,
     onConfirmationRequired: (required) => {
@@ -699,10 +712,20 @@ export function DatabasePage({
     testMutation.mutate(connection.id);
   }
 
-  function connectSelectedConnection() {
-    if (selectedConnection) {
-      connectConnection(selectedConnection);
-    }
+  // Validate the dialog form against the backend without saving it. Mirrors the
+  // SSH dialog's `canTest` gate: enough fields to attempt a connection, plus a
+  // credential (typed password for a new connection, or the stored reference
+  // when editing an existing one).
+  const canTest = Boolean(form.name?.trim()) && (
+    form.driver === "sqlite"
+      ? Boolean(form.sqlitePath?.trim())
+      : Boolean(form.host?.trim()) &&
+        Boolean(form.port) &&
+        (Boolean(form.credentialRef) || Boolean(password.trim()))
+  );
+
+  function testConnectionInput() {
+    testInputMutation.mutate({ input: form, secret: password || null });
   }
 
   function disconnectConnection(connection: DatabaseConnection) {
@@ -1422,7 +1445,8 @@ export function DatabasePage({
         />
       </div>
       <DatabaseConnectionDialog
-        error={saveMutation.error ?? testMutation.error}
+        canTest={canTest}
+        error={saveMutation.error}
         form={form}
         onDelete={() => {
           const target = connections.find((item) => item.id === selectedConnectionId);
@@ -1433,15 +1457,20 @@ export function DatabasePage({
         onOpenChange={setEditorOpen}
         onPasswordChange={setPassword}
         onSubmit={submitConnection}
-        onTest={connectSelectedConnection}
+        onTest={testConnectionInput}
         onUpdate={updateForm}
         open={editorOpen}
         password={password}
         result={testResult}
         savePending={saveMutation.isPending}
         selectedConnectionId={selectedConnectionId}
-        testPending={testMutation.isPending}
-      />
+        testPending={testInputMutation.isPending}
+      >
+        <DatabaseTestResultDialog
+          onOpenChange={(open) => !open && setTestResult(null)}
+          result={testResult}
+        />
+      </DatabaseConnectionDialog>
       <ConfirmDialog
         confirmLabel={t("common.actions.delete")}
         description={
@@ -1458,6 +1487,7 @@ export function DatabasePage({
 }
 
 function DatabaseConnectionDialog({
+  canTest,
   error,
   form,
   onDelete,
@@ -1472,7 +1502,9 @@ function DatabaseConnectionDialog({
   savePending,
   selectedConnectionId,
   testPending,
+  children,
 }: {
+  canTest: boolean;
   error: unknown;
   form: DatabaseConnectionInput;
   onDelete: () => void;
@@ -1487,6 +1519,7 @@ function DatabaseConnectionDialog({
   savePending: boolean;
   selectedConnectionId: string | null;
   testPending: boolean;
+  children?: ReactNode;
 }) {
   const { t } = useI18n();
 
@@ -1577,12 +1610,33 @@ function DatabaseConnectionDialog({
               </ErrorState>
             ) : null}
             {result && (
-              <div className="flex items-center gap-2 text-[12px] text-[var(--u-color-text-muted)]">
-                {result.ok ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
-                <span className="min-w-0 flex-1 truncate">{String(result.message)}</span>
-                <StatusBadge tone={result.ok ? "success" : "warning"}>
-                  {result.ok ? t("database.connection.connected") : t("database.connection.failed")}
-                </StatusBadge>
+              <div
+                className={`flex items-start gap-2 rounded-lg border p-3 ${
+                  result.ok
+                    ? "border-[var(--u-color-success)] bg-[var(--u-color-success-background)]"
+                    : "border-[var(--u-color-danger)] bg-[var(--u-color-danger-background)]"
+                }`}
+              >
+                {result.ok ? (
+                  <CheckCircle2 className="mt-0.5 shrink-0" size={16} style={{ color: "var(--u-color-success)" }} />
+                ) : (
+                  <XCircle className="mt-0.5 shrink-0" size={16} style={{ color: "var(--u-color-danger)" }} />
+                )}
+                <div>
+                  <p
+                    className="font-semibold"
+                    style={{
+                      color: result.ok
+                        ? "var(--u-color-success)"
+                        : "var(--u-color-danger)",
+                    }}
+                  >
+                    {result.ok ? t("database.connection.testSuccess") : t("database.connection.testFailed")}
+                  </p>
+                  <p className="mt-1 max-h-[100px] overflow-auto text-[12px] leading-relaxed">
+                    {result.message}
+                  </p>
+                </div>
               </div>
             )}
           </DialogBody>
@@ -1594,9 +1648,9 @@ function DatabaseConnectionDialog({
               <Button onClick={() => onOpenChange(false)} size="sm" type="button" variant="ghost">
                 {t("common.confirm.cancel")}
               </Button>
-              <Button disabled={!selectedConnectionId || testPending} onClick={onTest} size="sm" type="button" variant="outline">
-                <CheckCircle2 size={13} />
-                {testPending ? t("common.actions.connecting") : t("common.actions.connect")}
+              <Button disabled={!canTest || testPending} onClick={onTest} size="sm" type="button" variant="outline">
+                <Plug size={13} />
+                {testPending ? t("database.connection.testing") : t("database.connection.test")}
               </Button>
               <Button disabled={savePending} size="sm" type="submit">
                 <Save size={13} />
@@ -1605,6 +1659,7 @@ function DatabaseConnectionDialog({
             </div>
           </DialogFooter>
         </form>
+        {children}
       </DialogContent>
     </Dialog>
   );

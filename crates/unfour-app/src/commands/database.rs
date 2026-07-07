@@ -60,6 +60,21 @@ pub async fn database_connection_test(
 }
 
 #[tauri::command]
+pub async fn database_connection_test_input(
+    input: DatabaseConnectionInput,
+    secret: Option<String>,
+    state: State<'_, AppState>,
+) -> AppResult<DatabaseTestResult> {
+    trace_command(
+        "database_connection_test_input",
+        state
+            .command_bus
+            .test_database_connection_input(input, secret),
+    )
+    .await
+}
+
+#[tauri::command]
 pub async fn database_schema_get(
     workspace_id: String,
     connection_id: String,

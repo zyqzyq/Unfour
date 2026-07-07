@@ -30,6 +30,7 @@ export function SshConnectionDialog({
   open,
   pending,
   testing,
+  children,
 }: {
   canTest: boolean;
   error?: unknown;
@@ -41,6 +42,7 @@ export function SshConnectionDialog({
   open: boolean;
   pending?: boolean;
   testing?: boolean;
+  children?: ReactNode;
 }) {
   const { t } = useI18n();
 
@@ -188,6 +190,7 @@ export function SshConnectionDialog({
             </Button>
           </DialogFooter>
         </form>
+        {children}
       </DialogContent>
     </Dialog>
   );
