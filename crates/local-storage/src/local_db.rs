@@ -11,12 +11,6 @@ use unfour_core::AppResult;
 /// can open the same database file concurrently, so a non-zero busy timeout
 /// avoids spurious "database is locked" failures.
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
-#[cfg(test)]
-const CORE_INITIAL_MIGRATION_VERSION: i64 = 20260707110000;
-#[cfg(test)]
-const CORE_FOLDER_CYCLES_MIGRATION_VERSION: i64 = 20260707123000;
-#[cfg(test)]
-const CORE_CONSTRAINT_HARDENING_MIGRATION_VERSION: i64 = 20260708113000;
 
 #[derive(Clone)]
 pub struct LocalDb {

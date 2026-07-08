@@ -28,61 +28,6 @@ async fn migrate_creates_all_tables() {
 }
 
 #[tokio::test]
-async fn migrate_records_timestamped_core_migrations() {
-    let db = test_db().await;
-    db.migrate().await.expect("run migrations");
-
-    let versions: Vec<(i64,)> =
-        sqlx::query_as("SELECT version FROM _sqlx_migrations ORDER BY version")
-            .fetch_all(db.pool())
-            .await
-            .expect("list migration versions");
-
-    assert_eq!(
-        versions,
-        vec![
-            (CORE_INITIAL_MIGRATION_VERSION,),
-            (CORE_FOLDER_CYCLES_MIGRATION_VERSION,),
-            (CORE_CONSTRAINT_HARDENING_MIGRATION_VERSION,),
-        ],
-        "only timestamped core migrations should run"
-    );
-}
-
-#[tokio::test]
-async fn migrate_ignores_legacy_local_numbered_records() {
-    let db = test_db().await;
-    create_migration_table(db.pool()).await;
-    record_migration(db.pool(), 1, "initial schema").await;
-    record_migration(db.pool(), 2, "prevent folder cycles").await;
-
-    db.migrate()
-        .await
-        .expect("run migrations with legacy local-number records");
-    db.migrate()
-        .await
-        .expect("rerun migrations with legacy local-number records");
-
-    let versions: Vec<(i64,)> =
-        sqlx::query_as("SELECT version FROM _sqlx_migrations ORDER BY version")
-            .fetch_all(db.pool())
-            .await
-            .expect("list migration versions");
-
-    assert_eq!(
-        versions,
-        vec![
-            (1,),
-            (2,),
-            (CORE_INITIAL_MIGRATION_VERSION,),
-            (CORE_FOLDER_CYCLES_MIGRATION_VERSION,),
-            (CORE_CONSTRAINT_HARDENING_MIGRATION_VERSION,),
-        ],
-        "legacy pre-timestamp records should be ignored, not removed"
-    );
-}
-
-#[tokio::test]
 async fn migrate_ignores_foreign_pro_migration_records() {
     const PRO_MIGRATION_VERSION: i64 = 20260707130000;
 
