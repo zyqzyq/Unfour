@@ -4,7 +4,7 @@ import { DatabasePage } from "@unfour/database";
 import { TerminalLogPanel, TerminalPage, TerminalStatusBar } from "@unfour/ssh-terminal";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CommandPalette, MainWorkspace, useI18n } from "@unfour/ui";
+import { CommandPalette, FeedbackProvider, MainWorkspace, useI18n } from "@unfour/ui";
 import {
   exportDiagnosticsBundle,
   getSystemHealth,
@@ -111,7 +111,7 @@ export function DesktopApp() {
     ],
   );
   return (
-    <>
+    <FeedbackProvider>
       <AppShell
         activityBar={
           <ModuleActivityBar
@@ -251,7 +251,7 @@ export function DesktopApp() {
         onClose={() => setCommandPaletteOpen(false)}
         open={commandPaletteOpen}
       />
-    </>
+    </FeedbackProvider>
   );
 }
 

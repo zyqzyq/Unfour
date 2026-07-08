@@ -20,18 +20,22 @@ export function HostKeyTrustDialog({
   mismatchError,
   onConfirm,
   onOpenChange,
+  onResetAndReconnect,
   open,
   pending,
   port,
+  resetPending,
 }: {
   existingFingerprint: SshHostFingerprintInfo | null | undefined;
   host: string;
   mismatchError?: string | null;
   onConfirm: () => void;
   onOpenChange: (open: boolean) => void;
+  onResetAndReconnect?: () => void;
   open: boolean;
   pending?: boolean;
   port: number;
+  resetPending?: boolean;
 }) {
   const { t } = useI18n();
   const isMismatch = Boolean(mismatchError);
@@ -141,7 +145,16 @@ export function HostKeyTrustDialog({
               {isMismatch ? t("ssh.trust.close") : t("ssh.trust.cancel")}
             </Button>
           </DialogClose>
-          {isMismatch ? null : (
+          {isMismatch ? (
+            <Button
+              disabled={resetPending}
+              onClick={onResetAndReconnect}
+              type="button"
+              variant="danger"
+            >
+              {t("ssh.trust.resetAndReconnect")}
+            </Button>
+          ) : (
             <DialogClose asChild>
               <Button disabled={pending} onClick={onConfirm} type="button">
                 <ShieldCheck size={14} />

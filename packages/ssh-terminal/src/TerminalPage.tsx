@@ -7,6 +7,7 @@ import {
   getSshHostFingerprint,
   getSshSessionHistory,
   registerSshTerminalChannel,
+  resetSshHostFingerprint,
   saveSshConnection,
   testSshConnection,
   type SshConnection,
@@ -17,7 +18,7 @@ import {
   type SshTerminalDataPayload,
 } from "@unfour/command-client";
 import { useWorkspaceStore } from "@unfour/workspace-core";
-import { ConfirmDialog, LoadingState, useI18n } from "@unfour/ui";
+import { ConfirmDialog, LoadingState, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
 import { TerminalWorkspace } from "./components/TerminalWorkspace";
 import { SshConnectionTree } from "./components/SshConnectionTree";
 import { SshConnectionDialog } from "./components/SshConnectionDialog";
@@ -43,6 +44,7 @@ export function TerminalPage({
 }) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
+  const handleError = useFeedbackErrorHandler();
   const {
     selectedSshConnectionId: selectedConnectionId,
     setActiveTab,
@@ -390,6 +392,32 @@ export function TerminalPage({
     mutationFn: (sessionId: string) => exportSshLog({ workspaceId, sessionId }),
     onSuccess: (log) => setExportedLog(log.content),
   });
+
+  // Reset a previously trusted host key (e.g. after a mismatch) and then
+  // re-attempt the connection. Surfaces failures via the feedback toast.
+  const resetHostKeyMutation = useMutation({
+    mutationFn: (input: { host: string; port: number }) =>
+      resetSshHostFingerprint({ workspaceId, ...input }),
+    onSuccess: () => {
+      setTrustDialogState((prev) => ({ ...prev, open: false, mismatchError: null }));
+      const targetConnectionId = trustDialogState.connectionId ?? selectedConnectionId;
+      if (targetConnectionId) {
+        connectMutation.reset();
+        connectMutation.mutate(targetConnectionId);
+      }
+    },
+    onError: (error) => handleError(error, { key: "ssh.trust.resetFailed" }),
+  });
+
+  function resetHostAndReconnect() {
+    if (!trustDialogState.host) {
+      return;
+    }
+    resetHostKeyMutation.mutate({
+      host: trustDialogState.host,
+      port: trustDialogState.port,
+    });
+  }
 
   function updateForm(patch: Partial<SshConnectionInput>) {
     setForm((current) => ({ ...current, ...patch, workspaceId }));
@@ -742,9 +770,11 @@ export function TerminalPage({
         onOpenChange={(open) =>
           setTrustDialogState((prev) => ({ ...prev, open }))
         }
+        onResetAndReconnect={resetHostAndReconnect}
         open={trustDialogState.open}
         pending={connectMutation.isPending}
         port={trustDialogState.port}
+        resetPending={resetHostKeyMutation.isPending}
       />
     </div>
   );

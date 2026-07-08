@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { updateWorkspaceLayout } from "@unfour/command-client";
+import { useFeedbackErrorHandler } from "@unfour/ui";
 import { useWorkspaceStore } from "@unfour/workspace-core";
 
 export function useLayoutPersistence(activeWorkspaceId: string | null) {
@@ -14,10 +15,12 @@ export function useLayoutPersistence(activeWorkspaceId: string | null) {
     snapshotLayout,
     tabs,
   } = useWorkspaceStore();
+  const handleError = useFeedbackErrorHandler();
 
   const layoutMutation = useMutation({
     mutationFn: (workspaceId: string) =>
       updateWorkspaceLayout(workspaceId, snapshotLayout(workspaceId)),
+    onError: (error) => handleError(error, { key: "feedback.layout.saveFailed" }),
   });
 
   // Keep a stable ref to the mutate function so the debounced effect

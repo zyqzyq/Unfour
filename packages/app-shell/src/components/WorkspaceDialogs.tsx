@@ -9,7 +9,7 @@ import {
   updateWorkspaceEnvironment,
 } from "@unfour/command-client";
 import type { Workspace, WorkspaceEnvironmentType } from "@unfour/command-client";
-import { Button, Input, Select, useI18n } from "@unfour/ui";
+import { Button, Input, Select, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
 import { useWorkspaceStore } from "@unfour/workspace-core";
 
 export function WorkspaceDialogs({
@@ -38,6 +38,7 @@ export function WorkspaceDialogs({
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const { setActiveWorkspace } = useWorkspaceStore();
+  const handleError = useFeedbackErrorHandler();
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspaceEnvironment, setWorkspaceEnvironment] =
     useState<WorkspaceEnvironmentType>("dev");
@@ -54,6 +55,11 @@ export function WorkspaceDialogs({
   const canDelete =
     Boolean(activeWorkspace) && !activeWorkspace?.isDefault && workspaces.length > 1;
 
+  const createNameConflict = isDuplicateName(workspaceName);
+  const renameNameConflict = activeWorkspace
+    ? isDuplicateName(renameDraft, activeWorkspace.id)
+    : false;
+
   const createWorkspaceMutation = useMutation({
     mutationFn: ({
       environmentType,
@@ -65,13 +71,21 @@ export function WorkspaceDialogs({
     onSuccess: (workspace) => {
       setActiveWorkspace(workspace.id);
       queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      setWorkspaceName("");
+      setWorkspaceEnvironment("dev");
+      onCreateClose();
     },
+    onError: (error) => handleError(error, { key: "feedback.workspace.createFailed" }),
   });
 
   const renameWorkspaceMutation = useMutation({
     mutationFn: ({ name, workspaceId }: { name: string; workspaceId: string }) =>
       renameWorkspace(workspaceId, name),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workspaces"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      onRenameClose();
+    },
+    onError: (error) => handleError(error, { key: "feedback.workspace.renameFailed" }),
   });
 
   const deleteWorkspaceMutation = useMutation({
@@ -79,7 +93,9 @@ export function WorkspaceDialogs({
     onSuccess: (state) => {
       setActiveWorkspace(state.activeWorkspaceId);
       queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      onDeleteClose();
     },
+    onError: (error) => handleError(error, { key: "feedback.workspace.deleteFailed" }),
   });
 
   const updateEnvironmentMutation = useMutation({
@@ -90,29 +106,34 @@ export function WorkspaceDialogs({
       environmentType: WorkspaceEnvironmentType;
       workspaceId: string;
     }) => updateWorkspaceEnvironment(workspaceId, environmentType),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workspaces"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      onEnvironmentClose();
+    },
+    onError: (error) => handleError(error, { key: "feedback.workspace.environmentFailed" }),
   });
 
   function createWorkspaceFromDialog(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = workspaceName.trim();
-    if (!name) {
+    if (!name || isDuplicateName(workspaceName)) {
       return;
     }
     createWorkspaceMutation.mutate({ name, environmentType: workspaceEnvironment });
-    setWorkspaceName("");
-    setWorkspaceEnvironment("dev");
-    onCreateClose();
   }
 
   function renameWorkspaceFromDialog(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = renameDraft.trim();
-    if (!activeWorkspace || !name || name === activeWorkspace.name) {
+    if (
+      !activeWorkspace ||
+      !name ||
+      name === activeWorkspace.name ||
+      isDuplicateName(renameDraft, activeWorkspace.id)
+    ) {
       return;
     }
     renameWorkspaceMutation.mutate({ workspaceId: activeWorkspace.id, name });
-    onRenameClose();
   }
 
   function deleteWorkspaceFromDialog() {
@@ -120,7 +141,6 @@ export function WorkspaceDialogs({
       return;
     }
     deleteWorkspaceMutation.mutate(activeWorkspace.id);
-    onDeleteClose();
   }
 
   function updateEnvironmentFromDialog(event: FormEvent<HTMLFormElement>) {
@@ -132,7 +152,18 @@ export function WorkspaceDialogs({
       workspaceId: activeWorkspace.id,
       environmentType: environmentDraft,
     });
-    onEnvironmentClose();
+  }
+
+  function isDuplicateName(name: string, exceptId?: string): boolean {
+    const trimmed = name.trim().toLowerCase();
+    if (!trimmed) {
+      return false;
+    }
+    return workspaces.some(
+      (workspace) =>
+        workspace.id !== exceptId &&
+        workspace.name.trim().toLowerCase() === trimmed,
+    );
   }
 
   const environmentOptions = [
@@ -160,6 +191,11 @@ export function WorkspaceDialogs({
                 placeholder={t("app.workspace.dialog.namePlaceholder")}
                 value={workspaceName}
               />
+              {createNameConflict && (
+                <p className="rounded border border-[var(--u-badge-danger-ring)] bg-[var(--u-badge-danger-bg)] px-3 py-2 text-xs text-[var(--u-badge-danger-text)]">
+                  {t("app.workspace.dialog.nameExists")}
+                </p>
+              )}
               <label className="block space-y-1.5 text-sm text-[var(--u-color-text)]">
                 <span className="font-medium">{t("app.workspace.environment.label")}</span>
                 <Select
@@ -179,7 +215,7 @@ export function WorkspaceDialogs({
                     {t("app.workspace.dialog.cancel")}
                   </Button>
                 </Dialog.Close>
-                <Button disabled={createWorkspaceMutation.isPending || !workspaceName.trim()} type="submit">
+                <Button disabled={createWorkspaceMutation.isPending || !workspaceName.trim() || createNameConflict} type="submit">
                   {t("app.workspace.dialog.create")}
                 </Button>
               </div>
@@ -254,6 +290,11 @@ export function WorkspaceDialogs({
                 placeholder={t("app.workspace.dialog.namePlaceholder")}
                 value={renameDraft}
               />
+              {renameNameConflict && (
+                <p className="rounded border border-[var(--u-badge-danger-ring)] bg-[var(--u-badge-danger-bg)] px-3 py-2 text-xs text-[var(--u-badge-danger-text)]">
+                  {t("app.workspace.dialog.nameExists")}
+                </p>
+              )}
               <div className="flex justify-end gap-2">
                 <Dialog.Close asChild>
                   <Button type="button" variant="outline">
@@ -264,7 +305,8 @@ export function WorkspaceDialogs({
                   disabled={
                     renameWorkspaceMutation.isPending ||
                     !renameDraft.trim() ||
-                    renameDraft.trim() === activeWorkspace?.name
+                    renameDraft.trim() === activeWorkspace?.name ||
+                    renameNameConflict
                   }
                   type="submit"
                 >

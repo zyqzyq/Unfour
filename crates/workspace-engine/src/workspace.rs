@@ -111,6 +111,7 @@ impl WorkspaceService {
         mcp_policy: Option<String>,
     ) -> AppResult<Workspace> {
         let name = normalize_name(name)?;
+        self.assert_name_unique(&name, None).await?;
         let environment_type = normalize_environment_type(environment_type)?;
         let mcp_policy = normalize_mcp_policy(mcp_policy)?;
         let now = Utc::now().to_rfc3339();
@@ -181,6 +182,7 @@ impl WorkspaceService {
 
     pub async fn rename(&self, workspace_id: String, name: String) -> AppResult<Workspace> {
         let name = normalize_name(name)?;
+        self.assert_name_unique(&name, Some(&workspace_id)).await?;
         let now = Utc::now().to_rfc3339();
 
         let result = sqlx::query(
@@ -379,6 +381,23 @@ impl WorkspaceService {
         .execute(self.db.pool())
         .await?;
 
+        Ok(())
+    }
+
+    async fn assert_name_unique(&self, name: &str, except_id: Option<&str>) -> AppResult<()> {
+        let existing: Option<(String,)> = sqlx::query_as(
+            "SELECT id FROM workspaces WHERE name COLLATE NOCASE = ?1 AND deleted_at IS NULL AND (?2 IS NULL OR id <> ?2) LIMIT 1",
+        )
+        .bind(name)
+        .bind(except_id)
+        .fetch_optional(self.db.pool())
+        .await?;
+
+        if existing.is_some() {
+            return Err(AppError::Validation(format!(
+                "workspace name already exists: {name}"
+            )));
+        }
         Ok(())
     }
 }

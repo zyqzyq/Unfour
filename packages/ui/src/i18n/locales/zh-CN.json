@@ -109,6 +109,7 @@
         "environmentDescription": "选择用于 MCP 安全默认值的工作区环境。",
         "environmentTitle": "修改环境",
         "namePlaceholder": "工作区名称",
+        "nameExists": "该工作区名称已存在",
         "rename": "重命名",
         "renameDescription": "重命名当前工作区。已有的工作区记录会继续关联到它。",
         "renameTitle": "重命名工作区",
@@ -349,6 +350,21 @@
     },
     "state": {
       "loading": "加载中..."
+    }
+  },
+  "feedback": {
+    "dismiss": "关闭提示",
+    "error": {
+      "default": "操作失败"
+    },
+    "layout": {
+      "saveFailed": "布局保存失败"
+    },
+    "workspace": {
+      "createFailed": "创建工作区失败",
+      "deleteFailed": "删除工作区失败",
+      "environmentFailed": "更新环境失败",
+      "renameFailed": "重命名工作区失败"
     }
   },
   "database": {
@@ -726,7 +742,9 @@
       "trustedSince": "信任于 {date}",
       "trustedSinceUnknown": "未知",
       "verifiedTitle": "主机密钥已验证",
-      "verifyTitle": "确认信任新主机"
+      "verifyTitle": "确认信任新主机",
+      "resetAndReconnect": "重置并重连",
+      "resetFailed": "重置主机密钥失败"
     },
     "state": {
       "loadingWorkspace": "正在加载终端工作区..."

@@ -39,6 +39,57 @@ async fn initial_schema_enforces_environment_name_uniqueness() {
 }
 
 #[tokio::test]
+async fn workspace_name_must_be_unique_globally() {
+    let db = test_db().await;
+    db.migrate().await.expect("run migrations");
+    let now = Utc::now().to_rfc3339();
+
+    sqlx::query(
+        r#"
+        INSERT INTO workspaces (
+          id, name, is_default, created_at, updated_at, revision, sync_status
+        )
+        VALUES ('ws-1', 'Alpha', 0, ?1, ?1, 1, 'local')
+        "#,
+    )
+    .bind(&now)
+    .execute(db.pool())
+    .await
+    .expect("insert first workspace");
+
+    let duplicate = sqlx::query(
+        r#"
+        INSERT INTO workspaces (
+          id, name, is_default, created_at, updated_at, revision, sync_status
+        )
+        VALUES ('ws-2', 'Alpha', 0, ?1, ?1, 1, 'local')
+        "#,
+    )
+    .bind(&now)
+    .execute(db.pool())
+    .await;
+
+    assert!(duplicate.is_err(), "workspace names must be unique globally");
+
+    let case_variant = sqlx::query(
+        r#"
+        INSERT INTO workspaces (
+          id, name, is_default, created_at, updated_at, revision, sync_status
+        )
+        VALUES ('ws-3', 'alpha', 0, ?1, ?1, 1, 'local')
+        "#,
+    )
+    .bind(&now)
+    .execute(db.pool())
+    .await;
+
+    assert!(
+        case_variant.is_err(),
+        "workspace names must be unique ignoring case"
+    );
+}
+
+#[tokio::test]
 async fn initial_schema_rejects_cross_workspace_request_locations() {
     let db = test_db().await;
     db.migrate().await.expect("run migrations");

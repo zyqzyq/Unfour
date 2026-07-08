@@ -109,6 +109,7 @@
         "environmentDescription": "Choose the workspace environment used for MCP safety defaults.",
         "environmentTitle": "Change environment",
         "namePlaceholder": "Workspace name",
+        "nameExists": "A workspace with this name already exists",
         "rename": "Rename",
         "renameDescription": "Rename the active workspace. Existing workspace-scoped records stay attached to it.",
         "renameTitle": "Rename workspace",
@@ -350,6 +351,21 @@
     "state": {
       "loading": "Loading...",
       "unavailable": "Unavailable"
+    }
+  },
+  "feedback": {
+    "dismiss": "Dismiss",
+    "error": {
+      "default": "Operation failed"
+    },
+    "layout": {
+      "saveFailed": "Failed to save layout"
+    },
+    "workspace": {
+      "createFailed": "Failed to create workspace",
+      "deleteFailed": "Failed to delete workspace",
+      "environmentFailed": "Failed to update environment",
+      "renameFailed": "Failed to rename workspace"
     }
   },
   "database": {
@@ -728,7 +744,9 @@
       "trustedSince": "Trusted since {date}",
       "trustedSinceUnknown": "unknown",
       "verifiedTitle": "Host Key Verified",
-      "verifyTitle": "Confirm New Host Trust"
+      "verifyTitle": "Confirm New Host Trust",
+      "resetAndReconnect": "Reset & Reconnect",
+      "resetFailed": "Failed to reset host key"
     },
     "state": {
       "loadingWorkspace": "Loading terminal workspace..."

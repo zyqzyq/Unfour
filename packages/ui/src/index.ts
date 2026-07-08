@@ -70,6 +70,16 @@ export {
 } from "./shell";
   export { EmptyState, ErrorState, LoadingState } from "./states";
 export {
+  FeedbackProvider,
+  useFeedback,
+  useFeedbackErrorHandler,
+  redactForLog,
+  SENSITIVE_KEYS,
+  type FeedbackApi,
+  type FeedbackOptions,
+  type FeedbackTone,
+} from "./feedback";
+export {
   ThemeProvider,
   useTheme,
   type Theme,
