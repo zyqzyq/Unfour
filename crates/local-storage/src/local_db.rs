@@ -15,6 +15,8 @@ const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 const CORE_INITIAL_MIGRATION_VERSION: i64 = 20260707110000;
 #[cfg(test)]
 const CORE_FOLDER_CYCLES_MIGRATION_VERSION: i64 = 20260707123000;
+#[cfg(test)]
+const CORE_CONSTRAINT_HARDENING_MIGRATION_VERSION: i64 = 20260708113000;
 
 #[derive(Clone)]
 pub struct LocalDb {

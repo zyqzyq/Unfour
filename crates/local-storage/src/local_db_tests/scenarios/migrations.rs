@@ -43,6 +43,7 @@ async fn migrate_records_timestamped_core_migrations() {
         vec![
             (CORE_INITIAL_MIGRATION_VERSION,),
             (CORE_FOLDER_CYCLES_MIGRATION_VERSION,),
+            (CORE_CONSTRAINT_HARDENING_MIGRATION_VERSION,),
         ],
         "only timestamped core migrations should run"
     );
@@ -75,6 +76,7 @@ async fn migrate_ignores_legacy_local_numbered_records() {
             (2,),
             (CORE_INITIAL_MIGRATION_VERSION,),
             (CORE_FOLDER_CYCLES_MIGRATION_VERSION,),
+            (CORE_CONSTRAINT_HARDENING_MIGRATION_VERSION,),
         ],
         "legacy pre-timestamp records should be ignored, not removed"
     );
