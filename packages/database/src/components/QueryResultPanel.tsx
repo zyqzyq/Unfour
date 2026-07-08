@@ -1,4 +1,4 @@
-import { Clipboard, Download, FileDown, FileJson, Trash2 } from "lucide-react";
+import { Clipboard, Download, FileDown, FileJson, Info, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { DatabaseQueryResult } from "@unfour/command-client";
 import {
@@ -159,6 +159,21 @@ export function QueryResultPanel({
   );
 }
 
+const QUERY_CANCELLED_CODE = "QUERY_CANCELLED";
+
+function isCancelledError(error: unknown): error is { code: string; message?: string } {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === QUERY_CANCELLED_CODE
+  );
+}
+
+function cancelledErrorMessage(error: unknown): string {
+  const message = (error as { message?: unknown }).message;
+  return typeof message === "string" && message.length > 0 ? message : "Query cancelled";
+}
+
 function renderResults({
   error,
   isPending,
@@ -171,6 +186,19 @@ function renderResults({
   result: DatabaseQueryResult | null;
 }) {
   if (error) {
+    if (isCancelledError(error)) {
+      // A cancelled query is a user-initiated action, not a failure – render it
+      // as neutral info rather than a scary red error.
+      return (
+        <div
+          className="m-2 flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-center text-[12px] text-[var(--u-color-text-soft)]"
+          role="status"
+        >
+          <Info size={16} />
+          <span>{cancelledErrorMessage(error)}</span>
+        </div>
+      );
+    }
     return (
       <ErrorState className="m-2 min-h-0 flex-1">
         <DatabaseErrorDetails confirmation={pendingConfirmation} error={error} />

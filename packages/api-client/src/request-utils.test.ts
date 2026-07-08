@@ -11,7 +11,6 @@ import {
   isSensitiveKey,
   formatByteSize,
   nextEnvironmentName,
-  parseCollectionImport,
   queryFromUrl,
   stripUrlQuery,
   syncUrlQuery,
@@ -362,43 +361,6 @@ describe("formatByteSize", () => {
   it("formats megabytes", () => {
     expect(formatByteSize(1048576)).toBe("1.0 MB");
     expect(formatByteSize(10485760)).toBe("10 MB");
-  });
-});
-
-describe("parseCollectionImport", () => {
-  it("parses an array of requests", () => {
-    const items = [
-      { method: "GET", url: "https://example.com", name: "Test" },
-    ];
-    const result = parseCollectionImport(items, "ws-1");
-    expect(result).toHaveLength(1);
-    expect(result[0].method).toBe("GET");
-    expect(result[0].workspaceId).toBe("ws-1");
-  });
-
-  it("parses object with savedRequests property", () => {
-    const input = { savedRequests: [{ method: "POST", url: "https://api.test" }] };
-    const result = parseCollectionImport(input, "ws-1");
-    expect(result).toHaveLength(1);
-    expect(result[0].method).toBe("POST");
-  });
-
-  it("filters invalid items", () => {
-    const items = [
-      { method: "GET", url: "https://valid.com" },
-      "not an object",
-      { method: 123, url: "bad" },
-      null,
-      { url: "missing method" },
-    ];
-    const result = parseCollectionImport(items, "ws-1");
-    expect(result).toHaveLength(1);
-  });
-
-  it("returns empty for invalid input", () => {
-    expect(parseCollectionImport(null, "ws-1")).toEqual([]);
-    expect(parseCollectionImport("string", "ws-1")).toEqual([]);
-    expect(parseCollectionImport(42, "ws-1")).toEqual([]);
   });
 });
 

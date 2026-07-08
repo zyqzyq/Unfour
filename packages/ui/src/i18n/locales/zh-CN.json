@@ -331,6 +331,11 @@
       "openRequests": "已打开的 API 请求",
       "unsaved": "未保存的请求"
     },
+    "history": {
+      "open": "打开",
+      "saveAsRequest": "保存为请求",
+      "copyUrl": "复制 URL"
+    },
     "title": "API 调试器"
   },
   "common": {
@@ -365,6 +370,35 @@
       "deleteFailed": "删除工作区失败",
       "environmentFailed": "更新环境失败",
       "renameFailed": "重命名工作区失败"
+    },
+    "api": {
+      "collectionCreateFailed": "创建集合失败",
+      "collectionRenameFailed": "重命名集合失败",
+      "collectionDeleteFailed": "删除集合失败",
+      "folderCreateFailed": "创建文件夹失败",
+      "folderRenameFailed": "重命名文件夹失败",
+      "folderDeleteFailed": "删除文件夹失败",
+      "folderMoveFailed": "移动文件夹失败",
+      "requestDuplicateFailed": "复制请求失败",
+      "requestDeleteFailed": "删除请求失败",
+      "requestRenameFailed": "重命名请求失败",
+      "requestMoveFailed": "移动请求失败",
+      "environmentCreateFailed": "创建环境变量失败",
+      "environmentUpdateFailed": "更新环境变量失败",
+      "environmentDeleteFailed": "删除环境变量失败",
+      "environmentActivateFailed": "激活环境变量失败",
+      "environmentDuplicateFailed": "复制环境变量失败"
+    },
+    "ssh": {
+      "inputFailed": "发送终端输入失败",
+      "resizeFailed": "调整终端大小失败"
+    },
+    "database": {
+      "savedSqlDeleteFailed": "删除已保存 SQL 失败",
+      "clipboardFailed": "复制到剪贴板失败"
+    },
+    "command": {
+      "actionFailed": "操作失败"
     }
   },
   "database": {

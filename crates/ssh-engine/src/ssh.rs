@@ -105,6 +105,11 @@ const EMIT_FLUSH_INTERVAL: std::time::Duration = std::time::Duration::from_milli
 #[cfg(feature = "ssh-native")]
 const EMIT_FLUSH_BYTES: usize = 16 * 1024;
 
+/// Maximum number of in-memory session events retained per session. The event
+/// log is only consumed by `export_log`; older entries are dropped once this
+/// cap is reached so a long-lived session cannot grow it without bound.
+const MAX_SESSION_EVENTS: usize = 2000;
+
 #[cfg(feature = "ssh-native")]
 struct NativeSshHandle {
     handle: std::sync::Arc<tokio::sync::Mutex<russh::client::Handle<SshClientHandler>>>,
@@ -766,7 +771,7 @@ impl SshService {
                 data: redact_ssh_log(&input.data).0,
                 created_at: now.clone(),
             };
-            state.events.push(input_event);
+            record_session_event(state, input_event.clone());
             let event = SshSessionEvent {
                 session_id: input.session_id.clone(),
                 kind: "output".to_string(),
@@ -775,7 +780,11 @@ impl SshService {
             };
             #[cfg(not(feature = "ssh-native"))]
             {
-                state.events.push(event.clone());
+                // Persist the redacted input together with the terminal output
+                // so it survives after the in-memory session entry is dropped on
+                // close (issue #4) and still appears in exported logs.
+                state.pending_output.push_str(&input_event.data);
+                record_session_event(state, event.clone());
                 state.pending_output.push_str(&event.data);
             }
             state.summary.updated_at = now;
@@ -836,7 +845,7 @@ impl SshService {
                 data: format!("PTY resized to {}x{}.\r\n", input.cols, input.rows),
                 created_at: now,
             };
-            state.events.push(event.clone());
+            record_session_event(state, event.clone());
             event
         };
         self.persist_session_summary(&input.session_id).await?;
@@ -850,6 +859,27 @@ impl SshService {
             fields,
         );
         Ok(event)
+    }
+
+    // Return the persisted, disconnected summary for a session that was already
+    // closed and dropped from memory, so a repeated close is idempotent.
+    async fn persisted_disconnected_summary(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+    ) -> AppResult<SshSessionSummary> {
+        match self
+            .terminal_history
+            .get_session(workspace_id, session_id)
+            .await?
+        {
+            Some(mut summary) => {
+                summary.status = "disconnected".to_string();
+                summary.reconnect_attempt = 0;
+                Ok(summary)
+            }
+            None => Err(AppError::NotFound("ssh session".to_string())),
+        }
     }
 
     pub async fn close_session(&self, input: SshCloseInput) -> AppResult<SshSessionSummary> {
@@ -866,20 +896,25 @@ impl SshService {
             serde_json::json!({}),
         );
 
-        // Extract native handle and update state under the lock.
+        // Extract native handle and update state under the lock. A missing entry
+        // means the session was already closed and dropped from memory; the
+        // idempotent path below handles that.
         #[cfg(feature = "ssh-native")]
         let native_handle: Option<NativeSshHandle> = {
             let mut sessions = self
                 .sessions
                 .lock()
                 .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?;
-            let state =
-                session_for_workspace_mut(&mut sessions, &input.workspace_id, &input.session_id)?;
-            state.intentional_close = true;
-            if let Some(cancel_tx) = state.cancel_tx.take() {
-                let _ = cancel_tx.send(true);
+            match sessions.get_mut(&input.session_id) {
+                Some(state) if state.summary.workspace_id == input.workspace_id => {
+                    state.intentional_close = true;
+                    if let Some(cancel_tx) = state.cancel_tx.take() {
+                        let _ = cancel_tx.send(true);
+                    }
+                    state.native_handle.take()
+                }
+                _ => None,
             }
-            state.native_handle.take()
         };
 
         // Close channel and disconnect native transport outside the mutex lock.
@@ -893,32 +928,42 @@ impl SshService {
                 .await;
         }
 
-        // Update session status under the lock.
+        // Mark the session disconnected, persist its terminal output, then drop
+        // the in-memory entry. Removing the entry is the core of the leak fix
+        // (#4): the session map can no longer grow without bound across the
+        // process lifetime. The persisted output survives in `terminal_history`.
         let summary = {
             let mut sessions = self
                 .sessions
                 .lock()
                 .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?;
-            let state =
-                session_for_workspace_mut(&mut sessions, &input.workspace_id, &input.session_id)?;
-            if state.summary.status != "disconnected" {
-                let now = Utc::now().to_rfc3339();
-                state.intentional_close = true;
-                state.summary.status = "disconnected".to_string();
-                state.summary.reconnect_attempt = 0;
-                state.summary.updated_at = now.clone();
-                state.events.push(SshSessionEvent {
-                    session_id: input.session_id.clone(),
-                    kind: "close".to_string(),
-                    data: "SSH session closed.\r\n".to_string(),
-                    created_at: now,
-                });
-                state.pending_output.push_str("SSH session closed.\r\n");
+            match sessions.get_mut(&input.session_id) {
+                Some(state) if state.summary.workspace_id == input.workspace_id => {
+                    if state.summary.status != "disconnected" {
+                        let now = Utc::now().to_rfc3339();
+                        state.intentional_close = true;
+                        state.summary.status = "disconnected".to_string();
+                        state.summary.reconnect_attempt = 0;
+                        state.summary.updated_at = now;
+                        state.pending_output.push_str("SSH session closed.\r\n");
+                    }
+                    state.summary.clone()
+                }
+                _ => {
+                    // Already closed and dropped from memory: return the persisted
+                    // disconnected summary so repeated closes are idempotent.
+                    return self
+                        .persisted_disconnected_summary(&input.workspace_id, &input.session_id)
+                        .await;
+                }
             }
-            state.summary.clone()
         };
         self.flush_session_history(&input.session_id).await?;
         self.terminal_history.update_session(&summary).await?;
+        self.sessions
+            .lock()
+            .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?
+            .remove(&input.session_id);
         unfour_diag::log_operation_event(
             "ssh_disconnected",
             "ssh",
@@ -944,13 +989,16 @@ impl SshService {
                 .sessions
                 .lock()
                 .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?;
-            let state =
-                session_for_workspace_mut(&mut sessions, &input.workspace_id, &input.session_id)?;
-            state.intentional_close = true;
-            if let Some(cancel_tx) = state.cancel_tx.take() {
-                let _ = cancel_tx.send(true);
+            match sessions.get_mut(&input.session_id) {
+                Some(state) if state.summary.workspace_id == input.workspace_id => {
+                    state.intentional_close = true;
+                    if let Some(cancel_tx) = state.cancel_tx.take() {
+                        let _ = cancel_tx.send(true);
+                    }
+                    state.native_handle.take()
+                }
+                _ => None,
             }
-            state.native_handle.take()
         };
 
         #[cfg(feature = "ssh-native")]
@@ -958,6 +1006,8 @@ impl SshService {
             let _ = native.writer.close().await;
         }
 
+        // Mark disconnected, persist terminal output, then drop the in-memory
+        // entry so the session map cannot grow without bound (#4).
         let summary = {
             let mut sessions = self
                 .sessions
@@ -970,12 +1020,6 @@ impl SshService {
             state.summary.status = "disconnected".to_string();
             state.summary.reconnect_attempt = 0;
             state.summary.updated_at = now.clone();
-            state.events.push(SshSessionEvent {
-                session_id: input.session_id.clone(),
-                kind: "close".to_string(),
-                data: "SSH reconnect cancelled.\r\n".to_string(),
-                created_at: now,
-            });
             state
                 .pending_output
                 .push_str("SSH reconnect cancelled.\r\n");
@@ -983,38 +1027,41 @@ impl SshService {
         };
         self.flush_session_history(&input.session_id).await?;
         self.terminal_history.update_session(&summary).await?;
+        self.sessions
+            .lock()
+            .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?
+            .remove(&input.session_id);
         Ok(summary)
     }
 
-    pub fn export_log(&self, input: SshLogExportInput) -> AppResult<SshLogExport> {
+    pub async fn export_log(&self, input: SshLogExportInput) -> AppResult<SshLogExport> {
         validate_workspace_id(&input.workspace_id)?;
         validate_session_id(&input.session_id)?;
-        let sessions = self
+        // Fast path: a live session still holds its structured event log in
+        // memory, so export directly from there.
+        if let Some(state) = self
             .sessions
             .lock()
-            .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?;
-        let state = sessions
+            .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?
             .get(&input.session_id)
-            .filter(|state| state.summary.workspace_id == input.workspace_id)
-            .ok_or_else(|| AppError::NotFound("ssh session".to_string()))?;
-
-        let mut redacted = false;
-        let lines = state
-            .events
-            .iter()
-            .map(|event| {
-                let (data, event_redacted) = redact_ssh_log(&event.data);
-                redacted |= event_redacted;
-                format!("[{}] {} {}", event.created_at, event.kind, data)
-            })
-            .collect::<Vec<_>>();
-        Ok(SshLogExport {
-            session_id: input.session_id,
-            filename: format!("ssh-session-{}.log", state.summary.session_id),
-            line_count: lines.len(),
-            content: lines.join("\n"),
-            redacted,
-        })
+        {
+            if state.summary.workspace_id == input.workspace_id {
+                return Ok(build_ssh_log_export(
+                    &state.summary.session_id,
+                    &state.events,
+                ));
+            }
+        }
+        // Closed session: the in-memory entry was dropped to bound memory, so
+        // export the persisted, redacted terminal output instead.
+        let history = self
+            .terminal_history
+            .hydrate(&input.workspace_id, &input.session_id)
+            .await?;
+        if history.is_empty() {
+            return Err(AppError::NotFound("ssh session".to_string()));
+        }
+        Ok(build_ssh_log_export(&input.session_id, &history))
     }
 
     pub fn capability_summary(&self) -> serde_json::Value {
@@ -1275,11 +1322,14 @@ impl SshService {
                 .collect()
         };
 
-        {
+        // Mark live sessions disconnected, capture their ids, and append the
+        // close notice to the persisted terminal output.
+        let session_ids: Vec<String> = {
             let mut sessions = self
                 .sessions
                 .lock()
                 .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?;
+            let mut ids = Vec::new();
             for state in sessions.values_mut().filter(|state| {
                 state.summary.workspace_id == workspace_id
                     && state.summary.connection_id == connection_id
@@ -1297,13 +1347,27 @@ impl SshService {
                 state.summary.status = "disconnected".to_string();
                 state.summary.reconnect_attempt = 0;
                 state.summary.updated_at = now.clone();
-                state.events.push(SshSessionEvent {
-                    session_id: state.summary.session_id.clone(),
-                    kind: "close".to_string(),
-                    data: "SSH session closed because the connection was deleted.\r\n".to_string(),
-                    created_at: now.clone(),
-                });
+                state.pending_output.push_str(
+                    "SSH session closed because the connection was deleted.\r\n",
+                );
+                ids.push(state.summary.session_id.clone());
             }
+            ids
+        };
+
+        // Flush buffered terminal output to the database before dropping entries.
+        for id in &session_ids {
+            let _ = self.flush_session_history(id).await;
+        }
+
+        // Drop the in-memory entries so the session map cannot grow without
+        // bound across the process lifetime (#4).
+        {
+            let mut sessions = self
+                .sessions
+                .lock()
+                .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?;
+            sessions.retain(|id, _| !session_ids.contains(id));
         }
 
         // Disconnect native handles outside the mutex lock.
@@ -1968,7 +2032,7 @@ impl SshService {
             state.summary.status = status.to_string();
             state.summary.reconnect_attempt = attempt;
             state.summary.updated_at = now.clone();
-            state.events.push(SshSessionEvent {
+            record_session_event(state, SshSessionEvent {
                 session_id: session_id.to_string(),
                 kind: if status == "disconnected" || status == "failed" {
                     "close".to_string()
@@ -2217,6 +2281,47 @@ fn ensure_session_active(state: &SshSessionState) -> AppResult<()> {
         ));
     }
     Ok(())
+}
+
+/// Push a session event, dropping the oldest entries once the in-memory cap is
+/// exceeded. Session events are only used for `export_log`; trimming them keeps
+/// a long-lived session from growing the event vector without bound.
+fn record_session_event(state: &mut SshSessionState, event: SshSessionEvent) {
+    state.events.push(event);
+    if state.events.len() > MAX_SESSION_EVENTS {
+        let excess = state.events.len() - MAX_SESSION_EVENTS;
+        state.events.drain(0..excess);
+    }
+}
+
+/// Build a redacted session-log export from an event slice. Used for both live
+/// sessions (events held in memory) and closed sessions (events hydrated from
+/// the terminal-history store after the in-memory entry was dropped to bound
+/// memory growth, see issue #4).
+fn build_ssh_log_export(session_id: &str, events: &[SshSessionEvent]) -> SshLogExport {
+    let mut redacted = false;
+    let lines = events
+        .iter()
+        .map(|event| {
+            let (data, event_redacted) = redact_ssh_log(&event.data);
+            redacted |= event_redacted;
+            format!("[{}] {} {}", event.created_at, event.kind, data)
+        })
+        .collect::<Vec<_>>();
+    let content = lines.join("\n");
+    // Persisted (closed) sessions already had line-level redaction applied at
+    // append time; reflect that in the redacted flag so closed-session exports
+    // stay accurate.
+    if content.contains("<redacted>") {
+        redacted = true;
+    }
+    SshLogExport {
+        session_id: session_id.to_string(),
+        filename: format!("ssh-session-{}.log", session_id),
+        line_count: lines.len(),
+        content,
+        redacted,
+    }
 }
 
 fn is_live_status(status: &str) -> bool {

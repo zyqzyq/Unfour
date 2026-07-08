@@ -1,10 +1,8 @@
 export { ApiClientPage } from "./ApiClientPage";
 export { ApiClientSidebar } from "./components/ApiClientSidebar";
-export { ApiClientToolbar } from "./components/ApiClientToolbar";
 export { ApiCollectionTree } from "./components/ApiCollectionTree";
 export { ApiRequestEditor } from "./components/ApiRequestEditor";
 export { ApiResponseViewer } from "./components/ApiResponseViewer";
-export { RequestActionsMenu } from "./components/RequestActionsMenu";
 export { RequestParamsTabs } from "./components/RequestParamsTabs";
 export { ResponseTabs } from "./components/ResponseTabs";
 export { useApiHistory } from "./hooks/useApiHistory";

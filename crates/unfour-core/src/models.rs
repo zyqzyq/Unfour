@@ -75,6 +75,12 @@ pub struct WorkspaceLayout {
     pub selected_api_request_id: Option<String>,
     pub selected_database_connection_id: Option<String>,
     pub selected_ssh_connection_id: Option<String>,
+    #[serde(default)]
+    pub sidebar_width: i32,
+    #[serde(default)]
+    pub bottom_panel_height: i32,
+    #[serde(default)]
+    pub right_inspector_width: i32,
     pub updated_at: String,
 }
 

@@ -11,9 +11,11 @@ import {
   reorderApiRequests,
   type ApiCollectionFolder,
 } from "@unfour/command-client";
+import { useFeedbackErrorHandler } from "@unfour/ui";
 
 export function useApiCollectionFolders(workspaceId: string) {
   const queryClient = useQueryClient();
+  const handleError = useFeedbackErrorHandler();
 
   const query = useQuery({
     enabled: Boolean(workspaceId),
@@ -41,12 +43,14 @@ export function useApiCollectionFolders(workspaceId: string) {
         input.name,
       ),
     onSuccess: invalidateFolders,
+    onError: (error) => handleError(error, { key: "feedback.api.folderCreateFailed" }),
   });
 
   const renameFolderMut = useMutation({
     mutationFn: (input: { folderId: string; name: string }) =>
       renameApiCollectionFolder(workspaceId, input.folderId, input.name),
     onSuccess: invalidateFolders,
+    onError: (error) => handleError(error, { key: "feedback.api.folderRenameFailed" }),
   });
 
   const deleteFolderMut = useMutation({
@@ -55,6 +59,7 @@ export function useApiCollectionFolders(workspaceId: string) {
       invalidateFolders();
       invalidateSaved();
     },
+    onError: (error) => handleError(error, { key: "feedback.api.folderDeleteFailed" }),
   });
 
   const moveFolderMut = useMutation({
@@ -68,6 +73,7 @@ export function useApiCollectionFolders(workspaceId: string) {
         input.targetParentFolderId,
       ),
     onSuccess: invalidateFolders,
+    onError: (error) => handleError(error, { key: "feedback.api.folderMoveFailed" }),
   });
 
   const reorderFoldersMut = useMutation({
@@ -83,6 +89,7 @@ export function useApiCollectionFolders(workspaceId: string) {
         input.folderIds,
       ),
     onSuccess: invalidateFolders,
+    onError: (error) => handleError(error, { key: "feedback.api.folderMoveFailed" }),
   });
 
   const moveRequestMut = useMutation({
@@ -98,6 +105,7 @@ export function useApiCollectionFolders(workspaceId: string) {
         input.parentFolderId,
       ),
     onSuccess: invalidateSaved,
+    onError: (error) => handleError(error, { key: "feedback.api.requestMoveFailed" }),
   });
 
   const reorderRequestsMut = useMutation({
@@ -113,6 +121,7 @@ export function useApiCollectionFolders(workspaceId: string) {
         input.requestIds,
       ),
     onSuccess: invalidateSaved,
+    onError: (error) => handleError(error, { key: "feedback.api.requestMoveFailed" }),
   });
 
   const folders = useMemo<ApiCollectionFolder[]>(

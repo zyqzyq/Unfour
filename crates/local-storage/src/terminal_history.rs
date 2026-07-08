@@ -216,6 +216,23 @@ impl TerminalHistoryService {
         })
     }
 
+    /// Return a single session summary by id, or `None` if it is not present.
+    /// Used to support idempotent repeated closes after the in-memory entry has
+    /// been dropped (issue #4): a second close reads the persisted row instead
+    /// of erroring.
+    pub async fn get_session(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+    ) -> AppResult<Option<SshSessionSummary>> {
+        validate_workspace_id(workspace_id)?;
+        validate_session_id(session_id)?;
+        let sessions = self.list_sessions(workspace_id).await?;
+        Ok(sessions
+            .into_iter()
+            .find(|summary| summary.session_id == session_id))
+    }
+
     pub async fn delete_connection_history(
         &self,
         workspace_id: &str,

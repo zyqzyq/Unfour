@@ -4,7 +4,7 @@ import { DatabasePage } from "@unfour/database";
 import { TerminalLogPanel, TerminalPage, TerminalStatusBar } from "@unfour/ssh-terminal";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CommandPalette, FeedbackProvider, MainWorkspace, useI18n } from "@unfour/ui";
+import { CommandPalette, FeedbackProvider, MainWorkspace, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
 import {
   exportDiagnosticsBundle,
   getSystemHealth,
@@ -30,23 +30,27 @@ import { useWorkspaceInit } from "./components/useWorkspaceInit";
 export function DesktopApp() {
   const { t } = useI18n();
   const queryClient = useQueryClient();
+  const handleError = useFeedbackErrorHandler();
   const [bottomPanelCollapsed, setBottomPanelCollapsed] = useState(true);
-  const [bottomPanelHeight, setBottomPanelHeight] = useState(220);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [apiSidebarContent, setApiSidebarContent] = useState<ReactNode>(null);
   const [sshSidebarContent, setSshSidebarContent] = useState<ReactNode>(null);
   const [databaseSidebarContent, setDatabaseSidebarContent] = useState<ReactNode>(null);
   const [databaseStatusBarContent, setDatabaseStatusBarContent] = useState<ReactNode>(null);
   const [rightInspectorCollapsed, setRightInspectorCollapsed] = useState(true);
-  const [rightInspectorWidth, setRightInspectorWidth] = useState(300);
-  const [sidebarWidth, setSidebarWidth] = useState(248);
   const {
     activeTabId,
     activeWorkspaceId,
+    bottomPanelHeight,
+    rightInspectorWidth,
     setActiveTab,
     setActiveWorkspace,
+    setBottomPanelHeight,
+    setRightInspectorWidth,
     setSelectedApiRequest,
+    setSidebarWidth,
     sidebarCollapsed,
+    sidebarWidth,
     toggleSidebar,
     tabs,
   } = useWorkspaceStore();
@@ -68,10 +72,15 @@ export function DesktopApp() {
   });
   useWorkspaceInit(workspaceQuery.data?.activeWorkspaceId, workspaceLayoutQuery.data, sidebarDatabaseConnectionsQuery.data);
   useLayoutPersistence(activeWorkspace?.id ?? null);
-  const runCommandPaletteAction = useCallback((action: () => void | Promise<unknown>) => {
-    setCommandPaletteOpen(false);
-    void Promise.resolve(action()).catch(() => undefined);
-  }, []);
+  const runCommandPaletteAction = useCallback(
+    (action: () => void | Promise<unknown>) => {
+      setCommandPaletteOpen(false);
+      void Promise.resolve(action()).catch((error) =>
+        handleError(error, { key: "feedback.command.actionFailed" }),
+      );
+    },
+    [handleError],
+  );
   const activateWorkspaceMutation = useMutation({
     mutationFn: setActiveWorkspaceCommand,
     onSuccess: (state) => {

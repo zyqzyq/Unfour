@@ -331,6 +331,11 @@
       "openRequests": "Open API requests",
       "unsaved": "Unsaved request"
     },
+    "history": {
+      "open": "Open",
+      "saveAsRequest": "Save as Request",
+      "copyUrl": "Copy URL"
+    },
     "title": "API Debugger"
   },
   "common": {
@@ -366,6 +371,35 @@
       "deleteFailed": "Failed to delete workspace",
       "environmentFailed": "Failed to update environment",
       "renameFailed": "Failed to rename workspace"
+    },
+    "api": {
+      "collectionCreateFailed": "Failed to create collection",
+      "collectionRenameFailed": "Failed to rename collection",
+      "collectionDeleteFailed": "Failed to delete collection",
+      "folderCreateFailed": "Failed to create folder",
+      "folderRenameFailed": "Failed to rename folder",
+      "folderDeleteFailed": "Failed to delete folder",
+      "folderMoveFailed": "Failed to move folder",
+      "requestDuplicateFailed": "Failed to duplicate request",
+      "requestDeleteFailed": "Failed to delete request",
+      "requestRenameFailed": "Failed to rename request",
+      "requestMoveFailed": "Failed to move request",
+      "environmentCreateFailed": "Failed to create environment",
+      "environmentUpdateFailed": "Failed to update environment",
+      "environmentDeleteFailed": "Failed to delete environment",
+      "environmentActivateFailed": "Failed to activate environment",
+      "environmentDuplicateFailed": "Failed to duplicate environment"
+    },
+    "ssh": {
+      "inputFailed": "Failed to send terminal input",
+      "resizeFailed": "Failed to resize terminal"
+    },
+    "database": {
+      "savedSqlDeleteFailed": "Failed to delete saved SQL",
+      "clipboardFailed": "Copy to clipboard failed"
+    },
+    "command": {
+      "actionFailed": "Action failed"
     }
   },
   "database": {

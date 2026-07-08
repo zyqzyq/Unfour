@@ -6,6 +6,7 @@ import {
   saveSavedSql,
 } from "@unfour/command-client";
 import type { SavedSql, SavedSqlInput } from "@unfour/command-client";
+import { useFeedbackErrorHandler } from "@unfour/ui";
 
 export function savedSqlQueryKey(workspaceId: string) {
   return ["db-saved-sql", workspaceId] as const;
@@ -13,6 +14,7 @@ export function savedSqlQueryKey(workspaceId: string) {
 
 export function useSavedSql(workspaceId: string) {
   const queryClient = useQueryClient();
+  const handleError = useFeedbackErrorHandler();
   const queryKey = savedSqlQueryKey(workspaceId);
   const query = useQuery({
     enabled: Boolean(workspaceId),
@@ -30,6 +32,8 @@ export function useSavedSql(workspaceId: string) {
     onSuccess: (remaining: SavedSql[]) => {
       queryClient.setQueryData(queryKey, remaining);
     },
+    onError: (error) =>
+      handleError(error, { key: "feedback.database.savedSqlDeleteFailed" }),
   });
 
   // Keep `saved` referentially stable: react-query preserves query.data across
@@ -43,7 +47,10 @@ export function useSavedSql(workspaceId: string) {
 
   return {
     saved,
-    error: query.error ?? saveMutation.error ?? deleteMutation.error,
+    // Delete failures surface via the feedback toast (see deleteMutation.onError),
+    // so exclude deleteMutation.error here to avoid a duplicate inline ErrorState
+    // and to keep it from leaking into the unrelated save dialog.
+    error: query.error ?? saveMutation.error,
     isLoading: query.isLoading,
     save: (input: SavedSqlInput) => saveMutation.mutateAsync(input),
     savePending: saveMutation.isPending,

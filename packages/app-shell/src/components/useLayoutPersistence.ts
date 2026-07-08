@@ -7,11 +7,14 @@ import { useWorkspaceStore } from "@unfour/workspace-core";
 export function useLayoutPersistence(activeWorkspaceId: string | null) {
   const {
     activeTabId,
+    bottomPanelHeight,
     layoutWorkspaceId,
+    rightInspectorWidth,
     selectedApiRequestId,
     selectedDatabaseConnectionId,
     selectedSshConnectionId,
     sidebarCollapsed,
+    sidebarWidth,
     snapshotLayout,
     tabs,
   } = useWorkspaceStore();
@@ -48,6 +51,9 @@ export function useLayoutPersistence(activeWorkspaceId: string | null) {
     selectedDatabaseConnectionId,
     selectedSshConnectionId,
     sidebarCollapsed,
+    sidebarWidth,
+    bottomPanelHeight,
+    rightInspectorWidth,
     tabs,
   ]);
 

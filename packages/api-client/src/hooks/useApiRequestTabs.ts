@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   activateApiEnvironment,
@@ -38,7 +38,6 @@ import type {
 
 export function useApiRequestTabs(workspaceId: string) {
   const queryClient = useQueryClient();
-  const importInputRef = useRef<HTMLInputElement>(null);
   const [collectionStatus, setCollectionStatus] = useState("");
   const state = useApiRequestTabStore(
     (s) => s.byWorkspace[workspaceId] ?? DEFAULT_API_TAB_STATE,
@@ -112,19 +111,6 @@ export function useApiRequestTabs(workspaceId: string) {
       queryClient.invalidateQueries({
         queryKey: ["api-environments", workspaceId],
       }),
-  });
-  const importCollectionMutation = useMutation({
-    mutationFn: async (requests: ApiRequestInput[]) => {
-      for (const request of requests) {
-        await saveApiRequest({ ...request, workspaceId });
-      }
-      return requests.length;
-    },
-    onSuccess: (count) => {
-      setCollectionStatus(`Imported ${count} request${count === 1 ? "" : "s"}`);
-      queryClient.invalidateQueries({ queryKey: ["api-saved", workspaceId] });
-    },
-    onError: (error) => setCollectionStatus(formatError(error)),
   });
   const sendRequest = sendMutation.mutate;
   const saveRequest = saveMutation.mutateAsync;
@@ -229,7 +215,6 @@ export function useApiRequestTabs(workspaceId: string) {
     environments,
     envVariables,
     historyItems: historyQuery.data ?? [],
-    importInputRef,
     savedRequests: savedQuery.data ?? [],
     state,
     activateEnvironment: (environmentId: string | null) =>
@@ -238,7 +223,6 @@ export function useApiRequestTabs(workspaceId: string) {
       useApiRequestTabStore.getState().closeTab(workspaceId, tabId),
     closeTabs: (tabIds: string[]) =>
       useApiRequestTabStore.getState().closeTabs(workspaceId, tabIds),
-    importCollectionMutation,
     newRequest,
     openHistory,
     openSaved,

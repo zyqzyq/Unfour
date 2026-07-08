@@ -12,11 +12,23 @@ import {
   IconButton,
   StatusBadge,
   TreeView,
+  useFeedbackErrorHandler,
   useI18n,
   type TreeViewItem,
 } from "@unfour/ui";
 import { buildDatabaseTree, databaseTableTreeId } from "../model/database-tree";
 import type { DatabaseConnectionSessionState, DatabaseConnectionStatus } from "../model/types";
+
+async function copyToClipboard(value: string, onError: (error: unknown) => void) {
+  try {
+    if (!navigator.clipboard) {
+      throw new Error("Clipboard API is unavailable in this context");
+    }
+    await navigator.clipboard.writeText(value);
+  } catch (error) {
+    onError(error);
+  }
+}
 
 export function DatabaseConnectionTree({
   catalogNamesByConnection,
@@ -480,6 +492,7 @@ function SavedSqlContextMenu({
   onOpen?: (item: SavedSql) => void;
   t: ReturnType<typeof useI18n>["t"];
 }) {
+  const handleError = useFeedbackErrorHandler();
   return (
     <>
       {onOpen && (
@@ -488,7 +501,7 @@ function SavedSqlContextMenu({
           {t("database.tree.openSavedSql")}
         </ContextMenuItem>
       )}
-      <ContextMenuItem onSelect={() => void navigator.clipboard?.writeText(item.sql)}>
+      <ContextMenuItem onSelect={() => void copyToClipboard(item.sql, handleError)}>
         <Copy size={13} />
         {t("database.tree.copySavedSql")}
       </ContextMenuItem>
@@ -715,6 +728,7 @@ function TableContextMenu({
   t: ReturnType<typeof useI18n>["t"];
   table: DatabaseTable;
 }) {
+  const handleError = useFeedbackErrorHandler();
   return (
     <>
       {onPreviewTable && (
@@ -739,7 +753,7 @@ function TableContextMenu({
           {t("database.tree.generateInsert")}
         </ContextMenuItem>
       )}
-      <ContextMenuItem onSelect={() => void navigator.clipboard?.writeText(table.name)}>
+      <ContextMenuItem onSelect={() => void copyToClipboard(table.name, handleError)}>
         {t("database.tree.copyTableName")}
       </ContextMenuItem>
     </>
@@ -796,6 +810,7 @@ function ConnectionContextMenu({
   status: DatabaseConnectionStatus;
 }) {
   const { t } = useI18n();
+  const handleError = useFeedbackErrorHandler();
 
   return (
     <>
@@ -824,7 +839,7 @@ function ConnectionContextMenu({
           {t("database.tree.editConnection")}
         </ContextMenuItem>
       )}
-      <ContextMenuItem onSelect={() => void navigator.clipboard?.writeText(connection.name)}>
+      <ContextMenuItem onSelect={() => void copyToClipboard(connection.name, handleError)}>
         <Copy size={13} />
         {t("database.tree.copyName")}
       </ContextMenuItem>
@@ -861,6 +876,7 @@ function ConnectionRowMenu({
   status: DatabaseConnectionStatus;
 }) {
   const { t } = useI18n();
+  const handleError = useFeedbackErrorHandler();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -895,7 +911,7 @@ function ConnectionRowMenu({
             {t("database.tree.editConnection")}
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem onSelect={() => void navigator.clipboard?.writeText(connection.name)}>
+        <DropdownMenuItem onSelect={() => void copyToClipboard(connection.name, handleError)}>
           <Copy size={13} />
           {t("database.tree.copyName")}
         </DropdownMenuItem>

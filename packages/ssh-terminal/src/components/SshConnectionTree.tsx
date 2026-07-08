@@ -53,7 +53,6 @@ export function SshConnectionTree({
   onEditConnection,
   onNewConnection,
   onOpenTerminal,
-  onOpenTerminalSplit,
   workspaceId,
 }: {
   active?: boolean;
@@ -61,7 +60,6 @@ export function SshConnectionTree({
   onEditConnection?: (connection: SshConnection) => void;
   onNewConnection?: () => void;
   onOpenTerminal?: () => void;
-  onOpenTerminalSplit?: (connection: SshConnection) => void;
   workspaceId: string;
 }) {
   const { t } = useI18n();
@@ -277,7 +275,6 @@ export function SshConnectionTree({
           onSelect={() => {
             setSelectedSshConnection(connection.id);
             connect(connection, true);
-            onOpenTerminalSplit?.(connection);
           }}
         >
           {t("ssh.tree.openInSplit")}

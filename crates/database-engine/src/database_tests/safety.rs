@@ -29,6 +29,37 @@ fn classify_query_flags_writes_hidden_behind_explain_and_with() {
     assert!(!classify_query("SELECT updated_at, created_at FROM users").requires_confirmation);
 }
 
+#[test]
+fn classify_query_flags_select_into_as_write() {
+    // PostgreSQL `SELECT INTO table` creates a new table (schema change).
+    let pg = classify_query("SELECT * INTO new_table FROM users");
+    assert!(pg.requires_confirmation);
+    assert_eq!(pg.classification, "schema-change");
+
+    // MySQL `SELECT ... INTO OUTFILE` writes to the server filesystem.
+    let outfile = classify_query("SELECT * INTO OUTFILE '/tmp/out.csv' FROM users");
+    assert!(outfile.requires_confirmation);
+    assert_eq!(outfile.classification, "mutation");
+
+    // MySQL `SELECT ... INTO DUMPFILE` writes a single row to the server filesystem.
+    let dumpfile = classify_query("SELECT * INTO DUMPFILE '/tmp/out.txt' FROM users");
+    assert!(dumpfile.requires_confirmation);
+    assert_eq!(dumpfile.classification, "mutation");
+
+    // MySQL `SELECT ... INTO @var` is a harmless session assignment, still a read.
+    assert!(!classify_query("SELECT col INTO @var FROM users").requires_confirmation);
+
+    // Wrapped variants are caught too (the leading keyword is not `select`).
+    let wrapped_explain = classify_query("EXPLAIN ANALYZE SELECT * INTO new_table FROM users");
+    assert!(wrapped_explain.requires_confirmation);
+    assert_eq!(wrapped_explain.classification, "schema-change");
+
+    let wrapped_cte =
+        classify_query("WITH t AS (SELECT * INTO new_table FROM users) SELECT * FROM t");
+    assert!(wrapped_cte.requires_confirmation);
+    assert_eq!(wrapped_cte.classification, "schema-change");
+}
+
 #[tokio::test]
 async fn explain_analyze_write_requires_confirmation_before_execution() {
     let (service, workspace_id) = service_with_workspace().await;
@@ -211,6 +242,39 @@ async fn read_only_connection_blocks_writes_and_row_edits() {
         })
         .await;
     assert!(matches!(row, Err(AppError::ReadOnly(_))));
+
+    let _ = fs::remove_file(path);
+}
+
+#[tokio::test]
+async fn read_only_connection_blocks_select_into() {
+    let (service, workspace_id) = service_with_workspace().await;
+    let path = sqlite_fixture().await;
+    let connection = service
+        .save_connection(DatabaseConnectionInput {
+            read_only: true,
+            ..sqlite_input(&workspace_id, &path)
+        })
+        .await
+        .expect("save read-only connection");
+    assert!(connection.read_only);
+
+    // `SELECT ... INTO` is classified as a schema change / mutation, so a
+    // read-only connection must reject it before the driver is ever asked to
+    // run it. Confirmation cannot override the read-only gate.
+    let select_into = service
+        .execute_query(DatabaseQueryInput {
+            workspace_id: workspace_id.clone(),
+            connection_id: connection.id.clone(),
+            sql: "SELECT * INTO exported FROM deploys".to_string(),
+            limit: Some(10),
+            confirm_mutation: Some(true),
+            catalog: None,
+            schema: None,
+            timeout_ms: None,
+        })
+        .await;
+    assert!(matches!(select_into, Err(AppError::ReadOnly(_))));
 
     let _ = fs::remove_file(path);
 }

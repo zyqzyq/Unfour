@@ -472,6 +472,12 @@ struct StoredWorkspaceLayout {
     selected_api_request_id: Option<String>,
     selected_database_connection_id: Option<String>,
     selected_ssh_connection_id: Option<String>,
+    #[serde(default)]
+    sidebar_width: i32,
+    #[serde(default)]
+    bottom_panel_height: i32,
+    #[serde(default)]
+    right_inspector_width: i32,
 }
 
 impl StoredWorkspaceLayout {
@@ -493,6 +499,9 @@ impl StoredWorkspaceLayout {
                 layout.selected_database_connection_id,
             ),
             selected_ssh_connection_id: non_empty_optional(layout.selected_ssh_connection_id),
+            sidebar_width: layout.sidebar_width,
+            bottom_panel_height: layout.bottom_panel_height,
+            right_inspector_width: layout.right_inspector_width,
         })
     }
 }
@@ -506,6 +515,9 @@ fn parse_layout(workspace_id: &str, value: &str, updated_at: &str) -> WorkspaceL
             selected_api_request_id: None,
             selected_database_connection_id: None,
             selected_ssh_connection_id: None,
+            sidebar_width: 0,
+            bottom_panel_height: 0,
+            right_inspector_width: 0,
         }
     });
 
@@ -527,6 +539,21 @@ fn parse_layout(workspace_id: &str, value: &str, updated_at: &str) -> WorkspaceL
         selected_api_request_id: stored.selected_api_request_id,
         selected_database_connection_id: stored.selected_database_connection_id,
         selected_ssh_connection_id: stored.selected_ssh_connection_id,
+        sidebar_width: if stored.sidebar_width > 0 {
+            stored.sidebar_width
+        } else {
+            248
+        },
+        bottom_panel_height: if stored.bottom_panel_height > 0 {
+            stored.bottom_panel_height
+        } else {
+            220
+        },
+        right_inspector_width: if stored.right_inspector_width > 0 {
+            stored.right_inspector_width
+        } else {
+            300
+        },
         updated_at: updated_at.to_string(),
     }
 }

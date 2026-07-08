@@ -571,6 +571,15 @@ export function TerminalPage({
     connectMutation.mutate(connectionId);
   }
 
+  // Open a brand-new parallel session to the same connection. Unlike
+  // `retryConnection` (used for the failed-pane Retry action), this is the
+  // "Duplicate session" menu entry: it always spins up a fresh session rather
+  // than implying a reconnect of an existing one.
+  function duplicateSession(connectionId: string) {
+    connectMutation.reset();
+    connectMutation.mutate(connectionId);
+  }
+
   function requestCloseSession(sessionId: string) {
     const session = sessions.find((item) => item.sessionId === sessionId);
     const needsConfirmation =
@@ -699,7 +708,7 @@ export function TerminalPage({
           onCloseOthers={closeOtherSessions}
           onCloseRight={closeSessionsToRight}
           onCloseSession={requestCloseSession}
-          onDuplicate={retryConnection}
+          onDuplicate={duplicateSession}
           onNewConnection={newConnection}
           onNewSession={connectSelectedConnection}
           onOpenPreferences={openConnectionSettings}

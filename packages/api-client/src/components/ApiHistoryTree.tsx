@@ -3,6 +3,7 @@ import {
   ContextMenuItem,
   TreeView,
   type TreeViewItem,
+  useI18n,
 } from "@unfour/ui";
 import type { ApiHistoryItem } from "@unfour/command-client";
 import { groupApiHistory } from "../model/request-tabs";
@@ -15,6 +16,7 @@ export function ApiHistoryTree({
   items: ApiHistoryItem[];
   onOpenIntent: (intent: ApiOpenIntent) => void;
 }) {
+  const { t } = useI18n();
   const treeItems: TreeViewItem[] = groupApiHistory(items).map((group) => ({
     id: group.id,
     icon: <Clock3 size={13} />,
@@ -31,9 +33,8 @@ export function ApiHistoryTree({
               onOpenIntent({ historyId: item.id, kind: "history", nonce: Date.now() })
             }
           >
-            Open
+            {t("api.history.open")}
           </ContextMenuItem>
-          <ContextMenuItem disabled>Open in New Tab (unique tab)</ContextMenuItem>
           <ContextMenuItem
             onSelect={() =>
               onOpenIntent({
@@ -44,14 +45,13 @@ export function ApiHistoryTree({
               })
             }
           >
-            Save as Request
+            {t("api.history.saveAsRequest")}
           </ContextMenuItem>
           <ContextMenuItem
             onSelect={() => void navigator.clipboard?.writeText(item.url)}
           >
-            Copy URL
+            {t("api.request.copyUrl")}
           </ContextMenuItem>
-          <ContextMenuItem disabled>Delete from History (not supported)</ContextMenuItem>
         </>
       ),
     })),

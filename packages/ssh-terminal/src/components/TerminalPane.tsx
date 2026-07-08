@@ -9,7 +9,7 @@ import {
   type SshSessionEvent,
   type SshSessionSummary,
 } from "@unfour/command-client";
-import { cn } from "@unfour/ui";
+import { cn, useFeedbackErrorHandler } from "@unfour/ui";
 import { useTerminalStore } from "../model/terminal-state";
 import { sanitizeTerminalWriteChunk } from "../model/terminal-write-sanitizer";
 
@@ -34,12 +34,14 @@ export function TerminalPane({
   const searchAddonRef = useRef<SearchAddon | null>(null);
   const lastSizeRef = useRef<{ cols: number; rows: number } | null>(null);
   const inputQueueRef = useRef(Promise.resolve());
+  const lastInputErrorToastAtRef = useRef(0);
   const renderedEventsRef = useRef(0);
   const renderedEventDataLengthsRef = useRef<number[]>([]);
   const renderedSessionIdRef = useRef<string | null>(null);
 
   const appendTerminalEvents = useTerminalStore((s) => s.appendTerminalEvents);
   const setTerminalSearchAddon = useTerminalStore((s) => s.setTerminalSearchAddon);
+  const handleError = useFeedbackErrorHandler();
 
   // Mutable callback refs – updated in useEffect (not during render).
   const onSendInputRef = useRef<((data: string) => void) | null>(null);
@@ -71,8 +73,15 @@ export function TerminalPane({
                       appendTerminalEvents([event]);
                     }
                   })
-                  .catch(() => {
-                    /* swallow – output stream still works */
+                  .catch((error) => {
+                    // Input is sent per keystroke, so a toast on every failure
+                    // would spam. Surface at most one error per window; the
+                    // output stream keeps working regardless.
+                    const now = Date.now();
+                    if (now - lastInputErrorToastAtRef.current >= INPUT_ERROR_THROTTLE_MS) {
+                      lastInputErrorToastAtRef.current = now;
+                      handleError(error, { key: "feedback.ssh.inputFailed" });
+                    }
                   }),
               );
           }
@@ -86,12 +95,21 @@ export function TerminalPane({
             sessionId,
             cols,
             rows,
-          }).catch(() => {
-            /* resize failures are non-fatal */
+          }).catch((error) => {
+            // Resize failures are non-fatal – the terminal just keeps its
+            // current size. Log for diagnostics; no user-facing toast.
+            console.warn("[ssh-terminal] resize failed", error);
           });
         }
       : null;
-  }, [appendTerminalEvents, inputDisabled, readOnly, session?.sessionId, session?.workspaceId]);
+  }, [
+    appendTerminalEvents,
+    handleError,
+    inputDisabled,
+    readOnly,
+    session?.sessionId,
+    session?.workspaceId,
+  ]);
 
   useEffect(() => {
     const nextSessionId = session?.sessionId ?? null;
@@ -419,6 +437,10 @@ function fitAndSyncTerminalSize(
 function ensureNewline(value: string) {
   return value.endsWith("\r\n") || value.endsWith("\n") ? value : `${value}\r\n`;
 }
+
+// Cap how often a failed-keystroke error can surface so a disconnected session
+// doesn't flood the user with a toast on every character typed.
+const INPUT_ERROR_THROTTLE_MS = 4000;
 
 function isTauriRuntime() {
   return (

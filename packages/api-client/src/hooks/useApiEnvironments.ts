@@ -9,6 +9,7 @@ import {
   type ApiEnvironment,
   type KeyValue,
 } from "@unfour/command-client";
+import { useFeedbackErrorHandler } from "@unfour/ui";
 
 /**
  * Shared CRUD + activation for API environments. All mutations invalidate the
@@ -17,6 +18,7 @@ import {
  */
 export function useApiEnvironments(workspaceId: string) {
   const queryClient = useQueryClient();
+  const handleError = useFeedbackErrorHandler();
 
   const query = useQuery({
     enabled: Boolean(workspaceId),
@@ -40,11 +42,15 @@ export function useApiEnvironments(workspaceId: string) {
     mutationFn: (environmentId: string) =>
       deleteApiEnvironment(workspaceId, environmentId),
     onSuccess: invalidate,
+    onError: (error) =>
+      handleError(error, { key: "feedback.api.environmentDeleteFailed" }),
   });
   const activateMut = useMutation({
     mutationFn: (environmentId: string | null) =>
       activateApiEnvironment(workspaceId, environmentId),
     onSuccess: invalidate,
+    onError: (error) =>
+      handleError(error, { key: "feedback.api.environmentActivateFailed" }),
   });
 
   const environments = useMemo<ApiEnvironment[]>(

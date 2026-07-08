@@ -123,52 +123,6 @@ export function historyDetailToInput(history: ApiHistoryDetail): ApiRequestInput
   };
 }
 
-export function parseCollectionImport(
-  value: unknown,
-  workspaceId: string,
-): ApiRequestInput[] {
-  const rawItems = Array.isArray(value)
-    ? value
-    : typeof value === "object" && value !== null && "savedRequests" in value
-      ? (value as { savedRequests?: unknown }).savedRequests
-      : [];
-  if (!Array.isArray(rawItems)) {
-    return [];
-  }
-
-  return rawItems
-    .map((item) => normalizeImportedRequest(item, workspaceId))
-    .filter((item): item is ApiRequestInput => item !== null);
-}
-
-function normalizeImportedRequest(
-  item: unknown,
-  workspaceId: string,
-): ApiRequestInput | null {
-  if (typeof item !== "object" || item === null) {
-    return null;
-  }
-  const candidate = item as Partial<ApiRequestInput>;
-  if (typeof candidate.method !== "string" || typeof candidate.url !== "string") {
-    return null;
-  }
-
-  return {
-    workspaceId,
-    name: typeof candidate.name === "string" ? candidate.name : undefined,
-    parentFolderId: null,
-    collectionId: null,
-    authJson: typeof candidate.authJson === "string" ? candidate.authJson : undefined,
-    method: candidate.method.toUpperCase(),
-    url: candidate.url,
-    headers: parseKeyValues(candidate.headers),
-    query: parseKeyValues(candidate.query),
-    body: typeof candidate.body === "string" ? candidate.body : undefined,
-    bodyKind: typeof candidate.bodyKind === "string" ? candidate.bodyKind : "json",
-    timeoutMs: typeof candidate.timeoutMs === "number" ? candidate.timeoutMs : 60_000,
-  };
-}
-
 export type FolderNode = {
   collectionId: string;
   folders: FolderNode[];

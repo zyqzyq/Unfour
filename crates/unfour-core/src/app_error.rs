@@ -17,8 +17,6 @@ pub enum AppError {
     NotFound(String),
     #[error("serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
-    #[error("tauri error: {0}")]
-    Tauri(#[from] tauri::Error),
     #[error("unsupported operation: {0}")]
     Unsupported(String),
     #[error("validation error: {0}")]
@@ -45,7 +43,6 @@ impl AppError {
             AppError::Io(_) => "IO_ERROR",
             AppError::NotFound(_) => "NOT_FOUND",
             AppError::Serialization(_) => "SERIALIZATION_ERROR",
-            AppError::Tauri(_) => "TAURI_ERROR",
             AppError::Unsupported(_) => "UNSUPPORTED_OPERATION",
             AppError::Validation(_) => "VALIDATION_ERROR",
             AppError::ReadOnly(_) => "READ_ONLY_CONNECTION",

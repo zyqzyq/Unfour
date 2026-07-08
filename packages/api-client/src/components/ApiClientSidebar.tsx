@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
   useI18n,
 } from "@unfour/ui";
+import { useFeedbackErrorHandler } from "@unfour/ui";
 import { useApiEnvironments } from "../hooks/useApiEnvironments";
 import type { ApiOpenIntent } from "../model/types";
 import { nextEnvironmentName } from "../request-utils";
@@ -150,19 +151,23 @@ function EnvironmentsPanel({
   workspaceId: string;
 }) {
   const { t } = useI18n();
+  const handleError = useFeedbackErrorHandler();
   const { activateMut, createMut, deleteMut, environments, isLoading, updateMut } =
     useApiEnvironments(workspaceId);
   const [deleteTarget, setDeleteTarget] = useState<ApiEnvironment | null>(null);
 
-  const handleDuplicate = (environment: ApiEnvironment) => {
+  const handleDuplicate = async (environment: ApiEnvironment) => {
     const name = nextEnvironmentName(environment.name, environments);
-    createMut.mutateAsync(name).then((created) => {
-      updateMut.mutate({
+    try {
+      const created = await createMut.mutateAsync(name);
+      await updateMut.mutateAsync({
         id: created.id,
         name,
         variables: environment.variables,
       });
-    }).catch(() => {/* create failed — query invalidation handles cleanup */});
+    } catch (error) {
+      handleError(error, { key: "feedback.api.environmentDuplicateFailed" });
+    }
   };
 
   return (
@@ -212,9 +217,10 @@ function EnvironmentsPanel({
         }
         onConfirm={() => {
           if (deleteTarget) {
-            deleteMut.mutate(deleteTarget.id);
+            deleteMut.mutate(deleteTarget.id, {
+              onSuccess: () => setDeleteTarget(null),
+            });
           }
-          setDeleteTarget(null);
         }}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         open={deleteTarget !== null}

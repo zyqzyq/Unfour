@@ -559,5 +559,8 @@ export type WorkspaceLayout = {
   selectedApiRequestId: string | null;
   selectedDatabaseConnectionId: string | null;
   selectedSshConnectionId: string | null;
+  sidebarWidth?: number;
+  bottomPanelHeight?: number;
+  rightInspectorWidth?: number;
   updatedAt: string;
 };

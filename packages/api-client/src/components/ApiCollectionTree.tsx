@@ -19,6 +19,7 @@ import {
   useI18n,
   type TreeViewItem,
 } from "@unfour/ui";
+import { useFeedbackErrorHandler } from "@unfour/ui";
 import {
   deleteApiRequest,
   duplicateApiRequest,
@@ -81,6 +82,7 @@ export function ApiCollectionTree({
   const [deleteFolderTarget, setDeleteFolderTarget] = useState<FolderNode | null>(null);
   const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const handleError = useFeedbackErrorHandler();
   const { collections, createMut, deleteMut, renameMut } = useApiCollections(workspaceId);
   const {
     createFolderMut,
@@ -106,11 +108,13 @@ export function ApiCollectionTree({
     mutationFn: (requestId: string) => duplicateApiRequest(workspaceId, requestId),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["api-saved", workspaceId] }),
+    onError: (error) => handleError(error, { key: "feedback.api.requestDuplicateFailed" }),
   });
   const deleteMutation = useMutation({
     mutationFn: (requestId: string) => deleteApiRequest(workspaceId, requestId),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["api-saved", workspaceId] }),
+    onError: (error) => handleError(error, { key: "feedback.api.requestDeleteFailed" }),
   });
   const updateRequestMutation = useMutation({
     mutationFn: ({
@@ -126,6 +130,7 @@ export function ApiCollectionTree({
       }),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["api-saved", workspaceId] }),
+    onError: (error) => handleError(error, { key: "feedback.api.requestRenameFailed" }),
   });
 
   const folderNameById = new Map(folders.map((folder) => [folder.id, folder.name]));

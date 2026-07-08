@@ -1,6 +1,7 @@
 use super::super::*;
 use sqlx::Executor;
 use std::path::PathBuf;
+use uuid::Uuid;
 
 pub(super) async fn service_with_workspace() -> (DatabaseService, String) {
     let options = SqliteConnectOptions::new()

@@ -7,6 +7,7 @@ import {
   renameApiCollection,
   type ApiCollection,
 } from "@unfour/command-client";
+import { useFeedbackErrorHandler } from "@unfour/ui";
 
 /**
  * Shared CRUD for API collections. All mutations invalidate the
@@ -16,6 +17,7 @@ import {
  */
 export function useApiCollections(workspaceId: string) {
   const queryClient = useQueryClient();
+  const handleError = useFeedbackErrorHandler();
 
   const query = useQuery({
     enabled: Boolean(workspaceId),
@@ -29,11 +31,15 @@ export function useApiCollections(workspaceId: string) {
   const createMut = useMutation({
     mutationFn: (name: string) => createApiCollection(workspaceId, name),
     onSuccess: invalidate,
+    onError: (error) =>
+      handleError(error, { key: "feedback.api.collectionCreateFailed" }),
   });
   const renameMut = useMutation({
     mutationFn: (input: { id: string; name: string }) =>
       renameApiCollection(workspaceId, input.id, input.name),
     onSuccess: invalidate,
+    onError: (error) =>
+      handleError(error, { key: "feedback.api.collectionRenameFailed" }),
   });
   const deleteMut = useMutation({
     mutationFn: (collectionId: string) =>
@@ -45,6 +51,8 @@ export function useApiCollections(workspaceId: string) {
       });
       queryClient.invalidateQueries({ queryKey: ["api-saved", workspaceId] });
     },
+    onError: (error) =>
+      handleError(error, { key: "feedback.api.collectionDeleteFailed" }),
   });
   const collections = useMemo<ApiCollection[]>(
     () => query.data ?? [],

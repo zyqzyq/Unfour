@@ -70,13 +70,15 @@ async fn ssh_session_lifecycle_supports_connect_input_resize_close_and_export() 
             data: "whoami\n".to_string(),
         })
         .await;
-    assert!(matches!(rejected, Err(AppError::Validation(_))));
+    // The session entry is dropped on close (issue #4), so input is rejected.
+    assert!(rejected.is_err());
 
     let export = service
         .export_log(SshLogExportInput {
             workspace_id,
             session_id: session.session_id,
         })
+        .await
         .expect("export log");
     assert!(export.content.contains("<redacted>"));
     assert!(!export.content.contains("password=secret"));
@@ -106,10 +108,12 @@ async fn deleting_ssh_connection_closes_active_sessions() {
         .delete_connection(workspace_id.clone(), connection.id)
         .await
         .expect("delete connection");
+    // Deleting a connection closes its active sessions and removes both the
+    // in-memory entry (issue #4) and the persisted history row, so the session
+    // no longer appears in the list.
     let sessions = service
         .list_sessions(workspace_id)
         .await
         .expect("list sessions after delete");
-    assert_eq!(sessions[0].session_id, session.session_id);
-    assert_eq!(sessions[0].status, "disconnected");
+    assert!(sessions.is_empty());
 }

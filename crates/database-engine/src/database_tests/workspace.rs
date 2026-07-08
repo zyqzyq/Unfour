@@ -1,6 +1,7 @@
 use super::super::*;
 use super::support::{service_with_workspace, sqlite_fixture, sqlite_input};
 use std::fs;
+use uuid::Uuid;
 
 #[tokio::test]
 async fn query_history_is_workspace_scoped_ordered_limited_and_clearable() {

@@ -1633,7 +1633,7 @@ impl CommandBus {
     }
 
     pub async fn export_ssh_log(&self, input: SshLogExportInput) -> AppResult<SshLogExport> {
-        let export = self.ssh.export_log(input.clone())?;
+        let export = self.ssh.export_log(input.clone()).await?;
         self.activity_log
             .record(
                 Some(&input.workspace_id),

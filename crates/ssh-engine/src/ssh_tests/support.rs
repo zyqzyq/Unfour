@@ -38,11 +38,12 @@ pub(super) async fn service_with_workspaces() -> (SshService, String, String) {
               id, name, is_default, last_opened_at, created_at, updated_at,
               revision, sync_status
             )
-            VALUES (?1, 'Test Workspace', 0, ?2, ?2, ?2, 1, 'local')
+            VALUES (?1, ?3, 0, ?2, ?2, ?2, 1, 'local')
             "#,
         )
         .bind(workspace_id)
         .bind(&now)
+        .bind(format!("Test Workspace {workspace_id}"))
         .execute(db.pool())
         .await
         .expect("insert workspace");

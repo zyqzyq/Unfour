@@ -68,7 +68,7 @@ fn diagnostic_bundle_includes_logs_and_excludes_sqlite_database() {
     };
     std::fs::create_dir_all(&paths.logs_dir).expect("create logs dir");
     std::fs::create_dir_all(&paths.diagnostics_dir).expect("create diagnostics dir");
-    std::fs::write(paths.logs_dir.join("unfour-2026-07-03.log"), "safe log").expect("write log");
+    std::fs::write(paths.logs_dir.join("unfour.2026-07-03.log"), "safe log").expect("write log");
     std::fs::write(&paths.database_path, "sqlite bytes").expect("write db");
 
     let request = DiagnosticBundleRequest::oss_dev("0.1.0".to_string(), paths);
@@ -76,13 +76,13 @@ fn diagnostic_bundle_includes_logs_and_excludes_sqlite_database() {
     let manifest = std::fs::read_to_string(bundle.manifest_path).expect("read manifest");
 
     assert!(bundle.bundle_dir.is_dir());
-    assert!(manifest.contains("unfour-2026-07-03.log"));
+    assert!(manifest.contains("unfour.2026-07-03.log"));
     assert!(!manifest.contains("sqlite bytes"));
     assert!(!bundle.bundle_dir.join("unfour.sqlite").exists());
     assert!(bundle
         .bundle_dir
         .join("logs")
-        .join("unfour-2026-07-03.log")
+        .join("unfour.2026-07-03.log")
         .exists());
 
     let _ = std::fs::remove_dir_all(root);

@@ -36,11 +36,11 @@ async fn explicit_close_disables_reconnect() {
         .await
         .expect("close session");
 
+    // The in-memory entry must be dropped on close so the session map cannot
+    // grow without bound (issue #4). The session survives only in the
+    // terminal-history store.
     let sessions = service.sessions.lock().expect("session lock");
-    let state = sessions.get(&session.session_id).expect("session state");
-    assert!(state.intentional_close);
-    assert!(!should_reconnect(state));
-    assert_eq!(state.summary.status, "disconnected");
+    assert!(sessions.get(&session.session_id).is_none());
 }
 
 #[cfg(not(feature = "ssh-native"))]
@@ -72,10 +72,9 @@ async fn cancel_reconnect_marks_session_disconnected() {
 
     assert_eq!(cancelled.status, "disconnected");
     assert_eq!(cancelled.reconnect_attempt, 0);
+    // cancel_reconnect drops the in-memory entry (issue #4); verify it is gone.
     let sessions = service.sessions.lock().expect("session lock");
-    assert!(!should_reconnect(
-        sessions.get(&session.session_id).expect("session state")
-    ));
+    assert!(sessions.get(&session.session_id).is_none());
 }
 
 #[cfg(not(feature = "ssh-native"))]

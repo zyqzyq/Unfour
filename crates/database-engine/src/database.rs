@@ -3329,7 +3329,7 @@ fn returns_rows(sql: &str) -> bool {
     matches!(
         keyword.as_str(),
         "select" | "with" | "pragma" | "explain" | "show"
-    )
+    ) && detect_select_into(sql).is_none()
 }
 
 fn validate_single_statement(sql: &str) -> AppResult<()> {
@@ -3390,6 +3390,61 @@ fn detect_wrapped_write(sql: &str) -> Option<DatabaseQuerySafety> {
     })
 }
 
+/// Classify a `SELECT ... INTO` statement. PostgreSQL's `SELECT INTO table`
+/// creates a new table (a schema change) and MySQL's
+/// `SELECT ... INTO OUTFILE|DUMPFILE` writes to the server filesystem. Both are
+/// writes that must require confirmation and must be blocked on read-only
+/// connections, even though the leading keyword is `select`.
+///
+/// A bare `SELECT ... INTO @var` (MySQL session-variable assignment) is
+/// harmless and is intentionally NOT flagged, so it still runs as a read. The
+/// scan keeps looking past an `@var` target in case a later `INTO` writes a
+/// table or file.
+fn detect_select_into(sql: &str) -> Option<DatabaseQuerySafety> {
+    let lowered = sql.to_ascii_lowercase();
+    let tokens: Vec<&str> = lowered
+        .split(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '@')
+        .filter(|t| !t.is_empty())
+        .collect();
+
+    let mut idx = 0;
+    while idx < tokens.len() {
+        if tokens[idx] == "select" {
+            let mut j = idx + 1;
+            while j < tokens.len() {
+                if tokens[j] == "into" {
+                    let target = tokens.get(j + 1).copied().unwrap_or("");
+                    if target == "outfile" || target == "dumpfile" {
+                        return Some(DatabaseQuerySafety {
+                            classification: "mutation".to_string(),
+                            requires_confirmation: true,
+                            confirmed: false,
+                            message: Some(
+                                "This statement writes to the server filesystem (INTO OUTFILE/DUMPFILE). Confirm to execute it."
+                                    .to_string(),
+                            ),
+                        });
+                    }
+                    if !target.starts_with('@') {
+                        return Some(DatabaseQuerySafety {
+                            classification: "schema-change".to_string(),
+                            requires_confirmation: true,
+                            confirmed: false,
+                            message: Some(
+                                "This SELECT INTO statement creates a table (schema change). Confirm to execute it."
+                                    .to_string(),
+                            ),
+                        });
+                    }
+                }
+                j += 1;
+            }
+        }
+        idx += 1;
+    }
+    None
+}
+
 fn read_safety() -> DatabaseQuerySafety {
     DatabaseQuerySafety {
         classification: "read".to_string(),
@@ -3407,11 +3462,17 @@ fn classify_query(sql: &str) -> DatabaseQuerySafety {
         .to_ascii_lowercase();
 
     match keyword.as_str() {
-        "select" | "pragma" | "show" => read_safety(),
+        // `select` leads, but PostgreSQL `SELECT INTO table` and MySQL
+        // `SELECT ... INTO OUTFILE|DUMPFILE` are writes despite the keyword.
+        "select" => detect_select_into(sql).unwrap_or_else(read_safety),
+        "pragma" | "show" => read_safety(),
         // EXPLAIN and WITH can wrap a statement that actually writes (EXPLAIN
-        // ANALYZE <write> and data-modifying CTEs in PostgreSQL), so look past
-        // the wrapper before trusting them as no-confirmation reads.
-        "explain" | "with" => detect_wrapped_write(sql).unwrap_or_else(read_safety),
+        // ANALYZE <write>, data-modifying CTEs, and SELECT ... INTO table /
+        // INTO OUTFILE in PostgreSQL/MySQL), so look past the wrapper before
+        // trusting them as no-confirmation reads.
+        "explain" | "with" => detect_select_into(sql)
+            .or_else(|| detect_wrapped_write(sql))
+            .unwrap_or_else(read_safety),
         "insert" | "update" | "delete" | "replace" => DatabaseQuerySafety {
             classification: "mutation".to_string(),
             requires_confirmation: true,

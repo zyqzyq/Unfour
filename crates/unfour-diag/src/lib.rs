@@ -252,7 +252,7 @@ pub fn prune_old_logs(log_dir: &Path, retention_days: u64) -> io::Result<()> {
             continue;
         }
         let name = entry.file_name().to_string_lossy().to_string();
-        if !name.starts_with("unfour-") || !name.ends_with(".log") {
+        if !name.starts_with("unfour.") || !name.ends_with(".log") {
             continue;
         }
         let modified = entry.metadata()?.modified().unwrap_or(SystemTime::now());
@@ -378,7 +378,7 @@ fn copy_recent_logs(source_dir: &Path, target_dir: &Path) -> io::Result<Vec<Stri
         .filter(|entry| {
             let file_name = entry.file_name();
             let name = file_name.to_string_lossy();
-            name.starts_with("unfour-") && name.ends_with(".log")
+            name.starts_with("unfour.") && name.ends_with(".log")
         })
         .map(|entry| {
             let modified = entry
