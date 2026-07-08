@@ -1,0 +1,68 @@
+/*
+ * theme.css — light/dark theme semantic layer.
+ *
+ * Light values are the default, defined in tokens.css. This file only
+ * overrides the theme-dependent primitives for dark mode, so the two themes
+ * stay in one obvious place. Host apps must not redefine these tokens.
+ */
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* ── Color primitives (dark) — Catppuccin Mocha ── */
+  --u-color-bg: #1e1e2e;
+  --u-color-surface: #181825;
+  --u-color-surface-subtle: #1e1e2e;
+  --u-color-surface-muted: #313244;
+  --u-color-surface-hover: #45475a;
+  --u-color-surface-active: #585b70;
+  --u-color-border: #313244;
+  --u-color-border-strong: #585b70;
+  --u-color-input: #45475a;
+  --u-color-text: #cdd6f4;
+  --u-color-text-muted: #a6adc8;
+  --u-color-text-soft: #6c7086;
+  --u-color-focus: #cba6f7;
+  --u-color-primary: #89b4fa;
+  --u-color-primary-hover: #74c7ec;
+  --u-color-primary-foreground: #1e1e2e;
+  --u-color-primary-soft: #1e2a3a;
+  --u-color-danger: #f38ba8;
+  --u-color-danger-soft: #3a1a24;
+  --u-color-danger-hover: #f5a0b8;
+  --u-color-danger-text: #f5a0b8;
+  --u-color-secondary: #f5c2e7;
+  --u-color-secondary-soft: #3a2233;
+  --u-color-secondary-text: #f0b0d8;
+  --u-color-neutral: #a6adc8;
+  --u-color-neutral-soft: #313244;
+  --u-color-neutral-text: #bac2de;
+  --u-color-success: #a6e3a1;
+  --u-color-success-soft: #1e3326;
+  --u-color-warning: #f9e2af;
+  --u-color-warning-soft: #3a2e18;
+  --u-color-warning-text: #f5d98e;
+  --u-color-info: #89dceb;
+  --u-color-info-soft: #1a2e38;
+  --u-color-info-text: #a0d8e8;
+  --u-color-overlay: rgba(0, 0, 0, 0.5);
+  --u-color-scrollbar: #313244;
+  --u-color-scrollbar-hover: #45475a;
+
+  /* ── Badge color primitives (dark) ── */
+  --u-badge-neutral-bg: #313244;
+  --u-badge-neutral-text: #a6adc8;
+  --u-badge-neutral-ring: #45475a;
+  --u-badge-success-bg: #1e3326;
+  --u-badge-success-text: #a6e3a1;
+  --u-badge-success-ring: #2a5038;
+  --u-badge-warning-bg: #3a2e18;
+  --u-badge-warning-text: #f9e2af;
+  --u-badge-warning-ring: #5a4820;
+  --u-badge-danger-bg: #3a1a24;
+  --u-badge-danger-text: #f38ba8;
+  --u-badge-danger-ring: #5a2a38;
+  --u-badge-info-bg: #1a2e38;
+  --u-badge-info-text: #89dceb;
+  --u-badge-info-ring: #2a4a5a;
+}

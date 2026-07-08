@@ -112,6 +112,31 @@ business-logic free.
 
 ## Tokens
 
+### Single source of truth
+
+All shared design tokens (base `--u-*` primitives, light/dark theme semantic
+values, and the `--panel-*` / `--app-*` / `--border` / `--text` / `--accent` /
+`--sidebar-*` / `--danger` / `--success` / `--warning` / `--focus` / `--neutral`
+/ `--badge-*` aliases) have **one default source of truth**:
+`@unfour/ui/styles.css` (the files under `packages/ui/src/styles/`).
+
+- Host apps (`apps/desktop`, and the `apps/desktop-pro` edition) MUST import the
+  shared tokens first, before their own local `styles.css`:
+
+  ```ts
+  import "@unfour/ui/styles.css";
+  import "./styles.css";
+  ```
+
+- Host apps MAY **override** a token for host-only or Pro-only needs, but they
+  MUST NOT **redefine** shared tokens. The token source of truth always lives
+  in `@unfour/ui/styles.css`, never in a host app. Pro-only variables in the
+  `--pro-*` namespace are allowed.
+
+- `scripts/check-shared-tokens.mjs` enforces this: it fails the build if any
+  `apps/*/src/styles.css` redefines a shared token. Run it via
+  `pnpm run check:tokens` (it is part of `pnpm run check`).
+
 New UI tokens use the `--u-*` prefix.
 
 Core color tokens:

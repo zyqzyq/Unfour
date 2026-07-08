@@ -1,0 +1,17 @@
+/*
+ * index.css — aggregate entry for the shared Unfour design tokens.
+ *
+ * Host apps import this file once, BEFORE their own local styles.css:
+ *
+ *   import "@unfour/ui/styles.css";
+ *   import "./styles.css";
+ *
+ * @unfour/ui is the single default source of these tokens. Host apps may only
+ * override tokens; they are never the source of truth. For the guard that
+ * prevents host apps from redefining shared tokens, see
+ * scripts/check-shared-tokens.mjs.
+ */
+
+@import "./tokens.css";
+@import "./theme.css";
+@import "./surfaces.css";

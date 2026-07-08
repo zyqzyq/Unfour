@@ -6,7 +6,8 @@
   "type": "module",
   "types": "dist/types/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles/index.css"
   },
   "dependencies": {
     "@radix-ui/react-context-menu": "^2.3.1",

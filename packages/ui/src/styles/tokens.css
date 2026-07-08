@@ -1,0 +1,122 @@
+/*
+ * tokens.css — base design tokens for Unfour.
+ *
+ * This file (with theme.css and surfaces.css, aggregated by index.css) is the
+ * CANONICAL, DEFAULT source of shared design tokens for every host app
+ * (@unfour/desktop, and the @unfour/desktop-pro edition).
+ *
+ * Host apps MUST import "@unfour/ui/styles.css" exactly once, BEFORE their own
+ * local styles.css. Host apps MAY override tokens but MUST NOT redefine them —
+ * the token source of truth always lives here, never in a host app.
+ *
+ * Visual values below are preserved from the historical desktop styles.css so
+ * that migrating to the shared source does not change the rendered UI.
+ *
+ * Light theme is the default. Dark overrides live in theme.css.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* ── Color primitives (light) — Catppuccin Latte ── */
+  --u-color-bg: #eff1f5;
+  --u-color-surface: #e6e9ef;
+  --u-color-surface-subtle: #dce0e8;
+  --u-color-surface-muted: #ccd0da;
+  --u-color-surface-hover: #bcc0cc;
+  --u-color-surface-active: #acb0be;
+  --u-color-border: #ccd0da;
+  --u-color-border-strong: #acb0be;
+  --u-color-input: #bcc0cc;
+  --u-color-text: #4c4f69;
+  --u-color-text-muted: #5c5f77;
+  --u-color-text-soft: #9ca0b0;
+  --u-color-focus: #8839ef;
+  --u-color-primary: #1e66f5;
+  --u-color-primary-hover: #2a6ef5;
+  --u-color-primary-foreground: #eff1f5;
+  --u-color-primary-soft: #dce8f7;
+  --u-color-danger: #d20f39;
+  --u-color-danger-soft: #fce4ec;
+  --u-color-success: #40a02b;
+  --u-color-success-soft: #d8f0d0;
+  --u-color-warning: #df8e1d;
+  --u-color-warning-soft: #f5e0b8;
+  --u-color-warning-text: #b37215;
+  --u-color-overlay: rgba(76, 79, 105, 0.22);
+  --u-color-info: #179299;
+  --u-color-info-soft: #c8e8ea;
+  --u-color-info-text: #11656b;
+  --u-color-danger-hover: #b90d31;
+  --u-color-danger-text: #b90d31;
+  --u-color-secondary: #ea76cb;
+  --u-color-secondary-soft: #f5ddf0;
+  --u-color-secondary-text: #c95a9e;
+  --u-color-neutral: #7c7f93;
+  --u-color-neutral-soft: #dce0e8;
+  --u-color-neutral-text: #5c5f77;
+  --u-color-text-on-color: #eff1f5;
+  --u-color-scrollbar: #bcc0cc;
+  --u-color-scrollbar-hover: #acb0be;
+
+  /* ── Badge color primitives (light) ── */
+  --u-badge-neutral-bg: #dce0e8;
+  --u-badge-neutral-text: #5c5f77;
+  --u-badge-neutral-ring: #bcc0cc;
+  --u-badge-success-bg: #d8f0d0;
+  --u-badge-success-text: #2e7d1e;
+  --u-badge-success-ring: #a8d498;
+  --u-badge-warning-bg: #f5e0b8;
+  --u-badge-warning-text: #b37215;
+  --u-badge-warning-ring: #e0c888;
+  --u-badge-danger-bg: #fce4ec;
+  --u-badge-danger-text: #b90d31;
+  --u-badge-danger-ring: #f0a8a8;
+  --u-badge-info-bg: #c8e8ea;
+  --u-badge-info-text: #11656b;
+  --u-badge-info-ring: #88c4c8;
+
+  /* ── Terminal color primitives (theme-independent) ── */
+  --u-color-terminal-bg: #1e1e2e;
+  --u-color-terminal-text: #cdd6f4;
+  --u-color-terminal-muted: #a6adc8;
+  --u-color-terminal-border: #313244;
+  --u-color-terminal-input-bg: #313244;
+  --u-color-terminal-input-border: #45475a;
+  --u-color-terminal-cursor: #89b4fa;
+
+  /* ── Radii ── */
+  --u-radius-sm: 4px;
+  --u-radius-md: 6px;
+  --u-radius-lg: 8px;
+
+  /* ── Sizes (theme-independent geometry) ── */
+  --u-size-global-toolbar: 38px;
+  --u-size-section-toolbar: 34px;
+  --u-size-tabbar: 34px;
+  --u-size-sidebar-row: 28px;
+  --u-size-table-row: 30px;
+  --u-size-input: 32px;
+  --u-size-button: 30px;
+  --u-size-button-compact: 28px;
+  --u-size-statusbar: 24px;
+
+  /* ── Typography ── */
+  --u-line-height-ui: 1.4;
+  --u-font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, sans-serif;
+  --u-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+
+  /* ── Spacing scale (compact desktop density) ── */
+  --u-space-1: 4px;
+  --u-space-2: 8px;
+  --u-space-3: 12px;
+  --u-space-4: 16px;
+  --u-space-5: 20px;
+  --u-space-6: 24px;
+
+  /* ── Elevation (used by popovers, dialogs, tooltips) ── */
+  --u-shadow-sm: 0 1px 2px rgba(76, 79, 105, 0.12);
+  --u-shadow-md: 0 4px 12px rgba(76, 79, 105, 0.16);
+}

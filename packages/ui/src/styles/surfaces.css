@@ -1,0 +1,57 @@
+/*
+ * surfaces.css — semantic surface & alias tokens.
+ *
+ * These alias tokens map the theme primitives (theme.css) onto stable,
+ * intent-named tokens used across the workbench (panels, app chrome, sidebar,
+ * status, danger/success/warning accents). Host apps may override tokens but
+ * must not redefine them — the source of truth always lives in
+ * @unfour/ui/styles.css.
+ */
+
+:root {
+  /* App chrome */
+  --app-bg: var(--u-color-bg);
+  --app-surface: var(--u-color-surface-subtle);
+
+  /* Panels / surfaces */
+  --panel-bg: var(--u-color-surface);
+  --panel-subtle: var(--u-color-surface-subtle);
+  --panel-muted: var(--u-color-surface-muted);
+
+  /* Lines & text */
+  --border: var(--u-color-border);
+  --border-strong: var(--u-color-border-strong);
+  --text: var(--u-color-text);
+  --text-muted: var(--u-color-text-muted);
+  --text-soft: var(--u-color-text-soft);
+  --focus: var(--u-color-focus);
+
+  /* Accent */
+  --accent: var(--u-color-primary);
+  --accent-strong: var(--u-color-primary-hover);
+  --accent-soft: var(--u-color-primary-soft);
+
+  /* Sidebar */
+  --sidebar-bg: var(--u-color-surface-subtle);
+  --sidebar-muted: var(--u-color-text-muted);
+  --sidebar-border: var(--u-color-border);
+
+  /* Status accents */
+  --danger: var(--u-color-danger);
+  --danger-soft: var(--u-color-danger-soft);
+  --success: var(--u-color-success);
+  --success-soft: var(--u-color-success-soft);
+  --warning: var(--u-color-warning);
+  --warning-soft: var(--u-color-warning-soft);
+
+  /* Document base (inherited by html/body).
+     Lives here, not in tokens.css, so the var() references below resolve
+     against aliases defined in this same :root block (--text, --app-bg). */
+  font-family: var(--u-font-sans);
+  color: var(--text);
+  background: var(--app-bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

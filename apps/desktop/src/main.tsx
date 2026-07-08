@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { I18nProvider, ThemeProvider, initializeTheme } from "@unfour/ui";
 import App from "./App";
 import { DesktopErrorBoundary } from "./DesktopErrorBoundary";
+import "@unfour/ui/styles.css";
 import "./styles.css";
 
 const queryClient = new QueryClient({
