@@ -108,15 +108,35 @@ fn mysql_table_browse_sql_is_qualified_paginated_and_escaped() {
 }
 
 #[test]
-fn mysql_credential_errors_are_redacted() {
+fn mysql_connection_string_passwords_are_redacted() {
+    // A connection string with an embedded password leaked into the error keeps
+    // non-sensitive fields (user) but scrubs the password value, instead of
+    // wiping the whole message.
     let error = sanitize_mysql_error(sqlx::Error::Protocol(
-        "Access denied for user testuser using password mysql-super-secret".to_string(),
+        "mysql://testuser:mysql-super-secret@db.internal:3306/app".to_string(),
     ));
     let message = error.to_string();
 
-    assert!(!message.contains("testuser"));
+    assert!(message.contains("testuser"));
     assert!(!message.contains("mysql-super-secret"));
-    assert!(message.contains("details redacted"));
+    assert!(message.contains("<redacted>"));
+    assert!(!message.contains("details redacted"));
+}
+
+#[test]
+fn mysql_access_denied_message_is_preserved() {
+    // Benign, useful diagnostics are no longer overwritten with a generic
+    // redacted placeholder.
+    let error = sanitize_mysql_error(sqlx::Error::Protocol(
+        "Access denied for user 'testuser'@'localhost' (using password: YES)".to_string(),
+    ));
+    let message = error.to_string();
+
+    assert!(message.contains(
+        "Access denied for user 'testuser'@'localhost' (using password: YES)"
+    ));
+    assert!(!message.contains("<redacted>"));
+    assert!(!message.contains("details redacted"));
 }
 
 #[tokio::test]

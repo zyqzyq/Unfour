@@ -13,6 +13,7 @@ use unfour_core::models::{
     DatabaseTableColumn, DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult,
     DbQueryHistoryEntry, DbQueryHistoryRecordInput, SavedSql, SavedSqlInput,
 };
+use unfour_core::redaction::redact_connection_string;
 use unfour_core::{AppError, AppResult};
 use unfour_local_storage::LocalDb;
 use unfour_secret_store::SecretStore;
@@ -2173,32 +2174,36 @@ fn postgres_row_values(row: &sqlx::postgres::PgRow) -> AppResult<Vec<Option<Stri
         .collect()
 }
 
-/// Sanitize a sqlx::Error into an AppError, stripping password/connection leaks.
+/// Sanitize a sqlx::Error into an AppError.
+///
+/// Instead of wiping the whole message whenever it mentions credentials, we
+/// keep the original diagnostic text and only scrub credential material that
+/// may have leaked into it (e.g. a connection string with an embedded
+/// password). This preserves useful errors such as "password authentication
+/// failed for user \"x\"" while still redacting the secret value.
 fn sanitize_pg_error(error: sqlx::Error) -> AppError {
     let msg = error.to_string();
-    if msg.contains("password") || msg.contains("userinfo") {
-        AppError::Database(sqlx::Error::Protocol(
-            "PostgreSQL connection error (details redacted)".to_string(),
-        ))
-    } else {
+    let safe = redact_connection_string(&msg);
+    if safe == msg {
         AppError::Database(error)
+    } else {
+        AppError::Database(sqlx::Error::Protocol(safe))
     }
 }
 
 /// Sanitize an AppError from a helper that already wraps sqlx errors.
 fn sanitize_pg_app_error(error: AppError) -> AppError {
-    match &error {
+    match error {
         AppError::Database(sqlx_err) => {
             let msg = sqlx_err.to_string();
-            if msg.contains("password") || msg.contains("userinfo") {
-                AppError::Database(sqlx::Error::Protocol(
-                    "PostgreSQL connection error (details redacted)".to_string(),
-                ))
+            let safe = redact_connection_string(&msg);
+            if safe == msg {
+                AppError::Database(sqlx_err)
             } else {
-                error
+                AppError::Database(sqlx::Error::Protocol(safe))
             }
         }
-        _ => error,
+        other => other,
     }
 }
 
@@ -2597,23 +2602,17 @@ fn mysql_row_values(row: &sqlx::mysql::MySqlRow) -> AppResult<Vec<Option<String>
 
 fn sanitize_mysql_error(error: sqlx::Error) -> AppError {
     let message = error.to_string();
-    let lower = message.to_ascii_lowercase();
-    if lower.contains("password")
-        || lower.contains("access denied")
-        || lower.contains("userinfo")
-        || lower.contains("mysql://")
-    {
-        AppError::Database(sqlx::Error::Protocol(
-            "MySQL connection error (details redacted)".to_string(),
-        ))
-    } else {
+    let safe = redact_connection_string(&message);
+    if safe == message {
         AppError::Database(error)
+    } else {
+        AppError::Database(sqlx::Error::Protocol(safe))
     }
 }
 
 fn sanitize_mysql_app_error(error: AppError) -> AppError {
     match error {
-        AppError::Database(sqlx_error) => sanitize_mysql_error(sqlx_error),
+        AppError::Database(sqlx_err) => sanitize_mysql_error(sqlx_err),
         other => other,
     }
 }

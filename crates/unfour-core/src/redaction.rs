@@ -164,6 +164,14 @@ pub fn redact_connection_string(value: &str) -> String {
         return redact_url_password_for_display(&redact_url_query(value));
     }
 
+    // The url crate rejects non-special schemes (postgres://, mysql://) that
+    // carry a `:port`, so the parse above fails and would otherwise leave a
+    // userinfo password in the clear. Scrub the credential directly from the
+    // raw string instead.
+    if value.contains("://") && value.contains('@') {
+        return redact_url_password_for_display(value);
+    }
+
     let mut changed = false;
     let redacted = value
         .split(';')
@@ -348,6 +356,20 @@ mod tests {
             redacted,
             "Server=db.internal;User Id=alice;Password=<redacted>;Database=app"
         );
+    }
+
+    #[test]
+    fn non_special_scheme_url_with_port_scrubs_userinfo() {
+        // postgres:// / mysql:// are non-special schemes; the url crate refuses
+        // to parse them when a :port is present, so the userinfo password must
+        // still be scrubbed from the raw string.
+        let input = "postgres://alice:secret@db.internal:5432/app";
+
+        let redacted = redact_connection_string(input);
+
+        assert!(redacted.contains("alice"));
+        assert!(!redacted.contains("secret"));
+        assert!(redacted.contains("<redacted>"));
     }
 
     #[test]
