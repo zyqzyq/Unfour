@@ -607,6 +607,8 @@
       "deleteSavedSqlBody": "删除已保存查询“{name}”？该操作无法撤销。",
       "deleteSavedSqlTitle": "删除已保存查询？",
       "deleteTitle": "删除连接？",
+      "duplicateConnection": "复制连接",
+      "duplicateName": "{name} 副本",
       "editConnection": "编辑连接",
       "expandToLoad": "展开以加载",
       "generateInsert": "生成 INSERT 语句",

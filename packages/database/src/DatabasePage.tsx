@@ -428,6 +428,30 @@ export function DatabasePage({
     },
   });
 
+  // Clone a connection into a new record. The stored credential is shared by
+  // reusing its reference (the plaintext secret is never exposed to the client),
+  // so the copy can connect immediately without re-entering the password.
+  const duplicateMutation = useMutation({
+    mutationFn: (connection: DatabaseConnection) =>
+      saveDatabaseConnection({
+        workspaceId,
+        name: t("database.tree.duplicateName", { name: connection.name }),
+        driver: connection.driver,
+        host: connection.host,
+        port: connection.port,
+        database: connection.database,
+        username: connection.username,
+        sslMode: connection.sslMode,
+        sqlitePath: connection.sqlitePath,
+        credentialRef: connection.credentialRef,
+        readOnly: connection.readOnly,
+      }),
+    onSuccess: (created) => {
+      setSelectedDatabaseConnection(created.id);
+      queryClient.invalidateQueries({ queryKey: ["database-connections", workspaceId] });
+    },
+  });
+
   const testMutation = useMutation({
     mutationFn: (connectionId: string) => testDatabaseConnection(workspaceId, connectionId),
     onMutate: (connectionId) => {
@@ -1227,6 +1251,7 @@ export function DatabasePage({
     connect: (connection: DatabaseConnection) => void;
     delete: (connection: DatabaseConnection) => void;
     deleteSavedSql: (item: SavedSql) => void;
+    duplicate: (connection: DatabaseConnection) => void;
     designTable: (connectionId: string, table: DatabaseTable) => void;
     disconnect: (connection: DatabaseConnection) => void;
     edit: (connection: DatabaseConnection) => void;
@@ -1248,6 +1273,7 @@ export function DatabasePage({
     deleteSavedSql,
     designTable,
     disconnect: disconnectConnection,
+    duplicate: (connection) => duplicateMutation.mutate(connection),
     edit: handleEditConnection,
     newConnection: handleNewConnection,
     newQuery: (connection) => startNewQuery(connection?.id),
@@ -1269,8 +1295,9 @@ export function DatabasePage({
     onDesignTable: (connectionId: string, table: DatabaseTable) =>
       sidebarActionsRef.current?.designTable(connectionId, table),
     onDeleteConnection: (connection: DatabaseConnection) => sidebarActionsRef.current?.delete(connection),
-      onDeleteSavedSql: (item: SavedSql) => sidebarActionsRef.current?.deleteSavedSql(item),
-      onDisconnect: (connection: DatabaseConnection) => sidebarActionsRef.current?.disconnect(connection),
+    onDeleteSavedSql: (item: SavedSql) => sidebarActionsRef.current?.deleteSavedSql(item),
+    onDuplicateConnection: (connection: DatabaseConnection) => sidebarActionsRef.current?.duplicate(connection),
+    onDisconnect: (connection: DatabaseConnection) => sidebarActionsRef.current?.disconnect(connection),
       onEditConnection: (connection: DatabaseConnection) => sidebarActionsRef.current?.edit(connection),
       onNewConnection: () => sidebarActionsRef.current?.newConnection(),
       onNewQuery: (connection?: DatabaseConnection) => sidebarActionsRef.current?.newQuery(connection),

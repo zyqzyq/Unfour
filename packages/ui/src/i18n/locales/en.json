@@ -608,6 +608,8 @@
       "deleteSavedSqlBody": "Delete saved query \"{name}\"? This cannot be undone.",
       "deleteSavedSqlTitle": "Delete saved query?",
       "deleteTitle": "Delete connection?",
+      "duplicateConnection": "Duplicate Connection",
+      "duplicateName": "{name} copy",
       "editConnection": "Edit Connection",
       "expandToLoad": "Expand to load",
       "generateInsert": "Generate INSERT Statement",

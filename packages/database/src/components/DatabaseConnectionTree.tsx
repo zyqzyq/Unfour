@@ -1,4 +1,4 @@
-import { Columns3, Copy, Database, Eye, FileText, MoreVertical, Pencil, Play, PlusCircle, RefreshCw, Square, Table2, Trash2 } from "lucide-react";
+import { Columns3, Copy, CopyPlus, Database, Eye, FileText, MoreVertical, Pencil, Play, PlusCircle, RefreshCw, Square, Table2, Trash2 } from "lucide-react";
 import type { DatabaseConnection, DatabaseSchema, DatabaseTable, SavedSql } from "@unfour/command-client";
 import {
   Badge,
@@ -41,6 +41,7 @@ export function DatabaseConnectionTree({
   onDeleteSavedSql,
   onDesignTable,
   onDisconnect,
+  onDuplicateConnection,
   onEditConnection,
   onNewQuery,
   onOpenSavedSql,
@@ -69,6 +70,7 @@ export function DatabaseConnectionTree({
   onDeleteSavedSql?: (item: SavedSql) => void;
   onDesignTable?: (connectionId: string, table: DatabaseTable) => void;
   onDisconnect?: (connection: DatabaseConnection) => void;
+  onDuplicateConnection?: (connection: DatabaseConnection) => void;
   onEditConnection?: (connection: DatabaseConnection) => void;
   onNewQuery?: (connection?: DatabaseConnection) => void;
   onOpenSavedSql?: (item: SavedSql) => void;
@@ -127,6 +129,7 @@ export function DatabaseConnectionTree({
           onConnect={onConnect}
           onDeleteConnection={onDeleteConnection}
           onDisconnect={onDisconnect}
+          onDuplicateConnection={onDuplicateConnection}
           onEditConnection={onEditConnection}
           onNewQuery={onNewQuery}
           onRefreshSchema={onRefreshSchema}
@@ -146,6 +149,7 @@ export function DatabaseConnectionTree({
             onConnect={onConnect}
             onDeleteConnection={onDeleteConnection}
             onDisconnect={onDisconnect}
+            onDuplicateConnection={onDuplicateConnection}
             onEditConnection={onEditConnection}
             onNewQuery={onNewQuery}
             onRefreshSchema={onRefreshSchema}
@@ -795,6 +799,7 @@ function ConnectionContextMenu({
   onConnect,
   onDeleteConnection,
   onDisconnect,
+  onDuplicateConnection,
   onEditConnection,
   onNewQuery,
   onRefreshSchema,
@@ -804,6 +809,7 @@ function ConnectionContextMenu({
   onConnect?: (connection: DatabaseConnection) => void;
   onDeleteConnection?: (connection: DatabaseConnection) => void;
   onDisconnect?: (connection: DatabaseConnection) => void;
+  onDuplicateConnection?: (connection: DatabaseConnection) => void;
   onEditConnection?: (connection: DatabaseConnection) => void;
   onNewQuery?: (connection?: DatabaseConnection) => void;
   onRefreshSchema?: (connection: DatabaseConnection) => void;
@@ -839,6 +845,12 @@ function ConnectionContextMenu({
           {t("database.tree.editConnection")}
         </ContextMenuItem>
       )}
+      {onDuplicateConnection && (
+        <ContextMenuItem onSelect={() => onDuplicateConnection(connection)}>
+          <CopyPlus size={13} />
+          {t("database.tree.duplicateConnection")}
+        </ContextMenuItem>
+      )}
       <ContextMenuItem onSelect={() => void copyToClipboard(connection.name, handleError)}>
         <Copy size={13} />
         {t("database.tree.copyName")}
@@ -861,6 +873,7 @@ function ConnectionRowMenu({
   onConnect,
   onDeleteConnection,
   onDisconnect,
+  onDuplicateConnection,
   onEditConnection,
   onNewQuery,
   onRefreshSchema,
@@ -870,6 +883,7 @@ function ConnectionRowMenu({
   onConnect?: (connection: DatabaseConnection) => void;
   onDeleteConnection?: (connection: DatabaseConnection) => void;
   onDisconnect?: (connection: DatabaseConnection) => void;
+  onDuplicateConnection?: (connection: DatabaseConnection) => void;
   onEditConnection?: (connection: DatabaseConnection) => void;
   onNewQuery?: (connection?: DatabaseConnection) => void;
   onRefreshSchema?: (connection: DatabaseConnection) => void;
@@ -909,6 +923,12 @@ function ConnectionRowMenu({
           <DropdownMenuItem onSelect={() => onEditConnection(connection)}>
             <Pencil size={13} />
             {t("database.tree.editConnection")}
+          </DropdownMenuItem>
+        )}
+        {onDuplicateConnection && (
+          <DropdownMenuItem onSelect={() => onDuplicateConnection(connection)}>
+            <CopyPlus size={13} />
+            {t("database.tree.duplicateConnection")}
           </DropdownMenuItem>
         )}
         <DropdownMenuItem onSelect={() => void copyToClipboard(connection.name, handleError)}>
