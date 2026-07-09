@@ -300,11 +300,17 @@ impl CommandBus {
         Self::from_db_with_secret_store(db, secret_store).await
     }
 
-    pub async fn from_existing_db_read_only(db: LocalDb) -> AppResult<Self> {
-        // Use the real OS keychain (same service the desktop app writes to) so
-        // satellite processes such as the MCP server can resolve saved
-        // credentials for database connections. Only read operations are
-        // exercised here; no tool creates, rotates, or deletes credentials.
+    /// Construct a `CommandBus` over an existing DB without seeding the
+    /// default workspace, backed by the real OS keychain.
+    ///
+    /// Unlike [`from_db_with_secret_store`](Self::from_db_with_secret_store),
+    /// this skips `ensure_default_workspace()` so satellite processes (e.g.
+    /// the MCP server) can attach to an already-initialized storage without
+    /// re-seeding. The returned bus retains **full write capabilities**; the
+    /// `without_seeding` suffix refers only to construction-time seeding,
+    /// not to runtime capability. Current callers only exercise reads and
+    /// do not create/rotate/delete credentials by convention, not by type.
+    pub async fn from_existing_db_without_seeding(db: LocalDb) -> AppResult<Self> {
         Self::from_db_without_workspace_seed(db, SecretStore::new(DEFAULT_SECRET_SERVICE)).await
     }
 

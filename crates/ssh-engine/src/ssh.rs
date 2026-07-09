@@ -966,13 +966,17 @@ impl SshService {
         };
 
         // Persist terminal output and the final summary, then drop the in-memory
-        // entry. None of these holds a `self.sessions` guard across an await.
-        self.flush_session_history(&input.session_id).await?;
-        self.terminal_history.update_session(&summary).await?;
+        // entry. The entry is removed unconditionally even when persistence
+        // fails, so a persistence error cannot leak the session (#4). None of
+        // these holds a `self.sessions` guard across an await.
+        let flush_result = self.flush_session_history(&input.session_id).await;
+        let update_result = self.terminal_history.update_session(&summary).await;
         self.sessions
             .lock()
             .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?
             .remove(&input.session_id);
+        flush_result?;
+        update_result?;
         unfour_diag::log_operation_event(
             "ssh_disconnected",
             "ssh",
@@ -1010,13 +1014,23 @@ impl SshService {
             }
         };
 
+        // Close the native transport outside the mutex lock. Match
+        // `close_session`: shut the channel writer, then send an SSH-level
+        // disconnect so the transport is torn down gracefully instead of being
+        // dropped mid-stream (#11).
         #[cfg(feature = "ssh-native")]
         if let Some(native) = native_handle {
             let _ = native.writer.close().await;
+            let handle = native.handle.lock().await;
+            let _ = handle
+                .disconnect(russh::Disconnect::ByApplication, "session closed", "en")
+                .await;
         }
 
         // Mark disconnected, persist terminal output, then drop the in-memory
-        // entry so the session map cannot grow without bound (#4).
+        // entry so the session map cannot grow without bound (#4). The entry is
+        // removed unconditionally even when persistence fails, so a persistence
+        // error cannot leak the session.
         let summary = {
             let mut sessions = self
                 .sessions
@@ -1034,12 +1048,14 @@ impl SshService {
                 .push_str("SSH reconnect cancelled.\r\n");
             state.summary.clone()
         };
-        self.flush_session_history(&input.session_id).await?;
-        self.terminal_history.update_session(&summary).await?;
+        let flush_result = self.flush_session_history(&input.session_id).await;
+        let update_result = self.terminal_history.update_session(&summary).await;
         self.sessions
             .lock()
             .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?
             .remove(&input.session_id);
+        flush_result?;
+        update_result?;
         Ok(summary)
     }
 
@@ -1953,6 +1969,20 @@ impl SshService {
                 match reconnected {
                     Some(next_native) => {
                         if !service.install_reconnected_handle(&session_id, next_native.clone()) {
+                            // The session was closed/cancelled while we were
+                            // reconnecting, so this freshly opened transport has
+                            // no owner. Disconnect it gracefully instead of
+                            // dropping it mid-stream (#11). Entry cleanup is
+                            // handled by the close/cancel path that raced us.
+                            let _ = next_native.writer.close().await;
+                            let handle = next_native.handle.lock().await;
+                            let _ = handle
+                                .disconnect(
+                                    russh::Disconnect::ByApplication,
+                                    "session closed",
+                                    "en",
+                                )
+                                .await;
                             return;
                         }
                         service.set_session_health(
@@ -1974,6 +2004,11 @@ impl SshService {
                         let _ = service.flush_session_history(&session_id).await;
                         let _ = service.persist_session_summary(&session_id).await;
                         service.clear_native_session_resources(&session_id);
+                        // Drop the in-memory entry so a permanently failed session
+                        // cannot leak (#4).
+                        if let Ok(mut sessions) = service.sessions.lock() {
+                            sessions.remove(&session_id);
+                        }
                         return;
                     }
                 }
