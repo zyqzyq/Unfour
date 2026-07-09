@@ -216,14 +216,24 @@ export function DesktopApp() {
                 workspaceId={activeWorkspace.id}
               />
             )}
-            {activeTab.kind === "database" && activeWorkspace && (
-              <DatabasePage
-                onShellSidebarChange={handleDatabaseSidebarChange}
-                onShellStatusBarChange={handleDatabaseStatusBarChange}
-                statusBarRightAccessory={layoutControls}
-                workspaceName={activeWorkspace.name}
-                workspaceId={activeWorkspace.id}
-              />
+            {/* Keep DatabasePage mounted across module switches (mirrors the
+                ApiClientPage pattern above). The SQL editor is a Monaco instance
+                that remounts from scratch when this subtree is conditionally
+                unmounted, which repaints the editor with Monaco's default white
+                `vs` theme for one frame before `handleMount` applies the
+                unfour theme — the white flash seen when entering the database
+                module with a query tab open. Mounting it always (hidden when
+                inactive) preserves the live editor instance and its theme. */}
+            {activeWorkspace && (
+              <div className={activeTab.kind === "database" ? "h-full" : "hidden"}>
+                <DatabasePage
+                  onShellSidebarChange={handleDatabaseSidebarChange}
+                  onShellStatusBarChange={handleDatabaseStatusBarChange}
+                  statusBarRightAccessory={layoutControls}
+                  workspaceName={activeWorkspace.name}
+                  workspaceId={activeWorkspace.id}
+                />
+              </div>
             )}
           </MainWorkspace>
         }
