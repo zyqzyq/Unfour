@@ -5,9 +5,10 @@ use unfour_core::models::{DatabaseConnection, DatabaseQueryInput};
 use crate::command_bus_adapter::CommandBusAdapter;
 
 use super::{
-    confirmation::ensure_confirmed, object_with_allowed_keys, RegisteredTool, ToolAnnotations,
-    ToolCallError, ToolDefinition,
+    confirmation::ensure_confirmed_if_guarded, object_with_allowed_keys, RegisteredTool,
+    ToolAnnotations, ToolCallError, ToolDefinition,
 };
+use super::policy::ToolPolicyEvaluation;
 
 #[path = "database_create.rs"]
 mod database_create;
@@ -379,6 +380,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
 
 fn db_list_connections(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["workspaceId"])?;
@@ -402,6 +404,7 @@ fn db_list_connections(
 
 fn db_list_tables(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["connectionId", "workspaceId", "limit"])?;
@@ -446,6 +449,7 @@ fn db_list_tables(
 
 fn db_describe_table(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -514,6 +518,7 @@ fn db_describe_table(
 
 fn db_query_readonly(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments =
@@ -574,6 +579,7 @@ fn db_query_readonly(
 
 fn db_execute(
     command_bus: &dyn CommandBusAdapter,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -606,7 +612,7 @@ fn db_execute(
     let risk = classify_sql_risk(&sql);
 
     if risk.requires_confirmation {
-        ensure_confirmed(
+        ensure_confirmed_if_guarded(evaluation,
             &arguments,
             risk.confirmation_code,
             risk.reason,
@@ -689,6 +695,7 @@ fn db_execute(
 
 fn db_explain(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -754,6 +761,7 @@ fn db_explain(
 
 fn db_test_connection(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["connectionId", "workspaceId"])?;

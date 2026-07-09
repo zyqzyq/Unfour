@@ -20,9 +20,10 @@ use crate::response::{
 };
 
 use self::confirmation::ConfirmationRequired;
-use self::policy::{evaluate_tool_policy, McpPolicyDenial};
+use self::policy::{evaluate_tool_policy, McpPolicyDenial, ToolPolicyEvaluation};
 
-type ToolHandler = fn(&dyn CommandBusAdapter, Value) -> Result<Value, ToolCallError>;
+type ToolHandler =
+    fn(&dyn CommandBusAdapter, &ToolPolicyEvaluation, Value) -> Result<Value, ToolCallError>;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -154,7 +155,7 @@ impl ToolRegistry {
                 return policy_or_execution_error(name, started.elapsed().as_millis(), error);
             }
         };
-        let result = (tool.handler)(self.command_bus.as_ref(), arguments);
+        let result = (tool.handler)(self.command_bus.as_ref(), &policy, arguments);
 
         match result {
             Ok(value) => Ok(structured_tool_result(

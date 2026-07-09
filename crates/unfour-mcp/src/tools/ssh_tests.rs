@@ -24,7 +24,7 @@ impl CommandBusAdapter for SshStubCommandBus {
                     workspace_id: "ws-active".to_string(),
                     workspace_name: "Active".to_string(),
                     environment_type: "dev".to_string(),
-                    mcp_policy: "auto".to_string(),
+                    mcp_policy: "guarded".to_string(),
                     workspace_root: None,
                     mode: "local".to_string(),
                     source: "command-bus".to_string(),

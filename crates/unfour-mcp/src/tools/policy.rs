@@ -16,7 +16,7 @@ pub(super) struct WorkspacePolicyContext {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum ResolvedMcpPolicy {
+pub(crate) enum ResolvedMcpPolicy {
     Disabled,
     ReadOnly,
     Guarded,
@@ -103,11 +103,26 @@ impl McpRisk {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct ToolPolicyEvaluation {
+pub(crate) struct ToolPolicyEvaluation {
     pub workspace: WorkspacePolicyContext,
     pub resolved_policy: ResolvedMcpPolicy,
     pub capability: McpCapability,
     pub risk: McpRisk,
+}
+
+impl ToolPolicyEvaluation {
+    /// Whether a risky / mutating action must be explicitly confirmed by the
+    /// caller before execution under the active MCP policy.
+    ///
+    /// Only the `guarded` tier requires confirmation. `full_access` trusts the
+    /// calling agent to perform risky actions without a confirmation prompt,
+    /// and `read_only` / `disabled` never reach mutating handlers because they
+    /// are blocked earlier by `check_mcp_permission`. This is what gives the
+    /// four policy tiers distinct runtime behavior: `guarded` and `full_access`
+    /// are no longer collapsed into the same unconditional-confirmation path.
+    pub(crate) fn requires_confirmation(&self) -> bool {
+        self.resolved_policy == ResolvedMcpPolicy::Guarded
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

@@ -3,6 +3,7 @@ use unfour_core::models::{CredentialCreateInput, DatabaseConnectionInput};
 
 use crate::command_bus_adapter::CommandBusAdapter;
 
+use super::super::policy::ToolPolicyEvaluation;
 use super::super::{
     object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition,
 };
@@ -50,6 +51,7 @@ pub(super) fn registered_tool() -> RegisteredTool {
 
 fn db_create_connection(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(

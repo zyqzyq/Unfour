@@ -2,6 +2,7 @@ use serde_json::{json, Value};
 
 use crate::command_bus_adapter::CommandBusAdapter;
 
+use super::policy::ToolPolicyEvaluation;
 use super::{
     object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition,
 };
@@ -42,6 +43,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
 
 fn system_health(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     object_with_allowed_keys(arguments, &[])?;

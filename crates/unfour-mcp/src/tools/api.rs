@@ -9,9 +9,10 @@ use crate::sanitize::{
 };
 
 use super::{
-    confirmation::ensure_confirmed, object_with_allowed_keys, RegisteredTool, ToolAnnotations,
-    ToolCallError, ToolDefinition,
+    confirmation::ensure_confirmed_if_guarded, object_with_allowed_keys, RegisteredTool,
+    ToolAnnotations, ToolCallError, ToolDefinition,
 };
+use super::policy::ToolPolicyEvaluation;
 
 pub(super) fn registered_tools() -> Vec<RegisteredTool> {
     vec![
@@ -559,6 +560,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
 
 fn api_list_collections(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["workspaceId"])?;
@@ -580,6 +582,7 @@ fn api_list_collections(
 
 fn api_list_requests(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["workspaceId", "collectionId"])?;
@@ -610,6 +613,7 @@ fn api_list_requests(
 
 fn api_get_request(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["requestId", "includeBody"])?;
@@ -677,6 +681,7 @@ fn api_get_request(
 
 fn api_send_request(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -768,6 +773,7 @@ fn api_send_request(
 
 fn api_create_request(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -823,6 +829,7 @@ fn api_create_request(
 
 fn api_update_request(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -885,6 +892,7 @@ fn api_update_request(
 
 fn api_delete_request(
     command_bus: &dyn CommandBusAdapter,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -902,7 +910,7 @@ fn api_delete_request(
         Some(workspace_id) => workspace_id,
         None => get_saved_request(command_bus, &request_id)?.workspace_id,
     };
-    ensure_confirmed(
+    ensure_confirmed_if_guarded(evaluation,
         &arguments,
         "API_DELETE_REQUEST",
         "Deleting an API request hides local request metadata. This operation is soft-delete but still requires confirmation.",
@@ -929,6 +937,7 @@ fn api_delete_request(
 
 fn api_create_collection(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["workspaceId", "name"])?;
@@ -948,6 +957,7 @@ fn api_create_collection(
 
 fn api_update_collection(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["workspaceId", "collectionId", "name"])?;
@@ -969,6 +979,7 @@ fn api_update_collection(
 
 fn api_delete_collection(
     command_bus: &dyn CommandBusAdapter,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -984,7 +995,7 @@ fn api_delete_collection(
     let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
     let collection_id =
         parse_required_string(&arguments, "collectionId", "unfour.api.delete_collection")?;
-    ensure_confirmed(
+    ensure_confirmed_if_guarded(evaluation,
         &arguments,
         "API_DELETE_COLLECTION",
         "Deleting an API collection cascades soft-delete to local folders and requests. Confirmation is required.",
@@ -1010,6 +1021,7 @@ fn api_delete_collection(
 
 fn api_list_history(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["workspaceId", "limit"])?;
@@ -1055,6 +1067,7 @@ fn api_list_history(
 
 fn api_get_history(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["historyId", "workspaceId"])?;
@@ -1108,6 +1121,7 @@ fn api_get_history(
 
 fn api_list_environments(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["workspaceId"])?;

@@ -4,6 +4,7 @@ use unfour_command_bus::{ReadCommand, ReadCommandResult};
 use crate::command_bus_adapter::CommandBusAdapter;
 use crate::sanitize::redact_json_in_place;
 
+use super::policy::ToolPolicyEvaluation;
 use super::{
     object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition,
 };
@@ -65,6 +66,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
 
 fn activity_list(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["workspaceId", "limit"])?;

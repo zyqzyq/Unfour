@@ -3,6 +3,7 @@ use unfour_command_bus::{ConnectionType, ReadCommand, ReadCommandResult};
 
 use crate::command_bus_adapter::CommandBusAdapter;
 
+use super::policy::ToolPolicyEvaluation;
 use super::{
     object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition,
 };
@@ -150,6 +151,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
 
 fn workspace_current(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     object_with_allowed_keys(arguments, &[])?;
@@ -168,6 +170,7 @@ fn workspace_current(
 
 fn workspace_list(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     object_with_allowed_keys(arguments, &[])?;
@@ -186,6 +189,7 @@ fn workspace_list(
 
 fn connection_list(
     command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["type"])?;
