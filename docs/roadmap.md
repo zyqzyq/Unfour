@@ -4,7 +4,7 @@ This roadmap is a product-direction summary. It is not release evidence. Use
 `docs/testing/release-verification.md` and `docs/release/release-checklist.md`
 for release readiness.
 
-## v0.1 Public Preparation
+## v0.1 (First Public Release)
 
 Release focus:
 
@@ -22,7 +22,7 @@ Release focus:
 Remaining readiness work must be tracked through release verification, not
 through progress logs.
 
-## After v0.1
+## v0.2 and Beyond
 
 Likely follow-up areas:
 

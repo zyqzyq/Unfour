@@ -4,14 +4,11 @@ This file is the user-facing change history for Unfour, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
-> [!WARNING]
-> Unfour `v0.1` is in preparation. Entries below describe what has been built;
-> they are not a claim that a public release has passed all checks.
+## [Unreleased]
 
+## [0.1.0] - 2026-07-09
 
-## [0.1.0] - Unreleased
-
-First public release (in preparation)
+First public release.
 
 ### Added
 

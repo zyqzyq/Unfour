@@ -5,7 +5,7 @@ passwords, and API tokens — so we take security reports seriously.
 
 ## Supported Versions
 
-Unfour is in early alpha. Security fixes are applied to the latest `0.x`
+Unfour `0.1.x` is the first public release line. Security fixes are applied to the latest `0.x`
 release only. There is no long-term support branch yet.
 
 | Version | Supported |
@@ -43,5 +43,5 @@ disclosure.
   `x-api-key`, `x-auth-token`) are redacted in logs, history, and activity
   details.
 - Database SQL execution can run destructive statements; high-risk operations
-  are gated behind explicit confirmation. Do not point alpha builds at
+  are gated behind explicit confirmation. Do not point pre-release or development builds at
   production systems.

@@ -60,9 +60,19 @@ platform secret store or CI secret manager.
 
 ## Release Gate
 
-Before public v0.1:
+For v0.1.0:
 
 - record whether each platform artifact is signed;
 - record verification command output or mark the item `NOT VERIFIED`;
 - record OS trust prompts observed during installer smoke;
 - publish checksums for every artifact.
+
+## v0.1.0 Release Status
+
+- Windows: NOT VERIFIED — unsigned; Authenticode signing is not configured. Artifacts
+  must be labeled unsigned and shipped with SHA-256 checksums.
+- macOS: NOT VERIFIED — not built or notarized in this environment.
+- Linux: NOT VERIFIED — not built in this environment; publish SHA-256 checksums.
+
+Signing/notarization is incomplete for v0.1.0. Release notes must tell users to expect
+OS trust warnings and must publish checksums for manual verification.

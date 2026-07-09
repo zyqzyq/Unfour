@@ -13,10 +13,10 @@
 
 </div>
 
-> [!WARNING]
-> Unfour 正在筹备首次公开发布 `v0.1`。核心工作流已经具备，但发布就绪程度仍取决于
-> `docs/testing/release-verification.md` 中的验证矩阵，包括真实 SSH、打包、签名与平台
-> 冒烟检查。未经你自行验证，请勿将预发布版本用于生产系统。
+> [!NOTE]
+> Unfour `v0.1.0` 是首个公开版本。核心工作流已经具备；签名/公证仍在完善中，未签名产物
+> 可能触发系统安全警告。生产用途请自行验证，并参考 `docs/testing/release-verification.md`
+> 中的验证矩阵。
 
 ## Unfour 是什么？
 

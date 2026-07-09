@@ -100,7 +100,7 @@ values are never returned.
 
 ## Current Non-Goals
 
-The v0.1 MCP surface does not:
+The v0.1.0 MCP surface does not:
 
 - accept ad-hoc database connection strings;
 - open interactive SSH sessions;

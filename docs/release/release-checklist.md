@@ -1,6 +1,6 @@
 # Release Checklist
 
-This checklist is for the first public `v0.1` release preparation.
+This checklist is for the `v0.1` release.
 
 ## Release Candidate Setup
 
@@ -18,7 +18,7 @@ This checklist is for the first public `v0.1` release preparation.
 
 Complete and record the matrix in `docs/testing/release-verification.md`.
 
-Minimum automated checks before public v0.1:
+Minimum automated checks for v0.1.0:
 
 - `git status --short`
 - `git diff --check`
@@ -83,5 +83,5 @@ Minimum manual gates:
 Do not publish the release if any required verification is `FAIL`.
 
 `NOT RUN` or `NOT VERIFIED` may be acceptable only if the release notes clearly
-scope the limitation and the maintainer accepts the risk. For public v0.1, live
+scope the limitation and the maintainer accepts the risk. For v0.1.0, live
 SSH verification and installer launch checks should be treated as release gates.

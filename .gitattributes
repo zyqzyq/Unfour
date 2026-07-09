@@ -1,0 +1,13 @@
+# Default: let Git decide text vs binary; safe fallback for all contributors.
+* text=auto
+
+# sqlx computes a migration's checksum from the raw file bytes (SHA-384).
+# A CRLF<->LF difference changes the checksum and causes
+# `VersionMismatch` when the same DB is opened from different OSes
+# (e.g. the unfour core repo checked out as LF, this pro submodule
+# checked out as CRLF under core.autocrlf=true on Windows).
+# Force LF on checkout so the checksum is identical everywhere.
+*.sql text eol=lf
+
+# Shell scripts are also sensitive to CRLF on Windows; keep them LF.
+*.sh text eol=lf
