@@ -4,7 +4,7 @@
 // release bump only requires editing one line in the root Cargo.toml.
 // Runs automatically via tauri.conf.json beforeDev/beforeBuild commands.
 
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync, lstatSync } from "node:fs";
 import { dirname, resolve, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -43,7 +43,19 @@ const skipDirs = new Set([
 function walk(dir) {
   for (const entry of readdirSync(dir)) {
     const full = resolve(dir, entry);
-    if (statSync(full).isDirectory()) {
+    let stats;
+    try {
+      stats = lstatSync(full);
+    } catch {
+      // Skip entries we cannot stat (e.g. permission errors).
+      continue;
+    }
+    if (stats.isSymbolicLink()) {
+      // Never rewrite symlinks (e.g. CLAUDE.md -> AGENTS.md). lstat avoids
+      // following dangling links, which would otherwise throw ENOENT on CI.
+      continue;
+    }
+    if (stats.isDirectory()) {
       if (!skipDirs.has(entry)) walk(full);
     } else if (entry === "package.json") {
       targets.push(full);
