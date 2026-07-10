@@ -6,6 +6,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import type { Workspace } from "@unfour/command-client";
 import { I18nProvider, ThemeProvider } from "@unfour/ui";
 import { AppTitleBar } from "./AppTitleBar";
+import type { DesktopAppExtensionContext } from "../extensions";
 
 const { mockWindow } = vi.hoisted(() => ({
   mockWindow: {
@@ -58,12 +59,20 @@ function createWrapper() {
   };
 }
 
+function extensionContext(activeWorkspace: Workspace): DesktopAppExtensionContext {
+  return {
+    activeTab: { id: "api-main", kind: "api", title: "API Client" },
+    activeWorkspace,
+  };
+}
+
 describe("AppTitleBar settings entry", () => {
   it("keeps language and theme controls inside Settings instead of the title bar", () => {
     const activeWorkspace = workspace();
     render(
       <AppTitleBar
         activeWorkspace={activeWorkspace}
+        extensionContext={extensionContext(activeWorkspace)}
         onActivateWorkspace={vi.fn()}
         workspaces={[activeWorkspace]}
       />,
@@ -80,6 +89,7 @@ describe("AppTitleBar settings entry", () => {
     render(
       <AppTitleBar
         activeWorkspace={activeWorkspace}
+        extensionContext={extensionContext(activeWorkspace)}
         onActivateWorkspace={vi.fn()}
         workspaces={[activeWorkspace]}
       />,
@@ -99,5 +109,35 @@ describe("AppTitleBar settings entry", () => {
     });
     expect(await screen.findByRole("dialog", { name: "设置" })).toBeTruthy();
     expect(screen.getByRole("button", { hidden: true, name: "设置" })).toBeTruthy();
+  });
+
+  it("places an end accessory before window controls and mounts extension settings", async () => {
+    const activeWorkspace = workspace();
+    render(
+      <AppTitleBar
+        activeWorkspace={activeWorkspace}
+        endAccessory={<button type="button">Edition account</button>}
+        extensionContext={extensionContext(activeWorkspace)}
+        onActivateWorkspace={vi.fn()}
+        settingsSections={[
+          {
+            component: ({ activeWorkspace: workspaceFromContext }) => (
+              <div>Account for {workspaceFromContext?.name}</div>
+            ),
+            id: "edition.account",
+            label: "Account",
+          },
+        ]}
+        workspaces={[activeWorkspace]}
+      />,
+      { wrapper: createWrapper() },
+    );
+
+    expect(screen.getByRole("button", { name: "Edition account" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    const dialog = await screen.findByRole("dialog", { name: "Settings" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Account" }));
+
+    expect(within(dialog).getByText("Account for Default Workspace")).toBeTruthy();
   });
 });

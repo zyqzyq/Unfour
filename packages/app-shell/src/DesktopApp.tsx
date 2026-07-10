@@ -26,8 +26,16 @@ import { StatusBarPlaceholder } from "./components/StatusBarPlaceholder";
 import { CommandPaletteAction } from "./components/utils";
 import { useLayoutPersistence } from "./components/useLayoutPersistence";
 import { useWorkspaceInit } from "./components/useWorkspaceInit";
+import type {
+  DesktopAppExtensionContext,
+  DesktopAppExtensions,
+} from "./extensions";
 
-export function DesktopApp() {
+export type DesktopAppProps = {
+  extensions?: DesktopAppExtensions;
+};
+
+export function DesktopApp({ extensions }: DesktopAppProps) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const handleError = useFeedbackErrorHandler();
@@ -101,6 +109,13 @@ export function DesktopApp() {
     setDatabaseStatusBarContent(content);
   }, []);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
+  const extensionContext: DesktopAppExtensionContext = useMemo(
+    () => ({ activeTab, activeWorkspace }),
+    [activeTab, activeWorkspace],
+  );
+  const TitleBarEnd = extensions?.titleBarEnd;
+  const StatusBarEnd = extensions?.statusBarEnd;
+  const Overlays = extensions?.overlays;
   const layoutControls = useMemo(
     () => (
       <LayoutControls
@@ -118,6 +133,15 @@ export function DesktopApp() {
       sidebarCollapsed,
       toggleSidebar,
     ],
+  );
+  const statusBarRightAccessory = useMemo(
+    () => (
+      <>
+        {layoutControls}
+        {StatusBarEnd && <StatusBarEnd {...extensionContext} />}
+      </>
+    ),
+    [extensionContext, layoutControls, StatusBarEnd],
   );
   return (
     <FeedbackProvider>
@@ -152,7 +176,10 @@ export function DesktopApp() {
         globalToolbar={
           <AppTitleBar
             activeWorkspace={activeWorkspace}
+            endAccessory={TitleBarEnd ? <TitleBarEnd {...extensionContext} /> : undefined}
+            extensionContext={extensionContext}
             onActivateWorkspace={(id) => activateWorkspaceMutation.mutate(id)}
+            settingsSections={extensions?.settingsSections}
             workspaces={workspaceQuery.data?.workspaces ?? []}
           />
         }
@@ -179,7 +206,7 @@ export function DesktopApp() {
         statusBar={
           activeTab.kind === "ssh" && activeWorkspace ? (
             <TerminalStatusBar
-              rightAccessory={layoutControls}
+              rightAccessory={statusBarRightAccessory}
               workspaceId={activeWorkspace.id}
               workspaceName={activeWorkspace.name}
             />
@@ -190,7 +217,7 @@ export function DesktopApp() {
               activeTab={activeTab}
               activeWorkspace={activeWorkspace}
               healthReady={healthQuery.data?.storageReady === true}
-              rightAccessory={layoutControls}
+              rightAccessory={statusBarRightAccessory}
               syncStrategy={healthQuery.data?.syncStrategy ?? "local-first"}
             />
           )
@@ -229,7 +256,7 @@ export function DesktopApp() {
                 <DatabasePage
                   onShellSidebarChange={handleDatabaseSidebarChange}
                   onShellStatusBarChange={handleDatabaseStatusBarChange}
-                  statusBarRightAccessory={layoutControls}
+                  statusBarRightAccessory={statusBarRightAccessory}
                   workspaceName={activeWorkspace.name}
                   workspaceId={activeWorkspace.id}
                 />
@@ -265,11 +292,20 @@ export function DesktopApp() {
             <CommandPaletteAction onSelect={() => runCommandPaletteAction(exportDiagnosticsBundle)}>
               {t("app.commandPalette.exportDiagnosticsBundle")}
             </CommandPaletteAction>
+            {extensions?.commandPaletteActions?.map((action) => (
+              <CommandPaletteAction
+                key={action.id}
+                onSelect={() => runCommandPaletteAction(() => action.run(extensionContext))}
+              >
+                {action.label}
+              </CommandPaletteAction>
+            ))}
           </>
         }
         onClose={() => setCommandPaletteOpen(false)}
         open={commandPaletteOpen}
       />
+      {Overlays && <Overlays {...extensionContext} />}
     </FeedbackProvider>
   );
 }

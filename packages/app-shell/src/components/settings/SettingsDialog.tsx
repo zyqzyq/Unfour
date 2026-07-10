@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Button,
   Dialog,
@@ -14,23 +14,42 @@ import {
 import { SettingsAbout } from "./SettingsAbout";
 import { SettingsGeneral } from "./SettingsGeneral";
 import { SettingsMcp } from "./SettingsMcp";
+import type {
+  DesktopAppExtensionContext,
+  DesktopAppSettingsSection,
+} from "../../extensions";
 
 type SettingsSection = "general" | "mcp" | "about";
 
 export function SettingsDialog({
+  extensionContext,
+  extensionSections = [],
   onOpenChange,
   open,
 }: {
+  extensionContext: DesktopAppExtensionContext;
+  extensionSections?: readonly DesktopAppSettingsSection[];
   onOpenChange: (open: boolean) => void;
   open: boolean;
 }) {
   const { t } = useI18n();
-  const [activeSection, setActiveSection] = useState<SettingsSection>("general");
-  const sections: { id: SettingsSection; label: string }[] = [
+  const [activeSection, setActiveSection] = useState<string>("general");
+  const coreSections: { id: SettingsSection; label: string }[] = [
     { id: "general", label: t("app.settings.sections.general") },
     { id: "mcp", label: t("app.settings.sections.mcp") },
     { id: "about", label: t("app.settings.sections.about") },
   ];
+  const sections: { id: string; label: ReactNode }[] = [
+    ...coreSections.slice(0, -1),
+    ...extensionSections.map(({ id, label }) => ({ id, label })),
+    coreSections[coreSections.length - 1],
+  ];
+  const activeSectionExists = sections.some((section) => section.id === activeSection);
+  const resolvedActiveSection = activeSectionExists ? activeSection : "general";
+  const activeExtensionSection = extensionSections.find(
+    (section) => section.id === resolvedActiveSection,
+  );
+  const ExtensionSection = activeExtensionSection?.component;
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -48,7 +67,7 @@ export function SettingsDialog({
             className="border-r border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-2"
           >
             {sections.map((section) => {
-              const active = section.id === activeSection;
+              const active = section.id === resolvedActiveSection;
               return (
                 <Button
                   aria-current={active ? "page" : undefined}
@@ -69,9 +88,10 @@ export function SettingsDialog({
             })}
           </nav>
           <section className="min-w-0 overflow-y-auto p-4">
-            {activeSection === "general" && <SettingsGeneral />}
-            {activeSection === "mcp" && <SettingsMcp />}
-            {activeSection === "about" && <SettingsAbout />}
+            {resolvedActiveSection === "general" && <SettingsGeneral />}
+            {resolvedActiveSection === "mcp" && <SettingsMcp />}
+            {resolvedActiveSection === "about" && <SettingsAbout />}
+            {ExtensionSection && <ExtensionSection {...extensionContext} />}
           </section>
         </DialogBody>
       </DialogContent>
