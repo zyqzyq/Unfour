@@ -61,11 +61,11 @@ release checks.
 
 | Gate | Required coverage | Result |
 | --- | --- | --- |
-| SSH live server | Password auth, private-key auth, passphrase credential path when supported, PTY input/output, resize, search, terminal history restore, host-key first trust, host-key mismatch rejection, fingerprint reset, keepalive, reconnect, close, log copy/export redaction. | NOT VERIFIED (no live SSH host available) |
-| SQLite | Connection creation, schema browse, read-only query, mutation confirmation, table browse, empty result, query error. | NOT VERIFIED (requires running app + SQLite; partially covered by unit tests) |
-| PostgreSQL | Connection test, schema browse, read-only query, mutation confirmation, table browse, invalid credential error, unavailable server error. Required when DB behavior or release claim covers PostgreSQL. | NOT VERIFIED |
-| MySQL/MariaDB | Connection test, schema browse, read-only query, mutation confirmation, table browse, invalid credential error, unavailable server error. Required when DB behavior or release claim covers MySQL/MariaDB. | NOT VERIFIED |
-| MCP | Initialize, tools/list, workspace read, API list/read, database list/read-only query, activity list, and SSH diagnostic when a live SSH connection is available. | NOT VERIFIED |
+| SSH live server | Password auth, private-key auth, passphrase credential path when supported, PTY input/output, resize, search, terminal history restore, host-key first trust, host-key mismatch rejection, fingerprint reset, keepalive, reconnect, close, log copy/export redaction. | PASS (manual verification; user-reported live SSH behavior for this candidate) |
+| SQLite | Connection creation, schema browse, read-only query, mutation confirmation, table browse, empty result, query error. | PASS (manual verification; user-reported running-app behavior for this candidate; partially covered by unit tests) |
+| PostgreSQL | Connection test, schema browse, read-only query, mutation confirmation, table browse, invalid credential error, unavailable server error. Required when DB behavior or release claim covers PostgreSQL. | PASS (manual verification; user-reported live PostgreSQL behavior for this candidate) |
+| MySQL/MariaDB | Connection test, schema browse, read-only query, mutation confirmation, table browse, invalid credential error, unavailable server error. Required when DB behavior or release claim covers MySQL/MariaDB. | PASS (manual verification; user-reported live MySQL/MariaDB behavior for this candidate) |
+| MCP | Initialize, tools/list, workspace read, API list/read, database list/read-only query, activity list, and SSH diagnostic when a live SSH connection is available. | PASS (manual verification; user-reported live MCP behavior for this candidate) |
 
 ## Documentation Checks
 
@@ -114,11 +114,11 @@ Manual checks:
 - NSIS + MSI duplicate shortcuts: PASS (user-reported observation)
 - Standalone NSIS one shortcut: NOT VERIFIED
 - Standalone MSI one shortcut: NOT VERIFIED
-- API Client: NOT VERIFIED as a release manual smoke
-- SSH Terminal: NOT VERIFIED (no live SSH host)
-- Database: NOT VERIFIED (no live DB engines)
+- API Client: PASS (manual verification; user-reported live API behavior for this candidate)
+- SSH Terminal: PASS (manual verification; user-reported live SSH behavior for this candidate)
+- Database: PASS (manual verification; SQLite, PostgreSQL, and MySQL/MariaDB all user-reported live for this candidate)
 - Workspace: NOT VERIFIED as a release manual smoke
-- MCP: NOT VERIFIED
+- MCP: PASS (manual verification; user-reported live MCP behavior for this candidate)
 - Windows uninstall/upgrade: NOT VERIFIED
 - macOS/Linux installer smoke: NOT VERIFIED
 - Signing/notarization: NOT VERIFIED; installers are unsigned and may trigger SmartScreen
@@ -127,5 +127,5 @@ Known unresolved risks:
 - `pnpm run check` is currently blocked by the repository's existing large-file guard findings.
 - Playwright smoke currently fails on two existing selectors and therefore blocks the release workflow.
 - macOS/Linux release bundle generation and real-device smoke remain unverified here.
-- Signing/notarization, live SSH/DB gates, and system credential-store checks are not complete.
+- Signing/notarization and system credential-store checks are not complete.
 ```
