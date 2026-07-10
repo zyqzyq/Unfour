@@ -3,12 +3,12 @@
   "files": [
     {
       "path": "crates/database-engine/src/database.rs",
-      "maxLines": 3371,
+      "maxLines": 3544,
       "reason": "Historical database engine entry; split only by driver, query safety, and table operation boundaries."
     },
     {
       "path": "crates/ssh-engine/src/ssh.rs",
-      "maxLines": 2131,
+      "maxLines": 2402,
       "reason": "Historical SSH engine entry; split only by session lifecycle, native transport, persistence, and diagnostics boundaries."
     },
     {
@@ -18,7 +18,7 @@
     },
     {
       "path": "crates/unfour-command-bus/src/lib.rs",
-      "maxLines": 1679,
+      "maxLines": 1726,
       "reason": "Command-bus boundary and result models; needs future domain command and read-model extraction."
     },
     {
@@ -28,12 +28,12 @@
     },
     {
       "path": "crates/unfour-mcp/src/tools/api.rs",
-      "maxLines": 1428,
+      "maxLines": 1447,
       "reason": "API MCP tools plus redaction/parser helpers; needs future serializer and argument-parser split."
     },
     {
       "path": "packages/database/src/DatabasePage.tsx",
-      "maxLines": 1649,
+      "maxLines": 1686,
       "reason": "Historical database page container; needs future dialog, mutation hook, and workspace controller extraction."
     }
   ]

@@ -44,6 +44,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Prepare Tauri sidecars
+        run: node scripts/prepare-tauri-sidecars.mjs --debug
+
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
