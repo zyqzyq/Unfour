@@ -34,7 +34,7 @@ export function SettingsDialog({
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="w-[min(760px,calc(100vw-32px))]">
+      <DialogContent className="w-[min(900px,calc(100vw-32px))]">
         <DialogHeader>
           <div className="min-w-0">
             <DialogTitle>{t("app.settings.title")}</DialogTitle>
@@ -42,7 +42,7 @@ export function SettingsDialog({
           </div>
           <DialogXClose label={t("app.settings.close")} />
         </DialogHeader>
-        <DialogBody className="grid min-h-[420px] grid-cols-[154px_minmax(0,1fr)] overflow-hidden p-0">
+        <DialogBody className="grid h-[600px] grid-cols-[154px_minmax(0,1fr)] overflow-hidden p-0">
           <nav
             aria-label={t("app.settings.navigationLabel")}
             className="border-r border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-2"
