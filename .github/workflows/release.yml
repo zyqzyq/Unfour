@@ -137,19 +137,18 @@ jobs:
         env:
           UNFOUR_TAURI_TARGET: ${{ matrix.target }}
 
-      - name: Collect Windows NSIS and MSI assets
+      - name: Collect Windows NSIS assets
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
           $bundleFiles = Get-ChildItem -Path "target" -Recurse -File |
             Where-Object { $_.FullName -match '[\\/]release[\\/]bundle[\\/]' }
           $nsisAssets = @($bundleFiles | Where-Object { $_.Extension -ieq '.exe' })
-          $msiAssets = @($bundleFiles | Where-Object { $_.Extension -ieq '.msi' })
-          if ($nsisAssets.Count -eq 0 -or $msiAssets.Count -eq 0) {
-            throw 'Windows release must produce both an NSIS .exe and an MSI .msi asset.'
+          if ($nsisAssets.Count -eq 0) {
+            throw 'Windows release must produce an NSIS .exe installer.'
           }
           New-Item -ItemType Directory -Force -Path release-assets | Out-Null
-          foreach ($asset in @($nsisAssets + $msiAssets)) {
+          foreach ($asset in $nsisAssets) {
             Copy-Item -LiteralPath $asset.FullName -Destination (Join-Path 'release-assets' $asset.Name)
           }
 
@@ -205,9 +204,7 @@ jobs:
 
             This release is unsigned and may trigger SmartScreen or other operating-system security warnings.
 
-            Windows provides two installers for the same Unfour version: NSIS `.exe` is recommended for ordinary users; MSI `.msi` is for users who prefer MSI or need software deployment management. Choose one format.
-
-            Do not install both Windows formats on the same device: doing so may create duplicate shortcuts or uninstall entries and can make upgrade paths confusing. Cross-format detection, automatic uninstall, and NSIS/MSI cross-upgrade are not implemented at this stage.
+            Windows ships a single NSIS `.exe` installer (recommended for ordinary users).
 
             macOS and Linux artifacts are experimental and unverified until real-device smoke checks are recorded; they must not be treated as supported or verified platforms yet.
 
