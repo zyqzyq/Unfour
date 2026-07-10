@@ -1,5 +1,6 @@
-use std::io::Cursor;
+use std::io::{BufReader, Cursor, Read};
 use std::sync::Arc;
+use std::time::Duration;
 
 use serde_json::{json, Value};
 use unfour_command_bus::{
@@ -12,12 +13,30 @@ use unfour_core::models::{
     DatabaseQueryResult, DatabaseQuerySafety, DatabaseSchema,
 };
 
-use super::{run_stdio_with_server, McpServer, SUPPORTED_PROTOCOL_VERSION};
+use super::{
+    run_stdio_with_server, run_stdio_with_server_and_idle_timeout, McpServer,
+    SUPPORTED_PROTOCOL_VERSION,
+};
 use crate::command_bus_adapter::{
     CommandBusAdapter, CommandBusAdapterError, LocalCommandBusAdapter,
 };
 
 struct StubCommandBus;
+
+struct DelayedEofReader {
+    delay: Duration,
+    returned_eof: bool,
+}
+
+impl Read for DelayedEofReader {
+    fn read(&mut self, _buffer: &mut [u8]) -> std::io::Result<usize> {
+        if !self.returned_eof {
+            std::thread::sleep(self.delay);
+            self.returned_eof = true;
+        }
+        Ok(0)
+    }
+}
 
 impl CommandBusAdapter for StubCommandBus {
     fn execute_read(
@@ -286,4 +305,27 @@ fn stdio_round_trip_lists_and_calls_tools() {
         responses[2]["result"]["structuredContent"]["source"],
         "command-bus"
     );
+}
+
+#[test]
+fn stdio_idle_timeout_returns_while_input_remains_open() {
+    let command_bus =
+        LocalCommandBusAdapter::ephemeral().expect("ephemeral command bus should initialize");
+    let server = McpServer::new(command_bus);
+    let reader = BufReader::new(DelayedEofReader {
+        delay: Duration::from_millis(500),
+        returned_eof: false,
+    });
+    let mut output = Vec::new();
+
+    let timed_out = run_stdio_with_server_and_idle_timeout(
+        &server,
+        reader,
+        &mut output,
+        Duration::from_millis(20),
+    )
+    .expect("idle stdio server should stop cleanly");
+
+    assert!(timed_out);
+    assert!(output.is_empty());
 }

@@ -1,6 +1,7 @@
 use std::io::{self, BufRead, Write};
+use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 
@@ -222,6 +223,53 @@ where
     result
 }
 
+/// Drive the stdio loop with a bounded idle period.
+///
+/// Some desktop MCP clients keep a task's stdio transport open after the task
+/// has completed so it can be resumed later. In that state the server never
+/// observes EOF and the normal shutdown path cannot run. A bounded idle period
+/// lets the standalone sidecar release its runtime even when the client keeps
+/// the pipe handles open. Passing `None` preserves the ordinary wait-for-EOF
+/// behavior.
+pub fn run_stdio_with_adapter_and_idle_timeout<R, W>(
+    adapter: Arc<LocalCommandBusAdapter>,
+    reader: R,
+    mut writer: W,
+    idle_timeout: Option<Duration>,
+) -> io::Result<()>
+where
+    R: BufRead + Send + 'static,
+    W: Write,
+{
+    let server = McpServer::new(adapter.clone());
+    let result = match idle_timeout {
+        Some(timeout) => {
+            run_stdio_with_server_and_idle_timeout(&server, reader, &mut writer, timeout).map(
+                |timed_out| {
+                    if timed_out {
+                        unfour_diag::log_operation_event(
+                            "mcp_server_stopped",
+                            "mcp",
+                            "run_stdio",
+                            "ok",
+                            None,
+                            None,
+                            json!({
+                                "transport": "stdio",
+                                "reason": "idle_timeout",
+                                "idle_timeout_ms": timeout.as_millis(),
+                            }),
+                        );
+                    }
+                },
+            )
+        }
+        None => run_stdio_with_server(&server, reader, &mut writer),
+    };
+    adapter.shutdown();
+    result
+}
+
 /// Drive the stdio read/write loop with an already-built server. Splitting this
 /// out keeps the transport logic testable without opening the real OS app-data
 /// store (which does not exist in CI).
@@ -232,30 +280,79 @@ where
 {
     for line in reader.lines() {
         let line = line?;
-        if line.trim().is_empty() {
-            continue;
-        }
-
-        if let Some(response) = server.handle_line(&line) {
-            // A broken stdout pipe means the client (e.g. Codex) already went
-            // away. Treat that as a clean shutdown, not a failure that would
-            // otherwise turn into a non-zero exit and a lingering process.
-            if let Err(error) = writeln!(writer, "{response}") {
-                if error.kind() == io::ErrorKind::BrokenPipe {
-                    return Ok(());
-                }
-                return Err(error);
-            }
-            if let Err(error) = writer.flush() {
-                if error.kind() == io::ErrorKind::BrokenPipe {
-                    return Ok(());
-                }
-                return Err(error);
-            }
+        if !handle_stdio_line(server, &line, writer)? {
+            return Ok(());
         }
     }
 
     Ok(())
+}
+
+/// Read stdin on a dedicated thread so the transport can stop waiting even if
+/// the client keeps the pipe open indefinitely. The process exits after this
+/// returns, so the blocked reader thread is intentionally detached.
+fn run_stdio_with_server_and_idle_timeout<R, W>(
+    server: &McpServer,
+    reader: R,
+    writer: &mut W,
+    idle_timeout: Duration,
+) -> io::Result<bool>
+where
+    R: BufRead + Send + 'static,
+    W: Write,
+{
+    let (sender, receiver) = mpsc::channel::<io::Result<Option<String>>>();
+    std::thread::spawn(move || {
+        for line in reader.lines() {
+            let event = line.map(Some);
+            if sender.send(event).is_err() {
+                return;
+            }
+        }
+        let _ = sender.send(Ok(None));
+    });
+
+    loop {
+        match receiver.recv_timeout(idle_timeout) {
+            Ok(Ok(Some(line))) => {
+                if !handle_stdio_line(server, &line, writer)? {
+                    return Ok(false);
+                }
+            }
+            Ok(Ok(None)) | Err(RecvTimeoutError::Disconnected) => return Ok(false),
+            Ok(Err(error)) => return Err(error),
+            Err(RecvTimeoutError::Timeout) => return Ok(true),
+        }
+    }
+}
+
+/// Process one transport line. `false` means stdout was disconnected and the
+/// caller should stop the stdio loop cleanly.
+fn handle_stdio_line<W: Write>(server: &McpServer, line: &str, writer: &mut W) -> io::Result<bool> {
+    if line.trim().is_empty() {
+        return Ok(true);
+    }
+
+    let Some(response) = server.handle_line(line) else {
+        return Ok(true);
+    };
+
+    // A broken stdout pipe means the client (e.g. Codex) already went away.
+    // Treat it as a clean shutdown rather than a transport failure.
+    if let Err(error) = writeln!(writer, "{response}") {
+        if error.kind() == io::ErrorKind::BrokenPipe {
+            return Ok(false);
+        }
+        return Err(error);
+    }
+    if let Err(error) = writer.flush() {
+        if error.kind() == io::ErrorKind::BrokenPipe {
+            return Ok(false);
+        }
+        return Err(error);
+    }
+
+    Ok(true)
 }
 
 #[cfg(test)]

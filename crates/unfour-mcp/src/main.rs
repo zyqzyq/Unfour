@@ -1,7 +1,12 @@
-use std::io;
+use std::io::{self, BufReader};
 use std::sync::Arc;
+use std::time::Duration;
 
 use unfour_mcp::{LocalCommandBusAdapter, Shutdown};
+
+const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 300;
+const MAX_IDLE_TIMEOUT_SECS: u64 = 86_400;
+const IDLE_TIMEOUT_ENV: &str = "UNFOUR_MCP_IDLE_TIMEOUT_SECS";
 
 fn main() {
     let _logging_guard = initialize_logging();
@@ -29,7 +34,12 @@ fn main() {
     // background tasks (bounded) and then hard-exit the whole process.
     install_signal_handlers(shutdown.clone(), adapter.clone());
 
-    let result = unfour_mcp::run_stdio_with_adapter(adapter.clone(), stdin.lock(), stdout.lock());
+    let result = unfour_mcp::run_stdio_with_adapter_and_idle_timeout(
+        adapter.clone(),
+        BufReader::new(stdin),
+        stdout.lock(),
+        idle_timeout_from_env(),
+    );
 
     // Normal exit path: EOF on stdin or a clean client disconnect. `run_stdio_with_adapter`
     // already shut the runtime down; mark the signal for completeness.
@@ -46,6 +56,26 @@ fn main() {
             eprintln!("unfour-mcp stdio server failed: {error}");
             std::process::exit(1);
         }
+    }
+}
+
+/// Return the maximum period with no MCP protocol messages before the sidecar
+/// exits. `0` disables the idle backstop; invalid values use the packaged
+/// default. The cap avoids accidentally turning a typo into a practically
+/// unbounded process lifetime.
+fn idle_timeout_from_env() -> Option<Duration> {
+    parse_idle_timeout(std::env::var(IDLE_TIMEOUT_ENV).ok().as_deref())
+}
+
+fn parse_idle_timeout(value: Option<&str>) -> Option<Duration> {
+    let seconds = value
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .unwrap_or(DEFAULT_IDLE_TIMEOUT_SECS);
+
+    if seconds == 0 {
+        None
+    } else {
+        Some(Duration::from_secs(seconds.min(MAX_IDLE_TIMEOUT_SECS)))
     }
 }
 
@@ -98,4 +128,30 @@ fn initialize_logging() -> Option<unfour_diag::LoggingGuard> {
     config.app_name = "unfour-mcp".to_string();
     config.version = env!("CARGO_PKG_VERSION").to_string();
     unfour_diag::init_logging(config).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn idle_timeout_defaults_when_value_is_invalid() {
+        assert_eq!(
+            parse_idle_timeout(Some("invalid")),
+            Some(Duration::from_secs(DEFAULT_IDLE_TIMEOUT_SECS))
+        );
+    }
+
+    #[test]
+    fn idle_timeout_zero_disables_backstop() {
+        assert_eq!(parse_idle_timeout(Some("0")), None);
+    }
+
+    #[test]
+    fn idle_timeout_is_capped() {
+        assert_eq!(
+            parse_idle_timeout(Some("999999")),
+            Some(Duration::from_secs(MAX_IDLE_TIMEOUT_SECS))
+        );
+    }
 }
