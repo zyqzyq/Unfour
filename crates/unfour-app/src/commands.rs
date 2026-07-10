@@ -1,4 +1,5 @@
 pub mod api;
+pub mod app;
 pub mod database;
 pub mod diagnostics;
 pub mod mcp;
@@ -7,6 +8,7 @@ pub mod ssh;
 pub mod workspace;
 
 pub use api::*;
+pub use app::*;
 pub use database::*;
 pub use diagnostics::*;
 pub use mcp::*;

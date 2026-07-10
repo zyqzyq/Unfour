@@ -1,4 +1,5 @@
 import { handleApiMock } from "./api";
+import { handleAppMock } from "./app";
 import { handleDatabaseMock } from "./database";
 import { handleDiagnosticsMock } from "./diagnostics";
 import { handleMcpMock } from "./mcp";
@@ -11,6 +12,7 @@ const mockHandlers: MockCommandHandler[] = [
   handleDiagnosticsMock,
   handleWorkspaceMock,
   handleApiMock,
+  handleAppMock,
   handleSecretStoreMock,
   handleDatabaseMock,
   handleSshMock,

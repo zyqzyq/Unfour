@@ -5,14 +5,17 @@ import { Button, useI18n } from "@unfour/ui";
 import {
   APP_GITHUB_URL,
   APP_NAME,
-  APP_VERSION,
   APP_WEBSITE_URL,
   createVersionInfo,
 } from "../../settings/settings-config";
+import { getAppInfo } from "@unfour/command-client";
 
 export function SettingsAbout() {
   const { t } = useI18n();
   const [copyState, setCopyState] = useState<"copied" | "failed" | null>(null);
+  const [appInfo, setAppInfo] = useState<{ version: string; edition: "community" | "pro" } | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!copyState) {
@@ -22,9 +25,39 @@ export function SettingsAbout() {
     return () => window.clearTimeout(timeout);
   }, [copyState]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void getAppInfo()
+      .then((info) => {
+        if (!cancelled) {
+          setAppInfo(info);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAppInfo({ version: "", edition: "community" });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const editionLabel =
+    appInfo?.edition === "pro"
+      ? t("app.settings.about.editionPro")
+      : t("app.settings.about.editionCommunity");
+
   async function copyVersionInfo() {
+    const version = appInfo?.version || "";
     try {
-      await navigator.clipboard.writeText(createVersionInfo());
+      await navigator.clipboard.writeText(
+        createVersionInfo(undefined, {
+          name: APP_NAME,
+          version,
+          edition: appInfo?.edition ?? "community",
+        }),
+      );
       setCopyState("copied");
     } catch {
       setCopyState("failed");
@@ -44,7 +77,8 @@ export function SettingsAbout() {
 
       <dl className="divide-y divide-[var(--u-color-border)] rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)]">
         <InfoRow label={t("app.settings.about.appName")} value={APP_NAME} />
-        <InfoRow label={t("app.settings.about.version")} value={APP_VERSION} />
+        <InfoRow label={t("app.settings.about.edition")} value={editionLabel} />
+        <InfoRow label={t("app.settings.about.version")} value={appInfo?.version || ""} />
         <InfoRow
           label={t("app.settings.about.website")}
           value={<ExternalLinkValue href={APP_WEBSITE_URL} label={APP_WEBSITE_URL} />}

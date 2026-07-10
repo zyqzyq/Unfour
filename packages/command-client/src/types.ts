@@ -551,6 +551,13 @@ export type WorkspaceTab = {
   kind: "api" | "ssh" | "database";
 };
 
+export type AppEdition = "community" | "pro";
+
+export type AppInfo = {
+  version: string;
+  edition: AppEdition;
+};
+
 export type WorkspaceLayout = {
   workspaceId: string;
   sidebarCollapsed: boolean;

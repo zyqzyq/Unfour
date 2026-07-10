@@ -6,6 +6,7 @@ unsafe extern "C" {}
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let config = unfour_app::UnfourAppConfig {
+        edition: unfour_app::AppEdition::Community,
         app_version: env!("CARGO_PKG_VERSION").to_string(),
         ..Default::default()
     };

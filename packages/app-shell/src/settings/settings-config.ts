@@ -39,9 +39,16 @@ export function formatMcpClientConfig(command = getMcpCommand()) {
   return JSON.stringify(createMcpClientConfig(command), null, 2);
 }
 
-export function createVersionInfo(environment = getVersionEnvironment()) {
+export function createVersionInfo(
+  environment = getVersionEnvironment(),
+  app: { name: string; version: string; edition: string } = {
+    name: APP_NAME,
+    version: APP_VERSION,
+    edition: "community",
+  },
+) {
   return [
-    `${APP_NAME} ${APP_VERSION}`,
+    `${app.name} ${app.version} (${app.edition})`,
     `Platform: ${environment.platform}`,
     `User agent: ${environment.userAgent}`,
     `Website: ${APP_WEBSITE_URL}`,
