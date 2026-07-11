@@ -18,115 +18,17 @@ import {
 } from "../request-utils";
 import type {
   ApiSplitDirection,
-  ApiTabSaveState,
-  ApiTabSource,
   RequestDraft,
   RequestParamsTab,
   ResponseTab,
 } from "./types";
 
-export type ApiRequestTab = {
-  baseline: string | null;
-  draft: RequestDraft;
-  id: string;
-  requestTab: RequestParamsTab;
-  lastRequest: ApiRequestInput | null;
-  response: ApiResponse | null;
-  responseTab: ResponseTab;
-  saveError: string | null;
-  savedRequestId: string | null;
-  sendError: string | null;
-  sending: boolean;
-  saving: boolean;
-  source: ApiTabSource;
-  sourceId: string | null;
-};
+import type { ApiHistoryGroup, ApiRequestTab, ApiTabsState } from "./request-tab-types";
+import { normalizeRequestDraft } from "./request-tab-state";
 
-export type ApiTabsState = {
-  activeTabId: string | null;
-  splitDirection: ApiSplitDirection;
-  tabs: ApiRequestTab[];
-  workspaceId: string;
-};
-
-export type ApiHistoryGroup = {
-  id: string;
-  items: ApiHistoryItem[];
-  label: string;
-};
-
-export type ApiTabVisualState =
-  | "saved"
-  | "dirty"
-  | "unsaved"
-  | "saving"
-  | "sending"
-  | "success"
-  | "failed";
-
-export type ApiTabResponseState =
-  | "idle"
-  | "sending"
-  | "success"
-  | "empty"
-  | "http-error"
-  | "network"
-  | "timeout"
-  | "failed";
-
-export const requestConfigTabs: Array<{ id: RequestParamsTab; label: string }> = [
-  { id: "query", label: "Params" },
-  { id: "auth", label: "Auth" },
-  { id: "headers", label: "Headers" },
-  { id: "body", label: "Body" },
-];
-
-export function methodBadgeLabel(method: string) {
-  const normalized = method.trim().toUpperCase();
-  return normalized === "DELETE" ? "DEL" : normalized;
-}
-
-export function methodToneClass(method: string) {
-  switch (method.trim().toUpperCase()) {
-    case "GET":
-      return "text-[color:var(--u-color-info-text)]";
-    case "POST":
-      return "text-[color:var(--u-color-success)]";
-    case "PUT":
-      return "text-[color:var(--u-color-warning-text)]";
-    case "PATCH":
-      return "text-[color:var(--u-color-primary)]";
-    case "DELETE":
-      return "text-[color:var(--u-color-danger)]";
-    case "HEAD":
-      return "text-[color:var(--u-color-secondary-text)]";
-    case "OPTIONS":
-      return "text-[color:var(--u-color-neutral-text)]";
-    default:
-      return "text-[color:var(--u-color-text-muted)]";
-  }
-}
-
-export function methodBadgeToneClass(method: string) {
-  switch (method.trim().toUpperCase()) {
-    case "GET":
-      return "bg-[var(--u-color-info-soft)] text-[color:var(--u-color-info-text)]";
-    case "POST":
-      return "bg-[var(--u-color-success-soft)] text-[color:var(--u-color-success)]";
-    case "PUT":
-      return "bg-[var(--u-color-warning-soft)] text-[color:var(--u-color-warning-text)]";
-    case "PATCH":
-      return "bg-[var(--u-color-primary-soft)] text-[color:var(--u-color-primary)]";
-    case "DELETE":
-      return "bg-[var(--u-color-danger-soft)] text-[color:var(--u-color-danger-text)]";
-    case "HEAD":
-      return "bg-[var(--u-color-secondary-soft)] text-[color:var(--u-color-secondary-text)]";
-    case "OPTIONS":
-      return "bg-[var(--u-color-neutral-soft)] text-[color:var(--u-color-neutral-text)]";
-    default:
-      return "bg-[var(--u-color-surface-muted)] text-[color:var(--u-color-text-muted)]";
-  }
-}
+export * from "./request-tab-presentation";
+export * from "./request-tab-state";
+export * from "./request-tab-types";
 
 export function emptyApiTabsState(workspaceId: string): ApiTabsState {
   return {
@@ -369,63 +271,6 @@ export function failTabSave(
   }));
 }
 
-export function getTabSaveState(tab: ApiRequestTab): ApiTabSaveState {
-  if (tab.saving) {
-    return "saving";
-  }
-  if (!tab.baseline) {
-    return "unsaved";
-  }
-  return normalizeRequestDraft(tab.draft) === tab.baseline ? "saved" : "dirty";
-}
-
-export function requestTabTitle(tab: ApiRequestTab) {
-  return tab.draft.name.trim() || "Untitled Request";
-}
-
-export function requestTabVisualState(tab: ApiRequestTab): ApiTabVisualState {
-  if (tab.sending) {
-    return "sending";
-  }
-  if (tab.sendError || (tab.response && tab.response.status >= 400)) {
-    return "failed";
-  }
-  if (tab.response) {
-    return "success";
-  }
-  return getTabSaveState(tab);
-}
-
-export function deriveTabResponseState(
-  tab: ApiRequestTab,
-): ApiTabResponseState {
-  if (tab.sending) {
-    return "sending";
-  }
-  if (tab.sendError) {
-    const message = tab.sendError.toLowerCase();
-    if (message.includes("timeout") || message.includes("timed out")) {
-      return "timeout";
-    }
-    if (
-      message.includes("network") ||
-      message.includes("connection") ||
-      message.includes("dns") ||
-      message.includes("fetch")
-    ) {
-      return "network";
-    }
-    return "failed";
-  }
-  if (!tab.response) {
-    return "idle";
-  }
-  if (tab.response.status >= 400) {
-    return "http-error";
-  }
-  return tab.response.body.trim() ? "success" : "empty";
-}
-
 export function closeApiTab(
   state: ApiTabsState,
   tabId: string,
@@ -473,23 +318,6 @@ export function setApiSplitDirection(
   splitDirection: ApiSplitDirection,
 ): ApiTabsState {
   return { ...state, splitDirection };
-}
-
-export function normalizeRequestDraft(draft: RequestDraft): string {
-  return JSON.stringify({
-    auth: draft.auth,
-    body: draft.body,
-    bodyMode: draft.bodyMode,
-    collectionId: draft.collectionId,
-    formBody: normalizeKeyValues(draft.formBody),
-    headers: normalizeKeyValues(draft.headers),
-    method: draft.method.toUpperCase(),
-    name: draft.name.trim(),
-    parentFolderId: draft.parentFolderId,
-    query: normalizeKeyValues(draft.query),
-    rawBodyType: draft.rawBodyType,
-    url: draft.url.trim(),
-  });
 }
 
 export function groupApiHistory(
@@ -581,14 +409,6 @@ function historyResponse(history: ApiHistoryDetail): ApiResponse | null {
     body: history.responseBodyPreview ?? "",
     durationMs: history.durationMs ?? 0,
   };
-}
-
-function normalizeKeyValues(items: RequestDraft["headers"]) {
-  return items.map((item) => ({
-    enabled: item.enabled,
-    key: item.key,
-    value: item.value,
-  }));
 }
 
 function calendarDayDifference(left: Date, right: Date) {

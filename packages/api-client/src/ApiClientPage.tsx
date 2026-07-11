@@ -1,23 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Button, ConfirmDialog, EmptyState, SplitPane, useI18n } from "@unfour/ui";
+import { Button, EmptyState, useI18n } from "@unfour/ui";
 import { useApiRequestTabs } from "./hooks/useApiRequestTabs";
 import { useApiCollections } from "./hooks/useApiCollections";
 import { useApiCollectionFolders } from "./hooks/useApiCollectionFolders";
 import {
   getTabSaveState,
-  requestTabTitle,
   type ApiRequestTab,
 } from "./model/request-tabs";
 import type { ApiOpenIntent } from "./model/types";
 import { ApiRequestTabs } from "./components/ApiRequestTabs";
 import { EnvironmentControl } from "./components/EnvironmentControl";
-import { ApiRequestBar } from "./components/ApiRequestBar";
-import { ApiRequestEditor } from "./components/ApiRequestEditor";
-import { ApiResponseViewer } from "./components/ApiResponseViewer";
-import { ApiSaveDialog, type SaveIdentity } from "./components/ApiSaveDialog";
-import { ApiCloseRequestDialog } from "./components/ApiCloseRequestDialog";
+import type { SaveIdentity } from "./components/ApiSaveDialog";
 import { findDuplicateRequestName } from "./request-utils";
 import { ApiClientSidebar } from "./components/ApiClientSidebar";
+import { ApiClientDialogs } from "./components/ApiClientDialogs";
+import { ApiRequestWorkspace } from "./components/ApiRequestWorkspace";
 import {
   EnvironmentManagerPage,
   type EnvironmentManagerInitialMode,
@@ -463,103 +460,33 @@ export function ApiClientPage({
               </div>
             </EmptyState>
           ) : (
-            <>
-              <ApiRequestBar
-                onSave={() => requestSave(activeTab)}
-                onSend={() => sendTab(activeTab)}
-                onUpdate={(patch) => updateDraft(activeTab.id, patch)}
-                tab={activeTab}
-                urlInputRef={urlInputRef}
-              />
-              {collectionStatus && (
-                <div className="shrink-0 border-b border-[var(--u-color-border)] px-2 py-1 text-[12px] text-[var(--u-color-text-muted)]">
-                  {collectionStatus}
-                </div>
-              )}
-              <SplitPane
-                className="min-h-0 flex-1"
-                defaultRatio={46}
-                minPaneSize={280}
-                orientation="horizontal"
-                resizable
-              >
-                <ApiRequestEditor
-                  auth={activeTab.draft.auth}
-                  body={activeTab.draft.body}
-                  bodyMode={activeTab.draft.bodyMode}
-                  formBody={activeTab.draft.formBody}
-                  headers={activeTab.draft.headers}
-                  onAuthChange={(auth) => updateDraft(activeTab.id, { auth })}
-                  onBodyChange={(body) => updateDraft(activeTab.id, { body })}
-                  onBodyModeChange={(bodyMode) =>
-                    updateDraft(activeTab.id, { bodyMode })
-                  }
-                  onFormBodyChange={(formBody) =>
-                    updateDraft(activeTab.id, { formBody })
-                  }
-                  onHeadersChange={(headers) => updateDraft(activeTab.id, { headers })}
-                  onQueryChange={(query) => updateDraft(activeTab.id, { query })}
-                  onRawBodyTypeChange={(rawBodyType) =>
-                    updateDraft(activeTab.id, { rawBodyType })
-                  }
-                  onTabChange={(tab) => setRequestTab(activeTab.id, tab)}
-                  query={activeTab.draft.query}
-                  rawBodyType={activeTab.draft.rawBodyType}
-                  tab={activeTab.requestTab}
-                />
-                <ApiResponseViewer
-                  onOpenAuthSettings={() => setRequestTab(activeTab.id, "auth")}
-                  onResponseTabChange={(tab) => setResponseTab(activeTab.id, tab)}
-                  onRetry={() => sendTab(activeTab)}
-                  tab={activeTab}
-                />
-              </SplitPane>
-            </>
+            <ApiRequestWorkspace
+              activeTab={activeTab}
+              collectionStatus={collectionStatus}
+              onRequestTabChange={setRequestTab}
+              onResponseTabChange={setResponseTab}
+              onSave={requestSave}
+              onSend={sendTab}
+              onUpdateDraft={updateDraft}
+              urlInputRef={urlInputRef}
+            />
           )}
         </div>
       </div>
-      {saveDialogTab && (
-        <ApiSaveDialog
-          collections={collections}
-          defaultCollectionId={saveDialogTab.draft.collectionId}
-          defaultParentFolderId={saveDialogTab.draft.parentFolderId}
-          defaultName={saveDialogTab.draft.name}
-          folders={folders}
-          key={saveDialogTab.id}
-          savedRequests={savedRequests}
-          onCancel={() => {
-            closeAfterSaveRef.current = null;
-            pendingCloseQueueRef.current = [];
-            setSaveDialogTabId(null);
-          }}
-          onSave={(identity) => void saveWithIdentity(identity)}
-          open
-          saving={saveDialogTab.saving}
-        />
-      )}
-      <ApiCloseRequestDialog
-        onCancel={() => {
-          pendingCloseQueueRef.current = [];
-          setCloseDialogTabId(null);
-        }}
-        onDiscard={() => {
-          if (closeDialogTab) {
-            closeTab(closeDialogTab.id);
-          }
-          setCloseDialogTabId(null);
-          continuePendingCloseQueue();
-        }}
-        onSave={() => closeDialogTab && void saveThenClose(closeDialogTab)}
-        open={Boolean(closeDialogTab)}
-        title={closeDialogTab ? requestTabTitle(closeDialogTab) : ""}
-      />
-      <ConfirmDialog
-        confirmLabel={t("api.environment.discard")}
-        description={t("api.environment.discardChangesDescription")}
-        onConfirm={closeEnvironmentTab}
-        onOpenChange={setEnvironmentCloseDialogOpen}
-        open={environmentCloseDialogOpen}
-        title={t("api.environment.discardChangesTitle")}
+      <ApiClientDialogs
+        closeDialogTab={closeDialogTab}
+        collections={collections}
+        environmentCloseDialogOpen={environmentCloseDialogOpen}
+        folders={folders}
+        onCancelClose={() => { pendingCloseQueueRef.current = []; setCloseDialogTabId(null); }}
+        onCancelSave={() => { closeAfterSaveRef.current = null; pendingCloseQueueRef.current = []; setSaveDialogTabId(null); }}
+        onCloseEnvironment={closeEnvironmentTab}
+        onDiscardClose={() => { if (closeDialogTab) closeTab(closeDialogTab.id); setCloseDialogTabId(null); continuePendingCloseQueue(); }}
+        onEnvironmentDialogOpenChange={setEnvironmentCloseDialogOpen}
+        onSaveClose={() => closeDialogTab && void saveThenClose(closeDialogTab)}
+        onSaveIdentity={(identity) => void saveWithIdentity(identity)}
+        savedRequests={savedRequests}
+        saveDialogTab={saveDialogTab}
       />
     </div>
   );

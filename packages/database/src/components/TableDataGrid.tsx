@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ChevronsUpDown, Clipboard, Search, Trash2 } from "lucide-react";
+import { Clipboard, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { DatabaseCellValue, DatabaseQueryResult, DatabaseTableColumn } from "@unfour/command-client";
 import {
@@ -19,10 +19,21 @@ import {
 } from "@unfour/ui";
 import type { TableEditing } from "../model/types";
 import { serializeDatabaseCell, serializeDatabaseRow, tryFormatJson } from "../result-utils";
+import {
+  buildSkeletonColumns,
+  buildSkeletonRows,
+  compareCells,
+  copyStatusLabel,
+  renderCell,
+  renderServerSortIcon,
+  renderSortIcon,
+  truncatePreview,
+  type SortState,
+} from "./table-data-grid-helpers";
+
 
 const MAX_RENDERED_ROWS = 500;
 
-type SortState = { columnIndex: number; direction: "asc" | "desc" };
 type CellViewer = { columnName: string; value: string | null };
 type EditTarget = { row: Array<string | null>; columnIndex: number };
 type DataRow = Array<string | null>;
@@ -399,120 +410,6 @@ export function TableDataGrid({
           title={t("database.editing.updateCellTitle")}
         />
       ) : null}
-    </div>
-  );
-}
-
-function buildSkeletonRows(columns: DatabaseTableColumn[], count: number): Array<Array<string | null>> {
-  return Array.from({ length: count }, () => columns.map(() => ""));
-}
-
-function buildSkeletonColumns(
-  columns: DatabaseTableColumn[],
-  columnsWidths: Record<string, number>,
-): DataTableColumn<Array<string | null>>[] {
-  return [
-    {
-      header: "#",
-      id: "__row_actions",
-      width: columnsWidths["__row_actions"] ?? 48,
-    },
-    ...columns.map((column, columnIndex) => {
-      const id = column.name || `column-${columnIndex}`;
-      return {
-        header: (
-          <span className="truncate" title={column.name}>
-            {column.name}
-          </span>
-        ),
-        id,
-        meta: column.dataType,
-        width: columnsWidths[id] ?? Math.min(Math.max(column.name.length * 9 + 96, 140), 360),
-        cell: () => <SkeletonCell />,
-      } satisfies DataTableColumn<Array<string | null>>;
-    }),
-  ];
-}
-
-function truncatePreview(value: string) {
-  const text = value.length === 0 ? "''" : value;
-  return text.length > 120 ? `${text.slice(0, 120)}…` : text;
-}
-
-function compareCells(a: string | null, b: string | null) {
-  // NULLs always sort to the end regardless of direction.
-  if (a === null && b === null) return 0;
-  if (a === null) return 1;
-  if (b === null) return -1;
-  const numA = Number(a);
-  const numB = Number(b);
-  if (!Number.isNaN(numA) && !Number.isNaN(numB) && a.trim() !== "" && b.trim() !== "") {
-    return numA - numB;
-  }
-  return a.localeCompare(b);
-}
-
-function renderSortIcon(sort: SortState | null, columnIndex: number) {
-  const active = sort && sort.columnIndex === columnIndex;
-  return active ? (
-    sort.direction === "asc" ? (
-      <ArrowUp className="shrink-0 text-[var(--u-color-primary)]" size={12} />
-    ) : (
-      <ArrowDown className="shrink-0 text-[var(--u-color-primary)]" size={12} />
-    )
-  ) : (
-    <ChevronsUpDown className="shrink-0 text-[var(--u-color-text-soft)] opacity-0 transition-opacity group-hover/header:opacity-100" size={12} />
-  );
-}
-
-function renderServerSortIcon(
-  sort: { column: string; descending: boolean } | null,
-  columnName: string,
-) {
-  const active = sort && sort.column === columnName;
-  return active ? (
-    sort.descending ? (
-      <ArrowDown className="shrink-0 text-[var(--u-color-primary)]" size={12} />
-    ) : (
-      <ArrowUp className="shrink-0 text-[var(--u-color-primary)]" size={12} />
-    )
-  ) : (
-    <ChevronsUpDown className="shrink-0 text-[var(--u-color-text-soft)] opacity-0 transition-opacity group-hover/header:opacity-100" size={12} />
-  );
-}
-
-function renderCell(value: string | null | undefined) {
-  if (value === null || value === undefined) {
-    return <StatusBadge>NULL</StatusBadge>;
-  }
-
-  if (value.length > 240) {
-    return `${value.slice(0, 240)}...`;
-  }
-
-  return value;
-}
-
-function copyStatusLabel(
-  status: "idle" | "copied-cell" | "copied-row" | "failed",
-  t: ReturnType<typeof useI18n>["t"],
-) {
-  switch (status) {
-    case "copied-cell":
-      return t("database.grid.cellCopied");
-    case "copied-row":
-      return t("database.grid.rowCopied");
-    case "failed":
-      return t("database.grid.copyFailed");
-    default:
-      return t("database.grid.copyHint");
-  }
-}
-
-function SkeletonCell() {
-  return (
-    <div className="flex h-full items-center px-1">
-      <div className="h-3 w-full animate-pulse rounded bg-[var(--u-color-border)]" />
     </div>
   );
 }

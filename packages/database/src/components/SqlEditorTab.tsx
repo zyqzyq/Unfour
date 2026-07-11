@@ -27,6 +27,7 @@ import {
 import { useSavedSql } from "../hooks/useSavedSql";
 import { formatSql } from "../result-utils";
 import { formatDatabaseError } from "../result-utils";
+import { configureSqlEditorThemes } from "./sql-editor-theme";
 
 type MonacoEditor = Parameters<OnMount>[0];
 
@@ -172,88 +173,7 @@ export function SqlEditorTab({
     monacoRef.current = monaco;
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, runFromEditor);
 
-    // Register Catppuccin-themed Monaco editor themes
-    monaco.editor.defineTheme("unfour-dark", {
-      base: "vs-dark",
-      inherit: true,
-      rules: [
-        { token: "keyword", foreground: "cba6f7" },
-        { token: "keyword.sql", foreground: "cba6f7" },
-        { token: "string", foreground: "a6e3a1" },
-        { token: "string.sql", foreground: "a6e3a1" },
-        { token: "number", foreground: "fab387" },
-        { token: "comment", foreground: "6c7086", fontStyle: "italic" },
-        { token: "operator", foreground: "89dceb" },
-        { token: "delimiter", foreground: "a6adc8" },
-        { token: "identifier", foreground: "cdd6f4" },
-        { token: "type", foreground: "f9e2af" },
-        { token: "function", foreground: "89b4fa" },
-        { token: "variable", foreground: "cdd6f4" },
-        { token: "tag", foreground: "89b4fa" },
-        { token: "attribute.name", foreground: "f5c2e7" },
-        { token: "attribute.value", foreground: "a6e3a1" },
-        { token: "metatag", foreground: "89dceb" },
-      ],
-      colors: {
-        "editor.background": "#1e1e2e",
-        "editor.foreground": "#cdd6f4",
-        "editor.lineHighlightBackground": "#313244",
-        "editor.selectionBackground": "#45475a",
-        "editorCursor.foreground": "#f5e0dc",
-        "editor.inactiveSelectionBackground": "#31324440",
-        "editorLineNumber.foreground": "#6c7086",
-        "editorLineNumber.activeForeground": "#a6adc8",
-        "editorIndentGuide.background": "#313244",
-        "editorIndentGuide.activeBackground": "#45475a",
-        "editorWhitespace.foreground": "#45475a",
-        "editorBracketMatch.background": "#45475a80",
-        "editorBracketMatch.border": "#cba6f7",
-        "scrollbarSlider.background": "#45475a80",
-        "scrollbarSlider.hoverBackground": "#585b7080",
-        "scrollbarSlider.activeBackground": "#6c708680",
-      },
-    });
-    monaco.editor.defineTheme("unfour-light", {
-      base: "vs",
-      inherit: true,
-      rules: [
-        { token: "keyword", foreground: "8839ef" },
-        { token: "keyword.sql", foreground: "8839ef" },
-        { token: "string", foreground: "40a02b" },
-        { token: "string.sql", foreground: "40a02b" },
-        { token: "number", foreground: "fe640b" },
-        { token: "comment", foreground: "#9ca0b0", fontStyle: "italic" },
-        { token: "operator", foreground: "179299" },
-        { token: "delimiter", foreground: "#5c5f77" },
-        { token: "identifier", foreground: "4c4f69" },
-        { token: "type", foreground: "df8e1d" },
-        { token: "function", foreground: "1e66f5" },
-        { token: "variable", foreground: "4c4f69" },
-        { token: "tag", foreground: "1e66f5" },
-        { token: "attribute.name", foreground: "ea76cb" },
-        { token: "attribute.value", foreground: "40a02b" },
-        { token: "metatag", foreground: "179299" },
-      ],
-      colors: {
-        "editor.background": "#eff1f5",
-        "editor.foreground": "#4c4f69",
-        "editor.lineHighlightBackground": "#dce0e860",
-        "editor.selectionBackground": "#ccd0da",
-        "editorCursor.foreground": "#4c4f69",
-        "editor.inactiveSelectionBackground": "#ccd0da60",
-        "editorLineNumber.foreground": "#9ca0b0",
-        "editorLineNumber.activeForeground": "#5c5f77",
-        "editorIndentGuide.background": "#ccd0da",
-        "editorIndentGuide.activeBackground": "#acb0be",
-        "editorWhitespace.foreground": "#acb0be",
-        "editorBracketMatch.background": "#bcc0cc80",
-        "editorBracketMatch.border": "#8839ef",
-        "scrollbarSlider.background": "#bcc0cc80",
-        "scrollbarSlider.hoverBackground": "#acb0be80",
-        "scrollbarSlider.activeBackground": "#9ca0b080",
-      },
-    });
-    monaco.editor.setTheme(theme === "dark" ? "unfour-dark" : "unfour-light");
+    configureSqlEditorThemes(monaco, theme);
 
     completionDisposable.current?.dispose();
     const provider = {
