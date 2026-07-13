@@ -27,7 +27,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": ["nsis", "dmg", "deb", "appimage", "rpm"],
     "externalBin": [
       "binaries/unfour-mcp"
     ],
