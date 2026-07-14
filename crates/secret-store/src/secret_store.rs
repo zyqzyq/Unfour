@@ -34,6 +34,34 @@ impl SecretStore {
         }
     }
 
+    /// Store a secret under a caller-defined scope and key.
+    pub async fn put_named_secret(&self, scope: &str, key: &str, value: &str) -> AppResult<()> {
+        let storage_key = named_secret_storage_key(scope, key)?;
+        if value.is_empty() {
+            return Err(AppError::Validation(
+                "named secret value cannot be empty".to_string(),
+            ));
+        }
+
+        self.write_secret(&storage_key, value).await
+    }
+
+    /// Load a secret previously stored under a caller-defined scope and key.
+    pub async fn get_named_secret(&self, scope: &str, key: &str) -> AppResult<String> {
+        let storage_key = named_secret_storage_key(scope, key)?;
+        self.load_secret(&storage_key)
+            .await
+            .map_err(named_secret_error)
+    }
+
+    /// Delete a secret previously stored under a caller-defined scope and key.
+    pub async fn delete_named_secret(&self, scope: &str, key: &str) -> AppResult<()> {
+        let storage_key = named_secret_storage_key(scope, key)?;
+        self.remove_secret(&storage_key)
+            .await
+            .map_err(named_secret_error)
+    }
+
     #[allow(dead_code)]
     pub fn make_ref(&self, workspace_id: &str, kind: &str, record_id: &str) -> String {
         format!(
@@ -403,6 +431,19 @@ fn normalize_label(value: &str) -> AppResult<String> {
         ));
     }
     Ok(trimmed.to_string())
+}
+
+fn named_secret_storage_key(scope: &str, key: &str) -> AppResult<String> {
+    let scope = normalize_segment(scope, "named secret scope")?;
+    let key = normalize_segment(key, "named secret key")?;
+    Ok(format!("named:{scope}:{key}"))
+}
+
+fn named_secret_error(error: AppError) -> AppError {
+    match error {
+        AppError::NotFound(_) => AppError::NotFound("named secret".to_string()),
+        error => error,
+    }
 }
 
 #[cfg(test)]

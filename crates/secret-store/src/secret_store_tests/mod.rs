@@ -1,6 +1,102 @@
 use super::*;
 
 #[tokio::test]
+async fn named_secrets_are_stored_loaded_overwritten_and_deleted() {
+    let store = SecretStore::in_memory("unfour-test");
+
+    store
+        .put_named_secret("pro-auth", "login-key", "first-value")
+        .await
+        .expect("put named secret");
+    assert_eq!(
+        store
+            .get_named_secret("pro-auth", "login-key")
+            .await
+            .expect("get named secret"),
+        "first-value"
+    );
+
+    store
+        .put_named_secret("pro-auth", "login-key", "rotated-value")
+        .await
+        .expect("overwrite named secret");
+    assert_eq!(
+        store
+            .get_named_secret("pro-auth", "login-key")
+            .await
+            .expect("get overwritten named secret"),
+        "rotated-value"
+    );
+
+    store
+        .delete_named_secret("pro-auth", "login-key")
+        .await
+        .expect("delete named secret");
+    assert!(matches!(
+        store.get_named_secret("pro-auth", "login-key").await,
+        Err(AppError::NotFound(resource)) if resource == "named secret"
+    ));
+}
+
+#[tokio::test]
+async fn named_secret_scopes_and_keys_are_isolated() {
+    let store = SecretStore::in_memory("unfour-test");
+
+    store
+        .put_named_secret("scope-a", "shared-key", "scope-a-value")
+        .await
+        .expect("put scope-a secret");
+    store
+        .put_named_secret("scope-b", "shared-key", "scope-b-value")
+        .await
+        .expect("put scope-b secret");
+    store
+        .put_named_secret("scope-a", "other-key", "other-key-value")
+        .await
+        .expect("put other-key secret");
+
+    assert_eq!(
+        store
+            .get_named_secret("scope-a", "shared-key")
+            .await
+            .expect("get scope-a secret"),
+        "scope-a-value"
+    );
+    assert_eq!(
+        store
+            .get_named_secret("scope-b", "shared-key")
+            .await
+            .expect("get scope-b secret"),
+        "scope-b-value"
+    );
+    assert_eq!(
+        store
+            .get_named_secret("scope-a", "other-key")
+            .await
+            .expect("get other-key secret"),
+        "other-key-value"
+    );
+}
+
+#[tokio::test]
+async fn named_secret_inputs_are_validated() {
+    let store = SecretStore::in_memory("unfour-test");
+
+    assert!(matches!(
+        store.put_named_secret(" ", "key", "value").await,
+        Err(AppError::Validation(_))
+    ));
+    assert!(matches!(
+        store.put_named_secret("scope", "bad:key", "value").await,
+        Err(AppError::Validation(_))
+    ));
+    assert!(matches!(
+        store.put_named_secret("scope", "key", "").await,
+        Err(AppError::Validation(_))
+    ));
+}
+
+#[tokio::test]
 async fn credentials_are_created_read_and_deleted_by_reference() {
     let store = SecretStore::in_memory("unfour-test");
 
