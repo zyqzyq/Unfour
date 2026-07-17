@@ -6,12 +6,13 @@ use serde::{Deserialize, Serialize};
 pub use storage_paths::{default_database_path, DEFAULT_DATABASE_FILE, DEFAULT_PRODUCT_DATA_DIR};
 use unfour_core::ai_reserved;
 use unfour_core::models::{
-    ApiCollection, ApiCollectionFolder, ApiEnvironment, ApiHistoryDetail, ApiHistoryItem,
-    ApiRequestInput, ApiResponse, ApiSavedRequest, CredentialCreateInput, CredentialDeleteInput,
-    CredentialInspectInput, CredentialMetadata, CredentialRotateInput, DatabaseBrowseInput,
-    DatabaseBrowseResult, DatabaseConnection, DatabaseConnectionInput, DatabaseQueryInput,
-    DatabaseQueryResult, DatabaseRowMutationInput, DatabaseRowMutationResult, DatabaseSchema,
-    DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult, DbQueryHistoryEntry,
+    ApiCollection, ApiCollectionExportArtifact, ApiCollectionExportFormat, ApiCollectionFolder,
+    ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse,
+    ApiSavedRequest, CredentialCreateInput, CredentialDeleteInput, CredentialInspectInput,
+    CredentialMetadata, CredentialRotateInput, DatabaseBrowseInput, DatabaseBrowseResult,
+    DatabaseConnection, DatabaseConnectionInput, DatabaseQueryInput, DatabaseQueryResult,
+    DatabaseRowMutationInput, DatabaseRowMutationResult, DatabaseSchema, DatabaseTableStructure,
+    DatabaseTableStructureInput, DatabaseTestResult, DbQueryHistoryEntry,
     DbQueryHistoryRecordInput, KeyValue, SavedSql, SavedSqlInput, SshCloseInput, SshConnectInput,
     SshConnection, SshConnectionInput, SshDiagnosticInput, SshDiagnosticResult,
     SshHostFingerprintInfo, SshHostKeyInput, SshKnownHostsExportInput, SshKnownHostsExportResult,

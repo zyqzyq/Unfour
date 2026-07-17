@@ -1,6 +1,8 @@
 import { call } from "./invoke";
 import type {
   ApiCollection,
+  ApiCollectionExportFormat,
+  ApiCollectionExportResult,
   ApiCollectionFolder,
   ApiEnvironment,
   ApiHistoryDetail,
@@ -52,6 +54,18 @@ export function activateApiEnvironment(
 
 export function listApiCollections(workspaceId: string) {
   return call<ApiCollection[]>("api_collection_list", { workspaceId });
+}
+
+export function exportApiCollection(
+  workspaceId: string,
+  collectionId: string,
+  format: ApiCollectionExportFormat,
+) {
+  return call<ApiCollectionExportResult>("api_collection_export", {
+    workspaceId,
+    collectionId,
+    format,
+  });
 }
 
 export function createApiCollection(workspaceId: string, name: string) {

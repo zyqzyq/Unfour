@@ -23,6 +23,12 @@ export type ApiCollection = {
   updatedAt: string;
 };
 
+export type ApiCollectionExportFormat = "json" | "yaml";
+
+export type ApiCollectionExportResult = {
+  saved: boolean;
+};
+
 export type ApiCollectionFolder = {
   id: string;
   workspaceId: string;

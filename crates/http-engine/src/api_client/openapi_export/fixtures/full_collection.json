@@ -1,0 +1,151 @@
+{
+  "collection": {
+    "id": "commerce-collection",
+    "workspaceId": "workspace-1",
+    "name": "Commerce API",
+    "description": "Users, orders, and refunds",
+    "createdAt": "2026-07-17T00:00:00Z",
+    "updatedAt": "2026-07-17T00:00:00Z"
+  },
+  "collectionAuthJson": "{\"type\":\"bearer\",\"token\":\"{{api_token}}\"}",
+  "collectionBaseUrl": "{{base_url}}",
+  "collectionVersion": "2.4.0",
+  "environments": [
+    {
+      "id": "environment-1",
+      "workspaceId": "workspace-1",
+      "name": "Development",
+      "variables": [
+        { "key": "base_url", "value": "https://dev.example.test", "enabled": true },
+        { "key": "api_token", "value": "secret", "enabled": true }
+      ],
+      "isActive": true,
+      "createdAt": "2026-07-17T00:00:00Z",
+      "updatedAt": "2026-07-17T00:00:00Z"
+    }
+  ],
+  "folders": [
+    {
+      "id": "user-folder",
+      "workspaceId": "workspace-1",
+      "collectionId": "commerce-collection",
+      "parentFolderId": null,
+      "name": "User",
+      "sortOrder": 0,
+      "createdAt": "2026-07-17T00:00:00Z",
+      "updatedAt": "2026-07-17T00:00:00Z",
+      "deletedAt": null,
+      "revision": 1,
+      "syncStatus": "local",
+      "remoteId": null
+    },
+    {
+      "id": "profile-folder",
+      "workspaceId": "workspace-1",
+      "collectionId": "commerce-collection",
+      "parentFolderId": "user-folder",
+      "name": "Profile",
+      "sortOrder": 0,
+      "createdAt": "2026-07-17T00:00:00Z",
+      "updatedAt": "2026-07-17T00:00:00Z",
+      "deletedAt": null,
+      "revision": 1,
+      "syncStatus": "local",
+      "remoteId": null
+    },
+    {
+      "id": "order-folder",
+      "workspaceId": "workspace-1",
+      "collectionId": "commerce-collection",
+      "parentFolderId": null,
+      "name": "Order",
+      "sortOrder": 1,
+      "createdAt": "2026-07-17T00:00:00Z",
+      "updatedAt": "2026-07-17T00:00:00Z",
+      "deletedAt": null,
+      "revision": 1,
+      "syncStatus": "local",
+      "remoteId": null
+    },
+    {
+      "id": "refund-folder",
+      "workspaceId": "workspace-1",
+      "collectionId": "commerce-collection",
+      "parentFolderId": "order-folder",
+      "name": "Refund",
+      "sortOrder": 0,
+      "createdAt": "2026-07-17T00:00:00Z",
+      "updatedAt": "2026-07-17T00:00:00Z",
+      "deletedAt": null,
+      "revision": 1,
+      "syncStatus": "local",
+      "remoteId": null
+    }
+  ],
+  "histories": [],
+  "requests": [
+    {
+      "id": "list-users",
+      "workspaceId": "workspace-1",
+      "name": "List users",
+      "collectionId": "commerce-collection",
+      "parentFolderId": "user-folder",
+      "sortOrder": 0,
+      "authJson": "{\"type\":\"bearer\",\"token\":\"{{api_token}}\"}",
+      "method": "GET",
+      "url": "{{base_url}}/users?page=1",
+      "headersJson": "[]",
+      "queryJson": "[{\"key\":\"page\",\"value\":\"1\",\"enabled\":true}]",
+      "body": null,
+      "bodyKind": "none",
+      "createdAt": "2026-07-17T00:00:00Z",
+      "updatedAt": "2026-07-17T00:00:00Z",
+      "deletedAt": null,
+      "revision": 1,
+      "syncStatus": "local",
+      "remoteId": null
+    },
+    {
+      "id": "get-profile",
+      "workspaceId": "workspace-1",
+      "name": "Get user profile",
+      "collectionId": "commerce-collection",
+      "parentFolderId": "profile-folder",
+      "sortOrder": 0,
+      "authJson": "{\"type\":\"bearer\",\"token\":\"{{api_token}}\"}",
+      "method": "GET",
+      "url": "{{base_url}}/users/{{user_id}}",
+      "headersJson": "[]",
+      "queryJson": "[]",
+      "body": null,
+      "bodyKind": "none",
+      "createdAt": "2026-07-17T00:00:00Z",
+      "updatedAt": "2026-07-17T00:00:00Z",
+      "deletedAt": null,
+      "revision": 1,
+      "syncStatus": "local",
+      "remoteId": null
+    },
+    {
+      "id": "create-refund",
+      "workspaceId": "workspace-1",
+      "name": "Create refund",
+      "collectionId": "commerce-collection",
+      "parentFolderId": "refund-folder",
+      "sortOrder": 0,
+      "authJson": "{\"type\":\"bearer\",\"token\":\"{{api_token}}\"}",
+      "method": "POST",
+      "url": "{{base_url}}/orders/{{order_id}}/refunds",
+      "headersJson": "[{\"key\":\"Content-Type\",\"value\":\"application/json\",\"enabled\":true}]",
+      "queryJson": "[]",
+      "body": "{\"amount\":1999,\"reason\":\"duplicate\"}",
+      "bodyKind": "json",
+      "createdAt": "2026-07-17T00:00:00Z",
+      "updatedAt": "2026-07-17T00:00:00Z",
+      "deletedAt": null,
+      "revision": 1,
+      "syncStatus": "local",
+      "remoteId": null
+    }
+  ]
+}

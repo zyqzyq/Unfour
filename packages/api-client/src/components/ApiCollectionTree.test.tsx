@@ -14,6 +14,7 @@ vi.mock("@unfour/command-client", () => ({
   deleteApiCollectionFolder: vi.fn(),
   deleteApiRequest: vi.fn(),
   duplicateApiRequest: vi.fn(),
+  exportApiCollection: vi.fn(),
   listApiCollections: vi.fn(),
   listApiCollectionFolders: vi.fn(),
   listApiHistory: vi.fn(),
@@ -29,6 +30,7 @@ vi.mock("@unfour/command-client", () => ({
 
 import {
   duplicateApiRequest,
+  exportApiCollection,
   listApiCollections,
   listApiCollectionFolders,
   listApiHistory,
@@ -45,6 +47,7 @@ const listFoldersMock = vi.mocked(listApiCollectionFolders);
 const listSavedMock = vi.mocked(listSavedApiRequests);
 const listHistoryMock = vi.mocked(listApiHistory);
 const duplicateMock = vi.mocked(duplicateApiRequest);
+const exportMock = vi.mocked(exportApiCollection);
 const moveFolderMock = vi.mocked(moveApiCollectionFolder);
 const moveMock = vi.mocked(moveApiRequest);
 const reorderFoldersMock = vi.mocked(reorderApiCollectionFolders);
@@ -163,6 +166,7 @@ beforeEach(() => {
   listSavedMock.mockResolvedValue([savedRequest()]);
   listHistoryMock.mockResolvedValue([]);
   duplicateMock.mockResolvedValue(savedRequest({ id: "req-2", name: "Get Users Copy" }));
+  exportMock.mockResolvedValue({ saved: true });
   moveFolderMock.mockResolvedValue(folder({ parentFolderId: "folder-2" }));
   moveMock.mockResolvedValue(savedRequest({ parentFolderId: "folder-1" }));
   reorderFoldersMock.mockResolvedValue([folder()]);
@@ -176,12 +180,32 @@ afterEach(() => {
 });
 
 describe("ApiCollectionTree", () => {
-  it("shows a row action menu for saved requests", async () => {
+  it("exports a collection as OpenAPI YAML from the collection context menu", async () => {
     renderTree();
 
-    expect(
-      await screen.findByRole("button", { name: "Request actions for Get Users" }),
-    ).toBeInTheDocument();
+    const collectionRow = (await screen.findByText("Users")).closest("[role='treeitem']");
+    expect(collectionRow).not.toBeNull();
+    fireEvent.contextMenu(collectionRow as HTMLElement, { clientX: 24, clientY: 24 });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Export" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "OpenAPI 3.1 YAML" }),
+    );
+
+    await waitFor(() =>
+      expect(exportMock).toHaveBeenCalledWith("ws-1", "col-1", "yaml"),
+    );
+  });
+
+  it("shows request row actions without an export action", async () => {
+    renderTree();
+
+    const actions = await screen.findByRole("button", {
+      name: "Request actions for Get Users",
+    });
+    fireEvent.pointerDown(actions);
+
+    await screen.findByRole("menuitem", { name: "Open in tab" });
+    expect(screen.queryByRole("menuitem", { name: "Export" })).not.toBeInTheDocument();
   });
 
   it("renames a saved request from the row action menu", async () => {
@@ -242,7 +266,20 @@ describe("ApiCollectionTree", () => {
     await screen.findByRole("menuitem", { name: "Open in tab" });
     const contextLabels = menuItemLabels();
     expect(contextLabels).toEqual(rowLabels);
+    expect(contextLabels).not.toContain("Export");
     expect(contextLabels).not.toContain("Move to");
+  });
+
+  it("does not show export in a folder context menu", async () => {
+    listFoldersMock.mockResolvedValue([folder()]);
+    renderTree();
+
+    const folderRow = (await screen.findByText("Auth")).closest("[role='treeitem']");
+    expect(folderRow).not.toBeNull();
+    fireEvent.contextMenu(folderRow as HTMLElement, { clientX: 24, clientY: 24 });
+
+    await screen.findByRole("menuitem", { name: "Add folder" });
+    expect(screen.queryByRole("menuitem", { name: "Export" })).not.toBeInTheDocument();
   });
 
   it("moves a saved request by dragging it onto a folder", async () => {

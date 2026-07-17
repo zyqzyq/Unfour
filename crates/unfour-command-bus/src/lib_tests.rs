@@ -1,6 +1,8 @@
 use super::*;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use unfour_core::models::{ApiRequestInput, DatabaseConnectionInput, SshConnectionInput};
+use unfour_core::models::{
+    ApiCollectionExportFormat, ApiRequestInput, DatabaseConnectionInput, SshConnectionInput,
+};
 use unfour_local_storage::LocalDb;
 
 async fn test_bus() -> CommandBus {
@@ -123,6 +125,45 @@ async fn save_and_list_api_requests() {
         .await
         .expect("list saved requests after second save");
     assert_eq!(listed2.len(), 2);
+}
+
+#[tokio::test]
+async fn collection_openapi_export_uses_command_bus_and_persisted_requests() {
+    let bus = test_bus().await;
+    let state = bus.list_workspaces().await.expect("list workspaces");
+    let workspace_id = state.active_workspace_id;
+    let collection = bus
+        .api_collection_create(workspace_id.clone(), "Users API".to_string())
+        .await
+        .expect("create collection");
+    bus.save_api_request(ApiRequestInput {
+        workspace_id: workspace_id.clone(),
+        name: Some("List users".to_string()),
+        parent_folder_id: None,
+        collection_id: Some(collection.id.clone()),
+        auth_json: Some(r#"{"type":"bearer","token":"secret"}"#.to_string()),
+        method: "GET".to_string(),
+        url: "https://api.example.test/users".to_string(),
+        headers: vec![],
+        query: vec![],
+        body: None,
+        body_kind: "none".to_string(),
+        timeout_ms: None,
+    })
+    .await
+    .expect("save request");
+
+    let artifact = bus
+        .api_collection_export(workspace_id, collection.id, ApiCollectionExportFormat::Yaml)
+        .await
+        .expect("export collection");
+
+    assert_eq!(artifact.suggested_file_name, "Users-API.openapi.yaml");
+    assert_eq!(artifact.media_type, "application/yaml");
+    assert!(artifact.content.contains("openapi: 3.1.0"));
+    assert!(artifact.content.contains("/users:"));
+    assert!(artifact.content.contains("x-unfour-request-id"));
+    assert!(!artifact.content.contains("secret"));
 }
 
 #[tokio::test]

@@ -40,12 +40,11 @@ import type { ApiOpenIntent } from "../model/types";
 import { useApiCollectionFolders } from "../hooks/useApiCollectionFolders";
 import { useApiCollections } from "../hooks/useApiCollections";
 import { ApiHistoryTree } from "./ApiHistoryTree";
+import { ApiCollectionExportDialog } from "./ApiCollectionExportDialog";
 import type { RequestTreeActionContext } from "./ApiRequestTreeActions";
 import { createApiCollectionDropController } from "./api-collection-dnd";
 import {
   collectExpandableIds,
-  exportCollection,
-  exportRequest,
   requestTreeItem,
   SidebarEmpty,
 } from "./api-collection-tree-helpers";
@@ -80,6 +79,7 @@ export function ApiCollectionTree({
   const [renameRequestTarget, setRenameRequestTarget] = useState<ApiSavedRequest | null>(null);
   const [renameRequestValue, setRenameRequestValue] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<ApiCollection | null>(null);
+  const [exportTarget, setExportTarget] = useState<ApiCollection | null>(null);
   const [deleteFolderTarget, setDeleteFolderTarget] = useState<FolderNode | null>(null);
   const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -157,7 +157,6 @@ export function ApiCollectionTree({
 
   const menuContext: RequestTreeActionContext = {
     duplicate: duplicateMutation.mutate,
-    exportRequest,
     onOpenIntent,
     remove: deleteMutation.mutate,
     rename: (request) => {
@@ -268,9 +267,7 @@ export function ApiCollectionTree({
           {t("api.collection.addFolder")}
         </ContextMenuItem>
         <ContextMenuItem
-          onSelect={() =>
-            exportCollection(group.name, collectTreeRequests(group.tree))
-          }
+          onSelect={() => setExportTarget(group.collection)}
         >
           {t("api.collection.export")}
         </ContextMenuItem>
@@ -532,6 +529,12 @@ export function ApiCollectionTree({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ApiCollectionExportDialog
+        collection={exportTarget}
+        onClose={() => setExportTarget(null)}
+        workspaceId={workspaceId}
+      />
 
       <Dialog
         onOpenChange={(next) => !next && setDeleteTarget(null)}

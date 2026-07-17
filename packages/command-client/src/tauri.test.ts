@@ -8,6 +8,7 @@ import {
   createApiCollection,
   createApiCollectionFolder,
   deleteSavedSql,
+  exportApiCollection,
   executeDatabaseQuery,
   getDatabaseSchema,
   getWorkspaceState,
@@ -120,6 +121,15 @@ describe("SSH browser mock lifecycle", () => {
 });
 
 describe("API body redaction in browser mock", () => {
+  it("keeps the native collection export command available without duplicating the exporter", async () => {
+    const workspaceId = `mock-export-${crypto.randomUUID()}`;
+    const collection = await createApiCollection(workspaceId, "Export API");
+
+    await expect(
+      exportApiCollection(workspaceId, collection.id, "yaml"),
+    ).resolves.toEqual({ saved: false });
+  });
+
   it("redacts sensitive fields in saved request body while preserving structure", async () => {
     const workspaceId = `mock-redaction-${crypto.randomUUID()}`;
     const sensitiveBody = JSON.stringify({

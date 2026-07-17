@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import type { ApiSavedRequest } from "@unfour/command-client";
 import type { TreeViewItem } from "@unfour/ui";
 import { methodBadgeLabel, methodToneClass } from "../model/request-tabs";
-import { parseKeyValues } from "../request-utils";
 import {
   RequestActionMenu,
   RequestContextMenu,
@@ -54,48 +53,5 @@ export function SidebarEmpty({ children }: { children: ReactNode }) {
       {children}
     </div>
   );
-}
-
-function serializeRequest(request: ApiSavedRequest) {
-  return {
-    name: request.name,
-    collectionId: request.collectionId,
-    parentFolderId: request.parentFolderId,
-    method: request.method,
-    url: request.url,
-    headers: parseKeyValues(request.headersJson),
-    query: parseKeyValues(request.queryJson),
-    body: request.body,
-    bodyKind: request.bodyKind,
-  };
-}
-
-function downloadJson(filename: string, value: unknown) {
-  const href = URL.createObjectURL(
-    new Blob([JSON.stringify(value, null, 2)], {
-      type: "application/json;charset=utf-8",
-    }),
-  );
-  const link = document.createElement("a");
-  link.href = href;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(href);
-}
-
-export function exportRequest(request: ApiSavedRequest) {
-  downloadJson(
-    `${request.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.json`,
-    serializeRequest(request),
-  );
-}
-
-export function exportCollection(name: string, requests: ApiSavedRequest[]) {
-  downloadJson(`${name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.json`, {
-    name,
-    savedRequests: requests.map(serializeRequest),
-  });
 }
 

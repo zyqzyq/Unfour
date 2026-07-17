@@ -22,6 +22,15 @@ export function handleApiCollectionMock<T>(
     return mockCollectionList(workspaceId) as T;
   }
 
+  if (command === "api_collection_export") {
+    const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
+    const collectionId = String(args?.collectionId ?? "");
+    assertMockCollection(workspaceId, collectionId);
+    // Browser development has no Rust domain exporter or native save dialog.
+    // Treat it like a cancelled dialog instead of duplicating export logic here.
+    return { saved: false } as T;
+  }
+
   if (command === "api_collection_create") {
     const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
     const now = new Date().toISOString();

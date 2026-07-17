@@ -84,6 +84,17 @@ impl CommandBus {
         self.api_client.list_collections(workspace_id).await
     }
 
+    pub async fn api_collection_export(
+        &self,
+        workspace_id: String,
+        collection_id: String,
+        format: ApiCollectionExportFormat,
+    ) -> AppResult<ApiCollectionExportArtifact> {
+        self.api_client
+            .export_collection_openapi(workspace_id, collection_id, format)
+            .await
+    }
+
     pub async fn api_collection_create(
         &self,
         workspace_id: String,

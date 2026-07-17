@@ -134,3 +134,24 @@ pub struct ApiSavedRequest {
     pub sync_status: String,
     pub remote_id: Option<String>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ApiCollectionExportFormat {
+    Json,
+    Yaml,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiCollectionExportArtifact {
+    pub content: String,
+    pub media_type: String,
+    pub suggested_file_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiCollectionExportResult {
+    pub saved: bool,
+}

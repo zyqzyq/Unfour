@@ -1,11 +1,13 @@
 use crate::AppState;
-use tauri::State;
+use tauri::{AppHandle, State};
+use tauri_plugin_dialog::DialogExt;
 use unfour_core::{
     models::{
-        ApiCollection, ApiCollectionFolder, ApiEnvironment, ApiHistoryDetail, ApiHistoryItem,
-        ApiRequestInput, ApiResponse, ApiSavedRequest, KeyValue,
+        ApiCollection, ApiCollectionExportFormat, ApiCollectionExportResult, ApiCollectionFolder,
+        ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse,
+        ApiSavedRequest, KeyValue,
     },
-    AppResult,
+    AppError, AppResult,
 };
 
 use super::trace_command;
@@ -74,6 +76,38 @@ pub async fn api_collection_list(
     state: State<'_, AppState>,
 ) -> AppResult<Vec<ApiCollection>> {
     state.command_bus.api_collection_list(workspace_id).await
+}
+
+#[tauri::command]
+pub async fn api_collection_export(
+    workspace_id: String,
+    collection_id: String,
+    format: ApiCollectionExportFormat,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<ApiCollectionExportResult> {
+    let artifact = state
+        .command_bus
+        .api_collection_export(workspace_id, collection_id, format)
+        .await?;
+    let extension = match format {
+        ApiCollectionExportFormat::Json => "json",
+        ApiCollectionExportFormat::Yaml => "yaml",
+    };
+    let Some(file_path) = app
+        .dialog()
+        .file()
+        .set_file_name(&artifact.suggested_file_name)
+        .add_filter("OpenAPI 3.1", &[extension])
+        .blocking_save_file()
+    else {
+        return Ok(ApiCollectionExportResult { saved: false });
+    };
+    let path = file_path.into_path().map_err(|error| {
+        AppError::Config(format!("selected export path is not writable: {error}"))
+    })?;
+    std::fs::write(path, artifact.content)?;
+    Ok(ApiCollectionExportResult { saved: true })
 }
 
 #[tauri::command]

@@ -176,6 +176,7 @@ where
             }
         }))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(move |app| {
             let logging_guard = initialize_logging(&config);
@@ -369,6 +370,7 @@ macro_rules! generate_handlers {
             unfour_app::commands::api_environment_delete,
             unfour_app::commands::api_environment_activate,
             unfour_app::commands::api_collection_list,
+            unfour_app::commands::api_collection_export,
             unfour_app::commands::api_collection_create,
             unfour_app::commands::api_collection_rename,
             unfour_app::commands::api_collection_delete,

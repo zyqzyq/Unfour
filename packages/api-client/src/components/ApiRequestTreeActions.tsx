@@ -13,7 +13,6 @@ type Translate = (key: string, params?: Record<string, string | number>) => stri
 
 export type RequestTreeActionContext = {
   duplicate: (requestId: string) => void;
-  exportRequest: (request: ApiSavedRequest) => void;
   onOpenIntent: (intent: ApiOpenIntent) => void;
   remove: (requestId: string) => void;
   rename: (request: ApiSavedRequest) => void;
@@ -64,11 +63,6 @@ function requestTreeActions(
       id: "copy-url",
       label: ctx.t("api.request.copyUrl"),
       onSelect: () => void navigator.clipboard?.writeText(request.url),
-    },
-    {
-      id: "export",
-      label: ctx.t("api.actions.export"),
-      onSelect: () => ctx.exportRequest(request),
     },
     {
       id: "delete",
