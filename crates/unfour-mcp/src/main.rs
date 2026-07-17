@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use unfour_mcp::{LocalCommandBusAdapter, Shutdown};
 
-const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 300;
+const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 0;
 const MAX_IDLE_TIMEOUT_SECS: u64 = 86_400;
 const IDLE_TIMEOUT_ENV: &str = "UNFOUR_MCP_IDLE_TIMEOUT_SECS";
 
@@ -135,11 +135,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn idle_timeout_defaults_when_value_is_invalid() {
-        assert_eq!(
-            parse_idle_timeout(Some("invalid")),
-            Some(Duration::from_secs(DEFAULT_IDLE_TIMEOUT_SECS))
-        );
+    fn idle_timeout_is_disabled_by_default_and_for_invalid_values() {
+        assert_eq!(parse_idle_timeout(None), None);
+        assert_eq!(parse_idle_timeout(Some("invalid")), None);
     }
 
     #[test]

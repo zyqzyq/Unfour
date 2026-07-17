@@ -58,14 +58,14 @@ On non-Windows platforms, use the absolute path to the platform-specific
 ## Process Lifetime
 
 The stdio server exits when the client closes stdin, disconnects stdout, or
-sends a termination signal. As a defensive backstop for desktop clients that
-keep completed-task transports open, the packaged server also exits after five
-minutes without an MCP protocol message. A later MCP session starts a fresh
-sidecar process.
+sends a termination signal. Idle shutdown is disabled by default so clients
+that retain a completed task's stdio transport can continue using the same MCP
+session later.
 
-Set `UNFOUR_MCP_IDLE_TIMEOUT_SECS` in the MCP server environment to change this
-period. Set it to `0` to disable idle shutdown. Values above 86,400 seconds are
-capped at one day.
+Set `UNFOUR_MCP_IDLE_TIMEOUT_SECS` to a positive number to opt into idle
+shutdown after that many seconds without an MCP protocol message. Keep it
+unset, or set it to `0`, to disable idle shutdown. Values above 86,400 seconds
+are capped at one day; invalid values use the disabled default.
 
 ## Example Prompts
 
