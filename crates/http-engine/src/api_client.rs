@@ -22,6 +22,7 @@ mod environments;
 mod execution;
 mod history;
 mod openapi_export;
+mod openapi_import;
 mod requests;
 
 const DEFAULT_AUTH_JSON: &str = r#"{"type":"none"}"#;

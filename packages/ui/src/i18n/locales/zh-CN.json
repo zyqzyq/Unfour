@@ -195,6 +195,8 @@
       "exportJson": "OpenAPI 3.1 JSON",
       "exportYaml": "OpenAPI 3.1 YAML",
       "exportSuccess": "已导出 OpenAPI 3.1 {format}",
+      "import": "导入集合",
+      "importSuccess": "已导入“{name}”：{requestCount} 个请求、{folderCount} 个目录。环境及导出时省略的敏感值不会导入。",
       "defaultCollection": "默认集合",
       "none": "还没有集合。新建一个来组织请求。",
       "moveDuplicateName": "目标目录已存在名为 \"{name}\" 的请求。"
@@ -393,6 +395,7 @@
       "collectionRenameFailed": "重命名集合失败",
       "collectionDeleteFailed": "删除集合失败",
       "collectionExportFailed": "导出集合失败",
+      "collectionImportFailed": "导入集合失败",
       "folderCreateFailed": "创建文件夹失败",
       "folderRenameFailed": "重命名文件夹失败",
       "folderDeleteFailed": "删除文件夹失败",

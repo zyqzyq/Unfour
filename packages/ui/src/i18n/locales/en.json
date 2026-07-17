@@ -195,6 +195,8 @@
       "exportJson": "OpenAPI 3.1 JSON",
       "exportYaml": "OpenAPI 3.1 YAML",
       "exportSuccess": "OpenAPI 3.1 {format} exported",
+      "import": "Import collection",
+      "importSuccess": "Imported \"{name}\": {requestCount} requests and {folderCount} folders. Environments and omitted sensitive values were not imported.",
       "defaultCollection": "Default Collection",
       "none": "No collections yet. Create one to organize requests.",
       "moveDuplicateName": "A request named \"{name}\" already exists in the target folder."
@@ -394,6 +396,7 @@
       "collectionRenameFailed": "Failed to rename collection",
       "collectionDeleteFailed": "Failed to delete collection",
       "collectionExportFailed": "Failed to export collection",
+      "collectionImportFailed": "Failed to import collection",
       "folderCreateFailed": "Failed to create folder",
       "folderRenameFailed": "Failed to rename folder",
       "folderDeleteFailed": "Failed to delete folder",

@@ -15,6 +15,7 @@ vi.mock("@unfour/command-client", () => ({
   deleteApiRequest: vi.fn(),
   duplicateApiRequest: vi.fn(),
   exportApiCollection: vi.fn(),
+  importApiCollection: vi.fn(),
   listApiCollections: vi.fn(),
   listApiCollectionFolders: vi.fn(),
   listApiHistory: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock("@unfour/command-client", () => ({
 import {
   duplicateApiRequest,
   exportApiCollection,
+  importApiCollection,
   listApiCollections,
   listApiCollectionFolders,
   listApiHistory,
@@ -48,6 +50,7 @@ const listSavedMock = vi.mocked(listSavedApiRequests);
 const listHistoryMock = vi.mocked(listApiHistory);
 const duplicateMock = vi.mocked(duplicateApiRequest);
 const exportMock = vi.mocked(exportApiCollection);
+const importMock = vi.mocked(importApiCollection);
 const moveFolderMock = vi.mocked(moveApiCollectionFolder);
 const moveMock = vi.mocked(moveApiRequest);
 const reorderFoldersMock = vi.mocked(reorderApiCollectionFolders);
@@ -167,6 +170,12 @@ beforeEach(() => {
   listHistoryMock.mockResolvedValue([]);
   duplicateMock.mockResolvedValue(savedRequest({ id: "req-2", name: "Get Users Copy" }));
   exportMock.mockResolvedValue({ saved: true });
+  importMock.mockResolvedValue({
+    imported: true,
+    collection: collection({ id: "col-imported", name: "Imported Users" }),
+    folderCount: 2,
+    requestCount: 3,
+  });
   moveFolderMock.mockResolvedValue(folder({ parentFolderId: "folder-2" }));
   moveMock.mockResolvedValue(savedRequest({ parentFolderId: "folder-1" }));
   reorderFoldersMock.mockResolvedValue([folder()]);
@@ -180,6 +189,14 @@ afterEach(() => {
 });
 
 describe("ApiCollectionTree", () => {
+  it("imports an Unfour collection export from the collections toolbar", async () => {
+    renderTree();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Import collection" }));
+
+    await waitFor(() => expect(importMock).toHaveBeenCalledWith("ws-1"));
+  });
+
   it("exports a collection as OpenAPI YAML from the collection context menu", async () => {
     renderTree();
 

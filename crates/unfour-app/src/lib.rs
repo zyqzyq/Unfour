@@ -371,6 +371,7 @@ macro_rules! generate_handlers {
             unfour_app::commands::api_environment_activate,
             unfour_app::commands::api_collection_list,
             unfour_app::commands::api_collection_export,
+            unfour_app::commands::api_collection_import,
             unfour_app::commands::api_collection_create,
             unfour_app::commands::api_collection_rename,
             unfour_app::commands::api_collection_delete,

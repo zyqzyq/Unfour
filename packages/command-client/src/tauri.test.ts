@@ -9,6 +9,7 @@ import {
   createApiCollectionFolder,
   deleteSavedSql,
   exportApiCollection,
+  importApiCollection,
   executeDatabaseQuery,
   getDatabaseSchema,
   getWorkspaceState,
@@ -121,6 +122,17 @@ describe("SSH browser mock lifecycle", () => {
 });
 
 describe("API body redaction in browser mock", () => {
+  it("keeps collection import native-only in browser development", async () => {
+    const workspaceId = `mock-import-${crypto.randomUUID()}`;
+
+    await expect(importApiCollection(workspaceId)).resolves.toEqual({
+      imported: false,
+      collection: null,
+      folderCount: 0,
+      requestCount: 0,
+    });
+  });
+
   it("keeps the native collection export command available without duplicating the exporter", async () => {
     const workspaceId = `mock-export-${crypto.randomUUID()}`;
     const collection = await createApiCollection(workspaceId, "Export API");

@@ -95,6 +95,31 @@ impl CommandBus {
             .await
     }
 
+    pub async fn api_collection_import(
+        &self,
+        workspace_id: String,
+        content: String,
+    ) -> AppResult<ApiCollectionImportResult> {
+        let result = self
+            .api_client
+            .import_collection_openapi(workspace_id.clone(), content)
+            .await?;
+        if let Some(collection) = &result.collection {
+            self.activity_log
+                .record(
+                    Some(&workspace_id),
+                    "api.collection.import",
+                    Some(&collection.id),
+                    serde_json::json!({
+                        "folderCount": result.folder_count,
+                        "requestCount": result.request_count,
+                    }),
+                )
+                .await?;
+        }
+        Ok(result)
+    }
+
     pub async fn api_collection_create(
         &self,
         workspace_id: String,

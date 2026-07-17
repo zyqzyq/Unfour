@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Folder, FolderOpen, FolderPlus, Plus, Search, Send } from "lucide-react";
+import { Folder, FolderOpen, FolderPlus, Search, Send } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
@@ -41,6 +41,7 @@ import { useApiCollectionFolders } from "../hooks/useApiCollectionFolders";
 import { useApiCollections } from "../hooks/useApiCollections";
 import { ApiHistoryTree } from "./ApiHistoryTree";
 import { ApiCollectionExportDialog } from "./ApiCollectionExportDialog";
+import { ApiCollectionToolbarActions } from "./ApiCollectionToolbarActions";
 import type { RequestTreeActionContext } from "./ApiRequestTreeActions";
 import { createApiCollectionDropController } from "./api-collection-dnd";
 import {
@@ -84,7 +85,8 @@ export function ApiCollectionTree({
   const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const handleError = useFeedbackErrorHandler();
-  const { collections, createMut, deleteMut, renameMut } = useApiCollections(workspaceId);
+  const { collections, createMut, deleteMut, renameMut } =
+    useApiCollections(workspaceId);
   const {
     createFolderMut,
     deleteFolderMut,
@@ -317,19 +319,14 @@ export function ApiCollectionTree({
         <span className="text-[11px] font-semibold uppercase text-[var(--u-color-text-soft)]">
           {t("api.sidebar.collections")}
         </span>
-        <button
-          aria-label={t("api.collection.new")}
-          className="grid h-6 w-6 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]"
-          disabled={createMut.isPending}
-          onClick={() => {
+        <ApiCollectionToolbarActions
+          createPending={createMut.isPending}
+          onCreate={() => {
             setNameValue("");
             setNameTarget({ kind: "collection" });
           }}
-          title={t("api.collection.new")}
-          type="button"
-        >
-          <Plus size={14} />
-        </button>
+          workspaceId={workspaceId}
+        />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         {collectionItems.length ? (

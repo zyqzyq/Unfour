@@ -4,6 +4,7 @@ import type {
   ApiCollectionExportFormat,
   ApiCollectionExportResult,
   ApiCollectionFolder,
+  ApiCollectionImportResult,
   ApiEnvironment,
   ApiHistoryDetail,
   ApiHistoryItem,
@@ -66,6 +67,10 @@ export function exportApiCollection(
     collectionId,
     format,
   });
+}
+
+export function importApiCollection(workspaceId: string) {
+  return call<ApiCollectionImportResult>("api_collection_import", { workspaceId });
 }
 
 export function createApiCollection(workspaceId: string, name: string) {

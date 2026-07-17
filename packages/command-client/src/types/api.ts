@@ -29,6 +29,13 @@ export type ApiCollectionExportResult = {
   saved: boolean;
 };
 
+export type ApiCollectionImportResult = {
+  imported: boolean;
+  collection: ApiCollection | null;
+  folderCount: number;
+  requestCount: number;
+};
+
 export type ApiCollectionFolder = {
   id: string;
   workspaceId: string;

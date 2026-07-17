@@ -470,3 +470,161 @@ async fn collection_is_scoped_to_workspace() {
         .await;
     assert!(matches!(save_wrong_workspace, Err(AppError::NotFound(_))));
 }
+
+#[tokio::test]
+async fn unfour_openapi_export_imports_as_a_new_workspace_scoped_collection() {
+    let service = service().await;
+    let source = service
+        .create_collection("workspace-a".to_string(), "Commerce API".to_string())
+        .await
+        .expect("create source collection");
+    let parent = service
+        .create_collection_folder(
+            "workspace-a".to_string(),
+            source.id.clone(),
+            None,
+            "Orders".to_string(),
+        )
+        .await
+        .expect("create parent folder");
+    let child = service
+        .create_collection_folder(
+            "workspace-a".to_string(),
+            source.id.clone(),
+            Some(parent.id.clone()),
+            "Refunds".to_string(),
+        )
+        .await
+        .expect("create child folder");
+    service
+        .save_request(ApiRequestInput {
+            workspace_id: "workspace-a".to_string(),
+            name: Some("Create refund".to_string()),
+            parent_folder_id: Some(child.id.clone()),
+            collection_id: Some(source.id.clone()),
+            auth_json: Some(serde_json::json!({ "type": "bearer", "token": "secret" }).to_string()),
+            method: "POST".to_string(),
+            url: "https://api.example.test/orders/1/refunds?notify=true".to_string(),
+            headers: vec![KeyValue {
+                key: "X-Trace".to_string(),
+                value: "trace-1".to_string(),
+                enabled: true,
+            }],
+            query: vec![KeyValue {
+                key: "notify".to_string(),
+                value: "true".to_string(),
+                enabled: true,
+            }],
+            body: Some(r#"{"amount":1999}"#.to_string()),
+            body_kind: "json".to_string(),
+            timeout_ms: None,
+        })
+        .await
+        .expect("save source request");
+
+    let artifact = service
+        .export_collection_openapi(
+            "workspace-a".to_string(),
+            source.id.clone(),
+            unfour_core::models::ApiCollectionExportFormat::Json,
+        )
+        .await
+        .expect("export collection");
+    assert!(!artifact.content.contains("secret"));
+
+    let result = service
+        .import_collection_openapi("workspace-b".to_string(), artifact.content)
+        .await
+        .expect("import collection");
+    assert!(result.imported);
+    assert_eq!(result.folder_count, 2);
+    assert_eq!(result.request_count, 1);
+    let imported = result.collection.expect("imported collection");
+    assert_ne!(imported.id, source.id);
+    assert_eq!(imported.workspace_id, "workspace-b");
+    assert_eq!(imported.name, "Commerce API");
+
+    let folders = service
+        .list_collection_folders("workspace-b".to_string(), Some(imported.id.clone()))
+        .await
+        .expect("list imported folders");
+    let imported_parent = folders
+        .iter()
+        .find(|folder| folder.name == "Orders")
+        .expect("imported parent folder");
+    let imported_child = folders
+        .iter()
+        .find(|folder| folder.name == "Refunds")
+        .expect("imported child folder");
+    assert_eq!(
+        imported_child.parent_folder_id.as_deref(),
+        Some(imported_parent.id.as_str())
+    );
+
+    let requests = service
+        .list_saved_requests("workspace-b".to_string())
+        .await
+        .expect("list imported requests");
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].collection_id, imported.id);
+    assert_eq!(
+        requests[0].parent_folder_id.as_deref(),
+        Some(imported_child.id.as_str())
+    );
+    assert_eq!(requests[0].method, "POST");
+    assert_eq!(
+        requests[0].url,
+        "https://api.example.test/orders/1/refunds?notify=true"
+    );
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&requests[0].auth_json)
+            .expect("parse imported auth"),
+        serde_json::json!({ "type": "bearer", "token": "" })
+    );
+}
+
+#[tokio::test]
+async fn collection_import_accepts_standard_openapi_without_unfour_extensions() {
+    let service = service().await;
+    let external = r#"{
+      "openapi":"3.0.3",
+      "info":{"title":"External API","version":"1.0.0"},
+      "servers":[{"url":"https://api.example.com/v1"}],
+      "paths":{
+        "/users":{
+          "parameters":[{"name":"tenant","in":"header","example":"acme"}],
+          "get":{
+            "operationId":"listUsers",
+            "tags":["Users"],
+            "parameters":[{"name":"limit","in":"query","schema":{"example":25}}]
+          }
+        }
+      }
+    }"#;
+
+    let result = service
+        .import_collection_openapi("workspace-a".to_string(), external.to_string())
+        .await
+        .expect("standard OpenAPI must be imported");
+    assert!(result.imported);
+    assert_eq!(result.folder_count, 1);
+    assert_eq!(result.request_count, 1);
+
+    let collection = result.collection.expect("imported collection");
+    assert_eq!(collection.name, "External API");
+    let requests = service
+        .list_saved_requests("workspace-a".to_string())
+        .await
+        .expect("list imported requests")
+        .into_iter()
+        .filter(|request| request.collection_id == collection.id)
+        .collect::<Vec<_>>();
+    assert_eq!(requests[0].name, "listUsers");
+    assert_eq!(requests[0].url, "https://api.example.com/v1/users");
+    let headers = serde_json::from_str::<Vec<KeyValue>>(&requests[0].headers_json)
+        .expect("parse imported headers");
+    let query = serde_json::from_str::<Vec<KeyValue>>(&requests[0].query_json)
+        .expect("parse imported query");
+    assert_eq!(headers[0].key, "tenant");
+    assert_eq!(query[0].value, "25");
+}

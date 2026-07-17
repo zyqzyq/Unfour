@@ -154,7 +154,11 @@ async fn collection_openapi_export_uses_command_bus_and_persisted_requests() {
     .expect("save request");
 
     let artifact = bus
-        .api_collection_export(workspace_id, collection.id, ApiCollectionExportFormat::Yaml)
+        .api_collection_export(
+            workspace_id.clone(),
+            collection.id,
+            ApiCollectionExportFormat::Yaml,
+        )
         .await
         .expect("export collection");
 
@@ -164,6 +168,24 @@ async fn collection_openapi_export_uses_command_bus_and_persisted_requests() {
     assert!(artifact.content.contains("/users:"));
     assert!(artifact.content.contains("x-unfour-request-id"));
     assert!(!artifact.content.contains("secret"));
+
+    let imported = bus
+        .api_collection_import(workspace_id.clone(), artifact.content)
+        .await
+        .expect("import collection through command bus");
+    assert!(imported.imported);
+    assert_eq!(imported.request_count, 1);
+    assert_eq!(
+        imported.collection.expect("imported collection").name,
+        "Users API"
+    );
+    assert_eq!(
+        bus.api_collection_list(workspace_id)
+            .await
+            .expect("list collections after import")
+            .len(),
+        2
+    );
 }
 
 #[tokio::test]

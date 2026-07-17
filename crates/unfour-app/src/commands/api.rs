@@ -4,8 +4,8 @@ use tauri_plugin_dialog::DialogExt;
 use unfour_core::{
     models::{
         ApiCollection, ApiCollectionExportFormat, ApiCollectionExportResult, ApiCollectionFolder,
-        ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput, ApiResponse,
-        ApiSavedRequest, KeyValue,
+        ApiCollectionImportResult, ApiEnvironment, ApiHistoryDetail, ApiHistoryItem,
+        ApiRequestInput, ApiResponse, ApiSavedRequest, KeyValue,
     },
     AppError, AppResult,
 };
@@ -108,6 +108,35 @@ pub async fn api_collection_export(
     })?;
     std::fs::write(path, artifact.content)?;
     Ok(ApiCollectionExportResult { saved: true })
+}
+
+#[tauri::command]
+pub async fn api_collection_import(
+    workspace_id: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<ApiCollectionImportResult> {
+    let Some(file_path) = app
+        .dialog()
+        .file()
+        .add_filter("OpenAPI 3.x", &["json", "yaml", "yml"])
+        .blocking_pick_file()
+    else {
+        return Ok(ApiCollectionImportResult {
+            imported: false,
+            collection: None,
+            folder_count: 0,
+            request_count: 0,
+        });
+    };
+    let path = file_path.into_path().map_err(|error| {
+        AppError::Config(format!("selected import path is not readable: {error}"))
+    })?;
+    let content = std::fs::read_to_string(path)?;
+    state
+        .command_bus
+        .api_collection_import(workspace_id, content)
+        .await
 }
 
 #[tauri::command]

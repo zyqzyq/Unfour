@@ -155,3 +155,12 @@ pub struct ApiCollectionExportArtifact {
 pub struct ApiCollectionExportResult {
     pub saved: bool,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiCollectionImportResult {
+    pub imported: bool,
+    pub collection: Option<ApiCollection>,
+    pub folder_count: u32,
+    pub request_count: u32,
+}

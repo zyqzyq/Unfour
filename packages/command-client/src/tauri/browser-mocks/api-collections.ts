@@ -31,6 +31,16 @@ export function handleApiCollectionMock<T>(
     return { saved: false } as T;
   }
 
+  if (command === "api_collection_import") {
+    // Browser development has no native file picker or Rust importer.
+    return {
+      imported: false,
+      collection: null,
+      folderCount: 0,
+      requestCount: 0,
+    } as T;
+  }
+
   if (command === "api_collection_create") {
     const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
     const now = new Date().toISOString();
