@@ -64,6 +64,29 @@ describe("SFTP panel state", () => {
     expect(useSftpStore.getState().tabs["session-b"]).toBeUndefined();
   });
 
+  it("scopes multi-select paths per session and clears them on navigate", () => {
+    const state = useSftpStore.getState();
+    state.setSelectedPath("session-a", "connection-a", "/srv/a/one.txt");
+    state.setSelectedPaths(
+      "session-a",
+      "connection-a",
+      ["/srv/a/one.txt", "/srv/a/two.txt"],
+      "/srv/a/two.txt",
+    );
+
+    expect(useSftpStore.getState().tabs["session-a"]).toMatchObject({
+      selectedPath: "/srv/a/two.txt",
+      selectedPaths: ["/srv/a/one.txt", "/srv/a/two.txt"],
+    });
+
+    state.setPanelPath("session-a", "connection-a", "/srv/b");
+    expect(useSftpStore.getState().tabs["session-a"]).toMatchObject({
+      path: "/srv/b",
+      selectedPath: null,
+      selectedPaths: [],
+    });
+  });
+
   it("does not let a stale running frame overwrite a finished transfer", () => {
     const finished = transfer({
       transferId: "t-1",

@@ -11,7 +11,10 @@ type SftpTabState = {
   connectionId: string;
   open: boolean;
   path: string | null;
+  /** Primary selection / Shift-range anchor. */
   selectedPath: string | null;
+  /** All selected remote paths (includes selectedPath when set). */
+  selectedPaths: string[];
 };
 
 type SftpUiState = {
@@ -22,6 +25,12 @@ type SftpUiState = {
   setPanelPath: (sessionId: string, connectionId: string, path: string | null) => void;
   setPanelWidth: (width: number) => void;
   setSelectedPath: (sessionId: string, connectionId: string, path: string | null) => void;
+  setSelectedPaths: (
+    sessionId: string,
+    connectionId: string,
+    paths: string[],
+    primaryPath?: string | null,
+  ) => void;
   setTransfers: (sessionId: string, transfers: SftpTransferState[]) => void;
   upsertTransfer: (transfer: SftpTransferState) => void;
 };
@@ -81,14 +90,19 @@ function tabForConnection(
   connectionId: string,
 ) {
   const current = tabs[sessionId];
-  return current?.connectionId === connectionId
-    ? current
-    : {
-        connectionId,
-        open: false,
-        path: null,
-        selectedPath: null,
-      };
+  if (current?.connectionId === connectionId) {
+    return {
+      ...current,
+      selectedPaths: current.selectedPaths ?? (current.selectedPath ? [current.selectedPath] : []),
+    };
+  }
+  return {
+    connectionId,
+    open: false,
+    path: null,
+    selectedPath: null,
+    selectedPaths: [],
+  };
 }
 
 export const useSftpStore = create<SftpUiState>((set) => ({
@@ -113,6 +127,7 @@ export const useSftpStore = create<SftpUiState>((set) => ({
           ...tabForConnection(state.tabs, sessionId, connectionId),
           path,
           selectedPath: null,
+          selectedPaths: [],
         },
       },
     })),
@@ -130,9 +145,28 @@ export const useSftpStore = create<SftpUiState>((set) => ({
         [sessionId]: {
           ...tabForConnection(state.tabs, sessionId, connectionId),
           selectedPath,
+          selectedPaths: selectedPath ? [selectedPath] : [],
         },
       },
     })),
+  setSelectedPaths: (sessionId, connectionId, paths, primaryPath) =>
+    set((state) => {
+      const unique = [...new Set(paths)];
+      const selectedPath =
+        primaryPath === undefined
+          ? (unique[unique.length - 1] ?? null)
+          : primaryPath;
+      return {
+        tabs: {
+          ...state.tabs,
+          [sessionId]: {
+            ...tabForConnection(state.tabs, sessionId, connectionId),
+            selectedPath,
+            selectedPaths: unique,
+          },
+        },
+      };
+    }),
   setTransfers: (sessionId, transfers) =>
     set((state) => {
       const current = state.transfers[sessionId] ?? [];

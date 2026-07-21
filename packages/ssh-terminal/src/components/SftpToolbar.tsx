@@ -30,6 +30,7 @@ export function SftpToolbar({
   opening,
   pathValue,
   refreshing,
+  selectedCount,
   selectedEntry,
 }: {
   canRefresh: boolean;
@@ -49,9 +50,12 @@ export function SftpToolbar({
   opening: boolean;
   pathValue: string;
   refreshing: boolean;
+  selectedCount: number;
   selectedEntry: SftpFileEntry | null;
 }) {
   const { t } = useI18n();
+  const hasSelection = selectedCount > 0;
+  const singleSelection = selectedCount === 1 && Boolean(selectedEntry);
   return (
     <>
       <div className="flex h-[34px] shrink-0 items-center gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-1.5">
@@ -96,7 +100,7 @@ export function SftpToolbar({
           <Upload size={14} />
         </IconButton>
         <IconButton
-          disabled={!connected || selectedEntry?.kind !== "file"}
+          disabled={!connected || !singleSelection || selectedEntry?.kind !== "file"}
           label={t("ssh.sftp.download")}
           onClick={onDownload}
           size="compact"
@@ -112,7 +116,7 @@ export function SftpToolbar({
           <FolderPlus size={14} />
         </IconButton>
         <IconButton
-          disabled={!connected || !selectedEntry}
+          disabled={!connected || !singleSelection}
           label={t("ssh.sftp.rename")}
           onClick={onRename}
           size="compact"
@@ -121,7 +125,7 @@ export function SftpToolbar({
         </IconButton>
         <IconButton
           className="hover:text-[var(--u-color-danger)]"
-          disabled={!connected || !selectedEntry}
+          disabled={!connected || !hasSelection}
           label={t("ssh.sftp.delete")}
           onClick={onDelete}
           size="compact"

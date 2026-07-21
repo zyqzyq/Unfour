@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { open as openFileDialog, save as saveFileDialog } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -21,6 +21,7 @@ import {
   useFeedbackErrorHandler,
   useI18n,
 } from "@unfour/ui";
+import { useSftpNativeDragDrop } from "../hooks/useSftpNativeDragDrop";
 import { useSftpStore } from "../model/sftp-state";
 import { SftpFileList } from "./SftpFileList";
 import { SftpNameDialog } from "./SftpNameDialog";
@@ -29,6 +30,7 @@ import { SftpToolbar } from "./SftpToolbar";
 
 type NameAction = "mkdir" | "rename" | "upload";
 const EMPTY_TRANSFERS: SftpTransferState[] = [];
+const EMPTY_SELECTED_PATHS: string[] = [];
 
 function isActiveTransfer(transfer: SftpTransferState) {
   return transfer.status === "pending" || transfer.status === "running";
@@ -50,7 +52,9 @@ export function SftpPanel({
   );
   const setPanelPath = useSftpStore((state) => state.setPanelPath);
   const setSelectedPath = useSftpStore((state) => state.setSelectedPath);
+  const setSelectedPaths = useSftpStore((state) => state.setSelectedPaths);
   const upsertTransfer = useSftpStore((state) => state.upsertTransfer);
+  const listRef = useRef<HTMLDivElement | null>(null);
   const [pathDraft, setPathDraft] = useState<{
     dirty: boolean;
     sessionId: string;
@@ -59,7 +63,7 @@ export function SftpPanel({
   const [nameAction, setNameAction] = useState<NameAction | null>(null);
   const [nameValue, setNameValue] = useState("");
   const [localUploadPath, setLocalUploadPath] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<SftpFileEntry | null>(null);
+  const [deleteTargets, setDeleteTargets] = useState<SftpFileEntry[]>([]);
   const connected = session.status === "connected";
   const hasActiveTransfer = transfers.some(isActiveTransfer);
   const seenUploadSuccessRef = useRef(new Set<string>());
@@ -79,6 +83,10 @@ export function SftpPanel({
       : openQuery.data?.homePath ?? null;
   const selectedPath =
     tab?.connectionId === session.connectionId ? tab.selectedPath : null;
+  const selectedPaths =
+    tab?.connectionId === session.connectionId
+      ? (tab.selectedPaths ?? EMPTY_SELECTED_PATHS)
+      : EMPTY_SELECTED_PATHS;
   const pathValue =
     pathDraft.sessionId === session.sessionId && pathDraft.dirty
       ? pathDraft.value
@@ -102,6 +110,10 @@ export function SftpPanel({
   });
   const entries = directoryQuery.data?.entries ?? [];
   const selectedEntry = entries.find((entry) => entry.path === selectedPath) ?? null;
+  const selectedEntries = useMemo(
+    () => entries.filter((entry) => selectedPaths.includes(entry.path)),
+    [entries, selectedPaths],
+  );
 
   const nameMutation = useMutation({
     mutationFn: async () => {
@@ -152,15 +164,18 @@ export function SftpPanel({
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (entry: SftpFileEntry) =>
-      deleteSftpPath({
-        workspaceId: session.workspaceId,
-        sessionId: session.sessionId,
-        path: entry.path,
-        isDirectory: entry.kind === "directory",
-      }),
+    mutationFn: async (targets: SftpFileEntry[]) => {
+      for (const entry of targets) {
+        await deleteSftpPath({
+          workspaceId: session.workspaceId,
+          sessionId: session.sessionId,
+          path: entry.path,
+          isDirectory: entry.kind === "directory",
+        });
+      }
+    },
     onSuccess: () => {
-      setDeleteTarget(null);
+      setDeleteTargets([]);
       setSelectedPath(session.sessionId, session.connectionId, null);
       void refreshDirectory();
     },
@@ -238,26 +253,87 @@ export function SftpPanel({
     }
   }
 
-  async function chooseDownload() {
-    if (!selectedEntry || selectedEntry.kind !== "file") return;
+  async function chooseDownload(entry: SftpFileEntry | null = selectedEntry) {
+    if (!entry || entry.kind !== "file") return;
     if (!isTauriRuntime()) {
       handleError(new Error(t("ssh.sftp.nativeDialogUnavailable")));
       return;
     }
     try {
-      const target = await saveFileDialog({ defaultPath: selectedEntry.name });
+      const target = await saveFileDialog({ defaultPath: entry.name });
       if (!target) return;
       const transfer = await downloadSftpFile({
         workspaceId: session.workspaceId,
         sessionId: session.sessionId,
         localPath: target,
-        remotePath: selectedEntry.path,
+        remotePath: entry.path,
         overwrite: true,
       });
       upsertTransfer(transfer);
     } catch (error) {
       handleError(error, { key: "ssh.sftp.downloadFailed" });
     }
+  }
+
+  const dropActive = useSftpNativeDragDrop({
+    connected,
+    currentPath,
+    entries,
+    listRef,
+    onError: handleError,
+    onTransfer: upsertTransfer,
+    sessionId: session.sessionId,
+    workspaceId: session.workspaceId,
+  });
+
+  function selectEntry(entry: SftpFileEntry) {
+    setSelectedPath(session.sessionId, session.connectionId, entry.path);
+  }
+
+  function toggleSelect(entry: SftpFileEntry) {
+    const exists = selectedPaths.includes(entry.path);
+    const next = exists
+      ? selectedPaths.filter((path) => path !== entry.path)
+      : [...selectedPaths, entry.path];
+    setSelectedPaths(
+      session.sessionId,
+      session.connectionId,
+      next,
+      exists ? (next[next.length - 1] ?? null) : entry.path,
+    );
+  }
+
+  function selectRange(entry: SftpFileEntry) {
+    const anchorPath = selectedPath;
+    const anchorIndex = anchorPath
+      ? entries.findIndex((item) => item.path === anchorPath)
+      : -1;
+    const targetIndex = entries.findIndex((item) => item.path === entry.path);
+    if (anchorIndex < 0 || targetIndex < 0) {
+      selectEntry(entry);
+      return;
+    }
+    const [start, end] =
+      anchorIndex < targetIndex ? [anchorIndex, targetIndex] : [targetIndex, anchorIndex];
+    const paths = entries.slice(start, end + 1).map((item) => item.path);
+    setSelectedPaths(session.sessionId, session.connectionId, paths, entry.path);
+  }
+
+  function beginRename(entry: SftpFileEntry) {
+    setSelectedPath(session.sessionId, session.connectionId, entry.path);
+    setNameValue(entry.name);
+    setNameAction("rename");
+  }
+
+  function beginDelete(targets: SftpFileEntry[]) {
+    if (targets.length === 0) return;
+    setDeleteTargets(targets);
+  }
+
+  async function uploadHere(entry: SftpFileEntry) {
+    if (entry.kind !== "directory") return;
+    navigate(entry.path);
+    await chooseUpload();
   }
 
   const uploadExisting =
@@ -272,16 +348,20 @@ export function SftpPanel({
       ? t("ssh.sftp.dialog.upload.replace")
       : t(`ssh.sftp.dialog.${nameAction}.confirm`)
     : "";
+  const canUpload = connected && Boolean(currentPath);
+  const canGoParent = connected && Boolean(currentPath) && currentPath !== "/";
+  const canRefresh = connected && directoryQuery.isSuccess && !hasActiveTransfer;
+  const deleteMany = deleteTargets.length > 1;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <SftpToolbar
-        canRefresh={directoryQuery.isSuccess && !hasActiveTransfer}
+        canRefresh={canRefresh}
         connected={connected}
         currentPath={currentPath}
         endpoint={`${session.username}@${session.host}`}
         onClose={onClose}
-        onDelete={() => selectedEntry && setDeleteTarget(selectedEntry)}
+        onDelete={() => beginDelete(selectedEntries)}
         onDownload={() => void chooseDownload()}
         onNewFolder={() => {
           setNameValue("");
@@ -295,36 +375,65 @@ export function SftpPanel({
         onRefresh={() => void directoryQuery.refetch()}
         onRename={() => {
           if (!selectedEntry) return;
-          setNameValue(selectedEntry.name);
-          setNameAction("rename");
+          beginRename(selectedEntry);
         }}
         onUpload={() => void chooseUpload()}
         opening={openQuery.isPending}
         pathValue={pathValue}
         refreshing={directoryQuery.isFetching}
         selectedEntry={selectedEntry}
+        selectedCount={selectedEntries.length}
       />
       {!connected ? (
         <ErrorState className="min-h-0 flex-1 rounded-none border-0">
           {t("ssh.sftp.disconnected")}
         </ErrorState>
       ) : (
-        <SftpFileList
-          entries={entries}
-          error={openQuery.error ?? directoryQuery.error}
-          loading={openQuery.isPending || (openQuery.isSuccess && directoryQuery.isPending)}
-          onActivate={(entry) => {
-            if (entry.kind === "directory") navigate(entry.path);
-          }}
-          onRetry={() => {
-            if (openQuery.isError) void openQuery.refetch();
-            else void directoryQuery.refetch();
-          }}
-          onSelect={(entry) =>
-            setSelectedPath(session.sessionId, session.connectionId, entry.path)
+        <div
+          className={
+            dropActive
+              ? "relative flex min-h-0 flex-1 flex-col outline outline-2 outline-[var(--u-color-primary)]"
+              : "relative flex min-h-0 flex-1 flex-col"
           }
-          selectedPath={selectedPath}
-        />
+          ref={listRef}
+        >
+          <SftpFileList
+            actions={{
+              canGoParent,
+              canRefresh,
+              canUpload,
+              onCopyPath: (entry) => void navigator.clipboard?.writeText(entry.path),
+              onDelete: (entry) => beginDelete([entry]),
+              onDownload: (entry) => void chooseDownload(entry),
+              onNewFolder: () => {
+                setNameValue("");
+                setNameAction("mkdir");
+              },
+              onOpen: (entry) => {
+                if (entry.kind === "directory") navigate(entry.path);
+              },
+              onParent: () => currentPath && navigate(parentRemotePath(currentPath)),
+              onRefresh: () => void directoryQuery.refetch(),
+              onRename: beginRename,
+              onUpload: () => void chooseUpload(),
+              onUploadHere: (entry) => void uploadHere(entry),
+            }}
+            entries={entries}
+            error={openQuery.error ?? directoryQuery.error}
+            loading={openQuery.isPending || (openQuery.isSuccess && directoryQuery.isPending)}
+            onActivate={(entry) => {
+              if (entry.kind === "directory") navigate(entry.path);
+            }}
+            onRetry={() => {
+              if (openQuery.isError) void openQuery.refetch();
+              else void directoryQuery.refetch();
+            }}
+            onSelect={selectEntry}
+            onSelectRange={selectRange}
+            onToggleSelect={toggleSelect}
+            selectedPaths={selectedPaths}
+          />
+        </div>
       )}
       <SftpTransferList
         onCancel={(transfer) => cancelMutation.mutate(transfer)}
@@ -360,15 +469,21 @@ export function SftpPanel({
       <ConfirmDialog
         confirmLabel={t("ssh.sftp.dialog.delete.confirm")}
         description={
-          deleteTarget
-            ? t("ssh.sftp.dialog.delete.description", { name: deleteTarget.name })
-            : ""
+          deleteMany
+            ? t("ssh.sftp.dialog.delete.descriptionMany", { count: deleteTargets.length })
+            : deleteTargets[0]
+              ? t("ssh.sftp.dialog.delete.description", { name: deleteTargets[0].name })
+              : ""
         }
-        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget)}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-        open={deleteTarget !== null}
+        onConfirm={() => deleteTargets.length > 0 && deleteMutation.mutate(deleteTargets)}
+        onOpenChange={(open) => !open && setDeleteTargets([])}
+        open={deleteTargets.length > 0}
         pending={deleteMutation.isPending}
-        title={t("ssh.sftp.dialog.delete.title")}
+        title={
+          deleteMany
+            ? t("ssh.sftp.dialog.delete.titleMany")
+            : t("ssh.sftp.dialog.delete.title")
+        }
       />
     </div>
   );

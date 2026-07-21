@@ -892,11 +892,26 @@
       },
       "upload": "Upload local file",
       "uploadCannotReplaceNonFile": "A file upload cannot replace a folder, link, or other non-file item.",
+      "uploadDroppedFailed": "Failed to upload dropped file(s)",
+      "menu": {
+        "copyPath": "Copy path",
+        "delete": "Delete",
+        "download": "Download",
+        "newFolder": "New folder",
+        "open": "Open",
+        "parentDirectory": "Go to parent",
+        "refresh": "Refresh",
+        "rename": "Rename",
+        "upload": "Upload",
+        "uploadHere": "Upload here"
+      },
       "dialog": {
         "delete": {
           "confirm": "Delete",
           "description": "Delete \"{name}\"? Non-empty folders cannot be deleted.",
-          "title": "Delete remote item?"
+          "descriptionMany": "Delete {count} selected items? Non-empty folders cannot be deleted.",
+          "title": "Delete remote item?",
+          "titleMany": "Delete remote items?"
         },
         "mkdir": {
           "confirm": "Create",
