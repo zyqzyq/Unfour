@@ -840,6 +840,81 @@
       "resetAndReconnect": "Reset & Reconnect",
       "resetFailed": "Failed to reset host key"
     },
+    "sftp": {
+      "activeTransfers": "{count} active transfer(s)",
+      "cancelFailed": "Failed to cancel the transfer",
+      "cancelTransfer": "Cancel transfer",
+      "closePanel": "Close Remote Files panel",
+      "columns": {
+        "modified": "Modified",
+        "name": "Name",
+        "size": "Size",
+        "type": "Type"
+      },
+      "delete": "Delete selected remote item",
+      "deleteFailed": "Failed to delete the remote item",
+      "disconnected": "This SSH session is disconnected. Remote Files is unavailable, but the terminal remains intact.",
+      "download": "Download selected file",
+      "downloadFailed": "Failed to start download",
+      "emptyDirectory": "This remote directory is empty.",
+      "invalidAbsolutePath": "Enter an absolute remote path beginning with /.",
+      "invalidName": "Enter a valid name other than . or .., without / or NUL.",
+      "invalidOperation": "The remote file operation is invalid.",
+      "loadFailed": "Failed to load the remote directory.",
+      "loadingDirectory": "Loading remote files…",
+      "nativeDialogUnavailable": "Native file dialogs are available in the desktop app.",
+      "newFolder": "Create remote folder",
+      "openPanel": "Open Remote Files panel",
+      "openPanelTooltip": "Open Remote Files (SFTP)",
+      "panelTitle": "Remote Files",
+      "parentDirectory": "Go to parent directory",
+      "path": "Remote absolute path",
+      "refresh": "Refresh remote directory",
+      "refreshing": "Refreshing…",
+      "rename": "Rename selected remote item",
+      "resizePanel": "Resize Remote Files panel",
+      "resizePanelTooltip": "Drag to resize; double-click or press Home to reset",
+      "revealFailed": "Failed to open the containing folder",
+      "selectUploadFailed": "Failed to choose a local file",
+      "transfers": "Transfers",
+      "transferStatus": {
+        "cancelled": "Cancelled",
+        "failed": "Failed",
+        "pending": "Pending",
+        "running": "Running",
+        "success": "Complete"
+      },
+      "types": {
+        "directory": "Folder",
+        "file": "File",
+        "other": "Other",
+        "symlink": "Link"
+      },
+      "upload": "Upload local file",
+      "uploadCannotReplaceNonFile": "A file upload cannot replace a folder, link, or other non-file item.",
+      "dialog": {
+        "delete": {
+          "confirm": "Delete",
+          "description": "Delete \"{name}\"? Non-empty folders cannot be deleted.",
+          "title": "Delete remote item?"
+        },
+        "mkdir": {
+          "confirm": "Create",
+          "title": "Create remote folder"
+        },
+        "name": "Name",
+        "rename": {
+          "confirm": "Rename",
+          "title": "Rename remote item"
+        },
+        "upload": {
+          "confirm": "Upload",
+          "conflict": "A remote item with this name already exists. Confirming will replace the file only after the temporary upload completes.",
+          "replace": "Upload and replace",
+          "title": "Upload file"
+        }
+      }
+    },
     "state": {
       "loadingWorkspace": "Loading terminal workspace..."
     },

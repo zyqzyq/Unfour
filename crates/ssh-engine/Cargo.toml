@@ -17,12 +17,16 @@ uuid = { version = "1", features = ["serde", "v4"] }
 
 [features]
 default = []
-ssh-native = ["dep:russh", "dep:ssh-key", "dep:tokio"]
+ssh-native = ["dep:russh", "dep:russh-sftp", "dep:ssh-key", "dep:tokio"]
 
 [dependencies.russh]
 version = "0.61"
 default-features = false
 features = ["flate2", "ring", "rsa"]
+optional = true
+
+[dependencies.russh-sftp]
+version = "2.3"
 optional = true
 
 [dependencies.ssh-key]
@@ -32,7 +36,7 @@ optional = true
 
 [dependencies.tokio]
 version = "1"
-features = ["net", "sync", "time"]
+features = ["fs", "io-util", "net", "sync", "time"]
 optional = true
 
 [dev-dependencies]

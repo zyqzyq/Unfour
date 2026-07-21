@@ -19,6 +19,16 @@ import type {
   SshSessionInput,
   SshSessionSummary,
   SshTestResult,
+  SftpCancelTransferInput,
+  SftpDeleteInput,
+  SftpDirectoryListing,
+  SftpFileEntry,
+  SftpOpenResult,
+  SftpPathInput,
+  SftpRenameInput,
+  SftpSessionInput,
+  SftpTransferInput,
+  SftpTransferState,
 } from "../types";
 
 export function listSshConnections(workspaceId: string) {
@@ -92,6 +102,46 @@ export function exportSshKnownHosts(input: SshKnownHostsExportInput) {
   return call<SshKnownHostsExportResult>("ssh_known_hosts_export", { input });
 }
 
+export function openSftp(input: SftpSessionInput) {
+  return call<SftpOpenResult>("ssh_sftp_open", { input });
+}
+
+export function listSftpDirectory(input: SftpPathInput) {
+  return call<SftpDirectoryListing>("ssh_sftp_list_directory", { input });
+}
+
+export function statSftpPath(input: SftpPathInput) {
+  return call<SftpFileEntry>("ssh_sftp_stat", { input });
+}
+
+export function createSftpDirectory(input: SftpPathInput) {
+  return call<void>("ssh_sftp_create_directory", { input });
+}
+
+export function renameSftpPath(input: SftpRenameInput) {
+  return call<void>("ssh_sftp_rename", { input });
+}
+
+export function deleteSftpPath(input: SftpDeleteInput) {
+  return call<void>("ssh_sftp_delete", { input });
+}
+
+export function downloadSftpFile(input: SftpTransferInput) {
+  return call<SftpTransferState>("ssh_sftp_download", { input });
+}
+
+export function uploadSftpFile(input: SftpTransferInput) {
+  return call<SftpTransferState>("ssh_sftp_upload", { input });
+}
+
+export function cancelSftpTransfer(input: SftpCancelTransferInput) {
+  return call<SftpTransferState>("ssh_sftp_cancel_transfer", { input });
+}
+
+export function listSftpTransfers(input: SftpSessionInput) {
+  return call<SftpTransferState[]>("ssh_sftp_transfers_list", { input });
+}
+
 export type SshTerminalDataPayload = {
   sessionId: string;
   data: string;
@@ -116,6 +166,23 @@ export function registerSshTerminalChannel(
   const channel = new Channel<SshTerminalDataPayload>();
   channel.onmessage = onMessage;
   return invoke<void>("ssh_register_terminal_channel", { channel })
+    .then(() => () => {
+      channel.onmessage = () => {};
+    })
+    .catch(() => () => {
+      channel.onmessage = () => {};
+    });
+}
+
+export function registerSftpTransferChannel(
+  onMessage: (payload: SftpTransferState) => void,
+): Promise<() => void> {
+  if (!isTauriRuntime()) {
+    return Promise.resolve(() => {});
+  }
+  const channel = new Channel<SftpTransferState>();
+  channel.onmessage = onMessage;
+  return invoke<void>("ssh_register_sftp_transfer_channel", { channel })
     .then(() => () => {
       channel.onmessage = () => {};
     })

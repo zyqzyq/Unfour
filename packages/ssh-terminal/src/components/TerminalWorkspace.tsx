@@ -35,6 +35,7 @@ import { TerminalSearchBar } from "./TerminalSearchBar";
 import { TerminalSessionTabMeta } from "./TerminalSessionTab";
 import { TerminalSplitView, type TerminalPaneModel } from "./TerminalSplitView";
 import { useTerminalSplit } from "../hooks/useTerminalSplit";
+import { SftpWorkspace } from "./SftpWorkspace";
 
 export function TerminalWorkspace({
   activeSession,
@@ -183,55 +184,57 @@ export function TerminalWorkspace({
           {formatTerminalError(actionError, t)}
         </div>
       )}
-      <div className="relative flex min-h-0 flex-1">
-        {splitMode !== "single" && (
-          <Button
-            className="absolute left-3 top-3 z-10"
-            onClick={() => setMode("single")}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            <PanelRightClose size={14} />
-            {t("ssh.actions.singlePane")}
-          </Button>
-        )}
-        <TerminalSearchBar />
-        {error ? (
-          <ErrorState className="h-full min-h-0 flex-1 rounded-none border-0">
-            {formatTerminalError(error, t)}
-          </ErrorState>
-        ) : primaryModel ? (
-          <TerminalSplitView
-            onRetry={onRetry}
-            primary={primaryModel}
-            secondary={secondaryModel}
-            splitMode={splitMode}
-          />
-        ) : selectedConnection ? (
-          <ReadyToConnectState
-            connecting={connecting}
-            connection={selectedConnection}
-            onEditConnection={() => onOpenPreferences()}
-            onNewSession={onNewSession}
-          />
-        ) : (
-          <EmptyState className="h-full min-h-0 flex-1 rounded-none border-0">
-            <div className="flex max-w-[520px] flex-col items-center gap-3">
-              <div className="space-y-1">
-                <div className="text-[13px] font-semibold text-[var(--u-color-text)]">
-                  {t("ssh.empty.noSessionOpen")}
+      <SftpWorkspace session={activeSession}>
+        <div className="relative flex min-h-0 min-w-0 flex-1">
+          {splitMode !== "single" && (
+            <Button
+              className="absolute left-3 top-3 z-10"
+              onClick={() => setMode("single")}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              <PanelRightClose size={14} />
+              {t("ssh.actions.singlePane")}
+            </Button>
+          )}
+          <TerminalSearchBar />
+          {error ? (
+            <ErrorState className="h-full min-h-0 flex-1 rounded-none border-0">
+              {formatTerminalError(error, t)}
+            </ErrorState>
+          ) : primaryModel ? (
+            <TerminalSplitView
+              onRetry={onRetry}
+              primary={primaryModel}
+              secondary={secondaryModel}
+              splitMode={splitMode}
+            />
+          ) : selectedConnection ? (
+            <ReadyToConnectState
+              connecting={connecting}
+              connection={selectedConnection}
+              onEditConnection={() => onOpenPreferences()}
+              onNewSession={onNewSession}
+            />
+          ) : (
+            <EmptyState className="h-full min-h-0 flex-1 rounded-none border-0">
+              <div className="flex max-w-[520px] flex-col items-center gap-3">
+                <div className="space-y-1">
+                  <div className="text-[13px] font-semibold text-[var(--u-color-text)]">
+                    {t("ssh.empty.noSessionOpen")}
+                  </div>
+                  <div>{emptyMessage}</div>
                 </div>
-                <div>{emptyMessage}</div>
+                <Button onClick={onNewConnection} size="sm" type="button" variant="outline">
+                  <FilePlus2 size={14} />
+                  {t("ssh.actions.newConnection")}
+                </Button>
               </div>
-              <Button onClick={onNewConnection} size="sm" type="button" variant="outline">
-                <FilePlus2 size={14} />
-                {t("ssh.actions.newConnection")}
-              </Button>
-            </div>
-          </EmptyState>
-        )}
-      </div>
+            </EmptyState>
+          )}
+        </div>
+      </SftpWorkspace>
     </div>
   );
 }

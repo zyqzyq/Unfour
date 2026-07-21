@@ -82,6 +82,11 @@ impl CommandBus {
         self.ssh.set_terminal_output_callback(callback);
     }
 
+    #[cfg(feature = "ssh-native")]
+    pub fn set_sftp_transfer_callback(&self, callback: unfour_ssh_engine::SftpTransferCallback) {
+        self.ssh.set_sftp_transfer_callback(callback);
+    }
+
     pub async fn system_health(&self) -> AppResult<SystemHealth> {
         Ok(SystemHealth {
             app_name: "Unfour".to_string(),

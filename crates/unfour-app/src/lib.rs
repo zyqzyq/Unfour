@@ -133,10 +133,12 @@ impl Default for UnfourAppConfig {
 /// transport as commands, unlike the event system, which stalls under the
 /// high-rate emit burst of a full-screen redraw on WebView2/Windows.
 pub type TerminalChannelSlot = Arc<Mutex<Option<Channel<serde_json::Value>>>>;
+pub type SftpTransferChannelSlot = Arc<Mutex<Option<Channel<serde_json::Value>>>>;
 
 pub struct AppState {
     pub command_bus: CommandBus,
     pub terminal_channel: TerminalChannelSlot,
+    pub sftp_transfer_channel: SftpTransferChannelSlot,
     pub config: UnfourAppConfig,
     _logging_guard: Option<unfour_diag::LoggingGuard>,
 }
@@ -189,6 +191,7 @@ where
             })?;
 
             let terminal_channel: TerminalChannelSlot = Arc::new(Mutex::new(None));
+            let sftp_transfer_channel: SftpTransferChannelSlot = Arc::new(Mutex::new(None));
 
             #[cfg(feature = "ssh-native")]
             {
@@ -212,11 +215,23 @@ where
                         }
                     }
                 }));
+
+                let transfer_channel_slot = sftp_transfer_channel.clone();
+                command_bus.set_sftp_transfer_callback(std::sync::Arc::new(move |payload| {
+                    if let Ok(value) = serde_json::from_str::<serde_json::Value>(&payload) {
+                        if let Ok(guard) = transfer_channel_slot.lock() {
+                            if let Some(channel) = guard.as_ref() {
+                                let _ = channel.send(value);
+                            }
+                        }
+                    }
+                }));
             }
 
             app.manage(AppState {
                 command_bus,
                 terminal_channel,
+                sftp_transfer_channel,
                 config,
                 _logging_guard: logging_guard,
             });
@@ -431,6 +446,17 @@ macro_rules! generate_handlers {
             unfour_app::commands::ssh_session_history,
             unfour_app::commands::ssh_session_input,
             unfour_app::commands::ssh_register_terminal_channel,
+            unfour_app::commands::ssh_register_sftp_transfer_channel,
+            unfour_app::commands::ssh_sftp_cancel_transfer,
+            unfour_app::commands::ssh_sftp_create_directory,
+            unfour_app::commands::ssh_sftp_delete,
+            unfour_app::commands::ssh_sftp_download,
+            unfour_app::commands::ssh_sftp_list_directory,
+            unfour_app::commands::ssh_sftp_open,
+            unfour_app::commands::ssh_sftp_rename,
+            unfour_app::commands::ssh_sftp_stat,
+            unfour_app::commands::ssh_sftp_transfers_list,
+            unfour_app::commands::ssh_sftp_upload,
             unfour_app::commands::ssh_session_log_export,
             unfour_app::commands::ssh_session_reconnect_cancel,
             unfour_app::commands::ssh_session_resize,

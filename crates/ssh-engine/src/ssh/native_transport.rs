@@ -49,6 +49,8 @@ impl SshService {
             intentional_close: false,
             native_handle: Some(native_handle.clone()),
             cancel_tx: Some(cancel_tx),
+            sftp: None,
+            sftp_generation: 0,
         };
 
         self.sessions
@@ -474,17 +476,23 @@ impl SshService {
         session_id: &str,
         native_handle: NativeSshHandle,
     ) -> bool {
-        let Ok(mut sessions) = self.sessions.lock() else {
-            return false;
+        let installed = {
+            let Ok(mut sessions) = self.sessions.lock() else {
+                return false;
+            };
+            let Some(state) = sessions.get_mut(session_id) else {
+                return false;
+            };
+            if state.intentional_close {
+                return false;
+            }
+            state.sftp = None;
+            state.sftp_generation = state.sftp_generation.saturating_add(1);
+            state.native_handle = Some(native_handle);
+            true
         };
-        let Some(state) = sessions.get_mut(session_id) else {
-            return false;
-        };
-        if state.intentional_close {
-            return false;
-        }
-        state.native_handle = Some(native_handle);
-        true
+        self.cancel_sftp_transfers_for_session(session_id);
+        installed
     }
 
     #[cfg(feature = "ssh-native")]
@@ -493,8 +501,11 @@ impl SshService {
             if let Some(state) = sessions.get_mut(session_id) {
                 state.native_handle = None;
                 state.cancel_tx = None;
+                state.sftp = None;
+                state.sftp_generation = state.sftp_generation.saturating_add(1);
             }
         }
+        self.cancel_sftp_transfers_for_session(session_id);
     }
 
     #[cfg(feature = "ssh-native")]

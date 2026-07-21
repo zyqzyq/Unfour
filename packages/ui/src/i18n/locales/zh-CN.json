@@ -838,6 +838,81 @@
       "resetAndReconnect": "重置并重连",
       "resetFailed": "重置主机密钥失败"
     },
+    "sftp": {
+      "activeTransfers": "{count} 个传输进行中",
+      "cancelFailed": "取消传输失败",
+      "cancelTransfer": "取消传输",
+      "closePanel": "关闭远程文件面板",
+      "columns": {
+        "modified": "修改时间",
+        "name": "名称",
+        "size": "大小",
+        "type": "类型"
+      },
+      "delete": "删除选中的远程项目",
+      "deleteFailed": "删除远程项目失败",
+      "disconnected": "当前 SSH 会话已断开，远程文件不可用，但 Terminal 会话不受影响。",
+      "download": "下载选中的文件",
+      "downloadFailed": "启动下载失败",
+      "emptyDirectory": "此远程目录为空。",
+      "invalidAbsolutePath": "请输入以 / 开头的远程绝对路径。",
+      "invalidName": "请输入不含 /、NUL、. 或 .. 的有效名称。",
+      "invalidOperation": "远程文件操作无效。",
+      "loadFailed": "加载远程目录失败。",
+      "loadingDirectory": "正在加载远程文件…",
+      "nativeDialogUnavailable": "系统文件对话框仅在桌面应用中可用。",
+      "newFolder": "新建远程文件夹",
+      "openPanel": "展开远程文件面板",
+      "openPanelTooltip": "展开远程文件（SFTP）",
+      "panelTitle": "远程文件",
+      "parentDirectory": "返回上一级目录",
+      "path": "远程绝对路径",
+      "refresh": "刷新远程目录",
+      "refreshing": "正在刷新…",
+      "rename": "重命名选中的远程项目",
+      "resizePanel": "调整远程文件面板宽度",
+      "resizePanelTooltip": "拖动调整宽度；双击或按 Home 恢复默认宽度",
+      "revealFailed": "打开所在文件夹失败",
+      "selectUploadFailed": "选择本地文件失败",
+      "transfers": "传输",
+      "transferStatus": {
+        "cancelled": "已取消",
+        "failed": "失败",
+        "pending": "等待中",
+        "running": "进行中",
+        "success": "已完成"
+      },
+      "types": {
+        "directory": "文件夹",
+        "file": "文件",
+        "other": "其他",
+        "symlink": "链接"
+      },
+      "upload": "上传本地文件",
+      "uploadCannotReplaceNonFile": "上传文件不能替换文件夹、链接或其他非普通文件项目。",
+      "dialog": {
+        "delete": {
+          "confirm": "删除",
+          "description": "删除“{name}”？非空文件夹不会被递归删除。",
+          "title": "删除远程项目？"
+        },
+        "mkdir": {
+          "confirm": "创建",
+          "title": "新建远程文件夹"
+        },
+        "name": "名称",
+        "rename": {
+          "confirm": "重命名",
+          "title": "重命名远程项目"
+        },
+        "upload": {
+          "confirm": "上传",
+          "conflict": "远程已存在同名项目。确认后只会在临时文件完整上传后替换原文件。",
+          "replace": "上传并替换",
+          "title": "上传文件"
+        }
+      }
+    },
     "state": {
       "loadingWorkspace": "正在加载终端工作区..."
     },

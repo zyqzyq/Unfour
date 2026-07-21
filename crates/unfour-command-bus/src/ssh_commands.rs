@@ -257,6 +257,113 @@ impl CommandBus {
         self.ssh.export_known_hosts(input).await
     }
 
+    pub async fn open_ssh_sftp(&self, input: SftpSessionInput) -> AppResult<SftpOpenResult> {
+        self.ssh.sftp_open(input).await
+    }
+
+    pub async fn list_ssh_sftp_directory(
+        &self,
+        input: SftpPathInput,
+    ) -> AppResult<SftpDirectoryListing> {
+        self.ssh.sftp_list_directory(input).await
+    }
+
+    pub async fn stat_ssh_sftp_path(&self, input: SftpPathInput) -> AppResult<SftpFileEntry> {
+        self.ssh.sftp_stat(input).await
+    }
+
+    pub async fn create_ssh_sftp_directory(&self, input: SftpPathInput) -> AppResult<()> {
+        let workspace_id = input.workspace_id.clone();
+        let session_id = input.session_id.clone();
+        self.ssh.sftp_create_directory(input).await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "ssh.sftp.mkdir",
+                Some(&session_id),
+                serde_json::json!({}),
+            )
+            .await?;
+        Ok(())
+    }
+
+    pub async fn rename_ssh_sftp_path(&self, input: SftpRenameInput) -> AppResult<()> {
+        let workspace_id = input.workspace_id.clone();
+        let session_id = input.session_id.clone();
+        self.ssh.sftp_rename(input).await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "ssh.sftp.rename",
+                Some(&session_id),
+                serde_json::json!({}),
+            )
+            .await?;
+        Ok(())
+    }
+
+    pub async fn delete_ssh_sftp_path(&self, input: SftpDeleteInput) -> AppResult<()> {
+        let workspace_id = input.workspace_id.clone();
+        let session_id = input.session_id.clone();
+        let is_directory = input.is_directory;
+        self.ssh.sftp_delete(input).await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "ssh.sftp.delete",
+                Some(&session_id),
+                serde_json::json!({ "isDirectory": is_directory }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    pub async fn download_ssh_sftp_file(
+        &self,
+        input: SftpTransferInput,
+    ) -> AppResult<SftpTransferState> {
+        let transfer = self.ssh.sftp_download(input).await?;
+        self.record_sftp_transfer_started(&transfer).await?;
+        Ok(transfer)
+    }
+
+    pub async fn upload_ssh_sftp_file(
+        &self,
+        input: SftpTransferInput,
+    ) -> AppResult<SftpTransferState> {
+        let transfer = self.ssh.sftp_upload(input).await?;
+        self.record_sftp_transfer_started(&transfer).await?;
+        Ok(transfer)
+    }
+
+    pub async fn cancel_ssh_sftp_transfer(
+        &self,
+        input: SftpCancelTransferInput,
+    ) -> AppResult<SftpTransferState> {
+        self.ssh.sftp_cancel_transfer(input).await
+    }
+
+    pub async fn list_ssh_sftp_transfers(
+        &self,
+        input: SftpSessionInput,
+    ) -> AppResult<Vec<SftpTransferState>> {
+        self.ssh.sftp_list_transfers(input).await
+    }
+
+    async fn record_sftp_transfer_started(&self, transfer: &SftpTransferState) -> AppResult<()> {
+        self.activity_log
+            .record(
+                Some(&transfer.workspace_id),
+                "ssh.sftp.transfer.start",
+                Some(&transfer.transfer_id),
+                serde_json::json!({
+                    "connectionId": transfer.connection_id,
+                    "direction": transfer.direction,
+                }),
+            )
+            .await
+    }
+
     pub fn reserved_status(&self) -> serde_json::Value {
         serde_json::json!({
             "ssh": self.ssh.capability_summary(),

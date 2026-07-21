@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use unfour_core::models::{
+    SftpCancelTransferInput, SftpDeleteInput, SftpDirectoryListing, SftpFileEntry, SftpOpenResult,
+    SftpPathInput, SftpRenameInput, SftpSessionInput, SftpTransferInput, SftpTransferState,
     SshCloseInput, SshConnectInput, SshConnection, SshConnectionConfig, SshConnectionInput,
     SshDiagnosticInput, SshDiagnosticResult, SshHostFingerprintInfo, SshHostKeyInput,
     SshKnownHostsExportInput, SshKnownHostsExportResult, SshKnownHostsImportInput,
@@ -33,6 +35,7 @@ mod diagnostic_execution;
 mod native_transport;
 mod session;
 mod session_helpers;
+mod sftp;
 mod storage;
 
 #[cfg(all(feature = "ssh-native", test))]
@@ -45,6 +48,10 @@ use storage::*;
 #[cfg(feature = "ssh-native")]
 pub type TerminalOutputCallback = Arc<dyn Fn(String) + Send + Sync + 'static>;
 
+/// Callback invoked when an SFTP transfer changes state or reports progress.
+#[cfg(feature = "ssh-native")]
+pub type SftpTransferCallback = Arc<dyn Fn(String) + Send + Sync + 'static>;
+
 #[derive(Clone)]
 pub struct SshService {
     db: LocalDb,
@@ -54,6 +61,10 @@ pub struct SshService {
     sessions: Arc<Mutex<HashMap<String, SshSessionState>>>,
     #[cfg(feature = "ssh-native")]
     on_terminal_output: Arc<Mutex<Option<TerminalOutputCallback>>>,
+    #[cfg(feature = "ssh-native")]
+    on_sftp_transfer: Arc<Mutex<Option<SftpTransferCallback>>>,
+    #[cfg(feature = "ssh-native")]
+    transfers: Arc<Mutex<HashMap<String, SftpTransferRuntime>>>,
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -94,6 +105,34 @@ struct SshSessionState {
     native_handle: Option<NativeSshHandle>,
     #[cfg(feature = "ssh-native")]
     cancel_tx: Option<tokio::sync::watch::Sender<bool>>,
+    #[cfg(feature = "ssh-native")]
+    sftp: Option<SftpChannelState>,
+    #[cfg(feature = "ssh-native")]
+    sftp_generation: u64,
+}
+
+#[cfg(feature = "ssh-native")]
+struct SftpChannelState {
+    session: Arc<russh_sftp::client::SftpSession>,
+    home_path: String,
+    generation: u64,
+}
+
+#[cfg(feature = "ssh-native")]
+impl std::fmt::Debug for SftpChannelState {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SftpChannelState")
+            .field("home_path", &self.home_path)
+            .field("generation", &self.generation)
+            .finish_non_exhaustive()
+    }
+}
+
+#[cfg(feature = "ssh-native")]
+struct SftpTransferRuntime {
+    state: SftpTransferState,
+    cancel_tx: tokio::sync::watch::Sender<bool>,
 }
 
 #[cfg(feature = "ssh-native")]
@@ -202,6 +241,10 @@ impl SshService {
             sessions: Arc::new(Mutex::new(HashMap::new())),
             #[cfg(feature = "ssh-native")]
             on_terminal_output: Arc::new(Mutex::new(None)),
+            #[cfg(feature = "ssh-native")]
+            on_sftp_transfer: Arc::new(Mutex::new(None)),
+            #[cfg(feature = "ssh-native")]
+            transfers: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -211,6 +254,13 @@ impl SshService {
     #[cfg(feature = "ssh-native")]
     pub fn set_terminal_output_callback(&self, callback: TerminalOutputCallback) {
         if let Ok(mut slot) = self.on_terminal_output.lock() {
+            *slot = Some(callback);
+        }
+    }
+
+    #[cfg(feature = "ssh-native")]
+    pub fn set_sftp_transfer_callback(&self, callback: SftpTransferCallback) {
+        if let Ok(mut slot) = self.on_sftp_transfer.lock() {
             *slot = Some(callback);
         }
     }

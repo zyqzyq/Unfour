@@ -2,11 +2,13 @@ use crate::AppState;
 use tauri::State;
 use unfour_core::{
     models::{
-        SshCloseInput, SshConnectInput, SshConnection, SshConnectionInput, SshHostFingerprintInfo,
-        SshHostKeyInput, SshKnownHostsExportInput, SshKnownHostsExportResult,
-        SshKnownHostsImportInput, SshKnownHostsImportResult, SshLogExport, SshLogExportInput,
-        SshReconnectCancelInput, SshResizeInput, SshSessionEvent, SshSessionInput,
-        SshSessionSummary, SshTestResult,
+        SftpCancelTransferInput, SftpDeleteInput, SftpDirectoryListing, SftpFileEntry,
+        SftpOpenResult, SftpPathInput, SftpRenameInput, SftpSessionInput, SftpTransferInput,
+        SftpTransferState, SshCloseInput, SshConnectInput, SshConnection, SshConnectionInput,
+        SshHostFingerprintInfo, SshHostKeyInput, SshKnownHostsExportInput,
+        SshKnownHostsExportResult, SshKnownHostsImportInput, SshKnownHostsImportResult,
+        SshLogExport, SshLogExportInput, SshReconnectCancelInput, SshResizeInput, SshSessionEvent,
+        SshSessionInput, SshSessionSummary, SshTestResult,
     },
     AppResult,
 };
@@ -98,6 +100,91 @@ pub async fn ssh_register_terminal_channel(
         *guard = Some(channel);
     }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn ssh_register_sftp_transfer_channel(
+    channel: tauri::ipc::Channel<serde_json::Value>,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    if let Ok(mut guard) = state.sftp_transfer_channel.lock() {
+        *guard = Some(channel);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn ssh_sftp_open(
+    input: SftpSessionInput,
+    state: State<'_, AppState>,
+) -> AppResult<SftpOpenResult> {
+    trace_command("ssh_sftp_open", state.command_bus.open_ssh_sftp(input)).await
+}
+
+#[tauri::command]
+pub async fn ssh_sftp_list_directory(
+    input: SftpPathInput,
+    state: State<'_, AppState>,
+) -> AppResult<SftpDirectoryListing> {
+    state.command_bus.list_ssh_sftp_directory(input).await
+}
+
+#[tauri::command]
+pub async fn ssh_sftp_stat(
+    input: SftpPathInput,
+    state: State<'_, AppState>,
+) -> AppResult<SftpFileEntry> {
+    state.command_bus.stat_ssh_sftp_path(input).await
+}
+
+#[tauri::command]
+pub async fn ssh_sftp_create_directory(
+    input: SftpPathInput,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    state.command_bus.create_ssh_sftp_directory(input).await
+}
+
+#[tauri::command]
+pub async fn ssh_sftp_rename(input: SftpRenameInput, state: State<'_, AppState>) -> AppResult<()> {
+    state.command_bus.rename_ssh_sftp_path(input).await
+}
+
+#[tauri::command]
+pub async fn ssh_sftp_delete(input: SftpDeleteInput, state: State<'_, AppState>) -> AppResult<()> {
+    state.command_bus.delete_ssh_sftp_path(input).await
+}
+
+#[tauri::command]
+pub async fn ssh_sftp_download(
+    input: SftpTransferInput,
+    state: State<'_, AppState>,
+) -> AppResult<SftpTransferState> {
+    state.command_bus.download_ssh_sftp_file(input).await
+}
+
+#[tauri::command]
+pub async fn ssh_sftp_upload(
+    input: SftpTransferInput,
+    state: State<'_, AppState>,
+) -> AppResult<SftpTransferState> {
+    state.command_bus.upload_ssh_sftp_file(input).await
+}
+
+#[tauri::command]
+pub async fn ssh_sftp_cancel_transfer(
+    input: SftpCancelTransferInput,
+    state: State<'_, AppState>,
+) -> AppResult<SftpTransferState> {
+    state.command_bus.cancel_ssh_sftp_transfer(input).await
+}
+
+#[tauri::command]
+pub async fn ssh_sftp_transfers_list(
+    input: SftpSessionInput,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<SftpTransferState>> {
+    state.command_bus.list_ssh_sftp_transfers(input).await
 }
 
 #[tauri::command]

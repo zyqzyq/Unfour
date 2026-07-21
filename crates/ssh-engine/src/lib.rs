@@ -5,4 +5,4 @@ pub use host_key::{HostKeyStore, StoredHostKey};
 pub use ssh::SshService;
 
 #[cfg(feature = "ssh-native")]
-pub use ssh::TerminalOutputCallback;
+pub use ssh::{SftpTransferCallback, TerminalOutputCallback};

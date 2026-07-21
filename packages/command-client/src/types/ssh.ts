@@ -172,3 +172,77 @@ export type SshKnownHostsExportResult = {
   content: string;
   entryCount: number;
 };
+
+export type SftpSessionInput = {
+  workspaceId: string;
+  sessionId: string;
+};
+
+export type SftpOpenResult = SftpSessionInput & {
+  connectionId: string;
+  homePath: string;
+};
+
+export type SftpPathInput = SftpSessionInput & {
+  path: string;
+};
+
+export type SftpRenameInput = SftpSessionInput & {
+  oldPath: string;
+  newPath: string;
+};
+
+export type SftpDeleteInput = SftpPathInput & {
+  isDirectory: boolean;
+};
+
+export type SftpFileKind = "directory" | "file" | "symlink" | "other";
+
+export type SftpFileEntry = {
+  name: string;
+  path: string;
+  kind: SftpFileKind;
+  size: number;
+  modifiedAt: string | null;
+  permissions: string | null;
+  linkTarget: string | null;
+};
+
+export type SftpDirectoryListing = SftpSessionInput & {
+  connectionId: string;
+  path: string;
+  entries: SftpFileEntry[];
+};
+
+export type SftpTransferInput = SftpSessionInput & {
+  localPath: string;
+  remotePath: string;
+  overwrite?: boolean;
+};
+
+export type SftpCancelTransferInput = {
+  workspaceId: string;
+  transferId: string;
+};
+
+export type SftpTransferStatus =
+  | "pending"
+  | "running"
+  | "success"
+  | "failed"
+  | "cancelled";
+
+export type SftpTransferState = SftpSessionInput & {
+  transferId: string;
+  connectionId: string;
+  direction: "upload" | "download";
+  localPath: string;
+  remotePath: string;
+  transferredBytes: number;
+  totalBytes: number;
+  bytesPerSecond: number;
+  status: SftpTransferStatus;
+  error: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+};

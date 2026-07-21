@@ -25,6 +25,9 @@ tauri = { version = "2", features = [] }
 # in `unfour-app`). Any plugin referenced by a capability must be a direct
 # dependency of the binary crate, not only of `unfour-app`.
 tauri-plugin-opener = "2"
+# Direct dependency (same reason as opener): SFTP upload/download use the
+# frontend dialog plugin, so tauri-build must resolve its permission manifest.
+tauri-plugin-dialog = "2"
 # Direct dependency (same reason as opener): tauri-build must resolve this
 # plugin's permission manifest for `capabilities/`. The runtime `.plugin()`
 # call lives in `unfour-app`; any plugin referenced by a capability must be a

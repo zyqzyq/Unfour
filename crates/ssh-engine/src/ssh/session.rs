@@ -359,6 +359,9 @@ impl SshService {
             serde_json::json!({}),
         );
 
+        #[cfg(feature = "ssh-native")]
+        self.cancel_sftp_transfers_for_session(&input.session_id);
+
         // Extract the native handle and mark the session as intentionally closed
         // while the lock is held. The guard is dropped at the end of this block,
         // so it is never held across an await.
@@ -374,6 +377,8 @@ impl SshService {
                     if let Some(cancel_tx) = state.cancel_tx.take() {
                         let _ = cancel_tx.send(true);
                     }
+                    state.sftp = None;
+                    state.sftp_generation = state.sftp_generation.saturating_add(1);
                     state.native_handle.take()
                 }
                 _ => None,
@@ -457,6 +462,9 @@ impl SshService {
         validate_session_id(&input.session_id)?;
 
         #[cfg(feature = "ssh-native")]
+        self.cancel_sftp_transfers_for_session(&input.session_id);
+
+        #[cfg(feature = "ssh-native")]
         let native_handle = {
             let mut sessions = self
                 .sessions
@@ -468,6 +476,8 @@ impl SshService {
                     if let Some(cancel_tx) = state.cancel_tx.take() {
                         let _ = cancel_tx.send(true);
                     }
+                    state.sftp = None;
+                    state.sftp_generation = state.sftp_generation.saturating_add(1);
                     state.native_handle.take()
                 }
                 _ => None,
