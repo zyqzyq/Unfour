@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   cancelSshTaskRun,
@@ -22,6 +29,7 @@ import {
   ConfirmDialog,
   ErrorState,
   SegmentedControl,
+  Tabs,
   useFeedbackErrorHandler,
   useI18n,
 } from "@unfour/ui";
@@ -35,39 +43,57 @@ import {
   dockerImageExportTemplate,
   preferredTaskConnectionId,
 } from "../model/task-template";
+import {
+  closeTaskTab,
+  createEmptyTaskEditorState,
+  hydrateTaskTab,
+  isTaskTabDirty,
+  openNewTaskTab,
+  openSavedTaskTab,
+  persistTaskTab,
+  removeTaskTabs,
+  updateTaskTabDraft,
+  updateTaskTabView,
+  type SshTaskDetailView,
+} from "../model/task-editor-tabs";
 
-type DetailView = "editor" | "history";
-
+// eslint-disable-next-line max-lines-per-function -- coordinates task tabs, queries, mutations, sidebar content, and task-run dialogs in one page boundary
 export function SshTasksPage({
   connections,
+  onOpenConnections,
+  onShellSidebarChange,
   workspaceId,
 }: {
   connections: SshConnection[];
+  onOpenConnections: () => void;
+  onShellSidebarChange?: (sidebar: ReactNode | null) => void;
   workspaceId: string;
 }) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const handleError = useFeedbackErrorHandler();
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [draft, setDraft] = useState<SshTaskSaveInput | null>(null);
-  const [detailView, setDetailView] = useState<DetailView>("editor");
+  const [editorState, setEditorState] = useState(createEmptyTaskEditorState);
+  const [closeTabId, setCloseTabId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SshTask | null>(null);
-  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [clearTaskId, setClearTaskId] = useState<string | null>(null);
   const [runDialogTask, setRunDialogTask] = useState<SshTaskDetail | null>(null);
   const [runConnectionId, setRunConnectionId] = useState("");
   const [runInputs, setRunInputs] = useState<Record<string, string>>({});
   const [activeRun, setActiveRun] = useState<SshTaskRun | null>(null);
   const [activeRunTask, setActiveRunTask] = useState<SshTaskDetail | null>(null);
   const [eventsByRun, setEventsByRun] = useState<Record<string, SshTaskRunEvent[]>>({});
-  const loadedTaskIdRef = useRef<string | null>(null);
+  const nextNewTabIdRef = useRef(0);
 
   const tasksQuery = useQuery({
     queryKey: ["ssh-tasks", workspaceId],
     queryFn: () => listSshTasks(workspaceId),
   });
   const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
-  const activeTaskId = creating ? null : (selectedTaskId ?? tasks[0]?.id ?? null);
+  const activeTab =
+    editorState.tabs.find((tab) => tab.id === editorState.activeTabId) ?? null;
+  const activeTaskId = activeTab?.taskId ?? null;
+  const draft = activeTab?.draft ?? null;
+
   const detailQuery = useQuery({
     queryKey: ["ssh-task", workspaceId, activeTaskId],
     queryFn: () => getSshTask(workspaceId, activeTaskId!),
@@ -81,10 +107,12 @@ export function SshTasksPage({
 
   useEffect(() => {
     const detail = detailQuery.data;
-    if (!detail || loadedTaskIdRef.current === detail.task.id) return;
-    loadedTaskIdRef.current = detail.task.id;
-    setDraft(toDraft(detail));
-  }, [detailQuery.data]);
+    if (!detail || !activeTab || activeTab.taskId !== detail.task.id || activeTab.draft) {
+      return;
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- React Query detail hydration seeds the matching editor tab without replacing other drafts
+    setEditorState((current) => hydrateTaskTab(current, activeTab.id, toDraft(detail)));
+  }, [activeTab, detailQuery.data]);
 
   useEffect(() => {
     let disposed = false;
@@ -95,7 +123,9 @@ export function SshTasksPage({
         [event.runId]: [...(current[event.runId] ?? []), event].slice(-5_000),
       }));
       if (event.kind === "run" && event.status && event.status !== "running") {
-        queryClient.invalidateQueries({ queryKey: ["ssh-task-runs", workspaceId, event.taskId] });
+        queryClient.invalidateQueries({
+          queryKey: ["ssh-task-runs", workspaceId, event.taskId],
+        });
       }
     }).then((cleanup) => {
       if (disposed) cleanup();
@@ -108,12 +138,11 @@ export function SshTasksPage({
   }, [queryClient, workspaceId]);
 
   const saveMutation = useMutation({
-    mutationFn: saveSshTask,
-    onSuccess: (detail) => {
-      loadedTaskIdRef.current = detail.task.id;
-      setCreating(false);
-      setSelectedTaskId(detail.task.id);
-      setDraft(toDraft(detail));
+    mutationFn: ({ draft: input }: { draft: SshTaskSaveInput; tabId: string }) =>
+      saveSshTask(input),
+    onSuccess: (detail, { tabId }) => {
+      const savedDraft = toDraft(detail);
+      setEditorState((current) => persistTaskTab(current, tabId, savedDraft));
       queryClient.setQueryData(["ssh-task", workspaceId, detail.task.id], detail);
       queryClient.invalidateQueries({ queryKey: ["ssh-tasks", workspaceId] });
     },
@@ -122,10 +151,11 @@ export function SshTasksPage({
   const duplicateMutation = useMutation({
     mutationFn: (taskId: string) => duplicateSshTask(workspaceId, taskId),
     onSuccess: (detail) => {
-      loadedTaskIdRef.current = detail.task.id;
-      setSelectedTaskId(detail.task.id);
-      setCreating(false);
-      setDraft(toDraft(detail));
+      const savedDraft = toDraft(detail);
+      setEditorState((current) => {
+        const opened = openSavedTaskTab(current, detail.task.id);
+        return hydrateTaskTab(opened, opened.activeTabId!, savedDraft);
+      });
       queryClient.setQueryData(["ssh-task", workspaceId, detail.task.id], detail);
       queryClient.invalidateQueries({ queryKey: ["ssh-tasks", workspaceId] });
     },
@@ -134,11 +164,7 @@ export function SshTasksPage({
   const deleteMutation = useMutation({
     mutationFn: (taskId: string) => deleteSshTask(workspaceId, taskId),
     onSuccess: (_, taskId) => {
-      if (activeTaskId === taskId) {
-        setSelectedTaskId(null);
-        setDraft(null);
-        loadedTaskIdRef.current = null;
-      }
+      setEditorState((current) => removeTaskTabs(current, taskId));
       setDeleteTarget(null);
       queryClient.invalidateQueries({ queryKey: ["ssh-tasks", workspaceId] });
     },
@@ -156,7 +182,9 @@ export function SshTasksPage({
       setActiveRun(run);
       setActiveRunTask(runDialogTask);
       setRunDialogTask(null);
-      queryClient.invalidateQueries({ queryKey: ["ssh-task-runs", workspaceId, run.taskId] });
+      queryClient.invalidateQueries({
+        queryKey: ["ssh-task-runs", workspaceId, run.taskId],
+      });
     },
   });
   const cancelMutation = useMutation({
@@ -164,99 +192,196 @@ export function SshTasksPage({
     onError: (error) => handleError(error, { key: "feedback.ssh.taskCancelFailed" }),
   });
   const clearMutation = useMutation({
-    mutationFn: () => clearSshTaskRuns({ workspaceId, taskId: activeTaskId }),
-    onSuccess: () => {
-      setClearConfirmOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["ssh-task-runs", workspaceId, activeTaskId] });
-    },
-    onError: (error) => handleError(error, { key: "feedback.ssh.taskHistoryClearFailed" }),
-  });
-
-  function newTask(template?: SshTaskSaveInput) {
-    setCreating(true);
-    setSelectedTaskId(null);
-    loadedTaskIdRef.current = null;
-    setDraft(
-      template ?? {
-        workspaceId,
-        name: "",
-        description: "",
-        defaultConnectionId: null,
-        steps: [],
-      },
-    );
-    setDetailView("editor");
-  }
-
-  function selectTask(taskId: string) {
-    setCreating(false);
-    setSelectedTaskId(taskId);
-    setDraft(null);
-    loadedTaskIdRef.current = null;
-  }
-
-  async function openRun(task: SshTask | null = null) {
-    const taskId = task?.id ?? activeTaskId;
-    if (!taskId) return;
-    try {
-      const detail = await queryClient.fetchQuery({
-        queryKey: ["ssh-task", workspaceId, taskId],
-        queryFn: () => getSshTask(workspaceId, taskId),
+    mutationFn: (taskId: string) => clearSshTaskRuns({ workspaceId, taskId }),
+    onSuccess: (_, taskId) => {
+      setClearTaskId(null);
+      queryClient.invalidateQueries({
+        queryKey: ["ssh-task-runs", workspaceId, taskId],
       });
-      setRunDialogTask(detail);
-      setRunConnectionId(preferredTaskConnectionId(detail.localBinding));
-      setRunInputs(
-        Object.fromEntries(detectTaskInputs(detail.steps, true).map((name) => [name, ""])),
-      );
-      runMutation.reset();
-    } catch (error) {
-      handleError(error, { key: "feedback.ssh.taskLoadFailed" });
-    }
-  }
+    },
+    onError: (error) =>
+      handleError(error, { key: "feedback.ssh.taskHistoryClearFailed" }),
+  });
+  const duplicateTask = duplicateMutation.mutate;
+  const resetRunMutation = runMutation.reset;
 
-  const showEditor = detailView === "editor";
-  return (
-    <div className="flex min-h-0 flex-1 bg-[var(--u-color-surface)]">
+  const newTask = useCallback(
+    (template?: SshTaskSaveInput) => {
+      const tabId = `new:${++nextNewTabIdRef.current}`;
+      setEditorState((current) =>
+        openNewTaskTab(
+          current,
+          tabId,
+          template ?? {
+            workspaceId,
+            name: "",
+            description: "",
+            defaultConnectionId: null,
+            steps: [],
+          },
+        ),
+      );
+    },
+    [workspaceId],
+  );
+
+  const selectTask = useCallback((taskId: string) => {
+    setEditorState((current) => openSavedTaskTab(current, taskId));
+  }, []);
+
+  const prepareRun = useCallback(
+    async (taskId: string) => {
+      try {
+        const detail = await queryClient.fetchQuery({
+          queryKey: ["ssh-task", workspaceId, taskId],
+          queryFn: () => getSshTask(workspaceId, taskId),
+        });
+        setRunDialogTask(detail);
+        setRunConnectionId(preferredTaskConnectionId(detail.localBinding));
+        setRunInputs(
+          Object.fromEntries(detectTaskInputs(detail.steps, true).map((name) => [name, ""])),
+        );
+        resetRunMutation();
+      } catch (error) {
+        handleError(error, { key: "feedback.ssh.taskLoadFailed" });
+      }
+    },
+    [handleError, queryClient, resetRunMutation, workspaceId],
+  );
+
+  const handleListRun = useCallback(
+    (task: SshTask) => void prepareRun(task.id),
+    [prepareRun],
+  );
+  const handleDuplicate = useCallback(
+    (task: SshTask) => duplicateTask(task.id),
+    [duplicateTask],
+  );
+  const handleExample = useCallback(
+    () => newTask(dockerImageExportTemplate(workspaceId)),
+    [newTask, workspaceId],
+  );
+
+  const shellSidebar = useMemo(
+    () => (
       <TaskList
         loading={tasksQuery.isLoading}
         onDelete={setDeleteTarget}
-        onDuplicate={(task) => duplicateMutation.mutate(task.id)}
-        onExample={() => newTask(dockerImageExportTemplate(workspaceId))}
-        onNew={() => newTask()}
-        onRun={(task) => void openRun(task)}
+        onDuplicate={handleDuplicate}
+        onExample={handleExample}
+        onNew={newTask}
+        onOpenConnections={onOpenConnections}
+        onRun={handleListRun}
         onSelect={selectTask}
         selectedTaskId={activeTaskId}
         tasks={tasks}
       />
+    ),
+    [
+      activeTaskId,
+      handleDuplicate,
+      handleExample,
+      handleListRun,
+      newTask,
+      onOpenConnections,
+      selectTask,
+      tasks,
+      tasksQuery.isLoading,
+    ],
+  );
+
+  useEffect(() => {
+    if (!onShellSidebarChange) return;
+    onShellSidebarChange(shellSidebar);
+    return () => onShellSidebarChange(null);
+  }, [onShellSidebarChange, shellSidebar]);
+
+  function requestCloseTab(tabId: string) {
+    const tab = editorState.tabs.find((item) => item.id === tabId);
+    if (tab && isTaskTabDirty(tab)) {
+      setCloseTabId(tabId);
+      return;
+    }
+    setEditorState((current) => closeTaskTab(current, tabId));
+  }
+
+  function updateDraft(nextDraft: SshTaskSaveInput) {
+    if (!activeTab) return;
+    setEditorState((current) => updateTaskTabDraft(current, activeTab.id, nextDraft));
+  }
+
+  function updateDetailView(view: SshTaskDetailView) {
+    if (!activeTab) return;
+    setEditorState((current) => updateTaskTabView(current, activeTab.id, view));
+  }
+
+  const closeTarget = editorState.tabs.find((tab) => tab.id === closeTabId) ?? null;
+  const showEditor = activeTab?.view !== "history";
+  const taskTabs = editorState.tabs.map((tab) => {
+    const task = tab.taskId ? tasks.find((item) => item.id === tab.taskId) : null;
+    const title = tab.draft?.name.trim() || task?.name || t("ssh.tasks.editor.untitled");
+    const dirty = isTaskTabDirty(tab);
+    return {
+      id: tab.id,
+      title,
+      draggable: false,
+      meta: dirty ? (
+        <span
+          aria-label={t("ssh.tasks.tabs.unsaved")}
+          className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--u-color-primary)]"
+          title={t("ssh.tasks.tabs.unsaved")}
+        />
+      ) : undefined,
+    };
+  });
+
+  return (
+    <div className="flex min-h-0 flex-1 bg-[var(--u-color-surface)]">
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div className="flex h-[var(--u-size-tabbar)] shrink-0 items-center border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2">
-          <SegmentedControl
-            className="w-[220px]"
-            onChange={setDetailView}
-            options={[
-              { label: t("ssh.tasks.tabs.editor"), value: "editor" },
-              { label: t("ssh.tasks.tabs.history"), value: "history" },
-            ]}
-            value={detailView}
-          />
-        </div>
-        {detailQuery.isError ? (
+        <Tabs
+          activeId={activeTab?.id ?? ""}
+          endControl={
+            activeTab ? (
+              <SegmentedControl
+                className="w-[196px]"
+                onChange={updateDetailView}
+                options={[
+                  { label: t("ssh.tasks.tabs.editor"), value: "editor" },
+                  { label: t("ssh.tasks.tabs.history"), value: "history" },
+                ]}
+                value={activeTab.view}
+              />
+            ) : undefined
+          }
+          onClose={requestCloseTab}
+          onSelect={(tabId) =>
+            setEditorState((current) => ({ ...current, activeTabId: tabId }))
+          }
+          tabs={taskTabs}
+        />
+        {detailQuery.isError && !draft ? (
           <ErrorState className="min-h-0 flex-1">{String(detailQuery.error)}</ErrorState>
         ) : draft ? (
           showEditor ? (
             <TaskEditor
               connections={connections}
               draft={draft}
-              onChange={setDraft}
-              onRun={() => void openRun()}
-              onSave={() => saveMutation.mutate(draft)}
-              saving={saveMutation.isPending}
+              onChange={updateDraft}
+              onRun={() => activeTaskId && void prepareRun(activeTaskId)}
+              onSave={() =>
+                activeTab && saveMutation.mutate({ draft, tabId: activeTab.id })
+              }
+              saving={
+                saveMutation.isPending && saveMutation.variables?.tabId === activeTab?.id
+              }
             />
           ) : activeTaskId ? (
             <TaskHistory
-              clearing={clearMutation.isPending}
+              clearing={
+                clearMutation.isPending && clearMutation.variables === activeTaskId
+              }
               loading={runsQuery.isLoading}
-              onClear={() => setClearConfirmOpen(true)}
+              onClear={() => setClearTaskId(activeTaskId)}
               runs={runsQuery.data ?? []}
             />
           ) : (
@@ -266,7 +391,11 @@ export function SshTasksPage({
           )
         ) : (
           <div className="flex flex-1 items-center justify-center text-[12px] text-[var(--u-color-text-muted)]">
-            {tasks.length ? t("ssh.tasks.list.selectTask") : t("ssh.tasks.list.emptyDescription")}
+            {activeTab
+              ? t("ssh.tasks.list.loading")
+              : tasks.length
+                ? t("ssh.tasks.list.selectTask")
+                : t("ssh.tasks.list.emptyDescription")}
           </div>
         )}
         {activeRun && activeRunTask && (
@@ -290,7 +419,9 @@ export function SshTasksPage({
         error={runMutation.error}
         inputValues={runInputs}
         onConnectionChange={setRunConnectionId}
-        onInputChange={(name, value) => setRunInputs((current) => ({ ...current, [name]: value }))}
+        onInputChange={(name, value) =>
+          setRunInputs((current) => ({ ...current, [name]: value }))
+        }
         onOpenChange={(open) => !open && setRunDialogTask(null)}
         onRun={() => runMutation.mutate()}
         open={runDialogTask !== null}
@@ -298,8 +429,30 @@ export function SshTasksPage({
         task={runDialogTask}
       />
       <ConfirmDialog
+        confirmLabel={t("ssh.tasks.tabs.discard")}
+        description={
+          closeTarget
+            ? t("ssh.tasks.tabs.discardDescription", {
+                name:
+                  closeTarget.draft?.name.trim() || t("ssh.tasks.editor.untitled"),
+              })
+            : ""
+        }
+        onConfirm={() => {
+          if (closeTabId) {
+            setEditorState((current) => closeTaskTab(current, closeTabId));
+          }
+          setCloseTabId(null);
+        }}
+        onOpenChange={(open) => !open && setCloseTabId(null)}
+        open={closeTarget !== null}
+        title={t("ssh.tasks.tabs.discardTitle")}
+      />
+      <ConfirmDialog
         confirmLabel={t("ssh.tasks.actions.delete")}
-        description={deleteTarget ? t("ssh.tasks.confirmDelete", { name: deleteTarget.name }) : ""}
+        description={
+          deleteTarget ? t("ssh.tasks.confirmDelete", { name: deleteTarget.name }) : ""
+        }
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         open={deleteTarget !== null}
@@ -309,9 +462,9 @@ export function SshTasksPage({
       <ConfirmDialog
         confirmLabel={t("ssh.tasks.history.clear")}
         description={t("ssh.tasks.history.clearDescription")}
-        onConfirm={() => clearMutation.mutate()}
-        onOpenChange={setClearConfirmOpen}
-        open={clearConfirmOpen}
+        onConfirm={() => clearTaskId && clearMutation.mutate(clearTaskId)}
+        onOpenChange={(open) => !open && setClearTaskId(null)}
+        open={clearTaskId !== null}
         pending={clearMutation.isPending}
         title={t("ssh.tasks.history.clearTitle")}
       />

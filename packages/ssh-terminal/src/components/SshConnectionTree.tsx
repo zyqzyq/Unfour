@@ -46,12 +46,14 @@ import {
   terminalSessionStatus,
   terminalSessionStatusLabel,
 } from "../model/terminal-session-status";
+import { SshSidebarModeSwitcher } from "./SshSidebarModeSwitcher";
 
 export function SshConnectionTree({
   active,
   collapsed,
   onEditConnection,
   onNewConnection,
+  onOpenTasks,
   onOpenTerminal,
   workspaceId,
 }: {
@@ -59,6 +61,7 @@ export function SshConnectionTree({
   collapsed?: boolean;
   onEditConnection?: (connection: SshConnection) => void;
   onNewConnection?: () => void;
+  onOpenTasks?: () => void;
   onOpenTerminal?: () => void;
   workspaceId: string;
 }) {
@@ -372,9 +375,10 @@ export function SshConnectionTree({
   return (
     <SidebarSection>
       <div className="flex h-7 items-center justify-between gap-2 px-1">
-        <span className="text-[11px] font-semibold uppercase text-[var(--u-color-text-soft)]">
-          {t("ssh.status.sshConnections")}
-        </span>
+        <SshSidebarModeSwitcher
+          activeMode="connections"
+          onChange={(mode) => mode === "tasks" && onOpenTasks?.()}
+        />
         {onNewConnection && (
           <IconButton
             label={t("ssh.actions.newConnection")}

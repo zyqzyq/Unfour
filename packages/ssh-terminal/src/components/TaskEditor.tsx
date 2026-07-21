@@ -77,9 +77,9 @@ export function TaskEditor({
           </Button>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        <div className="mx-auto flex max-w-[900px] flex-col gap-4">
-          <section className="grid grid-cols-[minmax(0,1fr)_260px] gap-3">
+      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+        <div className="mx-auto flex max-w-[1100px] flex-col gap-3">
+          <section className="grid grid-cols-[minmax(0,1fr)_240px] gap-2">
             <Field label={t("ssh.tasks.editor.name")}>
               <Input
                 id="ssh-task-name"
@@ -109,7 +109,7 @@ export function TaskEditor({
             </Field>
             <Field className="col-span-2" label={t("ssh.tasks.editor.description")}>
               <textarea
-                className="min-h-16 w-full resize-y rounded-[var(--u-radius-sm)] border border-[var(--u-color-input)] bg-[var(--u-color-surface)] px-2 py-1.5 text-[13px] text-[var(--u-color-text)] outline-none transition-colors focus:border-[var(--u-color-focus)] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--u-color-focus)_16%,transparent)]"
+                className="min-h-12 w-full resize-y rounded-[var(--u-radius-sm)] border border-[var(--u-color-input)] bg-[var(--u-color-surface)] px-2 py-1.5 text-[13px] text-[var(--u-color-text)] outline-none transition-colors focus:border-[var(--u-color-focus)] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--u-color-focus)_16%,transparent)]"
                 id="ssh-task-description"
                 maxLength={2000}
                 onChange={(event) => onChange({ ...draft, description: event.target.value })}
@@ -119,7 +119,7 @@ export function TaskEditor({
           </section>
 
           <section>
-            <div className="mb-2 flex items-center justify-between">
+            <div className="mb-1.5 flex items-center justify-between">
               <h3 className="text-[12px] font-semibold text-[var(--u-color-text)]">
                 {t("ssh.tasks.editor.steps")}
               </h3>
@@ -135,7 +135,7 @@ export function TaskEditor({
                 </Button>
               </div>
             </div>
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1.5">
               {draft.steps.length ? (
                 draft.steps.map((step, index) => (
                   <StepEditor
@@ -201,14 +201,14 @@ function StepEditor({
   const config = step.configJson as unknown as Record<string, string | number | boolean>;
   return (
     <article className={`border border-[var(--u-color-border)] bg-[var(--u-color-surface)] ${step.enabled ? "" : "opacity-60"}`}>
-      <div className="flex h-9 items-center gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2">
+      <div className="flex h-8 items-center gap-1.5 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2">
         <span className="w-5 text-center font-mono text-[11px] text-[var(--u-color-text-soft)]">
           {index + 1}
         </span>
         <Badge>{t(`ssh.tasks.stepTypes.${step.stepType}`)}</Badge>
         <Input
           aria-label={t("ssh.tasks.editor.stepName")}
-          className="h-7 min-w-0 flex-1"
+          className="h-6 min-w-0 flex-1"
           maxLength={128}
           onChange={(event) => onUpdate({ name: event.target.value })}
           value={step.name}
@@ -234,26 +234,56 @@ function StepEditor({
           <Trash2 size={12} />
         </IconButton>
       </div>
-      <div className="grid grid-cols-2 gap-3 p-3">
+      <div className="grid grid-cols-2 gap-2 p-2">
         {step.stepType === "command" ? (
           <>
             <Field className="col-span-2" label={t("ssh.tasks.editor.command")}>
               <textarea
-                className="min-h-20 w-full resize-y rounded-[var(--u-radius-sm)] border border-[var(--u-color-input)] bg-[var(--u-color-bg)] px-2 py-1.5 font-mono text-[12px] text-[var(--u-color-text)] outline-none focus:border-[var(--u-color-focus)]"
+                className="min-h-10 w-full resize-y rounded-[var(--u-radius-sm)] border border-[var(--u-color-input)] bg-[var(--u-color-bg)] px-2 py-1.5 font-mono text-[12px] leading-5 text-[var(--u-color-text)] outline-none focus:border-[var(--u-color-focus)]"
                 onChange={(event) => onConfigChange("command", event.target.value)}
+                rows={1}
                 value={String(config.command ?? "")}
               />
             </Field>
-            <Field label={t("ssh.tasks.editor.workingDirectory")}>
-              <Input onChange={(event) => onConfigChange("workingDirectory", event.target.value)} value={String(config.workingDirectory ?? "")} />
-            </Field>
-            <Field label={t("ssh.tasks.editor.timeoutSeconds")}>
-              <Input max={3600} min={1} onChange={(event) => onConfigChange("timeoutSeconds", Number(event.target.value))} type="number" value={Number(config.timeoutSeconds ?? 300)} />
-            </Field>
-            <label className="col-span-2 flex cursor-pointer items-center gap-2 text-[12px] text-[var(--u-color-text-muted)]">
-              <input checked={Boolean(config.continueOnError)} onChange={(event) => onConfigChange("continueOnError", event.target.checked)} type="checkbox" />
-              {t("ssh.tasks.editor.continueOnError")}
-            </label>
+            <div className="col-span-2 flex flex-wrap items-center gap-2">
+              <div className="flex min-w-[260px] flex-1 items-center gap-2">
+                <span className="shrink-0 text-[11px] font-medium text-[var(--u-color-text-muted)]">
+                  {t("ssh.tasks.editor.workingDirectory")}
+                </span>
+                <Input
+                  aria-label={t("ssh.tasks.editor.workingDirectory")}
+                  className="h-7"
+                  onChange={(event) => onConfigChange("workingDirectory", event.target.value)}
+                  value={String(config.workingDirectory ?? "")}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-[11px] font-medium text-[var(--u-color-text-muted)]">
+                  {t("ssh.tasks.editor.timeoutSeconds")}
+                </span>
+                <Input
+                  aria-label={t("ssh.tasks.editor.timeoutSeconds")}
+                  className="h-7 w-20"
+                  max={3600}
+                  min={1}
+                  onChange={(event) =>
+                    onConfigChange("timeoutSeconds", Number(event.target.value))
+                  }
+                  type="number"
+                  value={Number(config.timeoutSeconds ?? 300)}
+                />
+              </div>
+              <label className="flex h-7 cursor-pointer items-center gap-1.5 text-[11px] text-[var(--u-color-text-muted)]">
+                <input
+                  checked={Boolean(config.continueOnError)}
+                  onChange={(event) =>
+                    onConfigChange("continueOnError", event.target.checked)
+                  }
+                  type="checkbox"
+                />
+                {t("ssh.tasks.editor.continueOnError")}
+              </label>
+            </div>
           </>
         ) : (
           <>

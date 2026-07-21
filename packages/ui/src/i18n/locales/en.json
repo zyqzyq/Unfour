@@ -1035,8 +1035,12 @@
         "upload": "Upload"
       },
       "tabs": {
+        "discard": "Discard",
+        "discardDescription": "Close \"{name}\" and discard its unsaved changes?",
+        "discardTitle": "Discard task changes?",
         "editor": "Task Editor",
-        "history": "Run History"
+        "history": "Run History",
+        "unsaved": "Unsaved changes"
       }
     },
     "state": {

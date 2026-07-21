@@ -1033,8 +1033,12 @@
         "upload": "Upload"
       },
       "tabs": {
+        "discard": "放弃",
+        "discardDescription": "关闭“{name}”并放弃尚未保存的更改？",
+        "discardTitle": "放弃 Task 更改？",
         "editor": "Task 编辑",
-        "history": "运行历史"
+        "history": "运行历史",
+        "unsaved": "有未保存的更改"
       }
     },
     "state": {

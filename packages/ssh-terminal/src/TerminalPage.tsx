@@ -40,9 +40,11 @@ import {
 import { formatTerminalError } from "./model/errors";
 
 export function SshConnectionsPage({
+  onOpenTasks,
   onShellSidebarChange,
   workspaceId,
 }: {
+  onOpenTasks?: () => void;
   onShellSidebarChange?: (sidebar: ReactNode | null) => void;
   workspaceId: string;
 }) {
@@ -495,11 +497,12 @@ export function SshConnectionsPage({
         collapsed={false}
         onEditConnection={handleEditConnection}
         onNewConnection={handleNewConnection}
+        onOpenTasks={onOpenTasks}
         onOpenTerminal={openTerminalTab}
         workspaceId={workspaceId}
       />
     ),
-    [handleEditConnection, handleNewConnection, openTerminalTab, workspaceId],
+    [handleEditConnection, handleNewConnection, onOpenTasks, openTerminalTab, workspaceId],
   );
 
   useEffect(() => {
