@@ -246,3 +246,145 @@ export type SftpTransferState = SftpSessionInput & {
   startedAt: string;
   finishedAt: string | null;
 };
+
+export type SshTask = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+};
+
+export type SshTaskStepType = "command" | "upload" | "download";
+
+export type SshTaskCommandConfig = {
+  command: string;
+  workingDirectory: string;
+  timeoutSeconds: number;
+  continueOnError: boolean;
+};
+
+export type SshTaskUploadConfig = {
+  localPath: string;
+  remotePath: string;
+  overwrite: boolean;
+};
+
+export type SshTaskDownloadConfig = {
+  remotePath: string;
+  localPath: string;
+  overwrite: boolean;
+};
+
+export type SshTaskStepConfig =
+  | SshTaskCommandConfig
+  | SshTaskUploadConfig
+  | SshTaskDownloadConfig;
+
+export type SshTaskStep = {
+  id: string;
+  workspaceId: string;
+  taskId: string;
+  name: string;
+  stepType: SshTaskStepType;
+  position: number;
+  enabled: boolean;
+  configVersion: number;
+  configJson: SshTaskStepConfig;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+};
+
+export type SshTaskLocalBinding = {
+  taskId: string;
+  workspaceId: string;
+  defaultConnectionId: string | null;
+  lastUsedConnectionId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SshTaskDetail = {
+  task: SshTask;
+  steps: SshTaskStep[];
+  localBinding: SshTaskLocalBinding | null;
+};
+
+export type SshTaskStepInput = {
+  id?: string;
+  name: string;
+  stepType: SshTaskStepType;
+  position: number;
+  enabled: boolean;
+  configVersion?: number;
+  configJson: SshTaskStepConfig;
+};
+
+export type SshTaskSaveInput = {
+  id?: string;
+  workspaceId: string;
+  name: string;
+  description: string;
+  defaultConnectionId: string | null;
+  steps: SshTaskStepInput[];
+};
+
+export type SshTaskRunInput = {
+  workspaceId: string;
+  taskId: string;
+  connectionId: string | null;
+  inputs: Record<string, string>;
+};
+
+export type SshTaskCancelInput = {
+  workspaceId: string;
+  runId: string;
+};
+
+export type SshTaskRunStatus = "running" | "success" | "failed" | "cancelled";
+
+export type SshTaskRun = {
+  id: string;
+  workspaceId: string;
+  taskId: string;
+  connectionId: string | null;
+  status: SshTaskRunStatus;
+  startedAt: string;
+  finishedAt: string | null;
+  errorMessage: string | null;
+  logPath: string;
+};
+
+export type SshTaskRunEvent = {
+  runId: string;
+  taskId: string;
+  kind: "run" | "step" | "output" | "transfer";
+  stepId: string | null;
+  stepName: string | null;
+  stepType: SshTaskStepType | null;
+  position: number | null;
+  status: SshTaskRunStatus | "success" | "failed" | "cancelled" | null;
+  stream: "stdout" | "stderr" | null;
+  data: string | null;
+  exitCode: number | null;
+  durationMs: number | null;
+  direction: "upload" | "download" | null;
+  transferredBytes: number | null;
+  totalBytes: number | null;
+  bytesPerSecond: number | null;
+  error: string | null;
+  createdAt: string;
+};
+
+export type SshTaskCleanupInput = {
+  workspaceId: string;
+  taskId: string | null;
+};
+
+export type SshTaskCleanupResult = {
+  deletedRuns: number;
+  deletedLogs: number;
+};

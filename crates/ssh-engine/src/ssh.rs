@@ -37,6 +37,8 @@ mod session;
 mod session_helpers;
 mod sftp;
 mod storage;
+#[path = "task/mod.rs"]
+mod task;
 
 #[cfg(all(feature = "ssh-native", test))]
 use native_transport::terminal_output_from_channel_message;
@@ -52,9 +54,14 @@ pub type TerminalOutputCallback = Arc<dyn Fn(String) + Send + Sync + 'static>;
 #[cfg(feature = "ssh-native")]
 pub type SftpTransferCallback = Arc<dyn Fn(String) + Send + Sync + 'static>;
 
+/// Callback invoked for SSH Task run, step, output, and transfer events.
+#[cfg(feature = "ssh-native")]
+pub type TaskRunCallback = Arc<dyn Fn(String) + Send + Sync + 'static>;
+
 #[derive(Clone)]
 pub struct SshService {
     db: LocalDb,
+    task_log_dir: Arc<std::path::PathBuf>,
     #[cfg_attr(not(feature = "ssh-native"), allow(dead_code))]
     secret_store: SecretStore,
     terminal_history: TerminalHistoryService,
@@ -65,6 +72,10 @@ pub struct SshService {
     on_sftp_transfer: Arc<Mutex<Option<SftpTransferCallback>>>,
     #[cfg(feature = "ssh-native")]
     transfers: Arc<Mutex<HashMap<String, SftpTransferRuntime>>>,
+    #[cfg(feature = "ssh-native")]
+    on_task_run: Arc<Mutex<Option<TaskRunCallback>>>,
+    #[cfg(feature = "ssh-native")]
+    task_runs: Arc<Mutex<HashMap<String, task::TaskRunRuntime>>>,
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -236,6 +247,7 @@ impl SshService {
     pub fn new(db: LocalDb, secret_store: SecretStore) -> Self {
         Self {
             db: db.clone(),
+            task_log_dir: Arc::new(std::env::temp_dir().join("unfour-task-logs")),
             secret_store,
             terminal_history: TerminalHistoryService::new(db.clone()),
             sessions: Arc::new(Mutex::new(HashMap::new())),
@@ -245,7 +257,16 @@ impl SshService {
             on_sftp_transfer: Arc::new(Mutex::new(None)),
             #[cfg(feature = "ssh-native")]
             transfers: Arc::new(Mutex::new(HashMap::new())),
+            #[cfg(feature = "ssh-native")]
+            on_task_run: Arc::new(Mutex::new(None)),
+            #[cfg(feature = "ssh-native")]
+            task_runs: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    pub fn with_task_log_dir(mut self, task_log_dir: std::path::PathBuf) -> Self {
+        self.task_log_dir = Arc::new(task_log_dir);
+        self
     }
 
     /// Register a callback invoked for every chunk of terminal output data
@@ -261,6 +282,13 @@ impl SshService {
     #[cfg(feature = "ssh-native")]
     pub fn set_sftp_transfer_callback(&self, callback: SftpTransferCallback) {
         if let Ok(mut slot) = self.on_sftp_transfer.lock() {
+            *slot = Some(callback);
+        }
+    }
+
+    #[cfg(feature = "ssh-native")]
+    pub fn set_task_run_callback(&self, callback: TaskRunCallback) {
+        if let Ok(mut slot) = self.on_task_run.lock() {
             *slot = Some(callback);
         }
     }

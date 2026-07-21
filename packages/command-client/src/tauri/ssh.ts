@@ -19,6 +19,15 @@ import type {
   SshSessionInput,
   SshSessionSummary,
   SshTestResult,
+  SshTask,
+  SshTaskCancelInput,
+  SshTaskCleanupInput,
+  SshTaskCleanupResult,
+  SshTaskDetail,
+  SshTaskRun,
+  SshTaskRunEvent,
+  SshTaskRunInput,
+  SshTaskSaveInput,
   SftpCancelTransferInput,
   SftpDeleteInput,
   SftpDirectoryListing,
@@ -30,6 +39,42 @@ import type {
   SftpTransferInput,
   SftpTransferState,
 } from "../types";
+
+export function listSshTasks(workspaceId: string) {
+  return call<SshTask[]>("ssh_tasks_list", { workspaceId });
+}
+
+export function getSshTask(workspaceId: string, taskId: string) {
+  return call<SshTaskDetail>("ssh_task_get", { workspaceId, taskId });
+}
+
+export function saveSshTask(input: SshTaskSaveInput) {
+  return call<SshTaskDetail>("ssh_task_save", { input });
+}
+
+export function duplicateSshTask(workspaceId: string, taskId: string) {
+  return call<SshTaskDetail>("ssh_task_duplicate", { workspaceId, taskId });
+}
+
+export function deleteSshTask(workspaceId: string, taskId: string) {
+  return call<void>("ssh_task_delete", { workspaceId, taskId });
+}
+
+export function runSshTask(input: SshTaskRunInput) {
+  return call<SshTaskRun>("ssh_task_run", { input });
+}
+
+export function cancelSshTaskRun(input: SshTaskCancelInput) {
+  return call<SshTaskRun>("ssh_task_run_cancel", { input });
+}
+
+export function listSshTaskRuns(workspaceId: string, taskId: string) {
+  return call<SshTaskRun[]>("ssh_task_runs_list", { workspaceId, taskId });
+}
+
+export function clearSshTaskRuns(input: SshTaskCleanupInput) {
+  return call<SshTaskCleanupResult>("ssh_task_runs_clear", { input });
+}
 
 export function listSshConnections(workspaceId: string) {
   return call<SshConnection[]>("ssh_connections_list", { workspaceId });
@@ -183,6 +228,23 @@ export function registerSftpTransferChannel(
   const channel = new Channel<SftpTransferState>();
   channel.onmessage = onMessage;
   return invoke<void>("ssh_register_sftp_transfer_channel", { channel })
+    .then(() => () => {
+      channel.onmessage = () => {};
+    })
+    .catch(() => () => {
+      channel.onmessage = () => {};
+    });
+}
+
+export function registerSshTaskRunChannel(
+  onMessage: (payload: SshTaskRunEvent) => void,
+): Promise<() => void> {
+  if (!isTauriRuntime()) {
+    return Promise.resolve(() => {});
+  }
+  const channel = new Channel<SshTaskRunEvent>();
+  channel.onmessage = onMessage;
+  return invoke<void>("ssh_register_task_run_channel", { channel })
     .then(() => () => {
       channel.onmessage = () => {};
     })

@@ -20,7 +20,9 @@ use unfour_core::models::{
     SshHostFingerprintInfo, SshHostKeyInput, SshKnownHostsExportInput, SshKnownHostsExportResult,
     SshKnownHostsImportInput, SshKnownHostsImportResult, SshLogExport, SshLogExportInput,
     SshReconnectCancelInput, SshResizeInput, SshSessionEvent, SshSessionInput, SshSessionSummary,
-    SshTestResult, SystemHealth, Workspace, WorkspaceLayout, WorkspaceState,
+    SshTask, SshTaskCancelInput, SshTaskCleanupInput, SshTaskCleanupResult, SshTaskDetail,
+    SshTaskRun, SshTaskRunInput, SshTaskSaveInput, SshTestResult, SystemHealth, Workspace,
+    WorkspaceLayout, WorkspaceState,
 };
 use unfour_core::sync_reserved;
 use unfour_core::AppResult;

@@ -1,4 +1,4 @@
-export { TerminalPage } from "./TerminalPage";
+export { TerminalPage } from "./SshPage";
 export { SshConnectionTree } from "./components/SshConnectionTree";
 export { TerminalLogPanel } from "./components/TerminalLogPanel";
 export { TerminalStatusBar } from "./components/TerminalStatusBar";

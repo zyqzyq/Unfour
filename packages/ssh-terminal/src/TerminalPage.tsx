@@ -39,7 +39,7 @@ import {
 } from "./model/terminal-tabs";
 import { formatTerminalError } from "./model/errors";
 
-export function TerminalPage({
+export function SshConnectionsPage({
   onShellSidebarChange,
   workspaceId,
 }: {
@@ -701,7 +701,7 @@ export function TerminalPage({
     connectMutation.error ?? closeMutation.error ?? exportMutation.error;
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col bg-[var(--u-color-surface)]">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--u-color-surface)]">
       {connectionsQuery.isLoading || sessionsQuery.isLoading ? (
         <LoadingState className="min-h-0 flex-1 rounded-none border-0">
           {t("ssh.state.loadingWorkspace")}

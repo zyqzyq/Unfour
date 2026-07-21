@@ -134,11 +134,13 @@ impl Default for UnfourAppConfig {
 /// high-rate emit burst of a full-screen redraw on WebView2/Windows.
 pub type TerminalChannelSlot = Arc<Mutex<Option<Channel<serde_json::Value>>>>;
 pub type SftpTransferChannelSlot = Arc<Mutex<Option<Channel<serde_json::Value>>>>;
+pub type TaskRunChannelSlot = Arc<Mutex<Option<Channel<serde_json::Value>>>>;
 
 pub struct AppState {
     pub command_bus: CommandBus,
     pub terminal_channel: TerminalChannelSlot,
     pub sftp_transfer_channel: SftpTransferChannelSlot,
+    pub task_run_channel: TaskRunChannelSlot,
     pub config: UnfourAppConfig,
     _logging_guard: Option<unfour_diag::LoggingGuard>,
 }
@@ -192,6 +194,7 @@ where
 
             let terminal_channel: TerminalChannelSlot = Arc::new(Mutex::new(None));
             let sftp_transfer_channel: SftpTransferChannelSlot = Arc::new(Mutex::new(None));
+            let task_run_channel: TaskRunChannelSlot = Arc::new(Mutex::new(None));
 
             #[cfg(feature = "ssh-native")]
             {
@@ -231,12 +234,24 @@ where
                         }
                     }
                 }));
+
+                let task_run_channel_slot = task_run_channel.clone();
+                command_bus.set_task_run_callback(std::sync::Arc::new(move |payload| {
+                    if let Ok(value) = serde_json::from_str::<serde_json::Value>(&payload) {
+                        if let Ok(guard) = task_run_channel_slot.lock() {
+                            if let Some(channel) = guard.as_ref() {
+                                let _ = channel.send(value);
+                            }
+                        }
+                    }
+                }));
             }
 
             app.manage(AppState {
                 command_bus,
                 terminal_channel,
                 sftp_transfer_channel,
+                task_run_channel,
                 config,
                 _logging_guard: logging_guard,
             });
@@ -466,6 +481,16 @@ macro_rules! generate_handlers {
             unfour_app::commands::ssh_session_reconnect_cancel,
             unfour_app::commands::ssh_session_resize,
             unfour_app::commands::ssh_sessions_list,
+            unfour_app::commands::ssh_task_delete,
+            unfour_app::commands::ssh_task_duplicate,
+            unfour_app::commands::ssh_task_get,
+            unfour_app::commands::ssh_task_run_cancel,
+            unfour_app::commands::ssh_task_run,
+            unfour_app::commands::ssh_task_runs_clear,
+            unfour_app::commands::ssh_task_runs_list,
+            unfour_app::commands::ssh_task_save,
+            unfour_app::commands::ssh_tasks_list,
+            unfour_app::commands::ssh_register_task_run_channel,
             $( $handler ),*
         ]
     };

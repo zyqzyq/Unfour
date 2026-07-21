@@ -12,6 +12,8 @@ import type {
   SshHostFingerprintInfo,
   SshSessionEvent,
   SshSessionSummary,
+  SshTaskDetail,
+  SshTaskRun,
   Workspace,
   WorkspaceLayout,
   WorkspaceState,
@@ -46,6 +48,8 @@ export const mockStore = {
   sshConnections: [] as SshConnection[],
   sshSessions: [] as SshSessionSummary[],
   sshEvents: [] as SshSessionEvent[],
+  sshTasks: [] as SshTaskDetail[],
+  sshTaskRuns: [] as SshTaskRun[],
   hostKeyFingerprints: {} as Record<string, SshHostFingerprintInfo>,
   credentials: {} as Record<string, string>,
   environments: [

@@ -412,7 +412,13 @@
     },
     "ssh": {
       "inputFailed": "发送终端输入失败",
-      "resizeFailed": "调整终端大小失败"
+      "resizeFailed": "调整终端大小失败",
+      "taskCancelFailed": "取消 SSH Task 失败",
+      "taskDeleteFailed": "删除 SSH Task 失败",
+      "taskDuplicateFailed": "复制 SSH Task 失败",
+      "taskHistoryClearFailed": "清理 SSH Task 历史失败",
+      "taskLoadFailed": "加载 SSH Task 失败",
+      "taskSaveFailed": "保存 SSH Task 失败"
     },
     "database": {
       "savedSqlDeleteFailed": "删除已保存 SQL 失败",
@@ -926,6 +932,109 @@
           "replace": "上传并替换",
           "title": "上传文件"
         }
+      }
+    },
+    "homeTabs": {
+      "connections": "Connections",
+      "tasks": "Tasks"
+    },
+    "tasks": {
+      "actions": {
+        "addCommand": "添加 Command",
+        "addDownload": "添加 Download",
+        "addUpload": "添加 Upload",
+        "cancel": "取消",
+        "cancelRun": "取消运行",
+        "close": "关闭",
+        "delete": "删除",
+        "deleteStep": "删除步骤",
+        "dockerExample": "使用 Docker 镜像导出示例",
+        "duplicate": "复制",
+        "duplicateStep": "复制步骤",
+        "moveDown": "下移步骤",
+        "moveUp": "上移步骤",
+        "new": "新建 Task",
+        "run": "运行",
+        "save": "保存",
+        "saving": "保存中..."
+      },
+      "confirmDelete": "删除“{name}”及其运行历史和日志文件？",
+      "confirmDeleteTitle": "删除 SSH Task？",
+      "editor": {
+        "command": "命令",
+        "continueOnError": "该命令失败后继续执行后续步骤",
+        "defaultConnection": "默认 SSH 连接",
+        "description": "描述",
+        "detectedInputs": "检测到的输入项",
+        "enabled": "启用",
+        "localPath": "本地路径",
+        "name": "名称",
+        "noDefaultConnection": "不设置默认连接",
+        "noDetectedInputs": "当前步骤中未检测到占位符。",
+        "noSteps": "添加 Command、Upload 或 Download 步骤。",
+        "overwrite": "覆盖已存在的目标",
+        "remotePath": "远程路径",
+        "stepName": "步骤名称",
+        "steps": "步骤",
+        "timeoutSeconds": "超时（秒）",
+        "untitled": "未命名 Task",
+        "workingDirectory": "工作目录"
+      },
+      "history": {
+        "clear": "清理历史",
+        "clearDescription": "删除此 Task 已持久化的运行摘要和日志文件？此操作无法撤销。",
+        "clearTitle": "清理 SSH Task 历史？",
+        "clearing": "清理中...",
+        "empty": "此 Task 暂无运行记录。",
+        "error": "错误",
+        "finished": "结束时间",
+        "loading": "正在加载运行历史...",
+        "logPath": "日志文件",
+        "saveFirst": "请先保存 Task，再查看运行历史。",
+        "started": "开始时间",
+        "status": "状态",
+        "title": "运行历史"
+      },
+      "list": {
+        "emptyDescription": "使用现有 SSH 和 SFTP 能力创建轻量级串行流程。",
+        "emptyTitle": "暂无 SSH Tasks",
+        "loading": "正在加载 SSH Tasks...",
+        "noDescription": "无描述",
+        "selectTask": "选择一个 Task 以查看或编辑。",
+        "title": "Tasks"
+      },
+      "run": {
+        "cancelling": "正在取消...",
+        "connection": "SSH 连接",
+        "currentStep": "当前：{name}",
+        "disabled": "已禁用",
+        "exitCode": "退出码 {code}",
+        "host": "Host",
+        "inputs": "本次运行输入",
+        "missingInputs": "请填写所有检测到的输入项后再运行。",
+        "noInputs": "此 Task 没有临时输入项。",
+        "selectConnection": "选择 SSH 连接",
+        "starting": "正在启动...",
+        "status": {
+          "cancelled": "已取消",
+          "failed": "失败",
+          "pending": "等待中",
+          "running": "运行中",
+          "success": "成功"
+        },
+        "steps": "步骤列表",
+        "taskName": "Task",
+        "title": "运行 SSH Task",
+        "waitingForOutput": "等待 stdout 或 stderr 输出..."
+      },
+      "stepTypes": {
+        "command": "Command",
+        "download": "Download",
+        "upload": "Upload"
+      },
+      "tabs": {
+        "editor": "Task 编辑",
+        "history": "运行历史"
       }
     },
     "state": {

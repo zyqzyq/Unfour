@@ -135,3 +135,96 @@ async fn initial_schema_workspace_policy_defaults_are_valid() {
     assert_eq!(row.0, "dev");
     assert_eq!(row.1, "auto");
 }
+
+#[tokio::test]
+async fn ssh_tasks_schema_separates_syncable_templates_from_local_state() {
+    let db = test_db().await;
+    db.migrate().await.expect("run migrations");
+
+    let tables: Vec<(String,)> = sqlx::query_as(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'ssh_task%' ORDER BY name",
+    )
+    .fetch_all(db.pool())
+    .await
+    .expect("list SSH task tables");
+    assert_eq!(
+        tables,
+        vec![
+            ("ssh_task".to_string(),),
+            ("ssh_task_local_binding".to_string(),),
+            ("ssh_task_run".to_string(),),
+            ("ssh_task_step".to_string(),),
+        ]
+    );
+
+    for table in ["ssh_task", "ssh_task_step", "ssh_task_run"] {
+        let query = format!("SELECT name FROM pragma_table_info('{table}')");
+        let columns: Vec<(String,)> = sqlx::query_as(&query)
+            .fetch_all(db.pool())
+            .await
+            .expect("list SSH task columns");
+        assert!(
+            columns.iter().any(|(name,)| name == "workspace_id"),
+            "{table} must be workspace scoped"
+        );
+        let id: (String, i64) = sqlx::query_as(&format!(
+            "SELECT type, pk FROM pragma_table_info('{table}') WHERE name = 'id'"
+        ))
+        .fetch_one(db.pool())
+        .await
+        .expect("read stable id column");
+        assert_eq!(id, ("TEXT".to_string(), 1), "{table} uses a stable text id");
+    }
+
+    let task_columns: Vec<(String,)> =
+        sqlx::query_as("SELECT name FROM pragma_table_info('ssh_task')")
+            .fetch_all(db.pool())
+            .await
+            .expect("list SSH task columns");
+    let task_names = task_columns
+        .iter()
+        .map(|(name,)| name.as_str())
+        .collect::<Vec<_>>();
+    assert!(task_names.contains(&"deleted_at"));
+    assert!(!task_names.contains(&"default_connection_id"));
+
+    let step_columns: Vec<(String,)> =
+        sqlx::query_as("SELECT name FROM pragma_table_info('ssh_task_step')")
+            .fetch_all(db.pool())
+            .await
+            .expect("list SSH task step columns");
+    let step_names = step_columns
+        .iter()
+        .map(|(name,)| name.as_str())
+        .collect::<Vec<_>>();
+    assert!(step_names.contains(&"config_version"));
+    assert!(step_names.contains(&"deleted_at"));
+
+    let binding_columns: Vec<(String,)> =
+        sqlx::query_as("SELECT name FROM pragma_table_info('ssh_task_local_binding')")
+            .fetch_all(db.pool())
+            .await
+            .expect("list SSH task local binding columns");
+    let binding_names = binding_columns
+        .iter()
+        .map(|(name,)| name.as_str())
+        .collect::<Vec<_>>();
+    assert!(binding_names.contains(&"default_connection_id"));
+    assert!(binding_names.contains(&"last_used_connection_id"));
+
+    let run_columns: Vec<(String,)> =
+        sqlx::query_as("SELECT name FROM pragma_table_info('ssh_task_run')")
+            .fetch_all(db.pool())
+            .await
+            .expect("list SSH task run columns");
+    let run_names = run_columns
+        .iter()
+        .map(|(name,)| name.as_str())
+        .collect::<Vec<_>>();
+    for transient in ["inputs", "stdout", "stderr", "transfer_progress"] {
+        assert!(
+            !run_names.contains(&transient),
+            "transient field {transient} must not be persisted"
+        );
+    }
+}

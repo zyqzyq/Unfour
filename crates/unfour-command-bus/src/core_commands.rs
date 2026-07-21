@@ -31,7 +31,7 @@ impl CommandBus {
             activity_log,
             database: DatabaseService::new(db.clone()).with_secret_store(secret_store.clone()),
             secret_store: secret_store.clone(),
-            ssh: SshService::new(db, secret_store),
+            ssh: SshService::new(db, secret_store).with_task_log_dir(task_log_dir()?),
             workspace,
         })
     }
@@ -69,7 +69,7 @@ impl CommandBus {
             activity_log,
             database: DatabaseService::new(db.clone()).with_secret_store(secret_store.clone()),
             secret_store: secret_store.clone(),
-            ssh: SshService::new(db, secret_store),
+            ssh: SshService::new(db, secret_store).with_task_log_dir(task_log_dir()?),
             workspace,
         })
     }
@@ -85,6 +85,11 @@ impl CommandBus {
     #[cfg(feature = "ssh-native")]
     pub fn set_sftp_transfer_callback(&self, callback: unfour_ssh_engine::SftpTransferCallback) {
         self.ssh.set_sftp_transfer_callback(callback);
+    }
+
+    #[cfg(feature = "ssh-native")]
+    pub fn set_task_run_callback(&self, callback: unfour_ssh_engine::TaskRunCallback) {
+        self.ssh.set_task_run_callback(callback);
     }
 
     pub async fn system_health(&self) -> AppResult<SystemHealth> {
@@ -448,4 +453,13 @@ impl CommandBus {
     pub async fn set_active_workspace(&self, workspace_id: String) -> AppResult<WorkspaceState> {
         self.workspace.set_active(workspace_id).await
     }
+}
+
+fn task_log_dir() -> AppResult<std::path::PathBuf> {
+    Ok(unfour_paths::resolve_unfour_paths()
+        .map_err(|error| {
+            unfour_core::AppError::Config(format!("failed to resolve SSH task log path: {error}"))
+        })?
+        .logs_dir
+        .join("tasks"))
 }

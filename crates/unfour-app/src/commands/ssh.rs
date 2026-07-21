@@ -8,12 +8,110 @@ use unfour_core::{
         SshHostFingerprintInfo, SshHostKeyInput, SshKnownHostsExportInput,
         SshKnownHostsExportResult, SshKnownHostsImportInput, SshKnownHostsImportResult,
         SshLogExport, SshLogExportInput, SshReconnectCancelInput, SshResizeInput, SshSessionEvent,
-        SshSessionInput, SshSessionSummary, SshTestResult,
+        SshSessionInput, SshSessionSummary, SshTask, SshTaskCancelInput, SshTaskCleanupInput,
+        SshTaskCleanupResult, SshTaskDetail, SshTaskRun, SshTaskRunInput, SshTaskSaveInput,
+        SshTestResult,
     },
     AppResult,
 };
 
 use super::trace_command;
+
+#[tauri::command]
+pub async fn ssh_tasks_list(
+    workspace_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<SshTask>> {
+    state.command_bus.list_ssh_tasks(workspace_id).await
+}
+
+#[tauri::command]
+pub async fn ssh_task_get(
+    workspace_id: String,
+    task_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<SshTaskDetail> {
+    state.command_bus.get_ssh_task(workspace_id, task_id).await
+}
+
+#[tauri::command]
+pub async fn ssh_task_save(
+    input: SshTaskSaveInput,
+    state: State<'_, AppState>,
+) -> AppResult<SshTaskDetail> {
+    state.command_bus.save_ssh_task(input).await
+}
+
+#[tauri::command]
+pub async fn ssh_task_duplicate(
+    workspace_id: String,
+    task_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<SshTaskDetail> {
+    state
+        .command_bus
+        .duplicate_ssh_task(workspace_id, task_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn ssh_task_delete(
+    workspace_id: String,
+    task_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    state
+        .command_bus
+        .delete_ssh_task(workspace_id, task_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn ssh_task_run(
+    input: SshTaskRunInput,
+    state: State<'_, AppState>,
+) -> AppResult<SshTaskRun> {
+    trace_command("ssh_task_run", state.command_bus.run_ssh_task(input)).await
+}
+
+#[tauri::command]
+pub async fn ssh_task_run_cancel(
+    input: SshTaskCancelInput,
+    state: State<'_, AppState>,
+) -> AppResult<SshTaskRun> {
+    state.command_bus.cancel_ssh_task_run(input).await
+}
+
+#[tauri::command]
+pub async fn ssh_task_runs_list(
+    workspace_id: String,
+    task_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<SshTaskRun>> {
+    state
+        .command_bus
+        .list_ssh_task_runs(workspace_id, task_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn ssh_task_runs_clear(
+    input: SshTaskCleanupInput,
+    state: State<'_, AppState>,
+) -> AppResult<SshTaskCleanupResult> {
+    state.command_bus.clear_ssh_task_runs(input).await
+}
+
+#[tauri::command]
+pub async fn ssh_register_task_run_channel(
+    channel: tauri::ipc::Channel<serde_json::Value>,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    if let Ok(mut guard) = state.task_run_channel.lock() {
+        *guard = Some(channel);
+    }
+    Ok(())
+}
 
 #[tauri::command]
 pub async fn ssh_connections_list(

@@ -257,6 +257,130 @@ impl CommandBus {
         self.ssh.export_known_hosts(input).await
     }
 
+    pub async fn list_ssh_tasks(&self, workspace_id: String) -> AppResult<Vec<SshTask>> {
+        self.ssh.list_tasks(workspace_id).await
+    }
+
+    pub async fn get_ssh_task(
+        &self,
+        workspace_id: String,
+        task_id: String,
+    ) -> AppResult<SshTaskDetail> {
+        self.ssh.get_task(&workspace_id, &task_id).await
+    }
+
+    pub async fn save_ssh_task(&self, input: SshTaskSaveInput) -> AppResult<SshTaskDetail> {
+        let detail = self.ssh.save_task(input).await?;
+        self.activity_log
+            .record(
+                Some(&detail.task.workspace_id),
+                "ssh.task.save",
+                Some(&detail.task.id),
+                serde_json::json!({
+                    "name": detail.task.name,
+                    "stepCount": detail.steps.len(),
+                    "hasDefaultConnection": detail
+                        .local_binding
+                        .as_ref()
+                        .is_some_and(|binding| binding.default_connection_id.is_some()),
+                }),
+            )
+            .await?;
+        Ok(detail)
+    }
+
+    pub async fn duplicate_ssh_task(
+        &self,
+        workspace_id: String,
+        task_id: String,
+    ) -> AppResult<SshTaskDetail> {
+        let detail = self.ssh.duplicate_task(workspace_id, task_id).await?;
+        self.activity_log
+            .record(
+                Some(&detail.task.workspace_id),
+                "ssh.task.duplicate",
+                Some(&detail.task.id),
+                serde_json::json!({ "stepCount": detail.steps.len() }),
+            )
+            .await?;
+        Ok(detail)
+    }
+
+    pub async fn delete_ssh_task(&self, workspace_id: String, task_id: String) -> AppResult<()> {
+        self.ssh
+            .delete_task(workspace_id.clone(), task_id.clone())
+            .await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "ssh.task.delete",
+                Some(&task_id),
+                serde_json::json!({}),
+            )
+            .await
+    }
+
+    pub async fn run_ssh_task(&self, input: SshTaskRunInput) -> AppResult<SshTaskRun> {
+        let workspace_id = input.workspace_id.clone();
+        let task_id = input.task_id.clone();
+        let run = self.ssh.run_task(input).await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "ssh.task.run",
+                Some(&run.id),
+                serde_json::json!({
+                    "taskId": task_id,
+                    "connectionId": run.connection_id,
+                }),
+            )
+            .await?;
+        Ok(run)
+    }
+
+    pub async fn cancel_ssh_task_run(&self, input: SshTaskCancelInput) -> AppResult<SshTaskRun> {
+        let workspace_id = input.workspace_id.clone();
+        let run = self.ssh.cancel_task_run(input).await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "ssh.task.cancel",
+                Some(&run.id),
+                serde_json::json!({ "taskId": run.task_id }),
+            )
+            .await?;
+        Ok(run)
+    }
+
+    pub async fn list_ssh_task_runs(
+        &self,
+        workspace_id: String,
+        task_id: String,
+    ) -> AppResult<Vec<SshTaskRun>> {
+        self.ssh.list_task_runs(workspace_id, task_id).await
+    }
+
+    pub async fn clear_ssh_task_runs(
+        &self,
+        input: SshTaskCleanupInput,
+    ) -> AppResult<SshTaskCleanupResult> {
+        let workspace_id = input.workspace_id.clone();
+        let task_id = input.task_id.clone();
+        let result = self.ssh.clear_task_runs(input).await?;
+        self.activity_log
+            .record(
+                Some(&workspace_id),
+                "ssh.task.history.clear",
+                task_id.as_deref(),
+                serde_json::json!({
+                    "deletedRuns": result.deleted_runs,
+                    "deletedLogs": result.deleted_logs,
+                }),
+            )
+            .await?;
+        Ok(result)
+    }
+
     pub async fn open_ssh_sftp(&self, input: SftpSessionInput) -> AppResult<SftpOpenResult> {
         self.ssh.sftp_open(input).await
     }

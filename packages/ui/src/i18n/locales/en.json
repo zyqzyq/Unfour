@@ -413,7 +413,13 @@
     },
     "ssh": {
       "inputFailed": "Failed to send terminal input",
-      "resizeFailed": "Failed to resize terminal"
+      "resizeFailed": "Failed to resize terminal",
+      "taskCancelFailed": "Failed to cancel SSH task",
+      "taskDeleteFailed": "Failed to delete SSH task",
+      "taskDuplicateFailed": "Failed to duplicate SSH task",
+      "taskHistoryClearFailed": "Failed to clear SSH task history",
+      "taskLoadFailed": "Failed to load SSH task",
+      "taskSaveFailed": "Failed to save SSH task"
     },
     "database": {
       "savedSqlDeleteFailed": "Failed to delete saved SQL",
@@ -928,6 +934,109 @@
           "replace": "Upload and replace",
           "title": "Upload file"
         }
+      }
+    },
+    "homeTabs": {
+      "connections": "Connections",
+      "tasks": "Tasks"
+    },
+    "tasks": {
+      "actions": {
+        "addCommand": "Add Command",
+        "addDownload": "Add Download",
+        "addUpload": "Add Upload",
+        "cancel": "Cancel",
+        "cancelRun": "Cancel Run",
+        "close": "Close",
+        "delete": "Delete",
+        "deleteStep": "Delete step",
+        "dockerExample": "Use Docker Image Export example",
+        "duplicate": "Duplicate",
+        "duplicateStep": "Duplicate step",
+        "moveDown": "Move step down",
+        "moveUp": "Move step up",
+        "new": "New Task",
+        "run": "Run",
+        "save": "Save",
+        "saving": "Saving..."
+      },
+      "confirmDelete": "Delete \"{name}\" and its run history and log files?",
+      "confirmDeleteTitle": "Delete SSH task?",
+      "editor": {
+        "command": "Command",
+        "continueOnError": "Continue with later steps if this command fails",
+        "defaultConnection": "Default SSH connection",
+        "description": "Description",
+        "detectedInputs": "Detected Inputs",
+        "enabled": "Enabled",
+        "localPath": "Local path",
+        "name": "Name",
+        "noDefaultConnection": "No default connection",
+        "noDetectedInputs": "No placeholders detected in the current steps.",
+        "noSteps": "Add a Command, Upload, or Download step.",
+        "overwrite": "Overwrite an existing target",
+        "remotePath": "Remote path",
+        "stepName": "Step name",
+        "steps": "Steps",
+        "timeoutSeconds": "Timeout (seconds)",
+        "untitled": "Untitled Task",
+        "workingDirectory": "Working directory"
+      },
+      "history": {
+        "clear": "Clear History",
+        "clearDescription": "Delete this task's persisted run summaries and log files? This cannot be undone.",
+        "clearTitle": "Clear SSH task history?",
+        "clearing": "Clearing...",
+        "empty": "No runs recorded for this task.",
+        "error": "Error",
+        "finished": "Finished",
+        "loading": "Loading task history...",
+        "logPath": "Log file",
+        "saveFirst": "Save the task before viewing its run history.",
+        "started": "Started",
+        "status": "Status",
+        "title": "Run History"
+      },
+      "list": {
+        "emptyDescription": "Create a compact serial workflow from existing SSH and SFTP operations.",
+        "emptyTitle": "No SSH tasks",
+        "loading": "Loading SSH tasks...",
+        "noDescription": "No description",
+        "selectTask": "Select a task to view or edit it.",
+        "title": "Tasks"
+      },
+      "run": {
+        "cancelling": "Cancelling...",
+        "connection": "SSH connection",
+        "currentStep": "Current: {name}",
+        "disabled": "Disabled",
+        "exitCode": "exit {code}",
+        "host": "Host",
+        "inputs": "Inputs for this run",
+        "missingInputs": "Fill in every detected input before running.",
+        "noInputs": "This task has no temporary inputs.",
+        "selectConnection": "Select an SSH connection",
+        "starting": "Starting...",
+        "status": {
+          "cancelled": "Cancelled",
+          "failed": "Failed",
+          "pending": "Pending",
+          "running": "Running",
+          "success": "Success"
+        },
+        "steps": "Steps",
+        "taskName": "Task",
+        "title": "Run SSH Task",
+        "waitingForOutput": "Waiting for stdout or stderr..."
+      },
+      "stepTypes": {
+        "command": "Command",
+        "download": "Download",
+        "upload": "Upload"
+      },
+      "tabs": {
+        "editor": "Task Editor",
+        "history": "Run History"
       }
     },
     "state": {
