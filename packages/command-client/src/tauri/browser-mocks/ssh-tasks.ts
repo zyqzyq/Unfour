@@ -22,6 +22,7 @@ const TASK_MOCK_HANDLERS: TaskMockHandler[] = [
   handleTaskStartRunMock,
   handleTaskCancelRunMock,
   handleTaskRunsListMock,
+  handleTaskRunLogReadMock,
   handleTaskRunsClearMock,
 ];
 
@@ -165,6 +166,27 @@ function handleTaskRunsListMock<T>(
   return mockStore.sshTaskRuns.filter(
     (run) => run.workspaceId === workspaceId && run.taskId === taskId,
   ) as T;
+}
+
+function handleTaskRunLogReadMock<T>(
+  command: string,
+  args?: Record<string, unknown>,
+): MockResult<T> {
+  if (command !== "ssh_task_run_log_read") return UNHANDLED;
+  const workspaceId = String(args?.workspaceId ?? "");
+  const runId = String(args?.runId ?? "");
+  const run = mockStore.sshTaskRuns.find(
+    (item) => item.workspaceId === workspaceId && item.id === runId,
+  );
+  if (!run) throw new Error("SSH task run not found");
+  const started = run.startedAt;
+  return [
+    `[${started}] run running`,
+    `[${started}] step 'Mock command' running`,
+    `[${started}] stdout hello from mock task run`,
+    `[${started}] step 'Mock command' success`,
+    `[${run.finishedAt ?? started}] run ${run.status}`,
+  ].join("\n") as T;
 }
 
 function handleTaskRunsClearMock<T>(

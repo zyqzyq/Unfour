@@ -445,6 +445,55 @@ impl SshService {
         Ok(rows.into_iter().map(run_from_row).collect())
     }
 
+    /// Read the on-disk task run log for history replay in the UI.
+    /// Path must stay under the configured task log directory.
+    pub async fn read_task_run_log(
+        &self,
+        workspace_id: String,
+        run_id: String,
+    ) -> AppResult<String> {
+        validate_workspace_id(&workspace_id)?;
+        if run_id.trim().is_empty() {
+            return Err(AppError::Validation("run id is required".to_string()));
+        }
+        let run = sqlx::query_as::<_, StoredRun>(
+            r#"
+            SELECT id, workspace_id, task_id, connection_id, status, started_at,
+                   finished_at, error_message, log_path
+            FROM ssh_task_run WHERE workspace_id = ?1 AND id = ?2
+            "#,
+        )
+        .bind(&workspace_id)
+        .bind(&run_id)
+        .fetch_optional(self.db.pool())
+        .await?
+        .map(run_from_row)
+        .ok_or_else(|| AppError::NotFound("SSH task run".to_string()))?;
+
+        let path = PathBuf::from(&run.log_path);
+        if !safe_task_log_path(&path, Some(self.task_log_dir.as_path())) {
+            return Err(AppError::Validation(
+                "SSH task log path is outside the allowed directory".to_string(),
+            ));
+        }
+        if !path.exists() {
+            return Ok(String::new());
+        }
+        let bytes = std::fs::read(&path).map_err(|error| {
+            AppError::Config(format!("failed to read SSH task log: {error}"))
+        })?;
+        let capped = if bytes.len() > MAX_TASK_LOG_READ_BYTES {
+            &bytes[..MAX_TASK_LOG_READ_BYTES]
+        } else {
+            &bytes[..]
+        };
+        let mut text = String::from_utf8_lossy(capped).into_owned();
+        if bytes.len() > MAX_TASK_LOG_READ_BYTES {
+            text.push_str("\n[log truncated for display]\n");
+        }
+        Ok(text)
+    }
+
     pub async fn clear_task_runs(
         &self,
         input: SshTaskCleanupInput,
@@ -653,6 +702,8 @@ impl SshService {
         Ok(self.task_log_dir.join(format!("{run_id}.log")))
     }
 }
+
+const MAX_TASK_LOG_READ_BYTES: usize = 2 * 1024 * 1024;
 
 fn remove_task_logs(paths: Vec<PathBuf>, allowed_root: &Path) -> usize {
     paths

@@ -79,6 +79,7 @@ export {
   FeedbackProvider,
   useFeedback,
   useFeedbackErrorHandler,
+  extractErrorDetail,
   redactForLog,
   SENSITIVE_KEYS,
   type FeedbackApi,

@@ -93,9 +93,12 @@ pub(super) fn validate_step_config(
     match step_type {
         "command" => {
             let parsed = parse_command_config(config_version, config)?;
-            if parsed.command.trim().is_empty() {
+            validate_task_command(&parsed.command)?;
+            if !parsed.working_directory.is_empty()
+                && parsed.working_directory.chars().any(char::is_control)
+            {
                 return Err(AppError::Validation(
-                    "Command step requires a command".to_string(),
+                    "Command workingDirectory cannot contain control characters".to_string(),
                 ));
             }
             if !(1..=3_600).contains(&parsed.timeout_seconds) {
@@ -128,6 +131,33 @@ pub(super) fn validate_step_config(
         }
     }
     Ok(())
+}
+
+/// Validate an SSH task command step. Unlike one-shot SSH exec validation,
+/// task scripts may include newlines and tabs; other control characters (NUL,
+/// bell, etc.) remain rejected.
+pub(super) fn validate_task_command(command: &str) -> AppResult<String> {
+    let trimmed = command.trim();
+    if trimmed.is_empty() {
+        return Err(AppError::Validation(
+            "Command step requires a command".to_string(),
+        ));
+    }
+    if trimmed.chars().count() > 4096 {
+        return Err(AppError::Validation(
+            "ssh task command must be 4096 characters or fewer".to_string(),
+        ));
+    }
+    if trimmed
+        .chars()
+        .any(|ch| ch.is_control() && !matches!(ch, '\n' | '\r' | '\t'))
+    {
+        return Err(AppError::Validation(
+            "ssh task command cannot contain control characters other than newlines and tabs"
+                .to_string(),
+        ));
+    }
+    Ok(trimmed.to_string())
 }
 
 pub(super) fn parse_command_config(
@@ -172,25 +202,11 @@ fn validate_transfer_paths(local_path: &str, remote_path: &str) -> AppResult<()>
             "Upload and Download paths cannot be empty".to_string(),
         ));
     }
-    validate_local_template_path(local_path)?;
-    Ok(())
-}
-
-fn validate_local_template_path(local_path: &str) -> AppResult<()> {
-    let local_path = local_path.trim();
-    let first_variable = scan_placeholders(local_path)?
-        .into_iter()
-        .next()
-        .ok_or_else(|| {
-            AppError::Validation(
-                "Upload and Download localPath must begin with a runtime placeholder".to_string(),
-            )
-        })?;
-    if !local_path.starts_with(&format!("{{{{{first_variable}}}}}")) {
-        return Err(AppError::Validation(
-            "Upload and Download localPath must begin with a runtime placeholder".to_string(),
-        ));
-    }
+    // Absolute device paths and runtime placeholders are both allowed.
+    // Placeholder-only templates remain useful for portable tasks; literal
+    // paths are accepted so Browse-selected local files/dirs can be saved.
+    let _ = scan_placeholders(local_path.trim())?;
+    let _ = scan_placeholders(remote_path.trim())?;
     Ok(())
 }
 
@@ -368,6 +384,36 @@ mod tests {
     }
 
     #[test]
+    fn task_command_allows_newlines_and_tabs_but_rejects_other_controls() {
+        assert_eq!(
+            validate_task_command("echo one\necho two\r\necho three\t# tab").unwrap(),
+            "echo one\necho two\r\necho three\t# tab"
+        );
+        assert!(validate_task_command("   ").is_err());
+        assert!(validate_task_command("echo\0oops").is_err());
+        assert!(validate_task_command("echo\u{0007}bell").is_err());
+
+        let multiline = serde_json::json!({
+            "command": "echo one\necho two",
+            "workingDirectory": "",
+            "timeoutSeconds": 30,
+            "continueOnError": false
+        });
+        assert!(validate_step_config("command", CONFIG_VERSION_V1, &multiline).is_ok());
+
+        let bad_cwd = serde_json::json!({
+            "command": "true",
+            "workingDirectory": "/tmp/bad\npath",
+            "timeoutSeconds": 30,
+            "continueOnError": false
+        });
+        let error = validate_step_config("command", CONFIG_VERSION_V1, &bad_cwd).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("workingDirectory cannot contain control characters"));
+    }
+
+    #[test]
     fn parses_all_version_one_configs_and_rejects_unknown_versions() {
         let command = serde_json::json!({
             "command": "true",
@@ -411,29 +457,31 @@ mod tests {
     }
 
     #[test]
-    fn transfer_local_paths_must_be_placeholder_led_templates() {
+    fn transfer_local_paths_allow_literals_and_placeholder_templates() {
         for local_path in [
             "/Users/alice/archive.tar",
             r"C:\Users\alice\archive.tar",
             "relative/archive.tar",
             "/tmp/{{archive_name}}.tar",
+            "{{local_output_dir}}/{{archive_name}}.tar",
         ] {
             let config = serde_json::json!({
                 "remotePath": "/tmp/archive.tar",
                 "localPath": local_path,
                 "overwrite": true
             });
-            let error = validate_step_config("download", CONFIG_VERSION_V1, &config).unwrap_err();
-            assert!(error
-                .to_string()
-                .contains("localPath must begin with a runtime placeholder"));
+            assert!(
+                validate_step_config("download", CONFIG_VERSION_V1, &config).is_ok(),
+                "expected localPath {local_path:?} to be accepted"
+            );
         }
 
-        let portable = serde_json::json!({
-            "remotePath": "/tmp/{{archive_name}}.tar",
-            "localPath": "{{local_output_dir}}/{{archive_name}}.tar",
+        let empty = serde_json::json!({
+            "remotePath": "/tmp/archive.tar",
+            "localPath": "   ",
             "overwrite": true
         });
-        assert!(validate_step_config("download", CONFIG_VERSION_V1, &portable).is_ok());
+        let error = validate_step_config("download", CONFIG_VERSION_V1, &empty).unwrap_err();
+        assert!(error.to_string().contains("paths cannot be empty"));
     }
 }

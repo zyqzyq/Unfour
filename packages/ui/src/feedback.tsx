@@ -228,10 +228,37 @@ function redactNode(node: unknown, seen: WeakSet<object>): unknown {
 }
 
 export interface FeedbackErrorFallback {
-  /** Resolved through the i18n translator. Takes precedence over `message`. */
+  /** Resolved through the i18n translator. Used as the toast title when provided. */
   key?: string;
-  /** Explicit message; used when no `key` is provided. */
+  /** Explicit title; used when no `key` is provided. */
   message?: string;
+}
+
+/** Pull a human-readable detail string out of Error / string / Tauri AppError payloads. */
+export function extractErrorDetail(error: unknown): string | undefined {
+  if (error instanceof Error && error.message.trim()) {
+    return cleanErrorDetail(error.message);
+  }
+  if (typeof error === "string" && error.trim()) {
+    return cleanErrorDetail(error);
+  }
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    if (typeof record.message === "string" && record.message.trim()) {
+      return cleanErrorDetail(record.message);
+    }
+  }
+  return undefined;
+}
+
+function cleanErrorDetail(message: string) {
+  return message
+    .replace(
+      /^(validation|configuration|database|http|io|serialization|unsupported|read-only|timeout) error:\s*/i,
+      "",
+    )
+    .replace(/^not found:\s*/i, "")
+    .trim();
 }
 
 /**
@@ -239,6 +266,9 @@ export interface FeedbackErrorFallback {
  * to the user via the feedback toast and logs a redacted diagnostic. Intended
  * for react-query `onError` callbacks and promise `.catch` blocks so failures
  * are never silently swallowed.
+ *
+ * When a fallback title is provided, the underlying backend detail is shown as
+ * the toast description so users can see *why* the action failed.
  */
 // eslint-disable-next-line react-refresh/only-export-components -- hook paired with its provider; splitting would create a circular import
 export function useFeedbackErrorHandler() {
@@ -246,18 +276,20 @@ export function useFeedbackErrorHandler() {
   const { t } = useI18n();
   return React.useCallback(
     (error: unknown, fallback?: FeedbackErrorFallback) => {
-      const detail =
-        error instanceof Error
-          ? error.message
-          : typeof error === "string"
-            ? error
-            : undefined;
-      const message =
+      const detail = extractErrorDetail(error);
+      const title =
         fallback?.message ??
         (fallback?.key ? t(fallback.key) : undefined) ??
         detail ??
         t("feedback.error.default");
-      feedback.error(message);
+      const description =
+        detail && detail !== title
+          ? detail
+          : undefined;
+      feedback.error(title, {
+        description,
+        durationMs: description ? 8_000 : undefined,
+      });
       console.error("[unfour] operation failed:", redactForLog(error));
     },
     [feedback, t],

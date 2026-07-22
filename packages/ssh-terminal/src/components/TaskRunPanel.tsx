@@ -3,20 +3,23 @@ import type {
   SshTaskRun,
   SshTaskRunEvent,
 } from "@unfour/command-client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Button, StatusBadge, useI18n } from "@unfour/ui";
 import { CircleStop, FolderOpen, X } from "lucide-react";
+import { buildTaskRunTranscript } from "../model/task-run-transcript";
 
 const HEIGHT_KEY = "unfour.ssh.task-run-panel-height";
-const MIN_HEIGHT = 140;
-const MAX_HEIGHT = 480;
-const DEFAULT_HEIGHT = 250;
+const MIN_HEIGHT = 160;
+const MAX_HEIGHT = 560;
+const DEFAULT_HEIGHT = 300;
 
 export function TaskRunPanel({
   cancelling,
   events,
+  logLoading,
+  logText,
   onCancel,
   onClose,
   run,
@@ -24,6 +27,8 @@ export function TaskRunPanel({
 }: {
   cancelling: boolean;
   events: SshTaskRunEvent[];
+  logLoading?: boolean;
+  logText?: string | null;
   onCancel: () => void;
   onClose: () => void;
   run: SshTaskRun;
@@ -32,6 +37,7 @@ export function TaskRunPanel({
   const { t } = useI18n();
   const [height, setHeight] = useState(readStoredHeight);
   const dragRef = useRef<{ startY: number; startHeight: number } | null>(null);
+  const outputRef = useRef<HTMLPreElement | null>(null);
 
   useEffect(() => {
     localStorage.setItem(HEIGHT_KEY, String(height));
@@ -68,11 +74,48 @@ export function TaskRunPanel({
     if (event.kind === "step" && event.stepId) stepEvents.set(event.stepId, event);
     if (event.kind === "transfer" && event.stepId) transfers.set(event.stepId, event);
   }
-  const output = events.filter((event) => event.kind === "output" && event.data);
   const currentStep = [...stepEvents.values()]
     .reverse()
     .find((event) => event.status === "running");
-  const hasLiveOutput = output.length > 0 || stepEvents.size > 0;
+
+  const transcript = useMemo(
+    () =>
+      buildTaskRunTranscript(events, {
+        stepHeader: (position, name) => t("ssh.tasks.run.stepHeader", { position, name }),
+        stepDone: (stepStatus, detail) =>
+          detail
+            ? t("ssh.tasks.run.stepDoneWithDetail", {
+                status: t(`ssh.tasks.run.status.${stepStatus}`),
+                detail,
+              })
+            : t("ssh.tasks.run.stepDone", {
+                status: t(`ssh.tasks.run.status.${stepStatus}`),
+              }),
+        transfer: (direction, transferred, total, speed) => {
+          const directionLabel =
+            direction === "upload" || direction === "download"
+              ? t(`ssh.tasks.stepTypes.${direction}`)
+              : direction;
+          return t("ssh.tasks.run.transferProgress", {
+            direction: directionLabel,
+            transferred,
+            total,
+            speed,
+          });
+        },
+      }),
+    [events, t],
+  );
+
+  const hasLiveTranscript = transcript.length > 0;
+  const historyLog = (logText ?? "").trim();
+  const showHistoryLog = !hasLiveTranscript && !running && Boolean(historyLog);
+
+  useEffect(() => {
+    const node = outputRef.current;
+    if (!node) return;
+    node.scrollTop = node.scrollHeight;
+  }, [transcript, historyLog, logLoading]);
 
   return (
     <section
@@ -134,7 +177,7 @@ export function TaskRunPanel({
             .map((step) => {
               const event = stepEvents.get(step.id);
               const transfer = transfers.get(step.id);
-                  const stepStatus = event?.status ?? "pending";
+              const stepStatus = event?.status ?? "pending";
               const progress = transfer?.totalBytes
                 ? Math.min(
                     100,
@@ -182,21 +225,40 @@ export function TaskRunPanel({
               );
             })}
         </ol>
-        <pre className="min-h-0 overflow-auto whitespace-pre-wrap break-words p-2 font-mono text-[11px] leading-5 text-[var(--u-color-text)]">
-          {output.length
-            ? output.map((event, index) => (
-                <span
-                  className={event.stream === "stderr" ? "text-[var(--u-color-danger)]" : ""}
-                  key={`${event.createdAt}-${index}`}
-                >
-                  {event.data}
-                </span>
-              ))
-            : run.errorMessage
-              ? run.errorMessage
-              : hasLiveOutput
-                ? t("ssh.tasks.run.waitingForOutput")
-                : t("ssh.tasks.run.historyReplayHint")}
+        <pre
+          className="min-h-0 overflow-auto whitespace-pre-wrap break-words p-2 font-mono text-[11px] leading-5 text-[var(--u-color-text)]"
+          ref={outputRef}
+        >
+          {hasLiveTranscript ? (
+            transcript.map((line) => (
+              <span
+                className={
+                  line.kind === "header"
+                    ? "mt-1 block font-semibold text-[var(--u-color-text-muted)] first:mt-0"
+                    : line.kind === "meta" || line.kind === "transfer"
+                      ? "block text-[var(--u-color-text-soft)]"
+                      : line.kind === "error" || line.stream === "stderr"
+                        ? "text-[var(--u-color-danger)]"
+                        : undefined
+                }
+                key={line.key}
+              >
+                {line.kind === "header" || line.kind === "meta" || line.kind === "transfer"
+                  ? `${line.text}\n`
+                  : line.text}
+              </span>
+            ))
+          ) : logLoading ? (
+            t("ssh.tasks.run.loadingLog")
+          ) : showHistoryLog ? (
+            historyLog
+          ) : run.errorMessage ? (
+            <span className="text-[var(--u-color-danger)]">{run.errorMessage}</span>
+          ) : running || stepEvents.size > 0 ? (
+            t("ssh.tasks.run.waitingForOutput")
+          ) : (
+            t("ssh.tasks.run.historyReplayHint")
+          )}
         </pre>
       </div>
     </section>

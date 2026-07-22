@@ -15,6 +15,7 @@ import {
   getSshTask,
   listSshTaskRuns,
   listSshTasks,
+  readSshTaskRunLog,
   registerSshTaskRunChannel,
   runSshTask,
   saveSshTask,
@@ -87,6 +88,12 @@ export function SshTasksPage({
   const [activeRun, setActiveRun] = useState<SshTaskRun | null>(null);
   const [activeRunTask, setActiveRunTask] = useState<SshTaskDetail | null>(null);
   const [eventsByRun, setEventsByRun] = useState<Record<string, SshTaskRunEvent[]>>({});
+  const [historyLogByRun, setHistoryLogByRun] = useState<Record<string, string>>({});
+  const [historyLogLoading, setHistoryLogLoading] = useState(false);
+  const eventsByRunRef = useRef(eventsByRun);
+  const historyLogByRunRef = useRef(historyLogByRun);
+  eventsByRunRef.current = eventsByRun;
+  historyLogByRunRef.current = historyLogByRun;
   const nextNewTabIdRef = useRef(0);
 
   const tasksQuery = useQuery({
@@ -201,6 +208,7 @@ export function SshTasksPage({
     mutationFn: (taskId: string) => clearSshTaskRuns({ workspaceId, taskId }),
     onSuccess: (_, taskId) => {
       setClearTaskId(null);
+      setHistoryLogByRun({});
       queryClient.invalidateQueries({
         queryKey: ["ssh-task-runs", workspaceId, taskId],
       });
@@ -313,6 +321,26 @@ export function SshTasksPage({
         });
         setActiveRun(run);
         setActiveRunTask(detail);
+
+        const hasLiveEvents = (eventsByRunRef.current[run.id]?.length ?? 0) > 0;
+        if (hasLiveEvents || historyLogByRunRef.current[run.id] !== undefined) {
+          return;
+        }
+
+        setHistoryLogLoading(true);
+        try {
+          const logText = await readSshTaskRunLog(workspaceId, run.id);
+          setHistoryLogByRun((current) =>
+            current[run.id] === undefined ? { ...current, [run.id]: logText } : current,
+          );
+        } catch (error) {
+          handleError(error, { key: "feedback.ssh.taskLogLoadFailed" });
+          setHistoryLogByRun((current) =>
+            current[run.id] === undefined ? { ...current, [run.id]: "" } : current,
+          );
+        } finally {
+          setHistoryLogLoading(false);
+        }
       } catch (error) {
         handleError(error, { key: "feedback.ssh.taskLoadFailed" });
       }
@@ -532,6 +560,8 @@ export function SshTasksPage({
           <TaskRunPanel
             cancelling={cancelMutation.isPending}
             events={eventsByRun[activeRun.id] ?? []}
+            logLoading={historyLogLoading && historyLogByRun[activeRun.id] === undefined}
+            logText={historyLogByRun[activeRun.id] ?? null}
             onCancel={() => cancelMutation.mutate()}
             onClose={() => {
               setActiveRun(null);

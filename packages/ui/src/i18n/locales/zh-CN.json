@@ -436,6 +436,7 @@
       "taskDuplicateFailed": "复制 SSH Task 失败",
       "taskHistoryClearFailed": "清理 SSH Task 历史失败",
       "taskLoadFailed": "加载 SSH Task 失败",
+      "taskLogLoadFailed": "加载 SSH Task 日志失败",
       "taskSaveFailed": "保存 SSH Task 失败"
     },
     "database": {
@@ -1003,7 +1004,8 @@
         "inputHint": "在命令或路径中使用 {{name}}，运行时会收集这些输入。",
         "insertStep": "插入步骤",
         "localPath": "本地路径",
-        "localPathPlaceholder": "C:\\path\\to\\file 或 /local/path",
+        "localPathHint": "可浏览选择本机路径；也可用 {{local_file}} / {{local_output_dir}}，在运行时再填写。",
+        "localPathPlaceholder": "C:\\path\\to\\file、/local/path 或 {{local_file}}",
         "name": "名称",
         "nameRequired": "请先填写 Task 名称再保存或运行。",
         "noDefaultConnection": "不设置默认连接",
@@ -1054,9 +1056,10 @@
         "currentStep": "当前：{name}",
         "disabled": "已禁用",
         "exitCode": "退出码 {code}",
-        "historyReplayHint": "此次历史运行没有实时步骤输出。可打开日志文件查看详情。",
+        "historyReplayHint": "此次历史运行没有可显示的输出。",
         "host": "Host",
         "inputs": "本次运行输入",
+        "loadingLog": "正在加载日志...",
         "missingInputs": "请填写所有检测到的输入项后再运行。",
         "noInputs": "此 Task 没有临时输入项。",
         "openLog": "打开日志",
@@ -1070,9 +1073,13 @@
           "running": "运行中",
           "success": "成功"
         },
+        "stepDone": "↳ {status}",
+        "stepDoneWithDetail": "↳ {status} · {detail}",
+        "stepHeader": "── 步骤 {position}: {name} ──",
         "steps": "步骤列表",
         "taskName": "Task",
         "title": "运行 SSH Task",
+        "transferProgress": "{direction}: {transferred} / {total} ({speed})",
         "waitingForOutput": "等待 stdout 或 stderr 输出..."
       },
       "stepTypes": {

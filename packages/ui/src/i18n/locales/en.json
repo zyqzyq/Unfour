@@ -437,6 +437,7 @@
       "taskDuplicateFailed": "Failed to duplicate SSH task",
       "taskHistoryClearFailed": "Failed to clear SSH task history",
       "taskLoadFailed": "Failed to load SSH task",
+      "taskLogLoadFailed": "Failed to load SSH task log",
       "taskSaveFailed": "Failed to save SSH task"
     },
     "database": {
@@ -1005,7 +1006,8 @@
         "inputHint": "Use {{name}} in commands or paths to collect values when the task runs.",
         "insertStep": "Insert step",
         "localPath": "Local path",
-        "localPathPlaceholder": "C:\\path\\to\\file or /local/path",
+        "localPathHint": "Browse a local path, or use {{local_file}} / {{local_output_dir}} for values filled when the task runs.",
+        "localPathPlaceholder": "C:\\path\\to\\file, /local/path, or {{local_file}}",
         "name": "Name",
         "nameRequired": "Enter a task name before saving or running.",
         "noDefaultConnection": "No default connection",
@@ -1056,9 +1058,10 @@
         "currentStep": "Current: {name}",
         "disabled": "Disabled",
         "exitCode": "exit {code}",
-        "historyReplayHint": "Live step output is unavailable for this past run. Open the log file for details.",
+        "historyReplayHint": "No output is available for this past run.",
         "host": "Host",
         "inputs": "Inputs for this run",
+        "loadingLog": "Loading log...",
         "missingInputs": "Fill in every detected input before running.",
         "noInputs": "This task has no temporary inputs.",
         "openLog": "Open log",
@@ -1072,9 +1075,13 @@
           "running": "Running",
           "success": "Success"
         },
+        "stepDone": "↳ {status}",
+        "stepDoneWithDetail": "↳ {status} · {detail}",
+        "stepHeader": "── Step {position}: {name} ──",
         "steps": "Steps",
         "taskName": "Task",
         "title": "Run SSH Task",
+        "transferProgress": "{direction}: {transferred} / {total} ({speed})",
         "waitingForOutput": "Waiting for stdout or stderr..."
       },
       "stepTypes": {

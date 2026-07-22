@@ -82,6 +82,9 @@ export function LocalPathField({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      <span className="text-[10px] leading-4 text-[var(--u-color-text-soft)]">
+        {t("ssh.tasks.editor.localPathHint")}
+      </span>
     </label>
   );
 }

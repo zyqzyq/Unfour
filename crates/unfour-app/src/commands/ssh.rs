@@ -95,6 +95,18 @@ pub async fn ssh_task_runs_list(
 }
 
 #[tauri::command]
+pub async fn ssh_task_run_log_read(
+    workspace_id: String,
+    run_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<String> {
+    state
+        .command_bus
+        .read_ssh_task_run_log(workspace_id, run_id)
+        .await
+}
+
+#[tauri::command]
 pub async fn ssh_task_runs_clear(
     input: SshTaskCleanupInput,
     state: State<'_, AppState>,

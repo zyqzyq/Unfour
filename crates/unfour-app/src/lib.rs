@@ -494,6 +494,7 @@ macro_rules! generate_handlers {
             unfour_app::commands::ssh_task_get,
             unfour_app::commands::ssh_task_run_cancel,
             unfour_app::commands::ssh_task_run,
+            unfour_app::commands::ssh_task_run_log_read,
             unfour_app::commands::ssh_task_runs_clear,
             unfour_app::commands::ssh_task_runs_list,
             unfour_app::commands::ssh_task_save,
