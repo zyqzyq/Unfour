@@ -23,25 +23,31 @@ import { DatabaseErrorDetails } from "./DatabaseErrorDetails";
 import { TableDataGrid } from "./TableDataGrid";
 
 export function QueryResultPanel({
+  activeResultIndex,
   activeTab,
   error,
   history,
   isPending,
   onClearHistory,
   onSelectHistory,
+  onSelectResultSet,
   onSelectTab,
   pendingConfirmation,
   result,
+  results,
 }: {
+  activeResultIndex: number;
   activeTab: DatabaseResultTab;
   error: unknown;
   history: SqlHistoryEntry[];
   isPending: boolean;
   onClearHistory: () => void;
   onSelectHistory: (entry: SqlHistoryEntry) => void;
+  onSelectResultSet: (index: number) => void;
   onSelectTab: (tab: DatabaseResultTab) => void;
   pendingConfirmation: boolean;
   result: DatabaseQueryResult | null;
+  results: DatabaseQueryResult[];
 }) {
   const { t } = useI18n();
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
@@ -97,10 +103,14 @@ export function QueryResultPanel({
         className="h-[30px]"
         onSelect={(tabId) => onSelectTab(tabId as DatabaseResultTab)}
         tabs={[
-          { id: "results", title: "Results" },
-          { id: "messages", title: "Messages" },
-          { id: "logs", title: "Logs" },
-          { id: "history", meta: <span className="text-[11px] text-[var(--u-color-text-soft)]">{history.length}</span>, title: t("database.history.tab") },
+          { id: "results", title: t("database.result.tabResults") },
+          { id: "messages", title: t("database.result.tabMessages") },
+          { id: "logs", title: t("database.result.tabLogs") },
+          {
+            id: "history",
+            meta: <span className="text-[11px] text-[var(--u-color-text-soft)]">{history.length}</span>,
+            title: t("database.history.tab"),
+          },
         ]}
       />
       <Toolbar className="h-8">
@@ -117,6 +127,11 @@ export function QueryResultPanel({
                 ? t("database.result.executionFailed")
                 : t("database.result.noExecution")}
           </span>
+          {results.length > 1 ? (
+            <span className="text-[12px] text-[var(--u-color-text-soft)]">
+              {t("database.result.setCount", { count: results.length })}
+            </span>
+          ) : null}
         </ToolbarGroup>
         <ToolbarGroup>
           {activeTab === "history" ? (
@@ -128,7 +143,11 @@ export function QueryResultPanel({
             <>
               <Button disabled={!result} onClick={copyTsv} size="sm" type="button" variant="outline">
                 <Clipboard size={13} />
-                {copyStatus === "copied" ? "Copied" : copyStatus === "failed" ? "Copy failed" : "Copy result"}
+                {copyStatus === "copied"
+                  ? t("database.result.copied")
+                  : copyStatus === "failed"
+                    ? t("database.result.copyFailed")
+                    : t("database.result.copy")}
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -139,11 +158,11 @@ export function QueryResultPanel({
                 <DropdownMenuContent>
                   <DropdownMenuItem disabled={!result} onSelect={exportCsv}>
                     <FileDown size={13} />
-                    Export CSV
+                    {t("database.result.exportCsv")}
                   </DropdownMenuItem>
                   <DropdownMenuItem disabled={!result} onSelect={exportJson}>
                     <FileJson size={13} />
-                    Export JSON
+                    {t("database.result.exportJson")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -151,9 +170,25 @@ export function QueryResultPanel({
           )}
         </ToolbarGroup>
       </Toolbar>
-      {activeTab === "results" && renderResults({ error, isPending, pendingConfirmation, result })}
-      {activeTab === "messages" && <Messages result={result} />}
-      {activeTab === "logs" && <Logs error={error} isPending={isPending} result={result} />}
+      {activeTab === "results" && results.length > 1 ? (
+        <Tabs
+          activeId={`result-${activeResultIndex}`}
+          className="h-[28px] border-b border-[var(--u-color-border)]"
+          onSelect={(tabId) => {
+            const index = Number(String(tabId).replace("result-", ""));
+            if (Number.isFinite(index)) {
+              onSelectResultSet(index);
+            }
+          }}
+          tabs={results.map((item, index) => ({
+            id: `result-${index}`,
+            title: resultSetTitle(item, index, t),
+          }))}
+        />
+      ) : null}
+      {activeTab === "results" && renderResults({ error, isPending, pendingConfirmation, result, t })}
+      {activeTab === "messages" && <Messages results={results} result={result} t={t} />}
+      {activeTab === "logs" && <Logs error={error} isPending={isPending} results={results} result={result} t={t} />}
       {activeTab === "history" && <History entries={history} onSelect={onSelectHistory} />}
     </section>
   );
@@ -169,9 +204,20 @@ function isCancelledError(error: unknown): error is { code: string; message?: st
   );
 }
 
-function cancelledErrorMessage(error: unknown): string {
+function cancelledErrorMessage(error: unknown, fallback: string): string {
   const message = (error as { message?: unknown }).message;
-  return typeof message === "string" && message.length > 0 ? message : "Query cancelled";
+  return typeof message === "string" && message.length > 0 ? message : fallback;
+}
+
+function resultSetTitle(
+  result: DatabaseQueryResult,
+  index: number,
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  if (result.columns.length > 0) {
+    return t("database.result.setLabelRows", { index: index + 1, rows: result.rows.length });
+  }
+  return t("database.result.setLabelAffected", { index: index + 1, rows: result.affectedRows });
 }
 
 function renderResults({
@@ -179,11 +225,13 @@ function renderResults({
   isPending,
   pendingConfirmation,
   result,
+  t,
 }: {
   error: unknown;
   isPending: boolean;
   pendingConfirmation: boolean;
   result: DatabaseQueryResult | null;
+  t: ReturnType<typeof useI18n>["t"];
 }) {
   if (error) {
     if (isCancelledError(error)) {
@@ -195,7 +243,7 @@ function renderResults({
           role="status"
         >
           <Info size={16} />
-          <span>{cancelledErrorMessage(error)}</span>
+          <span>{cancelledErrorMessage(error, t("database.query.cancelled"))}</span>
         </div>
       );
     }
@@ -207,17 +255,17 @@ function renderResults({
   }
 
   if (isPending) {
-    return <LoadingState className="m-2 min-h-0 flex-1">Running query...</LoadingState>;
+    return <LoadingState className="m-2 min-h-0 flex-1">{t("database.result.running")}</LoadingState>;
   }
 
   if (!result) {
-    return <EmptyState className="m-2 min-h-0 flex-1">Query results will appear here.</EmptyState>;
+    return <EmptyState className="m-2 min-h-0 flex-1">{t("database.result.empty")}</EmptyState>;
   }
 
   if (result.columns.length === 0) {
     return (
       <EmptyState className="m-2 min-h-0 flex-1">
-        {result.affectedRows} rows affected in {result.durationMs}ms.
+        {t("database.result.affectedRows", { rows: result.affectedRows, durationMs: result.durationMs })}
       </EmptyState>
     );
   }
@@ -225,19 +273,41 @@ function renderResults({
   return <TableDataGrid result={result} />;
 }
 
-function Messages({ result }: { result: DatabaseQueryResult | null }) {
+function Messages({
+  result,
+  results,
+  t,
+}: {
+  result: DatabaseQueryResult | null;
+  results: DatabaseQueryResult[];
+  t: ReturnType<typeof useI18n>["t"];
+}) {
+  if (!results.length && !result) {
+    return (
+      <div className="min-h-0 flex-1 overflow-auto p-2 text-[12px] text-[var(--u-color-text-muted)]">
+        {t("database.result.noMessages")}
+      </div>
+    );
+  }
+
+  const items = results.length ? results : result ? [result] : [];
   return (
     <div className="min-h-0 flex-1 overflow-auto p-2 text-[12px] text-[var(--u-color-text-muted)]">
-      {result ? (
-        <div className="space-y-1">
-          <div>{result.affectedRows} affected rows.</div>
-          <div>Safety: {result.safety.classification}.</div>
-          {result.safety.message ? <div>{result.safety.message}</div> : null}
-          {result.columns.length > 0 ? <div>Read queries use the backend default limit unless the SQL includes an explicit limit.</div> : null}
-        </div>
-      ) : (
-        "No messages."
-      )}
+      <div className="space-y-3">
+        {items.map((item, index) => (
+          <div className="space-y-1" key={`message-${index}`}>
+            {items.length > 1 ? (
+              <div className="font-medium text-[var(--u-color-text)]">
+                {t("database.result.setHeading", { index: index + 1 })}
+              </div>
+            ) : null}
+            <div>{t("database.result.affectedRowsShort", { rows: item.affectedRows })}</div>
+            <div>{t("database.result.safety", { classification: item.safety.classification })}</div>
+            {item.safety.message ? <div>{item.safety.message}</div> : null}
+            {item.columns.length > 0 ? <div>{t("database.result.limitHint")}</div> : null}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -246,21 +316,31 @@ function Logs({
   error,
   isPending,
   result,
+  results,
+  t,
 }: {
   error: unknown;
   isPending: boolean;
   result: DatabaseQueryResult | null;
+  results: DatabaseQueryResult[];
+  t: ReturnType<typeof useI18n>["t"];
 }) {
   const description = error ? describeDatabaseError(error) : null;
+  const items = results.length ? results : result ? [result] : [];
   return (
     <pre className="min-h-0 flex-1 overflow-auto p-2 font-mono text-[12px] text-[var(--u-color-text-muted)]">
       {isPending
-        ? "Executing SQL..."
+        ? t("database.result.executingLog")
         : description
           ? description.technicalDetail ?? description.message
-          : result
-            ? `duration=${result.durationMs}ms rows=${result.rows.length} affected=${result.affectedRows} classification=${result.safety.classification}`
-            : "No logs."}
+          : items.length
+            ? items
+                .map(
+                  (item, index) =>
+                    `#${index + 1} duration=${item.durationMs}ms rows=${item.rows.length} affected=${item.affectedRows} classification=${item.safety.classification}`,
+                )
+                .join("\n")
+            : t("database.result.noLogs")}
     </pre>
   );
 }

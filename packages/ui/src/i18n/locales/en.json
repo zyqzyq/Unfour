@@ -463,6 +463,9 @@
       "refreshModule": "Refresh database module",
       "refreshSchema": "Refresh Schema",
       "run": "Run",
+      "runAll": "Run All",
+      "runCurrent": "Run Current",
+      "runMenu": "Run options",
       "savedSql": "Saved",
       "saveSql": "Save SQL",
       "stopSql": "Stop SQL execution"
@@ -619,12 +622,33 @@
       "saving": "Saving"
     },
     "result": {
+      "affectedRows": "{rows} rows affected in {durationMs}ms.",
+      "affectedRowsShort": "{rows} affected rows.",
+      "copied": "Copied",
+      "copy": "Copy result",
+      "copyFailed": "Copy failed",
+      "empty": "Query results will appear here.",
       "executionFailed": "Execution failed",
+      "executingLog": "Executing SQL...",
       "export": "Export",
+      "exportCsv": "Export CSV",
+      "exportJson": "Export JSON",
+      "limitHint": "Read queries use the backend default limit unless the SQL includes an explicit limit.",
       "noExecution": "No execution yet",
+      "noLogs": "No logs.",
+      "noMessages": "No messages.",
       "rowsInMs": "{rows} rows in {durationMs}ms",
+      "running": "Running query...",
+      "safety": "Safety: {classification}.",
+      "setCount": "{count} result sets",
+      "setHeading": "Result {index}",
+      "setLabelAffected": "Result {index} · {rows} affected",
+      "setLabelRows": "Result {index} · {rows} rows",
       "statusFailed": "Failed",
-      "statusOk": "OK"
+      "statusOk": "OK",
+      "tabLogs": "Logs",
+      "tabMessages": "Messages",
+      "tabResults": "Results"
     },
     "sidebar": {
       "connections": "Connections"

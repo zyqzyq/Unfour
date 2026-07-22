@@ -1,4 +1,4 @@
-import { type Dispatch, type FormEvent, type SetStateAction, useEffect, useRef } from "react";
+import { type Dispatch, type FormEvent, type SetStateAction, useEffect, useRef, useState } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import {
   getDatabaseSchema,
@@ -7,6 +7,7 @@ import {
 import type {
   DatabaseConnection,
   DatabaseConnectionInput,
+  DatabaseQueryResult,
   DatabaseSchema,
   DatabaseTable,
   DatabaseTestResult,
@@ -16,19 +17,21 @@ import { databaseTableTabId, useDatabaseTabs } from "./useDatabaseTabs";
 import { useDatabaseQueryWorkspaceActions } from "./useDatabaseQueryWorkspaceActions";
 import { useQueryHistory } from "./useQueryHistory";
 import { useSavedSql } from "./useSavedSql";
-import { useSqlExecution } from "./useSqlExecution";
 import { useTableData } from "./useTableData";
 import { useTableRowMutations } from "./useTableRowMutations";
+import { resolveExecutableStatements } from "../model/sql-statements";
+import { executeSqlBatch, type SqlBatchState } from "../model/run-sql-batch";
 import type {
   DatabaseConnectionSessionState,
   DatabaseConnectionStatus,
   DatabaseQueryWorkspaceTab,
   DatabaseTableWorkspaceTab,
+  RunSqlOptions,
   SqlHistoryEntry,
   TableQueryState,
 } from "../model/types";
 import { emptyTableQuery } from "../model/types";
-import { describeDatabaseError, formatDatabaseError, isConfirmationRequired } from "../result-utils";
+import { describeDatabaseError, formatDatabaseError } from "../result-utils";
 
 const DEFAULT_PREVIEW_PAGE_SIZE = 100;
 
@@ -127,74 +130,8 @@ export function useDatabaseWorkspaceController({
   const cancelledRef = useRef(false);
   const executingRef = useRef<{ connectionId: string | null; sql: string; tabId: string } | null>(null);
   const browsingRef = useRef<{ connectionId: string; table: DatabaseTable; tabId: string } | null>(null);
-
-  const executeMutation = useSqlExecution({
-    connectionId: activeQueryTab?.connectionId ?? null,
-    onConfirmationRequired: (required) => {
-      const tabId = executingRef.current?.tabId ?? activeQueryTab?.id;
-      if (tabId) {
-        databaseTabs.updateQueryTab(tabId, { pendingConfirmation: required });
-      }
-    },
-    onError: (error) => {
-      const execution = executingRef.current;
-      if (execution) {
-        databaseTabs.updateQueryTab(execution.tabId, {
-          error,
-          loading: false,
-          resultTab: "results",
-        });
-      }
-      if (isConfirmationRequired(error)) {
-        return;
-      }
-
-      recordFailedHistory(error, execution);
-      const description = describeDatabaseError(error);
-      if (execution?.connectionId && ["connection", "network", "permission"].includes(description.category)) {
-        setConnectionState(execution.connectionId, {
-          message: description.message,
-          status: "failed",
-        });
-      }
-    },
-    onExecuteStart: () => {
-      cancelledRef.current = false;
-      const execution = executingRef.current;
-      if (execution) {
-        databaseTabs.updateQueryTab(execution.tabId, {
-          error: null,
-          loading: true,
-          resultTab: "results",
-        });
-      }
-    },
-    onSuccess: (result) => {
-      if (cancelledRef.current) {
-        return;
-      }
-      const execution = executingRef.current;
-      if (execution) {
-        databaseTabs.updateQueryTab(execution.tabId, {
-          error: null,
-          loading: false,
-          pendingConfirmation: false,
-          result,
-          resultTab: "results",
-        });
-      }
-      if (execution?.connectionId) {
-        setConnectionState(execution.connectionId, {
-          message: t("database.query.completed", {
-            durationMs: result.durationMs,
-          }),
-          status: "connected",
-        });
-      }
-      recordSuccessfulHistory(result, execution);
-    },
-    workspaceId,
-  });
+  const batchRef = useRef<SqlBatchState | null>(null);
+  const [sqlRunning, setSqlRunning] = useState(false);
 
   const browseMutation = useTableData({
     onBrowseStart: () => {
@@ -474,7 +411,6 @@ export function useDatabaseWorkspaceController({
       tableQuery: effectiveQuery,
     });
     browsingRef.current = { connectionId, table, tabId };
-    executeMutation.reset();
     browseMutation.reset();
     browseMutation.mutate({
       connectionId,
@@ -549,101 +485,6 @@ export function useDatabaseWorkspaceController({
     }
   }
 
-  function runSql(overrideSql?: string) {
-    executeMutation.reset();
-    browseMutation.reset();
-
-    if (!activeQueryTab) {
-      return;
-    }
-
-    if (!activeQueryTab.connectionId) {
-      databaseTabs.updateQueryTab(activeQueryTab.id, {
-        error: {
-          code: "VALIDATION_ERROR",
-          message: t("database.errors.selectBeforeRun"),
-        },
-        resultTab: "results",
-      });
-      return;
-    }
-
-    // Run the highlighted statement when the editor reports a non-empty
-    // selection; otherwise fall back to the full editor contents.
-    const effectiveSql = overrideSql && overrideSql.trim() ? overrideSql : activeQueryTab.sql;
-    if (!effectiveSql.trim()) {
-      databaseTabs.updateQueryTab(activeQueryTab.id, {
-        error: {
-          code: "VALIDATION_ERROR",
-          message: t("database.errors.sqlEmpty"),
-        },
-        resultTab: "results",
-      });
-      return;
-    }
-
-    executingRef.current = {
-      connectionId: activeQueryTab.connectionId,
-      sql: effectiveSql,
-      tabId: activeQueryTab.id,
-    };
-    databaseTabs.updateQueryTab(activeQueryTab.id, { error: null, resultTab: "results" });
-    executeMutation.mutate({
-      confirmMutation: activeQueryTab.pendingConfirmation,
-      sql: effectiveSql,
-      catalog: activeQueryTab.catalog,
-      schema: activeQueryTab.schema,
-    });
-  }
-
-  function clearSql() {
-    if (!activeQueryTab) {
-      return;
-    }
-    databaseTabs.updateQueryTab(activeQueryTab.id, {
-      error: null,
-      pendingConfirmation: false,
-      sql: "",
-    });
-    executeMutation.reset();
-  }
-
-  // Stop a running query/preview. The mutation is abandoned so the UI is
-  // responsive immediately; the statement keeps running server-side until it
-  // finishes or hits its timeout, but its late result is ignored.
-  function stopQuery() {
-    const wasRunning = executeMutation.isPending || browseMutation.isPending;
-    if (!wasRunning) {
-      return;
-    }
-    cancelledRef.current = true;
-    executeMutation.reset();
-    browseMutation.reset();
-    const cancelledError = { code: "QUERY_CANCELLED", message: t("database.query.cancelled") };
-    if (executingRef.current) {
-      databaseTabs.updateQueryTab(executingRef.current.tabId, {
-        error: cancelledError,
-        loading: false,
-        pendingConfirmation: false,
-        resultTab: "results",
-      });
-    }
-    if (browsingRef.current) {
-      databaseTabs.updateTableTab(browsingRef.current.tabId, {
-        error: cancelledError,
-        loading: false,
-      });
-    }
-    const connectionId = executingRef.current?.connectionId ?? browsingRef.current?.connectionId;
-    if (connectionId) {
-      setConnectionState(connectionId, {
-        message: t("database.query.cancelled"),
-        status: "connected",
-      });
-    }
-  }
-
-
   const {
     clearQueryHistory,
     deleteSavedSql,
@@ -678,6 +519,236 @@ export function useDatabaseWorkspaceController({
     setSelectedTable,
     t,
   });
+
+  function normalizeRunOptions(options?: string | RunSqlOptions): RunSqlOptions {
+    if (typeof options === "string") {
+      return { mode: "current", sql: options };
+    }
+    return options ?? { mode: "current" };
+  }
+
+  function applyQueryResults(tabId: string, collected: DatabaseQueryResult[], error: unknown = null) {
+    const activeResultIndex = collected.length > 0 ? collected.length - 1 : 0;
+    databaseTabs.updateQueryTab(tabId, {
+      activeResultIndex,
+      error,
+      loading: false,
+      result: collected[activeResultIndex] ?? null,
+      results: collected,
+      resultTab: "results",
+    });
+  }
+
+  async function runSqlBatch(batch: SqlBatchState, confirmMutation: boolean) {
+    cancelledRef.current = false;
+    setSqlRunning(true);
+    batchRef.current = batch;
+    databaseTabs.updateQueryTab(batch.tabId, {
+      error: null,
+      loading: true,
+      pendingConfirmation: false,
+      resultTab: "results",
+    });
+
+    try {
+      const outcome = await executeSqlBatch(batch, confirmMutation, {
+        cancelled: () => cancelledRef.current,
+        onConfirmationRequired: (paused, collected, error) => {
+          batchRef.current = paused;
+          executingRef.current = {
+            connectionId: paused.connectionId,
+            sql: paused.statements[paused.nextIndex] ?? "",
+            tabId: paused.tabId,
+          };
+          databaseTabs.updateQueryTab(paused.tabId, {
+            activeResultIndex: collected.length > 0 ? collected.length - 1 : 0,
+            error,
+            loading: false,
+            pendingConfirmation: true,
+            result: collected[collected.length - 1] ?? null,
+            results: collected,
+            resultTab: "results",
+          });
+        },
+        onError: (current, collected, sql, error) => {
+          executingRef.current = {
+            connectionId: current.connectionId,
+            sql,
+            tabId: current.tabId,
+          };
+          applyQueryResults(current.tabId, collected, error);
+          databaseTabs.updateQueryTab(current.tabId, { pendingConfirmation: false });
+          recordFailedHistory(error, {
+            connectionId: current.connectionId,
+            sql,
+          });
+          const description = describeDatabaseError(error);
+          if (["connection", "network", "permission"].includes(description.category)) {
+            setConnectionState(current.connectionId, {
+              message: description.message,
+              status: "failed",
+            });
+          }
+          batchRef.current = null;
+        },
+        onStatementSuccess: (current, collected, sql, result) => {
+          executingRef.current = {
+            connectionId: current.connectionId,
+            sql,
+            tabId: current.tabId,
+          };
+          batchRef.current = { ...current, collected, nextIndex: current.nextIndex + 1 };
+          applyQueryResults(current.tabId, collected);
+          recordSuccessfulHistory(result, {
+            connectionId: current.connectionId,
+            sql,
+          });
+          setConnectionState(current.connectionId, {
+            message: t("database.query.completed", { durationMs: result.durationMs }),
+            status: "connected",
+          });
+        },
+        onSuccess: (current, collected) => {
+          applyQueryResults(current.tabId, collected);
+          databaseTabs.updateQueryTab(current.tabId, { pendingConfirmation: false });
+          batchRef.current = null;
+        },
+        workspaceId,
+      });
+
+      if (outcome === "cancelled") {
+        // stopQuery already wrote the cancelled error onto the tab.
+        return;
+      }
+    } finally {
+      setSqlRunning(false);
+    }
+  }
+
+  function runSql(options?: string | RunSqlOptions) {
+    browseMutation.reset();
+
+    if (!activeQueryTab) {
+      return;
+    }
+
+    const request = normalizeRunOptions(options);
+    const pendingBatch =
+      activeQueryTab.pendingConfirmation &&
+      batchRef.current &&
+      batchRef.current.tabId === activeQueryTab.id
+        ? batchRef.current
+        : null;
+
+    if ((request.resume || activeQueryTab.pendingConfirmation) && pendingBatch) {
+      void runSqlBatch(pendingBatch, true);
+      return;
+    }
+
+    if (!activeQueryTab.connectionId) {
+      databaseTabs.updateQueryTab(activeQueryTab.id, {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: t("database.errors.selectBeforeRun"),
+        },
+        resultTab: "results",
+      });
+      return;
+    }
+
+    const statements = resolveExecutableStatements(activeQueryTab.sql, {
+      mode: request.mode ?? "current",
+      sql: request.sql,
+      cursorOffset: request.cursorOffset,
+    });
+
+    if (!statements.length) {
+      databaseTabs.updateQueryTab(activeQueryTab.id, {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: t("database.errors.sqlEmpty"),
+        },
+        resultTab: "results",
+      });
+      return;
+    }
+
+    void runSqlBatch(
+      {
+        catalog: activeQueryTab.catalog,
+        collected: [],
+        connectionId: activeQueryTab.connectionId,
+        nextIndex: 0,
+        schema: activeQueryTab.schema,
+        statements,
+        tabId: activeQueryTab.id,
+      },
+      false,
+    );
+  }
+
+  function clearSql() {
+    if (!activeQueryTab) {
+      return;
+    }
+    batchRef.current = null;
+    databaseTabs.updateQueryTab(activeQueryTab.id, {
+      activeResultIndex: 0,
+      error: null,
+      pendingConfirmation: false,
+      result: null,
+      results: [],
+      sql: "",
+    });
+  }
+
+  function selectQueryResult(index: number) {
+    if (!activeQueryTab) {
+      return;
+    }
+    const result = activeQueryTab.results[index];
+    if (!result) {
+      return;
+    }
+    databaseTabs.updateQueryTab(activeQueryTab.id, {
+      activeResultIndex: index,
+      result,
+    });
+  }
+
+  // Stop a running query/preview. The in-flight statement keeps running
+  // server-side until it finishes or hits its timeout, but late results are ignored.
+  function stopQuery() {
+    const wasRunning = sqlRunning || browseMutation.isPending;
+    if (!wasRunning) {
+      return;
+    }
+    cancelledRef.current = true;
+    browseMutation.reset();
+    setSqlRunning(false);
+    const cancelledError = { code: "QUERY_CANCELLED", message: t("database.query.cancelled") };
+    if (executingRef.current) {
+      databaseTabs.updateQueryTab(executingRef.current.tabId, {
+        error: cancelledError,
+        loading: false,
+        pendingConfirmation: false,
+        resultTab: "results",
+      });
+    }
+    if (browsingRef.current) {
+      databaseTabs.updateTableTab(browsingRef.current.tabId, {
+        error: cancelledError,
+        loading: false,
+      });
+    }
+    const connectionId = executingRef.current?.connectionId ?? browsingRef.current?.connectionId;
+    if (connectionId) {
+      setConnectionState(connectionId, {
+        message: t("database.query.cancelled"),
+        status: "connected",
+      });
+    }
+  }
 
   function refreshActiveSchema() {
     const connectionId = activeTableTab?.connectionId ?? activeQueryTab?.connectionId ?? selectedConnectionId;
@@ -716,7 +787,6 @@ export function useDatabaseWorkspaceController({
     deleteSavedSql,
     designTable,
     disconnectConnection,
-    executeMutation,
     handleEditConnection,
     handleNewConnection,
     handleSelectResultTab,
@@ -737,8 +807,10 @@ export function useDatabaseWorkspaceController({
     selectConnection,
     selectDatabaseTab,
     selectQueryConnection,
+    selectQueryResult,
     selectTable,
     showQueryHistory,
+    sqlRunning,
     startNewQuery,
     stopQuery,
     submitConnection,

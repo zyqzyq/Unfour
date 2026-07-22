@@ -9,6 +9,7 @@ import type {
   DatabaseStructureTab,
   DatabaseWorkspaceTab,
   DatabaseWorkspaceTabId,
+  RunSqlOptions,
   SqlHistoryEntry,
   TableEditing,
   TableSegment,
@@ -35,6 +36,7 @@ export function DatabaseWorkspace({
   onReorderTabs,
   onRun,
   onSelectConnection,
+  onSelectResultSet,
   queryCatalog,
   querySchema,
   schemaOptions,
@@ -71,8 +73,9 @@ export function DatabaseWorkspace({
   onPreviewSelectedTable: () => void;
   onRefreshSchema: () => void;
   onReorderTabs: (fromIndex: number, toIndex: number) => void;
-  onRun: (selectedSql?: string) => void;
+  onRun: (options?: string | RunSqlOptions) => void;
   onSelectConnection: (connectionId: string) => void;
+  onSelectResultSet: (index: number) => void;
   queryCatalog: string | null;
   querySchema: string | null;
   schemaOptions: string[];
@@ -229,15 +232,18 @@ export function DatabaseWorkspace({
                 workspaceId={workspaceId}
               />
               <QueryResultPanel
+                activeResultIndex={renderQuery.activeResultIndex}
                 activeTab={renderQuery.resultTab}
                 error={renderQuery.error}
                 history={history}
                 isPending={executePending}
                 onClearHistory={onClearHistory}
                 onSelectHistory={onSelectHistory}
+                onSelectResultSet={onSelectResultSet}
                 onSelectTab={onSelectResultTab}
                 pendingConfirmation={renderQuery.pendingConfirmation}
                 result={renderQuery.result}
+                results={renderQuery.results}
               />
             </SplitPane>
           )}

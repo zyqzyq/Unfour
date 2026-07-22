@@ -462,6 +462,9 @@
       "refreshModule": "刷新数据库模块",
       "refreshSchema": "刷新 Schema",
       "run": "运行",
+      "runAll": "全部运行",
+      "runCurrent": "运行当前语句",
+      "runMenu": "运行选项",
       "savedSql": "已保存",
       "saveSql": "保存 SQL",
       "stopSql": "停止 SQL 执行"
@@ -618,12 +621,33 @@
       "saving": "保存中"
     },
     "result": {
+      "affectedRows": "{rows} 行受影响，用时 {durationMs}ms。",
+      "affectedRowsShort": "受影响行数：{rows}。",
+      "copied": "已复制",
+      "copy": "复制结果",
+      "copyFailed": "复制失败",
+      "empty": "查询结果将显示在这里。",
       "executionFailed": "执行失败",
+      "executingLog": "正在执行 SQL...",
       "export": "导出",
+      "exportCsv": "导出 CSV",
+      "exportJson": "导出 JSON",
+      "limitHint": "读查询默认使用后端限制；SQL 中显式写了 limit 时除外。",
       "noExecution": "尚未执行",
+      "noLogs": "暂无日志。",
+      "noMessages": "暂无消息。",
       "rowsInMs": "{rows} 行，用时 {durationMs}ms",
+      "running": "正在运行查询...",
+      "safety": "安全分类：{classification}。",
+      "setCount": "{count} 个结果集",
+      "setHeading": "结果 {index}",
+      "setLabelAffected": "结果 {index} · {rows} 行受影响",
+      "setLabelRows": "结果 {index} · {rows} 行",
       "statusFailed": "失败",
-      "statusOk": "成功"
+      "statusOk": "成功",
+      "tabLogs": "日志",
+      "tabMessages": "消息",
+      "tabResults": "结果"
     },
     "sidebar": {
       "connections": "连接"

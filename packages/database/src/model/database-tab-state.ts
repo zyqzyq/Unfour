@@ -80,6 +80,7 @@ function createQueryTab(
   formatQueryTitle: (index: number) => string = defaultQueryTitle,
 ): DatabaseQueryWorkspaceTab {
   return {
+    activeResultIndex: 0,
     catalog: input.catalog ?? null,
     connectionId: input.connectionId ?? null,
     error: null,
@@ -87,6 +88,7 @@ function createQueryTab(
     kind: "query",
     pendingConfirmation: false,
     result: null,
+    results: [],
     resultTab: "results",
     schema: input.schema ?? null,
     sql: input.sql ?? defaultSql,

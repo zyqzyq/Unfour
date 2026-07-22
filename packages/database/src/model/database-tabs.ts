@@ -3,6 +3,7 @@ import { defaultSql } from "./database-state";
 
 export const defaultDatabaseTabs: DatabaseWorkspaceTab[] = [
   {
+    activeResultIndex: 0,
     catalog: null,
     connectionId: null,
     error: null,
@@ -10,6 +11,7 @@ export const defaultDatabaseTabs: DatabaseWorkspaceTab[] = [
     kind: "query",
     pendingConfirmation: false,
     result: null,
+    results: [],
     resultTab: "results",
     schema: null,
     sql: defaultSql,

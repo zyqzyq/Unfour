@@ -470,7 +470,6 @@ export function DatabasePage({
     deleteSavedSql,
     designTable,
     disconnectConnection,
-    executeMutation,
     handleEditConnection,
     handleNewConnection,
     handleSelectResultTab,
@@ -491,8 +490,10 @@ export function DatabasePage({
     selectConnection,
     selectDatabaseTab,
     selectQueryConnection,
+    selectQueryResult,
     selectTable,
     showQueryHistory,
+    sqlRunning,
     startNewQuery,
     stopQuery,
     submitConnection,
@@ -653,7 +654,7 @@ export function DatabasePage({
   const toolbarConnection = connections.find((item) => item.id === toolbarConnectionId) ?? null;
   const toolbarSession = toolbarConnectionId ? connectionStates[toolbarConnectionId] : undefined;
   const toolbarConnectionStatus: DatabaseConnectionStatus = toolbarSession?.status ?? "disconnected";
-  const executePending = executeMutation.isPending || browseMutation.isPending || rowMutation.isPending;
+  const executePending = sqlRunning || browseMutation.isPending || rowMutation.isPending;
   const shellStatusBar = useMemo(
     () => (
       <DatabaseStatusBar
@@ -742,6 +743,7 @@ export function DatabasePage({
           onReorderTabs={databaseTabs.reorderTabs}
           onRun={runSql}
           onSelectConnection={(connectionId) => selectQueryConnection(connectionId || null)}
+          onSelectResultSet={selectQueryResult}
           queryCatalog={activeQueryTab?.catalog ?? null}
           querySchema={activeQueryTab?.schema ?? null}
           schemaOptions={schemaOptions}

@@ -38,6 +38,7 @@ const table: DatabaseTable = {
 
 const tabs: DatabaseWorkspaceTab[] = [
   {
+    activeResultIndex: 0,
     catalog: null,
     connectionId: "conn-1",
     error: null,
@@ -45,6 +46,7 @@ const tabs: DatabaseWorkspaceTab[] = [
     kind: "query",
     pendingConfirmation: false,
     result: null,
+    results: [],
     resultTab: "results",
     schema: null,
     sql: "",
@@ -86,6 +88,7 @@ function renderWorkspace(
     onRun: vi.fn(),
     onSelectConnection: vi.fn(),
     onSelectHistory: vi.fn(),
+    onSelectResultSet: vi.fn(),
     onSelectResultTab: vi.fn(),
     onSelectStructureTab: vi.fn(),
     onSelectTab: vi.fn(),

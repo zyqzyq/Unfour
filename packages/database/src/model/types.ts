@@ -77,6 +77,15 @@ export type QueryContext = {
 
 export type DatabaseResultTab = "results" | "messages" | "logs" | "history";
 
+/** Options for Run Current / Run All from the SQL editor. */
+export type RunSqlOptions = {
+  cursorOffset?: number;
+  mode?: "current" | "all";
+  /** Continue a paused batch after CONFIRMATION_REQUIRED. */
+  resume?: boolean;
+  sql?: string;
+};
+
 export type DatabaseStructureTab = "ddl" | "indexes" | "constraints" | "properties";
 
 export type TableQueryState = {
@@ -100,6 +109,7 @@ export type TableSegment = "data" | "structure";
 export type DatabaseWorkspaceTabKind = "query" | "table";
 
 export type DatabaseQueryWorkspaceTab = {
+  activeResultIndex: number;
   catalog: string | null;
   connectionId: string | null;
   error: unknown;
@@ -107,7 +117,10 @@ export type DatabaseQueryWorkspaceTab = {
   kind: "query";
   loading?: boolean;
   pendingConfirmation: boolean;
+  /** Active result set; mirrors `results[activeResultIndex]` when present. */
   result: DatabaseQueryResult | null;
+  /** All result sets from the latest Run / Run All (SELECT and non-SELECT). */
+  results: DatabaseQueryResult[];
   resultTab: DatabaseResultTab;
   schema: string | null;
   sql: string;

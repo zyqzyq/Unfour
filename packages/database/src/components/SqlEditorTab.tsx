@@ -1,5 +1,5 @@
 import Editor, { type OnMount } from "@monaco-editor/react";
-import { AlignLeft, Eraser, History, Info, MoreHorizontal, Play, Save, Star, StopCircle, Trash2 } from "lucide-react";
+import { AlignLeft, ChevronDown, Eraser, History, Info, MoreHorizontal, Play, Save, Star, StopCircle, Trash2 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import type { DatabaseConnection, DatabaseSchema, SavedSql } from "@unfour/command-client";
 import {
@@ -25,6 +25,8 @@ import {
   useTheme,
 } from "@unfour/ui";
 import { useSavedSql } from "../hooks/useSavedSql";
+import { statementAtOffset } from "../model/sql-statements";
+import type { RunSqlOptions } from "../model/types";
 import { formatSql } from "../result-utils";
 import { formatDatabaseError } from "../result-utils";
 import { configureSqlEditorThemes } from "./sql-editor-theme";
@@ -64,7 +66,7 @@ export function SqlEditorTab({
   executePending: boolean;
   onChangeQueryContext: (patch: { catalog?: string | null; schema?: string | null }) => void;
   onClearSql: () => void;
-  onRun: (selectedSql?: string) => void;
+  onRun: (options?: string | RunSqlOptions) => void;
   onSelectConnection: (connectionId: string) => void;
   onShowHistory: () => void;
   onSqlChange: (sql: string) => void;
@@ -108,25 +110,60 @@ export function SqlEditorTab({
     }
   }, [theme]);
 
-  // Run the current selection when present, otherwise the full editor body.
+  // Run Current: selection when present, otherwise the statement under the cursor.
   const runFromEditor = () => {
+    if (pendingConfirmation) {
+      onRunRef.current({ resume: true });
+      return;
+    }
     const editor = editorRef.current;
+    const model = editor?.getModel();
     const selection = editor?.getSelection();
-    const selected = selection ? editor?.getModel()?.getValueInRange(selection) : "";
-    onRunRef.current(selected?.trim() ? selected : undefined);
+    const selected = selection && model ? model.getValueInRange(selection) : "";
+    if (selected?.trim()) {
+      onRunRef.current({ mode: "current", sql: selected });
+      return;
+    }
+    const position = editor?.getPosition();
+    const cursorOffset = model && position ? model.getOffsetAt(position) : 0;
+    onRunRef.current({ mode: "current", cursorOffset });
   };
 
-  // EXPLAIN the current selection (or the whole body) without mutating the
-  // editor text. The wrapped statement is read-only, so it bypasses confirmation.
+  // Run All: execute every statement in the editor (or selection) sequentially.
+  const runAllFromEditor = () => {
+    if (pendingConfirmation) {
+      onRunRef.current({ resume: true });
+      return;
+    }
+    const editor = editorRef.current;
+    const model = editor?.getModel();
+    const selection = editor?.getSelection();
+    const selected = selection && model ? model.getValueInRange(selection) : "";
+    if (selected?.trim()) {
+      onRunRef.current({ mode: "all", sql: selected });
+      return;
+    }
+    onRunRef.current({ mode: "all" });
+  };
+
+  // EXPLAIN the current selection (or statement under cursor) without mutating
+  // the editor text. The wrapped statement is read-only, so it bypasses confirmation.
   const explainFromEditor = () => {
     const editor = editorRef.current;
+    const model = editor?.getModel();
     const selection = editor?.getSelection();
-    const selected = selection ? editor?.getModel()?.getValueInRange(selection) : "";
-    const base = (selected?.trim() ? selected : sql).trim();
+    const selected = selection && model ? model.getValueInRange(selection) : "";
+    let base = selected?.trim() ? selected : "";
+    if (!base) {
+      const position = editor?.getPosition();
+      const cursorOffset = model && position ? model.getOffsetAt(position) : 0;
+      base = statementAtOffset(sql, cursorOffset)?.sql ?? "";
+    }
+    base = base.trim();
     if (!base) {
       return;
     }
-    onRunRef.current(`EXPLAIN ${base}`);
+    onRunRef.current({ mode: "current", sql: `EXPLAIN ${base}` });
   };
 
   const formatEditor = () => {
@@ -172,6 +209,10 @@ export function SqlEditorTab({
     editorRef.current = editor;
     monacoRef.current = monaco;
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, runFromEditor);
+    editor.addCommand(
+      monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter,
+      runAllFromEditor,
+    );
 
     configureSqlEditorThemes(monaco, theme);
 
@@ -232,10 +273,32 @@ export function SqlEditorTab({
               {t("database.actions.stopSql")}
             </Button>
           ) : (
-            <Button disabled={!selectedConnectionId} onClick={runFromEditor} size="sm" type="button">
-              <Play size={13} />
-              {pendingConfirmation ? t("database.actions.confirmRun") : t("database.actions.run")}
-            </Button>
+            <>
+              <Button disabled={!selectedConnectionId} onClick={runFromEditor} size="sm" type="button">
+                <Play size={13} />
+                {pendingConfirmation ? t("database.actions.confirmRun") : t("database.actions.run")}
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <IconButton
+                    disabled={!selectedConnectionId || executePending}
+                    label={t("database.actions.runMenu")}
+                  >
+                    <ChevronDown size={13} />
+                  </IconButton>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem disabled={!selectedConnectionId} onSelect={runFromEditor}>
+                    <Play size={13} />
+                    {t("database.actions.runCurrent")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem disabled={!selectedConnectionId || !sql.trim()} onSelect={runAllFromEditor}>
+                    <Play size={13} />
+                    {t("database.actions.runAll")}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
           )}
           <Button
             disabled={!selectedConnectionId || !sql.trim() || executePending}
