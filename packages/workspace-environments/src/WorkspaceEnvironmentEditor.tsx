@@ -4,18 +4,13 @@ import type {
   WorkspaceVariable,
   WorkspaceVariableInput,
 } from "@unfour/command-client";
-import { WORKSPACE_VARIABLES_SELECTION_ID } from "./environment-manager-selection";
 import { Button, Input, VariableTable, useI18n } from "@unfour/ui";
-import { useApiEnvironments } from "../hooks/useApiEnvironments";
-import { useWorkspaceVariables } from "../hooks/useWorkspaceVariables";
-import { formatError } from "../model/api-request-state";
-import { findDuplicateEnvironmentName, nextEnvironmentName } from "../request-utils";
+import { findDuplicateEnvironmentName, formatError, nextEnvironmentName } from "./environment-utils";
 
-export type EnvironmentManagerInitialMode =
-  | { kind: "manage"; nonce: number }
-  | { kind: "new"; nonce: number }
-  | { kind: "workspace"; nonce: number }
-  | { environmentId: string; kind: "edit"; nonce: number };
+export type EnvironmentEditorMode =
+  | { kind: "workspace" }
+  | { environmentId: string; kind: "environment" }
+  | { kind: "new" };
 
 type ExistingEnvironmentDraft = {
   id: string;
@@ -39,28 +34,42 @@ type EnvironmentDraft =
   | WorkspaceVariablesDraft
   | ExistingEnvironmentDraft;
 
-export function EnvironmentManagerPage({
-  initialMode,
+export function WorkspaceEnvironmentEditor({
+  environments,
+  environmentsLoading,
+  mode,
+  modeRevision,
+  onCreate,
   onDirtyChange,
-  onSelectionChange,
-  workspaceId,
+  onEnvironmentCreated,
+  onReplaceWorkspaceVariables,
+  onUpdate,
+  saving,
+  workspaceVariables,
+  workspaceVariablesLoading,
 }: {
-  initialMode: EnvironmentManagerInitialMode;
-  onDirtyChange?: (dirty: boolean) => void;
-  onSelectionChange?: (selectionId: string | null) => void;
-  workspaceId: string;
+  environments: WorkspaceEnvironment[];
+  environmentsLoading: boolean;
+  mode: EnvironmentEditorMode;
+  modeRevision: number;
+  onCreate: (name: string) => Promise<WorkspaceEnvironment>;
+  onDirtyChange: (dirty: boolean) => void;
+  onEnvironmentCreated: (environmentId: string) => void;
+  onReplaceWorkspaceVariables: (
+    variables: WorkspaceVariableInput[],
+  ) => Promise<WorkspaceVariable[]>;
+  onUpdate: (input: {
+    id: string;
+    name: string;
+    variables: WorkspaceVariableInput[];
+  }) => Promise<WorkspaceEnvironment>;
+  saving: boolean;
+  workspaceVariables: WorkspaceVariable[];
+  workspaceVariablesLoading: boolean;
 }) {
   const { t } = useI18n();
-  const { createMut, environments, isLoading, updateMut } =
-    useApiEnvironments(workspaceId);
-  const {
-    isLoading: workspaceVariablesLoading,
-    replaceMut,
-    variables: workspaceVariables,
-  } = useWorkspaceVariables(workspaceId);
   const [draft, setDraft] = useState<EnvironmentDraft>({ kind: "none" });
   const [saveError, setSaveError] = useState<string | null>(null);
-
   const dirty = isDraftDirty(draft);
   const selectedEnvironment =
     draft.kind === "existing"
@@ -74,85 +83,46 @@ export function EnvironmentManagerPage({
           draft.kind === "existing" ? draft.id : undefined,
         )
       : null;
-  const draftName =
-    draft.kind === "new" || draft.kind === "existing" ? draft.name : "";
-  const saving = createMut.isPending || updateMut.isPending || replaceMut.isPending;
   const persistedVariables =
     draft.kind === "none" ? [] : persistableVariables(draft.variables);
-  const hasIncompleteVariable = persistedVariables.some((variable) => !variable.key.trim());
-  const hasDuplicateVariable = hasDuplicateKeys(persistedVariables);
   const overridingKeys = useMemo(
     () => new Set(workspaceVariables.map((variable) => variable.key)),
     [workspaceVariables],
   );
 
-  useEffect(() => {
-    onDirtyChange?.(dirty);
-  }, [dirty, onDirtyChange]);
+  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
 
   useEffect(() => {
-    onSelectionChange?.(
-      draft.kind === "workspace"
-        ? WORKSPACE_VARIABLES_SELECTION_ID
-        : draft.kind === "existing"
-          ? draft.id
-          : null,
-    );
-  }, [draft, onSelectionChange]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- external open intent resets the editor draft
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- an explicit selection resets the editor draft
     setSaveError(null);
-    if (initialMode.kind === "new") {
+    if (mode.kind === "new") {
       setDraft({
         kind: "new",
-        name: nextEnvironmentName(t("api.environment.defaultName"), environments),
+        name: nextEnvironmentName(t("variables.defaultEnvironmentName"), environments),
         variables: [],
       });
       return;
     }
-    if (initialMode.kind === "workspace") {
+    if (mode.kind === "workspace") {
       setDraft(draftFromWorkspaceVariables(workspaceVariables));
       return;
     }
-    if (initialMode.kind === "edit") {
-      const target = environments.find(
-        (environment) => environment.id === initialMode.environmentId,
-      );
-      setDraft(target ? draftFromEnvironment(target) : { kind: "none" });
-      return;
-    }
-    const target =
-      environments.find((environment) => environment.isActive) ?? environments[0] ?? null;
-    setDraft(
-      target
-        ? draftFromEnvironment(target)
-        : isLoading
-          ? { kind: "none" }
-          : draftFromWorkspaceVariables(workspaceVariables),
+    const target = environments.find(
+      (environment) => environment.id === mode.environmentId,
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce is the explicit open-intent boundary
-  }, [initialMode.nonce]);
+    setDraft(target ? draftFromEnvironment(target) : { kind: "none" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- modeRevision is the explicit selection boundary
+  }, [modeRevision]);
 
   useEffect(() => {
     if (dirty) return;
-    if (draft.kind === "none") {
-      const target =
-        initialMode.kind === "edit"
-          ? environments.find(
-              (environment) => environment.id === initialMode.environmentId,
-            )
-          : environments.find((environment) => environment.isActive) ??
-            environments[0];
+    if (draft.kind === "none" && mode.kind === "environment") {
+      const target = environments.find(
+        (environment) => environment.id === mode.environmentId,
+      );
       if (target) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate an async environment open intent
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate a selection once its query resolves
         setDraft(draftFromEnvironment(target));
-      } else if (
-        initialMode.kind !== "edit" &&
-        !isLoading &&
-        !workspaceVariablesLoading
-      ) {
-        setDraft(draftFromWorkspaceVariables(workspaceVariables));
       }
       return;
     }
@@ -164,34 +134,19 @@ export function EnvironmentManagerPage({
       return;
     }
     if (draft.kind === "existing") {
-      if (!selectedEnvironment) {
-        const fallback = environments[0];
-        setDraft(
-          fallback
-            ? draftFromEnvironment(fallback)
-            : draftFromWorkspaceVariables(workspaceVariables),
-        );
-      } else if (selectedEnvironment.updatedAt !== draft.sourceUpdatedAt) {
+      if (!selectedEnvironment) return;
+      if (selectedEnvironment.updatedAt !== draft.sourceUpdatedAt) {
         setDraft(draftFromEnvironment(selectedEnvironment));
       }
     }
-  }, [
-    dirty,
-    draft,
-    environments,
-    initialMode,
-    isLoading,
-    selectedEnvironment,
-    workspaceVariables,
-    workspaceVariablesLoading,
-  ]);
+  }, [dirty, draft, environments, mode, selectedEnvironment, workspaceVariables]);
 
   const saveDisabled =
     draft.kind === "none" ||
     saving ||
     !dirty ||
-    hasIncompleteVariable ||
-    hasDuplicateVariable ||
+    persistedVariables.some((variable) => !variable.key.trim()) ||
+    hasDuplicateKeys(persistedVariables) ||
     ((draft.kind === "new" || draft.kind === "existing") &&
       (!draft.name.trim() || Boolean(duplicateName)));
 
@@ -201,20 +156,21 @@ export function EnvironmentManagerPage({
     setSaveError(null);
     try {
       if (draft.kind === "workspace") {
-        const saved = await replaceMut.mutateAsync(variables);
+        const saved = await onReplaceWorkspaceVariables(variables);
         setDraft(draftFromWorkspaceVariables(saved));
         return;
       }
       const name = draft.name.trim();
       if (draft.kind === "new") {
-        const created = await createMut.mutateAsync(name);
+        const created = await onCreate(name);
         const saved = variables.length
-          ? await updateMut.mutateAsync({ id: created.id, name, variables })
+          ? await onUpdate({ id: created.id, name, variables })
           : created;
         setDraft(draftFromEnvironment(saved));
+        onEnvironmentCreated(saved.id);
         return;
       }
-      const saved = await updateMut.mutateAsync({ id: draft.id, name, variables });
+      const saved = await onUpdate({ id: draft.id, name, variables });
       setDraft(draftFromEnvironment(saved));
     } catch (error) {
       setSaveError(formatError(error));
@@ -224,14 +180,15 @@ export function EnvironmentManagerPage({
   if (draft.kind === "none") {
     return (
       <div className="flex h-full items-center justify-center p-6 text-[12px] text-[var(--u-color-text-muted)]">
-        {isLoading || workspaceVariablesLoading
+        {environmentsLoading || workspaceVariablesLoading
           ? t("common.state.loading")
-          : t("api.environment.selectHint")}
+          : t("variables.selectHint")}
       </div>
     );
   }
 
   const isWorkspace = draft.kind === "workspace";
+  const draftName = draft.kind === "new" || draft.kind === "existing" ? draft.name : "";
   return (
     <main className="h-full min-w-0 flex-1 overflow-y-auto bg-[var(--u-color-bg)]">
       <div className="mx-auto flex min-h-full max-w-5xl flex-col gap-3 p-4">
@@ -242,37 +199,42 @@ export function EnvironmentManagerPage({
                 {isWorkspace
                   ? t("variables.workspaceVariables")
                   : draft.kind === "new"
-                    ? t("api.environment.newEnvironment")
+                    ? t("variables.newEnvironment")
                     : draft.sourceName}
               </h2>
               {selectedEnvironment?.isActive && (
-                <span className="inline-flex h-5 items-center gap-1.5 rounded-[var(--u-radius-sm)] px-1.5 text-[11px] font-medium text-[var(--u-color-primary)]">
+                <span className="inline-flex h-5 items-center gap-1.5 px-1.5 text-[11px] font-medium text-[var(--u-color-primary)]">
                   <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                  {t("api.environment.activeBadge")}
+                  {t("variables.active")}
                 </span>
               )}
               {dirty && (
                 <span className="text-[11px] text-[var(--u-color-text-soft)]">
-                  {t("api.environment.unsaved")}
+                  {t("variables.unsaved")}
                 </span>
               )}
             </div>
             <p className="mt-1 text-[12px] text-[var(--u-color-text-muted)]">
               {isWorkspace
                 ? t("variables.workspaceDescription")
-                : t("api.environment.workspaceVariables", {
+                : t("variables.environmentDescription", {
                     count: persistedVariables.length,
                   })}
             </p>
           </div>
-          <Button disabled={saveDisabled} onClick={() => void saveDraft()} size="sm" type="button">
-            {saving ? t("api.actions.saving") : t("api.environment.save")}
+          <Button
+            disabled={saveDisabled}
+            onClick={() => void saveDraft()}
+            size="sm"
+            type="button"
+          >
+            {saving ? t("variables.saving") : t("variables.save")}
           </Button>
         </div>
 
         {!isWorkspace && (
           <label className="grid gap-1 text-[12px] text-[var(--u-color-text-muted)]">
-            {t("api.environment.nameLabel")}
+            {t("variables.environmentName")}
             <Input
               aria-invalid={duplicateName ? true : undefined}
               onChange={(event) =>
@@ -282,13 +244,13 @@ export function EnvironmentManagerPage({
                     : current,
                 )
               }
-              value={draft.kind === "new" || draft.kind === "existing" ? draft.name : ""}
+              value={draftName}
             />
           </label>
         )}
         {duplicateName && (
           <div className="text-[12px] text-[var(--u-color-danger)]">
-            {t("api.environment.duplicateName", { name: draftName.trim() })}
+            {t("variables.duplicateEnvironmentName", { name: draftName.trim() })}
           </div>
         )}
         <VariableTable
@@ -299,7 +261,7 @@ export function EnvironmentManagerPage({
             )
           }
           overridingKeys={isWorkspace ? undefined : overridingKeys}
-          title={t("api.environment.variablesLabel")}
+          title={t("variables.variablesLabel")}
         />
         {saveError && (
           <div className="text-[12px] text-[var(--u-color-danger)]">{saveError}</div>

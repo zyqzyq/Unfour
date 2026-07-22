@@ -40,6 +40,19 @@ vi.mock("@tanstack/react-query", () => ({
     if (queryKey[0] === "database-connections") {
       return { data: [] };
     }
+    if (queryKey[0] === "workspace-environments") {
+      return {
+        data: [
+          {
+            id: "env-dev",
+            workspaceId: "ws-default",
+            name: "Development",
+            isActive: true,
+            variables: [],
+          },
+        ],
+      };
+    }
     return { data: undefined };
   },
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
@@ -56,13 +69,15 @@ vi.mock("@unfour/command-client", () => ({
   setActiveWorkspace: vi.fn(),
 }));
 
+const setActiveTab = vi.fn();
+
 vi.mock("@unfour/workspace-core", () => ({
   useWorkspaceStore: () => ({
     activeTabId: "api-main",
     activeWorkspaceId: "ws-default",
     bottomPanelHeight: 240,
     rightInspectorWidth: 320,
-    setActiveTab: vi.fn(),
+    setActiveTab,
     setActiveWorkspace: vi.fn(),
     setBottomPanelHeight: vi.fn(),
     setRightInspectorWidth: vi.fn(),
@@ -78,6 +93,29 @@ vi.mock("@unfour/workspace-core", () => ({
 vi.mock("@unfour/ui", () => ({
   CommandPalette: ({ actions, open }: { actions: ReactNode; open: boolean }) =>
     open ? <div aria-label="Command palette">{actions}</div> : null,
+  ConfirmDialog: ({
+    confirmLabel,
+    onConfirm,
+    onOpenChange,
+    open,
+    title,
+  }: {
+    confirmLabel: string;
+    onConfirm: () => void;
+    onOpenChange: (open: boolean) => void;
+    open: boolean;
+    title: string;
+  }) =>
+    open ? (
+      <div aria-label={title} role="dialog">
+        <button onClick={onConfirm} type="button">
+          {confirmLabel}
+        </button>
+        <button onClick={() => onOpenChange(false)} type="button">
+          Cancel
+        </button>
+      </div>
+    ) : null,
   FeedbackProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   MainWorkspace: ({ children }: { children: ReactNode }) => <>{children}</>,
   useFeedbackErrorHandler: () => vi.fn(),
@@ -91,6 +129,25 @@ vi.mock("@unfour/ssh-terminal", () => ({
   TerminalPage: () => null,
   TerminalStatusBar: ({ rightAccessory }: { rightAccessory?: ReactNode }) => (
     <>{rightAccessory}</>
+  ),
+}));
+vi.mock("@unfour/workspace-environments", () => ({
+  WorkspaceEnvironmentsPage: ({
+    initialEnvironmentId,
+    onDirtyChange,
+  }: {
+    initialEnvironmentId?: string | null;
+    onDirtyChange?: (dirty: boolean) => void;
+  }) => (
+    <div>
+      Workspace manager: {initialEnvironmentId}
+      <button onClick={() => onDirtyChange?.(true)} type="button">
+        Mark variables dirty
+      </button>
+    </div>
+  ),
+  WorkspaceEnvironmentsStatusBar: ({ workspaceName }: { workspaceName: string }) => (
+    <div>Workspace status: {workspaceName}</div>
   ),
 }));
 
@@ -119,14 +176,19 @@ vi.mock("./components/AppTitleBar", () => ({
   AppTitleBar: ({
     endAccessory,
     extensionContext,
+    onManageVariables,
     settingsSections = [],
   }: {
     endAccessory?: ReactNode;
     extensionContext: DesktopAppExtensionContext;
+    onManageVariables?: () => void;
     settingsSections?: readonly DesktopAppSettingsSection[];
   }) => (
     <>
       {endAccessory}
+      <button onClick={onManageVariables} type="button">
+        Manage variables
+      </button>
       {settingsSections.map(({ component: Section, id }) => (
         <Section key={id} {...extensionContext} />
       ))}
@@ -136,10 +198,26 @@ vi.mock("./components/AppTitleBar", () => ({
 vi.mock("./components/BottomPanelPlaceholder", () => ({ BottomPanelPlaceholder: () => null }));
 vi.mock("./components/LayoutControls", () => ({ LayoutControls: () => <span>Layout controls</span> }));
 vi.mock("./components/ModuleActivityBar", () => ({
-  ModuleActivityBar: ({ onOpenCommandPalette }: { onOpenCommandPalette: () => void }) => (
-    <button onClick={onOpenCommandPalette} type="button">
-      Open command palette
-    </button>
+  ModuleActivityBar: ({
+    onOpenCommandPalette,
+    onSelect,
+    onToggleSidebar,
+  }: {
+    onOpenCommandPalette: () => void;
+    onSelect: (tabId: string) => void;
+    onToggleSidebar: () => void;
+  }) => (
+    <>
+      <button onClick={onOpenCommandPalette} type="button">
+        Open command palette
+      </button>
+      <button onClick={() => onSelect("ssh-main")} type="button">
+        Open SSH Terminal
+      </button>
+      <button onClick={onToggleSidebar} type="button">
+        Toggle module sidebar
+      </button>
+    </>
   ),
 }));
 vi.mock("./components/ModuleSidebar", () => ({ ModuleSidebar: () => null }));
@@ -204,5 +282,47 @@ describe("DesktopApp extensions", () => {
       }),
     );
     expect(screen.queryByLabelText("Command palette")).toBeNull();
+  });
+
+  it("opens workspace variable management outside the API Client", () => {
+    render(<DesktopApp />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Manage variables" }));
+
+    expect(screen.getByText("Workspace manager: env-dev")).toBeTruthy();
+    expect(screen.getByText("Workspace status: Default Workspace")).toBeTruthy();
+    // Scheme A: keep the module activity bar while the manager replaces main.
+    expect(screen.getByRole("button", { name: "Open command palette" })).toBeTruthy();
+  });
+
+  it("confirms before leaving dirty variable management via the activity bar", () => {
+    setActiveTab.mockClear();
+    render(<DesktopApp />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Manage variables" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark variables dirty" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open SSH Terminal" }));
+
+    expect(screen.getByRole("dialog", { name: "variables.discardChangesTitle" })).toBeTruthy();
+    expect(screen.getByText("Workspace manager: env-dev")).toBeTruthy();
+    expect(setActiveTab).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "variables.discard" }));
+
+    expect(screen.queryByText("Workspace manager: env-dev")).toBeNull();
+    expect(setActiveTab).toHaveBeenCalledWith("ssh-main");
+  });
+
+  it("keeps dirty variable management open when leave is cancelled", () => {
+    setActiveTab.mockClear();
+    render(<DesktopApp />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Manage variables" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark variables dirty" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open SSH Terminal" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.getByText("Workspace manager: env-dev")).toBeTruthy();
+    expect(setActiveTab).not.toHaveBeenCalled();
   });
 });

@@ -3,8 +3,7 @@
 ## Scope
 
 `packages/api-client` owns the API Client frontend: request editing, Send,
-response display, history, saved requests, collections, environments, and
-import/export UI.
+response display, history, saved requests, collections, and import/export UI.
 
 ## Boundaries
 
@@ -19,7 +18,7 @@ import/export UI.
 - Do not make unrelated cross-package changes.
 - Prefer existing request models, hooks, utilities, and UI components.
 - Do not introduce new dependencies unless the task explicitly requires them.
-- Do not break saved-request, history, environment, or Send behavior.
+- Do not break saved-request, history, shared variable resolution, or Send behavior.
 - Keep sensitive headers and auth metadata aligned with backend redaction
   expectations.
 - New user-visible API Client copy must use shared i18n keys. Do not localize

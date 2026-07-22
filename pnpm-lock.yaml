@@ -298,6 +298,9 @@ importers:
       '@unfour/workspace-core':
         specifier: workspace:*
         version: link:../workspace-core
+      '@unfour/workspace-environments':
+        specifier: workspace:*
+        version: link:../workspace-environments
       lucide-react:
         specifier: ^1.17.0
         version: 1.17.0(react@19.2.7)
@@ -427,6 +430,24 @@ importers:
       zustand:
         specifier: ^5.0.14
         version: 5.0.14(@types/react@19.2.16)(react@19.2.7)
+
+  packages/workspace-environments:
+    dependencies:
+      '@tanstack/react-query':
+        specifier: ^5.100.14
+        version: 5.100.14(react@19.2.7)
+      '@unfour/command-client':
+        specifier: workspace:*
+        version: link:../command-client
+      '@unfour/ui':
+        specifier: workspace:*
+        version: link:../ui
+      lucide-react:
+        specifier: ^1.17.0
+        version: 1.17.0(react@19.2.7)
+      react:
+        specifier: ^19.1.0
+        version: 19.2.7
 
   packages/workspace-local:
     dependencies:

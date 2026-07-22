@@ -14,40 +14,22 @@ import { findDuplicateRequestName } from "./request-utils";
 import { ApiClientSidebar } from "./components/ApiClientSidebar";
 import { ApiClientDialogs } from "./components/ApiClientDialogs";
 import { ApiRequestWorkspace } from "./components/ApiRequestWorkspace";
-import {
-  EnvironmentManagerPage,
-  type EnvironmentManagerInitialMode,
-} from "./components/EnvironmentManagerPage";
-import { WORKSPACE_VARIABLES_SELECTION_ID } from "./components/environment-manager-selection";
-
-type ApiWorkspaceView = "request" | "environments";
-type EnvironmentManagerOpenMode =
-  | { kind: "manage" }
-  | { kind: "new" }
-  | { kind: "workspace" }
-  | { environmentId: string; kind: "edit" };
 
 export function ApiClientPage({
   active = true,
   onActiveSavedRequestChange,
   onShellSidebarChange,
   openIntent,
-  variableManagerRequest,
   workspaceId,
 }: {
   active?: boolean;
   onActiveSavedRequestChange?: (requestId: string | null) => void;
   onShellSidebarChange?: (sidebar: ReactNode | null) => void;
   openIntent: ApiOpenIntent | null;
-  variableManagerRequest?: {
-    environmentId: string | null;
-    nonce: number;
-  };
   workspaceId: string;
 }) {
   const { t } = useI18n();
   const {
-    activeEnvironment,
     activeTab,
     closeTab,
     closeTabs,
@@ -70,13 +52,6 @@ export function ApiClientPage({
   const { createFolderMut, folders } = useApiCollectionFolders(workspaceId);
   const [saveDialogTabId, setSaveDialogTabId] = useState<string | null>(null);
   const [closeDialogTabId, setCloseDialogTabId] = useState<string | null>(null);
-  const [workspaceView, setWorkspaceView] = useState<ApiWorkspaceView>("request");
-  const [environmentTabOpen, setEnvironmentTabOpen] = useState(false);
-  const [environmentTabDirty, setEnvironmentTabDirty] = useState(false);
-  const [environmentCloseDialogOpen, setEnvironmentCloseDialogOpen] = useState(false);
-  const [environmentInitialMode, setEnvironmentInitialMode] =
-    useState<EnvironmentManagerInitialMode>({ kind: "manage", nonce: 0 });
-  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(null);
   const closeAfterSaveRef = useRef<string | null>(null);
   const pendingCloseQueueRef = useRef<string[]>([]);
   const urlInputRef = useRef<HTMLInputElement>(null);
@@ -107,59 +82,12 @@ export function ApiClientPage({
     [saveTab, savedRequests, setCollectionStatus, t],
   );
 
-  const openEnvironmentManager = useCallback(
-    (mode: EnvironmentManagerOpenMode = { kind: "manage" }) => {
-      const nextSelectedEnvironmentId =
-        mode.kind === "edit"
-          ? mode.environmentId
-          : mode.kind === "workspace"
-            ? WORKSPACE_VARIABLES_SELECTION_ID
-          : mode.kind === "new"
-            ? null
-            : activeEnvironment?.id ?? selectedEnvironmentId;
-      setSelectedEnvironmentId(nextSelectedEnvironmentId ?? null);
-      setEnvironmentInitialMode((current) =>
-        ({ ...mode, nonce: current.nonce + 1 }) as EnvironmentManagerInitialMode,
-      );
-      setEnvironmentTabOpen(true);
-      setWorkspaceView("environments");
-    },
-    [activeEnvironment?.id, selectedEnvironmentId],
-  );
-
-  useEffect(() => {
-    if (!variableManagerRequest) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- the shell emits an explicit manager-open intent
-    openEnvironmentManager(
-      variableManagerRequest.environmentId
-        ? { kind: "edit", environmentId: variableManagerRequest.environmentId }
-        : { kind: "workspace" },
-    );
-  }, [openEnvironmentManager, variableManagerRequest]);
-
-  const closeEnvironmentTab = useCallback(() => {
-    setEnvironmentTabOpen(false);
-    setEnvironmentTabDirty(false);
-    setEnvironmentCloseDialogOpen(false);
-    setWorkspaceView("request");
-  }, []);
-
-  const requestCloseEnvironmentTab = useCallback(() => {
-    if (environmentTabDirty) {
-      setEnvironmentCloseDialogOpen(true);
-      return;
-    }
-    closeEnvironmentTab();
-  }, [closeEnvironmentTab, environmentTabDirty]);
-
   const handleNewRequest = useCallback(() => {
     newRequest();
-    setWorkspaceView("request");
   }, [newRequest]);
 
   const handleSelectTab = useCallback((tabId: string) => {
     selectTab(tabId);
-    setWorkspaceView("request");
   }, [selectTab]);
 
   useEffect(
@@ -171,8 +99,6 @@ export function ApiClientPage({
     if (!openIntent) {
       return;
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: imperative intent drives view switch
-    setWorkspaceView("request");
     if (openIntent.kind === "new") {
       newRequest();
       return;
@@ -202,7 +128,6 @@ export function ApiClientPage({
       return;
     }
     pendingIntentAction.current = null;
-    setWorkspaceView("request");
     if (pending.action === "send") {
       sendTab(activeTab);
     } else {
@@ -367,7 +292,6 @@ export function ApiClientPage({
 
   const handleSidebarIntent = useCallback(
     (intent: ApiOpenIntent) => {
-      setWorkspaceView("request");
       if (intent.kind === "new") {
         newRequest();
         return;
@@ -397,18 +321,8 @@ export function ApiClientPage({
   const sidebar = useMemo(
     () => (
       <ApiClientSidebar
-        environmentPanelActive={workspaceView === "environments"}
-        onEditEnvironment={(environmentId) =>
-          openEnvironmentManager({ kind: "edit", environmentId })
-        }
-        onEditWorkspaceVariables={() =>
-          openEnvironmentManager({ kind: "workspace" })
-        }
-        onNewEnvironment={() => openEnvironmentManager({ kind: "new" })}
         onNewRequest={handleNewRequest}
-        onOpenEnvironments={() => openEnvironmentManager()}
         onOpenIntent={handleSidebarIntent}
-        selectedEnvironmentId={selectedEnvironmentId}
         selectedId={activeTab?.savedRequestId ?? null}
         shellSlot={usesShellSidebar}
         workspaceId={workspaceId}
@@ -418,10 +332,7 @@ export function ApiClientPage({
       activeTab?.savedRequestId,
       handleNewRequest,
       handleSidebarIntent,
-      openEnvironmentManager,
-      selectedEnvironmentId,
       usesShellSidebar,
-      workspaceView,
       workspaceId,
     ],
   );
@@ -441,14 +352,7 @@ export function ApiClientPage({
         {!usesShellSidebar && sidebar}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <ApiRequestTabs
-            activeId={workspaceView === "environments" ? null : state.activeTabId}
-            environmentTab={{
-              active: workspaceView === "environments",
-              dirty: environmentTabDirty,
-              onClose: requestCloseEnvironmentTab,
-              onSelect: () => setWorkspaceView("environments"),
-              open: environmentTabOpen,
-            }}
+            activeId={state.activeTabId}
             onClose={requestClose}
             onCloseAll={() => requestCloseMany(state.tabs)}
             onCloseLeft={requestCloseTabsLeftOf}
@@ -458,14 +362,7 @@ export function ApiClientPage({
             onSelect={handleSelectTab}
             tabs={state.tabs}
           />
-          {workspaceView === "environments" && environmentTabOpen ? (
-            <EnvironmentManagerPage
-              initialMode={environmentInitialMode}
-              onDirtyChange={setEnvironmentTabDirty}
-              onSelectionChange={setSelectedEnvironmentId}
-              workspaceId={workspaceId}
-            />
-          ) : !activeTab ? (
+          {!activeTab ? (
             <EmptyState className="m-3 flex-1">
               <div className="space-y-2">
                 <div>{t("api.empty.noRequestOpen")}</div>
@@ -491,13 +388,10 @@ export function ApiClientPage({
       <ApiClientDialogs
         closeDialogTab={closeDialogTab}
         collections={collections}
-        environmentCloseDialogOpen={environmentCloseDialogOpen}
         folders={folders}
         onCancelClose={() => { pendingCloseQueueRef.current = []; setCloseDialogTabId(null); }}
         onCancelSave={() => { closeAfterSaveRef.current = null; pendingCloseQueueRef.current = []; setSaveDialogTabId(null); }}
-        onCloseEnvironment={closeEnvironmentTab}
         onDiscardClose={() => { if (closeDialogTab) closeTab(closeDialogTab.id); setCloseDialogTabId(null); continuePendingCloseQueue(); }}
-        onEnvironmentDialogOpenChange={setEnvironmentCloseDialogOpen}
         onSaveClose={() => closeDialogTab && void saveThenClose(closeDialogTab)}
         onSaveIdentity={(identity) => void saveWithIdentity(identity)}
         savedRequests={savedRequests}

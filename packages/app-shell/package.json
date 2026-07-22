@@ -15,6 +15,7 @@
     "@unfour/ssh-terminal": "workspace:*",
     "@unfour/ui": "workspace:*",
     "@unfour/workspace-core": "workspace:*",
+    "@unfour/workspace-environments": "workspace:*",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@tanstack/react-query": "^5.100.14",

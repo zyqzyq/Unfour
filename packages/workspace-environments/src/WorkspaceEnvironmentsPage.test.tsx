@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nProvider } from "@unfour/ui";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { EnvironmentManagerPage } from "./EnvironmentManagerPage";
+import { WorkspaceEnvironmentsPage } from "./WorkspaceEnvironmentsPage";
 
 vi.mock("@unfour/command-client", () => ({
   createWorkspaceEnvironment: vi.fn(),
@@ -26,6 +26,7 @@ import {
   listWorkspaceEnvironments,
   listWorkspaceVariables,
   replaceWorkspaceVariables,
+  setActiveWorkspaceEnvironment,
   updateWorkspaceEnvironmentVariables,
 } from "@unfour/command-client";
 
@@ -34,6 +35,7 @@ const listVariablesMock = vi.mocked(listWorkspaceVariables);
 const createMock = vi.mocked(createWorkspaceEnvironment);
 const updateMock = vi.mocked(updateWorkspaceEnvironmentVariables);
 const replaceMock = vi.mocked(replaceWorkspaceVariables);
+const activateMock = vi.mocked(setActiveWorkspaceEnvironment);
 
 function environmentVariable(
   overrides: Partial<WorkspaceEnvironmentVariable> = {},
@@ -58,9 +60,7 @@ function environmentVariable(
   };
 }
 
-function environment(
-  overrides: Partial<WorkspaceEnvironment> = {},
-): WorkspaceEnvironment {
+function environment(overrides: Partial<WorkspaceEnvironment> = {}): WorkspaceEnvironment {
   return {
     id: "env-1",
     workspaceId: "ws-1",
@@ -78,9 +78,7 @@ function environment(
   };
 }
 
-function workspaceVariable(
-  overrides: Partial<WorkspaceVariable> = {},
-): WorkspaceVariable {
+function workspaceVariable(overrides: Partial<WorkspaceVariable> = {}): WorkspaceVariable {
   const variable = environmentVariable(overrides);
   const { environmentId: _environmentId, ...workspaceVariable } = variable;
   return workspaceVariable;
@@ -99,36 +97,26 @@ function createWrapper() {
   };
 }
 
-function renderManager(
-  initialMode: React.ComponentProps<typeof EnvironmentManagerPage>["initialMode"] = {
-    kind: "manage",
-    nonce: 1,
-  },
-) {
+function renderPage(initialEnvironmentId: string | null = "env-1") {
   render(
-    <EnvironmentManagerPage initialMode={initialMode} workspaceId="ws-1" />,
+    <WorkspaceEnvironmentsPage
+      initialEnvironmentId={initialEnvironmentId}
+      onClose={vi.fn()}
+      workspaceId="ws-1"
+    />,
     { wrapper: createWrapper() },
   );
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  listEnvironmentsMock.mockResolvedValue([environment()]);
+  listEnvironmentsMock.mockResolvedValue([
+    environment({ id: "env-1", name: "Local", isActive: true }),
+    environment({ id: "env-2", name: "Test" }),
+  ]);
   listVariablesMock.mockResolvedValue([]);
-  createMock.mockResolvedValue(environment({ id: "env-2", name: "QA" }));
-  updateMock.mockResolvedValue(
-    environment({
-      id: "env-2",
-      name: "QA",
-      variables: [
-        environmentVariable({
-          id: "var-2",
-          environmentId: "env-2",
-          value: "https://qa.example.com",
-        }),
-      ],
-    }),
-  );
+  createMock.mockResolvedValue(environment({ id: "env-3", name: "QA" }));
+  updateMock.mockResolvedValue(environment({ id: "env-3", name: "QA" }));
   replaceMock.mockResolvedValue([
     workspaceVariable({ key: "base_url", value: "https://workspace.example.com" }),
   ]);
@@ -139,42 +127,17 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
-describe("EnvironmentManagerPage", () => {
-  it("creates a new environment and then saves its variables", async () => {
-    listEnvironmentsMock.mockResolvedValue([]);
-    renderManager({ kind: "new", nonce: 1 });
+describe("WorkspaceEnvironmentsPage", () => {
+  it("edits the fixed workspace variable collection", async () => {
+    renderPage(null);
 
-    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "QA" } });
+    expect(
+      await screen.findByRole("heading", { name: "Workspace Variables" }),
+    ).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Add variable" }));
     fireEvent.change(screen.getByPlaceholderText("Key"), {
       target: { value: "base_url" },
     });
-    fireEvent.change(screen.getByPlaceholderText("Value"), {
-      target: { value: "https://qa.example.com" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
-    await waitFor(() => expect(createMock).toHaveBeenCalledWith("ws-1", "QA"));
-    await waitFor(() =>
-      expect(updateMock).toHaveBeenCalledWith("ws-1", "env-2", "QA", [
-        {
-          key: "base_url",
-          value: "https://qa.example.com",
-          isSecret: false,
-          isEnabled: true,
-          description: null,
-          sortOrder: 0,
-        },
-      ]),
-    );
-  });
-
-  it("edits the fixed workspace variable collection", async () => {
-    renderManager({ kind: "workspace", nonce: 1 });
-
-    expect(await screen.findByRole("heading", { name: "Workspace Variables" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Add variable" }));
-    fireEvent.change(screen.getByPlaceholderText("Key"), { target: { value: "base_url" } });
     fireEvent.change(screen.getByPlaceholderText("Value"), {
       target: { value: "https://workspace.example.com" },
     });
@@ -194,15 +157,23 @@ describe("EnvironmentManagerPage", () => {
     );
   });
 
-  it("blocks duplicate environment names before save", async () => {
-    renderManager({ kind: "new", nonce: 1 });
-    fireEvent.change(await screen.findByLabelText("Name"), {
-      target: { value: "local" },
-    });
+  it("selecting an environment for editing does not activate it", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: "Local" });
 
-    expect(
-      screen.getByText("An environment named local already exists in this workspace."),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Test" }));
+
+    expect(await screen.findByRole("heading", { name: "Test" })).toBeTruthy();
+    expect(activateMock).not.toHaveBeenCalled();
+  });
+
+  it("creates an environment from the workspace manager", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: "Local" });
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "QA" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(createMock).toHaveBeenCalledWith("ws-1", "QA"));
   });
 });

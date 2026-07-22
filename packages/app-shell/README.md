@@ -25,7 +25,8 @@
 
 - Composes global toolbar, sidebar, main workspace, right inspector, bottom
   panel, and status bar slots.
-- Mounts API Client, SSH Terminal, and Database into the desktop workbench.
+- Mounts API Client, SSH Terminal, Database, and Workspace environment
+  management into the desktop workbench.
 - Delegates visual layout to `@unfour/ui`.
 
 ## Known Gaps

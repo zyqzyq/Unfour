@@ -104,7 +104,8 @@ layers choose whether local-only or Pro sync capabilities are wired in.
 
 | Package | Responsibility | Forbidden |
 | --- | --- | --- |
-| `packages/api-client` | API Client UI: request drafts, request tabs, Send behavior, response display, history, saved requests, collections, and the current workspace-variable management surface. Environment data and resolution are consumed through shared workspace contracts. | Database logic, SSH logic, global shell behavior, workspace variable persistence or resolution. |
+| `packages/api-client` | API Client UI: request drafts, request tabs, Send behavior, response display, history, saved requests, and collections. Workspace environment data and resolution are consumed through shared workspace contracts. | Database logic, SSH logic, global shell behavior, workspace variable management, persistence, or resolution. |
+| `packages/workspace-environments` | Workspace-level variables and environments management UI, editor state, navigation guards, and frontend CRUD hooks. | API request execution, feature navigation, variable resolution, or app-shell orchestration. |
 | `packages/ssh-terminal` | SSH Terminal UI: connections, sessions, terminal panes, split/search/log UI, host-key trust UI, terminal-local state. | API request logic, SQL/database logic, global shell behavior. |
 | `packages/database` | Database UI: connection tree, schema tree, SQL editor, query results, table inspector, database-local state. | API request logic, SSH session logic, global shell behavior. |
 | `packages/command-client` | Typed Tauri command wrappers, shared frontend command types, and browser-dev mocks. | React components, feature business logic, feature state. |
@@ -138,7 +139,7 @@ Allowed frontend direction:
 ```text
 apps/desktop
   -> packages/app-shell
-  -> feature packages (api-client, database, ssh-terminal)
+  -> feature packages (api-client, database, ssh-terminal, workspace-environments)
   -> packages/workspace-core, packages/command-client, packages/ui
 
 packages/workspace-local

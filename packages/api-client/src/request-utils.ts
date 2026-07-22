@@ -1,5 +1,4 @@
 import type {
-  ApiEnvironment,
   ApiHistoryDetail,
   ApiRequestInput,
   ApiSavedRequest,
@@ -12,28 +11,6 @@ import type {
   RequestRawBodyType,
 } from "./model/types";
 import { parseAuthConfigWithSchema, parseKeyValuesWithSchema } from "./adapters/request-schema";
-
-export function normalizeEnvironmentName(name: string) {
-  return name.trim().toLowerCase();
-}
-
-export function findDuplicateEnvironmentName(
-  environments: Array<Pick<ApiEnvironment, "id" | "name">>,
-  name: string,
-  excludeId?: string,
-) {
-  const normalized = normalizeEnvironmentName(name);
-  if (!normalized) {
-    return null;
-  }
-  return (
-    environments.find(
-      (environment) =>
-        environment.id !== excludeId &&
-        normalizeEnvironmentName(environment.name) === normalized,
-    )?.name ?? null
-  );
-}
 
 export function findDuplicateRequestName(
   savedRequests: ApiSavedRequest[],
@@ -55,22 +32,6 @@ export function findDuplicateRequestName(
         request.parentFolderId === (parentFolderId ?? null),
     )?.name ?? null
   );
-}
-
-export function nextEnvironmentName(
-  baseName: string,
-  environments: Array<Pick<ApiEnvironment, "id" | "name">>,
-) {
-  const base = baseName.trim() || "New Environment";
-  if (!findDuplicateEnvironmentName(environments, base)) {
-    return base;
-  }
-
-  let suffix = 2;
-  while (findDuplicateEnvironmentName(environments, `${base} ${suffix}`)) {
-    suffix += 1;
-  }
-  return `${base} ${suffix}`;
 }
 
 export function defaultAuthConfig(): ApiAuthConfig {
@@ -122,22 +83,6 @@ export function historyDetailToInput(history: ApiHistoryDetail): ApiRequestInput
 }
 
 export * from "./request-utils/collection-tree";
-
-export function duplicateEnvironmentKeys(variables: KeyValue[]) {
-  const seen = new Set<string>();
-  const duplicates = new Set<string>();
-  for (const variable of variables) {
-    const key = variable.key.trim().toLowerCase();
-    if (!key || !variable.enabled) {
-      continue;
-    }
-    if (seen.has(key)) {
-      duplicates.add(variable.key.trim());
-    }
-    seen.add(key);
-  }
-  return Array.from(duplicates);
-}
 
 export function isSensitiveKey(key: string) {
   return /(token|secret|password|passwd|api[_-]?key|auth|credential)/i.test(key);

@@ -2,9 +2,20 @@ import { ApiClientPage } from "@unfour/api-client";
 import AppShell from "./AppShell";
 import { DatabasePage } from "@unfour/database";
 import { TerminalLogPanel, TerminalPage, TerminalStatusBar } from "@unfour/ssh-terminal";
+import {
+  WorkspaceEnvironmentsPage,
+  WorkspaceEnvironmentsStatusBar,
+} from "@unfour/workspace-environments";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CommandPalette, FeedbackProvider, MainWorkspace, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
+import {
+  CommandPalette,
+  ConfirmDialog,
+  FeedbackProvider,
+  MainWorkspace,
+  useFeedbackErrorHandler,
+  useI18n,
+} from "@unfour/ui";
 import {
   exportDiagnosticsBundle,
   getSystemHealth,
@@ -53,6 +64,13 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
     nonce: number;
     workspaceId: string;
   } | null>(null);
+  const [variableManagerDirty, setVariableManagerDirty] = useState(false);
+  const [pendingVariableManagerLeave, setPendingVariableManagerLeave] = useState<
+    | { kind: "activate-workspace"; workspaceId: string }
+    | { kind: "select-module"; tabId: string }
+    | { kind: "toggle-sidebar" }
+    | null
+  >(null);
   const {
     activeTabId,
     activeWorkspaceId,
@@ -104,6 +122,9 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
   const activateWorkspaceMutation = useMutation({
     mutationFn: setActiveWorkspaceCommand,
     onSuccess: (state) => {
+      setVariableManagerRequest(null);
+      setVariableManagerDirty(false);
+      setPendingVariableManagerLeave(null);
       setActiveWorkspace(state.activeWorkspaceId);
       queryClient.invalidateQueries({ queryKey: ["workspaces"] });
     },
@@ -123,15 +144,93 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
   const workspaceEnvironments = workspaceEnvironmentsQuery.data ?? [];
   const activeEnvironment =
     workspaceEnvironments.find((environment) => environment.isActive) ?? null;
+  const variableManagerOpen =
+    Boolean(activeWorkspace) &&
+    variableManagerRequest?.workspaceId === activeWorkspace?.id;
   const handleManageVariables = useCallback(() => {
     if (!activeWorkspace) return;
-    setActiveTab("api-main");
     setVariableManagerRequest((current) => ({
       environmentId: activeEnvironment?.id ?? null,
       nonce: (current?.nonce ?? 0) + 1,
       workspaceId: activeWorkspace.id,
     }));
-  }, [activeEnvironment?.id, activeWorkspace, setActiveTab]);
+  }, [activeEnvironment?.id, activeWorkspace]);
+  const closeVariableManager = useCallback(() => {
+    setVariableManagerRequest(null);
+    setVariableManagerDirty(false);
+    setPendingVariableManagerLeave(null);
+  }, []);
+  const applyVariableManagerLeave = useCallback(
+    (
+      leave:
+        | { kind: "activate-workspace"; workspaceId: string }
+        | { kind: "select-module"; tabId: string }
+        | { kind: "toggle-sidebar" },
+    ) => {
+      closeVariableManager();
+      if (leave.kind === "select-module") {
+        setActiveTab(leave.tabId);
+        return;
+      }
+      if (leave.kind === "activate-workspace") {
+        activateWorkspaceMutation.mutate(leave.workspaceId);
+      }
+    },
+    [activateWorkspaceMutation, closeVariableManager, setActiveTab],
+  );
+  const requestLeaveVariableManager = useCallback(
+    (
+      leave:
+        | { kind: "activate-workspace"; workspaceId: string }
+        | { kind: "select-module"; tabId: string }
+        | { kind: "toggle-sidebar" },
+    ) => {
+      if (!variableManagerOpen) {
+        if (leave.kind === "select-module") {
+          setActiveTab(leave.tabId);
+          return;
+        }
+        if (leave.kind === "toggle-sidebar") {
+          toggleSidebar();
+          return;
+        }
+        activateWorkspaceMutation.mutate(leave.workspaceId);
+        return;
+      }
+      if (variableManagerDirty) {
+        setPendingVariableManagerLeave(leave);
+        return;
+      }
+      applyVariableManagerLeave(leave);
+    },
+    [
+      activateWorkspaceMutation,
+      applyVariableManagerLeave,
+      setActiveTab,
+      toggleSidebar,
+      variableManagerDirty,
+      variableManagerOpen,
+    ],
+  );
+  const handleSelectModule = useCallback(
+    (tabId: string) => {
+      requestLeaveVariableManager({ kind: "select-module", tabId });
+    },
+    [requestLeaveVariableManager],
+  );
+  const handleToggleSidebar = useCallback(() => {
+    if (variableManagerOpen) {
+      requestLeaveVariableManager({ kind: "toggle-sidebar" });
+      return;
+    }
+    toggleSidebar();
+  }, [requestLeaveVariableManager, toggleSidebar, variableManagerOpen]);
+  const handleActivateWorkspace = useCallback(
+    (workspaceId: string) => {
+      requestLeaveVariableManager({ kind: "activate-workspace", workspaceId });
+    },
+    [requestLeaveVariableManager],
+  );
   const handleApiSidebarChange = useCallback((content: ReactNode | null) => {
     setApiSidebarContent(content);
   }, []);
@@ -186,13 +285,13 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
           <ModuleActivityBar
             activeKind={activeTab.kind}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-            sidebarCollapsed={sidebarCollapsed}
-            onSelect={setActiveTab}
-            onToggleSidebar={toggleSidebar}
+            sidebarCollapsed={sidebarCollapsed || variableManagerOpen}
+            onSelect={handleSelectModule}
+            onToggleSidebar={handleToggleSidebar}
           />
         }
         bottomPanel={
-          activeTab.kind === "ssh" && activeWorkspace ? (
+          variableManagerOpen ? undefined : activeTab.kind === "ssh" && activeWorkspace ? (
             <TerminalLogPanel
               collapsed={bottomPanelCollapsed}
               height={bottomPanelHeight}
@@ -216,7 +315,7 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
             environments={workspaceEnvironments}
             endAccessory={TitleBarEnd ? <TitleBarEnd {...extensionContext} /> : undefined}
             extensionContext={extensionContext}
-            onActivateWorkspace={(id) => activateWorkspaceMutation.mutate(id)}
+            onActivateWorkspace={handleActivateWorkspace}
             onManageVariables={handleManageVariables}
             onSelectEnvironment={(environmentId) =>
               activeWorkspace &&
@@ -230,19 +329,21 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
           />
         }
         rightInspector={
-          <RightInspectorPlaceholder
-            activeTab={activeTab}
-            collapsed={rightInspectorCollapsed}
-            onCollapse={() => setRightInspectorCollapsed(true)}
-            onWidthChange={setRightInspectorWidth}
-            width={rightInspectorWidth}
-          />
+          variableManagerOpen ? undefined : (
+            <RightInspectorPlaceholder
+              activeTab={activeTab}
+              collapsed={rightInspectorCollapsed}
+              onCollapse={() => setRightInspectorCollapsed(true)}
+              onWidthChange={setRightInspectorWidth}
+              width={rightInspectorWidth}
+            />
+          )
         }
         sidebar={
           <ModuleSidebar
             activeTab={activeTab}
             apiSidebarContent={apiSidebarContent}
-            collapsed={sidebarCollapsed}
+            collapsed={sidebarCollapsed || variableManagerOpen}
             databaseSidebarContent={databaseSidebarContent}
             onWidthChange={setSidebarWidth}
             sshSidebarContent={sshSidebarContent}
@@ -250,7 +351,9 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
           />
         }
         statusBar={
-          activeTab.kind === "ssh" && activeWorkspace ? (
+          variableManagerOpen && activeWorkspace ? (
+            <WorkspaceEnvironmentsStatusBar workspaceName={activeWorkspace.name} />
+          ) : activeTab.kind === "ssh" && activeWorkspace ? (
             <TerminalStatusBar
               rightAccessory={statusBarRightAccessory}
               workspaceId={activeWorkspace.id}
@@ -274,26 +377,27 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
             tabBar={null}
           >
             {activeWorkspace && (
-              <div className={activeTab.kind === "api" ? "h-full" : "hidden"}>
+              <div
+                className={
+                  activeTab.kind === "api" && !variableManagerOpen ? "h-full" : "hidden"
+                }
+              >
                 <ApiClientPage
-                  active={activeTab.kind === "api"}
+                  active={activeTab.kind === "api" && !variableManagerOpen}
                   onShellSidebarChange={handleApiSidebarChange}
                   onActiveSavedRequestChange={setSelectedApiRequest}
                   openIntent={null}
-                  variableManagerRequest={
-                    variableManagerRequest?.workspaceId === activeWorkspace.id
-                      ? variableManagerRequest
-                      : undefined
-                  }
                   workspaceId={activeWorkspace.id}
                 />
               </div>
             )}
             {activeTab.kind === "ssh" && activeWorkspace && (
-              <TerminalPage
-                onShellSidebarChange={handleSshSidebarChange}
-                workspaceId={activeWorkspace.id}
-              />
+              <div className={variableManagerOpen ? "hidden" : "h-full"}>
+                <TerminalPage
+                  onShellSidebarChange={handleSshSidebarChange}
+                  workspaceId={activeWorkspace.id}
+                />
+              </div>
             )}
             {/* Keep DatabasePage mounted across module switches (mirrors the
                 ApiClientPage pattern above). The SQL editor is a Monaco instance
@@ -304,7 +408,13 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
                 module with a query tab open. Mounting it always (hidden when
                 inactive) preserves the live editor instance and its theme. */}
             {activeWorkspace && (
-              <div className={activeTab.kind === "database" ? "h-full" : "hidden"}>
+              <div
+                className={
+                  activeTab.kind === "database" && !variableManagerOpen
+                    ? "h-full"
+                    : "hidden"
+                }
+              >
                 <DatabasePage
                   onShellSidebarChange={handleDatabaseSidebarChange}
                   onShellStatusBarChange={handleDatabaseStatusBarChange}
@@ -314,24 +424,46 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
                 />
               </div>
             )}
+            {activeWorkspace && variableManagerOpen && variableManagerRequest && (
+              <WorkspaceEnvironmentsPage
+                initialEnvironmentId={variableManagerRequest.environmentId}
+                key={`${activeWorkspace.id}:${variableManagerRequest.nonce}`}
+                onClose={closeVariableManager}
+                onDirtyChange={setVariableManagerDirty}
+                workspaceId={activeWorkspace.id}
+              />
+            )}
           </MainWorkspace>
         }
+      />
+      <ConfirmDialog
+        confirmLabel={t("variables.discard")}
+        description={t("variables.discardChangesDescription")}
+        onConfirm={() => {
+          if (!pendingVariableManagerLeave) return;
+          applyVariableManagerLeave(pendingVariableManagerLeave);
+        }}
+        onOpenChange={(open) => !open && setPendingVariableManagerLeave(null)}
+        open={pendingVariableManagerLeave !== null}
+        title={t("variables.discardChangesTitle")}
       />
       <CommandPalette
         actions={
           <>
             <CommandPaletteAction
-              onSelect={() => runCommandPaletteAction(() => setActiveTab("api-main"))}
+              onSelect={() => runCommandPaletteAction(() => handleSelectModule("api-main"))}
             >
               {t("app.commandPalette.openApiClient")}
             </CommandPaletteAction>
             <CommandPaletteAction
-              onSelect={() => runCommandPaletteAction(() => setActiveTab("database-main"))}
+              onSelect={() =>
+                runCommandPaletteAction(() => handleSelectModule("database-main"))
+              }
             >
               {t("app.commandPalette.openDatabase")}
             </CommandPaletteAction>
             <CommandPaletteAction
-              onSelect={() => runCommandPaletteAction(() => setActiveTab("ssh-main"))}
+              onSelect={() => runCommandPaletteAction(() => handleSelectModule("ssh-main"))}
             >
               {t("app.commandPalette.openSshTerminal")}
             </CommandPaletteAction>

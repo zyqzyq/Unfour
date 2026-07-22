@@ -1,7 +1,6 @@
 import { Plus, Trash2 } from "lucide-react";
 import { Button, Input, cn, useI18n } from "@unfour/ui";
 import type { KeyValue } from "@unfour/command-client";
-import { duplicateEnvironmentKeys } from "../request-utils";
 
 export function KeyValueEditor({
   items,
@@ -121,23 +120,4 @@ function findDuplicateKeys(items: KeyValue[]): string[] {
     }
   }
   return [...duplicates];
-}
-
-export function EnvironmentHints({ variables }: { variables: KeyValue[] }) {
-  const { t } = useI18n();
-  const duplicateKeys = duplicateEnvironmentKeys(variables);
-
-  if (!duplicateKeys.length) {
-    return null;
-  }
-
-  return (
-    <div className="mt-2 space-y-1 text-xs">
-      {duplicateKeys.length > 0 && (
-        <div className="rounded-md bg-[var(--u-color-warning-soft)] px-2 py-1 text-[var(--u-color-warning-text)] ring-1 ring-inset ring-[var(--u-badge-warning-ring)]">
-          {t("api.keyValue.duplicateVariables", { keys: duplicateKeys.join(", ") })}
-        </div>
-      )}
-    </div>
-  );
 }

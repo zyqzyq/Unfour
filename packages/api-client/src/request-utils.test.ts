@@ -6,11 +6,8 @@ import {
   savedRequestToInput,
   buildApiCollectionTree,
   collectTreeRequests,
-  duplicateEnvironmentKeys,
-  findDuplicateEnvironmentName,
   isSensitiveKey,
   formatByteSize,
-  nextEnvironmentName,
   queryFromUrl,
   stripUrlQuery,
   syncUrlQuery,
@@ -18,7 +15,6 @@ import {
 import type {
   ApiCollection,
   ApiCollectionFolder,
-  ApiEnvironment,
   ApiSavedRequest,
   KeyValue,
 } from "@unfour/command-client";
@@ -270,60 +266,6 @@ describe("buildApiCollectionTree", () => {
 
     expect(groups[0].tree.folders).toEqual([]);
     expect(groups[0].tree.rootRequests[0].name).toBe("Root Request");
-  });
-});
-
-describe("duplicateEnvironmentKeys", () => {
-  it("finds case-insensitive duplicate keys", () => {
-    const vars: KeyValue[] = [
-      { key: "API_URL", value: "a", enabled: true },
-      { key: "api_url", value: "b", enabled: true },
-      { key: "OTHER", value: "c", enabled: true },
-    ];
-    const dupes = duplicateEnvironmentKeys(vars);
-    expect(dupes).toHaveLength(1);
-    expect(dupes[0].toLowerCase()).toBe("api_url");
-  });
-
-  it("ignores disabled and empty keys", () => {
-    const vars: KeyValue[] = [
-      { key: "DUP", value: "a", enabled: true },
-      { key: "dup", value: "b", enabled: false },
-      { key: "", value: "c", enabled: true },
-    ];
-    expect(duplicateEnvironmentKeys(vars)).toEqual([]);
-  });
-
-  it("returns empty for no duplicates", () => {
-    const vars: KeyValue[] = [
-      { key: "A", value: "1", enabled: true },
-      { key: "B", value: "2", enabled: true },
-    ];
-    expect(duplicateEnvironmentKeys(vars)).toEqual([]);
-  });
-});
-
-describe("environment name helpers", () => {
-  it("detects duplicate environment names inside one workspace list", () => {
-    const environments: Array<Pick<ApiEnvironment, "id" | "name">> = [
-      { id: "env-1", name: "Dev" },
-      { id: "env-2", name: "Prod" },
-    ];
-
-    expect(findDuplicateEnvironmentName(environments, " dev ")).toBe("Dev");
-    expect(findDuplicateEnvironmentName(environments, "dev", "env-1")).toBeNull();
-    expect(findDuplicateEnvironmentName(environments, "Stage")).toBeNull();
-  });
-
-  it("generates the next available default environment name", () => {
-    const environments: Array<Pick<ApiEnvironment, "id" | "name">> = [
-      { id: "env-1", name: "New Environment" },
-      { id: "env-2", name: "New Environment 2" },
-    ];
-
-    expect(nextEnvironmentName("New Environment", environments)).toBe(
-      "New Environment 3",
-    );
   });
 });
 

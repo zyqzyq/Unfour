@@ -3,8 +3,6 @@ import type {
   ApiCollectionFolder,
   ApiSavedRequest,
 } from "@unfour/command-client";
-import { ConfirmDialog, useI18n } from "@unfour/ui";
-
 import { requestTabTitle, type ApiRequestTab } from "../model/request-tabs";
 import { ApiCloseRequestDialog } from "./ApiCloseRequestDialog";
 import { ApiSaveDialog, type SaveIdentity } from "./ApiSaveDialog";
@@ -12,13 +10,10 @@ import { ApiSaveDialog, type SaveIdentity } from "./ApiSaveDialog";
 export function ApiClientDialogs({
   closeDialogTab,
   collections,
-  environmentCloseDialogOpen,
   folders,
   onCancelClose,
   onCancelSave,
-  onCloseEnvironment,
   onDiscardClose,
-  onEnvironmentDialogOpenChange,
   onSaveClose,
   onSaveIdentity,
   savedRequests,
@@ -26,20 +21,15 @@ export function ApiClientDialogs({
 }: {
   closeDialogTab: ApiRequestTab | null;
   collections: ApiCollection[];
-  environmentCloseDialogOpen: boolean;
   folders: ApiCollectionFolder[];
   onCancelClose: () => void;
   onCancelSave: () => void;
-  onCloseEnvironment: () => void;
   onDiscardClose: () => void;
-  onEnvironmentDialogOpenChange: (open: boolean) => void;
   onSaveClose: () => void;
   onSaveIdentity: (identity: SaveIdentity) => void;
   savedRequests: ApiSavedRequest[];
   saveDialogTab: ApiRequestTab | null;
 }) {
-  const { t } = useI18n();
-
   return (
     <>
       {saveDialogTab && (
@@ -63,14 +53,6 @@ export function ApiClientDialogs({
         onSave={onSaveClose}
         open={Boolean(closeDialogTab)}
         title={closeDialogTab ? requestTabTitle(closeDialogTab) : ""}
-      />
-      <ConfirmDialog
-        confirmLabel={t("api.environment.discard")}
-        description={t("api.environment.discardChangesDescription")}
-        onConfirm={onCloseEnvironment}
-        onOpenChange={onEnvironmentDialogOpenChange}
-        open={environmentCloseDialogOpen}
-        title={t("api.environment.discardChangesTitle")}
       />
     </>
   );

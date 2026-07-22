@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Layers, Settings2 } from "lucide-react";
+import { Check, ChevronDown, Settings2 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Button } from "./button";
 import { cn } from "./utils";
@@ -30,18 +30,26 @@ export function ActiveEnvironmentSelect({
       <DropdownMenu.Trigger asChild>
         <Button
           aria-label={t("variables.activeEnvironment")}
-          className="max-w-[210px] justify-start gap-1.5 border-transparent bg-[var(--u-color-surface)] px-2 font-medium shadow-none hover:bg-[var(--u-color-surface-hover)]"
+          className="max-w-[132px] justify-start gap-1.5 border-transparent bg-[var(--u-color-surface)] px-1.5 font-medium shadow-none hover:bg-[var(--u-color-surface-hover)]"
           size="sm"
+          title={t("variables.environmentPrefix", {
+            name: activeEnvironment?.name ?? t("variables.noEnvironment"),
+          })}
           type="button"
           variant="outline"
         >
-          <Layers className="shrink-0 text-[var(--u-color-text-muted)]" size={13} />
+          <span
+            className={cn(
+              "h-1.5 w-1.5 shrink-0 rounded-full",
+              activeEnvironment
+                ? "bg-[var(--u-color-primary)]"
+                : "bg-[var(--u-color-text-soft)]",
+            )}
+          />
           <span className="min-w-0 truncate">
-            {t("variables.environmentPrefix", {
-              name: activeEnvironment?.name ?? t("variables.noEnvironment"),
-            })}
+            {activeEnvironment?.name ?? t("variables.noEnvironment")}
           </span>
-          <ChevronDown className="ml-auto shrink-0 text-[var(--u-color-text-muted)]" size={13} />
+          <ChevronDown className="shrink-0 text-[var(--u-color-text-muted)]" size={12} />
         </Button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>

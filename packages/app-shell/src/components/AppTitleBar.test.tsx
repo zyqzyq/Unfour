@@ -179,7 +179,13 @@ describe("AppTitleBar settings entry", () => {
       { wrapper: createWrapper() },
     );
 
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Active environment" }), {
+    const environmentTrigger = screen.getByRole("button", {
+      name: "Active environment",
+    });
+    expect(environmentTrigger).toHaveTextContent("Development");
+    expect(environmentTrigger).not.toHaveTextContent("Environment:");
+
+    fireEvent.pointerDown(environmentTrigger, {
       button: 0,
       ctrlKey: false,
     });

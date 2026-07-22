@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Loader2, Settings2, X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -17,18 +17,9 @@ import {
   type ApiRequestTab,
 } from "../model/request-tabs";
 
-type EnvironmentTabState = {
-  active: boolean;
-  dirty: boolean;
-  onClose: () => void;
-  onSelect: () => void;
-  open: boolean;
-};
-
 export function ApiRequestTabs({
   activeId,
   endControl,
-  environmentTab,
   onClose,
   onCloseAll,
   onCloseLeft,
@@ -40,7 +31,6 @@ export function ApiRequestTabs({
 }: {
   activeId: string | null;
   endControl?: ReactNode;
-  environmentTab?: EnvironmentTabState;
   onClose: (tab: ApiRequestTab) => void;
   onCloseAll: () => void;
   onCloseLeft: (tab: ApiRequestTab) => void;
@@ -143,45 +133,6 @@ export function ApiRequestTabs({
             </ContextMenu>
           );
         })}
-        {environmentTab?.open && (
-          <div
-            className={cn(
-              "group relative flex min-w-[170px] max-w-[230px] items-center gap-1 border-r border-[var(--u-color-border)] px-2 text-[12px]",
-              environmentTab.active
-                ? "bg-[var(--u-color-surface)] text-[var(--u-color-text)]"
-                : "text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)]",
-            )}
-          >
-            {environmentTab.active && (
-              <span className="absolute inset-x-0 top-0 h-0.5 bg-[var(--u-color-primary)]" />
-            )}
-            <button
-              aria-selected={environmentTab.active}
-              className="flex min-w-0 flex-1 items-center gap-1.5"
-              onClick={environmentTab.onSelect}
-              role="tab"
-              title={t("api.sidebar.environments")}
-              type="button"
-            >
-              <Settings2 className="shrink-0 text-[var(--u-color-text-muted)]" size={13} />
-              {environmentTab.dirty && (
-                <span
-                  aria-label={t("api.tabs.dirty")}
-                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--u-color-primary)]"
-                />
-              )}
-              <span className="truncate">{t("api.sidebar.environments")}</span>
-            </button>
-            <button
-              aria-label={t("api.tabs.close", { title: t("api.sidebar.environments") })}
-              className="grid h-5 w-5 shrink-0 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] hover:bg-[var(--u-color-surface-hover)]"
-              onClick={environmentTab.onClose}
-              type="button"
-            >
-              <X size={12} />
-            </button>
-          </div>
-        )}
       </div>
       <button
         aria-label={t("common.actions.newRequest")}

@@ -11,25 +11,30 @@ import {
 } from "@unfour/command-client";
 import { useFeedbackErrorHandler } from "@unfour/ui";
 
-/**
- * Workspace environment CRUD and local active-environment selection.
- */
-export function useApiEnvironments(workspaceId: string) {
+export function useWorkspaceEnvironments(workspaceId: string) {
   const queryClient = useQueryClient();
   const handleError = useFeedbackErrorHandler();
-
+  const queryKey = ["workspace-environments", workspaceId] as const;
   const query = useQuery({
     enabled: Boolean(workspaceId),
-    queryKey: ["workspace-environments", workspaceId],
+    queryKey,
     queryFn: () => listWorkspaceEnvironments(workspaceId),
   });
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: ["workspace-environments", workspaceId] });
-
+  const mergeEnvironment = (saved: WorkspaceEnvironment) => {
+    queryClient.setQueryData<WorkspaceEnvironment[]>(queryKey, (current = []) => {
+      const index = current.findIndex((environment) => environment.id === saved.id);
+      if (index < 0) return [...current, saved];
+      return current.map((environment) =>
+        environment.id === saved.id ? saved : environment,
+      );
+    });
+  };
   const createMut = useMutation({
     mutationFn: (name: string) => createWorkspaceEnvironment(workspaceId, name),
-    onSuccess: invalidate,
+    // Use mutation results only — do not invalidate here. create→update save
+    // can race a stale list refetch and wipe variables just written by update.
+    onSuccess: mergeEnvironment,
   });
   const updateMut = useMutation({
     mutationFn: (input: {
@@ -43,19 +48,19 @@ export function useApiEnvironments(workspaceId: string) {
         input.name,
         input.variables,
       ),
-    onSuccess: invalidate,
+    onSuccess: mergeEnvironment,
   });
   const deleteMut = useMutation({
     mutationFn: (environmentId: string) =>
       deleteWorkspaceEnvironment(workspaceId, environmentId),
-    onSuccess: invalidate,
+    onSuccess: (saved) => queryClient.setQueryData(queryKey, saved),
     onError: (error) =>
       handleError(error, { key: "feedback.api.environmentDeleteFailed" }),
   });
   const activateMut = useMutation({
     mutationFn: (environmentId: string | null) =>
       setActiveWorkspaceEnvironment(workspaceId, environmentId),
-    onSuccess: invalidate,
+    onSuccess: (saved) => queryClient.setQueryData(queryKey, saved),
     onError: (error) =>
       handleError(error, { key: "feedback.api.environmentActivateFailed" }),
   });
@@ -64,14 +69,11 @@ export function useApiEnvironments(workspaceId: string) {
     () => query.data ?? [],
     [query.data],
   );
-  const activeEnvironment = useMemo(
-    () => environments.find((environment) => environment.isActive) ?? null,
-    [environments],
-  );
 
   return {
     activateMut,
-    activeEnvironment,
+    activeEnvironment:
+      environments.find((environment) => environment.isActive) ?? null,
     createMut,
     deleteMut,
     environments,

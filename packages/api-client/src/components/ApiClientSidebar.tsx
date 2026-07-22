@@ -1,84 +1,45 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { Circle, Clock, FolderOpen, MoreHorizontal, Plus, Settings2 } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Clock, FolderOpen } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  listApiHistory,
-  type ApiHistoryItem,
-  type WorkspaceEnvironment,
-} from "@unfour/command-client";
-import {
-  Button,
-  cn,
-  ConfirmDialog,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  useI18n,
-} from "@unfour/ui";
-import { useFeedbackErrorHandler } from "@unfour/ui";
-import { useApiEnvironments } from "../hooks/useApiEnvironments";
+import { listApiHistory, type ApiHistoryItem } from "@unfour/command-client";
+import { cn, useI18n } from "@unfour/ui";
 import type { ApiOpenIntent } from "../model/types";
-import { nextEnvironmentName } from "../request-utils";
 import { ApiCollectionTree } from "./ApiCollectionTree";
 import { ApiHistoryTree } from "./ApiHistoryTree";
-import { WORKSPACE_VARIABLES_SELECTION_ID } from "./environment-manager-selection";
 
-type SidebarTab = "collections" | "history" | "environments";
+type SidebarTab = "collections" | "history";
 
 const sidebarTabs: Array<{ id: SidebarTab; icon: ReactNode; labelKey: string }> = [
   { id: "collections", icon: <FolderOpen size={14} />, labelKey: "api.sidebar.collections" },
   { id: "history", icon: <Clock size={14} />, labelKey: "api.sidebar.history" },
-  { id: "environments", icon: <Settings2 size={14} />, labelKey: "api.sidebar.environments" },
 ];
 
 export function ApiClientSidebar({
-  environmentPanelActive = false,
-  onEditEnvironment,
-  onEditWorkspaceVariables,
-  onNewEnvironment,
   onNewRequest,
-  onOpenEnvironments,
   onOpenIntent,
-  selectedEnvironmentId,
   selectedId,
   shellSlot = false,
   workspaceId,
 }: {
-  environmentPanelActive?: boolean;
-  onEditEnvironment: (environmentId: string) => void;
-  onEditWorkspaceVariables: () => void;
-  onNewEnvironment: () => void;
   onNewRequest: () => void;
-  onOpenEnvironments: () => void;
   onOpenIntent: (intent: ApiOpenIntent) => void;
-  selectedEnvironmentId: string | null;
   selectedId: string | null;
   shellSlot?: boolean;
   workspaceId: string;
 }) {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<SidebarTab>("collections");
-
   const historyQuery = useQuery({
     enabled: Boolean(workspaceId),
     queryKey: ["api-history", workspaceId],
     queryFn: () => listApiHistory(workspaceId),
   });
 
-  useEffect(() => {
-    if (environmentPanelActive) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: external prop drives tab sync
-      setActiveTab("environments");
-    }
-  }, [environmentPanelActive]);
-
   return (
     <div
       className={cn(
         "flex h-full min-h-0 flex-col bg-[var(--u-color-surface)]",
-        !shellSlot &&
-          "w-[248px] shrink-0 border-r border-[var(--u-color-border)]",
+        !shellSlot && "w-[248px] shrink-0 border-r border-[var(--u-color-border)]",
       )}
     >
       <div className="flex h-[var(--u-size-tabbar)] shrink-0 items-center gap-1 border-b border-[var(--u-color-border)] px-2">
@@ -89,20 +50,13 @@ export function ApiClientSidebar({
               aria-label={t(tab.labelKey)}
               aria-pressed={active}
               className={cn(
-                "flex h-[26px] w-[26px] items-center justify-center rounded-[var(--u-radius-md)] border border-transparent text-[var(--u-color-text-muted)] transition-colors",
+                "flex h-[26px] w-[26px] cursor-pointer items-center justify-center rounded-[var(--u-radius-md)] border border-transparent text-[var(--u-color-text-muted)] transition-colors",
                 active
                   ? "bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]"
-                  : "text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
+                  : "hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
               )}
               key={tab.id}
-              onClick={() => {
-                if (tab.id === "environments") {
-                  setActiveTab("environments");
-                  onOpenEnvironments();
-                  return;
-                }
-                setActiveTab(tab.id);
-              }}
+              onClick={() => setActiveTab(tab.id)}
               title={t(tab.labelKey)}
               type="button"
             >
@@ -124,216 +78,9 @@ export function ApiClientSidebar({
           />
         )}
         {activeTab === "history" && (
-          <HistoryPanel
-            items={historyQuery.data ?? []}
-            onOpenIntent={onOpenIntent}
-          />
-        )}
-        {activeTab === "environments" && (
-          <EnvironmentsPanel
-            onEditEnvironment={onEditEnvironment}
-            onEditWorkspaceVariables={onEditWorkspaceVariables}
-            onNewEnvironment={onNewEnvironment}
-            selectedEnvironmentId={selectedEnvironmentId}
-            workspaceId={workspaceId}
-          />
+          <HistoryPanel items={historyQuery.data ?? []} onOpenIntent={onOpenIntent} />
         )}
       </div>
-    </div>
-  );
-}
-
-function EnvironmentsPanel({
-  onEditEnvironment,
-  onEditWorkspaceVariables,
-  onNewEnvironment,
-  selectedEnvironmentId,
-  workspaceId,
-}: {
-  onEditEnvironment: (environmentId: string) => void;
-  onEditWorkspaceVariables: () => void;
-  onNewEnvironment: () => void;
-  selectedEnvironmentId: string | null;
-  workspaceId: string;
-}) {
-  const { t } = useI18n();
-  const handleError = useFeedbackErrorHandler();
-  const { createMut, deleteMut, environments, isLoading, updateMut } =
-    useApiEnvironments(workspaceId);
-  const [deleteTarget, setDeleteTarget] = useState<WorkspaceEnvironment | null>(null);
-
-  const handleDuplicate = async (environment: WorkspaceEnvironment) => {
-    const name = nextEnvironmentName(environment.name, environments);
-    try {
-      const created = await createMut.mutateAsync(name);
-      await updateMut.mutateAsync({
-        id: created.id,
-        name,
-        // Drop persisted IDs so the replace path inserts copies for the new
-        // environment instead of updating rows scoped to the source.
-        variables: environment.variables.map((variable) => ({
-          id: null,
-          key: variable.key,
-          value: variable.value,
-          isSecret: variable.isSecret,
-          isEnabled: variable.isEnabled,
-          description: variable.description,
-          sortOrder: variable.sortOrder,
-        })),
-      });
-    } catch (error) {
-      handleError(error, { key: "feedback.api.environmentDuplicateFailed" });
-    }
-  };
-
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 px-2 pt-2">
-        <span className="text-[11px] font-semibold uppercase text-[var(--u-color-text-soft)]">
-          {t("variables.workspaceGroup")}
-        </span>
-        <button
-          className={cn(
-            "mt-1 flex w-full cursor-pointer items-center gap-2 rounded-[var(--u-radius-md)] px-2 py-1.5 text-left text-[12px] font-medium transition-colors",
-            selectedEnvironmentId === WORKSPACE_VARIABLES_SELECTION_ID
-              ? "bg-[var(--u-color-surface-active)] text-[var(--u-color-text)]"
-              : "text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
-          )}
-          onClick={onEditWorkspaceVariables}
-          type="button"
-        >
-          <Settings2 size={13} />
-          <span className="truncate">{t("variables.workspaceVariables")}</span>
-        </button>
-      </div>
-      <div className="flex shrink-0 items-center justify-between gap-2 px-2 pt-3 pb-1">
-        <span className="text-[11px] font-semibold uppercase text-[var(--u-color-text-soft)]">
-          {t("variables.environmentsGroup")}
-        </span>
-        <Button onClick={onNewEnvironment} size="sm" type="button" variant="ghost">
-          <Plus size={13} />
-          {t("api.environment.new")}
-        </Button>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-        {isLoading ? (
-          <div className="px-2 py-1.5 text-[12px] text-[var(--u-color-text-muted)]">
-            {t("common.state.loading")}
-          </div>
-        ) : environments.length === 0 ? (
-          <div className="px-2 py-1.5 text-[12px] text-[var(--u-color-text-muted)]">
-            {t("api.environment.noneConfigured")}
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {environments.map((environment) => (
-              <EnvironmentRow
-                environment={environment}
-                key={environment.id}
-                onDelete={() => setDeleteTarget(environment)}
-                onDuplicate={() => handleDuplicate(environment)}
-                onSelect={() => onEditEnvironment(environment.id)}
-                selected={selectedEnvironmentId === environment.id}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-      <ConfirmDialog
-        confirmLabel={t("common.actions.delete")}
-        description={
-          deleteTarget
-            ? t("api.environment.deleteConfirm", { name: deleteTarget.name })
-            : ""
-        }
-        onConfirm={() => {
-          if (deleteTarget) {
-            deleteMut.mutate(deleteTarget.id, {
-              onSuccess: () => setDeleteTarget(null),
-            });
-          }
-        }}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-        open={deleteTarget !== null}
-        pending={deleteMut.isPending}
-        title={t("api.environment.delete")}
-      />
-    </div>
-  );
-}
-
-function EnvironmentRow({
-  environment,
-  onDelete,
-  onDuplicate,
-  onSelect,
-  selected,
-}: {
-  environment: WorkspaceEnvironment;
-  onDelete: () => void;
-  onDuplicate: () => void;
-  onSelect: () => void;
-  selected: boolean;
-}) {
-  const { t } = useI18n();
-
-  return (
-    <div
-      className={cn(
-        "group flex w-full min-w-0 items-center gap-1.5 rounded-[var(--u-radius-md)] px-2 py-1.5 text-left text-[12px] transition-colors",
-        selected
-          ? "bg-[var(--u-color-surface-active)] text-[var(--u-color-text)]"
-          : "text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
-      )}
-    >
-      <span
-        aria-label={environment.isActive ? t("api.environment.activeBadge") : undefined}
-        className={cn(
-          "inline-flex shrink-0 items-center justify-center rounded-full transition-colors",
-          environment.isActive
-            ? "text-[var(--u-color-primary)]"
-            : "text-transparent",
-        )}
-        title={environment.isActive ? t("api.environment.activeBadge") : undefined}
-      >
-        <Circle
-          fill={environment.isActive ? "currentColor" : "none"}
-          size={10}
-          strokeWidth={2}
-        />
-      </span>
-      <button
-        aria-label={environment.name}
-        className="min-w-0 flex-1 truncate font-medium"
-        onClick={onSelect}
-        type="button"
-      >
-        {environment.name}
-      </button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-label={t("api.environment.actionsLabel", { name: environment.name })}
-            className="grid h-5 w-5 shrink-0 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] opacity-0 hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)] focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-            onClick={(event) => event.stopPropagation()}
-            onPointerDown={(event) => event.stopPropagation()}
-            type="button"
-          >
-            <MoreHorizontal size={13} />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={onDuplicate}>
-            {t("api.actions.duplicate")}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="text-[var(--u-color-danger)]"
-            onSelect={onDelete}
-          >
-            {t("api.environment.delete")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
     </div>
   );
 }
@@ -346,7 +93,6 @@ function HistoryPanel({
   onOpenIntent: (intent: ApiOpenIntent) => void;
 }) {
   const { t } = useI18n();
-
   if (!items.length) {
     return (
       <div className="p-3 text-[12px] text-[var(--u-color-text-muted)]">
