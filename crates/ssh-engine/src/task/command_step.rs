@@ -136,9 +136,7 @@ fn command_step_outcome(
         });
     }
     match exit_code {
-        Some(0) => Ok(TaskStepResult {
-            exit_code: Some(0),
-        }),
+        Some(0) => Ok(TaskStepResult { exit_code: Some(0) }),
         Some(code) => Err(TaskStepError::Failed {
             message: format!("Command exited with status {code}"),
             exit_code: Some(code),
@@ -255,9 +253,7 @@ mod tests {
     fn zero_exit_status_is_success() {
         assert_eq!(
             command_step_outcome(Some(0), None).unwrap(),
-            TaskStepResult {
-                exit_code: Some(0)
-            }
+            TaskStepResult { exit_code: Some(0) }
         );
     }
 

@@ -184,11 +184,7 @@ pub(super) fn finished_transfer_ids_to_prune(
     if finished.len() <= max_finished {
         return Vec::new();
     }
-    finished.sort_by(|left, right| {
-        left.1
-            .cmp(&right.1)
-            .then_with(|| left.0.cmp(&right.0))
-    });
+    finished.sort_by(|left, right| left.1.cmp(&right.1).then_with(|| left.0.cmp(&right.0)));
     let remove_count = finished.len() - max_finished;
     finished
         .into_iter()

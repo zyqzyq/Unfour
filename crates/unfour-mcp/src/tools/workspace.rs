@@ -618,10 +618,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(result["isError"], false);
-        assert_eq!(
-            result["structuredContent"]["variable"]["isSecret"],
-            true
-        );
+        assert_eq!(result["structuredContent"]["variable"]["isSecret"], true);
         assert_eq!(
             result["structuredContent"]["variable"]["description"],
             "kept"

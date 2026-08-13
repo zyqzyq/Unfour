@@ -650,10 +650,7 @@ mod tests {
             assert_eq!(input.steps[0].step_type, "command");
             if input.id.as_deref() == Some("task-1") {
                 assert_eq!(input.description, "Deploy service");
-                assert_eq!(
-                    input.default_connection_id.as_deref(),
-                    Some("connection-1")
-                );
+                assert_eq!(input.default_connection_id.as_deref(), Some("connection-1"));
             }
             Ok(detail())
         }

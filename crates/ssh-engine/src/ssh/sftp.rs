@@ -760,9 +760,7 @@ impl SshService {
         };
         let finished = transfers
             .iter()
-            .filter(|(_, runtime)| {
-                !matches!(runtime.state.status.as_str(), "pending" | "running")
-            })
+            .filter(|(_, runtime)| !matches!(runtime.state.status.as_str(), "pending" | "running"))
             .map(|(id, runtime)| (id.clone(), runtime.state.started_at.clone()))
             .collect::<Vec<_>>();
         for id in finished_transfer_ids_to_prune(finished, MAX_FINISHED_SFTP_TRANSFERS) {

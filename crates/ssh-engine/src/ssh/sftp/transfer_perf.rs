@@ -159,22 +159,19 @@ pub(super) async fn copy_remote_to_local_pipelined(
         return Ok(());
     }
 
-    let pipeline = DOWNLOAD_PIPELINE.min(total.div_ceil(TRANSFER_BUFFER_SIZE as u64).max(1) as usize);
+    let pipeline =
+        DOWNLOAD_PIPELINE.min(total.div_ceil(TRANSFER_BUFFER_SIZE as u64).max(1) as usize);
     let mut open_set: JoinSet<Result<File, TransferRunError>> = JoinSet::new();
     for _ in 0..pipeline {
         ensure_not_cancelled(cancel_rx)?;
         let sftp = sftp.clone();
         let path = remote_path.to_string();
-        open_set.spawn(async move {
-            sftp.open(path).await.map_err(transfer_sftp_error)
-        });
+        open_set.spawn(async move { sftp.open(path).await.map_err(transfer_sftp_error) });
     }
     let mut idle_files = Vec::with_capacity(pipeline);
     while let Some(opened) = open_set.join_next().await {
         ensure_not_cancelled(cancel_rx)?;
-        idle_files.push(
-            opened.map_err(|error| TransferRunError::Failed(error.to_string()))??,
-        );
+        idle_files.push(opened.map_err(|error| TransferRunError::Failed(error.to_string()))??);
     }
 
     let mut next_offset = 0_u64;
@@ -189,8 +186,8 @@ pub(super) async fn copy_remote_to_local_pipelined(
         let Some(joined) = inflight.join_next().await else {
             break;
         };
-        let (offset, data, file) = joined
-            .map_err(|error| TransferRunError::Failed(error.to_string()))??;
+        let (offset, data, file) =
+            joined.map_err(|error| TransferRunError::Failed(error.to_string()))??;
         idle_files.push(file);
         let chunk_len = data.len() as u64;
         pending.insert(offset, data);

@@ -31,12 +31,12 @@ impl NativeTaskDriver {
         }
         if let Some(parent) = target.parent() {
             if !parent.as_os_str().is_empty() {
-                tokio::fs::create_dir_all(parent).await.map_err(|error| {
-                    TaskStepError::Failed {
+                tokio::fs::create_dir_all(parent)
+                    .await
+                    .map_err(|error| TaskStepError::Failed {
                         message: format!("create local download directory failed: {error}"),
                         exit_code: None,
-                    }
-                })?;
+                    })?;
             }
         }
         let mut part_name = target.as_os_str().to_os_string();
@@ -177,20 +177,29 @@ mod tests {
     #[test]
     fn rejects_trailing_directory_separators() {
         let err = resolve_download_local_target(r"C:\Downloads\").unwrap_err();
-        assert!(matches!(err, super::TaskStepError::Failed { message, .. } if message.contains("file name")));
+        assert!(
+            matches!(err, super::TaskStepError::Failed { message, .. } if message.contains("file name"))
+        );
         let err = resolve_download_local_target("/tmp/out/").unwrap_err();
-        assert!(matches!(err, super::TaskStepError::Failed { message, .. } if message.contains("file name")));
+        assert!(
+            matches!(err, super::TaskStepError::Failed { message, .. } if message.contains("file name"))
+        );
     }
 
     #[test]
     fn rejects_empty_paths() {
         let err = resolve_download_local_target("   ").unwrap_err();
-        assert!(matches!(err, super::TaskStepError::Failed { message, .. } if message.contains("empty")));
+        assert!(
+            matches!(err, super::TaskStepError::Failed { message, .. } if message.contains("empty"))
+        );
     }
 
     #[test]
     fn accepts_file_paths() {
         let target = resolve_download_local_target(r"C:\Downloads\archive.tar").unwrap();
-        assert_eq!(target, std::path::PathBuf::from(r"C:\Downloads\archive.tar"));
+        assert_eq!(
+            target,
+            std::path::PathBuf::from(r"C:\Downloads\archive.tar")
+        );
     }
 }
