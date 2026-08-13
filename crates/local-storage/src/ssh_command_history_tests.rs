@@ -79,6 +79,8 @@ fn query(workspace_id: &str, connection_id: Option<&str>) -> SshCommandHistoryQu
         search: None,
         limit: Some(20),
         include_redacted: false,
+        since: None,
+        until: None,
     }
 }
 
@@ -255,4 +257,48 @@ async fn stores_at_most_two_hundred_commands_per_connection() {
     assert_eq!(entries.len(), 200);
     assert_eq!(entries[0].command, "cmd-204");
     assert!(entries.iter().all(|entry| entry.command != "cmd-0"));
+}
+
+#[tokio::test]
+async fn time_range_filters_executed_at() {
+    let service = service().await;
+    for (command, executed_at) in [
+        ("echo early", "2026-08-13T00:00:00Z"),
+        ("echo mid", "2026-08-13T12:00:00Z"),
+        ("echo late", "2026-08-13T23:00:00Z"),
+    ] {
+        service
+            .record(record_input("ws-a", "connection-a", command, executed_at))
+            .await
+            .expect("record timed command");
+    }
+
+    let mut since = query("ws-a", Some("connection-a"));
+    since.since = Some("2026-08-13T12:00:00Z".to_string());
+    let after_noon = service.list(since).await.expect("list since noon");
+    assert_eq!(
+        after_noon
+            .iter()
+            .map(|entry| entry.command.as_str())
+            .collect::<Vec<_>>(),
+        vec!["echo late", "echo mid"]
+    );
+
+    let mut until = query("ws-a", Some("connection-a"));
+    until.until = Some("2026-08-13T12:00:00Z".to_string());
+    let through_noon = service.list(until).await.expect("list until noon");
+    assert_eq!(
+        through_noon
+            .iter()
+            .map(|entry| entry.command.as_str())
+            .collect::<Vec<_>>(),
+        vec!["echo mid", "echo early"]
+    );
+
+    let mut window = query("ws-a", Some("connection-a"));
+    window.since = Some("2026-08-13T12:00:00Z".to_string());
+    window.until = Some("2026-08-13T12:00:00Z".to_string());
+    let exact = service.list(window).await.expect("list exact window");
+    assert_eq!(exact.len(), 1);
+    assert_eq!(exact[0].command, "echo mid");
 }

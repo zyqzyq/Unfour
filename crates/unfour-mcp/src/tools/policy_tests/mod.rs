@@ -85,6 +85,15 @@ fn check_mcp_permission_never_allows_secret_reveal_or_destructive_full_access() 
 }
 
 #[test]
+fn ssh_history_is_classified_as_workspace_read() {
+    let (capability, risk) = classify_mcp_action("unfour.ssh.list_history", None, None);
+    assert_eq!(capability, McpCapability::WorkspaceRead);
+    assert_eq!(risk, McpRisk::Read);
+    assert!(check_mcp_permission(&workspace("prod", "auto"), capability, risk).is_ok());
+    assert!(check_mcp_permission(&workspace("dev", "disabled"), capability, risk).is_err());
+}
+
+#[test]
 fn ssh_readonly_classifier_allows_prod_diagnostics_only() {
     assert!(is_readonly_ssh_command("df -h"));
     assert!(is_readonly_ssh_command("systemctl status nginx"));

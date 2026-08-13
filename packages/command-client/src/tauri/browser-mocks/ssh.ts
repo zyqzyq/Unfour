@@ -382,7 +382,9 @@ export function handleSshMock<T>(
           entry.workspaceId === query.workspaceId &&
           (!query.connectionId || entry.connectionId === query.connectionId) &&
           (query.includeRedacted || !entry.redacted) &&
-          (!search || entry.command.toLocaleLowerCase().includes(search)),
+          (!search || entry.command.toLocaleLowerCase().includes(search)) &&
+          (!query.since || entry.executedAt >= query.since) &&
+          (!query.until || entry.executedAt <= query.until),
       )
       .sort((left, right) => right.executedAt.localeCompare(left.executedAt))
       .slice(0, Math.min(Math.max(query.limit ?? 100, 1), 200)) as T;

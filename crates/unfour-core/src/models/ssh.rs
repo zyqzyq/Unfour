@@ -181,6 +181,12 @@ pub struct SshCommandHistoryQuery {
     pub limit: Option<i64>,
     #[serde(default)]
     pub include_redacted: bool,
+    /// Inclusive lower bound on `executed_at` (RFC 3339). Omitted means no lower bound.
+    #[serde(default)]
+    pub since: Option<String>,
+    /// Inclusive upper bound on `executed_at` (RFC 3339). Omitted means no upper bound.
+    #[serde(default)]
+    pub until: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

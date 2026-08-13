@@ -79,6 +79,7 @@ Use the Unfour MCP server to explain this query on connection <id>: select * fro
 Use the Unfour MCP server to dry-run this database fix on connection <id>: update users set active = true where id = 42.
 Use the Unfour MCP server to list recent workspace activity.
 Use the Unfour MCP server to list workspace-global variables and update the BASE_URL variable.
+Use the Unfour MCP server to list recent SSH commands on this workspace, then draft a reusable deploy task without saving it.
 Use the Unfour MCP server to inspect the saved SSH task with id <task-id>, then run it on connection <id> with the required inputs.
 Use the Unfour MCP server to run the read-only SSH diagnostic command df -h on connection <id>.
 Use the Unfour MCP server to list /var/log on SSH connection <id>.

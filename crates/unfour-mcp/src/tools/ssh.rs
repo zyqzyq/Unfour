@@ -1,5 +1,6 @@
 mod connection;
 mod helpers;
+mod history;
 mod operations;
 mod task_parse;
 mod task_schemas;
@@ -217,6 +218,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
             handler: ssh_list_dir,
         },
     ];
+    tools.extend(history::registered_tools());
     tools.extend(tasks::registered_tools());
     tools
 }

@@ -130,6 +130,8 @@ async fn command_history_records_only_after_enter_and_deduplicates_repeats() {
         search: None,
         limit: Some(20),
         include_redacted: false,
+        since: None,
+        until: None,
     };
     assert!(service
         .list_command_history(query.clone())
@@ -210,6 +212,8 @@ async fn command_history_drops_unechoed_secret_input() {
         search: None,
         limit: Some(20),
         include_redacted: true,
+        since: None,
+        until: None,
     };
     assert!(service
         .list_command_history(query.clone())
@@ -295,6 +299,8 @@ async fn command_history_reconnect_does_not_keep_partial_input() {
             search: None,
             limit: Some(20),
             include_redacted: false,
+            since: None,
+            until: None,
         })
         .await
         .expect("list after reconnect");

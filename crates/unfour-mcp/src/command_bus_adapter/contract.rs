@@ -3,10 +3,10 @@ use unfour_core::models::{
     ApiCollection, ApiEnvironment, ApiRequestInput, ApiResponse, ApiSavedRequest,
     CredentialCreateInput, CredentialMetadata, DatabaseConnection, DatabaseConnectionInput,
     DatabaseQueryInput, DatabaseQueryResult, DatabaseSchema, DatabaseTestResult, KeyValue,
-    SshConnection, SshConnectionInput, SshDiagnosticInput, SshDiagnosticResult, SshTask,
-    SshTaskCancelInput, SshTaskCleanupInput, SshTaskCleanupResult, SshTaskDetail, SshTaskRun,
-    SshTaskRunInput, SshTaskSaveInput, SshTasksReorderInput, SystemHealth, WorkspaceVariable,
-    WorkspaceVariableInput,
+    SshCommandHistoryEntry, SshCommandHistoryQuery, SshConnection, SshConnectionInput,
+    SshDiagnosticInput, SshDiagnosticResult, SshTask, SshTaskCancelInput, SshTaskCleanupInput,
+    SshTaskCleanupResult, SshTaskDetail, SshTaskRun, SshTaskRunInput, SshTaskSaveInput,
+    SshTasksReorderInput, SystemHealth, WorkspaceVariable, WorkspaceVariableInput,
 };
 
 use super::CommandBusAdapterError;
@@ -278,6 +278,16 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support SSH connection listing.",
+        })
+    }
+
+    fn list_ssh_command_history(
+        &self,
+        _query: SshCommandHistoryQuery,
+    ) -> Result<Vec<SshCommandHistoryEntry>, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "This command-bus adapter does not support SSH command history reads.",
         })
     }
 

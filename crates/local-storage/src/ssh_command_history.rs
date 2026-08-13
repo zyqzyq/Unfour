@@ -172,6 +172,8 @@ impl SshCommandHistoryService {
             .clamp(1, MAX_HISTORY_LIMIT);
         let search = query.search.and_then(trim_to_option);
         let search_pattern = search.map(|value| format!("%{}%", escape_like(&value)));
+        let since = query.since.and_then(trim_to_option);
+        let until = query.until.and_then(trim_to_option);
 
         let rows = sqlx::query_as::<_, SshCommandHistoryEntry>(
             r#"
@@ -183,6 +185,8 @@ impl SshCommandHistoryService {
               AND (?2 IS NULL OR connection_id = ?2)
               AND (?3 = 1 OR redacted = 0)
               AND (?4 IS NULL OR command LIKE ?4 ESCAPE '\')
+              AND (?6 IS NULL OR executed_at >= ?6)
+              AND (?7 IS NULL OR executed_at <= ?7)
             ORDER BY executed_at DESC, id DESC
             LIMIT ?5
             "#,
@@ -192,6 +196,8 @@ impl SshCommandHistoryService {
         .bind(query.include_redacted)
         .bind(search_pattern)
         .bind(limit)
+        .bind(since)
+        .bind(until)
         .fetch_all(self.db.pool())
         .await?;
         Ok(rows)

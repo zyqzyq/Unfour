@@ -189,6 +189,7 @@ pub(super) fn classify_mcp_action(
         | "unfour.activity.list"
         | "unfour.system.health"
         | "unfour.workspace.list_variables"
+        | "unfour.ssh.list_history"
         | "unfour.ssh.list_tasks"
         | "unfour.ssh.get_task"
         | "unfour.ssh.list_task_runs"

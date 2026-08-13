@@ -77,6 +77,7 @@ text to execute.
 | `unfour.db.test_connection` | `{ "connectionId": "required", "workspaceId": "optional" }` | Tests connectivity for a saved database connection and returns server metadata when available. |
 | `unfour.ssh.create_connection` | `{ "workspaceId": "optional", "name": "required", "host": "required", "port": "optional", "username": "required", "authKind": "required", "keyPath": "optional", "credentialRef": "optional", "secret": "optional" }` | Creates a saved SSH connection. If `secret` is supplied for password or private-key auth, it is written to the OS credential store and only the resulting credential reference is persisted. |
 | `unfour.ssh.list_connections` | `{ "workspaceId": "optional" }` | Lists saved SSH connections as safe summaries. |
+| `unfour.ssh.list_history` | `{ "workspaceId": "optional", "connectionId": "optional", "query": "optional", "since": "optional RFC 3339", "until": "optional RFC 3339", "limit": "optional" }` | Lists structured SSH command history for the selected workspace. Default limit is 50; max is 200. Sensitive commands are excluded or replaced with `[redacted command]`. Terminal buffers and session logs are never returned. |
 | `unfour.ssh.run_diagnostic` | `{ "connectionId": "required", "command": "required", "workspaceId": "optional", "timeoutMs": "optional" }` | Runs a single allowlisted read-only diagnostic command on a saved SSH connection. Requires an `ssh-native` build. |
 | `unfour.ssh.exec` | `{ "connectionId": "required", "command": "required", "workspaceId": "optional", "cwd": "optional", "env": "optional", "timeoutMs": "optional", "confirm": "optional", "confirmation_text": "optional" }` | Executes one non-interactive SSH command when policy allows. High-risk commands require confirmation. |
 | `unfour.ssh.read_file` | `{ "connectionId": "required", "path": "required", "workspaceId": "optional", "offset": "optional", "limit": "optional", "tailLines": "optional", "timeoutMs": "optional" }` | Reads a capped remote file slice or tail. |
@@ -226,6 +227,22 @@ either `secret` or an existing `credentialRef`, and private-key auth requires
 `keyPath`. Returned summaries never include secrets, private-key paths, or
 credential references.
 
+`unfour.ssh.list_history` reads structured command history already recorded for
+the selected workspace. It defaults to the active MCP workspace, always scopes
+the query to that workspace, and never returns history from another workspace.
+Optional filters are `connectionId`, `query`, `since`, `until`, and `limit`.
+The result is a list of commands with connection summary, `executedAt`, and
+`cwd` / `exitCode` / `durationMs` when those fields were recorded. It does not
+return terminal buffers or full session logs. Persisted redacted rows are
+omitted; any remaining command that still matches credential markers is
+replaced with `[redacted command]`.
+
+Use history to inspect what the user recently ran, then draft a reusable SSH
+Task for confirmation. Do not call `unfour.ssh.save_task` or
+`unfour.ssh.run_task` unless the user explicitly asks to save or run the draft.
+`unfour.ssh.save_task` already provides a safe write path when that confirmation
+happens; this release does not add a separate auto-create tool.
+
 `unfour.ssh.run_diagnostic` is gated by a strict allowlist. The leading word
 must be a bare allowlisted utility, such as:
 
@@ -297,4 +314,7 @@ diagnostic shape while hiding the secret. Examples:
 ```
 
 Masking applies to HTTP headers, URL query parameters, JSON request/response
-body fields, activity details, and connection summaries.
+body fields, activity details, connection summaries, SSH task configuration,
+and SSH command history. SSH history additionally omits persisted redacted
+rows and replaces any remaining credential-marker commands with
+`[redacted command]`.

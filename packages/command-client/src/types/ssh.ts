@@ -150,6 +150,8 @@ export type SshCommandHistoryQuery = {
   search?: string | null;
   limit?: number | null;
   includeRedacted?: boolean;
+  since?: string | null;
+  until?: string | null;
 };
 
 export type SshLogExport = {

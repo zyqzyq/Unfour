@@ -48,9 +48,12 @@ The `initialize` response includes instructions for a diagnose-then-act flow:
 3. For API issues, inspect API history and saved request details.
 4. For database issues, inspect saved database connections, schemas, and
    read-only query or explain output before executing a fix.
-5. For host/service issues, start with SSH diagnostics, directory listings,
-   file reads, or saved task inspection before running commands, writing files,
-   or starting an SSH task.
+5. For host/service issues, inspect `unfour.ssh.list_history` for recent
+   workspace-scoped commands, then start with SSH diagnostics, directory
+   listings, file reads, or saved task inspection before running commands,
+   writing files, or starting an SSH task. If asked to turn recent commands
+   into a reusable task, draft steps from history and wait for user
+   confirmation instead of saving or running a task automatically.
 
 ## Safety Posture
 

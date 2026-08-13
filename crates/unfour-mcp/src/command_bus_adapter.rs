@@ -11,10 +11,10 @@ use unfour_core::models::{
     ApiCollection, ApiEnvironment, ApiRequestInput, ApiResponse, ApiSavedRequest,
     CredentialCreateInput, CredentialMetadata, DatabaseConnection, DatabaseConnectionInput,
     DatabaseQueryInput, DatabaseQueryResult, DatabaseSchema, DatabaseTestResult, KeyValue,
-    SshConnection, SshConnectionInput, SshDiagnosticInput, SshDiagnosticResult, SshTask,
-    SshTaskCancelInput, SshTaskCleanupInput, SshTaskCleanupResult, SshTaskDetail, SshTaskRun,
-    SshTaskRunInput, SshTaskSaveInput, SshTasksReorderInput, SystemHealth, WorkspaceVariable,
-    WorkspaceVariableInput,
+    SshCommandHistoryEntry, SshCommandHistoryQuery, SshConnection, SshConnectionInput,
+    SshDiagnosticInput, SshDiagnosticResult, SshTask, SshTaskCancelInput, SshTaskCleanupInput,
+    SshTaskCleanupResult, SshTaskDetail, SshTaskRun, SshTaskRunInput, SshTaskSaveInput,
+    SshTasksReorderInput, SystemHealth, WorkspaceVariable, WorkspaceVariableInput,
 };
 use unfour_core::AppError;
 
@@ -557,6 +557,19 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
                 &e,
             )
         })
+    }
+
+    fn list_ssh_command_history(
+        &self,
+        query: SshCommandHistoryQuery,
+    ) -> Result<Vec<SshCommandHistoryEntry>, CommandBusAdapterError> {
+        self.run(self.bus.list_ssh_command_history(query))
+            .map_err(|e| {
+                CommandBusAdapterError::from_app_error(
+                    "The command-bus SSH command history list operation failed.",
+                    &e,
+                )
+            })
     }
 
     fn run_ssh_command(
