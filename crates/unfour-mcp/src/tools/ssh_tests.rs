@@ -8,3 +8,5 @@ mod execution;
 mod files;
 #[path = "ssh_tests/fixtures.rs"]
 mod fixtures;
+#[path = "ssh_tests/tasks.rs"]
+mod tasks;

@@ -47,7 +47,7 @@ impl SshService {
         }
     }
 
-    #[cfg_attr(not(feature = "ssh-native"), allow(dead_code))]
+    #[cfg(feature = "ssh-native")]
     pub(super) fn spawn_record_executed_commands(
         &self,
         workspace_id: String,

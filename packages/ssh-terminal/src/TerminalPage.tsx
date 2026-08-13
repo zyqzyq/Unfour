@@ -6,7 +6,6 @@ import {
   exportSshLog,
   getSshHostFingerprint,
   getSshSessionHistory,
-  registerSshTerminalChannel,
   resetSshHostFingerprint,
   saveSshConnection,
   testSshConnection,
@@ -15,7 +14,6 @@ import {
   type SshHostFingerprintInfo,
   type SshSessionEvent,
   type SshSessionSummary,
-  type SshTerminalDataPayload,
 } from "@unfour/command-client";
 import { useWorkspaceStore } from "@unfour/workspace-core";
 import { ConfirmDialog, LoadingState, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
@@ -25,6 +23,8 @@ import { SshConnectionDialog } from "./components/SshConnectionDialog";
 import { SshTestResultDialog } from "./components/SshTestResultDialog";
 import { HostKeyTrustDialog } from "./components/HostKeyTrustDialog";
 import { useSshConnections } from "./hooks/useSshConnections";
+import { useSshTerminalChannel } from "./hooks/useSshTerminalChannel";
+import { useTerminalSessionActions } from "./hooks/useTerminalSessionActions";
 import { useTerminalSessions } from "./hooks/useTerminalSessions";
 import { useTerminalSplit } from "./hooks/useTerminalSplit";
 import { useSftpStore } from "./model/sftp-state";
@@ -35,7 +35,6 @@ import {
 } from "./model/ssh-connection-state";
 import {
   buildTerminalSessionTabs,
-  shouldCloseTerminalSessionInBackend,
   shouldShowTerminalSessionTab,
 } from "./model/terminal-tabs";
 import { formatTerminalError } from "./model/errors";
@@ -94,7 +93,6 @@ export function SshConnectionsPage({
   });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<"new" | "edit" | null>(null);
-  const [closeConfirmSessionId, setCloseConfirmSessionId] = useState<string | null>(null);
   const [trustDialogState, setTrustDialogState] = useState<{
     open: boolean;
     connectionId: string | null;
@@ -168,79 +166,10 @@ export function SshConnectionsPage({
     [connections, visibleSessions],
   );
 
-  useEffect(() => {
-    let disposed = false;
-    let dispose: (() => void) | null = null;
-    // Live output is coalesced into the store roughly once per frame. It arrives
-    // over a Tauri IPC channel (not the event system, which stalls under a
-    // full-screen-redraw emit burst on WebView2/Windows) and is batched here so
-    // a keystroke echo does not force a full re-render per chunk.
-    let pending: SshSessionEvent[] = [];
-    let flushTimer: ReturnType<typeof setTimeout> | null = null;
-    const flushPending = () => {
-      flushTimer = null;
-      if (!pending.length) {
-        return;
-      }
-      const batch = pending;
-      pending = [];
-      appendTerminalEvents(batch);
-    };
-    const handlePayload = (payload: SshTerminalDataPayload) => {
-      if (!payload?.sessionId) {
-        return;
-      }
-      if (payload.data) {
-        pending.push({
-          sessionId: payload.sessionId,
-          kind:
-            payload.status === "disconnected" || payload.status === "failed"
-              ? "close"
-              : "output",
-          data: payload.data,
-          createdAt: new Date().toISOString(),
-        });
-        if (flushTimer === null) {
-          flushTimer = setTimeout(flushPending, 16);
-        }
-      }
-      if (payload.status) {
-        queryClient.setQueryData<SshSessionSummary[]>(
-          ["ssh-sessions", workspaceId],
-          (current = []) =>
-            current.map((session) =>
-              session.sessionId === payload.sessionId
-                ? {
-                    ...session,
-                    status: payload.status!,
-                    reconnectAttempt: payload.reconnectAttempt ?? 0,
-                    updatedAt: new Date().toISOString(),
-                  }
-                : session,
-            ),
-        );
-      }
-    };
-    registerSshTerminalChannel(handlePayload)
-      .then((d) => {
-        if (disposed) {
-          d();
-        } else {
-          dispose = d;
-        }
-      })
-      .catch(() => {
-        // Browser mock mode has no Tauri IPC; query polling remains active.
-      });
-    return () => {
-      disposed = true;
-      if (flushTimer !== null) {
-        clearTimeout(flushTimer);
-      }
-      flushPending();
-      dispose?.();
-    };
-  }, [appendTerminalEvents, queryClient, workspaceId]);
+  useSshTerminalChannel({
+    appendTerminalEvents,
+    workspaceId,
+  });
 
   useEffect(() => {
     activateWorkspace(workspaceId);
@@ -600,85 +529,26 @@ export function SshConnectionsPage({
     connectMutation.mutate(connectionId);
   }
 
-  function closeSessionInBackend(sessionId: string) {
-    if (
-      !shouldCloseTerminalSessionInBackend({
-        frontendFailedSessions,
-        sessionId,
-      })
-    ) {
-      connectMutation.reset();
-      return;
-    }
-    closeMutation.mutate(sessionId);
-  }
-
-  function requestCloseSession(sessionId: string) {
-    const session = sessions.find((item) => item.sessionId === sessionId);
-    const needsConfirmation =
-      session && !["disconnected", "failed"].includes(session.status);
-    if (needsConfirmation) {
-      setCloseConfirmSessionId(sessionId);
-      return;
-    }
-    // Frontend-only failures have no backend session to close. Backend-managed
-    // disconnected/failed sessions still go through the command bus.
-    if (session) {
-      closeSessionInBackend(sessionId);
-    }
-    dismissSession(sessionId);
-    removeSftpSession(sessionId);
-  }
-
-  const closeConfirmSession = closeConfirmSessionId
-    ? sessions.find((item) => item.sessionId === closeConfirmSessionId)
-    : null;
-
-  // Close a session without the confirmation prompt — used by the batch tab
-  // actions (close others/all/left/right) where a dialog per tab would be noise.
-  function closeSessionNow(sessionId: string) {
-    const session = sessions.find((item) => item.sessionId === sessionId);
-    if (session) {
-      closeSessionInBackend(sessionId);
-    }
-    dismissSession(sessionId);
-    removeSftpSession(sessionId);
-  }
-
-  function reconnectSession(sessionId: string) {
-    const session = sessions.find((item) => item.sessionId === sessionId);
-    if (!session) {
-      return;
-    }
-    closeSessionNow(sessionId);
-    retryConnection(session.connectionId);
-  }
-
-  function closeOtherSessions(sessionId: string) {
-    sessionTabs
-      .filter((item) => item.session.sessionId !== sessionId)
-      .forEach((item) => closeSessionNow(item.session.sessionId));
-  }
-
-  function closeAllSessions() {
-    sessionTabs.forEach((item) => closeSessionNow(item.session.sessionId));
-  }
-
-  function closeSessionsToLeft(sessionId: string) {
-    const index = sessionTabs.findIndex((item) => item.session.sessionId === sessionId);
-    if (index <= 0) {
-      return;
-    }
-    sessionTabs.slice(0, index).forEach((item) => closeSessionNow(item.session.sessionId));
-  }
-
-  function closeSessionsToRight(sessionId: string) {
-    const index = sessionTabs.findIndex((item) => item.session.sessionId === sessionId);
-    if (index < 0) {
-      return;
-    }
-    sessionTabs.slice(index + 1).forEach((item) => closeSessionNow(item.session.sessionId));
-  }
+  const {
+    closeAllSessions,
+    closeConfirmSession,
+    closeConfirmSessionId,
+    closeOtherSessions,
+    closeSessionsToLeft,
+    closeSessionsToRight,
+    confirmCloseSession,
+    reconnectSession,
+    requestCloseSession,
+    setCloseConfirmSessionId,
+  } = useTerminalSessionActions({
+    closeMutation,
+    connectMutation,
+    dismissSession,
+    frontendFailedSessions,
+    removeSftpSession,
+    sessions,
+    sessionTabs,
+  });
 
   // Detect host-key mismatch errors from connect failures.
   useEffect(() => {
@@ -796,14 +666,7 @@ export function SshConnectionsPage({
               })
             : ""
         }
-        onConfirm={() => {
-          if (closeConfirmSessionId) {
-            closeSessionInBackend(closeConfirmSessionId);
-            dismissSession(closeConfirmSessionId);
-            removeSftpSession(closeConfirmSessionId);
-          }
-          setCloseConfirmSessionId(null);
-        }}
+        onConfirm={confirmCloseSession}
         onOpenChange={(open) => !open && setCloseConfirmSessionId(null)}
         open={closeConfirmSessionId !== null}
         pending={closeMutation.isPending}

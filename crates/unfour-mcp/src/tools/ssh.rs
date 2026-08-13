@@ -1,7 +1,9 @@
 mod connection;
 mod helpers;
 mod operations;
+mod task_parse;
 mod task_schemas;
+mod task_serialize;
 mod tasks;
 
 use serde_json::json;
