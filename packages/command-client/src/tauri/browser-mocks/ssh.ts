@@ -401,7 +401,10 @@ function acceptMockSshInput(sessionId: string, input: string) {
   for (const character of input) {
     if (state.escapeSequence) {
       state.escapeSequence += character;
-      if (/\x1b\[(200|201)~$/.test(state.escapeSequence)) {
+      if (
+        state.escapeSequence === "\x1b[200~" ||
+        state.escapeSequence === "\x1b[201~"
+      ) {
         state.escapeSequence = "";
       } else if (/[A-Za-z~]$/.test(state.escapeSequence)) {
         state.escapeSequence = "";
