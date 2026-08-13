@@ -141,7 +141,10 @@ The current SQLite-backed records include:
   `database_connections` subtype tables);
 - workspace-scoped SSH host-key trust records;
 - terminal session-output history;
-- SSH command history (user-executed commands only, persisted after remote echo, with conservative secret redaction);
+- SSH command history (user-executed commands only, persisted after remote
+  echo, with conservative secret redaction; multiline bracketed pastes are
+  skipped because their embedded lines are buffered by the remote line editor
+  rather than individually executed);
 - saved SQL (soft-deleted, sync fields reserved);
 - local activity events.
 

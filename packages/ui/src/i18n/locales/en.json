@@ -838,6 +838,10 @@
       "sshSessions": "SSH Sessions",
       "terminalSsh": "Terminal / SSH"
     },
+    "suggest": {
+      "hint": "↑↓ select · Tab insert · Esc dismiss",
+      "listLabel": "Command history suggestions"
+    },
     "sessionStatus": {
       "closed": "closed",
       "connected": "connected",

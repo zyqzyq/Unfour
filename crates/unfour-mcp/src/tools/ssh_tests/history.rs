@@ -528,6 +528,36 @@ fn list_history_rejects_include_redacted_and_invalid_time_range() {
             }),
         )
         .is_err());
+    // Chronologically inverted even though the raw strings sort the other way.
+    assert!(registry
+        .call(
+            "unfour.ssh.list_history",
+            json!({
+                "since": "2026-08-13T11:00:00Z",
+                "until": "2026-08-13T18:00:00+08:00"
+            }),
+        )
+        .is_err());
+    assert!(registry
+        .call("unfour.ssh.list_history", json!({ "since": "yesterday" }))
+        .is_err());
+}
+
+#[test]
+fn list_history_accepts_mixed_utc_offset_time_range() {
+    // 20:00+08:00 is 12:00Z: lexicographically "20:00..." sorts after
+    // "13:00...Z", but the range is chronologically valid and must pass.
+    let result = HistoryStub::default()
+        .registry()
+        .call(
+            "unfour.ssh.list_history",
+            json!({
+                "since": "2026-08-13T20:00:00+08:00",
+                "until": "2026-08-13T13:00:00Z"
+            }),
+        )
+        .expect("mixed-offset range should be accepted");
+    assert_eq!(result["isError"], false);
 }
 
 #[test]

@@ -185,7 +185,7 @@ async fn consecutive_duplicate_refreshes_one_row() {
         .expect("list history");
     assert_eq!(entries.len(), 1);
     assert_eq!(first.id, second.id);
-    assert_eq!(entries[0].executed_at, "2026-08-13T00:00:02Z");
+    assert_eq!(entries[0].executed_at, "2026-08-13T00:00:02+00:00");
 }
 
 #[tokio::test]
@@ -301,4 +301,54 @@ async fn time_range_filters_executed_at() {
     let exact = service.list(window).await.expect("list exact window");
     assert_eq!(exact.len(), 1);
     assert_eq!(exact[0].command, "echo mid");
+}
+
+#[tokio::test]
+async fn time_filters_normalize_offsets_and_reject_invalid_bounds() {
+    let service = service().await;
+    service
+        .record(record_input(
+            "ws-a",
+            "connection-a",
+            "echo mid",
+            // Stored via a non-UTC offset; equals 2026-08-13T12:00:00Z.
+            "2026-08-13T20:00:00+08:00",
+        ))
+        .await
+        .expect("record offset command");
+
+    let entries = service
+        .list(query("ws-a", Some("connection-a")))
+        .await
+        .expect("list normalized history");
+    assert_eq!(entries[0].executed_at, "2026-08-13T12:00:00+00:00");
+
+    // A Z-suffixed bound at the same instant must match inclusively even
+    // though the stored text uses the +00:00 form.
+    let mut window = query("ws-a", Some("connection-a"));
+    window.since = Some("2026-08-13T12:00:00Z".to_string());
+    window.until = Some("2026-08-13T20:00:00+08:00".to_string());
+    let matched = service.list(window).await.expect("list window");
+    assert_eq!(matched.len(), 1);
+
+    // Chronologically inverted bounds are rejected even when the raw strings
+    // compare in the opposite order.
+    let mut inverted = query("ws-a", Some("connection-a"));
+    inverted.since = Some("2026-08-13T20:00:01+08:00".to_string());
+    inverted.until = Some("2026-08-13T12:00:00Z".to_string());
+    assert!(service.list(inverted).await.is_err());
+
+    let mut invalid = query("ws-a", Some("connection-a"));
+    invalid.since = Some("yesterday".to_string());
+    assert!(service.list(invalid).await.is_err());
+
+    assert!(service
+        .record(record_input(
+            "ws-a",
+            "connection-a",
+            "echo bad time",
+            "not-a-timestamp",
+        ))
+        .await
+        .is_err());
 }

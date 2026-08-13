@@ -837,6 +837,10 @@
       "sshSessions": "SSH 会话",
       "terminalSsh": "终端 / SSH"
     },
+    "suggest": {
+      "hint": "↑↓ 选择 · Tab 填入 · Esc 关闭",
+      "listLabel": "命令历史联想"
+    },
     "sessionStatus": {
       "closed": "已关闭",
       "connected": "已连接",

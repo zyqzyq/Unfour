@@ -11,9 +11,11 @@ import {
   type SshSessionSummary,
 } from "@unfour/command-client";
 import { cn, useFeedbackErrorHandler } from "@unfour/ui";
+import { useTerminalCommandSuggestions } from "../hooks/useTerminalCommandSuggestions";
 import { TerminalCommandHistoryController } from "../model/command-history";
 import { useTerminalStore } from "../model/terminal-state";
 import { sanitizeTerminalWriteChunk } from "../model/terminal-write-sanitizer";
+import { TerminalCommandSuggestions } from "./TerminalCommandSuggestions";
 import { TerminalContextMenu } from "./TerminalContextMenu";
 
 export function TerminalPane({
@@ -129,9 +131,25 @@ export function TerminalPane({
     sessionIdRef.current = nextSessionId;
   }, [inputDisabled, readOnly, session?.sessionId]);
 
+  const {
+    acceptSuggestion,
+    applySuggestions,
+    refreshSuggestions,
+    resetSuggestions,
+    suggestions,
+    suggestionsRef,
+    suppressSuggestions,
+  } = useTerminalCommandSuggestions({
+    controllerRef: commandHistoryRef,
+    hostRef,
+    onSendInputRef,
+    terminalRef,
+  });
+
   useEffect(() => {
     const controller = commandHistoryRef.current;
     controller.reset();
+    resetSuggestions();
     const workspaceId = session?.workspaceId;
     const connectionId = session?.connectionId;
     if (!workspaceId || !connectionId || readOnly) return undefined;
@@ -139,17 +157,26 @@ export function TerminalPane({
     let cancelled = false;
     listSshCommandHistory({ workspaceId, connectionId, limit: 100 })
       .then((entries) => {
-        if (!cancelled) controller.setHistory(entries.map((entry) => entry.command));
+        if (cancelled) return;
+        controller.setHistory(entries.map((entry) => entry.command));
+        refreshSuggestions();
       })
       .catch((error) => {
-        // History recall is additive to the PTY. A failed read must not block
+        // Suggestions are additive to the PTY. A failed read must not block
         // terminal input or compete with higher-value connection errors.
         console.warn("[ssh-terminal] command history load failed", error);
       });
     return () => {
       cancelled = true;
     };
-  }, [readOnly, session?.connectionId, session?.sessionId, session?.workspaceId]);
+  }, [
+    readOnly,
+    refreshSuggestions,
+    resetSuggestions,
+    session?.connectionId,
+    session?.sessionId,
+    session?.workspaceId,
+  ]);
 
   useEffect(() => {
     const status = session?.status;
@@ -159,8 +186,9 @@ export function TerminalPane({
     lastSessionStatusRef.current = status;
     if (wasReconnecting && status === "connected") {
       commandHistoryRef.current.resetCurrentLine();
+      applySuggestions(null);
     }
-  }, [session?.sessionId, session?.status]);
+  }, [applySuggestions, session?.sessionId, session?.status]);
 
   // ------------------------------------------------------------------
   // Terminal initialisation
@@ -215,36 +243,57 @@ export function TerminalPane({
     // Capture keyboard input from xterm
     // ---------------------------------------------------------------
     const dataDisposable = terminal.onData((data: string) => {
+      const send = onSendInputRef.current;
+      // Keys that cannot reach the PTY (read-only, disabled, no session) must
+      // not update the local line model either, or phantom commands would
+      // land in the suggestion history.
+      if (!send) return;
       commandHistoryRef.current.accept(data);
-      onSendInputRef.current?.(data);
+      send(data);
+      refreshSuggestions();
     });
 
+    // The handler only owns keys while the suggestion popup is visible. With
+    // the popup closed every key — including Up/Down — flows to the remote
+    // PTY, preserving native shell and REPL history navigation.
     terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+      if (event.type !== "keydown") return true;
+      const current = suggestionsRef.current;
+      if (!current) return true;
       if (
-        event.type !== "keydown" ||
+        event.isComposing ||
         event.altKey ||
         event.ctrlKey ||
         event.metaKey ||
-        event.shiftKey ||
         readOnlyRef.current ||
-        inputDisabledRef.current ||
-        commandHistoryRef.current.blocksHistoryRecall() ||
-        !isNormalTerminalBuffer(terminal)
+        inputDisabledRef.current
       ) {
         return true;
       }
-      const replacement =
-        event.key === "ArrowUp"
-          ? commandHistoryRef.current.previous()
-          : event.key === "ArrowDown"
-            ? commandHistoryRef.current.next()
-            : undefined;
-      if (replacement === undefined) return true;
-
-      // Readline's Ctrl+U / Ctrl+K pair clears both sides of the current remote
-      // cursor without sending Enter. The replacement remains editable.
-      onSendInputRef.current?.(`\x15\x0b${replacement}`);
-      return false;
+      if ((event.key === "ArrowUp" || event.key === "ArrowDown") && !event.shiftKey) {
+        const count = current.items.length;
+        const step = event.key === "ArrowUp" ? -1 : 1;
+        applySuggestions({
+          ...current,
+          selected: (current.selected + step + count) % count,
+        });
+        return false;
+      }
+      if (event.key === "Tab" && !event.shiftKey) {
+        acceptSuggestion(current.items[current.selected]);
+        return false;
+      }
+      if (event.key === "Escape") {
+        suppressSuggestions();
+        return false;
+      }
+      if (event.key === "Enter") {
+        // Enter always submits the typed line to the remote shell; it never
+        // accepts a suggestion. Close the popup and let the key through.
+        applySuggestions(null);
+        return true;
+      }
+      return true;
     });
 
     // ---------------------------------------------------------------
@@ -284,7 +333,7 @@ export function TerminalPane({
       lastRenderedEventRef.current = null;
       renderedEmptyStateRef.current = false;
     };
-  }, []);
+  }, [acceptSuggestion, applySuggestions, refreshSuggestions, suggestionsRef, suppressSuggestions]);
 
   useEffect(() => {
     if (active) {
@@ -420,9 +469,12 @@ export function TerminalPane({
       .join("");
     if (writeBatch) {
       terminal.write(writeBatch);
+      // Output can change the prompt context (secret prompt, REPL, alternate
+      // buffer) — re-evaluate whether suggestions may stay open.
+      refreshSuggestions();
     }
     lastRenderedEventRef.current = events[events.length - 1] ?? null;
-  }, [events, paintActive, session]);
+  }, [events, paintActive, refreshSuggestions, session]);
 
   return (
     <TerminalContextMenu
@@ -431,12 +483,36 @@ export function TerminalPane({
     >
       <div
         className={cn(
-          "min-h-0 flex-1 overflow-hidden bg-[var(--u-color-terminal-bg)] p-2",
+          "relative min-h-0 flex-1 overflow-hidden bg-[var(--u-color-terminal-bg)] p-2",
           className,
         )}
         onClick={() => terminalRef.current?.focus()}
       >
         <div className="h-full min-h-0 w-full overflow-hidden" ref={hostRef} />
+        {suggestions ? (
+          <TerminalCommandSuggestions
+            items={suggestions.items}
+            onAccept={acceptSuggestion}
+            onHoverItem={(index) => {
+              const current = suggestionsRef.current;
+              if (current && index !== current.selected) {
+                applySuggestions({ ...current, selected: index });
+              }
+            }}
+            selectedIndex={suggestions.selected}
+            style={{
+              left: TERMINAL_PADDING_PX,
+              top:
+                suggestions.anchor.top !== undefined
+                  ? suggestions.anchor.top + TERMINAL_PADDING_PX
+                  : undefined,
+              bottom:
+                suggestions.anchor.bottom !== undefined
+                  ? suggestions.anchor.bottom + TERMINAL_PADDING_PX
+                  : undefined,
+            }}
+          />
+        ) : null}
       </div>
     </TerminalContextMenu>
   );
@@ -501,14 +577,9 @@ function ensureNewline(value: string) {
   return value.endsWith("\r\n") || value.endsWith("\n") ? value : `${value}\r\n`;
 }
 
-function isNormalTerminalBuffer(terminal: XTerm) {
-  const type = (
-    terminal as XTerm & {
-      buffer?: { active?: { type?: "normal" | "alternate" } };
-    }
-  ).buffer?.active?.type;
-  return type === undefined || type === "normal";
-}
+// Matches the `p-2` padding on the terminal container so popup coordinates
+// computed against the xterm host line up with the padded box.
+const TERMINAL_PADDING_PX = 8;
 
 // Cap how often a failed-keystroke error can surface so a disconnected session
 // doesn't flood the user with a toast on every character typed.

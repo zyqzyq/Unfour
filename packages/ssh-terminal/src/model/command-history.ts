@@ -1,20 +1,32 @@
 /**
- * Tracks the editable command line visible to a normal xterm buffer.
+ * Tracks the editable command line visible to a normal xterm buffer and serves
+ * history suggestions for the typed prefix.
  *
  * This is deliberately conservative. If input contains an editing operation
  * whose resulting line cannot be known locally (for example Tab completion),
- * the next Enter is not reported for persistence. The remote PTY still
- * receives every byte unchanged.
+ * the next Enter is not reported for persistence and no suggestions are
+ * offered for that line. The remote PTY still receives every byte unchanged.
  */
+
+export type TerminalPromptContext = "shell" | "secret" | "other" | null;
+
+export type TerminalCommandLineState = {
+  line: string;
+  cursorAtEnd: boolean;
+  reliable: boolean;
+};
+
+const HISTORY_CAP = 200;
+const MIN_SUGGEST_CHARS = 2;
+
 export class TerminalCommandHistoryController {
   private chars: string[] = [];
   private cursor = 0;
-  private draft = "";
   private escapeSequence = "";
   private history: string[] = [];
-  private historyIndex = -1;
+  private inPaste = false;
+  private promptKind: TerminalPromptContext = null;
   private reliable = true;
-  private secretPrompt = false;
 
   accept(data: string): string[] {
     const submitted: string[] = [];
@@ -28,69 +40,122 @@ export class TerminalCommandHistoryController {
         continue;
       }
       if (char === "\r" || char === "\n") {
-        const command = this.chars.join("").trim();
-        if (command && this.reliable && !this.secretPrompt) {
-          submitted.push(command);
-          this.remember(command);
-        }
-        this.resetCurrentLine();
+        const command = this.acceptEnter();
+        if (command !== null) submitted.push(command);
         continue;
       }
-      if (char === "\x03") {
-        this.resetCurrentLine();
-        continue;
-      }
-      if (char === "\x01") {
-        this.cursor = 0;
-        continue;
-      }
-      if (char === "\x05") {
-        this.cursor = this.chars.length;
-        continue;
-      }
-      if (char === "\x0b") {
-        this.chars.splice(this.cursor);
-        this.leaveHistoryNavigation();
-        continue;
-      }
-      if (char === "\x15") {
-        this.replaceLine("");
-        continue;
-      }
-      if (char === "\x17") {
-        this.deletePreviousWord();
-        continue;
-      }
-      if (char === "\x08" || char === "\x7f") {
-        if (this.cursor > 0) {
-          this.chars.splice(this.cursor - 1, 1);
-          this.cursor -= 1;
-        }
-        this.leaveHistoryNavigation();
-        continue;
-      }
-      if (char === "\t" || char < " ") {
-        // Completion and uncommon readline bindings can change the remote line
-        // in ways xterm does not report back to the browser.
-        this.reliable = false;
-        this.leaveHistoryNavigation();
-        continue;
-      }
-
+      if (this.acceptControlCharacter(char)) continue;
       this.chars.splice(this.cursor, 0, char);
       this.cursor += 1;
-      this.leaveHistoryNavigation();
     }
     return submitted;
   }
 
-  observeOutput(output: string) {
-    if (looksLikeSecretPrompt(output)) this.secretPrompt = true;
-    else if (looksLikeShellPrompt(output)) this.secretPrompt = false;
+  private acceptEnter(): string | null {
+    if (this.inPaste) {
+      // Inside a bracketed paste the newline is buffered by the remote line
+      // editor instead of executing the line, so the block cannot be tracked
+      // as individually executed commands.
+      this.reliable = false;
+      return null;
+    }
+    const command = this.chars.join("").trim();
+    const record =
+      command.length > 0 && this.reliable && this.promptKind !== "secret" ? command : null;
+    if (record !== null) this.remember(record);
+    this.resetCurrentLine();
+    return record;
   }
 
-  blocksHistoryRecall() {
-    return this.secretPrompt;
+  /** Handles single-byte line-editing controls; returns false for printable
+   * characters so the caller inserts them at the cursor. */
+  private acceptControlCharacter(char: string): boolean {
+    switch (char) {
+      case "\x03":
+        this.resetCurrentLine();
+        return true;
+      case "\x01":
+        this.cursor = 0;
+        return true;
+      case "\x05":
+        this.cursor = this.chars.length;
+        return true;
+      case "\x0b":
+        this.chars.splice(this.cursor);
+        return true;
+      case "\x15":
+        this.replaceLine("");
+        return true;
+      case "\x17":
+        this.deletePreviousWord();
+        return true;
+      case "\x08":
+      case "\x7f":
+        if (this.cursor > 0) {
+          this.chars.splice(this.cursor - 1, 1);
+          this.cursor -= 1;
+        }
+        return true;
+      default:
+        if (char === "\t" || char < " ") {
+          // Completion and uncommon readline bindings can change the remote
+          // line in ways xterm does not report back to the browser.
+          this.reliable = false;
+          return true;
+        }
+        return false;
+    }
+  }
+
+  observeOutput(output: string) {
+    const visible = stripControlAndAnsi(output);
+    if (looksLikeSecretPrompt(visible)) {
+      this.promptKind = "secret";
+      return;
+    }
+    if (looksLikeShellPrompt(visible)) {
+      this.promptKind = "shell";
+      return;
+    }
+    // Output that scrolled a line means whatever prompt we sat on is gone.
+    // Keystroke echo chunks carry no line break and leave the context alone.
+    if (visible.includes("\n") || visible.includes("\r")) {
+      this.promptKind = "other";
+    }
+  }
+
+  promptContext(): TerminalPromptContext {
+    return this.promptKind;
+  }
+
+  /** History suggestions for the current line: exact-prefix matches first
+   * (newest first), then substring matches. The current line itself is
+   * excluded so accepting always changes the remote line. */
+  suggest(limit = 8): string[] {
+    const line = this.currentLine().trim();
+    if (line.length < MIN_SUGGEST_CHARS) return [];
+    const lower = line.toLowerCase();
+    const prefixMatches: string[] = [];
+    const containsMatches: string[] = [];
+    for (const command of this.history) {
+      if (command === line) continue;
+      const commandLower = command.toLowerCase();
+      if (commandLower.startsWith(lower)) {
+        prefixMatches.push(command);
+      } else if (commandLower.includes(lower)) {
+        containsMatches.push(command);
+      }
+      if (prefixMatches.length >= limit) break;
+    }
+    return [...prefixMatches, ...containsMatches].slice(0, limit);
+  }
+
+  lineState(): TerminalCommandLineState {
+    return {
+      line: this.currentLine(),
+      cursorAtEnd: this.cursor === this.chars.length,
+      reliable: this.reliable,
+    };
   }
 
   setHistory(commands: string[]) {
@@ -99,34 +164,14 @@ export class TerminalCommandHistoryController {
     for (const command of [...this.history, ...incoming]) {
       if (command.trim().length > 0 && !merged.includes(command)) merged.push(command);
     }
-    this.history = merged.slice(0, 200);
-    this.historyIndex = -1;
-    this.draft = "";
-  }
-
-  previous(): string | undefined {
-    if (this.secretPrompt || this.history.length === 0) return undefined;
-    if (this.historyIndex === -1) this.draft = this.chars.join("");
-    if (this.historyIndex < this.history.length - 1) this.historyIndex += 1;
-    const command = this.history[this.historyIndex];
-    this.replaceLine(command);
-    return command;
-  }
-
-  next(): string | undefined {
-    if (this.secretPrompt || this.historyIndex === -1) return undefined;
-    this.historyIndex -= 1;
-    const command = this.historyIndex === -1 ? this.draft : this.history[this.historyIndex];
-    this.replaceLine(command);
-    return command;
+    this.history = merged.slice(0, HISTORY_CAP);
   }
 
   reset() {
     this.history = [];
-    this.historyIndex = -1;
-    this.draft = "";
     this.escapeSequence = "";
-    this.secretPrompt = false;
+    this.inPaste = false;
+    this.promptKind = null;
     this.resetCurrentLine();
   }
 
@@ -134,8 +179,6 @@ export class TerminalCommandHistoryController {
     this.chars = [];
     this.cursor = 0;
     this.reliable = true;
-    this.historyIndex = -1;
-    this.draft = "";
     this.escapeSequence = "";
   }
 
@@ -174,18 +217,17 @@ export class TerminalCommandHistoryController {
         break;
       case "\x1b[3~":
         if (this.cursor < this.chars.length) this.chars.splice(this.cursor, 1);
-        this.leaveHistoryNavigation();
         break;
       case "\x1b[200~":
+        this.inPaste = true;
+        break;
       case "\x1b[201~":
-        // Bracketed-paste boundaries do not alter the command contents.
+        this.inPaste = false;
         break;
       default:
-        // Up/Down are handled before xterm emits data when persisted history
-        // is available. If another escape reaches this parser, avoid storing a
-        // command whose final text may differ from our local model.
+        // Arrow history recall or another escape reached the remote line
+        // editor; the resulting line text may differ from our local model.
         this.reliable = false;
-        this.leaveHistoryNavigation();
     }
   }
 
@@ -198,14 +240,6 @@ export class TerminalCommandHistoryController {
       this.chars.splice(this.cursor - 1, 1);
       this.cursor -= 1;
     }
-    this.leaveHistoryNavigation();
-  }
-
-  private leaveHistoryNavigation() {
-    if (this.historyIndex !== -1) {
-      this.historyIndex = -1;
-      this.draft = "";
-    }
   }
 
   private replaceLine(value: string) {
@@ -216,14 +250,41 @@ export class TerminalCommandHistoryController {
 
   private remember(command: string) {
     if (this.history[0] !== command) this.history.unshift(command);
-    if (this.history.length > 200) this.history.length = 200;
+    if (this.history.length > HISTORY_CAP) this.history.length = HISTORY_CAP;
   }
 }
 
-function looksLikeSecretPrompt(output: string) {
-  return /(password|passphrase|passcode)[^:\n]{0,80}:/i.test(output);
+function looksLikeSecretPrompt(visible: string) {
+  return /(password|passphrase|passcode)[^:\n]{0,80}:/i.test(visible);
 }
 
-function looksLikeShellPrompt(output: string) {
-  return /(?:^|\r|\n)[^\r\n]*[#$%] $/.test(output);
+function looksLikeShellPrompt(visible: string) {
+  return /(?:^|[\r\n])[^\r\n]*[#$%❯➜»] $/.test(visible);
+}
+
+/** Drop ANSI escape sequences and control characters (keeping line breaks and
+ * tabs) so prompt detection sees what the user sees. Mirrors the conservative
+ * escape scanning used by the Rust-side tracker. */
+function stripControlAndAnsi(output: string): string {
+  let visible = "";
+  let escape = "";
+  for (const character of output) {
+    if (escape) {
+      escape += character;
+      if (escape === "\x1b[") continue;
+      if (/[A-Za-z~]$/.test(character) || escape.length > 16) escape = "";
+      continue;
+    }
+    if (character === "\x1b") {
+      escape = character;
+      continue;
+    }
+    if (character === "\r" || character === "\n" || character === "\t") {
+      visible += character;
+      continue;
+    }
+    if (character < " " || character === "\x7f") continue;
+    visible += character;
+  }
+  return visible;
 }

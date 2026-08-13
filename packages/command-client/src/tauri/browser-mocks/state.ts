@@ -50,7 +50,7 @@ export const mockStore = {
   sshCommandHistory: [] as SshCommandHistoryEntry[],
   sshCommandLines: {} as Record<
     string,
-    { line: string; reliable: boolean; escapeSequence: string }
+    { line: string; reliable: boolean; escapeSequence: string; inPaste?: boolean }
   >,
   sshSessions: [] as SshSessionSummary[],
   sshEvents: [] as SshSessionEvent[],

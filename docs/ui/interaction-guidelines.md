@@ -247,6 +247,17 @@ high-impact operations. Do not use `window.confirm`.
   persisted history unless such behavior is explicitly added.
 - Split panes need clear focus ownership so toolbar actions target the expected
   session.
+- Command-history suggestions are popup-based: typing at a detected shell
+  prompt may open a suggestion list (Up/Down navigate, Tab or click inserts,
+  Esc dismisses until the next executed command, Enter always submits the
+  typed line to the remote shell and never accepts a suggestion).
+- When no suggestion popup is visible, every key — including Up/Down arrows —
+  must flow to the remote PTY unchanged so native shell and REPL history
+  navigation keep working. Suggestions must not open at password prompts, in
+  alternate-buffer apps, or in contexts not detected as a shell prompt.
+- Inserting a suggestion may only send printable text and plain backspaces;
+  shell-specific control shortcuts (for example readline Ctrl+U/Ctrl+K) must
+  not be assumed.
 
 ## Workspace And Settings Expectations
 

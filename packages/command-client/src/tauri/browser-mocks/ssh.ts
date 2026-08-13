@@ -376,16 +376,23 @@ export function handleSshMock<T>(
   if (command === "ssh_command_history_list") {
     const query = args?.query as SshCommandHistoryQuery;
     const search = query.search?.trim().toLocaleLowerCase() ?? "";
+    // Compare instants, not strings: `Z` and offset RFC 3339 spellings do not
+    // sort lexicographically. Mirrors the backend normalization.
+    const since = toEpochMillis(query.since);
+    const until = toEpochMillis(query.until);
     return mockStore.sshCommandHistory
-      .filter(
-        (entry) =>
-          entry.workspaceId === query.workspaceId &&
-          (!query.connectionId || entry.connectionId === query.connectionId) &&
-          (query.includeRedacted || !entry.redacted) &&
-          (!search || entry.command.toLocaleLowerCase().includes(search)) &&
-          (!query.since || entry.executedAt >= query.since) &&
-          (!query.until || entry.executedAt <= query.until),
-      )
+      .filter((entry) => {
+        if (entry.workspaceId !== query.workspaceId) return false;
+        if (query.connectionId && entry.connectionId !== query.connectionId) return false;
+        if (!query.includeRedacted && entry.redacted) return false;
+        if (search && !entry.command.toLocaleLowerCase().includes(search)) return false;
+        if (since === null && until === null) return true;
+        const executedAt = toEpochMillis(entry.executedAt);
+        if (executedAt === null) return false;
+        if (since !== null && executedAt < since) return false;
+        if (until !== null && executedAt > until) return false;
+        return true;
+      })
       .sort((left, right) => right.executedAt.localeCompare(left.executedAt))
       .slice(0, Math.min(Math.max(query.limit ?? 100, 1), 200)) as T;
   }
@@ -403,11 +410,12 @@ function acceptMockSshInput(sessionId: string, input: string) {
   for (const character of input) {
     if (state.escapeSequence) {
       state.escapeSequence += character;
-      if (
-        state.escapeSequence === "\x1b[200~" ||
-        state.escapeSequence === "\x1b[201~"
-      ) {
+      if (state.escapeSequence === "\x1b[200~") {
         state.escapeSequence = "";
+        state.inPaste = true;
+      } else if (state.escapeSequence === "\x1b[201~") {
+        state.escapeSequence = "";
+        state.inPaste = false;
       } else if (/[A-Za-z~]$/.test(state.escapeSequence)) {
         state.escapeSequence = "";
         state.reliable = false;
@@ -417,6 +425,12 @@ function acceptMockSshInput(sessionId: string, input: string) {
     if (character === "\x1b") {
       state.escapeSequence = character;
     } else if (character === "\r" || character === "\n") {
+      if (state.inPaste) {
+        // Bracketed-paste newlines are buffered by the line editor, not
+        // executed; a multiline block is not recorded (matches the backend).
+        state.reliable = false;
+        continue;
+      }
       const command = state.line.trim();
       if (command && state.reliable) commands.push(command);
       state.line = "";
@@ -436,4 +450,10 @@ function acceptMockSshInput(sessionId: string, input: string) {
     }
   }
   return commands;
+}
+
+function toEpochMillis(value: string | null | undefined): number | null {
+  if (!value || !value.trim()) return null;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
 }

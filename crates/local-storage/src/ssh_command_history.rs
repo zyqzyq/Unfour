@@ -45,12 +45,14 @@ impl SshCommandHistoryService {
                 "ssh command history command exceeds {MAX_COMMAND_BYTES} bytes"
             )));
         }
-        let executed_at = input.executed_at.trim().to_string();
-        if executed_at.is_empty() {
-            return Err(AppError::Validation(
-                "ssh command history executed_at cannot be empty".to_string(),
-            ));
-        }
+        // Timestamps are compared as TEXT in SQLite, so every stored value must
+        // use the same canonical UTC offset form for ordering to stay correct.
+        let executed_at = unfour_core::time::normalize_rfc3339_utc(&input.executed_at)
+            .ok_or_else(|| {
+                AppError::Validation(
+                    "ssh command history executed_at must be an RFC 3339 timestamp".to_string(),
+                )
+            })?;
         let (command, redacted) = redact_shell_command(&command);
         let cwd = input.cwd.and_then(trim_to_option);
         let session_id = input.session_id.and_then(trim_to_option);
@@ -172,8 +174,15 @@ impl SshCommandHistoryService {
             .clamp(1, MAX_HISTORY_LIMIT);
         let search = query.search.and_then(trim_to_option);
         let search_pattern = search.map(|value| format!("%{}%", escape_like(&value)));
-        let since = query.since.and_then(trim_to_option);
-        let until = query.until.and_then(trim_to_option);
+        let since = normalize_time_bound(query.since, "since")?;
+        let until = normalize_time_bound(query.until, "until")?;
+        if let (Some(since), Some(until)) = (since.as_deref(), until.as_deref()) {
+            if since > until {
+                return Err(AppError::Validation(
+                    "ssh command history since must not be later than until".to_string(),
+                ));
+            }
+        }
 
         let rows = sqlx::query_as::<_, SshCommandHistoryEntry>(
             r#"
@@ -207,6 +216,22 @@ impl SshCommandHistoryService {
 fn trim_to_option(value: String) -> Option<String> {
     let value = value.trim().to_string();
     (!value.is_empty()).then_some(value)
+}
+
+/// Normalize an optional RFC 3339 query bound to the canonical UTC form used
+/// by stored `executed_at` values. `Z`-suffixed and non-UTC-offset inputs
+/// would otherwise compare incorrectly against stored `+00:00` text.
+fn normalize_time_bound(value: Option<String>, field: &str) -> AppResult<Option<String>> {
+    let Some(value) = value.and_then(trim_to_option) else {
+        return Ok(None);
+    };
+    unfour_core::time::normalize_rfc3339_utc(&value)
+        .map(Some)
+        .ok_or_else(|| {
+            AppError::Validation(format!(
+                "ssh command history {field} must be an RFC 3339 timestamp"
+            ))
+        })
 }
 
 fn escape_like(value: &str) -> String {

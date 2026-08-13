@@ -1,3 +1,8 @@
+/// Un-echoed submissions kept while waiting for the remote echo. Bounded so a
+/// session that never echoes (echo-off prompts, simulated transport) cannot
+/// grow the queue without limit.
+const MAX_PENDING_COMMANDS: usize = 16;
+
 #[derive(Debug, Default)]
 pub(super) struct SshCommandLineTracker {
     chars: Vec<char>,
@@ -5,6 +10,7 @@ pub(super) struct SshCommandLineTracker {
     escape_sequence: String,
     reliable: bool,
     echoed: usize,
+    in_paste: bool,
     pending: Vec<String>,
 }
 
@@ -33,6 +39,14 @@ impl SshCommandLineTracker {
             match character {
                 '\x1b' => self.escape_sequence.push(character),
                 '\r' | '\n' => {
+                    if self.in_paste {
+                        // Inside a bracketed paste the newline is buffered by
+                        // the remote line editor instead of executing the line.
+                        // A multiline block cannot be tracked as individually
+                        // executed commands, so skip recording this line.
+                        self.reliable = false;
+                        continue;
+                    }
                     if let Some(command) = self.submit_line() {
                         commands.push(command);
                     }
@@ -98,6 +112,9 @@ impl SshCommandLineTracker {
                 Some(command)
             } else {
                 self.pending.push(command);
+                if self.pending.len() > MAX_PENDING_COMMANDS {
+                    self.pending.remove(0);
+                }
                 None
             }
         } else {
@@ -151,7 +168,8 @@ impl SshCommandLineTracker {
                     self.clamp_echoed();
                 }
             }
-            "\x1b[200~" | "\x1b[201~" => {}
+            "\x1b[200~" => self.in_paste = true,
+            "\x1b[201~" => self.in_paste = false,
             _ => self.reliable = false,
         }
     }
@@ -291,5 +309,41 @@ mod tests {
         assert!(tracker.accept("ls").is_empty());
         tracker.observe_output("ls");
         assert_eq!(tracker.accept("\r"), vec!["ls"]);
+    }
+
+    #[test]
+    fn bracketed_multiline_paste_is_not_recorded_as_executed_commands() {
+        let mut tracker = SshCommandLineTracker::new();
+        // The remote line editor buffers the pasted block; nothing executed yet.
+        assert!(tracker
+            .accept("\x1b[200~echo one\recho two\x1b[201~")
+            .is_empty());
+        // Echo of the highlighted paste must not confirm the embedded lines.
+        assert!(tracker.observe_output("echo one\r\necho two").is_empty());
+        // The paste made the tracked line unreliable, so the real Enter is
+        // skipped instead of persisting a mangled concatenation.
+        assert!(tracker.accept("\r").is_empty());
+        assert!(tracker.observe_output("echo one\r\necho two\r\n").is_empty());
+
+        // The tracker recovers for the next plainly typed command.
+        tracker.accept("pwd");
+        tracker.observe_output("pwd");
+        assert_eq!(tracker.accept("\r"), vec!["pwd"]);
+    }
+
+    #[test]
+    fn bracketed_single_line_paste_is_recorded_after_echo() {
+        let mut tracker = SshCommandLineTracker::new();
+        assert!(tracker.accept("\x1b[200~git status\x1b[201~\r").is_empty());
+        assert_eq!(tracker.observe_output("git status\r\n"), vec!["git status"]);
+    }
+
+    #[test]
+    fn pending_queue_is_bounded_without_remote_echo() {
+        let mut tracker = SshCommandLineTracker::new();
+        for index in 0..(MAX_PENDING_COMMANDS + 8) {
+            tracker.accept(&format!("cmd-{index}\r"));
+        }
+        assert!(tracker.pending.len() <= MAX_PENDING_COMMANDS);
     }
 }

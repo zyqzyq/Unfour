@@ -115,8 +115,13 @@ fn list_history(
     let search = optional_trimmed(&arguments, "query")?;
     let since = optional_trimmed(&arguments, "since")?;
     let until = optional_trimmed(&arguments, "until")?;
-    if let (Some(since), Some(until)) = (since.as_deref(), until.as_deref()) {
-        if since > until {
+    // Compare parsed instants, not raw strings: `Z` and non-UTC offsets are
+    // valid RFC 3339 spellings whose lexicographic order differs from their
+    // chronological order.
+    let since_instant = parse_time_argument(since.as_deref(), "since")?;
+    let until_instant = parse_time_argument(until.as_deref(), "until")?;
+    if let (Some(since_instant), Some(until_instant)) = (since_instant, until_instant) {
+        if since_instant > until_instant {
             return Err(ToolCallError::InvalidArguments(
                 "argument `since` must be less than or equal to `until`".to_string(),
             ));
@@ -182,6 +187,18 @@ fn optional_trimmed(
     Ok(parse_optional_string(arguments, key)?
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty()))
+}
+
+fn parse_time_argument(value: Option<&str>, key: &str) -> Result<Option<i64>, ToolCallError> {
+    value
+        .map(|value| {
+            unfour_core::time::parse_rfc3339_epoch_micros(value).ok_or_else(|| {
+                ToolCallError::InvalidArguments(format!(
+                    "argument `{key}` must be an RFC 3339 timestamp"
+                ))
+            })
+        })
+        .transpose()
 }
 
 fn parse_optional_history_limit(
