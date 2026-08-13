@@ -1,11 +1,9 @@
 use sqlx::SqliteConnection;
 use unfour_core::domain::ExternalApiCollectionUpsert;
-use unfour_core::AppResult;
+use unfour_core::{AppError, AppResult};
 
 use super::helpers::{validate_external_record, validate_owner};
-use crate::api_client::domain::{
-    normalize_collection_name, validate_workspace_on, ApiCollectionDomainRow,
-};
+use crate::api_client::domain::{validate_workspace_on, ApiCollectionDomainRow};
 
 pub(super) async fn upsert_collection(
     connection: &mut SqliteConnection,
@@ -25,7 +23,16 @@ pub(super) async fn upsert_collection(
         &record.workspace_id,
     )
     .await?;
-    let name = normalize_collection_name(record.name)?;
+    // Strict-producer / lenient-consumer contract: local commands validate
+    // names strictly and the server enforces the 120-rune cap at push time,
+    // so the external apply path only rejects blank names. Length or
+    // character violations are cosmetic here and must never wedge the puller.
+    let name = record.name.trim().to_string();
+    if name.is_empty() {
+        return Err(AppError::Validation(
+            "external API collection name cannot be empty".to_string(),
+        ));
+    }
     let current = sqlx::query_as::<_, ApiCollectionDomainRow>(
         r#"
         SELECT id, workspace_id, name, description, created_at, updated_at,

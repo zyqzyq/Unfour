@@ -212,7 +212,7 @@ impl ApiClientService {
         )
         .bind(&id)
         .bind(&workspace_id)
-        .bind(format!("{} Copy", source.name))
+        .bind(duplicate_request_name(&source.name))
         .bind(&source.collection_id)
         .bind(&source.parent_folder_id)
         .bind(source.sort_order)
@@ -434,13 +434,7 @@ async fn stored_request_fields_on(
         now,
     )
     .await?;
-    let name = input
-        .name
-        .as_deref()
-        .map(str::trim)
-        .filter(|name| !name.is_empty())
-        .map(str::to_string)
-        .unwrap_or_else(|| format!("{} {}", input.method.to_uppercase(), input.url));
+    let name = stored_request_name(input.name.as_deref(), &input.method, &input.url)?;
     Ok(StoredRequestFields {
         name,
         location,
@@ -452,6 +446,34 @@ async fn stored_request_fields_on(
         headers_json: serde_json::to_string(&input.headers)?,
         query_json: serde_json::to_string(&input.query)?,
     })
+}
+
+/// Duplicating a request appends " Copy"; truncate the source name so the
+/// result stays within the 120-character cap instead of producing a name the
+/// sync server would reject.
+fn duplicate_request_name(source: &str) -> String {
+    const SUFFIX: &str = " Copy";
+    let budget = 120 - SUFFIX.chars().count();
+    let base: String = source.trim().chars().take(budget).collect();
+    format!("{}{}", base.trim_end(), SUFFIX)
+}
+
+/// Explicit request names are validated strictly (the sync server enforces
+/// the same 120-rune cap at push time); the derived `METHOD url` fallback is
+/// truncated instead so saving a request without a name can never fail.
+fn stored_request_name(name: Option<&str>, method: &str, url: &str) -> AppResult<String> {
+    if let Some(name) = name.map(str::trim).filter(|name| !name.is_empty()) {
+        if name.chars().count() > 120 {
+            return Err(AppError::Validation(
+                "request name must be 120 characters or fewer".to_string(),
+            ));
+        }
+        return Ok(name.to_string());
+    }
+    Ok(format!("{} {}", method.to_uppercase(), url)
+        .chars()
+        .take(120)
+        .collect())
 }
 
 async fn resolve_location_on(
@@ -613,5 +635,39 @@ mod tests {
         let desired = vec!["request-a".to_string(), "request-a".to_string()];
         let error = validate_request_reorder(&desired, ["request-a"].into_iter()).unwrap_err();
         assert!(matches!(error, AppError::Validation(_)));
+    }
+
+    #[test]
+    fn explicit_request_names_are_capped_and_derived_names_truncate() {
+        let error =
+            stored_request_name(Some(&"n".repeat(121)), "get", "https://api.test").unwrap_err();
+        assert!(matches!(error, AppError::Validation(_)));
+        assert_eq!(
+            stored_request_name(Some(&"n".repeat(120)), "get", "https://api.test")
+                .unwrap()
+                .chars()
+                .count(),
+            120
+        );
+        assert_eq!(
+            stored_request_name(Some("  Create user  "), "post", "https://api.test").unwrap(),
+            "Create user"
+        );
+
+        let long_url = format!("https://api.test/{}", "p".repeat(300));
+        let derived = stored_request_name(None, "get", &long_url).unwrap();
+        assert_eq!(derived.chars().count(), 120);
+        assert!(derived.starts_with("GET https://api.test/"));
+    }
+
+    #[test]
+    fn duplicate_names_stay_within_the_cap() {
+        assert_eq!(
+            duplicate_request_name("List accounts"),
+            "List accounts Copy"
+        );
+        let capped = duplicate_request_name(&"n".repeat(120));
+        assert_eq!(capped.chars().count(), 120);
+        assert!(capped.ends_with(" Copy"));
     }
 }

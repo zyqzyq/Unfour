@@ -114,6 +114,19 @@ async fn snapshot_external_apply_round_trip_preserves_tree_without_secrets_or_ec
     assert_eq!(target_collection, source_collection);
     assert_eq!(target_parent, source_parent);
     assert_eq!(target_child, source_child);
+    // Shape-aware auth redaction is asymmetric on a first sync: the producer
+    // marks its local secret material with `<redacted>` while the receiver
+    // has no local material to restore and stores empty strings. Compare the
+    // auth payload structurally and everything else byte-for-byte.
+    let source_auth: serde_json::Value = serde_json::from_str(&source_request.auth_json).unwrap();
+    let target_auth: serde_json::Value = serde_json::from_str(&target_request.auth_json).unwrap();
+    assert_eq!(source_auth["type"], "bearer");
+    assert_eq!(source_auth["token"], "<redacted>");
+    assert_eq!(target_auth["type"], "bearer");
+    assert_eq!(target_auth["token"], "");
+    assert_eq!(target_auth["prefix"], "");
+    source_request.auth_json = String::new();
+    target_request.auth_json = String::new();
     assert_eq!(target_request, source_request);
 
     let stored: (String, String, String, Option<String>, String) = sqlx::query_as(
@@ -207,38 +220,325 @@ async fn snapshot_external_apply_round_trip_preserves_tree_without_secrets_or_ec
 }
 
 #[tokio::test]
-async fn external_apply_rejects_missing_or_cross_collection_parents_atomically() {
+async fn external_apply_skips_upserts_under_absent_or_deleted_parents() {
     let db = database().await;
     let bus = CommandBus::from_db(db.clone()).await.unwrap();
     let workspace_id = bus.list_workspaces().await.unwrap().active_workspace_id;
-    let collection = bus
-        .api_collection_create(workspace_id.clone(), "Valid".to_string())
+    let deleted = bus
+        .api_collection_create(workspace_id.clone(), "Doomed".to_string())
+        .await
+        .unwrap();
+    bus.api_collection_delete(workspace_id.clone(), deleted.id.clone())
+        .await
+        .unwrap();
+
+    // Folder upsert under a soft-deleted collection: skipped without a row or
+    // a mutation. The server cascades deletes, so the folder is guaranteed to
+    // be tombstoned at a later cursor.
+    let report = bus
+        .apply_external_page(ExternalApplyPage {
+            api_folders: vec![external_folder(
+                "orphan-folder",
+                &workspace_id,
+                &deleted.id,
+                None,
+                "Orphan",
+            )],
+            ..ExternalApplyPage::default()
+        })
+        .await
+        .expect("doomed orphan folder must be skipped, not fail the page");
+    assert_eq!(report.applied_count, 0);
+    assert!(report.mutations.is_empty());
+    assert_eq!(folder_row_count(&db, "orphan-folder").await, 0);
+
+    // Nested batch listing the child before its in-batch parent: the child is
+    // deferred, the parent is skipped, and the deferred child cascades into a
+    // skip instead of a "cyclic or unavailable parent" error.
+    let report = bus
+        .apply_external_page(ExternalApplyPage {
+            api_folders: vec![
+                external_folder(
+                    "folder-b",
+                    &workspace_id,
+                    &deleted.id,
+                    Some("folder-a"),
+                    "B",
+                ),
+                external_folder("folder-a", &workspace_id, &deleted.id, None, "A"),
+            ],
+            ..ExternalApplyPage::default()
+        })
+        .await
+        .expect("nested doomed orphans must be skipped");
+    assert_eq!(report.applied_count, 0);
+    assert_eq!(folder_row_count(&db, "folder-a").await, 0);
+    assert_eq!(folder_row_count(&db, "folder-b").await, 0);
+
+    // Live collection but absent parent folder: the folder upsert and the
+    // request targeting the same absent folder are both skipped.
+    let live = bus
+        .api_collection_create(workspace_id.clone(), "Live".to_string())
+        .await
+        .unwrap();
+    let report = bus
+        .apply_external_page(ExternalApplyPage {
+            api_folders: vec![external_folder(
+                "under-missing",
+                &workspace_id,
+                &live.id,
+                Some("missing-parent"),
+                "Orphan",
+            )],
+            api_requests: vec![external_request(
+                "request-under-missing",
+                &workspace_id,
+                &live.id,
+                Some("missing-parent"),
+            )],
+            ..ExternalApplyPage::default()
+        })
+        .await
+        .expect("upserts under an absent parent must be skipped");
+    assert_eq!(report.applied_count, 0);
+    assert_eq!(folder_row_count(&db, "under-missing").await, 0);
+    assert_eq!(request_row_count(&db, "request-under-missing").await, 0);
+
+    // Request upsert directly under the soft-deleted collection: skipped.
+    let report = bus
+        .apply_external_page(ExternalApplyPage {
+            api_requests: vec![external_request(
+                "request-under-deleted",
+                &workspace_id,
+                &deleted.id,
+                None,
+            )],
+            ..ExternalApplyPage::default()
+        })
+        .await
+        .expect("request under a deleted collection must be skipped");
+    assert_eq!(report.applied_count, 0);
+    assert_eq!(request_row_count(&db, "request-under-deleted").await, 0);
+}
+
+#[tokio::test]
+async fn external_apply_keeps_cross_collection_parent_as_hard_error() {
+    let db = database().await;
+    let bus = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let collection_a = bus
+        .api_collection_create(workspace_id.clone(), "A".to_string())
+        .await
+        .unwrap();
+    let collection_b = bus
+        .api_collection_create(workspace_id.clone(), "B".to_string())
+        .await
+        .unwrap();
+    let parent = bus
+        .api_collection_folder_create(
+            workspace_id.clone(),
+            collection_a.id.clone(),
+            None,
+            "Parent".to_string(),
+        )
         .await
         .unwrap();
     let error = bus
         .apply_external_page(ExternalApplyPage {
-            api_folders: vec![ExternalApiFolderApply::Upsert(ExternalApiFolderUpsert {
-                id: "external-folder".to_string(),
-                workspace_id: workspace_id.clone(),
-                collection_id: collection.id,
-                parent_folder_id: Some("missing-parent".to_string()),
-                name: "Orphan".to_string(),
-                sort_order: 0,
-                created_at: "2026-08-12T00:00:00Z".to_string(),
-                updated_at: "2026-08-12T00:00:00Z".to_string(),
-            })],
+            api_folders: vec![external_folder(
+                "cross-collection",
+                &workspace_id,
+                &collection_b.id,
+                Some(parent.id.as_str()),
+                "Cross",
+            )],
             ..ExternalApplyPage::default()
         })
         .await
-        .expect_err("missing external parent must be rejected");
-    assert!(matches!(error, AppError::NotFound(_)));
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM api_collection_folders WHERE id = 'external-folder'",
+        .expect_err("cross-collection parents must stay rejected");
+    assert!(matches!(error, AppError::Validation(_)));
+    assert_eq!(folder_row_count(&db, "cross-collection").await, 0);
+}
+
+#[tokio::test]
+async fn external_apply_is_lenient_on_names_but_rejects_blank_ones() {
+    let db = database().await;
+    let bus = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let collection = bus
+        .api_collection_create(workspace_id.clone(), "Live".to_string())
+        .await
+        .unwrap();
+
+    // Strict-producer / lenient-consumer: the server enforces name limits at
+    // push time, so a receiver must apply names local validation would reject.
+    let oversized = format!("{}<>{}", "a".repeat(150), "b".repeat(150));
+    let report = bus
+        .apply_external_page(ExternalApplyPage {
+            api_folders: vec![external_folder(
+                "lenient-folder",
+                &workspace_id,
+                &collection.id,
+                None,
+                &oversized,
+            )],
+            ..ExternalApplyPage::default()
+        })
+        .await
+        .expect("external apply must not reject long names or special characters");
+    assert_eq!(report.applied_count, 1);
+    let stored: String =
+        sqlx::query_scalar("SELECT name FROM api_collection_folders WHERE id = 'lenient-folder'")
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert_eq!(stored, oversized);
+
+    let error = bus
+        .apply_external_page(ExternalApplyPage {
+            api_folders: vec![external_folder(
+                "blank-folder",
+                &workspace_id,
+                &collection.id,
+                None,
+                "   ",
+            )],
+            ..ExternalApplyPage::default()
+        })
+        .await
+        .expect_err("blank external names must stay rejected");
+    assert!(matches!(error, AppError::Validation(_)));
+}
+
+#[tokio::test]
+async fn external_folder_upsert_cannot_move_live_folder_across_collections() {
+    let db = database().await;
+    let bus = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let original = bus
+        .api_collection_create(workspace_id.clone(), "Original".to_string())
+        .await
+        .unwrap();
+    let other = bus
+        .api_collection_create(workspace_id.clone(), "Other".to_string())
+        .await
+        .unwrap();
+    let folder = bus
+        .api_collection_folder_create(
+            workspace_id.clone(),
+            original.id.clone(),
+            None,
+            "Payments".to_string(),
+        )
+        .await
+        .unwrap();
+
+    let error = bus
+        .apply_external_page(ExternalApplyPage {
+            api_folders: vec![external_folder(
+                folder.id.as_str(),
+                &workspace_id,
+                &other.id,
+                None,
+                "Payments",
+            )],
+            ..ExternalApplyPage::default()
+        })
+        .await
+        .expect_err("a live folder must not change collection");
+    assert!(matches!(error, AppError::Validation(_)));
+
+    // Resurrecting a soft-deleted row under a new collection is an external
+    // re-create, not a move, and stays allowed.
+    bus.api_collection_folder_delete(workspace_id.clone(), folder.id.clone())
+        .await
+        .unwrap();
+    let report = bus
+        .apply_external_page(ExternalApplyPage {
+            api_folders: vec![external_folder(
+                folder.id.as_str(),
+                &workspace_id,
+                &other.id,
+                None,
+                "Payments",
+            )],
+            ..ExternalApplyPage::default()
+        })
+        .await
+        .expect("resurrecting a deleted folder under a new collection must apply");
+    assert_eq!(report.applied_count, 1);
+    let (collection_id, deleted_at): (String, Option<String>) = sqlx::query_as(
+        "SELECT collection_id, deleted_at FROM api_collection_folders WHERE id = ?1",
     )
+    .bind(&folder.id)
     .fetch_one(db.pool())
     .await
     .unwrap();
-    assert_eq!(count, 0);
+    assert_eq!(collection_id, other.id);
+    assert!(deleted_at.is_none());
+}
+
+fn external_folder(
+    id: &str,
+    workspace_id: &str,
+    collection_id: &str,
+    parent_folder_id: Option<&str>,
+    name: &str,
+) -> ExternalApiFolderApply {
+    ExternalApiFolderApply::Upsert(ExternalApiFolderUpsert {
+        id: id.to_string(),
+        workspace_id: workspace_id.to_string(),
+        collection_id: collection_id.to_string(),
+        parent_folder_id: parent_folder_id.map(str::to_string),
+        name: name.to_string(),
+        sort_order: 0,
+        created_at: "2026-08-12T00:00:00Z".to_string(),
+        updated_at: "2026-08-12T00:00:00Z".to_string(),
+    })
+}
+
+fn external_request(
+    id: &str,
+    workspace_id: &str,
+    collection_id: &str,
+    parent_folder_id: Option<&str>,
+) -> ExternalApiRequestApply {
+    ExternalApiRequestApply::Upsert(Box::new(ExternalApiRequestUpsert {
+        id: id.to_string(),
+        workspace_id: workspace_id.to_string(),
+        collection_id: collection_id.to_string(),
+        parent_folder_id: parent_folder_id.map(str::to_string),
+        name: format!("Request {id}"),
+        sort_order: 0,
+        auth_json: "<redacted>".to_string(),
+        method: "GET".to_string(),
+        url: "https://api.example.test/resource".to_string(),
+        headers: Vec::new(),
+        query: Vec::new(),
+        body: None,
+        body_kind: "none".to_string(),
+        pre_request_script: None,
+        post_response_script: None,
+        script_schema_version: 1,
+        created_at: "2026-08-12T00:00:00Z".to_string(),
+        updated_at: "2026-08-12T00:00:00Z".to_string(),
+    }))
+}
+
+async fn folder_row_count(db: &LocalDb, id: &str) -> i64 {
+    sqlx::query_scalar("SELECT COUNT(*) FROM api_collection_folders WHERE id = ?1")
+        .bind(id)
+        .fetch_one(db.pool())
+        .await
+        .unwrap()
+}
+
+async fn request_row_count(db: &LocalDb, id: &str) -> i64 {
+    sqlx::query_scalar("SELECT COUNT(*) FROM api_requests WHERE id = ?1")
+        .bind(id)
+        .fetch_one(db.pool())
+        .await
+        .unwrap()
 }
 
 async fn api_collection_snapshot(

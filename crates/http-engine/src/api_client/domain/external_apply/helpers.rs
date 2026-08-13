@@ -26,6 +26,26 @@ pub(super) async fn validate_owner(
     Ok(())
 }
 
+/// Convert a parent lookup into `None` when the parent is absent or
+/// soft-deleted, keeping every other failure as a hard error.
+///
+/// A missing parent on the external apply path is the doomed-orphan race, not
+/// corruption: another device created this entity while a concurrent delete
+/// of its parent (collection or folder) was already applied locally. The
+/// server cascades deletes, so a skipped entity is guaranteed to arrive as a
+/// tombstone at a later cursor; writing nothing keeps the puller from wedging
+/// on the page by retrying it forever. Genuine local-edit conflicts are
+/// intercepted upstream by the Pro client's intent checks before core apply
+/// runs. Workspace ownership mismatches, malformed records, and cycle
+/// violations still fail the page.
+pub(super) fn doomed_orphan_to_skip<T>(lookup: AppResult<T>) -> AppResult<Option<T>> {
+    match lookup {
+        Ok(value) => Ok(Some(value)),
+        Err(AppError::NotFound(_)) => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
 pub(super) fn validate_external_record(
     id: &str,
     workspace_id: &str,

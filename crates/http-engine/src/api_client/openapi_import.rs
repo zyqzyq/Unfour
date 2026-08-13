@@ -12,6 +12,9 @@ use value_parser::{parse_auth_json, parse_parameters, parse_request_body};
 
 const MAX_IMPORT_BYTES: usize = 10 * 1024 * 1024;
 const MAX_IMPORT_ITEMS: usize = 10_000;
+const MAX_IMPORT_NAME_CHARS: usize = 120;
+const FALLBACK_COLLECTION_NAME: &str = "Imported API";
+const FALLBACK_FOLDER_NAME: &str = "Group";
 const HTTP_METHODS: [&str; 8] = [
     "delete", "get", "head", "options", "patch", "post", "put", "trace",
 ];
@@ -269,7 +272,7 @@ fn parse_import(content: &str) -> AppResult<ParsedImport> {
     }
 
     let info = object_field(root, "info")?;
-    let name = required_string(info, "title", "collection import title cannot be empty")?;
+    let name = sanitize_collection_name(non_empty_string(info.get("title")).unwrap_or_default());
     let description = non_empty_string(info.get("description")).map(str::to_string);
     let (folders, tag_folder_ids) = parse_folders(root)?;
     let folder_ids = folders
@@ -363,24 +366,19 @@ fn parse_folders(
                         && folder.path.starts_with(&format!("{} / ", candidate.path))
                 })
                 .max_by_key(|candidate| candidate.path.len());
-            let name = parent
-                .and_then(|parent| folder.path.strip_prefix(&format!("{} / ", parent.path)))
-                .unwrap_or(&folder.path)
-                .trim()
-                .to_string();
-            if name.is_empty() {
-                return Err(import_validation(
-                    "collection import folder name cannot be empty",
-                ));
-            }
-            Ok(ParsedFolder {
+            let name = sanitize_folder_name(
+                parent
+                    .and_then(|parent| folder.path.strip_prefix(&format!("{} / ", parent.path)))
+                    .unwrap_or(&folder.path),
+            );
+            ParsedFolder {
                 source_id: folder.source_id.clone(),
                 parent_source_id: parent.map(|parent| parent.source_id.clone()),
                 name,
                 sort_order: folder.sort_order,
-            })
+            }
         })
-        .collect::<AppResult<Vec<_>>>()?;
+        .collect::<Vec<_>>();
     Ok((folders, tag_folder_ids))
 }
 
@@ -495,10 +493,12 @@ fn push_operation(
             "collection import contains duplicate request ids",
         ));
     }
-    let name = non_empty_string(operation.get("summary"))
-        .or_else(|| non_empty_string(operation.get("operationId")))
-        .map(str::to_string)
-        .unwrap_or_else(|| format!("{} {path}", method.to_ascii_uppercase()));
+    let name = truncate_name_chars(
+        non_empty_string(operation.get("summary"))
+            .or_else(|| non_empty_string(operation.get("operationId")))
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("{} {path}", method.to_ascii_uppercase())),
+    );
     let url = resolve_operation_url(root, operation, path);
     let parent_source_id = non_empty_string(operation.get("x-unfour-folder-id"))
         .map(str::to_string)
@@ -634,6 +634,51 @@ fn non_empty_string(value: Option<&Value>) -> Option<&str> {
         .filter(|value| !value.is_empty())
 }
 
+/// Imported names must satisfy the same rules local commands enforce
+/// (`normalize_collection_name` / `normalize_folder_name`): otherwise a
+/// pushed import is rejected by the server's 120-rune name limit and
+/// dead-letters. Instead of failing the import, trim, cap at 120 characters,
+/// replace the characters the folder rules reject, and fall back to a
+/// placeholder when nothing usable remains.
+fn sanitize_collection_name(raw: &str) -> String {
+    let name = truncate_name_chars(raw.trim().to_string());
+    let name = name.trim();
+    if name.is_empty() {
+        FALLBACK_COLLECTION_NAME.to_string()
+    } else {
+        name.to_string()
+    }
+}
+
+fn sanitize_folder_name(raw: &str) -> String {
+    let name = raw
+        .trim()
+        .chars()
+        .take(MAX_IMPORT_NAME_CHARS)
+        .map(|ch| {
+            if ch.is_control() || matches!(ch, '<' | '>' | '"' | '|') {
+                '_'
+            } else {
+                ch
+            }
+        })
+        .collect::<String>();
+    let name = name.trim();
+    if name.is_empty() {
+        FALLBACK_FOLDER_NAME.to_string()
+    } else {
+        name.to_string()
+    }
+}
+
+fn truncate_name_chars(name: String) -> String {
+    if name.chars().count() <= MAX_IMPORT_NAME_CHARS {
+        name
+    } else {
+        name.chars().take(MAX_IMPORT_NAME_CHARS).collect()
+    }
+}
+
 fn import_validation(message: impl Into<String>) -> AppError {
     AppError::Validation(message.into())
 }
@@ -657,6 +702,33 @@ mod tests {
         assert_eq!(parsed.folders[0].name, "Users");
         assert_eq!(parsed.requests[0].name, "listUsers");
         assert_eq!(parsed.requests[0].url, "https://api.example.com/v1/users");
+    }
+
+    #[test]
+    fn sanitizes_oversized_titles_and_invalid_tag_names() {
+        let title = "T".repeat(300);
+        let spec = format!(
+            r#"{{
+              "openapi":"3.0.3",
+              "info":{{"title":"{title}","version":"1"}},
+              "paths":{{"/items":{{"get":{{"operationId":"listItems","tags":["Query<T>"]}}}}}}
+            }}"#
+        );
+        let parsed = parse_import(&spec).expect("oversized names must be sanitized, not rejected");
+        assert_eq!(parsed.name.chars().count(), 120);
+        assert_eq!(parsed.folders[0].name, "Query_T_");
+        assert!(
+            helpers::normalize_folder_name(parsed.folders[0].name.clone()).is_ok(),
+            "sanitized folder names must pass strict local validation"
+        );
+
+        let blank_title = r#"{
+          "openapi":"3.0.3",
+          "info":{"title":"   ","version":"1"},
+          "paths":{}
+        }"#;
+        let parsed = parse_import(blank_title).expect("blank title must fall back");
+        assert_eq!(parsed.name, "Imported API");
     }
 
     #[test]

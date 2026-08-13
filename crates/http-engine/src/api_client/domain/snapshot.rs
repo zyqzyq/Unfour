@@ -79,7 +79,7 @@ impl ApiClientService {
                     url: snapshot_url(&request.url),
                     headers: snapshot_key_values(&request.headers_json)?,
                     query: snapshot_key_values(&request.query_json)?,
-                    body: snapshot_body(request.body.as_deref()),
+                    body: snapshot_body(request.body.as_deref(), &request.body_kind),
                     body_kind: request.body_kind,
                     pre_request_script: request.pre_request_script,
                     post_response_script: request.post_response_script,

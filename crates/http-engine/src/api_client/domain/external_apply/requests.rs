@@ -3,7 +3,7 @@ use unfour_core::domain::ExternalApiRequestUpsert;
 use unfour_core::models::ApiSavedRequest;
 use unfour_core::{AppError, AppResult};
 
-use super::helpers::{validate_external_record, validate_owner};
+use super::helpers::{doomed_orphan_to_skip, validate_external_record, validate_owner};
 use crate::api_client::domain::secrets::{
     restore_auth_json, restore_body, restore_key_values, restore_url,
 };
@@ -21,16 +21,27 @@ pub(super) async fn upsert_request(
         &record.updated_at,
     )?;
     validate_owner(connection, "api_requests", &record.id, &record.workspace_id).await?;
-    collection_on(
-        connection,
-        &record.workspace_id,
-        &record.collection_id,
-        false,
-    )
-    .await?;
+    if doomed_orphan_to_skip(
+        collection_on(
+            connection,
+            &record.workspace_id,
+            &record.collection_id,
+            false,
+        )
+        .await,
+    )?
+    .is_none()
+    {
+        return Ok(None);
+    }
     record.parent_folder_id = normalize_entity_id(record.parent_folder_id);
     if let Some(parent_id) = record.parent_folder_id.as_deref() {
-        let parent = folder_on(connection, &record.workspace_id, parent_id, false).await?;
+        let Some(parent) = doomed_orphan_to_skip(
+            folder_on(connection, &record.workspace_id, parent_id, false).await,
+        )?
+        else {
+            return Ok(None);
+        };
         if parent.collection_id != record.collection_id {
             return Err(AppError::Validation(
                 "external API request parent must belong to its collection".to_string(),
@@ -78,6 +89,7 @@ pub(super) async fn upsert_request(
     let body = restore_body(
         record.body,
         current.as_ref().and_then(|request| request.body.as_deref()),
+        &record.body_kind,
     );
     let url = restore_url(
         &record.url,

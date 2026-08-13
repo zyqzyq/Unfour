@@ -171,6 +171,7 @@ export function ApiSaveDialog({
             <span className="text-[12px] font-medium">{t("api.save.name")}</span>
             <Input
               autoFocus
+              maxLength={120}
               onChange={(event) => {
                 setName(event.target.value);
                 if (error) setError(null);

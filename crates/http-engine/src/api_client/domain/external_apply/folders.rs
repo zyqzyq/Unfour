@@ -7,10 +7,17 @@ use unfour_core::domain::{
 use unfour_core::models::ApiCollectionFolder;
 use unfour_core::{AppError, AppResult};
 
-use super::helpers::{validate_external_record, validate_owner};
+use super::helpers::{doomed_orphan_to_skip, validate_external_record, validate_owner};
 use crate::api_client::domain::{collection_on, effective_parent, folder_on, mutation};
-use crate::api_client::helpers::{normalize_entity_id, normalize_folder_name};
+use crate::api_client::helpers::normalize_entity_id;
 
+/// Apply folder upserts as a fixed point so in-batch parents may arrive in
+/// any order. Records are only deferred while their parent is still pending;
+/// once a pending parent has been processed and skipped as a doomed orphan
+/// (see `doomed_orphan_to_skip`), its children stop being deferred and skip
+/// through the absent-parent path themselves instead of being reported as a
+/// cyclic hierarchy. The hard error below therefore only fires for true
+/// in-batch cycles.
 pub(super) async fn apply_folder_upserts(
     connection: &mut SqliteConnection,
     context: &CommandContext,
@@ -88,22 +95,42 @@ async fn upsert_folder(
         &record.workspace_id,
     )
     .await?;
-    collection_on(
-        connection,
-        &record.workspace_id,
-        &record.collection_id,
-        false,
-    )
-    .await?;
+    if doomed_orphan_to_skip(
+        collection_on(
+            connection,
+            &record.workspace_id,
+            &record.collection_id,
+            false,
+        )
+        .await,
+    )?
+    .is_none()
+    {
+        return Ok(None);
+    }
     record.parent_folder_id = normalize_entity_id(record.parent_folder_id);
-    let name = normalize_folder_name(record.name)?;
+    // Strict-producer / lenient-consumer contract: local commands validate
+    // names strictly and the server enforces the 120-rune cap at push time,
+    // so the external apply path only rejects blank names. Length or
+    // character violations are cosmetic here and must never wedge the puller.
+    let name = record.name.trim().to_string();
+    if name.is_empty() {
+        return Err(AppError::Validation(
+            "external API folder name cannot be empty".to_string(),
+        ));
+    }
     if record.parent_folder_id.as_deref() == Some(record.id.as_str()) {
         return Err(AppError::Validation(
             "external API folder cannot be its own parent".to_string(),
         ));
     }
     if let Some(parent_id) = record.parent_folder_id.as_deref() {
-        let parent = folder_on(connection, &record.workspace_id, parent_id, false).await?;
+        let Some(parent) = doomed_orphan_to_skip(
+            folder_on(connection, &record.workspace_id, parent_id, false).await,
+        )?
+        else {
+            return Ok(None);
+        };
         if parent.collection_id != record.collection_id {
             return Err(AppError::Validation(
                 "external API folder parent must belong to the same collection".to_string(),
@@ -145,6 +172,16 @@ async fn upsert_folder(
     .fetch_optional(&mut *connection)
     .await?;
     if let Some(current) = current {
+        // Local moves never cross collections and cascade deletes rely on
+        // that invariant, so a live row must keep its collection; an honest
+        // server validates folder-chain consistency and never sends this.
+        // Resurrecting a soft-deleted row under a new collection stays
+        // allowed: that is an external re-create, not a move.
+        if current.deleted_at.is_none() && current.collection_id != record.collection_id {
+            return Err(AppError::Validation(
+                "external API folder cannot change collection".to_string(),
+            ));
+        }
         if current.deleted_at.is_none()
             && current.collection_id == record.collection_id
             && current.parent_folder_id == record.parent_folder_id

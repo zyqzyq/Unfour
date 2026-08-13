@@ -503,6 +503,7 @@ export function ApiCollectionTree({
           <DialogBody>
             <Input
               autoFocus
+              maxLength={120}
               onChange={(event) => setRenameRequestValue(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
