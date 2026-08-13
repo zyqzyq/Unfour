@@ -9,6 +9,7 @@ import type {
   KeyValue,
   SavedSql,
   SshConnection,
+  SshCommandHistoryEntry,
   SshHostFingerprintInfo,
   SshSessionEvent,
   SshSessionSummary,
@@ -46,6 +47,11 @@ export const mockStore = {
   databaseConnections: [] as DatabaseConnection[],
   savedSql: [] as SavedSql[],
   sshConnections: [] as SshConnection[],
+  sshCommandHistory: [] as SshCommandHistoryEntry[],
+  sshCommandLines: {} as Record<
+    string,
+    { line: string; reliable: boolean; escapeSequence: string }
+  >,
   sshSessions: [] as SshSessionSummary[],
   sshEvents: [] as SshSessionEvent[],
   sshTasks: [] as SshTaskDetail[],

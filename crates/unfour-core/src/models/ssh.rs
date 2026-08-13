@@ -144,6 +144,45 @@ pub struct SshSessionEvent {
     pub created_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct SshCommandHistoryEntry {
+    pub id: String,
+    pub workspace_id: String,
+    pub connection_id: String,
+    pub session_id: Option<String>,
+    pub command: String,
+    pub cwd: Option<String>,
+    pub exit_code: Option<i32>,
+    pub duration_ms: Option<i64>,
+    pub redacted: bool,
+    pub executed_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshCommandHistoryRecordInput {
+    pub workspace_id: String,
+    pub connection_id: String,
+    pub session_id: Option<String>,
+    pub command: String,
+    pub cwd: Option<String>,
+    pub exit_code: Option<i32>,
+    pub duration_ms: Option<i64>,
+    pub executed_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshCommandHistoryQuery {
+    pub workspace_id: String,
+    pub connection_id: Option<String>,
+    pub search: Option<String>,
+    pub limit: Option<i64>,
+    #[serde(default)]
+    pub include_redacted: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SshLogExport {

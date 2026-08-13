@@ -8,6 +8,7 @@ import { TerminalPane } from "./TerminalPane";
 const terminalState = vi.hoisted(() => ({
   cols: 120,
   customKeyHandlerRegistrations: 0,
+  customKeyHandlers: [] as Array<(event: KeyboardEvent) => boolean>,
   rows: 32,
   dataHandlers: [] as Array<(data: string) => void>,
   inputElement: null as HTMLTextAreaElement | null,
@@ -33,9 +34,11 @@ vi.mock("@xterm/xterm", () => ({
       get rows() {
         return terminalState.rows;
       },
-      attachCustomKeyEventHandler: vi.fn(() => {
+      attachCustomKeyEventHandler: vi.fn((handler: (event: KeyboardEvent) => boolean) => {
         terminalState.customKeyHandlerRegistrations += 1;
+        terminalState.customKeyHandlers.push(handler);
       }),
+      buffer: { active: { type: "normal" } },
       dispose: vi.fn(),
       focus: vi.fn(),
       getSelection: vi.fn(() => terminalState.selection),
@@ -92,6 +95,7 @@ vi.mock("@unfour/command-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@unfour/command-client")>();
   return {
     ...actual,
+    listSshCommandHistory: vi.fn().mockResolvedValue([]),
     resizeSshSession: vi.fn().mockResolvedValue({}),
     sendSshInput: vi.fn(),
   };
@@ -105,8 +109,13 @@ vi.mock("@unfour/ui", async (importOriginal) => {
   };
 });
 
-import { resizeSshSession, sendSshInput } from "@unfour/command-client";
+import {
+  listSshCommandHistory,
+  resizeSshSession,
+  sendSshInput,
+} from "@unfour/command-client";
 
+const listHistoryMock = vi.mocked(listSshCommandHistory);
 const resizeMock = vi.mocked(resizeSshSession);
 const sendInputMock = vi.mocked(sendSshInput);
 const clipboardReadMock = vi.fn();
@@ -131,6 +140,7 @@ const session: SshSessionSummary = {
 function resetTerminalMocks() {
   terminalState.cols = 120;
   terminalState.customKeyHandlerRegistrations = 0;
+  terminalState.customKeyHandlers = [];
   terminalState.rows = 32;
   terminalState.dataHandlers = [];
   terminalState.inputElement = null;
@@ -151,7 +161,15 @@ function resetTerminalMocks() {
     },
   });
   resizeMock.mockClear();
+  listHistoryMock.mockReset();
+  listHistoryMock.mockResolvedValue([]);
   sendInputMock.mockReset();
+  sendInputMock.mockResolvedValue({
+    sessionId: "session-1",
+    kind: "output",
+    data: "",
+    createdAt: "2026-06-23T00:00:04.000Z",
+  });
 }
 
 describe("TerminalPane", () => {
@@ -381,7 +399,12 @@ describe("TerminalPane clipboard interactions", () => {
       />,
     );
 
-    expect(terminalState.customKeyHandlerRegistrations).toBe(0);
+    expect(terminalState.customKeyHandlerRegistrations).toBe(1);
+    expect(
+      terminalState.customKeyHandlers[0]?.(
+        new KeyboardEvent("keydown", { key: "v", ctrlKey: true }),
+      ),
+    ).toBe(true);
     terminalState.dataHandlers[0]?.("native paste once");
 
     await waitFor(() =>
@@ -456,6 +479,266 @@ describe("TerminalPane output rendering", () => {
     );
 
     await waitFor(() => expect(terminalState.writes).toEqual(["line 3\r\n"]));
+  });
+
+  it("loads connection history and recalls it with Arrow Up and Down", async () => {
+    listHistoryMock.mockResolvedValue([
+      {
+        id: "history-1",
+        workspaceId: "ws-1",
+        connectionId: "conn-1",
+        sessionId: "session-old",
+        command: "git status",
+        cwd: null,
+        exitCode: null,
+        durationMs: null,
+        redacted: false,
+        executedAt: "2026-06-23T00:00:00.000Z",
+      },
+    ]);
+    sendInputMock.mockResolvedValue({
+      sessionId: "session-1",
+      kind: "output",
+      data: "",
+      createdAt: "2026-06-23T00:00:04.000Z",
+    });
+
+    render(
+      <TerminalPane
+        active
+        events={[]}
+        inputDisabled={false}
+        readOnly={false}
+        session={session}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(listHistoryMock).toHaveBeenCalledWith({
+        workspaceId: "ws-1",
+        connectionId: "conn-1",
+        limit: 100,
+      }),
+    );
+    const handler = terminalState.customKeyHandlers[0];
+    expect(handler?.(new KeyboardEvent("keydown", { key: "ArrowUp" }))).toBe(false);
+    await waitFor(() =>
+      expect(sendInputMock).toHaveBeenCalledWith({
+        workspaceId: "ws-1",
+        sessionId: "session-1",
+        data: "\x15\x0bgit status",
+      }),
+    );
+    sendInputMock.mockClear();
+
+    expect(handler?.(new KeyboardEvent("keydown", { key: "ArrowDown" }))).toBe(false);
+    await waitFor(() =>
+      expect(sendInputMock).toHaveBeenCalledWith({
+        workspaceId: "ws-1",
+        sessionId: "session-1",
+        data: "\x15\x0b",
+      }),
+    );
+  });
+
+  it("keeps a command typed before history finishes loading", async () => {
+    let resolveHistory: (value: unknown[]) => void = () => undefined;
+    listHistoryMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveHistory = resolve;
+        }),
+    );
+    sendInputMock.mockResolvedValue({
+      sessionId: "session-1",
+      kind: "output",
+      data: "",
+      createdAt: "2026-06-23T00:00:04.000Z",
+    });
+
+    render(
+      <TerminalPane
+        active
+        events={[]}
+        inputDisabled={false}
+        readOnly={false}
+        session={session}
+      />,
+    );
+
+    await waitFor(() => expect(terminalState.dataHandlers.length).toBeGreaterThan(0));
+    terminalState.dataHandlers[0]?.("ls\r");
+    resolveHistory([
+      {
+        id: "history-1",
+        workspaceId: "ws-1",
+        connectionId: "conn-1",
+        sessionId: "session-old",
+        command: "pwd",
+        cwd: null,
+        exitCode: null,
+        durationMs: null,
+        redacted: false,
+        executedAt: "2026-06-23T00:00:00.000Z",
+      },
+    ]);
+
+    await waitFor(() => expect(listHistoryMock).toHaveBeenCalled());
+    const handler = terminalState.customKeyHandlers[0];
+    expect(handler?.(new KeyboardEvent("keydown", { key: "ArrowUp" }))).toBe(false);
+    await waitFor(() =>
+      expect(sendInputMock).toHaveBeenCalledWith({
+        workspaceId: "ws-1",
+        sessionId: "session-1",
+        data: "\x15\x0bls",
+      }),
+    );
+  });
+
+  it("does not recall the previous connection while the next history list is in flight", async () => {
+    listHistoryMock.mockResolvedValueOnce([
+      {
+        id: "history-1",
+        workspaceId: "ws-1",
+        connectionId: "conn-1",
+        sessionId: "session-old",
+        command: "git status",
+        cwd: null,
+        exitCode: null,
+        durationMs: null,
+        redacted: false,
+        executedAt: "2026-06-23T00:00:00.000Z",
+      },
+    ]);
+    sendInputMock.mockResolvedValue({
+      sessionId: "session-2",
+      kind: "output",
+      data: "",
+      createdAt: "2026-06-23T00:00:04.000Z",
+    });
+
+    const { rerender } = render(
+      <TerminalPane
+        active
+        events={[]}
+        inputDisabled={false}
+        readOnly={false}
+        session={session}
+      />,
+    );
+
+    await waitFor(() => expect(listHistoryMock).toHaveBeenCalledTimes(1));
+    listHistoryMock.mockImplementation(() => new Promise(() => undefined));
+    rerender(
+      <TerminalPane
+        active
+        events={[]}
+        inputDisabled={false}
+        readOnly={false}
+        session={{
+          ...session,
+          connectionId: "conn-2",
+          id: "session-2",
+          sessionId: "session-2",
+        }}
+      />,
+    );
+
+    await waitFor(() => expect(listHistoryMock).toHaveBeenCalledTimes(2));
+    const handler = terminalState.customKeyHandlers[0];
+    sendInputMock.mockClear();
+    expect(handler?.(new KeyboardEvent("keydown", { key: "ArrowUp" }))).toBe(true);
+    expect(sendInputMock).not.toHaveBeenCalled();
+  });
+
+  it("does not keep the previous host history when the next list fails", async () => {
+    listHistoryMock.mockResolvedValueOnce([
+      {
+        id: "history-1",
+        workspaceId: "ws-1",
+        connectionId: "conn-1",
+        sessionId: "session-old",
+        command: "git status",
+        cwd: null,
+        exitCode: null,
+        durationMs: null,
+        redacted: false,
+        executedAt: "2026-06-23T00:00:00.000Z",
+      },
+    ]);
+    const { rerender } = render(
+      <TerminalPane
+        active
+        events={[]}
+        inputDisabled={false}
+        readOnly={false}
+        session={session}
+      />,
+    );
+    await waitFor(() => expect(listHistoryMock).toHaveBeenCalledTimes(1));
+
+    listHistoryMock.mockRejectedValueOnce(new Error("history unavailable"));
+    rerender(
+      <TerminalPane
+        active
+        events={[]}
+        inputDisabled={false}
+        readOnly={false}
+        session={{
+          ...session,
+          connectionId: "conn-2",
+          id: "session-2",
+          sessionId: "session-2",
+        }}
+      />,
+    );
+    await waitFor(() => expect(listHistoryMock).toHaveBeenCalledTimes(2));
+    const handler = terminalState.customKeyHandlers[0];
+    sendInputMock.mockClear();
+    expect(handler?.(new KeyboardEvent("keydown", { key: "ArrowUp" }))).toBe(true);
+    expect(sendInputMock).not.toHaveBeenCalled();
+  });
+
+  it("does not intercept Arrow Up at a password prompt", async () => {
+    listHistoryMock.mockResolvedValue([
+      {
+        id: "history-1",
+        workspaceId: "ws-1",
+        connectionId: "conn-1",
+        sessionId: "session-old",
+        command: "git status",
+        cwd: null,
+        exitCode: null,
+        durationMs: null,
+        redacted: false,
+        executedAt: "2026-06-23T00:00:00.000Z",
+      },
+    ]);
+    render(
+      <TerminalPane
+        active
+        events={[
+          {
+            sessionId: "session-1",
+            kind: "output",
+            data: "[sudo] password for dev: ",
+            createdAt: "2026-06-23T00:00:01.000Z",
+          },
+        ]}
+        inputDisabled={false}
+        readOnly={false}
+        session={session}
+      />,
+    );
+
+    await waitFor(() => expect(listHistoryMock).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(terminalState.writes.some((chunk) => chunk.includes("password"))).toBe(true),
+    );
+    const handler = terminalState.customKeyHandlers[0];
+    sendInputMock.mockClear();
+    expect(handler?.(new KeyboardEvent("keydown", { key: "ArrowUp" }))).toBe(true);
+    expect(sendInputMock).not.toHaveBeenCalled();
   });
 
   it("combines a frame of output into one xterm write without refreshing per event", async () => {

@@ -96,6 +96,219 @@ async fn async_send_input_and_resize_work_in_simulated_path() {
 
 #[cfg(not(feature = "ssh-native"))]
 #[tokio::test]
+async fn command_history_records_only_after_enter_and_deduplicates_repeats() {
+    let (service, workspace_id, _) = service_with_workspaces().await;
+    let connection = service
+        .save_connection(password_input(&workspace_id))
+        .await
+        .expect("save ssh connection");
+    let session = service
+        .connect(SshConnectInput {
+            workspace_id: workspace_id.clone(),
+            connection_id: connection.id.clone(),
+            cols: None,
+            rows: None,
+            secret: None,
+        })
+        .await
+        .expect("connect ssh session");
+
+    service
+        .send_input(SshSessionInput {
+            workspace_id: workspace_id.clone(),
+            session_id: session.session_id.clone(),
+            data: "git ".to_string(),
+        })
+        .await
+        .expect("send partial command");
+    service
+        .ingest_terminal_output(&workspace_id, &session.session_id, "git ")
+        .await;
+    let query = SshCommandHistoryQuery {
+        workspace_id: workspace_id.clone(),
+        connection_id: Some(connection.id.clone()),
+        search: None,
+        limit: Some(20),
+        include_redacted: false,
+    };
+    assert!(service
+        .list_command_history(query.clone())
+        .await
+        .expect("list before enter")
+        .is_empty());
+
+    service
+        .send_input(SshSessionInput {
+            workspace_id: workspace_id.clone(),
+            session_id: session.session_id.clone(),
+            data: "status\r".to_string(),
+        })
+        .await
+        .expect("execute command");
+    service
+        .ingest_terminal_output(&workspace_id, &session.session_id, "git status\r\n")
+        .await;
+    service
+        .send_input(SshSessionInput {
+            workspace_id: workspace_id.clone(),
+            session_id: session.session_id.clone(),
+            data: "git status\r".to_string(),
+        })
+        .await
+        .expect("repeat command");
+    service
+        .ingest_terminal_output(&workspace_id, &session.session_id, "git status\r\n")
+        .await;
+
+    let history = service
+        .list_command_history(query)
+        .await
+        .expect("list after enter");
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].command, "git status");
+    assert_eq!(history[0].connection_id, connection.id);
+}
+
+#[cfg(not(feature = "ssh-native"))]
+#[tokio::test]
+async fn command_history_drops_unechoed_secret_input() {
+    let (service, workspace_id, _) = service_with_workspaces().await;
+    let connection = service
+        .save_connection(password_input(&workspace_id))
+        .await
+        .expect("save ssh connection");
+    let session = service
+        .connect(SshConnectInput {
+            workspace_id: workspace_id.clone(),
+            connection_id: connection.id.clone(),
+            cols: None,
+            rows: None,
+            secret: None,
+        })
+        .await
+        .expect("connect ssh session");
+
+    service
+        .send_input(SshSessionInput {
+            workspace_id: workspace_id.clone(),
+            session_id: session.session_id.clone(),
+            data: "hunter2\r".to_string(),
+        })
+        .await
+        .expect("send password");
+    service
+        .ingest_terminal_output(
+            &workspace_id,
+            &session.session_id,
+            "\r\nSorry, try again.\r\n",
+        )
+        .await;
+
+    let query = SshCommandHistoryQuery {
+        workspace_id: workspace_id.clone(),
+        connection_id: Some(connection.id.clone()),
+        search: None,
+        limit: Some(20),
+        include_redacted: true,
+    };
+    assert!(service
+        .list_command_history(query.clone())
+        .await
+        .expect("list after secret")
+        .is_empty());
+
+    service
+        .send_input(SshSessionInput {
+            workspace_id: workspace_id.clone(),
+            session_id: session.session_id.clone(),
+            data: "pwd\r".to_string(),
+        })
+        .await
+        .expect("send pwd");
+    service
+        .ingest_terminal_output(&workspace_id, &session.session_id, "pwd\r\n")
+        .await;
+    let history = service
+        .list_command_history(query)
+        .await
+        .expect("list after echoed command");
+    assert_eq!(
+        history
+            .iter()
+            .map(|entry| entry.command.as_str())
+            .collect::<Vec<_>>(),
+        vec!["pwd"]
+    );
+}
+
+#[cfg(not(feature = "ssh-native"))]
+#[tokio::test]
+async fn command_history_reconnect_does_not_keep_partial_input() {
+    let (service, workspace_id, _) = service_with_workspaces().await;
+    let connection = service
+        .save_connection(password_input(&workspace_id))
+        .await
+        .expect("save ssh connection");
+    let session = service
+        .connect(SshConnectInput {
+            workspace_id: workspace_id.clone(),
+            connection_id: connection.id.clone(),
+            cols: None,
+            rows: None,
+            secret: None,
+        })
+        .await
+        .expect("connect ssh session");
+
+    service
+        .send_input(SshSessionInput {
+            workspace_id: workspace_id.clone(),
+            session_id: session.session_id.clone(),
+            data: "rm -rf /tmp/foo".to_string(),
+        })
+        .await
+        .expect("send partial command");
+    {
+        let mut sessions = service.sessions.lock().expect("session lock");
+        sessions
+            .get_mut(&session.session_id)
+            .expect("session state")
+            .command_line
+            .reset();
+    }
+    service
+        .send_input(SshSessionInput {
+            workspace_id: workspace_id.clone(),
+            session_id: session.session_id.clone(),
+            data: "ls\r".to_string(),
+        })
+        .await
+        .expect("send after reconnect");
+    service
+        .ingest_terminal_output(&workspace_id, &session.session_id, "ls\r\n")
+        .await;
+
+    let history = service
+        .list_command_history(SshCommandHistoryQuery {
+            workspace_id,
+            connection_id: Some(connection.id),
+            search: None,
+            limit: Some(20),
+            include_redacted: false,
+        })
+        .await
+        .expect("list after reconnect");
+    assert_eq!(
+        history
+            .iter()
+            .map(|entry| entry.command.as_str())
+            .collect::<Vec<_>>(),
+        vec!["ls"]
+    );
+}
+
+#[cfg(not(feature = "ssh-native"))]
+#[tokio::test]
 async fn multiple_sessions_handle_concurrent_input_and_close() {
     let (service, workspace_id, _) = service_with_workspaces().await;
     let connection = service

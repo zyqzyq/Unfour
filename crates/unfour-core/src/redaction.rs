@@ -129,6 +129,47 @@ pub fn redact_sensitive_lines(value: &str) -> (String, bool) {
     (output, redacted)
 }
 
+/// Return a persistence-safe representation of an interactive shell command.
+///
+/// Shell syntax is too broad to identify every secret value reliably without
+/// executing or fully parsing the command. Command history therefore uses a
+/// conservative first-phase policy: if a command contains a common credential
+/// marker, persist no reusable part of it. The `bool` lets callers exclude the
+/// placeholder from interactive recall and apply stricter MCP defaults later.
+pub fn redact_shell_command(value: &str) -> (String, bool) {
+    let lower = value.to_ascii_lowercase();
+    let sensitive_markers = [
+        "authorization",
+        "cookie",
+        "proxy-authorization",
+        "x-api-key",
+        "x-auth-token",
+        "password",
+        "passwd",
+        "passphrase",
+        "token",
+        "access_token",
+        "refresh_token",
+        "api-key",
+        "api_key",
+        "apikey",
+        "secret",
+        "private_key",
+        "private-key",
+        "license_key",
+        "database_url",
+        "connection_string",
+    ];
+    if sensitive_markers
+        .iter()
+        .any(|marker| lower.contains(marker))
+    {
+        (REDACTED_VALUE.to_string(), true)
+    } else {
+        (value.to_string(), false)
+    }
+}
+
 pub fn redact_url_query(value: &str) -> String {
     let Ok(mut url) = reqwest::Url::parse(value) else {
         return value.to_string();
@@ -270,6 +311,25 @@ mod tests {
 
         assert_eq!(output, "ok\n<redacted>\n<redacted>");
         assert!(redacted);
+    }
+
+    #[test]
+    fn shell_commands_with_credential_markers_are_fully_redacted() {
+        for command in [
+            "curl -H 'Authorization: Bearer abc' https://example.test",
+            "export API_TOKEN=abc",
+            "mysql --password=abc",
+            "echo secret=value",
+        ] {
+            let (persisted, redacted) = redact_shell_command(command);
+            assert_eq!(persisted, REDACTED_VALUE);
+            assert!(redacted);
+        }
+
+        assert_eq!(
+            redact_shell_command("git status"),
+            ("git status".to_string(), false)
+        );
     }
 
     #[test]

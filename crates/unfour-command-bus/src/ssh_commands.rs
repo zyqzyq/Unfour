@@ -153,6 +153,13 @@ impl CommandBus {
         self.ssh.session_history(input).await
     }
 
+    pub async fn list_ssh_command_history(
+        &self,
+        query: SshCommandHistoryQuery,
+    ) -> AppResult<Vec<SshCommandHistoryEntry>> {
+        self.ssh.list_command_history(query).await
+    }
+
     pub async fn send_ssh_input(&self, input: SshSessionInput) -> AppResult<SshSessionEvent> {
         self.ssh.send_input(input).await
     }

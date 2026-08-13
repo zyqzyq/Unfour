@@ -18,6 +18,10 @@ Do not store these in SQLite plaintext:
 Persist only credential references. Raw secret reads belong behind
 `crates/secret-store` and should happen only where required for execution.
 
+SSH command history is not a credential store. It persists only interactive
+lines that were echoed by the remote PTY, then applies conservative marker
+redaction. Password-prompt input is not stored in SQLite.
+
 ## Redaction
 
 Logs, history, activity details, and MCP results must redact or mask sensitive

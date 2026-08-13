@@ -45,6 +45,7 @@ impl SshService {
                 ),
                 created_at: now,
             }],
+            command_line: SshCommandLineTracker::new(),
             pending_output: String::new(),
             history_flush_running: false,
             intentional_close: false,
@@ -490,6 +491,7 @@ impl SshService {
             state.sftp = None;
             state.sftp_generation = state.sftp_generation.saturating_add(1);
             state.native_handle = Some(native_handle);
+            state.command_line.reset();
             true
         };
         self.cancel_sftp_transfers_for_session(session_id);

@@ -4,13 +4,14 @@ use unfour_core::{
     models::{
         SftpCancelTransferInput, SftpDeleteInput, SftpDirectoryListing, SftpFileEntry,
         SftpOpenResult, SftpPathInput, SftpRenameInput, SftpSessionInput, SftpTransferInput,
-        SftpTransferState, SshCloseInput, SshConnectInput, SshConnection, SshConnectionInput,
-        SshHostFingerprintInfo, SshHostKeyInput, SshKnownHostsExportInput,
-        SshKnownHostsExportResult, SshKnownHostsImportInput, SshKnownHostsImportResult,
-        SshLogExport, SshLogExportInput, SshReconnectCancelInput, SshResizeInput, SshSessionEvent,
-        SshSessionInput, SshSessionSummary, SshTask, SshTaskCancelInput, SshTaskCleanupInput,
-        SshTaskCleanupResult, SshTaskDetail, SshTaskRun, SshTaskRunInput, SshTaskSaveInput,
-        SshTasksReorderInput, SshTestResult,
+        SftpTransferState, SshCloseInput, SshCommandHistoryEntry, SshCommandHistoryQuery,
+        SshConnectInput, SshConnection, SshConnectionInput, SshHostFingerprintInfo,
+        SshHostKeyInput, SshKnownHostsExportInput, SshKnownHostsExportResult,
+        SshKnownHostsImportInput, SshKnownHostsImportResult, SshLogExport, SshLogExportInput,
+        SshReconnectCancelInput, SshResizeInput, SshSessionEvent, SshSessionInput,
+        SshSessionSummary, SshTask, SshTaskCancelInput, SshTaskCleanupInput, SshTaskCleanupResult,
+        SshTaskDetail, SshTaskRun, SshTaskRunInput, SshTaskSaveInput, SshTasksReorderInput,
+        SshTestResult,
     },
     AppResult,
 };
@@ -195,6 +196,14 @@ pub async fn ssh_session_history(
     state: State<'_, AppState>,
 ) -> AppResult<Vec<SshSessionEvent>> {
     state.command_bus.ssh_session_history(input).await
+}
+
+#[tauri::command]
+pub async fn ssh_command_history_list(
+    query: SshCommandHistoryQuery,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<SshCommandHistoryEntry>> {
+    state.command_bus.list_ssh_command_history(query).await
 }
 
 #[tauri::command]

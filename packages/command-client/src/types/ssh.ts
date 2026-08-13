@@ -131,6 +131,27 @@ export type SshSessionEvent = {
   createdAt: string;
 };
 
+export type SshCommandHistoryEntry = {
+  id: string;
+  workspaceId: string;
+  connectionId: string;
+  sessionId: string | null;
+  command: string;
+  cwd: string | null;
+  exitCode: number | null;
+  durationMs: number | null;
+  redacted: boolean;
+  executedAt: string;
+};
+
+export type SshCommandHistoryQuery = {
+  workspaceId: string;
+  connectionId?: string | null;
+  search?: string | null;
+  limit?: number | null;
+  includeRedacted?: boolean;
+};
+
 export type SshLogExport = {
   sessionId: string;
   filename: string;

@@ -504,6 +504,7 @@ macro_rules! generate_handlers {
             unfour_app::commands::ssh_session_close,
             unfour_app::commands::ssh_session_connect,
             unfour_app::commands::ssh_session_history,
+            unfour_app::commands::ssh_command_history_list,
             unfour_app::commands::ssh_session_input,
             unfour_app::commands::ssh_register_terminal_channel,
             unfour_app::commands::ssh_register_sftp_transfer_channel,

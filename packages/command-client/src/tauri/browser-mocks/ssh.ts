@@ -8,6 +8,7 @@ import {
 import { UNHANDLED, type MockResult } from "./types";
 import type {
   SshCloseInput,
+  SshCommandHistoryQuery,
   SshConnectInput,
   SshConnection,
   SshConnectionInput,
@@ -164,6 +165,38 @@ export function handleSshMock<T>(
       createdAt: now,
     };
     mockStore.sshEvents.push(event);
+    for (const executedCommand of acceptMockSshInput(input.sessionId, input.data)) {
+      const normalized = executedCommand.trim();
+      if (!normalized) continue;
+      const sensitive = /authorization|cookie|proxy-authorization|x-api-key|x-auth-token|password|passwd|passphrase|token|api[-_]?key|secret|private[-_]?key|license_key|database_url|connection_string/i.test(
+        normalized,
+      );
+      const persisted = sensitive ? "<redacted>" : normalized;
+      const previous = mockStore.sshCommandHistory
+        .filter(
+          (entry) =>
+            entry.workspaceId === input.workspaceId &&
+            entry.connectionId === session.connectionId,
+        )
+        .sort((left, right) => right.executedAt.localeCompare(left.executedAt))[0];
+      if (previous && previous.command === persisted && previous.redacted === sensitive) {
+        previous.executedAt = now;
+        previous.sessionId = input.sessionId;
+      } else {
+        mockStore.sshCommandHistory.push({
+          id: crypto.randomUUID(),
+          workspaceId: input.workspaceId,
+          connectionId: session.connectionId,
+          sessionId: input.sessionId,
+          command: persisted,
+          cwd: null,
+          exitCode: null,
+          durationMs: null,
+          redacted: sensitive,
+          executedAt: now,
+        });
+      }
+    }
     trimMockSshHistory(input.sessionId);
     session.updatedAt = now;
     return event as T;
@@ -340,5 +373,62 @@ export function handleSshMock<T>(
     } as T;
   }
 
+  if (command === "ssh_command_history_list") {
+    const query = args?.query as SshCommandHistoryQuery;
+    const search = query.search?.trim().toLocaleLowerCase() ?? "";
+    return mockStore.sshCommandHistory
+      .filter(
+        (entry) =>
+          entry.workspaceId === query.workspaceId &&
+          (!query.connectionId || entry.connectionId === query.connectionId) &&
+          (query.includeRedacted || !entry.redacted) &&
+          (!search || entry.command.toLocaleLowerCase().includes(search)),
+      )
+      .sort((left, right) => right.executedAt.localeCompare(left.executedAt))
+      .slice(0, Math.min(Math.max(query.limit ?? 100, 1), 200)) as T;
+  }
+
   return UNHANDLED;
+}
+
+function acceptMockSshInput(sessionId: string, input: string) {
+  const state = (mockStore.sshCommandLines[sessionId] ??= {
+    line: "",
+    reliable: true,
+    escapeSequence: "",
+  });
+  const commands: string[] = [];
+  for (const character of input) {
+    if (state.escapeSequence) {
+      state.escapeSequence += character;
+      if (/\x1b\[(200|201)~$/.test(state.escapeSequence)) {
+        state.escapeSequence = "";
+      } else if (/[A-Za-z~]$/.test(state.escapeSequence)) {
+        state.escapeSequence = "";
+        state.reliable = false;
+      }
+      continue;
+    }
+    if (character === "\x1b") {
+      state.escapeSequence = character;
+    } else if (character === "\r" || character === "\n") {
+      const command = state.line.trim();
+      if (command && state.reliable) commands.push(command);
+      state.line = "";
+      state.reliable = true;
+    } else if (character === "\x03" || character === "\x15") {
+      state.line = "";
+      state.reliable = true;
+    } else if (character === "\x0b" || character === "\x01" || character === "\x05") {
+      // The lightweight mock does not model a mid-line cursor; these common
+      // readline controls preserve the already modeled line safely.
+    } else if (character === "\x08" || character === "\x7f") {
+      state.line = state.line.slice(0, -1);
+    } else if (character === "\t" || character < " ") {
+      state.reliable = false;
+    } else {
+      state.line += character;
+    }
+  }
+  return commands;
 }

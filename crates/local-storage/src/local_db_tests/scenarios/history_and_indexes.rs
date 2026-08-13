@@ -27,6 +27,49 @@ async fn initial_schema_keeps_api_history_local_only() {
 }
 
 #[tokio::test]
+async fn ssh_command_history_reserves_execution_metadata_and_scope_indexes() {
+    let db = test_db().await;
+    db.migrate().await.expect("run migrations");
+
+    let columns: Vec<(String,)> =
+        sqlx::query_as("SELECT name FROM pragma_table_info('ssh_command_history')")
+            .fetch_all(db.pool())
+            .await
+            .expect("list ssh command history columns");
+    let names = columns
+        .iter()
+        .map(|(name,)| name.as_str())
+        .collect::<Vec<_>>();
+    for required in [
+        "id",
+        "workspace_id",
+        "connection_id",
+        "session_id",
+        "command",
+        "cwd",
+        "exit_code",
+        "duration_ms",
+        "redacted",
+        "executed_at",
+    ] {
+        assert!(names.contains(&required), "missing {required}");
+    }
+
+    let indexes: Vec<(String,)> = sqlx::query_as(
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'ssh_command_history'",
+    )
+    .fetch_all(db.pool())
+    .await
+    .expect("list ssh command history indexes");
+    assert!(indexes
+        .iter()
+        .any(|(name,)| name == "idx_ssh_command_history_workspace_executed"));
+    assert!(indexes
+        .iter()
+        .any(|(name,)| name == "idx_ssh_command_history_connection_executed"));
+}
+
+#[tokio::test]
 async fn initial_schema_creates_single_active_environment_index() {
     let db = test_db().await;
     db.migrate().await.expect("run migrations");

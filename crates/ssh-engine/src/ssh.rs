@@ -6,15 +6,16 @@ use std::time::Instant;
 use unfour_core::models::{
     SftpCancelTransferInput, SftpDeleteInput, SftpDirectoryListing, SftpFileEntry, SftpOpenResult,
     SftpPathInput, SftpRenameInput, SftpSessionInput, SftpTransferInput, SftpTransferState,
-    SshCloseInput, SshConnectInput, SshConnection, SshConnectionConfig, SshConnectionInput,
-    SshDiagnosticInput, SshDiagnosticResult, SshHostFingerprintInfo, SshHostKeyInput,
-    SshKnownHostsExportInput, SshKnownHostsExportResult, SshKnownHostsImportInput,
-    SshKnownHostsImportResult, SshLogExport, SshLogExportInput, SshReconnectCancelInput,
-    SshResizeInput, SshSessionEvent, SshSessionInput, SshSessionSummary, SshTestResult,
+    SshCloseInput, SshCommandHistoryEntry, SshCommandHistoryQuery, SshCommandHistoryRecordInput,
+    SshConnectInput, SshConnection, SshConnectionConfig, SshConnectionInput, SshDiagnosticInput,
+    SshDiagnosticResult, SshHostFingerprintInfo, SshHostKeyInput, SshKnownHostsExportInput,
+    SshKnownHostsExportResult, SshKnownHostsImportInput, SshKnownHostsImportResult, SshLogExport,
+    SshLogExportInput, SshReconnectCancelInput, SshResizeInput, SshSessionEvent, SshSessionInput,
+    SshSessionSummary, SshTestResult,
 };
 use unfour_core::redaction::redact_sensitive_lines;
 use unfour_core::{AppError, AppResult};
-use unfour_local_storage::{LocalDb, TerminalHistoryService};
+use unfour_local_storage::{LocalDb, SshCommandHistoryService, TerminalHistoryService};
 use unfour_secret_store::SecretStore;
 use uuid::Uuid;
 
@@ -24,12 +25,15 @@ use crate::host_key::HostKeyStore;
 mod diagnostics;
 #[path = "validation.rs"]
 mod validation;
+use command_line::SshCommandLineTracker;
 use diagnostics::{validate_diagnostic_command, validate_one_shot_command};
 use validation::{
     empty_to_none, validate_connection_id, validate_pty_size, validate_session_id,
     validate_workspace_id,
 };
 
+mod command_history;
+mod command_line;
 mod connection;
 mod diagnostic_execution;
 mod native_transport;
@@ -64,6 +68,7 @@ pub struct SshService {
     task_log_dir: Arc<std::path::PathBuf>,
     #[cfg_attr(not(feature = "ssh-native"), allow(dead_code))]
     secret_store: SecretStore,
+    command_history: SshCommandHistoryService,
     terminal_history: TerminalHistoryService,
     sessions: Arc<Mutex<HashMap<String, SshSessionState>>>,
     #[cfg(feature = "ssh-native")]
@@ -110,6 +115,7 @@ struct SshConnectionStorageInput {
 struct SshSessionState {
     summary: SshSessionSummary,
     events: Vec<SshSessionEvent>,
+    command_line: SshCommandLineTracker,
     pending_output: String,
     #[cfg(feature = "ssh-native")]
     history_flush_running: bool,
@@ -255,6 +261,7 @@ impl SshService {
             db: db.clone(),
             task_log_dir: Arc::new(std::env::temp_dir().join("unfour-task-logs")),
             secret_store,
+            command_history: SshCommandHistoryService::new(db.clone()),
             terminal_history: TerminalHistoryService::new(db.clone()),
             sessions: Arc::new(Mutex::new(HashMap::new())),
             #[cfg(feature = "ssh-native")]

@@ -2,6 +2,8 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { call, isTauriRuntime } from "./invoke";
 import type {
   SshCloseInput,
+  SshCommandHistoryEntry,
+  SshCommandHistoryQuery,
   SshConnectInput,
   SshConnection,
   SshConnectionInput,
@@ -114,6 +116,10 @@ export function listSshSessions(workspaceId: string) {
 
 export function getSshSessionHistory(input: SshCloseInput) {
   return call<SshSessionEvent[]>("ssh_session_history", { input });
+}
+
+export function listSshCommandHistory(query: SshCommandHistoryQuery) {
+  return call<SshCommandHistoryEntry[]>("ssh_command_history_list", { query });
 }
 
 export function sendSshInput(input: SshSessionInput) {

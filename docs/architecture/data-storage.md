@@ -140,7 +140,8 @@ The current SQLite-backed records include:
 - connection metadata (parent `connections` table plus `ssh_connections` /
   `database_connections` subtype tables);
 - workspace-scoped SSH host-key trust records;
-- terminal history;
+- terminal session-output history;
+- SSH command history (user-executed commands only, persisted after remote echo, with conservative secret redaction);
 - saved SQL (soft-deleted, sync fields reserved);
 - local activity events.
 
@@ -224,6 +225,7 @@ Data that can remain local-only for now:
 - `api_history`
 - `db_query_history`
 - `ssh_terminal_history`
+- `ssh_command_history` (local-only, 200 rows per connection, echoed commands only)
 - `activity_events`
 - diagnostics logs
 - cache

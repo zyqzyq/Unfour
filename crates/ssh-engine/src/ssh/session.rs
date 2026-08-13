@@ -108,14 +108,29 @@ impl SshService {
         if output.is_empty() {
             return false;
         }
-        let Ok(mut sessions) = self.sessions.lock() else {
-            return false;
+        let (should_flush, workspace_id, connection_id, confirmed) = {
+            let Ok(mut sessions) = self.sessions.lock() else {
+                return false;
+            };
+            let Some(state) = sessions.get_mut(session_id) else {
+                return false;
+            };
+            append_pending_output(&mut state.pending_output, output);
+            let confirmed = state.command_line.observe_output(output);
+            (
+                state.pending_output.len() >= PERSIST_FLUSH_BYTES && !state.history_flush_running,
+                state.summary.workspace_id.clone(),
+                state.summary.connection_id.clone(),
+                confirmed,
+            )
         };
-        let Some(state) = sessions.get_mut(session_id) else {
-            return false;
-        };
-        append_pending_output(&mut state.pending_output, output);
-        state.pending_output.len() >= PERSIST_FLUSH_BYTES && !state.history_flush_running
+        self.spawn_record_executed_commands(
+            workspace_id,
+            connection_id,
+            session_id.to_string(),
+            confirmed,
+        );
+        should_flush
     }
 
     /// Flush a session's buffered output to the database on a detached task.
@@ -257,7 +272,7 @@ impl SshService {
             }
         }
 
-        let event = {
+        let (event, connection_id, executed_commands, executed_at) = {
             let mut sessions = self
                 .sessions
                 .lock()
@@ -267,6 +282,7 @@ impl SshService {
             ensure_session_active(state)?;
 
             let now = Utc::now().to_rfc3339();
+            let executed_commands = state.command_line.accept(&input.data);
             let input_event = SshSessionEvent {
                 session_id: input.session_id.clone(),
                 kind: "input".to_string(),
@@ -289,9 +305,22 @@ impl SshService {
                 record_session_event(state, event.clone());
                 append_pending_output(&mut state.pending_output, &event.data);
             }
-            state.summary.updated_at = now;
-            event
+            state.summary.updated_at = now.clone();
+            (
+                event,
+                state.summary.connection_id.clone(),
+                executed_commands,
+                now,
+            )
         };
+        self.record_executed_commands(
+            &input.workspace_id,
+            &connection_id,
+            &input.session_id,
+            executed_commands,
+            &executed_at,
+        )
+        .await;
         #[cfg(not(feature = "ssh-native"))]
         self.flush_session_history(&input.session_id).await?;
         Ok(event)
@@ -661,6 +690,7 @@ impl SshService {
                 ),
                 created_at: now,
             }],
+            command_line: SshCommandLineTracker::new(),
             pending_output: String::new(),
             intentional_close: false,
         };

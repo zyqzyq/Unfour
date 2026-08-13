@@ -4,12 +4,14 @@ import { SearchAddon } from "@xterm/addon-search";
 import { Terminal as XTerm } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import {
+  listSshCommandHistory,
   resizeSshSession,
   sendSshInput,
   type SshSessionEvent,
   type SshSessionSummary,
 } from "@unfour/command-client";
 import { cn, useFeedbackErrorHandler } from "@unfour/ui";
+import { TerminalCommandHistoryController } from "../model/command-history";
 import { useTerminalStore } from "../model/terminal-state";
 import { sanitizeTerminalWriteChunk } from "../model/terminal-write-sanitizer";
 import { TerminalContextMenu } from "./TerminalContextMenu";
@@ -42,6 +44,8 @@ export function TerminalPane({
   const lastRenderedEventRef = useRef<SshSessionEvent | null>(null);
   const renderedEmptyStateRef = useRef(false);
   const renderedSessionIdRef = useRef<string | null>(null);
+  const commandHistoryRef = useRef(new TerminalCommandHistoryController());
+  const lastSessionStatusRef = useRef(session?.status);
 
   const appendTerminalEvents = useTerminalStore((s) => s.appendTerminalEvents);
   const setTerminalSearchAddon = useTerminalStore((s) => s.setTerminalSearchAddon);
@@ -125,6 +129,39 @@ export function TerminalPane({
     sessionIdRef.current = nextSessionId;
   }, [inputDisabled, readOnly, session?.sessionId]);
 
+  useEffect(() => {
+    const controller = commandHistoryRef.current;
+    controller.reset();
+    const workspaceId = session?.workspaceId;
+    const connectionId = session?.connectionId;
+    if (!workspaceId || !connectionId || readOnly) return undefined;
+
+    let cancelled = false;
+    listSshCommandHistory({ workspaceId, connectionId, limit: 100 })
+      .then((entries) => {
+        if (!cancelled) controller.setHistory(entries.map((entry) => entry.command));
+      })
+      .catch((error) => {
+        // History recall is additive to the PTY. A failed read must not block
+        // terminal input or compete with higher-value connection errors.
+        console.warn("[ssh-terminal] command history load failed", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [readOnly, session?.connectionId, session?.sessionId, session?.workspaceId]);
+
+  useEffect(() => {
+    const status = session?.status;
+    const wasReconnecting =
+      lastSessionStatusRef.current === "reconnecting" ||
+      lastSessionStatusRef.current === "degraded";
+    lastSessionStatusRef.current = status;
+    if (wasReconnecting && status === "connected") {
+      commandHistoryRef.current.resetCurrentLine();
+    }
+  }, [session?.sessionId, session?.status]);
+
   // ------------------------------------------------------------------
   // Terminal initialisation
   // ------------------------------------------------------------------
@@ -178,7 +215,36 @@ export function TerminalPane({
     // Capture keyboard input from xterm
     // ---------------------------------------------------------------
     const dataDisposable = terminal.onData((data: string) => {
+      commandHistoryRef.current.accept(data);
       onSendInputRef.current?.(data);
+    });
+
+    terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+      if (
+        event.type !== "keydown" ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        readOnlyRef.current ||
+        inputDisabledRef.current ||
+        commandHistoryRef.current.blocksHistoryRecall() ||
+        !isNormalTerminalBuffer(terminal)
+      ) {
+        return true;
+      }
+      const replacement =
+        event.key === "ArrowUp"
+          ? commandHistoryRef.current.previous()
+          : event.key === "ArrowDown"
+            ? commandHistoryRef.current.next()
+            : undefined;
+      if (replacement === undefined) return true;
+
+      // Readline's Ctrl+U / Ctrl+K pair clears both sides of the current remote
+      // cursor without sending Enter. The replacement remains editable.
+      onSendInputRef.current?.(`\x15\x0b${replacement}`);
+      return false;
     });
 
     // ---------------------------------------------------------------
@@ -345,6 +411,9 @@ export function TerminalPane({
     const writeBatch = events
       .slice(startIndex)
       .map((event) => {
+        if (event.kind === "output") {
+          commandHistoryRef.current.observeOutput(event.data);
+        }
         const data = event.kind === "input" ? `$ ${event.data}` : event.data;
         return sanitizeWrite(event.kind === "output" ? data : ensureNewline(data));
       })
@@ -430,6 +499,15 @@ function fitAndSyncTerminalSize(
 
 function ensureNewline(value: string) {
   return value.endsWith("\r\n") || value.endsWith("\n") ? value : `${value}\r\n`;
+}
+
+function isNormalTerminalBuffer(terminal: XTerm) {
+  const type = (
+    terminal as XTerm & {
+      buffer?: { active?: { type?: "normal" | "alternate" } };
+    }
+  ).buffer?.active?.type;
+  return type === undefined || type === "normal";
 }
 
 // Cap how often a failed-keystroke error can surface so a disconnected session
