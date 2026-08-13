@@ -118,6 +118,10 @@ pnpm install
 pnpm tauri dev
 ```
 
+`pnpm install` also installs Git hooks through lefthook. A commit formats staged
+Rust files with `cargo fmt` and auto-fixes staged TypeScript with ESLint.
+Skip once with `LEFTHOOK=0 git commit`.
+
 Common commands:
 
 ```bash

@@ -1,0 +1,20 @@
+# Git hooks for Unfour. `pnpm install` runs `lefthook install` via the prepare script.
+# Skip once: LEFTHOOK=0 git commit
+# Personal overrides: lefthook-local.yml (gitignored)
+
+glob_matcher: doublestar
+
+pre-commit:
+  parallel: true
+  skip:
+    - merge
+    - rebase
+  commands:
+    rust-fmt:
+      glob: "**/*.rs"
+      run: cargo fmt -- "{staged_files}"
+      stage_fixed: true
+    frontend-lint:
+      glob: "**/*.{ts,tsx}"
+      run: pnpm exec eslint --fix "{staged_files}"
+      stage_fixed: true

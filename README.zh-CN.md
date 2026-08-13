@@ -102,6 +102,10 @@ pnpm install
 pnpm tauri dev
 ```
 
+`pnpm install` 会通过 lefthook 安装 Git hooks。提交时会对暂存的 Rust 文件执行
+`cargo fmt`，并对暂存的 TypeScript 执行 ESLint `--fix`。
+如需跳过一次，使用 `LEFTHOOK=0 git commit`。
+
 常用命令：
 
 ```bash
