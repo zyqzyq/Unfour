@@ -5,6 +5,19 @@ const TEMPLATE_FIELDS: &[(&str, &[&str])] = &[
     ("upload", &["localPath", "remotePath"]),
     ("download", &["remotePath", "localPath"]),
 ];
+const CONFIG_FIELDS: &[(&str, &[&str])] = &[
+    (
+        "command",
+        &[
+            "command",
+            "workingDirectory",
+            "timeoutSeconds",
+            "continueOnError",
+        ],
+    ),
+    ("upload", &["localPath", "remotePath", "overwrite"]),
+    ("download", &["remotePath", "localPath", "overwrite"]),
+];
 const CONFIG_VERSION_V1: i64 = 1;
 
 pub(super) fn detected_inputs(steps: &[SshTaskStep]) -> AppResult<Vec<String>> {
@@ -113,19 +126,30 @@ pub(super) fn validate_step_config(
     config_version: i64,
     config: &serde_json::Value,
 ) -> AppResult<()> {
-    let object = config.as_object().ok_or_else(|| {
-        AppError::Validation("SSH task step config must be a JSON object".to_string())
-    })?;
-    if ["version", "configVersion", "config_version"]
-        .iter()
-        .any(|field| object.contains_key(*field))
+    let object = step_config_object(config)?;
+    let allowed_fields = config_fields_for_type(step_type)?;
+    if let Some(field) = object
+        .keys()
+        .find(|field| !allowed_fields.contains(&field.as_str()))
     {
-        return Err(AppError::Validation(
-            "SSH task step config version must be stored in config_version, not config_json"
-                .to_string(),
-        ));
+        return Err(AppError::Validation(format!(
+            "unsupported SSH task {step_type} config field: {field}"
+        )));
     }
-    match step_type {
+    normalized_step_config(step_type, config_version, config).map(|_| ())
+}
+
+/// Parse and validate the known versioned fields while dropping unknown
+/// legacy keys. Reads use this compatibility path so configs accepted by an
+/// older release remain usable; all new writes still call
+/// [`validate_step_config`] first and therefore reject unknown fields.
+pub(super) fn normalized_step_config(
+    step_type: &str,
+    config_version: i64,
+    config: &serde_json::Value,
+) -> AppResult<serde_json::Value> {
+    let _ = step_config_object(config)?;
+    let normalized = match step_type {
         "command" => {
             let parsed = parse_command_config(config_version, config)?;
             validate_task_command(&parsed.command)?;
@@ -141,22 +165,25 @@ pub(super) fn validate_step_config(
                     "Command timeoutSeconds must be between 1 and 3600".to_string(),
                 ));
             }
+            serde_json::to_value(parsed)?
         }
         "upload" => {
             let parsed = parse_upload_config(config_version, config)?;
             validate_transfer_paths(&parsed.local_path, &parsed.remote_path)?;
+            serde_json::to_value(parsed)?
         }
         "download" => {
             let parsed = parse_download_config(config_version, config)?;
             validate_transfer_paths(&parsed.local_path, &parsed.remote_path)?;
+            serde_json::to_value(parsed)?
         }
         _ => {
             return Err(AppError::Validation(format!(
                 "unsupported SSH task step type: {step_type}"
             )));
         }
-    }
-    for value in config
+    };
+    for value in normalized
         .as_object()
         .into_iter()
         .flat_map(|object| object.values())
@@ -165,7 +192,25 @@ pub(super) fn validate_step_config(
             scan_placeholders(value)?;
         }
     }
-    Ok(())
+    Ok(normalized)
+}
+
+fn step_config_object(
+    config: &serde_json::Value,
+) -> AppResult<&serde_json::Map<String, serde_json::Value>> {
+    let object = config.as_object().ok_or_else(|| {
+        AppError::Validation("SSH task step config must be a JSON object".to_string())
+    })?;
+    if ["version", "configVersion", "config_version"]
+        .iter()
+        .any(|field| object.contains_key(*field))
+    {
+        return Err(AppError::Validation(
+            "SSH task step config version must be stored in config_version, not config_json"
+                .to_string(),
+        ));
+    }
+    Ok(object)
 }
 
 /// Validate an SSH task command step. Unlike one-shot SSH exec validation,
@@ -237,12 +282,92 @@ fn validate_transfer_paths(local_path: &str, remote_path: &str) -> AppResult<()>
             "Upload and Download paths cannot be empty".to_string(),
         ));
     }
-    // Absolute device paths and runtime placeholders are both allowed.
-    // Placeholder-only templates remain useful for portable tasks; literal
-    // paths are accepted so Browse-selected local files/dirs can be saved.
     let _ = scan_placeholders(local_path.trim())?;
     let _ = scan_placeholders(remote_path.trim())?;
     Ok(())
+}
+
+pub(super) fn canonical_step_config(
+    step_id: &str,
+    step_type: &str,
+    config_version: i64,
+    config: &serde_json::Value,
+) -> AppResult<serde_json::Value> {
+    let mut normalized = normalized_step_config(step_type, config_version, config)?;
+    if matches!(step_type, "upload" | "download") {
+        let local_path = normalized
+            .get("localPath")
+            .and_then(serde_json::Value::as_str)
+            .expect("normalized transfer config has localPath");
+        if is_device_absolute_path(local_path.trim()) {
+            normalized["localPath"] =
+                serde_json::Value::String(canonical_local_path_placeholder(step_id));
+        }
+    }
+    Ok(normalized)
+}
+
+/// Merge an incoming sync-safe config with the current device's local transfer
+/// path. A canonical placeholder signals that the sender intentionally omitted
+/// its device path; it must never erase a value already configured here.
+pub(super) fn restore_device_local_step_config(
+    step_id: &str,
+    incoming_step_type: &str,
+    incoming_config_version: i64,
+    incoming: &serde_json::Value,
+    current_step_type: &str,
+    current_config_version: i64,
+    current: &serde_json::Value,
+) -> AppResult<serde_json::Value> {
+    let mut restored =
+        normalized_step_config(incoming_step_type, incoming_config_version, incoming)?;
+    if !matches!(incoming_step_type, "upload" | "download") {
+        return Ok(restored);
+    }
+    let incoming_local_path = restored
+        .get("localPath")
+        .and_then(serde_json::Value::as_str)
+        .expect("normalized transfer config has localPath");
+    if !is_canonical_local_path_placeholder(step_id, incoming_local_path) {
+        return Ok(restored);
+    }
+    if !matches!(current_step_type, "upload" | "download") {
+        return Ok(restored);
+    }
+    let current = normalized_step_config(current_step_type, current_config_version, current)?;
+    let current_local_path = current
+        .get("localPath")
+        .and_then(serde_json::Value::as_str)
+        .expect("normalized transfer config has localPath");
+    if !is_canonical_local_path_placeholder(step_id, current_local_path) {
+        restored["localPath"] = serde_json::Value::String(current_local_path.to_string());
+    }
+    Ok(restored)
+}
+
+pub(super) fn canonical_local_path_placeholder(step_id: &str) -> String {
+    use std::fmt::Write;
+
+    let mut placeholder = String::with_capacity(15 + step_id.len() * 2);
+    placeholder.push_str("{{local_path_");
+    for byte in step_id.as_bytes() {
+        write!(&mut placeholder, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    placeholder.push_str("}}");
+    placeholder
+}
+
+fn is_canonical_local_path_placeholder(step_id: &str, value: &str) -> bool {
+    value == "{{local_path}}" || value == canonical_local_path_placeholder(step_id)
+}
+
+fn is_device_absolute_path(value: &str) -> bool {
+    value.starts_with('/')
+        || value.starts_with('\\')
+        || value
+            .as_bytes()
+            .get(1)
+            .is_some_and(|separator| *separator == b':')
 }
 
 fn template_values(step: &SshTaskStep) -> AppResult<Vec<&str>> {
@@ -269,6 +394,14 @@ fn template_values(step: &SshTaskStep) -> AppResult<Vec<&str>> {
 
 fn fields_for_type(step_type: &str) -> AppResult<&'static [&'static str]> {
     TEMPLATE_FIELDS
+        .iter()
+        .find(|(kind, _)| *kind == step_type)
+        .map(|(_, fields)| *fields)
+        .ok_or_else(|| AppError::Validation(format!("unsupported SSH task step type: {step_type}")))
+}
+
+fn config_fields_for_type(step_type: &str) -> AppResult<&'static [&'static str]> {
+    CONFIG_FIELDS
         .iter()
         .find(|(kind, _)| *kind == step_type)
         .map(|(_, fields)| *fields)
@@ -320,220 +453,6 @@ fn valid_variable_name(value: &str) -> bool {
     matches!(chars.next(), Some('_' | 'a'..='z' | 'A'..='Z'))
         && chars.all(|character| character == '_' || character.is_ascii_alphanumeric())
 }
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn step(step_type: &str, config_json: serde_json::Value) -> SshTaskStep {
-        SshTaskStep {
-            id: "step".to_string(),
-            workspace_id: "workspace".to_string(),
-            task_id: "task".to_string(),
-            name: "Step".to_string(),
-            step_type: step_type.to_string(),
-            position: 0,
-            enabled: true,
-            config_version: CONFIG_VERSION_V1,
-            config_json,
-            created_at: String::new(),
-            updated_at: String::new(),
-            deleted_at: None,
-        }
-    }
-
-    #[test]
-    fn scans_supported_fields_and_deduplicates_in_first_seen_order() {
-        let steps = vec![
-            step(
-                "command",
-                serde_json::json!({
-                    "command": "docker pull {{source_image}} && echo {{source_image}} {{target_image}}",
-                    "workingDirectory": "/tmp/{{archive_name}}",
-                    "timeoutSeconds": 300,
-                    "continueOnError": false
-                }),
-            ),
-            step(
-                "download",
-                serde_json::json!({
-                    "remotePath": "/tmp/{{archive_name}}.tar",
-                    "localPath": "{{local_output_dir}}/{{archive_name}}.tar",
-                    "overwrite": true
-                }),
-            ),
-        ];
-
-        assert_eq!(
-            detected_inputs(&steps).unwrap(),
-            vec![
-                "source_image",
-                "target_image",
-                "archive_name",
-                "local_output_dir"
-            ]
-        );
-    }
-
-    #[test]
-    fn replaces_placeholders_without_persisting_or_interpreting_values() {
-        let steps = vec![step(
-            "command",
-            serde_json::json!({
-                "command": "printf '%s' '{{value}}'",
-                "workingDirectory": "{{directory}}",
-                "timeoutSeconds": 30,
-                "continueOnError": false
-            }),
-        )];
-        let inputs = std::collections::BTreeMap::from([
-            ("value".to_string(), "$HOME && literal".to_string()),
-            ("directory".to_string(), "/tmp/work".to_string()),
-        ]);
-
-        let resolved = resolve_enabled_steps(&steps, &inputs).unwrap();
-        assert_eq!(
-            resolved[0].config_json["command"],
-            "printf '%s' '$HOME && literal'"
-        );
-        assert_eq!(resolved[0].config_json["workingDirectory"], "/tmp/work");
-        assert_eq!(steps[0].config_json["command"], "printf '%s' '{{value}}'");
-    }
-
-    #[test]
-    fn validates_and_redacts_declared_secret_input_values() {
-        let inputs = std::collections::BTreeMap::from([
-            ("token".to_string(), "long-secret-value".to_string()),
-            ("empty".to_string(), String::new()),
-        ]);
-        let values =
-            task_secret_values(&inputs, &["token".to_string(), "empty".to_string()]).unwrap();
-        assert_eq!(values, vec!["long-secret-value"]);
-        assert_eq!(
-            redact_task_secret_values("echo long-secret-value", &values),
-            "echo <redacted>"
-        );
-        assert!(task_secret_values(&inputs, &["missing".to_string()]).is_err());
-        assert!(task_secret_values(&inputs, &["token".to_string(), "token".to_string()]).is_err());
-    }
-
-    #[test]
-    fn rejects_missing_invalid_nested_and_unterminated_placeholders() {
-        assert!(scan_placeholders("{{valid_name}}").is_ok());
-        assert!(scan_placeholders("{{bad.name}}").is_err());
-        assert!(scan_placeholders("{{outer_{{inner}}}}").is_err());
-        assert!(scan_placeholders("{{missing").is_err());
-
-        let steps = vec![step(
-            "upload",
-            serde_json::json!({
-                "localPath": "{{local_file}}",
-                "remotePath": "/tmp/file",
-                "overwrite": true
-            }),
-        )];
-        assert!(resolve_enabled_steps(&steps, &std::collections::BTreeMap::new()).is_err());
-    }
-
-    #[test]
-    fn task_command_allows_newlines_and_tabs_but_rejects_other_controls() {
-        assert_eq!(
-            validate_task_command("echo one\necho two\r\necho three\t# tab").unwrap(),
-            "echo one\necho two\r\necho three\t# tab"
-        );
-        assert!(validate_task_command("   ").is_err());
-        assert!(validate_task_command("echo\0oops").is_err());
-        assert!(validate_task_command("echo\u{0007}bell").is_err());
-
-        let multiline = serde_json::json!({
-            "command": "echo one\necho two",
-            "workingDirectory": "",
-            "timeoutSeconds": 30,
-            "continueOnError": false
-        });
-        assert!(validate_step_config("command", CONFIG_VERSION_V1, &multiline).is_ok());
-
-        let bad_cwd = serde_json::json!({
-            "command": "true",
-            "workingDirectory": "/tmp/bad\npath",
-            "timeoutSeconds": 30,
-            "continueOnError": false
-        });
-        let error = validate_step_config("command", CONFIG_VERSION_V1, &bad_cwd).unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("workingDirectory cannot contain control characters"));
-    }
-
-    #[test]
-    fn parses_all_version_one_configs_and_rejects_unknown_versions() {
-        let command = serde_json::json!({
-            "command": "true",
-            "workingDirectory": "",
-            "timeoutSeconds": 30,
-            "continueOnError": false
-        });
-        let upload = serde_json::json!({
-            "localPath": "{{local_file}}",
-            "remotePath": "/tmp/file",
-            "overwrite": true
-        });
-        let download = serde_json::json!({
-            "remotePath": "/tmp/file",
-            "localPath": "{{local_file}}",
-            "overwrite": true
-        });
-
-        assert!(parse_command_config(CONFIG_VERSION_V1, &command).is_ok());
-        assert!(parse_upload_config(CONFIG_VERSION_V1, &upload).is_ok());
-        assert!(parse_download_config(CONFIG_VERSION_V1, &download).is_ok());
-        let error = parse_command_config(99, &command).unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("unsupported SSH task command config version: 99"));
-    }
-
-    #[test]
-    fn rejects_config_versions_embedded_inside_config_json() {
-        let config = serde_json::json!({
-            "command": "true",
-            "workingDirectory": "",
-            "timeoutSeconds": 30,
-            "continueOnError": false,
-            "version": 1
-        });
-        let error = validate_step_config("command", CONFIG_VERSION_V1, &config).unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("must be stored in config_version"));
-    }
-
-    #[test]
-    fn transfer_local_paths_allow_literals_and_placeholder_templates() {
-        for local_path in [
-            "/Users/alice/archive.tar",
-            r"C:\Users\alice\archive.tar",
-            "relative/archive.tar",
-            "/tmp/{{archive_name}}.tar",
-            "{{local_output_dir}}/{{archive_name}}.tar",
-        ] {
-            let config = serde_json::json!({
-                "remotePath": "/tmp/archive.tar",
-                "localPath": local_path,
-                "overwrite": true
-            });
-            assert!(
-                validate_step_config("download", CONFIG_VERSION_V1, &config).is_ok(),
-                "expected localPath {local_path:?} to be accepted"
-            );
-        }
-
-        let empty = serde_json::json!({
-            "remotePath": "/tmp/archive.tar",
-            "localPath": "   ",
-            "overwrite": true
-        });
-        let error = validate_step_config("download", CONFIG_VERSION_V1, &empty).unwrap_err();
-        assert!(error.to_string().contains("paths cannot be empty"));
-    }
-}
+#[path = "template_tests.rs"]
+mod template_tests;

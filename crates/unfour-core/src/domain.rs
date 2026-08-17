@@ -27,6 +27,8 @@ pub enum DomainEntityType {
     ApiCollection,
     ApiFolder,
     ApiRequest,
+    SshTask,
+    SshTaskStep,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -263,6 +265,36 @@ pub struct ApiRequestSnapshot {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SshTaskSnapshot {
+    pub id: String,
+    pub workspace_id: String,
+    pub name: String,
+    pub description: String,
+    pub sort_order: i64,
+    pub created_at: String,
+    pub updated_at: String,
+    pub revision: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshTaskStepSnapshot {
+    pub id: String,
+    pub workspace_id: String,
+    pub task_id: String,
+    pub name: String,
+    pub step_type: String,
+    pub position: i64,
+    pub enabled: bool,
+    pub config_version: i64,
+    pub config_json: serde_json::Value,
+    pub created_at: String,
+    pub updated_at: String,
+    pub revision: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TombstoneSnapshot {
     pub entity: DomainEntityKey,
     pub deleted_at: String,
@@ -279,6 +311,8 @@ pub enum DomainSnapshot {
     ApiCollection(ApiCollectionSnapshot),
     ApiFolder(ApiFolderSnapshot),
     ApiRequest(ApiRequestSnapshot),
+    SshTask(SshTaskSnapshot),
+    SshTaskStep(SshTaskStepSnapshot),
     Tombstone(TombstoneSnapshot),
 }
 
@@ -407,6 +441,34 @@ pub struct ExternalApiRequestUpsert {
     pub updated_at: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalSshTaskUpsert {
+    pub id: String,
+    pub workspace_id: String,
+    pub name: String,
+    pub description: String,
+    pub sort_order: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalSshTaskStepUpsert {
+    pub id: String,
+    pub workspace_id: String,
+    pub task_id: String,
+    pub name: String,
+    pub step_type: String,
+    pub position: i64,
+    pub enabled: bool,
+    pub config_version: i64,
+    pub config_json: serde_json::Value,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 macro_rules! external_change {
     ($name:ident, $upsert:ty) => {
         #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -433,6 +495,8 @@ external_change!(
 );
 external_change!(ExternalApiCollectionApply, ExternalApiCollectionUpsert);
 external_change!(ExternalApiFolderApply, ExternalApiFolderUpsert);
+external_change!(ExternalSshTaskApply, ExternalSshTaskUpsert);
+external_change!(ExternalSshTaskStepApply, ExternalSshTaskStepUpsert);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "operation", content = "record", rename_all = "camelCase")]
@@ -454,6 +518,10 @@ pub struct ExternalApplyPage {
     pub api_folders: Vec<ExternalApiFolderApply>,
     #[serde(default)]
     pub api_requests: Vec<ExternalApiRequestApply>,
+    #[serde(default)]
+    pub ssh_tasks: Vec<ExternalSshTaskApply>,
+    #[serde(default)]
+    pub ssh_task_steps: Vec<ExternalSshTaskStepApply>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -502,5 +570,7 @@ mod tests {
         assert!(page.api_collections.is_empty());
         assert!(page.api_folders.is_empty());
         assert!(page.api_requests.is_empty());
+        assert!(page.ssh_tasks.is_empty());
+        assert!(page.ssh_task_steps.is_empty());
     }
 }

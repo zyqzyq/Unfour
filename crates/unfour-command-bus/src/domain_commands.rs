@@ -13,8 +13,18 @@ impl CommandBus {
             DomainEntityType::ApiCollection
             | DomainEntityType::ApiFolder
             | DomainEntityType::ApiRequest => self.api_client.read_domain_snapshot(key).await,
+            DomainEntityType::SshTask | DomainEntityType::SshTaskStep => {
+                self.ssh.read_task_domain_snapshot(key).await
+            }
             _ => self.workspace.read_snapshot(key).await,
         }
+    }
+
+    pub async fn list_ssh_task_domain_entities(
+        &self,
+        workspace_id: String,
+    ) -> AppResult<Vec<DomainEntityKey>> {
+        self.ssh.list_task_domain_entities(workspace_id).await
     }
 
     pub async fn apply_external_page(
@@ -29,11 +39,14 @@ impl CommandBus {
             "apiCollectionCount": page.api_collections.len(),
             "apiFolderCount": page.api_folders.len(),
             "apiRequestCount": page.api_requests.len(),
+            "sshTaskCount": page.ssh_tasks.len(),
+            "sshTaskStepCount": page.ssh_task_steps.len(),
         });
         let context = CommandContext::external("workspace.external.apply_page");
         let executor_context = context.clone();
         let workspace = self.workspace.clone();
         let api_client = self.api_client.clone();
+        let ssh = self.ssh.clone();
         self.execute_domain_command(
             context,
             Some(CommandActivity {
@@ -45,17 +58,23 @@ impl CommandBus {
             move |connection| {
                 Box::pin(async move {
                     let api_page = page.clone();
+                    let ssh_page = page.clone();
                     let workspace_outcome = workspace
                         .apply_external_page_on(connection, &executor_context, page)
                         .await?;
                     let api_outcome = api_client
                         .apply_external_page_on(connection, &executor_context, api_page)
                         .await?;
+                    let ssh_outcome = ssh
+                        .apply_external_task_page_on(connection, &executor_context, ssh_page)
+                        .await?;
                     let mut mutations = workspace_outcome.mutations;
                     mutations.extend(api_outcome.mutations);
+                    mutations.extend(ssh_outcome.mutations);
                     let mut secret_material_outcomes =
                         workspace_outcome.value.secret_material_outcomes;
                     secret_material_outcomes.extend(api_outcome.value.secret_material_outcomes);
+                    secret_material_outcomes.extend(ssh_outcome.value.secret_material_outcomes);
                     let report = ExternalApplyReport {
                         applied_count: mutations.len(),
                         mutations: mutations.clone(),

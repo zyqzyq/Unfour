@@ -1,4 +1,6 @@
 use super::*;
+use crate::transaction::CommandActivity;
+use unfour_core::domain::CommandContext;
 
 impl CommandBus {
     pub async fn list_ssh_connections(
@@ -271,16 +273,26 @@ impl CommandBus {
     pub async fn reorder_ssh_tasks(&self, input: SshTasksReorderInput) -> AppResult<Vec<SshTask>> {
         let workspace_id = input.workspace_id.clone();
         let task_count = input.task_ids.len();
-        let tasks = self.ssh.reorder_tasks(input).await?;
-        self.activity_log
-            .record(
-                Some(&workspace_id),
-                "ssh.task.reorder",
-                None,
-                serde_json::json!({ "taskCount": task_count }),
-            )
-            .await?;
-        Ok(tasks)
+        let context = CommandContext::local("ssh.task.reorder");
+        let executor_context = context.clone();
+        let service = self.ssh.clone();
+        self.execute_domain_command(
+            context,
+            Some(CommandActivity {
+                workspace_id: Some(workspace_id),
+                action: "ssh.task.reorder",
+                target: None,
+                details: serde_json::json!({ "taskCount": task_count }),
+            }),
+            move |connection| {
+                Box::pin(async move {
+                    service
+                        .reorder_tasks_on(connection, &executor_context, input)
+                        .await
+                })
+            },
+        )
+        .await
     }
 
     pub async fn get_ssh_task(
@@ -292,13 +304,16 @@ impl CommandBus {
     }
 
     pub async fn save_ssh_task(&self, input: SshTaskSaveInput) -> AppResult<SshTaskDetail> {
-        let detail = self.ssh.save_task(input).await?;
-        self.activity_log
-            .record(
-                Some(&detail.task.workspace_id),
-                "ssh.task.save",
-                Some(&detail.task.id),
-                serde_json::json!({
+        let context = CommandContext::local("ssh.task.save");
+        let executor_context = context.clone();
+        let service = self.ssh.clone();
+        self.execute_domain_command_with_activity(
+            context,
+            |detail: &SshTaskDetail| CommandActivity {
+                workspace_id: Some(detail.task.workspace_id.clone()),
+                action: "ssh.task.save",
+                target: Some(detail.task.id.clone()),
+                details: serde_json::json!({
                     "name": detail.task.name,
                     "stepCount": detail.steps.len(),
                     "hasDefaultConnection": detail
@@ -306,9 +321,16 @@ impl CommandBus {
                         .as_ref()
                         .is_some_and(|binding| binding.default_connection_id.is_some()),
                 }),
-            )
-            .await?;
-        Ok(detail)
+            },
+            move |connection| {
+                Box::pin(async move {
+                    service
+                        .save_task_on(connection, &executor_context, input)
+                        .await
+                })
+            },
+        )
+        .await
     }
 
     pub async fn duplicate_ssh_task(
@@ -316,30 +338,53 @@ impl CommandBus {
         workspace_id: String,
         task_id: String,
     ) -> AppResult<SshTaskDetail> {
-        let detail = self.ssh.duplicate_task(workspace_id, task_id).await?;
-        self.activity_log
-            .record(
-                Some(&detail.task.workspace_id),
-                "ssh.task.duplicate",
-                Some(&detail.task.id),
-                serde_json::json!({ "stepCount": detail.steps.len() }),
-            )
-            .await?;
-        Ok(detail)
+        let context = CommandContext::local("ssh.task.duplicate");
+        let executor_context = context.clone();
+        let service = self.ssh.clone();
+        self.execute_domain_command_with_activity(
+            context,
+            |detail: &SshTaskDetail| CommandActivity {
+                workspace_id: Some(detail.task.workspace_id.clone()),
+                action: "ssh.task.duplicate",
+                target: Some(detail.task.id.clone()),
+                details: serde_json::json!({ "stepCount": detail.steps.len() }),
+            },
+            move |connection| {
+                Box::pin(async move {
+                    service
+                        .duplicate_task_on(connection, &executor_context, workspace_id, task_id)
+                        .await
+                })
+            },
+        )
+        .await
     }
 
     pub async fn delete_ssh_task(&self, workspace_id: String, task_id: String) -> AppResult<()> {
-        self.ssh
-            .delete_task(workspace_id.clone(), task_id.clone())
-            .await?;
-        self.activity_log
-            .record(
-                Some(&workspace_id),
-                "ssh.task.delete",
-                Some(&task_id),
-                serde_json::json!({}),
+        let context = CommandContext::local("ssh.task.delete");
+        let executor_context = context.clone();
+        let service = self.ssh.clone();
+        let executor_service = service.clone();
+        let log_paths = self
+            .execute_domain_command(
+                context,
+                Some(CommandActivity {
+                    workspace_id: Some(workspace_id.clone()),
+                    action: "ssh.task.delete",
+                    target: Some(task_id.clone()),
+                    details: serde_json::json!({ "softDelete": true, "cascade": true }),
+                }),
+                move |connection| {
+                    Box::pin(async move {
+                        executor_service
+                            .delete_task_on(connection, &executor_context, workspace_id, task_id)
+                            .await
+                    })
+                },
             )
-            .await
+            .await?;
+        service.remove_task_log_paths(log_paths);
+        Ok(())
     }
 
     pub async fn run_ssh_task(&self, input: SshTaskRunInput) -> AppResult<SshTaskRun> {

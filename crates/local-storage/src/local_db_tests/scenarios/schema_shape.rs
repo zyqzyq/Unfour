@@ -214,7 +214,10 @@ async fn ssh_tasks_schema_separates_syncable_templates_from_local_state() {
         .collect::<Vec<_>>();
     assert!(task_names.contains(&"deleted_at"));
     assert!(task_names.contains(&"sort_order"));
+    assert!(task_names.contains(&"revision"));
     assert!(!task_names.contains(&"default_connection_id"));
+    assert!(!task_names.contains(&"remote_id"));
+    assert!(!task_names.contains(&"sync_status"));
 
     let step_columns: Vec<(String,)> =
         sqlx::query_as("SELECT name FROM pragma_table_info('ssh_task_step')")
@@ -227,6 +230,16 @@ async fn ssh_tasks_schema_separates_syncable_templates_from_local_state() {
         .collect::<Vec<_>>();
     assert!(step_names.contains(&"config_version"));
     assert!(step_names.contains(&"deleted_at"));
+    assert!(step_names.contains(&"revision"));
+    assert!(!step_names.contains(&"remote_id"));
+    assert!(!step_names.contains(&"sync_status"));
+    let active_position_index_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'uq_ssh_task_step_active_position')",
+    )
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert!(!active_position_index_exists);
 
     let binding_columns: Vec<(String,)> =
         sqlx::query_as("SELECT name FROM pragma_table_info('ssh_task_local_binding')")

@@ -148,6 +148,9 @@ pub(crate) async fn read_snapshot_on(
         | DomainEntityType::ApiRequest => Err(AppError::Validation(
             "API snapshots must be read through the API domain service".to_string(),
         )),
+        DomainEntityType::SshTask | DomainEntityType::SshTaskStep => Err(AppError::Validation(
+            "SSH Task snapshots must be read through the SSH domain service".to_string(),
+        )),
     }
 }
 

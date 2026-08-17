@@ -9,6 +9,7 @@ use unfour_core::models::{
 
 #[cfg(any(feature = "ssh-native", test))]
 mod command_step;
+mod domain;
 #[cfg(feature = "ssh-native")]
 mod download_step;
 #[cfg(any(feature = "ssh-native", test))]

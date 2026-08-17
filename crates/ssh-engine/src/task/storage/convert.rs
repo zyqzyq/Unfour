@@ -84,7 +84,7 @@ pub(super) fn step_from_row(row: StoredStep) -> AppResult<SshTaskStep> {
     let config_json = serde_json::from_str(&row.config_json).map_err(|error| {
         AppError::Config(format!("stored SSH task step config is invalid: {error}"))
     })?;
-    validate_step_config(&row.step_type, row.config_version, &config_json)?;
+    let config_json = normalized_step_config(&row.step_type, row.config_version, &config_json)?;
     Ok(SshTaskStep {
         id: row.id,
         workspace_id: row.workspace_id,
