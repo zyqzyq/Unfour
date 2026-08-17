@@ -420,6 +420,62 @@ async fn snapshots_and_enumeration_are_canonical_and_device_local_safe() {
 }
 
 #[tokio::test]
+async fn serialized_snapshots_omit_all_literal_transfer_local_paths() {
+    let (bus, _) = bus_with_hook(RecordingHook {
+        local_only: true,
+        fail_on: None,
+    })
+    .await;
+    let workspace_id = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let local_paths = [
+        r"C:\Users\alice\artifact.tar",
+        "/Users/alice/artifact.tar",
+        "relative/artifact.tar",
+        "./output/artifact.tar",
+        "../output/artifact.tar",
+    ];
+    let mut input = task_input(&workspace_id, "Literal paths", &[]);
+    input.steps = local_paths
+        .iter()
+        .enumerate()
+        .map(|(position, local_path)| SshTaskStepInput {
+            id: None,
+            name: format!("Transfer {position}"),
+            step_type: if position % 2 == 0 {
+                "upload".to_string()
+            } else {
+                "download".to_string()
+            },
+            position: position as i64,
+            enabled: true,
+            config_version: Some(1),
+            config_json: serde_json::json!({
+                "remotePath": "/tmp/artifact.tar",
+                "localPath": local_path,
+                "overwrite": true
+            }),
+        })
+        .collect();
+    let detail = bus.save_ssh_task(input).await.unwrap();
+    let snapshots = futures_for_steps(&bus, &workspace_id, &detail).await;
+
+    assert!(snapshots.iter().all(|snapshot| {
+        snapshot.config_json["localPath"]
+            .as_str()
+            .is_some_and(|value| value.starts_with("{{local_path_") && value.ends_with("}}"))
+    }));
+    let serialized = serde_json::to_string(&snapshots).unwrap();
+    for local_path in local_paths {
+        let encoded = serde_json::to_string(local_path).unwrap();
+        let encoded = encoded.trim_matches('"');
+        assert!(
+            !serialized.contains(encoded),
+            "snapshot leaked literal localPath {local_path}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn external_apply_preserves_the_current_device_transfer_path() {
     let (bus, db) = bus_with_hook(RecordingHook {
         local_only: true,

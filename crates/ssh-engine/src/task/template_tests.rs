@@ -212,15 +212,18 @@ fn transfer_local_paths_allow_literals_and_placeholder_templates() {
 }
 
 #[test]
-fn canonical_transfer_config_replaces_device_absolute_local_paths() {
+fn canonical_transfer_config_replaces_device_local_literal_paths() {
     for local_path in [
         "/Users/alice/archive.tar",
         r"C:\Users\alice\archive.tar",
         r"\\server\share\archive.tar",
+        "relative/archive.tar",
+        "./output/archive.tar",
+        "../output/archive.tar",
         "/tmp/{{archive_name}}.tar",
     ] {
         let config = serde_json::json!({
-            "remotePath": "/tmp/archive.tar",
+            "remotePath": "relative/remote/archive.tar",
             "localPath": local_path,
             "overwrite": true
         });
@@ -230,17 +233,24 @@ fn canonical_transfer_config_replaces_device_absolute_local_paths() {
             canonical["localPath"],
             canonical_local_path_placeholder("step")
         );
+        assert_eq!(canonical["remotePath"], config["remotePath"]);
         assert!(!canonical.to_string().contains(local_path));
     }
-    let portable = serde_json::json!({
-        "remotePath": "/tmp/archive.tar",
-        "localPath": "{{local_output_dir}}/archive.tar",
-        "overwrite": true
-    });
-    assert_eq!(
-        canonical_step_config("step", "download", CONFIG_VERSION_V1, &portable).unwrap(),
-        portable
-    );
+    for local_path in [
+        "{{output_dir}}/file.tar",
+        "{{local_file}}",
+        "{{workspace_output}}/{{name}}.tar",
+    ] {
+        let portable = serde_json::json!({
+            "remotePath": "/tmp/archive.tar",
+            "localPath": local_path,
+            "overwrite": true
+        });
+        assert_eq!(
+            canonical_step_config("step", "download", CONFIG_VERSION_V1, &portable).unwrap(),
+            portable
+        );
+    }
 }
 
 #[test]

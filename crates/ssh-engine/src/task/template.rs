@@ -299,7 +299,8 @@ pub(super) fn canonical_step_config(
             .get("localPath")
             .and_then(serde_json::Value::as_str)
             .expect("normalized transfer config has localPath");
-        if is_device_absolute_path(local_path.trim()) {
+        let local_path = local_path.trim();
+        if is_device_absolute_path(local_path) || scan_placeholders(local_path)?.is_empty() {
             normalized["localPath"] =
                 serde_json::Value::String(canonical_local_path_placeholder(step_id));
         }
