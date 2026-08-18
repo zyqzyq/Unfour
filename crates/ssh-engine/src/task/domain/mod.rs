@@ -94,9 +94,20 @@ impl SshService {
         &self,
         workspace_id: String,
     ) -> AppResult<Vec<DomainEntityKey>> {
-        validate_workspace_id(&workspace_id)?;
         let mut connection = self.db.pool().acquire().await?;
-        validate_workspace_on(&mut connection, &workspace_id).await?;
+        self.list_task_domain_entities_on(&mut connection, &workspace_id)
+            .await
+    }
+
+    /// Enumerate live SSH Task domain entities using the caller's SQLite
+    /// connection without acquiring a connection or starting a transaction.
+    pub async fn list_task_domain_entities_on(
+        &self,
+        connection: &mut SqliteConnection,
+        workspace_id: &str,
+    ) -> AppResult<Vec<DomainEntityKey>> {
+        validate_workspace_id(workspace_id)?;
+        validate_workspace_on(connection, workspace_id).await?;
         let task_ids = sqlx::query_scalar::<_, String>(
             r#"
             SELECT id FROM ssh_task
@@ -104,7 +115,7 @@ impl SshService {
             ORDER BY sort_order, id
             "#,
         )
-        .bind(&workspace_id)
+        .bind(workspace_id)
         .fetch_all(&mut *connection)
         .await?;
         let steps = sqlx::query_as::<_, (String, String)>(
@@ -118,15 +129,17 @@ impl SshService {
             ORDER BY task.sort_order, task.id, step.position, step.id
             "#,
         )
-        .bind(&workspace_id)
+        .bind(workspace_id)
         .fetch_all(&mut *connection)
         .await?;
         let mut keys = Vec::with_capacity(task_ids.len() + steps.len());
-        keys.extend(task_ids.into_iter().map(|task_id| {
-            DomainEntityKey::new(DomainEntityType::SshTask, &workspace_id, task_id)
-        }));
+        keys.extend(
+            task_ids.into_iter().map(|task_id| {
+                DomainEntityKey::new(DomainEntityType::SshTask, workspace_id, task_id)
+            }),
+        );
         keys.extend(steps.into_iter().map(|(step_id, task_id)| {
-            DomainEntityKey::new(DomainEntityType::SshTaskStep, &workspace_id, step_id)
+            DomainEntityKey::new(DomainEntityType::SshTaskStep, workspace_id, step_id)
                 .with_parent_entity_id(task_id)
         }));
         Ok(keys)
