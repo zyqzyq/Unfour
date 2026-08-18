@@ -6,6 +6,52 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-18
+
+Feature release adding persistent SSH command history and history-aware MCP and
+terminal workflows, while extending the API domain foundation for optional
+edition sync.
+
+### Added
+
+- **SSH command history and suggestions** — Persist workspace- and
+  connection-scoped commands after remote echo, retain a bounded local history,
+  and show prefix-based suggestions while typing at detected shell prompts.
+  Arrow keys continue to reach the remote shell whenever the suggestion popup
+  is closed.
+- **MCP SSH history inspection** — Add the read-only
+  `unfour.ssh.list_history` tool with workspace, connection, text, time-range,
+  and result-limit filters so an agent can inspect recent commands and draft a
+  reusable SSH task for explicit user confirmation.
+- **API sync-domain coverage** — Add revisioned snapshots and external-apply
+  handling for API collections, folders, and saved requests. This extends the
+  local command-bus foundation for optional edition sync; it does not enable a
+  hosted sync service by itself.
+
+### Changed
+
+- **Terminal history interaction** — Suggestions use an explicit popup:
+  Up/Down selects an item, Tab or click inserts it, Escape dismisses it, and
+  Enter always submits the user's current line.
+- **Development hooks** — Install lefthook during `pnpm install` and format
+  staged Rust and TypeScript files before commits.
+- **Module responsibility splits** — Split oversized SSH task, MCP task,
+  Workspace external-apply, Database controller, SSH Terminal, and API domain
+  modules into focused files without changing their package ownership.
+
+### Fixed
+
+- **API external apply resilience** — Make collection, folder, and request
+  apply behavior more robust around missing parents, rollback, OpenAPI import,
+  and locally preserved redacted values.
+
+### Security
+
+- **History and API snapshot redaction** — Exclude password-prompt input and
+  conservatively redact sensitive SSH commands. Redact credentials in API
+  auth, headers, query parameters, URLs, JSON bodies, and form bodies while
+  preserving existing local secrets when redacted snapshots are applied.
+
 ## [0.4.0] - 2026-08-11
 
 Feature release extending the local MCP workflow with workspace variables and
@@ -247,6 +293,7 @@ First public release.
 - macOS and Linux artifacts remain experimental/unverified until real-device
   smoke checks are complete.
 
+[0.5.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.5.0
 [0.4.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.4.0
 [0.3.0-rc.1]: https://github.com/zyqzyq/Unfour/releases/tag/v0.3.0-rc.1
 [0.2.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.2.0
