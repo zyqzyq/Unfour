@@ -1,0 +1,9 @@
+.git
+.codex
+.agents
+node_modules
+target
+dist
+coverage
+test-results
+playwright-report

@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
+use crate::StorageMode;
 use tokio::runtime::{Builder, Runtime};
 use unfour_command_bus::{CommandBus, CommandBusExtensions, ReadCommand, ReadCommandResult};
 use unfour_core::models::{
@@ -45,6 +46,17 @@ impl LocalCommandBusAdapter {
 
     pub fn default_storage() -> AdapterResult {
         Self::from_command_bus_future(CommandBus::from_existing_default_storage())
+    }
+
+    pub fn from_storage_mode(mode: StorageMode) -> AdapterResult {
+        match mode {
+            StorageMode::Default => Self::default_storage(),
+            StorageMode::Ephemeral => Self::ephemeral(),
+        }
+    }
+
+    pub fn from_env() -> AdapterResult {
+        Self::from_storage_mode(StorageMode::from_env())
     }
 
     pub fn default_storage_with_extensions(extensions: CommandBusExtensions) -> AdapterResult {

@@ -113,6 +113,27 @@ connection. Connection creation tools may write supplied database passwords or
 SSH secrets to the OS credential store through the command bus; raw credential
 values are never returned.
 
+### Ephemeral registry mode
+
+For MCP registry validation, CI, protocol smoke tests, and isolated integration
+tests only, set:
+
+```text
+UNFOUR_MCP_STORAGE_MODE=ephemeral
+```
+
+The mode uses `LocalCommandBusAdapter::ephemeral()` with in-memory SQLite and
+the in-memory secret store. It does not open or create
+`~/.unfour/unfour.sqlite`, read the OS credential store, or require a desktop
+workspace. The real tool registry still handles `initialize`,
+`notifications/initialized`, and `tools/list`; tool execution remains subject
+to the normal command-bus policy and may still reach external services when a
+tool is explicitly called.
+
+Do not set this variable for normal Codex, Claude Code, or Cursor usage. Those
+clients should use the default mode so MCP can read the desktop's real,
+workspace-scoped data.
+
 ## Current Non-Goals
 
 The current Community MCP surface does not:

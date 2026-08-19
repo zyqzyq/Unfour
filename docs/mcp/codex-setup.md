@@ -38,6 +38,42 @@ input shuts it down.
 Start the desktop app once before running this smoke check if the local Unfour
 SQLite database has not been created yet.
 
+## Registry / CI Smoke Check
+
+Registry validation and isolated CI checks can start the real server without a
+desktop-created database:
+
+```powershell
+$env:UNFOUR_MCP_STORAGE_MODE = "ephemeral"
+@'
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"registry-check","version":"0.1.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
+'@ | .\target\release\unfour-mcp.exe
+Remove-Item Env:UNFOUR_MCP_STORAGE_MODE
+```
+
+This mode is only for MCP registry validation, CI, protocol smoke tests, and
+isolated integration tests. Do not use it for normal MCP clients, because its
+workspace and credential store are intentionally empty and in-memory.
+
+## Registry Docker Image
+
+The repository includes a stdio-only image that does not build the desktop or
+install Node/pnpm dependencies:
+
+```bash
+docker build -t unfour-mcp-registry .
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"registry-check","version":"0.1.0"}}}' \
+  '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
+  | docker run --rm -i unfour-mcp-registry
+```
+
+The image sets `UNFOUR_MCP_STORAGE_MODE=ephemeral` and exposes no HTTP port;
+MCP messages use standard input/output.
+
 ## Codex Configuration
 
 Use the absolute path to the built executable. The exact path depends on your
