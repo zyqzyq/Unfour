@@ -186,7 +186,7 @@ where
     R: BufRead,
     W: Write,
 {
-    let command_bus = LocalCommandBusAdapter::default_storage()
+    let command_bus = LocalCommandBusAdapter::from_env()
         .map_err(|error| io::Error::other(format!("{}: {}", error.code, error.message)))?;
     let server = McpServer::new(command_bus.clone());
     unfour_diag::log_operation_event(
