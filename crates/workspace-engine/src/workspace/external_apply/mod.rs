@@ -123,6 +123,19 @@ pub(super) async fn delete_existing(
     Ok(query.fetch_optional(&mut *connection).await?)
 }
 
+/// Convert a parent lookup into `None` when the parent is absent or
+/// soft-deleted. A missing parent on the external apply path is the
+/// doomed-orphan race: another device created this entity while a concurrent
+/// delete of its parent was already applied locally. Skipping the write keeps
+/// the puller from wedging on the page.
+pub(super) fn doomed_orphan_to_skip<T>(lookup: AppResult<T>) -> AppResult<Option<T>> {
+    match lookup {
+        Ok(value) => Ok(Some(value)),
+        Err(AppError::NotFound(_)) => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
 pub(super) fn validate_delete(
     delete: &ExternalDelete,
     expected: DomainEntityType,

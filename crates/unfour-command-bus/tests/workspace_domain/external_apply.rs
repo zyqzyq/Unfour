@@ -289,11 +289,20 @@ async fn external_last_workspace_fallback_has_no_local_echo() {
         .await
         .unwrap();
 
-    assert_eq!(report.mutations.len(), 2);
+    assert_eq!(report.mutations.len(), 4);
     assert!(report
         .mutations
         .iter()
         .all(|mutation| mutation.origin == MutationOrigin::External));
+    assert_eq!(
+        report
+            .mutations
+            .iter()
+            .filter(|mutation| mutation.operation == unfour_core::domain::MutationOperation::Delete)
+            .count(),
+        3,
+        "workspace delete must tombstone leftover live variables and environments"
+    );
     let fallback_id = report
         .mutations
         .iter()

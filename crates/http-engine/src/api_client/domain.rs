@@ -3,6 +3,7 @@ mod external_apply;
 mod requests;
 mod secrets;
 mod snapshot;
+mod workspace_cascade;
 
 use sqlx::{FromRow, SqliteConnection};
 use unfour_core::domain::{

@@ -1,3 +1,4 @@
+mod delete_cascade;
 mod external_apply;
 mod layout;
 mod snapshot;
@@ -253,6 +254,13 @@ impl WorkspaceService {
         }
         get_workspace_on(connection, &workspace_id, false).await?;
         let now = Utc::now().to_rfc3339();
+        let mut mutations = delete_cascade::cascade_delete_workspace_children_on(
+            connection,
+            context,
+            &workspace_id,
+            &now,
+        )
+        .await?;
         let revision: i64 = sqlx::query_scalar(
             r#"
             UPDATE workspaces
@@ -281,14 +289,15 @@ impl WorkspaceService {
             write_setting_on(connection, "active_workspace_id", &next).await?;
         }
 
+        mutations.push(workspace_mutation(
+            context,
+            MutationOperation::Delete,
+            &workspace_id,
+            revision,
+        ));
         Ok(DomainCommandResult::new(
             state_on(connection).await?,
-            vec![workspace_mutation(
-                context,
-                MutationOperation::Delete,
-                &workspace_id,
-                revision,
-            )],
+            mutations,
         ))
     }
 

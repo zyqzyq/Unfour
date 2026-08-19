@@ -8,7 +8,9 @@ use unfour_core::domain::{
 use unfour_core::models::{WorkspaceEnvironmentVariable, WorkspaceVariable};
 use unfour_core::{AppError, AppResult};
 
-use super::{delete_existing, external_value, normalized_key, validate_delete};
+use super::{
+    delete_existing, doomed_orphan_to_skip, external_value, normalized_key, validate_delete,
+};
 use crate::workspace::get_workspace_on;
 use crate::workspace::variable_executor::{entity_mutation, entity_mutation_with_parent};
 use crate::workspace::variables::{get_environment_on, normalize_description};
@@ -78,7 +80,11 @@ async fn upsert_workspace_variable(
     Option<i64>,
     Option<unfour_core::domain::SecretMaterialStatus>,
 )> {
-    get_workspace_on(connection, &record.workspace_id, false).await?;
+    if doomed_orphan_to_skip(get_workspace_on(connection, &record.workspace_id, false).await)?
+        .is_none()
+    {
+        return Ok((None, None));
+    }
     let key = normalized_key(&record.key)?;
     let current = sqlx::query_as::<_, WorkspaceVariable>(
         r#"
@@ -252,13 +258,19 @@ async fn upsert_environment_variable(
     Option<i64>,
     Option<unfour_core::domain::SecretMaterialStatus>,
 )> {
-    get_environment_on(
-        connection,
-        &record.workspace_id,
-        &record.environment_id,
-        false,
-    )
-    .await?;
+    if doomed_orphan_to_skip(
+        get_environment_on(
+            connection,
+            &record.workspace_id,
+            &record.environment_id,
+            false,
+        )
+        .await,
+    )?
+    .is_none()
+    {
+        return Ok((None, None));
+    }
     let key = normalized_key(&record.key)?;
     let current = sqlx::query_as::<_, WorkspaceEnvironmentVariable>(
         r#"

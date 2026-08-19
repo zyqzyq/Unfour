@@ -8,6 +8,7 @@ use unfour_core::models::Workspace;
 use unfour_core::{AppError, AppResult};
 
 use super::{delete_existing, validate_delete};
+use crate::workspace::delete_cascade::cascade_delete_workspace_children_on;
 use crate::workspace::{
     get_workspace_on, insert_workspace_companions, normalize_environment_type,
     normalize_mcp_policy, normalize_name, read_setting_on, workspace_mutation, write_setting_on,
@@ -39,6 +40,15 @@ pub(super) async fn apply_workspace(
                 ));
             }
             let current = get_workspace_on(connection, &delete.entity.workspace_id, true).await?;
+            mutations.extend(
+                cascade_delete_workspace_children_on(
+                    connection,
+                    context,
+                    &delete.entity.workspace_id,
+                    &delete.deleted_at,
+                )
+                .await?,
+            );
             if current.deleted_at.is_some() {
                 return Ok(());
             }

@@ -1,11 +1,25 @@
 use super::*;
 use crate::transaction::CommandActivity;
+use sqlx::SqliteConnection;
 use unfour_core::domain::{
-    CommandContext, DomainCommandResult, DomainEntityKey, DomainEntityType, DomainSnapshot,
-    ExternalApplyPage, ExternalApplyReport, ExternalWorkspaceApply,
+    CommandContext, DomainCommandResult, DomainEntityKey, DomainEntityType, DomainMutation,
+    DomainSnapshot, ExternalApplyPage, ExternalApplyReport, ExternalWorkspaceApply,
     ExternalWorkspaceEnvironmentApply, ExternalWorkspaceEnvironmentVariableApply,
     ExternalWorkspaceVariableApply,
 };
+use unfour_http_engine::ApiClientService;
+
+pub(crate) async fn cascade_workspace_feature_entities_on(
+    api_client: &ApiClientService,
+    connection: &mut SqliteConnection,
+    context: &CommandContext,
+    workspace_id: &str,
+    deleted_at: Option<&str>,
+) -> AppResult<Vec<DomainMutation>> {
+    api_client
+        .delete_workspace_api_entities_on(connection, context, workspace_id, deleted_at)
+        .await
+}
 
 impl CommandBus {
     pub async fn read_domain_snapshot(&self, key: &DomainEntityKey) -> AppResult<DomainSnapshot> {
@@ -44,14 +58,37 @@ impl CommandBus {
             }),
             move |connection| {
                 Box::pin(async move {
+                    let workspace_deletes: Vec<(String, String)> = page
+                        .workspaces
+                        .iter()
+                        .filter_map(|change| match change {
+                            ExternalWorkspaceApply::Delete(delete) => Some((
+                                delete.entity.workspace_id.clone(),
+                                delete.deleted_at.clone(),
+                            )),
+                            _ => None,
+                        })
+                        .collect();
                     let api_page = page.clone();
                     let workspace_outcome = workspace
                         .apply_external_page_on(connection, &executor_context, page)
                         .await?;
+                    let mut mutations = workspace_outcome.mutations;
+                    for (workspace_id, deleted_at) in &workspace_deletes {
+                        mutations.extend(
+                            cascade_workspace_feature_entities_on(
+                                &api_client,
+                                connection,
+                                &executor_context,
+                                workspace_id,
+                                Some(deleted_at),
+                            )
+                            .await?,
+                        );
+                    }
                     let api_outcome = api_client
                         .apply_external_page_on(connection, &executor_context, api_page)
                         .await?;
-                    let mut mutations = workspace_outcome.mutations;
                     mutations.extend(api_outcome.mutations);
                     let mut secret_material_outcomes =
                         workspace_outcome.value.secret_material_outcomes;
