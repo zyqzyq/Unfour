@@ -91,12 +91,15 @@ impl SshCommandLineTracker {
         let mut confirmed = Vec::new();
         let mut remaining = Vec::new();
         let has_other_visible = visible.chars().any(|character| !is_line_ending(character));
-        for command in self.pending.drain(..) {
+        for (index, command) in self.pending.drain(..).enumerate() {
             if visible.contains(&command) {
                 confirmed.push(command);
-            } else if has_other_visible {
+            } else if has_other_visible && index == 0 {
                 // Echo-off prompts (sudo/ssh/mysql) typically emit a newline
-                // plus a message without repeating the typed secret.
+                // plus a message without repeating the typed secret. Only
+                // discard the first unconfirmed entry: later entries may be
+                // normal commands already queued behind it whose echoes arrive
+                // in a subsequent PTY output chunk.
             } else {
                 remaining.push(command);
             }
@@ -301,6 +304,22 @@ mod tests {
     }
 
     #[test]
+    fn later_pending_commands_survive_earlier_command_output() {
+        let mut tracker = SshCommandLineTracker::new();
+        assert!(tracker.accept("docker ps -a\r").is_empty());
+        assert!(tracker.accept("docker images\r").is_empty());
+
+        assert_eq!(
+            tracker.observe_output("docker ps -a\r\nCONTAINER ID\r\n"),
+            vec!["docker ps -a"]
+        );
+        assert_eq!(
+            tracker.observe_output("docker images\r\nREPOSITORY\r\n"),
+            vec!["docker images"]
+        );
+    }
+
+    #[test]
     fn reset_clears_pending_and_partial_input() {
         let mut tracker = SshCommandLineTracker::new();
         tracker.accept("rm -rf /tmp/foo");
@@ -323,7 +342,9 @@ mod tests {
         // The paste made the tracked line unreliable, so the real Enter is
         // skipped instead of persisting a mangled concatenation.
         assert!(tracker.accept("\r").is_empty());
-        assert!(tracker.observe_output("echo one\r\necho two\r\n").is_empty());
+        assert!(tracker
+            .observe_output("echo one\r\necho two\r\n")
+            .is_empty());
 
         // The tracker recovers for the next plainly typed command.
         tracker.accept("pwd");

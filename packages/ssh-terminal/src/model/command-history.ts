@@ -129,8 +129,9 @@ export class TerminalCommandHistoryController {
   }
 
   /** History suggestions for the current line: exact-prefix matches first
-   * (newest first), then substring matches. The current line itself is
-   * excluded so accepting always changes the remote line. */
+   * (newest first), then substring matches. An exact current-line match stays
+   * visible so users can confirm that the command was recorded; accepting it
+   * is a safe no-op handled by the suggestion consumer. */
   suggest(limit = 8): string[] {
     const line = this.currentLine().trim();
     if (line.length < MIN_SUGGEST_CHARS) return [];
@@ -138,7 +139,6 @@ export class TerminalCommandHistoryController {
     const prefixMatches: string[] = [];
     const containsMatches: string[] = [];
     for (const command of this.history) {
-      if (command === line) continue;
       const commandLower = command.toLowerCase();
       if (commandLower.startsWith(lower)) {
         prefixMatches.push(command);

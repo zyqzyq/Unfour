@@ -68,15 +68,15 @@ describe("TerminalCommandHistoryController", () => {
     ]);
   });
 
-  it("requires two typed characters and excludes the exact current line", () => {
+  it("requires two typed characters and keeps an exact history match visible", () => {
     const history = new TerminalCommandHistoryController();
-    history.setHistory(["ls -la", "ls"]);
+    history.setHistory(["ls", "ls -la"]);
 
     history.accept("l");
     expect(history.suggest()).toEqual([]);
 
     history.accept("s");
-    expect(history.suggest()).toEqual(["ls -la"]);
+    expect(history.suggest()).toEqual(["ls", "ls -la"]);
   });
 
   it("matches case-insensitively and honors the suggestion limit", () => {
