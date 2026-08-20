@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use super::*;
 use crate::tools::ToolRegistry;
 
@@ -22,6 +24,104 @@ fn query_readonly_executes_select() {
     assert_eq!(content["rowCount"], 2);
     assert_eq!(content["durationMs"], 42);
     assert_eq!(content["source"], "command-bus");
+}
+
+#[test]
+fn query_readonly_forwards_catalog_schema_and_timeout() {
+    struct CapturingQueryBus {
+        captured: Mutex<Option<DatabaseQueryInput>>,
+    }
+
+    impl CommandBusAdapter for CapturingQueryBus {
+        fn execute_read(
+            &self,
+            _: ReadCommand,
+        ) -> Result<ReadCommandResult, CommandBusAdapterError> {
+            Ok(ReadCommandResult::CurrentWorkspace(
+                CurrentWorkspaceResult {
+                    workspace_id: "ws-1".to_string(),
+                    workspace_name: "W".to_string(),
+                    environment_type: "dev".to_string(),
+                    mcp_policy: "auto".to_string(),
+                    workspace_root: None,
+                    mode: "local".to_string(),
+                    source: "command-bus".to_string(),
+                },
+            ))
+        }
+        fn execute_saved_api_request(
+            &self,
+            _: &str,
+            _: Option<u64>,
+        ) -> Result<ApiResponse, CommandBusAdapterError> {
+            unreachable!()
+        }
+        fn list_db_connections(
+            &self,
+            _: &str,
+        ) -> Result<Vec<DatabaseConnection>, CommandBusAdapterError> {
+            unreachable!()
+        }
+        fn get_db_schema(
+            &self,
+            _: &str,
+            _: &str,
+        ) -> Result<DatabaseSchema, CommandBusAdapterError> {
+            unreachable!()
+        }
+        fn execute_db_query(
+            &self,
+            input: DatabaseQueryInput,
+        ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
+            *self.captured.lock().expect("capture lock") = Some(input);
+            Ok(DatabaseQueryResult {
+                columns: vec![],
+                rows: vec![],
+                affected_rows: 0,
+                duration_ms: 1,
+                safety: DatabaseQuerySafety {
+                    classification: "read".to_string(),
+                    requires_confirmation: false,
+                    confirmed: true,
+                    message: None,
+                },
+            })
+        }
+    }
+
+    let bus = Arc::new(CapturingQueryBus {
+        captured: Mutex::new(None),
+    });
+    let registry = ToolRegistry::with_command_bus(bus.clone());
+    let result = registry
+        .call(
+            "unfour.db.query_readonly",
+            json!({
+                "connectionId": "conn-1",
+                "sql": "SELECT 1",
+                "catalog": "other_db",
+                "schema": "public",
+                "timeoutMs": 1500
+            }),
+        )
+        .expect("should succeed");
+    crate::output_schema::assert_success_matches_output_schema(
+        &registry,
+        "unfour.db.query_readonly",
+        &result,
+    );
+    assert_eq!(result["structuredContent"]["ok"], true);
+
+    let captured = bus
+        .captured
+        .lock()
+        .expect("capture lock")
+        .clone()
+        .expect("query input should be forwarded");
+    assert_eq!(captured.connection_id, "conn-1");
+    assert_eq!(captured.catalog.as_deref(), Some("other_db"));
+    assert_eq!(captured.schema.as_deref(), Some("public"));
+    assert_eq!(captured.timeout_ms, Some(1500));
 }
 
 #[test]

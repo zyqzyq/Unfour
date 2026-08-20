@@ -91,3 +91,52 @@ fn db_describe_table_input_schema() {
     assert!(required.contains(&json!("connectionId")));
     assert!(required.contains(&json!("tableName")));
 }
+
+#[test]
+fn db_query_readonly_input_schema_includes_catalog_schema_timeout() {
+    let definitions = definitions();
+    let tool = definitions
+        .iter()
+        .find(|d| d.name == "unfour.db.query_readonly")
+        .unwrap();
+    let properties = &tool.input_schema["properties"];
+    assert!(properties["catalog"].is_object());
+    assert!(properties["schema"].is_object());
+    assert!(properties["timeoutMs"].is_object());
+}
+
+#[test]
+fn db_list_tables_output_schema_includes_catalog() {
+    let definitions = definitions();
+    let tool = definitions
+        .iter()
+        .find(|d| d.name == "unfour.db.list_tables")
+        .unwrap();
+    let item_properties = &tool.output_schema["properties"]["tables"]["items"]["properties"];
+    assert!(item_properties["catalog"].is_object());
+    assert!(item_properties["schema"].is_object());
+}
+
+#[test]
+fn db_describe_table_output_schema_includes_catalog() {
+    let definitions = definitions();
+    let tool = definitions
+        .iter()
+        .find(|d| d.name == "unfour.db.describe_table")
+        .unwrap();
+    let table_properties = &tool.output_schema["properties"]["table"]["properties"];
+    assert!(table_properties["catalog"].is_object());
+    assert!(table_properties["schema"].is_object());
+}
+
+#[test]
+fn db_execute_output_schema_includes_truncated_and_transaction() {
+    let definitions = definitions();
+    let tool = definitions
+        .iter()
+        .find(|d| d.name == "unfour.db.execute")
+        .unwrap();
+    let properties = &tool.output_schema["properties"];
+    assert!(properties["truncated"].is_object());
+    assert!(properties["transaction"].is_object());
+}

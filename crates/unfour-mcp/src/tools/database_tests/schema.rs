@@ -4,9 +4,15 @@ use super::*;
 
 #[test]
 fn list_tables_returns_table_summaries() {
-    let result = registry()
+    let registry = registry();
+    let result = registry
         .call("unfour.db.list_tables", json!({ "connectionId": "conn-1" }))
         .expect("should succeed");
+    crate::output_schema::assert_success_matches_output_schema(
+        &registry,
+        "unfour.db.list_tables",
+        &result,
+    );
 
     let content = &result["structuredContent"];
     assert_eq!(content["connectionId"], "conn-1");
@@ -16,6 +22,7 @@ fn list_tables_returns_table_summaries() {
 
     let first = &content["tables"][0];
     assert_eq!(first["name"], "users");
+    assert_eq!(first["catalog"], serde_json::Value::Null);
     assert_eq!(first["schema"], "public");
     assert_eq!(first["kind"], "table");
     assert_eq!(first["columnCount"], 3);
@@ -61,17 +68,24 @@ fn list_tables_clamps_limit_to_500() {
 
 #[test]
 fn describe_table_returns_columns() {
-    let result = registry()
+    let registry = registry();
+    let result = registry
         .call(
             "unfour.db.describe_table",
             json!({ "connectionId": "conn-1", "tableName": "users" }),
         )
         .expect("should succeed");
+    crate::output_schema::assert_success_matches_output_schema(
+        &registry,
+        "unfour.db.describe_table",
+        &result,
+    );
 
     let content = &result["structuredContent"];
     assert_eq!(content["connectionId"], "conn-1");
     let table = &content["table"];
     assert_eq!(table["name"], "users");
+    assert_eq!(table["catalog"], serde_json::Value::Null);
     assert_eq!(table["schema"], "public");
     assert_eq!(table["kind"], "table");
     assert_eq!(table["columnCount"], 3);

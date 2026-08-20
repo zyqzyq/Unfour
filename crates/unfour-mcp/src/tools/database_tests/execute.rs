@@ -5,7 +5,8 @@ use crate::tools::ToolRegistry;
 
 #[test]
 fn execute_allows_dev_update_with_where() {
-    let result = registry()
+    let registry = registry();
+    let result = registry
         .call(
             "unfour.db.execute",
             json!({
@@ -14,11 +15,18 @@ fn execute_allows_dev_update_with_where() {
             }),
         )
         .expect("dev update should execute");
+    crate::output_schema::assert_success_matches_output_schema(
+        &registry,
+        "unfour.db.execute",
+        &result,
+    );
 
     let content = &result["structuredContent"];
     assert_eq!(result["isError"], false);
     crate::response::assert_call_meta(&result, "dev", "medium");
     assert_eq!(content["affectedRows"], 2);
+    assert_eq!(content["truncated"], false);
+    assert_eq!(content["transaction"], false);
     assert_eq!(content["safety"]["confirmed"], true);
 }
 
