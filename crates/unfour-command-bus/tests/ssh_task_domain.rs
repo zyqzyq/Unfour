@@ -17,6 +17,9 @@ use unfour_core::models::{
 use unfour_core::{AppError, AppResult};
 use unfour_local_storage::LocalDb;
 
+#[path = "ssh_task_domain/workspace_cascade.rs"]
+mod workspace_cascade;
+
 #[derive(Clone)]
 struct RecordingHook {
     local_only: bool,

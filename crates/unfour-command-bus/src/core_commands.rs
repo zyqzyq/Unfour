@@ -569,6 +569,7 @@ impl CommandBus {
         let executor_context = context.clone();
         let service = self.workspace.clone();
         let api_client = self.api_client.clone();
+        let ssh = self.ssh.clone();
         let activity_workspace_id = workspace_id.clone();
         self.execute_domain_command(
             context,
@@ -580,17 +581,24 @@ impl CommandBus {
             }),
             move |connection| {
                 Box::pin(async move {
+                    let deleted_at = unfour_workspace_engine::WorkspaceService::rfc3339_now();
                     let mut mutations =
                         crate::domain_commands::cascade_workspace_feature_entities_on(
                             &api_client,
+                            &ssh,
                             connection,
                             &executor_context,
                             &workspace_id,
-                            None,
+                            Some(&deleted_at),
                         )
                         .await?;
                     let result = service
-                        .delete_on(connection, &executor_context, workspace_id)
+                        .delete_on(
+                            connection,
+                            &executor_context,
+                            workspace_id,
+                            Some(&deleted_at),
+                        )
                         .await?;
                     mutations.extend(result.mutations);
                     Ok(unfour_core::domain::DomainCommandResult::new(

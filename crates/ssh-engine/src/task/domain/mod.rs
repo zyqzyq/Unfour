@@ -1,5 +1,6 @@
 mod external_apply;
 mod snapshot;
+mod workspace_cascade;
 
 use sqlx::SqliteConnection;
 use unfour_core::domain::{
@@ -46,41 +47,68 @@ pub(super) async fn delete_task_steps_on(
     task_id: &str,
     deleted_at: &str,
 ) -> AppResult<Vec<DomainMutation>> {
-    let step_ids = sqlx::query_scalar::<_, String>(
-        r#"
-        SELECT id FROM ssh_task_step
-        WHERE workspace_id = ?1 AND task_id = ?2 AND deleted_at IS NULL
-        ORDER BY position, id
-        "#,
-    )
-    .bind(workspace_id)
-    .bind(task_id)
-    .fetch_all(&mut *connection)
-    .await?;
-    let mut mutations = Vec::with_capacity(step_ids.len());
-    for step_id in step_ids {
-        let revision: i64 = sqlx::query_scalar(
+    delete_live_steps_on(connection, context, workspace_id, Some(task_id), deleted_at).await
+}
+
+pub(super) async fn delete_live_steps_on(
+    connection: &mut SqliteConnection,
+    context: &CommandContext,
+    workspace_id: &str,
+    task_id: Option<&str>,
+    deleted_at: &str,
+) -> AppResult<Vec<DomainMutation>> {
+    let steps: Vec<(String, String)> = match task_id {
+        Some(task_id) => {
+            sqlx::query_as(
+                r#"
+                SELECT id, task_id FROM ssh_task_step
+                WHERE workspace_id = ?1 AND task_id = ?2 AND deleted_at IS NULL
+                ORDER BY position, id
+                "#,
+            )
+            .bind(workspace_id)
+            .bind(task_id)
+            .fetch_all(&mut *connection)
+            .await?
+        }
+        None => {
+            sqlx::query_as(
+                r#"
+                SELECT id, task_id FROM ssh_task_step
+                WHERE workspace_id = ?1 AND deleted_at IS NULL
+                ORDER BY task_id, position, id
+                "#,
+            )
+            .bind(workspace_id)
+            .fetch_all(&mut *connection)
+            .await?
+        }
+    };
+    let mut mutations = Vec::with_capacity(steps.len());
+    for (step_id, parent_task_id) in steps {
+        let Some(revision) = sqlx::query_scalar(
             r#"
             UPDATE ssh_task_step
             SET deleted_at = ?1, updated_at = ?1, revision = revision + 1
-            WHERE workspace_id = ?2 AND task_id = ?3 AND id = ?4
-              AND deleted_at IS NULL
+            WHERE workspace_id = ?2 AND id = ?3 AND deleted_at IS NULL
             RETURNING revision
             "#,
         )
         .bind(deleted_at)
         .bind(workspace_id)
-        .bind(task_id)
         .bind(&step_id)
-        .fetch_one(&mut *connection)
-        .await?;
+        .fetch_optional(&mut *connection)
+        .await?
+        else {
+            continue;
+        };
         mutations.push(mutation(
             context,
             DomainEntityType::SshTaskStep,
             MutationOperation::Delete,
             workspace_id,
             &step_id,
-            Some(task_id),
+            Some(&parent_task_id),
             revision,
         ));
     }
