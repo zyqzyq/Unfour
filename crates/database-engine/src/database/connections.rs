@@ -78,6 +78,7 @@ impl DatabaseService {
         let username = storage.username.clone();
         let ssl_mode = storage.ssl_mode.clone();
         let credential_ref = empty_to_none(input.credential_ref);
+        validate_credential_ref_for_workspace(credential_ref.as_deref(), &input.workspace_id)?;
 
         if let Some(id) = input
             .id
@@ -414,6 +415,38 @@ pub(super) fn empty_to_none(value: Option<String>) -> Option<String> {
     value
         .map(|item| item.trim().to_string())
         .filter(|item| !item.is_empty())
+}
+
+/// Format: `<service>:<workspace_id>:<kind>:<record_id>`.
+pub(super) fn validate_credential_ref_for_workspace(
+    credential_ref: Option<&str>,
+    workspace_id: &str,
+) -> AppResult<()> {
+    let Some(credential_ref) = credential_ref else {
+        return Ok(());
+    };
+    let parsed_workspace = parse_credential_ref_workspace(credential_ref)?;
+    if parsed_workspace != workspace_id {
+        return Err(AppError::Validation(
+            "credential reference does not belong to the workspace".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn parse_credential_ref_workspace(credential_ref: &str) -> AppResult<&str> {
+    let mut parts = credential_ref.splitn(4, ':');
+    let service_name = parts.next().unwrap_or_default();
+    let workspace_id = parts.next().unwrap_or_default();
+    let kind = parts.next().unwrap_or_default();
+    let record_id = parts.next().unwrap_or_default();
+    if service_name.is_empty() || workspace_id.is_empty() || kind.is_empty() || record_id.is_empty()
+    {
+        return Err(AppError::Validation(
+            "credential reference is invalid".to_string(),
+        ));
+    }
+    Ok(workspace_id)
 }
 
 pub(super) fn validate_workspace_id(workspace_id: &str) -> AppResult<()> {

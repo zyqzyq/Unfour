@@ -40,6 +40,7 @@ import type {
   SqlHistoryEntry,
   TableEditing,
 } from "./model/types";
+import { emptyDatabaseConnectionForm } from "./model/database-credentials";
 import { formatDatabaseError } from "./result-utils";
 
 const DEFAULT_PREVIEW_PAGE_SIZE = 100;
@@ -87,12 +88,9 @@ export function DatabasePage({
   const [treeLoadingKeys, setTreeLoadingKeys] = useState<string[]>([]);
   const [treeErrors, setTreeErrors] = useState<Record<string, string>>({});
   const [password, setPassword] = useState("");
-  const [form, setForm] = useState<DatabaseConnectionInput>({
-    workspaceId,
-    name: "",
-    driver: "sqlite",
-    sqlitePath: "",
-  });
+  const [form, setForm] = useState<DatabaseConnectionInput>(() =>
+    emptyDatabaseConnectionForm(workspaceId),
+  );
 
   const connectionsQuery = useDatabaseConnections(workspaceId);
   const queryHistoryQuery = useQueryHistory(workspaceId, MAX_HISTORY_ENTRIES);
@@ -109,6 +107,7 @@ export function DatabasePage({
     [savedSqlQuery.saved],
   );
   const prevSelectedConnectionIdRef = useRef(selectedConnectionId);
+  const prevWorkspaceIdRef = useRef(workspaceId);
   const activeTab = databaseTabs.activeTab;
   const activeQueryTab = activeTab?.kind === "query" ? activeTab : null;
   const activeTableTab = activeTab?.kind === "table" ? activeTab : null;
@@ -216,7 +215,14 @@ export function DatabasePage({
   }, [queryHistoryQuery.entries]);
 
   // Sync form state when the selected connection changes (render-time adjustment pattern).
-  if (selectedConnectionId !== prevSelectedConnectionIdRef.current) {
+  if (workspaceId !== prevWorkspaceIdRef.current) {
+    prevWorkspaceIdRef.current = workspaceId;
+    prevSelectedConnectionIdRef.current = selectedConnectionId;
+    setPassword("");
+    setForm(emptyDatabaseConnectionForm(workspaceId));
+    setEditorOpen(false);
+    setTestResult(null);
+  } else if (selectedConnectionId !== prevSelectedConnectionIdRef.current) {
     prevSelectedConnectionIdRef.current = selectedConnectionId;
     setPassword("");
     if (selectedConnection) {
@@ -671,6 +677,7 @@ export function DatabasePage({
         canTest={canTest}
         error={saveMutation.error}
         form={form}
+        key={workspaceId}
         onOpenChange={setEditorOpen}
         onPasswordChange={setPassword}
         onSubmit={submitConnection}
