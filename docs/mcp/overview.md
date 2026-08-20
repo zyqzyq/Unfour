@@ -73,26 +73,60 @@ also carry MCP behavior hints in `tools/list`:
 - `idempotentHint`
 - `openWorldHint`
 
-High-risk actions return a structured `CONFIRMATION_REQUIRED` result instead of
+High-risk actions return a `CONFIRMATION_REQUIRED` error result instead of
 executing. The client must re-run the same tool call with `confirm=true` and
 the returned `confirmation_text`. The confirmation text is bound to the exact
 payload fingerprint, so changing the SQL, URL, command, path, or patch content
 changes the required confirmation text.
 
-All structured results use a common envelope:
+## Result Contract
+
+Successful `tools/call` results keep business data and Unfour call metadata in
+separate layers:
+
+```text
+structuredContent  = the tool's business value; must match that tool's outputSchema
+_meta              = Unfour call metadata (environment, riskLevel, durationMs, tool)
+content[].text     = the same business JSON, for clients that only read text
+isError            = false
+```
+
+Example success:
 
 ```json
 {
-  "ok": true,
-  "tool": "unfour.db.query_readonly",
-  "environment": "dev",
-  "risk_level": "read",
-  "duration_ms": 12,
-  "data": {},
-  "warnings": [],
-  "redactions": []
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"connections\":[],\"count\":0,\"source\":\"command-bus\"}"
+    }
+  ],
+  "structuredContent": {
+    "connections": [],
+    "count": 0,
+    "source": "command-bus"
+  },
+  "_meta": {
+    "tool": "unfour.db.list_connections",
+    "environment": "dev",
+    "riskLevel": "low",
+    "durationMs": 3
+  },
+  "isError": false
 }
 ```
+
+`outputSchema` describes only the success business value. Do not put
+`ok`, `tool`, `environment`, `risk_level`, `duration_ms`, `data`, `warnings`,
+or `redactions` into `structuredContent` unless a specific tool's own schema
+defines that field.
+
+Error, policy-blocked, and confirmation-required calls keep `isError: true`
+and put a machine-readable JSON payload in `content[].text`. They omit
+`structuredContent` so they cannot fail the success `outputSchema`. Call
+metadata still appears in `_meta`. Confirmation payloads include
+`CONFIRMATION_REQUIRED`, `reason`, `confirmation_text`, and
+`confirmation_hint`.
 
 ## Data Source
 

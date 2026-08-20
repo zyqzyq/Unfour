@@ -14,6 +14,7 @@ unfour-diag = { path = "../unfour-diag" }
 unfour-paths = { path = "../unfour-paths" }
 
 [dev-dependencies]
+jsonschema = "0.26"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "sqlite"] }
 unfour-core = { path = "../unfour-core" }
 unfour-local-storage = { path = "../local-storage" }

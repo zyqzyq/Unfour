@@ -6,6 +6,9 @@ mod server;
 mod shutdown;
 mod tools;
 
+#[cfg(test)]
+mod output_schema;
+
 pub const MCP_STORAGE_MODE_ENV: &str = "UNFOUR_MCP_STORAGE_MODE";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

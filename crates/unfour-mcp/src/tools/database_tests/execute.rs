@@ -17,8 +17,7 @@ fn execute_allows_dev_update_with_where() {
 
     let content = &result["structuredContent"];
     assert_eq!(result["isError"], false);
-    assert_eq!(content["environment"], "dev");
-    assert_eq!(content["risk_level"], "medium");
+    crate::response::assert_call_meta(&result, "dev", "medium");
     assert_eq!(content["affectedRows"], 2);
     assert_eq!(content["safety"]["confirmed"], true);
 }
@@ -33,11 +32,11 @@ fn execute_delete_without_where_requires_confirmation_then_executes() {
         .expect("confirmation should be structured");
 
     assert_eq!(first["isError"], true);
-    assert_eq!(first["structuredContent"]["requires_confirmation"], true);
-    let confirmation = first["structuredContent"]["confirmation_text"]
-        .as_str()
-        .unwrap()
-        .to_string();
+    let payload = crate::response::error_json(&first);
+    assert_eq!(payload["requires_confirmation"], true);
+    assert_eq!(payload["error"]["code"], "CONFIRMATION_REQUIRED");
+    crate::response::assert_call_meta(&first, "dev", "high");
+    let confirmation = payload["confirmation_text"].as_str().unwrap().to_string();
     assert!(confirmation.starts_with("DELETE_WITHOUT_WHERE:"));
 
     let confirmed = registry()
@@ -69,10 +68,8 @@ fn execute_prod_update_is_blocked_by_policy() {
         .expect("policy denial should be structured");
 
     assert_eq!(result["isError"], true);
-    assert_eq!(result["structuredContent"]["ok"], false);
-    assert_eq!(
-        result["structuredContent"]["error"]["code"],
-        "WORKSPACE_POLICY_BLOCKED"
-    );
-    assert_eq!(result["structuredContent"]["environment"], "prod");
+    let payload = crate::response::error_json(&result);
+    assert!(payload.get("ok").is_none());
+    assert_eq!(payload["error"]["code"], "WORKSPACE_POLICY_BLOCKED");
+    crate::response::assert_call_meta(&result, "prod", "medium");
 }

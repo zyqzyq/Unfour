@@ -261,7 +261,7 @@ fn query_readonly_command_bus_failure() {
         .expect("should return error result");
     assert_eq!(result["isError"], true);
     assert_eq!(
-        result["structuredContent"]["error"]["code"],
+        crate::response::error_json(&result)["error"]["code"],
         "COMMAND_BUS_DB_QUERY_FAILED"
     );
 }

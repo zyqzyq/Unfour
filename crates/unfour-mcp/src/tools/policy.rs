@@ -148,9 +148,9 @@ pub struct McpPolicyDenial {
     /// operation — NOT its severity. The severity bucket is `risk_level`.
     pub risk: &'static str,
     /// The *severity* of the blocked action, bucketed as `low` / `medium` /
-    /// `high`. This is the same scale as the response envelope's top-level
-    /// `risk_level` and is derived from `risk` exactly once here, so the two
-    /// can never diverge. Do NOT re-derive severity from `risk` elsewhere.
+    /// `high`. This is the same scale as MCP result `_meta.riskLevel` and is
+    /// derived from `risk` exactly once here, so the two can never diverge.
+    /// Do NOT re-derive severity from `risk` elsewhere.
     pub risk_level: &'static str,
 }
 

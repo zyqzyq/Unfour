@@ -26,11 +26,9 @@ fn patch_file_multi_match_requires_confirmation_then_replaces_all() {
         .expect("multi-match patch should return confirmation");
 
     assert_eq!(first["isError"], true);
-    assert_eq!(first["structuredContent"]["requires_confirmation"], true);
-    let confirmation = first["structuredContent"]["confirmation_text"]
-        .as_str()
-        .unwrap()
-        .to_string();
+    let payload = crate::response::error_json(&first);
+    assert_eq!(payload["requires_confirmation"], true);
+    let confirmation = payload["confirmation_text"].as_str().unwrap().to_string();
     assert!(confirmation.starts_with("SSH_PATCH_MULTIPLE_MATCHES:"));
 
     let confirmed = registry()
@@ -144,9 +142,9 @@ fn write_file_is_blocked_in_prod() {
         )
         .expect("policy denial should be structured");
     assert_eq!(result["isError"], true);
-    assert_eq!(result["structuredContent"]["environment"], "prod");
+    crate::response::assert_call_meta(&result, "prod", "medium");
     assert_eq!(
-        result["structuredContent"]["error"]["code"],
+        crate::response::error_json(&result)["error"]["code"],
         "WORKSPACE_POLICY_BLOCKED"
     );
 }

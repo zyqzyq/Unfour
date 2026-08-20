@@ -238,6 +238,10 @@ fn initialize_declares_tools_capability() {
         response["result"]["capabilities"]["tools"]["listChanged"],
         false
     );
+    let instructions = response["result"]["instructions"].as_str().unwrap();
+    assert!(instructions.contains("Judge risk from tool annotations first"));
+    assert!(instructions.contains("_meta.riskLevel"));
+    assert!(!instructions.contains("structuredContent.risk_level before acting"));
 }
 
 #[test]
@@ -308,6 +312,22 @@ fn stdio_round_trip_lists_and_calls_tools() {
         responses[2]["result"]["structuredContent"]["source"],
         "command-bus"
     );
+    assert_eq!(
+        responses[2]["result"]["_meta"]["tool"],
+        "unfour.workspace.current"
+    );
+    assert!(responses[2]["result"]["_meta"]["environment"]
+        .as_str()
+        .is_some());
+    assert!(responses[2]["result"]["_meta"]["riskLevel"]
+        .as_str()
+        .is_some());
+    assert!(responses[2]["result"]["_meta"]["durationMs"]
+        .as_u64()
+        .is_some());
+    assert!(responses[2]["result"]["structuredContent"]
+        .get("risk_level")
+        .is_none());
 }
 
 #[test]

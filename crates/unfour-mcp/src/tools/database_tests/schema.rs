@@ -109,7 +109,7 @@ fn describe_table_not_found_returns_error() {
 
     assert_eq!(result["isError"], true);
     assert_eq!(
-        result["structuredContent"]["error"]["code"],
+        crate::response::error_json(&result)["error"]["code"],
         "TABLE_NOT_FOUND"
     );
 }

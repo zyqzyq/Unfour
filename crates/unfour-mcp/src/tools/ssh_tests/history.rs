@@ -571,7 +571,7 @@ fn list_history_allows_prod_read_and_blocks_disabled_policy() {
     .call("unfour.ssh.list_history", json!({}))
     .expect("prod read should succeed");
     assert_eq!(prod["isError"], false);
-    assert_eq!(prod["structuredContent"]["risk_level"], "low");
+    crate::response::assert_call_meta(&prod, "prod", "low");
     assert!(prod["structuredContent"]["count"].as_u64().unwrap() > 0);
 
     let disabled = HistoryStub {
@@ -584,7 +584,7 @@ fn list_history_allows_prod_read_and_blocks_disabled_policy() {
     .expect("disabled policy should be structured");
     assert_eq!(disabled["isError"], true);
     assert_eq!(
-        disabled["structuredContent"]["error"]["code"],
+        crate::response::error_json(&disabled)["error"]["code"],
         "WORKSPACE_POLICY_BLOCKED"
     );
 }

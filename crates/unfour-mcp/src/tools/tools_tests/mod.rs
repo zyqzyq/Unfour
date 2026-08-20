@@ -219,6 +219,15 @@ impl CommandBusAdapter for StubCommandBus {
             },
         })
     }
+
+    fn system_health(&self) -> Result<unfour_core::models::SystemHealth, CommandBusAdapterError> {
+        Ok(unfour_core::models::SystemHealth {
+            app_name: "Unfour".to_string(),
+            storage_ready: true,
+            command_bus_ready: true,
+            ai_reserved_capabilities: vec![],
+        })
+    }
 }
 
 struct FailingCommandBus;
@@ -444,7 +453,7 @@ fn prod_workspace_blocks_ssh_execution_with_policy_payload() {
         .expect("policy denials are MCP tool results");
 
     assert_eq!(result["isError"], true);
-    let content = &result["structuredContent"];
+    let content = crate::response::error_json(&result);
     assert_eq!(content["blocked"], true);
     assert_eq!(content["workspaceId"], "workspace-1");
     assert_eq!(content["workspaceName"], "Local Workspace");
@@ -453,6 +462,7 @@ fn prod_workspace_blocks_ssh_execution_with_policy_payload() {
     assert_eq!(content["resolvedPolicy"], "read_only");
     assert_eq!(content["capability"], "ssh:exec");
     assert_eq!(content["risk"], "execute");
+    crate::response::assert_call_meta(&result, "prod", "medium");
 }
 
 #[test]
@@ -479,12 +489,13 @@ fn command_bus_failure_returns_structured_tool_error() {
         .expect("execution failures are MCP tool results");
 
     assert_eq!(result["isError"], true);
+    let payload = crate::response::error_json(&result);
+    assert_eq!(payload["error"]["code"], "COMMAND_BUS_READ_FAILED");
     assert_eq!(
-        result["structuredContent"]["error"]["code"],
-        "COMMAND_BUS_READ_FAILED"
-    );
-    assert_eq!(
-        result["structuredContent"]["error"]["message"],
+        payload["error"]["message"],
         "The command-bus read operation failed."
     );
 }
+
+#[path = "output_schema.rs"]
+mod output_schema;
