@@ -237,11 +237,16 @@ impl WorkspaceService {
         Ok(DomainCommandResult::unchanged(state))
     }
 
+    pub fn rfc3339_now() -> String {
+        Utc::now().to_rfc3339()
+    }
+
     pub async fn delete_on(
         &self,
         connection: &mut SqliteConnection,
         context: &CommandContext,
         workspace_id: String,
+        deleted_at: Option<&str>,
     ) -> AppResult<DomainCommandResult<WorkspaceState>> {
         let active_count: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM workspaces WHERE deleted_at IS NULL")
@@ -253,7 +258,9 @@ impl WorkspaceService {
             ));
         }
         get_workspace_on(connection, &workspace_id, false).await?;
-        let now = Utc::now().to_rfc3339();
+        let now = deleted_at
+            .map(str::to_string)
+            .unwrap_or_else(Self::rfc3339_now);
         let mut mutations = delete_cascade::cascade_delete_workspace_children_on(
             connection,
             context,

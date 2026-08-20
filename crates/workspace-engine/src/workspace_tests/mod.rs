@@ -121,6 +121,7 @@ impl TestWorkspaceService {
                 &mut tx,
                 &CommandContext::local("test.workspace.delete"),
                 workspace_id,
+                None,
             )
             .await?;
         tx.commit().await?;
