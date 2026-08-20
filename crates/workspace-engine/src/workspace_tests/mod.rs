@@ -1,6 +1,10 @@
 use super::*;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use unfour_core::domain::CommandContext;
+use unfour_core::domain::{
+    CommandContext, DomainEntityKey, DomainEntityType, ExternalApplyPage, ExternalDelete,
+    ExternalVariableValue, ExternalWorkspaceApply, ExternalWorkspaceEnvironmentVariableApply,
+    ExternalWorkspaceEnvironmentVariableUpsert,
+};
 use unfour_core::models::{WorkspaceEnvironment, WorkspaceVariable, WorkspaceVariableInput};
 
 struct TestWorkspaceService {
@@ -225,6 +229,19 @@ impl TestWorkspaceService {
     async fn read_setting(&self, key: &str) -> AppResult<Option<String>> {
         let mut connection = self.db.pool().acquire().await?;
         read_setting_on(&mut connection, key).await
+    }
+
+    async fn apply_external_page(&self, page: ExternalApplyPage) -> AppResult<()> {
+        let mut tx = self.db.pool().begin().await?;
+        self.inner
+            .apply_external_page_on(
+                &mut tx,
+                &CommandContext::external("test.workspace.external.apply_page"),
+                page,
+            )
+            .await?;
+        tx.commit().await?;
+        Ok(())
     }
 }
 
@@ -721,4 +738,152 @@ async fn variable_keys_are_case_insensitive() {
     assert!(error
         .to_string()
         .contains("duplicate workspace variable key"));
+}
+
+async fn live_descendant_counts(
+    service: &TestWorkspaceService,
+    workspace_id: &str,
+) -> (i64, i64, i64) {
+    sqlx::query_as(
+        r#"
+        SELECT
+          (SELECT COUNT(*) FROM workspace_variables
+           WHERE workspace_id = ?1 AND deleted_at IS NULL),
+          (SELECT COUNT(*) FROM workspace_environments
+           WHERE workspace_id = ?1 AND deleted_at IS NULL),
+          (SELECT COUNT(*) FROM workspace_environment_variables
+           WHERE workspace_id = ?1 AND deleted_at IS NULL)
+        "#,
+    )
+    .bind(workspace_id)
+    .fetch_one(service.db.pool())
+    .await
+    .expect("count live workspace descendants")
+}
+
+#[tokio::test]
+async fn deleting_workspace_tombstones_live_variables_and_environments() {
+    let service = service().await;
+    let _keep = service.state().await.unwrap().active_workspace_id;
+    let target = service
+        .create("Scratch".to_string())
+        .await
+        .expect("create workspace to delete")
+        .id;
+    service
+        .replace_variables(
+            target.clone(),
+            vec![variable("BASE_URL", "https://example")],
+        )
+        .await
+        .unwrap();
+    let environment = service
+        .create_environment(target.clone(), "Development".to_string())
+        .await
+        .unwrap();
+    service
+        .update_environment(
+            target.clone(),
+            environment.id,
+            "Development".to_string(),
+            vec![variable("TOKEN", "secret")],
+        )
+        .await
+        .unwrap();
+    assert_eq!(live_descendant_counts(&service, &target).await, (1, 1, 1));
+
+    service
+        .delete(target.clone())
+        .await
+        .expect("delete workspace");
+
+    assert_eq!(live_descendant_counts(&service, &target).await, (0, 0, 0));
+    let tombstoned: Option<String> =
+        sqlx::query_scalar("SELECT deleted_at FROM workspaces WHERE id = ?1")
+            .bind(&target)
+            .fetch_one(service.db.pool())
+            .await
+            .unwrap();
+    assert!(tombstoned.is_some());
+}
+
+#[tokio::test]
+async fn applying_workspace_tombstone_cascades_leftover_live_children() {
+    let service = service().await;
+    let _keep = service.state().await.unwrap().active_workspace_id;
+    let target = service
+        .create("Scratch".to_string())
+        .await
+        .expect("create workspace to tombstone")
+        .id;
+    service
+        .replace_variables(
+            target.clone(),
+            vec![variable("BASE_URL", "https://example")],
+        )
+        .await
+        .unwrap();
+    let environment = service
+        .create_environment(target.clone(), "Development".to_string())
+        .await
+        .unwrap();
+    service
+        .update_environment(
+            target.clone(),
+            environment.id,
+            "Development".to_string(),
+            vec![variable("TOKEN", "secret")],
+        )
+        .await
+        .unwrap();
+
+    service
+        .apply_external_page(ExternalApplyPage {
+            workspaces: vec![ExternalWorkspaceApply::Delete(ExternalDelete {
+                entity: DomainEntityKey::new(DomainEntityType::Workspace, &target, &target),
+                deleted_at: "2026-08-19T00:00:00Z".into(),
+            })],
+            ..ExternalApplyPage::default()
+        })
+        .await
+        .expect("apply parent-only workspace tombstone");
+
+    assert_eq!(live_descendant_counts(&service, &target).await, (0, 0, 0));
+}
+
+#[tokio::test]
+async fn applying_environment_variable_orphan_upsert_is_skipped() {
+    let service = service().await;
+    let workspace_id = service.state().await.unwrap().active_workspace_id;
+    service
+        .apply_external_page(ExternalApplyPage {
+            workspace_environment_variables: vec![
+                ExternalWorkspaceEnvironmentVariableApply::Upsert(
+                    ExternalWorkspaceEnvironmentVariableUpsert {
+                        id: "orphan-env-var".into(),
+                        workspace_id: workspace_id.clone(),
+                        environment_id: "missing-environment".into(),
+                        key: "ORPHAN".into(),
+                        value: ExternalVariableValue::Set("value".into()),
+                        is_secret: false,
+                        is_enabled: true,
+                        description: None,
+                        sort_order: 0,
+                        created_at: "2026-08-19T00:00:00Z".into(),
+                        updated_at: "2026-08-19T00:00:00Z".into(),
+                    },
+                ),
+            ],
+            ..ExternalApplyPage::default()
+        })
+        .await
+        .expect("orphan env-var upsert should skip, not fail the page");
+
+    let inserted: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM workspace_environment_variables WHERE id = 'orphan-env-var'",
+    )
+    .fetch_one(service.db.pool())
+    .await
+    .unwrap();
+    assert_eq!(inserted, 0);
 }

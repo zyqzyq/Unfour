@@ -12,8 +12,7 @@ fn exec_allows_dev_regular_command() {
         .expect("dev command should execute");
 
     assert_eq!(result["isError"], false);
-    assert_eq!(result["structuredContent"]["environment"], "dev");
-    assert_eq!(result["structuredContent"]["risk_level"], "medium");
+    crate::response::assert_call_meta(&result, "dev", "medium");
     assert!(result["structuredContent"]["stdout"]
         .as_str()
         .unwrap()
@@ -29,11 +28,9 @@ fn exec_rm_rf_requires_confirmation_then_executes() {
         )
         .expect("confirmation should be structured");
     assert_eq!(first["isError"], true);
-    assert_eq!(first["structuredContent"]["requires_confirmation"], true);
-    let confirmation = first["structuredContent"]["confirmation_text"]
-        .as_str()
-        .unwrap()
-        .to_string();
+    let payload = crate::response::error_json(&first);
+    assert_eq!(payload["requires_confirmation"], true);
+    let confirmation = payload["confirmation_text"].as_str().unwrap().to_string();
     assert!(confirmation.starts_with("SSH_DELETE_COMMAND:"));
 
     let confirmed = registry()

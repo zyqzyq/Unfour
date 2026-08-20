@@ -1,4 +1,4 @@
-import { type Dispatch, type FormEvent, type SetStateAction } from "react";
+import { type Dispatch, type FormEvent, type SetStateAction, useEffect } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type {
   DatabaseConnection,
@@ -8,6 +8,7 @@ import type {
   DatabaseTestResult,
 } from "@unfour/command-client";
 import { useI18n } from "@unfour/ui";
+import { emptyDatabaseConnectionForm } from "../model/database-credentials";
 import { useDatabaseTabs } from "./useDatabaseTabs";
 import { useDatabaseQueryWorkspaceActions } from "./useDatabaseQueryWorkspaceActions";
 import { useDatabaseSchemaTreeActions } from "./useDatabaseSchemaTreeActions";
@@ -188,10 +189,20 @@ export function useDatabaseWorkspaceController({
   function newConnection() {
     selectConnection(null);
     setPassword("");
-    setForm({ workspaceId, name: "", driver: "sqlite", sqlitePath: "" });
+    setForm(emptyDatabaseConnectionForm(workspaceId));
     // Clear a previously failed save so its error doesn't leak into the new window.
     saveMutation.reset();
   }
+
+  // Drop leftover connection id / credentialRef when the active workspace changes.
+  useEffect(() => {
+     
+    setPassword("");
+    setForm(emptyDatabaseConnectionForm(workspaceId));
+    setEditorOpen(false);
+    setTestResult(null);
+    saveMutation.reset();
+  }, [workspaceId]);
 
   function handleNewConnection() {
     newConnection();

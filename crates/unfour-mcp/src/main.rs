@@ -2,14 +2,15 @@ use std::io::{self, BufReader};
 use std::sync::Arc;
 use std::time::Duration;
 
-use unfour_mcp::{LocalCommandBusAdapter, Shutdown};
+use unfour_mcp::{LocalCommandBusAdapter, Shutdown, StorageMode};
 
 const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 0;
 const MAX_IDLE_TIMEOUT_SECS: u64 = 86_400;
 const IDLE_TIMEOUT_ENV: &str = "UNFOUR_MCP_IDLE_TIMEOUT_SECS";
 
 fn main() {
-    let _logging_guard = initialize_logging();
+    let storage_mode = StorageMode::from_env();
+    let _logging_guard = initialize_logging(storage_mode);
 
     // Unified shutdown signal shared between the stdio loop and the signal
     // handlers. The first trigger wins; every observer sees the same value.
@@ -18,7 +19,7 @@ fn main() {
     let stdin = io::stdin();
     let stdout = io::stdout();
 
-    let adapter = match LocalCommandBusAdapter::default_storage() {
+    let adapter = match LocalCommandBusAdapter::from_storage_mode(storage_mode) {
         Ok(adapter) => adapter,
         Err(error) => {
             eprintln!(
@@ -122,7 +123,11 @@ fn install_signal_handlers(shutdown: Shutdown, adapter: Arc<LocalCommandBusAdapt
     }
 }
 
-fn initialize_logging() -> Option<unfour_diag::LoggingGuard> {
+fn initialize_logging(storage_mode: StorageMode) -> Option<unfour_diag::LoggingGuard> {
+    if storage_mode == StorageMode::Ephemeral {
+        return None;
+    }
+
     let paths = unfour_paths::initialize_unfour_storage().ok()?;
     let mut config = unfour_diag::LoggingConfig::oss_dev(paths.logs_dir);
     config.app_name = "unfour-mcp".to_string();
@@ -133,6 +138,17 @@ fn initialize_logging() -> Option<unfour_diag::LoggingGuard> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn storage_mode_requires_the_exact_ephemeral_value() {
+        assert_eq!(
+            StorageMode::from_env_value(Some("ephemeral")),
+            StorageMode::Ephemeral
+        );
+        for value in [None, Some(""), Some("unknown"), Some(" Ephemeral ")] {
+            assert_eq!(StorageMode::from_env_value(value), StorageMode::Default);
+        }
+    }
 
     #[test]
     fn idle_timeout_is_disabled_by_default_and_for_invalid_values() {

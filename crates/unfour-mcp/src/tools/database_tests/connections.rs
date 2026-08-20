@@ -68,12 +68,10 @@ fn create_connection_prod_workspace_is_blocked_by_policy() {
         .expect("policy denial should be structured");
 
     assert_eq!(result["isError"], true);
-    assert_eq!(result["structuredContent"]["ok"], false);
-    assert_eq!(
-        result["structuredContent"]["error"]["code"],
-        "WORKSPACE_POLICY_BLOCKED"
-    );
-    assert_eq!(result["structuredContent"]["environment"], "prod");
+    let payload = crate::response::error_json(&result);
+    assert!(payload.get("ok").is_none());
+    assert_eq!(payload["error"]["code"], "WORKSPACE_POLICY_BLOCKED");
+    crate::response::assert_call_meta(&result, "prod", "medium");
 }
 
 #[test]

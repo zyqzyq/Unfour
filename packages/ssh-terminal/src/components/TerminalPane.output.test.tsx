@@ -180,6 +180,36 @@ describe("TerminalPane output rendering", () => {
     await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
   });
 
+  it("keeps multiple commands entered in one session available for suggestions", async () => {
+    listHistoryMock.mockResolvedValue([]);
+
+    render(
+      <TerminalPane
+        active
+        events={[shellPromptEvent]}
+        inputDisabled={false}
+        readOnly={false}
+        session={session}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(terminalState.writes.some((chunk) => chunk.includes("dev@host"))).toBe(true),
+    );
+
+    act(() => {
+      terminalState.dataHandlers[0]?.("docker ps -a\r");
+      terminalState.dataHandlers[0]?.("docker images\r");
+      terminalState.dataHandlers[0]?.("docker");
+    });
+
+    const options = await screen.findAllByRole("option");
+    expect(options.map((option) => option.textContent)).toEqual([
+      "docker images",
+      "docker ps -a",
+    ]);
+  });
+
   it("replaces the typed line with plain backspaces for substring matches", async () => {
     listHistoryMock.mockResolvedValue([
       historyEntry("history-1", "sudo systemctl restart nginx"),

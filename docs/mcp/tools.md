@@ -33,9 +33,11 @@ Tools with `openWorldHint: true`:
 
 Write-capable tools are also checked by workspace policy at call time. The
 default `auto` mapping is dev = full access, test = guarded, prod = read-only.
-High-risk calls return `CONFIRMATION_REQUIRED` with a content-bound
-`confirmation_text`; re-run the same call with `confirm=true` and that exact
-text to execute.
+High-risk calls return `CONFIRMATION_REQUIRED` in `content[].text` with a
+content-bound `confirmation_text`; re-run the same call with `confirm=true`
+and that exact text to execute. Judge risk from tool annotations first;
+server-side policy and confirmation are the final control. `_meta.riskLevel`
+is advisory call metadata and is not part of `structuredContent`.
 
 ## Tool Reference
 
@@ -71,7 +73,7 @@ text to execute.
 | `unfour.db.list_connections` | `{ "workspaceId": "optional" }` | Lists saved database connections as safe summaries. |
 | `unfour.db.list_tables` | `{ "connectionId": "required", "workspaceId": "optional", "limit": "optional" }` | Lists tables and views for a saved connection. Default limit is 200; max is 500. |
 | `unfour.db.describe_table` | `{ "connectionId": "required", "tableName": "required", "schema": "optional", "workspaceId": "optional" }` | Describes a table's columns without reading table data. |
-| `unfour.db.query_readonly` | `{ "connectionId": "required", "sql": "required", "limit": "optional", "workspaceId": "optional" }` | Executes one read-only SQL statement. Default limit is 100; max is 1000. |
+| `unfour.db.query_readonly` | `{ "connectionId": "required", "sql": "required", "limit": "optional", "workspaceId": "optional", "catalog": "optional", "schema": "optional", "timeoutMs": "optional" }` | Executes one read-only SQL statement. Default limit is 100; max is 1000. Optional `catalog`/`schema` select the database context, matching `execute` and `explain`. |
 | `unfour.db.execute` | `{ "connectionId": "required", "sql": "required", "workspaceId": "optional", "limit": "optional", "catalog": "optional", "schema": "optional", "timeoutMs": "optional", "dryRun": "optional", "transaction": "optional", "confirm": "optional", "confirmationText": "optional", "confirmation_text": "optional" }` | Executes one SQL statement when policy allows. High-risk writes such as `DELETE` without `WHERE` require confirmation. |
 | `unfour.db.explain` | `{ "connectionId": "required", "sql": "required", "workspaceId": "optional", "limit": "optional", "catalog": "optional", "schema": "optional", "timeoutMs": "optional" }` | Runs `EXPLAIN` for a read-only statement or an existing explain query. |
 | `unfour.db.test_connection` | `{ "connectionId": "required", "workspaceId": "optional" }` | Tests connectivity for a saved database connection and returns server metadata when available. |
@@ -147,14 +149,26 @@ Example confirmation-required result:
 
 ```json
 {
-  "ok": false,
-  "tool": "unfour.api.delete_request",
-  "environment": "dev",
-  "risk_level": "high",
-  "requires_confirmation": true,
-  "confirmation_text": "API_DELETE_REQUEST:1a2b3c4d"
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"error\":{\"code\":\"CONFIRMATION_REQUIRED\",\"message\":\"This MCP tool call requires confirmation.\"},\"reason\":\"This MCP tool call requires confirmation.\",\"confirmation_text\":\"API_DELETE_REQUEST:1a2b3c4d\",\"confirmation_hint\":\"Re-run with confirm=true and the exact confirmation_text.\",\"requires_confirmation\":true}"
+    }
+  ],
+  "_meta": {
+    "tool": "unfour.api.delete_request",
+    "environment": "test",
+    "riskLevel": "high",
+    "durationMs": 4
+  },
+  "isError": true
 }
 ```
+
+Successful tool results return the business value as `structuredContent`. That
+object must match the tool `outputSchema`. Unfour call metadata such as
+`environment`, `riskLevel`, and `durationMs` is returned in `_meta`, not in
+`structuredContent`.
 
 ## Database Tools
 

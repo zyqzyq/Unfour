@@ -36,15 +36,15 @@ what Codex can access and execute; connecting Codex does not grant unrestricted
 access by default.
 
 > [!WARNING]
-> The source tree is preparing the Community Stable `v0.4.0` release. It is
+> The source tree is preparing the Community Stable `v0.5.0` release. It is
 > unsigned and still requires release verification; installers may trigger
 > SmartScreen or other operating-system security warnings.
 
 ## Download
 
 Download published builds from [GitHub Releases](https://github.com/zyqzyq/Unfour/releases).
-The latest stable release is [`v0.2.0`](https://github.com/zyqzyq/Unfour/releases/tag/v0.2.0);
-`v0.4.0` will appear there after the release is published.
+The latest stable release is [`v0.4.0`](https://github.com/zyqzyq/Unfour/releases/tag/v0.4.0);
+`v0.5.0` will appear there after the release is published.
 
 - Windows: NSIS `.exe` installer.
 - macOS and Linux packages are experimental and unverified until real-device
@@ -71,7 +71,8 @@ capability crates and the command bus.
   body/headers/cookies/timing, run saved pre-request and post-response scripts,
   review script tests and console output, and keep redacted history.
 - **SSH Terminal** - Manage SSH connections and terminal sessions (split panes,
-  search, clipboard context menu, host-key trust, redacted logs), browse and
+  search, clipboard context menu, persistent redacted command history and
+  typing suggestions, host-key trust, redacted logs), browse and
   transfer remote files over SFTP, and automate multi-step SSH tasks (command,
   upload, download) from the Connections / Files / Tasks sidebar.
 - **Database** - Manage database connections, browse schemas, run SQL with
@@ -167,8 +168,8 @@ map.
 
 ## Release Status
 
-The source tree is preparing Community Stable `v0.4.0`; the latest published
-stable version is `v0.2.0`. Release readiness is documented in:
+The source tree is preparing Community Stable `v0.5.0`; the latest published
+stable version is `v0.4.0`. Release readiness is documented in:
 
 - `docs/testing/release-verification.md`
 - `docs/testing/manual-test-cases.md`

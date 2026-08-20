@@ -47,9 +47,9 @@ Release-candidate focus:
 These items are release claims only to the extent recorded in
 `docs/testing/release-verification.md`.
 
-## v0.4.0 (Current release line)
+## v0.4.0
 
-Current focus:
+Delivered areas:
 
 - policy-aware MCP workspace variable CRUD over the command bus;
 - MCP SSH task lifecycle tools for save, run, cancellation, inspection, and
@@ -60,7 +60,21 @@ Current focus:
 These items are release claims only to the extent recorded in the current
 verification matrix.
 
-## Beyond v0.4
+## v0.5.0 (Current release line)
+
+Current focus:
+
+- persistent, redacted SSH command history and terminal command suggestions;
+- read-only MCP SSH history inspection for user-confirmed task drafting;
+- API collection, folder, and saved-request snapshots and external apply for
+  optional edition sync foundations;
+- API snapshot and external-apply secret redaction and resilience hardening.
+
+The API domain work is a local command-bus foundation and does not by itself
+provide a hosted sync service. Release claims remain limited by the current
+verification matrix.
+
+## Beyond v0.5
 
 Likely follow-up areas:
 
@@ -70,7 +84,8 @@ Likely follow-up areas:
 - screenshots and fuller user documentation;
 - query cancellation and richer database result interactions;
 - optional AI/automation adapters over the command bus;
-- optional cloud sync and plugin extension points.
+- hosted sync adapters and UI over the optional domain foundation;
+- plugin extension points.
 
 ## Release Rule
 

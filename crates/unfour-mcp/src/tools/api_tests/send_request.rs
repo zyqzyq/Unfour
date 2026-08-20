@@ -63,8 +63,7 @@ fn send_request_allows_dev_post_ad_hoc() {
 
     let content = &result["structuredContent"];
     assert_eq!(result["isError"], false);
-    assert_eq!(content["environment"], "dev");
-    assert_eq!(content["risk_level"], "medium");
+    crate::response::assert_call_meta(&result, "dev", "medium");
     assert_eq!(content["status"], 201);
     assert!(!result.to_string().contains("secret-token"));
     assert!(!result.to_string().contains("secret-jwt"));
@@ -132,9 +131,9 @@ fn send_request_blocks_prod_delete_ad_hoc() {
         .expect("policy denial should be structured");
 
     assert_eq!(result["isError"], true);
-    assert_eq!(result["structuredContent"]["environment"], "prod");
+    crate::response::assert_call_meta(&result, "prod", "medium");
     assert_eq!(
-        result["structuredContent"]["error"]["code"],
+        crate::response::error_json(&result)["error"]["code"],
         "WORKSPACE_POLICY_BLOCKED"
     );
 }
@@ -167,7 +166,7 @@ fn send_request_returns_structured_error_on_failure() {
 
     assert_eq!(result["isError"], true);
     assert_eq!(
-        result["structuredContent"]["error"]["code"],
+        crate::response::error_json(&result)["error"]["code"],
         "COMMAND_BUS_API_SEND_FAILED"
     );
 }
@@ -181,7 +180,7 @@ fn command_bus_read_failure_returns_structured_error() {
 
     assert_eq!(result["isError"], true);
     assert_eq!(
-        result["structuredContent"]["error"]["code"],
+        crate::response::error_json(&result)["error"]["code"],
         "COMMAND_BUS_READ_FAILED"
     );
 }

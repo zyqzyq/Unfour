@@ -250,15 +250,10 @@ fn guarded_task_run_requires_content_bound_confirmation() {
         .unwrap();
 
     assert_eq!(first["isError"], true);
-    assert_eq!(
-        first["structuredContent"]["error"]["code"],
-        "CONFIRMATION_REQUIRED"
-    );
+    let payload = crate::response::error_json(&first);
+    assert_eq!(payload["error"]["code"], "CONFIRMATION_REQUIRED");
     assert!(!first.to_string().contains("secret-value"));
-    let confirmation = first["structuredContent"]["confirmation_text"]
-        .as_str()
-        .unwrap()
-        .to_string();
+    let confirmation = payload["confirmation_text"].as_str().unwrap().to_string();
     let mut confirmed = arguments;
     confirmed["confirm"] = json!(true);
     confirmed["confirmation_text"] = json!(confirmation);

@@ -563,7 +563,7 @@ pub(super) async fn soft_delete_request_on(
     .await?)
 }
 
-async fn soft_delete_folder_on(
+pub(super) async fn soft_delete_folder_on(
     connection: &mut SqliteConnection,
     workspace_id: &str,
     folder_id: &str,
@@ -585,7 +585,7 @@ async fn soft_delete_folder_on(
     .await?)
 }
 
-async fn soft_delete_collection_on(
+pub(super) async fn soft_delete_collection_on(
     connection: &mut SqliteConnection,
     workspace_id: &str,
     collection_id: &str,

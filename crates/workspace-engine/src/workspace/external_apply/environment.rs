@@ -5,7 +5,7 @@ use unfour_core::domain::{
 };
 use unfour_core::AppResult;
 
-use super::{delete_existing, validate_delete};
+use super::{delete_existing, doomed_orphan_to_skip, validate_delete};
 use crate::workspace::get_workspace_on;
 use crate::workspace::variable_executor::{
     entity_mutation, entity_mutation_with_parent, update_active_environment_after_delete_on,
@@ -101,7 +101,11 @@ async fn upsert_environment(
     connection: &mut SqliteConnection,
     record: ExternalWorkspaceEnvironmentUpsert,
 ) -> AppResult<Option<i64>> {
-    get_workspace_on(connection, &record.workspace_id, false).await?;
+    if doomed_orphan_to_skip(get_workspace_on(connection, &record.workspace_id, false).await)?
+        .is_none()
+    {
+        return Ok(None);
+    }
     let name = normalize_environment_name(record.name)?;
     let current = sqlx::query_as::<_, WorkspaceEnvironmentRow>(
         r#"

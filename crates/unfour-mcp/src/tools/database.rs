@@ -105,6 +105,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                                 "type": "object",
                                 "properties": {
                                     "name": { "type": "string" },
+                                    "catalog": { "type": ["string", "null"] },
                                     "schema": { "type": ["string", "null"] },
                                     "kind": { "type": "string" },
                                     "columnCount": { "type": "integer", "minimum": 0 }
@@ -162,6 +163,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                             "type": "object",
                             "properties": {
                                 "name": { "type": "string" },
+                                "catalog": { "type": ["string", "null"] },
                                 "schema": { "type": ["string", "null"] },
                                 "kind": { "type": "string" },
                                 "columns": {
@@ -197,7 +199,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                 name: "unfour.db.query_readonly",
                 title: "Execute Read-Only SQL Query",
                 description:
-                    "Executes a read-only SQL query against a saved database connection through the Unfour command bus. Only SELECT, WITH, SHOW, DESCRIBE, DESC, and EXPLAIN statements are allowed. Write operations, DDL, and multi-statement queries are rejected.",
+                    "Executes a read-only SQL query against a saved database connection through the Unfour command bus. Only SELECT, WITH, SHOW, DESCRIBE, DESC, and EXPLAIN statements are allowed. Write operations, DDL, and multi-statement queries are rejected. Optional catalog, schema, and timeoutMs match unfour.db.execute and unfour.db.explain.",
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -216,6 +218,18 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                         "workspaceId": {
                             "type": "string",
                             "description": "Optional workspace ID. Uses the active workspace if omitted."
+                        },
+                        "catalog": {
+                            "type": "string",
+                            "description": "Optional catalog (database) to run the query against."
+                        },
+                        "schema": {
+                            "type": "string",
+                            "description": "Optional schema to resolve unqualified names against."
+                        },
+                        "timeoutMs": {
+                            "type": "integer",
+                            "description": "Optional per-statement timeout in milliseconds."
                         }
                     },
                     "required": ["connectionId", "sql"],
@@ -287,7 +301,9 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                         "rows": { "type": "array" },
                         "rowCount": { "type": "integer" },
                         "durationMs": { "type": "integer" },
+                        "truncated": { "type": "boolean" },
                         "dryRun": { "type": "boolean" },
+                        "transaction": { "type": "boolean" },
                         "safety": { "type": "object" },
                         "source": { "type": "string", "const": "command-bus" }
                     },
@@ -523,13 +539,26 @@ fn db_query_readonly(
     _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
-    let arguments =
-        object_with_allowed_keys(arguments, &["connectionId", "sql", "limit", "workspaceId"])?;
+    let arguments = object_with_allowed_keys(
+        arguments,
+        &[
+            "connectionId",
+            "sql",
+            "limit",
+            "workspaceId",
+            "catalog",
+            "schema",
+            "timeoutMs",
+        ],
+    )?;
     let connection_id =
         parse_required_string(&arguments, "connectionId", "unfour.db.query_readonly")?;
     let sql = parse_required_string(&arguments, "sql", "unfour.db.query_readonly")?;
     let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
     let limit = parse_optional_limit(&arguments, "limit", DEFAULT_QUERY_LIMIT, MAX_QUERY_LIMIT)?;
+    let catalog = parse_optional_string(&arguments, "catalog")?;
+    let schema = parse_optional_string(&arguments, "schema")?;
+    let timeout_ms = parse_optional_u64(&arguments, "timeoutMs")?;
 
     // MCP-layer read-only validation (defense-in-depth).
     validate_readonly_sql(&sql)?;
@@ -540,9 +569,9 @@ fn db_query_readonly(
         sql,
         limit: Some(limit),
         confirm_mutation: None,
-        catalog: None,
-        schema: None,
-        timeout_ms: None,
+        catalog,
+        schema,
+        timeout_ms,
     };
 
     match command_bus.execute_db_query(input) {

@@ -1,7 +1,7 @@
 # Distribution
 
 This document describes the public distribution format and release-asset
-verification for Community Stable Unfour `v0.4.0`.
+verification for Community Stable Unfour `v0.5.0`.
 
 ## Release workflow
 

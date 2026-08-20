@@ -519,9 +519,10 @@ async fn read_commands_return_current_workspace_and_safe_connections() {
     assert_eq!(workspace.source, "command-bus");
     assert_eq!(workspace.workspace_root, None);
 
+    let workspace_id = workspace.workspace_id.clone();
     bus.save_database_connection(DatabaseConnectionInput {
         id: None,
-        workspace_id: workspace.workspace_id.clone(),
+        workspace_id: workspace_id.clone(),
         name: "Database".to_string(),
         driver: "postgres".to_string(),
         host: Some("db.internal".to_string()),
@@ -530,14 +531,16 @@ async fn read_commands_return_current_workspace_and_safe_connections() {
         username: Some("developer".to_string()),
         ssl_mode: None,
         sqlite_path: None,
-        credential_ref: Some("database-secret".to_string()),
+        credential_ref: Some(format!(
+            "unfour:{workspace_id}:database-password:database-secret"
+        )),
         read_only: false,
     })
     .await
     .expect("save database connection");
     bus.save_ssh_connection(SshConnectionInput {
         id: None,
-        workspace_id: workspace.workspace_id,
+        workspace_id,
         name: "SSH".to_string(),
         host: "ssh.internal".to_string(),
         port: Some(22),

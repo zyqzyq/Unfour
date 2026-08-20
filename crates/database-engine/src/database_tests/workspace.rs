@@ -1,5 +1,5 @@
 use super::super::*;
-use super::support::{service_with_workspace, sqlite_fixture, sqlite_input};
+use super::support::{mysql_input, service_with_workspace, sqlite_fixture, sqlite_input};
 use std::fs;
 use uuid::Uuid;
 
@@ -272,7 +272,7 @@ async fn connection_storage_columns_and_advanced_config_round_trip() {
             username: Some(" deploy ".to_string()),
             ssl_mode: Some("REQUIRE".to_string()),
             sqlite_path: None,
-            credential_ref: Some("unfour:ws:database-password:abc".to_string()),
+            credential_ref: Some(format!("unfour:{workspace_id}:database-password:abc")),
             read_only: true,
         })
         .await
@@ -318,7 +318,8 @@ async fn connection_storage_columns_and_advanced_config_round_trip() {
     assert_eq!(stored.6.as_deref(), Some("require"));
     assert!(stored.7);
     assert_eq!(stored.8, "{}");
-    assert_eq!(stored.9.as_deref(), Some("unfour:ws:database-password:abc"));
+    let expected_ref = format!("unfour:{workspace_id}:database-password:abc");
+    assert_eq!(stored.9.as_deref(), Some(expected_ref.as_str()));
     assert!(!stored.8.contains("database-password"));
     assert!(!stored.8.contains("deploy"));
 
@@ -411,4 +412,60 @@ async fn connection_config_json_missing_optional_fields_uses_defaults() {
     assert_eq!(listed[0].database.as_deref(), Some("app"));
     assert!(listed[0].sqlite_path.is_none());
     assert!(!listed[0].read_only);
+}
+
+#[tokio::test]
+async fn save_connection_rejects_credential_ref_from_another_workspace() {
+    let (service, workspace_id) = service_with_workspace().await;
+    let result = service
+        .save_connection(mysql_input(
+            &workspace_id,
+            Some(format!(
+                "unfour:other-workspace:database-password:{}",
+                Uuid::new_v4()
+            )),
+        ))
+        .await;
+
+    assert!(
+        matches!(
+            result,
+            Err(AppError::Validation(ref message))
+                if message.contains("does not belong to the workspace")
+        ),
+        "expected workspace mismatch validation, got {result:?}"
+    );
+}
+
+#[tokio::test]
+async fn save_connection_rejects_invalid_credential_ref() {
+    let (service, workspace_id) = service_with_workspace().await;
+    let result = service
+        .save_connection(mysql_input(
+            &workspace_id,
+            Some("secret-ref-123".to_string()),
+        ))
+        .await;
+
+    assert!(
+        matches!(
+            result,
+            Err(AppError::Validation(ref message)) if message.contains("credential reference is invalid")
+        ),
+        "expected invalid credential reference validation, got {result:?}"
+    );
+}
+
+#[tokio::test]
+async fn save_connection_accepts_credential_ref_for_current_workspace() {
+    let (service, workspace_id) = service_with_workspace().await;
+    let credential_ref = format!("unfour:{workspace_id}:database-password:{}", Uuid::new_v4());
+    let created = service
+        .save_connection(mysql_input(&workspace_id, Some(credential_ref.clone())))
+        .await
+        .expect("save connection with matching credential ref");
+    assert_eq!(
+        created.credential_ref.as_deref(),
+        Some(credential_ref.as_str())
+    );
 }
