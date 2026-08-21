@@ -1,5 +1,4 @@
 use chrono::Utc;
-use sqlx::Row;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -35,6 +34,10 @@ use validation::{
 mod command_history;
 mod command_line;
 mod connection;
+mod connection_crud;
+pub use connection_crud::PreparedSshConnectionSave;
+mod connection_domain;
+pub use connection_domain::SshConnectionCleanup;
 mod diagnostic_execution;
 mod native_transport;
 mod session;

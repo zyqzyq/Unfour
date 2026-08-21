@@ -1,6 +1,7 @@
 use super::*;
 use crate::transaction::CommandActivity;
 use unfour_core::domain::CommandContext;
+use unfour_core::AppError;
 
 impl CommandBus {
     pub async fn list_ssh_connections(
@@ -63,21 +64,46 @@ impl CommandBus {
     }
 
     pub async fn save_ssh_connection(&self, input: SshConnectionInput) -> AppResult<SshConnection> {
-        let connection = self.ssh.save_connection(input).await?;
-        self.activity_log
-            .record(
-                Some(&connection.workspace_id),
-                "ssh.connection.save",
-                Some(&connection.id),
-                serde_json::json!({
-                    "name": connection.name,
-                    "host": connection.host,
-                    "authKind": connection.auth_kind,
-                    "credentialRef": connection.credential_ref.is_some()
-                }),
+        let context = CommandContext::local("ssh.connection.save");
+        let executor_context = context.clone();
+        let service = self.ssh.clone();
+        let mut prepared = service.prepare_connection_save(input).await?;
+        let transaction_input = prepared.take_transaction_input();
+        let executor_service = service.clone();
+        let result = self
+            .execute_domain_command_with_activity(
+                context,
+                |connection: &SshConnection| CommandActivity {
+                    workspace_id: Some(connection.workspace_id.clone()),
+                    action: "ssh.connection.save",
+                    target: Some(connection.id.clone()),
+                    details: serde_json::json!({
+                        "name": connection.name,
+                        "host": connection.host,
+                        "authKind": connection.auth_kind,
+                        "credentialRef": connection.credential_ref.is_some()
+                    }),
+                },
+                move |connection| {
+                    Box::pin(async move {
+                        executor_service
+                            .save_connection_on(connection, &executor_context, transaction_input)
+                            .await
+                    })
+                },
             )
-            .await?;
-        Ok(connection)
+            .await;
+        match result {
+            Ok(connection) => Ok(connection),
+            Err(error) => {
+                if let Err(rollback_error) = service.rollback_connection_save(prepared).await {
+                    return Err(AppError::Config(format!(
+                        "ssh connection save failed ({error}); secret rollback failed ({rollback_error})"
+                    )));
+                }
+                Err(error)
+            }
+        }
     }
 
     pub async fn test_ssh_connection(&self, input: SshConnectionInput) -> AppResult<SshTestResult> {
@@ -102,18 +128,34 @@ impl CommandBus {
         workspace_id: String,
         connection_id: String,
     ) -> AppResult<Vec<SshConnection>> {
-        let connections = self
-            .ssh
-            .delete_connection(workspace_id.clone(), connection_id.clone())
-            .await?;
-        self.activity_log
-            .record(
-                Some(&workspace_id),
-                "ssh.connection.delete",
-                Some(&connection_id),
-                serde_json::json!({ "softDelete": true }),
+        let context = CommandContext::local("ssh.connection.delete");
+        let executor_context = context.clone();
+        let service = self.ssh.clone();
+        let executor_service = service.clone();
+        let (connections, cleanup) = self
+            .execute_domain_command(
+                context,
+                Some(CommandActivity {
+                    workspace_id: Some(workspace_id.clone()),
+                    action: "ssh.connection.delete",
+                    target: Some(connection_id.clone()),
+                    details: serde_json::json!({ "softDelete": true }),
+                }),
+                move |connection| {
+                    Box::pin(async move {
+                        executor_service
+                            .delete_connection_on(
+                                connection,
+                                &executor_context,
+                                workspace_id,
+                                connection_id,
+                            )
+                            .await
+                    })
+                },
             )
             .await?;
+        service.cleanup_connection_changes(vec![cleanup]).await;
         Ok(connections)
     }
 

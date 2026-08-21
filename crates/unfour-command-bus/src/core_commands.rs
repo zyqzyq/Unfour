@@ -570,45 +570,62 @@ impl CommandBus {
         let service = self.workspace.clone();
         let api_client = self.api_client.clone();
         let ssh = self.ssh.clone();
+        let database = self.database.clone();
+        let cleanup_ssh = ssh.clone();
+        let cleanup_database = database.clone();
         let activity_workspace_id = workspace_id.clone();
-        self.execute_domain_command(
-            context,
-            Some(crate::transaction::CommandActivity {
-                workspace_id: Some(activity_workspace_id.clone()),
-                action: "workspace.delete",
-                target: Some(activity_workspace_id),
-                details: serde_json::json!({ "softDelete": true }),
-            }),
-            move |connection| {
-                Box::pin(async move {
-                    let deleted_at = unfour_workspace_engine::WorkspaceService::rfc3339_now();
-                    let mut mutations =
-                        crate::domain_commands::cascade_workspace_feature_entities_on(
-                            &api_client,
-                            &ssh,
-                            connection,
-                            &executor_context,
-                            &workspace_id,
-                            Some(&deleted_at),
-                        )
-                        .await?;
-                    let result = service
-                        .delete_on(
-                            connection,
-                            &executor_context,
-                            workspace_id,
-                            Some(&deleted_at),
-                        )
-                        .await?;
-                    mutations.extend(result.mutations);
-                    Ok(unfour_core::domain::DomainCommandResult::new(
-                        result.value,
-                        mutations,
-                    ))
-                })
-            },
-        )
-        .await
+        let (state, ssh_connection_cleanups, database_connection_cleanups) = self
+            .execute_domain_command(
+                context,
+                Some(crate::transaction::CommandActivity {
+                    workspace_id: Some(activity_workspace_id.clone()),
+                    action: "workspace.delete",
+                    target: Some(activity_workspace_id),
+                    details: serde_json::json!({ "softDelete": true }),
+                }),
+                move |connection| {
+                    Box::pin(async move {
+                        let deleted_at = unfour_workspace_engine::WorkspaceService::rfc3339_now();
+                        let cascade =
+                            crate::domain_commands::cascade_workspace_feature_entities_on(
+                                &api_client,
+                                &ssh,
+                                &database,
+                                connection,
+                                &executor_context,
+                                &workspace_id,
+                                Some(&deleted_at),
+                            )
+                            .await?;
+                        let mut mutations = cascade.mutations;
+                        let result = service
+                            .delete_on(
+                                connection,
+                                &executor_context,
+                                workspace_id,
+                                Some(&deleted_at),
+                            )
+                            .await?;
+                        mutations.extend(result.mutations);
+                        Ok(unfour_core::domain::DomainCommandResult::new(
+                            (
+                                result.value,
+                                cascade.ssh_connection_cleanups,
+                                cascade.database_connection_cleanups,
+                            ),
+                            mutations,
+                        ))
+                    })
+                },
+            )
+            .await?;
+        cleanup_ssh
+            .cleanup_connection_changes(ssh_connection_cleanups)
+            .await;
+        cleanup_database
+            .cleanup_connection_changes(database_connection_cleanups)
+            .await;
+        Ok(state)
     }
 
     pub async fn set_active_workspace(&self, workspace_id: String) -> AppResult<WorkspaceState> {

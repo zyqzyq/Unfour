@@ -1,4 +1,8 @@
 use super::*;
+use sqlx::SqliteConnection;
+use unfour_core::domain::{CommandContext, DomainCommandResult, MutationOperation};
+
+use super::connection_domain::{connection_mutation, DatabaseConnectionCleanup};
 
 #[derive(Debug, sqlx::FromRow)]
 struct StoredDatabaseConnection {
@@ -39,6 +43,16 @@ impl DatabaseService {
         &self,
         workspace_id: String,
     ) -> AppResult<Vec<DatabaseConnection>> {
+        let mut connection = self.db.pool().acquire().await?;
+        self.list_connections_on(&mut connection, &workspace_id)
+            .await
+    }
+
+    pub async fn list_connections_on(
+        &self,
+        connection: &mut SqliteConnection,
+        workspace_id: &str,
+    ) -> AppResult<Vec<DatabaseConnection>> {
         validate_workspace_id(&workspace_id)?;
 
         let rows = sqlx::query_as::<_, StoredDatabaseConnection>(
@@ -55,7 +69,7 @@ impl DatabaseService {
             "#,
         )
         .bind(workspace_id)
-        .fetch_all(self.db.pool())
+        .fetch_all(&mut *connection)
         .await?;
 
         rows.into_iter()
@@ -67,6 +81,21 @@ impl DatabaseService {
         &self,
         input: DatabaseConnectionInput,
     ) -> AppResult<DatabaseConnection> {
+        let context = CommandContext::local("database.connection.save");
+        let mut transaction = self.db.pool().begin().await?;
+        let outcome = self
+            .save_connection_on(&mut transaction, &context, input)
+            .await?;
+        transaction.commit().await?;
+        Ok(outcome.value)
+    }
+
+    pub async fn save_connection_on(
+        &self,
+        connection: &mut SqliteConnection,
+        context: &CommandContext,
+        input: DatabaseConnectionInput,
+    ) -> AppResult<DomainCommandResult<DatabaseConnection>> {
         validate_workspace_id(&input.workspace_id)?;
         let storage = input_to_storage(&input)?;
         let name = normalize_name(&input.name)?;
@@ -80,18 +109,19 @@ impl DatabaseService {
         let credential_ref = empty_to_none(input.credential_ref);
         validate_credential_ref_for_workspace(credential_ref.as_deref(), &input.workspace_id)?;
 
-        if let Some(id) = input
+        let (id, revision) = if let Some(id) = input
             .id
             .as_deref()
             .map(str::trim)
             .filter(|id| !id.is_empty())
         {
-            let result = sqlx::query(
+            let revision: Option<i64> = sqlx::query_scalar(
                 r#"
                 UPDATE connections
                 SET name = ?1, host = ?2, port = ?3, credential_ref = ?4,
                     updated_at = ?5, revision = revision + 1, sync_status = 'pending'
                 WHERE id = ?6 AND workspace_id = ?7 AND connection_type = 'database' AND deleted_at IS NULL
+                RETURNING revision
                 "#,
             )
             .bind(name)
@@ -101,14 +131,12 @@ impl DatabaseService {
             .bind(&now)
             .bind(id)
             .bind(&input.workspace_id)
-            .execute(self.db.pool())
+            .fetch_optional(&mut *connection)
             .await?;
+            let revision =
+                revision.ok_or_else(|| AppError::NotFound("database connection".to_string()))?;
 
-            if result.rows_affected() == 0 {
-                return Err(AppError::NotFound("database connection".to_string()));
-            }
-
-            sqlx::query(
+            let subtype = sqlx::query(
                 r#"
                 UPDATE database_connections
                 SET driver = ?1, database_name = ?2, username = ?3,
@@ -123,51 +151,68 @@ impl DatabaseService {
             .bind(storage.read_only)
             .bind(&config_json)
             .bind(id)
-            .execute(self.db.pool())
+            .execute(&mut *connection)
             .await?;
-
-            return self.get_connection(&input.workspace_id, id).await;
-        }
-
-        let id = unfour_core::id::new_id();
-        sqlx::query(
-            r#"
+            if subtype.rows_affected() != 1 {
+                return Err(AppError::Config(
+                    "database connection subtype row is missing".to_string(),
+                ));
+            }
+            (id.to_string(), revision)
+        } else {
+            let id = unfour_core::id::new_id();
+            sqlx::query(
+                r#"
             INSERT INTO connections (
               id, workspace_id, connection_type, name, host, port, credential_ref,
               created_at, updated_at, revision, sync_status
             )
             VALUES (?1, ?2, 'database', ?3, ?4, ?5, ?6, ?7, ?7, 1, 'local')
             "#,
-        )
-        .bind(&id)
-        .bind(&input.workspace_id)
-        .bind(name)
-        .bind(host)
-        .bind(port)
-        .bind(credential_ref)
-        .bind(now)
-        .execute(self.db.pool())
-        .await?;
+            )
+            .bind(&id)
+            .bind(&input.workspace_id)
+            .bind(name)
+            .bind(host)
+            .bind(port)
+            .bind(credential_ref)
+            .bind(now)
+            .execute(&mut *connection)
+            .await?;
 
-        sqlx::query(
-            r#"
+            sqlx::query(
+                r#"
             INSERT INTO database_connections (
               connection_id, driver, database_name, username, ssl_mode, read_only, config_json
             )
             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
             "#,
-        )
-        .bind(&id)
-        .bind(&storage.driver)
-        .bind(storage.database_name)
-        .bind(storage.username)
-        .bind(storage.ssl_mode)
-        .bind(storage.read_only)
-        .bind(&config_json)
-        .execute(self.db.pool())
-        .await?;
+            )
+            .bind(&id)
+            .bind(&storage.driver)
+            .bind(storage.database_name)
+            .bind(storage.username)
+            .bind(storage.ssl_mode)
+            .bind(storage.read_only)
+            .bind(&config_json)
+            .execute(&mut *connection)
+            .await?;
+            (id, 1)
+        };
 
-        self.get_connection(&input.workspace_id, &id).await
+        let saved = self
+            .get_connection_on(connection, &input.workspace_id, &id)
+            .await?;
+        Ok(DomainCommandResult::new(
+            saved,
+            vec![connection_mutation(
+                context,
+                MutationOperation::Upsert,
+                &input.workspace_id,
+                &id,
+                revision,
+            )],
+        ))
     }
 
     pub async fn delete_connection(
@@ -175,44 +220,56 @@ impl DatabaseService {
         workspace_id: String,
         connection_id: String,
     ) -> AppResult<Vec<DatabaseConnection>> {
+        let context = CommandContext::local("database.connection.delete");
+        let mut transaction = self.db.pool().begin().await?;
+        let outcome = self
+            .delete_connection_on(&mut transaction, &context, workspace_id, connection_id)
+            .await?;
+        transaction.commit().await?;
+        let (connections, cleanup) = outcome.value;
+        self.cleanup_connection_changes(vec![cleanup]).await;
+        Ok(connections)
+    }
+
+    pub async fn delete_connection_on(
+        &self,
+        connection: &mut SqliteConnection,
+        context: &CommandContext,
+        workspace_id: String,
+        connection_id: String,
+    ) -> AppResult<DomainCommandResult<(Vec<DatabaseConnection>, DatabaseConnectionCleanup)>> {
         validate_workspace_id(&workspace_id)?;
         validate_connection_id(&connection_id)?;
         let now = Utc::now().to_rfc3339();
 
         // Read the credential reference before soft-deleting so the stored
         // secret can be purged from the OS keychain.
-        let existing = sqlx::query(
+        let existing: Option<Option<String>> = sqlx::query_scalar(
             "SELECT credential_ref FROM connections \
              WHERE id = ?1 AND workspace_id = ?2 \
                AND connection_type = 'database' AND deleted_at IS NULL",
         )
         .bind(&connection_id)
         .bind(&workspace_id)
-        .fetch_optional(self.db.pool())
+        .fetch_optional(&mut *connection)
         .await?;
-        let credential_ref: Option<String> = existing
-            .and_then(|row| row.try_get::<Option<String>, _>("credential_ref").ok())
-            .flatten();
+        let credential_ref =
+            existing.ok_or_else(|| AppError::NotFound("database connection".to_string()))?;
 
-        let mut tx = self.db.pool().begin().await?;
-
-        let result = sqlx::query(
+        let revision: i64 = sqlx::query_scalar(
             r#"
             UPDATE connections
             SET deleted_at = ?1, updated_at = ?1, revision = revision + 1, sync_status = 'deleted'
             WHERE id = ?2 AND workspace_id = ?3
               AND connection_type = 'database' AND deleted_at IS NULL
+            RETURNING revision
             "#,
         )
         .bind(&now)
         .bind(&connection_id)
         .bind(&workspace_id)
-        .execute(&mut *tx)
+        .fetch_one(&mut *connection)
         .await?;
-
-        if result.rows_affected() == 0 {
-            return Err(AppError::NotFound("database connection".to_string()));
-        }
 
         sqlx::query(
             r#"
@@ -225,29 +282,35 @@ impl DatabaseService {
         .bind(&now)
         .bind(&workspace_id)
         .bind(&connection_id)
-        .execute(&mut *tx)
+        .execute(&mut *connection)
         .await?;
-
-        tx.commit().await?;
-
-        // Best-effort purge of the stored secret from the OS keychain, only
-        // after the soft-delete transaction has committed. The secret store is
-        // optional (absent in some runtimes); only purge when it is configured.
-        // A failure here (e.g. the credential was already removed) must not
-        // surface as a delete error.
-        if let Some(credential_ref) = credential_ref.filter(|value| !value.is_empty()) {
-            if let Some(secret_store) = &self.secret_store {
-                let _ = secret_store
-                    .delete_credential(workspace_id.clone(), credential_ref)
-                    .await;
-            }
-        }
-
-        self.list_connections(workspace_id).await
+        let remaining = self.list_connections_on(connection, &workspace_id).await?;
+        let cleanup = DatabaseConnectionCleanup::new(workspace_id.clone(), credential_ref);
+        Ok(DomainCommandResult::new(
+            (remaining, cleanup),
+            vec![connection_mutation(
+                context,
+                MutationOperation::Delete,
+                &workspace_id,
+                &connection_id,
+                revision,
+            )],
+        ))
     }
 
     pub(super) async fn get_connection(
         &self,
+        workspace_id: &str,
+        connection_id: &str,
+    ) -> AppResult<DatabaseConnection> {
+        let mut connection = self.db.pool().acquire().await?;
+        self.get_connection_on(&mut connection, workspace_id, connection_id)
+            .await
+    }
+
+    pub(super) async fn get_connection_on(
+        &self,
+        connection: &mut SqliteConnection,
         workspace_id: &str,
         connection_id: &str,
     ) -> AppResult<DatabaseConnection> {
@@ -269,7 +332,7 @@ impl DatabaseService {
         )
         .bind(connection_id)
         .bind(workspace_id)
-        .fetch_optional(self.db.pool())
+        .fetch_optional(&mut *connection)
         .await?;
 
         row.map(stored_to_database_connection)

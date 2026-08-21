@@ -21,6 +21,7 @@ pub enum MutationOperation {
 #[serde(rename_all = "camelCase")]
 pub enum DomainEntityType {
     Workspace,
+    Connection,
     WorkspaceVariable,
     WorkspaceEnvironment,
     WorkspaceEnvironmentVariable,
@@ -169,6 +170,41 @@ pub struct WorkspaceSnapshot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ConnectionSnapshotConfig {
+    Ssh {
+        username: String,
+        auth_method: String,
+    },
+    Database {
+        driver: String,
+        database_name: Option<String>,
+        username: Option<String>,
+        ssl_mode: Option<String>,
+        read_only: bool,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionSnapshot {
+    pub id: String,
+    pub workspace_id: String,
+    pub connection_type: String,
+    pub name: String,
+    pub host: Option<String>,
+    pub port: Option<u16>,
+    pub config: ConnectionSnapshotConfig,
+    pub created_at: String,
+    pub updated_at: String,
+    pub revision: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceVariableSnapshot {
     pub id: String,
@@ -305,6 +341,7 @@ pub struct TombstoneSnapshot {
 #[serde(tag = "entityType", content = "snapshot", rename_all = "camelCase")]
 pub enum DomainSnapshot {
     Workspace(WorkspaceSnapshot),
+    Connection(ConnectionSnapshot),
     WorkspaceVariable(WorkspaceVariableSnapshot),
     WorkspaceEnvironment(WorkspaceEnvironmentSnapshot),
     WorkspaceEnvironmentVariable(WorkspaceEnvironmentVariableSnapshot),
@@ -348,6 +385,20 @@ pub struct ExternalWorkspaceUpsert {
     pub name: String,
     pub environment_type: String,
     pub mcp_policy: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalConnectionUpsert {
+    pub id: String,
+    pub workspace_id: String,
+    pub connection_type: String,
+    pub name: String,
+    pub host: Option<String>,
+    pub port: Option<u16>,
+    pub config: ConnectionSnapshotConfig,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -481,6 +532,7 @@ macro_rules! external_change {
 }
 
 external_change!(ExternalWorkspaceApply, ExternalWorkspaceUpsert);
+external_change!(ExternalConnectionApply, ExternalConnectionUpsert);
 external_change!(
     ExternalWorkspaceVariableApply,
     ExternalWorkspaceVariableUpsert
@@ -509,6 +561,8 @@ pub enum ExternalApiRequestApply {
 #[serde(rename_all = "camelCase")]
 pub struct ExternalApplyPage {
     pub workspaces: Vec<ExternalWorkspaceApply>,
+    #[serde(default)]
+    pub connections: Vec<ExternalConnectionApply>,
     pub workspace_variables: Vec<ExternalWorkspaceVariableApply>,
     pub workspace_environments: Vec<ExternalWorkspaceEnvironmentApply>,
     pub workspace_environment_variables: Vec<ExternalWorkspaceEnvironmentVariableApply>,
@@ -568,6 +622,7 @@ mod tests {
         }))
         .unwrap();
         assert!(page.api_collections.is_empty());
+        assert!(page.connections.is_empty());
         assert!(page.api_folders.is_empty());
         assert!(page.api_requests.is_empty());
         assert!(page.ssh_tasks.is_empty());

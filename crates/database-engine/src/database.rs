@@ -18,6 +18,7 @@ use unfour_core::{AppError, AppResult};
 use unfour_local_storage::LocalDb;
 use unfour_secret_store::SecretStore;
 
+mod connection_domain;
 mod connections;
 mod mysql;
 mod pools;
@@ -29,6 +30,7 @@ mod sql;
 mod sqlite;
 mod tables;
 
+pub use connection_domain::DatabaseConnectionCleanup;
 use connections::*;
 use mysql::*;
 use postgres::*;

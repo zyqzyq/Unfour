@@ -1,3 +1,3 @@
 pub mod database;
 
-pub use database::DatabaseService;
+pub use database::{DatabaseConnectionCleanup, DatabaseService};

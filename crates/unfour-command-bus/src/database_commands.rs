@@ -1,4 +1,6 @@
 use super::*;
+use crate::transaction::CommandActivity;
+use unfour_core::domain::CommandContext;
 
 impl CommandBus {
     pub async fn list_database_connections(
@@ -12,20 +14,30 @@ impl CommandBus {
         &self,
         input: DatabaseConnectionInput,
     ) -> AppResult<DatabaseConnection> {
-        let connection = self.database.save_connection(input).await?;
-        self.activity_log
-            .record(
-                Some(&connection.workspace_id),
-                "database.connection.save",
-                Some(&connection.id),
-                serde_json::json!({
+        let context = CommandContext::local("database.connection.save");
+        let executor_context = context.clone();
+        let service = self.database.clone();
+        self.execute_domain_command_with_activity(
+            context,
+            |connection: &DatabaseConnection| CommandActivity {
+                workspace_id: Some(connection.workspace_id.clone()),
+                action: "database.connection.save",
+                target: Some(connection.id.clone()),
+                details: serde_json::json!({
                     "name": connection.name,
                     "driver": connection.driver,
                     "credentialRef": connection.credential_ref.is_some()
                 }),
-            )
-            .await?;
-        Ok(connection)
+            },
+            move |connection| {
+                Box::pin(async move {
+                    service
+                        .save_connection_on(connection, &executor_context, input)
+                        .await
+                })
+            },
+        )
+        .await
     }
 
     pub async fn delete_database_connection(
@@ -33,18 +45,34 @@ impl CommandBus {
         workspace_id: String,
         connection_id: String,
     ) -> AppResult<Vec<DatabaseConnection>> {
-        let connections = self
-            .database
-            .delete_connection(workspace_id.clone(), connection_id.clone())
-            .await?;
-        self.activity_log
-            .record(
-                Some(&workspace_id),
-                "database.connection.delete",
-                Some(&connection_id),
-                serde_json::json!({ "softDelete": true }),
+        let context = CommandContext::local("database.connection.delete");
+        let executor_context = context.clone();
+        let service = self.database.clone();
+        let executor_service = service.clone();
+        let (connections, cleanup) = self
+            .execute_domain_command(
+                context,
+                Some(CommandActivity {
+                    workspace_id: Some(workspace_id.clone()),
+                    action: "database.connection.delete",
+                    target: Some(connection_id.clone()),
+                    details: serde_json::json!({ "softDelete": true }),
+                }),
+                move |connection| {
+                    Box::pin(async move {
+                        executor_service
+                            .delete_connection_on(
+                                connection,
+                                &executor_context,
+                                workspace_id,
+                                connection_id,
+                            )
+                            .await
+                    })
+                },
             )
             .await?;
+        service.cleanup_connection_changes(vec![cleanup]).await;
         Ok(connections)
     }
 

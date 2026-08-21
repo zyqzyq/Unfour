@@ -143,6 +143,9 @@ pub(crate) async fn read_snapshot_on(
                 },
             ))
         }
+        DomainEntityType::Connection => Err(AppError::Validation(
+            "connection snapshots must be read through a connection domain service".to_string(),
+        )),
         DomainEntityType::ApiCollection
         | DomainEntityType::ApiFolder
         | DomainEntityType::ApiRequest => Err(AppError::Validation(
