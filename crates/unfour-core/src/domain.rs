@@ -2,6 +2,9 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+mod connection;
+pub use connection::*;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum MutationOrigin {
@@ -164,41 +167,6 @@ pub struct WorkspaceSnapshot {
     pub name: String,
     pub environment_type: String,
     pub mcp_policy: String,
-    pub created_at: String,
-    pub updated_at: String,
-    pub revision: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(
-    tag = "kind",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum ConnectionSnapshotConfig {
-    Ssh {
-        username: String,
-        auth_method: String,
-    },
-    Database {
-        driver: String,
-        database_name: Option<String>,
-        username: Option<String>,
-        ssl_mode: Option<String>,
-        read_only: bool,
-    },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ConnectionSnapshot {
-    pub id: String,
-    pub workspace_id: String,
-    pub connection_type: String,
-    pub name: String,
-    pub host: Option<String>,
-    pub port: Option<u16>,
-    pub config: ConnectionSnapshotConfig,
     pub created_at: String,
     pub updated_at: String,
     pub revision: i64,
@@ -391,20 +359,6 @@ pub struct ExternalWorkspaceUpsert {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ExternalConnectionUpsert {
-    pub id: String,
-    pub workspace_id: String,
-    pub connection_type: String,
-    pub name: String,
-    pub host: Option<String>,
-    pub port: Option<u16>,
-    pub config: ConnectionSnapshotConfig,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ExternalWorkspaceVariableUpsert {
     pub id: String,
     pub workspace_id: String,
@@ -532,7 +486,6 @@ macro_rules! external_change {
 }
 
 external_change!(ExternalWorkspaceApply, ExternalWorkspaceUpsert);
-external_change!(ExternalConnectionApply, ExternalConnectionUpsert);
 external_change!(
     ExternalWorkspaceVariableApply,
     ExternalWorkspaceVariableUpsert

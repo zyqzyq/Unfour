@@ -1,8 +1,9 @@
 use sqlx::SqliteConnection;
 use unfour_core::domain::{CommandContext, DomainCommandResult, MutationOperation};
 
-use super::connection_domain::{connection_mutation, SshConnectionCleanup};
+use super::connection_domain::SshConnectionCleanup;
 use super::*;
+use unfour_core::domain::connection_mutation;
 
 pub struct PreparedSshConnectionSave {
     input: Option<SshConnectionInput>,

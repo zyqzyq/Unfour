@@ -1,8 +1,10 @@
 use sqlx::{FromRow, SqliteConnection};
 use unfour_core::domain::{
-    CommandContext, ConnectionSnapshot, ConnectionSnapshotConfig, DomainCommandResult,
-    DomainEntityKey, DomainEntityType, DomainMutation, DomainSnapshot, ExternalConnectionApply,
-    ExternalConnectionUpsert, ExternalDelete, MutationOperation, MutationOrigin, TombstoneSnapshot,
+    connection_mutation, validate_connection_domain_key, validate_external_connection_delete,
+    validate_external_connection_upsert, CommandContext, ConnectionSnapshot,
+    ConnectionSnapshotConfig, DomainCommandResult, DomainEntityKey, DomainMutation, DomainSnapshot,
+    ExternalConnectionApply, ExternalConnectionUpsert, ExternalDelete, MutationOperation,
+    MutationOrigin, TombstoneSnapshot,
 };
 
 use super::*;
@@ -62,53 +64,7 @@ struct CurrentExternalDatabaseConnection {
     sync_status: String,
 }
 
-pub(super) fn connection_mutation(
-    context: &CommandContext,
-    operation: MutationOperation,
-    workspace_id: &str,
-    connection_id: &str,
-    revision: i64,
-) -> DomainMutation {
-    DomainMutation::new(
-        context.origin,
-        operation,
-        DomainEntityKey::new(DomainEntityType::Connection, workspace_id, connection_id),
-        revision,
-    )
-}
-
 impl DatabaseService {
-    pub async fn list_connection_domain_entities(
-        &self,
-        workspace_id: String,
-    ) -> AppResult<Vec<DomainEntityKey>> {
-        let mut connection = self.db.pool().acquire().await?;
-        self.list_connection_domain_entities_on(&mut connection, &workspace_id)
-            .await
-    }
-
-    pub async fn list_connection_domain_entities_on(
-        &self,
-        connection: &mut SqliteConnection,
-        workspace_id: &str,
-    ) -> AppResult<Vec<DomainEntityKey>> {
-        validate_workspace_id(workspace_id)?;
-        let ids: Vec<String> = sqlx::query_scalar(
-            r#"
-            SELECT id FROM connections
-            WHERE workspace_id = ?1 AND connection_type = 'database' AND deleted_at IS NULL
-            ORDER BY id
-            "#,
-        )
-        .bind(workspace_id)
-        .fetch_all(&mut *connection)
-        .await?;
-        Ok(ids
-            .into_iter()
-            .map(|id| DomainEntityKey::new(DomainEntityType::Connection, workspace_id, id))
-            .collect())
-    }
-
     pub async fn read_connection_domain_snapshot(
         &self,
         key: &DomainEntityKey,
@@ -195,7 +151,7 @@ impl DatabaseService {
         context: &CommandContext,
         record: ExternalConnectionUpsert,
     ) -> AppResult<DomainCommandResult<Option<DatabaseConnectionCleanup>>> {
-        validate_external_record(&record)?;
+        validate_external_connection_upsert(&record)?;
         if record.connection_type != "database" {
             return Err(AppError::Validation(
                 "external database connection must use connection_type=database".to_string(),
@@ -420,7 +376,7 @@ impl DatabaseService {
         context: &CommandContext,
         delete: ExternalDelete,
     ) -> AppResult<DomainCommandResult<Option<DatabaseConnectionCleanup>>> {
-        validate_external_delete(&delete)?;
+        validate_external_connection_delete(&delete)?;
         let current: Option<(String, String, Option<String>, Option<String>)> = sqlx::query_as(
             "SELECT workspace_id, connection_type, credential_ref, deleted_at FROM connections WHERE id = ?1",
         )

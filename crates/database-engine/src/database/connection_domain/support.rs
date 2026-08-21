@@ -1,11 +1,6 @@
 use sqlx::SqliteConnection;
-use unfour_core::domain::{
-    DomainEntityKey, DomainEntityType, ExternalConnectionUpsert, ExternalDelete,
-};
 use unfour_core::models::DatabaseConnectionConfig;
 use unfour_core::{AppError, AppResult};
-
-use super::super::connections::{validate_connection_id, validate_workspace_id};
 
 pub(super) fn empty_database_config() -> DatabaseConnectionConfig {
     DatabaseConnectionConfig {
@@ -14,45 +9,6 @@ pub(super) fn empty_database_config() -> DatabaseConnectionConfig {
         statement_timeout_ms: None,
         default_schema: None,
     }
-}
-
-pub(super) fn validate_connection_domain_key(key: &DomainEntityKey) -> AppResult<()> {
-    validate_workspace_id(&key.workspace_id)?;
-    validate_connection_id(&key.entity_id)?;
-    if key.entity_type != DomainEntityType::Connection || key.parent_entity_id.is_some() {
-        return Err(AppError::Validation(
-            "connection domain key must use entity type Connection without a parent".to_string(),
-        ));
-    }
-    Ok(())
-}
-
-pub(super) fn validate_external_record(record: &ExternalConnectionUpsert) -> AppResult<()> {
-    if [
-        record.id.as_str(),
-        record.workspace_id.as_str(),
-        record.connection_type.as_str(),
-        record.created_at.as_str(),
-        record.updated_at.as_str(),
-    ]
-    .iter()
-    .any(|value| value.trim().is_empty())
-    {
-        return Err(AppError::Validation(
-            "external connection upsert requires ids, type, and timestamps".to_string(),
-        ));
-    }
-    Ok(())
-}
-
-pub(super) fn validate_external_delete(delete: &ExternalDelete) -> AppResult<()> {
-    validate_connection_domain_key(&delete.entity)?;
-    if delete.deleted_at.trim().is_empty() {
-        return Err(AppError::Validation(
-            "external connection delete requires deleted_at".to_string(),
-        ));
-    }
-    Ok(())
 }
 
 pub(super) async fn validate_live_workspace_on(

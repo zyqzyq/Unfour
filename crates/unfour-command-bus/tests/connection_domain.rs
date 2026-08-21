@@ -1,239 +1,15 @@
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use sqlx::SqliteConnection;
-use unfour_command_bus::{CommandBus, CommandBusExtensions, TransactionalCommandHook};
+use unfour_command_bus::{CommandBus, CommandBusExtensions};
 use unfour_core::domain::{
-    CommandContext, ConnectionSnapshotConfig, DomainEntityKey, DomainEntityType, DomainMutation,
-    DomainSnapshot, ExternalConnectionApply, ExternalConnectionUpsert, ExternalDelete,
-    ExternalWorkspaceApply, MutationOperation, MutationOrigin,
+    ConnectionSnapshotConfig, DomainEntityKey, DomainEntityType, DomainSnapshot,
+    ExternalConnectionApply, ExternalDelete, ExternalWorkspaceApply, MutationOperation,
 };
-use unfour_core::models::{DatabaseConnectionInput, SshConnectionInput};
-use unfour_core::{AppError, AppResult};
-use unfour_local_storage::LocalDb;
 use unfour_secret_store::SecretStore;
 
-#[derive(Clone)]
-struct RecordingHook {
-    effects: Arc<Mutex<Vec<(String, Vec<DomainMutation>)>>>,
-    fail_on: Option<&'static str>,
-    local_only: bool,
-}
-
-impl TransactionalCommandHook for RecordingHook {
-    fn on_mutations<'a>(
-        &'a self,
-        _connection: &'a mut SqliteConnection,
-        context: &'a CommandContext,
-        mutations: &'a [DomainMutation],
-    ) -> Pin<Box<dyn Future<Output = AppResult<()>> + Send + 'a>> {
-        Box::pin(async move {
-            if self.local_only && context.origin != MutationOrigin::Local {
-                return Ok(());
-            }
-            self.effects
-                .lock()
-                .expect("recording hook lock")
-                .push((context.command_name.clone(), mutations.to_vec()));
-            if self.fail_on == Some(context.command_name.as_str()) {
-                return Err(AppError::Config(format!(
-                    "hook rejected {}",
-                    context.command_name
-                )));
-            }
-            Ok(())
-        })
-    }
-}
-
-#[derive(Clone)]
-struct CaptureCredentialAndRejectHook {
-    credential_ref: Arc<Mutex<Option<String>>>,
-}
-
-impl TransactionalCommandHook for CaptureCredentialAndRejectHook {
-    fn on_mutations<'a>(
-        &'a self,
-        connection: &'a mut SqliteConnection,
-        context: &'a CommandContext,
-        mutations: &'a [DomainMutation],
-    ) -> Pin<Box<dyn Future<Output = AppResult<()>> + Send + 'a>> {
-        Box::pin(async move {
-            if context.command_name != "ssh.connection.save" {
-                return Ok(());
-            }
-            let connection_id = mutations
-                .iter()
-                .find(|mutation| mutation.entity.entity_type == DomainEntityType::Connection)
-                .map(|mutation| mutation.entity.entity_id.clone())
-                .ok_or_else(|| AppError::Config("missing connection mutation".to_string()))?;
-            let credential_ref: Option<String> =
-                sqlx::query_scalar("SELECT credential_ref FROM connections WHERE id = ?1")
-                    .bind(connection_id)
-                    .fetch_one(&mut *connection)
-                    .await?;
-            *self.credential_ref.lock().expect("credential capture lock") = credential_ref;
-            Err(AppError::Config(
-                "hook rejected ssh.connection.save".to_string(),
-            ))
-        })
-    }
-}
-
-async fn database() -> LocalDb {
-    let options = SqliteConnectOptions::new()
-        .filename(":memory:")
-        .create_if_missing(true)
-        .foreign_keys(true);
-    let pool = SqlitePoolOptions::new()
-        .max_connections(1)
-        .connect_with(options)
-        .await
-        .expect("connect sqlite");
-    let db = LocalDb::from_pool(pool);
-    db.migrate().await.expect("migrate sqlite");
-    db
-}
-
-async fn bus_with_hook(
-    fail_on: Option<&'static str>,
-    local_only: bool,
-) -> (
-    CommandBus,
-    LocalDb,
-    Arc<Mutex<Vec<(String, Vec<DomainMutation>)>>>,
-) {
-    let db = database().await;
-    CommandBus::from_db(db.clone())
-        .await
-        .expect("seed default workspace");
-    let effects = Arc::new(Mutex::new(Vec::new()));
-    let hook = RecordingHook {
-        effects: effects.clone(),
-        fail_on,
-        local_only,
-    };
-    let bus = CommandBus::from_db_with_extensions(
-        db.clone(),
-        CommandBusExtensions::new(vec![Arc::new(hook)]),
-    )
-    .await
-    .expect("construct bus with hook");
-    (bus, db, effects)
-}
-
-fn ssh_input(
-    workspace_id: &str,
-    id: Option<String>,
-    name: &str,
-    auth_kind: &str,
-    key_path: Option<&str>,
-    credential_ref: Option<&str>,
-) -> SshConnectionInput {
-    SshConnectionInput {
-        id,
-        workspace_id: workspace_id.to_string(),
-        name: name.to_string(),
-        host: "ssh.example.test".to_string(),
-        port: Some(22),
-        username: "alice".to_string(),
-        auth_kind: auth_kind.to_string(),
-        key_path: key_path.map(str::to_string),
-        credential_ref: credential_ref.map(str::to_string),
-        secret: None,
-    }
-}
-
-fn database_input(
-    workspace_id: &str,
-    id: Option<String>,
-    name: &str,
-    driver: &str,
-    credential_ref: Option<&str>,
-) -> DatabaseConnectionInput {
-    let sqlite = driver == "sqlite";
-    DatabaseConnectionInput {
-        id,
-        workspace_id: workspace_id.to_string(),
-        name: name.to_string(),
-        driver: driver.to_string(),
-        host: (!sqlite).then(|| "db.example.test".to_string()),
-        port: (!sqlite).then_some(if driver == "mysql" { 3306 } else { 5432 }),
-        database: (!sqlite).then(|| "app".to_string()),
-        username: (!sqlite).then(|| "app_user".to_string()),
-        ssl_mode: (!sqlite).then(|| "require".to_string()),
-        sqlite_path: sqlite.then(|| "C:\\data\\device-only.sqlite".to_string()),
-        credential_ref: credential_ref.map(str::to_string),
-        read_only: false,
-    }
-}
-
-fn external_ssh(
-    id: &str,
-    workspace_id: &str,
-    name: &str,
-    auth_method: &str,
-    created_at: &str,
-    updated_at: &str,
-) -> ExternalConnectionApply {
-    ExternalConnectionApply::Upsert(ExternalConnectionUpsert {
-        id: id.to_string(),
-        workspace_id: workspace_id.to_string(),
-        connection_type: "ssh".to_string(),
-        name: name.to_string(),
-        host: Some("remote-ssh.example.test".to_string()),
-        port: Some(2222),
-        config: ConnectionSnapshotConfig::Ssh {
-            username: "remote-user".to_string(),
-            auth_method: auth_method.to_string(),
-        },
-        created_at: created_at.to_string(),
-        updated_at: updated_at.to_string(),
-    })
-}
-
-fn external_database(
-    id: &str,
-    workspace_id: &str,
-    name: &str,
-    driver: &str,
-    created_at: &str,
-    updated_at: &str,
-) -> ExternalConnectionApply {
-    let sqlite = driver == "sqlite";
-    ExternalConnectionApply::Upsert(ExternalConnectionUpsert {
-        id: id.to_string(),
-        workspace_id: workspace_id.to_string(),
-        connection_type: "database".to_string(),
-        name: name.to_string(),
-        host: (!sqlite).then(|| "remote-db.example.test".to_string()),
-        port: (!sqlite).then_some(if driver == "mysql" { 3306 } else { 5432 }),
-        config: ConnectionSnapshotConfig::Database {
-            driver: driver.to_string(),
-            database_name: (!sqlite).then(|| "remote_app".to_string()),
-            username: (!sqlite).then(|| "remote_user".to_string()),
-            ssl_mode: (!sqlite).then(|| "require".to_string()),
-            read_only: true,
-        },
-        created_at: created_at.to_string(),
-        updated_at: updated_at.to_string(),
-    })
-}
-
-fn mutations_for(
-    effects: &Arc<Mutex<Vec<(String, Vec<DomainMutation>)>>>,
-    command_name: &str,
-) -> Vec<DomainMutation> {
-    effects
-        .lock()
-        .expect("recording hook lock")
-        .iter()
-        .filter(|(name, _)| name == command_name)
-        .flat_map(|(_, mutations)| mutations.clone())
-        .collect()
-}
+#[path = "connection_domain/support.rs"]
+mod support;
+use support::*;
 
 #[test]
 fn connection_entity_contract_serializes_to_stable_protocol_names() {
@@ -314,6 +90,27 @@ async fn local_connection_crud_emits_one_connection_mutation_and_hook_failure_ro
         DomainEntityType::Connection
     );
     assert_eq!(database_mutations[0].entity.entity_id, database.id);
+    assert_eq!(database_mutations[0].revision, 1);
+
+    effects.lock().unwrap().clear();
+    let updated_database = bus
+        .save_database_connection(database_input(
+            &workspace_id,
+            Some(database.id.clone()),
+            "Database Updated",
+            "postgres",
+            Some(&credential_ref),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(updated_database.revision, 2);
+    let database_update_mutations = mutations_for(&effects, "database.connection.save");
+    assert_eq!(database_update_mutations.len(), 1);
+    assert_eq!(
+        database_update_mutations[0].operation,
+        MutationOperation::Upsert
+    );
+    assert_eq!(database_update_mutations[0].revision, 2);
 
     let (rejecting_bus, rejecting_db, _) = bus_with_hook(Some("ssh.connection.save"), false).await;
     let rejecting_workspace = rejecting_bus
@@ -342,6 +139,35 @@ async fn local_connection_crud_emits_one_connection_mutation_and_hook_failure_ro
         "#,
     )
     .fetch_one(rejecting_db.pool())
+    .await
+    .unwrap();
+    assert_eq!(counts, (0, 0));
+}
+
+#[tokio::test]
+async fn external_connection_apply_rolls_back_when_the_transactional_hook_rejects_it() {
+    let (bus, db, _) = bus_with_hook(Some("workspace.external.apply_page"), false).await;
+    let workspace_id = bus.list_workspaces().await.unwrap().active_workspace_id;
+
+    bus.apply_external_connections(vec![external_database(
+        "rejected-external-database",
+        &workspace_id,
+        "Rejected External Database",
+        "mysql",
+        "2026-08-21T00:00:00Z",
+        "2026-08-21T00:00:00Z",
+    )])
+    .await
+    .expect_err("external apply must remain inside the hook-owned transaction");
+
+    let counts: (i64, i64) = sqlx::query_as(
+        r#"
+        SELECT
+          (SELECT COUNT(*) FROM connections WHERE id = 'rejected-external-database'),
+          (SELECT COUNT(*) FROM database_connections WHERE connection_id = 'rejected-external-database')
+        "#,
+    )
+    .fetch_one(db.pool())
     .await
     .unwrap();
     assert_eq!(counts, (0, 0));
@@ -499,6 +325,10 @@ async fn snapshots_and_enumeration_exclude_all_device_local_connection_fields() 
         let serialized = serde_json::to_string(&snapshot).unwrap();
         for excluded in [
             "credentialRef",
+            "password",
+            "keyPath",
+            "sqlitePath",
+            "secret",
             "snapshot-key",
             "device-only.sqlite",
             "lastConnectedAt",
@@ -633,6 +463,63 @@ async fn external_ssh_apply_preserves_compatible_local_material_and_clears_incom
     assert!(changed.0.is_none());
     assert!(!changed.1.contains("id_ed25519"));
 
+    let password_ref = format!("unfour-test:{workspace_id}:ssh-password:two");
+    let password_local = bus
+        .save_ssh_connection(ssh_input(
+            &workspace_id,
+            None,
+            "Local Password SSH",
+            "password",
+            None,
+            Some(&password_ref),
+        ))
+        .await
+        .unwrap();
+    bus.apply_external_connections(vec![external_ssh(
+        &password_local.id,
+        &workspace_id,
+        "Remote Password SSH",
+        "password",
+        &password_local.created_at,
+        "2026-08-21T01:01:30Z",
+    )])
+    .await
+    .unwrap();
+    let preserved_password_ref: Option<String> =
+        sqlx::query_scalar("SELECT credential_ref FROM connections WHERE id = ?1")
+            .bind(&password_local.id)
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert_eq!(
+        preserved_password_ref.as_deref(),
+        Some(password_ref.as_str())
+    );
+
+    bus.apply_external_connections(vec![external_ssh(
+        &password_local.id,
+        &workspace_id,
+        "Changed To Private Key",
+        "private-key",
+        &password_local.created_at,
+        "2026-08-21T01:01:31Z",
+    )])
+    .await
+    .unwrap();
+    let password_to_key: (Option<String>, String) = sqlx::query_as(
+        r#"
+        SELECT c.credential_ref, sub.config_json
+        FROM connections c INNER JOIN ssh_connections sub ON sub.connection_id = c.id
+        WHERE c.id = ?1
+        "#,
+    )
+    .bind(&password_local.id)
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert!(password_to_key.0.is_none());
+    assert_eq!(password_to_key.1, "{}");
+
     bus.apply_external_connections(vec![external_ssh(
         "external-private-key",
         &workspace_id,
@@ -699,16 +586,19 @@ async fn external_database_apply_preserves_compatible_credentials_and_allows_pat
         ))
         .await
         .unwrap();
-    bus.apply_external_connections(vec![external_database(
+    let compatible = external_database(
         &local.id,
         &workspace_id,
         "Remote Postgres",
         "postgres",
         &local.created_at,
         "2026-08-21T02:00:00Z",
-    )])
-    .await
-    .unwrap();
+    );
+    let first = bus
+        .apply_external_connections(vec![compatible.clone()])
+        .await
+        .unwrap();
+    assert_eq!(first.applied_count, 1);
     let preserved = bus
         .list_database_connections(workspace_id.clone())
         .await
@@ -720,6 +610,40 @@ async fn external_database_apply_preserves_compatible_credentials_and_allows_pat
         preserved.credential_ref.as_deref(),
         Some(credential_ref.as_str())
     );
+    let preserved_revision = preserved.revision;
+    let repeated = bus
+        .apply_external_connections(vec![compatible])
+        .await
+        .unwrap();
+    assert_eq!(repeated.applied_count, 0);
+    let repeated_revision: i64 =
+        sqlx::query_scalar("SELECT revision FROM connections WHERE id = ?1")
+            .bind(&local.id)
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert_eq!(repeated_revision, preserved_revision);
+
+    bus.apply_external_connections(vec![external_database(
+        "external-mysql",
+        &workspace_id,
+        "Remote MySQL",
+        "mysql",
+        "2026-08-21T02:00:30Z",
+        "2026-08-21T02:00:30Z",
+    )])
+    .await
+    .unwrap();
+    let mysql = bus
+        .list_database_connections(workspace_id.clone())
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|connection| connection.id == "external-mysql")
+        .unwrap();
+    assert_eq!(mysql.driver, "mysql");
+    assert_eq!(mysql.port, Some(3306));
+    assert!(mysql.sqlite_path.is_none());
 
     bus.apply_external_connections(vec![external_database(
         "external-sqlite",
@@ -740,6 +664,34 @@ async fn external_database_apply_preserves_compatible_credentials_and_allows_pat
         .unwrap();
     assert_eq!(sqlite.driver, "sqlite");
     assert!(sqlite.sqlite_path.is_none());
+
+    let local_sqlite = bus
+        .save_database_connection(database_input(
+            &workspace_id,
+            None,
+            "Local SQLite With Path",
+            "sqlite",
+            None,
+        ))
+        .await
+        .unwrap();
+    bus.apply_external_connections(vec![external_database(
+        &local_sqlite.id,
+        &workspace_id,
+        "Changed To Postgres",
+        "postgres",
+        &local_sqlite.created_at,
+        "2026-08-21T02:01:30Z",
+    )])
+    .await
+    .unwrap();
+    let sqlite_to_postgres: String =
+        sqlx::query_scalar("SELECT config_json FROM database_connections WHERE connection_id = ?1")
+            .bind(&local_sqlite.id)
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert!(!sqlite_to_postgres.contains("device-only.sqlite"));
 
     bus.apply_external_connections(vec![external_database(
         &local.id,
@@ -813,34 +765,61 @@ async fn connection_delete_and_workspace_cascades_are_tombstoned_in_dependency_o
         ))
         .await
         .unwrap();
+    let database_connection = bus
+        .save_database_connection(database_input(
+            &target.id,
+            None,
+            "Cascade Database",
+            "sqlite",
+            None,
+        ))
+        .await
+        .unwrap();
     effects.lock().unwrap().clear();
     bus.delete_workspace(target.id.clone()).await.unwrap();
     let workspace_delete = mutations_for(&effects, "workspace.delete");
-    let connection_position = workspace_delete
+    let connection_positions: Vec<usize> = workspace_delete
         .iter()
-        .position(|mutation| mutation.entity.entity_type == DomainEntityType::Connection)
-        .unwrap();
+        .enumerate()
+        .filter_map(|(index, mutation)| {
+            (mutation.entity.entity_type == DomainEntityType::Connection).then_some(index)
+        })
+        .collect();
     let workspace_position = workspace_delete
         .iter()
         .position(|mutation| mutation.entity.entity_type == DomainEntityType::Workspace)
         .unwrap();
-    assert!(connection_position < workspace_position);
-    let timestamps: (Option<String>, String, Option<String>) = sqlx::query_as(
+    assert_eq!(connection_positions.len(), 2);
+    assert!(connection_positions
+        .iter()
+        .all(|position| *position < workspace_position));
+    let timestamps: (
+        Option<String>,
+        Option<String>,
+        String,
+        String,
+        Option<String>,
+    ) = sqlx::query_as(
         r#"
         SELECT
           (SELECT deleted_at FROM connections WHERE id = ?1),
+          (SELECT deleted_at FROM connections WHERE id = ?2),
           (SELECT sync_status FROM connections WHERE id = ?1),
-          (SELECT deleted_at FROM workspaces WHERE id = ?2)
+          (SELECT sync_status FROM connections WHERE id = ?2),
+          (SELECT deleted_at FROM workspaces WHERE id = ?3)
         "#,
     )
     .bind(&connection.id)
+    .bind(&database_connection.id)
     .bind(&target.id)
     .fetch_one(db.pool())
     .await
     .unwrap();
     assert!(timestamps.0.is_some());
-    assert_eq!(timestamps.1, "deleted");
-    assert_eq!(timestamps.0, timestamps.2);
+    assert_eq!(timestamps.0, timestamps.1);
+    assert_eq!(timestamps.2, "deleted");
+    assert_eq!(timestamps.3, "deleted");
+    assert_eq!(timestamps.0, timestamps.4);
 
     let external_target = bus
         .create_workspace("External Connection Cascade".to_string())
@@ -852,6 +831,17 @@ async fn connection_delete_and_workspace_cascades_are_tombstoned_in_dependency_o
             None,
             "Leftover Database",
             "sqlite",
+            None,
+        ))
+        .await
+        .unwrap();
+    let external_ssh_connection = bus
+        .save_ssh_connection(ssh_input(
+            &external_target.id,
+            None,
+            "Leftover SSH",
+            "private-key",
+            Some("C:\\device\\leftover-key"),
             None,
         ))
         .await
@@ -876,6 +866,21 @@ async fn connection_delete_and_workspace_cascades_are_tombstoned_in_dependency_o
     assert_eq!(external_tombstone.0.as_deref(), Some(deleted_at.as_str()));
     assert_eq!(external_tombstone.1, external_connection.revision + 1);
     assert_eq!(external_tombstone.2, "deleted");
+    let external_ssh_tombstone: (Option<String>, i64, String) =
+        sqlx::query_as("SELECT deleted_at, revision, sync_status FROM connections WHERE id = ?1")
+            .bind(&external_ssh_connection.id)
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert_eq!(
+        external_ssh_tombstone.0.as_deref(),
+        Some(deleted_at.as_str())
+    );
+    assert_eq!(
+        external_ssh_tombstone.1,
+        external_ssh_connection.revision + 1
+    );
+    assert_eq!(external_ssh_tombstone.2, "deleted");
 }
 
 #[tokio::test]

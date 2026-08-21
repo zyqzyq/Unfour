@@ -2,7 +2,8 @@ use super::*;
 use sqlx::SqliteConnection;
 use unfour_core::domain::{CommandContext, DomainCommandResult, MutationOperation};
 
-use super::connection_domain::{connection_mutation, DatabaseConnectionCleanup};
+use super::connection_domain::DatabaseConnectionCleanup;
+use unfour_core::domain::connection_mutation;
 
 #[derive(Debug, sqlx::FromRow)]
 struct StoredDatabaseConnection {

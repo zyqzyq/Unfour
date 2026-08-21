@@ -2,10 +2,12 @@ use super::*;
 use crate::transaction::CommandActivity;
 use sqlx::SqliteConnection;
 use unfour_core::domain::{
+    connection_entity_key, validate_connection_domain_key, validate_external_connection_delete,
     CommandContext, DomainCommandResult, DomainEntityKey, DomainEntityType, DomainMutation,
     DomainSnapshot, ExternalApplyPage, ExternalApplyReport, ExternalConnectionApply,
     ExternalWorkspaceApply, ExternalWorkspaceEnvironmentApply,
     ExternalWorkspaceEnvironmentVariableApply, ExternalWorkspaceVariableApply,
+    DATABASE_CONNECTION_TYPE, SSH_CONNECTION_TYPE,
 };
 use unfour_core::AppError;
 use unfour_database_engine::{DatabaseConnectionCleanup, DatabaseService};
@@ -68,8 +70,10 @@ impl CommandBus {
         match key.entity_type {
             DomainEntityType::Connection => match self.connection_type_for_key(key).await?.as_str()
             {
-                "ssh" => self.ssh.read_connection_domain_snapshot(key).await,
-                "database" => self.database.read_connection_domain_snapshot(key).await,
+                SSH_CONNECTION_TYPE => self.ssh.read_connection_domain_snapshot(key).await,
+                DATABASE_CONNECTION_TYPE => {
+                    self.database.read_connection_domain_snapshot(key).await
+                }
                 connection_type => Err(AppError::Config(format!(
                     "unsupported stored connection type: {connection_type}"
                 ))),
@@ -97,17 +101,20 @@ impl CommandBus {
         if !workspace_exists {
             return Err(AppError::NotFound("workspace".to_string()));
         }
-        let mut keys = self
-            .ssh
-            .list_connection_domain_entities(workspace_id.clone())
-            .await?;
-        keys.extend(
-            self.database
-                .list_connection_domain_entities(workspace_id)
-                .await?,
-        );
-        keys.sort_by(|left, right| left.entity_id.cmp(&right.entity_id));
-        Ok(keys)
+        let ids: Vec<String> = sqlx::query_scalar(
+            r#"
+            SELECT id FROM connections
+            WHERE workspace_id = ?1 AND deleted_at IS NULL
+            ORDER BY id
+            "#,
+        )
+        .bind(&workspace_id)
+        .fetch_all(self.db.pool())
+        .await?;
+        Ok(ids
+            .into_iter()
+            .map(|id| connection_entity_key(&workspace_id, id))
+            .collect())
     }
 
     pub async fn list_ssh_task_domain_entities(
@@ -295,12 +302,7 @@ impl CommandBus {
     }
 
     async fn connection_type_for_key(&self, key: &DomainEntityKey) -> AppResult<String> {
-        if key.entity_type != DomainEntityType::Connection || key.parent_entity_id.is_some() {
-            return Err(AppError::Validation(
-                "connection domain key must use entity type Connection without a parent"
-                    .to_string(),
-            ));
-        }
+        validate_connection_domain_key(key)?;
         let row: Option<(String, String)> =
             sqlx::query_as("SELECT workspace_id, connection_type FROM connections WHERE id = ?1")
                 .bind(&key.entity_id)
@@ -331,17 +333,7 @@ async fn apply_external_connection_changes_on(
         let connection_type = match &change {
             ExternalConnectionApply::Upsert(record) => Some(record.connection_type.as_str()),
             ExternalConnectionApply::Delete(delete) => {
-                if delete.entity.entity_type != DomainEntityType::Connection
-                    || delete.entity.parent_entity_id.is_some()
-                    || delete.entity.workspace_id.trim().is_empty()
-                    || delete.entity.entity_id.trim().is_empty()
-                    || delete.deleted_at.trim().is_empty()
-                {
-                    return Err(AppError::Validation(
-                        "external connection delete requires a Connection key without a parent and a deleted_at"
-                            .to_string(),
-                    ));
-                }
+                validate_external_connection_delete(delete)?;
                 let row: Option<(String, String)> = sqlx::query_as(
                     "SELECT workspace_id, connection_type FROM connections WHERE id = ?1",
                 )
@@ -355,10 +347,10 @@ async fn apply_external_connection_changes_on(
                                 "external connection workspace ownership mismatch".to_string(),
                             ));
                         }
-                        Some(if connection_type == "ssh" {
-                            "ssh"
-                        } else if connection_type == "database" {
-                            "database"
+                        Some(if connection_type == SSH_CONNECTION_TYPE {
+                            SSH_CONNECTION_TYPE
+                        } else if connection_type == DATABASE_CONNECTION_TYPE {
+                            DATABASE_CONNECTION_TYPE
                         } else {
                             return Err(AppError::Config(format!(
                                 "unsupported stored connection type: {connection_type}"
@@ -373,7 +365,7 @@ async fn apply_external_connection_changes_on(
             continue;
         };
         match connection_type {
-            "ssh" => {
+            SSH_CONNECTION_TYPE => {
                 let outcome = ssh
                     .apply_external_connection_on(connection, context, change)
                     .await?;
@@ -382,7 +374,7 @@ async fn apply_external_connection_changes_on(
                     ssh_connection_cleanups.push(cleanup);
                 }
             }
-            "database" => {
+            DATABASE_CONNECTION_TYPE => {
                 let outcome = database
                     .apply_external_connection_on(connection, context, change)
                     .await?;
