@@ -6,6 +6,47 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-21
+
+Feature release adding the SSH task domain foundation for optional edition sync
+and expanding MCP registry and response contracts, with workspace and
+credential-scope hardening.
+
+### Added
+
+- **SSH task sync-domain foundation** — Add revisioned task and task-step
+  snapshots, tombstones, external apply, workspace-delete cascade handling,
+  and local-storage migrations. This is a local command-bus foundation and
+  does not enable hosted sync by itself.
+- **Connection-aware task entities** — Include connection context when
+  listing SSH task entities so task-domain consumers can resolve their owning
+  connection.
+- **Ephemeral MCP registry mode** — Support an in-memory registry for MCP
+  processes that should not persist registry state, with container packaging
+  and registry smoke coverage.
+
+### Changed
+
+- **MCP response contracts** — Keep `structuredContent` aligned with declared
+  `outputSchema` values and pass catalog context through `db.query_readonly`.
+- **Workspace deletion consistency** — Cascade soft-delete tombstones to live
+  API, Workspace, and SSH task children while preserving the caller-provided
+  deletion timestamp.
+- **SSH task persistence and transfer paths** — Preserve step-position and
+  paging metadata and keep literal transfer paths device-local.
+- **SSH terminal suggestions and history** — Stabilize command tracking and
+  suggestion behavior.
+
+### Fixed
+
+- **Linux MCP build** — Enable the required Tokio macros so `unfour-mcp` builds
+  on Linux.
+
+### Security
+
+- **Workspace-scoped database credentials** — Keep connection passwords and
+  credential references scoped to the current workspace.
+
 ## [0.5.0] - 2026-08-18
 
 Feature release adding persistent SSH command history and history-aware MCP and
@@ -293,6 +334,7 @@ First public release.
 - macOS and Linux artifacts remain experimental/unverified until real-device
   smoke checks are complete.
 
+[0.6.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.6.0
 [0.5.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.5.0
 [0.4.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.4.0
 [0.3.0-rc.1]: https://github.com/zyqzyq/Unfour/releases/tag/v0.3.0-rc.1

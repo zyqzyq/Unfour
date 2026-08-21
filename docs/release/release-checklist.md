@@ -1,15 +1,15 @@
 # Release Checklist
 
-This checklist is for the Community Stable `v0.5.0` release.
+This checklist is for the Community Stable `v0.6.0` release.
 
 ## Release setup
 
 - Confirm the release commit and a clean working tree.
-- Confirm the unique version source is `0.5.0` in root
+- Confirm the unique version source is `0.6.0` in root
   `[workspace.package]`; run the version sync and confirm the root package,
   desktop package,
   Tauri configuration, and any packaged Rust crates.
-- Confirm the release tag is exactly `v0.5.0` and points to the verified
+- Confirm the release tag is exactly `v0.6.0` and points to the verified
   release commit. Community rejects every pre-release tag.
 - Confirm the release workflow resolves Stable with `prerelease = false`,
   exports `UNFOUR_RELEASE_CHANNEL=stable`, and embeds the exact checked-out
@@ -60,9 +60,11 @@ the Windows NSIS target. The Windows release asset set must contain one NSIS
 - macOS and Linux launch/install smoke: `NOT VERIFIED` until run on real
   devices.
 - API request scripts, API snapshot/external-apply behavior, Workspace
-  transactional domain behavior, storage profiles, Database row actions, SSH
-  clipboard/SFTP/tasks/command history and suggestions, and MCP history smoke:
-  record only what was actually tested.
+  transactional domain behavior, SSH task snapshots/external apply and
+  workspace cascades, storage profiles, Database row actions and
+  workspace-scoped credentials, SSH clipboard/SFTP/tasks/command history and
+  suggestions, and MCP registry/schema/history smoke: record only what was
+  actually tested.
 - Live SSH, PostgreSQL, MySQL/MariaDB, and system credential-store checks:
   require the corresponding real server, OS, or credential environment.
 - Signing/notarization status: record as unsigned/not verified until completed.

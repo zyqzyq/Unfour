@@ -60,9 +60,9 @@ Delivered areas:
 These items are release claims only to the extent recorded in the current
 verification matrix.
 
-## v0.5.0 (Current release line)
+## v0.5.0
 
-Current focus:
+Delivered areas:
 
 - persistent, redacted SSH command history and terminal command suggestions;
 - read-only MCP SSH history inspection for user-confirmed task drafting;
@@ -74,7 +74,25 @@ The API domain work is a local command-bus foundation and does not by itself
 provide a hosted sync service. Release claims remain limited by the current
 verification matrix.
 
-## Beyond v0.5
+## v0.6.0 (Current release line)
+
+Current focus:
+
+- SSH task snapshots, tombstones, external apply, workspace-delete cascades,
+  and connection-aware task entities for optional edition sync foundations;
+- ephemeral MCP registry storage and container/sidecar packaging support;
+- MCP output-schema alignment and catalog-context propagation for database
+  read-only queries;
+- workspace-scoped database credentials and consistent child tombstones on
+  workspace deletion;
+- stable SSH command suggestions, history tracking, and device-local transfer
+  paths.
+
+The SSH task and MCP domain work is a local command-bus foundation and does not
+by itself provide a hosted sync service. Release claims remain limited by the
+current verification matrix.
+
+## Beyond v0.6
 
 Likely follow-up areas:
 
