@@ -71,7 +71,7 @@ impl CommandBus {
         let transaction_input = prepared.take_transaction_input();
         let executor_service = service.clone();
         let result = self
-            .execute_domain_command_with_activity(
+            .execute_domain_command_with_activity_even_without_mutation(
                 context,
                 |connection: &SshConnection| CommandActivity {
                     workspace_id: Some(connection.workspace_id.clone()),

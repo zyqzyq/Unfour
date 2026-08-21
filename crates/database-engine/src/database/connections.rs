@@ -27,6 +27,18 @@ struct StoredDatabaseConnection {
     remote_id: Option<String>,
 }
 
+#[derive(Debug, sqlx::FromRow)]
+struct CurrentDatabaseConnectionSave {
+    name: String,
+    host: Option<String>,
+    port: Option<i64>,
+    driver: String,
+    database_name: Option<String>,
+    username: Option<String>,
+    ssl_mode: Option<String>,
+    read_only: bool,
+}
+
 #[derive(Debug)]
 pub(super) struct DatabaseConnectionStorageInput {
     pub(super) driver: String,
@@ -110,56 +122,109 @@ impl DatabaseService {
         let credential_ref = empty_to_none(input.credential_ref);
         validate_credential_ref_for_workspace(credential_ref.as_deref(), &input.workspace_id)?;
 
-        let (id, revision) = if let Some(id) = input
+        let (id, revision, shared_changed) = if let Some(id) = input
             .id
             .as_deref()
             .map(str::trim)
             .filter(|id| !id.is_empty())
         {
-            let revision: Option<i64> = sqlx::query_scalar(
+            let current = sqlx::query_as::<_, CurrentDatabaseConnectionSave>(
                 r#"
-                UPDATE connections
-                SET name = ?1, host = ?2, port = ?3, credential_ref = ?4,
-                    updated_at = ?5, revision = revision + 1, sync_status = 'pending'
-                WHERE id = ?6 AND workspace_id = ?7 AND connection_type = 'database' AND deleted_at IS NULL
-                RETURNING revision
+                SELECT c.name, c.host, c.port, sub.driver, sub.database_name,
+                       sub.username, sub.ssl_mode, sub.read_only
+                FROM connections c
+                INNER JOIN database_connections sub ON sub.connection_id = c.id
+                WHERE c.id = ?1 AND c.workspace_id = ?2
+                  AND c.connection_type = 'database' AND c.deleted_at IS NULL
                 "#,
             )
-            .bind(name)
-            .bind(host)
-            .bind(port)
-            .bind(credential_ref)
-            .bind(&now)
             .bind(id)
             .bind(&input.workspace_id)
             .fetch_optional(&mut *connection)
-            .await?;
-            let revision =
-                revision.ok_or_else(|| AppError::NotFound("database connection".to_string()))?;
+            .await?
+            .ok_or_else(|| AppError::NotFound("database connection".to_string()))?;
+            let shared_changed = current.name != name
+                || current.host != host
+                || current.port != port
+                || current.driver != storage.driver
+                || current.database_name != database_name
+                || current.username != username
+                || current.ssl_mode != ssl_mode
+                || current.read_only != storage.read_only;
+            let revision = if shared_changed {
+                sqlx::query_scalar(
+                    r#"
+                    UPDATE connections
+                    SET name = ?1, host = ?2, port = ?3, credential_ref = ?4,
+                        updated_at = ?5, revision = revision + 1, sync_status = 'pending'
+                    WHERE id = ?6 AND workspace_id = ?7
+                      AND connection_type = 'database' AND deleted_at IS NULL
+                    RETURNING revision
+                    "#,
+                )
+                .bind(&name)
+                .bind(&host)
+                .bind(port)
+                .bind(&credential_ref)
+                .bind(&now)
+                .bind(id)
+                .bind(&input.workspace_id)
+                .fetch_one(&mut *connection)
+                .await?
+            } else {
+                sqlx::query_scalar(
+                    r#"
+                    UPDATE connections
+                    SET credential_ref = ?1
+                    WHERE id = ?2 AND workspace_id = ?3
+                      AND connection_type = 'database' AND deleted_at IS NULL
+                    RETURNING revision
+                    "#,
+                )
+                .bind(&credential_ref)
+                .bind(id)
+                .bind(&input.workspace_id)
+                .fetch_one(&mut *connection)
+                .await?
+            };
 
-            let subtype = sqlx::query(
-                r#"
-                UPDATE database_connections
-                SET driver = ?1, database_name = ?2, username = ?3,
-                    ssl_mode = ?4, read_only = ?5, config_json = ?6
-                WHERE connection_id = ?7
-                "#,
-            )
-            .bind(&storage.driver)
-            .bind(database_name)
-            .bind(username)
-            .bind(ssl_mode)
-            .bind(storage.read_only)
-            .bind(&config_json)
-            .bind(id)
-            .execute(&mut *connection)
-            .await?;
+            let subtype = if shared_changed {
+                sqlx::query(
+                    r#"
+                    UPDATE database_connections
+                    SET driver = ?1, database_name = ?2, username = ?3,
+                        ssl_mode = ?4, read_only = ?5, config_json = ?6
+                    WHERE connection_id = ?7
+                    "#,
+                )
+                .bind(&storage.driver)
+                .bind(&database_name)
+                .bind(&username)
+                .bind(&ssl_mode)
+                .bind(storage.read_only)
+                .bind(&config_json)
+                .bind(id)
+                .execute(&mut *connection)
+                .await?
+            } else {
+                sqlx::query(
+                    r#"
+                    UPDATE database_connections
+                    SET config_json = ?1
+                    WHERE connection_id = ?2
+                    "#,
+                )
+                .bind(&config_json)
+                .bind(id)
+                .execute(&mut *connection)
+                .await?
+            };
             if subtype.rows_affected() != 1 {
                 return Err(AppError::Config(
                     "database connection subtype row is missing".to_string(),
                 ));
             }
-            (id.to_string(), revision)
+            (id.to_string(), revision, shared_changed)
         } else {
             let id = unfour_core::id::new_id();
             sqlx::query(
@@ -198,22 +263,24 @@ impl DatabaseService {
             .bind(&config_json)
             .execute(&mut *connection)
             .await?;
-            (id, 1)
+            (id, 1, true)
         };
 
         let saved = self
             .get_connection_on(connection, &input.workspace_id, &id)
             .await?;
-        Ok(DomainCommandResult::new(
-            saved,
+        let mutations = if shared_changed {
             vec![connection_mutation(
                 context,
                 MutationOperation::Upsert,
                 &input.workspace_id,
                 &id,
                 revision,
-            )],
-        ))
+            )]
+        } else {
+            Vec::new()
+        };
+        Ok(DomainCommandResult::new(saved, mutations))
     }
 
     pub async fn delete_connection(

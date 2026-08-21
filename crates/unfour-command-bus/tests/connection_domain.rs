@@ -11,6 +11,9 @@ use unfour_secret_store::SecretStore;
 mod support;
 use support::*;
 
+#[path = "connection_domain/device_local.rs"]
+mod device_local;
+
 #[test]
 fn connection_entity_contract_serializes_to_stable_protocol_names() {
     assert_eq!(

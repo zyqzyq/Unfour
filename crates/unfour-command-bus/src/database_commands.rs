@@ -17,7 +17,7 @@ impl CommandBus {
         let context = CommandContext::local("database.connection.save");
         let executor_context = context.clone();
         let service = self.database.clone();
-        self.execute_domain_command_with_activity(
+        self.execute_domain_command_with_activity_even_without_mutation(
             context,
             |connection: &DatabaseConnection| CommandActivity {
                 workspace_id: Some(connection.workspace_id.clone()),

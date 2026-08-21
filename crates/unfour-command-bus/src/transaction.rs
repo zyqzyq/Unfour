@@ -64,7 +64,7 @@ impl CommandBus {
     {
         let mut transaction = self.db.pool().begin().await?;
         let outcome = executor(&mut transaction).await?;
-        self.finalize_domain_command(&mut transaction, &context, activity, &outcome)
+        self.finalize_domain_command(&mut transaction, &context, activity, &outcome, false)
             .await?;
         transaction.commit().await?;
         Ok(outcome.value)
@@ -84,11 +84,52 @@ impl CommandBus {
         A: FnOnce(&T) -> CommandActivity + Send,
         F: for<'a> FnOnce(&'a mut SqliteConnection) -> CommandExecutorFuture<'a, T>,
     {
+        self.execute_domain_command_with_activity_policy(context, false, activity, executor)
+            .await
+    }
+
+    /// Like [`Self::execute_domain_command_with_activity`], but records the
+    /// local activity even when the domain operation only changes device-local
+    /// state and therefore returns no cloud mutation. Transactional hooks
+    /// still run only when mutations are present.
+    pub(crate) async fn execute_domain_command_with_activity_even_without_mutation<T, F, A>(
+        &self,
+        context: CommandContext,
+        activity: A,
+        executor: F,
+    ) -> AppResult<T>
+    where
+        T: Send,
+        A: FnOnce(&T) -> CommandActivity + Send,
+        F: for<'a> FnOnce(&'a mut SqliteConnection) -> CommandExecutorFuture<'a, T>,
+    {
+        self.execute_domain_command_with_activity_policy(context, true, activity, executor)
+            .await
+    }
+
+    async fn execute_domain_command_with_activity_policy<T, F, A>(
+        &self,
+        context: CommandContext,
+        record_activity_without_mutation: bool,
+        activity: A,
+        executor: F,
+    ) -> AppResult<T>
+    where
+        T: Send,
+        A: FnOnce(&T) -> CommandActivity + Send,
+        F: for<'a> FnOnce(&'a mut SqliteConnection) -> CommandExecutorFuture<'a, T>,
+    {
         let mut transaction = self.db.pool().begin().await?;
         let outcome = executor(&mut transaction).await?;
         let activity = activity(&outcome.value);
-        self.finalize_domain_command(&mut transaction, &context, Some(activity), &outcome)
-            .await?;
+        self.finalize_domain_command(
+            &mut transaction,
+            &context,
+            Some(activity),
+            &outcome,
+            record_activity_without_mutation,
+        )
+        .await?;
         transaction.commit().await?;
         Ok(outcome.value)
     }
@@ -99,8 +140,9 @@ impl CommandBus {
         context: &CommandContext,
         activity: Option<CommandActivity>,
         outcome: &DomainCommandResult<T>,
+        record_activity_without_mutation: bool,
     ) -> AppResult<()> {
-        if outcome.mutations.is_empty() {
+        if outcome.mutations.is_empty() && !record_activity_without_mutation {
             return Ok(());
         }
         if let Some(activity) = activity {
@@ -129,6 +171,9 @@ impl CommandBus {
                 activity.details,
             )
             .await?;
+        }
+        if outcome.mutations.is_empty() {
+            return Ok(());
         }
         for hook in self.extensions.transactional_hooks() {
             hook.on_mutations(transaction, context, &outcome.mutations)

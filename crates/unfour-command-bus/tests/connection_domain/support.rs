@@ -200,6 +200,18 @@ pub(super) fn external_database(
     created_at: &str,
     updated_at: &str,
 ) -> ExternalConnectionApply {
+    external_database_with_read_only(id, workspace_id, name, driver, created_at, updated_at, true)
+}
+
+pub(super) fn external_database_with_read_only(
+    id: &str,
+    workspace_id: &str,
+    name: &str,
+    driver: &str,
+    created_at: &str,
+    updated_at: &str,
+    read_only: bool,
+) -> ExternalConnectionApply {
     let sqlite = driver == "sqlite";
     ExternalConnectionApply::Upsert(ExternalConnectionUpsert {
         id: id.to_string(),
@@ -213,7 +225,7 @@ pub(super) fn external_database(
             database_name: (!sqlite).then(|| "remote_app".to_string()),
             username: (!sqlite).then(|| "remote_user".to_string()),
             ssl_mode: (!sqlite).then(|| "require".to_string()),
-            read_only: true,
+            read_only,
         },
         created_at: created_at.to_string(),
         updated_at: updated_at.to_string(),

@@ -22,6 +22,15 @@ enum SshConnectionSecretRollback {
     },
 }
 
+#[derive(sqlx::FromRow)]
+struct CurrentSshConnectionSave {
+    name: String,
+    host: String,
+    port: i64,
+    username: String,
+    auth_method: String,
+}
+
 impl PreparedSshConnectionSave {
     pub fn take_transaction_input(&mut self) -> SshConnectionInput {
         self.input
@@ -258,52 +267,100 @@ impl SshService {
         let now = Utc::now().to_rfc3339();
         let config_json = ssh_config_to_json(&storage.config)?;
 
-        let (id, revision) = if let Some(id) = input
+        let (id, revision, shared_changed) = if let Some(id) = input
             .id
             .as_deref()
             .map(str::trim)
             .filter(|id| !id.is_empty())
         {
-            let revision: Option<i64> = sqlx::query_scalar(
+            let current = sqlx::query_as::<_, CurrentSshConnectionSave>(
                 r#"
-                UPDATE connections
-                SET name = ?1, host = ?2, port = ?3, credential_ref = ?4,
-                    updated_at = ?5, revision = revision + 1, sync_status = 'pending'
-                WHERE id = ?6 AND workspace_id = ?7
-                  AND connection_type = 'ssh' AND deleted_at IS NULL
-                RETURNING revision
+                SELECT c.name, c.host, c.port, sub.username, sub.auth_method
+                FROM connections c
+                INNER JOIN ssh_connections sub ON sub.connection_id = c.id
+                WHERE c.id = ?1 AND c.workspace_id = ?2
+                  AND c.connection_type = 'ssh' AND c.deleted_at IS NULL
                 "#,
             )
-            .bind(name)
-            .bind(&storage.host)
-            .bind(i64::from(storage.port))
-            .bind(credential_ref)
-            .bind(&now)
             .bind(id)
             .bind(&input.workspace_id)
             .fetch_optional(&mut *connection)
-            .await?;
-            let revision =
-                revision.ok_or_else(|| AppError::NotFound("ssh connection".to_string()))?;
-            let subtype = sqlx::query(
-                r#"
-                UPDATE ssh_connections
-                SET username = ?1, auth_method = ?2, config_json = ?3
-                WHERE connection_id = ?4
-                "#,
-            )
-            .bind(&storage.username)
-            .bind(&storage.auth_method)
-            .bind(&config_json)
-            .bind(id)
-            .execute(&mut *connection)
-            .await?;
+            .await?
+            .ok_or_else(|| AppError::NotFound("ssh connection".to_string()))?;
+            let shared_changed = current.name != name
+                || current.host != storage.host
+                || current.port != i64::from(storage.port)
+                || current.username != storage.username
+                || current.auth_method != storage.auth_method;
+            let revision = if shared_changed {
+                sqlx::query_scalar(
+                    r#"
+                    UPDATE connections
+                    SET name = ?1, host = ?2, port = ?3, credential_ref = ?4,
+                        updated_at = ?5, revision = revision + 1, sync_status = 'pending'
+                    WHERE id = ?6 AND workspace_id = ?7
+                      AND connection_type = 'ssh' AND deleted_at IS NULL
+                    RETURNING revision
+                    "#,
+                )
+                .bind(&name)
+                .bind(&storage.host)
+                .bind(i64::from(storage.port))
+                .bind(&credential_ref)
+                .bind(&now)
+                .bind(id)
+                .bind(&input.workspace_id)
+                .fetch_one(&mut *connection)
+                .await?
+            } else {
+                sqlx::query_scalar(
+                    r#"
+                    UPDATE connections
+                    SET credential_ref = ?1
+                    WHERE id = ?2 AND workspace_id = ?3
+                      AND connection_type = 'ssh' AND deleted_at IS NULL
+                    RETURNING revision
+                    "#,
+                )
+                .bind(&credential_ref)
+                .bind(id)
+                .bind(&input.workspace_id)
+                .fetch_one(&mut *connection)
+                .await?
+            };
+            let subtype = if shared_changed {
+                sqlx::query(
+                    r#"
+                    UPDATE ssh_connections
+                    SET username = ?1, auth_method = ?2, config_json = ?3
+                    WHERE connection_id = ?4
+                    "#,
+                )
+                .bind(&storage.username)
+                .bind(&storage.auth_method)
+                .bind(&config_json)
+                .bind(id)
+                .execute(&mut *connection)
+                .await?
+            } else {
+                sqlx::query(
+                    r#"
+                    UPDATE ssh_connections
+                    SET config_json = ?1
+                    WHERE connection_id = ?2
+                    "#,
+                )
+                .bind(&config_json)
+                .bind(id)
+                .execute(&mut *connection)
+                .await?
+            };
             if subtype.rows_affected() != 1 {
                 return Err(AppError::Config(
                     "ssh connection subtype row is missing".to_string(),
                 ));
             }
-            (id.to_string(), revision)
+            (id.to_string(), revision, shared_changed)
         } else {
             let id = unfour_core::id::new_id();
             sqlx::query(
@@ -335,22 +392,24 @@ impl SshService {
             .bind(&config_json)
             .execute(&mut *connection)
             .await?;
-            (id, 1)
+            (id, 1, true)
         };
 
         let saved = self
             .get_connection_on(connection, &input.workspace_id, &id)
             .await?;
-        Ok(DomainCommandResult::new(
-            saved,
+        let mutations = if shared_changed {
             vec![connection_mutation(
                 context,
                 MutationOperation::Upsert,
                 &input.workspace_id,
                 &id,
                 revision,
-            )],
-        ))
+            )]
+        } else {
+            Vec::new()
+        };
+        Ok(DomainCommandResult::new(saved, mutations))
     }
 
     pub async fn delete_connection(
