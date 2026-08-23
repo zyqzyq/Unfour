@@ -6,6 +6,38 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-23
+
+Feature release adding the connection sync-domain foundation for SSH and
+database connections, while separating device-local saves from cloud-visible
+mutations.
+
+### Added
+
+- **Connection sync-domain foundation** — Add revisioned connection snapshots,
+  tombstones, external apply, shared domain contracts, workspace ownership
+  validation, and command-bus transaction integration for SSH and Database
+  connections. This is a local foundation for optional edition sync and does
+  not enable a hosted sync service by itself.
+- **Connection domain coverage** — Add command-bus coverage for local and
+  external create, update, delete, no-op, workspace-boundary, and
+  credential-cleanup flows.
+
+### Changed
+
+- **Device-local connection saves** — Keep local-only configuration and
+  credential-reference changes out of cloud mutation streams while still
+  allowing local activity to be recorded.
+- **Connection CRUD paths** — Separate shared connection fields from
+  device-local state for SSH and Database persistence, so revisions and sync
+  status advance only when shared fields change.
+
+### Security
+
+- **Workspace-scoped connection handling** — Reject cross-workspace connection
+  operations and keep credential references device-local, preserving compatible
+  local credentials when external connection data is applied.
+
 ## [0.6.0] - 2026-08-21
 
 Feature release adding the SSH task domain foundation for optional edition sync
@@ -334,6 +366,7 @@ First public release.
 - macOS and Linux artifacts remain experimental/unverified until real-device
   smoke checks are complete.
 
+[0.7.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.7.0
 [0.6.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.6.0
 [0.5.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.5.0
 [0.4.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.4.0

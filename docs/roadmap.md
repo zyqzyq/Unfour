@@ -74,9 +74,9 @@ The API domain work is a local command-bus foundation and does not by itself
 provide a hosted sync service. Release claims remain limited by the current
 verification matrix.
 
-## v0.6.0 (Current release line)
+## v0.6.0
 
-Current focus:
+Delivered areas:
 
 - SSH task snapshots, tombstones, external apply, workspace-delete cascades,
   and connection-aware task entities for optional edition sync foundations;
@@ -92,7 +92,21 @@ The SSH task and MCP domain work is a local command-bus foundation and does not
 by itself provide a hosted sync service. Release claims remain limited by the
 current verification matrix.
 
-## Beyond v0.6
+## v0.7.0 (Current release line)
+
+Current focus:
+
+- SSH and Database connection snapshots, revisioned mutations, tombstones, and
+  external apply for optional edition sync foundations;
+- shared connection domain contracts and command-bus transaction integration;
+- device-local connection saves that do not create cloud mutations when shared
+  connection fields are unchanged, while preserving local activity recording.
+
+The connection domain work is a local command-bus foundation and does not by
+itself provide a hosted sync service. Release claims remain limited by the
+current verification matrix.
+
+## Beyond v0.7
 
 Likely follow-up areas:
 
