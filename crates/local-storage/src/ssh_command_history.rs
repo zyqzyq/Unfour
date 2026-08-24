@@ -47,8 +47,8 @@ impl SshCommandHistoryService {
         }
         // Timestamps are compared as TEXT in SQLite, so every stored value must
         // use the same canonical UTC offset form for ordering to stay correct.
-        let executed_at = unfour_core::time::normalize_rfc3339_utc(&input.executed_at)
-            .ok_or_else(|| {
+        let executed_at =
+            unfour_core::time::normalize_rfc3339_utc(&input.executed_at).ok_or_else(|| {
                 AppError::Validation(
                     "ssh command history executed_at must be an RFC 3339 timestamp".to_string(),
                 )
