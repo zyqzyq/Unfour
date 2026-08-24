@@ -18,7 +18,8 @@
   },
   "bundle": {
     "macOS": {
-      "bundleVersion": "1"
+      "bundleVersion": "1",
+      "signingIdentity": "-"
     }
   }
 }
