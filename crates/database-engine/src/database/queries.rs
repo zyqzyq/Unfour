@@ -9,6 +9,7 @@ impl DatabaseService {
             return Err(AppError::Validation("SQL cannot be empty".to_string()));
         }
         validate_single_statement(sql)?;
+        let catalog = clean_identifier(input.catalog.as_deref())?;
         let safety = classify_query(sql);
 
         let connection = self
@@ -93,8 +94,7 @@ impl DatabaseService {
                     })
                 }
                 "postgres" => {
-                    let effective =
-                        Self::effective_connection(&connection, input.catalog.as_deref());
+                    let effective = Self::effective_connection(&connection, catalog);
                     let pool = self.postgres_pool(&effective).await?;
                     let limit = input.limit.unwrap_or(100).clamp(1, 1_000);
                     let started = Instant::now();
@@ -104,16 +104,25 @@ impl DatabaseService {
                     let mut conn = pool.acquire().await.map_err(sanitize_pg_error)?;
                     if let Some(schema) = clean_identifier(input.schema.as_deref())? {
                         let stmt = format!("SET search_path TO {}", quote_identifier(schema));
-                        sqlx::query(&stmt)
-                            .execute(conn.as_mut())
+                        // Session commands such as SET are not portable through
+                        // SQLx's prepared-query API. Execute this context change
+                        // through the database's simple-query protocol instead.
+                        conn.as_mut()
+                            .execute(stmt.as_str())
                             .await
                             .map_err(sanitize_pg_error)?;
                     }
 
                     if returns_rows(sql) {
                         let query_sql = sql_with_limit(sql, limit);
-                        let rows = sqlx::query(&query_sql)
-                            .fetch_all(conn.as_mut())
+                        // The SQL editor accepts arbitrary user statements and
+                        // does not expose bind parameters. Use the simple query
+                        // protocol so commands such as SET/BEGIN/ROLLBACK and
+                        // engine-specific statements are not rejected during
+                        // prepared-statement parsing.
+                        let rows = conn
+                            .as_mut()
+                            .fetch_all(query_sql.as_str())
                             .await
                             .map_err(sanitize_pg_error)?;
                         let columns = rows
@@ -135,8 +144,9 @@ impl DatabaseService {
                         });
                     }
 
-                    let result = sqlx::query(sql)
-                        .execute(conn.as_mut())
+                    let result = conn
+                        .as_mut()
+                        .execute(sql)
                         .await
                         .map_err(sanitize_pg_error)?;
                     Ok(DatabaseQueryResult {
@@ -151,27 +161,26 @@ impl DatabaseService {
                     })
                 }
                 "mysql" => {
-                    let effective =
-                        Self::effective_connection(&connection, input.catalog.as_deref());
+                    let effective = Self::effective_connection(&connection, catalog);
                     let pool = self.mysql_pool(&effective).await?;
                     let limit = input.limit.unwrap_or(100).clamp(1, 1_000);
                     let started = Instant::now();
 
-                    // Apply the query context (active database) on a dedicated
-                    // connection so the USE statement and the query share a session.
+                    // The effective connection is opened against the selected
+                    // catalog, so no session-level USE command is needed here.
+                    // This is important because MySQL does not support USE in
+                    // the prepared-statement protocol.
                     let mut conn = pool.acquire().await.map_err(sanitize_mysql_error)?;
-                    if let Some(catalog) = clean_identifier(input.catalog.as_deref())? {
-                        let stmt = format!("USE {}", quote_mysql_identifier(catalog));
-                        sqlx::query(&stmt)
-                            .execute(conn.as_mut())
-                            .await
-                            .map_err(sanitize_mysql_error)?;
-                    }
 
                     if returns_rows(sql) {
                         let query_sql = sql_with_limit(sql, limit);
-                        let rows = sqlx::query(&query_sql)
-                            .fetch_all(conn.as_mut())
+                        // Keep editor SQL on the simple-query protocol. SQLx's
+                        // prepared API rejects valid MySQL/MariaDB commands
+                        // such as SET, transaction control, and some DDL/SHOW
+                        // variants even though they are valid editor input.
+                        let rows = conn
+                            .as_mut()
+                            .fetch_all(query_sql.as_str())
                             .await
                             .map_err(sanitize_mysql_error)?;
                         let columns = rows.first().map(mysql_result_columns).unwrap_or_default();
@@ -190,8 +199,9 @@ impl DatabaseService {
                         });
                     }
 
-                    let result = sqlx::query(sql)
-                        .execute(conn.as_mut())
+                    let result = conn
+                        .as_mut()
+                        .execute(sql)
                         .await
                         .map_err(sanitize_mysql_error)?;
                     Ok(DatabaseQueryResult {

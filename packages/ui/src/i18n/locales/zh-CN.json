@@ -504,6 +504,7 @@
     },
     "editor": {
       "catalogAria": "查询数据库",
+      "catalogDefault": "连接默认数据库",
       "connectionAria": "SQL 编辑器连接",
       "dataView": "数据",
       "empty": "创建或选择数据库连接后开始编写 SQL。",

@@ -2,7 +2,7 @@ use chrono::Utc;
 use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use sqlx::{Column, Row, TypeInfo, ValueRef};
+use sqlx::{Column, Executor, Row, TypeInfo, ValueRef};
 use std::path::Path;
 use std::time::{Duration, Instant};
 use unfour_core::models::{

@@ -505,6 +505,7 @@
     },
     "editor": {
       "catalogAria": "Query database",
+      "catalogDefault": "Connection default",
       "connectionAria": "SQL editor connection",
       "dataView": "Data",
       "empty": "Create or select a database connection to start writing SQL.",

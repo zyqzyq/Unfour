@@ -356,7 +356,10 @@ export function SqlEditorTab({
               aria-label={t("database.editor.catalogAria")}
               className="max-w-[160px]"
               onChange={(event) => onChangeQueryContext({ catalog: event.target.value || null })}
-              options={catalogOptions.map((catalog) => ({ label: catalog, value: catalog }))}
+              options={[
+                { label: t("database.editor.catalogDefault"), value: "" },
+                ...catalogOptions.map((catalog) => ({ label: catalog, value: catalog })),
+              ]}
               value={queryCatalog ?? ""}
             />
           )}

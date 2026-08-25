@@ -4,10 +4,10 @@ pub(super) fn quote_identifier(value: &str) -> String {
     format!("\"{}\"", value.replace('"', "\"\""))
 }
 
-/// Trim and validate an optional SQL identifier used as a session-context
-/// target (PostgreSQL `search_path` schema or MySQL `USE` database). Returns
-/// `None` for empty input. Callers still quote/escape the result before use;
-/// this rejects control characters as defense in depth.
+/// Trim and validate an optional database/schema identifier used as a
+/// connection or session context (for example, PostgreSQL `search_path`).
+/// Returns `None` for empty input. Callers still quote/escape the result before
+/// use; this rejects control characters as defense in depth.
 pub(super) fn clean_identifier(value: Option<&str>) -> AppResult<Option<&str>> {
     let trimmed = match value.map(str::trim).filter(|item| !item.is_empty()) {
         None => return Ok(None),

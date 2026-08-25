@@ -154,20 +154,22 @@ export function DatabasePage({
     }
     return [...merged];
   }, [catalogsQuery.data, treeModel]);
+  const activeQueryConnection = connections.find(
+    (connection) => connection.id === activeQueryTab?.connectionId,
+  );
   // Schema choices for the active catalog. Empty unless the catalog nests
   // schemas (PostgreSQL).
   const schemaOptions = useMemo(() => {
     if (!treeModel) {
       return [];
     }
-    const activeCatalog =
-      treeModel.catalogs.find((catalog) => catalog.key === activeQueryTab?.catalog) ??
-      treeModel.catalogs[0];
+    const activeCatalogKey = activeQueryTab?.catalog ?? activeQueryConnection?.database ?? null;
+    const activeCatalog = treeModel.catalogs.find((catalog) => catalog.key === activeCatalogKey);
     if (!activeCatalog?.hasSchemaLevel) {
       return [];
     }
     return activeCatalog.schemas.map((schema) => schema.key).filter((key) => key !== "");
-  }, [treeModel, activeQueryTab?.catalog]);
+  }, [activeQueryConnection?.database, activeQueryTab?.catalog, activeQueryTab?.connectionId, treeModel]);
   const structureEnabled = Boolean(
     activeTableTab &&
       activeTableTab.segment === "structure" &&
@@ -324,19 +326,26 @@ export function DatabasePage({
     });
   }, [selectedConnectionId, selectedSchemaData]);
 
-  // Keep the active query tab pointed at a valid catalog/schema as the schema
-  // loads or changes. Preserves a still-valid user selection; otherwise falls
-  // back to the first catalog and (for PostgreSQL) its first schema.
+  // Preserve an explicit catalog/schema selection as the schema loads. A new
+  // query remains unscoped unless the connection has a default schema context;
+  // never silently choose the first catalog returned by the server.
   useEffect(() => {
     if (!treeModel || !activeQueryTab) {
       return;
     }
-    const next = normalizeQueryContext(activeQueryTab, treeModel);
+    const next = normalizeQueryContext(activeQueryTab, treeModel, activeQueryConnection?.database);
     if (next.catalog === activeQueryTab.catalog && next.schema === activeQueryTab.schema) {
       return;
     }
     databaseTabs.updateQueryTab(activeQueryTab.id, next);
-  }, [treeModel, activeQueryTab?.id, activeQueryTab?.catalog, activeQueryTab?.schema]);
+  }, [
+    activeQueryConnection?.database,
+    activeQueryTab?.catalog,
+    activeQueryTab?.connectionId,
+    activeQueryTab?.id,
+    activeQueryTab?.schema,
+    treeModel,
+  ]);
 
   const {
     deleteConfirm,
