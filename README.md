@@ -36,15 +36,15 @@ what Codex can access and execute; connecting Codex does not grant unrestricted
 access by default.
 
 > [!WARNING]
-> The source tree is preparing the Community Stable `v0.7.0` release. It is
+> The source tree is preparing the Community Stable `v0.8.0` release. It is
 > unsigned and still requires release verification; installers may trigger
 > SmartScreen or other operating-system security warnings.
 
 ## Download
 
 Download published builds from [GitHub Releases](https://github.com/zyqzyq/Unfour/releases).
-The latest stable release is [`v0.6.0`](https://github.com/zyqzyq/Unfour/releases/tag/v0.6.0);
-`v0.7.0` will appear there after the release is published.
+The latest stable release is [`v0.7.1`](https://github.com/zyqzyq/Unfour/releases/tag/v0.7.1);
+`v0.8.0` will appear there after the release is published.
 
 - Windows: NSIS `.exe` installer.
 - macOS and Linux packages are experimental and unverified until real-device
@@ -168,8 +168,8 @@ map.
 
 ## Release Status
 
-The source tree is preparing Community Stable `v0.7.0`; the latest published
-stable version is `v0.6.0`. Release readiness is documented in:
+The source tree is preparing Community Stable `v0.8.0`; the latest published
+stable version is `v0.7.1`. Release readiness is documented in:
 
 - `docs/testing/release-verification.md`
 - `docs/testing/manual-test-cases.md`

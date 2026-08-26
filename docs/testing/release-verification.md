@@ -1,6 +1,6 @@
 # Release Verification
 
-This is the active verification matrix for the Community Stable `v0.7.0`
+This is the active verification matrix for the Community Stable `v0.8.0`
 release. Results must come from this release commit; evidence from earlier
 releases is historical context only. An artifact build is not proof of
 platform, live-service, credential-store, or feature-level verification.
@@ -19,21 +19,21 @@ platform, live-service, credential-store, or feature-level verification.
 Run from the repository root and replace each placeholder with current
 evidence.
 
-| Area | Command | Required for v0.7.0 | Result |
+| Area | Command | Required for v0.8.0 | Result |
 | --- | --- | --- | --- |
 | Working tree | `git status --short` | Yes | NOT RUN (release-preparation changes are present) |
 | Patch hygiene | `git diff --check` | Yes | PASS (current working diff) |
 | Dependency installation | `pnpm install --frozen-lockfile` | Yes | NOT RUN |
-| Frontend build | `pnpm run build` | Yes | NOT RUN |
-| Large-file guard | `pnpm run check:large-files` | Yes | NOT RUN |
-| Frontend lint | `pnpm run lint` | Yes | NOT RUN |
-| Frontend unit tests | `pnpm run test` | Yes | NOT RUN |
-| Release/environment unit tests | `pnpm run test:release-env` | Yes | NOT RUN (pnpm install blocked by local node_modules permissions; direct `node --test` passed 9 tests) |
+| Frontend build | `pnpm run build` | Yes | NOT RUN after pull (runner disk space insufficient) |
+| Large-file guard | `pnpm run check:large-files` | Yes | PASS (0 blocking violations) |
+| Frontend lint | `pnpm run lint` | Yes | NOT RUN after pull |
+| Frontend unit tests | `pnpm run test` | Yes | NOT RUN after pull |
+| Release/environment unit tests | `pnpm run test:release-env` | Yes | PASS (9 tests) |
 | Playwright browser install | `pnpm exec playwright install chromium` | When required by the runner | NOT RUN |
 | Playwright smoke | `pnpm run test:e2e` | Yes | NOT RUN |
-| Rust workspace check | `pnpm run check:rust` | Yes | NOT RUN |
-| Rust SSH feature check | `pnpm run check:rust:ssh` | Yes | NOT RUN |
-| Aggregate repository check | `pnpm run check` | Yes | NOT RUN |
+| Rust workspace check | `pnpm run check:rust` | Yes | NOT RUN after pull (runner disk space insufficient) |
+| Rust SSH feature check | `pnpm run check:rust:ssh` | Yes | NOT RUN after pull (runner disk space insufficient) |
+| Aggregate repository check | `pnpm run check` | Yes | NOT RUN after pull (runner disk space insufficient) |
 | Rust tests | `pnpm run test:rust` | Yes | NOT RUN |
 | Windows NSIS bundle | `pnpm run tauri build` | Yes on Windows | NOT RUN |
 | macOS/Linux Tauri bundles | `pnpm run tauri build` | Yes on each target | NOT VERIFIED (requires target runners and real-device smoke) |
@@ -89,7 +89,7 @@ example client rather than the Unfour release. Historical references inside
 ## Release Evidence Template
 
 ```text
-Release: v0.7.0
+Release: v0.8.0
 Commit: <release commit>
 Platform: <runner or physical device>
 

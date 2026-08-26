@@ -92,9 +92,9 @@ The SSH task and MCP domain work is a local command-bus foundation and does not
 by itself provide a hosted sync service. Release claims remain limited by the
 current verification matrix.
 
-## v0.7.0 (Current release line)
+## v0.7.0
 
-Current focus:
+Delivered areas:
 
 - SSH and Database connection snapshots, revisioned mutations, tombstones, and
   external apply for optional edition sync foundations;
@@ -106,7 +106,19 @@ The connection domain work is a local command-bus foundation and does not by
 itself provide a hosted sync service. Release claims remain limited by the
 current verification matrix.
 
-## Beyond v0.7
+## v0.8.0 (Current release line)
+
+Current focus:
+
+- Community Stable release preparation and version alignment;
+- automated, installer, platform, and live-service verification recorded in
+  the active release matrix;
+- continued platform hardening without expanding the current package or
+  command-bus boundaries.
+
+Release claims remain limited by the current verification matrix.
+
+## Beyond v0.8
 
 Likely follow-up areas:
 

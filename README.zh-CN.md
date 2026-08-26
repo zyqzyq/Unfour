@@ -31,14 +31,14 @@ SSH 与数据库能力，完成“复现 API 问题 → 查看服务日志 → �
 限制 Codex 可以访问和执行的内容；连接 Codex 并不代表默认授予不受限制的权限。
 
 > [!NOTE]
-> 当前源码正在准备 Unfour Community Stable `v0.7.0`。该版本尚未签名且仍需完成发布验证；
+> 当前源码正在准备 Unfour Community Stable `v0.8.0`。该版本尚未签名且仍需完成发布验证；
 > 安装包可能触发 SmartScreen 或其他操作系统安全警告。
 
 ## 下载
 
 请从 [GitHub Releases](https://github.com/zyqzyq/Unfour/releases) 下载已发布版本。
-最新稳定版是 [`v0.6.0`](https://github.com/zyqzyq/Unfour/releases/tag/v0.6.0)；
-`v0.7.0` 会在正式发布后出现在 Releases 页面。
+最新稳定版是 [`v0.7.1`](https://github.com/zyqzyq/Unfour/releases/tag/v0.7.1)；
+`v0.8.0` 会在正式发布后出现在 Releases 页面。
 
 - Windows：NSIS `.exe` 安装包。
 - macOS 与 Linux 安装包在完成真实设备冒烟检查前属于 experimental/unverified（实验性/未验证），不要将其视为已支持或已验证平台。
@@ -147,7 +147,7 @@ pnpm run test:rust      # cargo test --workspace
 
 ## 发布状态
 
-当前源码正在准备 Community Stable `v0.7.0`，最新稳定版为 `v0.6.0`。发布就绪程度
+当前源码正在准备 Community Stable `v0.8.0`，最新稳定版为 `v0.7.1`。发布就绪程度
 受以下验证证据限制：
 
 - `docs/testing/release-verification.md`

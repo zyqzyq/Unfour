@@ -6,6 +6,19 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-26
+
+### Changed
+
+- **Faster desktop startup** — Load feature modules on demand and pause
+  inactive SSH and Database queries while preserving previously opened work.
+
+### Fixed
+
+- **Database query compatibility** — Improve PostgreSQL and MySQL/MariaDB
+  execution for selected catalogs and commands that require the simple query
+  protocol, including session, transaction, DDL, and `SHOW` statements.
+
 ## [0.7.0] - 2026-08-23
 
 Feature release adding the connection sync-domain foundation for SSH and
@@ -366,6 +379,7 @@ First public release.
 - macOS and Linux artifacts remain experimental/unverified until real-device
   smoke checks are complete.
 
+[0.8.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.8.0
 [0.7.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.7.0
 [0.6.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.6.0
 [0.5.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.5.0

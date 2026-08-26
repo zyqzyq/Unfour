@@ -158,7 +158,7 @@ MCP client
 The desktop binary wrapper lives under `apps/desktop/src-tauri`. Shared Tauri
 composition lives in `crates/unfour-app`: plugins, command-bus setup,
 `AppState`, command adapters, and edition-independent wiring. The product name
-is Unfour and the repository package version is `0.7.0`. Release readiness
+is Unfour and the repository package version is `0.8.0`. Release readiness
 must be determined from the release verification documents, not from the
 version string alone.
 
