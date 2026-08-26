@@ -42,7 +42,7 @@ describe("useTerminalSessions", () => {
     expect(listMock).not.toHaveBeenCalled();
   });
 
-  it("disables refetchInterval while the Connections surface is inactive", async () => {
+  it("disables fetching and polling while the Connections surface is inactive", () => {
     listMock.mockResolvedValue([]);
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
@@ -52,8 +52,9 @@ describe("useTerminalSessions", () => {
       wrapper: createWrapper(client),
     });
 
-    await waitFor(() => expect(listMock).toHaveBeenCalledTimes(1));
+    expect(listMock).not.toHaveBeenCalled();
     const query = client.getQueryCache().find({ queryKey: ["ssh-sessions", "ws-1"] });
+    expect(query?.options.enabled).toBe(false);
     expect(query?.options.refetchInterval).toBe(false);
   });
 });

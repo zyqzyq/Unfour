@@ -42,6 +42,7 @@ type CompletionModel = {
 };
 
 export function SqlEditorTab({
+  active,
   catalogOptions,
   connections,
   executePending,
@@ -61,6 +62,7 @@ export function SqlEditorTab({
   sql,
   workspaceId,
 }: {
+  active: boolean;
   catalogOptions: string[];
   connections: DatabaseConnection[];
   executePending: boolean;
@@ -88,7 +90,7 @@ export function SqlEditorTab({
   const schemaRef = useRef<DatabaseSchema | undefined>(schema);
   const completionDisposable = useRef<{ dispose: () => void } | null>(null);
   const selectedConnection = connections.find((connection) => connection.id === selectedConnectionId);
-  const savedSql = useSavedSql(workspaceId);
+  const savedSql = useSavedSql(workspaceId, { active });
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [savedDialogOpen, setSavedDialogOpen] = useState(false);
   const [snippetName, setSnippetName] = useState("");
@@ -109,6 +111,12 @@ export function SqlEditorTab({
       monacoRef.current.editor.setTheme(theme === "dark" ? "unfour-dark" : "unfour-light");
     }
   }, [theme]);
+
+  useEffect(() => {
+    if (!active) return;
+    const frame = window.requestAnimationFrame(() => editorRef.current?.layout());
+    return () => window.cancelAnimationFrame(frame);
+  }, [active]);
 
   // Run Current: selection when present, otherwise the statement under the cursor.
   const runFromEditor = () => {

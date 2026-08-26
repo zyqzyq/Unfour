@@ -42,4 +42,11 @@ describe("useSshConnections", () => {
     renderHook(() => useSshConnections(""), { wrapper: createWrapper() });
     expect(listMock).not.toHaveBeenCalled();
   });
+
+  it("stays disabled while the SSH surface is inactive", () => {
+    renderHook(() => useSshConnections("ws-1", { active: false }), {
+      wrapper: createWrapper(),
+    });
+    expect(listMock).not.toHaveBeenCalled();
+  });
 });

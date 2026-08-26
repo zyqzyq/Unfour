@@ -1,10 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { listSshConnections } from "@unfour/command-client";
+import { sshConnectionsQueryOptions } from "./sshWorkspaceQueries";
 
-export function useSshConnections(workspaceId: string) {
+export function useSshConnections(
+  workspaceId: string,
+  options?: { active?: boolean },
+) {
+  const active = options?.active ?? true;
   return useQuery({
-    enabled: Boolean(workspaceId),
-    queryKey: ["ssh-connections", workspaceId],
-    queryFn: () => listSshConnections(workspaceId),
+    ...sshConnectionsQueryOptions(workspaceId),
+    enabled: Boolean(active && workspaceId),
   });
 }

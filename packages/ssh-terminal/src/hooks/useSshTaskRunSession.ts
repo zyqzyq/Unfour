@@ -74,7 +74,7 @@ export function useSshTaskRunSession({
   }, [active, activeRun?.id, eventsByRun, historyLogByRun]);
 
   const workspaceEnvironmentsQuery = useQuery({
-    enabled: Boolean(workspaceId),
+    enabled: Boolean(active && workspaceId),
     queryKey: ["workspace-environments", workspaceId],
     queryFn: () => listWorkspaceEnvironments(workspaceId),
     staleTime: 0,

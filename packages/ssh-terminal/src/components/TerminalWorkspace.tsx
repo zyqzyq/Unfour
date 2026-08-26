@@ -25,6 +25,7 @@ import {
   ContextMenuSeparator,
   EmptyState,
   ErrorState,
+  LoadingState,
   Tabs,
   useI18n,
 } from "@unfour/ui";
@@ -45,6 +46,7 @@ export function TerminalWorkspace({
   emptyMessage,
   error,
   events,
+  loading,
   onClear,
   onCloseAll,
   onCloseLeft,
@@ -70,6 +72,7 @@ export function TerminalWorkspace({
   emptyMessage: string;
   error?: unknown;
   events: SshSessionEvent[];
+  loading?: boolean;
   onClear: (sessionId: string) => void;
   onCloseAll: () => void;
   onCloseLeft: (sessionId: string) => void;
@@ -202,7 +205,11 @@ export function TerminalWorkspace({
             </Button>
           )}
           <TerminalSearchBar />
-          {error ? (
+          {loading ? (
+            <LoadingState className="h-full min-h-0 flex-1 rounded-none border-0">
+              {t("ssh.state.loadingWorkspace")}
+            </LoadingState>
+          ) : error ? (
             <ErrorState className="h-full min-h-0 flex-1 rounded-none border-0">
               {formatTerminalError(error, t)}
             </ErrorState>

@@ -72,6 +72,7 @@ function renderWorkspace(
   props: Partial<Parameters<typeof DatabaseWorkspace>[0]> = {},
 ) {
   const defaultProps: Parameters<typeof DatabaseWorkspace>[0] = {
+    active: true,
     activeTab: tabs[1],
     activeTabId: "table-1",
     catalogOptions: [],

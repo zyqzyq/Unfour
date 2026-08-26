@@ -21,6 +21,7 @@ import { TableDataTab } from "./TableDataTab";
 import { TableInspector } from "./TableInspector";
 
 export function DatabaseWorkspace({
+  active,
   activeTabId,
   activeTab,
   catalogOptions,
@@ -60,6 +61,7 @@ export function DatabaseWorkspace({
   tabs,
   workspaceId,
 }: {
+  active: boolean;
   activeTabId: DatabaseWorkspaceTabId;
   activeTab: DatabaseWorkspaceTab | null;
   catalogOptions: string[];
@@ -213,6 +215,7 @@ export function DatabaseWorkspace({
           {renderQuery && (
             <SplitPane className="min-h-0 flex-1" defaultRatio={62} minPaneSize={220} orientation="vertical" resizable>
               <SqlEditorTab
+                active={active}
                 catalogOptions={catalogOptions}
                 connections={connections}
                 executePending={executePending}

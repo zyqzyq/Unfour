@@ -12,12 +12,16 @@ export function savedSqlQueryKey(workspaceId: string) {
   return ["db-saved-sql", workspaceId] as const;
 }
 
-export function useSavedSql(workspaceId: string) {
+export function useSavedSql(
+  workspaceId: string,
+  options?: { active?: boolean },
+) {
   const queryClient = useQueryClient();
   const handleError = useFeedbackErrorHandler();
   const queryKey = savedSqlQueryKey(workspaceId);
+  const active = options?.active ?? true;
   const query = useQuery({
-    enabled: Boolean(workspaceId),
+    enabled: Boolean(active && workspaceId),
     queryKey,
     queryFn: () => listSavedSql(workspaceId),
   });

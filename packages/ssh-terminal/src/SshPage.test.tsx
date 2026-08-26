@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { TerminalPage } from "./SshPage";
+
+afterEach(cleanup);
 
 vi.mock("./hooks/useSshConnections", () => ({
   useSshConnections: () => ({ data: [] }),
@@ -50,6 +52,13 @@ describe("SSH surface mode switching", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Open connections" }));
     expect(screen.getByTestId("connections-page")).toHaveAttribute("data-active", "true");
+    expect(screen.getByTestId("tasks-page")).toHaveAttribute("data-active", "false");
+  });
+
+  it("suspends both retained surfaces while the SSH module is inactive", () => {
+    render(<TerminalPage active={false} workspaceId="workspace-one" />);
+
+    expect(screen.getByTestId("connections-page")).toHaveAttribute("data-active", "false");
     expect(screen.getByTestId("tasks-page")).toHaveAttribute("data-active", "false");
   });
 });

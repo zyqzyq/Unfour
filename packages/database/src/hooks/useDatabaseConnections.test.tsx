@@ -42,4 +42,11 @@ describe("useDatabaseConnections", () => {
     renderHook(() => useDatabaseConnections(""), { wrapper: createWrapper() });
     expect(listMock).not.toHaveBeenCalled();
   });
+
+  it("stays disabled while the Database surface is inactive", () => {
+    renderHook(() => useDatabaseConnections("ws-1", { active: false }), {
+      wrapper: createWrapper(),
+    });
+    expect(listMock).not.toHaveBeenCalled();
+  });
 });

@@ -12,11 +12,16 @@ export function dbQueryHistoryQueryKey(workspaceId: string) {
   return ["db-query-history", workspaceId] as const;
 }
 
-export function useQueryHistory(workspaceId: string, limit: number) {
+export function useQueryHistory(
+  workspaceId: string,
+  limit: number,
+  options?: { active?: boolean },
+) {
   const queryClient = useQueryClient();
   const queryKey = dbQueryHistoryQueryKey(workspaceId);
+  const active = options?.active ?? true;
   const query = useQuery({
-    enabled: Boolean(workspaceId),
+    enabled: Boolean(active && workspaceId),
     queryKey,
     queryFn: () => listDatabaseQueryHistory(workspaceId, limit),
   });

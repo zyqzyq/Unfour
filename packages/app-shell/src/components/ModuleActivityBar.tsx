@@ -8,12 +8,14 @@ import {
 export function ModuleActivityBar({
   activeKind,
   onOpenCommandPalette,
+  onPreload,
   sidebarCollapsed,
   onSelect,
   onToggleSidebar,
 }: {
   activeKind: ModuleSwitcherItem["kind"];
   onOpenCommandPalette: () => void;
+  onPreload?: (kind: ModuleSwitcherItem["kind"]) => void;
   sidebarCollapsed: boolean;
   onSelect: (tabId: ModuleSwitcherItem["id"]) => void;
   onToggleSidebar: () => void;
@@ -49,6 +51,9 @@ export function ModuleActivityBar({
                 )}
                 key={item.id}
                 onClick={() => handleClick(item)}
+                onFocus={() => onPreload?.(item.kind)}
+                onPointerDown={() => onPreload?.(item.kind)}
+                onPointerEnter={() => onPreload?.(item.kind)}
                 title={item.label}
                 type="button"
               >

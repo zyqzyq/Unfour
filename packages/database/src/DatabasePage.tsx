@@ -47,6 +47,7 @@ const DEFAULT_PREVIEW_PAGE_SIZE = 100;
 const MAX_HISTORY_ENTRIES = 25;
 
 export function DatabasePage({
+  active = true,
   onShellSidebarChange,
   onShellStatusBarChange,
   statusBarRightAccessory,
@@ -92,9 +93,9 @@ export function DatabasePage({
     emptyDatabaseConnectionForm(workspaceId),
   );
 
-  const connectionsQuery = useDatabaseConnections(workspaceId);
-  const queryHistoryQuery = useQueryHistory(workspaceId, MAX_HISTORY_ENTRIES);
-  const savedSqlQuery = useSavedSql(workspaceId);
+  const connectionsQuery = useDatabaseConnections(workspaceId, { active });
+  const queryHistoryQuery = useQueryHistory(workspaceId, MAX_HISTORY_ENTRIES, { active });
+  const savedSqlQuery = useSavedSql(workspaceId, { active });
   const connections = useMemo(() => connectionsQuery.data ?? [], [connectionsQuery.data]);
   const selectedConnection = useMemo(
     () => connections.find((item) => item.id === selectedConnectionId) ?? null,
@@ -114,7 +115,8 @@ export function DatabasePage({
   const selectedSession = selectedConnectionId ? connectionStates[selectedConnectionId] : undefined;
   const selectedConnectionStatus: DatabaseConnectionStatus = selectedSession?.status ?? "disconnected";
   const schemaEnabled = Boolean(
-    selectedConnection &&
+    active &&
+      selectedConnection &&
       (selectedConnectionStatus === "connecting" || selectedConnectionStatus === "connected"),
   );
   // The initial schema load fetches the connected database (PostgreSQL) or every
@@ -171,7 +173,8 @@ export function DatabasePage({
     return activeCatalog.schemas.map((schema) => schema.key).filter((key) => key !== "");
   }, [activeQueryConnection?.database, activeQueryTab?.catalog, activeQueryTab?.connectionId, treeModel]);
   const structureEnabled = Boolean(
-    activeTableTab &&
+    active &&
+      activeTableTab &&
       activeTableTab.segment === "structure" &&
       (connectionStates[activeTableTab.connectionId]?.status === "connecting" ||
         connectionStates[activeTableTab.connectionId]?.status === "connected"),
@@ -286,6 +289,9 @@ export function DatabasePage({
   // connection loads through its own queries; without this a second connected
   // connection would sit empty until manually expanded.
   useEffect(() => {
+    if (!active) {
+      return;
+    }
     for (const connection of connections) {
       const status = connectionStates[connection.id]?.status;
       if (status === "connected" || status === "connecting") {
@@ -295,7 +301,7 @@ export function DatabasePage({
     // loadConnectionRoot is recreated each render and guards against duplicate
     // fetches internally, so it is intentionally excluded from the deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connections, connectionStates]);
+  }, [active, connections, connectionStates]);
 
   // Feed the selected connection's loaded schema into the cache, grouped by
   // catalog (the connected database for PostgreSQL, every database for MySQL,
@@ -555,12 +561,12 @@ export function DatabasePage({
   );
 
   useEffect(() => {
-    if (!onShellSidebarChange) {
+    if (!active || !onShellSidebarChange) {
       return;
     }
     onShellSidebarChange(shellSidebar);
     return () => onShellSidebarChange(null);
-  }, [onShellSidebarChange, shellSidebar]);
+  }, [active, onShellSidebarChange, shellSidebar]);
 
   const toolbarConnectionId = activeQueryTab
     ? activeQueryTab.connectionId
@@ -590,12 +596,12 @@ export function DatabasePage({
   );
 
   useEffect(() => {
-    if (!onShellStatusBarChange) {
+    if (!active || !onShellStatusBarChange) {
       return;
     }
     onShellStatusBarChange(shellStatusBar);
     return () => onShellStatusBarChange(null);
-  }, [onShellStatusBarChange, shellStatusBar]);
+  }, [active, onShellStatusBarChange, shellStatusBar]);
 
   // Inline editing is available when a real table with a primary key is being
   // browsed on a connected session; the primary key locates rows for the
@@ -642,6 +648,7 @@ export function DatabasePage({
           />
         ) : null}
         <DatabaseWorkspace
+          active={active}
           activeTab={activeTab}
           activeTabId={databaseTabs.activeTabId}
           connections={connections}

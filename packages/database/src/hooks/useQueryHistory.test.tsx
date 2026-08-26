@@ -65,6 +65,14 @@ describe("dbQueryHistoryQueryKey", () => {
 });
 
 describe("useQueryHistory", () => {
+  it("stays disabled while the Database surface is inactive", () => {
+    const { Wrapper } = createWrapper();
+    renderHook(() => useQueryHistory("ws-1", 50, { active: false }), {
+      wrapper: Wrapper,
+    });
+    expect(listMock).not.toHaveBeenCalled();
+  });
+
   it("maps nullable persisted fields into optional entry fields", async () => {
     listMock.mockResolvedValue([
       persisted({ rowCount: null, durationMs: 12, error: null }),

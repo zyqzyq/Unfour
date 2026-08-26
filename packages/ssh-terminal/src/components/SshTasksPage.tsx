@@ -106,6 +106,7 @@ export function SshTasksPage({
   } = runSession;
 
   const tasksQuery = useQuery({
+    enabled: Boolean(active && workspaceId),
     queryKey: ["ssh-tasks", workspaceId],
     queryFn: () => listSshTasks(workspaceId),
   });
@@ -119,12 +120,12 @@ export function SshTasksPage({
   const detailQuery = useQuery({
     queryKey: ["ssh-task", workspaceId, activeTaskId],
     queryFn: () => getSshTask(workspaceId, activeTaskId!),
-    enabled: Boolean(activeTaskId),
+    enabled: Boolean(active && activeTaskId),
   });
   const runsQuery = useQuery({
     queryKey: ["ssh-task-runs", workspaceId, activeTaskId],
     queryFn: () => listSshTaskRuns(workspaceId, activeTaskId!),
-    enabled: Boolean(activeTaskId),
+    enabled: Boolean(active && activeTaskId),
   });
 
   useEffect(() => {

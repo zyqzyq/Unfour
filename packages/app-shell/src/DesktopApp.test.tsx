@@ -122,6 +122,9 @@ vi.mock("@unfour/ui", () => ({
       </div>
     ) : null,
   FeedbackProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+  LoadingState: ({ children }: { children?: ReactNode }) => (
+    <div>{children ?? "Loading"}</div>
+  ),
   MainWorkspace: ({ children }: { children: ReactNode }) => <>{children}</>,
   useFeedbackErrorHandler: () => vi.fn(),
   useI18n: () => ({ t: (key: string) => key }),
@@ -154,6 +157,35 @@ vi.mock("@unfour/workspace-environments", () => ({
   WorkspaceEnvironmentsStatusBar: ({ workspaceName }: { workspaceName: string }) => (
     <div>Workspace status: {workspaceName}</div>
   ),
+}));
+
+vi.mock("./components/LazyFeatureModules", () => ({
+  ApiClientModule: () => null,
+  DatabaseModule: () => null,
+  SshTerminalLogPanel: () => null,
+  SshTerminalModule: () => null,
+  SshTerminalStatusBar: ({ rightAccessory }: { rightAccessory?: ReactNode }) => (
+    <>{rightAccessory}</>
+  ),
+  WorkspaceEnvironmentsModule: ({
+    initialEnvironmentId,
+    onDirtyChange,
+  }: {
+    initialEnvironmentId?: string | null;
+    onDirtyChange?: (dirty: boolean) => void;
+  }) => (
+    <div>
+      Workspace manager: {initialEnvironmentId}
+      <button onClick={() => onDirtyChange?.(true)} type="button">
+        Mark variables dirty
+      </button>
+    </div>
+  ),
+  WorkspaceEnvironmentsModuleStatusBar: ({
+    workspaceName,
+  }: {
+    workspaceName: string;
+  }) => <div>Workspace status: {workspaceName}</div>,
 }));
 
 vi.mock("./AppShell", () => ({
@@ -349,22 +381,23 @@ describe("DesktopApp extensions", () => {
     expect(queryMocks.mutate).toHaveBeenCalledWith("ws-imported");
   });
 
-  it("opens workspace variable management outside the API Client", () => {
+  it("opens workspace variable management outside the API Client", async () => {
     render(<DesktopApp />);
 
     fireEvent.click(screen.getByRole("button", { name: "Manage variables" }));
 
-    expect(screen.getByText("Workspace manager: env-dev")).toBeTruthy();
-    expect(screen.getByText("Workspace status: Default Workspace")).toBeTruthy();
+    expect(await screen.findByText("Workspace manager: env-dev")).toBeTruthy();
+    expect(await screen.findByText("Workspace status: Default Workspace")).toBeTruthy();
     // Scheme A: keep the module activity bar while the manager replaces main.
     expect(screen.getByRole("button", { name: "Open command palette" })).toBeTruthy();
   });
 
-  it("confirms before leaving dirty variable management via the activity bar", () => {
+  it("confirms before leaving dirty variable management via the activity bar", async () => {
     setActiveTab.mockClear();
     render(<DesktopApp />);
 
     fireEvent.click(screen.getByRole("button", { name: "Manage variables" }));
+    await screen.findByText("Workspace manager: env-dev");
     fireEvent.click(screen.getByRole("button", { name: "Mark variables dirty" }));
     fireEvent.click(screen.getByRole("button", { name: "Open SSH Terminal" }));
 
@@ -378,11 +411,12 @@ describe("DesktopApp extensions", () => {
     expect(setActiveTab).toHaveBeenCalledWith("ssh-main");
   });
 
-  it("keeps dirty variable management open when leave is cancelled", () => {
+  it("keeps dirty variable management open when leave is cancelled", async () => {
     setActiveTab.mockClear();
     render(<DesktopApp />);
 
     fireEvent.click(screen.getByRole("button", { name: "Manage variables" }));
+    await screen.findByText("Workspace manager: env-dev");
     fireEvent.click(screen.getByRole("button", { name: "Mark variables dirty" }));
     fireEvent.click(screen.getByRole("button", { name: "Open SSH Terminal" }));
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));

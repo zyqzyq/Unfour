@@ -5,7 +5,6 @@ import {
   connectSshSession,
   exportSshLog,
   getSshHostFingerprint,
-  getSshSessionHistory,
   resetSshHostFingerprint,
   saveSshConnection,
   testSshConnection,
@@ -16,13 +15,14 @@ import {
   type SshSessionSummary,
 } from "@unfour/command-client";
 import { useWorkspaceStore } from "@unfour/workspace-core";
-import { ConfirmDialog, LoadingState, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
+import { ConfirmDialog, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
 import { TerminalWorkspace } from "./components/TerminalWorkspace";
 import { SshConnectionTree } from "./components/SshConnectionTree";
 import { SshConnectionDialog } from "./components/SshConnectionDialog";
 import { SshTestResultDialog } from "./components/SshTestResultDialog";
 import { HostKeyTrustDialog } from "./components/HostKeyTrustDialog";
 import { useSshConnections } from "./hooks/useSshConnections";
+import { useActiveSessionHistory } from "./hooks/useActiveSessionHistory";
 import { useSshTerminalChannel } from "./hooks/useSshTerminalChannel";
 import { useTerminalSessionActions } from "./hooks/useTerminalSessionActions";
 import { useTerminalSessions } from "./hooks/useTerminalSessions";
@@ -108,7 +108,6 @@ export function SshConnectionsPage({
     fingerprint: undefined,
     mismatchError: null,
   });
-  const hydratedSessionIdsRef = useRef(new Set<string>());
   const [form, setForm] = useState<SshConnectionInput>(() =>
     defaultSshConnectionInput(workspaceId),
   );
@@ -116,7 +115,7 @@ export function SshConnectionsPage({
     null,
   );
 
-  const connectionsQuery = useSshConnections(workspaceId);
+  const connectionsQuery = useSshConnections(workspaceId, { active });
   const sessionsQuery = useTerminalSessions(workspaceId, { active });
   const connections = useMemo(() => connectionsQuery.data ?? [], [connectionsQuery.data]);
   const backendSessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data]);
@@ -170,28 +169,16 @@ export function SshConnectionsPage({
     appendTerminalEvents,
     workspaceId,
   });
+  const markSessionHistoryHydrated = useActiveSessionHistory({
+    active,
+    hydrate: hydrateTerminalSession,
+    sessionId: activeSession?.sessionId,
+    workspaceId,
+  });
 
   useEffect(() => {
     activateWorkspace(workspaceId);
-    hydratedSessionIdsRef.current.clear();
   }, [activateWorkspace, workspaceId]);
-
-  useEffect(() => {
-    const pending = sessions.filter(
-      (session) => !hydratedSessionIdsRef.current.has(session.sessionId),
-    );
-    pending.forEach((session) => hydratedSessionIdsRef.current.add(session.sessionId));
-    pending.forEach((session) => {
-      getSshSessionHistory({
-        workspaceId,
-        sessionId: session.sessionId,
-      })
-        .then((events) => hydrateTerminalSession(session.sessionId, events))
-        .catch(() => {
-          hydratedSessionIdsRef.current.delete(session.sessionId);
-        });
-    });
-  }, [hydrateTerminalSession, sessions, workspaceId]);
 
   useEffect(() => {
     if (!connections.length) {
@@ -269,7 +256,7 @@ export function SshConnectionsPage({
     mutationFn: (connectionId: string) =>
       connectSshSession({ workspaceId, connectionId, cols: 120, rows: 32 }),
     onSuccess: (session) => {
-      hydratedSessionIdsRef.current.add(session.sessionId);
+      markSessionHistoryHydrated(session.sessionId);
       startTerminalSession(session.sessionId, [
         {
           sessionId: session.sessionId,
@@ -591,42 +578,37 @@ export function SshConnectionsPage({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--u-color-surface)]">
-      {connectionsQuery.isLoading || sessionsQuery.isLoading ? (
-        <LoadingState className="min-h-0 flex-1 rounded-none border-0">
-          {t("ssh.state.loadingWorkspace")}
-        </LoadingState>
-      ) : (
-        <TerminalWorkspace
-          activeSession={activeSession}
-          activeSessionId={activeSessionId}
-          actionError={actionError}
-          connecting={connectMutation.isPending}
-          error={blockingError}
-          events={terminalEvents}
-          emptyMessage={
-            connections.length
-              ? t("ssh.empty.selectConnection")
-              : t("ssh.empty.noConnections")
-          }
-          onClear={(sessionId) => clearTerminalSessionEvents(sessionId)}
-          onCloseAll={closeAllSessions}
-          onCloseLeft={closeSessionsToLeft}
-          onCloseOthers={closeOtherSessions}
-          onCloseRight={closeSessionsToRight}
-          onCloseSession={requestCloseSession}
-          onDuplicate={duplicateSession}
-          onNewConnection={newConnection}
-          onNewSession={connectSelectedConnection}
-          onOpenPreferences={openConnectionSettings}
-          onReconnect={reconnectSession}
-          onRetry={retryConnection}
-          onSelectSession={setActiveSessionId}
-          selectedConnection={selectedConnection}
-          sessions={sessionTabs}
-          splitMode={split.mode}
-          surfaceActive={active}
-        />
-      )}
+      <TerminalWorkspace
+        activeSession={activeSession}
+        activeSessionId={activeSessionId}
+        actionError={actionError}
+        connecting={connectMutation.isPending}
+        error={blockingError}
+        events={terminalEvents}
+        emptyMessage={
+          connections.length
+            ? t("ssh.empty.selectConnection")
+            : t("ssh.empty.noConnections")
+        }
+        loading={connectionsQuery.isLoading}
+        onClear={(sessionId) => clearTerminalSessionEvents(sessionId)}
+        onCloseAll={closeAllSessions}
+        onCloseLeft={closeSessionsToLeft}
+        onCloseOthers={closeOtherSessions}
+        onCloseRight={closeSessionsToRight}
+        onCloseSession={requestCloseSession}
+        onDuplicate={duplicateSession}
+        onNewConnection={newConnection}
+        onNewSession={connectSelectedConnection}
+        onOpenPreferences={openConnectionSettings}
+        onReconnect={reconnectSession}
+        onRetry={retryConnection}
+        onSelectSession={setActiveSessionId}
+        selectedConnection={selectedConnection}
+        sessions={sessionTabs}
+        splitMode={split.mode}
+        surfaceActive={active}
+      />
       <SshConnectionDialog
         canTest={
           Boolean(form.host?.trim()) &&

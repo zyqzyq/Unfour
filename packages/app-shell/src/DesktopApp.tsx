@@ -1,11 +1,4 @@
-import { ApiClientPage } from "@unfour/api-client";
 import AppShell from "./AppShell";
-import { DatabasePage } from "@unfour/database";
-import { TerminalLogPanel, TerminalPage, TerminalStatusBar } from "@unfour/ssh-terminal";
-import {
-  WorkspaceEnvironmentsPage,
-  WorkspaceEnvironmentsStatusBar,
-} from "@unfour/workspace-environments";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -32,6 +25,11 @@ import {
 import { useWorkspaceStore } from "@unfour/workspace-core";
 import { AppTitleBar } from "./components/AppTitleBar";
 import { BottomPanelPlaceholder } from "./components/BottomPanelPlaceholder";
+import {
+  ApiClientModule, DatabaseModule, SshTerminalLogPanel, SshTerminalModule,
+  SshTerminalStatusBar, WorkspaceEnvironmentsModule,
+  WorkspaceEnvironmentsModuleStatusBar,
+} from "./components/LazyFeatureModules";
 import { LayoutControls } from "./components/LayoutControls";
 import { ModuleActivityBar } from "./components/ModuleActivityBar";
 import { ModuleSidebar } from "./components/ModuleSidebar";
@@ -39,12 +37,13 @@ import { RightInspectorPlaceholder } from "./components/RightInspectorPlaceholde
 import { StatusBarPlaceholder } from "./components/StatusBarPlaceholder";
 import { CommandPaletteAction } from "./components/utils";
 import { useLayoutPersistence } from "./components/useLayoutPersistence";
+import { useFeatureModulePreload } from "./components/useFeatureModulePreload";
+import { usePersistentFeatureMounts } from "./components/usePersistentFeatureMounts";
 import { useWorkspaceInit } from "./components/useWorkspaceInit";
 import type {
   DesktopAppExtensionContext,
   DesktopAppExtensions,
 } from "./extensions";
-
 export type DesktopAppProps = {
   extensions?: DesktopAppExtensions;
 };
@@ -77,7 +76,7 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
     activeWorkspaceId,
     bottomPanelHeight,
     rightInspectorWidth,
-    setActiveTab,
+    setActiveTab: setActiveTabInStore,
     setActiveWorkspace,
     setBottomPanelHeight,
     setRightInspectorWidth,
@@ -88,12 +87,23 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
     toggleSidebar,
     tabs,
   } = useWorkspaceStore();
+  const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
+  const { setActiveTab, shouldMountApi, shouldMountDatabase, shouldMountSsh } =
+    usePersistentFeatureMounts({
+      activeTabId,
+      setActiveTab: setActiveTabInStore,
+      tabs,
+    });
   const healthQuery = useQuery({ queryKey: ["system-health"], queryFn: getSystemHealth });
   const workspaceQuery = useQuery({ queryKey: ["workspaces"], queryFn: getWorkspaceState });
   const activeWorkspace =
     workspaceQuery.data?.workspaces.find(
       (w) => w.id === (activeWorkspaceId || workspaceQuery.data.activeWorkspaceId),
     ) ?? workspaceQuery.data?.workspaces[0];
+  const handlePreloadFeature = useFeatureModulePreload(activeTab.kind, {
+    queryClient,
+    workspaceId: activeWorkspace?.id,
+  });
   const workspaceLayoutQuery = useQuery({
     enabled: Boolean(activeWorkspace?.id),
     queryKey: ["workspace-layout", activeWorkspace?.id],
@@ -247,9 +257,13 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
   );
   const handleSelectModule = useCallback(
     (tabId: string) => {
+      const kind = tabs.find((tab) => tab.id === tabId)?.kind;
+      if (kind) {
+        void handlePreloadFeature(kind).catch(() => undefined);
+      }
       requestLeaveVariableManager({ kind: "select-module", tabId });
     },
-    [requestLeaveVariableManager],
+    [handlePreloadFeature, requestLeaveVariableManager, tabs],
   );
   const handleToggleSidebar = useCallback(() => {
     if (variableManagerOpen) {
@@ -283,7 +297,6 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
   const handleDatabaseStatusBarChange = useCallback((content: ReactNode | null) => {
     setDatabaseStatusBarContent(content);
   }, []);
-  const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
   const extensionContext: DesktopAppExtensionContext = useMemo(
     () => ({
       activeTab,
@@ -331,6 +344,7 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
           <ModuleActivityBar
             activeKind={activeTab.kind}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+            onPreload={handlePreloadFeature}
             sidebarCollapsed={sidebarCollapsed || variableManagerOpen}
             onSelect={handleSelectModule}
             onToggleSidebar={handleToggleSidebar}
@@ -338,7 +352,15 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
         }
         bottomPanel={
           variableManagerOpen ? undefined : activeTab.kind === "ssh" && activeWorkspace ? (
-            <TerminalLogPanel
+            <SshTerminalLogPanel
+              fallback={
+                <BottomPanelPlaceholder
+                  collapsed={bottomPanelCollapsed}
+                  height={bottomPanelHeight}
+                  onCollapse={() => setBottomPanelCollapsed(true)}
+                  onHeightChange={setBottomPanelHeight}
+                />
+              }
               collapsed={bottomPanelCollapsed}
               height={bottomPanelHeight}
               onCollapse={() => setBottomPanelCollapsed(true)}
@@ -403,9 +425,27 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
         }
         statusBar={
           variableManagerOpen && activeWorkspace ? (
-            <WorkspaceEnvironmentsStatusBar workspaceName={activeWorkspace.name} />
+            <WorkspaceEnvironmentsModuleStatusBar
+              fallback={
+                <StatusBarPlaceholder
+                  activeTab={activeTab}
+                  activeWorkspace={activeWorkspace}
+                  healthReady={healthQuery.data?.storageReady === true}
+                  rightAccessory={statusBarRightAccessory}
+                />
+              }
+              workspaceName={activeWorkspace.name}
+            />
           ) : activeTab.kind === "ssh" && activeWorkspace ? (
-            <TerminalStatusBar
+            <SshTerminalStatusBar
+              fallback={
+                <StatusBarPlaceholder
+                  activeTab={activeTab}
+                  activeWorkspace={activeWorkspace}
+                  healthReady={healthQuery.data?.storageReady === true}
+                  rightAccessory={statusBarRightAccessory}
+                />
+              }
               rightAccessory={statusBarRightAccessory}
               workspaceId={activeWorkspace.id}
               workspaceName={activeWorkspace.name}
@@ -426,13 +466,13 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
             className="[&>section]:p-0"
             tabBar={null}
           >
-            {activeWorkspace && (
+            {activeWorkspace && shouldMountApi && (
               <div
                 className={
                   activeTab.kind === "api" && !variableManagerOpen ? "h-full" : "hidden"
                 }
               >
-                <ApiClientPage
+                <ApiClientModule
                   active={activeTab.kind === "api" && !variableManagerOpen}
                   onShellSidebarChange={handleApiSidebarChange}
                   onActiveSavedRequestChange={setSelectedApiRequest}
@@ -441,23 +481,23 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
                 />
               </div>
             )}
-            {activeTab.kind === "ssh" && activeWorkspace && (
-              <div className={variableManagerOpen ? "hidden" : "h-full"}>
-                <TerminalPage
+            {activeWorkspace && shouldMountSsh && (
+              <div
+                className={
+                  activeTab.kind === "ssh" && !variableManagerOpen ? "h-full" : "hidden"
+                }
+              >
+                <SshTerminalModule
+                  active={activeTab.kind === "ssh" && !variableManagerOpen}
                   onShellSidebarChange={handleSshSidebarChange}
                   workspaceId={activeWorkspace.id}
                 />
               </div>
             )}
-            {/* Keep DatabasePage mounted across module switches (mirrors the
-                ApiClientPage pattern above). The SQL editor is a Monaco instance
-                that remounts from scratch when this subtree is conditionally
-                unmounted, which repaints the editor with Monaco's default white
-                `vs` theme for one frame before `handleMount` applies the
-                unfour theme — the white flash seen when entering the database
-                module with a query tab open. Mounting it always (hidden when
-                inactive) preserves the live editor instance and its theme. */}
-            {activeWorkspace && (
+            {/* Keep DatabasePage mounted after its first visit. Reusing the
+                Monaco instance preserves its theme and avoids a white repaint
+                when the user returns to a query tab. */}
+            {activeWorkspace && shouldMountDatabase && (
               <div
                 className={
                   activeTab.kind === "database" && !variableManagerOpen
@@ -465,7 +505,8 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
                     : "hidden"
                 }
               >
-                <DatabasePage
+                <DatabaseModule
+                  active={activeTab.kind === "database" && !variableManagerOpen}
                   onShellSidebarChange={handleDatabaseSidebarChange}
                   onShellStatusBarChange={handleDatabaseStatusBarChange}
                   statusBarRightAccessory={statusBarRightAccessory}
@@ -475,7 +516,7 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
               </div>
             )}
             {activeWorkspace && variableManagerOpen && variableManagerRequest && (
-              <WorkspaceEnvironmentsPage
+              <WorkspaceEnvironmentsModule
                 initialEnvironmentId={variableManagerRequest.environmentId}
                 key={`${activeWorkspace.id}:${variableManagerRequest.nonce}`}
                 onClose={closeVariableManager}

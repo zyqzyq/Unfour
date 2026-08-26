@@ -5,14 +5,16 @@ import { SshTasksPage } from "./components/SshTasksPage";
 import { useSshConnections } from "./hooks/useSshConnections";
 
 export function TerminalPage({
+  active = true,
   onShellSidebarChange,
   workspaceId,
 }: {
+  active?: boolean;
   onShellSidebarChange?: (sidebar: ReactNode | null) => void;
   workspaceId: string;
 }) {
   const [activeMode, setActiveMode] = useState<"connections" | "tasks">("connections");
-  const connectionsQuery = useSshConnections(workspaceId);
+  const connectionsQuery = useSshConnections(workspaceId, { active });
   const openConnections = useCallback(() => setActiveMode("connections"), []);
   const openTasks = useCallback(() => setActiveMode("tasks"), []);
 
@@ -26,7 +28,7 @@ export function TerminalPage({
         }
       >
         <SshConnectionsPage
-          active={activeMode === "connections"}
+          active={active && activeMode === "connections"}
           onOpenTasks={openTasks}
           onShellSidebarChange={onShellSidebarChange}
           workspaceId={workspaceId}
@@ -38,7 +40,7 @@ export function TerminalPage({
         }
       >
         <SshTasksPage
-          active={activeMode === "tasks"}
+          active={active && activeMode === "tasks"}
           connections={connectionsQuery.data ?? []}
           key={workspaceId}
           onOpenConnections={openConnections}
