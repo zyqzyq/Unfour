@@ -26,6 +26,7 @@ lefthook-local.yml
 .codex-target*
 .superpowers/
 .worktrees/
+.pnpm-store/
 
 # Editor directories and files
 .vscode/*
