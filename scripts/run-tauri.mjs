@@ -10,12 +10,29 @@ import {
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const invocation = resolveTauriInvocation(process.argv.slice(2));
+const tauriArgs = invocation.args;
+
+// Synchronize generated version consumers before the Tauri CLI reads its
+// configuration. `beforeDevCommand`/`beforeBuildCommand` are too late for
+// configuration values that the CLI uses while starting the command.
+if (tauriArgs[0] === "dev" || tauriArgs[0] === "build") {
+  const sync = spawnSync(
+    process.execPath,
+    [resolve(repoRoot, "scripts/sync-version.mjs")],
+    {
+      cwd: repoRoot,
+      stdio: "inherit",
+    },
+  );
+  if (sync.error) throw sync.error;
+  if (sync.status !== 0) process.exit(sync.status ?? 1);
+}
+
 const { channel, environment } = tauriEnvironment(
   process.env,
   invocation.defaultChannel,
   invocation.forcedChannel,
 );
-const tauriArgs = invocation.args;
 const args = ["--filter", "@unfour/desktop", "tauri", ...tauriArgs];
 
 let command = "pnpm";

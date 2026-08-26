@@ -1,12 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Unfour",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "identifier": "dev.unfour",
   "build": {
-    "beforeDevCommand": "node ../../scripts/sync-version.mjs && node ../../scripts/prepare-tauri-sidecars.mjs --debug && pnpm run dev",
+    "beforeDevCommand": "node ../../scripts/prepare-tauri-sidecars.mjs --debug && pnpm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "node ../../scripts/sync-version.mjs && pnpm run build && node ../../scripts/prepare-tauri-sidecars.mjs",
+    "beforeBuildCommand": "pnpm run build && node ../../scripts/prepare-tauri-sidecars.mjs",
     "frontendDist": "../dist"
   },
   "app": {

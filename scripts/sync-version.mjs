@@ -2,7 +2,7 @@
 // Single source of truth: root Cargo.toml [workspace.package].version
 // Propagates the version into tauri.conf.json and every package.json so a
 // release bump only requires editing one line in the root Cargo.toml.
-// Runs automatically via tauri.conf.json beforeDev/beforeBuild commands.
+// Runs automatically via run-tauri.mjs before the Tauri CLI starts dev/build.
 
 import { readFileSync, writeFileSync, existsSync, readdirSync, lstatSync } from "node:fs";
 import { dirname, resolve, relative } from "node:path";
