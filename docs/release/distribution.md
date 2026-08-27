@@ -28,8 +28,8 @@ Windows, the configured release target produces an NSIS installer.
 
 | Platform | Official distribution status | Format |
 | --- | --- | --- |
-| Windows x64 | Community release / Preview distribution | NSIS `.exe` |
-| macOS arm64/x64 | Experimental / unverified until real-device smoke checks | Existing Tauri `.dmg` and archive outputs |
+| Windows x64 | Community release / Preview distribution; primary distribution path | NSIS `.exe` |
+| macOS arm64/x64 | Real-device verified on Apple Silicon and Intel; unsigned and not notarized | Existing Tauri `.dmg` and archive outputs |
 | Linux x64 | Experimental / unverified until real-device smoke checks | Existing Tauri `.AppImage`, `.deb`, and available package outputs |
 
 Windows ships a single NSIS `.exe` installer. Before collecting release assets,
@@ -57,11 +57,12 @@ Get-FileHash -Algorithm SHA256 .\Unfour-*.exe
 
 ## Release caveats
 
-- Installers are unsigned and may trigger SmartScreen or other operating-system
-  warnings.
-- macOS and Linux must remain labeled experimental/unverified until real-device
-  launch and smoke checks are recorded; a successful CI bundle build is not
-  platform verification.
+- The Windows NSIS installer and macOS packages are unsigned and may trigger
+  operating-system warnings; macOS packages are also not notarized, so
+  Gatekeeper may block them.
+- macOS Apple Silicon and Intel packages are real-device verified. Linux remains
+  experimental / unverified until real-device launch and smoke checks are
+  recorded; a successful CI bundle build is not platform verification.
 - Real SSH, PostgreSQL, MySQL/MariaDB, and system Keychain/Secret Service checks
   are not represented as automated passes unless they were run against those
   real systems.

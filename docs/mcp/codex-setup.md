@@ -55,8 +55,9 @@ Remove-Item Env:UNFOUR_MCP_STORAGE_MODE
 ```
 
 This mode is only for MCP registry validation, CI, protocol smoke tests, and
-isolated integration tests. Do not use it for normal MCP clients, because its
-workspace and credential store are intentionally empty and in-memory.
+isolated integration tests. Do not use it for normal Codex or Cursor usage,
+because its workspace and credential store are intentionally empty and
+in-memory.
 
 ## Registry Docker Image
 
@@ -105,6 +106,10 @@ unset, or set it to `0`, to disable idle shutdown. Values above 86,400 seconds
 are capped at one day; invalid values use the disabled default.
 
 ## Example Prompts
+
+These examples are individual diagnostic or remediation actions that Codex or
+Cursor can combine with the user into a troubleshooting loop. The server does not
+automatically run a complete root-cause playbook.
 
 ```text
 Use the Unfour MCP server to list saved API requests in the current workspace.

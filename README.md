@@ -4,7 +4,7 @@
 
 # Unfour
 
-**A local-first desktop workspace for backend developers that combines API debugging, SSH terminals, and database management — and exposes them to your AI agent through a local MCP server.**
+**A local-first desktop workspace for backend developers that combines API debugging, SSH terminals, and database management — and exposes them to Codex and Cursor through a local MCP server.**
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![CI](https://github.com/zyqzyq/Unfour/actions/workflows/ci.yml/badge.svg)](https://github.com/zyqzyq/Unfour/actions/workflows/ci.yml)
@@ -28,9 +28,9 @@ from GitHub Releases.
 
 - Windows is the primary distribution path: NSIS `.exe` installer. It is
   unsigned and may trigger SmartScreen.
-- macOS has Apple Silicon and Intel packages, but they are not Apple-signed or
-  notarized; Gatekeeper may block them. Do not describe them as notarized or
-  verified.
+- macOS has Apple Silicon and Intel packages that have been verified on real
+  devices, but they are not Apple-signed or notarized; Gatekeeper may block
+  them.
 - Linux packages are experimental / unverified.
 - Verify downloaded installers with the release `SHA256SUMS.txt` asset.
 
@@ -39,9 +39,14 @@ from GitHub Releases.
 Unfour is a local-first desktop workspace for backend and operations work.
 It keeps API requests, SSH connections, database connections, local activity,
 and workspace layout in one local-first application, and exposes those
-capabilities to your AI agent through a local MCP server. Codex and Cursor can
-use the same saved connections for diagnostic inspection through the available
-tools; multi-step troubleshooting workflows are not a product feature.
+capabilities to Codex and Cursor through a local MCP server. The desktop
+workbench and the local MCP server share the same command bus and the same
+saved API, SSH, and database connections, so you and Codex or Cursor can
+reproduce an issue, inspect logs and database state, and then make a fix in the
+same troubleshooting loop. Troubleshooting is Unfour's core product loop.
+Unfour does not ship an automatic troubleshooting playbook: you and Codex or
+Cursor work through the steps together, using ready-made diagnostic tools
+rather than a workflow runner.
 
 The app is built with Tauri 2, React, TypeScript, and Rust. The frontend owns
 the workbench UI, while security-sensitive execution such as HTTP, SSH,
@@ -67,8 +72,10 @@ capability crates and the command bus.
   title-bar active-environment switching.
 - **MCP integration for Codex and Cursor** - Expose safe local stdio diagnostic
   tools through the same command bus used by the desktop app. Codex and Cursor
-  can use the same saved API, SSH, and database connections; multi-step
-  troubleshooting workflows are not a product feature.
+  can use the same saved API, SSH, and database connections to reproduce
+  issues, inspect logs and database state, and make a fix. The user and Codex
+  or Cursor work through the steps together; Unfour does not ship an automatic
+  troubleshooting playbook or workflow runner.
 
 > [Connect Codex and Cursor to Unfour MCP →](docs/mcp/client-setup.md)
 
@@ -165,8 +172,8 @@ verification evidence is documented in:
 
 Windows is the primary distribution path and ships an unsigned NSIS `.exe`
 installer that may trigger SmartScreen. macOS has Apple Silicon and Intel
-packages, but they are not Apple-signed or notarized and Gatekeeper may block
-them. Linux remains experimental / unverified. Use the release
+packages verified on real devices, but they are not Apple-signed or notarized
+and Gatekeeper may block them. Linux remains experimental / unverified. Use the release
 `SHA256SUMS.txt` to verify downloaded artifacts, and do not claim a release
 check passes unless it was run successfully for the target platform or is
 backed by current repository evidence.
@@ -208,9 +215,11 @@ GPT-5.6 helped analyze SSH and database permission boundaries, refine MCP tool
 design, and plan the project architecture and release process.
 
 The local Unfour MCP server lets Codex and Cursor use the same saved API, SSH,
-and database connections for diagnostic inspection. It follows the same command
-bus, workspace scope, credential handling, and confirmation controls as the
-desktop app.
+and database connections for diagnostic inspection and fixes. It follows the
+same command bus, workspace scope, credential handling, and confirmation
+controls as the desktop app. Codex and Cursor can participate in the
+troubleshooting loop through MCP, but connecting them does not automatically
+run a complete root-cause playbook.
 
 ## License
 

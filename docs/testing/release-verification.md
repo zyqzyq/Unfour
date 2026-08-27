@@ -36,7 +36,8 @@ evidence.
 | Aggregate repository check | `pnpm run check` | Yes | NOT RUN after pull (runner disk space insufficient) |
 | Rust tests | `pnpm run test:rust` | Yes | NOT RUN |
 | Windows NSIS bundle | `pnpm run tauri build` | Yes on Windows | NOT RUN |
-| macOS/Linux Tauri bundles | `pnpm run tauri build` | Yes on each target | NOT VERIFIED (requires target runners and real-device smoke) |
+| macOS Tauri bundles | `pnpm run tauri build` | Yes on macOS target | PASS (Apple Silicon and Intel packages are real-device verified; unsigned/not notarized) |
+| Linux Tauri bundles | `pnpm run tauri build` | Yes on Linux target | NOT VERIFIED (requires target runner and real-device smoke) |
 
 If `pnpm run check` is used, record its subcommands and separately record any
 checks not included in the aggregate command.
@@ -46,7 +47,9 @@ checks not included in the aggregate command.
 | Platform | Required checks | Result |
 | --- | --- | --- |
 | Windows | NSIS install, launch, first viewport, upgrade from `v0.2.0`, running-`unfour-mcp` install/uninstall handling, credential behavior, quit/relaunch, and uninstall. | NOT VERIFIED |
-| macOS | Bundle build, install/launch, first viewport, Keychain, signing, and notarization status. | NOT VERIFIED |
+| macOS package/launch | Bundle build, install/launch, and first viewport on Apple Silicon and Intel real devices. | PASS (real-device verified) |
+| macOS Keychain | Keychain behavior on the target devices. | NOT VERIFIED |
+| macOS signing/notarization | Apple signing, notarization, and Gatekeeper assessment. | NOT VERIFIED (artifacts are unsigned and not notarized) |
 | Linux | Selected package build, install/launch, first viewport, Secret Service, and package-signing status. | NOT VERIFIED |
 
 Platform checks that cannot be run must remain `NOT VERIFIED` with a reason.
@@ -118,8 +121,9 @@ Manual checks:
 - SSH Terminal/SFTP/tasks/clipboard/history suggestions: PASS / FAIL / NOT VERIFIED
 - Database and row actions: PASS / FAIL / NOT VERIFIED
 - MCP including SSH history: PASS / FAIL / NOT VERIFIED
-- macOS/Linux installer smoke: PASS / FAIL / NOT VERIFIED
-- signing/notarization: PASS / FAIL / NOT VERIFIED
+- macOS installer smoke: PASS / FAIL / NOT VERIFIED
+- Linux installer smoke: PASS / FAIL / NOT VERIFIED
+- macOS signing/notarization: PASS / FAIL / NOT VERIFIED
 
 Known unresolved risks:
 - <failed, unverified, or accepted release risks>

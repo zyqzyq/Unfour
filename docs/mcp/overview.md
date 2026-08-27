@@ -1,13 +1,13 @@
 # MCP Overview
 
 `unfour-mcp` is a local stdio Model Context Protocol server. It exposes
-workspace, API Client, database, SSH, activity, and system-health tools to MCP
-clients.
+workspace, API Client, database, SSH, activity, and system-health tools to
+Codex and Cursor.
 
 ## Architecture
 
 ```text
-MCP client
+Codex or Cursor
   -> unfour-mcp stdio server
   -> MCP tool handler
   -> command-bus adapter
@@ -54,6 +54,12 @@ The `initialize` response includes instructions for a diagnose-then-act flow:
    writing files, or starting an SSH task. If asked to turn recent commands
    into a reusable task, draft steps from history and wait for user
    confirmation instead of saving or running a task automatically.
+
+This diagnose-then-act sequence is Unfour's troubleshooting loop: Codex or
+Cursor can use saved API, SSH, and database connections to reproduce an issue,
+inspect logs and database state, and then act with the user's review. The
+server does not automatically run a complete troubleshooting playbook; the
+user and Codex or Cursor coordinate the steps.
 
 ## Safety Posture
 
@@ -164,8 +170,8 @@ workspace. The real tool registry still handles `initialize`,
 to the normal command-bus policy and may still reach external services when a
 tool is explicitly called.
 
-Do not set this variable for normal Codex or Cursor usage. Those
-clients should use the default mode so MCP can read the desktop's real,
+Do not set this variable for normal Codex or Cursor usage. Codex and Cursor
+should use the default mode so MCP can read the desktop's real,
 workspace-scoped data.
 
 ## Current Non-Goals
@@ -174,7 +180,7 @@ The current Community MCP surface does not:
 
 - accept ad-hoc database connection strings;
 - open interactive SSH sessions;
-- provide multi-step troubleshooting workflows as a product feature;
+- ship an automatic troubleshooting playbook or workflow runner;
 - implement HTTP MCP transport;
 - return raw secret values;
 - attach to the running desktop process over IPC.

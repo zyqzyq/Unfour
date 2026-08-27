@@ -75,7 +75,7 @@
       },
       "mcp": {
         "title": "MCP",
-        "description": "用于 Codex 与 Cursor 的本地 MCP 连接信息。",
+        "description": "用于 Codex 与 Cursor 的本地 MCP 连接信息。Codex 与 Cursor 使用桌面应用的同一套已保存连接和命令总线进行排障。",
         "statusLabel": "MCP 状态",
         "statusValue": "本地 MCP 可用",
         "statusUnavailable": "本地 MCP 不可用",

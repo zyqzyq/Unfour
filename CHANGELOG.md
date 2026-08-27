@@ -376,8 +376,10 @@ First public release.
   may create duplicate shortcuts or uninstall entries and confuse upgrades.
 - Cross-format detection, automatic uninstall, and NSIS/MSI cross-upgrade are
   not implemented at this stage.
-- macOS and Linux artifacts remain experimental/unverified until real-device
-  smoke checks are complete.
+- macOS Apple Silicon and Intel packages are real-device verified, but remain
+  unsigned and unnotarized; Gatekeeper may block them.
+- Linux artifacts remain experimental/unverified until real-device smoke checks
+  are complete.
 
 [0.8.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.8.0
 [0.7.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.7.0

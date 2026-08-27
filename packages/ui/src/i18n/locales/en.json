@@ -75,7 +75,7 @@
       },
       "mcp": {
         "title": "MCP",
-        "description": "Local MCP connection details for Codex and Cursor.",
+        "description": "Local MCP connection details for Codex and Cursor. Codex and Cursor use the desktop app's saved connections and command bus for troubleshooting.",
         "statusLabel": "MCP status",
         "statusValue": "Local MCP available",
         "statusUnavailable": "Local MCP unavailable",

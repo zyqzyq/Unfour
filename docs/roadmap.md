@@ -115,8 +115,11 @@ Current status:
   the active release matrix;
 - continued platform hardening without expanding the current package or
   command-bus boundaries;
-- MCP tools are provided over local stdio through the command bus; multi-step
-  troubleshooting workflows are not a product feature.
+- MCP tools are provided over local stdio through the command bus and support
+  the product's troubleshooting loop: Codex and Cursor can use saved API, SSH,
+  and database connections to reproduce issues, inspect logs and database
+  state, and act on the findings; Unfour does not ship an automatic
+  troubleshooting playbook or workflow runner.
 
 Release claims remain limited by the current verification matrix.
 

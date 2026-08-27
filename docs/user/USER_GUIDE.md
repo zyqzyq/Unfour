@@ -21,8 +21,9 @@ The current published release is `v0.8.0`:
   saved requests, collections, environments, import/export, and request
   scripts with test and console results.
 - Local MCP is available through the stdio `unfour-mcp` server. It uses the
-  same command bus and the same saved API, SSH, and database connections for
-  Codex and Cursor diagnostics.
+  same command bus and the same saved API, SSH, and database connections, so
+  Codex and Cursor can reproduce issues, inspect logs and database state, and
+  make fixes alongside the user.
 - The Community edition is free and licensed under Apache-2.0. Cloud Sync is a
   Pro capability.
 - SQLite database workflows are usable.
@@ -31,27 +32,36 @@ The current published release is `v0.8.0`:
 - SSH Terminal workflows are experimental until the live SSH verification gate
   is completed.
 
-Multi-step AI troubleshooting workflows are not a product feature. Agents use
-the available MCP tools and the saved connections for diagnosis.
+Troubleshooting is a core product loop. Unfour does not include an automatic
+troubleshooting playbook: the user and Codex or Cursor work through the steps
+together with the available diagnostic tools. Those tools are not a workflow
+runner.
 
-## Connect an AI agent (MCP)
+## Connect Codex or Cursor (MCP)
 
 Unfour provides a local stdio MCP server for Codex and Cursor. It uses the same
 command bus as the desktop app and reads the workspace data and saved
 connections from the local storage.
 
+This gives Codex and Cursor the same troubleshooting surface as the desktop
+app: they can use saved connections to reproduce an issue, inspect logs or
+database state, and then act with your review. The steps remain collaborative;
+the server provides diagnostic tools, not an automatic troubleshooting
+playbook.
+
 1. Open the desktop app once. This creates `~/.unfour/unfour.sqlite`.
 2. In `Settings → MCP`, copy the absolute MCP command path shown by the app.
 3. Follow the [installed-user MCP setup](../mcp/client-setup.md) and paste that
    path into the Codex or Cursor configuration.
-4. Start or restart the MCP client after saving its configuration.
+4. Start or restart Codex or Cursor after saving its configuration.
 
 Do not set `UNFOUR_MCP_STORAGE_MODE=ephemeral` for daily use. That mode is for
 registry validation, CI, protocol smoke checks, and isolated tests; it uses an
 empty in-memory workspace instead of the desktop app's saved data.
 
 In the default `prod` environment, MCP is read-only. High-risk actions return
-`CONFIRMATION_REQUIRED` and must be reviewed before the client retries them.
+`CONFIRMATION_REQUIRED` and must be reviewed before Codex or Cursor retries
+them.
 
 ## API Client
 

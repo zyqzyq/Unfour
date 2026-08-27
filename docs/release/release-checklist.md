@@ -46,8 +46,10 @@ the Windows NSIS target. The Windows release asset set must contain one NSIS
 - Windows release notes identify NSIS as the only Windows installer format.
 - Unsigned artifacts and possible SmartScreen/security warnings are stated in
   the Release body.
-- macOS/Linux artifacts remain experimental or unverified until real-device
-  smoke checks are complete.
+- macOS Apple Silicon and Intel artifacts are real-device verified, but remain
+  unsigned and unnotarized; Gatekeeper may block them.
+- Linux artifacts remain experimental or unverified until real-device smoke
+  checks are complete.
 
 ## Manual gates
 
@@ -57,8 +59,9 @@ the Windows NSIS target. The Windows release asset set must contain one NSIS
   stall.
 - Windows first viewport, quit/relaunch, uninstall, and upgrade behavior:
   record the actual result; do not infer it from bundle generation.
-- macOS and Linux launch/install smoke: `NOT VERIFIED` until run on real
-  devices.
+- macOS Apple Silicon and Intel launch/install smoke: record the real-device
+  result; the published `v0.8.0` packages are real-device verified.
+- Linux launch/install smoke: `NOT VERIFIED` until run on real devices.
 - API request scripts, API snapshot/external-apply behavior, Workspace
   transactional domain behavior, SSH task snapshots/external apply and
   workspace cascades, SSH and Database connection snapshots/external apply and
@@ -68,7 +71,9 @@ the Windows NSIS target. The Windows release asset set must contain one NSIS
   actually tested.
 - Live SSH, PostgreSQL, MySQL/MariaDB, and system credential-store checks:
   require the corresponding real server, OS, or credential environment.
-- Signing/notarization status: record as unsigned/not verified until completed.
+- Signing/notarization status: record Windows and macOS artifacts as unsigned
+  and not notarized; platform verification does not imply signing or
+  notarization.
 
 ## Go / no-go
 

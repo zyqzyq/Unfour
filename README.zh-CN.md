@@ -4,7 +4,7 @@
 
 # Unfour
 
-**一个面向后端开发者的本地优先桌面工作台，整合 API 调试、SSH 终端与数据库管理，并通过本地 MCP 服务把能力暴露给你的 AI Agent。**
+**一个面向后端开发者的本地优先桌面工作台，整合 API 调试、SSH 终端与数据库管理，并通过本地 MCP 服务把能力暴露给 Codex 与 Cursor。**
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![CI](https://github.com/zyqzyq/Unfour/actions/workflows/ci.yml/badge.svg)](https://github.com/zyqzyq/Unfour/actions/workflows/ci.yml)
@@ -26,8 +26,8 @@
 
 - Windows 是主分发路径：NSIS `.exe` 安装包。该安装包尚未签名，可能触发
   SmartScreen。
-- macOS 提供 Apple Silicon 与 Intel 真机包，但未 Apple 签名、未公证；Gatekeeper
-  可能拦截。不要将其描述为已公证或已验证。
+- macOS 提供 Apple Silicon 与 Intel 包，均已在真机验证，但未 Apple 签名、未公证；
+  Gatekeeper 可能拦截。
 - Linux 安装包属于 experimental / unverified（实验性 / 未验证）。
 - 使用 Release 中的 `SHA256SUMS.txt` 校验下载的安装包。
 
@@ -35,8 +35,10 @@
 
 Unfour 是一个面向后端与运维工作的本地优先桌面工作台。它把 API 请求、SSH 连接、
 数据库连接、本地活动与工作台布局统一在一个本地优先的应用中，并通过本地 MCP 服务把这些
-能力暴露给你的 AI Agent。Codex 与 Cursor 可以通过现有工具使用同一套已保存连接进行诊断；
-多步骤排障工作流不是产品功能。
+能力暴露给 Codex 与 Cursor。桌面工作台与本地 MCP 服务共用同一条命令总线，以及同一套已保存
+的 API、SSH 与数据库连接，因此你可以和 Codex 或 Cursor 在同一排障闭环中复现问题、查日志、
+查数据库状态，再进行修复。排障是 Unfour 的核心产品闭环。Unfour 不内置自动运行的排障剧本：
+你与 Codex 或 Cursor 一起推进步骤，使用现成的诊断工具，而不是由 workflow runner 自动编排。
 
 应用基于 Tauri 2、React、TypeScript 与 Rust 构建。前端负责工作台界面，而 HTTP、SSH、
 数据库驱动、本地存储与凭据引用等安全敏感的执行逻辑，则位于 Rust 能力模块与命令总线之后。
@@ -55,7 +57,8 @@ Unfour 是一个面向后端与运维工作的本地优先桌面工作台。它�
   限定在某个本地工作区之内，并支持标题栏切换当前环境。
 - **MCP integration（面向 Codex 与 Cursor）** - 通过桌面应用所用的同一命令总线，
   以本地 stdio 方式提供安全的诊断工具。Codex 与 Cursor 可以使用同一套已保存的 API、
-  SSH 与数据库连接；多步骤排障工作流不是产品功能。
+  SSH 与数据库连接来复现问题、查日志、查数据库状态并进行修复。使用者与 Codex 或 Cursor
+  一起推进步骤；Unfour 不内置自动运行的排障剧本或 workflow runner。
 
 > [连接 Codex 与 Cursor 到 Unfour MCP →](docs/mcp/client-setup.md)
 
@@ -147,8 +150,8 @@ pnpm run test:rust      # cargo test --workspace
 - `docs/release/signing.md`
 
 Windows 是主分发路径，提供尚未签名的 NSIS `.exe` 安装包，可能触发 SmartScreen。
-macOS 提供 Apple Silicon 与 Intel 真机包，但未 Apple 签名、未公证，Gatekeeper 可能拦截。
-Linux 仍属于 experimental / unverified（实验性 / 未验证）。请使用 Release 中的
+macOS 提供已在 Apple Silicon 与 Intel 真机验证过的包，但未 Apple 签名、未公证，
+Gatekeeper 可能拦截。Linux 仍属于 experimental / unverified（实验性 / 未验证）。请使用 Release 中的
 `SHA256SUMS.txt` 校验下载的产物。除非发布检查确实成功执行，或有当前仓库证据支撑，
 否则不得声称其通过。
 
@@ -182,7 +185,8 @@ Codex 用于审查 Rust 与 TypeScript 架构、实现和重构 Tauri 命令、�
 GPT-5.6 用于分析 SSH 与数据库权限边界、优化 MCP 工具设计，以及规划项目架构和发布流程。
 
 Unfour 的本地 MCP 服务让 Codex 与 Cursor 可以使用同一套已保存的 API、SSH 与数据库连接
-进行诊断检查，并沿用桌面应用相同的命令总线、工作区范围、凭据处理与操作确认控制。
+进行诊断检查和修复，并沿用桌面应用相同的命令总线、工作区范围、凭据处理与操作确认控制。
+Codex 与 Cursor 可以通过 MCP 参与排障闭环，但连接 MCP 并不会自动运行完整的根因排障剧本。
 
 ## 许可证
 
