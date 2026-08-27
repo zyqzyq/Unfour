@@ -1,0 +1,8 @@
+ALTER TABLE pro_workspace_sync_bindings RENAME TO cloud_sync_workspace_bindings;
+ALTER TABLE pro_sync_runtime_context RENAME TO cloud_sync_runtime_context;
+ALTER TABLE pro_sync_outbox RENAME TO cloud_sync_outbox;
+ALTER TABLE pro_sync_entity_state RENAME TO cloud_sync_entity_state;
+ALTER TABLE pro_sync_attempts RENAME TO cloud_sync_attempts;
+ALTER TABLE pro_sync_snapshot_staging RENAME TO cloud_sync_snapshot_staging;
+ALTER TABLE pro_sync_diagnostics RENAME TO cloud_sync_diagnostics;
+ALTER TABLE pro_sync_account_settings RENAME TO cloud_sync_account_settings;

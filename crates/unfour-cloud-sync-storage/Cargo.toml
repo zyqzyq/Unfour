@@ -1,0 +1,13 @@
+[package]
+name = "unfour-cloud-sync-storage"
+version.workspace = true
+edition = "2021"
+license = "Apache-2.0"
+
+[dependencies]
+sqlx = { version = "0.8", default-features = false, features = ["macros", "migrate", "runtime-tokio-rustls", "sqlite"] }
+unfour-core = { path = "../unfour-core" }
+unfour-local-storage = { path = "../local-storage" }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

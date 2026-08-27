@@ -6678,6 +6678,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "unfour-cloud-sync"
+version = "0.8.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "unfour-cloud-sync-storage",
+ "unfour-command-bus",
+ "unfour-core",
+ "unfour-database-engine",
+ "unfour-http-engine",
+ "unfour-local-storage",
+ "unfour-secret-store",
+ "unfour-ssh-engine",
+ "unfour-workspace-engine",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "unfour-cloud-sync-storage"
+version = "0.8.0"
+dependencies = [
+ "sqlx",
+ "tokio",
+ "unfour-core",
+ "unfour-local-storage",
+]
+
+[[package]]
 name = "unfour-command-bus"
 version = "0.8.0"
 dependencies = [
