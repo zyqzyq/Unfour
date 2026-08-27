@@ -13,6 +13,7 @@ members = [
   "crates/unfour-command-bus",
   "crates/unfour-mcp",
   "crates/unfour-app",
+  "crates/unfour-account",
   "crates/unfour-cloud-sync",
   "crates/unfour-cloud-sync-storage",
 ]

@@ -11,7 +11,7 @@ use unfour_core::domain::{CommandContext, DomainMutation};
 
 use super::{CommandBusAdapter, CommandBusAdapterError, LocalCommandBusAdapter};
 use unfour_command_bus::CommandBus;
-use unfour_core::models::{KeyValue, SshConnectionInput};
+use unfour_core::models::{KeyValue, SshConnectionInput, WorkspaceVariableInput};
 use unfour_core::AppError;
 use unfour_local_storage::LocalDb;
 
@@ -133,6 +133,37 @@ fn ephemeral_adapter_executes_real_command_bus_reads() {
     let health = adapter.system_health().expect("system health");
     assert!(health.command_bus_ready);
     assert!(health.storage_ready);
+}
+
+#[test]
+fn unified_ephemeral_adapter_installs_cloud_sync_schema_and_hook() {
+    let adapter = LocalCommandBusAdapter::from_storage_mode(crate::StorageMode::Ephemeral)
+        .expect("create unified ephemeral adapter");
+    let workspace = adapter
+        .execute_read(ReadCommand::CurrentWorkspace)
+        .expect("read current workspace");
+    let ReadCommandResult::CurrentWorkspace(workspace) = workspace else {
+        panic!("expected current workspace result");
+    };
+
+    // A local mutation can commit only if the Cloud Sync migration exists and
+    // SyncOutboxHook can enqueue its outbox row in the same transaction.
+    let created = adapter
+        .create_workspace_variable(
+            &workspace.workspace_id,
+            WorkspaceVariableInput {
+                id: None,
+                key: "UNIFIED_MCP_HOOK".to_string(),
+                value: "local".to_string(),
+                is_secret: false,
+                is_enabled: true,
+                description: None,
+                sort_order: 0,
+            },
+        )
+        .expect("create variable through unified hook");
+    assert_eq!(created.key, "UNIFIED_MCP_HOOK");
+    adapter.shutdown();
 }
 
 #[test]

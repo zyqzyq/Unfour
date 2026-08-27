@@ -6648,14 +6648,44 @@ dependencies = [
 name = "unfour"
 version = "0.8.0"
 dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
  "sqlx",
  "tauri",
  "tauri-build",
+ "tauri-plugin-deep-link",
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
  "tauri-plugin-window-state",
  "tokio",
+ "unfour-account",
  "unfour-app",
+ "unfour-cloud-sync",
+ "unfour-cloud-sync-storage",
+ "unfour-command-bus",
+ "unfour-core",
+ "unfour-local-storage",
+ "unfour-paths",
+ "unfour-secret-store",
+]
+
+[[package]]
+name = "unfour-account"
+version = "0.8.0"
+dependencies = [
+ "base64 0.22.1",
+ "rand 0.8.6",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "time",
+ "tokio",
+ "unfour-core",
+ "unfour-secret-store",
+ "url",
 ]
 
 [[package]]
@@ -6815,6 +6845,8 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tokio",
+ "unfour-cloud-sync",
+ "unfour-cloud-sync-storage",
  "unfour-command-bus",
  "unfour-core",
  "unfour-diag",

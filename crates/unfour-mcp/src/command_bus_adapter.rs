@@ -1,4 +1,5 @@
 mod contract;
+mod unified_runtime;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -18,6 +19,8 @@ use unfour_core::models::{
     SshTasksReorderInput, SystemHealth, WorkspaceVariable, WorkspaceVariableInput,
 };
 use unfour_core::AppError;
+
+use unified_runtime::unified_command_bus;
 
 pub use contract::CommandBusAdapter;
 
@@ -49,10 +52,7 @@ impl LocalCommandBusAdapter {
     }
 
     pub fn from_storage_mode(mode: StorageMode) -> AdapterResult {
-        match mode {
-            StorageMode::Default => Self::default_storage(),
-            StorageMode::Ephemeral => Self::ephemeral(),
-        }
+        Self::from_command_bus_future(unified_command_bus(mode))
     }
 
     pub fn from_env() -> AdapterResult {

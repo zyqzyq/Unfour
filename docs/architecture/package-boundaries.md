@@ -87,9 +87,9 @@ is scoped. It is not a completed cloud/local provider abstraction.
 - SSH terminal state.
 - App-shell orchestration.
 
-## Future Pro Sync
+## Cloud Sync Overlay
 
-Future Pro sync should be modeled as a local-first sync overlay, not as a
+Cloud Sync is modeled as a local-first sync overlay, not as a
 cloud-primary workspace provider. `workspace-sync` is the recommended
 long-term package name because local SQLite remains the runtime source of truth
 and cloud support reconciles local workspace data periodically.
@@ -97,8 +97,8 @@ and cloud support reconciles local workspace data periodically.
 Feature packages must not depend on `packages/workspace-local` or any future
 `packages/workspace-sync`. API Client, Database, and SSH Terminal should depend
 only on `packages/workspace-core`, `packages/command-client`, and
-`packages/ui` for shared frontend contracts. App-shell and edition composition
-layers choose whether local-only or Pro sync capabilities are wired in.
+`packages/ui` for shared frontend contracts. The desktop composition root wires
+the account-gated sync overlay without moving feature logic into app-shell.
 
 ## Feature Packages
 
@@ -122,6 +122,9 @@ and should reuse `packages/ui` primitives where possible.
 | `crates/unfour-diag` | Structured diagnostics, file logging, log retention, correlation IDs, and diagnostic bundle export. | Feature business execution, raw secret persistence. |
 | `crates/local-storage` | SQLite migrations, local database access, and local activity logging. | Raw secret storage. |
 | `crates/secret-store` | Credential reference management backed by OS keychain or test memory store. | SQLite plaintext secret persistence. |
+| `crates/unfour-account` | Account sign-in, desktop-session credential storage, entitlement refresh, and validated billing-session URLs. | Tauri UI behavior, SQLite plaintext session storage. |
+| `crates/unfour-cloud-sync-storage` | Unified compatibility migration chain for core and Cloud Sync schema. | Sync transport or UI behavior. |
+| `crates/unfour-cloud-sync` | Local-first reconciliation, transport, sync repository/runtime, and transactional outbox hook. | Tauri UI behavior, replacing local SQLite as runtime source of truth. |
 | `crates/http-engine` | API request execution after workspace-variable resolution, bounded request-script runtime, saved requests, history, and redaction persistence. | Workspace variable persistence/resolution, UI state, database query execution, SSH sessions. |
 | `crates/database-engine` | Database connection CRUD, schema browsing, query execution, browse-table behavior, SQL safety classification. | API request execution, SSH sessions. |
 | `crates/ssh-engine` | SSH connection/session service, terminal events, host-key handling, reconnect, log export. | API request execution, SQL execution. |
@@ -129,8 +132,9 @@ and should reuse `packages/ui` primitives where possible.
 | `crates/unfour-command-bus` | Reusable Rust command entry point for Tauri, MCP, and future AI/CLI adapters. | UI components, duplicated domain logic. |
 | `crates/unfour-mcp` | Local stdio MCP server adapter over the command bus. | Bypassing command-bus safety, redaction, or tool policy. |
 
-`apps/desktop/src-tauri` is the thin Tauri desktop binary and edition adapter.
-Shared Tauri composition lives in crates/unfour-app.
+`apps/desktop/src-tauri` is the single Tauri desktop composition root. It owns
+account/sync adapters and startup ordering; shared core Tauri composition lives
+in `crates/unfour-app`.
 
 ## Dependency Direction
 

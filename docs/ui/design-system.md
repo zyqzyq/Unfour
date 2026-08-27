@@ -120,7 +120,7 @@ values, and the `--panel-*` / `--app-*` / `--border` / `--text` / `--accent` /
 / `--badge-*` aliases) have **one default source of truth**:
 `@unfour/ui/styles.css` (the files under `packages/ui/src/styles/`).
 
-- Host apps (`apps/desktop`, and the `apps/desktop-pro` edition) MUST import the
+- The host app (`apps/desktop`) MUST import the
   shared tokens first, before their own local `styles.css`:
 
   ```ts

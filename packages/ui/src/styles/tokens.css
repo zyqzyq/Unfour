@@ -3,7 +3,7 @@
  *
  * This file (with theme.css and surfaces.css, aggregated by index.css) is the
  * CANONICAL, DEFAULT source of shared design tokens for every host app
- * (@unfour/desktop, and the @unfour/desktop-pro edition).
+ * (@unfour/desktop).
  *
  * Host apps MUST import "@unfour/ui/styles.css" exactly once, BEFORE their own
  * local styles.css. Host apps MAY override tokens but MUST NOT redefine them —

@@ -1,0 +1,23 @@
+[package]
+name = "unfour-account"
+version.workspace = true
+edition = "2021"
+license = "Apache-2.0"
+description = "Unfour desktop account, entitlement, and billing-session service."
+
+[dependencies]
+base64 = "0.22"
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+time = { version = "0.3", features = ["serde-well-known"] }
+tokio = { version = "1", features = ["time"] }
+unfour-core = { path = "../unfour-core" }
+unfour-secret-store = { path = "../secret-store" }
+url = "2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros"] }

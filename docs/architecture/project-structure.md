@@ -28,6 +28,9 @@ Unfour/
     ssh-engine/              SSH connection and terminal session service
     workspace-engine/        workspace CRUD, environments, layout persistence
     secret-store/            OS keychain credential boundary
+    unfour-account/          account, entitlement, and billing-session service
+    unfour-cloud-sync/       local-first Cloud Sync overlay and outbox hook
+    unfour-cloud-sync-storage/ unified Cloud Sync migration chain
     unfour-app/              shared Tauri composition layer
     unfour-command-bus/      reusable Rust command entry point
     unfour-mcp/              local stdio MCP server adapter
@@ -65,6 +68,9 @@ Unfour/
 | `unfour-diag` | Structured logging, log retention, correlation IDs, and diagnostic bundle export. |
 | `unfour-local-storage` | SQLite setup, migrations, local persistence, and activity log. |
 | `unfour-secret-store` | Credential reference service backed by OS keychain in production and in-memory storage in tests. |
+| `unfour-account` | Desktop account, entitlement, hosted sign-in, and billing-session service. Construction is offline and credentials remain in the OS keychain. |
+| `unfour-cloud-sync-storage` | Compatibility-aware unified migration entry point for core and historical Cloud Sync schema. |
+| `unfour-cloud-sync` | Local-first Cloud Sync service, transport, background runtime, repository, and command-bus outbox hook. |
 | `unfour-http-engine` | API execution after shared workspace-variable resolution, bounded request-script execution, saved requests, history, and persistence redaction. |
 | `unfour-database-engine` | Database connection CRUD, schema browsing, SQL execution, table browsing, and SQL safety classification. |
 | `unfour-ssh-engine` | SSH connection/session lifecycle, PTY events, host-key trust, reconnect behavior, and redacted log export. |
@@ -72,7 +78,7 @@ Unfour/
 | `unfour-app` | Shared Tauri composition layer for plugins, command-bus setup, managed `AppState`, commands, and edition-independent wiring. |
 | `unfour-command-bus` | Shared command entry point used by Tauri, MCP, and future adapters. |
 | `unfour-mcp` | Local stdio MCP server that routes tools through the command bus. |
-| `unfour` | Thin Tauri desktop binary and edition adapter in `apps/desktop/src-tauri`. |
+| `unfour` | Single Tauri desktop composition root in `apps/desktop/src-tauri`. |
 
 ## Frontend Dependency Shape
 
@@ -92,10 +98,10 @@ Unfour/
 @unfour/desktop            -> app-shell
 ```
 
-Feature packages must not depend on each other, on `packages/app-shell`, on
-`packages/workspace-local`, or on any future Pro sync package. App-shell and
-edition composition layers choose local or Pro sync capabilities; feature
-packages consume only workspace contracts from `workspace-core`.
+Feature packages must not depend on each other, on `packages/app-shell`, or on
+`packages/workspace-local`. The single desktop composition root wires optional
+Cloud Sync capabilities; feature packages consume only workspace contracts
+from `workspace-core`.
 
 ## Rust Dependency Shape
 
@@ -107,6 +113,8 @@ unfour-diag -> unfour-core, unfour-paths
 
 unfour-local-storage -> unfour-core, unfour-diag
 unfour-secret-store -> unfour-core, unfour-diag
+unfour-account -> unfour-core, unfour-secret-store
+unfour-cloud-sync-storage -> unfour-core, unfour-local-storage
 unfour-http-engine -> unfour-core, unfour-local-storage, unfour-diag
 unfour-database-engine -> unfour-core, unfour-local-storage, unfour-diag
 unfour-ssh-engine -> unfour-core, unfour-local-storage, unfour-diag
@@ -120,11 +128,16 @@ unfour-app
   -> unfour-command-bus, unfour-core, unfour-diag, unfour-local-storage,
      unfour-paths, unfour-secret-store
 
+unfour-cloud-sync
+  -> unfour-command-bus and the syncable domain engines
+
 unfour-mcp
-  -> unfour-command-bus, unfour-core, unfour-diag, unfour-paths
+  -> unfour-command-bus, unfour-cloud-sync, unfour-cloud-sync-storage,
+     unfour-core, unfour-diag, unfour-paths
 
 unfour Tauri binary
-  -> unfour-app
+  -> unfour-app, unfour-account, unfour-cloud-sync,
+     unfour-cloud-sync-storage
 ```
 
 ## Frontend-To-Rust Call Chain
@@ -155,10 +168,11 @@ MCP client
 
 ## Tauri Configuration Snapshot
 
-The desktop binary wrapper lives under `apps/desktop/src-tauri`. Shared Tauri
-composition lives in `crates/unfour-app`: plugins, command-bus setup,
-`AppState`, command adapters, and edition-independent wiring. The product name
-is Unfour and the repository package version is `0.8.0`. Release readiness
+The single desktop runtime lives under `apps/desktop/src-tauri`. It initializes
+unified storage, account state, Cloud Sync, and the outbox hook before handing
+the prepared command bus to `crates/unfour-app` for shared Tauri composition.
+There is no separate Pro desktop runtime. The product name is Unfour and the
+repository package version is `0.8.0`. Release readiness
 must be determined from the release verification documents, not from the
 version string alone.
 

@@ -1,11 +1,9 @@
 //! Shared Tauri composition layer.
 //!
-//! This crate owns everything in the app shell that is edition-independent:
-//! the shared plugins, the command-bus setup, the managed [`AppState`], and the
-//! `commands` adapters. Each edition's binary (core `apps/desktop`, Pro
-//! `apps/desktop-pro`) supplies only its edition config, optional edition-only
-//! handlers, and `generate_context!` — which are compile-time, per-binary
-//! concerns — and delegates the rest to [`configure_core_app`].
+//! This crate owns the shared plugins, command-bus setup, managed [`AppState`],
+//! and core command adapters. The single desktop binary may prepare a command
+//! bus with capability hooks before delegating the remaining Tauri composition
+//! to [`configure_core_app_with_extensions`].
 
 pub mod commands;
 
@@ -148,6 +146,19 @@ pub struct AppState {
 #[derive(Clone, Default)]
 pub struct UnfourAppExtensions {
     pub command_bus: CommandBusExtensions,
+    prepared_command_bus: Option<CommandBus>,
+}
+
+impl UnfourAppExtensions {
+    /// Use a command bus that was initialized by the desktop composition root.
+    /// This supports startup sequences that must run unified migrations and
+    /// attach transactional hooks before background services begin.
+    pub fn with_prepared_command_bus(command_bus: CommandBus) -> Self {
+        Self {
+            command_bus: CommandBusExtensions::default(),
+            prepared_command_bus: Some(command_bus),
+        }
+    }
 }
 
 /// Apply the shared plugins and command-bus setup to a Tauri builder.
@@ -188,6 +199,7 @@ where
     R: Runtime,
 {
     let config = normalize_config(config);
+    let prepared_command_bus = extensions.prepared_command_bus.clone();
     builder
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
@@ -200,17 +212,20 @@ where
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(move |app| {
             let logging_guard = initialize_logging(&config);
-            let command_bus = tauri::async_runtime::block_on(async {
-                let paths = unfour_paths::initialize_unfour_storage()?;
-                let db = LocalDb::connect_path(paths.database_path).await?;
-                db.migrate().await?;
-                CommandBus::from_db_with_secret_store_and_extensions(
-                    db,
-                    SecretStore::new(SECRET_STORE_NAMESPACE),
-                    extensions.command_bus.clone(),
-                )
-                .await
-            })?;
+            let command_bus = match prepared_command_bus.clone() {
+                Some(command_bus) => command_bus,
+                None => tauri::async_runtime::block_on(async {
+                    let paths = unfour_paths::initialize_unfour_storage()?;
+                    let db = LocalDb::connect_path(paths.database_path).await?;
+                    db.migrate().await?;
+                    CommandBus::from_db_with_secret_store_and_extensions(
+                        db,
+                        SecretStore::new(SECRET_STORE_NAMESPACE),
+                        extensions.command_bus.clone(),
+                    )
+                    .await
+                })?,
+            };
 
             let terminal_channel: TerminalChannelSlot = Arc::new(Mutex::new(None));
             let sftp_transfer_channel: SftpTransferChannelSlot = Arc::new(Mutex::new(None));

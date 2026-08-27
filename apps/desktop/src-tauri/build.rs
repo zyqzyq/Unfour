@@ -16,6 +16,7 @@ fn main() {
     // `debug_assertions`; only these two values are accepted.
     let channel = resolve_release_channel();
     println!("cargo:rustc-env=UNFOUR_RELEASE_CHANNEL={channel}");
+    bake_account_service(&channel);
 
     // Build commit. Precedence:
     //   1. Explicit `UNFOUR_BUILD_COMMIT` override.
@@ -47,6 +48,21 @@ fn main() {
             println!("cargo:rerun-if-changed={}", refs_heads.display());
         }
     }
+}
+
+/// Account origins are immutable build identity, selected by the same release
+/// channel as storage. Network availability is intentionally irrelevant here:
+/// the account service performs I/O only after startup when a command asks for
+/// account state or begins sign-in.
+fn bake_account_service(channel: &str) {
+    let (api_url, web_url) = match channel {
+        "stable" => ("https://api.unfour.dev", "https://unfour.dev"),
+        "test" => ("https://test-api.unfour.dev", "https://test.unfour.dev"),
+        value => panic!("invalid resolved release channel: {value}"),
+    };
+    println!("cargo:rustc-env=UNFOUR_ACCOUNT_API_URL={api_url}");
+    println!("cargo:rustc-env=UNFOUR_ACCOUNT_WEB_URL={web_url}");
+    println!("cargo:rustc-env=UNFOUR_ACCOUNT_ALLOW_LOOPBACK_HTTP=0");
 }
 
 fn resolve_release_channel() -> String {

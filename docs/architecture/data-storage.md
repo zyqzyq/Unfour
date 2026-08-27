@@ -17,7 +17,7 @@ Workspace is the top-level product boundary. A workspace owns:
 Every persisted business record must carry `workspace_id` unless it is truly
 global application configuration.
 
-Future Pro cloud support must preserve this local-first model. Local SQLite
+Cloud Sync preserves this local-first model. Local SQLite
 remains the runtime source of truth; cloud behavior should be implemented as a
 periodic sync overlay that reconciles local workspace data, not as a
 cloud-primary workspace provider that replaces local storage during normal app
@@ -148,46 +148,51 @@ The current SQLite-backed records include:
 - saved SQL (soft-deleted, sync fields reserved);
 - local activity events.
 
-Schema changes live in `crates/local-storage/migrations/`. Core and Pro share
-the same SQLite file and sqlx's default `_sqlx_migrations` table, so migration
-versions must be globally unique across both repos. sqlx parses the digits
+Core schema changes live in `crates/local-storage/migrations/`; Cloud Sync
+schema changes live in `crates/unfour-cloud-sync-storage/migrations/`. The
+single runtime applies both through `unfour_cloud_sync_storage::migrate` and
+shares sqlx's default `_sqlx_migrations` table, so migration versions must be
+globally unique. sqlx parses the digits
 before the first `_` as the version; `0001_core_init.sql` and
 `0001_pro_init.sql` both become version `1` and collide.
 
-All new migration files must use a UTC timestamp version plus an edition marker
-inside the description:
+All new migration files must use a UTC timestamp version plus the unified
+`core` marker inside the description:
 
 ```text
 YYYYMMDDHHMMSS_core_description.sql
-YYYYMMDDHHMMSS_pro_description.sql
 ```
+
+The Cloud Sync directory still contains immutable historical `_pro_`
+migrations. Their names and checksums are compatibility data and must not be
+rewritten; new Cloud Sync migrations use `_core_`.
 
 The version must be pure digits before the first `_`. Do not add local
 `0001_xxx.sql` / `0002_xxx.sql` migrations, and do not put the marker first
 as `core_YYYYMMDDHHMMSS_xxx.sql` because sqlx would parse `core` as the
-version. Both core and Pro migrators must enable sqlx
-`set_ignore_missing(true)` so each edition can ignore the other's records in
-`_sqlx_migrations`. This only handles missing/unknown records; it does not
-permit changing the checksum of an already applied migration.
+version. Both embedded migrators behind the unified entry point must enable
+sqlx `set_ignore_missing(true)` so each migration set can ignore the other's
+records in `_sqlx_migrations`. This only handles missing/unknown records; it
+does not permit changing the checksum of an already applied migration.
 
 Do not rename, delete, or edit the content of already-published migrations.
 If a published schema needs correcting, add a new compatible migration instead.
-Before adding or reviewing migrations, run `pnpm run check:migrations`; when
-the Pro repo is outside the default sibling path, set
-`UNFOUR_PRO_MIGRATIONS_DIR` to its migrations directory.
+Before adding or reviewing migrations, run `pnpm run check:migrations`. For a
+nonstandard Cloud Sync migration fixture, set
+`UNFOUR_CLOUD_SYNC_MIGRATIONS_DIR` to its migrations directory.
 
-Core migrations manage only the base schema. Pro migrations should prefer
-independent `pro_` tables such as `pro_sync_mappings` for sync state, license,
-cloud mapping, remote IDs, and conflict metadata. Avoid `ALTER TABLE` changes
-that add Pro-only columns to core tables unless there is a strong reason and
-the base edition can safely ignore the change. Persistence code belongs in
-`crates/local-storage` or the owning engine crate, not in frontend packages or
+`crates/local-storage` owns the base schema;
+`crates/unfour-cloud-sync-storage` owns independent `cloud_sync_` tables for
+account binding, sync state, remote IDs, outbox, and conflict metadata. Avoid
+adding Cloud Sync-only columns to base tables unless there is a strong reason
+and local-only paths can safely ignore the change. Persistence code belongs in
+those storage crates or the owning engine crate, not in frontend packages or
 Tauri command adapters.
 
 ## Syncable Business Records
 
-Syncable business records should have stable local identity and workspace
-scope before any Pro sync layer is added:
+Syncable business records have stable local identity and workspace scope so
+the optional Cloud Sync overlay can operate transactionally:
 
 - all syncable business records should have a stable `id`;
 - all syncable business records should have `workspace_id`;
@@ -198,9 +203,9 @@ scope before any Pro sync layer is added:
 
 Current local tables already reserve some forward-compatible fields such as
 `revision`, `sync_status`, or `remote_id`. Those fields are not a requirement
-for every OSS runtime table. Future sync metadata can be deferred to sync
-metadata tables or a Pro-owned sync layer unless the OSS runtime directly needs
-the field:
+for every local runtime table. Future sync metadata can remain in
+Cloud Sync-owned metadata tables unless the local runtime directly needs the
+field:
 
 - `remote_id`
 - `sync_version`
@@ -302,8 +307,7 @@ still choose a local fallback so the runtime never points at a deleted row.
 when none exists. Workspaces created by users are inserted with
 `is_default = 0`; the schema validates `is_default` as a boolean and does not
 attempt to manage multiple default rows. `is_default` is a device-local
-preference for the initial Pro sync phase, so external Workspace upserts do not
-read or write it.
+preference, so Cloud Sync Workspace upserts do not read or write it.
 
 ## Workspace Environments
 

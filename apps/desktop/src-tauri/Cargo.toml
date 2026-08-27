@@ -19,12 +19,17 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 tauri = { version = "2", features = [] }
+tokio = { version = "1", features = ["sync"] }
 # Kept as a direct dependency so tauri-build can resolve this plugin's
 # permission manifests for `capabilities/` (the runtime `.plugin()` call lives
 # in `unfour-app`). Any plugin referenced by a capability must be a direct
 # dependency of the binary crate, not only of `unfour-app`.
 tauri-plugin-opener = "2"
+tauri-plugin-deep-link = "2"
 # Direct dependency (same reason as opener): SFTP upload/download use the
 # frontend dialog plugin, so tauri-build must resolve its permission manifest.
 tauri-plugin-dialog = "2"
@@ -34,7 +39,15 @@ tauri-plugin-dialog = "2"
 # direct dependency of this binary crate, not only of `unfour-app`.
 tauri-plugin-window-state = "2"
 # Shared composition layer (plugins, command-bus setup, AppState, commands).
-unfour-app = { path = "../../../crates/unfour-app" }
+unfour-account = { path = "../../../crates/unfour-account" }
+unfour-app = { path = "../../../crates/unfour-app", features = ["deep-link"] }
+unfour-cloud-sync = { path = "../../../crates/unfour-cloud-sync" }
+unfour-cloud-sync-storage = { path = "../../../crates/unfour-cloud-sync-storage" }
+unfour-command-bus = { path = "../../../crates/unfour-command-bus" }
+unfour-core = { path = "../../../crates/unfour-core" }
+unfour-local-storage = { path = "../../../crates/local-storage" }
+unfour-paths = { path = "../../../crates/unfour-paths" }
+unfour-secret-store = { path = "../../../crates/secret-store" }
 
 [dev-dependencies]
 sqlx = { version = "0.8", default-features = false, features = ["chrono", "json", "macros", "runtime-tokio-rustls", "sqlite"] }

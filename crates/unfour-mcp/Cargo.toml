@@ -7,17 +7,19 @@ license = "Apache-2.0"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "sqlite"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+unfour-cloud-sync = { path = "../unfour-cloud-sync" }
+unfour-cloud-sync-storage = { path = "../unfour-cloud-sync-storage" }
 unfour-command-bus = { path = "../unfour-command-bus" }
 unfour-core = { path = "../unfour-core" }
 unfour-diag = { path = "../unfour-diag" }
 unfour-paths = { path = "../unfour-paths" }
+unfour-local-storage = { path = "../local-storage" }
 
 [dev-dependencies]
 jsonschema = "0.26"
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "sqlite"] }
 unfour-core = { path = "../unfour-core" }
-unfour-local-storage = { path = "../local-storage" }
 
 # `ssh-native` is enabled by default so the released MCP binary can actually
 # execute `unfour.ssh.run_diagnostic` — SSH log/service inspection is a core

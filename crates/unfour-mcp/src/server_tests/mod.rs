@@ -1,4 +1,4 @@
-use std::io::{BufReader, Cursor, Read};
+use std::io::{BufReader, Cursor, Read, Write};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -26,6 +26,24 @@ struct StubCommandBus;
 struct DelayedEofReader {
     delay: Duration,
     returned_eof: bool,
+}
+
+struct BrokenPipeWriter;
+
+impl Write for BrokenPipeWriter {
+    fn write(&mut self, _buffer: &[u8]) -> std::io::Result<usize> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::BrokenPipe,
+            "client disconnected",
+        ))
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::BrokenPipe,
+            "client disconnected",
+        ))
+    }
 }
 
 impl Read for DelayedEofReader {
@@ -351,4 +369,30 @@ fn stdio_idle_timeout_returns_while_input_remains_open() {
 
     assert!(timed_out);
     assert!(output.is_empty());
+}
+
+#[test]
+fn stdio_eof_exits_cleanly() {
+    let command_bus =
+        LocalCommandBusAdapter::ephemeral().expect("ephemeral command bus should initialize");
+    let server = McpServer::new(command_bus);
+    let mut output = Vec::new();
+
+    run_stdio_with_server(&server, Cursor::new(Vec::<u8>::new()), &mut output)
+        .expect("EOF should be a clean shutdown");
+    assert!(output.is_empty());
+}
+
+#[test]
+fn broken_stdout_pipe_is_a_clean_disconnect() {
+    let command_bus =
+        LocalCommandBusAdapter::ephemeral().expect("ephemeral command bus should initialize");
+    let server = McpServer::new(command_bus);
+    let input = concat!(
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"broken-pipe-test","version":"0.1.0"}}}"#,
+        "\n"
+    );
+
+    run_stdio_with_server(&server, Cursor::new(input), &mut BrokenPipeWriter)
+        .expect("broken pipe should stop the server without a fatal error");
 }

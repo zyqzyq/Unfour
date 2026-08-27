@@ -20,14 +20,11 @@ The MCP layer is an adapter. It must not bypass command-bus safety,
 workspace scoping, redaction, credential reference rules, MCP policy checks,
 or high-risk confirmation checks.
 
-The Community server constructs the writable adapter with empty Command Bus
-extensions. Edition composition may instead use
-`LocalCommandBusAdapter::default_storage_with_extensions` to install
-`TransactionalCommandHook` implementations. MCP Environment create, update,
-and delete operations, including the legacy API Environment compatibility
-methods, then reach the same Workspace Domain Command coordinator and run each
-hook inside the Command Bus-owned SQLite transaction. The adapter does not
-define or install Pro hooks itself.
+The single server applies the unified core + Cloud Sync migration chain and
+installs `SyncOutboxHook` on its writable Command Bus. MCP mutations therefore
+reach the same Workspace Domain Command coordinator as desktop and enqueue
+outbox rows inside the Command Bus-owned SQLite transaction when the workspace
+has Cloud Sync enabled. Local-only workspaces remain local-only.
 
 ## Protocol Shape
 
@@ -142,9 +139,10 @@ platforms; `UNFOUR_STORAGE_PROFILE` / `UNFOUR_DATA_DIR` select the same
 alternate roots as the desktop app (see
 `docs/architecture/data-storage.md`). This path intentionally does not use
 Tauri's `app_data_dir()`, because the Tauri identifier `dev.unfour` would
-resolve to a different directory. The MCP process does not run schema
-migrations or create fallback workspaces. Start the desktop app once before
-starting the MCP server if the local database does not exist yet.
+resolve to a different directory. The MCP process runs the idempotent unified
+migration chain but does not create a missing normal-storage database or seed
+fallback workspaces. Start the desktop app once before starting the MCP server
+if the local database does not exist yet.
 
 Credential values are resolved from the OS keychain under the same service name
 as the desktop app. The MCP process reads credentials only when a tool needs to
