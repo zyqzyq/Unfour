@@ -7,17 +7,16 @@ use super::*;
 
 #[test]
 fn default_logging_config_keeps_seven_days_of_logs() {
-    let config = LoggingConfig::oss_dev(PathBuf::from("logs"));
+    let config = LoggingConfig::unified_dev(PathBuf::from("logs"));
 
     assert_eq!(DEFAULT_LOG_RETENTION_DAYS, 7);
     assert_eq!(config.retention_days, 7);
-    assert_eq!(config.edition.as_str(), "oss");
     assert_eq!(config.channel.as_str(), "test");
-    assert_eq!(config.package_kind.as_str(), "github");
+    assert_eq!(config.distribution.as_str(), "standard");
 }
 
 #[test]
-fn channel_and_package_kind_have_only_two_stable_values_each() {
+fn channel_and_distribution_have_only_two_stable_values_each() {
     assert_eq!(Channel::Test.as_str(), "test");
     assert_eq!(Channel::Stable.as_str(), "stable");
     assert_eq!(serde_json::to_string(&Channel::Test).unwrap(), "\"test\"");
@@ -26,15 +25,15 @@ fn channel_and_package_kind_have_only_two_stable_values_each() {
         "\"stable\""
     );
 
-    assert_eq!(PackageKind::GitHub.as_str(), "github");
-    assert_eq!(PackageKind::Website.as_str(), "website");
+    assert_eq!(Distribution::Standard.as_str(), "standard");
+    assert_eq!(Distribution::MicrosoftStore.as_str(), "microsoft-store");
     assert_eq!(
-        serde_json::to_string(&PackageKind::GitHub).unwrap(),
-        "\"github\""
+        serde_json::to_string(&Distribution::Standard).unwrap(),
+        "\"standard\""
     );
     assert_eq!(
-        serde_json::to_string(&PackageKind::Website).unwrap(),
-        "\"website\""
+        serde_json::to_string(&Distribution::MicrosoftStore).unwrap(),
+        "\"microsoft-store\""
     );
 }
 
@@ -61,15 +60,15 @@ fn diagnostic_manifest_carries_full_identity_and_commit() {
     std::fs::create_dir_all(&paths.logs_dir).expect("create logs dir");
     std::fs::create_dir_all(&paths.diagnostics_dir).expect("create diagnostics dir");
 
-    let mut request = DiagnosticBundleRequest::oss_dev("0.1.0".to_string(), paths);
+    let mut request = DiagnosticBundleRequest::unified_dev("0.1.0".to_string(), paths);
     request.channel = Channel::Stable;
-    request.package_kind = PackageKind::GitHub;
+    request.distribution = Distribution::Standard;
     request.commit = Some("0123456789abcdef0123456789abcdef01234567".to_string());
     let bundle = export_diagnostics_bundle(&request).expect("export bundle");
     let manifest = std::fs::read_to_string(bundle.manifest_path).expect("read manifest");
 
     assert!(manifest.contains("\"channel\": \"stable\""));
-    assert!(manifest.contains("\"packageKind\": \"github\""));
+    assert!(manifest.contains("\"distribution\": \"standard\""));
     assert!(manifest.contains("0123456789abcdef0123456789abcdef01234567"));
 
     let _ = std::fs::remove_dir_all(root);
@@ -131,7 +130,7 @@ fn diagnostic_bundle_includes_logs_and_excludes_sqlite_database() {
     std::fs::write(paths.logs_dir.join("unfour.2026-07-03.log"), "safe log").expect("write log");
     std::fs::write(&paths.database_path, "sqlite bytes").expect("write db");
 
-    let request = DiagnosticBundleRequest::oss_dev("0.1.0".to_string(), paths);
+    let request = DiagnosticBundleRequest::unified_dev("0.1.0".to_string(), paths);
     let bundle = export_diagnostics_bundle(&request).expect("export bundle");
     let manifest = std::fs::read_to_string(bundle.manifest_path).expect("read manifest");
 

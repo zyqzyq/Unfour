@@ -4,9 +4,9 @@ import { spawnSync } from "node:child_process";
 import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  releaseChannelEnvironment,
   resolveTauriInvocation,
-  tauriEnvironment,
-} from "./release-environment.mjs";
+} from "./release-channel.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const invocation = resolveTauriInvocation(process.argv.slice(2));
@@ -28,7 +28,8 @@ if (tauriArgs[0] === "dev" || tauriArgs[0] === "build") {
   if (sync.status !== 0) process.exit(sync.status ?? 1);
 }
 
-const { channel, environment } = tauriEnvironment(
+const { channel, profile, environment } = releaseChannelEnvironment(
+  repoRoot,
   process.env,
   invocation.defaultChannel,
   invocation.forcedChannel,
@@ -53,7 +54,9 @@ if (process.platform === "win32") {
   }
 }
 
-console.log(`[run-tauri] Community release channel: ${channel}`);
+console.log(
+  `[run-tauri] version ${profile.version} -> channel=${channel}, distribution=${profile.distribution}`,
+);
 const result = spawnSync(command, commandArgs, {
   cwd: repoRoot,
   stdio: "inherit",

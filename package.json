@@ -11,7 +11,8 @@
     "preview": "pnpm --filter @unfour/desktop preview",
     "tauri": "node scripts/run-tauri.mjs",
     "tauri:prepare-sidecars": "node scripts/prepare-tauri-sidecars.mjs",
-    "check": "pnpm run build && pnpm run check:rust && pnpm run check:migrations && pnpm run check:large-files && pnpm run check:tokens",
+    "check": "pnpm run check:version && pnpm run build && pnpm run check:rust && pnpm run check:migrations && pnpm run check:large-files && pnpm run check:tokens",
+    "check:version": "node scripts/sync-version.mjs --check",
     "check:rust": "cargo check --workspace",
     "check:rust:ssh": "cargo check -p unfour --features ssh-native",
     "check:large-files": "node scripts/check-large-files.mjs",
@@ -24,7 +25,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:rust": "cargo test --workspace",
-    "test:release-env": "node --test scripts/release-environment.test.mjs scripts/release-contract.test.mjs"
+    "test:release-env": "node --test scripts/release-environment.test.mjs scripts/release-channel.test.mjs scripts/release-contract.test.mjs"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

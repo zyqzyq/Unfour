@@ -20,13 +20,19 @@ import {
   useCloudSync,
 } from "./features/cloud-sync";
 import { createCloudSyncWorkspaceActions } from "./features/cloud-sync/workspaceMenuActions";
+import {
+  UpdateIndicator,
+  UpdateOverlays,
+  UpdateProvider,
+  updatesSection,
+} from "./features/update";
 
 function DesktopTitleBarEnd(context: DesktopAppExtensionContext) {
-  return <><CloudSyncStatus {...context} /><AccountIndicator /></>;
+  return <><CloudSyncStatus {...context} /><AccountIndicator /><UpdateIndicator /></>;
 }
 
 function DesktopOverlays(context: DesktopAppExtensionContext) {
-  return <><AccountOverlays /><CloudSyncOverlays {...context} /></>;
+  return <><AccountOverlays /><UpdateOverlays /><CloudSyncOverlays {...context} /></>;
 }
 
 function ExtendedDesktopApp() {
@@ -36,7 +42,7 @@ function ExtendedDesktopApp() {
     createCloudSyncWorkspaceActions(cloudSync, t, workspace);
   const extensions: DesktopAppExtensions = {
     titleBarEnd: DesktopTitleBarEnd,
-    settingsSections: [accountSection, cloudSyncSection],
+    settingsSections: [accountSection, cloudSyncSection, updatesSection],
     workspaceDecoration: CloudSyncWorkspaceDecoration,
     workspaceMenuActions,
     workspaceMenuFooterActions: [{
@@ -53,11 +59,13 @@ function ExtendedDesktopApp() {
 
 function App() {
   return (
-    <AccountProvider>
-      <CloudSyncProvider>
-        <ExtendedDesktopApp />
-      </CloudSyncProvider>
-    </AccountProvider>
+    <UpdateProvider>
+      <AccountProvider>
+        <CloudSyncProvider>
+          <ExtendedDesktopApp />
+        </CloudSyncProvider>
+      </AccountProvider>
+    </UpdateProvider>
   );
 }
 

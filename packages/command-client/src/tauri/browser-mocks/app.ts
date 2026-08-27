@@ -5,8 +5,7 @@ export function handleAppMock<T>(command: string): MockResult<T> {
     return {
       name: "Unfour",
       version: "0.1.0",
-      edition: "community",
-      distribution: "github",
+      distribution: "standard",
       channel: "test",
       commit: null,
     } as T;

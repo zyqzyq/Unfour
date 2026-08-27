@@ -42,7 +42,6 @@ export function formatMcpClientConfig(command = getMcpCommand()) {
 export type VersionInfoApp = {
   name: string;
   version: string;
-  edition: string;
   distribution?: string;
   channel?: string;
   commit?: string | null;
@@ -53,14 +52,12 @@ export function createVersionInfo(
   app: VersionInfoApp = {
     name: APP_NAME,
     version: APP_VERSION,
-    edition: "community",
   },
 ) {
-  // Support reports need the complete identity: edition, version, distribution,
-  // channel, and commit. Fields that were not supplied are omitted rather than
-  // printed as "undefined".
+  // Support reports need the complete unified identity. Fields that were not
+  // supplied are omitted rather than printed as "undefined".
   return [
-    `${app.name} ${app.version} (${app.edition})`,
+    `${app.name} ${app.version}`,
     ...(app.distribution ? [`Distribution: ${app.distribution}`] : []),
     ...(app.channel ? [`Channel: ${app.channel}`] : []),
     ...(app.commit ? [`Commit: ${app.commit}`] : []),

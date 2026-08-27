@@ -7,6 +7,7 @@ import type { DesktopAppExtensions } from "@unfour/app-shell";
 const mocks = vi.hoisted(() => ({
   extensions: undefined as DesktopAppExtensions | undefined,
   getAccountState: vi.fn(),
+  getUpdateInfo: vi.fn(),
 }));
 
 vi.mock("@unfour/app-shell", () => ({
@@ -46,12 +47,28 @@ vi.mock("./features/cloud-sync/syncApi", () => ({
   useRemoteDeadLetter: vi.fn(),
 }));
 
+vi.mock("./features/update/updateApi", () => ({
+  checkForUpdate: vi.fn(),
+  getUpdateInfo: mocks.getUpdateInfo,
+  installUpdate: vi.fn(),
+  updaterError: (error: unknown) => ({ message: String(error), recovery: "check" }),
+}));
+
 import App from "./App";
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.extensions = undefined;
   mocks.getAccountState.mockRejectedValue(new Error("account command unavailable"));
+  mocks.getUpdateInfo.mockResolvedValue({
+    name: "Unfour",
+    version: "0.8.0",
+    distribution: "microsoft-store",
+    channel: "stable",
+    commit: null,
+    updaterEnabled: false,
+    endpoint: null,
+  });
 });
 
 afterEach(cleanup);
@@ -68,6 +85,7 @@ describe("desktop feature composition", () => {
     expect(extensions?.settingsSections?.map((section) => section.id)).toEqual([
       "account.settings",
       "cloud-sync.settings",
+      "updates.settings",
     ]);
     expect(extensions?.titleBarEnd).toBeTypeOf("function");
     expect(extensions?.workspaceDecoration).toBeTypeOf("function");

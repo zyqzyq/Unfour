@@ -1,30 +1,28 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { validateCommunityStableRelease } from "./release-contract.mjs";
+import { validateStandardStableRelease } from "./release-contract.mjs";
 
-test("Community Stable accepts only the exact workspace version tag", () => {
-  assert.deepEqual(validateCommunityStableRelease("1.2.3", "v1.2.3"), {
+test("Standard Stable accepts only the exact X.Y.Z workspace tag", () => {
+  assert.deepEqual(validateStandardStableRelease("1.2.3", "v1.2.3"), {
     version: "1.2.3",
     tag: "v1.2.3",
     channel: "stable",
+    distribution: "standard",
+    updaterEndpoint: "https://release.unfour.dev/stable/latest.json",
     prerelease: false,
   });
   assert.throws(
-    () => validateCommunityStableRelease("1.2.3", "v1.2.4"),
+    () => validateStandardStableRelease("1.2.3", "v1.2.4"),
     /must exactly match v1\.2\.3/,
   );
 });
 
-test("pre-release tags cannot enter Community Stable", () => {
-  for (const tag of ["v1.2.3-test.1", "v1.2.3-dev", "v1.2.3-rc.1"]) {
+test("pre-release and four-part project versions cannot enter Standard Stable", () => {
+  for (const version of ["1.2.3-test.1", "1.2.3-dev", "1.2.3-rc.1", "1.2.3.0"]) {
     assert.throws(
-      () => validateCommunityStableRelease("1.2.3", tag),
-      /must exactly match v1\.2\.3/,
+      () => validateStandardStableRelease(version, `v${version}`),
+      /must use X\.Y\.Z/,
     );
   }
-  assert.throws(
-    () => validateCommunityStableRelease("1.2.3-rc.1", "v1.2.3-rc.1"),
-    /requires workspace version X\.Y\.Z/,
-  );
 });

@@ -13,27 +13,6 @@ use unfour_command_bus::{CommandBus, CommandBusExtensions};
 use unfour_local_storage::LocalDb;
 use unfour_secret_store::SecretStore;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AppEdition {
-    Community,
-    Pro,
-}
-
-impl Default for AppEdition {
-    fn default() -> Self {
-        Self::Community
-    }
-}
-
-impl AppEdition {
-    fn diagnostics_edition(self) -> unfour_diag::Edition {
-        match self {
-            Self::Community => unfour_diag::Edition::Oss,
-            Self::Pro => unfour_diag::Edition::Pro,
-        }
-    }
-}
-
 /// The single, shared release channel type. Only two channels exist
 /// project-wide: `Test` (pre-release / local dev) and `Stable` (formal
 /// release). The channel is decided at build time by the host binary and is
@@ -61,28 +40,28 @@ impl ReleaseChannel {
     }
 }
 
-/// The single, shared distribution/package kind type. Only two kinds exist
-/// project-wide: `GitHub` (GitHub Releases) and `Website` (website downloads).
-/// Community builds are always distributed as `GitHub`.
+/// The final single-repository distribution model. Standard artifacts are
+/// published byte-for-byte to GitHub Releases and Cloudflare R2; Microsoft
+/// Store builds use MSIX and delegate update authority to the Store.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PackageKind {
-    GitHub,
-    Website,
+pub enum AppDistribution {
+    Standard,
+    MicrosoftStore,
 }
 
-impl PackageKind {
+impl AppDistribution {
     /// Stable API value surfaced to the frontend and diagnostics.
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::GitHub => "github",
-            Self::Website => "website",
+            Self::Standard => "standard",
+            Self::MicrosoftStore => "microsoft-store",
         }
     }
 
-    fn diagnostics_package_kind(self) -> unfour_diag::PackageKind {
+    fn diagnostics_distribution(self) -> unfour_diag::Distribution {
         match self {
-            Self::GitHub => unfour_diag::PackageKind::GitHub,
-            Self::Website => unfour_diag::PackageKind::Website,
+            Self::Standard => unfour_diag::Distribution::Standard,
+            Self::MicrosoftStore => unfour_diag::Distribution::MicrosoftStore,
         }
     }
 }
@@ -98,29 +77,21 @@ const SECRET_STORE_NAMESPACE: &str = "unfour";
 /// the host binary at build time; nothing is inferred at runtime.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnfourAppConfig {
-    pub edition: AppEdition,
     pub app_name: String,
     pub app_version: String,
     pub channel: ReleaseChannel,
-    pub package_kind: PackageKind,
+    pub distribution: AppDistribution,
     pub commit: Option<String>,
-    /// The commit of the Unfour core this build is based on. When the host
-    /// binary does not override it, this defaults to [`UnfourAppConfig::commit`]
-    /// (the host's own build commit), so Community builds report a single,
-    /// unified identity. Future Pro builds may set a distinct core commit.
-    pub core_commit: Option<String>,
 }
 
 impl Default for UnfourAppConfig {
     fn default() -> Self {
         Self {
-            edition: AppEdition::Community,
             app_name: "Unfour".to_string(),
             app_version: env!("CARGO_PKG_VERSION").to_string(),
             channel: ReleaseChannel::Test,
-            package_kind: PackageKind::GitHub,
+            distribution: AppDistribution::Standard,
             commit: None,
-            core_commit: None,
         }
     }
 }
@@ -163,21 +134,11 @@ impl UnfourAppExtensions {
 
 /// Apply the shared plugins and command-bus setup to a Tauri builder.
 ///
-/// The caller is responsible for the per-edition tail of the chain:
+/// The caller is responsible for the desktop-specific tail of the chain:
 /// `.invoke_handler(unfour_app::generate_handlers![..])` and
 /// `.run(tauri::generate_context!())`.
 pub fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
     configure_core_app(builder, UnfourAppConfig::default())
-}
-
-/// `core_commit` mirrors [`UnfourAppConfig::commit`] unless the host binary
-/// overrides it. This keeps the baseline identity single-valued (Community)
-/// while leaving room for Pro builds to report a distinct core commit later.
-fn normalize_config(mut config: UnfourAppConfig) -> UnfourAppConfig {
-    if config.core_commit.is_none() {
-        config.core_commit = config.commit.clone();
-    }
-    config
 }
 
 pub fn configure_core_app<R>(
@@ -198,7 +159,6 @@ pub fn configure_core_app_with_extensions<R>(
 where
     R: Runtime,
 {
-    let config = normalize_config(config);
     let prepared_command_bus = extensions.prepared_command_bus.clone();
     builder
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
@@ -297,15 +257,14 @@ where
 
 fn initialize_logging(config: &UnfourAppConfig) -> Option<unfour_diag::LoggingGuard> {
     let paths = unfour_paths::initialize_unfour_storage().ok()?;
-    let mut logging_config = unfour_diag::LoggingConfig::oss_dev(paths.logs_dir);
+    let mut logging_config = unfour_diag::LoggingConfig::unified_dev(paths.logs_dir);
     logging_config.app_name = config.app_name.clone();
-    logging_config.edition = config.edition.diagnostics_edition();
     logging_config.version = config.app_version.clone();
     // Release identity comes straight from the build-time config, never from the
     // cargo profile. `debug_assertions` is allowed to influence only the log
-    // verbosity, which `oss_dev` already derives from it.
+    // verbosity, which `unified_dev` already derives from it.
     logging_config.channel = config.channel.diagnostics_channel();
-    logging_config.package_kind = config.package_kind.diagnostics_package_kind();
+    logging_config.distribution = config.distribution.diagnostics_distribution();
     logging_config.commit = config.commit.clone();
     unfour_diag::init_logging(logging_config).ok()
 }
@@ -315,11 +274,10 @@ pub fn diagnostic_bundle_request(
     paths: unfour_paths::UnfourPaths,
 ) -> unfour_diag::DiagnosticBundleRequest {
     let mut request =
-        unfour_diag::DiagnosticBundleRequest::oss_dev(config.app_version.clone(), paths);
+        unfour_diag::DiagnosticBundleRequest::unified_dev(config.app_version.clone(), paths);
     request.app_name = config.app_name.clone();
-    request.edition = config.edition.diagnostics_edition();
     request.channel = config.channel.diagnostics_channel();
-    request.package_kind = config.package_kind.diagnostics_package_kind();
+    request.distribution = config.distribution.diagnostics_distribution();
     request.commit = config.commit.clone();
     request
 }
@@ -349,13 +307,12 @@ mod identity_tests {
     }
 
     #[test]
-    fn community_default_identity_is_community_github_test() {
+    fn unified_default_identity_is_standard_test() {
         let config = UnfourAppConfig::default();
-        assert_eq!(config.edition, AppEdition::Community);
-        assert_eq!(config.package_kind, PackageKind::GitHub);
+        assert_eq!(config.distribution, AppDistribution::Standard);
         assert_eq!(config.channel, ReleaseChannel::Test);
         assert_eq!(config.app_name, "Unfour");
-        assert_eq!(config.package_kind.as_str(), "github");
+        assert_eq!(config.distribution.as_str(), "standard");
         assert_eq!(config.channel.as_str(), "test");
     }
 
@@ -365,55 +322,18 @@ mod identity_tests {
     }
 
     #[test]
-    fn core_commit_defaults_to_commit_when_unset() {
-        // No explicit core_commit -> mirrors commit (Community baseline).
-        let config = UnfourAppConfig {
-            edition: AppEdition::Community,
-            app_name: "Unfour".to_string(),
-            app_version: "1.0.0".to_string(),
-            channel: ReleaseChannel::Test,
-            package_kind: PackageKind::GitHub,
-            commit: Some("deadbeef".to_string()),
-            core_commit: None,
-        };
-        let normalized = normalize_config(config);
-        assert_eq!(normalized.core_commit.as_deref(), Some("deadbeef"));
-        assert_eq!(normalized.commit.as_deref(), Some("deadbeef"));
-    }
-
-    #[test]
-    fn core_commit_is_preserved_when_explicitly_set() {
-        // A future Pro build may supply a distinct core commit; it must win.
-        let config = UnfourAppConfig {
-            edition: AppEdition::Pro,
-            app_name: "Unfour".to_string(),
-            app_version: "1.0.0".to_string(),
-            channel: ReleaseChannel::Stable,
-            package_kind: PackageKind::GitHub,
-            commit: Some("prosha123".to_string()),
-            core_commit: Some("coresha456".to_string()),
-        };
-        let normalized = normalize_config(config);
-        assert_eq!(normalized.core_commit.as_deref(), Some("coresha456"));
-        assert_eq!(normalized.commit.as_deref(), Some("prosha123"));
-    }
-
-    #[test]
     fn diagnostic_request_uses_config_identity_for_both_channels() {
         for channel in [ReleaseChannel::Test, ReleaseChannel::Stable] {
             let config = UnfourAppConfig {
-                edition: AppEdition::Community,
                 app_name: "Unfour".to_string(),
                 app_version: "9.9.9".to_string(),
                 channel,
-                package_kind: PackageKind::GitHub,
+                distribution: AppDistribution::Standard,
                 commit: Some("abc123".to_string()),
-                core_commit: None,
             };
             let request = diagnostic_bundle_request(&config, paths());
             assert_eq!(request.channel, channel.diagnostics_channel());
-            assert_eq!(request.package_kind, unfour_diag::PackageKind::GitHub);
-            assert_eq!(request.edition, unfour_diag::Edition::Oss);
+            assert_eq!(request.distribution, unfour_diag::Distribution::Standard);
             assert_eq!(request.version, "9.9.9");
             assert_eq!(request.commit.as_deref(), Some("abc123"));
         }

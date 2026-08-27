@@ -1,0 +1,8 @@
+{
+  "identityName": "__PARTNER_CENTER_PACKAGE_IDENTITY_NAME__",
+  "publisher": "__PARTNER_CENTER_PACKAGE_IDENTITY_PUBLISHER__",
+  "publisherDisplayName": "__PARTNER_CENTER_PUBLISHER_DISPLAY_NAME__",
+  "displayName": "Unfour",
+  "description": "A lightweight developer workbench for API, SSH, Database, and workspace workflows.",
+  "architecture": "x64"
+}

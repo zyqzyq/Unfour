@@ -7,27 +7,25 @@ use serde::Serialize;
 use unfour_paths::UnfourPaths;
 use uuid::Uuid;
 
-use super::{safe_path_display, Channel, Edition, PackageKind};
+use super::{safe_path_display, Channel, Distribution};
 
 #[derive(Debug, Clone)]
 pub struct DiagnosticBundleRequest {
     pub app_name: String,
     pub version: String,
-    pub edition: Edition,
     pub channel: Channel,
-    pub package_kind: PackageKind,
+    pub distribution: Distribution,
     pub commit: Option<String>,
     pub paths: UnfourPaths,
 }
 
 impl DiagnosticBundleRequest {
-    pub fn oss_dev(version: String, paths: UnfourPaths) -> Self {
+    pub fn unified_dev(version: String, paths: UnfourPaths) -> Self {
         Self {
             app_name: "Unfour".to_string(),
             version,
-            edition: Edition::Oss,
             channel: Channel::Test,
-            package_kind: PackageKind::GitHub,
+            distribution: Distribution::Standard,
             commit: None,
             paths,
         }
@@ -45,9 +43,8 @@ pub struct DiagnosticBundle {
 struct DiagnosticBundleManifest {
     app_name: String,
     version: String,
-    edition: String,
     channel: String,
-    package_kind: String,
+    distribution: String,
     commit: Option<String>,
     platform: String,
     created_at: String,
@@ -82,9 +79,8 @@ pub fn export_diagnostics_bundle(
     let manifest = DiagnosticBundleManifest {
         app_name: request.app_name.clone(),
         version: request.version.clone(),
-        edition: request.edition.as_str().to_string(),
         channel: request.channel.as_str().to_string(),
-        package_kind: request.package_kind.as_str().to_string(),
+        distribution: request.distribution.as_str().to_string(),
         commit: request.commit.clone(),
         platform: std::env::consts::OS.to_string(),
         created_at: chrono::Utc::now().to_rfc3339(),

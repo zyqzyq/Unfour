@@ -22,30 +22,6 @@ pub const DEFAULT_LOG_RETENTION_DAYS: u64 = 7;
 
 static LOGGING_METADATA: OnceLock<LoggingMetadata> = OnceLock::new();
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Edition {
-    Oss,
-    Pro,
-    Team,
-}
-
-impl Edition {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Edition::Oss => "oss",
-            Edition::Pro => "pro",
-            Edition::Team => "team",
-        }
-    }
-}
-
-impl fmt::Display for Edition {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
 /// Release channel of a build. Only two channels exist project-wide:
 /// `Test` (pre-release / local dev builds) and `Stable` (formal releases).
 /// The channel is decided at build time by the host binary and must never be
@@ -72,25 +48,26 @@ impl fmt::Display for Channel {
     }
 }
 
-/// Distribution channel of a build. Only two package kinds exist project-wide:
-/// `GitHub` (GitHub Releases) and `Website` (direct website downloads).
+/// Distribution authority of a build. Standard artifacts are byte-identical
+/// across GitHub Releases and Cloudflare R2; Store packages are serviced by
+/// Microsoft Store.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PackageKind {
-    GitHub,
-    Website,
+#[serde(rename_all = "kebab-case")]
+pub enum Distribution {
+    Standard,
+    MicrosoftStore,
 }
 
-impl PackageKind {
+impl Distribution {
     pub fn as_str(self) -> &'static str {
         match self {
-            PackageKind::GitHub => "github",
-            PackageKind::Website => "website",
+            Distribution::Standard => "standard",
+            Distribution::MicrosoftStore => "microsoft-store",
         }
     }
 }
 
-impl fmt::Display for PackageKind {
+impl fmt::Display for Distribution {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
@@ -99,9 +76,8 @@ impl fmt::Display for PackageKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoggingConfig {
     pub app_name: String,
-    pub edition: Edition,
     pub channel: Channel,
-    pub package_kind: PackageKind,
+    pub distribution: Distribution,
     pub version: String,
     pub commit: Option<String>,
     pub log_level: String,
@@ -110,12 +86,11 @@ pub struct LoggingConfig {
 }
 
 impl LoggingConfig {
-    pub fn oss_dev(log_dir: PathBuf) -> Self {
+    pub fn unified_dev(log_dir: PathBuf) -> Self {
         Self {
             app_name: "Unfour".to_string(),
-            edition: Edition::Oss,
             channel: Channel::Test,
-            package_kind: PackageKind::GitHub,
+            distribution: Distribution::Standard,
             version: env!("CARGO_PKG_VERSION").to_string(),
             commit: None,
             log_level: if cfg!(debug_assertions) {
@@ -132,9 +107,8 @@ impl LoggingConfig {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoggingMetadata {
     pub app_name: String,
-    pub edition: Edition,
     pub channel: Channel,
-    pub package_kind: PackageKind,
+    pub distribution: Distribution,
     pub version: String,
     pub commit: Option<String>,
 }
@@ -143,9 +117,8 @@ impl From<&LoggingConfig> for LoggingMetadata {
     fn from(config: &LoggingConfig) -> Self {
         Self {
             app_name: config.app_name.clone(),
-            edition: config.edition,
             channel: config.channel,
-            package_kind: config.package_kind,
+            distribution: config.distribution,
             version: config.version.clone(),
             commit: config.commit.clone(),
         }
@@ -200,9 +173,8 @@ pub fn init_logging(config: LoggingConfig) -> io::Result<LoggingGuard> {
             operation = "init_logging",
             status = "ok",
             app_name = %metadata.app_name,
-            edition = %metadata.edition,
             channel = %metadata.channel,
-            package_kind = %metadata.package_kind,
+            distribution = %metadata.distribution,
             app_version = %metadata.version,
             commit = metadata.commit.as_deref().unwrap_or(""),
             retention_days = config.retention_days,
@@ -284,8 +256,7 @@ pub fn log_command_started(command: &str, command_id: &str) {
         operation = command,
         command_id = command_id,
         status = "started",
-        edition = meta.map(|m| m.edition.as_str()).unwrap_or("oss"),
-        package_kind = meta.map(|m| m.package_kind.as_str()).unwrap_or("github"),
+        distribution = meta.map(|m| m.distribution.as_str()).unwrap_or("standard"),
     );
 }
 
@@ -298,8 +269,7 @@ pub fn log_command_completed(command: &str, command_id: &str, duration_ms: u128)
         command_id = command_id,
         duration_ms = duration_ms,
         status = "ok",
-        edition = meta.map(|m| m.edition.as_str()).unwrap_or("oss"),
-        package_kind = meta.map(|m| m.package_kind.as_str()).unwrap_or("github"),
+        distribution = meta.map(|m| m.distribution.as_str()).unwrap_or("standard"),
     );
 }
 
@@ -313,8 +283,7 @@ pub fn log_command_failed(command: &str, command_id: &str, duration_ms: u128, er
         duration_ms = duration_ms,
         status = "error",
         error_kind = error_kind,
-        edition = meta.map(|m| m.edition.as_str()).unwrap_or("oss"),
-        package_kind = meta.map(|m| m.package_kind.as_str()).unwrap_or("github"),
+        distribution = meta.map(|m| m.distribution.as_str()).unwrap_or("standard"),
     );
 }
 
@@ -341,8 +310,7 @@ pub fn log_operation_event(
             duration_ms = duration_ms,
             status = status,
             error_kind = error_kind,
-            edition = meta.map(|m| m.edition.as_str()).unwrap_or("oss"),
-            package_kind = meta.map(|m| m.package_kind.as_str()).unwrap_or("github"),
+            distribution = meta.map(|m| m.distribution.as_str()).unwrap_or("standard"),
             fields = %fields,
         );
     } else {
@@ -353,8 +321,7 @@ pub fn log_operation_event(
             duration_ms = duration_ms,
             status = status,
             error_kind = error_kind,
-            edition = meta.map(|m| m.edition.as_str()).unwrap_or("oss"),
-            package_kind = meta.map(|m| m.package_kind.as_str()).unwrap_or("github"),
+            distribution = meta.map(|m| m.distribution.as_str()).unwrap_or("standard"),
             fields = %fields,
         );
     }

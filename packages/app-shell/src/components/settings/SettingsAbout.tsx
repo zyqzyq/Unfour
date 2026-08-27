@@ -15,8 +15,7 @@ import type { AppInfo } from "@unfour/command-client";
 const FALLBACK_APP_INFO: AppInfo = {
   name: APP_NAME,
   version: "",
-  edition: "community",
-  distribution: "github",
+  distribution: "standard",
   channel: "test",
   commit: null,
 };
@@ -52,15 +51,10 @@ export function SettingsAbout() {
     };
   }, []);
 
-  const editionLabel =
-    appInfo?.edition === "pro"
-      ? t("app.settings.about.editionPro")
-      : t("app.settings.about.editionCommunity");
-
   const distributionLabel =
-    appInfo?.distribution === "website"
-      ? t("app.settings.about.distributionWebsite")
-      : t("app.settings.about.distributionGithub");
+    appInfo?.distribution === "microsoft-store"
+      ? t("app.settings.about.distributionMicrosoftStore")
+      : t("app.settings.about.distributionStandard");
 
   const shortCommit = formatShortCommit(appInfo?.commit);
 
@@ -71,7 +65,6 @@ export function SettingsAbout() {
         createVersionInfo(undefined, {
           name: info.name || APP_NAME,
           version: info.version,
-          edition: info.edition,
           distribution: info.distribution,
           channel: info.channel,
           commit: info.commit,
@@ -96,7 +89,6 @@ export function SettingsAbout() {
 
       <dl className="divide-y divide-[var(--u-color-border)] rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)]">
         <InfoRow label={t("app.settings.about.appName")} value={APP_NAME} />
-        <InfoRow label={t("app.settings.about.edition")} value={editionLabel} />
         <InfoRow label={t("app.settings.about.version")} value={appInfo?.version || ""} />
         <InfoRow label={t("app.settings.about.distribution")} value={distributionLabel} />
         {shortCommit ? (

@@ -129,7 +129,7 @@ fn initialize_logging(storage_mode: StorageMode) -> Option<unfour_diag::LoggingG
     }
 
     let paths = unfour_paths::initialize_unfour_storage().ok()?;
-    let mut config = unfour_diag::LoggingConfig::oss_dev(paths.logs_dir);
+    let mut config = unfour_diag::LoggingConfig::unified_dev(paths.logs_dir);
     config.app_name = "unfour-mcp".to_string();
     config.version = env!("CARGO_PKG_VERSION").to_string();
     unfour_diag::init_logging(config).ok()

@@ -22,6 +22,14 @@ test-results
 playwright-report
 coverage
 *.local
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.pem
+*.key
+scripts/msix/msix.config.json
 lefthook-local.yml
 .codex-target*
 .superpowers/

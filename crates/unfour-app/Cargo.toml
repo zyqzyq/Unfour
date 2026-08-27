@@ -1,7 +1,7 @@
 [package]
 name = "unfour-app"
 version.workspace = true
-description = "Shared Tauri composition layer (plugins, command-bus setup, AppState, and commands) reused by every Unfour edition's binary."
+description = "Shared Tauri composition layer for the unified Unfour desktop binary."
 authors = ["Unfour"]
 edition = "2021"
 license = "Apache-2.0"

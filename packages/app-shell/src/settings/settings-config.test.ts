@@ -44,20 +44,19 @@ describe("settings config", () => {
     );
   });
 
-  it("includes the full identity (edition, version, distribution, channel, commit) when provided", () => {
+  it("includes the unified version, distribution, channel, and commit", () => {
     const info = createVersionInfo(
       { platform: "Win32", userAgent: "Vitest" },
       {
         name: "Unfour",
         version: "0.1.0",
-        edition: "community",
-        distribution: "github",
+        distribution: "standard",
         channel: "test",
         commit: "0123456789abcdef",
       },
     );
-    expect(info).toContain("Unfour 0.1.0 (community)");
-    expect(info).toContain("Distribution: github");
+    expect(info).toContain("Unfour 0.1.0");
+    expect(info).toContain("Distribution: standard");
     expect(info).toContain("Channel: test");
     expect(info).toContain("Commit: 0123456789abcdef");
   });

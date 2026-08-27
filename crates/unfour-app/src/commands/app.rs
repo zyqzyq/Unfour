@@ -5,39 +5,20 @@ use unfour_core::AppResult;
 
 use super::trace_command;
 
-/// The build edition surfaced to the frontend. Serialized as the lowercase
-/// string so it stays stable and locale-independent (`"community"` / `"pro"`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum AppEditionDto {
-    Community,
-    Pro,
-}
-
-impl From<crate::AppEdition> for AppEditionDto {
-    fn from(edition: crate::AppEdition) -> Self {
-        match edition {
-            crate::AppEdition::Community => Self::Community,
-            crate::AppEdition::Pro => Self::Pro,
-        }
-    }
-}
-
 /// The distribution channel surfaced to the frontend. Serialized as the
-/// lowercase string so it stays stable and locale-independent
-/// (`"github"` / `"website"`).
+/// stable, locale-independent values (`"standard"` / `"microsoft-store"`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 pub enum AppDistributionDto {
-    GitHub,
-    Website,
+    Standard,
+    MicrosoftStore,
 }
 
-impl From<crate::PackageKind> for AppDistributionDto {
-    fn from(kind: crate::PackageKind) -> Self {
-        match kind {
-            crate::PackageKind::GitHub => Self::GitHub,
-            crate::PackageKind::Website => Self::Website,
+impl From<crate::AppDistribution> for AppDistributionDto {
+    fn from(distribution: crate::AppDistribution) -> Self {
+        match distribution {
+            crate::AppDistribution::Standard => Self::Standard,
+            crate::AppDistribution::MicrosoftStore => Self::MicrosoftStore,
         }
     }
 }
@@ -65,7 +46,6 @@ impl From<crate::ReleaseChannel> for AppChannelDto {
 pub struct AppInfo {
     pub name: String,
     pub version: String,
-    pub edition: AppEditionDto,
     pub distribution: AppDistributionDto,
     pub channel: AppChannelDto,
     pub commit: Option<String>,
@@ -80,8 +60,7 @@ pub async fn get_app_info(state: State<'_, AppState>) -> AppResult<AppInfo> {
         Ok(AppInfo {
             name: state.config.app_name.clone(),
             version: state.config.app_version.clone(),
-            edition: state.config.edition.into(),
-            distribution: state.config.package_kind.into(),
+            distribution: state.config.distribution.into(),
             channel: state.config.channel.into(),
             commit: state.config.commit.clone(),
         })
@@ -96,20 +75,12 @@ mod tests {
     #[test]
     fn dto_values_are_stable_and_lowercase() {
         assert_eq!(
-            serde_json::to_string(&AppEditionDto::Community).unwrap(),
-            "\"community\""
+            serde_json::to_string(&AppDistributionDto::Standard).unwrap(),
+            "\"standard\""
         );
         assert_eq!(
-            serde_json::to_string(&AppEditionDto::Pro).unwrap(),
-            "\"pro\""
-        );
-        assert_eq!(
-            serde_json::to_string(&AppDistributionDto::GitHub).unwrap(),
-            "\"github\""
-        );
-        assert_eq!(
-            serde_json::to_string(&AppDistributionDto::Website).unwrap(),
-            "\"website\""
+            serde_json::to_string(&AppDistributionDto::MicrosoftStore).unwrap(),
+            "\"microsoft-store\""
         );
         assert_eq!(
             serde_json::to_string(&AppChannelDto::Test).unwrap(),
@@ -126,16 +97,14 @@ mod tests {
         let info = AppInfo {
             name: "Unfour".to_string(),
             version: "0.1.0".to_string(),
-            edition: AppEditionDto::Community,
-            distribution: AppDistributionDto::GitHub,
+            distribution: AppDistributionDto::Standard,
             channel: AppChannelDto::Test,
             commit: None,
         };
         let json = serde_json::to_value(&info).unwrap();
         assert_eq!(json["name"], "Unfour");
         assert_eq!(json["version"], "0.1.0");
-        assert_eq!(json["edition"], "community");
-        assert_eq!(json["distribution"], "github");
+        assert_eq!(json["distribution"], "standard");
         assert_eq!(json["channel"], "test");
         assert!(json["commit"].is_null());
     }

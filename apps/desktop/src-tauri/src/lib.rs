@@ -8,6 +8,9 @@ use unfour_secret_store::SecretStore;
 
 mod account;
 mod sync;
+mod update;
+
+pub use update::handle_build_metadata_cli;
 
 // Tauri's resource selects Common Controls v6 before the Windows test harness starts.
 #[cfg(all(test, target_os = "windows"))]
@@ -16,20 +19,7 @@ unsafe extern "C" {}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Community identity is stated explicitly here — the single, compile-time
-    // source of truth. `channel` and `commit` are injected by `build.rs`
-    // (see UNFOUR_RELEASE_CHANNEL / UNFOUR_BUILD_COMMIT); nothing is inferred
-    // from the cargo profile or `debug_assertions` at runtime.
-    let config = unfour_app::UnfourAppConfig {
-        edition: unfour_app::AppEdition::Community,
-        app_name: "Unfour".to_string(),
-        app_version: env!("CARGO_PKG_VERSION").to_string(),
-        package_kind: unfour_app::PackageKind::GitHub,
-        channel: build_channel(),
-        commit: build_commit(),
-        // `core_commit` defaults to this same unified repository commit.
-        core_commit: None,
-    };
+    let config = update::app_config();
 
     let runtime = tauri::async_runtime::block_on(initialize_unified_runtime())
         .expect("error while initializing the Unfour desktop runtime");
@@ -49,7 +39,7 @@ pub fn run() {
         background_sync.run_background(sync_receiver).await;
     });
 
-    unfour_app::configure_core_app_with_extensions(
+    let builder = unfour_app::configure_core_app_with_extensions(
         tauri::Builder::default(),
         config,
         unfour_app::UnfourAppExtensions::with_prepared_command_bus(command_bus),
@@ -57,31 +47,44 @@ pub fn run() {
     .plugin(tauri_plugin_deep_link::init())
     .manage(account_state)
     .manage(sync_state)
-    .invoke_handler(unfour_app::generate_handlers![
-        account::account_get_state,
-        account::account_begin_sign_in,
-        account::account_handle_deep_link,
-        account::account_sign_out,
-        account::account_open_upgrade,
-        account::account_open_web_account,
-        sync::cloud_sync_enable,
-        sync::cloud_sync_disable,
-        sync::cloud_sync_status,
-        sync::cloud_sync_global_status,
-        sync::cloud_sync_set_global_enabled,
-        sync::cloud_sync_diagnostics,
-        sync::cloud_sync_now,
-        sync::cloud_sync_retry_dead_letter_current_local,
-        sync::cloud_sync_use_remote_dead_letter,
-        sync::cloud_sync_all,
-        sync::cloud_sync_list_workspaces,
-        sync::cloud_sync_download,
-        sync::cloud_sync_conflicts,
-        sync::cloud_sync_keep_local,
-        sync::cloud_sync_use_remote
-    ])
-    .run(tauri::generate_context!())
-    .expect("error while running Unfour");
+    .manage(update::PendingUpdate::default());
+    // Store builds never register the updater plugin. The commands remain in
+    // the static handler table but independently reject Store distribution,
+    // which provides defense in depth against an NSIS install path.
+    let builder = if update::internal_updater_enabled() {
+        builder.plugin(tauri_plugin_updater::Builder::new().build())
+    } else {
+        builder
+    };
+    builder
+        .invoke_handler(unfour_app::generate_handlers![
+            account::account_get_state,
+            account::account_begin_sign_in,
+            account::account_handle_deep_link,
+            account::account_sign_out,
+            account::account_open_upgrade,
+            account::account_open_web_account,
+            sync::cloud_sync_enable,
+            sync::cloud_sync_disable,
+            sync::cloud_sync_status,
+            sync::cloud_sync_global_status,
+            sync::cloud_sync_set_global_enabled,
+            sync::cloud_sync_diagnostics,
+            sync::cloud_sync_now,
+            sync::cloud_sync_retry_dead_letter_current_local,
+            sync::cloud_sync_use_remote_dead_letter,
+            sync::cloud_sync_all,
+            sync::cloud_sync_list_workspaces,
+            sync::cloud_sync_download,
+            sync::cloud_sync_conflicts,
+            sync::cloud_sync_keep_local,
+            sync::cloud_sync_use_remote,
+            update::get_update_info,
+            update::check_for_update,
+            update::install_update
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running Unfour");
 }
 
 struct UnifiedDesktopRuntime {
@@ -140,25 +143,6 @@ async fn initialize_unified_runtime_with_db(
         sync_state: sync::SyncAppState::new(sync_service, sync_access),
         sync_receiver,
     })
-}
-
-/// Release channel injected at build time by `build.rs`. The build script
-/// rejects every value except "test" and "stable".
-fn build_channel() -> unfour_app::ReleaseChannel {
-    match env!("UNFOUR_RELEASE_CHANNEL") {
-        "test" => unfour_app::ReleaseChannel::Test,
-        "stable" => unfour_app::ReleaseChannel::Stable,
-        value => panic!("invalid compiled UNFOUR_RELEASE_CHANNEL: {value}"),
-    }
-}
-
-/// HEAD SHA of the workspace this binary was built from, injected by `build.rs`.
-/// An empty or "unknown" value (git unavailable) becomes `None`.
-fn build_commit() -> Option<String> {
-    match env!("UNFOUR_BUILD_COMMIT") {
-        "" | "unknown" => None,
-        value => Some(value.to_string()),
-    }
 }
 
 #[cfg(test)]

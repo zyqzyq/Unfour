@@ -10,6 +10,10 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
+const checkOnly = process.argv.includes("--check");
+for (const argument of process.argv.slice(2)) {
+  if (argument !== "--check") throw new Error(`Unknown argument: ${argument}`);
+}
 
 function readWorkspaceVersion() {
   const cargo = readFileSync(resolve(root, "Cargo.toml"), "utf8");
@@ -66,14 +70,27 @@ function walk(dir) {
 walk(root);
 
 let changed = 0;
+const mismatches = [];
 for (const file of targets) {
   const raw = readFileSync(file, "utf8");
   const updated = raw.replace(/^(\s*"version":\s*)"[^"]*"/m, `$1"${version}"`);
   if (updated !== raw) {
+    if (checkOnly) {
+      mismatches.push(relative(root, file));
+      continue;
+    }
     writeFileSync(file, updated);
     changed++;
     console.log(`[sync-version] ${relative(root, file)} -> ${version}`);
   }
 }
 
-console.log(`[sync-version] version ${version}, ${changed} file(s) updated`);
+if (mismatches.length > 0) {
+  throw new Error(
+    `Version ${version} is not synchronized in: ${mismatches.join(", ")}`,
+  );
+}
+
+console.log(
+  `[sync-version] version ${version}, ${checkOnly ? "all tracked consumers match" : `${changed} file(s) updated`}`,
+);

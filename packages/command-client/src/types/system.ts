@@ -10,16 +10,13 @@ export type DiagnosticBundleResult = {
   manifestPath: string;
 };
 
-export type AppEdition = "community" | "pro";
-
-export type AppDistribution = "github" | "website";
+export type AppDistribution = "standard" | "microsoft-store";
 
 export type AppChannel = "test" | "stable";
 
 export type AppInfo = {
   name: string;
   version: string;
-  edition: AppEdition;
   distribution: AppDistribution;
   channel: AppChannel;
   commit: string | null;
