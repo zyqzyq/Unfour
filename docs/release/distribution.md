@@ -1,7 +1,7 @@
 # Distribution
 
 This document describes the public distribution format and release-asset
-verification for Community Stable Unfour `v0.8.0`.
+verification for the published Community release / Preview Unfour `v0.8.0`.
 
 ## Release workflow
 
@@ -28,7 +28,7 @@ Windows, the configured release target produces an NSIS installer.
 
 | Platform | Official distribution status | Format |
 | --- | --- | --- |
-| Windows x64 | Community Stable distribution | NSIS `.exe` |
+| Windows x64 | Community release / Preview distribution | NSIS `.exe` |
 | macOS arm64/x64 | Experimental / unverified until real-device smoke checks | Existing Tauri `.dmg` and archive outputs |
 | Linux x64 | Experimental / unverified until real-device smoke checks | Existing Tauri `.AppImage`, `.deb`, and available package outputs |
 

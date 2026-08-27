@@ -15,40 +15,28 @@
 
 </div>
 
-## 使用 Codex 与 GPT-5.6 构建
-
-Codex 用于审查 Rust 与 TypeScript 架构、实现和重构 Tauri 命令、补充测试，
-以及排查构建失败和 MCP 进程生命周期问题。
-
-GPT-5.6 用于设计 AI 辅助的后端排障流程、分析 SSH 与数据库权限边界、优化
-MCP 工具设计，以及规划项目架构和发布流程。
-
-Codex 对 Unfour 而言不只是开发工具：通过 Unfour MCP 服务，它可以调用 API、
-SSH 与数据库能力，完成“复现 API 问题 → 查看服务日志 → 查询数据库 → 关联证据并
-定位根因”的排障流程。
-
-敏感操作仍由开发者控制。工作区范围、凭据处理、主机信任、操作确认与工具权限会
-限制 Codex 可以访问和执行的内容；连接 Codex 并不代表默认授予不受限制的权限。
-
-> [!NOTE]
-> 当前源码正在准备 Unfour Community Stable `v0.8.0`。该版本尚未签名且仍需完成发布验证；
-> 安装包可能触发 SmartScreen 或其他操作系统安全警告。
+> [!WARNING]
+> 当前已发布版本是 `v0.8.0`，定位为 Community release / Preview（社区发布 / 预览）。
+> Windows NSIS 安装包尚未签名，可能触发 SmartScreen 或其他操作系统安全警告。
+> 请使用 GitHub Release 中的 `SHA256SUMS.txt` 校验下载文件。
 
 ## 下载
 
-请从 [GitHub Releases](https://github.com/zyqzyq/Unfour/releases) 下载已发布版本。
-最新稳定版是 [`v0.7.1`](https://github.com/zyqzyq/Unfour/releases/tag/v0.7.1)；
-`v0.8.0` 会在正式发布后出现在 Releases 页面。
+请从 GitHub Releases 下载已发布的 [`v0.8.0`](https://github.com/zyqzyq/Unfour/releases/tag/v0.8.0)。
 
-- Windows：NSIS `.exe` 安装包。
-- macOS 与 Linux 安装包在完成真实设备冒烟检查前属于 experimental/unverified（实验性/未验证），不要将其视为已支持或已验证平台。
+- Windows 是主分发路径：NSIS `.exe` 安装包。该安装包尚未签名，可能触发
+  SmartScreen。
+- macOS 提供 Apple Silicon 与 Intel 真机包，但未 Apple 签名、未公证；Gatekeeper
+  可能拦截。不要将其描述为已公证或已验证。
+- Linux 安装包属于 experimental / unverified（实验性 / 未验证）。
 - 使用 Release 中的 `SHA256SUMS.txt` 校验下载的安装包。
 
 ## Unfour 是什么？
 
 Unfour 是一个面向后端与运维工作的本地优先桌面工作台。它把 API 请求、SSH 连接、
 数据库连接、本地活动与工作台布局统一在一个本地优先的应用中，并通过本地 MCP 服务把这些
-能力暴露给你的 AI Agent。这一基础支持跨工具的 AI 辅助排障工作流。
+能力暴露给你的 AI Agent。Codex 与 Cursor 可以通过现有工具使用同一套已保存连接进行诊断；
+多步骤排障工作流不是产品功能。
 
 应用基于 Tauri 2、React、TypeScript 与 Rust 构建。前端负责工作台界面，而 HTTP、SSH、
 数据库驱动、本地存储与凭据引用等安全敏感的执行逻辑，则位于 Rust 能力模块与命令总线之后。
@@ -65,9 +53,11 @@ Unfour 是一个面向后端与运维工作的本地优先桌面工作台。它�
   SQL（支持多语句 Run Current / Run All），预览与编辑表数据，并查看查询结果。
 - **Workspace（工作区）** - 将已保存的请求、共享环境变量、连接、活动、标签页与布局状态
   限定在某个本地工作区之内，并支持标题栏切换当前环境。
-- **MCP integration（由 Codex 驱动的 API、SSH 与数据库调试）** - 通过桌面应用所用的
-  同一命令总线，把安全的本地诊断工具暴露给 MCP 客户端（如 Codex、Claude Code 或
-  Cursor），让你的 AI Agent 能够使用同样的 API、SSH 与数据库上下文。
+- **MCP integration（面向 Codex 与 Cursor）** - 通过桌面应用所用的同一命令总线，
+  以本地 stdio 方式提供安全的诊断工具。Codex 与 Cursor 可以使用同一套已保存的 API、
+  SSH 与数据库连接；多步骤排障工作流不是产品功能。
+
+> [连接 Codex 与 Cursor 到 Unfour MCP →](docs/mcp/client-setup.md)
 
 ## 截图
 
@@ -147,8 +137,8 @@ pnpm run test:rust      # cargo test --workspace
 
 ## 发布状态
 
-当前源码正在准备 Community Stable `v0.8.0`，最新稳定版为 `v0.7.1`。发布就绪程度
-受以下验证证据限制：
+当前已发布版本是 `v0.8.0`，定位为 Community release / Preview（社区发布 / 预览）。
+发布验证证据见：
 
 - `docs/testing/release-verification.md`
 - `docs/testing/manual-test-cases.md`
@@ -156,9 +146,11 @@ pnpm run test:rust      # cargo test --workspace
 - `docs/release/distribution.md`
 - `docs/release/signing.md`
 
-Windows 提供 NSIS `.exe` 安装包。安装包尚未签名，可能触发 SmartScreen。
-macOS 与 Linux 在完成真实设备冒烟检查前仍是 experimental/unverified（实验性/未验证）。
-除非发布检查确实成功执行，或有当前仓库证据支撑，否则不得声称其通过。
+Windows 是主分发路径，提供尚未签名的 NSIS `.exe` 安装包，可能触发 SmartScreen。
+macOS 提供 Apple Silicon 与 Intel 真机包，但未 Apple 签名、未公证，Gatekeeper 可能拦截。
+Linux 仍属于 experimental / unverified（实验性 / 未验证）。请使用 Release 中的
+`SHA256SUMS.txt` 校验下载的产物。除非发布检查确实成功执行，或有当前仓库证据支撑，
+否则不得声称其通过。
 
 ## 文档
 
@@ -170,6 +162,7 @@ macOS 与 Linux 在完成真实设备冒烟检查前仍是 experimental/unverifi
 - `docs/architecture/diagnostics.md` - 本地结构化日志、脱敏、留存、诊断包与开发日志指引。
 - `docs/architecture/security-model.md` - 安全姿态、脱敏、主机密钥策略与危险操作规则。
 - `docs/mcp/overview.md` 与 `docs/mcp/tools.md` - 本地 MCP 服务行为。
+- `docs/mcp/client-setup.md` - 面向 Codex 与 Cursor 的安装用户配置。
 - `docs/testing/release-verification.md` - 发布验证矩阵。
 - `docs/release/release-checklist.md` - 公开发布检查清单。
 - `docs/user/USER_GUIDE.md` - 面向用户的工作流指南。
@@ -180,6 +173,16 @@ macOS 与 Linux 在完成真实设备冒烟检查前仍是 experimental/unverifi
 `AGENTS.md` 中的包边界规则。
 
 安全问题请通过 `SECURITY.md` 反馈，不要使用公开 Issue。
+
+## 使用 Codex 与 GPT-5.6 构建
+
+Codex 用于审查 Rust 与 TypeScript 架构、实现和重构 Tauri 命令、补充测试，
+以及排查构建失败和 MCP 进程生命周期问题。
+
+GPT-5.6 用于分析 SSH 与数据库权限边界、优化 MCP 工具设计，以及规划项目架构和发布流程。
+
+Unfour 的本地 MCP 服务让 Codex 与 Cursor 可以使用同一套已保存的 API、SSH 与数据库连接
+进行诊断检查，并沿用桌面应用相同的命令总线、工作区范围、凭据处理与操作确认控制。
 
 ## 许可证
 

@@ -164,7 +164,7 @@ workspace. The real tool registry still handles `initialize`,
 to the normal command-bus policy and may still reach external services when a
 tool is explicitly called.
 
-Do not set this variable for normal Codex, Claude Code, or Cursor usage. Those
+Do not set this variable for normal Codex or Cursor usage. Those
 clients should use the default mode so MCP can read the desktop's real,
 workspace-scoped data.
 
@@ -174,7 +174,7 @@ The current Community MCP surface does not:
 
 - accept ad-hoc database connection strings;
 - open interactive SSH sessions;
-- implement workflows;
+- provide multi-step troubleshooting workflows as a product feature;
 - implement HTTP MCP transport;
 - return raw secret values;
 - attach to the running desktop process over IPC.
@@ -182,5 +182,6 @@ The current Community MCP surface does not:
 See also:
 
 - `docs/mcp/tools.md`
+- `docs/mcp/client-setup.md`
 - `docs/mcp/codex-setup.md`
 - `docs/architecture/security-model.md`

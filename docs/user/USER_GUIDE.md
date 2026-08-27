@@ -3,7 +3,7 @@
 This document is for people using the app. Implementation details live in
 `docs/architecture`, `docs/mcp`, `docs/testing`, and `docs/release`.
 
-## Current MVP
+## Current Product
 
 Unfour opens into a single workspace surface:
 
@@ -14,18 +14,44 @@ Unfour opens into a single workspace surface:
 
 ## Current Capabilities
 
-The app is currently an MVP workbench:
+The current published release is `v0.8.0`:
 
 - The workspace shell is usable.
 - API debugging supports request editing, Send, response viewing, history,
   saved requests, collections, environments, import/export, and request
   scripts with test and console results.
+- Local MCP is available through the stdio `unfour-mcp` server. It uses the
+  same command bus and the same saved API, SSH, and database connections for
+  Codex and Cursor diagnostics.
+- The Community edition is free and licensed under Apache-2.0. Cloud Sync is a
+  Pro capability.
 - SQLite database workflows are usable.
 - PostgreSQL and MySQL/MariaDB database workflows are experimental and should be
   verified against your own database before relying on them.
 - SSH Terminal workflows are experimental until the live SSH verification gate
   is completed.
-- AI calls and cloud sync are planned, not visible product features.
+
+Multi-step AI troubleshooting workflows are not a product feature. Agents use
+the available MCP tools and the saved connections for diagnosis.
+
+## Connect an AI agent (MCP)
+
+Unfour provides a local stdio MCP server for Codex and Cursor. It uses the same
+command bus as the desktop app and reads the workspace data and saved
+connections from the local storage.
+
+1. Open the desktop app once. This creates `~/.unfour/unfour.sqlite`.
+2. In `Settings → MCP`, copy the absolute MCP command path shown by the app.
+3. Follow the [installed-user MCP setup](../mcp/client-setup.md) and paste that
+   path into the Codex or Cursor configuration.
+4. Start or restart the MCP client after saving its configuration.
+
+Do not set `UNFOUR_MCP_STORAGE_MODE=ephemeral` for daily use. That mode is for
+registry validation, CI, protocol smoke checks, and isolated tests; it uses an
+empty in-memory workspace instead of the desktop app's saved data.
+
+In the default `prod` environment, MCP is read-only. High-risk actions return
+`CONFIRMATION_REQUIRED` and must be reviewed before the client retries them.
 
 ## API Client
 

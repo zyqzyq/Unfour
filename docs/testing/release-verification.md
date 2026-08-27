@@ -1,7 +1,7 @@
 # Release Verification
 
-This is the active verification matrix for the Community Stable `v0.8.0`
-release. Results must come from this release commit; evidence from earlier
+This is the active verification matrix for the published Community release /
+Preview `v0.8.0`. Results must come from this release commit; evidence from earlier
 releases is historical context only. An artifact build is not proof of
 platform, live-service, credential-store, or feature-level verification.
 

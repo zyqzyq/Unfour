@@ -106,15 +106,17 @@ The connection domain work is a local command-bus foundation and does not by
 itself provide a hosted sync service. Release claims remain limited by the
 current verification matrix.
 
-## v0.8.0 (Current release line)
+## v0.8.0 (Current published release)
 
-Current focus:
+Current status:
 
-- Community Stable release preparation and version alignment;
+- Published Community release / Preview `v0.8.0`;
 - automated, installer, platform, and live-service verification recorded in
   the active release matrix;
 - continued platform hardening without expanding the current package or
-  command-bus boundaries.
+  command-bus boundaries;
+- MCP tools are provided over local stdio through the command bus; multi-step
+  troubleshooting workflows are not a product feature.
 
 Release claims remain limited by the current verification matrix.
 

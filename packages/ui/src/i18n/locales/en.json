@@ -75,7 +75,7 @@
       },
       "mcp": {
         "title": "MCP",
-        "description": "Local MCP connection details for clients such as Codex, Claude, or Cursor.",
+        "description": "Local MCP connection details for Codex and Cursor.",
         "statusLabel": "MCP status",
         "statusValue": "Local MCP available",
         "statusUnavailable": "Local MCP unavailable",
@@ -85,9 +85,9 @@
         "copyCommand": "Copy command",
         "copyConfig": "Copy config",
         "notFoundTitle": "MCP binary not found",
-        "notFoundDev": "No runnable unfour-mcp was found for this dev build. Build it with `cargo build -p unfour-mcp` (or run `pnpm tauri dev`, which builds it automatically), then copy the absolute path above into your MCP client.",
-        "notFoundRelease": "No unfour-mcp binary was found at the expected install location. Reinstall Unfour or build the MCP server, then point your MCP client at the absolute path above.",
-        "docsDescription": "The active setup guide is {path}. Build the MCP server first, then use an absolute command path in your client.",
+        "notFoundDev": "No runnable unfour-mcp was found for this dev build. Build it with `cargo build -p unfour-mcp` (or run `pnpm tauri dev`, which builds it automatically), then copy the absolute path above into Codex or Cursor.",
+        "notFoundRelease": "No unfour-mcp binary was found at the expected install location. Reinstall Unfour or build the MCP server, then point Codex or Cursor at the absolute path above.",
+        "docsDescription": "The active setup guide is {path}. Build the MCP server first, then use an absolute command path in Codex or Cursor.",
         "openDocs": "Open MCP docs"
       },
       "about": {

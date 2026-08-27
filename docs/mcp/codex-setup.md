@@ -1,7 +1,8 @@
 # Codex MCP Setup
 
-Use this guide to build and register the local Unfour MCP server with Codex or
-another MCP client that supports stdio servers.
+Use this guide to build and inspect the local Unfour MCP server for development.
+For an installed release, use [`client-setup.md`](client-setup.md), which
+provides the Codex and Cursor configuration entries.
 
 ## Build
 

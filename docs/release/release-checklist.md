@@ -1,6 +1,6 @@
 # Release Checklist
 
-This checklist is for the Community Stable `v0.8.0` release.
+This checklist is for the published Community release / Preview `v0.8.0`.
 
 ## Release setup
 

@@ -75,7 +75,7 @@
       },
       "mcp": {
         "title": "MCP",
-        "description": "用于 Codex、Claude、Cursor 等客户端的本地 MCP 连接信息。",
+        "description": "用于 Codex 与 Cursor 的本地 MCP 连接信息。",
         "statusLabel": "MCP 状态",
         "statusValue": "本地 MCP 可用",
         "statusUnavailable": "本地 MCP 不可用",
@@ -85,9 +85,9 @@
         "copyCommand": "复制命令",
         "copyConfig": "复制配置",
         "notFoundTitle": "未找到 MCP 可执行文件",
-        "notFoundDev": "当前开发构建中未找到可运行的 unfour-mcp。请执行 `cargo build -p unfour-mcp`（或运行 `pnpm tauri dev` 会自动构建），然后将上面的绝对路径配置到你的 MCP 客户端。",
-        "notFoundRelease": "在预期安装位置未找到 unfour-mcp。请重新安装 Unfour 或构建 MCP server，然后将上面的绝对路径配置到你的 MCP 客户端。",
-        "docsDescription": "当前配置说明位于 {path}。请先构建 MCP server，再在客户端中使用绝对命令路径。",
+        "notFoundDev": "当前开发构建中未找到可运行的 unfour-mcp。请执行 `cargo build -p unfour-mcp`（或运行 `pnpm tauri dev` 会自动构建），然后将上面的绝对路径配置到 Codex 或 Cursor。",
+        "notFoundRelease": "在预期安装位置未找到 unfour-mcp。请重新安装 Unfour 或构建 MCP server，然后将上面的绝对路径配置到 Codex 或 Cursor。",
+        "docsDescription": "当前配置说明位于 {path}。请先构建 MCP server，再在 Codex 或 Cursor 中使用绝对命令路径。",
         "openDocs": "打开 MCP 文档"
       },
       "about": {

@@ -71,8 +71,9 @@ For `v0.8.0`:
 
 - Windows: NOT VERIFIED — unsigned; Authenticode signing is not configured. Artifacts
   must be labeled unsigned and shipped with SHA-256 checksums.
-- macOS: NOT VERIFIED — not built or notarized in this environment.
-- Linux: NOT VERIFIED — not built in this environment; publish SHA-256 checksums.
+- macOS: NOT VERIFIED — Apple Silicon and Intel packages are available, but
+  they are not Apple-signed or notarized; Gatekeeper may block them.
+- Linux: NOT VERIFIED — experimental / unverified; publish SHA-256 checksums.
 
 Signing/notarization is incomplete for `v0.8.0`. Release notes must tell
 users to expect OS trust warnings and must publish checksums for manual

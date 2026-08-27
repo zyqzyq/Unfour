@@ -15,40 +15,23 @@
 
 </div>
 
-## Built with Codex & GPT-5.6
-
-Codex was used to review the Rust and TypeScript architecture, implement and
-refactor Tauri commands, add tests, and investigate build failures and MCP
-process lifecycle issues.
-
-GPT-5.6 helped design AI-assisted backend troubleshooting workflows, analyze
-SSH and database permission boundaries, refine MCP tool design, and plan the
-project architecture and release process.
-
-Codex is also more than a development tool for Unfour: through the Unfour MCP
-server, it can use API, SSH, and database capabilities to reproduce an API
-issue, inspect service logs, query the database, correlate the evidence, and
-identify the root cause.
-
-Sensitive operations remain under developer control. Workspace scope,
-credential handling, host trust, confirmations, and tool permissions constrain
-what Codex can access and execute; connecting Codex does not grant unrestricted
-access by default.
-
 > [!WARNING]
-> The source tree is preparing the Community Stable `v0.8.0` release. It is
-> unsigned and still requires release verification; installers may trigger
-> SmartScreen or other operating-system security warnings.
+> `v0.8.0` is the current published Community release / Preview. Windows NSIS
+> installers are unsigned and may trigger SmartScreen or other operating-system
+> security warnings. Use `SHA256SUMS.txt` from the GitHub Release to verify
+> downloaded files.
 
 ## Download
 
-Download published builds from [GitHub Releases](https://github.com/zyqzyq/Unfour/releases).
-The latest stable release is [`v0.7.1`](https://github.com/zyqzyq/Unfour/releases/tag/v0.7.1);
-`v0.8.0` will appear there after the release is published.
+Download the published [`v0.8.0` release](https://github.com/zyqzyq/Unfour/releases/tag/v0.8.0)
+from GitHub Releases.
 
-- Windows: NSIS `.exe` installer.
-- macOS and Linux packages are experimental and unverified until real-device
-  smoke checks are recorded; do not treat them as supported or verified yet.
+- Windows is the primary distribution path: NSIS `.exe` installer. It is
+  unsigned and may trigger SmartScreen.
+- macOS has Apple Silicon and Intel packages, but they are not Apple-signed or
+  notarized; Gatekeeper may block them. Do not describe them as notarized or
+  verified.
+- Linux packages are experimental / unverified.
 - Verify downloaded installers with the release `SHA256SUMS.txt` asset.
 
 ## What Is Unfour?
@@ -56,8 +39,9 @@ The latest stable release is [`v0.7.1`](https://github.com/zyqzyq/Unfour/release
 Unfour is a local-first desktop workspace for backend and operations work.
 It keeps API requests, SSH connections, database connections, local activity,
 and workspace layout in one local-first application, and exposes those
-capabilities to your AI agent through a local MCP server. This foundation
-supports AI-assisted troubleshooting workflows across those tools.
+capabilities to your AI agent through a local MCP server. Codex and Cursor can
+use the same saved connections for diagnostic inspection through the available
+tools; multi-step troubleshooting workflows are not a product feature.
 
 The app is built with Tauri 2, React, TypeScript, and Rust. The frontend owns
 the workbench UI, while security-sensitive execution such as HTTP, SSH,
@@ -81,10 +65,12 @@ capability crates and the command bus.
 - **Workspace** - Scope saved requests, shared environments/variables,
   connections, activity, tabs, and layout state to a local workspace, with
   title-bar active-environment switching.
-- **MCP integration for Codex-powered API, SSH, and database debugging** -
-  Expose safe local diagnostic tools to MCP clients (such as Codex, Claude
-  Code, or Cursor) through the same command bus used by the desktop app, so
-  your AI agent can work with the same API, SSH, and database context.
+- **MCP integration for Codex and Cursor** - Expose safe local stdio diagnostic
+  tools through the same command bus used by the desktop app. Codex and Cursor
+  can use the same saved API, SSH, and database connections; multi-step
+  troubleshooting workflows are not a product feature.
+
+> [Connect Codex and Cursor to Unfour MCP →](docs/mcp/client-setup.md)
 
 ## Screenshots
 
@@ -168,8 +154,8 @@ map.
 
 ## Release Status
 
-The source tree is preparing Community Stable `v0.8.0`; the latest published
-stable version is `v0.7.1`. Release readiness is documented in:
+`v0.8.0` is the current published Community release / Preview. Release
+verification evidence is documented in:
 
 - `docs/testing/release-verification.md`
 - `docs/testing/manual-test-cases.md`
@@ -177,11 +163,13 @@ stable version is `v0.7.1`. Release readiness is documented in:
 - `docs/release/distribution.md`
 - `docs/release/signing.md`
 
-Windows distributes an NSIS `.exe` installer. Installers are unsigned and may
-trigger SmartScreen. macOS and Linux remain experimental/unverified until
-real-device smoke checks are complete. Do not claim a release check passes
-unless it was run successfully for the target platform or is backed by current
-repository evidence.
+Windows is the primary distribution path and ships an unsigned NSIS `.exe`
+installer that may trigger SmartScreen. macOS has Apple Silicon and Intel
+packages, but they are not Apple-signed or notarized and Gatekeeper may block
+them. Linux remains experimental / unverified. Use the release
+`SHA256SUMS.txt` to verify downloaded artifacts, and do not claim a release
+check passes unless it was run successfully for the target platform or is
+backed by current repository evidence.
 
 ## Documentation
 
@@ -198,6 +186,7 @@ repository evidence.
 - `docs/architecture/security-model.md` - security posture, redaction, host-key
   policy, and dangerous-action rules.
 - `docs/mcp/overview.md` and `docs/mcp/tools.md` - local MCP server behavior.
+- `docs/mcp/client-setup.md` - installed-user setup for Codex and Cursor.
 - `docs/testing/release-verification.md` - release verification matrix.
 - `docs/release/release-checklist.md` - public release checklist.
 - `docs/user/USER_GUIDE.md` - user-facing workflow guide.
@@ -208,6 +197,20 @@ Please read `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and the package boundary
 rules in `AGENTS.md` before opening a pull request.
 
 Security issues should be reported through `SECURITY.md`, not a public issue.
+
+## Built with Codex & GPT-5.6
+
+Codex was used to review the Rust and TypeScript architecture, implement and
+refactor Tauri commands, add tests, and investigate build failures and MCP
+process lifecycle issues.
+
+GPT-5.6 helped analyze SSH and database permission boundaries, refine MCP tool
+design, and plan the project architecture and release process.
+
+The local Unfour MCP server lets Codex and Cursor use the same saved API, SSH,
+and database connections for diagnostic inspection. It follows the same command
+bus, workspace scope, credential handling, and confirmation controls as the
+desktop app.
 
 ## License
 

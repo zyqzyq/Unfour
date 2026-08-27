@@ -5,12 +5,12 @@ passwords, and API tokens — so we take security reports seriously.
 
 ## Supported Versions
 
-Unfour `0.1.x` is the first public release line. Security fixes are applied to the latest `0.x`
-release only. There is no long-term support branch yet.
+Security fixes are applied to the current latest `0.x` release, which is the
+published `v0.8.0`. There is no long-term support branch yet.
 
 | Version | Supported |
 | ------- | --------- |
-| latest `0.x` | ✅ |
+| latest `0.x` (`v0.8.0`) | ✅ |
 | older | ❌ |
 
 ## Reporting a Vulnerability
