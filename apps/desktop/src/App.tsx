@@ -1,10 +1,64 @@
-import { DesktopApp } from "@unfour/app-shell";
+import {
+  DesktopApp,
+  type DesktopAppExtensionContext,
+  type DesktopAppExtensions,
+  type DesktopAppWorkspaceActionsProvider,
+} from "@unfour/app-shell";
+import { useI18n } from "@unfour/ui";
+import {
+  AccountIndicator,
+  AccountOverlays,
+  AccountProvider,
+  accountSection,
+} from "./features/account";
+import {
+  CloudSyncOverlays,
+  CloudSyncProvider,
+  CloudSyncStatus,
+  CloudSyncWorkspaceDecoration,
+  cloudSyncSection,
+  useCloudSync,
+} from "./features/cloud-sync";
+import { createCloudSyncWorkspaceActions } from "./features/cloud-sync/workspaceMenuActions";
 
-// The full shell composition now lives in @unfour/app-shell (DesktopApp).
-// apps/desktop is a thin entry that mounts it; the Pro edition mounts the
-// same DesktopApp from the unfour submodule with zero code duplication.
+function DesktopTitleBarEnd(context: DesktopAppExtensionContext) {
+  return <><CloudSyncStatus {...context} /><AccountIndicator /></>;
+}
+
+function DesktopOverlays(context: DesktopAppExtensionContext) {
+  return <><AccountOverlays /><CloudSyncOverlays {...context} /></>;
+}
+
+function ExtendedDesktopApp() {
+  const { t } = useI18n();
+  const cloudSync = useCloudSync();
+  const workspaceMenuActions: DesktopAppWorkspaceActionsProvider = (_context, workspace) =>
+    createCloudSyncWorkspaceActions(cloudSync, t, workspace);
+  const extensions: DesktopAppExtensions = {
+    titleBarEnd: DesktopTitleBarEnd,
+    settingsSections: [accountSection, cloudSyncSection],
+    workspaceDecoration: CloudSyncWorkspaceDecoration,
+    workspaceMenuActions,
+    workspaceMenuFooterActions: [{
+      id: "cloud-sync.open-cloud-workspace",
+      label: t("cloudSync.openCloudWorkspace"),
+      disabled: !cloudSync.available,
+      run: cloudSync.openCloudWorkspaceDialog,
+    }],
+    overlays: DesktopOverlays,
+  };
+
+  return <DesktopApp extensions={extensions} />;
+}
+
 function App() {
-  return <DesktopApp />;
+  return (
+    <AccountProvider>
+      <CloudSyncProvider>
+        <ExtendedDesktopApp />
+      </CloudSyncProvider>
+    </AccountProvider>
+  );
 }
 
 export default App;
