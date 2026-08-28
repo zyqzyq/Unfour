@@ -3,7 +3,20 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const readWorkflow = (name) =>
-  readFileSync(new URL(`../.github/workflows/${name}`, import.meta.url), "utf8");
+  readFileSync(new URL(`../.github/workflows/${name}`, import.meta.url), "utf8").replaceAll(
+    "\r\n",
+    "\n",
+  );
+
+const readJob = (workflow, name) => {
+  const marker = `  ${name}:\n`;
+  const start = workflow.indexOf(marker);
+  assert.notEqual(start, -1, `workflow must define ${name} job`);
+  const bodyStart = start + marker.length;
+  const nextJobOffset = workflow.slice(bodyStart).search(/\n  [A-Za-z0-9_-]+:/);
+  const end = nextJobOffset === -1 ? workflow.length : bodyStart + nextJobOffset + 1;
+  return workflow.slice(start, end);
+};
 
 test("Release Candidate is manual, read-only, and pins the requested ref", () => {
   const candidate = readWorkflow("release-candidate.yml");
@@ -49,6 +62,37 @@ test("Release Candidate and Release call the same signed Standard build core", (
   ]) {
     assert.ok(build.includes(command), `shared verify must run ${command}`);
   }
+});
+
+test("production Environment owns signing and publication secrets", () => {
+  const candidate = readWorkflow("release-candidate.yml");
+  const release = readWorkflow("release.yml");
+  const build = readWorkflow("reusable-standard-build.yml");
+  const buildJob = readJob(build, "build");
+  const releaseBuildJob = readJob(release, "standard-build");
+  const candidateBuildJob = readJob(candidate, "standard-build");
+  const publishJob = readJob(release, "publish");
+
+  assert.match(buildJob, /^    environment: production$/m);
+  assert.match(publishJob, /^    environment: production$/m);
+  assert.doesNotMatch(build, /^    secrets:/m);
+  assert.doesNotMatch(releaseBuildJob, /TAURI_SIGNING_PRIVATE_KEY/);
+  assert.doesNotMatch(candidateBuildJob, /TAURI_SIGNING_PRIVATE_KEY/);
+  assert.doesNotMatch(releaseBuildJob, /^    secrets:/m);
+  assert.doesNotMatch(candidateBuildJob, /^    secrets:/m);
+  assert.match(buildJob, /TAURI_SIGNING_PRIVATE_KEY: \$\{\{ secrets\.TAURI_SIGNING_PRIVATE_KEY \}\}/);
+  assert.match(buildJob, /TAURI_SIGNING_PRIVATE_KEY_PASSWORD: \$\{\{ secrets\.TAURI_SIGNING_PRIVATE_KEY_PASSWORD \}\}/);
+  assert.match(publishJob, /AWS_ACCESS_KEY_ID: \$\{\{ secrets\.R2_ACCESS_KEY_ID \}\}/);
+  assert.match(publishJob, /AWS_SECRET_ACCESS_KEY: \$\{\{ secrets\.R2_SECRET_ACCESS_KEY \}\}/);
+  assert.match(publishJob, /R2_ACCOUNT_ID: \$\{\{ secrets\.R2_ACCOUNT_ID \}\}/);
+  assert.match(publishJob, /R2_BUCKET: \$\{\{ secrets\.R2_BUCKET \}\}/);
+});
+
+test("reusable Standard build does not declare workflow_call secrets", () => {
+  const build = readWorkflow("reusable-standard-build.yml");
+
+  assert.match(build, /workflow_call:\n    inputs:/);
+  assert.doesNotMatch(build, /workflow_call:[\s\S]*?\n    secrets:/);
 });
 
 test("shared staging enforces the four canonical signed platform outputs", () => {

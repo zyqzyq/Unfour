@@ -47,9 +47,11 @@ release, including:
 pnpm run tauri build --config src-tauri/tauri.release.conf.json
 ```
 
-It requires `TAURI_SIGNING_PRIVATE_KEY`, passes
-`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, and fails explicitly if the private key
-is empty. Successful runs upload:
+The reusable workflow's actual `build` job binds the GitHub Environment
+`production` and reads `TAURI_SIGNING_PRIVATE_KEY` plus
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` directly from that Environment. The
+candidate caller does not forward signing secrets. The build fails explicitly
+if the private key is empty. Successful runs upload:
 
 - `release-candidate-x86_64-pc-windows-msvc`: canonical Windows x64 NSIS
   installer and `.sig`;
@@ -71,8 +73,8 @@ uninstall checks before formal publication.
 A plain `vX.Y.Z` tag is the only Stable release input. The workflow verifies
 that Cargo, root/desktop package.json, and Tauri all contain the same `X.Y.Z`,
 then builds each native target once with `distribution=standard`. Tauri creates
-signed updater artifacts using a private key held only in GitHub Actions
-secrets.
+signed updater artifacts using signing secrets held in the GitHub Environment
+`production` and read by the reusable workflow's `build` job.
 
 The formal workflow resolves the release tag to an exact commit and calls the
 same reusable build core used by Release Candidate. Each matrix job renames
@@ -98,11 +100,14 @@ candidate fails. Equal-version reruns reach this gate only after the existing
 immutable objects under `stable/X.Y.Z/` have passed the byte and checksum
 verification above.
 
-GitHub and R2 never invoke separate builds. `latest.json` points to the
-immutable R2 version path, while unfour.dev may link to the same R2 objects.
-Required CI secrets are `TAURI_SIGNING_PRIVATE_KEY`, optional signing-key
-password, `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, and
-`R2_SECRET_ACCESS_KEY`. None belongs in repository files.
+The formal `publish` job also binds the `production` Environment and reads
+`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ACCOUNT_ID`, and `R2_BUCKET`
+for Cloudflare R2 publication. GitHub and R2 never invoke separate builds.
+`latest.json` points to the immutable R2 version path, while unfour.dev may
+link to the same R2 objects. All six values belong in the GitHub Environment
+`production`; none belongs in repository files. Release Candidate only has the
+shared signed-build capability and does not receive R2 or GitHub Release
+publication authority.
 
 ### Linux (Experimental)
 

@@ -15,9 +15,11 @@
 
 - In GitHub Actions, manually run **Standard Release Candidate** with `ref=main`
   or another reviewed branch/commit; record the resolved commit SHA.
-- Confirm `TAURI_SIGNING_PRIVATE_KEY` and, when the key is encrypted,
-  `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` are configured. A missing private key
-  must fail the shared build rather than produce unsigned updater artifacts.
+- Confirm the GitHub Environment `production` contains
+  `TAURI_SIGNING_PRIVATE_KEY` and, when the key is encrypted,
+  `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. The reusable workflow's actual
+  `build` job binds that Environment and a missing private key must fail the
+  shared build rather than produce unsigned updater artifacts.
 - Confirm the reusable workflow completes the full verify job and exactly four
   native builds: Windows x64, macOS arm64, macOS x64, and Linux x64.
 - Download all four `release-candidate-*` Actions artifacts. Verify canonical
@@ -36,10 +38,14 @@
 - Proceed only from the reviewed commit represented by the Release Candidate;
   create the immutable `vX.Y.Z` tag according to the release procedure.
 - CI exports `UNFOUR_DISTRIBUTION=standard` and `stable`.
-- The updater private signing key exists only in Actions secrets; the tracked
-  public key exactly matches the updater configuration.
+- The updater private signing key exists only in the GitHub Environment
+  `production`; the tracked public key exactly matches the updater
+  configuration.
 - The formal workflow calls the same reusable verify/build/staging workflow as
   RC; one matrix build produces each installer and updater signature.
+- The reusable Standard `build` job binds the `production` Environment for
+  Tauri signing, and the formal `publish` job also binds `production` for
+  `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ACCOUNT_ID`, and `R2_BUCKET`.
 - Linux Standard staging contains only the x64 AppImage and its `.sig`;
   `.deb`, `.rpm`, and Linux ARM64 are not canonical public release assets.
 - The aggregation job creates `SHA256SUMS.txt` and `latest.json`.

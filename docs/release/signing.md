@@ -10,18 +10,22 @@ store.
 match the updater public key in the base `tauri.conf.json`. The base config
 provides updater runtime configuration for Standard dev and local builds, but
 does not generate updater artifacts. `tauri.release.conf.json` is the release
-override that enables updater artifact generation only. GitHub Actions reads
-`TAURI_SIGNING_PRIVATE_KEY` and its optional password from Actions secrets.
-The private key must never be generated, decoded, or written inside the
-repository. A release is blocked if the signing secret is absent.
+override that enables updater artifact generation only. The GitHub Environment
+named `production` stores `TAURI_SIGNING_PRIVATE_KEY` and its optional
+password. The reusable Standard build's actual `build` job binds that
+Environment and reads the secrets directly. The private key must never be
+generated, decoded, or written inside the repository. A release is blocked if
+the signing secret is absent.
 
 Both **Standard Release Candidate** and **Standard Release** call the same
-reusable Standard build workflow and therefore use the same
-`TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` inputs.
-The shared build checks that the private key is non-empty before invoking
-Tauri; Release Candidate never falls back to an unsigned updater build. Run RC
-only for trusted refs because build scripts from the selected commit execute
-with access to those signing inputs.
+reusable Standard build workflow. Its `build` job binds the `production`
+Environment, so both callers receive the same
+`TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` values
+without manually forwarding signing secrets. The shared build checks that the
+private key is non-empty before invoking Tauri; Release Candidate never falls
+back to an unsigned updater build. Run RC only for trusted refs because build
+scripts from the selected commit execute with access to the production signing
+secrets.
 
 Tauri updater signatures authenticate the downloaded update artifact; they do
 not replace Windows Authenticode or Apple code signing/notarization. Record

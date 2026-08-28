@@ -19,12 +19,6 @@ on:
         description: 'Prefix for per-platform Actions artifact names'
         required: true
         type: string
-    secrets:
-      TAURI_SIGNING_PRIVATE_KEY:
-        required: true
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
-        required: false
-
 permissions:
   contents: read
 
@@ -80,6 +74,7 @@ jobs:
   build:
     name: Build Standard once (${{ matrix.target }})
     needs: verify
+    environment: production
     strategy:
       fail-fast: false
       matrix:
