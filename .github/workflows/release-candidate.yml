@@ -1,0 +1,49 @@
+name: Standard Release Candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Trusted branch or commit SHA to build'
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  identity:
+    name: Resolve Release Candidate identity
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      commit: ${{ steps.commit.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Validate Standard Stable source contract
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          node scripts/release-contract.mjs "v${version}" >> "$GITHUB_OUTPUT"
+      - name: Pin candidate build commit
+        id: commit
+        shell: bash
+        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  standard-build:
+    name: Verify and build signed Standard candidate
+    needs: identity
+    uses: ./.github/workflows/reusable-standard-build.yml
+    with:
+      checkout_ref: ${{ needs.identity.outputs.commit }}
+      version: ${{ needs.identity.outputs.version }}
+      build_commit: ${{ needs.identity.outputs.commit }}
+      artifact_prefix: release-candidate
+    secrets:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}

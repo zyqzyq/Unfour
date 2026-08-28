@@ -131,9 +131,17 @@ test("base updater config does not grant updater authority to Store builds", () 
   assert.equal(store.updaterEndpoint, null);
 });
 
-test("only the Standard release workflow loads the artifact override", () => {
+test("only the shared Standard build core loads the artifact override", () => {
   const releaseWorkflow = readFileSync(
     resolve(repoRoot, ".github/workflows/release.yml"),
+    "utf8",
+  );
+  const candidateWorkflow = readFileSync(
+    resolve(repoRoot, ".github/workflows/release-candidate.yml"),
+    "utf8",
+  );
+  const buildWorkflow = readFileSync(
+    resolve(repoRoot, ".github/workflows/reusable-standard-build.yml"),
     "utf8",
   );
   const tauriRunner = readFileSync(
@@ -146,9 +154,19 @@ test("only the Standard release workflow loads the artifact override", () => {
   );
 
   assert.match(
-    releaseWorkflow,
+    buildWorkflow,
     /tauri build --config src-tauri\/tauri\.release\.conf\.json/,
   );
+  assert.match(
+    releaseWorkflow,
+    /uses: \.\/\.github\/workflows\/reusable-standard-build\.yml/,
+  );
+  assert.match(
+    candidateWorkflow,
+    /uses: \.\/\.github\/workflows\/reusable-standard-build\.yml/,
+  );
+  assert.doesNotMatch(releaseWorkflow, /tauri build/);
+  assert.doesNotMatch(candidateWorkflow, /tauri build/);
   assert.doesNotMatch(tauriRunner, /tauri\.release\.conf\.json/);
   assert.doesNotMatch(msixBuild, /tauri\.release\.conf\.json/);
 });

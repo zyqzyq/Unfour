@@ -1,0 +1,209 @@
+name: Reusable Standard Build
+
+on:
+  workflow_call:
+    inputs:
+      checkout_ref:
+        description: 'Exact Standard source ref to check out'
+        required: true
+        type: string
+      version:
+        description: 'Canonical X.Y.Z version expected in the source tree'
+        required: true
+        type: string
+      build_commit:
+        description: 'Exact commit SHA expected after checkout'
+        required: true
+        type: string
+      artifact_prefix:
+        description: 'Prefix for per-platform Actions artifact names'
+        required: true
+        type: string
+    secrets:
+      TAURI_SIGNING_PRIVATE_KEY:
+        required: true
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify Standard build
+    runs-on: ubuntu-latest
+    env:
+      UNFOUR_RELEASE_CHANNEL: stable
+      UNFOUR_DISTRIBUTION: standard
+      UNFOUR_BUILD_COMMIT: ${{ inputs.build_commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref }}
+      - name: Validate exact commit and Standard release contract
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$UNFOUR_BUILD_COMMIT"
+          node scripts/release-contract.mjs "v${VERSION}"
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: '. -> target'
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/prepare-tauri-sidecars.mjs --debug
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm run lint
+      - run: pnpm run test
+      - run: pnpm run test:release-env
+      - run: pnpm run check
+      - run: pnpm run check:rust:ssh
+      - run: pnpm run test:rust
+      - run: pnpm run test:e2e
+
+  build:
+    name: Build Standard once (${{ matrix.target }})
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: macos-latest, args: '--target aarch64-apple-darwin', target: aarch64-apple-darwin, asset_arch: arm64, bundle_dir: target/aarch64-apple-darwin/release/bundle }
+          - { platform: macos-latest, args: '--target x86_64-apple-darwin', target: x86_64-apple-darwin, asset_arch: x64, bundle_dir: target/x86_64-apple-darwin/release/bundle }
+          - { platform: ubuntu-latest, args: '', target: x86_64-unknown-linux-gnu, asset_arch: x64, bundle_dir: target/release/bundle }
+          - { platform: windows-latest, args: '', target: x86_64-pc-windows-msvc, asset_arch: x64, bundle_dir: target/release/bundle }
+    runs-on: ${{ matrix.platform }}
+    env:
+      UNFOUR_RELEASE_CHANNEL: stable
+      UNFOUR_DISTRIBUTION: standard
+      UNFOUR_BUILD_COMMIT: ${{ inputs.build_commit }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      BUNDLE_DIR: ${{ matrix.bundle_dir }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref }}
+      - name: Validate exact build commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$UNFOUR_BUILD_COMMIT"
+      - name: Install Tauri system dependencies
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: '. -> target'
+          key: ${{ matrix.target }}
+      - run: pnpm install --frozen-lockfile
+      - name: Reject missing updater signing key
+        shell: bash
+        run: |
+          if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is required for signed Standard updater artifacts."
+            exit 1
+          fi
+      - name: Clean Windows bundle output
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $bundleRoot = Join-Path $env:GITHUB_WORKSPACE $env:BUNDLE_DIR
+          if (Test-Path -LiteralPath $bundleRoot) { Remove-Item -LiteralPath $bundleRoot -Recurse -Force }
+      - name: Build signed Standard updater bundles once
+        run: pnpm run tauri build --config src-tauri/tauri.release.conf.json ${{ matrix.args }}
+        env:
+          UNFOUR_TAURI_TARGET: ${{ matrix.target }}
+      - name: Stage canonical Windows assets
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          $nsisRoot = Join-Path $env:GITHUB_WORKSPACE "$env:BUNDLE_DIR/nsis"
+          $installers = @(Get-ChildItem -LiteralPath $nsisRoot -File -Filter '*-setup.exe' -ErrorAction Stop)
+          if ($installers.Count -ne 1) { throw "Expected exactly one NSIS updater installer, found $($installers.Count)." }
+          $signature = Get-Item -LiteralPath "$($installers[0].FullName).sig" -ErrorAction Stop
+          if ($signature.Length -eq 0) { throw "NSIS updater signature is empty." }
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          $name = "Unfour_$env:VERSION`_windows_x64.exe"
+          Copy-Item -LiteralPath $installers[0].FullName -Destination (Join-Path release-assets $name)
+          Copy-Item -LiteralPath $signature.FullName -Destination (Join-Path release-assets "$name.sig")
+      - name: Stage canonical macOS assets
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+          ASSET_ARCH: ${{ matrix.asset_arch }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          find_one() {
+            local description="$1"
+            local directory="$2"
+            local pattern="$3"
+            local matches
+            matches="$(find "$directory" -maxdepth 1 -type f -name "$pattern" -print 2>/dev/null || true)"
+            local count
+            count="$(printf '%s\n' "$matches" | grep -c . || true)"
+            if [ "$count" -ne 1 ]; then
+              echo "Expected exactly one $description for $ASSET_ARCH in $directory, found $count." >&2
+              printf '%s\n' "$matches" >&2
+              exit 1
+            fi
+            printf '%s' "$matches"
+          }
+
+          dmg="$(find_one 'macOS DMG' "$BUNDLE_DIR/dmg" '*.dmg')"
+          archive="$(find_one 'macOS updater archive' "$BUNDLE_DIR/macos" '*.app.tar.gz')"
+          test -s "${archive}.sig"
+          cp "$dmg" "release-assets/Unfour_${VERSION}_macos_${ASSET_ARCH}.dmg"
+          cp "$archive" "release-assets/Unfour_${VERSION}_macos_${ASSET_ARCH}.app.tar.gz"
+          cp "${archive}.sig" "release-assets/Unfour_${VERSION}_macos_${ASSET_ARCH}.app.tar.gz.sig"
+      - name: Stage canonical Linux assets
+        if: matrix.platform == 'ubuntu-latest'
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          mapfile -t images < <(find "$BUNDLE_DIR/appimage" -maxdepth 1 -type f -name '*.AppImage' -print 2>/dev/null)
+          if [ "${#images[@]}" -ne 1 ]; then
+            echo "Expected exactly one x64 AppImage, found ${#images[@]}." >&2
+            printf '%s\n' "${images[@]}" >&2
+            exit 1
+          fi
+          test -s "${images[0]}.sig"
+          cp "${images[0]}" "release-assets/Unfour_${VERSION}_linux_x64.AppImage"
+          cp "${images[0]}.sig" "release-assets/Unfour_${VERSION}_linux_x64.AppImage.sig"
+      - name: Upload canonical Standard build assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_prefix }}-${{ matrix.target }}
+          path: release-assets/*
+          if-no-files-found: error

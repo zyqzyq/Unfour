@@ -15,6 +15,14 @@ override that enables updater artifact generation only. GitHub Actions reads
 The private key must never be generated, decoded, or written inside the
 repository. A release is blocked if the signing secret is absent.
 
+Both **Standard Release Candidate** and **Standard Release** call the same
+reusable Standard build workflow and therefore use the same
+`TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` inputs.
+The shared build checks that the private key is non-empty before invoking
+Tauri; Release Candidate never falls back to an unsigned updater build. Run RC
+only for trusted refs because build scripts from the selected commit execute
+with access to those signing inputs.
+
 Tauri updater signatures authenticate the downloaded update artifact; they do
 not replace Windows Authenticode or Apple code signing/notarization. Record
 those OS trust states separately for each published candidate.

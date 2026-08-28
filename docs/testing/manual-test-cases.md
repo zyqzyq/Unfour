@@ -108,7 +108,8 @@ Use disposable local or test databases only.
 
 ## Installer And Startup
 
-For each target platform:
+Download the four `release-candidate-*` Actions artifacts from the exact
+reviewed commit. For each target platform:
 
 - Install from the release artifact.
 - Launch the installed app.
@@ -116,6 +117,8 @@ For each target platform:
 - Switch between API Client, SSH Terminal, and Database modules.
 - Quit and relaunch.
 - Upgrade over a previous release candidate if available.
+- Confirm the installed architecture matches its RC artifact label; test both
+  macOS arm64 and x64 artifacts on appropriate hardware or virtualization.
 - On Windows, keep `unfour-mcp.exe` open through an MCP client during install
   and uninstall; confirm the NSIS prompt appears and the operation completes
   after the sidecar is stopped.

@@ -14,6 +14,58 @@ entitlement, cloud sync, desktop, command bus, and `unfour-mcp` are shared by
 both distributions. A paid account plan can still be called Pro; that is an
 entitlement name, not a second client or repository boundary.
 
+## Delivery stages
+
+The four delivery stages have deliberately different responsibilities:
+
+| Stage | Purpose | External side effects |
+| --- | --- | --- |
+| CI | Unit tests, Rust checks, release contracts, and migration/secret gates | None beyond CI logs |
+| Release Candidate | Full verification plus real signed Standard Tauri bundles for Windows x64, macOS arm64/x64, and Linux x64 | Uploads per-platform GitHub Actions artifacts only |
+| Release | Publishes an already reviewed Standard candidate to the GitHub Release and immutable R2 version path, then promotes the updater manifest | GitHub Release, R2 versioned files, and finally `stable/latest.json` |
+| Microsoft Store | Builds and validates the independent Windows x64 MSIX path | Manual Partner Center submission only |
+
+The Release Candidate and Release workflows both call
+`.github/workflows/reusable-standard-build.yml`. That reusable workflow owns
+the complete verification suite, target matrix, real Tauri release command,
+updater signing checks, canonical filenames, and per-platform Actions artifact
+upload. Neither caller has a second copy of those build steps.
+
+### Standard Release Candidate: build without publication
+
+Run **Standard Release Candidate** manually in GitHub Actions. Its `ref` input
+defaults to `main` and accepts a trusted branch or commit SHA. The identity job
+resolves that input once and passes the exact commit SHA to every verification
+and build job, so a branch moving during the run cannot mix commits across
+platforms. Only use reviewed refs: the selected source is built with the
+updater signing secret.
+
+The run executes the same full verification and build core as a formal
+release, including:
+
+```text
+pnpm run tauri build --config src-tauri/tauri.release.conf.json
+```
+
+It requires `TAURI_SIGNING_PRIVATE_KEY`, passes
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, and fails explicitly if the private key
+is empty. Successful runs upload:
+
+- `release-candidate-x86_64-pc-windows-msvc`: canonical Windows x64 NSIS
+  installer and `.sig`;
+- `release-candidate-aarch64-apple-darwin`: canonical macOS arm64 DMG,
+  `.app.tar.gz`, and `.app.tar.gz.sig`;
+- `release-candidate-x86_64-apple-darwin`: canonical macOS x64 DMG,
+  `.app.tar.gz`, and `.app.tar.gz.sig`; and
+- `release-candidate-x86_64-unknown-linux-gnu`: canonical Linux x64 AppImage
+  and `.sig` only.
+
+The candidate workflow has `contents: read` permission. It does not create or
+move a tag, create a GitHub Release, access R2, generate or publish an online
+`latest.json`, change `stable/latest.json`, or build/publish MSIX. Download the
+Actions artifacts and complete the installer, startup, updater, OS trust, and
+uninstall checks before formal publication.
+
 ## Standard: build once, publish twice
 
 A plain `vX.Y.Z` tag is the only Stable release input. The workflow verifies
@@ -22,15 +74,17 @@ then builds each native target once with `distribution=standard`. Tauri creates
 signed updater artifacts using a private key held only in GitHub Actions
 secrets.
 
-Each matrix job renames its output to a canonical filename and uploads that
-exact file to the aggregation job. The aggregation job creates one
+The formal workflow resolves the release tag to an exact commit and calls the
+same reusable build core used by Release Candidate. Each matrix job renames
+its output to a canonical filename and uploads that exact file to the
+aggregation job. The aggregation job creates one
 `SHA256SUMS.txt` and one Tauri `latest.json`. It uploads the same staged bytes
 to both destinations:
 
 ```text
 vX.Y.Z
-  -> verify
-  -> one native build per target
+  -> resolve exact tag commit
+  -> reusable Standard verify and one native build per target
   -> release-assets/
        -> Cloudflare R2 stable/X.Y.Z/ (downloaded again and SHA-256 checked)
        -> GitHub Release vX.Y.Z

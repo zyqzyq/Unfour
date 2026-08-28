@@ -36,165 +36,22 @@ jobs:
         id: commit
         run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-  verify:
-    name: Verify release
+  standard-build:
+    name: Verify and build signed Standard artifacts
     needs: identity
-    runs-on: ubuntu-latest
-    env:
-      UNFOUR_RELEASE_CHANNEL: ${{ needs.identity.outputs.channel }}
-      UNFOUR_DISTRIBUTION: ${{ needs.identity.outputs.distribution }}
-      UNFOUR_BUILD_COMMIT: ${{ needs.identity.outputs.commit }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.identity.outputs.tag }}
-      - name: Install Tauri system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: '. -> target'
-      - run: pnpm install --frozen-lockfile
-      - run: node scripts/prepare-tauri-sidecars.mjs --debug
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm run lint
-      - run: pnpm run test
-      - run: pnpm run test:release-env
-      - run: pnpm run check
-      - run: pnpm run check:rust:ssh
-      - run: pnpm run test:rust
-      - run: pnpm run test:e2e
-
-  build:
-    name: Build once (${{ matrix.target }})
-    needs: [identity, verify]
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { platform: macos-latest, args: '--target aarch64-apple-darwin', target: aarch64-apple-darwin, asset_arch: arm64 }
-          - { platform: macos-latest, args: '--target x86_64-apple-darwin', target: x86_64-apple-darwin, asset_arch: x64 }
-          - { platform: ubuntu-latest, args: '', target: x86_64-unknown-linux-gnu, asset_arch: x64 }
-          - { platform: windows-latest, args: '', target: x86_64-pc-windows-msvc, asset_arch: x64 }
-    runs-on: ${{ matrix.platform }}
-    env:
-      UNFOUR_RELEASE_CHANNEL: ${{ needs.identity.outputs.channel }}
-      UNFOUR_DISTRIBUTION: ${{ needs.identity.outputs.distribution }}
-      UNFOUR_BUILD_COMMIT: ${{ needs.identity.outputs.commit }}
+    uses: ./.github/workflows/reusable-standard-build.yml
+    with:
+      checkout_ref: ${{ needs.identity.outputs.commit }}
+      version: ${{ needs.identity.outputs.version }}
+      build_commit: ${{ needs.identity.outputs.commit }}
+      artifact_prefix: release-assets
+    secrets:
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.identity.outputs.tag }}
-      - name: Install Tauri system dependencies
-        if: matrix.platform == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: '. -> target'
-          key: ${{ matrix.target }}
-      - run: pnpm install --frozen-lockfile
-      - name: Reject missing updater signing key
-        shell: bash
-        run: test -n "$TAURI_SIGNING_PRIVATE_KEY"
-      - name: Clean Windows bundle output
-        if: matrix.platform == 'windows-latest'
-        shell: pwsh
-        run: |
-          $bundleRoot = Join-Path $env:GITHUB_WORKSPACE 'target/release/bundle'
-          if (Test-Path -LiteralPath $bundleRoot) { Remove-Item -LiteralPath $bundleRoot -Recurse -Force }
-      - name: Build signed updater bundles once
-        run: pnpm run tauri build --config src-tauri/tauri.release.conf.json ${{ matrix.args }}
-        env:
-          UNFOUR_TAURI_TARGET: ${{ matrix.target }}
-      - name: Stage canonical Windows assets
-        if: matrix.platform == 'windows-latest'
-        shell: pwsh
-        env:
-          VERSION: ${{ needs.identity.outputs.version }}
-        run: |
-          $installers = @(Get-ChildItem target -Recurse -File -Filter '*-setup.exe' | Where-Object { $_.FullName -match '[\\/]release[\\/]bundle[\\/]nsis[\\/]' })
-          if ($installers.Count -ne 1) { throw "Expected exactly one NSIS updater installer, found $($installers.Count)." }
-          $signature = Get-Item -LiteralPath "$($installers[0].FullName).sig" -ErrorAction Stop
-          New-Item -ItemType Directory -Force release-assets | Out-Null
-          $name = "Unfour_$env:VERSION`_windows_x64.exe"
-          Copy-Item -LiteralPath $installers[0].FullName -Destination (Join-Path release-assets $name)
-          Copy-Item -LiteralPath $signature.FullName -Destination (Join-Path release-assets "$name.sig")
-      - name: Stage canonical macOS assets
-        if: matrix.platform == 'macos-latest'
-        shell: bash
-        env:
-          VERSION: ${{ needs.identity.outputs.version }}
-          ASSET_ARCH: ${{ matrix.asset_arch }}
-        run: |
-          set -euo pipefail
-          mkdir -p release-assets
-          find_one() {
-            local description="$1"
-            shift
-            local matches
-            matches="$(find target -type f "$@" -print 2>/dev/null)"
-            local count
-            count="$(printf '%s\n' "$matches" | grep -c . || true)"
-            if [ "$count" -ne 1 ]; then
-              echo "Expected exactly one $description, found $count." >&2
-              printf '%s\n' "$matches" >&2
-              exit 1
-            fi
-            printf '%s' "$matches"
-          }
-
-          dmg="$(find_one 'macOS DMG' -path '*/release/bundle/dmg/*.dmg')"
-          archive="$(find_one 'macOS updater archive' -path '*/release/bundle/macos/*.app.tar.gz')"
-          test -s "${archive}.sig"
-          cp "$dmg" "release-assets/Unfour_${VERSION}_macos_${ASSET_ARCH}.dmg"
-          cp "$archive" "release-assets/Unfour_${VERSION}_macos_${ASSET_ARCH}.app.tar.gz"
-          cp "${archive}.sig" "release-assets/Unfour_${VERSION}_macos_${ASSET_ARCH}.app.tar.gz.sig"
-      - name: Stage canonical Linux assets
-        if: matrix.platform == 'ubuntu-latest'
-        shell: bash
-        env:
-          VERSION: ${{ needs.identity.outputs.version }}
-        run: |
-          set -euo pipefail
-          mkdir -p release-assets
-          mapfile -t images < <(find target -type f -path '*/release/bundle/appimage/*.AppImage')
-          test "${#images[@]}" -eq 1
-          test -s "${images[0]}.sig"
-          cp "${images[0]}" "release-assets/Unfour_${VERSION}_linux_x64.AppImage"
-          cp "${images[0]}.sig" "release-assets/Unfour_${VERSION}_linux_x64.AppImage.sig"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release-assets-${{ matrix.target }}
-          path: release-assets/*
-          if-no-files-found: error
 
   publish:
     name: Publish identical Standard artifacts
-    needs: [identity, build]
+    needs: [identity, standard-build]
     concurrency:
       group: standard-stable-publish
       cancel-in-progress: false

@@ -11,12 +11,35 @@
 - API, SSH, Database, MCP, Account, Cloud, and multi-device manual results are
   recorded; unavailable live services remain `NOT VERIFIED`.
 
+## Release Candidate
+
+- In GitHub Actions, manually run **Standard Release Candidate** with `ref=main`
+  or another reviewed branch/commit; record the resolved commit SHA.
+- Confirm `TAURI_SIGNING_PRIVATE_KEY` and, when the key is encrypted,
+  `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` are configured. A missing private key
+  must fail the shared build rather than produce unsigned updater artifacts.
+- Confirm the reusable workflow completes the full verify job and exactly four
+  native builds: Windows x64, macOS arm64, macOS x64, and Linux x64.
+- Download all four `release-candidate-*` Actions artifacts. Verify canonical
+  filenames, non-empty updater signatures, and that each file belongs to the
+  expected architecture.
+- Confirm Windows contains one NSIS installer plus `.sig`; each macOS artifact
+  contains its DMG, `.app.tar.gz`, and `.app.tar.gz.sig`; Linux contains only
+  the public x64 AppImage and `.sig` even if Tauri also built `.deb`/`.rpm`.
+- Record install, launch, upgrade, updater, signature rejection, OS trust, and
+  uninstall results from the downloaded candidate artifacts.
+- Confirm the RC run created no tag or GitHub Release, accessed no R2 path,
+  changed no `stable/latest.json`, and built or published no MSIX.
+
 ## Standard
 
+- Proceed only from the reviewed commit represented by the Release Candidate;
+  create the immutable `vX.Y.Z` tag according to the release procedure.
 - CI exports `UNFOUR_DISTRIBUTION=standard` and `stable`.
 - The updater private signing key exists only in Actions secrets; the tracked
   public key exactly matches the updater configuration.
-- One matrix build produces each installer and updater signature.
+- The formal workflow calls the same reusable verify/build/staging workflow as
+  RC; one matrix build produces each installer and updater signature.
 - Linux Standard staging contains only the x64 AppImage and its `.sig`;
   `.deb`, `.rpm`, and Linux ARM64 are not canonical public release assets.
 - The aggregation job creates `SHA256SUMS.txt` and `latest.json`.

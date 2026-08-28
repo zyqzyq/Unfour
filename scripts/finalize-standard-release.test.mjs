@@ -126,29 +126,40 @@ test("rejects a Standard release without a Linux AppImage", () => {
 });
 
 test("Standard workflow builds once and republishes the same staged files", () => {
-  const workflow = readFileSync(
+  const releaseWorkflow = readFileSync(
     new URL("../.github/workflows/release.yml", import.meta.url),
     "utf8",
   );
-  assert.equal(workflow.match(/pnpm run tauri build/g)?.length, 1);
-  assert.match(workflow, /pattern: release-assets-\*/);
-  assert.match(workflow, /linux_x64\.AppImage/);
-  assert.match(workflow, /linux_x64\.AppImage\.sig/);
-  assert.doesNotMatch(workflow, /bundle\/(?:deb|rpm)/);
-  assert.doesNotMatch(workflow, /linux_x64\.(?:deb|rpm)/);
-  assert.match(workflow, /aws s3 cp release-assets[\s\S]*sha256sum -c/);
-  assert.match(workflow, /sha256sum -c[\s\S]*softprops\/action-gh-release/);
-  assert.match(workflow, /files: release-assets\/\*/);
-  assert.match(workflow, /Refusing to overwrite immutable R2 object/);
-  assert.match(workflow, /group: standard-stable-publish/);
-  assert.match(workflow, /cancel-in-progress: false/);
+  const buildWorkflow = readFileSync(
+    new URL("../.github/workflows/reusable-standard-build.yml", import.meta.url),
+    "utf8",
+  );
+  assert.equal(buildWorkflow.match(/pnpm run tauri build/g)?.length, 1);
+  assert.match(releaseWorkflow, /pattern: release-assets-\*/);
+  assert.match(buildWorkflow, /linux_x64\.AppImage/);
+  assert.match(buildWorkflow, /linux_x64\.AppImage\.sig/);
+  assert.doesNotMatch(buildWorkflow, /bundle\/(?:deb|rpm)/);
+  assert.doesNotMatch(buildWorkflow, /linux_x64\.(?:deb|rpm)/);
+  assert.match(releaseWorkflow, /aws s3 cp release-assets[\s\S]*sha256sum -c/);
+  assert.match(releaseWorkflow, /sha256sum -c[\s\S]*softprops\/action-gh-release/);
+  assert.match(releaseWorkflow, /files: release-assets\/\*/);
+  assert.match(releaseWorkflow, /Refusing to overwrite immutable R2 object/);
+  assert.match(releaseWorkflow, /group: standard-stable-publish/);
+  assert.match(releaseWorkflow, /cancel-in-progress: false/);
+  assert.match(releaseWorkflow, /needs: \[identity, standard-build\]/);
 
-  const verifyIndex = workflow.indexOf("sha256sum -c");
-  const immutableComparisonIndex = workflow.indexOf("cmp --silent");
-  const githubReleaseIndex = workflow.indexOf("softprops/action-gh-release@v2");
-  const updateOrderIndex = workflow.indexOf("scripts/check-update-order.mjs");
-  const latestUploadIndex = workflow.indexOf("aws s3 cp release-assets/latest.json");
-  assert.ok(immutableComparisonIndex < updateOrderIndex);
+  const finalizeIndex = releaseWorkflow.indexOf("scripts/finalize-standard-release.mjs");
+  const immutableComparisonIndex = releaseWorkflow.indexOf("cmp --silent");
+  const versionedUploadIndex = releaseWorkflow.indexOf("aws s3 cp release-assets \"s3://${R2_BUCKET}/stable/${VERSION}/\"");
+  const redownloadIndex = releaseWorkflow.indexOf("aws s3 cp \"s3://${R2_BUCKET}/stable/${VERSION}/\" r2-verify");
+  const verifyIndex = releaseWorkflow.indexOf("sha256sum -c");
+  const githubReleaseIndex = releaseWorkflow.indexOf("softprops/action-gh-release@v2");
+  const updateOrderIndex = releaseWorkflow.indexOf("scripts/check-update-order.mjs");
+  const latestUploadIndex = releaseWorkflow.indexOf("aws s3 cp release-assets/latest.json");
+  assert.ok(finalizeIndex < immutableComparisonIndex);
+  assert.ok(immutableComparisonIndex < versionedUploadIndex);
+  assert.ok(versionedUploadIndex < redownloadIndex);
+  assert.ok(redownloadIndex < verifyIndex);
   assert.ok(verifyIndex < githubReleaseIndex);
   assert.ok(githubReleaseIndex < updateOrderIndex);
   assert.ok(updateOrderIndex < latestUploadIndex);
