@@ -44,3 +44,4 @@ jobs:
       version: ${{ needs.identity.outputs.version }}
       build_commit: ${{ needs.identity.outputs.commit }}
       artifact_prefix: release-candidate
+    secrets: inherit

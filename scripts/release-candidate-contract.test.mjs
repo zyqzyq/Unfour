@@ -78,8 +78,8 @@ test("production Environment owns signing and publication secrets", () => {
   assert.doesNotMatch(build, /^    secrets:/m);
   assert.doesNotMatch(releaseBuildJob, /TAURI_SIGNING_PRIVATE_KEY/);
   assert.doesNotMatch(candidateBuildJob, /TAURI_SIGNING_PRIVATE_KEY/);
-  assert.doesNotMatch(releaseBuildJob, /^    secrets:/m);
-  assert.doesNotMatch(candidateBuildJob, /^    secrets:/m);
+  assert.match(releaseBuildJob, /^    secrets: inherit$/m);
+  assert.match(candidateBuildJob, /^    secrets: inherit$/m);
   assert.match(buildJob, /TAURI_SIGNING_PRIVATE_KEY: \$\{\{ secrets\.TAURI_SIGNING_PRIVATE_KEY \}\}/);
   assert.match(buildJob, /TAURI_SIGNING_PRIVATE_KEY_PASSWORD: \$\{\{ secrets\.TAURI_SIGNING_PRIVATE_KEY_PASSWORD \}\}/);
   assert.match(publishJob, /AWS_ACCESS_KEY_ID: \$\{\{ secrets\.R2_ACCESS_KEY_ID \}\}/);

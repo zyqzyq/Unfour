@@ -45,6 +45,7 @@ jobs:
       version: ${{ needs.identity.outputs.version }}
       build_commit: ${{ needs.identity.outputs.commit }}
       artifact_prefix: release-assets
+    secrets: inherit
 
   publish:
     name: Publish identical Standard artifacts
