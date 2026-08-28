@@ -29,30 +29,70 @@ export function resolveStandardStableRelease(repoRoot, tag) {
   return validateStandardStableRelease(readWorkspaceVersion(repoRoot), tag);
 }
 
-function validateTrackedUpdaterPublicKey(repoRoot) {
-  const tauri = JSON.parse(
-    readFileSync(resolve(repoRoot, "apps/desktop/src-tauri/tauri.conf.json"), "utf8"),
+export function validateTauriUpdaterConfigs(
+  tauri,
+  release,
+  publicKeyFile,
+) {
+  const publicKey = publicKeyFile.replace(/\r?\n$/, "");
+  const updater = tauri.plugins?.updater;
+  if (!updater || typeof updater !== "object" || Array.isArray(updater)) {
+    throw new Error("base tauri.conf.json must define plugins.updater");
+  }
+  if (updater.active !== true) {
+    throw new Error("base plugins.updater.active must be true");
+  }
+  if (!publicKey || updater.pubkey !== publicKey) {
+    throw new Error(
+      "base updater public key must exactly match updater_secret.key.pub",
+    );
+  }
+  if (updater.windows?.installMode !== "passive") {
+    throw new Error("base updater Windows installMode must remain passive");
+  }
+  if (
+    tauri.bundle?.createUpdaterArtifacts === true ||
+    tauri.bundle?.createUpdaterArtifacts === "v1Compatible"
+  ) {
+    throw new Error("base tauri.conf.json must not create updater artifacts");
+  }
+
+  if (release.plugins?.updater !== undefined) {
+    throw new Error(
+      "tauri.release.conf.json must not duplicate plugins.updater runtime config",
+    );
+  }
+  const unexpectedTopLevelKeys = Object.keys(release).filter(
+    (key) => key !== "$schema" && key !== "bundle",
   );
-  const updater = JSON.parse(
-    readFileSync(
-      resolve(repoRoot, "apps/desktop/src-tauri/tauri.updater.conf.json"),
-      "utf8",
-    ),
+  const unexpectedBundleKeys = Object.keys(release.bundle ?? {}).filter(
+    (key) => key !== "createUpdaterArtifacts",
+  );
+  if (unexpectedTopLevelKeys.length > 0 || unexpectedBundleKeys.length > 0) {
+    throw new Error(
+      "tauri.release.conf.json may only configure bundle.createUpdaterArtifacts",
+    );
+  }
+  if (release.bundle?.createUpdaterArtifacts !== true) {
+    throw new Error(
+      "tauri.release.conf.json must set bundle.createUpdaterArtifacts=true",
+    );
+  }
+}
+
+export function validateTauriUpdaterConfigFiles(repoRoot) {
+  const tauriRoot = resolve(repoRoot, "apps/desktop/src-tauri");
+  const tauri = JSON.parse(
+    readFileSync(resolve(tauriRoot, "tauri.conf.json"), "utf8"),
+  );
+  const release = JSON.parse(
+    readFileSync(resolve(tauriRoot, "tauri.release.conf.json"), "utf8"),
   );
   const publicKeyFile = readFileSync(
-    resolve(repoRoot, "apps/desktop/src-tauri/updater_secret.key.pub"),
+    resolve(tauriRoot, "updater_secret.key.pub"),
     "utf8",
   );
-  const publicKey = publicKeyFile.trimEnd();
-  if (tauri.bundle?.createUpdaterArtifacts === true || tauri.plugins?.updater?.pubkey) {
-    throw new Error("base tauri.conf.json must remain updater-signing-key free");
-  }
-  if (updater.bundle?.createUpdaterArtifacts !== true) {
-    throw new Error("tauri.updater.conf.json must create updater artifacts");
-  }
-  if (!publicKey || updater.plugins?.updater?.pubkey !== publicKey) {
-    throw new Error("tracked updater config must exactly match updater_secret.key.pub");
-  }
+  validateTauriUpdaterConfigs(tauri, release, publicKeyFile);
 }
 
 const invokedPath = process.argv[1] ? resolve(process.argv[1]) : undefined;
@@ -60,7 +100,7 @@ if (invokedPath === fileURLToPath(import.meta.url)) {
   try {
     const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
     const result = resolveStandardStableRelease(repoRoot, process.argv[2]);
-    validateTrackedUpdaterPublicKey(repoRoot);
+    validateTauriUpdaterConfigFiles(repoRoot);
     process.stdout.write(
       `version=${result.version}\ntag=${result.tag}\nchannel=${result.channel}\ndistribution=${result.distribution}\nupdater_endpoint=${result.updaterEndpoint}\nprerelease=${result.prerelease}\n`,
     );

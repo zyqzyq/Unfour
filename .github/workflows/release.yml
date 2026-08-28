@@ -127,7 +127,7 @@ jobs:
           $bundleRoot = Join-Path $env:GITHUB_WORKSPACE 'target/release/bundle'
           if (Test-Path -LiteralPath $bundleRoot) { Remove-Item -LiteralPath $bundleRoot -Recurse -Force }
       - name: Build signed updater bundles once
-        run: pnpm run tauri build --config src-tauri/tauri.updater.conf.json ${{ matrix.args }}
+        run: pnpm run tauri build --config src-tauri/tauri.release.conf.json ${{ matrix.args }}
         env:
           UNFOUR_TAURI_TARGET: ${{ matrix.target }}
       - name: Stage canonical Windows assets

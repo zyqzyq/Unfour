@@ -6,6 +6,22 @@ import {
   resolveMsixPackageProfile,
 } from "./release-channel.mjs";
 
+test("Standard Stable and Test both enable their updater endpoints", () => {
+  const stable = resolveBuildProfile("0.8.0", "stable", "standard");
+  const testProfile = resolveBuildProfile("0.8.0", "test", "standard");
+
+  assert.equal(stable.updaterEnabled, true);
+  assert.equal(
+    stable.updaterEndpoint,
+    "https://release.unfour.dev/stable/latest.json",
+  );
+  assert.equal(testProfile.updaterEnabled, true);
+  assert.equal(
+    testProfile.updaterEndpoint,
+    "https://release.unfour.dev/test/latest.json",
+  );
+});
+
 test("standard and Store are independent distribution authorities", () => {
   const standard = resolveBuildProfile("0.8.0", "stable", "standard");
   const store = resolveBuildProfile("0.8.0", "stable", "microsoft-store");

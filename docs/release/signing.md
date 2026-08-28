@@ -7,7 +7,10 @@ store.
 ## Standard updater
 
 `apps/desktop/src-tauri/updater_secret.key.pub` is tracked and must exactly
-match `tauri.updater.conf.json`. GitHub Actions reads
+match the updater public key in the base `tauri.conf.json`. The base config
+provides updater runtime configuration for Standard dev and local builds, but
+does not generate updater artifacts. `tauri.release.conf.json` is the release
+override that enables updater artifact generation only. GitHub Actions reads
 `TAURI_SIGNING_PRIVATE_KEY` and its optional password from Actions secrets.
 The private key must never be generated, decoded, or written inside the
 repository. A release is blocked if the signing secret is absent.

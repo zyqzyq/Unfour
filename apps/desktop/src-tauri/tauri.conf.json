@@ -49,6 +49,13 @@
       "desktop": {
         "schemes": ["unfour"]
       }
+    },
+    "updater": {
+      "active": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlCNDEwN0VFRTA2MTcwRjYKUldUMmNHSGc3Z2RCbTJyd01oVmZZZ3ZVSWl1Ym41elZNKzc2cFloUHYvVmY2aXE3NGVoNGJDVlQK",
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }
