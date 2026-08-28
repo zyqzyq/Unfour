@@ -11,6 +11,23 @@ export interface McpBinaryPathResult {
   buildKind: McpBuildKind;
 }
 
+export type McpClient = "codex" | "cursor";
+export type McpClientStatus = "notConfigured" | "configured" | "outdated" | "error";
+
+export interface McpClientStatusResult {
+  client: McpClient;
+  status: McpClientStatus;
+  configPath: string;
+}
+
 export function getMcpBinaryPath() {
   return call<McpBinaryPathResult>("mcp_binary_path");
+}
+
+export function getMcpClientStatus(client: McpClient) {
+  return call<McpClientStatusResult>("mcp_client_status", { client });
+}
+
+export function configureMcpClient(client: McpClient) {
+  return call<McpClientStatusResult>("mcp_client_configure", { client });
 }

@@ -1,7 +1,9 @@
-use crate::{AppDistribution, AppState};
+use crate::{mcp_client_config, AppDistribution, AppState};
 use serde::Serialize;
-use tauri::State;
-use unfour_core::AppResult;
+use tauri::{AppHandle, Manager, State};
+use unfour_core::{AppError, AppResult};
+
+pub use crate::mcp_client_config::{McpClient, McpClientStatus, McpClientStatusResult};
 
 /// Whether the running app is a debug/dev build or a release/installed build.
 ///
@@ -31,16 +33,45 @@ pub struct McpBinaryPathResult {
 
 #[tauri::command]
 pub fn mcp_binary_path(state: State<'_, AppState>) -> AppResult<McpBinaryPathResult> {
+    Ok(current_mcp_binary_path(&state))
+}
+
+#[tauri::command]
+pub fn mcp_client_status(
+    client: McpClient,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<McpClientStatusResult> {
+    let home = app
+        .path()
+        .home_dir()
+        .map_err(|_| AppError::Config("The user home directory is not available.".to_string()))?;
+    let binary = current_mcp_binary_path(&state);
+    Ok(mcp_client_config::status(&home, client, &binary.path))
+}
+
+#[tauri::command]
+pub fn mcp_client_configure(
+    client: McpClient,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<McpClientStatusResult> {
+    let home = app
+        .path()
+        .home_dir()
+        .map_err(|_| AppError::Config("The user home directory is not available.".to_string()))?;
+    let binary = current_mcp_binary_path(&state);
+    mcp_client_config::configure(&home, client, &binary.path, binary.found)
+}
+
+fn current_mcp_binary_path(state: &AppState) -> McpBinaryPathResult {
     let build_kind = if cfg!(debug_assertions) {
         McpBuildKind::Dev
     } else {
         McpBuildKind::Release
     };
 
-    Ok(resolve_mcp_binary_path(
-        build_kind,
-        state.config.distribution,
-    ))
+    resolve_mcp_binary_path(build_kind, state.config.distribution)
 }
 
 /// Plain runnable name (no target triple), used for the dev `target/debug`

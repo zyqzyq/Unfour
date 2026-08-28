@@ -3,6 +3,7 @@ import {
   browseDatabaseTable,
   cancelSshReconnect,
   closeSshSession,
+  configureMcpClient,
   connectSshSession,
   createWorkspace,
   createApiCollection,
@@ -12,6 +13,7 @@ import {
   importApiCollection,
   executeDatabaseQuery,
   getDatabaseSchema,
+  getMcpClientStatus,
   getWorkspaceState,
   getSshSessionHistory,
   listSavedSql,
@@ -24,6 +26,24 @@ import {
   testDatabaseConnection,
   updateApiRequest,
 } from "./tauri";
+
+describe("MCP client browser mock", () => {
+  it("reports user-level client paths and blocks configuration without a binary", async () => {
+    await expect(getMcpClientStatus("codex")).resolves.toEqual({
+      client: "codex",
+      status: "notConfigured",
+      configPath: "/mock/.codex/config.toml",
+    });
+    await expect(getMcpClientStatus("cursor")).resolves.toEqual({
+      client: "cursor",
+      status: "notConfigured",
+      configPath: "/mock/.cursor/mcp.json",
+    });
+    await expect(configureMcpClient("codex")).rejects.toThrow(
+      "MCP binary is not available",
+    );
+  });
+});
 
 describe("Workspace browser mock", () => {
   it("creates workspaces with default and explicit MCP policy fields", async () => {

@@ -6,6 +6,7 @@
 //! to [`configure_core_app_with_extensions`].
 
 pub mod commands;
+mod mcp_client_config;
 
 use std::sync::{Arc, Mutex};
 use tauri::{ipc::Channel, Manager, Runtime};
@@ -348,6 +349,8 @@ macro_rules! generate_handlers {
             unfour_app::commands::frontend_log,
             unfour_app::commands::get_app_info,
             unfour_app::commands::mcp_binary_path,
+            unfour_app::commands::mcp_client_configure,
+            unfour_app::commands::mcp_client_status,
             unfour_app::commands::open_diagnostics_dir,
             unfour_app::commands::open_log_dir,
             unfour_app::commands::system_health,

@@ -1,75 +1,147 @@
-import { ExternalLink } from "lucide-react";
+import {
+  Bot,
+  Check,
+  Copy,
+  LoaderCircle,
+  MousePointer2,
+  type LucideIcon,
+} from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
-import { Button, StatusBadge, useI18n } from "@unfour/ui";
+import { useEffect, useState } from "react";
 import {
+  Button,
+  ConnectionStatus,
+  StatusBadge,
+  extractErrorDetail,
+  useFeedbackErrorHandler,
+  useI18n,
+  type TFunction,
+} from "@unfour/ui";
+import {
+  configureMcpClient,
   getMcpBinaryPath,
+  getMcpClientStatus,
   type McpBinaryPathResult,
+  type McpClient,
+  type McpClientStatusResult,
 } from "@unfour/command-client";
-import {
-  MCP_DOCS_PATH,
-  MCP_DOCS_URL,
-  formatMcpClientConfig,
-  getMcpCommand,
-} from "../../settings/settings-config";
 
-type CopyTarget = "command" | "config";
+type ClientMap<T> = Record<McpClient, T>;
+type ClientMessage = { tone: "success" | "error"; text: string } | null;
+
+const CLIENTS: Array<{
+  client: McpClient;
+  icon: LucideIcon;
+  name: string;
+}> = [
+  { client: "codex", icon: Bot, name: "Codex" },
+  { client: "cursor", icon: MousePointer2, name: "Cursor" },
+];
+
+const EMPTY_STATUSES: ClientMap<McpClientStatusResult | null> = {
+  codex: null,
+  cursor: null,
+};
+
+const EMPTY_ERRORS: ClientMap<boolean> = {
+  codex: false,
+  cursor: false,
+};
+
+const EMPTY_MESSAGES: ClientMap<ClientMessage> = {
+  codex: null,
+  cursor: null,
+};
 
 export function SettingsMcp() {
   const { t } = useI18n();
+  const reportError = useFeedbackErrorHandler();
   const [mcp, setMcp] = useState<McpBinaryPathResult | null>(null);
   const [mcpError, setMcpError] = useState(false);
-  const [copied, setCopied] = useState<CopyTarget | null>(null);
-  const [copyFailed, setCopyFailed] = useState<CopyTarget | null>(null);
+  const [clientStatuses, setClientStatuses] = useState(EMPTY_STATUSES);
+  const [clientLoadErrors, setClientLoadErrors] = useState(EMPTY_ERRORS);
+  const [clientMessages, setClientMessages] = useState(EMPTY_MESSAGES);
+  const [configuring, setConfiguring] = useState<McpClient | null>(null);
+  const [copyState, setCopyState] = useState<"copied" | "failed" | null>(null);
 
   useEffect(() => {
     let active = true;
-    getMcpBinaryPath()
+
+    void getMcpBinaryPath()
       .then((result) => {
         if (active) setMcp(result);
       })
       .catch(() => {
         if (active) setMcpError(true);
       });
+
+    for (const { client } of CLIENTS) {
+      void getMcpClientStatus(client)
+        .then((result) => {
+          if (active) {
+            setClientStatuses((current) => ({ ...current, [client]: result }));
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setClientLoadErrors((current) => ({ ...current, [client]: true }));
+          }
+        });
+    }
+
     return () => {
       active = false;
     };
   }, []);
 
-  // Prefer the runtime-resolved path; fall back to the platform placeholder
-  // only when the backend call itself fails (e.g. unsupported runtime).
-  const command = useMemo(
-    () => mcp?.path ?? getMcpCommand(),
-    [mcp],
-  );
-  const config = useMemo(() => formatMcpClientConfig(command), [command]);
+  useEffect(() => {
+    if (!copyState) return undefined;
+    const timeout = window.setTimeout(() => setCopyState(null), 1600);
+    return () => window.clearTimeout(timeout);
+  }, [copyState]);
 
-  const statusTone = !mcp && !mcpError ? "neutral" : mcp?.found ? "success" : "warning";
-  const statusText = !mcp && !mcpError
+  const mcpChecking = !mcp && !mcpError;
+  const status = mcpChecking ? "connecting" : mcp?.found ? "connected" : "error";
+  const statusText = mcpChecking
     ? t("app.settings.mcp.statusChecking")
     : mcp?.found
       ? t("app.settings.mcp.statusValue")
       : t("app.settings.mcp.statusUnavailable");
 
-  useEffect(() => {
-    if (!copied && !copyFailed) {
-      return undefined;
-    }
-    const timeout = window.setTimeout(() => {
-      setCopied(null);
-      setCopyFailed(null);
-    }, 1600);
-    return () => window.clearTimeout(timeout);
-  }, [copied, copyFailed]);
-
-  async function copyText(target: CopyTarget, text: string) {
+  async function configureClient(client: McpClient, clientName: string) {
+    if (!mcp?.found || configuring) return;
+    setConfiguring(client);
+    setClientMessages((current) => ({ ...current, [client]: null }));
     try {
-      await navigator.clipboard.writeText(text);
-      setCopied(target);
-      setCopyFailed(null);
+      const result = await configureMcpClient(client);
+      setClientStatuses((current) => ({ ...current, [client]: result }));
+      setClientMessages((current) => ({
+        ...current,
+        [client]: {
+          tone: "success",
+          text: t("app.settings.mcp.configureSuccess", { client: clientName }),
+        },
+      }));
+    } catch (error) {
+      const title = t("app.settings.mcp.configureFailed", { client: clientName });
+      const detail = extractErrorDetail(error);
+      setClientMessages((current) => ({
+        ...current,
+        [client]: { tone: "error", text: detail ? `${title} ${detail}` : title },
+      }));
+      reportError(error, { message: title });
+    } finally {
+      setConfiguring(null);
+    }
+  }
+
+  async function copyCommand() {
+    if (!mcp?.path) return;
+    try {
+      await navigator.clipboard.writeText(mcp.path);
+      setCopyState("copied");
     } catch {
-      setCopyFailed(target);
-      setCopied(null);
+      setCopyState("failed");
     }
   }
 
@@ -85,11 +157,19 @@ export function SettingsMcp() {
       </div>
 
       <InfoBlock label={t("app.settings.mcp.statusLabel")}>
-        <StatusBadge tone={statusTone}>{statusText}</StatusBadge>
+        <ConnectionStatus
+          label={statusText}
+          pulse={mcpChecking}
+          status={status}
+          variant="dot"
+        />
       </InfoBlock>
 
-      {mcp && !mcp.found && (
-        <div className="rounded-[var(--u-radius-sm)] border border-[var(--u-color-warning)] bg-[var(--u-color-warning-soft)] p-3 text-[12px] text-[var(--u-color-warning)]">
+      {mcp && !mcp.found ? (
+        <div
+          className="rounded-[var(--u-radius-sm)] border border-[var(--u-color-warning)] bg-[var(--u-color-warning-soft)] p-3 text-[12px] text-[var(--u-color-warning)]"
+          role="alert"
+        >
           <p className="font-semibold">{t("app.settings.mcp.notFoundTitle")}</p>
           <p className="mt-1 leading-5">
             {mcp.buildKind === "dev"
@@ -97,85 +177,205 @@ export function SettingsMcp() {
               : t("app.settings.mcp.notFoundRelease")}
           </p>
         </div>
-      )}
+      ) : null}
 
-      <InfoBlock
-        action={
+      <section className="space-y-2 border-t border-[var(--u-color-border)] pt-3">
+        <div>
+          <h3 className="text-[12px] font-semibold text-[var(--u-color-text)]">
+            {t("app.settings.mcp.clientsLabel")}
+          </h3>
+          <p className="mt-1 text-[12px] text-[var(--u-color-text-muted)]">
+            {t("app.settings.mcp.clientsDescription")}
+          </p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {CLIENTS.map(({ client, icon, name }) => (
+            <ClientCard
+              client={client}
+              clientName={name}
+              configuring={configuring === client}
+              disabled={!mcp?.found || Boolean(configuring)}
+              icon={icon}
+              key={client}
+              loadError={clientLoadErrors[client]}
+              message={clientMessages[client]}
+              onConfigure={() => void configureClient(client, name)}
+              status={clientStatuses[client]}
+              t={t}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-2 border-t border-[var(--u-color-border)] pt-3">
+        <h3 className="text-[12px] font-semibold text-[var(--u-color-text-muted)]">
+          {t("app.settings.mcp.advancedLabel")}
+        </h3>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[12px] font-medium text-[var(--u-color-text-muted)]">
+            {t("app.settings.mcp.commandLabel")}
+          </span>
           <Button
-            onClick={() => void copyText("command", command)}
+            disabled={!mcp?.path}
+            onClick={() => void copyCommand()}
             size="sm"
             type="button"
-            variant="secondary"
+            variant="ghost"
           >
-            {buttonCopyText(copied, copyFailed, "command", t("app.settings.mcp.copyCommand"), t)}
+            <Copy aria-hidden="true" size={13} />
+            {copyState === "copied"
+              ? t("app.settings.copy.copied")
+              : copyState === "failed"
+                ? t("app.settings.copy.failed")
+                : t("app.settings.mcp.copyCommand")}
           </Button>
-        }
-        label={t("app.settings.mcp.commandLabel")}
-      >
-        <code className="block overflow-x-auto rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-bg)] px-2 py-1.5 font-mono text-[12px] text-[var(--u-color-text)]">
-          {command}
+        </div>
+        <code className="block overflow-x-auto rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-bg)] px-2 py-1.5 font-mono text-[12px] text-[var(--u-color-text-muted)]">
+          {mcp?.path ?? t("app.settings.mcp.commandUnavailable")}
         </code>
-      </InfoBlock>
-
-      <InfoBlock
-        action={
-          <Button
-            onClick={() => void copyText("config", config)}
-            size="sm"
-            type="button"
-            variant="secondary"
-          >
-            {buttonCopyText(copied, copyFailed, "config", t("app.settings.mcp.copyConfig"), t)}
-          </Button>
-        }
-        label={t("app.settings.mcp.configLabel")}
-      >
-        <pre className="max-h-44 overflow-auto rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-bg)] p-2 font-mono text-[12px] leading-5 text-[var(--u-color-text)]">
-          {config}
-        </pre>
-      </InfoBlock>
-
-      <div className="rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-3 text-[12px] text-[var(--u-color-text-muted)]">
-        <p>{t("app.settings.mcp.docsDescription", { path: MCP_DOCS_PATH })}</p>
-        <Button asChild className="mt-2" size="sm" variant="outline">
-          <a href={MCP_DOCS_URL} rel="noreferrer" target="_blank">
-            <ExternalLink size={13} />
-            {t("app.settings.mcp.openDocs")}
-          </a>
-        </Button>
-      </div>
+      </section>
     </div>
   );
 }
 
-function InfoBlock({
-  action,
-  children,
-  label,
+function ClientCard({
+  client,
+  clientName,
+  configuring,
+  disabled,
+  icon: Icon,
+  loadError,
+  message,
+  onConfigure,
+  status,
+  t,
 }: {
-  action?: ReactNode;
-  children: ReactNode;
-  label: string;
+  client: McpClient;
+  clientName: string;
+  configuring: boolean;
+  disabled: boolean;
+  icon: LucideIcon;
+  loadError: boolean;
+  message: ClientMessage;
+  onConfigure: () => void;
+  status: McpClientStatusResult | null;
+  t: TFunction;
 }) {
+  const resolvedStatus = loadError ? "error" : status?.status;
+  const isConfigured = resolvedStatus === "configured";
+  const statusLabel = clientStatusLabel(resolvedStatus, t);
+  const actionLabel = clientActionLabel(clientName, resolvedStatus, configuring, t);
+  const actionDisabled = disabled || isConfigured || resolvedStatus === "error" || !resolvedStatus;
+
+  return (
+    <article className="flex min-w-0 flex-col rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-3">
+      <div className="flex items-start gap-2">
+        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--u-radius-sm)] bg-[var(--u-color-surface-muted)] text-[var(--u-color-text-muted)]">
+          <Icon aria-hidden="true" size={15} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="text-[13px] font-semibold text-[var(--u-color-text)]">
+              {clientName}
+            </h4>
+            <StatusBadge tone={clientStatusTone(resolvedStatus)}>{statusLabel}</StatusBadge>
+          </div>
+          <p className="mt-1 text-[12px] leading-5 text-[var(--u-color-text-muted)]">
+            {t(`app.settings.mcp.${client}Description`)}
+          </p>
+          {status?.configPath ? (
+            <code
+              className="mt-1 block truncate font-mono text-[11px] text-[var(--u-color-text-soft)]"
+              title={status.configPath}
+            >
+              {status.configPath}
+            </code>
+          ) : null}
+        </div>
+      </div>
+      <Button
+        className="mt-3 w-full"
+        disabled={actionDisabled}
+        onClick={onConfigure}
+        size="sm"
+        type="button"
+        variant={isConfigured ? "secondary" : "default"}
+      >
+        {configuring ? (
+          <LoaderCircle aria-hidden="true" className="animate-spin" size={13} />
+        ) : isConfigured ? (
+          <Check aria-hidden="true" size={13} />
+        ) : null}
+        {actionLabel}
+      </Button>
+      {message ? (
+        <p
+          className={`mt-2 text-[11px] leading-4 ${
+            message.tone === "success"
+              ? "text-[var(--u-color-success)]"
+              : "text-[var(--u-color-danger)]"
+          }`}
+          role={message.tone === "error" ? "alert" : "status"}
+        >
+          {message.text}
+        </p>
+      ) : null}
+    </article>
+  );
+}
+
+function clientStatusLabel(
+  status: McpClientStatusResult["status"] | undefined,
+  t: TFunction,
+) {
+  switch (status) {
+    case "configured":
+      return t("app.settings.mcp.clientStatusConfigured");
+    case "outdated":
+      return t("app.settings.mcp.clientStatusOutdated");
+    case "notConfigured":
+      return t("app.settings.mcp.clientStatusNotConfigured");
+    case "error":
+      return t("app.settings.mcp.clientStatusError");
+    default:
+      return t("app.settings.mcp.statusChecking");
+  }
+}
+
+function clientStatusTone(status: McpClientStatusResult["status"] | undefined) {
+  switch (status) {
+    case "configured":
+      return "success" as const;
+    case "outdated":
+      return "warning" as const;
+    case "error":
+      return "danger" as const;
+    default:
+      return "neutral" as const;
+  }
+}
+
+function clientActionLabel(
+  clientName: string,
+  status: McpClientStatusResult["status"] | undefined,
+  configuring: boolean,
+  t: TFunction,
+) {
+  if (configuring) return t("app.settings.mcp.configuringClient", { client: clientName });
+  if (status === "configured") {
+    return t("app.settings.mcp.clientConfigured", { client: clientName });
+  }
+  if (status === "outdated") {
+    return t("app.settings.mcp.updateClient", { client: clientName });
+  }
+  return t("app.settings.mcp.configureClient", { client: clientName });
+}
+
+function InfoBlock({ children, label }: { children: ReactNode; label: string }) {
   return (
     <div className="space-y-2 border-t border-[var(--u-color-border)] pt-3">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-[12px] font-semibold text-[var(--u-color-text)]">{label}</h3>
-        {action}
-      </div>
+      <h3 className="text-[12px] font-semibold text-[var(--u-color-text)]">{label}</h3>
       {children}
     </div>
   );
-}
-
-function buttonCopyText(
-  copied: CopyTarget | null,
-  copyFailed: CopyTarget | null,
-  target: CopyTarget,
-  label: string,
-  t: (key: string) => string,
-) {
-  if (copied === target) return t("app.settings.copy.copied");
-  if (copyFailed === target) return t("app.settings.copy.failed");
-  return label;
 }
