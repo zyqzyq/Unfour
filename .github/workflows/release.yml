@@ -152,14 +152,27 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          mapfile -t dmgs < <(find target -type f -path '*/release/bundle/dmg/*.dmg')
-          mapfile -t archives < <(find target -type f -path '*/release/bundle/macos/*.app.tar.gz')
-          test "${#dmgs[@]}" -eq 1
-          test "${#archives[@]}" -eq 1
-          test -s "${archives[0]}.sig"
-          cp "${dmgs[0]}" "release-assets/Unfour_${VERSION}_macos_${ASSET_ARCH}.dmg"
-          cp "${archives[0]}" "release-assets/Unfour_${VERSION}_macos_${ASSET_ARCH}.app.tar.gz"
-          cp "${archives[0]}.sig" "release-assets/Unfour_${VERSION}_macos_${ASSET_ARCH}.app.tar.gz.sig"
+          find_one() {
+            local description="$1"
+            shift
+            local matches
+            matches="$(find target -type f "$@" -print 2>/dev/null)"
+            local count
+            count="$(printf '%s\n' "$matches" | grep -c . || true)"
+            if [ "$count" -ne 1 ]; then
+              echo "Expected exactly one $description, found $count." >&2
+              printf '%s\n' "$matches" >&2
+              exit 1
+            fi
+            printf '%s' "$matches"
+          }
+
+          dmg="$(find_one 'macOS DMG' -path '*/release/bundle/dmg/*.dmg')"
+          archive="$(find_one 'macOS updater archive' -path '*/release/bundle/macos/*.app.tar.gz')"
+          test -s "${archive}.sig"
+          cp "$dmg" "release-assets/Unfour_${VERSION}_macos_${ASSET_ARCH}.dmg"
+          cp "$archive" "release-assets/Unfour_${VERSION}_macos_${ASSET_ARCH}.app.tar.gz"
+          cp "${archive}.sig" "release-assets/Unfour_${VERSION}_macos_${ASSET_ARCH}.app.tar.gz.sig"
       - name: Stage canonical Linux assets
         if: matrix.platform == 'ubuntu-latest'
         shell: bash
