@@ -18,9 +18,11 @@ manually. The Standard workflow must never publish to Microsoft Store.
 
 ## Build and validate
 
-Install the Windows SDK so `MakeAppx.exe` is available. From the repository
-root, provide the exact identity through parameters, environment variables, or
-an untracked config derived from `scripts/msix/msix.config.example.json`:
+Install the Windows SDK so `MakeAppx.exe` is available. The ordinary
+`pnpm msix:build` command continues to invoke `scripts/msix/build-msix.ps1`
+with `PackageChannel=Store` and `SignMode=None`; it does not pass a local config
+path. It therefore remains suitable for the existing environment-variable
+workflow:
 
 ```powershell
 $env:MSIX_IDENTITY_NAME = "<Partner Center Identity Name>"
@@ -28,9 +30,24 @@ $env:MSIX_PUBLISHER = "<Partner Center Publisher>"
 $env:MSIX_PUBLISHER_DISPLAY_NAME = "<Partner Center Publisher Display Name>"
 $env:MSIX_DISPLAY_NAME = "Unfour"
 
-pnpm run msix:build
-pnpm run msix:validate
+pnpm msix:build
+pnpm msix:validate
 ```
+
+For personal local use, copy the tracked example to the existing ignored local
+config, replace the placeholders with the exact Partner Center values, and use
+the local-only command:
+
+```powershell
+Copy-Item scripts/msix/msix.config.example.json scripts/msix/msix.config.json
+# Edit scripts/msix/msix.config.json
+pnpm msix:build:local
+pnpm msix:validate
+```
+
+`pnpm msix:build:local` passes
+`-ConfigPath scripts/msix/msix.config.json` to the same build script. The local
+config is explicitly ignored by Git and must never be committed.
 
 `scripts/msix/build-msix.ps1` builds the frontend, desktop binary, and unified
 MCP sidecar, asks the binary to export compile-time metadata, stages the
