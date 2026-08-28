@@ -36,6 +36,12 @@ export function finalizeStandardRelease({ assetsDir, version, baseUrl, notes = "
   const files = readdirSync(assetsDir)
     .filter((name) => name !== "SHA256SUMS.txt" && name !== "latest.json")
     .sort();
+  const nonCanonicalLinuxPackages = files.filter((name) => /\.(?:deb|rpm)$/i.test(name));
+  if (nonCanonicalLinuxPackages.length > 0) {
+    throw new Error(
+      `Non-canonical Linux package assets must not be staged: ${nonCanonicalLinuxPackages.join(", ")}`,
+    );
+  }
   const windowsInstaller = `Unfour_${version}_windows_x64.exe`;
   if (!files.includes(windowsInstaller)) {
     throw new Error(`Standard release is missing ${windowsInstaller}`);
@@ -56,6 +62,9 @@ export function finalizeStandardRelease({ assetsDir, version, baseUrl, notes = "
   );
   if (!platforms["windows-x86_64"]) {
     throw new Error("Standard Windows updater artifact and signature are required");
+  }
+  if (!platforms["linux-x86_64"]) {
+    throw new Error("Standard Linux updater artifact and signature are required");
   }
 
   const checksums = files.map((name) => `${sha256(resolve(assetsDir, name))}  ${name}`);

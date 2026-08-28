@@ -6,7 +6,7 @@ selects the update authority.
 
 | Distribution | Package | Delivery | Update authority |
 | --- | --- | --- | --- |
-| `standard` | Tauri installers | GitHub Release, Cloudflare R2, and unfour.dev | Unfour updater at `https://release.unfour.dev/stable/latest.json` |
+| `standard` | Windows NSIS, macOS packages, Linux x64 AppImage (Experimental) | GitHub Release, Cloudflare R2, and unfour.dev | Unfour updater at `https://release.unfour.dev/stable/latest.json` |
 | `microsoft-store` | Windows x64 MSIX | Manual Partner Center upload | Microsoft Store |
 
 There is no Pro application edition and no Website package kind. Account,
@@ -42,6 +42,20 @@ immutable R2 version path, while unfour.dev may link to the same R2 objects.
 Required CI secrets are `TAURI_SIGNING_PRIVATE_KEY`, optional signing-key
 password, `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, and
 `R2_SECRET_ACCESS_KEY`. None belongs in repository files.
+
+### Linux (Experimental)
+
+The Standard release currently publishes one Linux format: x64 AppImage.
+The canonical public assets are:
+
+- `Unfour_X.Y.Z_linux_x64.AppImage`
+- `Unfour_X.Y.Z_linux_x64.AppImage.sig`
+
+The updater manifest has one Linux entry, `linux-x86_64`, pointing to the
+AppImage. Tauri may still generate `.deb` and `.rpm` files during the Linux
+build, but they remain CI intermediates: they are not copied into
+`release-assets/`, `SHA256SUMS.txt`, GitHub Releases, Cloudflare R2, or
+`latest.json`. Linux ARM64 is not a published Standard target.
 
 ## Microsoft Store
 

@@ -173,8 +173,6 @@ jobs:
           test -s "${images[0]}.sig"
           cp "${images[0]}" "release-assets/Unfour_${VERSION}_linux_x64.AppImage"
           cp "${images[0]}.sig" "release-assets/Unfour_${VERSION}_linux_x64.AppImage.sig"
-          find target -type f -path '*/release/bundle/deb/*.deb' -exec cp {} "release-assets/Unfour_${VERSION}_linux_x64.deb" \;
-          find target -type f -path '*/release/bundle/rpm/*.rpm' -exec cp {} "release-assets/Unfour_${VERSION}_linux_x64.rpm" \;
       - uses: actions/upload-artifact@v4
         with:
           name: release-assets-${{ matrix.target }}

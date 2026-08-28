@@ -28,7 +28,8 @@
   SmartScreen。
 - macOS 提供 Apple Silicon 与 Intel 包，均已在真机验证，但未 Apple 签名、未公证；
   Gatekeeper 可能拦截。
-- Linux 安装包属于 experimental / unverified（实验性 / 未验证）。
+- Linux 目前只发布 x64 AppImage，定位为 Experimental（实验性）；`.deb` 和
+  `.rpm` 暂不正式支持，也不会公开发布。
 - 使用 Release 中的 `SHA256SUMS.txt` 校验下载的安装包。
 
 ## Unfour 是什么？
@@ -151,7 +152,8 @@ pnpm run test:rust      # cargo test --workspace
 
 Windows 是主分发路径，提供尚未签名的 NSIS `.exe` 安装包，可能触发 SmartScreen。
 macOS 提供已在 Apple Silicon 与 Intel 真机验证过的包，但未 Apple 签名、未公证，
-Gatekeeper 可能拦截。Linux 仍属于 experimental / unverified（实验性 / 未验证）。请使用 Release 中的
+Gatekeeper 可能拦截。Linux 目前只发布 x64 AppImage，定位为 Experimental
+（实验性）；`.deb` 和 `.rpm` 暂不正式支持，也不会公开发布。请使用 Release 中的
 `SHA256SUMS.txt` 校验下载的产物。除非发布检查确实成功执行，或有当前仓库证据支撑，
 否则不得声称其通过。
 

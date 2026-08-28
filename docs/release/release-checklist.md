@@ -17,7 +17,11 @@
 - The updater private signing key exists only in Actions secrets; the tracked
   public key exactly matches the updater configuration.
 - One matrix build produces each installer and updater signature.
+- Linux Standard staging contains only the x64 AppImage and its `.sig`;
+  `.deb`, `.rpm`, and Linux ARM64 are not canonical public release assets.
 - The aggregation job creates `SHA256SUMS.txt` and `latest.json`.
+- `latest.json` has one Linux entry, `linux-x86_64`, pointing to the AppImage
+  and requiring its non-empty signature.
 - R2 re-download passes the same checksum manifest used by GitHub Release.
 - `stable/latest.json` is uploaded only after immutable versioned files verify.
 - Install, launch, update from the previous Stable version, MCP sidecar

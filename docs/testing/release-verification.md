@@ -11,7 +11,7 @@ commit; `NOT VERIFIED` is intentionally not inferred from builds or unit tests.
 | Working tree baseline | `git status --short` before edits | PASS (clean at `1d0bb08`) |
 | Patch hygiene | `git diff --check` | PASS |
 | Version identity | `node scripts/sync-version.mjs --check` | PASS (`0.8.0`) |
-| Release/distribution contracts | direct Node test suite | PASS (17 tests) |
+| Release/distribution contracts | direct Node test suite | PASS (20 tests; Linux AppImage asset contract covered) |
 | Historical migration integrity | `node scripts/check-migrations.mjs` | PASS (18 files) |
 | MSIX PowerShell syntax | PowerShell parser over `scripts/msix/*.ps1` | PASS (4 files) |
 | Publishable-tree secret audit | `node scripts/audit-public-secrets.mjs` | PASS (tracked and non-ignored candidate files; no secret values found) |
@@ -39,7 +39,7 @@ does not import Unfour-pro Git history.
 | Local | API, real SSH, SQLite/PostgreSQL/MySQL, desktop MCP | NOT VERIFIED as a complete live matrix |
 | Account | GitHub login, closed/running deep link, sign out | NOT VERIFIED on candidate installers |
 | Cloud | entitlement, push/pull, conflicts, snapshots, second device | Automated domain tests PASS; live multi-device NOT VERIFIED |
-| Standard | bundle, GitHub artifact, identical R2 hash, signed updater | Workflow contract present; published artifact NOT VERIFIED |
+| Standard | Windows/macOS bundles, Linux x64 AppImage + signature, identical GitHub/R2 hash, signed updater | Workflow contract present; published artifact NOT VERIFIED |
 | Store | MSIX, validator, callback, MCP alias, no internal updater | Static contract covered; installed package NOT VERIFIED |
 | Migration | old Community DB, old Pro DB, clean DB | PASS (9 storage migration tests, including exact old-Pro data preservation) |
 

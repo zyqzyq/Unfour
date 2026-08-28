@@ -31,7 +31,8 @@ from GitHub Releases.
 - macOS has Apple Silicon and Intel packages that have been verified on real
   devices, but they are not Apple-signed or notarized; Gatekeeper may block
   them.
-- Linux packages are experimental / unverified.
+- Linux publishes an x64 AppImage only. It is Experimental; `.deb` and `.rpm`
+  packages are not formally supported or published.
 - Verify downloaded installers with the release `SHA256SUMS.txt` asset.
 
 ## What Is Unfour?
@@ -173,10 +174,11 @@ verification evidence is documented in:
 Windows is the primary distribution path and ships an unsigned NSIS `.exe`
 installer that may trigger SmartScreen. macOS has Apple Silicon and Intel
 packages verified on real devices, but they are not Apple-signed or notarized
-and Gatekeeper may block them. Linux remains experimental / unverified. Use the release
-`SHA256SUMS.txt` to verify downloaded artifacts, and do not claim a release
-check passes unless it was run successfully for the target platform or is
-backed by current repository evidence.
+and Gatekeeper may block them. Linux publishes an x64 AppImage only and
+remains Experimental. `.deb` and `.rpm` packages are not formally supported
+or published. Use the release `SHA256SUMS.txt` to verify downloaded artifacts,
+and do not claim a release check passes unless it was run successfully for the
+target platform or is backed by current repository evidence.
 
 ## Documentation
 

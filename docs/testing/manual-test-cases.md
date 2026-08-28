@@ -128,4 +128,5 @@ For each target platform:
 - Verify checksums before launch.
 - On macOS, record notarization and Gatekeeper behavior.
 - On Windows, record SmartScreen or certificate trust behavior.
-- On Linux, record package manager or desktop integration behavior.
+- On Linux, exercise the x64 AppImage and record launch, desktop integration,
+  and updater behavior.
