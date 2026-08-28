@@ -1,82 +1,44 @@
-# Release Checklist
+# Final release checklist
 
-This checklist is for the published Community release / Preview `v0.8.0`.
+## Shared gate
 
-## Release setup
+- Working tree and intended release commit are reviewed.
+- `pnpm run check:version`, `pnpm run check:secrets`, migration checks,
+  frontend/Rust tests, and release contract tests pass.
+- The release version is unused, exactly `X.Y.Z`, and the tag is `vX.Y.Z`.
+- Historical `pro_*` SQL migration files pass their immutable checksum guard.
+- Community DB, Pro DB, and clean DB migrations have current test evidence.
+- API, SSH, Database, MCP, Account, Cloud, and multi-device manual results are
+  recorded; unavailable live services remain `NOT VERIFIED`.
 
-- Confirm the release commit and a clean working tree.
-- Confirm the unique version source is `0.8.0` in root
-  `[workspace.package]`; run the version sync and confirm the root package,
-  desktop package,
-  Tauri configuration, and any packaged Rust crates.
-- Confirm the release tag is exactly `v0.8.0` and points to the verified
-  release commit. Community rejects every pre-release tag.
-- Confirm the release workflow resolves Stable with `prerelease = false`,
-  exports `UNFOUR_RELEASE_CHANNEL=stable`, and embeds the exact checked-out
-  commit as `UNFOUR_BUILD_COMMIT` throughout verification and artifact builds.
-- Review `README.md`, `README.zh-CN.md`, `CHANGELOG.md`, `SECURITY.md`, and
-  `LICENSE`.
-- Confirm release notes describe this as a release and do not claim
-  unverified platforms or live-service checks are supported.
+## Standard
 
-## Required automated verification
+- CI exports `UNFOUR_DISTRIBUTION=standard` and `stable`.
+- The updater private signing key exists only in Actions secrets; the tracked
+  public key exactly matches the updater configuration.
+- One matrix build produces each installer and updater signature.
+- The aggregation job creates `SHA256SUMS.txt` and `latest.json`.
+- R2 re-download passes the same checksum manifest used by GitHub Release.
+- `stable/latest.json` is uploaded only after immutable versioned files verify.
+- Install, launch, update from the previous Stable version, MCP sidecar
+  replacement, uninstall, and signature rejection are manually exercised.
 
-The release workflow must complete its independent `verify` job before any
-platform build job:
+## Microsoft Store
 
-- `pnpm install --frozen-lockfile`
-- `pnpm run lint`
-- `pnpm run test`
-- `pnpm run check`
-- `pnpm run test:rust`
-- Playwright Chromium installation and `pnpm run test:e2e` when the GitHub
-  Actions runner can execute the existing local smoke suite.
+- Use a clean Windows x64 release tree and exact Partner Center identity.
+- Run the manual MSIX build and validator; do not add Store publication to CI.
+- Confirm `X.Y.Z` became `X.Y.Z.0`.
+- Inspect packaged build metadata for `distribution=microsoft-store`, Stable
+  services, updater disabled, and null updater endpoint.
+- Install a signed test package and exercise closed/running-app
+  `unfour://auth/callback`, `unfour-mcp.exe` alias, Store upgrade, uninstall,
+  and NSIS coexistence.
+- Confirm no request is made to the Standard updater endpoint and no internal
+  installer can be launched.
 
-The workflow then builds macOS and Linux with their existing targets and builds
-the Windows NSIS target. The Windows release asset set must contain one NSIS
-`.exe` installer for this version and must not include stale MSI output.
+## Go/no-go
 
-## Artifact review
-
-- Build artifacts come from the verified release commit.
-- The single aggregation job generates and uploads `SHA256SUMS.txt` alongside
-  the installers.
-- Artifact names identify the app, version, platform, and architecture where
-  Tauri provides those fields.
-- Windows release notes identify NSIS as the only Windows installer format.
-- Unsigned artifacts and possible SmartScreen/security warnings are stated in
-  the Release body.
-- macOS Apple Silicon and Intel artifacts are real-device verified, but remain
-  unsigned and unnotarized; Gatekeeper may block them.
-- Linux artifacts remain experimental or unverified until real-device smoke
-  checks are complete.
-
-## Manual gates
-
-- Windows NSIS install and app launch: record the actual result.
-- Verify upgrade from `v0.2.0` and install/uninstall while `unfour-mcp.exe` is
-  held by an MCP client; the installer should prompt and complete rather than
-  stall.
-- Windows first viewport, quit/relaunch, uninstall, and upgrade behavior:
-  record the actual result; do not infer it from bundle generation.
-- macOS Apple Silicon and Intel launch/install smoke: record the real-device
-  result; the published `v0.8.0` packages are real-device verified.
-- Linux launch/install smoke: `NOT VERIFIED` until run on real devices.
-- API request scripts, API snapshot/external-apply behavior, Workspace
-  transactional domain behavior, SSH task snapshots/external apply and
-  workspace cascades, SSH and Database connection snapshots/external apply and
-  device-local saves, storage profiles, Database row actions and
-  workspace-scoped credentials, SSH clipboard/SFTP/tasks/command history and
-  suggestions, and MCP registry/schema/history smoke: record only what was
-  actually tested.
-- Live SSH, PostgreSQL, MySQL/MariaDB, and system credential-store checks:
-  require the corresponding real server, OS, or credential environment.
-- Signing/notarization status: record Windows and macOS artifacts as unsigned
-  and not notarized; platform verification does not imply signing or
-  notarization.
-
-## Go / no-go
-
-Do not publish if a required automated verification step is `FAIL`. A
-`NOT RUN` or `NOT VERIFIED` item requires maintainer acceptance; it must not be
-rewritten as `PASS`.
+Do not publish with a required automated `FAIL`, a secret finding, a modified
+historical migration, a version/tag mismatch, or different GitHub/R2 bytes.
+Manual and real-service items that were not run must stay visibly `NOT
+VERIFIED`; a successful build does not convert them to `PASS`.

@@ -1,75 +1,65 @@
-# Distribution
+# Distribution architecture
 
-This document describes the public distribution format and release-asset
-verification for the published Community release / Preview Unfour `v0.8.0`.
+Unfour has one source tree, one desktop product, and two distribution values.
+Release channel (`test` or `stable`) selects services and storage; distribution
+selects the update authority.
 
-## Release workflow
+| Distribution | Package | Delivery | Update authority |
+| --- | --- | --- | --- |
+| `standard` | Tauri installers | GitHub Release, Cloudflare R2, and unfour.dev | Unfour updater at `https://release.unfour.dev/stable/latest.json` |
+| `microsoft-store` | Windows x64 MSIX | Manual Partner Center upload | Microsoft Store |
 
-GitHub Actions runs the release workflow in three gates:
+There is no Pro application edition and no Website package kind. Account,
+entitlement, cloud sync, desktop, command bus, and `unfour-mcp` are shared by
+both distributions. A paid account plan can still be called Pro; that is an
+entitlement name, not a second client or repository boundary.
 
-1. `verify` installs the frozen dependency graph and runs lint, unit tests,
-   repository checks, Rust tests, and Playwright Chromium smoke tests.
-2. The platform matrix builds the existing macOS and Linux targets. The
-   Windows matrix builds and stages the NSIS installer only.
-3. `checksum-release` downloads all platform artifacts, generates one
-   `SHA256SUMS.txt` from the actual files, and creates the release with the
-   installers and checksum manifest.
+## Standard: build once, publish twice
 
-If `verify` fails, the build jobs do not run and no release assets are created.
+A plain `vX.Y.Z` tag is the only Stable release input. The workflow verifies
+that Cargo, root/desktop package.json, and Tauri all contain the same `X.Y.Z`,
+then builds each native target once with `distribution=standard`. Tauri creates
+signed updater artifacts using a private key held only in GitHub Actions
+secrets.
 
-Local `pnpm tauri build` bundles default to the Stable channel. For isolated
-local test builds, use `pnpm tauri build:test`; the root launcher exports the
-Test channel to Tauri, sidecar builds, and the complete Cargo graph. A formal
-publishable Stable build is CI-owned and must explicitly provide
-`UNFOUR_RELEASE_CHANNEL=stable` and the exact `UNFOUR_BUILD_COMMIT`. On
-Windows, the configured release target produces an NSIS installer.
+Each matrix job renames its output to a canonical filename and uploads that
+exact file to the aggregation job. The aggregation job creates one
+`SHA256SUMS.txt` and one Tauri `latest.json`. It uploads the same staged bytes
+to both destinations:
 
-## Target artifacts
-
-| Platform | Official distribution status | Format |
-| --- | --- | --- |
-| Windows x64 | Community release / Preview distribution; primary distribution path | NSIS `.exe` |
-| macOS arm64/x64 | Real-device verified on Apple Silicon and Intel; unsigned and not notarized | Existing Tauri `.dmg` and archive outputs |
-| Linux x64 | Experimental / unverified until real-device smoke checks | Existing Tauri `.AppImage`, `.deb`, and available package outputs |
-
-Windows ships a single NSIS `.exe` installer. Before collecting release assets,
-the workflow removes cached Windows bundle output and then selects `.exe`
-artifacts only, preventing stale MSI files from being published.
-
-The NSIS installer checks for a running `unfour-mcp.exe` during install and
-uninstall. It prompts before stopping the sidecar and retries the process check
-so an MCP host that respawns the process does not leave file replacement
-stalled. This behavior still requires Windows installer smoke verification for
-the release.
-
-## Checksums
-
-The final `checksum-release` job generates a single `SHA256SUMS.txt` using
-`sha256sum` over the exact staged release assets. It uploads that file to the
-same GitHub Release as the installers. Each line contains the SHA-256 followed
-by the exact installer filename.
-
-PowerShell can verify a downloaded Windows installer with:
-
-```powershell
-Get-FileHash -Algorithm SHA256 .\Unfour-*.exe
+```text
+vX.Y.Z
+  -> verify
+  -> one native build per target
+  -> release-assets/
+       -> Cloudflare R2 stable/X.Y.Z/ (downloaded again and SHA-256 checked)
+       -> GitHub Release vX.Y.Z
+       -> R2 stable/latest.json (uploaded last)
 ```
 
-## Release caveats
+GitHub and R2 never invoke separate builds. `latest.json` points to the
+immutable R2 version path, while unfour.dev may link to the same R2 objects.
+Required CI secrets are `TAURI_SIGNING_PRIVATE_KEY`, optional signing-key
+password, `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, and
+`R2_SECRET_ACCESS_KEY`. None belongs in repository files.
 
-- The Windows NSIS installer and macOS packages are unsigned and may trigger
-  operating-system warnings; macOS packages are also not notarized, so
-  Gatekeeper may block them.
-- macOS Apple Silicon and Intel packages are real-device verified. Linux remains
-  experimental / unverified until real-device launch and smoke checks are
-  recorded; a successful CI bundle build is not platform verification.
-- Real SSH, PostgreSQL, MySQL/MariaDB, and system Keychain/Secret Service checks
-  are not represented as automated passes unless they were run against those
-  real systems.
+## Microsoft Store
 
-## Installer smoke
+MSIX remains an intentional manual path: local Windows x64 build, local
+validation, then manual upload and certification. The Standard release
+workflow neither builds MSIX nor calls Store publication tooling. See
+`docs/release/msix.md`.
 
-For each platform that is claimed as verified, use a clean or disposable test
-profile to install, launch, render the first viewport, exercise the documented
-module navigation, quit and relaunch, and uninstall. Record OS warnings,
-signing status, and upgrade behavior in the release verification matrix.
+The Store binary is compiled with `channel=stable` and
+`distribution=microsoft-store`. It uses the same APIs and Stable data profile,
+but does not register the Tauri updater plugin. Both updater commands reject
+Store builds, the frontend hides installer controls, and package validation
+requires `updaterEnabled=false` plus a null updater endpoint.
+
+## Version contract
+
+- Product source version: exactly `X.Y.Z` in Cargo, package.json, and Tauri.
+- Standard tag and artifact version: the same `X.Y.Z`.
+- MSIX identity version: deterministic `X.Y.Z.0`.
+- A previously published tag must never be moved or reused. Bump the canonical
+  source version before the next release when its current tag already exists.

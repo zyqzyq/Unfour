@@ -1,81 +1,44 @@
-# Signing
+# Signing and release secrets
 
-This document tracks release signing expectations. It does not claim signing is
-configured or passing.
+The updater public verification key and public certificates may be published.
+Private signing material must live only in the relevant CI or operator secret
+store.
 
-## Policy
+## Standard updater
 
-Public artifacts should clearly state whether they are signed. If a release is
-unsigned, release notes must tell users to expect operating-system warnings and
-must provide checksums for manual verification.
+`apps/desktop/src-tauri/updater_secret.key.pub` is tracked and must exactly
+match `tauri.updater.conf.json`. GitHub Actions reads
+`TAURI_SIGNING_PRIVATE_KEY` and its optional password from Actions secrets.
+The private key must never be generated, decoded, or written inside the
+repository. A release is blocked if the signing secret is absent.
 
-## Windows
+Tauri updater signatures authenticate the downloaded update artifact; they do
+not replace Windows Authenticode or Apple code signing/notarization. Record
+those OS trust states separately for each published candidate.
 
-Expected production posture for the published Windows format:
+## Microsoft Store
 
-- code-sign the NSIS `.exe` artifact with an Authenticode certificate;
-- verify signatures after build;
-- record SmartScreen behavior during installer smoke.
+Partner Center can sign an uploaded correctly identified Store candidate.
+Local installed testing may use a disposable self-signed certificate. Keep
+PFX/P12 files, certificate passwords, base64 certificate values, and private
+keys outside Git. Trust only the public test certificate on a disposable
+machine, then remove it.
 
-Verification examples:
+## Secret inventory
 
-```powershell
-Get-AuthenticodeSignature <artifact>
-```
+The following are secret-manager values and are forbidden in tracked files:
 
-Unsigned Windows artifacts must be labeled as unsigned in the release notes.
+- Creem API and webhook secrets;
+- Supabase service-role keys;
+- OAuth client secrets (public client IDs are not secrets);
+- Tauri updater private signing key;
+- certificate private keys and PFX/P12 contents/passwords;
+- Cloudflare/R2 access credentials;
+- Google service-account/private credentials;
+- Partner Center application secrets; and
+- real test access/refresh tokens.
 
-## macOS
-
-Expected production posture:
-
-- sign the `.app` bundle and `.dmg`;
-- notarize with Apple;
-- staple notarization where appropriate;
-- verify Gatekeeper behavior on a clean machine.
-
-Verification examples:
-
-```bash
-codesign --verify --deep --strict <Unfour.app>
-spctl --assess --type execute <Unfour.app>
-```
-
-Unnotarized macOS artifacts must be labeled clearly.
-
-## Linux
-
-Linux desktop artifacts often are not code-signed in the same way as Windows or
-macOS. Release notes should still publish SHA-256 checksums and describe the
-package format.
-
-For `.deb` packages, record whether repository signing or package signing is in
-scope for the release channel.
-
-## Secrets
-
-Signing credentials must not be committed to the repository. Store certificates,
-private keys, notarization credentials, and tokens only in the appropriate
-platform secret store or CI secret manager.
-
-## Release Gate
-
-For `v0.8.0`:
-
-- record whether each platform artifact is signed;
-- record verification command output or mark the item `NOT VERIFIED`;
-- record OS trust prompts observed during installer smoke;
-- publish checksums for every artifact.
-
-## v0.8.0 Release Status
-
-- Windows: NOT VERIFIED — unsigned; Authenticode signing is not configured. Artifacts
-  must be labeled unsigned and shipped with SHA-256 checksums.
-- macOS: REAL-DEVICE VERIFIED · UNSIGNED · NOT NOTARIZED — Apple Silicon and
-  Intel packages are available; Gatekeeper may block them.
-- Linux: NOT VERIFIED — experimental / unverified; publish SHA-256 checksums.
-
-Signing/notarization is incomplete for `v0.8.0`. Release notes must tell
-users to expect OS trust warnings and must publish checksums for manual
-verification. Real-device verification is separate from signing and
-notarization.
+Run `pnpm run check:secrets` before publication. It reports only filenames and
+rule categories, never matched values. Repository visibility must not change
+until findings are removed and any previously exposed value is revoked and
+rotated.

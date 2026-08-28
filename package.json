@@ -11,13 +11,14 @@
     "preview": "pnpm --filter @unfour/desktop preview",
     "tauri": "node scripts/run-tauri.mjs",
     "tauri:prepare-sidecars": "node scripts/prepare-tauri-sidecars.mjs",
-    "check": "pnpm run check:version && pnpm run build && pnpm run check:rust && pnpm run check:migrations && pnpm run check:large-files && pnpm run check:tokens",
+    "check": "pnpm run check:version && pnpm run check:secrets && pnpm run build && pnpm run check:rust && pnpm run check:migrations && pnpm run check:large-files && pnpm run check:tokens",
     "check:version": "node scripts/sync-version.mjs --check",
     "check:rust": "cargo check --workspace",
     "check:rust:ssh": "cargo check -p unfour --features ssh-native",
     "check:large-files": "node scripts/check-large-files.mjs",
     "check:migrations": "node scripts/check-migrations.mjs",
     "check:tokens": "node scripts/check-shared-tokens.mjs",
+    "check:secrets": "node scripts/audit-public-secrets.mjs",
     "prepare": "lefthook install",
     "lint": "eslint .",
     "test": "vitest run",
@@ -25,7 +26,9 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:rust": "cargo test --workspace",
-    "test:release-env": "node --test scripts/release-environment.test.mjs scripts/release-channel.test.mjs scripts/release-contract.test.mjs"
+    "test:release-env": "node --test scripts/release-environment.test.mjs scripts/release-channel.test.mjs scripts/release-contract.test.mjs scripts/finalize-standard-release.test.mjs scripts/msix-contract.test.mjs",
+    "msix:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/msix/build-msix.ps1 -PackageChannel Store -SignMode None",
+    "msix:validate": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/msix/validate-msix.ps1"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

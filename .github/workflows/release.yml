@@ -1,13 +1,12 @@
-name: Release
+name: Standard Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing Community Stable tag to publish (vX.Y.Z)'
+        description: 'Existing Standard Stable tag to publish (vX.Y.Z)'
         required: true
         type: string
 
@@ -16,11 +15,11 @@ permissions:
 
 jobs:
   identity:
-    name: Resolve release identity
+    name: Resolve Standard release identity
     runs-on: ubuntu-latest
     outputs:
       channel: ${{ steps.resolve.outputs.channel }}
-      prerelease: ${{ steps.resolve.outputs.prerelease }}
+      distribution: ${{ steps.resolve.outputs.distribution }}
       tag: ${{ steps.resolve.outputs.tag }}
       version: ${{ steps.resolve.outputs.version }}
       commit: ${{ steps.commit.outputs.commit }}
@@ -28,16 +27,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-
-      - name: Validate Community Stable release contract
+      - name: Validate Standard Stable release contract
         id: resolve
         env:
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: node scripts/release-contract.mjs "$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-
       - name: Resolve checked-out build commit
         id: commit
-        shell: bash
         run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   verify:
@@ -46,228 +42,206 @@ jobs:
     runs-on: ubuntu-latest
     env:
       UNFOUR_RELEASE_CHANNEL: ${{ needs.identity.outputs.channel }}
+      UNFOUR_DISTRIBUTION: ${{ needs.identity.outputs.distribution }}
       UNFOUR_BUILD_COMMIT: ${{ needs.identity.outputs.commit }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.identity.outputs.tag }}
-
-      - name: Install Tauri system dependencies (Linux)
+      - name: Install Tauri system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            libgtk-3-dev \
-            libsoup-3.0-dev \
-            libjavascriptcoregtk-4.1-dev
-
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
       - uses: pnpm/action-setup@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
-
       - uses: dtolnay/rust-toolchain@stable
-
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: '. -> target'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Prepare Tauri sidecars
-        run: node scripts/prepare-tauri-sidecars.mjs --debug
-
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/prepare-tauri-sidecars.mjs --debug
       - name: Cache Playwright browsers
-        id: playwright-cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            playwright-${{ runner.os }}-
-
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Lint
-        run: pnpm run lint
-
-      - name: Frontend unit tests
-        run: pnpm run test
-
-      - name: Release and environment unit tests
-        run: pnpm run test:release-env
-
-      - name: Repository checks
-        run: pnpm run check
-
-      - name: Rust SSH feature check
-        run: pnpm run check:rust:ssh
-
-      - name: Rust tests
-        run: pnpm run test:rust
-
-      - name: Playwright smoke tests
-        run: pnpm run test:e2e
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm run lint
+      - run: pnpm run test
+      - run: pnpm run test:release-env
+      - run: pnpm run check
+      - run: pnpm run check:rust:ssh
+      - run: pnpm run test:rust
+      - run: pnpm run test:e2e
 
   build:
-    name: Build (${{ matrix.platform }})
+    name: Build once (${{ matrix.target }})
     needs: [identity, verify]
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest
-            args: '--target aarch64-apple-darwin'
-            target: aarch64-apple-darwin
-          - platform: macos-latest
-            args: '--target x86_64-apple-darwin'
-            target: x86_64-apple-darwin
-          - platform: ubuntu-latest
-            args: ''
-            target: x86_64-unknown-linux-gnu
-          - platform: windows-latest
-            args: ''
-            target: x86_64-pc-windows-msvc
-
+          - { platform: macos-latest, args: '--target aarch64-apple-darwin', target: aarch64-apple-darwin, asset_arch: arm64 }
+          - { platform: macos-latest, args: '--target x86_64-apple-darwin', target: x86_64-apple-darwin, asset_arch: x64 }
+          - { platform: ubuntu-latest, args: '', target: x86_64-unknown-linux-gnu, asset_arch: x64 }
+          - { platform: windows-latest, args: '', target: x86_64-pc-windows-msvc, asset_arch: x64 }
     runs-on: ${{ matrix.platform }}
     env:
       UNFOUR_RELEASE_CHANNEL: ${{ needs.identity.outputs.channel }}
+      UNFOUR_DISTRIBUTION: ${{ needs.identity.outputs.distribution }}
       UNFOUR_BUILD_COMMIT: ${{ needs.identity.outputs.commit }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.identity.outputs.tag }}
-
-      - name: Install Tauri system dependencies (Linux)
+      - name: Install Tauri system dependencies
         if: matrix.platform == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            libgtk-3-dev \
-            libsoup-3.0-dev \
-            libjavascriptcoregtk-4.1-dev
-
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
       - uses: pnpm/action-setup@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
-
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: '. -> target'
           key: ${{ matrix.target }}
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Clean cached Windows bundle output
+      - run: pnpm install --frozen-lockfile
+      - name: Reject missing updater signing key
+        shell: bash
+        run: test -n "$TAURI_SIGNING_PRIVATE_KEY"
+      - name: Clean Windows bundle output
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
           $bundleRoot = Join-Path $env:GITHUB_WORKSPACE 'target/release/bundle'
-          if (Test-Path -LiteralPath $bundleRoot) {
-            Remove-Item -LiteralPath $bundleRoot -Recurse -Force
-          }
-
-      - name: Build bundles
-        run: pnpm run tauri build ${{ matrix.args }}
+          if (Test-Path -LiteralPath $bundleRoot) { Remove-Item -LiteralPath $bundleRoot -Recurse -Force }
+      - name: Build signed updater bundles once
+        run: pnpm run tauri build --config src-tauri/tauri.updater.conf.json ${{ matrix.args }}
         env:
           UNFOUR_TAURI_TARGET: ${{ matrix.target }}
-
-      - name: Collect Windows NSIS assets
+      - name: Stage canonical Windows assets
         if: matrix.platform == 'windows-latest'
         shell: pwsh
+        env:
+          VERSION: ${{ needs.identity.outputs.version }}
         run: |
-          $bundleFiles = Get-ChildItem -Path "target" -Recurse -File |
-            Where-Object { $_.FullName -match '[\\/]release[\\/]bundle[\\/]' }
-          $nsisAssets = @($bundleFiles | Where-Object { $_.Extension -ieq '.exe' })
-          if ($nsisAssets.Count -eq 0) {
-            throw 'Windows release must produce an NSIS .exe installer.'
-          }
-          New-Item -ItemType Directory -Force -Path release-assets | Out-Null
-          foreach ($asset in $nsisAssets) {
-            Copy-Item -LiteralPath $asset.FullName -Destination (Join-Path 'release-assets' $asset.Name)
-          }
-
-      - name: Collect macOS and Linux assets
-        if: matrix.platform != 'windows-latest'
+          $installers = @(Get-ChildItem target -Recurse -File -Filter '*-setup.exe' | Where-Object { $_.FullName -match '[\\/]release[\\/]bundle[\\/]nsis[\\/]' })
+          if ($installers.Count -ne 1) { throw "Expected exactly one NSIS updater installer, found $($installers.Count)." }
+          $signature = Get-Item -LiteralPath "$($installers[0].FullName).sig" -ErrorAction Stop
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          $name = "Unfour_$env:VERSION`_windows_x64.exe"
+          Copy-Item -LiteralPath $installers[0].FullName -Destination (Join-Path release-assets $name)
+          Copy-Item -LiteralPath $signature.FullName -Destination (Join-Path release-assets "$name.sig")
+      - name: Stage canonical macOS assets
+        if: matrix.platform == 'macos-latest'
         shell: bash
+        env:
+          VERSION: ${{ needs.identity.outputs.version }}
+          ASSET_ARCH: ${{ matrix.asset_arch }}
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          find target -type f -path '*/release/bundle/*' \
-            \( -iname '*.dmg' -o -iname '*.tar.gz' -o -iname '*.appimage' -o -iname '*.deb' -o -iname '*.rpm' \) \
-            -exec cp {} release-assets/ \;
-          test -n "$(find release-assets -maxdepth 1 -type f -print -quit)"
-
-      - name: Upload release assets for aggregation
-        uses: actions/upload-artifact@v4
+          mapfile -t dmgs < <(find target -type f -path '*/release/bundle/dmg/*.dmg')
+          mapfile -t archives < <(find target -type f -path '*/release/bundle/macos/*.app.tar.gz')
+          test "${#dmgs[@]}" -eq 1
+          test "${#archives[@]}" -eq 1
+          test -s "${archives[0]}.sig"
+          cp "${dmgs[0]}" "release-assets/Unfour_${VERSION}_macos_${ASSET_ARCH}.dmg"
+          cp "${archives[0]}" "release-assets/Unfour_${VERSION}_macos_${ASSET_ARCH}.app.tar.gz"
+          cp "${archives[0]}.sig" "release-assets/Unfour_${VERSION}_macos_${ASSET_ARCH}.app.tar.gz.sig"
+      - name: Stage canonical Linux assets
+        if: matrix.platform == 'ubuntu-latest'
+        shell: bash
+        env:
+          VERSION: ${{ needs.identity.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          mapfile -t images < <(find target -type f -path '*/release/bundle/appimage/*.AppImage')
+          test "${#images[@]}" -eq 1
+          test -s "${images[0]}.sig"
+          cp "${images[0]}" "release-assets/Unfour_${VERSION}_linux_x64.AppImage"
+          cp "${images[0]}.sig" "release-assets/Unfour_${VERSION}_linux_x64.AppImage.sig"
+          find target -type f -path '*/release/bundle/deb/*.deb' -exec cp {} "release-assets/Unfour_${VERSION}_linux_x64.deb" \;
+          find target -type f -path '*/release/bundle/rpm/*.rpm' -exec cp {} "release-assets/Unfour_${VERSION}_linux_x64.rpm" \;
+      - uses: actions/upload-artifact@v4
         with:
           name: release-assets-${{ matrix.target }}
           path: release-assets/*
           if-no-files-found: error
 
-  checksum-release:
-    name: Generate checksums and publish release
+  publish:
+    name: Publish identical Standard artifacts
     needs: [identity, build]
     runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
     steps:
-      - name: Download build assets
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.identity.outputs.tag }}
+      - uses: actions/download-artifact@v4
         with:
           pattern: release-assets-*
           path: release-assets
           merge-multiple: true
-
-      - name: Generate SHA-256 manifest
+      - name: Finalize checksums and updater manifest
         shell: bash
+        env:
+          VERSION: ${{ needs.identity.outputs.version }}
+        run: |
+          printf 'Unfour %s Standard stable release.' "$VERSION" > release-notes.txt
+          node scripts/finalize-standard-release.mjs --assets-dir release-assets --version "$VERSION" --base-url https://release.unfour.dev --notes-file release-notes.txt
+      - name: Upload immutable files to Cloudflare R2 and verify bytes
+        shell: bash
+        env:
+          VERSION: ${{ needs.identity.outputs.version }}
         run: |
           set -euo pipefail
-          test -n "$(find release-assets -maxdepth 1 -type f -print -quit)"
-          (
-            cd release-assets
-            sha256sum -- *
-          ) > SHA256SUMS.txt
-          test -s SHA256SUMS.txt
-
-      - name: Create release and upload assets
+          test -n "$R2_ACCOUNT_ID"
+          test -n "$R2_BUCKET"
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          mkdir r2-existing
+          aws s3 cp "s3://${R2_BUCKET}/stable/${VERSION}/" r2-existing --recursive --endpoint-url "$endpoint"
+          while IFS= read -r -d '' existing; do
+            relative="${existing#r2-existing/}"
+            test -f "release-assets/${relative}"
+            cmp --silent "$existing" "release-assets/${relative}" || {
+              echo "Refusing to overwrite immutable R2 object stable/${VERSION}/${relative}" >&2
+              exit 1
+            }
+          done < <(find r2-existing -type f -print0)
+          aws s3 cp release-assets "s3://${R2_BUCKET}/stable/${VERSION}/" --recursive --exclude latest.json --endpoint-url "$endpoint"
+          mkdir r2-verify
+          aws s3 cp "s3://${R2_BUCKET}/stable/${VERSION}/" r2-verify --recursive --endpoint-url "$endpoint"
+          (cd r2-verify && sha256sum -c ../release-assets/SHA256SUMS.txt)
+          aws s3 cp release-assets/latest.json "s3://${R2_BUCKET}/stable/latest.json" --content-type application/json --cache-control no-cache --endpoint-url "$endpoint"
+      - name: Create GitHub Release from the same staged files
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.identity.outputs.tag }}
           name: Unfour ${{ needs.identity.outputs.tag }}
-          prerelease: ${{ needs.identity.outputs.prerelease }}
+          prerelease: false
           body: |
-            Unfour `${{ needs.identity.outputs.tag }}` is a stable Community release.
+            Unfour `${{ needs.identity.outputs.tag }}` is the Standard stable release.
 
-            This release is unsigned and may trigger SmartScreen or other operating-system security warnings.
+            GitHub Release and Cloudflare R2 receive the same build artifacts. Verify them with `SHA256SUMS.txt`. The internal updater reads `https://release.unfour.dev/stable/latest.json`.
 
-            Windows ships a single NSIS `.exe` installer (recommended for ordinary users).
-
-            macOS and Linux artifacts are experimental and unverified until real-device smoke checks are recorded; they must not be treated as supported or verified platforms yet.
-
-            SHA-256 values for all published installers are in `SHA256SUMS.txt`.
-
-            - [README](https://github.com/zyqzyq/Unfour/blob/main/README.md)
-            - [CHANGELOG](https://github.com/zyqzyq/Unfour/blob/main/CHANGELOG.md)
-            - [SECURITY](https://github.com/zyqzyq/Unfour/blob/main/SECURITY.md)
-          files: |
-            release-assets/*
-            SHA256SUMS.txt
+            Microsoft Store packages are built, validated, and submitted separately by the manual MSIX process.
+          files: release-assets/*
           fail_on_unmatched_files: true
