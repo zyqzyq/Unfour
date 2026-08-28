@@ -167,6 +167,14 @@ fn unified_ephemeral_adapter_installs_cloud_sync_schema_and_hook() {
 }
 
 #[test]
+fn adapter_shutdown_is_idempotent() {
+    let adapter = LocalCommandBusAdapter::ephemeral().expect("create adapter");
+
+    adapter.shutdown();
+    adapter.shutdown();
+}
+
+#[test]
 fn ephemeral_adapter_executes_environment_crud() {
     let adapter = LocalCommandBusAdapter::ephemeral().expect("create adapter");
     let workspace = adapter

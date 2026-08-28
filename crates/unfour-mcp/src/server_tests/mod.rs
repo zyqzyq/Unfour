@@ -14,8 +14,8 @@ use unfour_core::models::{
 };
 
 use super::{
-    run_stdio_with_server, run_stdio_with_server_and_idle_timeout, McpServer,
-    SUPPORTED_PROTOCOL_VERSION,
+    run_stdio_with_adapter, run_stdio_with_server, run_stdio_with_server_and_idle_timeout,
+    McpServer, SUPPORTED_PROTOCOL_VERSION,
 };
 use crate::command_bus_adapter::{
     CommandBusAdapter, CommandBusAdapterError, LocalCommandBusAdapter,
@@ -375,10 +375,9 @@ fn stdio_idle_timeout_returns_while_input_remains_open() {
 fn stdio_eof_exits_cleanly() {
     let command_bus =
         LocalCommandBusAdapter::ephemeral().expect("ephemeral command bus should initialize");
-    let server = McpServer::new(command_bus);
     let mut output = Vec::new();
 
-    run_stdio_with_server(&server, Cursor::new(Vec::<u8>::new()), &mut output)
+    run_stdio_with_adapter(command_bus, Cursor::new(Vec::<u8>::new()), &mut output)
         .expect("EOF should be a clean shutdown");
     assert!(output.is_empty());
 }
@@ -387,12 +386,11 @@ fn stdio_eof_exits_cleanly() {
 fn broken_stdout_pipe_is_a_clean_disconnect() {
     let command_bus =
         LocalCommandBusAdapter::ephemeral().expect("ephemeral command bus should initialize");
-    let server = McpServer::new(command_bus);
     let input = concat!(
         r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"broken-pipe-test","version":"0.1.0"}}}"#,
         "\n"
     );
 
-    run_stdio_with_server(&server, Cursor::new(input), &mut BrokenPipeWriter)
+    run_stdio_with_adapter(command_bus, Cursor::new(input), &mut BrokenPipeWriter)
         .expect("broken pipe should stop the server without a fatal error");
 }

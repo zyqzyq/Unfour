@@ -82,8 +82,9 @@ fn parse_idle_timeout(value: Option<&str>) -> Option<Duration> {
 
 /// Spawn a tiny dedicated tokio runtime on a thread that only waits for the
 /// termination signals, so the blocking stdio loop on the main thread is never
-/// disturbed. On a signal we trigger the shared [`Shutdown`] flag, perform a
-/// bounded release of background tasks, then exit the whole process.
+/// disturbed. The async block only waits for a signal; runtime shutdown happens
+/// after `block_on` returns so dropping the command-bus runtime never occurs
+/// inside a Tokio async context.
 fn install_signal_handlers(shutdown: Shutdown, adapter: Arc<LocalCommandBusAdapter>) {
     #[cfg(unix)]
     {
@@ -100,10 +101,10 @@ fn install_signal_handlers(shutdown: Shutdown, adapter: Arc<LocalCommandBusAdapt
                     _ = tokio::signal::ctrl_c() => {}
                     _ = sigterm.recv() => {}
                 }
-                shutdown.trigger();
-                adapter.shutdown();
-                std::process::exit(0);
             });
+            shutdown.trigger();
+            adapter.shutdown();
+            std::process::exit(0);
         });
     }
     #[cfg(windows)]
@@ -115,10 +116,10 @@ fn install_signal_handlers(shutdown: Shutdown, adapter: Arc<LocalCommandBusAdapt
                 .expect("unfour-mcp signal runtime");
             runtime.block_on(async {
                 let _ = tokio::signal::ctrl_c().await;
-                shutdown.trigger();
-                adapter.shutdown();
-                std::process::exit(0);
             });
+            shutdown.trigger();
+            adapter.shutdown();
+            std::process::exit(0);
         });
     }
 }

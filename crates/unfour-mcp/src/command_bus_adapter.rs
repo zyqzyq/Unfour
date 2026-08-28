@@ -133,12 +133,14 @@ impl LocalCommandBusAdapter {
     /// SSH sessions, database connections, and the API runtime before the
     /// adapter is dropped.
     pub fn shutdown(&self) {
-        if let Some(runtime) = self
-            .runtime
-            .lock()
-            .expect("command-bus runtime lock poisoned")
-            .take()
-        {
+        let runtime = {
+            self.runtime
+                .lock()
+                .expect("command-bus runtime lock poisoned")
+                .take()
+        };
+
+        if let Some(runtime) = runtime {
             runtime.shutdown_timeout(Duration::from_secs(2));
         }
     }
