@@ -6,6 +6,72 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-28
+
+Release candidate prepared after `v0.8.0`, adding account-gated Cloud Sync,
+unified desktop and MCP runtimes, and signed in-app updates with multi-channel
+distribution. The `v0.9.0` tag and public release remain subject to the active
+release verification matrix.
+
+### Added
+
+- **Account and billing** — Add GitHub browser sign-in with PKCE and
+  `unfour://auth/callback`, OS-keychain desktop sessions, account and
+  entitlement state, and validated checkout/account-portal actions.
+- **Cloud Sync** — Add Pro-gated, local-first synchronization for workspaces,
+  API collections/folders/requests, environments and variables, SSH tasks, and
+  SSH/Database connection definitions, with outbox retries, snapshots,
+  tombstones, remote-workspace download, conflict resolution, and recovery.
+- **Unified desktop and MCP runtime** — Share storage, command-bus setup,
+  account context, and Cloud Sync initialization between the Tauri desktop and
+  standalone `unfour-mcp` process, while retaining an ephemeral registry mode
+  for CI and protocol smoke tests.
+- **MCP client setup** — Add one-click Codex and Cursor configuration from
+  Settings, including platform-aware sidecar/Store alias commands and safe
+  preservation or backup of existing configuration.
+- **Signed updates and Store distribution** — Add in-app signed updates for
+  Standard builds and a separately validated Windows x64 MSIX path managed by
+  Microsoft Store.
+- **Release candidate automation** — Add a reusable Standard build workflow for
+  Windows x64, macOS arm64/x64, and Linux x64 AppImage candidates, with
+  canonical artifacts, signatures, release checksums, and contract coverage.
+
+### Changed
+
+- **Distribution and release authority** — Split `standard` and
+  `microsoft-store` at build time. Standard publishes NSIS, macOS, and Linux
+  AppImage artifacts through GitHub/R2 and owns the Unfour updater, while Store
+  builds disable the internal updater and use the Microsoft Store update path.
+- **Release publication flow** — Resolve tags to exact commits, build once,
+  reuse identical staged bytes for GitHub and R2, and promote
+  `stable/latest.json` only after immutable artifacts and checksums pass.
+  Production signing and publication secrets are read from the GitHub
+  `production` Environment.
+- **Local data profiles** — Keep Stable, Test, and Dev product roots isolated
+  while desktop and MCP share the same resolver; preserve historical Community
+  and Cloud Sync migration data.
+
+### Fixed
+
+- **MCP process lifecycle** — Handle EOF, broken stdout, and termination
+  readiness cleanly, and avoid shutting down the Tokio runtime from an async
+  context.
+- **Windows Store and MSIX integration** — Use the stable `unfour-mcp.exe`
+  execution alias and invoke PowerShell 7 for MSIX tooling.
+- **Release artifact staging** — Correct the updater host, macOS updater
+  artifacts, Linux publication to AppImage only, and stable updater promotion
+  ordering.
+
+### Security
+
+- **Credential and sync isolation** — Keep account sessions in the OS keychain;
+  keep secrets, credential references, local paths, and runtime history out of
+  Cloud Sync payloads; and preserve workspace ownership and local-secret
+  boundaries during external applies.
+- **Artifact trust and Store boundaries** — Keep updater private keys and R2
+  credentials out of tracked files, require signed Standard updater artifacts,
+  and prevent Store builds from registering or invoking the internal updater.
+
 ## [0.8.0] - 2026-08-26
 
 ### Changed
@@ -381,6 +447,7 @@ First public release.
 - Linux artifacts remain experimental/unverified until real-device smoke checks
   are complete.
 
+[0.9.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.0
 [0.8.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.8.0
 [0.7.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.7.0
 [0.6.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.6.0

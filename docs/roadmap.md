@@ -123,7 +123,35 @@ Current status:
 
 Release claims remain limited by the current verification matrix.
 
-## Beyond v0.8
+## v0.9.0 (Current release candidate)
+
+Implemented areas:
+
+- GitHub browser sign-in with PKCE, deep-link completion, OS-keychain desktop
+  sessions, account entitlements, and billing destinations;
+- Pro-gated, local-first Cloud Sync for workspaces, API trees, variables,
+  connections, and SSH tasks, including retries, conflict resolution, remote
+  workspace download, and recovery;
+- one unified desktop/MCP runtime with shared storage, command-bus setup,
+  account context, and an ephemeral registry mode for CI and smoke checks;
+- one-click Codex and Cursor MCP configuration from Settings;
+- signed in-app updates for Standard builds and a separately validated Windows
+  x64 Microsoft Store MSIX distribution; and
+- a reusable Release Candidate/Release pipeline for canonical Windows, macOS,
+  and Linux AppImage artifacts, checksum manifests, and ordered updater
+  promotion.
+
+Current status:
+
+- source version is `0.9.0`; the last published tag remains `v0.8.0`;
+- current automated checks pass as recorded in
+  `docs/testing/release-verification.md`; and
+- candidate installer, OS trust, live account/billing, and multi-device Cloud
+  Sync checks remain subject to manual verification before publication.
+
+Release claims remain limited by the current verification matrix.
+
+## Beyond v0.9
 
 Likely follow-up areas:
 
