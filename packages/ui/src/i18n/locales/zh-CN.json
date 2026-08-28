@@ -86,8 +86,8 @@
         "copyConfig": "复制配置",
         "notFoundTitle": "未找到 MCP 可执行文件",
         "notFoundDev": "当前开发构建中未找到可运行的 unfour-mcp。请执行 `cargo build -p unfour-mcp`（或运行 `pnpm tauri dev` 会自动构建），然后将上面的绝对路径配置到 Codex 或 Cursor。",
-        "notFoundRelease": "在预期安装位置未找到 unfour-mcp。请重新安装 Unfour 或构建 MCP server，然后将上面的绝对路径配置到 Codex 或 Cursor。",
-        "docsDescription": "当前配置说明位于 {path}。请先构建 MCP server，再在 Codex 或 Cursor 中使用绝对命令路径。",
+        "notFoundRelease": "当前安装版本未找到 unfour-mcp。请重新安装 Unfour 或构建 MCP server，然后在 Codex 或 Cursor 中使用上面显示的命令。",
+        "docsDescription": "当前配置说明位于 {path}。请使用上面显示的命令；Microsoft Store 安装版使用稳定的 unfour-mcp.exe execution alias。",
         "openDocs": "打开 MCP 文档"
       },
       "about": {

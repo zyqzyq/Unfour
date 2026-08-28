@@ -21,6 +21,7 @@ test("MSIX package binds Store identity to the compiled Store distribution", asy
   assert.match(manifest, /Category="windows\.protocol"/);
   assert.match(manifest, /Name="unfour"[\s\S]*Parameters="&quot;%1&quot;"/);
   assert.match(manifest, /Category="windows\.appExecutionAlias"[\s\S]*Executable="unfour-mcp\.exe"/);
+  assert.match(manifest, /<desktop:ExecutionAlias Alias="unfour-mcp\.exe" \/>/);
 });
 
 test("Store builds cannot register or invoke the internal updater", async () => {

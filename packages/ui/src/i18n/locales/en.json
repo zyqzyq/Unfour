@@ -86,8 +86,8 @@
         "copyConfig": "Copy config",
         "notFoundTitle": "MCP binary not found",
         "notFoundDev": "No runnable unfour-mcp was found for this dev build. Build it with `cargo build -p unfour-mcp` (or run `pnpm tauri dev`, which builds it automatically), then copy the absolute path above into Codex or Cursor.",
-        "notFoundRelease": "No unfour-mcp binary was found at the expected install location. Reinstall Unfour or build the MCP server, then point Codex or Cursor at the absolute path above.",
-        "docsDescription": "The active setup guide is {path}. Build the MCP server first, then use an absolute command path in Codex or Cursor.",
+        "notFoundRelease": "No unfour-mcp binary was found for this installed build. Reinstall Unfour or build the MCP server, then use the command shown above in Codex or Cursor.",
+        "docsDescription": "The active setup guide is {path}. Use the command shown above; Microsoft Store installs use the stable unfour-mcp.exe execution alias.",
         "openDocs": "Open MCP docs"
       },
       "about": {

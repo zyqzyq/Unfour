@@ -78,11 +78,11 @@ MCP messages use standard input/output.
 
 ## Codex Configuration
 
-Use the absolute path to the built executable. The exact path depends on your
-build/install location and is shown automatically in the app under
-**Settings → MCP** (the "MCP command" value). For a release install it is the
-sidecar bundled next to the app; for a dev build it is the `target/debug`
-binary. A dev build looks like:
+Use the command shown automatically in the app under **Settings → MCP** (the
+"MCP command" value). A Microsoft Store/MSIX release uses the stable
+`unfour-mcp.exe` execution alias. A Standard release uses the absolute path to
+the installed sidecar, and a dev build uses the `target/debug` binary. A dev
+build looks like:
 
 ```toml
 [mcp_servers.unfour]

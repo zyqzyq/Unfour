@@ -3,9 +3,9 @@ import { call } from "./invoke";
 export type McpBuildKind = "dev" | "release";
 
 export interface McpBinaryPathResult {
-  /** Absolute path the external MCP client should invoke. */
+  /** Command or absolute path the external MCP client should invoke. */
   path: string;
-  /** Whether a runnable binary actually exists at `path`. */
+  /** Whether the command is available for the current build. */
   found: boolean;
   /** Build kind, so the UI can tailor its guidance. */
   buildKind: McpBuildKind;

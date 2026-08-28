@@ -50,9 +50,11 @@ the server provides diagnostic tools, not an automatic troubleshooting
 playbook.
 
 1. Open the desktop app once. This creates `~/.unfour/unfour.sqlite`.
-2. In `Settings → MCP`, copy the absolute MCP command path shown by the app.
+2. In `Settings → MCP`, copy the MCP command shown by the app. Microsoft
+   Store/MSIX installations use the stable `unfour-mcp.exe` alias; Standard
+   installations show the absolute sidecar path.
 3. Follow the [installed-user MCP setup](../mcp/client-setup.md) and paste that
-   path into the Codex or Cursor configuration.
+   command into the Codex or Cursor configuration.
 4. Start or restart Codex or Cursor after saving its configuration.
 
 Do not set `UNFOUR_MCP_STORAGE_MODE=ephemeral` for daily use. That mode is for

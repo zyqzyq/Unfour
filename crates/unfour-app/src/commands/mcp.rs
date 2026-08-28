@@ -1,4 +1,6 @@
+use crate::{AppDistribution, AppState};
 use serde::Serialize;
+use tauri::State;
 use unfour_core::AppResult;
 
 /// Whether the running app is a debug/dev build or a release/installed build.
@@ -19,23 +21,26 @@ pub enum McpBuildKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McpBinaryPathResult {
-    /// Absolute path the external MCP client should invoke.
+    /// Command or absolute path the external MCP client should invoke.
     pub path: String,
-    /// Whether a runnable binary actually exists at `path`.
+    /// Whether the command is available for the current build.
     pub found: bool,
     /// Build kind, so the UI can tailor its guidance.
     pub build_kind: McpBuildKind,
 }
 
 #[tauri::command]
-pub fn mcp_binary_path() -> AppResult<McpBinaryPathResult> {
+pub fn mcp_binary_path(state: State<'_, AppState>) -> AppResult<McpBinaryPathResult> {
     let build_kind = if cfg!(debug_assertions) {
         McpBuildKind::Dev
     } else {
         McpBuildKind::Release
     };
 
-    Ok(resolve_mcp_binary_path(build_kind))
+    Ok(resolve_mcp_binary_path(
+        build_kind,
+        state.config.distribution,
+    ))
 }
 
 /// Plain runnable name (no target triple), used for the dev `target/debug`
@@ -86,7 +91,21 @@ fn current_exe_dir() -> Option<std::path::PathBuf> {
         .map(|p| p.to_path_buf())
 }
 
-fn resolve_mcp_binary_path(build_kind: McpBuildKind) -> McpBinaryPathResult {
+fn resolve_mcp_binary_path(
+    build_kind: McpBuildKind,
+    distribution: AppDistribution,
+) -> McpBinaryPathResult {
+    // Microsoft Store registers this executable through the package manifest's
+    // windows.appExecutionAlias. The physical WindowsApps directory contains
+    // versioned package folders and must never be copied into client config.
+    if distribution == AppDistribution::MicrosoftStore {
+        return McpBinaryPathResult {
+            path: binary_name(),
+            found: true,
+            build_kind,
+        };
+    }
+
     let recommended = current_exe_dir()
         .map(|dir| dir.join(binary_name()))
         .unwrap_or_else(|| std::path::PathBuf::from(binary_name()));
@@ -123,5 +142,19 @@ fn resolve_mcp_binary_path(build_kind: McpBuildKind) -> McpBinaryPathResult {
         path: recommended.to_string_lossy().to_string(),
         found: false,
         build_kind,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn microsoft_store_uses_the_stable_execution_alias() {
+        let result =
+            resolve_mcp_binary_path(McpBuildKind::Release, AppDistribution::MicrosoftStore);
+
+        assert_eq!(result.path, binary_name());
+        assert!(result.found);
     }
 }
