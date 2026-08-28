@@ -1,5 +1,5 @@
 use std::io::{self, BufReader};
-use std::sync::Arc;
+use std::sync::{mpsc, Arc};
 use std::time::Duration;
 
 use unfour_mcp::{LocalCommandBusAdapter, Shutdown, StorageMode};
@@ -86,6 +86,8 @@ fn parse_idle_timeout(value: Option<&str>) -> Option<Duration> {
 /// after `block_on` returns so dropping the command-bus runtime never occurs
 /// inside a Tokio async context.
 fn install_signal_handlers(shutdown: Shutdown, adapter: Arc<LocalCommandBusAdapter>) {
+    let (ready_sender, ready_receiver) = mpsc::channel();
+
     #[cfg(unix)]
     {
         std::thread::spawn(move || {
@@ -94,11 +96,21 @@ fn install_signal_handlers(shutdown: Shutdown, adapter: Arc<LocalCommandBusAdapt
                 .build()
                 .expect("unfour-mcp signal runtime");
             runtime.block_on(async {
+                let mut sigint =
+                    tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+                        .expect("install SIGINT handler");
                 let mut sigterm =
                     tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
                         .expect("install SIGTERM handler");
+                // `signal` registers the OS handlers synchronously. Do not let
+                // the main thread enter the blocking stdio loop until both
+                // handlers are active, otherwise a fast test/client can send
+                // a signal while the process still has the default action.
+                ready_sender
+                    .send(())
+                    .expect("MCP main thread dropped signal readiness receiver");
                 tokio::select! {
-                    _ = tokio::signal::ctrl_c() => {}
+                    _ = sigint.recv() => {}
                     _ = sigterm.recv() => {}
                 }
             });
@@ -115,13 +127,24 @@ fn install_signal_handlers(shutdown: Shutdown, adapter: Arc<LocalCommandBusAdapt
                 .build()
                 .expect("unfour-mcp signal runtime");
             runtime.block_on(async {
-                let _ = tokio::signal::ctrl_c().await;
+                let mut ctrl_c = tokio::signal::windows::ctrl_c().expect("install Ctrl+C handler");
+                // The Windows-specific constructor installs the console
+                // handler before returning, so this is the equivalent ready
+                // point for the Windows implementation.
+                ready_sender
+                    .send(())
+                    .expect("MCP main thread dropped signal readiness receiver");
+                ctrl_c.recv().await;
             });
             shutdown.trigger();
             adapter.shutdown();
             std::process::exit(0);
         });
     }
+
+    ready_receiver
+        .recv()
+        .expect("unfour-mcp signal handler thread exited before initialization");
 }
 
 fn initialize_logging(storage_mode: StorageMode) -> Option<unfour_diag::LoggingGuard> {
