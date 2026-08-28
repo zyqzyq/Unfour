@@ -17,7 +17,7 @@ test("staged Standard installers feed checksums and updater metadata", () => {
     finalizeStandardRelease({
       assetsDir: directory,
       version: "1.2.3",
-      baseUrl: "https://release.unfour.dev/",
+      baseUrl: "https://releases.unfour.dev/",
       notes: "Fixture",
     });
     const latest = JSON.parse(readFileSync(resolve(directory, "latest.json"), "utf8"));
@@ -27,11 +27,11 @@ test("staged Standard installers feed checksums and updater metadata", () => {
     assert.equal(latest.platforms["linux-x86_64"].signature, "signed-linux-fixture");
     assert.equal(
       latest.platforms["linux-x86_64"].url,
-      `https://release.unfour.dev/stable/1.2.3/${linuxInstaller}`,
+      `https://releases.unfour.dev/stable/1.2.3/${linuxInstaller}`,
     );
     assert.equal(
       latest.platforms["windows-x86_64"].url,
-      `https://release.unfour.dev/stable/1.2.3/${installer}`,
+      `https://releases.unfour.dev/stable/1.2.3/${installer}`,
     );
     const checksums = readFileSync(resolve(directory, "SHA256SUMS.txt"), "utf8");
     assert.match(checksums, new RegExp(`  ${installer}\\n`));
@@ -55,7 +55,7 @@ test("requires a signed Linux AppImage in the Standard release", () => {
         finalizeStandardRelease({
           assetsDir: directory,
           version: "1.2.3",
-          baseUrl: "https://release.unfour.dev",
+          baseUrl: "https://releases.unfour.dev",
         }),
       /missing .*\.sig/,
     );
@@ -78,7 +78,7 @@ test("rejects non-canonical Linux deb and rpm package assets", () => {
         finalizeStandardRelease({
           assetsDir: directory,
           version: "1.2.3",
-          baseUrl: "https://release.unfour.dev",
+          baseUrl: "https://releases.unfour.dev",
         }),
       /Non-canonical Linux package assets must not be staged/,
     );
@@ -96,7 +96,7 @@ test("rejects an unsigned updater installer", () => {
         finalizeStandardRelease({
           assetsDir: directory,
           version: "1.2.3",
-          baseUrl: "https://release.unfour.dev",
+          baseUrl: "https://releases.unfour.dev",
         }),
       /missing .*\.sig/,
     );
@@ -116,7 +116,7 @@ test("rejects a Standard release without a Linux AppImage", () => {
         finalizeStandardRelease({
           assetsDir: directory,
           version: "1.2.3",
-          baseUrl: "https://release.unfour.dev",
+          baseUrl: "https://releases.unfour.dev",
         }),
       /Standard Linux updater artifact and signature are required/,
     );

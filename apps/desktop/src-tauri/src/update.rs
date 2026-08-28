@@ -388,7 +388,7 @@ mod tests {
             assert_eq!(
                 metadata.updater_endpoint,
                 Some(format!(
-                    "https://release.unfour.dev/{}/latest.json",
+                    "https://releases.unfour.dev/{}/latest.json",
                     metadata.channel
                 ))
             );

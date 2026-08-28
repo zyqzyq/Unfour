@@ -18,14 +18,14 @@ const channelProfiles = Object.freeze({
   test: Object.freeze({
     accountApiUrl: "https://test-api.unfour.dev",
     accountWebUrl: "https://test.unfour.dev",
-    updaterEndpoint: "https://release.unfour.dev/test/latest.json",
+    updaterEndpoint: "https://releases.unfour.dev/test/latest.json",
     allowLoopbackHttp: false,
     defaultStorageProfile: "test",
   }),
   stable: Object.freeze({
     accountApiUrl: "https://api.unfour.dev",
     accountWebUrl: "https://unfour.dev",
-    updaterEndpoint: "https://release.unfour.dev/stable/latest.json",
+    updaterEndpoint: "https://releases.unfour.dev/stable/latest.json",
     allowLoopbackHttp: false,
     defaultStorageProfile: "stable",
   }),

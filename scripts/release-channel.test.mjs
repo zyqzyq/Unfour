@@ -13,12 +13,12 @@ test("Standard Stable and Test both enable their updater endpoints", () => {
   assert.equal(stable.updaterEnabled, true);
   assert.equal(
     stable.updaterEndpoint,
-    "https://release.unfour.dev/stable/latest.json",
+    "https://releases.unfour.dev/stable/latest.json",
   );
   assert.equal(testProfile.updaterEnabled, true);
   assert.equal(
     testProfile.updaterEndpoint,
-    "https://release.unfour.dev/test/latest.json",
+    "https://releases.unfour.dev/test/latest.json",
   );
 });
 
@@ -30,7 +30,7 @@ test("standard and Store are independent distribution authorities", () => {
   assert.equal(standard.updaterEnabled, true);
   assert.equal(
     standard.updaterEndpoint,
-    "https://release.unfour.dev/stable/latest.json",
+    "https://releases.unfour.dev/stable/latest.json",
   );
   assert.equal(store.distribution, "microsoft-store");
   assert.equal(store.updaterEnabled, false);

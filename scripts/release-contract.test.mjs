@@ -39,7 +39,7 @@ test("Standard Stable accepts only the exact X.Y.Z workspace tag", () => {
     tag: "v1.2.3",
     channel: "stable",
     distribution: "standard",
-    updaterEndpoint: "https://release.unfour.dev/stable/latest.json",
+    updaterEndpoint: "https://releases.unfour.dev/stable/latest.json",
     prerelease: false,
   });
   assert.throws(

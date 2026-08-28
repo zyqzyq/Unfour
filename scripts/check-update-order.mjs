@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 export const DEFAULT_LATEST_URL =
-  "https://release.unfour.dev/stable/latest.json";
+  "https://releases.unfour.dev/stable/latest.json";
 
 const stableVersionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 

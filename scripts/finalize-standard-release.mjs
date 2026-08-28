@@ -80,7 +80,7 @@ function run(arguments_) {
   const assetsDir = resolve(argument(arguments_, "--assets-dir") ?? "release-assets");
   const version = argument(arguments_, "--version");
   if (!version) throw new Error("--version is required");
-  const baseUrl = argument(arguments_, "--base-url") ?? "https://release.unfour.dev";
+  const baseUrl = argument(arguments_, "--base-url") ?? "https://releases.unfour.dev";
   const notesPath = argument(arguments_, "--notes-file");
   const notes = notesPath ? readFileSync(resolve(notesPath), "utf8").trim() : "";
   const result = finalizeStandardRelease({ assetsDir, version, baseUrl, notes });

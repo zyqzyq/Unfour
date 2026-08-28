@@ -6,7 +6,7 @@ selects the update authority.
 
 | Distribution | Package | Delivery | Update authority |
 | --- | --- | --- | --- |
-| `standard` | Windows NSIS, macOS packages, Linux x64 AppImage (Experimental) | GitHub Release, Cloudflare R2, and unfour.dev | Unfour updater at `https://release.unfour.dev/stable/latest.json` |
+| `standard` | Windows NSIS, macOS packages, Linux x64 AppImage (Experimental) | GitHub Release, Cloudflare R2, and unfour.dev | Unfour updater at `https://releases.unfour.dev/stable/latest.json` |
 | `microsoft-store` | Windows x64 MSIX | Manual Partner Center upload | Microsoft Store |
 
 There is no Pro application edition and no Website package kind. Account,
