@@ -27,9 +27,9 @@
     "test:e2e:ui": "playwright test --ui",
     "test:rust": "cargo test --workspace",
     "test:release-env": "node --test scripts/release-environment.test.mjs scripts/release-channel.test.mjs scripts/release-contract.test.mjs scripts/release-candidate-contract.test.mjs scripts/check-update-order.test.mjs scripts/finalize-standard-release.test.mjs scripts/msix-contract.test.mjs",
-    "msix:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/msix/build-msix.ps1 -PackageChannel Store -SignMode None",
-    "msix:build:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/msix/build-msix.ps1 -PackageChannel Store -SignMode None -ConfigPath scripts/msix/msix.config.json",
-    "msix:validate": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/msix/validate-msix.ps1"
+    "msix:build": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/msix/build-msix.ps1 -PackageChannel Store -SignMode None",
+    "msix:build:local": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/msix/build-msix.ps1 -PackageChannel Store -SignMode None -ConfigPath scripts/msix/msix.config.json",
+    "msix:validate": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/msix/validate-msix.ps1"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

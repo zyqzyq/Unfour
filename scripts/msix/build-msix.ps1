@@ -293,7 +293,7 @@ try {
     [IO.File]::WriteAllText($manifestPath, $manifestText, (New-Object Text.UTF8Encoding($false)))
 
     $validator = Join-Path $PSScriptRoot "validate-msix.ps1"
-    & powershell -NoProfile -ExecutionPolicy Bypass -File $validator -StagingDirectory $stagingDirectory -ExpectedIdentityName $IdentityName -ExpectedPublisher $Publisher -ExpectedPublisherDisplayName $PublisherDisplayName -ExpectedVersion $manifestVersion -ExpectedArchitecture $Architecture -ExpectedDisplayName $DisplayName -ExpectedPackageChannel $PackageChannel
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File $validator -StagingDirectory $stagingDirectory -ExpectedIdentityName $IdentityName -ExpectedPublisher $Publisher -ExpectedPublisherDisplayName $PublisherDisplayName -ExpectedVersion $manifestVersion -ExpectedArchitecture $Architecture -ExpectedDisplayName $DisplayName -ExpectedPackageChannel $PackageChannel
     if ($LASTEXITCODE -ne 0) { throw "MSIX staging validation failed." }
 
     $signatureLabel = if ($SignMode -eq "Pfx") { "SIGNED" } else { "UNSIGNED" }
@@ -313,7 +313,7 @@ try {
     $hash = (Get-FileHash -LiteralPath $outputPath -Algorithm SHA256).Hash.ToUpperInvariant()
     $checksumPath = "$outputPath.sha256"
     [IO.File]::WriteAllText($checksumPath, "$hash *$([IO.Path]::GetFileName($outputPath))`r`n", (New-Object Text.UTF8Encoding($false)))
-    & powershell -NoProfile -ExecutionPolicy Bypass -File $validator -MsixPath $outputPath -MakeAppxPath $MakeAppxPath -ExpectedIdentityName $IdentityName -ExpectedPublisher $Publisher -ExpectedPublisherDisplayName $PublisherDisplayName -ExpectedVersion $manifestVersion -ExpectedArchitecture $Architecture -ExpectedDisplayName $DisplayName -ExpectedPackageChannel $PackageChannel
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File $validator -MsixPath $outputPath -MakeAppxPath $MakeAppxPath -ExpectedIdentityName $IdentityName -ExpectedPublisher $Publisher -ExpectedPublisherDisplayName $PublisherDisplayName -ExpectedVersion $manifestVersion -ExpectedArchitecture $Architecture -ExpectedDisplayName $DisplayName -ExpectedPackageChannel $PackageChannel
     if ($LASTEXITCODE -ne 0) { throw "Packed MSIX validation failed." }
 
     Write-Host "[build-msix] MSIX: $outputPath"

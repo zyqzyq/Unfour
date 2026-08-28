@@ -24,7 +24,7 @@ if (-not $isAdministrator) {
         "-ValidYears", $ValidYears
     )
     if ($Remove) { $arguments += "-Remove" }
-    $elevated = Start-Process -FilePath "powershell.exe" -ArgumentList $arguments -Verb RunAs -Wait -PassThru
+    $elevated = Start-Process -FilePath "pwsh.exe" -ArgumentList $arguments -Verb RunAs -Wait -PassThru
     exit $elevated.ExitCode
 }
 
