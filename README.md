@@ -207,6 +207,12 @@ rules in `AGENTS.md` before opening a pull request.
 
 Security issues should be reported through `SECURITY.md`, not a public issue.
 
+## Support Unfour
+
+If Unfour is useful to you, you can support its continued open-source development through [GitHub Sponsors](https://github.com/sponsors/zyqzyq).
+
+Sponsorship is optional and does not include Unfour Pro or paid cloud services.
+
 ## Built with Codex & GPT-5.6
 
 Codex was used to review the Rust and TypeScript architecture, implement and
