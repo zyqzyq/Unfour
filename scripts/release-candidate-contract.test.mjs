@@ -49,7 +49,7 @@ test("Release Candidate and Release call the same signed Standard build core", (
   assert.match(build, /TAURI_SIGNING_PRIVATE_KEY: \$\{\{ secrets\.TAURI_SIGNING_PRIVATE_KEY \}\}/);
   assert.match(build, /TAURI_SIGNING_PRIVATE_KEY_PASSWORD: \$\{\{ secrets\.TAURI_SIGNING_PRIVATE_KEY_PASSWORD \}\}/);
   assert.match(build, /TAURI_SIGNING_PRIVATE_KEY is required/);
-  assert.match(build, /actions\/upload-artifact@v4/);
+  assert.match(build, /actions\/upload-artifact@v6/);
 
   for (const command of [
     "pnpm run lint",

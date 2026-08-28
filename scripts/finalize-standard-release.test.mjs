@@ -153,7 +153,7 @@ test("Standard workflow builds once and republishes the same staged files", () =
   const versionedUploadIndex = releaseWorkflow.indexOf("aws s3 cp release-assets \"s3://${R2_BUCKET}/stable/${VERSION}/\"");
   const redownloadIndex = releaseWorkflow.indexOf("aws s3 cp \"s3://${R2_BUCKET}/stable/${VERSION}/\" r2-verify");
   const verifyIndex = releaseWorkflow.indexOf("sha256sum -c");
-  const githubReleaseIndex = releaseWorkflow.indexOf("softprops/action-gh-release@v2");
+  const githubReleaseIndex = releaseWorkflow.indexOf("softprops/action-gh-release@v3");
   const updateOrderIndex = releaseWorkflow.indexOf("scripts/check-update-order.mjs");
   const latestUploadIndex = releaseWorkflow.indexOf("aws s3 cp release-assets/latest.json");
   assert.ok(finalizeIndex < immutableComparisonIndex);

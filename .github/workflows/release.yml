@@ -24,7 +24,7 @@ jobs:
       version: ${{ steps.resolve.outputs.version }}
       commit: ${{ steps.commit.outputs.commit }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
       - name: Validate Standard Stable release contract
@@ -62,10 +62,10 @@ jobs:
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
       R2_BUCKET: ${{ secrets.R2_BUCKET }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ needs.identity.outputs.tag }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: release-assets-*
           path: release-assets
@@ -101,7 +101,7 @@ jobs:
           aws s3 cp "s3://${R2_BUCKET}/stable/${VERSION}/" r2-verify --recursive --endpoint-url "$endpoint"
           (cd r2-verify && sha256sum -c ../release-assets/SHA256SUMS.txt)
       - name: Create GitHub Release from the same staged files
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.identity.outputs.tag }}
           name: Unfour ${{ needs.identity.outputs.tag }}
