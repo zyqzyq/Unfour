@@ -36,6 +36,31 @@ jobs:
       - name: Unit tests
         run: pnpm run test
 
+  release-contracts:
+    name: Release contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Release environment and contract tests
+        run: pnpm run test:release-env
+
+      - name: Public secret audit
+        run: pnpm run check:secrets
+
+      - name: Migration integrity check
+        run: pnpm run check:migrations
+
   rust:
     name: Rust (check, test)
     runs-on: ubuntu-latest
