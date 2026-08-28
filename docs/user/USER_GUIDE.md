@@ -14,7 +14,7 @@ Unfour opens into a single workspace surface:
 
 ## Current Capabilities
 
-The current published release is `v0.9.0`:
+This guide documents the current v0.9.0 source/release candidate capabilities:
 
 - The workspace shell is usable.
 - API debugging supports request editing, Send, response viewing, history,
@@ -72,12 +72,15 @@ the server provides diagnostic tools, not an automatic troubleshooting
 playbook.
 
 1. Open the desktop app once. This creates `~/.unfour/unfour.sqlite`.
-2. In `Settings → MCP`, copy the MCP command shown by the app. Microsoft
-   Store/MSIX installations use the stable `unfour-mcp.exe` alias; Standard
-   installations show the absolute sidecar path.
-3. Follow the [installed-user MCP setup](../mcp/client-setup.md) and paste that
-   command into the Codex or Cursor configuration.
-4. Start or restart Codex or Cursor after saving its configuration.
+2. Open `Settings → MCP`.
+3. Click `Configure Codex` or `Configure Cursor` for the client you want to
+   connect.
+4. Wait for configuration to complete.
+5. Restart the corresponding client.
+
+If one-click configuration is unavailable or you want to review the
+configuration manually, see [docs/mcp/client-setup.md](../mcp/client-setup.md)
+for the Manual / Advanced configuration steps.
 
 Do not set `UNFOUR_MCP_STORAGE_MODE=ephemeral` for daily use. That mode is for
 registry validation, CI, protocol smoke checks, and isolated tests; it uses an

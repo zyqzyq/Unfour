@@ -16,14 +16,14 @@
 </div>
 
 > [!WARNING]
-> `v0.9.0` is the current published Unfour release. Windows NSIS
+> This source tree targets Unfour v0.9.0. Windows NSIS
 > installers are unsigned and may trigger SmartScreen or other operating-system
 > security warnings. Use `SHA256SUMS.txt` from the GitHub Release to verify
 > downloaded files.
 
 ## Download
 
-Download the published [`v0.9.0` release](https://github.com/zyqzyq/Unfour/releases/tag/v0.9.0)
+Download the [latest Unfour release](https://github.com/zyqzyq/Unfour/releases/latest)
 from GitHub Releases.
 
 - Windows is the primary distribution path: NSIS `.exe` installer. It is
@@ -167,7 +167,7 @@ map.
 
 ## Release Status
 
-`v0.9.0` is the current published Unfour release. Release
+This source tree targets Unfour v0.9.0. Release
 verification evidence is documented in:
 
 - `docs/testing/release-verification.md`

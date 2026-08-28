@@ -16,13 +16,13 @@
 </div>
 
 > [!WARNING]
-> 当前已发布版本是 `v0.9.0`，产品统一为 Unfour。
+> 当前源码版本目标为 Unfour v0.9.0。产品统一为 Unfour。
 > Windows NSIS 安装包尚未签名，可能触发 SmartScreen 或其他操作系统安全警告。
 > 请使用 GitHub Release 中的 `SHA256SUMS.txt` 校验下载文件。
 
 ## 下载
 
-请从 GitHub Releases 下载已发布的 [`v0.9.0`](https://github.com/zyqzyq/Unfour/releases/tag/v0.9.0)。
+请从 [GitHub Releases](https://github.com/zyqzyq/Unfour/releases/latest) 下载最新的 Unfour 正式版本。
 
 - Windows 是主分发路径：NSIS `.exe` 安装包。该安装包尚未签名，可能触发
   SmartScreen。
@@ -145,7 +145,7 @@ pnpm run test:rust      # cargo test --workspace
 
 ## 发布状态
 
-当前已发布版本是 `v0.9.0`，产品统一为 Unfour。
+当前源码版本目标为 Unfour v0.9.0。产品统一为 Unfour。
 发布验证证据见：
 
 - `docs/testing/release-verification.md`
