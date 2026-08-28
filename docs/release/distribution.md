@@ -37,6 +37,13 @@ vX.Y.Z
        -> R2 stable/latest.json (uploaded last)
 ```
 
+The final manifest promotion reads the live `stable/latest.json` first and
+compares versions by numeric SemVer fields. A missing manifest is allowed for
+the first release; a newer or equal candidate is allowed, while an older
+candidate fails. Equal-version reruns reach this gate only after the existing
+immutable objects under `stable/X.Y.Z/` have passed the byte and checksum
+verification above.
+
 GitHub and R2 never invoke separate builds. `latest.json` points to the
 immutable R2 version path, while unfour.dev may link to the same R2 objects.
 Required CI secrets are `TAURI_SIGNING_PRIVATE_KEY`, optional signing-key

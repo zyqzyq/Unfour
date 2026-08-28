@@ -140,4 +140,16 @@ test("Standard workflow builds once and republishes the same staged files", () =
   assert.match(workflow, /sha256sum -c[\s\S]*softprops\/action-gh-release/);
   assert.match(workflow, /files: release-assets\/\*/);
   assert.match(workflow, /Refusing to overwrite immutable R2 object/);
+  assert.match(workflow, /group: standard-stable-publish/);
+  assert.match(workflow, /cancel-in-progress: false/);
+
+  const verifyIndex = workflow.indexOf("sha256sum -c");
+  const immutableComparisonIndex = workflow.indexOf("cmp --silent");
+  const githubReleaseIndex = workflow.indexOf("softprops/action-gh-release@v2");
+  const updateOrderIndex = workflow.indexOf("scripts/check-update-order.mjs");
+  const latestUploadIndex = workflow.indexOf("aws s3 cp release-assets/latest.json");
+  assert.ok(immutableComparisonIndex < updateOrderIndex);
+  assert.ok(verifyIndex < githubReleaseIndex);
+  assert.ok(githubReleaseIndex < updateOrderIndex);
+  assert.ok(updateOrderIndex < latestUploadIndex);
 });

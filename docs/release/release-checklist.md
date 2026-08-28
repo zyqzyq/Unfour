@@ -23,7 +23,9 @@
 - `latest.json` has one Linux entry, `linux-x86_64`, pointing to the AppImage
   and requiring its non-empty signature.
 - R2 re-download passes the same checksum manifest used by GitHub Release.
-- `stable/latest.json` is uploaded only after immutable versioned files verify.
+- `stable/latest.json` is uploaded only after immutable versioned files verify
+  and the GitHub Release succeeds; its live version gate rejects numeric
+  SemVer downgrades and permits equal-version reruns only after that check.
 - Install, launch, update from the previous Stable version, MCP sidecar
   replacement, uninstall, and signature rejection are manually exercised.
 

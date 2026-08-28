@@ -195,6 +195,9 @@ jobs:
   publish:
     name: Publish identical Standard artifacts
     needs: [identity, build]
+    concurrency:
+      group: standard-stable-publish
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -241,7 +244,6 @@ jobs:
           mkdir r2-verify
           aws s3 cp "s3://${R2_BUCKET}/stable/${VERSION}/" r2-verify --recursive --endpoint-url "$endpoint"
           (cd r2-verify && sha256sum -c ../release-assets/SHA256SUMS.txt)
-          aws s3 cp release-assets/latest.json "s3://${R2_BUCKET}/stable/latest.json" --content-type application/json --cache-control no-cache --endpoint-url "$endpoint"
       - name: Create GitHub Release from the same staged files
         uses: softprops/action-gh-release@v2
         with:
@@ -256,3 +258,13 @@ jobs:
             Microsoft Store packages are built, validated, and submitted separately by the manual MSIX process.
           files: release-assets/*
           fail_on_unmatched_files: true
+      - name: Check update order and publish stable latest manifest
+        shell: bash
+        env:
+          VERSION: ${{ needs.identity.outputs.version }}
+        run: |
+          set -euo pipefail
+          node scripts/check-update-order.mjs \
+            --candidate-version "$VERSION" \
+            --latest-url https://release.unfour.dev/stable/latest.json
+          aws s3 cp release-assets/latest.json "s3://${R2_BUCKET}/stable/latest.json" --content-type application/json --cache-control no-cache --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
