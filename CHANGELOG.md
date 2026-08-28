@@ -10,7 +10,8 @@ This file is the user-facing change history for Unfour, following
 
 Release candidate prepared after `v0.8.0`, adding account-gated Cloud Sync,
 unified desktop and MCP runtimes, and signed in-app updates with multi-channel
-distribution. The `v0.9.0` tag and public release remain subject to the active
+distribution. An active Pro subscription unlocks Cloud Sync in the same Unfour
+application. The `v0.9.0` tag and public release remain subject to the active
 release verification matrix.
 
 ### Added
@@ -18,7 +19,8 @@ release verification matrix.
 - **Account and billing** — Add GitHub browser sign-in with PKCE and
   `unfour://auth/callback`, OS-keychain desktop sessions, account and
   entitlement state, and validated checkout/account-portal actions.
-- **Cloud Sync** — Add Pro-gated, local-first synchronization for workspaces,
+- **Cloud Sync** — Add local-first synchronization unlocked by an active Pro
+  subscription for workspaces,
   API collections/folders/requests, environments and variables, SSH tasks, and
   SSH/Database connection definitions, with outbox retries, snapshots,
   tombstones, remote-workspace download, conflict resolution, and recovery.
@@ -29,9 +31,9 @@ release verification matrix.
 - **MCP client setup** — Add one-click Codex and Cursor configuration from
   Settings, including platform-aware sidecar/Store alias commands and safe
   preservation or backup of existing configuration.
-- **Signed updates and Store distribution** — Add in-app signed updates for
-  Standard builds and a separately validated Windows x64 MSIX path managed by
-  Microsoft Store.
+- **Signed in-app updates and Store distribution** — Add in-app updates backed
+  by signed updater artifacts for Standard builds and a separately validated
+  Windows x64 MSIX path managed by Microsoft Store.
 - **Release candidate automation** — Add a reusable Standard build workflow for
   Windows x64, macOS arm64/x64, and Linux x64 AppImage candidates, with
   canonical artifacts, signatures, release checksums, and contract coverage.

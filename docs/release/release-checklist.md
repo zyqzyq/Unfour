@@ -7,7 +7,8 @@
   frontend/Rust tests, and release contract tests pass.
 - The release version is unused, exactly `X.Y.Z`, and the tag is `vX.Y.Z`.
 - Historical `pro_*` SQL migration files pass their immutable checksum guard.
-- Community DB, Pro DB, and clean DB migrations have current test evidence.
+- Historical Community DB, historical Pro DB, and clean DB migrations have
+  current test evidence.
 - API, SSH, Database, MCP, Account, Cloud, and multi-device manual results are
   recorded; unavailable live services remain `NOT VERIFIED`.
 

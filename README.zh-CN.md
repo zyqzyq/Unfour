@@ -16,13 +16,13 @@
 </div>
 
 > [!WARNING]
-> 当前已发布版本是 `v0.8.0`，定位为 Community release / Preview（社区发布 / 预览）。
+> 当前已发布版本是 `v0.9.0`，产品统一为 Unfour。
 > Windows NSIS 安装包尚未签名，可能触发 SmartScreen 或其他操作系统安全警告。
 > 请使用 GitHub Release 中的 `SHA256SUMS.txt` 校验下载文件。
 
 ## 下载
 
-请从 GitHub Releases 下载已发布的 [`v0.8.0`](https://github.com/zyqzyq/Unfour/releases/tag/v0.8.0)。
+请从 GitHub Releases 下载已发布的 [`v0.9.0`](https://github.com/zyqzyq/Unfour/releases/tag/v0.9.0)。
 
 - Windows 是主分发路径：NSIS `.exe` 安装包。该安装包尚未签名，可能触发
   SmartScreen。
@@ -43,6 +43,10 @@ Unfour 是一个面向后端与运维工作的本地优先桌面工作台。它�
 
 应用基于 Tauri 2、React、TypeScript 与 Rust 构建。前端负责工作台界面，而 HTTP、SSH、
 数据库驱动、本地存储与凭据引用等安全敏感的执行逻辑，则位于 Rust 能力模块与命令总线之后。
+
+Unfour 是一个统一的应用和产品。核心桌面功能免费并以 Apache-2.0 协议开源。
+用户可通过 Pro 订阅在同一个应用中解锁 Cloud Sync。Pro 是 Unfour 内的订阅权益，
+不是独立的客户端、安装包、仓库或发布版本。
 
 ## 模块
 
@@ -141,7 +145,7 @@ pnpm run test:rust      # cargo test --workspace
 
 ## 发布状态
 
-当前已发布版本是 `v0.8.0`，定位为 Community release / Preview（社区发布 / 预览）。
+当前已发布版本是 `v0.9.0`，产品统一为 Unfour。
 发布验证证据见：
 
 - `docs/testing/release-verification.md`

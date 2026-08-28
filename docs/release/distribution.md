@@ -9,10 +9,12 @@ selects the update authority.
 | `standard` | Windows NSIS, macOS packages, Linux x64 AppImage (Experimental) | GitHub Release, Cloudflare R2, and unfour.dev | Unfour updater at `https://releases.unfour.dev/stable/latest.json` |
 | `microsoft-store` | Windows x64 MSIX | Manual Partner Center upload | Microsoft Store |
 
-There is no Pro application edition and no Website package kind. Account,
-entitlement, cloud sync, desktop, command bus, and `unfour-mcp` are shared by
-both distributions. A paid account plan can still be called Pro; that is an
-entitlement name, not a second client or repository boundary.
+There is no second application or repository for Pro, and no Website package
+kind. Account, entitlement, cloud sync, desktop, command bus, and `unfour-mcp`
+are shared by both distributions. A paid account plan can still be called Pro;
+that is an entitlement name, not a second client or repository boundary.
+`standard` and `microsoft-store` describe distribution types, not Free or Pro
+subscription tiers.
 
 ## Delivery stages
 

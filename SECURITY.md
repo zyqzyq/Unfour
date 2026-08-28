@@ -6,11 +6,11 @@ passwords, and API tokens — so we take security reports seriously.
 ## Supported Versions
 
 Security fixes are applied to the current latest `0.x` release, which is the
-published `v0.8.0`. There is no long-term support branch yet.
+published `v0.9.0`. There is no long-term support branch yet.
 
 | Version | Supported |
 | ------- | --------- |
-| latest `0.x` (`v0.8.0`) | ✅ |
+| latest `0.x` (`v0.9.0`) | ✅ |
 | older | ❌ |
 
 ## Reporting a Vulnerability

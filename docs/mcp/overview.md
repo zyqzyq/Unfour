@@ -174,7 +174,7 @@ workspace-scoped data.
 
 ## Current Non-Goals
 
-The current Community MCP surface does not:
+The current Unfour MCP surface does not:
 
 - accept ad-hoc database connection strings;
 - open interactive SSH sessions;

@@ -97,7 +97,7 @@ current verification matrix.
 Delivered areas:
 
 - SSH and Database connection snapshots, revisioned mutations, tombstones, and
-  external apply for optional edition sync foundations;
+  external apply for optional Cloud Sync foundations;
 - shared connection domain contracts and command-bus transaction integration;
 - device-local connection saves that do not create cloud mutations when shared
   connection fields are unchanged, while preserving local activity recording.
@@ -106,11 +106,11 @@ The connection domain work is a local command-bus foundation and does not by
 itself provide a hosted sync service. Release claims remain limited by the
 current verification matrix.
 
-## v0.8.0 (Current published release)
+## v0.8.0 (Previous published release)
 
-Current status:
+Historical status:
 
-- Published Community release / Preview `v0.8.0`;
+- Published Unfour release `v0.8.0`;
 - automated, installer, platform, and live-service verification recorded in
   the active release matrix;
 - continued platform hardening without expanding the current package or
@@ -129,9 +129,9 @@ Implemented areas:
 
 - GitHub browser sign-in with PKCE, deep-link completion, OS-keychain desktop
   sessions, account entitlements, and billing destinations;
-- Pro-gated, local-first Cloud Sync for workspaces, API trees, variables,
-  connections, and SSH tasks, including retries, conflict resolution, remote
-  workspace download, and recovery;
+- local-first Cloud Sync unlocked by an active Pro subscription for workspaces,
+  API trees, variables, connections, and SSH tasks, including retries, conflict
+  resolution, remote workspace download, and recovery;
 - one unified desktop/MCP runtime with shared storage, command-bus setup,
   account context, and an ephemeral registry mode for CI and smoke checks;
 - one-click Codex and Cursor MCP configuration from Settings;
@@ -144,8 +144,9 @@ Implemented areas:
 Current status:
 
 - source version is `0.9.0`; the last published tag remains `v0.8.0`;
-- current automated checks pass as recorded in
-  `docs/testing/release-verification.md`; and
+- historical automated evidence remains recorded in
+  `docs/testing/release-verification.md`, with final RC verification pending;
+  and
 - candidate installer, OS trust, live account/billing, and multi-device Cloud
   Sync checks remain subject to manual verification before publication.
 

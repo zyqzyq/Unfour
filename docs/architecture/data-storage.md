@@ -65,11 +65,11 @@ Under product root `<root>`:
 Release identity and local data isolation are separate axes:
 
 - `UNFOUR_RELEASE_CHANNEL` is a build-time input and accepts only `test` or
-  `stable`. It controls Community release metadata and supplies the default
+  `stable`. It controls Unfour release metadata and supplies the default
   storage profile for that compiled artifact. It never accepts `dev`.
 - `UNFOUR_STORAGE_PROFILE` is a runtime local-data override and accepts only
-  `dev`, `test`, or `stable`. It does not change edition, keychain namespace,
-  package identity, or any service address.
+  `dev`, `test`, or `stable`. It does not change the product, distribution
+  type, keychain namespace, package identity, or any service address.
 - `UNFOUR_DATA_DIR` is the highest-priority complete product-tree override and
   must be absolute.
 
@@ -116,7 +116,7 @@ Storage profiles isolate the local product data tree only. They do **not**
 change:
 
 - OS keychain / `SECRET_STORE_NAMESPACE` (service name stays `unfour`);
-- edition or package identity;
+- product, distribution type, or package identity;
 - service or updater endpoints.
 
 Runtime diagnostics are owned by `crates/unfour-diag`, not by

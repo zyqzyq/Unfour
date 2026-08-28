@@ -1,12 +1,22 @@
 # v0.9.0 Release Verification
 
-This matrix applies to the `v0.9.0` release candidate at source revision
-`74c7270`, immediately after the published `v0.8.0`. It covers the unified
-desktop/MCP runtime, account and Cloud Sync integration, and Standard/Store
-distribution pipeline. `PASS` means executed on the recorded commit;
+This document tracks release readiness for `v0.9.0`. Final release verification
+must be run against the exact commit SHA that will receive the `v0.9.0` tag.
+
+The evidence currently recorded below was collected at the earlier source
+revision `74c7270`, before later commits landed on `main`. Those results remain
+useful historical evidence, but they do not certify the final release commit.
+The final record is therefore `PENDING FINAL RC VERIFICATION` until the checks
+are rerun against that exact SHA. `PASS` means executed on the evidence commit;
 `NOT VERIFIED` is intentionally not inferred from builds or unit tests.
-`NOT CLEAN` records a working-tree change that must be reviewed before creating
-the release tag.
+
+## Final RC status
+
+- Status: `PENDING FINAL RC VERIFICATION`
+- Exact commit SHA for the `v0.9.0` tag: `NOT RECORDED`
+- Final working tree: `NOT VERIFIED` (the release commit must be clean)
+- Final automated, installer, platform, live-service, and multi-device results:
+  `NOT VERIFIED` until rerun on the exact release-candidate commit
 
 ## Verification layers
 
@@ -31,12 +41,15 @@ behavior, updater behavior, OS signing/notarization trust, and architecture
 must still be recorded from its downloaded artifacts. The RC workflow does not
 write a tag, GitHub Release, R2 object, `stable/latest.json`, or Store state.
 
-## Automated evidence
+## Previously recorded automated evidence (historical)
 
-| Area | Command | Current result |
+The PASS values in this section are retained from the `74c7270` run. They must
+not be copied into the final RC record without rerunning the check on the exact
+commit selected for the tag.
+
+| Area | Command | Historical result at `74c7270` |
 | --- | --- | --- |
-| Working tree baseline | `git status --short` before edits | NOT CLEAN (pre-existing user change in `apps/desktop/src-tauri/Cargo.toml`; release commit must be clean) |
-| Patch hygiene | `git diff --check` | PASS (current documentation diff) |
+| Patch hygiene | `git diff --check` | PASS (historical documentation diff) |
 | Version identity | `node scripts/sync-version.mjs --check` | PASS (`0.9.0`) |
 | Release/distribution/RC contracts | `pnpm run test:release-env` | PASS (41 tests; shared signed build core, zero-publication RC policy, Store policy, and Linux AppImage contract covered) |
 | Historical migration integrity | `node scripts/check-migrations.mjs` | PASS (18 files) |
@@ -62,7 +75,10 @@ still be run before changing repository visibility if Git history from another
 repository is ever imported. This merge copies reviewed source snapshots and
 does not import Unfour-pro Git history.
 
-## Feature and migration matrix
+## Previously recorded feature and migration evidence (historical)
+
+These results are also tied to the earlier evidence run and are not final RC
+results.
 
 | Gate | Required behavior | Result |
 | --- | --- | --- |
@@ -92,7 +108,14 @@ pnpm run test:rust
 pnpm run test:e2e
 ```
 
+## Final verification procedure
+
+Run the automated commands and manual gates against the exact reviewed commit
+that is intended to receive the `v0.9.0` tag. Then replace the pending status,
+the unrecorded SHA, and the historical-only results above with the actual SHA
+and actual results. Keep any check that was not run as `NOT VERIFIED`.
+
 Manual Store, updater, real-service, signing, and multi-device evidence must be
-attached to the actual new version/tag candidate. The existing `v0.8.0` tag
-predates the unified release implementation and cannot be reused; create and
-verify a new `v0.9.0` tag only after the remaining gates pass.
+attached to that exact version/tag candidate. The existing `v0.8.0` tag predates
+the unified release implementation and cannot be reused; create and verify a
+new `v0.9.0` tag only after the remaining gates pass.

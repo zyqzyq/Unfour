@@ -14,7 +14,7 @@ Unfour opens into a single workspace surface:
 
 ## Current Capabilities
 
-The current published release is `v0.8.0`:
+The current published release is `v0.9.0`:
 
 - The workspace shell is usable.
 - API debugging supports request editing, Send, response viewing, history,
@@ -24,13 +24,35 @@ The current published release is `v0.8.0`:
   same command bus and the same saved API, SSH, and database connections, so
   Codex and Cursor can reproduce issues, inspect logs and database state, and
   make fixes alongside the user.
-- The Community edition is free and licensed under Apache-2.0. Cloud Sync is a
-  Pro capability.
+- Unfour's core desktop features are free and open source under Apache-2.0. An
+  active Pro subscription unlocks Cloud Sync in the same application.
 - SQLite database workflows are usable.
 - PostgreSQL and MySQL/MariaDB database workflows are experimental and should be
   verified against your own database before relying on them.
 - SSH Terminal workflows are experimental until the live SSH verification gate
   is completed.
+
+## Account and Cloud Sync
+
+Unfour is one application and one product. Cloud Sync is available in that same
+application when the signed-in account has an active Pro entitlement for Cloud
+Sync; there is no separate client for Pro.
+
+1. Open `Settings → Account` and choose `Sign in`.
+2. Complete the GitHub sign-in in your browser. After the
+   `unfour://auth/callback` link returns to Unfour, the account status and plan
+   are refreshed.
+3. Open `Settings → Cloud Sync`. Cloud Sync is available only when the account
+   has the required active entitlement. If it is unavailable, refresh the
+   account status or use the account and billing action in `Settings → Account`.
+4. Enable Cloud Sync for a workspace from its workspace actions, then review
+   sync status in `Settings → Cloud Sync`.
+
+Cloud Sync synchronizes the supported non-secret workspace data shown in the
+app, including workspace settings, connection definitions, environments,
+non-secret variables, API collections/folders/requests, and SSH tasks. Secrets,
+SSH credentials and local key paths, database credentials and local file paths,
+and history/runtime results remain local to each device.
 
 Troubleshooting is a core product loop. Unfour does not include an automatic
 troubleshooting playbook: the user and Codex or Cursor work through the steps

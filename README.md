@@ -16,14 +16,14 @@
 </div>
 
 > [!WARNING]
-> `v0.8.0` is the current published Community release / Preview. Windows NSIS
+> `v0.9.0` is the current published Unfour release. Windows NSIS
 > installers are unsigned and may trigger SmartScreen or other operating-system
 > security warnings. Use `SHA256SUMS.txt` from the GitHub Release to verify
 > downloaded files.
 
 ## Download
 
-Download the published [`v0.8.0` release](https://github.com/zyqzyq/Unfour/releases/tag/v0.8.0)
+Download the published [`v0.9.0` release](https://github.com/zyqzyq/Unfour/releases/tag/v0.9.0)
 from GitHub Releases.
 
 - Windows is the primary distribution path: NSIS `.exe` installer. It is
@@ -48,6 +48,11 @@ same troubleshooting loop. Troubleshooting is Unfour's core product loop.
 Unfour does not ship an automatic troubleshooting playbook: you and Codex or
 Cursor work through the steps together, using ready-made diagnostic tools
 rather than a workflow runner.
+
+Unfour is one application and one product. Its core desktop features are free
+and open source under Apache-2.0. An active Pro subscription unlocks Cloud Sync
+in the same application. Pro is an entitlement within Unfour, not a separate
+client, package, repository, or release.
 
 The app is built with Tauri 2, React, TypeScript, and Rust. The frontend owns
 the workbench UI, while security-sensitive execution such as HTTP, SSH,
@@ -162,7 +167,7 @@ map.
 
 ## Release Status
 
-`v0.8.0` is the current published Community release / Preview. Release
+`v0.9.0` is the current published Unfour release. Release
 verification evidence is documented in:
 
 - `docs/testing/release-verification.md`

@@ -12,8 +12,9 @@ effective order is:
 4. Future Cloud Sync migrations.
 
 The two sqlx migrators continue sharing `_sqlx_migrations` and both ignore
-missing records. This preserves Community and Pro databases that have already
-recorded only one side of the historical chain while still exposing one
-ordered migration entry point. A future single-migrator consolidation is safe
-only if it embeds the same historical files and checksums without renaming,
+missing records. This preserves historical Community and Pro databases that
+have already recorded only one side of the historical chain while still
+exposing one ordered migration entry point. A future single-migrator
+consolidation is safe only if it embeds the same historical files and checksums
+without renaming,
 deleting, or rewriting them.
