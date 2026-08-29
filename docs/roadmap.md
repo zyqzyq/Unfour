@@ -123,9 +123,9 @@ Historical status:
 
 Release claims remain limited by the current verification matrix.
 
-## v0.9.0 (Current release candidate)
+## v0.9.0 (Current published release)
 
-Implemented areas:
+Implemented in v0.9.0:
 
 - GitHub browser sign-in with PKCE, deep-link completion, OS-keychain desktop
   sessions, account entitlements, and billing destinations;
@@ -143,12 +143,15 @@ Implemented areas:
 
 Current status:
 
-- source version is `0.9.0`; the last published tag remains `v0.8.0`;
-- historical automated evidence remains recorded in
-  `docs/testing/release-verification.md`, with final RC verification pending;
-  and
-- candidate installer, OS trust, live account/billing, and multi-device Cloud
-  Sync checks remain subject to manual verification before publication.
+- `v0.9.0` is published from commit
+  `1dc7c1cc6430e546689fde5206599a31f36b17a1`;
+- PostgreSQL and MySQL are implemented, verified against real environments, and
+  released; compatible MariaDB servers use the MySQL driver path, without a
+  separate v0.9.0 MariaDB verification claim;
+- SSH is implemented, release-level verified against a real server, and
+  released; and
+- final publication evidence and the remaining platform-specific limits are
+  recorded in `docs/testing/release-verification.md`.
 
 Release claims remain limited by the current verification matrix.
 
@@ -156,8 +159,6 @@ Release claims remain limited by the current verification matrix.
 
 Likely follow-up areas:
 
-- broader live SSH verification and platform hardening;
-- database driver smoke coverage across supported engines;
 - signed and notarized distribution;
 - screenshots and fuller user documentation;
 - query cancellation and richer database result interactions;

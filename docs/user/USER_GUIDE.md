@@ -14,7 +14,7 @@ Unfour opens into a single workspace surface:
 
 ## Current Capabilities
 
-This guide documents the current v0.9.0 source/release candidate capabilities:
+This guide documents the current v0.9.0 release capabilities:
 
 - The workspace shell is usable.
 - API debugging supports request editing, Send, response viewing, history,
@@ -26,11 +26,12 @@ This guide documents the current v0.9.0 source/release candidate capabilities:
   make fixes alongside the user.
 - Unfour's core desktop features are free and open source under Apache-2.0. An
   active Pro subscription unlocks Cloud Sync in the same application.
-- SQLite database workflows are usable.
-- PostgreSQL and MySQL/MariaDB database workflows are experimental and should be
-  verified against your own database before relying on them.
-- SSH Terminal workflows are experimental until the live SSH verification gate
-  is completed.
+- SQLite, PostgreSQL, and MySQL database workflows are verified.
+- Compatible MariaDB servers use the MySQL driver path where protocol and SQL
+  behavior are compatible; independent MariaDB verification is not part of the
+  current v0.9.0 release record.
+- SSH Terminal workflows have completed release-level verification against a
+  real SSH server.
 
 ## Account and Cloud Sync
 
@@ -108,15 +109,15 @@ Saved requests are stored inside the active workspace.
 
 ## SSH Terminal
 
-The SSH Terminal is experimental. It supports saved SSH connections, credential
-references, terminal sessions, PTY input/output, resize, search, redacted log
-export, clipboard context actions, host-key trust, reconnect, SFTP remote files,
-and serial command/upload/download tasks in the current implementation.
+The SSH Terminal supports saved SSH connections, credential references,
+terminal sessions, PTY input/output, resize, search, redacted log export,
+clipboard context actions, host-key trust, reconnect, SFTP remote files, and
+serial command/upload/download tasks. These workflows have completed
+release-level verification against a real SSH server.
 
-Use non-critical hosts until the live SSH verification gate is completed. The
-full password/private-key, host-key, history restore, keepalive, and reconnect
-journey still needs release-level manual verification against a reachable SSH
-server.
+Verify host-key fingerprints before trusting a new server. Review destructive
+commands before running them, and use disposable data when testing SFTP or SSH
+task workflows.
 
 ## Database
 
@@ -133,10 +134,11 @@ The database screen can save workspace-scoped database connections.
 9. Click `Run`.
 10. Review result rows, affected rows, and duration.
 
-PostgreSQL and MySQL/MariaDB workflows are experimental. You can create
-connections using credential references and use the same connect, schema,
-query, and table-preview flow, but live behavior depends on your database
-environment. Re-verify before using them for important work.
+SQLite, PostgreSQL, and MySQL workflows are verified for the v0.9.0 release.
+Compatible MariaDB servers use the MySQL driver path where protocol and SQL
+behavior are compatible. This release record does not claim a separate
+MariaDB-specific verification matrix. Use credential references for database
+passwords, and review mutation SQL before confirming execution.
 
 ## Code Architecture Overview
 

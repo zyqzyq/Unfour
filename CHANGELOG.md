@@ -6,13 +6,11 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
-## [0.9.0] - 2026-08-28
+## [0.9.0] - 2026-08-29
 
-Release candidate prepared after `v0.8.0`, adding account-gated Cloud Sync,
-unified desktop and MCP runtimes, and signed in-app updates with multi-channel
-distribution. An active Pro subscription unlocks Cloud Sync in the same Unfour
-application. The `v0.9.0` tag and public release remain subject to the active
-release verification matrix.
+Released after `v0.8.0`, adding account-gated Cloud Sync, unified desktop and
+MCP runtimes, and signed in-app updates with multi-channel distribution. An
+active Pro subscription unlocks Cloud Sync in the same Unfour application.
 
 ### Added
 

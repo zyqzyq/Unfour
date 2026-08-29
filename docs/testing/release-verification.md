@@ -1,22 +1,45 @@
-# v0.9.0 Release Verification
+# v0.9.0 Final Release Verification Record
 
-This document tracks release readiness for `v0.9.0`. Final release verification
-must be run against the exact commit SHA that will receive the `v0.9.0` tag.
+This document records the final status of the published `v0.9.0` release. It
+distinguishes implemented behavior from real-environment verification and
+formal release publication. A published build does not turn an unrecorded
+manual, platform, signing, updater, or live-service check into `PASS`.
 
-The evidence currently recorded below was collected at the earlier source
-revision `74c7270`, before later commits landed on `main`. Those results remain
-useful historical evidence, but they do not certify the final release commit.
-The final record is therefore `PENDING FINAL RC VERIFICATION` until the checks
-are rerun against that exact SHA. `PASS` means executed on the evidence commit;
-`NOT VERIFIED` is intentionally not inferred from builds or unit tests.
+## Status terms
 
-## Final RC status
+```text
+Implemented
+  = the feature exists in the product
 
-- Status: `PENDING FINAL RC VERIFICATION`
-- Exact commit SHA for the `v0.9.0` tag: `NOT RECORDED`
-- Final working tree: `NOT VERIFIED` (the release commit must be clean)
-- Final automated, installer, platform, live-service, and multi-device results:
-  `NOT VERIFIED` until rerun on the exact release-candidate commit
+Verified
+  = the behavior was exercised against the stated real environment
+
+Released
+  = the feature is included in the formally published v0.9.0 release
+```
+
+## Final release status
+
+- Status: `RELEASED`
+- Exact `v0.9.0` tag commit SHA:
+  `1dc7c1cc6430e546689fde5206599a31f36b17a1`
+- Tag resolution: `VERIFIED` through the local Git tag and GitHub tag ref
+- CI workflow on the tagged commit: `PASS`
+- Standard Release Candidate workflow on the tagged commit: `PASS`
+- Standard Release workflow on the tagged commit: `PASS`
+- GitHub Release: `VERIFIED` as published on 2026-08-29, non-draft and
+  non-prerelease
+- Published GitHub asset inventory: `VERIFIED` (12 uploaded assets, including
+  platform packages, updater signatures, `SHA256SUMS.txt`, and `latest.json`)
+- Release-operator working-tree cleanliness: `NOT RECORDED`; this cannot be
+  inferred from the immutable tag or successful workflows
+
+Traceable publication evidence:
+
+- [CI run 33183827600](https://github.com/zyqzyq/Unfour/actions/runs/33183827600)
+- [Standard Release Candidate run 33233154945](https://github.com/zyqzyq/Unfour/actions/runs/33233154945)
+- [Standard Release run 33233946389](https://github.com/zyqzyq/Unfour/actions/runs/33233946389)
+- [Unfour v0.9.0 GitHub Release](https://github.com/zyqzyq/Unfour/releases/tag/v0.9.0)
 
 ## Verification layers
 
@@ -36,16 +59,31 @@ Microsoft Store
   = independent manual Windows x64 MSIX build, validation, and submission
 ```
 
-An RC workflow success is build evidence, not publication evidence. Installed
-behavior, updater behavior, OS signing/notarization trust, and architecture
-must still be recorded from its downloaded artifacts. The RC workflow does not
-write a tag, GitHub Release, R2 object, `stable/latest.json`, or Store state.
+An RC workflow success is build evidence, not publication evidence. For
+`v0.9.0`, publication is separately evidenced by the successful Standard
+Release workflow and the published GitHub Release. Installed behavior, updater
+behavior, and OS signing/notarization trust still require their own evidence.
 
-## Previously recorded automated evidence (historical)
+## Final feature status
 
-The PASS values in this section are retained from the `74c7270` run. They must
-not be copied into the final RC record without rerunning the check on the exact
-commit selected for the tag.
+| Capability | Implemented | Verified | Released | Final v0.9.0 record |
+| --- | --- | --- | --- | --- |
+| SQLite | Yes | Yes | Yes | Verified for v0.9.0 |
+| PostgreSQL | Yes | Yes | Yes | Verified against a real PostgreSQL environment |
+| MySQL | Yes | Yes | Yes | Verified against a real MySQL environment |
+| MariaDB | Through the MySQL compatibility path | Not independently recorded | Compatibility path included | Do not claim a separate MariaDB verification matrix for v0.9.0 |
+| SSH Terminal | Yes | Yes | Yes | Release-level verification completed against a real SSH server |
+
+Compatible MariaDB servers use the MySQL driver path where protocol and SQL
+behavior are compatible. That implementation and release status is not the
+same as an independent MariaDB verification claim.
+
+## Earlier automated evidence (historical)
+
+The PASS values in this section are retained from the earlier `74c7270` run.
+They are historical supporting evidence, not claims that these commands were
+rerun locally while preparing this documentation update. The separate workflow
+results above are the final tagged-commit automation record.
 
 | Area | Command | Historical result at `74c7270` |
 | --- | --- | --- |
@@ -65,8 +103,8 @@ commit selected for the tag.
 | Rust SSH feature check | `cargo check -p unfour --features ssh-native` | PASS |
 | Rust workspace tests | `cargo test --workspace` | PASS (715 passed, 0 failed; one OS keychain smoke intentionally ignored) |
 | Desktop account/update tests | `cargo test --workspace` | PASS (17 desktop tests; Store updater rejection covered) |
-| Windows/macOS/Linux RC bundles | manual `Standard Release Candidate` run on the recorded commit | NOT VERIFIED |
-| Windows Standard bundle/update | signed CI build and installed upgrade | NOT VERIFIED |
+| Windows/macOS/Linux RC build | `Standard Release Candidate` workflow on tagged commit | PASS |
+| Windows Standard installed upgrade | install and update from the previous Stable release | NOT VERIFIED |
 | Store MSIX build/validate/install | manual Windows candidate | NOT VERIFIED |
 
 The local machine does not have `gitleaks`; the repository audit therefore
@@ -75,21 +113,29 @@ still be run before changing repository visibility if Git history from another
 repository is ever imported. This merge copies reviewed source snapshots and
 does not import Unfour-pro Git history.
 
-## Previously recorded feature and migration evidence (historical)
+## Remaining verification limits
 
-These results are also tied to the earlier evidence run and are not final RC
-results.
+The completed PostgreSQL, MySQL, and SSH checks are recorded in the final
+feature table above. The following unrelated items retain their actual status:
 
 | Gate | Required behavior | Result |
 | --- | --- | --- |
-| Local | API, real SSH, SQLite/PostgreSQL/MySQL, desktop MCP | NOT VERIFIED as a complete live matrix |
 | Account | GitHub login, closed/running deep link, sign out | Automated account tests PASS; installed/live callback NOT VERIFIED |
 | Cloud | entitlement, push/pull, conflicts, snapshots, second device | Automated domain tests PASS; live multi-device NOT VERIFIED |
-| Standard | RC Windows/macOS bundles, Linux x64 AppImage + signature, identical formal GitHub/R2 hash, signed updater | Shared RC/Release contracts PASS; real candidate and published artifact NOT VERIFIED |
+| Windows Standard | unsigned NSIS install, launch, previous-version update, SmartScreen behavior | NOT VERIFIED as an installed v0.9.0 journey |
+| macOS signing and notarization | Apple signing, notarization, and Gatekeeper trust | NOT APPLICABLE to the unsigned and unnotarized v0.9.0 packages; trust behavior remains NOT VERIFIED |
+| Linux | x64 AppImage launch, desktop integration, and updater behavior | NOT VERIFIED; Linux remains Experimental |
+| Standard updater | installed update and signature-rejection behavior | NOT VERIFIED |
+| Published Standard artifacts | tagged workflow publication and GitHub asset inventory | VERIFIED; installed behavior is not inferred |
 | Store | MSIX, validator, callback, MCP alias, no internal updater | Static contracts PASS; installed package NOT VERIFIED |
 | Migration | old Community DB, old Pro DB, clean DB | PASS (9 storage migration tests, including exact old-Pro data preservation) |
 
-## Commands for the final local rerun
+Windows code signing, macOS signing/notarization, Microsoft Store submission,
+multi-device Cloud Sync, Linux runtime behavior, and installed updater behavior
+are deliberately not promoted to verified status by this release-status
+cleanup.
+
+## Commands for future release regression checks
 
 ```powershell
 $env:CI = "true"
@@ -108,14 +154,7 @@ pnpm run test:rust
 pnpm run test:e2e
 ```
 
-## Final verification procedure
-
-Run the automated commands and manual gates against the exact reviewed commit
-that is intended to receive the `v0.9.0` tag. Then replace the pending status,
-the unrecorded SHA, and the historical-only results above with the actual SHA
-and actual results. Keep any check that was not run as `NOT VERIFIED`.
-
-Manual Store, updater, real-service, signing, and multi-device evidence must be
-attached to that exact version/tag candidate. The existing `v0.8.0` tag predates
-the unified release implementation and cannot be reused; create and verify a
-new `v0.9.0` tag only after the remaining gates pass.
+Run these commands when a future change needs fresh regression evidence. Keep
+manual Store, updater, platform trust, signing, and multi-device checks as
+`NOT VERIFIED` until evidence is recorded for the applicable release and
+environment.
