@@ -3,6 +3,47 @@
 These manual cases supplement automated tests for release candidates. Record
 `PASS`, `FAIL`, `NOT RUN`, or `NOT VERIFIED` for each relevant platform.
 
+## v0.9.0 recorded manual status
+
+These results come from completed real-environment testing and were not inferred
+from automation:
+
+| Area | v0.9.0 status |
+| --- | --- |
+| Windows NSIS install, installed launch, and uninstall | VERIFIED |
+| Windows previous-Stable-to-new-Stable updater journey | VERIFIED |
+| GitHub browser OAuth, Desktop login, `unfour://auth/callback`, and basic account state | VERIFIED |
+| Creem Test checkout, webhook, entitlement, and billing portal | VERIFIED |
+| PostgreSQL and MySQL | VERIFIED |
+| SSH Terminal, SFTP, and SSH Tasks | VERIFIED |
+| macOS arm64 install and run | VERIFIED |
+| macOS x64 install and run | VERIFIED |
+| Real Codex and Cursor MCP clients: start, `initialize`, `tools/list`, `tools/call`, and real Unfour data/tools | VERIFIED |
+
+Historical live multi-device Cloud Sync verification exists, but the v0.9.0
+unified-client multi-device regression remains `NOT VERIFIED`. Single-device
+v0.9.0 coverage can be recorded as part of that same regression rather than as
+a separate large verification task.
+
+Creem Production is not failed and does not require a repeat of the verified
+Test flow. Record Production only after the first successful real checkout ->
+production webhook -> active entitlement -> Desktop account refresh -> Cloud
+Sync entitlement -> billing portal journey.
+
+## Account, Billing, And Cloud Sync
+
+- Complete GitHub browser sign-in and confirm the real Desktop receives the
+  `unfour://auth/callback` and refreshes its basic signed-in account state.
+- In Creem Test, complete checkout, receive the webhook, confirm the entitlement,
+  and open the billing portal.
+- For the first real Creem Production transaction, record the complete checkout,
+  webhook, entitlement, Desktop refresh, Cloud Sync entitlement, and billing
+  portal chain. Until that first flow occurs, keep Production `NOT VERIFIED`.
+- On the v0.9.0 unified client, exercise Cloud Sync on multiple real devices,
+  including push/pull, conflicts, snapshots, and second-device behavior. Record
+  single-device coverage during this regression. Until then, keep the v0.9.0
+  regression `NOT VERIFIED` while retaining the historical live result.
+
 ## Workspace
 
 - Launch the app with no existing local database and confirm a default workspace
@@ -88,10 +129,17 @@ Use disposable local or test databases only.
 - Enter table editing after the initial preview loads and confirm both edit and
   delete row actions remain visible.
 - Copy results as TSV and export CSV.
-- Repeat applicable cases for PostgreSQL and MySQL/MariaDB when those drivers
-  are part of the release claim.
+- Repeat applicable cases for PostgreSQL and MySQL when those drivers are part
+  of the release claim. If a compatible MariaDB server is exercised through the
+  MySQL driver, record it as compatibility-path evidence rather than a separate
+  MariaDB verification matrix.
 
 ## MCP
+
+The real Codex and Cursor client journeys are `VERIFIED` for v0.9.0 and cover
+server start, `initialize`, `tools/list`, `tools/call`, and access to real
+Unfour data/tools. The basic protocol smoke below remains a reusable diagnostic
+and future-regression procedure, not a separate outstanding v0.9.0 item.
 
 - Build `unfour-mcp`.
 - Run the initialize and tools/list smoke check from `docs/mcp/codex-setup.md`.
@@ -106,10 +154,22 @@ Use disposable local or test databases only.
 - Attempt a forbidden SSH command shape and confirm it is rejected.
 - Inspect returned data for secret masking.
 
+The following production-policy journey remains `NOT VERIFIED` for v0.9.0:
+
+- In a prod workspace, confirm permitted read-only MCP operations work.
+- Confirm forbidden write operations cannot execute directly.
+- Confirm applicable high-risk operations return `CONFIRMATION_REQUIRED`.
+- Confirm `confirmation_text` is bound to the exact payload being authorized.
+- Retry after confirmation and confirm execution follows the current policy.
+
 ## Installer And Startup
 
 Download the four `release-candidate-*` Actions artifacts from the exact
 reviewed commit. For each target platform:
+
+Recorded v0.9.0 scope: Windows install/launch/uninstall and real Stable upgrade
+are `VERIFIED`; macOS arm64 and x64 install/run are `VERIFIED`. Linux AppImage
+runtime behavior and real Microsoft Store/MSIX journeys remain `NOT VERIFIED`.
 
 - Install from the release artifact.
 - Launch the installed app.
@@ -125,6 +185,11 @@ reviewed commit. For each target platform:
 - Uninstall and confirm the app is removed cleanly.
 
 ## Signing And Trust Prompts
+
+Apple signing and notarization are not enabled for v0.9.0 and therefore are not
+failed tests. Without a separately recorded Gatekeeper warning/trust result,
+that scoped item remains `NOT VERIFIED`; this does not downgrade the verified
+macOS arm64/x64 install and run results.
 
 - Record whether the artifact is signed.
 - Record the exact OS warning shown for unsigned or unnotarized artifacts.

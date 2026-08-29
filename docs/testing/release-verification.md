@@ -62,7 +62,8 @@ Microsoft Store
 An RC workflow success is build evidence, not publication evidence. For
 `v0.9.0`, publication is separately evidenced by the successful Standard
 Release workflow and the published GitHub Release. Installed behavior, updater
-behavior, and OS signing/notarization trust still require their own evidence.
+behavior, and OS signing/notarization trust require their own evidence; the
+real-environment evidence actually recorded for v0.9.0 is listed below.
 
 ## Final feature status
 
@@ -77,6 +78,29 @@ behavior, and OS signing/notarization trust still require their own evidence.
 Compatible MariaDB servers use the MySQL driver path where protocol and SQL
 behavior are compatible. That implementation and release status is not the
 same as an independent MariaDB verification claim.
+
+## Recorded live and manual verification
+
+The release operator supplied the following real-environment results. They are
+recorded here without rerunning the completed manual journeys, and are not
+inferred from automated tests or artifact generation.
+
+| Area | Real behavior exercised | v0.9.0 result |
+| --- | --- | --- |
+| Windows Standard | NSIS install, installed launch, and uninstall | VERIFIED |
+| Windows Stable updater | A real installation of the previous Stable release upgraded to the new Stable release | VERIFIED |
+| Account and GitHub OAuth | Browser GitHub sign-in, Desktop GitHub login, `unfour://auth/callback`, and basic signed-in account state | VERIFIED |
+| Creem Test environment | Checkout, webhook delivery, entitlement activation, and billing portal | VERIFIED |
+| Database | PostgreSQL and MySQL against real database environments | VERIFIED |
+| SSH | SSH Terminal, SFTP, and SSH Tasks against a real SSH environment | VERIFIED |
+| macOS arm64 | Install and run on the target architecture | VERIFIED |
+| macOS x64 | Install and run on the target architecture | VERIFIED |
+| MCP real clients | Codex and Cursor each started Unfour MCP, completed `initialize` and `tools/list`, called tools, and accessed real Unfour data/tools | VERIFIED |
+
+The real Codex and Cursor client journeys cover more than the standalone MCP
+protocol smoke. The basic manual smoke remains useful as a future diagnostic or
+regression procedure, but it is not a separate outstanding v0.9.0 verification
+item.
 
 ## Earlier automated evidence (historical)
 
@@ -104,8 +128,6 @@ results above are the final tagged-commit automation record.
 | Rust workspace tests | `cargo test --workspace` | PASS (715 passed, 0 failed; one OS keychain smoke intentionally ignored) |
 | Desktop account/update tests | `cargo test --workspace` | PASS (17 desktop tests; Store updater rejection covered) |
 | Windows/macOS/Linux RC build | `Standard Release Candidate` workflow on tagged commit | PASS |
-| Windows Standard installed upgrade | install and update from the previous Stable release | NOT VERIFIED |
-| Store MSIX build/validate/install | manual Windows candidate | NOT VERIFIED |
 
 The local machine does not have `gitleaks`; the repository audit therefore
 uses the tracked deterministic scanner. A separate full-history scanner should
@@ -115,25 +137,27 @@ does not import Unfour-pro Git history.
 
 ## Remaining verification limits
 
-The completed PostgreSQL, MySQL, and SSH checks are recorded in the final
-feature table above. The following unrelated items retain their actual status:
+These limits are scoped so that one unverified trust or policy variant does not
+erase a completed install, updater, account, platform, or MCP client journey.
 
 | Gate | Required behavior | Result |
 | --- | --- | --- |
-| Account | GitHub login, closed/running deep link, sign out | Automated account tests PASS; installed/live callback NOT VERIFIED |
-| Cloud | entitlement, push/pull, conflicts, snapshots, second device | Automated domain tests PASS; live multi-device NOT VERIFIED |
-| Windows Standard | unsigned NSIS install, launch, previous-version update, SmartScreen behavior | NOT VERIFIED as an installed v0.9.0 journey |
-| macOS signing and notarization | Apple signing, notarization, and Gatekeeper trust | NOT APPLICABLE to the unsigned and unnotarized v0.9.0 packages; trust behavior remains NOT VERIFIED |
+| Cloud Sync v0.9.0 unified client | Single-device behavior and a real multi-device push/pull, conflict, snapshot, and second-device regression | Historical live multi-device verification exists for an earlier version; the v0.9.0 unified-client regression remains NOT VERIFIED. Record single-device coverage with this regression rather than creating a separate large gate. |
+| Creem Production | First real production checkout -> webhook -> active entitlement -> Desktop account refresh -> Cloud Sync entitlement -> billing portal | NOT VERIFIED until the first successful real production flow is recorded; Creem Test is VERIFIED, and this is not a failure or a request to repeat Test validation. |
+| MCP production policy | Read-only operations in a prod workspace, blocked writes, `CONFIRMATION_REQUIRED`, `confirmation_text`/payload binding, and confirmed retry behavior | NOT VERIFIED in a real prod workspace |
+| Windows trust prompt | SmartScreen/certificate trust behavior for the unsigned NSIS package | NOT VERIFIED; Windows install, launch, uninstall, and Stable upgrade remain VERIFIED |
+| Standard updater rejection | Manual rejection of an invalid updater signature | NOT VERIFIED manually; automated desktop rejection coverage is PASS. The real previous-Stable-to-new-Stable success path is VERIFIED. |
+| macOS signing and notarization | Apple signing and notarization | NOT APPLICABLE because neither is enabled for v0.9.0; this is not a test failure |
+| macOS Gatekeeper trust | Exact warning/trust behavior for the unsigned and unnotarized packages | NOT VERIFIED; arm64 and x64 install/run remain VERIFIED |
 | Linux | x64 AppImage launch, desktop integration, and updater behavior | NOT VERIFIED; Linux remains Experimental |
-| Standard updater | installed update and signature-rejection behavior | NOT VERIFIED |
 | Published Standard artifacts | tagged workflow publication and GitHub asset inventory | VERIFIED; installed behavior is not inferred |
-| Store | MSIX, validator, callback, MCP alias, no internal updater | Static contracts PASS; installed package NOT VERIFIED |
+| Microsoft Store / MSIX | Real MSIX install, callback, MCP alias, Store servicing, Partner Center acceptance, and coexistence behavior | Static contract/build-policy tests PASS; real package and Store journeys remain NOT VERIFIED |
 | Migration | old Community DB, old Pro DB, clean DB | PASS (9 storage migration tests, including exact old-Pro data preservation) |
 
-Windows code signing, macOS signing/notarization, Microsoft Store submission,
-multi-device Cloud Sync, Linux runtime behavior, and installed updater behavior
-are deliberately not promoted to verified status by this release-status
-cleanup.
+MariaDB remains a MySQL compatibility-path claim rather than an independent
+verification matrix. Windows code signing is not claimed. Apple
+signing/notarization is not enabled and therefore is not described as a failed
+test.
 
 ## Commands for future release regression checks
 
@@ -155,6 +179,7 @@ pnpm run test:e2e
 ```
 
 Run these commands when a future change needs fresh regression evidence. Keep
-manual Store, updater, platform trust, signing, and multi-device checks as
-`NOT VERIFIED` until evidence is recorded for the applicable release and
-environment.
+the scoped manual Store/MSIX, updater-signature rejection, platform trust,
+Linux, v0.9.0 Cloud Sync multi-device regression, Creem Production, and MCP
+production-policy checks as `NOT VERIFIED` until evidence is recorded for the
+applicable release and environment.

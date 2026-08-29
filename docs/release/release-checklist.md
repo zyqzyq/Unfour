@@ -1,4 +1,33 @@
-# Final release checklist
+# v0.9.0 final release checklist
+
+## Recorded release outcomes
+
+This is the v0.9.0 outcome record, not an inference from CI or release assets:
+
+| Area | Recorded status |
+| --- | --- |
+| Windows NSIS install, launch, and uninstall | VERIFIED |
+| Windows previous-Stable-to-new-Stable updater journey | VERIFIED |
+| GitHub browser OAuth, Desktop login/callback, and basic account state | VERIFIED |
+| Creem Test checkout, webhook, entitlement, and billing portal | VERIFIED |
+| PostgreSQL and MySQL | VERIFIED |
+| SSH Terminal, SFTP, and SSH Tasks | VERIFIED |
+| macOS arm64 and x64 install/run | VERIFIED |
+| Real Codex and Cursor MCP client start, initialization, discovery, tool call, and real Unfour data/tool access | VERIFIED |
+| v0.9.0 unified-client Cloud Sync multi-device regression, with single-device coverage recorded in the same run | NOT VERIFIED; historical live multi-device verification exists |
+| Creem Production first real end-to-end transaction and entitlement flow | NOT VERIFIED; Test is VERIFIED and Production is not failed |
+| MCP prod read-only, blocked-write, confirmation binding, and confirmed-retry behavior | NOT VERIFIED |
+| Linux x64 AppImage launch, desktop integration, and updater | NOT VERIFIED; Experimental |
+| Real MSIX install, Store servicing, Partner Center, callback, and alias journey | NOT VERIFIED; static contract/build-policy tests exist |
+| macOS Gatekeeper warning/trust behavior | NOT VERIFIED; signing/notarization is not enabled, and arm64/x64 install/run stays VERIFIED |
+
+The completed real Codex and Cursor checks supersede a separate basic MCP
+manual-smoke release gate. Keep the protocol smoke procedure for diagnostics
+and future regression use.
+
+The sections below preserve the reusable release procedure. Their imperative
+steps are not additional v0.9.0 `PASS` claims; the table above and
+`docs/testing/release-verification.md` are the recorded outcome.
 
 ## Shared gate
 
@@ -56,8 +85,13 @@
 - `stable/latest.json` is uploaded only after immutable versioned files verify
   and the GitHub Release succeeds; its live version gate rejects numeric
   SemVer downgrades and permits equal-version reruns only after that check.
-- Install, launch, update from the previous Stable version, MCP sidecar
-  replacement, uninstall, and signature rejection are manually exercised.
+- Manually exercise install, launch, update from the previous Stable version,
+  MCP sidecar replacement, uninstall, and signature rejection.
+
+For v0.9.0, install, launch, previous-Stable update, and uninstall are
+`VERIFIED`. Manual updater signature rejection was not included in the recorded
+live journey; automated rejection coverage does not convert it to a manual
+`PASS`.
 
 ## Microsoft Store
 

@@ -16,7 +16,7 @@ active Pro subscription unlocks Cloud Sync in the same Unfour application.
 
 - **Account and billing** — Add GitHub browser sign-in with PKCE and
   `unfour://auth/callback`, OS-keychain desktop sessions, account and
-  entitlement state, and validated checkout/account-portal actions.
+  entitlement state, and checkout/account-portal actions.
 - **Cloud Sync** — Add local-first synchronization unlocked by an active Pro
   subscription for workspaces,
   API collections/folders/requests, environments and variables, SSH tasks, and
@@ -30,8 +30,8 @@ active Pro subscription unlocks Cloud Sync in the same Unfour application.
   Settings, including platform-aware sidecar/Store alias commands and safe
   preservation or backup of existing configuration.
 - **Signed in-app updates and Store distribution** — Add in-app updates backed
-  by signed updater artifacts for Standard builds and a separately validated
-  Windows x64 MSIX path managed by Microsoft Store.
+  by signed updater artifacts for Standard builds and a separately
+  contract-tested Windows x64 MSIX path managed by Microsoft Store.
 - **Release candidate automation** — Add a reusable Standard build workflow for
   Windows x64, macOS arm64/x64, and Linux x64 AppImage candidates, with
   canonical artifacts, signatures, release checksums, and contract coverage.
@@ -71,6 +71,22 @@ active Pro subscription unlocks Cloud Sync in the same Unfour application.
 - **Artifact trust and Store boundaries** — Keep updater private keys and R2
   credentials out of tracked files, require signed Standard updater artifacts,
   and prevent Store builds from registering or invoking the internal updater.
+
+### Verification notes
+
+- **Verified real-environment journeys** — Complete Windows install, launch,
+  uninstall, and previous-Stable-to-new-Stable update; macOS arm64/x64 install
+  and run; GitHub browser OAuth and Desktop callback/login; Creem Test checkout,
+  webhook, entitlement, and billing portal; PostgreSQL and MySQL; SSH Terminal,
+  SFTP, and SSH Tasks; and real Codex and Cursor MCP initialization, discovery,
+  tool calls, and Unfour data/tool access.
+- **Scoped follow-up verification** — Historical live multi-device Cloud Sync
+  evidence exists, but the v0.9.0 unified-client multi-device regression
+  remains `NOT VERIFIED` and will include single-device coverage. The first real
+  Creem Production end-to-end transaction, MCP prod policy/confirmation,
+  Linux AppImage runtime, real Microsoft Store/MSIX, and macOS Gatekeeper trust
+  journeys also remain `NOT VERIFIED` without reducing the completed platform
+  and Test-environment results.
 
 ## [0.8.0] - 2026-08-26
 

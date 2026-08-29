@@ -185,6 +185,21 @@ or published. Use the release `SHA256SUMS.txt` to verify downloaded artifacts,
 and do not claim a release check passes unless it was run successfully for the
 target platform or is backed by current repository evidence.
 
+Recorded v0.9.0 real-environment verification includes Windows install, launch,
+uninstall, and a previous-Stable-to-new-Stable update; macOS arm64/x64 install
+and run; GitHub browser OAuth and the Desktop callback/login; Creem Test
+checkout, webhook, entitlement, and billing portal; PostgreSQL and MySQL; SSH
+Terminal, SFTP, and SSH Tasks; and real Codex and Cursor MCP initialization,
+tool discovery, tool calls, and access to Unfour data/tools.
+
+Historical live multi-device Cloud Sync verification exists, but the v0.9.0
+unified-client multi-device regression remains `NOT VERIFIED` and will include
+single-device coverage. Creem Production will be recorded after the first real
+production transaction flow. MCP production-policy behavior, Linux AppImage
+runtime integration, real MSIX/Store servicing, and macOS Gatekeeper trust
+behavior also remain `NOT VERIFIED`; these limits do not reduce the verified
+platform install/run results above.
+
 ## Documentation
 
 - `AGENTS.md` - repository rules for coding agents.

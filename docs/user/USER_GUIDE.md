@@ -23,7 +23,9 @@ This guide documents the current v0.9.0 release capabilities:
 - Local MCP is available through the stdio `unfour-mcp` server. It uses the
   same command bus and the same saved API, SSH, and database connections, so
   Codex and Cursor can reproduce issues, inspect logs and database state, and
-  make fixes alongside the user.
+  make fixes alongside the user. Real v0.9.0 client checks completed in both
+  Codex and Cursor, including server start, initialization, tool discovery,
+  tool calls, and access to real Unfour data/tools.
 - Unfour's core desktop features are free and open source under Apache-2.0. An
   active Pro subscription unlocks Cloud Sync in the same application.
 - SQLite, PostgreSQL, and MySQL database workflows are verified.
@@ -49,11 +51,24 @@ Sync; there is no separate client for Pro.
 4. Enable Cloud Sync for a workspace from its workspace actions, then review
    sync status in `Settings → Cloud Sync`.
 
+The v0.9.0 GitHub browser sign-in, Desktop login,
+`unfour://auth/callback`, and basic account state have been verified in the real
+Desktop flow. Creem Test checkout, webhook, entitlement, and billing portal
+have also been verified. Creem Production will be recorded after the first
+successful real production transaction, webhook, entitlement, Desktop refresh,
+Cloud Sync entitlement, and billing-portal flow; this pending record is not a
+failed Production result and does not require repeating the Test validation.
+
 Cloud Sync synchronizes the supported non-secret workspace data shown in the
 app, including workspace settings, connection definitions, environments,
 non-secret variables, API collections/folders/requests, and SSH tasks. Secrets,
 SSH credentials and local key paths, database credentials and local file paths,
 and history/runtime results remain local to each device.
+
+Live multi-device Cloud Sync was verified in an earlier version. After Pro
+capabilities were merged into the unified Unfour client, the v0.9.0 real
+multi-device regression has not yet been recorded and remains `NOT VERIFIED`.
+Single-device v0.9.0 coverage will be recorded during that same regression.
 
 Troubleshooting is a core product loop. Unfour does not include an automatic
 troubleshooting playbook: the user and Codex or Cursor work through the steps
@@ -90,6 +105,12 @@ empty in-memory workspace instead of the desktop app's saved data.
 In the default `prod` environment, MCP is read-only. High-risk actions return
 `CONFIRMATION_REQUIRED` and must be reviewed before Codex or Cursor retries
 them.
+
+That production policy is implemented, but its real v0.9.0 prod-workspace
+verification remains `NOT VERIFIED`: permitted read-only calls, blocked writes,
+`CONFIRMATION_REQUIRED`, `confirmation_text`/payload binding, and the confirmed
+retry path still need to be exercised together. This does not change the
+completed real Codex and Cursor client verification above.
 
 ## API Client
 
