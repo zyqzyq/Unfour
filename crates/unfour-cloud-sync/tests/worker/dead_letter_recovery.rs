@@ -1,4 +1,4 @@
-use super::*;
+use super::support::*;
 
 #[tokio::test]
 async fn initial_dead_letter_survives_restart_and_retries_with_a_new_operation_id() {

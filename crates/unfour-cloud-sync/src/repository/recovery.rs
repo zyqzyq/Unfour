@@ -10,6 +10,71 @@ use crate::{
 };
 
 impl SyncRepository {
+    /// Revives dead letters that were parked with `protocol_version_unsupported`.
+    /// After an app upgrade the running build speaks a newer protocol, so those
+    /// operations are retryable again. Returns the affected local workspaces so
+    /// the caller can refresh their binding state.
+    pub async fn revive_protocol_dead_letters(
+        &self,
+        account_id: &str,
+        now: DateTime<Utc>,
+    ) -> Result<Vec<String>, SyncError> {
+        let mut tx = self.pool.begin().await?;
+        let workspaces: Vec<String> = sqlx::query_scalar(
+            r#"UPDATE cloud_sync_outbox SET status = 'pending', attempt_count = 0,
+                 next_attempt_at = NULL, lease_owner = NULL, lease_started_at = NULL,
+                 lease_expires_at = NULL, last_error = NULL, updated_at = ?2
+               WHERE account_id = ?1 AND status = 'dead'
+                 AND last_error = 'protocol_version_unsupported'
+               RETURNING local_workspace_id"#,
+        )
+        .bind(account_id)
+        .bind(now.to_rfc3339())
+        .fetch_all(&mut *tx)
+        .await?;
+        let mut affected: Vec<String> = workspaces;
+        affected.sort();
+        affected.dedup();
+        for workspace_id in &affected {
+            sqlx::query(
+                r#"UPDATE cloud_sync_workspace_bindings SET
+                     state = CASE
+                       WHEN state = 'paused' THEN 'paused'
+                       WHEN EXISTS (
+                         SELECT 1 FROM cloud_sync_entity_state
+                         WHERE account_id = ?1 AND cloud_workspace_id =
+                           cloud_sync_workspace_bindings.cloud_workspace_id
+                           AND sync_status = 'conflict'
+                       ) THEN 'conflict'
+                       WHEN EXISTS (
+                         SELECT 1 FROM cloud_sync_outbox
+                         WHERE account_id = ?1 AND local_workspace_id = ?2
+                           AND status = 'dead'
+                       ) THEN 'error'
+                       WHEN initial_confirmed < initial_total THEN 'uploading'
+                       ELSE 'reconciling'
+                     END,
+                     last_error = CASE
+                       WHEN EXISTS (
+                         SELECT 1 FROM cloud_sync_outbox
+                         WHERE account_id = ?1 AND local_workspace_id = ?2
+                           AND status = 'dead'
+                       ) THEN last_error
+                       ELSE NULL
+                     END,
+                     updated_at = ?3
+                   WHERE account_id = ?1 AND local_workspace_id = ?2"#,
+            )
+            .bind(account_id)
+            .bind(workspace_id)
+            .bind(now.to_rfc3339())
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(affected)
+    }
+
     pub async fn dead_letters(
         &self,
         account_id: &str,

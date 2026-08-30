@@ -1,30 +1,4 @@
 {
   "description": "Known oversized source files allowed only while their line counts do not increase.",
-  "files": [
-    {
-      "path": "crates/unfour-cloud-sync/tests/worker.rs",
-      "maxLines": 2029,
-      "reason": "Unified cloud-sync integration matrix; split by scenario after the first stable unified release"
-    },
-    {
-      "path": "crates/unfour-cloud-sync/src/repository.rs",
-      "maxLines": 1991,
-      "reason": "Unified cloud-sync persistence boundary; responsibility split is a post-release refactor"
-    },
-    {
-      "path": "crates/unfour-cloud-sync/src/service.rs",
-      "maxLines": 1705,
-      "reason": "Unified cloud-sync orchestration boundary; responsibility split is a post-release refactor"
-    },
-    {
-      "path": "crates/unfour-cloud-sync/tests/worker/connections.rs",
-      "maxLines": 1516,
-      "reason": "Connection sync regression matrix retained intact for merge compatibility"
-    },
-    {
-      "path": "crates/unfour-cloud-sync/tests/worker/ssh_tasks.rs",
-      "maxLines": 1251,
-      "reason": "SSH task sync regression matrix retained intact for merge compatibility"
-    }
-  ]
+  "files": []
 }

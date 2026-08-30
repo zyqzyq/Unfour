@@ -1,4 +1,4 @@
-use super::*;
+use super::support::*;
 use unfour_cloud_sync::SyncService;
 
 fn remote_delete_change(
