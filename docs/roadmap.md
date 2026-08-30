@@ -135,8 +135,8 @@ Implemented in v0.9.0:
 - one unified desktop/MCP runtime with shared storage, command-bus setup,
   account context, and an ephemeral registry mode for CI and smoke checks;
 - one-click Codex and Cursor MCP configuration from Settings;
-- signed in-app updates for Standard builds and a separately validated Windows
-  x64 Microsoft Store MSIX distribution; and
+- signed in-app updates for Standard builds and a separately contract-tested
+  Windows x64 Microsoft Store MSIX distribution; and
 - a reusable Release Candidate/Release pipeline for canonical Windows, macOS,
   and Linux AppImage artifacts, checksum manifests, and ordered updater
   promotion.

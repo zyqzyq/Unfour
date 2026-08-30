@@ -74,7 +74,7 @@ active Pro subscription unlocks Cloud Sync in the same Unfour application.
 
 ### Verification notes
 
-- **Verified real-environment journeys** — Complete Windows install, launch,
+- **Verified real-environment journeys** — Recorded successful Windows install, launch,
   uninstall, and previous-Stable-to-new-Stable update; macOS arm64/x64 install
   and run; GitHub browser OAuth and Desktop callback/login; Creem Test checkout,
   webhook, entitlement, and billing portal; PostgreSQL and MySQL; SSH Terminal,

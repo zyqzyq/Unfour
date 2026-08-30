@@ -90,8 +90,8 @@ steps are not additional v0.9.0 `PASS` claims; the table above and
 
 For v0.9.0, install, launch, previous-Stable update, and uninstall are
 `VERIFIED`. Manual updater signature rejection was not included in the recorded
-live journey; automated rejection coverage does not convert it to a manual
-`PASS`.
+live journey; artifact signatures and Store updater-policy tests do not convert
+it to a manual `PASS`.
 
 ## Microsoft Store
 

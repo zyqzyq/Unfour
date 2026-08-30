@@ -95,7 +95,7 @@ inferred from automated tests or artifact generation.
 | SSH | SSH Terminal, SFTP, and SSH Tasks against a real SSH environment | VERIFIED |
 | macOS arm64 | Install and run on the target architecture | VERIFIED |
 | macOS x64 | Install and run on the target architecture | VERIFIED |
-| MCP real clients | Codex and Cursor each started Unfour MCP, completed `initialize` and `tools/list`, called tools, and accessed real Unfour data/tools | VERIFIED |
+| MCP real clients | Codex and Cursor each started Unfour MCP, completed `initialize`, `tools/list`, and `tools/call`, and accessed real Unfour data/tools | VERIFIED |
 
 The real Codex and Cursor client journeys cover more than the standalone MCP
 protocol smoke. The basic manual smoke remains useful as a future diagnostic or
@@ -146,7 +146,7 @@ erase a completed install, updater, account, platform, or MCP client journey.
 | Creem Production | First real production checkout -> webhook -> active entitlement -> Desktop account refresh -> Cloud Sync entitlement -> billing portal | NOT VERIFIED until the first successful real production flow is recorded; Creem Test is VERIFIED, and this is not a failure or a request to repeat Test validation. |
 | MCP production policy | Read-only operations in a prod workspace, blocked writes, `CONFIRMATION_REQUIRED`, `confirmation_text`/payload binding, and confirmed retry behavior | NOT VERIFIED in a real prod workspace |
 | Windows trust prompt | SmartScreen/certificate trust behavior for the unsigned NSIS package | NOT VERIFIED; Windows install, launch, uninstall, and Stable upgrade remain VERIFIED |
-| Standard updater rejection | Manual rejection of an invalid updater signature | NOT VERIFIED manually; automated desktop rejection coverage is PASS. The real previous-Stable-to-new-Stable success path is VERIFIED. |
+| Standard updater rejection | Manual rejection of an invalid updater signature | NOT VERIFIED manually; artifact signatures and Store updater-policy tests do not establish this result. The real previous-Stable-to-new-Stable success path is VERIFIED. |
 | macOS signing and notarization | Apple signing and notarization | NOT APPLICABLE because neither is enabled for v0.9.0; this is not a test failure |
 | macOS Gatekeeper trust | Exact warning/trust behavior for the unsigned and unnotarized packages | NOT VERIFIED; arm64 and x64 install/run remain VERIFIED |
 | Linux | x64 AppImage launch, desktop integration, and updater behavior | NOT VERIFIED; Linux remains Experimental |
