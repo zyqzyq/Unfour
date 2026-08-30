@@ -178,35 +178,16 @@ function categorizeDatabaseError(
   if (code === "VALIDATION_ERROR") {
     return "validation";
   }
-  if (
-    lowerMessage.includes("permission") ||
-    lowerMessage.includes("denied") ||
-    lowerMessage.includes("access denied")
-  ) {
+  if (["permission", "denied"].some((term) => lowerMessage.includes(term))) {
     return "permission";
   }
-  if (
-    lowerMessage.includes("syntax") ||
-    lowerMessage.includes("parse error") ||
-    lowerMessage.includes("parser error")
-  ) {
+  if (["syntax", "parse error", "parser error"].some((term) => lowerMessage.includes(term))) {
     return "syntax";
   }
-  if (
-    lowerMessage.includes("network") ||
-    lowerMessage.includes("timeout") ||
-    lowerMessage.includes("timed out") ||
-    lowerMessage.includes("unreachable")
-  ) {
+  if (["network", "timeout", "timed out", "unreachable"].some((term) => lowerMessage.includes(term))) {
     return "network";
   }
-  if (
-    lowerMessage.includes("connection") ||
-    lowerMessage.includes("connect") ||
-    lowerMessage.includes("refused") ||
-    lowerMessage.includes("closed") ||
-    lowerMessage.includes("details redacted")
-  ) {
+  if (["connect", "refused", "closed", "details redacted"].some((term) => lowerMessage.includes(term))) {
     return "connection";
   }
   if (code === "DATABASE_ERROR") {

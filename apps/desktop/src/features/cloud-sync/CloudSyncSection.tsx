@@ -1,4 +1,4 @@
-import type { DesktopAppExtensionContext, DesktopAppSettingsSection } from "@unfour/app-shell";
+import type { DesktopAppExtensionContext } from "@unfour/app-shell";
 import { Button, ErrorState, StatusBadge, useFeedback, useI18n } from "@unfour/ui";
 import { getAccountPrimaryLabel } from "../account/accountDisplay";
 import { useAccount } from "../account/useAccount";
@@ -74,13 +74,7 @@ export function CloudSyncSection({ activeWorkspace }: DesktopAppExtensionContext
   </div>;
 }
 
-function Label() {
+export function CloudSyncSectionLabel() {
   const { t } = useI18n();
   return <>{t("cloudSync.title")}</>;
 }
-
-export const cloudSyncSection: DesktopAppSettingsSection = {
-  id: "cloud-sync.settings",
-  label: <Label />,
-  component: CloudSyncSection,
-};

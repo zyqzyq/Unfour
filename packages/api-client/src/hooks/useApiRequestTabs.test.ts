@@ -22,6 +22,20 @@ function header(input: ReturnType<typeof tabToInput>, key: string) {
 }
 
 describe("tabToInput", () => {
+  it("preserves explicit content-type and omits generated form headers for disabled fields", () => {
+    const explicit = tabToInput(tabWithDraft({
+      method: "POST", bodyMode: "raw", rawBodyType: "json", body: "{}",
+      headers: [{ enabled: true, key: "content-type", value: "application/custom" }],
+    }), WORKSPACE);
+    expect(explicit.headers.filter((item) => item.key.toLowerCase() === "content-type")).toEqual([
+      { enabled: true, key: "content-type", value: "application/custom" },
+    ]);
+    const form = tabWithDraft({ method: "POST", bodyMode: "form", formBody: [{ enabled: false, key: "disabled", value: "value" }] });
+    expect(header(tabToInput(form, WORKSPACE), "Content-Type")).toBeUndefined();
+    form.draft.formBody[0].enabled = true;
+    expect(header(tabToInput(form, WORKSPACE), "Content-Type")?.value).toBe("application/x-www-form-urlencoded");
+  });
+
   it("strips the query string from the url and omits the body for GET", () => {
     const input = tabToInput(
       tabWithDraft({ method: "GET", url: "https://api.test/items?page=2", body: "x" }),

@@ -1,3 +1,4 @@
+import { SidebarEmpty } from "./ApiTreeLabels";
 import { useState } from "react";
 import { Folder, FolderOpen, FolderPlus, Search, Send } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -47,7 +48,6 @@ import { createApiCollectionDropController } from "./api-collection-dnd";
 import {
   collectExpandableIds,
   requestTreeItem,
-  SidebarEmpty,
 } from "./api-collection-tree-helpers";
 
 type NameTarget =

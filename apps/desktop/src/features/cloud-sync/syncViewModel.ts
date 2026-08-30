@@ -18,13 +18,14 @@ export function getCloudSyncViewState(
   if (binding.lastError && OFFLINE_ERRORS.has(binding.lastError)) return "offline";
   if (binding.state === "error") return "attention";
   if (binding.lastError) return "attention";
-  if (status.running) return "syncing";
-  if (binding.initialConfirmed < binding.initialTotal
-    || ["preparing", "uploading", "downloading", "reconciling"].includes(binding.state)) {
-    return "syncing";
-  }
-  if (status.pendingCount + status.uncertainCount + status.inFlightCount > 0) return "syncing";
-  return "synced";
+  return syncInProgress(status, binding) ? "syncing" : "synced";
+}
+
+function syncInProgress(status: CloudSyncStatus, binding: NonNullable<CloudSyncStatus["binding"]>) {
+  return status.running
+    || binding.initialConfirmed < binding.initialTotal
+    || ["preparing", "uploading", "downloading", "reconciling"].includes(binding.state)
+    || status.pendingCount + status.uncertainCount + status.inFlightCount > 0;
 }
 
 export function viewStateTone(state: CloudSyncViewState): "neutral" | "success" | "warning" | "danger" {

@@ -26,6 +26,14 @@ function status(overrides: Partial<CloudSyncStatus> = {}, bindingOverrides: Part
 }
 
 describe("getCloudSyncViewState", () => {
+  it("keeps pause and error states ahead of ongoing synchronization", () => {
+    expect(getCloudSyncViewState(status({ running: true }), false)).toBe("paused");
+    expect(getCloudSyncViewState(status({ running: true, deadCount: 1 }), true)).toBe("attention");
+    expect(getCloudSyncViewState(status({ running: true }, { lastError: "cloud_sync_timeout" }), true)).toBe("offline");
+    expect(getCloudSyncViewState(status({}, { initialConfirmed: 0, initialTotal: 2 }), true)).toBe("syncing");
+    expect(getCloudSyncViewState(status({ uncertainCount: 1 }), true)).toBe("syncing");
+  });
+
   it("maps local-only, syncing, synced, and paused workspaces", () => {
     expect(getCloudSyncViewState({ ...status(), binding: null }, true)).toBe("local_only");
     expect(getCloudSyncViewState(status({ pendingCount: 1 }), true)).toBe("syncing");

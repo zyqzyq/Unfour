@@ -202,6 +202,14 @@ describe("formatDatabaseError", () => {
 });
 
 describe("describeDatabaseError", () => {
+  it.each([
+    ["access denied: connection refused", "permission"],
+    ["connection timeout", "network"], ["connection closed", "connection"],
+    ["parser error: connection", "syntax"],
+  ])("preserves category precedence for %s", (message, category) => {
+    expect(describeDatabaseError({ code: "DATABASE_ERROR", message }).category).toBe(category);
+  });
+
   it("categorizes confirmation errors", () => {
     const description = describeDatabaseError({ code: "CONFIRMATION_REQUIRED", message: "confirmation required" });
     expect(description.category).toBe("confirmation");

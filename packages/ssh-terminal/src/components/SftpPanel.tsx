@@ -108,7 +108,7 @@ export function SftpPanel({
     retry: false,
     staleTime: 10_000,
   });
-  const entries = directoryQuery.data?.entries ?? [];
+  const entries = useMemo(() => directoryQuery.data?.entries ?? [], [directoryQuery.data?.entries]);
   const selectedEntry = entries.find((entry) => entry.path === selectedPath) ?? null;
   const selectedEntries = useMemo(
     () => entries.filter((entry) => selectedPaths.includes(entry.path)),

@@ -9,12 +9,7 @@ export function normalizeQueryContext(
   const explicitCatalog = current.catalog?.trim() || null;
   const configuredCatalog = defaultCatalog?.trim() || null;
   const lookupCatalog = explicitCatalog ?? configuredCatalog;
-  const catalogNode =
-    lookupCatalog !== null
-      ? treeModel.catalogs.find((catalog) => catalog.key === lookupCatalog)
-      : treeModel.catalogs.length === 1 && treeModel.catalogs[0]?.key === ""
-        ? treeModel.catalogs[0]
-        : null;
+  const catalogNode = findQueryCatalog(treeModel, lookupCatalog);
 
   // A query without an explicit catalog is valid: the connection's default
   // database remains the server-side fallback. Do not silently bind a new
@@ -33,5 +28,12 @@ export function normalizeQueryContext(
     catalog: explicitCatalog,
     schema: fallbackSchema?.key || null,
   };
+}
+
+function findQueryCatalog(treeModel: DatabaseTreeModel, key: string | null) {
+  if (key !== null) return treeModel.catalogs.find((catalog) => catalog.key === key);
+  // SQLite has one unnamed catalog; do not choose a server database implicitly.
+  if (treeModel.catalogs.length === 1 && treeModel.catalogs[0]?.key === "") return treeModel.catalogs[0];
+  return null;
 }
 

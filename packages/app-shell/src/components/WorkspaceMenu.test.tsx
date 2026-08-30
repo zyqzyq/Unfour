@@ -195,6 +195,9 @@ describe("WorkspaceMenu", () => {
     ).toBeTruthy();
   });
 
+});
+
+describe("WorkspaceMenu extensions", () => {
   it("renders extension decorations and runs asynchronous workspace actions", async () => {
     const active = workspace("Default Workspace");
     const run = vi.fn().mockResolvedValue(undefined);

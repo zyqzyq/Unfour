@@ -60,7 +60,6 @@ export function TreeView({
   // re-expanding nodes the user has since collapsed. Without this the tree only
   // honors defaultExpandedIds at mount, so content loaded later stays hidden.
   const appliedDefaultsRef = React.useRef<Set<string>>(new Set(defaultExpandedIds));
-  const defaultsKey = defaultExpandedIds.join("|");
   React.useEffect(() => {
     const applied = appliedDefaultsRef.current;
     const added = defaultExpandedIds.filter((id) => !applied.has(id));
@@ -84,9 +83,7 @@ export function TreeView({
     for (const id of added) {
       onToggle?.(id, true);
     }
-    // defaultsKey captures the meaningful change in defaultExpandedIds contents.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultsKey, onToggle]);
+  }, [defaultExpandedIds, onToggle]);
 
   const flat = React.useMemo(() => flatten(items, expandedIds), [items, expandedIds]);
   const itemById = React.useMemo(

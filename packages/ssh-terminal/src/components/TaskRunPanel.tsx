@@ -50,17 +50,21 @@ export function TaskRunPanel({
     setHeight(next);
   }, []);
 
-  const onResizeEnd = useCallback(() => {
+  const onResizeEnd = useCallback(function endResize() {
     dragRef.current = null;
     window.removeEventListener("pointermove", onResizeMove);
-    window.removeEventListener("pointerup", onResizeEnd);
+    window.removeEventListener("pointerup", endResize);
+    window.removeEventListener("pointercancel", endResize);
   }, [onResizeMove]);
+
+  useEffect(() => onResizeEnd, [onResizeEnd]);
 
   function startResize(event: ReactPointerEvent<HTMLDivElement>) {
     event.preventDefault();
     dragRef.current = { startY: event.clientY, startHeight: height };
     window.addEventListener("pointermove", onResizeMove);
     window.addEventListener("pointerup", onResizeEnd);
+    window.addEventListener("pointercancel", onResizeEnd);
   }
 
   const finalRunEvent = [...events]

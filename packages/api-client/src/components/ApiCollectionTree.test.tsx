@@ -299,6 +299,9 @@ describe("ApiCollectionTree", () => {
     expect(screen.queryByRole("menuitem", { name: "Export" })).not.toBeInTheDocument();
   });
 
+});
+
+describe("ApiCollectionTree drag and drop", () => {
   it("moves a saved request by dragging it onto a folder", async () => {
     listFoldersMock.mockResolvedValue([folder()]);
     renderTree();

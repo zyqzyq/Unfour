@@ -3,7 +3,7 @@ import {
   readStoredThemeMode,
   resolveTheme,
 } from "./theme-internal";
-import type { Theme, ThemeMode } from "./theme";
+import type { Theme, ThemeMode } from "./theme-context";
 
 const DEFAULT_THEME_MODE: ThemeMode = "dark";
 const DEFAULT_STORAGE_KEY = "unfour.theme";

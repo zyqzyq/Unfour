@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type {
   AccountContextValue,
   AccountProfile,
@@ -116,7 +116,42 @@ beforeEach(() => {
   });
   mocks.enableCloudSync.mockResolvedValue(undefined);
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.useRealTimers(); });
+
+describe("CloudSyncProvider polling lifecycle", () => {
+  it("polls once per interval, never syncs from rerenders, and stops after unmount", async () => {
+    vi.useFakeTimers();
+    mocks.account = account(true, { kind: "ready" });
+    const { rerender, unmount } = render(<CloudSyncProvider><Probe /></CloudSyncProvider>);
+    await act(async () => {});
+    rerender(<CloudSyncProvider><Probe /></CloudSyncProvider>);
+    expect(mocks.getLocalWorkspaces).toHaveBeenCalledTimes(1);
+    await act(() => vi.advanceTimersByTimeAsync(15000));
+    expect(mocks.getLocalWorkspaces).toHaveBeenCalledTimes(2);
+    expect(mocks.syncNow).not.toHaveBeenCalled();
+    expect(mocks.enableCloudSync).not.toHaveBeenCalled();
+    unmount();
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(mocks.getLocalWorkspaces).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each(["unmount", "revoke"])("does not start per-workspace status requests after %s", async (action) => {
+    let finish!: (state: { workspaces: { id: string }[] }) => void;
+    mocks.getLocalWorkspaces.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    mocks.account = account(true, { kind: "ready" });
+    const { rerender, unmount } = render(<CloudSyncProvider><Probe /></CloudSyncProvider>);
+    if (action === "unmount") unmount();
+    else {
+      mocks.account = anonymousAccount();
+      rerender(<CloudSyncProvider><Probe /></CloudSyncProvider>);
+    }
+    await act(async () => { finish({ workspaces: [{ id: "old-workspace" }] }); });
+    expect(mocks.getCloudSyncStatus).not.toHaveBeenCalled();
+    expect(mocks.getLocalWorkspaces).toHaveBeenCalledTimes(1);
+    unmount();
+  });
+});
 
 describe("CloudSyncProvider account context boundary", () => {
   it.each([

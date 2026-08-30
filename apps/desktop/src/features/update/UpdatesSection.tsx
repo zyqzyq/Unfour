@@ -1,4 +1,3 @@
-import type { DesktopAppSettingsSection } from "@unfour/app-shell";
 import { Button, useI18n } from "@unfour/ui";
 import { useUpdate } from "./useUpdate";
 
@@ -45,13 +44,7 @@ export function UpdatesSection() {
   );
 }
 
-function Label() {
+export function UpdatesSectionLabel() {
   const { t } = useI18n();
   return <>{t("updates.title")}</>;
 }
-
-export const updatesSection: DesktopAppSettingsSection = {
-  id: "updates.settings",
-  label: <Label />,
-  component: UpdatesSection,
-};

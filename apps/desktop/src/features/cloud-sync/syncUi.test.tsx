@@ -2,8 +2,9 @@
 import type { Workspace } from "@unfour/command-client";
 import type { DesktopAppExtensionContext } from "@unfour/app-shell";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const mocks = vi.hoisted(() => ({
   context: null as unknown as Record<string, unknown>,
@@ -142,6 +143,79 @@ beforeEach(() => {
   mocks.replaceDeadLetterWithRemote.mockResolvedValue(undefined);
 });
 afterEach(cleanup);
+
+describe("Cloud Sync request lifecycles", () => {
+  it("drops a recovery confirmation when the detail target changes", () => {
+    mocks.context = {
+      ...baseContext(), detailTarget: { id: "old", name: "Old" },
+      statuses: new Map([["old", { ...emptyStatus, deadCount: 1, deadLetters: [{
+        operationId: "old-operation", entityId: "variable", entityName: "Old variable", entityType: "workspaceVariable", errorCode: "invalid_sync_entity",
+      }] }]]),
+    };
+    const { rerender } = render(<WorkspaceSyncDialog />);
+    fireEvent.click(screen.getByText("Use cloud version"));
+    expect(screen.getByText("Discard local change")).toBeTruthy();
+    mocks.context = { ...mocks.context, detailTarget: { id: "new", name: "New" } };
+    rerender(<WorkspaceSyncDialog />);
+    expect(screen.queryByText("Discard local change")).toBeNull();
+    expect(mocks.replaceDeadLetterWithRemote).not.toHaveBeenCalled();
+  });
+
+  it("coalesces StrictMode mount reads without losing the live subscription", async () => {
+    mocks.context = { ...baseContext(), cloudWorkspaceDialogOpen: true };
+    render(<StrictMode><CloudWorkspaceDialog {...extensionContext} /><SyncConflictList workspaceId="workspace" onResolved={() => {}} /></StrictMode>);
+    await screen.findByText("No cloud workspaces");
+    expect(mocks.listCloud).toHaveBeenCalledTimes(1);
+    expect(mocks.listConflicts).toHaveBeenCalledExactlyOnceWith("workspace");
+    expect(screen.queryByText("Loading")).toBeNull();
+  });
+
+  it("filters updated local bindings without refetching the remote workspace list", async () => {
+    const cloud = { cloudWorkspaceId: "cloud", name: "Remote", updatedAt: "2026-01-01" };
+    mocks.context = { ...baseContext(), cloudWorkspaceDialogOpen: true };
+    mocks.listCloud.mockResolvedValue([cloud]);
+    const { rerender } = render(<CloudWorkspaceDialog {...extensionContext} />);
+    await screen.findByText("Remote");
+    mocks.context = { ...mocks.context, statuses: new Map([[workspace.id, { ...emptyStatus, binding: { cloudWorkspaceId: "cloud" } }]]) };
+    rerender(<CloudWorkspaceDialog {...extensionContext} />);
+    expect(screen.getByText("No cloud workspaces")).toBeTruthy();
+    expect(mocks.listCloud).toHaveBeenCalledTimes(1);
+    mocks.context = { ...mocks.context, cloudWorkspaceDialogOpen: false };
+    rerender(<CloudWorkspaceDialog {...extensionContext} />);
+    mocks.context = { ...mocks.context, cloudWorkspaceDialogOpen: true };
+    rerender(<CloudWorkspaceDialog {...extensionContext} />);
+    await screen.findByText("No cloud workspaces");
+    expect(mocks.listCloud).toHaveBeenCalledTimes(2);
+  });
+
+  it("discards a cloud listing completed after the dialog was closed and reopened", async () => {
+    let complete!: (items: unknown[]) => void;
+    mocks.listCloud.mockReturnValueOnce(new Promise((resolve) => { complete = resolve; }));
+    mocks.context = { ...baseContext(), cloudWorkspaceDialogOpen: true };
+    const { rerender } = render(<CloudWorkspaceDialog {...extensionContext} />);
+    mocks.context = { ...mocks.context, cloudWorkspaceDialogOpen: false };
+    rerender(<CloudWorkspaceDialog {...extensionContext} />);
+    mocks.context = { ...mocks.context, cloudWorkspaceDialogOpen: true };
+    rerender(<CloudWorkspaceDialog {...extensionContext} />);
+    await screen.findByText("No cloud workspaces");
+    await act(async () => { complete([{ cloudWorkspaceId: "old", name: "Old workspace", updatedAt: "2026-01-01" }]); });
+    expect(screen.queryByText("Old workspace")).toBeNull();
+    expect(mocks.listCloud).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not reload conflicts for callback identity changes or apply an old workspace result", async () => {
+    let complete!: (items: unknown[]) => void;
+    mocks.listConflicts.mockReturnValueOnce(new Promise((resolve) => { complete = resolve; }));
+    const { rerender } = render(<SyncConflictList onResolved={() => {}} workspaceId="old" />);
+    rerender(<SyncConflictList onResolved={() => {}} workspaceId="old" />);
+    expect(mocks.listConflicts).toHaveBeenCalledTimes(1);
+    rerender(<SyncConflictList onResolved={() => {}} workspaceId="new" />);
+    await act(async () => {});
+    await act(async () => { complete([{ entityId: "old-item", entityType: "workspaceVariable", operation: "update", localPayload: { name: "Stale conflict" }, remotePayload: null }]); });
+    expect(screen.queryByText("Stale conflict")).toBeNull();
+    expect(mocks.listConflicts.mock.calls).toEqual([["old"], ["new"]]);
+  });
+});
 
 describe("Cloud Sync UI", () => {
   it("does not decorate a local-only workspace", () => {

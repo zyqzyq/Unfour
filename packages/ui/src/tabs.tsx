@@ -49,6 +49,7 @@ export function Tabs({
   tabs: WorkspaceTab[];
 }) {
   const dragRef = React.useRef<{ id: string; index: number } | null>(null);
+  const [dragIndex, setDragIndex] = React.useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = React.useState<number | null>(null);
   const [confirmTabId, setConfirmTabId] = React.useState<string | null>(null);
   const [confirmResolve, setConfirmResolve] = React.useState<((confirmed: boolean) => void) | null>(null);
@@ -77,6 +78,7 @@ export function Tabs({
         e.dataTransfer.setData("text/tab-id", tabId);
       }
       dragRef.current = { id: tabId, index };
+      setDragIndex(index);
     },
     [],
   );
@@ -94,6 +96,7 @@ export function Tabs({
     (e: React.DragEvent, toIndex: number) => {
       e.preventDefault();
       setDragOverIndex(null);
+      setDragIndex(null);
       const from = dragRef.current;
       if (from && from.index !== toIndex) {
         onReorder?.(from.index, toIndex);
@@ -105,6 +108,7 @@ export function Tabs({
 
   const handleDragEnd = React.useCallback(() => {
     dragRef.current = null;
+    setDragIndex(null);
     setDragOverIndex(null);
   }, []);
 
@@ -169,8 +173,8 @@ export function Tabs({
         >
           {tabs.map((tab, index) => {
           const active = tab.id === activeId;
-          const isDragging = dragRef.current?.index === index;
-          const showDropIndicator = dragOverIndex === index && dragRef.current?.index !== index;
+          const isDragging = dragIndex === index;
+          const showDropIndicator = dragOverIndex === index && dragIndex !== index;
 
           const tabNode = (
             <div

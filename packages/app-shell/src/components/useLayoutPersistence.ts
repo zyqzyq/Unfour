@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { updateWorkspaceLayout } from "@unfour/command-client";
 import { useFeedbackErrorHandler } from "@unfour/ui";
@@ -26,12 +26,8 @@ export function useLayoutPersistence(activeWorkspaceId: string | null) {
     onError: (error) => handleError(error, { key: "feedback.layout.saveFailed" }),
   });
 
-  // Keep a stable ref to the mutate function so the debounced effect
-  // does not re-trigger on every render (layoutMutation object identity
-  // changes each render even though .mutate is stable).
-  const mutateRef = useRef(layoutMutation.mutate);
-  // eslint-disable-next-line react-hooks/refs -- render-time ref sync is the recommended pattern for stabilizing callbacks
-  mutateRef.current = layoutMutation.mutate;
+  // React Query's mutate function is stable; the result object is not.
+  const persistLayout = layoutMutation.mutate;
 
   useEffect(() => {
     if (!activeWorkspaceId || layoutWorkspaceId !== activeWorkspaceId) {
@@ -39,7 +35,7 @@ export function useLayoutPersistence(activeWorkspaceId: string | null) {
     }
 
     const timeout = window.setTimeout(() => {
-      mutateRef.current(activeWorkspaceId);
+      persistLayout(activeWorkspaceId);
     }, 350);
 
     return () => window.clearTimeout(timeout);
@@ -47,6 +43,7 @@ export function useLayoutPersistence(activeWorkspaceId: string | null) {
     activeTabId,
     activeWorkspaceId,
     layoutWorkspaceId,
+    persistLayout,
     selectedApiRequestId,
     selectedDatabaseConnectionId,
     selectedSshConnectionId,

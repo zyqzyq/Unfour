@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractErrorDetail } from "./feedback";
+import { extractErrorDetail } from "./feedback-context";
 
 describe("extractErrorDetail", () => {
   it("reads Error, string, and Tauri AppError-shaped payloads", () => {

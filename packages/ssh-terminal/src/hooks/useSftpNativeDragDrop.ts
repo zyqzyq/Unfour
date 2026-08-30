@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { uploadSftpFile, type SftpFileEntry, type SftpTransferState } from "@unfour/command-client";
@@ -29,17 +29,40 @@ export function useSftpNativeDragDrop({
     sessionId,
     workspaceId,
   });
-  dropContextRef.current = {
-    currentPath,
-    entries,
-    sessionId,
-    workspaceId,
-  };
+  useLayoutEffect(() => {
+    dropContextRef.current = { currentPath, entries, sessionId, workspaceId };
+  }, [currentPath, entries, sessionId, workspaceId]);
 
   useEffect(() => {
     if (!connected || !isTauriRuntime()) return;
     let cancelled = false;
     let unlisten: (() => void) | undefined;
+
+    async function uploadPaths(paths: string[]) {
+      const { currentPath: path, entries: listing, sessionId: sid, workspaceId: wid } =
+        dropContextRef.current;
+      if (!path) return;
+      for (const localPath of paths) {
+        if (cancelled) return;
+        const name = localFileName(localPath);
+        if (!name) continue;
+        const existing = listing.find((entry) => entry.name === name);
+        if (existing && existing.kind !== "file") continue;
+        try {
+          const transfer = await uploadSftpFile({
+            workspaceId: wid,
+            sessionId: sid,
+            localPath,
+            remotePath: joinRemotePath(path, name),
+            overwrite: Boolean(existing),
+          });
+          if (!cancelled) onTransfer(transfer);
+        } catch (error) {
+          if (!cancelled) onError(error, { key: "ssh.sftp.uploadDroppedFailed" });
+          break;
+        }
+      }
+    }
 
     void (async () => {
       try {
@@ -59,6 +82,7 @@ export function useSftpNativeDragDrop({
               return;
             }
             const scale = await appWindow.scaleFactor();
+            if (cancelled) return;
             const rect = el.getBoundingClientRect();
             const x = payload.position.x / scale;
             const y = payload.position.y / scale;
@@ -69,30 +93,10 @@ export function useSftpNativeDragDrop({
               return;
             }
             setDropActive(false);
-            const { currentPath: path, entries: listing, sessionId: sid, workspaceId: wid } =
-              dropContextRef.current;
-            if (!inside || !path) return;
-            for (const localPath of payload.paths) {
-              const name = localFileName(localPath);
-              if (!name) continue;
-              const existing = listing.find((entry) => entry.name === name);
-              if (existing && existing.kind !== "file") continue;
-              try {
-                const transfer = await uploadSftpFile({
-                  workspaceId: wid,
-                  sessionId: sid,
-                  localPath,
-                  remotePath: joinRemotePath(path, name),
-                  overwrite: Boolean(existing),
-                });
-                onTransfer(transfer);
-              } catch (error) {
-                onError(error, { key: "ssh.sftp.uploadDroppedFailed" });
-                break;
-              }
-            }
+            if (inside) await uploadPaths(payload.paths);
           }
         });
+        if (cancelled) unlisten();
       } catch {
         // Browser / non-Tauri runtimes skip native drag-drop.
       }

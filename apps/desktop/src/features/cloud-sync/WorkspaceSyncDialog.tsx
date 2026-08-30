@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Button,
   ConfirmDialog,
@@ -28,6 +28,11 @@ function formatRelativeTime(value: string | null, t: (key: string, params?: Reco
 }
 
 export function WorkspaceSyncDialog() {
+  const { detailTarget } = useCloudSync();
+  return <WorkspaceSyncDialogContent key={detailTarget?.id ?? "closed"} />;
+}
+
+function WorkspaceSyncDialogContent() {
   const { t } = useI18n();
   const { closeDetailDialog, detailTarget, enableWorkspace, globalEnabled, pauseWorkspace, refreshNow, replaceDeadLetterWithRemote, retryDeadLetter, retryWorkspace, setServiceEnabled, statuses } = useCloudSync();
   const [busy, setBusy] = useState(false);
@@ -37,8 +42,6 @@ export function WorkspaceSyncDialog() {
   const status = detailTarget ? statuses.get(detailTarget.id) : undefined;
   const state = status ? getCloudSyncViewState(status, globalEnabled) : "local_only";
   const pending = status ? status.pendingCount + status.uncertainCount + status.inFlightCount + status.deadCount : 0;
-
-  useEffect(() => { setDiagnostics(null); setErrorCode(null); setRemoteConfirmation(null); }, [detailTarget?.id]);
 
   const run = async (operation: () => Promise<void>) => {
     setBusy(true);

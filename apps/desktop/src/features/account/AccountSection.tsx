@@ -1,4 +1,3 @@
-import type { DesktopAppSettingsSection } from "@unfour/app-shell";
 import { Button, Select, StatusBadge, useI18n } from "@unfour/ui";
 import {
   getAccountEmail,
@@ -72,13 +71,7 @@ export function AccountSection() {
   );
 }
 
-function Label() {
+export function AccountSectionLabel() {
   const { t } = useI18n();
   return <>{t("account.title")}</>;
 }
-
-export const accountSection: DesktopAppSettingsSection = {
-  id: "account.settings",
-  label: <Label />,
-  component: AccountSection,
-};

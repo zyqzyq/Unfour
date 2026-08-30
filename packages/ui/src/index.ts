@@ -76,7 +76,6 @@ export {
 } from "./shell";
   export { EmptyState, ErrorState, LoadingState } from "./states";
 export {
-  FeedbackProvider,
   useFeedback,
   useFeedbackErrorHandler,
   extractErrorDetail,
@@ -85,14 +84,15 @@ export {
   type FeedbackApi,
   type FeedbackOptions,
   type FeedbackTone,
-} from "./feedback";
+} from "./feedback-context";
+export { FeedbackProvider } from "./feedback";
+export { ThemeProvider } from "./theme";
 export {
-  ThemeProvider,
   useTheme,
   type Theme,
   type ThemeContextValue,
   type ThemeMode,
-} from "./theme";
+} from "./theme-context";
 export { initializeTheme } from "./theme-init";
 export {
   ConnectionStatus,

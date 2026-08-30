@@ -194,15 +194,12 @@ export function useDatabaseWorkspaceController({
     saveMutation.reset();
   }
 
-  // Drop leftover connection id / credentialRef when the active workspace changes.
+  // A save failure belongs to the workspace that produced it.
+  const resetSaveMutation = saveMutation.reset;
   useEffect(() => {
-     
-    setPassword("");
-    setForm(emptyDatabaseConnectionForm(workspaceId));
-    setEditorOpen(false);
-    setTestResult(null);
-    saveMutation.reset();
-  }, [workspaceId]);
+    // Form/credential state is reset by useDatabaseConnectionForm before render.
+    resetSaveMutation();
+  }, [workspaceId, resetSaveMutation]);
 
   function handleNewConnection() {
     newConnection();

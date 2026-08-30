@@ -30,6 +30,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
   const [enableTarget, setEnableTarget] = useState<SyncWorkspaceTarget | null>(null);
   const [detailTarget, setDetailTarget] = useState<SyncWorkspaceTarget | null>(null);
   const [cloudWorkspaceDialogOpen, setCloudWorkspaceDialogOpen] = useState(false);
+  const [wasAvailable, setWasAvailable] = useState(available);
   const requestId = useRef(0);
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
 
@@ -49,6 +50,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
         getLocalWorkspaces(),
         getGlobalSyncEnabled(),
       ]);
+      if (currentRequest !== requestId.current) return;
       const entries = await Promise.all(workspaceState.workspaces.map(async (workspace) => [
         workspace.id,
         await getCloudSyncStatus(workspace.id),
@@ -64,19 +66,26 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     }
   }, [available]);
 
-  useEffect(() => { void refreshNow(); }, [refreshNow, revision]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- external status fetch owns its pending state; availability loss also invalidates in-flight results
+    void refreshNow();
+    return () => { requestId.current += 1; };
+  }, [refreshNow, revision]);
   useEffect(() => {
     if (!available) return;
     const timer = window.setInterval(() => void refreshNow(), 15_000);
     return () => window.clearInterval(timer);
   }, [available, refreshNow]);
 
-  useEffect(() => {
-    if (available) return;
-    setEnableTarget(null);
-    setDetailTarget(null);
-    setCloudWorkspaceDialogOpen(false);
-  }, [available]);
+  // Reset before rendering children so revoked access cannot leave a dialog visible.
+  if (wasAvailable !== available) {
+    setWasAvailable(available);
+    if (!available) {
+      setEnableTarget(null);
+      setDetailTarget(null);
+      setCloudWorkspaceDialogOpen(false);
+    }
+  }
 
   const runAndRefresh = useCallback(async (operation: () => Promise<void>) => {
     if (!available) {

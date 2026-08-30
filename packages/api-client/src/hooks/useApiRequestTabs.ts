@@ -277,16 +277,8 @@ function applyGeneratedHeaders(
   auth: ApiAuthConfig,
 ): KeyValue[] {
   let headers = sendableKeyValues(draft.headers);
-  if (draft.bodyMode === "raw" && draft.rawBodyType === "json" && draft.body.trim()) {
-    headers = addHeaderIfMissing(headers, "Content-Type", "application/json");
-  }
-  if (draft.bodyMode === "form" && sendableKeyValues(draft.formBody).length) {
-    headers = addHeaderIfMissing(
-      headers,
-      "Content-Type",
-      "application/x-www-form-urlencoded",
-    );
-  }
+  const contentType = bodyContentType(draft);
+  if (contentType) headers = addHeaderIfMissing(headers, "Content-Type", contentType);
 
   // Explicit Authorization in the Headers table wins over generated Auth headers.
   if (auth.type === "bearer" && !hasHeader(headers, "Authorization")) {
@@ -331,6 +323,12 @@ function applyGeneratedHeaders(
     }
   }
   return headers;
+}
+
+function bodyContentType(draft: RequestDraft): string | null {
+  if (draft.bodyMode === "raw" && draft.rawBodyType === "json" && draft.body.trim()) return "application/json";
+  if (draft.bodyMode === "form" && sendableKeyValues(draft.formBody).length) return "application/x-www-form-urlencoded";
+  return null;
 }
 
 function applyGeneratedQuery(

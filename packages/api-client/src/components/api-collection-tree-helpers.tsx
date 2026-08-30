@@ -1,7 +1,6 @@
-import type { ReactNode } from "react";
 import type { ApiSavedRequest } from "@unfour/command-client";
 import type { TreeViewItem } from "@unfour/ui";
-import { methodBadgeLabel, methodToneClass } from "../model/request-tabs";
+import { MethodMeta } from "./ApiTreeLabels";
 import {
   RequestActionMenu,
   RequestContextMenu,
@@ -36,22 +35,3 @@ export function requestTreeItem(
     contextMenu: <RequestContextMenu ctx={ctx} request={request} />,
   };
 }
-
-function MethodMeta({ method }: { method: string }) {
-  return (
-    <span
-      className={`w-9 shrink-0 text-left text-[10px] font-bold uppercase tabular-nums ${methodToneClass(method)}`}
-    >
-      {methodBadgeLabel(method)}
-    </span>
-  );
-}
-
-export function SidebarEmpty({ children }: { children: ReactNode }) {
-  return (
-    <div className="px-2 py-1.5 text-[12px] text-[var(--u-color-text-muted)]">
-      {children}
-    </div>
-  );
-}
-

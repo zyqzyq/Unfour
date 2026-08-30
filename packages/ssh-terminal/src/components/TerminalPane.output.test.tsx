@@ -49,11 +49,11 @@ function historyEntry(id: string, command: string) {
   };
 }
 
+beforeEach(resetTerminalMocks);
+// Popup assertions query the document; every group needs the same isolation.
+afterEach(cleanup);
+
 describe("TerminalPane output rendering", () => {
-  beforeEach(resetTerminalMocks);
-  // Popup assertions query the shared document; unmount between tests so a
-  // suggestion list from the previous render cannot leak into the next one.
-  afterEach(cleanup);
 
   it("writes only immutable events appended after the render cursor", async () => {
     const firstEvent: SshSessionEvent = {
@@ -115,6 +115,9 @@ describe("TerminalPane output rendering", () => {
     await waitFor(() => expect(terminalState.writes).toEqual(["line 3\r\n"]));
   });
 
+});
+
+describe("TerminalPane history suggestions", () => {
   it("shows history suggestions while typing at a shell prompt and inserts with Tab", async () => {
     listHistoryMock.mockResolvedValue([
       historyEntry("history-1", "git status"),
@@ -328,6 +331,9 @@ describe("TerminalPane output rendering", () => {
     expect(options.map((option) => option.textContent)).toEqual(["lsblk", "ls -la"]);
   });
 
+});
+
+describe("TerminalPane native input boundaries", () => {
   it("passes arrows to the remote shell whenever no suggestions are visible", async () => {
     listHistoryMock.mockResolvedValue([historyEntry("history-1", "git status")]);
 
@@ -464,6 +470,9 @@ describe("TerminalPane output rendering", () => {
     expect(screen.queryByRole("listbox")).toBeNull();
   });
 
+});
+
+describe("TerminalPane history isolation", () => {
   it("clears suggestions from the previous connection while the next history is in flight", async () => {
     listHistoryMock.mockResolvedValueOnce([historyEntry("history-1", "git status")]);
 
@@ -547,6 +556,9 @@ describe("TerminalPane output rendering", () => {
     expect(screen.queryByRole("listbox")).toBeNull();
   });
 
+});
+
+describe("TerminalPane output batching and resize", () => {
   it("combines a frame of output into one xterm write without refreshing per event", async () => {
     const firstEvent: SshSessionEvent = {
       sessionId: "session-1",

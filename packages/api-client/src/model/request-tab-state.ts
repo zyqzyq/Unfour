@@ -50,12 +50,7 @@ export function deriveTabResponseState(
     if (message.includes("timeout") || message.includes("timed out")) {
       return "timeout";
     }
-    if (
-      message.includes("network") ||
-      message.includes("connection") ||
-      message.includes("dns") ||
-      message.includes("fetch")
-    ) {
+    if (["network", "connection", "dns", "fetch"].some((term) => message.includes(term))) {
       return "network";
     }
     return "failed";

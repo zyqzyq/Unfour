@@ -1,5 +1,6 @@
-import { AlertCircle, Copy, Send, WifiOff } from "lucide-react";
-import { Badge, Button, useI18n } from "@unfour/ui";
+import { responseCookies } from "./response-tab-helpers";
+import { AlertCircle, Copy, Send } from "lucide-react";
+import { Button, useI18n } from "@unfour/ui";
 import { formatByteSize } from "../request-utils";
 import {
   deriveTabResponseState,
@@ -13,10 +14,11 @@ import {
   RequestSnapshot,
   ResponseBodyView,
   ResponsePaneState,
+  ResponseFailureState,
+  PostResponseStatus,
   ResponseStatus,
   ResponseTiming,
   SendingState,
-  responseCookies,
 } from "./response-tab-views";
 
 export function ResponseTabs({
@@ -54,16 +56,7 @@ export function ResponseTabs({
           {t("api.response.title")}
         </span>
         <ResponseStatus response={tab.response} state={responseState} />
-        {execution &&
-          (execution.postResponse.status === "failed" ||
-            execution.postResponse.status === "timeout") && (
-            <Badge tone="red">
-              {t("api.scripts.postResponse")} ·{" "}
-              {execution.postResponse.status === "timeout"
-                ? t("api.scripts.timeout")
-                : t("api.scripts.error")}
-            </Badge>
-          )}
+        <PostResponseStatus result={execution?.postResponse} />
         {tab.response && (
           <div className="ml-auto flex items-center gap-3 font-mono text-[12px] text-[var(--u-color-text-muted)]">
             <span className="font-semibold text-[var(--u-color-text)]">
@@ -141,33 +134,7 @@ export function ResponseTabs({
           responseState === "timeout" ||
           responseState === "failed") &&
           tab.responseTab !== "request" && !isScriptTab && (
-          <ResponsePaneState
-            description={
-              tab.sendError ||
-              (responseState === "timeout"
-                ? t("api.response.timeoutDescription")
-                : t("api.response.errorDescription"))
-            }
-            icon={responseState === "network" ? <WifiOff size={24} /> : <AlertCircle size={24} />}
-            title={
-              responseState === "network"
-                ? t("api.response.networkTitle")
-                : responseState === "timeout"
-                  ? t("api.response.timeoutTitle")
-                  : t("api.response.failedTitle")
-            }
-            tone="error"
-          >
-            <Button
-              disabled={!canRetry}
-              onClick={onRetry}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              {t("api.response.retry")}
-            </Button>
-          </ResponsePaneState>
+          <ResponseFailureState canRetry={canRetry} onRetry={onRetry} responseState={responseState} sendError={tab.sendError} />
         )}
         {(responseState === "pre-script-error" || responseState === "pre-script-timeout") &&
           !isScriptTab &&

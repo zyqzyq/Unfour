@@ -5,8 +5,8 @@ import type {
   ApiResponse,
   RequestExecutionResult,
 } from "@unfour/command-client";
-import { cleanup, render, screen } from "@testing-library/react";
-import { I18nProvider } from "@unfour/ui";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { createTranslator, I18nProvider } from "@unfour/ui";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createNewRequestTab, emptyApiTabsState, type ApiRequestTab } from "../model/request-tabs";
 import { ResponseTabs } from "./ResponseTabs";
@@ -211,3 +211,19 @@ function requestInput(): ApiRequestInput {
     timeoutMs: 60_000,
   };
 }
+
+it.each([
+  ["network unavailable", "api.response.networkTitle"],
+  ["request timeout", "api.response.timeoutTitle"],
+  ["invalid request", "api.response.failedTitle"],
+])("keeps the failure message and explicit retry action for %s", (sendError, title) => {
+  const base = baseTab();
+  const retry = vi.fn();
+  const tab = { ...base, sendError, draft: { ...base.draft, url: "https://example.test" } };
+  render(withI18n(<ResponseTabs tab={tab} onRetry={retry} onOpenAuthSettings={vi.fn()} onResponseTabChange={vi.fn()} />));
+  expect(screen.getByText(createTranslator("en")(title))).toBeInTheDocument();
+  expect(screen.getByText(sendError)).toBeInTheDocument();
+  expect(retry).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  expect(retry).toHaveBeenCalledTimes(1);
+});

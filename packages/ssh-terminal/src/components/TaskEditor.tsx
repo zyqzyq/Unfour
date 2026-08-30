@@ -1,3 +1,4 @@
+import { useTaskStepDrag } from "../hooks/useTaskStepDrag";
 import type {
   SshConnection,
   SshTaskSaveInput,
@@ -5,8 +6,7 @@ import type {
   SshTaskStepInput,
   SshTaskStepType,
 } from "@unfour/command-client";
-import { useEffect, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useState } from "react";
 import { Badge, Button, Input, Select, useI18n } from "@unfour/ui";
 import { Play, Save } from "lucide-react";
 import {
@@ -15,7 +15,6 @@ import {
   duplicateTaskStep,
   moveTaskStep,
   removeTaskStep,
-  reorderTaskStep,
 } from "../model/task-template";
 import { AddStepMenu, StepInsertSlot, StepRow } from "./TaskEditorSteps";
 
@@ -43,69 +42,8 @@ export function TaskEditor({
   );
   const [showDescription, setShowDescription] = useState(Boolean(draft.description.trim()));
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [overIndex, setOverIndex] = useState<number | null>(null);
-  const dragFromRef = useRef<number | null>(null);
-  const overIndexRef = useRef<number | null>(null);
-  const draftRef = useRef(draft);
-  draftRef.current = draft;
+  const { dragIndex, overIndex, onStepDragHandlePointerDown } = useTaskStepDrag(draft, onChange, setExpandedIndex);
   const canRun = !runDisabledReason && !saving;
-
-  useEffect(() => {
-    overIndexRef.current = overIndex;
-  }, [overIndex]);
-
-  function finishStepDrag() {
-    const from = dragFromRef.current;
-    const to = overIndexRef.current;
-    dragFromRef.current = null;
-    const current = draftRef.current;
-    if (from !== null && to !== null && from !== to) {
-      onChange({
-        ...current,
-        steps: reorderTaskStep(current.steps, from, to),
-      });
-      setExpandedIndex(to);
-    }
-    setDragIndex(null);
-    setOverIndex(null);
-  }
-
-  function onStepDragHandlePointerDown(
-    index: number,
-    event: ReactPointerEvent<HTMLSpanElement>,
-  ) {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    dragFromRef.current = index;
-    overIndexRef.current = index;
-    setDragIndex(index);
-    setOverIndex(index);
-    const target = event.currentTarget;
-    target.setPointerCapture(event.pointerId);
-
-    function onMove(moveEvent: PointerEvent) {
-      const el = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
-      const row = el?.closest("[data-step-index]");
-      if (!row) return;
-      const next = Number(row.getAttribute("data-step-index"));
-      if (Number.isNaN(next)) return;
-      overIndexRef.current = next;
-      setOverIndex(next);
-    }
-
-    function onUp() {
-      target.releasePointerCapture(event.pointerId);
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-      finishStepDrag();
-    }
-
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
-  }
 
   useEffect(() => {
     if (expandedIndex === null) return;

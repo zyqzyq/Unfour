@@ -4,63 +4,35 @@ export function formatTerminalError(error: unknown, t: TFunction) {
   const rawMessage = rawTerminalError(error);
   const normalized = rawMessage.toLowerCase();
 
-  if (
-    normalized.includes("password ssh session requires a stored password") ||
-    normalized.includes("password auth requires a credential reference") ||
-    normalized.includes("password ssh auth requires a password")
-  ) {
+  if (["password ssh session requires a stored password", "password auth requires a credential reference", "password ssh auth requires a password"].some((message) => normalized.includes(message))) {
     return t("ssh.errors.credentialMissing");
   }
 
   if (normalized.includes("host key verification failed")) {
     return t("ssh.errors.hostKeyMismatch");
   }
-  if (
-    normalized.includes("fingerprint does not match") ||
-    normalized.includes("host key")
-  ) {
+  if (["fingerprint does not match", "host key"].some((message) => normalized.includes(message))) {
     return t("ssh.errors.hostKeyFailed");
   }
-  if (
-    normalized.includes("authentication failed") ||
-    normalized.includes("invalid credentials") ||
-    normalized.includes("permission denied") ||
-    normalized.includes("key rejected")
-  ) {
+  if (["authentication failed", "invalid credentials", "permission denied", "key rejected"].some((message) => normalized.includes(message))) {
     return t("ssh.errors.authenticationFailed");
   }
-  if (normalized.includes("timed out") || normalized.includes("timeout")) {
+  if (["timed out", "timeout"].some((message) => normalized.includes(message))) {
     return t("ssh.errors.timeout");
   }
-  if (
-    normalized.includes("connection refused") ||
-    normalized.includes("actively refused")
-  ) {
+  if (["connection refused", "actively refused"].some((message) => normalized.includes(message))) {
     return t("ssh.errors.connectionRefused");
   }
-  if (
-    normalized.includes("could not resolve") ||
-    normalized.includes("dns") ||
-    normalized.includes("nodename") ||
-    normalized.includes("name or service not known")
-  ) {
+  if (["could not resolve", "dns", "nodename", "name or service not known"].some((message) => normalized.includes(message))) {
     return t("ssh.errors.hostNotResolved");
   }
-  if (
-    normalized.includes("network unreachable") ||
-    normalized.includes("host unreachable") ||
-    normalized.includes("no route to host")
-  ) {
+  if (["network unreachable", "host unreachable", "no route to host"].some((message) => normalized.includes(message))) {
     return t("ssh.errors.hostUnreachable");
   }
   if (normalized.includes("private key file not found")) {
     return t("ssh.errors.keyFileMissing");
   }
-  if (
-    normalized.includes("failed to decrypt ssh private key") ||
-    normalized.includes("failed to read ssh private key") ||
-    normalized.includes("passphrase may be incorrect")
-  ) {
+  if (["failed to decrypt ssh private key", "failed to read ssh private key", "passphrase may be incorrect"].some((message) => normalized.includes(message))) {
     return t("ssh.errors.keyUnreadable");
   }
   if (normalized.includes("session is not connected")) {

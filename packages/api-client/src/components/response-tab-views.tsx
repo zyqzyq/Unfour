@@ -1,11 +1,20 @@
+import { redactKeyValues, responseStateLabel } from "./response-tab-helpers";
 import { useState, type ReactNode } from "react";
 import Editor from "@monaco-editor/react";
-import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, WifiOff } from "lucide-react";
 import { Badge, Button, EmptyState, cn, useI18n, useTheme } from "@unfour/ui";
-import type { ApiRequestInput, ApiResponse, KeyValue } from "@unfour/command-client";
-import { formatByteSize, isSensitiveKey } from "../request-utils";
+import type { ApiRequestInput, ApiResponse, KeyValue, ScriptExecutionResult } from "@unfour/command-client";
+import { formatByteSize } from "../request-utils";
 import { formatResponseBody, looksLikeJson } from "../model/api-request-state";
 import { deriveTabResponseState } from "../model/request-tabs";
+
+export function PostResponseStatus({ result }: { result: ScriptExecutionResult | undefined }) {
+  const { t } = useI18n();
+  if (!result || (result.status !== "failed" && result.status !== "timeout")) return null;
+  return <Badge tone="red">
+    {t("api.scripts.postResponse")} · {result.status === "timeout" ? t("api.scripts.timeout") : t("api.scripts.error")}
+  </Badge>;
+}
 
 export function ResponseStatus({
   response,
@@ -228,12 +237,6 @@ export function RequestKeyValueReadout({
   );
 }
 
-export function redactKeyValues(items: KeyValue[]): KeyValue[] {
-  return items.map((item) =>
-    isSensitiveKey(item.key) ? { ...item, value: "<redacted>" } : item,
-  );
-}
-
 export function SendingState() {
   const { t } = useI18n();
   return (
@@ -358,47 +361,40 @@ export function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function responseCookies(response: ApiResponse | null) {
+export function ResponseFailureState({ canRetry, onRetry, responseState, sendError }: {
+  canRetry: boolean;
+  onRetry: () => void;
+  responseState: ReturnType<typeof deriveTabResponseState>;
+  sendError: string | null;
+}) {
+  const { t } = useI18n();
   return (
-    response?.headers
-      .filter((item) => item.key.toLowerCase() === "set-cookie")
-      .flatMap((item) => parseSetCookieHeader(item.value)) ?? []
+    <ResponsePaneState
+      description={
+        sendError ||
+        (responseState === "timeout"
+          ? t("api.response.timeoutDescription")
+          : t("api.response.errorDescription"))
+      }
+      icon={responseState === "network" ? <WifiOff size={24} /> : <AlertCircle size={24} />}
+      title={
+        responseState === "network"
+          ? t("api.response.networkTitle")
+          : responseState === "timeout"
+            ? t("api.response.timeoutTitle")
+            : t("api.response.failedTitle")
+      }
+      tone="error"
+    >
+      <Button
+        disabled={!canRetry}
+        onClick={onRetry}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        {t("api.response.retry")}
+      </Button>
+    </ResponsePaneState>
   );
-}
-
-export function parseSetCookieHeader(value: string): KeyValue[] {
-  const [pair] = value.split(";");
-  const separator = pair.indexOf("=");
-  if (separator < 0) {
-    return [];
-  }
-  return [
-    {
-      enabled: true,
-      key: pair.slice(0, separator).trim(),
-      value: pair.slice(separator + 1).trim(),
-    },
-  ];
-}
-
-export function responseStateLabel(
-  state: ReturnType<typeof deriveTabResponseState>,
-  t: (key: string) => string,
-) {
-  switch (state) {
-    case "sending":
-      return t("api.response.status.sending");
-    case "network":
-      return t("api.response.status.network");
-    case "timeout":
-      return t("api.response.status.timeout");
-    case "failed":
-      return t("api.response.status.failed");
-    case "pre-script-error":
-      return t("api.scripts.preErrorTitle");
-    case "pre-script-timeout":
-      return t("api.scripts.preTimeoutTitle");
-    default:
-      return state;
-  }
 }

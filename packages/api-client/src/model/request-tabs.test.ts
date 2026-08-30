@@ -238,6 +238,14 @@ describe("API request tab state", () => {
   });
 });
 
+it.each([
+  ["NETWORK failure", "network"], ["Connection refused", "network"], ["DNS failure", "network"],
+  ["Failed to fetch", "network"], ["Connection timed out", "timeout"], ["Invalid request", "failed"],
+])("classifies send failure %s as %s", (sendError, expected) => {
+  const tab = createNewRequestTab(emptyApiTabsState("ws-1"), "new:1").tabs[0];
+  expect(deriveTabResponseState({ ...tab, sendError })).toBe(expected);
+});
+
 describe("API history grouping", () => {
   it("groups recent history into stable date buckets", () => {
     const now = new Date("2026-06-15T12:00:00+08:00");

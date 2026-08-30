@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, ErrorState, LoadingState, useI18n } from "@unfour/ui";
 import {
   keepLocalConflict,
@@ -36,38 +36,58 @@ function conflictTitleKey(type: SyncConflict["entityType"]): string {
 }
 
 export function SyncConflictList({ onResolved, workspaceId }: { onResolved(): void; workspaceId: string }) {
+  return <WorkspaceConflictList key={workspaceId} onResolved={onResolved} workspaceId={workspaceId} />;
+}
+
+function WorkspaceConflictList({ onResolved, workspaceId }: { onResolved(): void; workspaceId: string }) {
   const { t } = useI18n();
   const [items, setItems] = useState<SyncConflict[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
+  const requestId = useRef(0);
+  const active = useRef(false);
+  const inFlight = useRef<Promise<SyncConflict[]> | null>(null);
 
-  const load = async () => {
-    setLoading(true);
-    setErrorCode(null);
-    try {
-      setItems(await listSyncConflicts(workspaceId));
-    } catch (error) {
-      setErrorCode(syncErrorCode(error));
-    } finally {
-      setLoading(false);
-    }
-  };
-  useEffect(() => { void load(); }, [workspaceId]);
+  const load = useCallback(() => {
+    const currentRequest = ++requestId.current;
+    const request = inFlight.current ?? listSyncConflicts(workspaceId);
+    inFlight.current = request;
+    return request.then((conflicts) => {
+      if (currentRequest !== requestId.current) return false;
+      setItems(conflicts);
+      setErrorCode(null);
+      return true;
+    }).catch((error: unknown) => {
+      if (currentRequest === requestId.current) setErrorCode(syncErrorCode(error));
+      // A completed mutation must still refresh status if reloading the list fails.
+      return currentRequest === requestId.current;
+    }).finally(() => {
+      if (inFlight.current === request) inFlight.current = null;
+      if (currentRequest === requestId.current) setLoading(false);
+    });
+  }, [workspaceId]);
+  useEffect(() => {
+    active.current = true;
+    void load();
+    return () => { active.current = false; requestId.current += 1; };
+  }, [load]);
 
   const resolve = async (conflict: SyncConflict, choice: "local" | "remote") => {
     const key = `${conflict.entityType}:${conflict.entityId}`;
     setBusyKey(key);
     setErrorCode(null);
+    const currentRequest = requestId.current;
     try {
       const request = choice === "local" ? keepLocalConflict : useRemoteConflict;
       await request(workspaceId, conflict.entityType, conflict.entityId);
-      await load();
-      onResolved();
+      if (currentRequest !== requestId.current) return;
+      setLoading(true);
+      if (await load()) onResolved();
     } catch (error) {
-      setErrorCode(syncErrorCode(error));
+      if (active.current) setErrorCode(syncErrorCode(error));
     } finally {
-      setBusyKey(null);
+      if (active.current) setBusyKey(null);
     }
   };
 

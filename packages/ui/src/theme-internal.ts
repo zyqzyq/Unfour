@@ -1,4 +1,4 @@
-import type { Theme, ThemeMode } from "./theme";
+import type { Theme, ThemeMode } from "./theme-context";
 
 export function applyTheme(theme: Theme) {
   globalThis.document?.documentElement.setAttribute("data-theme", theme);

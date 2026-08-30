@@ -58,6 +58,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     setSyncContext(snapshot.syncContext);
   }, [applyState]);
 
+  // The factory stores getState; it only invokes it after an async refresh fails.
+  // eslint-disable-next-line react-hooks/refs -- this initializer never reads stateRef.current
   const [refreshController] = useState(() =>
     createAccountRefreshController({
       getState: () => stateRef.current,
@@ -115,6 +117,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       if (active) applyExternalError();
     };
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- start one external account refresh and show its pending state before awaiting it
     void refreshAccount().catch(() => undefined);
     void listenForAccountDeepLinks(onSnapshot, onError)
       .then((unlisten) => {

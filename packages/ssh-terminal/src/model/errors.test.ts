@@ -6,6 +6,14 @@ import { redactTerminalLog } from "./terminal-state";
 const t = createTranslator("en");
 
 describe("formatTerminalError", () => {
+  it.each([
+    ["HOST KEY verification failed: permission denied", "ssh.errors.hostKeyMismatch"],
+    ["permission denied: connection timeout", "ssh.errors.authenticationFailed"],
+    ["connection refused: timeout", "ssh.errors.timeout"],
+  ])("preserves error guidance precedence for %s", (message, key) => {
+    expect(formatTerminalError(message, t)).toBe(t(key));
+  });
+
   it("formats authentication failures", () => {
     expect(formatTerminalError(new Error("ssh authentication failed"), t)).toContain(
       "SSH authentication failed",

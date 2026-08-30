@@ -155,7 +155,7 @@ export function SshConnectionsPage({
     () => connections.find((item) => item.id === selectedConnectionId) ?? null,
     [connections, selectedConnectionId],
   );
-  const prevSelectedConnectionIdRef = useRef(selectedConnectionId);
+  const [previousSelectedConnectionId, setPreviousSelectedConnectionId] = useState(selectedConnectionId);
   const activeSession = useMemo(
     () => visibleSessions.find((item) => item.sessionId === activeSessionId) ?? null,
     [activeSessionId, visibleSessions],
@@ -198,10 +198,8 @@ export function SshConnectionsPage({
   }, [connections, selectedConnectionId, setSelectedSshConnection, dialogMode]);
 
   // Sync form state when the selected connection changes (render-time adjustment pattern).
-  /* eslint-disable react-hooks/refs -- render-time ref read/write is React's recommended pattern for adjusting state when a derived value changes */
-  if (selectedConnectionId !== prevSelectedConnectionIdRef.current) {
-    prevSelectedConnectionIdRef.current = selectedConnectionId;
-    /* eslint-enable react-hooks/refs */
+  if (selectedConnectionId !== previousSelectedConnectionId) {
+    setPreviousSelectedConnectionId(selectedConnectionId);
     if (selectedConnection && dialogMode !== "new") {
       setForm(sshConnectionToInput(selectedConnection, workspaceId));
     }

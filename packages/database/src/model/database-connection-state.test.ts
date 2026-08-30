@@ -1,9 +1,18 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  canLoadDatabaseSchema,
   resetDatabaseConnectionStore,
   useDatabaseConnectionStore,
 } from "./database-connection-state";
+
+it("only loads schema for connecting or connected sessions", () => {
+  expect(canLoadDatabaseSchema("connecting")).toBe(true);
+  expect(canLoadDatabaseSchema("connected")).toBe(true);
+  expect(canLoadDatabaseSchema("failed")).toBe(false);
+  expect(canLoadDatabaseSchema("disconnected")).toBe(false);
+  expect(canLoadDatabaseSchema(undefined)).toBe(false);
+});
 
 describe("useDatabaseConnectionStore", () => {
   beforeEach(() => {

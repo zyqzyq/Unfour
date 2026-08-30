@@ -1,5 +1,9 @@
 import { create } from "zustand";
-import type { DatabaseConnectionSessionState } from "./types";
+import type { DatabaseConnectionSessionState, DatabaseConnectionStatus } from "./types";
+
+export function canLoadDatabaseSchema(status: DatabaseConnectionStatus | undefined) {
+  return status === "connecting" || status === "connected";
+}
 
 // Connection lifecycle state for the Database module, partitioned per workspace.
 //

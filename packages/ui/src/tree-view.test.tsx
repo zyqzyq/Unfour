@@ -27,6 +27,22 @@ function dataTransfer(): DataTransfer {
 }
 
 describe("TreeView", () => {
+  it("handles distinct default IDs with identical joined text without reopening collapsed nodes", () => {
+    const items = ["a|b", "a", "b"].map((id) => ({ id, label: id, children: [{ id: `${id}-child`, label: `${id}-child` }] }));
+    const onToggle = vi.fn();
+    const { rerender } = render(<TreeView items={items} defaultExpandedIds={["a|b"]} onToggle={onToggle} />);
+    rerender(<TreeView items={items} defaultExpandedIds={["a", "b"]} onToggle={onToggle} />);
+    expect(onToggle.mock.calls).toEqual([["a", true], ["b", true]]);
+    expect(screen.getByText("a-child")).toBeInTheDocument();
+    const row = screen.getByText("a").closest('[role="treeitem"]')!;
+    fireEvent.click(row.querySelector("button")!);
+    expect(screen.queryByText("a-child")).toBeNull();
+    onToggle.mockClear();
+    rerender(<TreeView items={items} defaultExpandedIds={["a", "b"]} onToggle={onToggle} />);
+    expect(onToggle).not.toHaveBeenCalled();
+    expect(screen.queryByText("a-child")).toBeNull();
+  });
+
   it("uses a compact disclosure control in sidebar rows", () => {
     render(
       <TreeView
@@ -117,6 +133,9 @@ describe("TreeView", () => {
     expect(onToggle).toHaveBeenLastCalledWith("db", false);
   });
 
+});
+
+describe("TreeView drag and drop", () => {
   it("calls onDrop when a draggable item is dropped on an accepted target", () => {
     const onDrop = vi.fn();
     render(

@@ -34,7 +34,9 @@ export function DropdownMenuItem({
   );
 }
 
-export const ContextMenu = ContextMenuPrimitive.Root;
+export function ContextMenu(props: React.ComponentProps<typeof ContextMenuPrimitive.Root>) {
+  return <ContextMenuPrimitive.Root {...props} />;
+}
 
 export function ContextMenuTrigger({
   asChild,

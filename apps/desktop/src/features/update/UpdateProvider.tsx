@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -22,7 +23,7 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
   const busyRef = useRef(false);
   const metaRef = useRef<UpdateMeta | null>(null);
   const stateRef = useRef(state);
-  stateRef.current = state;
+  useLayoutEffect(() => { stateRef.current = state; }, [state]);
 
   useEffect(() => {
     mountedRef.current = true;
