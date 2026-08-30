@@ -130,7 +130,7 @@ test("Release Candidate contains no publication or Store side effects", () => {
 
   assert.doesNotMatch(candidatePath, /softprops\/action-gh-release|gh release/i);
   assert.doesNotMatch(candidatePath, /aws s3|cloudflare|\bR2_/i);
-  assert.doesNotMatch(candidatePath, /stable\/latest\.json|check-update-order/i);
+  assert.doesNotMatch(candidatePath, /stable\/(?:latest|downloads)\.json|finalize-standard-release|check-update-order/i);
   assert.doesNotMatch(candidatePath, /\bgit\s+(?:tag|push)\b/i);
   assert.doesNotMatch(candidatePath, /build-msix|msix:build|Partner Center/i);
   assert.doesNotMatch(candidatePath, /contents: write/);

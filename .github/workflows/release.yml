@@ -70,7 +70,7 @@ jobs:
           pattern: release-assets-*
           path: release-assets
           merge-multiple: true
-      - name: Finalize checksums and updater manifest
+      - name: Finalize checksums, updater and public download manifests
         shell: bash
         env:
           VERSION: ${{ needs.identity.outputs.version }}
@@ -96,7 +96,7 @@ jobs:
               exit 1
             }
           done < <(find r2-existing -type f -print0)
-          aws s3 cp release-assets "s3://${R2_BUCKET}/stable/${VERSION}/" --recursive --exclude latest.json --endpoint-url "$endpoint"
+          aws s3 cp release-assets "s3://${R2_BUCKET}/stable/${VERSION}/" --recursive --exclude latest.json --exclude downloads.json --endpoint-url "$endpoint"
           mkdir r2-verify
           aws s3 cp "s3://${R2_BUCKET}/stable/${VERSION}/" r2-verify --recursive --endpoint-url "$endpoint"
           (cd r2-verify && sha256sum -c ../release-assets/SHA256SUMS.txt)
@@ -111,10 +111,12 @@ jobs:
 
             GitHub Release and Cloudflare R2 receive the same build artifacts. Verify them with `SHA256SUMS.txt`. The internal updater reads `https://releases.unfour.dev/stable/latest.json`.
 
+            Website and Download Worker installers are listed in `https://releases.unfour.dev/stable/downloads.json`. macOS users install the `.dmg`; `.app.tar.gz` is reserved for the Tauri updater.
+
             Microsoft Store packages are built, validated, and submitted separately by the manual MSIX process.
           files: release-assets/*
           fail_on_unmatched_files: true
-      - name: Check update order and publish stable latest manifest
+      - name: Check update order and publish stable manifests
         shell: bash
         env:
           VERSION: ${{ needs.identity.outputs.version }}
@@ -122,5 +124,7 @@ jobs:
           set -euo pipefail
           node scripts/check-update-order.mjs \
             --candidate-version "$VERSION" \
-            --latest-url https://releases.unfour.dev/stable/latest.json
+            --latest-url https://releases.unfour.dev/stable/latest.json \
+            --downloads-url https://releases.unfour.dev/stable/downloads.json
+          aws s3 cp release-assets/downloads.json "s3://${R2_BUCKET}/stable/downloads.json" --content-type application/json --cache-control no-cache --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
           aws s3 cp release-assets/latest.json "s3://${R2_BUCKET}/stable/latest.json" --content-type application/json --cache-control no-cache --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"

@@ -9,7 +9,7 @@ export const DEFAULT_LATEST_URL =
 const stableVersionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 export function parseSemVer(version) {
-  if (typeof version !== "string" || !stableVersionPattern.test(version)) {
+  if (typeof version !== "string" || version.trim() !== version || !stableVersionPattern.test(version)) {
     throw new Error(
       `Stable release version must be X.Y.Z, got ${JSON.stringify(version)}`,
     );
@@ -44,21 +44,29 @@ function errorMessage(error) {
 export async function checkUpdateOrder({
   candidateVersion,
   latestUrl = DEFAULT_LATEST_URL,
+  downloadsUrl,
   fetchImpl = globalThis.fetch,
 }) {
   parseSemVer(candidateVersion);
   if (typeof fetchImpl !== "function") {
-    throw new Error("Node fetch is required to read stable/latest.json");
+    throw new Error("Node fetch is required to read stable manifests");
   }
+  const decision = await checkManifestOrder(candidateVersion, latestUrl, fetchImpl);
+  if (downloadsUrl !== undefined) {
+    await checkManifestOrder(candidateVersion, downloadsUrl, fetchImpl);
+  }
+  return decision;
+}
 
+async function checkManifestOrder(candidateVersion, manifestUrl, fetchImpl) {
   let response;
   try {
-    response = await fetchImpl(latestUrl, {
+    response = await fetchImpl(manifestUrl, {
       headers: { accept: "application/json" },
     });
   } catch (error) {
     throw new Error(
-      `Failed to read current stable/latest.json: ${errorMessage(error)}`,
+      `Failed to read current ${manifestUrl}: ${errorMessage(error)}`,
     );
   }
 
@@ -72,7 +80,7 @@ export async function checkUpdateOrder({
   }
   if (!response.ok) {
     throw new Error(
-      `Failed to read current stable/latest.json: HTTP ${response.status}`,
+      `Failed to read current ${manifestUrl}: HTTP ${response.status}`,
     );
   }
 
@@ -81,17 +89,17 @@ export async function checkUpdateOrder({
     latest = await response.json();
   } catch (error) {
     throw new Error(
-      `Failed to parse current stable/latest.json: ${errorMessage(error)}`,
+      `Failed to parse current ${manifestUrl}: ${errorMessage(error)}`,
     );
   }
   if (!latest || typeof latest !== "object" || Array.isArray(latest)) {
-    throw new Error("Current stable/latest.json must contain a JSON object");
+    throw new Error(`Current ${manifestUrl} must contain a JSON object`);
   }
 
   const decision = evaluateUpdateOrder(candidateVersion, latest.version);
   if (!decision.allowed) {
     throw new Error(
-      `Refusing to publish stable/latest.json: candidate ${candidateVersion} is older than current ${latest.version}`,
+      `Refusing to publish ${manifestUrl}: candidate ${candidateVersion} is older than current ${latest.version}`,
     );
   }
   return decision;
@@ -109,9 +117,10 @@ async function run(arguments_) {
   const candidateVersion = argument(arguments_, "--candidate-version");
   if (!candidateVersion) throw new Error("--candidate-version is required");
   const latestUrl = argument(arguments_, "--latest-url") ?? DEFAULT_LATEST_URL;
-  const decision = await checkUpdateOrder({ candidateVersion, latestUrl });
+  const downloadsUrl = argument(arguments_, "--downloads-url");
+  const decision = await checkUpdateOrder({ candidateVersion, latestUrl, downloadsUrl });
   process.stdout.write(
-    `[update-order] stable/latest.json promotion allowed: candidate=${decision.candidateVersion} relation=${decision.relation} current=${decision.currentVersion ?? "none"}\n`,
+    `[update-order] stable manifest promotion allowed: candidate=${decision.candidateVersion} updater_relation=${decision.relation} updater_current=${decision.currentVersion ?? "none"}\n`,
   );
 }
 

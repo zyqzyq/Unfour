@@ -61,7 +61,8 @@ steps are not additional v0.9.0 `PASS` claims; the table above and
 - Record install, launch, upgrade, updater, signature rejection, OS trust, and
   uninstall results from the downloaded candidate artifacts.
 - Confirm the RC run created no tag or GitHub Release, accessed no R2 path,
-  changed no `stable/latest.json`, and built or published no MSIX.
+  changed neither `stable/latest.json` nor `stable/downloads.json`, and built
+  or published no MSIX.
 
 ## Standard
 
@@ -78,13 +79,33 @@ steps are not additional v0.9.0 `PASS` claims; the table above and
   `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ACCOUNT_ID`, and `R2_BUCKET`.
 - Linux Standard staging contains only the x64 AppImage and its `.sig`;
   `.deb`, `.rpm`, and Linux ARM64 are not canonical public release assets.
-- The aggregation job creates `SHA256SUMS.txt` and `latest.json`.
+- The aggregation job creates `SHA256SUMS.txt`, `latest.json`, and
+  `downloads.json` only after validating actual canonical installer files and
+  all four signed updater artifacts. Missing installers fail the release.
+- `downloads.json` contains exactly `windows-x64` (`.exe`), `macos-arm64`
+  (`.dmg`), `macos-x64` (`.dmg`), and `linux-x64` (`.AppImage`). Website and
+  Download Worker consumers read its URLs instead of guessing filenames.
+- Tauri `latest.json` retains `windows-x86_64`, `darwin-aarch64`,
+  `darwin-x86_64`, and `linux-x86_64`. macOS entries still use `.app.tar.gz`
+  with signatures; DMGs are only user installers, never updater substitutes.
 - `latest.json` has one Linux entry, `linux-x86_64`, pointing to the AppImage
   and requiring its non-empty signature.
+- Neither manifest is uploaded under immutable `stable/{version}/`. Neither
+  manifest nor `SHA256SUMS.txt` itself appears in the checksum entries.
 - R2 re-download passes the same checksum manifest used by GitHub Release.
-- `stable/latest.json` is uploaded only after immutable versioned files verify
-  and the GitHub Release succeeds; its live version gate rejects numeric
-  SemVer downgrades and permits equal-version reruns only after that check.
+- Only after immutable versioned files verify and the GitHub Release succeeds,
+  check both live manifest versions, publish `stable/downloads.json`, then
+  publish `stable/latest.json` last. Both use `application/json` and `no-cache`.
+- The live version gate rejects a numeric SemVer downgrade of either pointer
+  and permits equal-version reruns only after immutable verification. A `404`
+  allows a first manifest publication; other read/parse failures block it.
+- If only downloads promotion succeeds, retry the same release after checking
+  the failure; the updater can remain on the previous version until promotion
+  completes. The two writes are not atomic.
+- For the already published Stable version only, the operator manually creates
+  and uploads `stable/downloads.json` as a one-time migration. No historical
+  release rebuild or extra workflow is needed. Future new tags containing this
+  change generate it automatically with the existing GitHub/R2 configuration.
 - Manually exercise install, launch, update from the previous Stable version,
   MCP sidecar replacement, uninstall, and signature rejection.
 

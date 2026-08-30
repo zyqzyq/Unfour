@@ -2,8 +2,48 @@
 
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { parseSemVer } from "./check-update-order.mjs";
+
+const generatedMetadata = new Set(["SHA256SUMS.txt", "latest.json", "downloads.json"]);
+
+function normalizeBaseUrl(baseUrl) {
+  let url;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    throw new Error("Release base URL must be an absolute HTTP(S) URL");
+  }
+  if (
+    typeof baseUrl !== "string" ||
+    !/^https?:\/\//i.test(baseUrl) ||
+    !["https:", "http:"].includes(url.protocol) ||
+    url.username || url.password || /[?#\\\s]/.test(baseUrl)
+  ) {
+    throw new Error("Release base URL must use HTTP(S) without credentials, query, fragment, or whitespace");
+  }
+  return url.href.replace(/\/+$/, "");
+}
+
+// files is the inventory of regular files discovered in release-assets.
+export function createDownloadsManifest({ files, version, baseUrl }) {
+  parseSemVer(version);
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  const installers = [
+    ["windows-x64", `Unfour_${version}_windows_x64.exe`],
+    ["macos-arm64", `Unfour_${version}_macos_arm64.dmg`],
+    ["macos-x64", `Unfour_${version}_macos_x64.dmg`],
+    ["linux-x64", `Unfour_${version}_linux_x64.AppImage`],
+  ];
+  const downloads = Object.fromEntries(installers.map(([platform, name]) => {
+    if (!files.includes(name)) {
+      throw new Error(`Standard release is missing required installer ${name}`);
+    }
+    return [platform, { url: `${normalizedBaseUrl}/stable/${version}/${name}` }];
+  }));
+  return { version, downloads };
+}
 
 function argument(arguments_, name) {
   const index = arguments_.indexOf(name);
@@ -18,7 +58,9 @@ function sha256(path) {
 }
 
 function updaterPlatform(files, assetsDir, name, platform, baseUrl, version) {
-  if (!files.includes(name)) return undefined;
+  if (!files.includes(name)) {
+    throw new Error(`Standard release is missing required updater artifact ${name}`);
+  }
   const signatureName = `${name}.sig`;
   if (!files.includes(signatureName)) {
     throw new Error(`Updater artifact ${name} is missing ${signatureName}`);
@@ -29,12 +71,16 @@ function updaterPlatform(files, assetsDir, name, platform, baseUrl, version) {
 }
 
 export function finalizeStandardRelease({ assetsDir, version, baseUrl, notes = "" }) {
-  if (!/^\d+\.\d+\.\d+$/.test(version)) {
-    throw new Error(`Standard release version must be X.Y.Z, got ${JSON.stringify(version)}`);
-  }
-  const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
-  const files = readdirSync(assetsDir)
-    .filter((name) => name !== "SHA256SUMS.txt" && name !== "latest.json")
+  parseSemVer(version);
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  const files = readdirSync(assetsDir, { withFileTypes: true })
+    .filter((entry) => !generatedMetadata.has(entry.name))
+    .map((entry) => {
+      if (!entry.isFile()) {
+        throw new Error(`Standard release asset must be a regular file: ${entry.name}`);
+      }
+      return entry.name;
+    })
     .sort();
   const nonCanonicalLinuxPackages = files.filter((name) => /\.(?:deb|rpm)$/i.test(name));
   if (nonCanonicalLinuxPackages.length > 0) {
@@ -42,30 +88,19 @@ export function finalizeStandardRelease({ assetsDir, version, baseUrl, notes = "
       `Non-canonical Linux package assets must not be staged: ${nonCanonicalLinuxPackages.join(", ")}`,
     );
   }
-  const windowsInstaller = `Unfour_${version}_windows_x64.exe`;
-  if (!files.includes(windowsInstaller)) {
-    throw new Error(`Standard release is missing ${windowsInstaller}`);
-  }
+  const downloadsManifest = createDownloadsManifest({ files, version, baseUrl: normalizedBaseUrl });
 
   const candidates = [
-    [windowsInstaller, "windows-x86_64"],
+    [`Unfour_${version}_windows_x64.exe`, "windows-x86_64"],
     [`Unfour_${version}_macos_arm64.app.tar.gz`, "darwin-aarch64"],
     [`Unfour_${version}_macos_x64.app.tar.gz`, "darwin-x86_64"],
     [`Unfour_${version}_linux_x64.AppImage`, "linux-x86_64"],
   ];
   const platforms = Object.fromEntries(
-    candidates
-      .map(([name, platform]) =>
-        updaterPlatform(files, assetsDir, name, platform, normalizedBaseUrl, version),
-      )
-      .filter(Boolean),
+    candidates.map(([name, platform]) =>
+      updaterPlatform(files, assetsDir, name, platform, normalizedBaseUrl, version),
+    ),
   );
-  if (!platforms["windows-x86_64"]) {
-    throw new Error("Standard Windows updater artifact and signature are required");
-  }
-  if (!platforms["linux-x86_64"]) {
-    throw new Error("Standard Linux updater artifact and signature are required");
-  }
 
   const checksums = files.map((name) => `${sha256(resolve(assetsDir, name))}  ${name}`);
   writeFileSync(resolve(assetsDir, "SHA256SUMS.txt"), `${checksums.join("\n")}\n`);
@@ -73,7 +108,11 @@ export function finalizeStandardRelease({ assetsDir, version, baseUrl, notes = "
     resolve(assetsDir, "latest.json"),
     `${JSON.stringify({ version, notes, pub_date: new Date().toISOString(), platforms }, null, 2)}\n`,
   );
-  return { files, platforms };
+  writeFileSync(
+    resolve(assetsDir, "downloads.json"),
+    `${JSON.stringify(downloadsManifest, null, 2)}\n`,
+  );
+  return { files, platforms, downloads: downloadsManifest.downloads };
 }
 
 function run(arguments_) {
