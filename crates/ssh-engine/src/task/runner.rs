@@ -183,9 +183,12 @@ mod tests {
         assert!(throttle.should_emit(started + std::time::Duration::from_millis(100)));
     }
 
+    #[derive(Default)]
     struct FakeDriver {
         calls: Arc<Mutex<Vec<String>>>,
         wait_on: Option<String>,
+        fail_on: Option<String>,
+        entered: Option<Arc<tokio::sync::Notify>>,
     }
 
     impl TaskStepDriver for FakeDriver {
@@ -196,13 +199,21 @@ mod tests {
             _emit: &mut (dyn FnMut(DriverEvent) + Send),
         ) -> Result<TaskStepResult, TaskStepError> {
             self.calls.lock().unwrap().push(step.name.clone());
+            if self.fail_on.as_deref() == Some(&step.name) {
+                return Err(TaskStepError::Failed {
+                    message: "step failed".into(),
+                    exit_code: Some(42),
+                });
+            }
             if self.wait_on.as_deref() == Some(&step.name) {
-                tokio::select! {
-                    _ = cancel_rx.changed() => Err(TaskStepError::Cancelled),
-                    _ = tokio::time::sleep(std::time::Duration::from_secs(2)) => {
-                        Ok(TaskStepResult { exit_code: Some(0) })
-                    }
+                if let Some(entered) = &self.entered {
+                    entered.notify_one();
                 }
+                cancel_rx
+                    .changed()
+                    .await
+                    .expect("cancellation sender remains alive");
+                Err(TaskStepError::Cancelled)
             } else {
                 Ok(TaskStepResult { exit_code: Some(0) })
             }
@@ -237,6 +248,7 @@ mod tests {
         let mut driver = FakeDriver {
             calls: calls.clone(),
             wait_on: None,
+            ..Default::default()
         };
         let (_cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
         let outcome = execute_serial(
@@ -254,25 +266,98 @@ mod tests {
     #[tokio::test]
     async fn cancellation_stops_current_and_all_following_steps() {
         let calls = Arc::new(Mutex::new(Vec::new()));
+        let entered = Arc::new(tokio::sync::Notify::new());
         let mut driver = FakeDriver {
             calls: calls.clone(),
             wait_on: Some("Long running".to_string()),
+            entered: Some(entered.clone()),
+            ..Default::default()
         };
         let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
         tokio::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            entered.notified().await;
             let _ = cancel_tx.send(true);
         });
 
-        let outcome = execute_serial(
-            vec![step("Long running", 0), step("Must not run", 1)],
-            &mut driver,
-            &mut cancel_rx,
-            |_| {},
+        let outcome = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            execute_serial(
+                vec![step("Long running", 0), step("Must not run", 1)],
+                &mut driver,
+                &mut cancel_rx,
+                |_| {},
+            ),
         )
-        .await;
+        .await
+        .expect("cancelled step must finish without a timer race");
 
         assert_eq!(outcome.status, "cancelled");
         assert_eq!(&*calls.lock().unwrap(), &["Long running"]);
+    }
+
+    #[tokio::test]
+    async fn failed_step_stops_following_work_unless_continue_on_error_is_explicit() {
+        for continue_on_error in [false, true] {
+            let mut driver = FakeDriver {
+                fail_on: Some("Fail".into()),
+                ..Default::default()
+            };
+            let mut failed = step("Fail", 0);
+            failed.config_json["continueOnError"] = serde_json::json!(continue_on_error);
+            let (_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
+            let mut events = Vec::new();
+            let outcome = execute_serial(
+                vec![failed, step("Next", 1)],
+                &mut driver,
+                &mut cancel_rx,
+                |event| events.push(event),
+            )
+            .await;
+            assert_eq!(
+                outcome.status,
+                if continue_on_error {
+                    "success"
+                } else {
+                    "failed"
+                }
+            );
+            assert_eq!(
+                outcome.error,
+                if continue_on_error {
+                    None
+                } else {
+                    Some("step failed".into())
+                }
+            );
+            assert_eq!(
+                *driver.calls.lock().unwrap(),
+                if continue_on_error {
+                    vec!["Fail", "Next"]
+                } else {
+                    vec!["Fail"]
+                }
+            );
+            assert!(
+                matches!(&events[1], RunnerEvent::StepFinished { status, exit_code: Some(42), error: Some(message), .. } if status == "failed" && message == "step failed")
+            );
+            assert_eq!(events.len(), if continue_on_error { 4 } else { 2 });
+        }
+    }
+
+    #[tokio::test]
+    async fn cancellation_before_run_has_no_driver_or_step_event_side_effects() {
+        let mut driver = FakeDriver::default();
+        let (_tx, mut cancel_rx) = tokio::sync::watch::channel(true);
+        let mut events = Vec::new();
+        let outcome = execute_serial(
+            vec![step("Must not run", 0)],
+            &mut driver,
+            &mut cancel_rx,
+            |event| events.push(event),
+        )
+        .await;
+        assert_eq!(outcome.status, "cancelled");
+        assert!(driver.calls.lock().unwrap().is_empty());
+        assert!(events.is_empty());
     }
 }

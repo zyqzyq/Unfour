@@ -3,6 +3,8 @@ mod billing_tests;
 mod client;
 mod installation;
 mod pkce;
+#[cfg(test)]
+mod service_tests;
 mod session;
 mod types;
 
@@ -101,6 +103,7 @@ pub struct AccountService {
     pending: Arc<Mutex<Option<PendingAuthorization>>>,
     entitlement_cache: Arc<Mutex<Option<CachedAuthorization>>>,
     generation: Arc<AtomicU64>,
+    session_transition: Arc<tokio::sync::Mutex<()>>,
 }
 
 const ENTITLEMENT_CACHE_TTL: Duration = Duration::from_secs(30);
@@ -164,6 +167,7 @@ impl AccountService {
             pending: Arc::new(Mutex::new(None)),
             entitlement_cache: Arc::new(Mutex::new(None)),
             generation: Arc::new(AtomicU64::new(0)),
+            session_transition: Arc::new(tokio::sync::Mutex::new(())),
         })
     }
 
@@ -353,6 +357,7 @@ impl AccountService {
 
     pub async fn handle_deep_link(&self, raw: &str) -> Result<AccountState, AccountError> {
         let callback = AuthCallback::parse(raw)?;
+        let generation = self.generation();
         let pending = {
             let mut guard = self
                 .pending
@@ -377,6 +382,12 @@ impl AccountService {
             .exchange_code(authorization_code, state, pending.code_verifier)
             .await?;
         let profile = session.account.clone();
+        // Sign-out and exchange completion must not interleave keychain writes.
+        // A response from before sign-out cannot restore the deleted session.
+        let _transition = self.session_transition.lock().await;
+        if generation != self.generation() {
+            return Err(AccountError::NoPendingAuthorization);
+        }
         self.sessions.save(session.stored_session()).await?;
         self.advance_generation();
         Ok(AccountState::SignedIn { profile })
@@ -395,6 +406,7 @@ impl AccountService {
     async fn clear_local_session_for_sign_out(
         &self,
     ) -> Result<Option<StoredSession>, AccountError> {
+        let _transition = self.session_transition.lock().await;
         self.cancel_sign_in();
         self.advance_generation();
         let session: Option<StoredSession> = match self.sessions.load().await {

@@ -1,4 +1,6 @@
 use super::*;
+#[path = "lib_tests/script_rollback.rs"]
+mod script_rollback;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use unfour_core::models::{
     ApiCollectionExportFormat, ApiRequestInput, DatabaseConnectionInput, ScriptExecutionStatus,

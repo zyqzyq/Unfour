@@ -47,6 +47,48 @@ const tab: DatabaseTableWorkspaceTab = {
 beforeEach(() => vi.clearAllMocks());
 
 describe("useTableRowMutations", () => {
+  it.each([0, 1])("preserves failed and unattempted edits when row %i fails, then retries only those edits", async (failureIndex) => {
+    const changes = [0, 1, 2].map((index) => ({
+      ...tab.pendingChanges[0],
+      id: `update:${index}`,
+      rowKey: String(index),
+      primaryKey: [{ column: "id", mode: "value" as const, value: String(index) }],
+    }));
+    let current = { ...tab, pendingChanges: changes };
+    const error = new Error("optimistic concurrency conflict");
+    mutateMock.mockReset();
+    for (let index = 0; index < failureIndex; index++) {
+      mutateMock.mockResolvedValueOnce({ affectedRows: 1, sql: "UPDATE users" });
+    }
+    mutateMock.mockRejectedValueOnce(error);
+    const updateTableTab: ReturnType<typeof useDatabaseTabs>["updateTableTab"] = (_id, patch) => {
+      current = { ...current, ...(typeof patch === "function" ? patch(current) : patch) };
+    };
+    const refreshTablePage = vi.fn();
+    const databaseTabs = { updateTableTab } as unknown as ReturnType<typeof useDatabaseTabs>;
+    const { result, rerender } = renderHook(
+      () => useTableRowMutations({ activeTableTab: current, databaseTabs, refreshTablePage, workspaceId: "ws-1" }),
+      { wrapper: createWrapper() },
+    );
+
+    await act(() => result.current.applyPendingTableChanges());
+    expect(mutateMock).toHaveBeenCalledTimes(failureIndex + 1);
+    expect(current.pendingChanges).toEqual(changes.slice(failureIndex));
+    expect(current.error).toBe(error);
+    expect(refreshTablePage).toHaveBeenCalledTimes(failureIndex === 0 ? 0 : 1);
+
+    mutateMock.mockReset();
+    mutateMock.mockResolvedValue({ affectedRows: 1, sql: "UPDATE users" });
+    rerender();
+    await act(() => result.current.applyPendingTableChanges());
+    expect(mutateMock.mock.calls.map(([input]) => input.primaryKey)).toEqual(
+      changes.slice(failureIndex).map((change) => change.primaryKey),
+    );
+    expect(current.pendingChanges).toEqual([]);
+    expect(current.error).toBeNull();
+    expect(refreshTablePage).toHaveBeenCalledTimes(failureIndex === 0 ? 1 : 2);
+  });
+
   it("applies confirmed changes with original values, then removes and refreshes", async () => {
     mutateMock.mockResolvedValue({ affectedRows: 1, sql: "UPDATE users SET name = ?" });
     const updateTableTab = vi.fn();

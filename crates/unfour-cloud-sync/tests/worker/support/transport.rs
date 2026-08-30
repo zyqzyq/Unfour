@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 use tokio::sync::Barrier;
 use unfour_cloud_sync::{
     ChangesPage, CloudWorkspace, PushRequest, PushResponse, PushResult, PushResultStatus,
@@ -17,6 +16,7 @@ pub(crate) struct MockTransport {
     pub(crate) changes: Mutex<VecDeque<ChangesPage>>,
     pub(crate) snapshots: Mutex<VecDeque<SnapshotPage>>,
     pub(crate) roots: Mutex<Vec<String>>,
+    pub(crate) created_workspace_id: Mutex<Option<String>>,
     pub(crate) account_id: Mutex<String>,
     pub(crate) generation: AtomicU64,
     pub(crate) fail_pushes: AtomicUsize,
@@ -26,7 +26,6 @@ pub(crate) struct MockTransport {
     pub(crate) unauthorized_pushes: AtomicUsize,
     pub(crate) fail_on_push_number: AtomicUsize,
     pub(crate) no_op_pushes: AtomicUsize,
-    pub(crate) delay_ms: AtomicUsize,
     pub(crate) active_calls: AtomicUsize,
     pub(crate) max_active_calls: AtomicUsize,
     pub(crate) cursor: AtomicU64,
@@ -58,10 +57,6 @@ impl MockTransport {
     async fn enter(&self) -> ActiveCall<'_> {
         let active = self.active_calls.fetch_add(1, Ordering::SeqCst) + 1;
         self.max_active_calls.fetch_max(active, Ordering::SeqCst);
-        let delay = self.delay_ms.load(Ordering::SeqCst);
-        if delay > 0 {
-            tokio::time::sleep(Duration::from_millis(delay as u64)).await;
-        }
         ActiveCall(self)
     }
 
@@ -133,7 +128,12 @@ impl SyncTransport for MockTransport {
     ) -> Result<CloudWorkspace, TransportError> {
         let _active = self.enter().await;
         Ok(CloudWorkspace {
-            cloud_workspace_id: "cloud-created".into(),
+            cloud_workspace_id: self
+                .created_workspace_id
+                .lock()
+                .unwrap()
+                .clone()
+                .unwrap_or_else(|| "cloud-created".into()),
             root_entity_id: root_entity_id.into(),
             name: None,
             current_cursor: self.cursor.load(Ordering::SeqCst) as i64,

@@ -496,8 +496,9 @@ mod tests {
         assert!(!is_transient(&AccountError::AuthorizationDenied));
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn with_transient_retry_retries_then_succeeds() {
+        let start = tokio::time::Instant::now();
         let mut attempts = 0u32;
         let value = with_transient_retry(|| {
             attempts += 1;
@@ -514,6 +515,22 @@ mod tests {
         .expect("eventual success");
         assert_eq!(value, 3);
         assert_eq!(attempts, 3);
+        assert_eq!(start.elapsed(), Duration::from_secs(3));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn transient_retry_exhausts_its_budget_and_returns_the_last_failure() {
+        let start = tokio::time::Instant::now();
+        let mut attempts = 0;
+        let error = with_transient_retry(|| {
+            attempts += 1;
+            async { Err::<(), _>(AccountError::ApiUnavailable) }
+        })
+        .await
+        .unwrap_err();
+        assert!(matches!(error, AccountError::ApiUnavailable));
+        assert_eq!(attempts, 5);
+        assert_eq!(start.elapsed(), Duration::from_secs(10));
     }
 
     #[tokio::test]

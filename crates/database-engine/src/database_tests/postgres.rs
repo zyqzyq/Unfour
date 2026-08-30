@@ -1,5 +1,5 @@
 use super::super::*;
-use super::support::{postgres_input, service_with_workspace};
+use super::support::{postgres_input, service_with_workspace, RejectingServer};
 
 // -----------------------------------------------------------------------
 // PostgreSQL-specific tests
@@ -66,21 +66,34 @@ fn postgres_schema_metadata_preserves_schema_name() {
 #[tokio::test]
 async fn postgres_password_not_leaked_in_connection_error() {
     let (service, workspace_id) = service_with_workspace().await;
+    let server = RejectingServer::start().await;
+    let credential = service
+        .secret_store
+        .as_ref()
+        .unwrap()
+        .create_credential(
+            workspace_id.clone(),
+            "database-password".into(),
+            "PG test".into(),
+            "pg-secret-canary".into(),
+        )
+        .await
+        .unwrap();
 
-    // Save a PostgreSQL connection that points to a non-existent server
+    // The controlled endpoint fails the handshake without contacting a real DB.
     let connection = service
         .save_connection(DatabaseConnectionInput {
             id: None,
             workspace_id: workspace_id.clone(),
             name: "Bad PG".to_string(),
             driver: "postgres".to_string(),
-            host: Some("192.0.2.1".to_string()), // RFC 5737 TEST-NET, unreachable
-            port: Some(5432),
+            host: Some("127.0.0.1".to_string()),
+            port: Some(server.port),
             database: Some("testdb".to_string()),
             username: Some("testuser".to_string()),
             ssl_mode: None,
             sqlite_path: None,
-            credential_ref: None,
+            credential_ref: Some(credential.credential_ref),
             read_only: false,
         })
         .await
@@ -91,6 +104,7 @@ async fn postgres_password_not_leaked_in_connection_error() {
     assert!(result.is_err());
     // The error message should not contain the username or host
     let err_msg = format!("{}", result.unwrap_err());
+    assert!(!err_msg.contains("pg-secret-canary"));
     assert!(
         !err_msg.contains("testuser"),
         "error should not leak username: {}",
@@ -246,8 +260,11 @@ async fn postgres_metadata_can_be_saved_and_listed() {
 #[tokio::test]
 async fn postgres_schema_fails_without_live_server() {
     let (service, workspace_id) = service_with_workspace().await;
+    let server = RejectingServer::start().await;
+    let mut input = postgres_input(&workspace_id);
+    input.port = Some(server.port);
     let connection = service
-        .save_connection(postgres_input(&workspace_id))
+        .save_connection(input)
         .await
         .expect("save pg connection");
 

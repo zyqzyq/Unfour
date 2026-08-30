@@ -19,6 +19,8 @@ mod pull_cursor;
 mod push_retry;
 #[path = "worker/scheduling.rs"]
 mod scheduling;
+#[path = "worker/second_device.rs"]
+mod second_device;
 #[path = "worker/snapshots.rs"]
 mod snapshots;
 #[path = "worker/ssh_tasks.rs"]

@@ -95,14 +95,18 @@ async fn sign_out_pause_generation_rejects_an_old_in_flight_result() {
     )
     .await
     .unwrap();
-    transport.delay_ms.store(80, Ordering::SeqCst);
+    let barrier = Arc::new(Barrier::new(2));
+    *transport.push_barrier.lock().unwrap() = Some(barrier.clone());
     let task = {
         let service = service.clone();
         let workspace_id = workspace_id.clone();
         tokio::spawn(async move { service.sync_workspace(&workspace_id).await })
     };
-    tokio::time::sleep(Duration::from_millis(20)).await;
+    tokio::time::timeout(Duration::from_secs(5), barrier.wait())
+        .await
+        .expect("worker reached push before sign-out");
     service.pause_current_account().await.unwrap();
+    barrier.wait().await;
     assert!(matches!(
         task.await.unwrap(),
         Err(SyncError::AccountChanged)
@@ -140,15 +144,15 @@ async fn global_pause_preserves_workspace_preferences_and_resumes_them() {
     service.sync_workspace(&workspace_id).await.unwrap();
     assert_eq!(transport.changes_calls.load(Ordering::SeqCst), calls_before);
 
+    let barrier = Arc::new(Barrier::new(2));
+    *transport.changes_barrier.lock().unwrap() = Some(barrier.clone());
     service.set_global_sync_enabled(true).await.unwrap();
     assert!(service.global_sync_enabled().await.unwrap());
     let resumed = service.status(&workspace_id).await.unwrap();
     assert!(resumed.binding.unwrap().sync_enabled);
-    for _ in 0..20 {
-        if transport.changes_calls.load(Ordering::SeqCst) > calls_before {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
+    tokio::time::timeout(Duration::from_secs(5), barrier.wait())
+        .await
+        .expect("resume triggered a pull without a manual sync");
     assert!(transport.changes_calls.load(Ordering::SeqCst) > calls_before);
+    barrier.wait().await;
 }

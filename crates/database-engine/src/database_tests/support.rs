@@ -3,6 +3,33 @@ use sqlx::Executor;
 use std::path::PathBuf;
 use uuid::Uuid;
 
+// Hold an OS-assigned port for the entire test; never assume a developer's
+// PostgreSQL/MySQL port is unused or wait for an external network to time out.
+pub(super) struct RejectingServer {
+    pub port: u16,
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl RejectingServer {
+    pub async fn start() -> Self {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let task = tokio::spawn(async move {
+            loop {
+                let (stream, _) = listener.accept().await.unwrap();
+                drop(stream);
+            }
+        });
+        Self { port, task }
+    }
+}
+
+impl Drop for RejectingServer {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+
 pub(super) async fn service_with_workspace() -> (DatabaseService, String) {
     let options = SqliteConnectOptions::new()
         .filename(":memory:")

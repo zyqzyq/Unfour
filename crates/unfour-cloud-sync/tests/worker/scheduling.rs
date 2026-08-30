@@ -65,7 +65,17 @@ async fn repeated_workspace_triggers_coalesce_and_global_calls_stay_bounded() {
     service.sync_workspace(&workspace_id).await.unwrap();
     assert_eq!(transport.changes_calls.load(Ordering::SeqCst), 1);
     transport.max_active_calls.store(0, Ordering::SeqCst);
-    transport.delay_ms.store(20, Ordering::SeqCst);
+    transport.changes_calls.store(0, Ordering::SeqCst);
+    let barrier = Arc::new(Barrier::new(2));
+    *transport.changes_barrier.lock().unwrap() = Some(barrier.clone());
+    let worker = {
+        let service = service.clone();
+        let workspace_id = workspace_id.clone();
+        tokio::spawn(async move { service.sync_workspace(&workspace_id).await })
+    };
+    tokio::time::timeout(Duration::from_secs(5), barrier.wait())
+        .await
+        .unwrap();
     let mut tasks = Vec::new();
     for _ in 0..10 {
         let service = service.clone();
@@ -75,8 +85,20 @@ async fn repeated_workspace_triggers_coalesce_and_global_calls_stay_bounded() {
         }));
     }
     for task in tasks {
-        task.await.unwrap().unwrap();
+        tokio::time::timeout(Duration::from_secs(5), task)
+            .await
+            .expect("concurrent triggers must merge while the first pull is blocked")
+            .unwrap()
+            .unwrap();
     }
+    assert_eq!(transport.changes_calls.load(Ordering::SeqCst), 1);
+    barrier.wait().await;
+    worker.await.unwrap().unwrap();
+    assert_eq!(
+        transport.changes_calls.load(Ordering::SeqCst),
+        2,
+        "one dirty follow-up for all merged triggers"
+    );
     assert_eq!(transport.max_active_calls.load(Ordering::SeqCst), 1);
 }
 

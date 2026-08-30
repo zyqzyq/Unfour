@@ -142,6 +142,7 @@ fn mysql_access_denied_message_is_preserved() {
 #[tokio::test]
 async fn mysql_test_connection_and_read_query_use_live_path_with_sanitized_errors() {
     let (service, workspace_id) = service_with_workspace().await;
+    let server = super::support::RejectingServer::start().await;
     let credential = service
         .secret_store
         .as_ref()
@@ -154,8 +155,10 @@ async fn mysql_test_connection_and_read_query_use_live_path_with_sanitized_error
         )
         .await
         .expect("create credential");
+    let mut input = mysql_input(&workspace_id, Some(credential.credential_ref));
+    input.port = Some(server.port);
     let connection = service
-        .save_connection(mysql_input(&workspace_id, Some(credential.credential_ref)))
+        .save_connection(input)
         .await
         .expect("save mysql connection");
 

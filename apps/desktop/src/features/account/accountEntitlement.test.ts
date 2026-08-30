@@ -41,6 +41,16 @@ describe("capability entitlements", () => {
     ], now)).toBeNull();
   });
 
+  it.each([
+    "2026-08-23T00:00:00.000Z",
+    "2026-08-23T08:00:00.000+08:00",
+    "invalid-expiry",
+  ])("fails closed at the expiry boundary or invalid date: %s", (validUntil) => {
+    const entitlements = [entitlement({ validUntil })];
+    expect(getActiveCloudSyncEntitlement(entitlements, now)).toBeNull();
+    expect(hasActiveEntitlement(entitlements, CLOUD_SYNC_ENTITLEMENT, now)).toBe(false);
+  });
+
   it.each(["expired", "revoked"] as const)("rejects %s cloud_sync", (status) => {
     expect(getActiveCloudSyncEntitlement([entitlement({ status })], now)).toBeNull();
   });
