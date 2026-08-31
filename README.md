@@ -83,6 +83,17 @@ Repeat the request and verify the fix
 The investigation stays in one workspace, while you remain in control of each
 request, SSH session, query, and verification step.
 
+## For Coding Agents
+
+Codex or Cursor can use their own repository tools to inspect, change, and test
+code. Unfour complements those tools with controlled access to API behavior,
+SSH/server evidence, and database state through MCP, so the agent can help
+investigate the running backend and re-check it after a change.
+
+Unfour does not edit the repository itself: the coding client owns code changes,
+while Unfour provides the runtime side of the investigation. You control the
+workspace, environment, risky actions, and final decision.
+
 ## Modules
 
 - **API Client** - Compose and send HTTP requests, organize saved requests into
@@ -103,7 +114,7 @@ request, SSH session, query, and verification step.
 - **MCP integration for Codex and Cursor** - Expose safe local stdio diagnostic
   tools through the same command bus used by the desktop app. Codex and Cursor
   can use the same saved API, SSH, and database connections to reproduce
-  issues, inspect logs and database state, and make a fix. The user and Codex
+  issues, inspect logs and database state, and verify a fix. The user and Codex
   or Cursor work through the steps together; Unfour does not ship an automatic
   troubleshooting playbook or workflow runner.
 
@@ -267,8 +278,8 @@ GPT-5.6 helped analyze SSH and database permission boundaries, refine MCP tool
 design, and plan the project architecture and release process.
 
 The local Unfour MCP server lets Codex and Cursor use the same saved API, SSH,
-and database connections for diagnostic inspection and fixes. It follows the
-same command bus, workspace scope, credential handling, and confirmation
+and database connections for diagnostic inspection and runtime re-checks. It
+follows the same command bus, workspace scope, credential handling, and confirmation
 controls as the desktop app. Codex and Cursor can participate in the
 troubleshooting loop through MCP, but connecting them does not automatically
 run a complete root-cause playbook.

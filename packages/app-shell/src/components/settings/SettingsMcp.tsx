@@ -63,6 +63,7 @@ export function SettingsMcp() {
   const [clientMessages, setClientMessages] = useState(EMPTY_MESSAGES);
   const [configuring, setConfiguring] = useState<McpClient | null>(null);
   const [copyState, setCopyState] = useState<"copied" | "failed" | null>(null);
+  const [promptCopyState, setPromptCopyState] = useState<"copied" | "failed" | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -99,6 +100,12 @@ export function SettingsMcp() {
     const timeout = window.setTimeout(() => setCopyState(null), 1600);
     return () => window.clearTimeout(timeout);
   }, [copyState]);
+
+  useEffect(() => {
+    if (!promptCopyState) return undefined;
+    const timeout = window.setTimeout(() => setPromptCopyState(null), 1600);
+    return () => window.clearTimeout(timeout);
+  }, [promptCopyState]);
 
   const mcpChecking = !mcp && !mcpError;
   const status = mcpChecking ? "connecting" : mcp?.found ? "connected" : "error";
@@ -142,6 +149,15 @@ export function SettingsMcp() {
       setCopyState("copied");
     } catch {
       setCopyState("failed");
+    }
+  }
+
+  async function copyExamplePrompt() {
+    try {
+      await navigator.clipboard.writeText(t("app.settings.mcp.examplePrompt"));
+      setPromptCopyState("copied");
+    } catch {
+      setPromptCopyState("failed");
     }
   }
 
@@ -205,6 +221,32 @@ export function SettingsMcp() {
             />
           ))}
         </div>
+      </section>
+
+      <section className="space-y-2 border-t border-[var(--u-color-border)] pt-3">
+        <h3 className="text-[12px] font-semibold text-[var(--u-color-text)]">
+          {t("app.settings.mcp.examplePromptLabel")}
+        </h3>
+        <p className="text-[12px] leading-5 text-[var(--u-color-text-muted)]">
+          {t("app.settings.mcp.examplePromptDescription")}
+        </p>
+        <p className="whitespace-pre-line text-[12px] leading-5 text-[var(--u-color-text)]">
+          {t("app.settings.mcp.examplePrompt")}
+        </p>
+        <Button
+          aria-live="polite"
+          onClick={() => void copyExamplePrompt()}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          <Copy aria-hidden="true" size={13} />
+          {promptCopyState === "copied"
+            ? t("app.settings.copy.copied")
+            : promptCopyState === "failed"
+              ? t("app.settings.copy.failed")
+              : t("app.settings.mcp.copyExamplePrompt")}
+        </Button>
       </section>
 
       <section className="space-y-2 border-t border-[var(--u-color-border)] pt-3">

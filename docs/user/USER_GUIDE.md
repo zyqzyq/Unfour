@@ -87,6 +87,10 @@ database state, and then act with your review. The steps remain collaborative;
 the server provides diagnostic tools, not an automatic troubleshooting
 playbook.
 
+Codex and Cursor use their own coding tools to inspect, modify, and test code.
+Unfour MCP supplies API, SSH/server, and database runtime evidence, including
+re-checking the original symptom after a change in your selected environment.
+
 1. Open the desktop app once. This creates `~/.unfour/unfour.sqlite`.
 2. Open `Settings → MCP`.
 3. Click `Configure Codex` or `Configure Cursor` for the client you want to

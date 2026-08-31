@@ -24,6 +24,15 @@ logs and database state, and then act with the user's review. The steps are
 worked through together; Unfour provides diagnostic tools rather than an
 automatic troubleshooting playbook or workflow runner.
 
+The coding client uses its own tools to inspect, edit, and test code; Unfour MCP
+provides runtime evidence and re-checks after a change. You keep control of the
+workspace, environment, risky actions, and final decision.
+
+After restarting your configured client, use `Settings → MCP → Example Prompt`
+and `Copy example prompt`, then paste it into that client and describe your
+issue. Copying only places text on the clipboard; it does not launch a client,
+call tools, send network requests, or change the workspace or MCP policy.
+
 The server uses local stdio transport, so `args` must remain empty. Do not
 invent a CLI install command or use a development `target/debug` path for an
 installed release. Do not replace the MSIX alias with a path under

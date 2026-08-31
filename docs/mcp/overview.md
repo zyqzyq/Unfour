@@ -4,6 +4,28 @@
 workspace, API Client, database, SSH, activity, and system-health tools to
 Codex and Cursor.
 
+## Coding Tools and Runtime Tools
+
+The coding client owns:
+
+- repository inspection;
+- code edits;
+- code-level tests;
+- git and source-control actions.
+
+Unfour MCP provides:
+
+- workspace and environment context;
+- API requests and runtime responses;
+- SSH/server evidence;
+- database state;
+- policy-controlled runtime actions;
+- runtime re-checks and verification through existing tools.
+
+The coding agent edits code with its own tools. Unfour MCP complements those
+tools with controlled runtime access; it does not manage or edit the repository.
+The user controls the workspace, environment, risky actions, and final decision.
+
 ## Architecture
 
 ```text
@@ -38,11 +60,12 @@ Implemented method families:
 - `tools/list`
 - `tools/call`
 
-The `initialize` response includes instructions for a diagnose-then-act flow:
+The `initialize` response includes instructions for a diagnose → act → verify flow:
 
 1. Check `unfour.system.health`.
 2. Review recent `unfour.activity.list`.
-3. For API issues, inspect API history and saved request details.
+3. For API issues, inspect workspace context, API history, and saved request
+   details to reproduce or inspect the visible API symptom.
 4. For database issues, inspect saved database connections, schemas, and
    read-only query or explain output before executing a fix.
 5. For host/service issues, inspect `unfour.ssh.list_history` for recent
@@ -51,8 +74,18 @@ The `initialize` response includes instructions for a diagnose-then-act flow:
    writing files, or starting an SSH task. If asked to turn recent commands
    into a reusable task, draft steps from history and wait for user
    confirmation instead of saving or running a task automatically.
+6. Summarize the evidence and propose the next action for the user's review.
+7. If the coding client changes code using its own coding tools, re-run the
+   original runtime check against the updated backend in the user-selected
+   workspace and environment, subject to the same policy and confirmation checks.
+8. Verify that the original symptom is gone and relevant runtime and database
+   state is consistent; report any checks that could not be completed.
 
-This diagnose-then-act sequence is Unfour's troubleshooting loop: Codex or
+Code changes in step 7 belong to the coding client, not Unfour MCP. Re-checking
+requires the updated code to be running in the target environment; a local code
+edit alone does not establish that a runtime issue is fixed.
+
+This diagnose → act → verify sequence is Unfour's troubleshooting loop: Codex or
 Cursor can use saved API, SSH, and database connections to reproduce an issue,
 inspect logs and database state, and then act with the user's review. The
 server does not automatically run a complete troubleshooting playbook; the

@@ -70,6 +70,15 @@ API 错误
 
 整个排查过程都留在同一个工作区中，但每个请求、SSH 会话、查询和验证步骤仍由用户主动选择。
 
+## 面向 Coding Agent
+
+Codex 或 Cursor 可以继续使用自己的仓库工具阅读、修改和测试代码。Unfour 通过 MCP
+提供受控的 API 行为、SSH / 服务器证据和数据库状态访问，补充这些工具的能力，
+帮助 Agent 排查正在运行的后端，并在修改后重新检查。
+
+Unfour 本身不修改代码仓库：代码变更由 Coding 客户端负责，Unfour 提供排查中的运行时信息。
+工作区、环境、高风险操作和最终决策仍由用户控制。
+
 ## 模块
 
 - **API Client（API 客户端）** - 编写并发送 HTTP 请求，将已保存的请求整理为集合与
@@ -84,7 +93,7 @@ API 错误
   限定在某个本地工作区之内，并支持标题栏切换当前环境。
 - **MCP integration（面向 Codex 与 Cursor）** - 通过桌面应用所用的同一命令总线，
   以本地 stdio 方式提供安全的诊断工具。Codex 与 Cursor 可以使用同一套已保存的 API、
-  SSH 与数据库连接来复现问题、查日志、查数据库状态并进行修复。使用者与 Codex 或 Cursor
+  SSH 与数据库连接来复现问题、查日志、查数据库状态并验证修复。使用者与 Codex 或 Cursor
   一起推进步骤；Unfour 不内置自动运行的排障剧本或 workflow runner。
 
 > [连接 Codex 与 Cursor 到 Unfour MCP →](docs/mcp/client-setup.md)
@@ -213,7 +222,7 @@ Codex 用于审查 Rust 与 TypeScript 架构、实现和重构 Tauri 命令、�
 GPT-5.6 用于分析 SSH 与数据库权限边界、优化 MCP 工具设计，以及规划项目架构和发布流程。
 
 Unfour 的本地 MCP 服务让 Codex 与 Cursor 可以使用同一套已保存的 API、SSH 与数据库连接
-进行诊断检查和修复，并沿用桌面应用相同的命令总线、工作区范围、凭据处理与操作确认控制。
+进行诊断检查和运行时复查，并沿用桌面应用相同的命令总线、工作区范围、凭据处理与操作确认控制。
 Codex 与 Cursor 可以通过 MCP 参与排障闭环，但连接 MCP 并不会自动运行完整的根因排障剧本。
 
 ## 许可证
