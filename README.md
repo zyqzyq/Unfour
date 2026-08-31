@@ -4,7 +4,9 @@
 
 # Unfour
 
-**A local-first desktop workspace for backend developers that combines API debugging, SSH terminals, and database management — and exposes them to Codex and Cursor through a local MCP server.**
+**A unified, local-first developer workspace for tracing backend failures from API requests through server logs and database state to verified fixes.**
+
+Unfour brings API testing, SSH, database tools, and MCP-assisted troubleshooting into one desktop application.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![CI](https://github.com/zyqzyq/Unfour/actions/workflows/ci.yml/badge.svg)](https://github.com/zyqzyq/Unfour/actions/workflows/ci.yml)
@@ -37,17 +39,22 @@ from GitHub Releases.
 
 ## What Is Unfour?
 
-Unfour is a local-first desktop workspace for backend and operations work.
-It keeps API requests, SSH connections, database connections, local activity,
-and workspace layout in one local-first application, and exposes those
-capabilities to Codex and Cursor through a local MCP server. The desktop
-workbench and the local MCP server share the same command bus and the same
-saved API, SSH, and database connections, so you and Codex or Cursor can
-reproduce an issue, inspect logs and database state, and then make a fix in the
-same troubleshooting loop. Troubleshooting is Unfour's core product loop.
-Unfour does not ship an automatic troubleshooting playbook: you and Codex or
-Cursor work through the steps together, using ready-made diagnostic tools
-rather than a workflow runner.
+Unfour helps backend developers investigate failures that span an API, a
+server, and its database. Troubleshooting is Unfour's core product loop:
+reproduce an issue with an API request, inspect server logs over SSH, check
+database state, identify the cause, and make and verify a fix.
+
+A unified, local-first workspace keeps requests, connections, local activity,
+and layout together throughout the investigation. API testing, SSH terminals,
+and database tools provide the capabilities for each step in that loop.
+
+MCP is an optional assisted layer: Codex and Cursor can use the local stdio
+MCP server to work with the same saved API, SSH, and database connections as
+the desktop app. Its workspace-scoped tools run through the shared command
+bus, subject to MCP policy and high-risk action confirmation checks.
+Troubleshooting remains user-directed. Unfour does not automatically correlate
+requests, logs, and database state or detect root causes, and it does not ship
+an automatic troubleshooting playbook or workflow runner.
 
 Unfour is one application and one product. Its core desktop features are free
 and open source under Apache-2.0. An active Pro subscription unlocks Cloud Sync
@@ -58,6 +65,23 @@ The app is built with Tauri 2, React, TypeScript, and Rust. The frontend owns
 the workbench UI, while security-sensitive execution such as HTTP, SSH,
 database drivers, local storage, and credential references lives behind Rust
 capability crates and the command bus.
+
+## Troubleshooting Workflow
+
+```text
+API error
+↓
+Inspect server logs over SSH
+↓
+Check related database state
+↓
+Identify the cause
+↓
+Repeat the request and verify the fix
+```
+
+The investigation stays in one workspace, while you remain in control of each
+request, SSH session, query, and verification step.
 
 ## Modules
 

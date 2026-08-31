@@ -4,7 +4,9 @@
 
 # Unfour
 
-**一个面向后端开发者的本地优先桌面工作台，整合 API 调试、SSH 终端与数据库管理，并通过本地 MCP 服务把能力暴露给 Codex 与 Cursor。**
+**一个统一、本地优先的开发者工作区，用于从 API 请求一路追踪后端故障到服务器日志、数据库状态和修复验证。**
+
+Unfour 在一个桌面应用中提供 API 测试、SSH、数据库工具和 MCP 辅助排障能力。
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![CI](https://github.com/zyqzyq/Unfour/actions/workflows/ci.yml/badge.svg)](https://github.com/zyqzyq/Unfour/actions/workflows/ci.yml)
@@ -34,19 +36,39 @@
 
 ## Unfour 是什么？
 
-Unfour 是一个面向后端与运维工作的本地优先桌面工作台。它把 API 请求、SSH 连接、
-数据库连接、本地活动与工作台布局统一在一个本地优先的应用中，并通过本地 MCP 服务把这些
-能力暴露给 Codex 与 Cursor。桌面工作台与本地 MCP 服务共用同一条命令总线，以及同一套已保存
-的 API、SSH 与数据库连接，因此你可以和 Codex 或 Cursor 在同一排障闭环中复现问题、查日志、
-查数据库状态，再进行修复。排障是 Unfour 的核心产品闭环。Unfour 不内置自动运行的排障剧本：
-你与 Codex 或 Cursor 一起推进步骤，使用现成的诊断工具，而不是由 workflow runner 自动编排。
+Unfour 帮助后端开发者排查涉及 API、服务器及其数据库的故障。排障是 Unfour 的核心产品闭环：
+通过 API 请求复现问题，经由 SSH 检查服务器日志，查看数据库状态，定位原因，再进行修复并验证。
+
+统一、本地优先的工作区让请求、连接、本地活动和布局贯穿整个排查过程。
+API 测试、SSH 终端与数据库工具为这条链路中的各个步骤提供能力。
+
+MCP 是可选的辅助层：Codex 与 Cursor 可以通过本地 stdio MCP 服务，使用与桌面应用相同的
+已保存 API、SSH 和数据库连接。工具限定在工作区范围内，经由共享命令总线执行，并遵循
+MCP 策略和高风险操作确认检查。排障仍由用户主导。Unfour 不会自动关联请求、日志与数据库状态，
+不会自动检测根因，也不内置自动运行的排障剧本或 workflow runner。
+
+Unfour 是一个统一的应用和产品。核心桌面功能免费并以 Apache-2.0 协议开源。
+用户可通过有效的 Pro 订阅在同一个应用中解锁 Cloud Sync。Pro 是 Unfour 内的订阅权益，
+不是独立的客户端、安装包、仓库或发布版本。
 
 应用基于 Tauri 2、React、TypeScript 与 Rust 构建。前端负责工作台界面，而 HTTP、SSH、
 数据库驱动、本地存储与凭据引用等安全敏感的执行逻辑，则位于 Rust 能力模块与命令总线之后。
 
-Unfour 是一个统一的应用和产品。核心桌面功能免费并以 Apache-2.0 协议开源。
-用户可通过 Pro 订阅在同一个应用中解锁 Cloud Sync。Pro 是 Unfour 内的订阅权益，
-不是独立的客户端、安装包、仓库或发布版本。
+## 排障工作流
+
+```text
+API 错误
+↓
+通过 SSH 检查服务器日志
+↓
+检查相关数据库状态
+↓
+定位问题原因
+↓
+重新发送请求并验证修复
+```
+
+整个排查过程都留在同一个工作区中，但每个请求、SSH 会话、查询和验证步骤仍由用户主动选择。
 
 ## 模块
 
