@@ -30,8 +30,10 @@ Unfour 在一个桌面应用中提供 API 测试、SSH、数据库工具和 MCP 
   SmartScreen。
 - macOS 提供 Apple Silicon 与 Intel 包，均已在真机验证，但未 Apple 签名、未公证；
   Gatekeeper 可能拦截。
-- Linux 目前只发布 x64 AppImage，定位为 Experimental（实验性）；`.deb` 和
-  `.rpm` 暂不正式支持，也不会公开发布。
+- Linux 目前只发布 x86_64（x64）AppImage，定位为 Experimental（实验性），
+  当前面向 Ubuntu 22.04+，不支持 Ubuntu 20.04。已发布的 v0.9.0 AppImage
+  早于本次构建基线修复，新产物仍待真实运行验证。`.deb` 和 `.rpm` 暂不正式支持，
+  也不会公开发布。
 - 使用 Release 中的 `SHA256SUMS.txt` 校验下载的安装包。
 
 ## Unfour 是什么？
@@ -187,10 +189,17 @@ pnpm run test:rust      # cargo test --workspace
 
 Windows 是主分发路径，提供尚未签名的 NSIS `.exe` 安装包，可能触发 SmartScreen。
 macOS 提供已在 Apple Silicon 与 Intel 真机验证过的包，但未 Apple 签名、未公证，
-Gatekeeper 可能拦截。Linux 目前只发布 x64 AppImage，定位为 Experimental
-（实验性）；`.deb` 和 `.rpm` 暂不正式支持，也不会公开发布。请使用 Release 中的
-`SHA256SUMS.txt` 校验下载的产物。除非发布检查确实成功执行，或有当前仓库证据支撑，
+Gatekeeper 可能拦截。Linux 目前只发布 x86_64（x64）AppImage，定位为 Experimental
+（实验性），当前运行与测试基线为 Ubuntu 22.04+，不支持 Ubuntu 20.04；不能仅凭
+glibc 版本就保证其他发行版兼容。`.deb` 和 `.rpm` 暂不正式支持，也不会公开发布。
+请使用 Release 中的 `SHA256SUMS.txt` 校验下载的产物。除非发布检查确实成功执行，或有当前仓库证据支撑，
 否则不得声称其通过。
+
+已发布的 v0.9.0 Linux AppImage 构建成功，但因依赖 Ubuntu 24.04 时代的
+GLIBC/GLIBCXX 符号，在 Ubuntu 20.04 上启动失败。本次 Ubuntu 22.04 构建基线修复
+仅适用于后续产物，不会替换已发布的 v0.9.0 文件。新产物构建并实测之前，
+Ubuntu 22.04/24.04 运行回归仍为 `NOT VERIFIED`，详见
+[发布验证记录](docs/testing/release-verification.md#linux-appimage-compatibility)。
 
 ## 文档
 

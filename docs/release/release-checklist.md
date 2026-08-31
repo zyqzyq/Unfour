@@ -2,7 +2,8 @@
 
 ## Recorded release outcomes
 
-This is the v0.9.0 outcome record, not an inference from CI or release assets:
+This is the v0.9.0 outcome record, not an inference from CI or release assets.
+The Linux baseline follow-up is explicitly marked as new-artifact work:
 
 | Area | Recorded status |
 | --- | --- |
@@ -17,7 +18,8 @@ This is the v0.9.0 outcome record, not an inference from CI or release assets:
 | v0.9.0 unified-client Cloud Sync multi-device regression, with single-device coverage recorded in the same run | NOT VERIFIED; historical live multi-device verification exists |
 | Creem Production first real end-to-end transaction and entitlement flow | NOT VERIFIED; Test is VERIFIED and Production is not failed |
 | MCP prod read-only, blocked-write, confirmation binding, and confirmed-retry behavior | NOT VERIFIED |
-| Linux x64 AppImage launch, desktop integration, and updater | NOT VERIFIED; Experimental |
+| v0.9.0 Linux x64 AppImage artifact build / Ubuntu 20.04 runtime | PASS / FAIL; Ubuntu 24.04-era GLIBC/GLIBCXX requirements; Ubuntu 20.04 is outside the current baseline |
+| Linux x86_64 AppImage, Ubuntu 22.04+ runtime baseline | Experimental; new-artifact Ubuntu 22.04/24.04 regression, desktop integration, and updater remain NOT VERIFIED |
 | Real MSIX install, Store servicing, Partner Center, callback, and alias journey | NOT VERIFIED; static contract/build-policy tests exist |
 | macOS Gatekeeper warning/trust behavior | NOT VERIFIED; signing/notarization is not enabled, and arm64/x64 install/run stays VERIFIED |
 
@@ -52,6 +54,9 @@ steps are not additional v0.9.0 `PASS` claims; the table above and
   shared build rather than produce unsigned updater artifacts.
 - Confirm the reusable workflow completes the full verify job and exactly four
   native builds: Windows x64, macOS arm64, macOS x64, and Linux x64.
+- For the next candidate, confirm the actual Linux build uses `ubuntu-22.04`
+  with a runner-specific Rust cache key. The independent verify job may use
+  `ubuntu-latest`; it must not supply packaged native artifacts.
 - Download all four `release-candidate-*` Actions artifacts. Verify canonical
   filenames, non-empty updater signatures, and that each file belongs to the
   expected architecture.
@@ -60,6 +65,12 @@ steps are not additional v0.9.0 `PASS` claims; the table above and
   the public x64 AppImage and `.sig` even if Tauri also built `.deb`/`.rpm`.
 - Record install, launch, upgrade, updater, signature rejection, OS trust, and
   uninstall results from the downloaded candidate artifacts.
+- For Linux Experimental (x86_64 AppImage only), record Ubuntu 22.04 executable
+  permission, launch, first-window rendering, API/SSH/Database module opening,
+  and quit/relaunch, plus an Ubuntu 24.04 launch smoke with the same artifact.
+  Retain Linux updater smoke and signature-rejection checks; unrun items remain
+  `NOT VERIFIED`. Follow `docs/testing/manual-test-cases.md`. Do not rebuild or
+  overwrite v0.9.0 artifacts to exercise the new baseline.
 - Confirm the RC run created no tag or GitHub Release, accessed no R2 path,
   changed neither `stable/latest.json` nor `stable/downloads.json`, and built
   or published no MSIX.

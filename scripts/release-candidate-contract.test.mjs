@@ -95,6 +95,46 @@ test("reusable Standard build does not declare workflow_call secrets", () => {
   assert.doesNotMatch(build, /workflow_call:[\s\S]*?\n    secrets:/);
 });
 
+test("Standard Linux release build baseline must remain pinned to ubuntu-22.04", () => {
+  const buildJob = readJob(readWorkflow("reusable-standard-build.yml"), "build");
+  // Inspect only the Linux include entry, not a snapshot of the workflow.
+  const linuxEntries = buildJob.match(
+    /^\s*-\s*\{[^\n]*\btarget:\s*x86_64-unknown-linux-gnu\b[^\n]*\}\s*$/gm,
+  ) ?? [];
+  const message = "Linux GLIBC compatibility baseline: Standard Linux release builds must remain pinned to ubuntu-22.04; changing it requires an explicit support-policy review and runtime verification.";
+
+  assert.equal(linuxEntries.length, 1, message);
+  assert.match(linuxEntries[0], /\bplatform:\s*ubuntu-22\.04\s*[,}]/, message);
+  assert.match(buildJob, /^    runs-on:\s*\$\{\{\s*matrix\.platform\s*\}\}\s*$/m, message);
+});
+
+test("Linux dependency installation and AppImage staging follow the target, not the runner label", () => {
+  const buildJob = readJob(readWorkflow("reusable-standard-build.yml"), "build");
+  const steps = buildJob.split(/\n      - /);
+  for (const name of ["Install Tauri system dependencies", "Stage canonical Linux assets"]) {
+    const step = steps.find((entry) => entry.startsWith(`name: ${name}\n`));
+    assert.ok(step, `Linux build must retain ${name}`);
+    assert.match(
+      step,
+      /^        if:\s*matrix\.target == 'x86_64-unknown-linux-gnu'\s*$/m,
+      `${name} must follow the Linux target so a runner change cannot skip it`,
+    );
+  }
+});
+
+test("Linux release native artifacts stay isolated from verify and older runner caches", () => {
+  const workflow = readWorkflow("reusable-standard-build.yml");
+  const verifyJob = readJob(workflow, "verify");
+  const buildJob = readJob(workflow, "build");
+
+  assert.doesNotMatch(verifyJob, /actions\/upload-artifact|pnpm run tauri build/);
+  assert.doesNotMatch(buildJob, /actions\/download-artifact/);
+  assert.ok(
+    buildJob.includes("key: ${{ matrix.target == 'x86_64-unknown-linux-gnu' && format('{0}-{1}', matrix.target, matrix.platform) || matrix.target }}"),
+    "Linux GLIBC compatibility baseline: Rust cache keys must isolate the Linux runner version from old native artifacts while retaining other platform keys",
+  );
+});
+
 test("shared staging enforces the four canonical signed platform outputs", () => {
   const build = readWorkflow("reusable-standard-build.yml");
 

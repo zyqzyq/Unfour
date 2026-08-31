@@ -189,7 +189,10 @@ required beyond the existing Standard publishing setup.
 
 ### Linux (Experimental)
 
-The Standard release currently publishes one Linux format: x64 AppImage.
+The Standard release currently publishes one Linux format: x86_64 (x64)
+AppImage only. Linux remains Experimental. Ubuntu 22.04 or newer is the current
+Linux runtime/test baseline; Ubuntu 20.04 is not supported. This is not a
+compatibility guarantee for every distribution with glibc 2.35 or newer.
 The canonical public assets are:
 
 - `Unfour_X.Y.Z_linux_x64.AppImage`
@@ -200,6 +203,48 @@ AppImage. Tauri may still generate `.deb` and `.rpm` files during the Linux
 build, but they remain CI intermediates: they are not copied into
 `release-assets/`, `SHA256SUMS.txt`, GitHub Releases, Cloudflare R2, or
 either stable manifest. Linux ARM64 is not a published Standard target.
+
+The shared Standard `build` job pins `x86_64-unknown-linux-gnu` to
+`ubuntu-22.04` for both RC and Release. Linux dependency installation and staging
+select that target, not a moving runner label. Its Rust cache key also includes
+the runner label so earlier Ubuntu 24.04 native dependencies cannot be restored
+from the former Linux build cache. Windows/macOS runners and cache keys are
+unchanged. The independent `verify` job can stay on `ubuntu-latest`: it uploads
+no native artifacts for packaging, uses a separate Rust cache key, and the
+actual build recompiles the release MCP sidecar via Tauri's `beforeBuildCommand`.
+Identity and publication jobs do not compile release binaries either.
+
+Ubuntu's Jammy package indexes list amd64 builds of
+[`libwebkit2gtk-4.1-dev`](https://packages.ubuntu.com/jammy/libwebkit2gtk-4.1-dev),
+[`libsoup-3.0-dev`](https://packages.ubuntu.com/jammy-updates/libsoup-3.0-dev), and
+[`libjavascriptcoregtk-4.1-dev`](https://packages.ubuntu.com/jammy/libjavascriptcoregtk-4.1-dev).
+[Tauri's AppImage guidance](https://v2.tauri.app/distribute/appimage/) also names
+Ubuntu 22.04 as a suitable WebKitGTK 4.1 build baseline. This is package-level
+evidence, not a successful hosted-runner apt/build or runtime test. Keep the
+standard Jammy updates/security repositories enabled. If apt
+cannot resolve the required packages, stop and record its output; do not fall
+back to `ubuntu-latest`.
+
+Runner lifecycle follow-up: GitHub has
+[announced](https://github.com/actions/runner-images/issues/14254) deprecation of
+`ubuntu-22.04` beginning 2026-09-17 and retirement on 2027-04-17. Before then,
+explicitly review how to preserve or revise the Linux build/runtime baseline;
+runner retirement must not trigger an unreviewed upgrade to `ubuntu-latest`.
+
+`pnpm run test:release-env` guards the pinned Linux runner, target-based steps,
+and native-cache isolation. No broad bundled-ELF ABI scanner is added: a check
+of only the main executable would miss runtime-loaded dependencies, while an
+unvalidated scan of every bundled GTK/WebKitGTK library could misclassify symbol
+definitions or unused libraries. The runner/cache contract is not an ABI or
+runtime proof. Require a newly built candidate to pass real Ubuntu 22.04 x64
+startup/module/relaunch checks and an Ubuntu 24.04 x64 launch smoke, plus the
+existing Linux updater smoke. See
+[manual cases](../testing/manual-test-cases.md#linux-appimage-experimental).
+
+The published v0.9.0 AppImage predates this fix and is not rebuilt or replaced.
+Its Ubuntu 20.04 runtime failure and the still-unverified Ubuntu 22.04+
+regression are recorded in
+[release verification](../testing/release-verification.md#linux-appimage-compatibility).
 
 ## Microsoft Store
 

@@ -33,8 +33,11 @@ from GitHub Releases.
 - macOS has Apple Silicon and Intel packages that have been verified on real
   devices, but they are not Apple-signed or notarized; Gatekeeper may block
   them.
-- Linux publishes an x64 AppImage only. It is Experimental; `.deb` and `.rpm`
-  packages are not formally supported or published.
+- Linux publishes an x86_64 (x64) AppImage only. It is Experimental and currently
+  targets Ubuntu 22.04+; Ubuntu 20.04 is not supported. The published v0.9.0
+  AppImage predates this build baseline; new-artifact runtime verification is
+  still pending. `.deb` and `.rpm` packages are not formally supported or
+  published.
 - Verify downloaded installers with the release `SHA256SUMS.txt` asset.
 
 ## What Is Unfour?
@@ -214,11 +217,20 @@ verification evidence is documented in:
 Windows is the primary distribution path and ships an unsigned NSIS `.exe`
 installer that may trigger SmartScreen. macOS has Apple Silicon and Intel
 packages verified on real devices, but they are not Apple-signed or notarized
-and Gatekeeper may block them. Linux publishes an x64 AppImage only and
-remains Experimental. `.deb` and `.rpm` packages are not formally supported
-or published. Use the release `SHA256SUMS.txt` to verify downloaded artifacts,
-and do not claim a release check passes unless it was run successfully for the
-target platform or is backed by current repository evidence.
+and Gatekeeper may block them. Linux publishes an x86_64 (x64) AppImage only,
+remains Experimental, and uses Ubuntu 22.04+ as its current runtime/test baseline.
+Ubuntu 20.04 is not supported; compatibility with other distributions is not
+guaranteed solely by their glibc version. `.deb` and `.rpm` packages are not
+formally supported or published. Use the release `SHA256SUMS.txt` to verify
+downloaded artifacts, and do not claim a release check passes unless it was run
+successfully for the target platform or is backed by current repository evidence.
+
+The published v0.9.0 Linux AppImage built successfully but failed to launch on
+Ubuntu 20.04 because it requires Ubuntu 24.04-era GLIBC/GLIBCXX symbols. The
+Ubuntu 22.04 build-baseline fix applies to future artifacts, not the immutable
+v0.9.0 download. Ubuntu 22.04/24.04 runtime regression remains `NOT VERIFIED`
+until a new artifact is built and tested; see
+[release verification](docs/testing/release-verification.md#linux-appimage-compatibility).
 
 Recorded v0.9.0 real-environment verification includes Windows install, launch,
 uninstall, and a previous-Stable-to-new-Stable update; macOS arm64/x64 install

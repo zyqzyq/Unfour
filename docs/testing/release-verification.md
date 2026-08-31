@@ -102,6 +102,52 @@ protocol smoke. The basic manual smoke remains useful as a future diagnostic or
 regression procedure, but it is not a separate outstanding v0.9.0 verification
 item.
 
+## Linux AppImage compatibility
+
+Linux remains Experimental: x86_64 (x64) only, AppImage only, with Ubuntu 22.04+
+as the current runtime/test baseline. Ubuntu 20.04 is not supported. Other
+distributions are not guaranteed compatible merely because they use glibc 2.35
+or newer.
+
+The release operator reported the v0.9.0 Ubuntu 20.04 startup failure and
+confirmed that its formal Linux release build ran on `ubuntu-latest`, then
+Ubuntu 24.04 / glibc 2.39. These runtime results are supplied evidence, not a
+local rerun during the baseline fix.
+
+| v0.9.0 Linux AppImage check | Result / evidence |
+| --- | --- |
+| Artifact build | PASS; the recorded Standard Release workflow produced and published the AppImage |
+| Ubuntu 20.04 x64 runtime | FAIL; missing `GLIBC_2.32`, `GLIBC_2.33`, `GLIBC_2.34`, `GLIBC_2.35`, `GLIBC_2.38`, `GLIBC_2.39`, `GLIBCXX_3.4.29`, and `GLIBCXX_3.4.30` |
+| Root cause | Binary/runtime dependencies were built against Ubuntu 24.04-era GLIBC/GLIBCXX; the release build baseline was too new, not a Rust business-logic, chmod, or FUSE defect |
+| Ubuntu 22.04+ regression after the build-baseline fix | NOT VERIFIED until a new artifact is built on the pinned runner and tested |
+| Linux desktop integration and updater | NOT VERIFIED |
+
+The fix pins the shared Standard Linux `build` job to `ubuntu-22.04` and
+isolates its Rust cache from older runner builds. `verify` may stay on
+`ubuntu-latest` because it supplies no packaged native artifacts. This changes
+future builds only: do not move the v0.9.0 tag, rebuild/overwrite its Release or
+R2 files, or describe its Linux runtime as PASS. Existing VERIFIED Windows and
+macOS results remain unchanged.
+
+### Next-artifact Linux regression gates
+
+Use a new candidate from the fixed workflow; record the commit, Actions run,
+artifact filename/SHA-256, Ubuntu version, architecture, desktop session, and
+startup logs with each result. Build success and static contracts alone do not
+satisfy these runtime gates.
+
+| Environment | Minimum real verification | Current result |
+| --- | --- | --- |
+| Ubuntu 22.04 x64 | `chmod +x` the AppImage; launch; first window renders; open API Client, SSH Terminal, and Database; quit and relaunch | NOT VERIFIED |
+| Ubuntu 24.04 x64 | Launch smoke test with the same candidate AppImage | NOT VERIFIED |
+| Linux Standard updater | Signed AppImage update from a runnable earlier installation, restart into the expected version, and record signature-rejection behavior separately | NOT VERIFIED |
+
+The Linux `linux-x86_64` signed AppImage remains part of the Standard updater
+contract. If no runnable previous build or safe update feed is available,
+record that blocker instead of PASS; do not change stable metadata just to
+exercise a candidate. Detailed steps are in
+[Linux manual cases](manual-test-cases.md#linux-appimage-experimental).
+
 ## Earlier automated evidence (historical)
 
 The PASS values in this section are retained from the earlier `74c7270` run.
@@ -149,7 +195,7 @@ erase a completed install, updater, account, platform, or MCP client journey.
 | Standard updater rejection | Manual rejection of an invalid updater signature | NOT VERIFIED manually; artifact signatures and Store updater-policy tests do not establish this result. The real previous-Stable-to-new-Stable success path is VERIFIED. |
 | macOS signing and notarization | Apple signing and notarization | NOT APPLICABLE because neither is enabled for v0.9.0; this is not a test failure |
 | macOS Gatekeeper trust | Exact warning/trust behavior for the unsigned and unnotarized packages | NOT VERIFIED; arm64 and x64 install/run remain VERIFIED |
-| Linux | x64 AppImage launch, desktop integration, and updater behavior | NOT VERIFIED; Linux remains Experimental |
+| Linux | Experimental x86_64 AppImage; Ubuntu 22.04+ baseline | v0.9.0 Ubuntu 20.04 launch FAIL (unsupported baseline); new-artifact Ubuntu 22.04/24.04 regression, desktop integration, and updater remain NOT VERIFIED; see Linux compatibility record above |
 | Published Standard artifacts | tagged workflow publication and GitHub asset inventory | VERIFIED; installed behavior is not inferred |
 | Microsoft Store / MSIX | Real MSIX install, callback, MCP alias, Store servicing, Partner Center acceptance, and coexistence behavior | Static contract/build-policy tests PASS; real package and Store journeys remain NOT VERIFIED |
 | Migration | old Community DB, old Pro DB, clean DB | PASS (9 storage migration tests, including exact old-Pro data preservation) |

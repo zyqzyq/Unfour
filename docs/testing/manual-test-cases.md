@@ -168,8 +168,10 @@ Download the four `release-candidate-*` Actions artifacts from the exact
 reviewed commit. For each target platform:
 
 Recorded v0.9.0 scope: Windows install/launch/uninstall and real Stable upgrade
-are `VERIFIED`; macOS arm64 and x64 install/run are `VERIFIED`. Linux AppImage
-runtime behavior and real Microsoft Store/MSIX journeys remain `NOT VERIFIED`.
+are `VERIFIED`; macOS arm64 and x64 install/run are `VERIFIED`. The v0.9.0 Linux
+AppImage failed on Ubuntu 20.04 (outside the current supported baseline);
+new-artifact Ubuntu 22.04+ runtime regression and real Microsoft Store/MSIX
+journeys remain `NOT VERIFIED`.
 
 - Install from the release artifact.
 - Launch the installed app.
@@ -184,6 +186,55 @@ runtime behavior and real Microsoft Store/MSIX journeys remain `NOT VERIFIED`.
   after the sidecar is stopped.
 - Uninstall and confirm the app is removed cleanly.
 
+## Linux AppImage (Experimental)
+
+Linux support is x86_64 (x64) only, AppImage only, and Experimental. Ubuntu
+22.04+ is the current runtime/test baseline. Ubuntu 20.04 is not supported;
+glibc version alone does not establish compatibility with other distributions.
+
+For v0.9.0, artifact build is `PASS`, but Ubuntu 20.04 runtime is `FAIL` due to
+Ubuntu 24.04-era GLIBC/GLIBCXX requirements from the former `ubuntu-latest`
+release runner. The supplied error evidence is retained in
+[release verification](release-verification.md#linux-appimage-compatibility).
+The Ubuntu 22.04+ regression stays `NOT VERIFIED` until a new artifact is built
+on the pinned `ubuntu-22.04` runner and tested. Do not rebuild or replace the
+published v0.9.0 files; Windows/macOS VERIFIED results remain unchanged.
+
+Use the same new `release-candidate-x86_64-unknown-linux-gnu` artifact on both
+Ubuntu versions. Record its source commit, Actions run, filename, SHA-256,
+Ubuntu version, architecture (`uname -m`), desktop session, and startup output.
+
+### Ubuntu 22.04 x64 minimum runtime check
+
+All items below are currently `NOT VERIFIED` for the new artifact:
+
+- Run `chmod +x ./Unfour_X.Y.Z_linux_x64.AppImage` on the actual candidate file.
+- Launch that AppImage from a terminal and retain any loader/GLIBC/GLIBCXX errors.
+- Confirm the first window renders, not merely that a process starts.
+- Open API Client, SSH Terminal, and Database; confirm each module renders.
+- Quit completely, relaunch the same AppImage, and confirm the window renders.
+- Record desktop integration behavior separately; it is not implied by launch.
+
+### Ubuntu 24.04 x64 launch smoke
+
+- Make the same candidate executable, launch it, and confirm the first window
+  renders. Record the result independently; currently `NOT VERIFIED`.
+
+### Linux Standard updater smoke
+
+The `linux-x86_64` signed AppImage is still a formal Standard updater target.
+Currently `NOT VERIFIED`:
+
+- From a runnable earlier AppImage on Ubuntu 22.04 x64, exercise a signed update
+  using an approved test setup; confirm download, installation, restart, and
+  the expected version after relaunch.
+- Record invalid-signature rejection separately; it must not install the
+  rejected artifact.
+- Record source/destination versions and feed context. If a runnable earlier
+  build or safe update feed is unavailable, record the limitation as
+  `NOT VERIFIED`. Do not overwrite v0.9.0 assets or promote stable manifests to
+  create test evidence. No new Release is needed for the startup checks above.
+
 ## Signing And Trust Prompts
 
 Apple signing and notarization are not enabled for v0.9.0 and therefore are not
@@ -196,5 +247,5 @@ macOS arm64/x64 install and run results.
 - Verify checksums before launch.
 - On macOS, record notarization and Gatekeeper behavior.
 - On Windows, record SmartScreen or certificate trust behavior.
-- On Linux, exercise the x64 AppImage and record launch, desktop integration,
-  and updater behavior.
+- On Linux, follow the Experimental x64 AppImage Ubuntu 22.04/24.04 cases above
+  and record launch, desktop integration, and updater behavior independently.
