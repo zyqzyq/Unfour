@@ -89,7 +89,7 @@ falling back to another profile.
 The root Tauri launcher always exports a channel to the complete child process
 and Cargo graph. Local `pnpm tauri dev` defaults to Test, while
 `pnpm tauri build` defaults to Stable. Use `pnpm tauri build:test` for an
-isolated Test-channel bundle. Formal `v0.9.0` release CI still explicitly sets
+isolated Test-channel bundle. Formal Standard Release CI explicitly sets
 `UNFOUR_RELEASE_CHANNEL=stable` and the exact build commit. Direct Cargo/Tauri
 invocations without the variable emit a warning and consistently compile as
 Test.

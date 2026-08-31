@@ -18,7 +18,7 @@ Unfour brings API testing, SSH, database tools, and MCP-assisted troubleshooting
 </div>
 
 > [!WARNING]
-> This source tree targets Unfour v0.9.0. Windows NSIS
+> This source tree targets Unfour v0.9.1. Windows NSIS
 > installers are unsigned and may trigger SmartScreen or other operating-system
 > security warnings. Use `SHA256SUMS.txt` from the GitHub Release to verify
 > downloaded files.
@@ -205,7 +205,7 @@ map.
 
 ## Release Status
 
-This source tree targets Unfour v0.9.0. Release
+This source tree targets Unfour v0.9.1. Release
 verification evidence is documented in:
 
 - `docs/testing/release-verification.md`

@@ -1,6 +1,15 @@
-# v0.9.0 final release checklist
+# v0.9.1 release checklist
 
-## Recorded release outcomes
+## v0.9.1 preparation status
+
+- Source version: `0.9.1`; the latest published release remains `v0.9.0`.
+- Version synchronization: `PASS` (`node scripts/sync-version.mjs --check`).
+- Cargo workspace lock/check: `PASS` (`cargo check --workspace --locked`).
+- Release contract suite: `PASS` (72 tests via the direct Node test command).
+- Candidate artifact, platform, live-service, and manual checks: `NOT VERIFIED`;
+  they require fresh evidence for the v0.9.1 candidate.
+
+## Previous v0.9.0 recorded release outcomes
 
 This is the v0.9.0 outcome record, not an inference from CI or release assets.
 The Linux baseline follow-up is explicitly marked as new-artifact work:
@@ -27,9 +36,10 @@ The completed real Codex and Cursor checks supersede a separate basic MCP
 manual-smoke release gate. Keep the protocol smoke procedure for diagnostics
 and future regression use.
 
-The sections below preserve the reusable release procedure. Their imperative
-steps are not additional v0.9.0 `PASS` claims; the table above and
-`docs/testing/release-verification.md` are the recorded outcome.
+The sections below preserve the reusable release procedure for v0.9.1. Their
+imperative steps are not additional v0.9.1 `PASS` claims; the v0.9.0 table above
+and `docs/testing/release-verification.md` are historical outcome records until
+new v0.9.1 evidence is recorded.
 
 ## Shared gate
 
@@ -120,10 +130,10 @@ steps are not additional v0.9.0 `PASS` claims; the table above and
 - Manually exercise install, launch, update from the previous Stable version,
   MCP sidecar replacement, uninstall, and signature rejection.
 
-For v0.9.0, install, launch, previous-Stable update, and uninstall are
-`VERIFIED`. Manual updater signature rejection was not included in the recorded
-live journey; artifact signatures and Store updater-policy tests do not convert
-it to a manual `PASS`.
+For the published v0.9.0 release, install, launch, previous-Stable update, and
+uninstall are `VERIFIED`. Manual updater signature rejection was not included in
+the recorded live journey; artifact signatures and Store updater-policy tests do
+not convert it to a manual `PASS`.
 
 ## Microsoft Store
 

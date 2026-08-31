@@ -14,7 +14,9 @@ Unfour opens into a single workspace surface:
 
 ## Current Capabilities
 
-This guide documents the current v0.9.0 release capabilities:
+This guide documents the current v0.9.1 product capabilities. The published
+v0.9.0 verification record remains the latest completed release evidence until
+the v0.9.1 candidate is verified:
 
 - The workspace shell is usable.
 - API debugging supports request editing, Send, response viewing, history,
@@ -31,7 +33,7 @@ This guide documents the current v0.9.0 release capabilities:
 - SQLite, PostgreSQL, and MySQL database workflows are verified.
 - Compatible MariaDB servers use the MySQL driver path where protocol and SQL
   behavior are compatible; independent MariaDB verification is not part of the
-  current v0.9.0 release record.
+  published v0.9.0 release record.
 - SSH Terminal workflows have completed release-level verification against a
   real SSH server.
 

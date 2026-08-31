@@ -1,4 +1,18 @@
-# v0.9.0 Final Release Verification Record
+# v0.9.1 Release Verification
+
+This document tracks v0.9.1 release preparation. The published v0.9.0 results
+remain below as historical evidence; a new v0.9.1 candidate needs fresh
+evidence and must not inherit those release results automatically.
+
+## v0.9.1 preparation status
+
+- Source version: `0.9.1`; release status: `NOT RELEASED`.
+- Version synchronization: `PASS` (`node scripts/sync-version.mjs --check`).
+- Cargo workspace lock/check: `PASS` (`cargo check --workspace --locked`).
+- Release contract suite: `PASS` (72 tests via the direct Node test command).
+- Candidate artifact, platform, live-service, and manual gates: `NOT VERIFIED`.
+
+## Previous v0.9.0 Final Release Verification Record
 
 This document records the final status of the published `v0.9.0` release. It
 distinguishes implemented behavior from real-environment verification and

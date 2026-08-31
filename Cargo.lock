@@ -6881,7 +6881,7 @@ dependencies = [
 
 [[package]]
 name = "unfour"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "async-trait",
  "reqwest 0.13.4",
@@ -6910,7 +6910,7 @@ dependencies = [
 
 [[package]]
 name = "unfour-account"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "base64 0.22.1",
  "rand 0.8.6",
@@ -6928,7 +6928,7 @@ dependencies = [
 
 [[package]]
 name = "unfour-app"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -6948,7 +6948,7 @@ dependencies = [
 
 [[package]]
 name = "unfour-cloud-sync"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -6973,7 +6973,7 @@ dependencies = [
 
 [[package]]
 name = "unfour-cloud-sync-storage"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "sqlx",
  "tokio",
@@ -6983,7 +6983,7 @@ dependencies = [
 
 [[package]]
 name = "unfour-command-bus"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -7002,7 +7002,7 @@ dependencies = [
 
 [[package]]
 name = "unfour-core"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chrono",
  "reqwest 0.12.28",
@@ -7015,7 +7015,7 @@ dependencies = [
 
 [[package]]
 name = "unfour-database-engine"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chrono",
  "serde_json",
@@ -7030,7 +7030,7 @@ dependencies = [
 
 [[package]]
 name = "unfour-diag"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chrono",
  "serde",
@@ -7045,7 +7045,7 @@ dependencies = [
 
 [[package]]
 name = "unfour-http-engine"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chrono",
  "reqwest 0.12.28",
@@ -7063,7 +7063,7 @@ dependencies = [
 
 [[package]]
 name = "unfour-local-storage"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chrono",
  "serde_json",
@@ -7077,7 +7077,7 @@ dependencies = [
 
 [[package]]
 name = "unfour-mcp"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "jsonschema",
  "serde",
@@ -7095,14 +7095,14 @@ dependencies = [
 
 [[package]]
 name = "unfour-paths"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "dirs",
 ]
 
 [[package]]
 name = "unfour-secret-store"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "keyring",
  "serde_json",
@@ -7114,7 +7114,7 @@ dependencies = [
 
 [[package]]
 name = "unfour-ssh-engine"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chrono",
  "russh",
@@ -7133,7 +7133,7 @@ dependencies = [
 
 [[package]]
 name = "unfour-workspace-engine"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chrono",
  "serde",

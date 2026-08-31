@@ -123,7 +123,7 @@ Historical status:
 
 Release claims remain limited by the current verification matrix.
 
-## v0.9.0 (Current published release)
+## v0.9.0 (Previous published release)
 
 Implemented in v0.9.0:
 
@@ -152,6 +152,25 @@ Current status:
   released; and
 - final publication evidence and the remaining platform-specific limits are
   recorded in `docs/testing/release-verification.md`.
+
+Release claims remain limited by the current verification matrix.
+
+## v0.9.1 (Current source version)
+
+Maintenance and release-hardening follow-up to the published v0.9.0 release:
+
+- frontend lifecycle hardening and broader high-risk execution coverage;
+- Cloud Sync repository and worker responsibility splits;
+- a separate public `stable/downloads.json` installer manifest;
+- an Ubuntu 22.04 baseline for Standard Linux x86_64 AppImage builds; and
+- Codex and Cursor MCP runtime verification guidance and troubleshooting
+  documentation.
+
+Current status:
+
+- source version is `0.9.1`; the latest published release remains `v0.9.0`;
+- the v0.9.0 publication evidence remains historical until a new v0.9.1
+  candidate is verified.
 
 Release claims remain limited by the current verification matrix.
 

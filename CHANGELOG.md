@@ -6,6 +6,35 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-08-31
+
+Maintenance release following `v0.9.0`, focused on release hardening, runtime
+verification, and maintainability.
+
+### Added
+
+- **Public download manifest** — Publish a separate `stable/downloads.json`
+  manifest for website and Download Worker installer links.
+- **Coding-agent runtime guidance** — Document the real Codex and Cursor MCP
+  verification journey and the troubleshooting loop around Unfour.
+
+### Changed
+
+- **Cloud Sync structure** — Split repository, reconciliation, and worker
+  responsibilities into focused modules without changing package ownership.
+- **Linux AppImage baseline** — Pin the Standard x86_64 build to Ubuntu 22.04
+  and isolate its native Rust cache from older runner builds.
+- **Release evidence and product messaging** — Clarify release limits,
+  distribution support, and the backend-troubleshooting positioning.
+
+### Fixed
+
+- **Frontend lifecycle handling** — Harden account, Cloud Sync, update, API,
+  Database, SSH, and shared UI hook lifecycles and remove related lint issues.
+- **Safety regression coverage** — Expand account, database, SSH task,
+  command-bus, Cloud Sync, and MCP coverage for high-risk execution paths and
+  transactional rollback behavior.
+
 ## [0.9.0] - 2026-08-29
 
 Released after `v0.8.0`, adding account-gated Cloud Sync, unified desktop and
@@ -463,6 +492,7 @@ First public release.
 - Linux artifacts remain experimental/unverified until real-device smoke checks
   are complete.
 
+[0.9.1]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.1
 [0.9.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.0
 [0.8.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.8.0
 [0.7.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.7.0
