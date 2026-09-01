@@ -8,6 +8,7 @@ use unfour_secret_store::SecretStore;
 
 mod account;
 mod sync;
+mod telemetry;
 mod update;
 
 pub use update::handle_build_metadata_cli;
@@ -28,6 +29,7 @@ pub fn run() {
         account_state,
         sync_state,
         sync_receiver,
+        telemetry_state,
     } = runtime;
 
     // The worker starts only after unified migrations have completed and the
@@ -47,6 +49,7 @@ pub fn run() {
     .plugin(tauri_plugin_deep_link::init())
     .manage(account_state)
     .manage(sync_state)
+    .manage(telemetry_state)
     .manage(update::PendingUpdate::default());
     // Store builds never register the updater plugin. The commands remain in
     // the static handler table but independently reject Store distribution,
@@ -79,6 +82,10 @@ pub fn run() {
             sync::cloud_sync_conflicts,
             sync::cloud_sync_keep_local,
             sync::cloud_sync_use_remote,
+            telemetry::telemetry_get_preferences,
+            telemetry::telemetry_set_enabled,
+            telemetry::telemetry_mark_notice_shown,
+            telemetry::telemetry_record_active,
             update::get_update_info,
             update::check_for_update,
             update::install_update
@@ -92,6 +99,7 @@ struct UnifiedDesktopRuntime {
     account_state: account::AccountAppState,
     sync_state: sync::SyncAppState,
     sync_receiver: mpsc::UnboundedReceiver<String>,
+    telemetry_state: telemetry::TelemetryAppState,
 }
 
 async fn initialize_unified_runtime() -> AppResult<UnifiedDesktopRuntime> {
@@ -102,6 +110,7 @@ async fn initialize_unified_runtime() -> AppResult<UnifiedDesktopRuntime> {
         env!("UNFOUR_ACCOUNT_API_URL"),
         env!("UNFOUR_ACCOUNT_WEB_URL"),
         env!("UNFOUR_ACCOUNT_ALLOW_LOOPBACK_HTTP") == "1",
+        telemetry::compiled_config()?,
     )
     .await
 }
@@ -111,6 +120,7 @@ async fn initialize_unified_runtime_with_db(
     account_api_url: &str,
     account_web_url: &str,
     allow_loopback_http: bool,
+    telemetry_config: unfour_telemetry::TelemetryConfig,
 ) -> AppResult<UnifiedDesktopRuntime> {
     // One compatibility-aware migrator entry point owns both the historical
     // core schema and the migrated Cloud Sync schema.
@@ -130,9 +140,13 @@ async fn initialize_unified_runtime_with_db(
     let (sync_service, sync_hook, sync_receiver) =
         unfour_cloud_sync::SyncRuntime::build(db.clone(), Arc::new(transport));
     let command_bus_extensions = CommandBusExtensions::new(vec![sync_hook]);
+    let secret_store = SecretStore::new(DEFAULT_SECRET_SERVICE);
+    let telemetry_state = telemetry::TelemetryAppState::new(
+        unfour_telemetry::TelemetryService::new(db.clone(), secret_store.clone(), telemetry_config),
+    );
     let command_bus = CommandBus::from_db_with_secret_store_and_extensions(
         db,
-        SecretStore::new(DEFAULT_SECRET_SERVICE),
+        secret_store,
         command_bus_extensions,
     )
     .await?;
@@ -142,6 +156,7 @@ async fn initialize_unified_runtime_with_db(
         account_state,
         sync_state: sync::SyncAppState::new(sync_service, sync_access),
         sync_receiver,
+        telemetry_state,
     })
 }
 
@@ -173,6 +188,10 @@ mod unified_runtime_tests {
             "https://offline-api.example.test",
             "https://offline.example.test",
             false,
+            unfour_telemetry::TelemetryConfig::new(
+                "0.9.1", "windows", "x86_64", "test", "standard", None,
+            )
+            .expect("test telemetry config"),
         )
         .await
         .expect("network availability must not gate local startup");

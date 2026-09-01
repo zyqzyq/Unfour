@@ -5,4 +5,5 @@ export * from "./tauri/diagnostics";
 export * from "./tauri/mcp";
 export * from "./tauri/secret-store";
 export * from "./tauri/ssh";
+export * from "./tauri/telemetry";
 export * from "./tauri/workspace";

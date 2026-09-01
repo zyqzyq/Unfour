@@ -22,6 +22,17 @@ test("Standard Stable and Test both enable their updater endpoints", () => {
   );
 });
 
+test("only Stable builds receive the production telemetry endpoint", () => {
+  const stable = resolveBuildProfile("0.8.0", "stable", "standard");
+  const testProfile = resolveBuildProfile("0.8.0", "test", "standard");
+
+  assert.equal(
+    stable.telemetryEndpoint,
+    "https://telemetry.unfour.dev/v1/active",
+  );
+  assert.equal(testProfile.telemetryEndpoint, null);
+});
+
 test("standard and Store are independent distribution authorities", () => {
   const standard = resolveBuildProfile("0.8.0", "stable", "standard");
   const store = resolveBuildProfile("0.8.0", "stable", "microsoft-store");
@@ -36,6 +47,7 @@ test("standard and Store are independent distribution authorities", () => {
   assert.equal(store.updaterEnabled, false);
   assert.equal(store.updaterEndpoint, null);
   assert.equal(store.accountApiUrl, standard.accountApiUrl);
+  assert.equal(store.telemetryEndpoint, standard.telemetryEndpoint);
   assert.equal(store.defaultStorageProfile, standard.defaultStorageProfile);
 });
 

@@ -29,6 +29,7 @@ struct ResolvedBuildProfile {
     distribution: String,
     account_api_url: String,
     account_web_url: String,
+    telemetry_endpoint: String,
     updater_enabled: String,
     updater_endpoint: String,
     allow_loopback_http: String,
@@ -80,6 +81,10 @@ fn resolve_build_profile() -> ResolvedBuildProfile {
         distribution: required_profile_value(&values, "distribution"),
         account_api_url: required_profile_value(&values, "account_api_url"),
         account_web_url: required_profile_value(&values, "account_web_url"),
+        telemetry_endpoint: values
+            .get("telemetry_endpoint")
+            .cloned()
+            .unwrap_or_default(),
         updater_enabled: required_profile_value(&values, "updater_enabled"),
         updater_endpoint: values.get("updater_endpoint").cloned().unwrap_or_default(),
         allow_loopback_http: required_profile_value(&values, "allow_loopback_http"),
@@ -95,6 +100,16 @@ fn resolve_build_profile() -> ResolvedBuildProfile {
         _ => panic!(
             "invalid distribution/updater build profile: distribution={}, updater_enabled={}, updater_endpoint={:?}",
             profile.distribution, profile.updater_enabled, profile.updater_endpoint
+        ),
+    }
+    match (
+        profile.release_channel.as_str(),
+        profile.telemetry_endpoint.is_empty(),
+    ) {
+        ("test", true) | ("stable", false) => {}
+        _ => panic!(
+            "invalid telemetry build profile: channel={}, endpoint={:?}",
+            profile.release_channel, profile.telemetry_endpoint
         ),
     }
     profile
@@ -146,6 +161,10 @@ fn bake_build_profile(profile: &ResolvedBuildProfile) {
     println!(
         "cargo:rustc-env=UNFOUR_ACCOUNT_WEB_URL={}",
         profile.account_web_url
+    );
+    println!(
+        "cargo:rustc-env=UNFOUR_TELEMETRY_ENDPOINT={}",
+        profile.telemetry_endpoint
     );
     println!(
         "cargo:rustc-env=UNFOUR_ACCOUNT_ALLOW_LOOPBACK_HTTP={}",

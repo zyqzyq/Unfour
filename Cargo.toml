@@ -14,6 +14,7 @@ members = [
   "crates/unfour-mcp",
   "crates/unfour-app",
   "crates/unfour-account",
+  "crates/unfour-telemetry",
   "crates/unfour-cloud-sync",
   "crates/unfour-cloud-sync-storage",
 ]

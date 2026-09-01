@@ -12,6 +12,7 @@ import { DesktopErrorBoundary } from "./DesktopErrorBoundary";
 import { accountI18nResources } from "./features/account";
 import { cloudSyncI18nResources } from "./features/cloud-sync";
 import { updateI18nResources } from "./features/update";
+import { telemetryI18nResources } from "./features/telemetry";
 import "@unfour/ui/styles.css";
 import "@unfour/app-shell/styles.css";
 import "./styles.css";
@@ -30,11 +31,13 @@ const desktopFeatureI18nResources: I18nResources = {
     ...accountI18nResources.en,
     ...cloudSyncI18nResources.en,
     ...updateI18nResources.en,
+    ...telemetryI18nResources.en,
   },
   "zh-CN": {
     ...accountI18nResources["zh-CN"],
     ...cloudSyncI18nResources["zh-CN"],
     ...updateI18nResources["zh-CN"],
+    ...telemetryI18nResources["zh-CN"],
   },
 };
 

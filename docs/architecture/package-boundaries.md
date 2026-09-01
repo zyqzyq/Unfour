@@ -123,6 +123,7 @@ and should reuse `packages/ui` primitives where possible.
 | `crates/local-storage` | SQLite migrations, local database access, and local activity logging. | Raw secret storage. |
 | `crates/secret-store` | Credential reference management backed by OS keychain or test memory store. | SQLite plaintext secret persistence. |
 | `crates/unfour-account` | Account sign-in, desktop-session credential storage, entitlement refresh, and validated billing-session URLs. | Tauri UI behavior, SQLite plaintext session storage. |
+| `crates/unfour-telemetry` | Desktop anonymous active-installation telemetry, account-independent installation identity, UTC daily gating, local telemetry preferences, and best-effort transport. | Account identity, workspace or feature analytics, Tauri UI behavior, Cloud Sync. |
 | `crates/unfour-cloud-sync-storage` | Unified compatibility migration chain for core and Cloud Sync schema. | Sync transport or UI behavior. |
 | `crates/unfour-cloud-sync` | Local-first reconciliation, transport, sync repository/runtime, and transactional outbox hook. | Tauri UI behavior, replacing local SQLite as runtime source of truth. |
 | `crates/http-engine` | API request execution after workspace-variable resolution, bounded request-script runtime, saved requests, history, and redaction persistence. | Workspace variable persistence/resolution, UI state, database query execution, SSH sessions. |

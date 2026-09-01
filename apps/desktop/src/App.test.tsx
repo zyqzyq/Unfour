@@ -74,7 +74,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("desktop feature composition", () => {
-  it("injects Account and Cloud Sync extensions without blocking the core desktop", async () => {
+  it("injects Privacy, Account, and Cloud Sync extensions without blocking the core desktop", async () => {
     render(<App />);
 
     expect(screen.getByTestId("desktop-app")).toHaveTextContent("local desktop");
@@ -83,6 +83,7 @@ describe("desktop feature composition", () => {
 
     const extensions = mocks.extensions;
     expect(extensions?.settingsSections?.map((section) => section.id)).toEqual([
+      "telemetry.privacy",
       "account.settings",
       "cloud-sync.settings",
       "updates.settings",

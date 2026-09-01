@@ -7,6 +7,7 @@ import { handleSecretStoreMock } from "./secret-store";
 import { handleSftpMock } from "./sftp";
 import { handleSshMock } from "./ssh";
 import { handleSshTaskMock } from "./ssh-tasks";
+import { handleTelemetryMock } from "./telemetry";
 import { handleWorkspaceMock } from "./workspace";
 import { UNHANDLED, type MockCommandHandler } from "./types";
 
@@ -20,6 +21,7 @@ const mockHandlers: MockCommandHandler[] = [
   handleSshMock,
   handleSshTaskMock,
   handleSftpMock,
+  handleTelemetryMock,
   handleMcpMock,
 ];
 

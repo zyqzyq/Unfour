@@ -26,13 +26,18 @@ import {
   UpdateProvider,
   updatesSection,
 } from "./features/update";
+import {
+  TelemetryNotice,
+  TelemetryProvider,
+  telemetryPrivacySection,
+} from "./features/telemetry";
 
 function DesktopTitleBarEnd(context: DesktopAppExtensionContext) {
   return <><CloudSyncStatus {...context} /><AccountIndicator /><UpdateIndicator /></>;
 }
 
 function DesktopOverlays(context: DesktopAppExtensionContext) {
-  return <><AccountOverlays /><UpdateOverlays /><CloudSyncOverlays {...context} /></>;
+  return <><TelemetryNotice /><AccountOverlays /><UpdateOverlays /><CloudSyncOverlays {...context} /></>;
 }
 
 function ExtendedDesktopApp() {
@@ -42,7 +47,7 @@ function ExtendedDesktopApp() {
     createCloudSyncWorkspaceActions(cloudSync, t, workspace);
   const extensions: DesktopAppExtensions = {
     titleBarEnd: DesktopTitleBarEnd,
-    settingsSections: [accountSection, cloudSyncSection, updatesSection],
+    settingsSections: [telemetryPrivacySection, accountSection, cloudSyncSection, updatesSection],
     workspaceDecoration: CloudSyncWorkspaceDecoration,
     workspaceMenuActions,
     workspaceMenuFooterActions: [{
@@ -59,13 +64,15 @@ function ExtendedDesktopApp() {
 
 function App() {
   return (
-    <UpdateProvider>
-      <AccountProvider>
-        <CloudSyncProvider>
-          <ExtendedDesktopApp />
-        </CloudSyncProvider>
-      </AccountProvider>
-    </UpdateProvider>
+    <TelemetryProvider>
+      <UpdateProvider>
+        <AccountProvider>
+          <CloudSyncProvider>
+            <ExtendedDesktopApp />
+          </CloudSyncProvider>
+        </AccountProvider>
+      </UpdateProvider>
+    </TelemetryProvider>
   );
 }
 

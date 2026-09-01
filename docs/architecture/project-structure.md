@@ -29,6 +29,7 @@ Unfour/
     workspace-engine/        workspace CRUD, environments, layout persistence
     secret-store/            OS keychain credential boundary
     unfour-account/          account, entitlement, and billing-session service
+    unfour-telemetry/        anonymous active-installation telemetry service
     unfour-cloud-sync/       local-first Cloud Sync overlay and outbox hook
     unfour-cloud-sync-storage/ unified Cloud Sync migration chain
     unfour-app/              shared Tauri composition layer
@@ -69,6 +70,7 @@ Unfour/
 | `unfour-local-storage` | SQLite setup, migrations, local persistence, and activity log. |
 | `unfour-secret-store` | Credential reference service backed by OS keychain in production and in-memory storage in tests. |
 | `unfour-account` | Desktop account, entitlement, hosted sign-in, and billing-session service. Construction is offline and credentials remain in the OS keychain. |
+| `unfour-telemetry` | Desktop anonymous active-installation telemetry, independent random identity, global local preferences, UTC daily success gating, and best-effort HTTP transport. |
 | `unfour-cloud-sync-storage` | Compatibility-aware unified migration entry point for core and historical Cloud Sync schema. |
 | `unfour-cloud-sync` | Local-first Cloud Sync service, transport, background runtime, repository, and command-bus outbox hook. |
 | `unfour-http-engine` | API execution after shared workspace-variable resolution, bounded request-script execution, saved requests, history, and persistence redaction. |
@@ -114,6 +116,7 @@ unfour-diag -> unfour-core, unfour-paths
 unfour-local-storage -> unfour-core, unfour-diag
 unfour-secret-store -> unfour-core, unfour-diag
 unfour-account -> unfour-core, unfour-secret-store
+unfour-telemetry -> unfour-core, unfour-local-storage, unfour-secret-store
 unfour-cloud-sync-storage -> unfour-core, unfour-local-storage
 unfour-http-engine -> unfour-core, unfour-local-storage, unfour-diag
 unfour-database-engine -> unfour-core, unfour-local-storage, unfour-diag
@@ -136,7 +139,7 @@ unfour-mcp
      unfour-core, unfour-diag, unfour-paths
 
 unfour Tauri binary
-  -> unfour-app, unfour-account, unfour-cloud-sync,
+  -> unfour-app, unfour-account, unfour-telemetry, unfour-cloud-sync,
      unfour-cloud-sync-storage
 ```
 

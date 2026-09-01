@@ -6905,6 +6905,7 @@ dependencies = [
  "unfour-local-storage",
  "unfour-paths",
  "unfour-secret-store",
+ "unfour-telemetry",
  "url",
 ]
 
@@ -7129,6 +7130,24 @@ dependencies = [
  "unfour-local-storage",
  "unfour-secret-store",
  "uuid",
+]
+
+[[package]]
+name = "unfour-telemetry"
+version = "0.9.1"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "rand 0.8.6",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "unfour-core",
+ "unfour-local-storage",
+ "unfour-secret-store",
 ]
 
 [[package]]

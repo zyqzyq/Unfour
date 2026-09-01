@@ -1,0 +1,23 @@
+[package]
+name = "unfour-telemetry"
+version.workspace = true
+edition = "2021"
+license = "Apache-2.0"
+description = "Privacy-preserving anonymous active-installation telemetry for Unfour Desktop."
+
+[dependencies]
+async-trait = "0.1"
+base64 = "0.22"
+chrono = "0.4"
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "sqlite"] }
+tokio = { version = "1", features = ["sync"] }
+unfour-core = { path = "../unfour-core" }
+unfour-local-storage = { path = "../local-storage" }
+unfour-secret-store = { path = "../secret-store" }
+
+[dev-dependencies]
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

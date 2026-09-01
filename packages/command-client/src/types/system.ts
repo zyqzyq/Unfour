@@ -21,3 +21,16 @@ export type AppInfo = {
   channel: AppChannel;
   commit: string | null;
 };
+
+export type TelemetryPreferences = {
+  enabled: boolean;
+  noticeShown: boolean;
+  networkEnabled: boolean;
+};
+
+export type TelemetrySendOutcome =
+  | "sent"
+  | "alreadySentToday"
+  | "disabled"
+  | "networkDisabled"
+  | "failed";

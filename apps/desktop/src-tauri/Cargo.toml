@@ -53,6 +53,7 @@ unfour-core = { path = "../../../crates/unfour-core" }
 unfour-local-storage = { path = "../../../crates/local-storage" }
 unfour-paths = { path = "../../../crates/unfour-paths" }
 unfour-secret-store = { path = "../../../crates/secret-store" }
+unfour-telemetry = { path = "../../../crates/unfour-telemetry" }
 
 [dev-dependencies]
 sqlx = { version = "0.8", default-features = false, features = ["chrono", "json", "macros", "runtime-tokio-rustls", "sqlite"] }

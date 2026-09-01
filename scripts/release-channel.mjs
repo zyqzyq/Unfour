@@ -18,6 +18,7 @@ const channelProfiles = Object.freeze({
   test: Object.freeze({
     accountApiUrl: "https://test-api.unfour.dev",
     accountWebUrl: "https://test.unfour.dev",
+    telemetryEndpoint: null,
     updaterEndpoint: "https://releases.unfour.dev/test/latest.json",
     allowLoopbackHttp: false,
     defaultStorageProfile: "test",
@@ -25,6 +26,7 @@ const channelProfiles = Object.freeze({
   stable: Object.freeze({
     accountApiUrl: "https://api.unfour.dev",
     accountWebUrl: "https://unfour.dev",
+    telemetryEndpoint: "https://telemetry.unfour.dev/v1/active",
     updaterEndpoint: "https://releases.unfour.dev/stable/latest.json",
     allowLoopbackHttp: false,
     defaultStorageProfile: "stable",
@@ -205,6 +207,7 @@ function printLines(profile) {
     distribution: profile.distribution,
     account_api_url: profile.accountApiUrl,
     account_web_url: profile.accountWebUrl,
+    telemetry_endpoint: profile.telemetryEndpoint ?? "",
     updater_enabled: profile.updaterEnabled ? "1" : "0",
     updater_endpoint: profile.updaterEndpoint ?? "",
     allow_loopback_http: profile.allowLoopbackHttp ? "1" : "0",
