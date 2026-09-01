@@ -6,6 +6,12 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cursor MCP on Windows** — One-click Cursor configuration wraps sidecar
+  paths that contain spaces (for example `D:\Program Files\Unfour\unfour-mcp.exe`)
+  in `cmd.exe /c`, matching how Cursor still launches stdio servers.
+
 ## [0.9.1] - 2026-08-31
 
 Maintenance release following `v0.9.0`, focused on release hardening, runtime

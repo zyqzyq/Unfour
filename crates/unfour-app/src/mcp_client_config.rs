@@ -151,12 +151,7 @@ fn inspect_cursor_config(content: &str, command: &str) -> AppResult<McpClientSta
         return Ok(McpClientStatus::Outdated);
     };
 
-    let command_matches = unfour.get("command").and_then(JsonValue::as_str) == Some(command);
-    let args_match = unfour
-        .get("args")
-        .and_then(JsonValue::as_array)
-        .is_some_and(Vec::is_empty);
-    Ok(if command_matches && args_match {
+    Ok(if cursor_entry_matches(unfour, command) {
         McpClientStatus::Configured
     } else {
         McpClientStatus::Outdated
@@ -218,15 +213,51 @@ fn merge_cursor_config(path: &Path, command: &str) -> AppResult<String> {
     let unfour = unfour
         .as_object_mut()
         .expect("unfour value was normalized to an object");
-    unfour.insert(
-        "command".to_string(),
-        JsonValue::String(command.to_string()),
-    );
-    unfour.insert("args".to_string(), JsonValue::Array(Vec::new()));
+    let (launch_command, launch_args) = cursor_launch_spec(command);
+    unfour.insert("command".to_string(), JsonValue::String(launch_command));
+    unfour.insert("args".to_string(), JsonValue::Array(launch_args));
 
     let mut output = serde_json::to_string_pretty(&document)?;
     output.push('\n');
     Ok(output)
+}
+
+/// Cursor still launches stdio MCP servers through `cmd.exe` on Windows.
+/// An unquoted path with whitespace is split, so `D:\Program Files\...`
+/// becomes the command `D:\Program` and the connection closes immediately.
+fn cursor_launch_spec(command: &str) -> (String, Vec<JsonValue>) {
+    if cursor_windows_cmd_wrapper_required(command) {
+        (
+            "cmd.exe".to_string(),
+            vec![
+                JsonValue::String("/c".to_string()),
+                JsonValue::String(command.to_string()),
+            ],
+        )
+    } else {
+        (command.to_string(), Vec::new())
+    }
+}
+
+fn cursor_windows_cmd_wrapper_required(command: &str) -> bool {
+    cfg!(windows) && command_has_whitespace(command)
+}
+
+fn command_has_whitespace(command: &str) -> bool {
+    command.chars().any(char::is_whitespace)
+}
+
+fn cursor_entry_matches(unfour: &JsonMap<String, JsonValue>, command: &str) -> bool {
+    let Some(configured_command) = unfour.get("command").and_then(JsonValue::as_str) else {
+        return false;
+    };
+    let configured_args = unfour
+        .get("args")
+        .and_then(JsonValue::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    let (expected_command, expected_args) = cursor_launch_spec(command);
+    configured_command == expected_command && configured_args == expected_args.as_slice()
 }
 
 fn parse_codex(content: &str) -> AppResult<DocumentMut> {
@@ -440,6 +471,7 @@ mod tests {
 
     const CURRENT_COMMAND: &str = r"D:\Apps\Unfour\unfour-mcp.exe";
     const OLD_COMMAND: &str = r"D:\Old\Unfour\unfour-mcp.exe";
+    const SPACED_COMMAND: &str = r"D:\Program Files\Unfour\unfour-mcp.exe";
 
     struct TestHome {
         path: PathBuf,
@@ -645,6 +677,80 @@ mod tests {
         assert_eq!(
             status(home.path(), McpClient::Cursor, CURRENT_COMMAND).status,
             McpClientStatus::Configured
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn cursor_windows_path_with_spaces_uses_cmd_wrapper() {
+        let home = TestHome::new("cursor-space-wrapper");
+
+        let result = configure(home.path(), McpClient::Cursor, SPACED_COMMAND, true)
+            .expect("configure MCP client");
+
+        assert_eq!(result.status, McpClientStatus::Configured);
+        let content = fs::read_to_string(home.path().join(".cursor/mcp.json")).unwrap();
+        let document = parse_cursor(&content).unwrap();
+        assert_eq!(document["mcpServers"]["unfour"]["command"], "cmd.exe");
+        assert_eq!(
+            document["mcpServers"]["unfour"]["args"],
+            JsonValue::Array(vec![
+                JsonValue::String("/c".to_string()),
+                JsonValue::String(SPACED_COMMAND.to_string()),
+            ])
+        );
+        assert_eq!(
+            status(home.path(), McpClient::Cursor, SPACED_COMMAND).status,
+            McpClientStatus::Configured
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn cursor_windows_direct_path_with_spaces_is_outdated_and_rewritten() {
+        let home = TestHome::new("cursor-space-direct-outdated");
+        let path = home.path().join(".cursor/mcp.json");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(
+            &path,
+            format!(r#"{{"mcpServers":{{"unfour":{{"command":{SPACED_COMMAND:?},"args":[]}}}}}}"#),
+        )
+        .unwrap();
+
+        assert_eq!(
+            status(home.path(), McpClient::Cursor, SPACED_COMMAND).status,
+            McpClientStatus::Outdated
+        );
+
+        configure(home.path(), McpClient::Cursor, SPACED_COMMAND, true)
+            .expect("configure MCP client");
+
+        assert_eq!(
+            status(home.path(), McpClient::Cursor, SPACED_COMMAND).status,
+            McpClientStatus::Configured
+        );
+        let document = parse_cursor(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(document["mcpServers"]["unfour"]["command"], "cmd.exe");
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn cursor_non_windows_keeps_path_with_spaces_in_command() {
+        let home = TestHome::new("cursor-space-unix");
+
+        configure(home.path(), McpClient::Cursor, SPACED_COMMAND, true)
+            .expect("configure MCP client");
+
+        let document =
+            parse_cursor(&fs::read_to_string(home.path().join(".cursor/mcp.json")).unwrap())
+                .unwrap();
+        assert_eq!(
+            document["mcpServers"]["unfour"]["command"].as_str(),
+            Some(SPACED_COMMAND)
+        );
+        assert_eq!(
+            document["mcpServers"]["unfour"]["args"],
+            JsonValue::Array(Vec::new())
         );
     }
 

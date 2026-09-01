@@ -33,11 +33,14 @@ and `Copy example prompt`, then paste it into that client and describe your
 issue. Copying only places text on the clipboard; it does not launch a client,
 call tools, send network requests, or change the workspace or MCP policy.
 
-The server uses local stdio transport, so `args` must remain empty. Do not
-invent a CLI install command or use a development `target/debug` path for an
-installed release. Do not replace the MSIX alias with a path under
-`C:\Program Files\WindowsApps`; that directory is versioned and changes during
-installation and Store upgrades.
+`unfour-mcp` itself takes no CLI arguments. Codex should keep `args = []`. On
+Windows, Cursor still launches stdio MCP servers through `cmd.exe`, so a
+command path that contains spaces must be wrapped as `cmd.exe /c` with the
+absolute path as a single argument; one-click Cursor configuration writes that
+wrapper automatically. Do not invent a CLI install command or use a development
+`target/debug` path for an installed release. Do not replace the MSIX alias
+with a path under `C:\Program Files\WindowsApps`; that directory is versioned
+and changes during installation and Store upgrades.
 
 ## Manual / Advanced configuration
 
@@ -79,6 +82,21 @@ your user configuration:
     "unfour": {
       "command": "PASTE_COMMAND_FROM_SETTINGS_MCP",
       "args": []
+    }
+  }
+}
+```
+
+If the pasted Windows command contains spaces (for example
+`D:\Program Files\Unfour\unfour-mcp.exe`), wrap it so Cursor does not split the
+path:
+
+```json
+{
+  "mcpServers": {
+    "unfour": {
+      "command": "cmd.exe",
+      "args": ["/c", "D:\\Program Files\\Unfour\\unfour-mcp.exe"]
     }
   }
 }
