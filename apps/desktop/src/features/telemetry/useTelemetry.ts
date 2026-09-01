@@ -3,6 +3,7 @@ import type { TelemetryPreferences } from "@unfour/command-client";
 
 export type TelemetryContextValue = {
   dismissNotice: () => void;
+  markNoticeShown: () => Promise<void>;
   noticeVisible: boolean;
   preferenceError: boolean;
   preferences: TelemetryPreferences | null;

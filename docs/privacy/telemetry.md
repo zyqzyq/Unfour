@@ -11,10 +11,15 @@ Anonymous usage statistics are enabled by default. On the first entry into the
 normal Desktop workbench, Unfour shows a non-blocking notice that explains the
 collection and provides **Learn more** and **Turn off** actions. The notice is
 recorded locally after its first display and is not shown on later launches.
+Test/dev builds have network telemetry disabled and do not show this production
+telemetry notice.
 
 The first network attempt waits for a 15-second grace period after that notice.
-Turning telemetry off during the grace period cancels the attempt. Later
-launches do not repeat the notice or grace period.
+Turning telemetry off during the grace period cancels the attempt and
+immediately suppresses telemetry for the current session. If saving that
+preference fails, telemetry remains suppressed for the rest of the session and
+does not resume because of an optimistic UI rollback. Later launches do not
+repeat the notice or grace period.
 
 Telemetry can be turned off or on at any time in **Settings → Privacy →
 Anonymous usage statistics**. Turning it off prevents later `app_active`
@@ -76,6 +81,9 @@ Stable Desktop builds send:
 POST https://telemetry.unfour.dev/v1/active
 Content-Type: application/json
 ```
+
+The telemetry client does not follow HTTP redirects. A redirect response is
+treated as a failed send.
 
 The complete JSON payload is:
 

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Button, IconButton, useI18n } from "@unfour/ui";
 import { X } from "lucide-react";
 import { openTelemetryPrivacy } from "./privacyLink";
@@ -7,11 +8,20 @@ export function TelemetryNotice() {
   const { t } = useI18n();
   const {
     dismissNotice,
+    markNoticeShown,
     noticeVisible,
     preferenceError,
     setEnabled,
     updating,
   } = useTelemetry();
+  const noticeDisplayMarkedRef = useRef(false);
+
+  useEffect(() => {
+    if (!noticeVisible || noticeDisplayMarkedRef.current) return;
+    noticeDisplayMarkedRef.current = true;
+    void markNoticeShown();
+  }, [markNoticeShown, noticeVisible]);
+
   if (!noticeVisible) return null;
 
   return (

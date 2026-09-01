@@ -94,16 +94,30 @@ impl TelemetryConfig {
                 "telemetry distribution {distribution} is invalid"
             )));
         }
-        let endpoint = endpoint
-            .filter(|value| !value.is_empty())
-            .map(str::to_string);
-        if endpoint
-            .as_deref()
-            .is_some_and(|value| !value.starts_with("https://"))
-        {
-            return Err(AppError::Config(
-                "telemetry endpoint must use HTTPS".to_string(),
-            ));
+        let endpoint = endpoint.map(str::to_string);
+        if let Some(value) = endpoint.as_deref() {
+            let url = reqwest::Url::parse(value).map_err(|_| {
+                AppError::Config(
+                    "telemetry endpoint must be a valid HTTPS URL without credentials or a fragment"
+                        .to_string(),
+                )
+            })?;
+            let authority = value.split_once("://").and_then(|(_, rest)| {
+                rest.split(|character| matches!(character, '/' | '?' | '#'))
+                    .next()
+            });
+            if url.scheme() != "https"
+                || url.host_str().is_none()
+                || authority.is_some_and(|value| value.contains('@'))
+                || !url.username().is_empty()
+                || url.password().is_some()
+                || url.fragment().is_some()
+            {
+                return Err(AppError::Config(
+                    "telemetry endpoint must be a valid HTTPS URL without credentials or a fragment"
+                        .to_string(),
+                ));
+            }
         }
         Ok(Self {
             version,
