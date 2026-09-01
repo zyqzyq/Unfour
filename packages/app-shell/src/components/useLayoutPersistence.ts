@@ -14,7 +14,7 @@ export function useLayoutPersistence(activeWorkspaceId: string | null) {
     selectedDatabaseConnectionId,
     selectedSshConnectionId,
     sidebarCollapsed,
-    sidebarWidth,
+    sidebarWidths,
     snapshotLayout,
     tabs,
   } = useWorkspaceStore();
@@ -48,7 +48,7 @@ export function useLayoutPersistence(activeWorkspaceId: string | null) {
     selectedDatabaseConnectionId,
     selectedSshConnectionId,
     sidebarCollapsed,
-    sidebarWidth,
+    sidebarWidths,
     bottomPanelHeight,
     rightInspectorWidth,
     tabs,

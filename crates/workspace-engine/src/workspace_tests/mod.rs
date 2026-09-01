@@ -295,6 +295,9 @@ async fn layout_returns_defaults_for_new_workspace() {
 
     assert_eq!(layout.active_tab_id, "api-main");
     assert!(!layout.sidebar_collapsed);
+    assert_eq!(layout.sidebar_widths.api, 320);
+    assert_eq!(layout.sidebar_widths.ssh, 248);
+    assert_eq!(layout.sidebar_widths.database, 280);
     assert_eq!(layout.tabs.len(), 3);
     assert!(layout
         .tabs
@@ -314,12 +317,18 @@ async fn layout_update_persists_valid_layout() {
     layout.sidebar_collapsed = true;
     layout.active_tab_id = "database-main".to_string();
     layout.selected_database_connection_id = Some("db-1".to_string());
+    layout.sidebar_widths.api = 500;
+    layout.sidebar_widths.ssh = 250;
+    layout.sidebar_widths.database = 360;
 
     let updated = service
         .update_layout(workspace_id.clone(), layout)
         .await
         .expect("update layout");
-    let loaded = service.layout(workspace_id).await.expect("reload layout");
+    let loaded = service
+        .layout(workspace_id.clone())
+        .await
+        .expect("reload layout");
 
     assert!(updated.sidebar_collapsed);
     assert_eq!(loaded.active_tab_id, "database-main");
@@ -327,6 +336,18 @@ async fn layout_update_persists_valid_layout() {
         loaded.selected_database_connection_id.as_deref(),
         Some("db-1")
     );
+    assert_eq!(loaded.sidebar_widths.api, 500);
+    assert_eq!(loaded.sidebar_widths.ssh, 250);
+    assert_eq!(loaded.sidebar_widths.database, 360);
+
+    let stored_json: String =
+        sqlx::query_scalar("SELECT layout_json FROM workspace_settings WHERE workspace_id = ?1")
+            .bind(&workspace_id)
+            .fetch_one(service.db.pool())
+            .await
+            .expect("stored layout JSON");
+    assert!(stored_json.contains("\"sidebarWidths\""));
+    assert!(!stored_json.contains("\"sidebarWidth\""));
 }
 
 #[tokio::test]

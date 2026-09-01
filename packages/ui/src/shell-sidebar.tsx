@@ -63,7 +63,7 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        "relative flex min-h-0 shrink-0 flex-col border-r border-[var(--u-color-border)] bg-[var(--u-color-surface)] transition-[width] duration-150",
+        "relative flex min-h-0 shrink-0 flex-col border-r border-[var(--u-color-border)] bg-[var(--u-color-surface)]",
         collapsed && "w-[52px]",
         className,
       )}

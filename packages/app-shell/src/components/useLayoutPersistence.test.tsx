@@ -6,7 +6,16 @@ import { afterEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   save: vi.fn().mockResolvedValue(undefined), error: vi.fn(),
-  layout: { layoutWorkspaceId: "ws", activeTabId: "api", tabs: [], snapshotLayout: vi.fn(() => ({ sidebarWidth: 280 })) },
+  layout: {
+    layoutWorkspaceId: "ws",
+    activeTabId: "api",
+    sidebarCollapsed: false,
+    sidebarWidths: { api: 320, ssh: 248, database: 280 },
+    tabs: [],
+    snapshotLayout: vi.fn(() => ({
+      sidebarWidths: { api: 320, ssh: 248, database: 280 },
+    })),
+  },
 }));
 vi.mock("@unfour/workspace-core", () => ({ useWorkspaceStore: () => mocks.layout }));
 vi.mock("@unfour/command-client", () => ({ updateWorkspaceLayout: mocks.save }));
@@ -25,7 +34,9 @@ it("preserves the debounce across mutation rerenders and cancels unsaved timers 
   await act(() => vi.advanceTimersByTimeAsync(200));
   rerender();
   await act(() => vi.advanceTimersByTimeAsync(150));
-  expect(mocks.save).toHaveBeenCalledExactlyOnceWith("ws", { sidebarWidth: 280 });
+  expect(mocks.save).toHaveBeenCalledExactlyOnceWith("ws", {
+    sidebarWidths: { api: 320, ssh: 248, database: 280 },
+  });
   await act(() => vi.advanceTimersByTimeAsync(1000));
   expect(mocks.save).toHaveBeenCalledTimes(1);
   mocks.layout = { ...mocks.layout, activeTabId: "database" };

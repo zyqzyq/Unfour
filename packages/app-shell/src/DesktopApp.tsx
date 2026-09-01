@@ -81,9 +81,9 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
     setBottomPanelHeight,
     setRightInspectorWidth,
     setSelectedApiRequest,
-    setSidebarWidth,
+    setModuleSidebarWidth,
     sidebarCollapsed,
-    sidebarWidth,
+    sidebarWidths,
     toggleSidebar,
     tabs,
   } = useWorkspaceStore();
@@ -418,9 +418,9 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
             apiSidebarContent={apiSidebarContent}
             collapsed={sidebarCollapsed || variableManagerOpen}
             databaseSidebarContent={databaseSidebarContent}
-            onWidthChange={setSidebarWidth}
+            onModuleWidthChange={setModuleSidebarWidth}
+            sidebarWidths={sidebarWidths}
             sshSidebarContent={sshSidebarContent}
-            width={sidebarWidth}
           />
         }
         statusBar={

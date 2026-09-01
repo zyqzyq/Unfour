@@ -151,6 +151,24 @@ fn default_enabled() -> bool {
     true
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceSidebarWidths {
+    pub api: i32,
+    pub ssh: i32,
+    pub database: i32,
+}
+
+impl Default for WorkspaceSidebarWidths {
+    fn default() -> Self {
+        Self {
+            api: 320,
+            ssh: 248,
+            database: 280,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceLayout {
@@ -162,7 +180,11 @@ pub struct WorkspaceLayout {
     pub selected_database_connection_id: Option<String>,
     pub selected_ssh_connection_id: Option<String>,
     #[serde(default)]
-    pub sidebar_width: i32,
+    pub sidebar_widths: WorkspaceSidebarWidths,
+    /// Accepted only when decoding payloads from the previous global-width API.
+    /// It is never serialized back; layout snapshots use `sidebar_widths`.
+    #[serde(default, skip_serializing)]
+    pub sidebar_width: Option<i32>,
     #[serde(default)]
     pub bottom_panel_height: i32,
     #[serde(default)]

@@ -67,6 +67,12 @@ export type WorkspaceTab = {
   kind: "api" | "ssh" | "database";
 };
 
+export type WorkspaceSidebarWidths = {
+  api: number;
+  ssh: number;
+  database: number;
+};
+
 export type WorkspaceLayout = {
   workspaceId: string;
   sidebarCollapsed: boolean;
@@ -75,8 +81,18 @@ export type WorkspaceLayout = {
   selectedApiRequestId: string | null;
   selectedDatabaseConnectionId: string | null;
   selectedSshConnectionId: string | null;
-  sidebarWidth?: number;
+  sidebarWidths: WorkspaceSidebarWidths;
   bottomPanelHeight?: number;
   rightInspectorWidth?: number;
   updatedAt: string;
+};
+
+/**
+ * Layout shape accepted while hydrating workspaces created by older builds.
+ * New snapshots and command responses always use `sidebarWidths`.
+ */
+export type WorkspaceLayoutCompat = Omit<WorkspaceLayout, "sidebarWidths"> & {
+  sidebarWidths?: Partial<WorkspaceSidebarWidths> | null;
+  /** Legacy global width; read only for migration and never written back. */
+  sidebarWidth?: number | null;
 };

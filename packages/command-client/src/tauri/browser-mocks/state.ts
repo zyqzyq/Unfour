@@ -364,7 +364,11 @@ export function getMockLayout(workspaceId: string): WorkspaceLayout {
     selectedApiRequestId: null,
     selectedDatabaseConnectionId: null,
     selectedSshConnectionId: null,
-    sidebarWidth: 248,
+    sidebarWidths: {
+      api: 320,
+      ssh: 248,
+      database: 280,
+    },
     bottomPanelHeight: 220,
     rightInspectorWidth: 300,
     updatedAt: new Date().toISOString(),
