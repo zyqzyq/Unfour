@@ -15,8 +15,11 @@ export function getTabSaveState(tab: ApiRequestTab): ApiTabSaveState {
   return normalizeRequestDraft(tab.draft) === tab.baseline ? "saved" : "dirty";
 }
 
-export function requestTabTitle(tab: ApiRequestTab) {
-  return tab.draft.name.trim() || "Untitled Request";
+export function requestTabTitle(
+  tab: ApiRequestTab,
+  fallback = "Untitled Request",
+) {
+  return tab.draft.name.trim() || fallback;
 }
 
 export function requestTabVisualState(tab: ApiRequestTab): ApiTabVisualState {

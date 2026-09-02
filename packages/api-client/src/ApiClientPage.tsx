@@ -61,25 +61,46 @@ export function ApiClientPage({
   } | null>(null);
 
   const requestSave = useCallback(
-    (tab: ApiRequestTab) => {
-      if (tab.savedRequestId) {
+    (tab: ApiRequestTab, nameOverride?: string) => {
+      const effectiveTab =
+        nameOverride === undefined
+          ? tab
+          : { ...tab, draft: { ...tab.draft, name: nameOverride } };
+      if (nameOverride !== undefined) {
+        updateDraft(tab.id, { name: nameOverride });
+      }
+
+      if (effectiveTab.savedRequestId) {
         const duplicate = findDuplicateRequestName(
           savedRequests,
-          tab.draft.name,
-          tab.draft.collectionId,
-          tab.draft.parentFolderId,
-          tab.savedRequestId,
+          effectiveTab.draft.name,
+          effectiveTab.draft.collectionId,
+          effectiveTab.draft.parentFolderId,
+          effectiveTab.savedRequestId,
         );
         if (duplicate) {
-          setCollectionStatus(t("api.save.duplicateName", { name: tab.draft.name }));
+          setCollectionStatus(
+            t("api.save.duplicateName", { name: effectiveTab.draft.name }),
+          );
           return;
         }
-        void saveTab(tab);
+        void saveTab(effectiveTab);
       } else {
         setSaveDialogTabId(tab.id);
       }
     },
-    [saveTab, savedRequests, setCollectionStatus, t],
+    [saveTab, savedRequests, setCollectionStatus, t, updateDraft],
+  );
+
+  const handleRequestNameCommit = useCallback(
+    (tab: ApiRequestTab, name: string) => {
+      const nextName = name.trim();
+      if (!nextName && tab.savedRequestId) {
+        return;
+      }
+      updateDraft(tab.id, { name: nextName });
+    },
+    [updateDraft],
   );
 
   const handleNewRequest = useCallback(() => {
@@ -375,6 +396,7 @@ export function ApiClientPage({
             <ApiRequestWorkspace
               activeTab={activeTab}
               collectionStatus={collectionStatus}
+              onRequestNameCommit={handleRequestNameCommit}
               onRequestTabChange={setRequestTab}
               onResponseTabChange={setResponseTab}
               onSave={requestSave}

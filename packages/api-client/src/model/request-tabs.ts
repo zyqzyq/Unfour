@@ -398,7 +398,7 @@ function inputToDraft(input: ReturnType<typeof savedRequestToInput>): RequestDra
     envVariables: [],
     headers: input.headers,
     method: input.method,
-    name: input.name ?? `${input.method} ${input.url}`,
+    name: input.name ?? "",
     parentFolderId: input.parentFolderId ?? null,
     preRequestScript: input.preRequestScript ?? "",
     postResponseScript: input.postResponseScript ?? "",

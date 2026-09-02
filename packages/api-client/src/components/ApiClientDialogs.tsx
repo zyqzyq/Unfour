@@ -3,6 +3,7 @@ import type {
   ApiCollectionFolder,
   ApiSavedRequest,
 } from "@unfour/command-client";
+import { useI18n } from "@unfour/ui";
 import { requestTabTitle, type ApiRequestTab } from "../model/request-tabs";
 import { ApiCloseRequestDialog } from "./ApiCloseRequestDialog";
 import { ApiSaveDialog, type SaveIdentity } from "./ApiSaveDialog";
@@ -30,6 +31,8 @@ export function ApiClientDialogs({
   savedRequests: ApiSavedRequest[];
   saveDialogTab: ApiRequestTab | null;
 }) {
+  const { t } = useI18n();
+
   return (
     <>
       {saveDialogTab && (
@@ -52,7 +55,11 @@ export function ApiClientDialogs({
         onDiscard={onDiscardClose}
         onSave={onSaveClose}
         open={Boolean(closeDialogTab)}
-        title={closeDialogTab ? requestTabTitle(closeDialogTab) : ""}
+        title={
+          closeDialogTab
+            ? requestTabTitle(closeDialogTab, t("api.request.untitled"))
+            : ""
+        }
       />
     </>
   );

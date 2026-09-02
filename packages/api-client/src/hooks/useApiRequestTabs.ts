@@ -235,7 +235,7 @@ export function tabToInput(
       : applyGeneratedQuery(tab.draft, options.auth ?? tab.draft.auth);
   return {
     workspaceId,
-    name: tab.draft.name,
+    name: tab.draft.name.trim() || undefined,
     parentFolderId: tab.draft.parentFolderId,
     collectionId: tab.draft.collectionId,
     authJson: JSON.stringify(tab.draft.auth),

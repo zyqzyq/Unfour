@@ -54,6 +54,7 @@ export function ApiRequestTabs({
           const active = tab.id === activeId;
           const saveState = getTabSaveState(tab);
           const visualState = requestTabVisualState(tab);
+          const title = requestTabTitle(tab, t("api.request.untitled"));
           const tabNode = (
             <div
               className={cn(
@@ -71,7 +72,7 @@ export function ApiRequestTabs({
                 className="flex min-w-0 flex-1 items-center gap-1.5"
                 onClick={() => onSelect(tab.id)}
                 role="tab"
-                title={requestTabTitle(tab) + " · " + visualState}
+                title={title + " · " + visualState}
                 type="button"
               >
                 <span
@@ -95,10 +96,10 @@ export function ApiRequestTabs({
                     size={12}
                   />
                 )}
-                <span className="truncate">{requestTabTitle(tab)}</span>
+                <span className="truncate">{title}</span>
               </button>
               <button
-                aria-label={t("api.tabs.close", { title: requestTabTitle(tab) })}
+                aria-label={t("api.tabs.close", { title })}
                 className="grid h-5 w-5 shrink-0 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] hover:bg-[var(--u-color-surface-hover)]"
                 onClick={() => onClose(tab)}
                 type="button"

@@ -114,6 +114,17 @@ describe("API request tab state", () => {
     expect(second.tabs[0].lastRequest?.url).toBe("https://history.test");
   });
 
+  it("keeps an unnamed history replay unnamed instead of deriving a URL title", () => {
+    const opened = openHistoryRequest(
+      emptyApiTabsState("ws-1"),
+      historyDetail("history-unnamed", { name: null }),
+    );
+
+    expect(opened.tabs[0].draft.name).toBe("");
+    expect(opened.tabs[0].lastRequest?.name).toBeUndefined();
+    expect(requestTabTitle(opened.tabs[0])).toBe("Untitled Request");
+  });
+
   it("keeps persistence state unchanged while sending", () => {
     const opened = openSavedRequest(emptyApiTabsState("ws-1"), savedRequest("req-1"));
     const dirty = updateTabDraft(opened, "saved:req-1", {
@@ -302,7 +313,10 @@ function savedRequestWithAuth(id: string): ApiSavedRequest & { authJson: string 
   };
 }
 
-function historyDetail(id: string): ApiHistoryDetail {
+function historyDetail(
+  id: string,
+  overrides: Partial<ApiHistoryDetail> = {},
+): ApiHistoryDetail {
   return {
     id,
     workspaceId: "ws-1",
@@ -322,6 +336,7 @@ function historyDetail(id: string): ApiHistoryDetail {
     revision: 1,
     syncStatus: "local",
     remoteId: null,
+    ...overrides,
   };
 }
 

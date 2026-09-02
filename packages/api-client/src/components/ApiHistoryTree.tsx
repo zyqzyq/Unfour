@@ -1,12 +1,22 @@
 import { Clock3 } from "lucide-react";
 import {
+  cn,
   ContextMenuItem,
   TreeView,
   type TreeViewItem,
   useI18n,
 } from "@unfour/ui";
 import type { ApiHistoryItem } from "@unfour/command-client";
-import { groupApiHistory } from "../model/request-tabs";
+import {
+  groupApiHistory,
+  methodBadgeLabel,
+  methodBadgeToneClass,
+} from "../model/request-tabs";
+import {
+  apiHistoryPrimaryLabel,
+  apiHistoryRequestName,
+  apiHistoryTooltip,
+} from "../model/api-history-display";
 import type { ApiOpenIntent } from "../model/types";
 
 export function ApiHistoryTree({
@@ -23,8 +33,8 @@ export function ApiHistoryTree({
     label: group.label,
     children: group.items.map((item) => ({
       id: `history-item:${item.id}`,
-      label: item.url,
-      title: `${item.method} ${item.url}`,
+      label: <HistoryLabel item={item} />,
+      title: apiHistoryTooltip(item),
       meta: <HistoryMeta item={item} />,
       contextMenu: (
         <>
@@ -74,21 +84,71 @@ export function ApiHistoryTree({
 }
 
 function HistoryMeta({ item }: { item: ApiHistoryItem }) {
+  const time = formatHistoryTime(item.createdAt);
   return (
     <span className="flex min-w-0 items-center gap-1 text-[10px] text-[var(--u-color-text-soft)]">
-      <span className="rounded-[var(--u-radius-sm)] bg-[var(--u-color-surface-muted)] px-1 font-semibold uppercase text-[var(--u-color-text-muted)]">
-        {item.method}
-      </span>
-      {item.status !== null && <span>{item.status}</span>}
+      {item.status !== null && (
+        <span
+          className={cn(
+            "font-mono font-semibold tabular-nums",
+            statusToneClass(item.status),
+          )}
+        >
+          {item.status}
+        </span>
+      )}
       {item.durationMs !== null && <span>{item.durationMs}ms</span>}
-      <span>{formatHistoryTime(item.createdAt)}</span>
+      {time && <span>{time}</span>}
     </span>
   );
 }
 
+function HistoryLabel({ item }: { item: ApiHistoryItem }) {
+  const hasName = Boolean(apiHistoryRequestName(item));
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <span
+        className={cn(
+          "shrink-0 rounded-[var(--u-radius-sm)] px-1 font-mono text-[10px] font-bold uppercase",
+          methodBadgeToneClass(item.method),
+        )}
+      >
+        {methodBadgeLabel(item.method)}
+      </span>
+      <span
+        className={cn(
+          "min-w-0 flex-1 truncate",
+          hasName
+            ? "font-medium text-[var(--u-color-text)]"
+            : "font-mono text-[var(--u-color-text-muted)]",
+        )}
+      >
+        {apiHistoryPrimaryLabel(item)}
+      </span>
+    </span>
+  );
+}
+
+function statusToneClass(status: number): string {
+  if (status >= 500) {
+    return "text-[var(--u-color-danger-text)]";
+  }
+  if (status >= 400) {
+    return "text-[var(--u-color-warning-text)]";
+  }
+  if (status >= 200 && status < 300) {
+    return "text-[var(--u-color-success)]";
+  }
+  return "text-[var(--u-color-text-muted)]";
+}
+
 function formatHistoryTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
   return new Intl.DateTimeFormat(undefined, {
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(value));
+  }).format(date);
 }

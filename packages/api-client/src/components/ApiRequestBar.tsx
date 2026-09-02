@@ -1,28 +1,66 @@
-import type { CSSProperties, Ref } from "react";
-import { Save, Send } from "lucide-react";
-import { Button, Input, useI18n } from "@unfour/ui";
-import type { ApiRequestTab } from "../model/request-tabs";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type CSSProperties,
+  type Ref,
+  type RefObject,
+} from "react";
+import { Pencil, Save, Send } from "lucide-react";
+import { Button, IconButton, Input, useI18n } from "@unfour/ui";
 import { httpMethods } from "../constants/http-methods";
+import { requestTabTitle, type ApiRequestTab } from "../model/request-tabs";
 
 export function ApiRequestBar({
+  onNameCommit,
   onSave,
   onSend,
   onUpdate,
   tab,
   urlInputRef,
 }: {
-  onSave: () => void;
+  onNameCommit: (name: string) => void;
+  onSave: (name?: string) => void;
   onSend: () => void;
   onUpdate: (patch: Partial<ApiRequestTab["draft"]>) => void;
   tab: ApiRequestTab;
   urlInputRef?: Ref<HTMLInputElement>;
 }) {
   const { t } = useI18n();
+  const nameEditorRef = useRef<RequestNameEditorHandle>(null);
+  const saveButtonRef = useRef<HTMLButtonElement>(null);
+
+  function handleSave() {
+    onSave(nameEditorRef.current?.takePendingName());
+  }
 
   return (
-    <div className="flex shrink-0 flex-col gap-1.5 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3 py-2">
-      {/* Primary action row: Method + URL + Send are the first visual layer.
-          The request name lives in the Save dialog and the tab, not here. */}
+    <div
+      className="flex shrink-0 flex-col gap-1.5 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3 py-2"
+      onKeyDownCapture={(event) => {
+        if (
+          (event.ctrlKey || event.metaKey) &&
+          event.key.toLowerCase() === "s"
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          handleSave();
+        }
+      }}
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="w-16 shrink-0 whitespace-nowrap text-[11px] font-semibold text-[var(--u-color-text-soft)]">
+          {t("api.request.nameLabel")}
+        </span>
+        <RequestNameEditor
+          onCommit={onNameCommit}
+          ref={nameEditorRef}
+          saveButtonRef={saveButtonRef}
+          tab={tab}
+        />
+      </div>
       <div className="flex min-w-0 items-center gap-2">
         <select
           aria-label={t("api.request.method")}
@@ -57,8 +95,9 @@ export function ApiRequestBar({
         <Button
           aria-label={tab.saving ? t("api.actions.saving") : t("api.actions.save")}
           disabled={tab.saving}
+          ref={saveButtonRef}
           size="icon"
-          onClick={onSave}
+          onClick={handleSave}
           title={tab.saving ? t("api.actions.saving") : t("api.actions.save")}
           type="button"
           variant="outline"
@@ -77,6 +116,135 @@ export function ApiRequestBar({
     </div>
   );
 }
+
+type RequestNameEditorHandle = {
+  takePendingName: () => string | undefined;
+};
+
+const RequestNameEditor = forwardRef<
+  RequestNameEditorHandle,
+  {
+    onCommit: (name: string) => void;
+    saveButtonRef: RefObject<HTMLButtonElement | null>;
+    tab: ApiRequestTab;
+  }
+>(function RequestNameEditor({ onCommit, saveButtonRef, tab }, ref) {
+  const { t } = useI18n();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(tab.draft.name);
+  const editingRef = useRef(false);
+
+  useEffect(() => {
+    if (!editingRef.current) {
+      setValue(tab.draft.name);
+    }
+  }, [tab.draft.name]);
+
+  const displayName = requestTabTitle(tab, t("api.request.untitled"));
+
+  function beginEditing() {
+    if (tab.saving) {
+      return;
+    }
+    editingRef.current = true;
+    setValue(tab.draft.name);
+    setEditing(true);
+  }
+
+  function cancelEditing() {
+    editingRef.current = false;
+    setEditing(false);
+    setValue(tab.draft.name);
+  }
+
+  function commitEditing() {
+    if (!editingRef.current) {
+      return;
+    }
+    editingRef.current = false;
+    setEditing(false);
+
+    const nextName = value.trim();
+    if (tab.savedRequestId && !nextName) {
+      setValue(tab.draft.name);
+      return;
+    }
+
+    setValue(nextName);
+    if (nextName !== tab.draft.name.trim()) {
+      onCommit(nextName);
+    }
+  }
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      takePendingName() {
+        if (!editingRef.current) {
+          return undefined;
+        }
+
+        const nextName = value.trim();
+        editingRef.current = false;
+        setEditing(false);
+        if (tab.savedRequestId && !nextName) {
+          setValue(tab.draft.name);
+          return undefined;
+        }
+
+        setValue(nextName);
+        return nextName;
+      },
+    }),
+    [tab.draft.name, tab.savedRequestId, value],
+  );
+
+  return editing ? (
+    <Input
+      aria-label={t("api.request.name")}
+      autoFocus
+      className="min-w-0 flex-1"
+      maxLength={120}
+      onBlur={(event) => {
+        if (event.relatedTarget === saveButtonRef.current) {
+          return;
+        }
+        commitEditing();
+      }}
+      onChange={(event) => setValue(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          commitEditing();
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          cancelEditing();
+        }
+      }}
+      placeholder={t("api.request.untitled")}
+      value={value}
+    />
+  ) : (
+    <div className="flex min-w-0 flex-1 items-center gap-0.5">
+      <span
+        className="min-w-0 max-w-full shrink truncate px-2 pr-1 text-[13px] font-medium text-[var(--u-color-text)]"
+        title={displayName}
+      >
+        {displayName}
+      </span>
+      <IconButton
+        disabled={tab.saving}
+        label={t("api.request.editName")}
+        onClick={beginEditing}
+        size="compact"
+        tooltip={t("api.request.editName")}
+      >
+        <Pencil size={13} />
+      </IconButton>
+    </div>
+  );
+});
 
 function methodSelectStyle(method: string): CSSProperties {
   return {

@@ -264,12 +264,15 @@
     "request": {
       "actionsLabel": "Request actions for {name}",
       "copyUrl": "Copy URL",
+      "editName": "Edit name",
       "openInTab": "Open in tab",
       "rename": "Rename request",
       "renameTitle": "Rename request",
       "method": "HTTP method",
       "name": "Request name",
+      "nameLabel": "Name",
       "namePlaceholder": "Request name",
+      "untitled": "Untitled Request",
       "tabs": {
         "auth": "Auth",
         "body": "Body",

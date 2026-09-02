@@ -10,6 +10,7 @@ import { ApiResponseViewer } from "./ApiResponseViewer";
 export function ApiRequestWorkspace({
   activeTab,
   collectionStatus,
+  onRequestNameCommit,
   onRequestTabChange,
   onResponseTabChange,
   onSave,
@@ -19,9 +20,10 @@ export function ApiRequestWorkspace({
 }: {
   activeTab: ApiRequestTab;
   collectionStatus: string | null;
+  onRequestNameCommit: (tab: ApiRequestTab, name: string) => void;
   onRequestTabChange: (tabId: string, tab: RequestParamsTab) => void;
   onResponseTabChange: (tabId: string, tab: ResponseTab) => void;
-  onSave: (tab: ApiRequestTab) => void;
+  onSave: (tab: ApiRequestTab, name?: string) => void;
   onSend: (tab: ApiRequestTab) => void;
   onUpdateDraft: (tabId: string, patch: Partial<RequestDraft>) => void;
   urlInputRef: RefObject<HTMLInputElement | null>;
@@ -29,7 +31,8 @@ export function ApiRequestWorkspace({
   return (
     <>
       <ApiRequestBar
-        onSave={() => onSave(activeTab)}
+        onNameCommit={(name) => onRequestNameCommit(activeTab, name)}
+        onSave={(name) => onSave(activeTab, name)}
         onSend={() => onSend(activeTab)}
         onUpdate={(patch) => onUpdateDraft(activeTab.id, patch)}
         tab={activeTab}

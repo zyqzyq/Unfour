@@ -72,7 +72,7 @@ export function savedRequestToInput(
 export function historyDetailToInput(history: ApiHistoryDetail): ApiRequestInput {
   return {
     workspaceId: history.workspaceId,
-    name: history.name ?? `${history.method} ${history.url}`,
+    name: history.name?.trim() || undefined,
     parentFolderId: null,
     collectionId: null,
     method: history.method,

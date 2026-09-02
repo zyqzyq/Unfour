@@ -19,7 +19,7 @@ function requestTab(overrides: Partial<ApiRequestTab> = {}): ApiRequestTab {
       formBody: [],
       headers: [],
       method: "GET",
-      name: "Untitled Request",
+      name: "",
       parentFolderId: null,
       query: [],
       rawBodyType: "json",
@@ -82,5 +82,28 @@ describe("ApiRequestTabs", () => {
     expect(container.firstElementChild?.lastElementChild).toContainElement(
       screen.getByRole("button", { name: "Active environment" }),
     );
+  });
+
+  it("keeps long request names bounded while exposing the full name on hover", () => {
+    const longName = "Query the current schema details for the selected dataset";
+    render(
+      <I18nProvider initialLocale="en">
+        <ApiRequestTabs
+          activeId="new:1"
+          onClose={vi.fn()}
+          onCloseAll={vi.fn()}
+          onCloseLeft={vi.fn()}
+          onCloseRight={vi.fn()}
+          onCloseSaved={vi.fn()}
+          onNew={vi.fn()}
+          onSelect={vi.fn()}
+          tabs={[requestTab({ draft: { ...requestTab().draft, name: longName } })]}
+        />
+      </I18nProvider>,
+    );
+
+    const tab = screen.getByRole("tab");
+    expect(tab).toHaveAttribute("title", `${longName} · unsaved`);
+    expect(screen.getByText(longName)).toHaveClass("truncate");
   });
 });

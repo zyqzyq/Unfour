@@ -47,6 +47,15 @@ describe("tabToInput", () => {
     expect(input.workspaceId).toBe(WORKSPACE);
   });
 
+  it("omits an empty request name so unnamed history stays unnamed", () => {
+    const input = tabToInput(
+      tabWithDraft({ name: "  " }),
+      WORKSPACE,
+    );
+
+    expect(input.name).toBeUndefined();
+  });
+
   it("preserves configured GET bodies when saving but omits them when sending", () => {
     const tab = tabWithDraft({
       method: "GET",
