@@ -74,7 +74,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("desktop feature composition", () => {
-  it("injects Privacy, Account, and Cloud Sync extensions without blocking the core desktop", async () => {
+  it("injects slotted Privacy and Updates plus one Account & Sync navigation section", async () => {
     render(<App />);
 
     expect(screen.getByTestId("desktop-app")).toHaveTextContent("local desktop");
@@ -82,11 +82,12 @@ describe("desktop feature composition", () => {
     expect(screen.getByTestId("desktop-app")).toBeInTheDocument();
 
     const extensions = mocks.extensions;
-    expect(extensions?.settingsSections?.map((section) => section.id)).toEqual([
-      "telemetry.privacy",
-      "account.settings",
-      "cloud-sync.settings",
-      "updates.settings",
+    expect(
+      extensions?.settingsSections?.map(({ id, slot }) => ({ id, slot })),
+    ).toEqual([
+      { id: "telemetry.privacy", slot: "general" },
+      { id: "account-sync.settings", slot: undefined },
+      { id: "updates.settings", slot: "about" },
     ]);
     expect(extensions?.titleBarEnd).toBeTypeOf("function");
     expect(extensions?.workspaceDecoration).toBeTypeOf("function");

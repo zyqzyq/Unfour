@@ -1,6 +1,5 @@
 const zhCN = {
   title: "云同步",
-  account: "账号",
   capabilityRequired: "云同步不可用",
   capabilityDescription: "请登录具备云同步能力的账号。",
   contextUnavailable: "云同步不可用",

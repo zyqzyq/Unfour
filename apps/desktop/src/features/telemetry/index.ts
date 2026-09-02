@@ -1,6 +1,5 @@
-import { createElement } from "react";
 import type { DesktopAppSettingsSection } from "@unfour/app-shell";
-import { PrivacySection, PrivacySectionLabel } from "./PrivacySection";
+import { PrivacySection } from "./PrivacySection";
 
 export { PrivacySection } from "./PrivacySection";
 export { TelemetryNotice } from "./TelemetryNotice";
@@ -10,6 +9,6 @@ export { useTelemetry } from "./useTelemetry";
 
 export const telemetryPrivacySection: DesktopAppSettingsSection = {
   id: "telemetry.privacy",
-  label: createElement(PrivacySectionLabel),
   component: PrivacySection,
+  slot: "general",
 };

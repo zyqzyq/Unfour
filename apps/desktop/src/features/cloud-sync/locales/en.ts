@@ -1,6 +1,5 @@
 const en = {
   title: "Cloud Sync",
-  account: "Account",
   capabilityRequired: "Cloud Sync unavailable",
   capabilityDescription: "Sign in with an account that includes Cloud Sync.",
   contextUnavailable: "Cloud Sync unavailable",

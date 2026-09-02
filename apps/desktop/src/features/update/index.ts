@@ -1,6 +1,5 @@
-import { createElement } from "react";
 import type { DesktopAppSettingsSection } from "@unfour/app-shell";
-import { UpdatesSection, UpdatesSectionLabel } from "./UpdatesSection";
+import { UpdatesSection } from "./UpdatesSection";
 
 export { UpdateProvider } from "./UpdateProvider";
 export { UpdateIndicator } from "./UpdateIndicator";
@@ -12,6 +11,6 @@ export type { UpdateInfo, UpdateMeta, UpdateState } from "./updateTypes";
 
 export const updatesSection: DesktopAppSettingsSection = {
   id: "updates.settings",
-  label: createElement(UpdatesSectionLabel),
   component: UpdatesSection,
+  slot: "about",
 };

@@ -59,6 +59,7 @@
       "sections": {
         "general": "通用",
         "mcp": "MCP",
+        "accountSync": "账号与同步",
         "about": "关于"
       },
       "copy": {
@@ -68,6 +69,7 @@
       "general": {
         "title": "通用",
         "description": "语言与外观偏好会立即生效。",
+        "appearance": "外观",
         "languageLabel": "语言",
         "languageDescription": "选择界面语言。",
         "themeLabel": "主题",
@@ -106,17 +108,30 @@
         "notFoundDev": "当前开发构建中未找到可运行的 unfour-mcp。请执行 `cargo build -p unfour-mcp`（或运行 `pnpm tauri dev` 会自动构建）后再配置客户端。",
         "notFoundRelease": "当前安装版本未找到 unfour-mcp。请重新安装 Unfour 后再配置客户端。"
       },
+      "accountSync": {
+        "title": "账号与同步",
+        "description": "管理 Unfour 账号和工作区同步。",
+        "accountTitle": "账号",
+        "cloudSyncTitle": "云同步"
+      },
       "about": {
         "title": "关于",
         "description": "用于反馈和排查问题的版本与项目链接。",
+        "application": "应用",
         "appName": "应用名称",
         "version": "版本",
         "distribution": "分发渠道",
         "distributionStandard": "标准版",
         "distributionMicrosoftStore": "Microsoft Store",
+        "channel": "通道",
+        "channelStable": "稳定版",
+        "channelTest": "测试版",
         "commit": "构建提交",
+        "unavailable": "不可用",
+        "links": "链接",
         "website": "网站",
         "github": "GitHub",
+        "actions": "操作",
         "copyVersionInfo": "复制版本信息"
       }
     },

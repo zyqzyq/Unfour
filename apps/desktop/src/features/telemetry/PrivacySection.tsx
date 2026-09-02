@@ -68,8 +68,3 @@ export function PrivacySection() {
     </div>
   );
 }
-
-export function PrivacySectionLabel() {
-  const { t } = useI18n();
-  return <>{t("telemetry.settings.sectionLabel")}</>;
-}

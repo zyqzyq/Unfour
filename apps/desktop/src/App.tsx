@@ -9,14 +9,12 @@ import {
   AccountIndicator,
   AccountOverlays,
   AccountProvider,
-  accountSection,
 } from "./features/account";
 import {
   CloudSyncOverlays,
   CloudSyncProvider,
   CloudSyncStatus,
   CloudSyncWorkspaceDecoration,
-  cloudSyncSection,
   useCloudSync,
 } from "./features/cloud-sync";
 import { createCloudSyncWorkspaceActions } from "./features/cloud-sync/workspaceMenuActions";
@@ -24,13 +22,12 @@ import {
   UpdateIndicator,
   UpdateOverlays,
   UpdateProvider,
-  updatesSection,
 } from "./features/update";
 import {
   TelemetryNotice,
   TelemetryProvider,
-  telemetryPrivacySection,
 } from "./features/telemetry";
+import { desktopSettingsSections } from "./desktopSettingsSections";
 
 function DesktopTitleBarEnd(context: DesktopAppExtensionContext) {
   return <><CloudSyncStatus {...context} /><AccountIndicator /><UpdateIndicator /></>;
@@ -47,7 +44,7 @@ function ExtendedDesktopApp() {
     createCloudSyncWorkspaceActions(cloudSync, t, workspace);
   const extensions: DesktopAppExtensions = {
     titleBarEnd: DesktopTitleBarEnd,
-    settingsSections: [telemetryPrivacySection, accountSection, cloudSyncSection, updatesSection],
+    settingsSections: desktopSettingsSections,
     workspaceDecoration: CloudSyncWorkspaceDecoration,
     workspaceMenuActions,
     workspaceMenuFooterActions: [{

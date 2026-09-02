@@ -9,6 +9,7 @@ export type {
   DesktopAppExtensions,
   DesktopAppExtensionSlot,
   DesktopAppSettingsSection,
+  DesktopAppSettingsSlot,
   DesktopAppWorkspaceAction,
   DesktopAppWorkspaceActionContext,
   DesktopAppWorkspaceActionsProvider,

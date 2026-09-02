@@ -17,6 +17,7 @@ import { SettingsMcp } from "./SettingsMcp";
 import type {
   DesktopAppExtensionContext,
   DesktopAppSettingsSection,
+  DesktopAppSettingsSlot,
 } from "../../extensions";
 
 type SettingsSection = "general" | "mcp" | "about";
@@ -65,17 +66,24 @@ export function SettingsDialog({
     { id: "mcp", label: t("app.settings.sections.mcp") },
     { id: "about", label: t("app.settings.sections.about") },
   ];
+  const navigationExtensions = extensionSections.filter(
+    (section) => section.slot === undefined,
+  );
   const sections: { id: string; label: ReactNode }[] = [
     ...coreSections.slice(0, -1),
-    ...extensionSections.map(({ id, label }) => ({ id, label })),
+    ...navigationExtensions.map(({ id, label }) => ({ id, label })),
     coreSections[coreSections.length - 1],
   ];
   const activeSectionExists = sections.some((section) => section.id === activeSection);
   const resolvedActiveSection = activeSectionExists ? activeSection : "general";
-  const activeExtensionSection = extensionSections.find(
+  const activeExtensionSection = navigationExtensions.find(
     (section) => section.id === resolvedActiveSection,
   );
   const ExtensionSection = activeExtensionSection?.component;
+  const renderEmbeddedSections = (slot: DesktopAppSettingsSlot) =>
+    extensionSections
+      .filter((section) => section.slot === slot)
+      .map(({ component: Section, id }) => <Section key={id} {...extensionContext} />);
 
   return (
     <>
@@ -123,9 +131,13 @@ export function SettingsDialog({
             })}
           </nav>
           <section className="min-w-0 overflow-y-auto p-4">
-            {resolvedActiveSection === "general" && <SettingsGeneral />}
+            {resolvedActiveSection === "general" && (
+              <SettingsGeneral>{renderEmbeddedSections("general")}</SettingsGeneral>
+            )}
             {resolvedActiveSection === "mcp" && <SettingsMcp />}
-            {resolvedActiveSection === "about" && <SettingsAbout />}
+            {resolvedActiveSection === "about" && (
+              <SettingsAbout>{renderEmbeddedSections("about")}</SettingsAbout>
+            )}
             {ExtensionSection && <ExtensionSection {...extensionContext} />}
           </section>
         </DialogBody>

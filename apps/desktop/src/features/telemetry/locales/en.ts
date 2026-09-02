@@ -11,7 +11,6 @@ const en = {
     dismiss: "Dismiss anonymous usage statistics notice",
   },
   settings: {
-    sectionLabel: "Privacy",
     title: "Privacy",
     description: "Control privacy-preserving project health statistics.",
     loading: "Loading privacy preferences…",

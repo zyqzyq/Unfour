@@ -1,6 +1,5 @@
 import type { DesktopAppExtensionContext } from "@unfour/app-shell";
 import { Button, ErrorState, StatusBadge, useFeedback, useI18n } from "@unfour/ui";
-import { getAccountPrimaryLabel } from "../account/accountDisplay";
 import { useAccount } from "../account/useAccount";
 import { syncErrorMessageKey } from "./syncViewModel";
 import { useCloudSync } from "./useCloudSync";
@@ -36,7 +35,6 @@ export function CloudSyncSection({ activeWorkspace }: DesktopAppExtensionContext
     <p className="text-xs text-[var(--u-color-text-muted)]">{t("cloudSync.contextUnavailableDescription")}</p>
   </div>;
 
-  const profile = account.state.profile;
   const copyDiagnostics = () => {
     const payload = {
       capturedAt: new Date().toISOString(),
@@ -50,12 +48,6 @@ export function CloudSyncSection({ activeWorkspace }: DesktopAppExtensionContext
 
   return <div className="flex flex-col gap-4">
     {errorCode && <ErrorState>{t(syncErrorMessageKey(errorCode))}</ErrorState>}
-    <section className="rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-3 py-3">
-      <h3 className="text-xs font-semibold text-[var(--u-color-text-muted)]">{t("cloudSync.account")}</h3>
-      <p className="mt-1 truncate text-sm font-semibold">{getAccountPrimaryLabel(profile, t("cloudSync.account"))}</p>
-      <p className="truncate text-xs text-[var(--u-color-text-muted)]">{profile.email}</p>
-    </section>
-
     <section className="border-b border-[var(--u-color-border)] pb-4">
       <div className="flex items-center justify-between gap-3">
         <div><h3 className="text-sm font-semibold">{t("cloudSync.syncService")}</h3><p className="mt-1 text-xs text-[var(--u-color-text-muted)]">{t("cloudSync.syncServiceDescription")}</p></div>
@@ -72,9 +64,4 @@ export function CloudSyncSection({ activeWorkspace }: DesktopAppExtensionContext
     <div><Button onClick={openCloudWorkspaceDialog} size="sm" type="button" variant="outline">{t("cloudSync.openCloudWorkspace")}</Button></div>
     <details className="border-t border-[var(--u-color-border)] pt-3"><summary className="cursor-pointer text-sm font-semibold">{t("cloudSync.advanced")}</summary><Button className="mt-2" onClick={copyDiagnostics} size="sm" type="button" variant="outline">{t("cloudSync.copyDiagnostics")}</Button></details>
   </div>;
-}
-
-export function CloudSyncSectionLabel() {
-  const { t } = useI18n();
-  return <>{t("cloudSync.title")}</>;
 }

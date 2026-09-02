@@ -11,7 +11,6 @@ const zhCN = {
     dismiss: "关闭匿名使用统计提示",
   },
   settings: {
-    sectionLabel: "隐私",
     title: "隐私",
     description: "管理用于了解项目健康度的隐私保护统计。",
     loading: "正在加载隐私设置…",

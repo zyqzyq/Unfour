@@ -1,5 +1,6 @@
 const en = {
   title: "Updates",
+  description: "Check for the latest Unfour release and install it when ready.",
   indicator: "Update available",
   checking: "Checking…",
   upToDate: "You're up to date.",

@@ -1,5 +1,6 @@
 const zhCN = {
   title: "更新",
+  description: "检查最新的 Unfour 版本，并在准备好后安装。",
   indicator: "有新版本",
   checking: "正在检查…",
   upToDate: "当前已是最新版本。",

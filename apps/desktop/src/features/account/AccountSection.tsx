@@ -70,8 +70,3 @@ export function AccountSection() {
     </div>
   );
 }
-
-export function AccountSectionLabel() {
-  const { t } = useI18n();
-  return <>{t("account.title")}</>;
-}

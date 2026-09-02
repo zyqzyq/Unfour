@@ -59,6 +59,7 @@
       "sections": {
         "general": "General",
         "mcp": "MCP",
+        "accountSync": "Account & Sync",
         "about": "About"
       },
       "copy": {
@@ -68,6 +69,7 @@
       "general": {
         "title": "General",
         "description": "Language and appearance preferences apply immediately.",
+        "appearance": "Appearance",
         "languageLabel": "Language",
         "languageDescription": "Choose the UI language.",
         "themeLabel": "Theme",
@@ -106,17 +108,30 @@
         "notFoundDev": "No runnable unfour-mcp was found for this dev build. Build it with `cargo build -p unfour-mcp` (or run `pnpm tauri dev`, which builds it automatically) before configuring a client.",
         "notFoundRelease": "No unfour-mcp binary was found for this installed build. Reinstall Unfour before configuring a client."
       },
+      "accountSync": {
+        "title": "Account & Sync",
+        "description": "Manage your Unfour account and workspace synchronization.",
+        "accountTitle": "Account",
+        "cloudSyncTitle": "Cloud Sync"
+      },
       "about": {
         "title": "About",
         "description": "Version and project links for support and feedback.",
+        "application": "Application",
         "appName": "App name",
         "version": "Version",
         "distribution": "Distribution",
         "distributionStandard": "Standard",
         "distributionMicrosoftStore": "Microsoft Store",
+        "channel": "Channel",
+        "channelStable": "Stable",
+        "channelTest": "Test",
         "commit": "Commit",
+        "unavailable": "Unavailable",
+        "links": "Links",
         "website": "Website",
         "github": "GitHub",
+        "actions": "Actions",
         "copyVersionInfo": "Copy version info"
       }
     },

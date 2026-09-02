@@ -17,11 +17,25 @@ export type DesktopAppExtensionContext = Readonly<{
 
 export type DesktopAppExtensionSlot = ComponentType<DesktopAppExtensionContext>;
 
-export type DesktopAppSettingsSection = Readonly<{
-  id: DesktopAppExtensionId;
-  label: ReactNode;
-  component: DesktopAppExtensionSlot;
-}>;
+export type DesktopAppSettingsSlot = "general" | "about";
+
+/**
+ * Settings sections without a slot add a navigation item. Slotted sections
+ * render inside an existing core Settings page while keeping their feature
+ * implementation in the owning Desktop module.
+ */
+export type DesktopAppSettingsSection =
+  | Readonly<{
+      id: DesktopAppExtensionId;
+      label: ReactNode;
+      component: DesktopAppExtensionSlot;
+      slot?: undefined;
+    }>
+  | Readonly<{
+      id: DesktopAppExtensionId;
+      component: DesktopAppExtensionSlot;
+      slot: DesktopAppSettingsSlot;
+    }>;
 
 export type DesktopAppCommandPaletteAction = Readonly<{
   id: DesktopAppExtensionId;

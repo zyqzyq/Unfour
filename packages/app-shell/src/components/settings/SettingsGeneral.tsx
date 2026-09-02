@@ -7,85 +7,52 @@ import {
   type Locale,
   type ThemeMode,
 } from "@unfour/ui";
+import { SettingsGroup, SettingsRow, SettingsSectionHeading } from "./SettingsPrimitives";
 
-export function SettingsGeneral() {
+export function SettingsGeneral({ children }: { children?: ReactNode }) {
   const { locale, locales, setLocale, t } = useI18n();
   const { setThemeMode, themeMode } = useTheme();
 
   return (
-    <div className="space-y-4">
-      <SectionHeading
+    <div className="space-y-5">
+      <SettingsSectionHeading
         description={t("app.settings.general.description")}
         title={t("app.settings.general.title")}
       />
-      <SettingRow
-        control={
-          <Select
-            aria-label={t("app.settings.general.languageLabel")}
-            onChange={(event) => setLocale(event.target.value as Locale)}
-            options={locales.map((item) => ({
-              label: getLocaleLabel(item),
-              value: item,
-            }))}
-            value={locale}
-          />
-        }
-        description={t("app.settings.general.languageDescription")}
-        label={t("app.settings.general.languageLabel")}
-      />
-      <SettingRow
-        control={
-          <Select
-            aria-label={t("app.settings.general.themeLabel")}
-            onChange={(event) => setThemeMode(event.target.value as ThemeMode)}
-            options={[
-              { label: t("app.theme.system"), value: "system" },
-              { label: t("app.theme.light"), value: "light" },
-              { label: t("app.theme.dark"), value: "dark" },
-            ]}
-            value={themeMode}
-          />
-        }
-        description={t("app.settings.general.themeDescription")}
-        label={t("app.settings.general.themeLabel")}
-      />
-    </div>
-  );
-}
-
-function SectionHeading({
-  description,
-  title,
-}: {
-  description: string;
-  title: string;
-}) {
-  return (
-    <div>
-      <h2 className="text-[14px] font-semibold text-[var(--u-color-text)]">{title}</h2>
-      <p className="mt-1 text-[12px] text-[var(--u-color-text-muted)]">{description}</p>
-    </div>
-  );
-}
-
-function SettingRow({
-  control,
-  description,
-  label,
-}: {
-  control: ReactNode;
-  description: string;
-  label: string;
-}) {
-  return (
-    <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-3 border-t border-[var(--u-color-border)] pt-3">
-      <div>
-        <div className="text-[12px] font-semibold text-[var(--u-color-text)]">{label}</div>
-        <div className="mt-1 text-[12px] text-[var(--u-color-text-muted)]">
-          {description}
-        </div>
-      </div>
-      <div className="max-w-[260px]">{control}</div>
+      <SettingsGroup title={t("app.settings.general.appearance")}>
+        <SettingsRow
+          control={
+            <Select
+              aria-label={t("app.settings.general.languageLabel")}
+              onChange={(event) => setLocale(event.target.value as Locale)}
+              options={locales.map((item) => ({
+                label: getLocaleLabel(item),
+                value: item,
+              }))}
+              value={locale}
+            />
+          }
+          description={t("app.settings.general.languageDescription")}
+          label={t("app.settings.general.languageLabel")}
+        />
+        <SettingsRow
+          control={
+            <Select
+              aria-label={t("app.settings.general.themeLabel")}
+              onChange={(event) => setThemeMode(event.target.value as ThemeMode)}
+              options={[
+                { label: t("app.theme.system"), value: "system" },
+                { label: t("app.theme.light"), value: "light" },
+                { label: t("app.theme.dark"), value: "dark" },
+              ]}
+              value={themeMode}
+            />
+          }
+          description={t("app.settings.general.themeDescription")}
+          label={t("app.settings.general.themeLabel")}
+        />
+      </SettingsGroup>
+      {children}
     </div>
   );
 }

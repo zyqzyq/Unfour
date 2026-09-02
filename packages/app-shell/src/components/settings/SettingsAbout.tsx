@@ -5,22 +5,24 @@ import { Button, useI18n } from "@unfour/ui";
 import {
   APP_GITHUB_URL,
   APP_NAME,
+  APP_VERSION,
   APP_WEBSITE_URL,
   createVersionInfo,
   formatShortCommit,
 } from "../../settings/settings-config";
 import { getAppInfo } from "@unfour/command-client";
 import type { AppInfo } from "@unfour/command-client";
+import { SettingsGroup, SettingsSectionHeading } from "./SettingsPrimitives";
 
 const FALLBACK_APP_INFO: AppInfo = {
   name: APP_NAME,
-  version: "",
+  version: APP_VERSION,
   distribution: "standard",
   channel: "test",
   commit: null,
 };
 
-export function SettingsAbout() {
+export function SettingsAbout({ children }: { children?: ReactNode }) {
   const { t } = useI18n();
   const [copyState, setCopyState] = useState<"copied" | "failed" | null>(null);
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
@@ -51,12 +53,17 @@ export function SettingsAbout() {
     };
   }, []);
 
+  const resolvedAppInfo = appInfo ?? FALLBACK_APP_INFO;
   const distributionLabel =
-    appInfo?.distribution === "microsoft-store"
+    resolvedAppInfo.distribution === "microsoft-store"
       ? t("app.settings.about.distributionMicrosoftStore")
       : t("app.settings.about.distributionStandard");
+  const channelLabel =
+    resolvedAppInfo.channel === "stable"
+      ? t("app.settings.about.channelStable")
+      : t("app.settings.about.channelTest");
 
-  const shortCommit = formatShortCommit(appInfo?.commit);
+  const shortCommit = formatShortCommit(resolvedAppInfo.commit);
 
   async function copyVersionInfo() {
     const info = appInfo ?? FALLBACK_APP_INFO;
@@ -77,43 +84,59 @@ export function SettingsAbout() {
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-[14px] font-semibold text-[var(--u-color-text)]">
-          {t("app.settings.about.title")}
-        </h2>
-        <p className="mt-1 text-[12px] text-[var(--u-color-text-muted)]">
-          {t("app.settings.about.description")}
-        </p>
-      </div>
+    <div className="space-y-5">
+      <SettingsSectionHeading
+        description={t("app.settings.about.description")}
+        title={t("app.settings.about.title")}
+      />
 
-      <dl className="divide-y divide-[var(--u-color-border)] rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)]">
-        <InfoRow label={t("app.settings.about.appName")} value={APP_NAME} />
-        <InfoRow label={t("app.settings.about.version")} value={appInfo?.version || ""} />
-        <InfoRow label={t("app.settings.about.distribution")} value={distributionLabel} />
-        {shortCommit ? (
+      <SettingsGroup title={t("app.settings.about.application")}>
+        <dl className="divide-y divide-[var(--u-color-border)] rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)]">
+          <InfoRow
+            label={t("app.settings.about.appName")}
+            value={resolvedAppInfo.name || APP_NAME}
+          />
+          <InfoRow
+            label={t("app.settings.about.version")}
+            value={resolvedAppInfo.version || t("app.settings.about.unavailable")}
+          />
+          <InfoRow label={t("app.settings.about.distribution")} value={distributionLabel} />
+          <InfoRow label={t("app.settings.about.channel")} value={channelLabel} />
           <InfoRow
             label={t("app.settings.about.commit")}
-            value={<span className="font-mono">{shortCommit}</span>}
+            value={
+              shortCommit
+                ? <span className="font-mono">{shortCommit}</span>
+                : t("app.settings.about.unavailable")
+            }
           />
-        ) : null}
-        <InfoRow
-          label={t("app.settings.about.website")}
-          value={<ExternalLinkValue href={APP_WEBSITE_URL} label={APP_WEBSITE_URL} />}
-        />
-        <InfoRow
-          label={t("app.settings.about.github")}
-          value={<ExternalLinkValue href={APP_GITHUB_URL} label={APP_GITHUB_URL} />}
-        />
-      </dl>
+        </dl>
+      </SettingsGroup>
 
-      <Button onClick={() => void copyVersionInfo()} size="sm" type="button" variant="secondary">
-        {copyState === "copied"
-          ? t("app.settings.copy.copied")
-          : copyState === "failed"
-            ? t("app.settings.copy.failed")
-            : t("app.settings.about.copyVersionInfo")}
-      </Button>
+      {children ? <div className="space-y-4">{children}</div> : null}
+
+      <SettingsGroup title={t("app.settings.about.links")}>
+        <dl className="divide-y divide-[var(--u-color-border)] rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)]">
+          <InfoRow
+            label={t("app.settings.about.website")}
+            value={<ExternalLinkValue href={APP_WEBSITE_URL} label={APP_WEBSITE_URL} />}
+          />
+          <InfoRow
+            label={t("app.settings.about.github")}
+            value={<ExternalLinkValue href={APP_GITHUB_URL} label={APP_GITHUB_URL} />}
+          />
+        </dl>
+      </SettingsGroup>
+
+      <SettingsGroup title={t("app.settings.about.actions")}>
+        <Button onClick={() => void copyVersionInfo()} size="sm" type="button" variant="secondary">
+          {copyState === "copied"
+            ? t("app.settings.copy.copied")
+            : copyState === "failed"
+              ? t("app.settings.copy.failed")
+              : t("app.settings.about.copyVersionInfo")}
+        </Button>
+      </SettingsGroup>
     </div>
   );
 }

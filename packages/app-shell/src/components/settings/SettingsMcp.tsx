@@ -25,6 +25,7 @@ import {
   type McpClient,
   type McpClientStatusResult,
 } from "@unfour/command-client";
+import { SettingsSectionHeading } from "./SettingsPrimitives";
 
 type ClientMap<T> = Record<McpClient, T>;
 type ClientMessage = { tone: "success" | "error"; text: string } | null;
@@ -163,14 +164,10 @@ export function SettingsMcp() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-[14px] font-semibold text-[var(--u-color-text)]">
-          {t("app.settings.mcp.title")}
-        </h2>
-        <p className="mt-1 text-[12px] text-[var(--u-color-text-muted)]">
-          {t("app.settings.mcp.description")}
-        </p>
-      </div>
+      <SettingsSectionHeading
+        description={t("app.settings.mcp.description")}
+        title={t("app.settings.mcp.title")}
+      />
 
       <InfoBlock label={t("app.settings.mcp.statusLabel")}>
         <ConnectionStatus
