@@ -110,13 +110,6 @@ export function SettingsAbout({ children }: { children?: ReactNode }) {
                 : t("app.settings.about.unavailable")
             }
           />
-        </dl>
-      </SettingsGroup>
-
-      {children ? <div className="space-y-4">{children}</div> : null}
-
-      <SettingsGroup title={t("app.settings.about.links")}>
-        <dl className="divide-y divide-[var(--u-color-border)] rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)]">
           <InfoRow
             label={t("app.settings.about.website")}
             value={<ExternalLinkValue href={APP_WEBSITE_URL} label={APP_WEBSITE_URL} />}
@@ -127,6 +120,8 @@ export function SettingsAbout({ children }: { children?: ReactNode }) {
           />
         </dl>
       </SettingsGroup>
+
+      {children ? <div className="space-y-4">{children}</div> : null}
 
       <SettingsGroup title={t("app.settings.about.actions")}>
         <Button onClick={() => void copyVersionInfo()} size="sm" type="button" variant="secondary">

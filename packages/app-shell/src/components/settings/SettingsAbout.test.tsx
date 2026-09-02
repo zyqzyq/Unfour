@@ -39,7 +39,9 @@ describe("SettingsAbout", () => {
     expect(screen.getByRole("heading", { name: "About" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Application" })).toBeTruthy();
     expect(screen.getByText("Update available")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Links" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /unfour\.dev/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /github\.com/i })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Links" })).toBeNull();
     expect(screen.getByRole("heading", { name: "Actions" })).toBeTruthy();
 
     await waitFor(() => {
