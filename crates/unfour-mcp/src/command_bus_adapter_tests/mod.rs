@@ -218,6 +218,47 @@ fn ephemeral_adapter_executes_environment_crud() {
     assert_eq!(updated.name, "Staging");
     assert_eq!(updated.variables.len(), 1);
 
+    let full_environments = adapter
+        .list_workspace_environments(&workspace.workspace_id)
+        .expect("list full workspace environments");
+    assert_eq!(full_environments[0].variables[0].key, "baseUrl");
+    let variable = adapter
+        .create_api_environment_variable(
+            &workspace.workspace_id,
+            &created.id,
+            WorkspaceVariableInput {
+                id: None,
+                key: "TOKEN".to_string(),
+                value: "secret".to_string(),
+                is_secret: true,
+                is_enabled: true,
+                description: Some("adapter contract".to_string()),
+                sort_order: 1,
+            },
+        )
+        .expect("create environment variable");
+    let variable = adapter
+        .update_api_environment_variable(
+            &workspace.workspace_id,
+            &created.id,
+            &variable.id,
+            WorkspaceVariableInput {
+                id: Some(variable.id.clone()),
+                key: variable.key,
+                value: "updated-secret".to_string(),
+                is_secret: variable.is_secret,
+                is_enabled: false,
+                description: variable.description,
+                sort_order: variable.sort_order,
+            },
+        )
+        .expect("update environment variable");
+    assert_eq!(variable.value, "updated-secret");
+    assert!(!variable.is_enabled);
+    adapter
+        .delete_api_environment_variable(&workspace.workspace_id, &created.id, &variable.id)
+        .expect("delete environment variable");
+
     let remaining = adapter
         .delete_api_environment(&workspace.workspace_id, &created.id)
         .expect("delete environment");

@@ -529,7 +529,20 @@ impl CommandBus {
     }
 
     pub async fn send_api_request(&self, input: ApiRequestInput) -> AppResult<ApiResponse> {
-        let resolved_input = self.resolve_api_request_input(input.clone()).await?;
+        self.send_api_request_in_environment(input, None).await
+    }
+
+    pub async fn send_api_request_in_environment(
+        &self,
+        input: ApiRequestInput,
+        environment_id_override: Option<String>,
+    ) -> AppResult<ApiResponse> {
+        let resolved_input = self
+            .resolve_api_request_input_in_environment(
+                input.clone(),
+                environment_id_override.as_deref(),
+            )
+            .await?;
         let response = self.api_client.send(resolved_input).await?;
         self.activity_log
             .record(
@@ -756,5 +769,46 @@ impl CommandBus {
 
         let input = self.resolve_api_request_input(input).await?;
         self.api_client.send(input).await
+    }
+
+    pub async fn execute_saved_api_request_with_scripts_in_workspace(
+        &self,
+        workspace_id: Option<String>,
+        request_id: &str,
+        timeout_ms_override: Option<u64>,
+        environment_id_override: Option<String>,
+    ) -> AppResult<RequestExecutionResult> {
+        let saved = self.api_client.get_saved_request(request_id).await?;
+
+        if workspace_id
+            .as_deref()
+            .is_some_and(|id| saved.workspace_id != id)
+        {
+            return Err(unfour_core::AppError::NotFound("api request".to_string()));
+        }
+
+        let headers: Vec<KeyValue> = serde_json::from_str(&saved.headers_json).unwrap_or_default();
+        let query: Vec<KeyValue> = serde_json::from_str(&saved.query_json).unwrap_or_default();
+        let input = ApiRequestInput {
+            workspace_id: saved.workspace_id.clone(),
+            name: Some(saved.name.clone()),
+            parent_folder_id: saved.parent_folder_id.clone(),
+            collection_id: Some(saved.collection_id.clone()),
+            auth_json: Some(saved.auth_json.clone()),
+            method: saved.method.clone(),
+            url: saved.url.clone(),
+            headers,
+            query,
+            body: saved.body.clone(),
+            body_kind: saved.body_kind.clone(),
+            timeout_ms: timeout_ms_override.map(|timeout| timeout.min(60_000)),
+            pre_request_script: saved.pre_request_script.clone(),
+            post_response_script: saved.post_response_script.clone(),
+            script_schema_version: saved.script_schema_version,
+            temporary_variables: vec![],
+        };
+
+        self.send_api_request_with_scripts_in_environment(input, environment_id_override)
+            .await
     }
 }

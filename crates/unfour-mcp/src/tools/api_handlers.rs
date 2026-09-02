@@ -143,13 +143,15 @@ pub(super) fn api_send_request(
         ],
     )?;
     let timeout_ms = parse_optional_timeout(&arguments)?;
+    let environment_id = parse_optional_string(&arguments, "environmentId")?;
 
     let response = if let Some(request_id) = parse_optional_string(&arguments, "requestId")? {
         let workspace_id = parse_optional_string(&arguments, "workspaceId")?;
-        command_bus.execute_saved_api_request_in_workspace(
+        command_bus.execute_saved_api_request_with_scripts_in_workspace(
             workspace_id.as_deref(),
             &request_id,
             timeout_ms,
+            environment_id.as_deref(),
         )
     } else {
         let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
@@ -174,7 +176,7 @@ pub(super) fn api_send_request(
             script_schema_version: 1,
             temporary_variables: vec![],
         };
-        command_bus.send_api_request(input)
+        command_bus.send_api_request_in_environment(input, environment_id.as_deref())
     };
 
     match response {

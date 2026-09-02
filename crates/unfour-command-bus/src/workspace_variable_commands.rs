@@ -495,17 +495,56 @@ impl CommandBus {
 
     pub(crate) async fn resolve_api_request_input(
         &self,
-        mut input: ApiRequestInput,
+        input: ApiRequestInput,
     ) -> AppResult<ApiRequestInput> {
-        let active_environment_id = self
-            .workspace
-            .active_environment_id(&input.workspace_id)
+        self.resolve_api_request_input_in_environment(input, None)
+            .await
+    }
+
+    pub(crate) async fn resolve_api_request_input_in_environment(
+        &self,
+        input: ApiRequestInput,
+        environment_id_override: Option<&str>,
+    ) -> AppResult<ApiRequestInput> {
+        let environment_id = self
+            .resolve_api_environment_id(&input.workspace_id, environment_id_override)
             .await?;
+        self.resolve_api_request_input_for_environment(input, environment_id.as_deref())
+            .await
+    }
+
+    pub(crate) async fn resolve_api_environment_id(
+        &self,
+        workspace_id: &str,
+        environment_id_override: Option<&str>,
+    ) -> AppResult<Option<String>> {
+        match environment_id_override {
+            Some(environment_id) => {
+                let environment_id = environment_id.trim();
+                if environment_id.is_empty() {
+                    return Err(unfour_core::AppError::Validation(
+                        "environment id cannot be empty".to_string(),
+                    ));
+                }
+                self.workspace
+                    .resolve_variables(workspace_id, Some(environment_id), "")
+                    .await?;
+                Ok(Some(environment_id.to_string()))
+            }
+            None => self.workspace.active_environment_id(workspace_id).await,
+        }
+    }
+
+    pub(crate) async fn resolve_api_request_input_for_environment(
+        &self,
+        mut input: ApiRequestInput,
+        environment_id: Option<&str>,
+    ) -> AppResult<ApiRequestInput> {
         input.url = self
             .workspace
             .resolve_variables_with_overrides(
                 &input.workspace_id,
-                active_environment_id.as_deref(),
+                environment_id,
                 &input.url,
                 &input.temporary_variables,
             )
@@ -515,7 +554,7 @@ impl CommandBus {
                 self.workspace
                     .resolve_variables_with_overrides(
                         &input.workspace_id,
-                        active_environment_id.as_deref(),
+                        environment_id,
                         &auth_json,
                         &input.temporary_variables,
                     )
@@ -528,7 +567,7 @@ impl CommandBus {
                 self.workspace
                     .resolve_variables_with_overrides(
                         &input.workspace_id,
-                        active_environment_id.as_deref(),
+                        environment_id,
                         &body,
                         &input.temporary_variables,
                     )
@@ -539,7 +578,7 @@ impl CommandBus {
         input.headers = self
             .resolve_api_key_values(
                 &input.workspace_id,
-                active_environment_id.as_deref(),
+                environment_id,
                 input.headers,
                 &input.temporary_variables,
             )
@@ -547,7 +586,7 @@ impl CommandBus {
         input.query = self
             .resolve_api_key_values(
                 &input.workspace_id,
-                active_environment_id.as_deref(),
+                environment_id,
                 input.query,
                 &input.temporary_variables,
             )

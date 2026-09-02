@@ -80,6 +80,12 @@ fn ephemeral_binary_passes_registry_introspection_without_sqlite() {
     assert!(tools
         .iter()
         .any(|tool| tool["name"] == "unfour.system.health"));
+    assert!(tools
+        .iter()
+        .any(|tool| tool["name"] == "unfour.api.set_environment_variable"));
+    assert!(tools
+        .iter()
+        .any(|tool| tool["name"] == "unfour.api.delete_environment_variable"));
 
     assert!(
         !storage_dir.join("unfour.sqlite").exists(),

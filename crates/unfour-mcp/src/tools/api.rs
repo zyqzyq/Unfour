@@ -1,6 +1,9 @@
 use serde_json::{json, Map, Value};
 use unfour_command_bus::{ReadCommand, ReadCommandResult};
-use unfour_core::models::{ApiRequestInput, ApiSavedRequest, KeyValue};
+use unfour_core::models::{
+    ApiRequestInput, ApiSavedRequest, KeyValue, WorkspaceEnvironment, WorkspaceEnvironmentVariable,
+    WorkspaceVariableInput,
+};
 
 use crate::command_bus_adapter::CommandBusAdapter;
 use crate::sanitize::{
@@ -14,11 +17,14 @@ use super::{
     ToolAnnotations, ToolCallError, ToolDefinition,
 };
 
+#[path = "api_environment_variables.rs"]
+mod api_environment_variables;
 #[path = "api_handlers.rs"]
 mod api_handlers;
 #[path = "api_support.rs"]
 mod api_support;
 
+use api_environment_variables::*;
 use api_handlers::*;
 use api_support::*;
 
@@ -214,7 +220,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                         },
                         "environmentId": {
                             "type": "string",
-                            "description": "Optional environment ID (currently uses the workspace default environment)."
+                            "description": "Optional per-call environment override. It is used for variable resolution and saved request scripts without changing the workspace active environment."
                         },
                         "timeoutMs": {
                             "type": "number",
@@ -582,6 +588,87 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                 annotations: ToolAnnotations::local_write_destructive(),
             },
             handler: api_delete_environment,
+        },
+        RegisteredTool {
+            definition: ToolDefinition {
+                name: "unfour.api.set_environment_variable",
+                title: "Set API Environment Variable",
+                description:
+                    "Creates or updates one API environment variable by environmentId and key through the command bus. Empty values are allowed. Omitted isSecret/description preserve existing metadata, and returned secrets are masked.",
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "workspaceId": { "type": "string" },
+                        "environmentId": { "type": "string" },
+                        "key": { "type": "string" },
+                        "value": { "type": "string" },
+                        "enabled": { "type": "boolean", "default": true },
+                        "isSecret": { "type": "boolean" },
+                        "description": { "type": ["string", "null"] }
+                    },
+                    "required": ["environmentId", "key", "value"],
+                    "additionalProperties": false
+                }),
+                output_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "variable": {
+                            "type": "object",
+                            "properties": {
+                                "id": { "type": "string" },
+                                "environmentId": { "type": "string" },
+                                "key": { "type": "string" },
+                                "value": { "type": "string" },
+                                "enabled": { "type": "boolean" },
+                                "isSecret": { "type": "boolean" },
+                                "description": { "type": ["string", "null"] }
+                            },
+                            "required": ["id", "environmentId", "key", "value", "enabled", "isSecret", "description"],
+                            "additionalProperties": false
+                        },
+                        "created": { "type": "boolean" },
+                        "source": { "type": "string", "const": "command-bus" }
+                    },
+                    "required": ["variable", "created", "source"],
+                    "additionalProperties": false
+                }),
+                annotations: ToolAnnotations::local_write(),
+            },
+            handler: api_set_environment_variable,
+        },
+        RegisteredTool {
+            definition: ToolDefinition {
+                name: "unfour.api.delete_environment_variable",
+                title: "Delete API Environment Variable",
+                description:
+                    "Deletes one API environment variable by environmentId and key through the command bus. Guarded policy requires confirmation; read-only policy blocks deletion.",
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "workspaceId": { "type": "string" },
+                        "environmentId": { "type": "string" },
+                        "key": { "type": "string" },
+                        "confirm": { "type": "boolean" },
+                        "confirmationText": { "type": "string" },
+                        "confirmation_text": { "type": "string" }
+                    },
+                    "required": ["environmentId", "key"],
+                    "additionalProperties": false
+                }),
+                output_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "deleted": { "type": "boolean", "const": true },
+                        "environmentId": { "type": "string" },
+                        "key": { "type": "string" },
+                        "source": { "type": "string", "const": "command-bus" }
+                    },
+                    "required": ["deleted", "environmentId", "key", "source"],
+                    "additionalProperties": false
+                }),
+                annotations: ToolAnnotations::local_write_destructive(),
+            },
+            handler: api_delete_environment_variable,
         },
         RegisteredTool {
             definition: ToolDefinition {

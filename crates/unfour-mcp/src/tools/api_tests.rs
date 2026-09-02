@@ -9,7 +9,8 @@ use unfour_command_bus::{
 use unfour_core::models::{
     ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiResponse, ApiSavedRequest,
     DatabaseConnection, DatabaseQueryInput, DatabaseQueryResult, DatabaseQuerySafety,
-    DatabaseSchema, KeyValue,
+    DatabaseSchema, KeyValue, WorkspaceEnvironment, WorkspaceEnvironmentVariable,
+    WorkspaceVariableInput,
 };
 
 use crate::command_bus_adapter::{CommandBusAdapter, CommandBusAdapterError};
@@ -249,6 +250,96 @@ impl CommandBusAdapter for ApiStubCommandBus {
         Ok(vec![])
     }
 
+    fn list_workspace_environments(
+        &self,
+        workspace_id: &str,
+    ) -> Result<Vec<WorkspaceEnvironment>, CommandBusAdapterError> {
+        if workspace_id != "ws-1" {
+            return Ok(vec![]);
+        }
+        Ok(vec![WorkspaceEnvironment {
+            id: "env-1".to_string(),
+            workspace_id: workspace_id.to_string(),
+            name: "Staging".to_string(),
+            sort_order: 0,
+            is_active: true,
+            variables: vec![
+                WorkspaceEnvironmentVariable {
+                    id: "var-base-url".to_string(),
+                    workspace_id: workspace_id.to_string(),
+                    environment_id: "env-1".to_string(),
+                    key: "BASE_URL".to_string(),
+                    value: "https://api.staging.example.com".to_string(),
+                    is_secret: false,
+                    is_enabled: false,
+                    description: Some("keep this description".to_string()),
+                    sort_order: 0,
+                    created_at: String::new(),
+                    updated_at: String::new(),
+                    deleted_at: None,
+                    revision: 1,
+                },
+                WorkspaceEnvironmentVariable {
+                    id: "var-hidden".to_string(),
+                    workspace_id: workspace_id.to_string(),
+                    environment_id: "env-1".to_string(),
+                    key: "DISPLAY_NAME".to_string(),
+                    value: "secret display value".to_string(),
+                    is_secret: true,
+                    is_enabled: true,
+                    description: None,
+                    sort_order: 1,
+                    created_at: String::new(),
+                    updated_at: String::new(),
+                    deleted_at: None,
+                    revision: 1,
+                },
+            ],
+            created_at: String::new(),
+            updated_at: String::new(),
+            deleted_at: None,
+            revision: 1,
+        }])
+    }
+
+    fn create_api_environment_variable(
+        &self,
+        workspace_id: &str,
+        environment_id: &str,
+        input: WorkspaceVariableInput,
+    ) -> Result<WorkspaceEnvironmentVariable, CommandBusAdapterError> {
+        Ok(environment_variable_from_input(
+            "var-created",
+            workspace_id,
+            environment_id,
+            input,
+        ))
+    }
+
+    fn update_api_environment_variable(
+        &self,
+        workspace_id: &str,
+        environment_id: &str,
+        variable_id: &str,
+        input: WorkspaceVariableInput,
+    ) -> Result<WorkspaceEnvironmentVariable, CommandBusAdapterError> {
+        Ok(environment_variable_from_input(
+            variable_id,
+            workspace_id,
+            environment_id,
+            input,
+        ))
+    }
+
+    fn delete_api_environment_variable(
+        &self,
+        _workspace_id: &str,
+        _environment_id: &str,
+        _variable_id: &str,
+    ) -> Result<Vec<WorkspaceEnvironmentVariable>, CommandBusAdapterError> {
+        Ok(vec![])
+    }
+
     fn execute_saved_api_request_in_workspace(
         &self,
         workspace_id: Option<&str>,
@@ -261,6 +352,21 @@ impl CommandBusAdapter for ApiStubCommandBus {
             assert_eq!(workspace_id, None);
         }
         self.execute_saved_api_request(request_id, timeout_ms)
+    }
+
+    fn execute_saved_api_request_with_scripts_in_workspace(
+        &self,
+        workspace_id: Option<&str>,
+        request_id: &str,
+        timeout_ms: Option<u64>,
+        environment_id: Option<&str>,
+    ) -> Result<ApiResponse, CommandBusAdapterError> {
+        if request_id == "req-environment-override" {
+            assert_eq!(environment_id, Some("env-test"));
+        } else {
+            assert_eq!(environment_id, None);
+        }
+        self.execute_saved_api_request_in_workspace(workspace_id, request_id, timeout_ms)
     }
 
     fn send_api_request(
@@ -281,6 +387,19 @@ impl CommandBusAdapter for ApiStubCommandBus {
             body: r#"{"id":1,"token":"secret-jwt"}"#.to_string(),
             duration_ms: 77,
         })
+    }
+
+    fn send_api_request_in_environment(
+        &self,
+        input: ApiRequestInput,
+        environment_id: Option<&str>,
+    ) -> Result<ApiResponse, CommandBusAdapterError> {
+        if input.url.contains("environment-override") {
+            assert_eq!(environment_id, Some("env-test"));
+        } else {
+            assert_eq!(environment_id, None);
+        }
+        self.send_api_request(input)
     }
 
     fn list_db_connections(
@@ -317,6 +436,29 @@ impl CommandBusAdapter for ApiStubCommandBus {
                 message: None,
             },
         })
+    }
+}
+
+fn environment_variable_from_input(
+    id: &str,
+    workspace_id: &str,
+    environment_id: &str,
+    input: WorkspaceVariableInput,
+) -> WorkspaceEnvironmentVariable {
+    WorkspaceEnvironmentVariable {
+        id: id.to_string(),
+        workspace_id: workspace_id.to_string(),
+        environment_id: environment_id.to_string(),
+        key: input.key,
+        value: input.value,
+        is_secret: input.is_secret,
+        is_enabled: input.is_enabled,
+        description: input.description,
+        sort_order: input.sort_order,
+        created_at: String::new(),
+        updated_at: String::new(),
+        deleted_at: None,
+        revision: 1,
     }
 }
 

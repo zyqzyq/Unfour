@@ -101,6 +101,11 @@ execution. The default `auto` policy maps workspace environments as follows:
   checks, and high-risk actions require confirmation.
 - `prod`: read-only access, with safe SSH diagnostics allowed.
 
+The tool registry is fail-closed: every registered tool must have an explicit
+capability and risk classification, registry completeness is tested, and
+unknown/unclassified tools are denied. API request, collection, environment,
+and environment-variable deletes are classified as destructive.
+
 Explicit workspace policy can override the default environment mapping. Tools
 also carry MCP behavior hints in `tools/list`:
 
@@ -114,6 +119,14 @@ executing. The client must re-run the same tool call with `confirm=true` and
 the returned `confirmation_text`. The confirmation text is bound to the exact
 payload fingerprint, so changing the SQL, URL, command, path, or patch content
 changes the required confirmation text.
+
+For `unfour.api.send_request`, `environmentId` is a per-call override. The
+selected environment is fixed for request-variable resolution and the entire
+pre-request/post-response script lifecycle without changing Desktop's active
+environment. If no override is provided, the current active environment is
+used. Saved request replay executes its saved scripts through the shared
+command-bus script execution path; scripted replays are treated as writes for
+policy purposes because scripts may persist environment mutations.
 
 ## Result Contract
 

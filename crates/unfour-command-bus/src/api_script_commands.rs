@@ -21,13 +21,27 @@ impl CommandBus {
         &self,
         input: ApiRequestInput,
     ) -> AppResult<RequestExecutionResult> {
+        self.send_api_request_with_scripts_in_environment(input, None)
+            .await
+    }
+
+    pub async fn send_api_request_with_scripts_in_environment(
+        &self,
+        input: ApiRequestInput,
+        environment_id_override: Option<String>,
+    ) -> AppResult<RequestExecutionResult> {
         validate_script_config(
             input.pre_request_script.as_deref(),
             input.post_response_script.as_deref(),
             input.script_schema_version,
         )?;
 
-        let pre_environment = self.active_script_environment(&input.workspace_id).await?;
+        let environment_id = self
+            .resolve_api_environment_id(&input.workspace_id, environment_id_override.as_deref())
+            .await?;
+        let pre_environment = self
+            .script_environment(&input.workspace_id, environment_id.as_deref())
+            .await?;
         let pre_input = script_input(
             ScriptPhase::PreRequest,
             &input,
@@ -75,7 +89,9 @@ impl CommandBus {
             .iter()
             .map(key_value_from_script_variable)
             .collect();
-        let resolved_request = self.resolve_api_request_input(request).await?;
+        let resolved_request = self
+            .resolve_api_request_input_for_environment(request, environment_id.as_deref())
+            .await?;
         let response = match self.api_client.send(resolved_request.clone()).await {
             Ok(response) => response,
             Err(error) => {
@@ -88,7 +104,9 @@ impl CommandBus {
             }
         };
 
-        let post_environment = self.active_script_environment(&input.workspace_id).await?;
+        let post_environment = self
+            .script_environment(&input.workspace_id, environment_id.as_deref())
+            .await?;
         let post_input = script_input(
             ScriptPhase::PostResponse,
             &resolved_request,
@@ -139,16 +157,23 @@ impl CommandBus {
         })
     }
 
-    async fn active_script_environment(
+    async fn script_environment(
         &self,
         workspace_id: &str,
+        environment_id: Option<&str>,
     ) -> AppResult<Option<WorkspaceEnvironment>> {
-        Ok(self
+        let environments = self
             .workspace
             .list_environments(workspace_id.to_string())
-            .await?
-            .into_iter()
-            .find(|environment| environment.is_active))
+            .await?;
+        match environment_id {
+            Some(environment_id) => environments
+                .into_iter()
+                .find(|environment| environment.id == environment_id)
+                .map(Some)
+                .ok_or_else(|| AppError::NotFound("workspace environment".to_string())),
+            None => Ok(None),
+        }
     }
 
     async fn commit_script_environment(

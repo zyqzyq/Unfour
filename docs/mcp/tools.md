@@ -33,6 +33,9 @@ Tools with `openWorldHint: true`:
 
 Write-capable tools are also checked by workspace policy at call time. The
 default `auto` mapping is dev = full access, test = guarded, prod = read-only.
+Every registered tool has an explicit capability/risk classification; an
+unknown or newly registered-but-unclassified tool is denied instead of being
+treated as a read.
 High-risk calls return `CONFIRMATION_REQUIRED` in `content[].text` with a
 content-bound `confirmation_text`; re-run the same call with `confirm=true`
 and that exact text to execute. Judge risk from tool annotations first;
@@ -56,7 +59,7 @@ is advisory call metadata and is not part of `structuredContent`.
 | `unfour.api.list_collections` | `{ "workspaceId": "optional" }` | Lists API request collections derived from saved request folders. |
 | `unfour.api.list_requests` | `{ "workspaceId": "optional", "collectionId": "optional" }` | Lists saved API requests with sensitive URL parameters redacted. |
 | `unfour.api.get_request` | `{ "requestId": "required", "includeBody": "optional bool" }` | Returns a saved API request with sensitive headers, query params, URL params, and body fields masked. |
-| `unfour.api.send_request` | `{ "requestId": "optional", "method": "optional", "url": "optional", "headers": "optional", "query": "optional", "body": "optional", "workspaceId": "optional", "environmentId": "optional", "timeoutMs": "optional" }` | Sends a saved request or an ad-hoc request and returns a masked response summary. Non-read methods are blocked by prod policy. |
+| `unfour.api.send_request` | `{ "requestId": "optional", "method": "optional", "url": "optional", "headers": "optional", "query": "optional", "body": "optional", "workspaceId": "optional", "environmentId": "optional", "timeoutMs": "optional" }` | Sends a saved request or an ad-hoc request and returns a masked response summary. `environmentId` is a per-call override and does not change the Desktop active environment. Saved replay executes its saved pre-request and post-response scripts. Non-read methods and scripted saved requests are blocked by prod/read-only policy. |
 | `unfour.api.create_request` | `{ "workspaceId": "optional", "collectionId": "optional", "parentId": "optional", "parentFolderId": "optional", "name": "required", "method": "required", "url": "required", "headers": "optional", "query": "optional", "body": "optional", "bodyKind": "optional", "auth": "optional", "authJson": "optional" }` | Creates a saved API request in an allowed workspace. `parentFolderId` is the current folder field; `parentId` is accepted as a compatibility alias. |
 | `unfour.api.update_request` | `{ "requestId": "required", "workspaceId": "optional", "collectionId": "optional", "parentId": "optional", "parentFolderId": "optional", "name": "optional", "method": "optional", "url": "optional", "headers": "optional", "query": "optional", "body": "optional", "bodyKind": "optional", "auth": "optional", "authJson": "optional" }` | Updates a saved API request. Omitted fields keep their current values. `parentFolderId` is the current folder field; `parentId` is accepted as a compatibility alias. |
 | `unfour.api.delete_request` | `{ "requestId": "required", "workspaceId": "optional", "confirm": "optional", "confirmation_text": "optional" }` | Soft-deletes a saved API request after confirmation. |
@@ -69,6 +72,8 @@ is advisory call metadata and is not part of `structuredContent`.
 | `unfour.api.create_environment` | `{ "workspaceId": "optional", "name": "required" }` | Creates an empty API environment in an allowed workspace. |
 | `unfour.api.update_environment` | `{ "environmentId": "required", "workspaceId": "optional", "name": "required", "variables": "required array" }` | Updates an API environment name and variables. Sensitive values are masked in the result. |
 | `unfour.api.delete_environment` | `{ "environmentId": "required", "workspaceId": "optional", "confirm": "optional", "confirmation_text": "optional" }` | Soft-deletes an API environment; guarded policy requires confirmation. |
+| `unfour.api.set_environment_variable` | `{ "environmentId": "required", "key": "required", "value": "required", "workspaceId": "optional", "enabled": "optional", "isSecret": "optional", "description": "optional" }` | Creates or updates one environment variable by key. Empty values are allowed; omitted `isSecret` and `description` preserve existing metadata. New sensitive keys are marked secret by default, and returned sensitive values are masked. |
+| `unfour.api.delete_environment_variable` | `{ "environmentId": "required", "key": "required", "workspaceId": "optional", "confirm": "optional", "confirmation_text": "optional" }` | Deletes one environment variable by key. Guarded policy requires confirmation; prod/read-only policy blocks deletion. |
 | `unfour.db.create_connection` | `{ "workspaceId": "optional", "name": "required", "driver": "required", "host": "optional", "port": "optional", "database": "optional", "username": "optional", "sslMode": "optional", "sqlitePath": "optional", "credentialRef": "optional", "password": "optional", "credentialLabel": "optional", "readOnly": "optional" }` | Creates a saved database connection. If `password` is supplied, it is written to the OS credential store and only the resulting credential reference is persisted. |
 | `unfour.db.list_connections` | `{ "workspaceId": "optional" }` | Lists saved database connections as safe summaries. |
 | `unfour.db.list_tables` | `{ "connectionId": "required", "workspaceId": "optional", "limit": "optional" }` | Lists tables and views for a saved connection. Default limit is 200; max is 500. |
@@ -120,8 +125,18 @@ Important limits:
   `method` plus `url`.
 - Saved and ad-hoc requests both use the command bus so history, masking, and
   credential handling stay in one path.
+- `environmentId` selects the environment only for that call. URL, headers,
+  query, body, authentication, pre-request scripts, post-response scripts, and
+  `pm.environment` all use that same environment. The workspace active
+  environment is never changed, and a missing/deleted/cross-workspace override
+  returns an error instead of falling back.
+- Saved request replay executes the saved pre-request and post-response scripts
+  through the same versioned command-bus script path used by Desktop Send.
+  Because scripts can mutate environment state, scripted saved requests are
+  classified as writes even when their HTTP method is read-only.
 - `timeoutMs` is clamped to a maximum of 60,000 ms.
-- Environment variables are resolved from the workspace environment.
+- Without `environmentId`, variables and scripts use the workspace active
+  environment as before.
 - Delete operations require the confirmation handshake.
 - Sensitive request and response fields are masked before returning to the MCP
   client.

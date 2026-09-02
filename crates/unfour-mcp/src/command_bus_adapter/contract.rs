@@ -6,7 +6,8 @@ use unfour_core::models::{
     SshCommandHistoryEntry, SshCommandHistoryQuery, SshConnection, SshConnectionInput,
     SshDiagnosticInput, SshDiagnosticResult, SshTask, SshTaskCancelInput, SshTaskCleanupInput,
     SshTaskCleanupResult, SshTaskDetail, SshTaskRun, SshTaskRunInput, SshTaskSaveInput,
-    SshTasksReorderInput, SystemHealth, WorkspaceVariable, WorkspaceVariableInput,
+    SshTasksReorderInput, SystemHealth, WorkspaceEnvironment, WorkspaceEnvironmentVariable,
+    WorkspaceVariable, WorkspaceVariableInput,
 };
 
 use super::CommandBusAdapterError;
@@ -32,6 +33,22 @@ pub trait CommandBusAdapter: Send + Sync {
         self.execute_saved_api_request(request_id, timeout_ms)
     }
 
+    fn execute_saved_api_request_with_scripts_in_workspace(
+        &self,
+        workspace_id: Option<&str>,
+        request_id: &str,
+        timeout_ms: Option<u64>,
+        environment_id: Option<&str>,
+    ) -> Result<ApiResponse, CommandBusAdapterError> {
+        if environment_id.is_some() {
+            return Err(CommandBusAdapterError {
+                code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+                message: "This command-bus adapter does not support per-call API environments.",
+            });
+        }
+        self.execute_saved_api_request_in_workspace(workspace_id, request_id, timeout_ms)
+    }
+
     fn send_api_request(
         &self,
         _input: ApiRequestInput,
@@ -40,6 +57,20 @@ pub trait CommandBusAdapter: Send + Sync {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support ad-hoc API sends.",
         })
+    }
+
+    fn send_api_request_in_environment(
+        &self,
+        input: ApiRequestInput,
+        environment_id: Option<&str>,
+    ) -> Result<ApiResponse, CommandBusAdapterError> {
+        if environment_id.is_some() {
+            return Err(CommandBusAdapterError {
+                code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+                message: "This command-bus adapter does not support per-call API environments.",
+            });
+        }
+        self.send_api_request(input)
     }
 
     fn save_api_request(
@@ -141,6 +172,53 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support API environment deletion.",
+        })
+    }
+
+    fn list_workspace_environments(
+        &self,
+        _workspace_id: &str,
+    ) -> Result<Vec<WorkspaceEnvironment>, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "This command-bus adapter does not support workspace environment reads.",
+        })
+    }
+
+    fn create_api_environment_variable(
+        &self,
+        _workspace_id: &str,
+        _environment_id: &str,
+        _input: WorkspaceVariableInput,
+    ) -> Result<WorkspaceEnvironmentVariable, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "This command-bus adapter does not support API environment variable creation.",
+        })
+    }
+
+    fn update_api_environment_variable(
+        &self,
+        _workspace_id: &str,
+        _environment_id: &str,
+        _variable_id: &str,
+        _input: WorkspaceVariableInput,
+    ) -> Result<WorkspaceEnvironmentVariable, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "This command-bus adapter does not support API environment variable updates.",
+        })
+    }
+
+    fn delete_api_environment_variable(
+        &self,
+        _workspace_id: &str,
+        _environment_id: &str,
+        _variable_id: &str,
+    ) -> Result<Vec<WorkspaceEnvironmentVariable>, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "This command-bus adapter does not support API environment variable deletion.",
         })
     }
 

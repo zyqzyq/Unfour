@@ -16,7 +16,8 @@ use unfour_core::models::{
     SshCommandHistoryEntry, SshCommandHistoryQuery, SshConnection, SshConnectionInput,
     SshDiagnosticInput, SshDiagnosticResult, SshTask, SshTaskCancelInput, SshTaskCleanupInput,
     SshTaskCleanupResult, SshTaskDetail, SshTaskRun, SshTaskRunInput, SshTaskSaveInput,
-    SshTasksReorderInput, SystemHealth, WorkspaceVariable, WorkspaceVariableInput,
+    SshTasksReorderInput, SystemHealth, WorkspaceEnvironment, WorkspaceEnvironmentVariable,
+    WorkspaceVariable, WorkspaceVariableInput,
 };
 use unfour_core::AppError;
 
@@ -199,12 +200,65 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         })
     }
 
+    fn execute_saved_api_request_with_scripts_in_workspace(
+        &self,
+        workspace_id: Option<&str>,
+        request_id: &str,
+        timeout_ms: Option<u64>,
+        environment_id: Option<&str>,
+    ) -> Result<ApiResponse, CommandBusAdapterError> {
+        let result = self
+            .run(
+                self.bus
+                    .execute_saved_api_request_with_scripts_in_workspace(
+                        workspace_id.map(str::to_string),
+                        request_id,
+                        timeout_ms,
+                        environment_id.map(str::to_string),
+                    ),
+            )
+            .map_err(|error| {
+                CommandBusAdapterError::from_app_error(
+                    "The command-bus scripted API send operation failed.",
+                    &error,
+                )
+            })?;
+        match result.response {
+            Some(response) => Ok(response),
+            None if result.http_error.is_some() => Err(CommandBusAdapterError {
+                code: "HTTP_ERROR",
+                message: "The command-bus API send operation failed.",
+            }),
+            None => Err(CommandBusAdapterError {
+                code: "API_SCRIPT_EXECUTION_FAILED",
+                message: "The saved API request pre-request script failed before sending.",
+            }),
+        }
+    }
+
     fn send_api_request(
         &self,
         input: ApiRequestInput,
     ) -> Result<ApiResponse, CommandBusAdapterError> {
         self.run(self.bus.send_api_request(input)).map_err(|e| {
             CommandBusAdapterError::from_app_error("The command-bus API send operation failed.", &e)
+        })
+    }
+
+    fn send_api_request_in_environment(
+        &self,
+        input: ApiRequestInput,
+        environment_id: Option<&str>,
+    ) -> Result<ApiResponse, CommandBusAdapterError> {
+        self.run(
+            self.bus
+                .send_api_request_in_environment(input, environment_id.map(str::to_string)),
+        )
+        .map_err(|error| {
+            CommandBusAdapterError::from_app_error(
+                "The command-bus API send operation failed.",
+                &error,
+            )
         })
     }
 
@@ -360,6 +414,81 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
             CommandBusAdapterError::from_app_error(
                 "The command-bus API environment delete operation failed.",
                 &e,
+            )
+        })
+    }
+
+    fn list_workspace_environments(
+        &self,
+        workspace_id: &str,
+    ) -> Result<Vec<WorkspaceEnvironment>, CommandBusAdapterError> {
+        self.run(
+            self.bus
+                .workspace_environments_list(workspace_id.to_string()),
+        )
+        .map_err(|error| {
+            CommandBusAdapterError::from_app_error(
+                "The command-bus workspace environment read operation failed.",
+                &error,
+            )
+        })
+    }
+
+    fn create_api_environment_variable(
+        &self,
+        workspace_id: &str,
+        environment_id: &str,
+        input: WorkspaceVariableInput,
+    ) -> Result<WorkspaceEnvironmentVariable, CommandBusAdapterError> {
+        self.run(self.bus.workspace_environment_variable_create(
+            workspace_id.to_string(),
+            environment_id.to_string(),
+            input,
+        ))
+        .map_err(|error| {
+            CommandBusAdapterError::from_app_error(
+                "The command-bus API environment variable create operation failed.",
+                &error,
+            )
+        })
+    }
+
+    fn update_api_environment_variable(
+        &self,
+        workspace_id: &str,
+        environment_id: &str,
+        variable_id: &str,
+        input: WorkspaceVariableInput,
+    ) -> Result<WorkspaceEnvironmentVariable, CommandBusAdapterError> {
+        self.run(self.bus.workspace_environment_variable_update(
+            workspace_id.to_string(),
+            environment_id.to_string(),
+            variable_id.to_string(),
+            input,
+        ))
+        .map_err(|error| {
+            CommandBusAdapterError::from_app_error(
+                "The command-bus API environment variable update operation failed.",
+                &error,
+            )
+        })
+    }
+
+    fn delete_api_environment_variable(
+        &self,
+        workspace_id: &str,
+        environment_id: &str,
+        variable_id: &str,
+    ) -> Result<Vec<WorkspaceEnvironmentVariable>, CommandBusAdapterError> {
+        self.run(self.bus.workspace_environment_variable_delete(
+            workspace_id.to_string(),
+            environment_id.to_string(),
+            variable_id.to_string(),
+        ))
+        .map_err(|error| {
+            CommandBusAdapterError::from_app_error(
+                "The command-bus API environment variable delete operation failed.",
+                &error,
             )
         })
     }

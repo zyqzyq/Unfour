@@ -47,6 +47,39 @@ fn send_request_replays_saved_request_in_explicit_workspace() {
 }
 
 #[test]
+fn send_request_passes_environment_override_to_saved_scripted_replay() {
+    let result = api_registry()
+        .call(
+            "unfour.api.send_request",
+            json!({
+                "requestId": "req-environment-override",
+                "environmentId": "env-test"
+            }),
+        )
+        .expect("saved replay should receive the per-call environment");
+
+    assert_eq!(result["isError"], false);
+    assert_eq!(result["structuredContent"]["ok"], true);
+}
+
+#[test]
+fn send_request_passes_environment_override_to_ad_hoc_send() {
+    let result = api_registry()
+        .call(
+            "unfour.api.send_request",
+            json!({
+                "method": "POST",
+                "url": "https://environment-override.example.test",
+                "environmentId": "env-test"
+            }),
+        )
+        .expect("ad-hoc send should receive the per-call environment");
+
+    assert_eq!(result["isError"], false);
+    assert_eq!(result["structuredContent"]["status"], 201);
+}
+
+#[test]
 fn send_request_allows_dev_post_ad_hoc() {
     let result = api_registry()
         .call(
@@ -132,6 +165,112 @@ fn send_request_blocks_prod_delete_ad_hoc() {
 
     assert_eq!(result["isError"], true);
     crate::response::assert_call_meta(&result, "prod", "medium");
+    assert_eq!(
+        crate::response::error_json(&result)["error"]["code"],
+        "WORKSPACE_POLICY_BLOCKED"
+    );
+}
+
+#[test]
+fn send_request_blocks_scripted_saved_get_in_prod() {
+    struct ProdScriptedGetCommandBus;
+
+    impl CommandBusAdapter for ProdScriptedGetCommandBus {
+        fn execute_read(
+            &self,
+            command: ReadCommand,
+        ) -> Result<ReadCommandResult, CommandBusAdapterError> {
+            match command {
+                ReadCommand::ApiGetRequest { request_id } => {
+                    Ok(ReadCommandResult::ApiRequest(ApiRequestDetailResult {
+                        request: ApiSavedRequest {
+                            id: request_id,
+                            workspace_id: "ws-prod".to_string(),
+                            name: "Scripted GET".to_string(),
+                            collection_id: "collection".to_string(),
+                            parent_folder_id: None,
+                            sort_order: 0,
+                            auth_json: "{}".to_string(),
+                            method: "GET".to_string(),
+                            url: "https://api.example.test".to_string(),
+                            headers_json: "[]".to_string(),
+                            query_json: "[]".to_string(),
+                            body: None,
+                            body_kind: "none".to_string(),
+                            pre_request_script: Some(
+                                "pm.environment.set('mutated', 'yes')".to_string(),
+                            ),
+                            post_response_script: None,
+                            script_schema_version: 1,
+                            created_at: String::new(),
+                            updated_at: String::new(),
+                            deleted_at: None,
+                            revision: 1,
+                            sync_status: "local".to_string(),
+                            remote_id: None,
+                        },
+                        source: "command-bus".to_string(),
+                    }))
+                }
+                ReadCommand::ListWorkspaces => {
+                    Ok(ReadCommandResult::Workspaces(WorkspaceListResult {
+                        workspaces: vec![WorkspaceSummary {
+                            id: "ws-prod".to_string(),
+                            name: "Prod".to_string(),
+                            is_default: true,
+                            is_active: true,
+                            environment_type: "prod".to_string(),
+                            mcp_policy: "auto".to_string(),
+                            last_opened_at: None,
+                        }],
+                        active_workspace_id: "ws-prod".to_string(),
+                        count: 1,
+                        source: "command-bus".to_string(),
+                    }))
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        fn execute_saved_api_request(
+            &self,
+            _request_id: &str,
+            _timeout_ms: Option<u64>,
+        ) -> Result<ApiResponse, CommandBusAdapterError> {
+            panic!("scripted prod GET should be blocked before execution")
+        }
+
+        fn list_db_connections(
+            &self,
+            _workspace_id: &str,
+        ) -> Result<Vec<DatabaseConnection>, CommandBusAdapterError> {
+            unreachable!()
+        }
+
+        fn get_db_schema(
+            &self,
+            _workspace_id: &str,
+            _connection_id: &str,
+        ) -> Result<DatabaseSchema, CommandBusAdapterError> {
+            unreachable!()
+        }
+
+        fn execute_db_query(
+            &self,
+            _input: DatabaseQueryInput,
+        ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
+            unreachable!()
+        }
+    }
+
+    let result = ToolRegistry::with_command_bus(Arc::new(ProdScriptedGetCommandBus))
+        .call(
+            "unfour.api.send_request",
+            json!({ "requestId": "scripted-get" }),
+        )
+        .expect("policy denial should be structured");
+
+    assert_eq!(result["isError"], true);
     assert_eq!(
         crate::response::error_json(&result)["error"]["code"],
         "WORKSPACE_POLICY_BLOCKED"

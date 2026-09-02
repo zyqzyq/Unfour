@@ -181,8 +181,8 @@ pub(super) fn classify_mcp_action(
     tool_name: &str,
     arguments: Option<&Map<String, Value>>,
     api_method: Option<&str>,
-) -> (McpCapability, McpRisk) {
-    match tool_name {
+) -> Option<(McpCapability, McpRisk)> {
+    Some(match tool_name {
         "unfour.workspace.current"
         | "unfour.workspace.list"
         | "unfour.connection.list"
@@ -208,13 +208,17 @@ pub(super) fn classify_mcp_action(
         | "unfour.api.list_environments" => (McpCapability::ApiRead, McpRisk::Read),
         "unfour.api.create_request"
         | "unfour.api.update_request"
-        | "unfour.api.delete_request"
         | "unfour.api.create_collection"
         | "unfour.api.update_collection"
-        | "unfour.api.delete_collection"
         | "unfour.api.create_environment"
         | "unfour.api.update_environment"
-        | "unfour.api.delete_environment" => (McpCapability::ApiMutate, McpRisk::Write),
+        | "unfour.api.set_environment_variable" => (McpCapability::ApiMutate, McpRisk::Write),
+        "unfour.api.delete_request"
+        | "unfour.api.delete_collection"
+        | "unfour.api.delete_environment"
+        | "unfour.api.delete_environment_variable" => {
+            (McpCapability::ApiMutate, McpRisk::Destructive)
+        }
         "unfour.api.send_request" => {
             if api_method.map(is_readonly_http_method).unwrap_or(false) {
                 (McpCapability::ApiSend, McpRisk::Read)
@@ -281,8 +285,8 @@ pub(super) fn classify_mcp_action(
         "unfour.ssh.run_task" | "unfour.ssh.cancel_task_run" => {
             (McpCapability::SshExec, McpRisk::Execute)
         }
-        _ => (McpCapability::WorkspaceRead, McpRisk::Read),
-    }
+        _ => return None,
+    })
 }
 
 pub(super) fn check_mcp_permission(
@@ -347,8 +351,9 @@ pub(super) fn evaluate_tool_policy(
     arguments: &Value,
 ) -> Result<ToolPolicyEvaluation, ToolCallError> {
     let Some(arguments) = arguments.as_object() else {
+        let (capability, risk) =
+            classify_mcp_action(tool_name, None, None).ok_or_else(unclassified_policy_error)?;
         let workspace = active_workspace_context(command_bus)?;
-        let (capability, risk) = classify_mcp_action(tool_name, None, None);
         let resolved_policy = resolve_mcp_policy(&workspace);
         check_mcp_permission(&workspace, capability, risk).map_err(ToolCallError::PolicyBlocked)?;
         return Ok(ToolPolicyEvaluation {
@@ -360,6 +365,7 @@ pub(super) fn evaluate_tool_policy(
     };
     let mut workspace_id = parse_optional_string(arguments, "workspaceId");
     let mut api_method = parse_optional_string(arguments, "method");
+    let mut saved_request_has_scripts = false;
 
     if matches!(
         tool_name,
@@ -375,6 +381,16 @@ pub(super) fn evaluate_tool_policy(
             let ReadCommandResult::ApiRequest(result) = result else {
                 return Err(unexpected_result());
             };
+            saved_request_has_scripts = result
+                .request
+                .pre_request_script
+                .as_deref()
+                .is_some_and(|script| !script.trim().is_empty())
+                || result
+                    .request
+                    .post_response_script
+                    .as_deref()
+                    .is_some_and(|script| !script.trim().is_empty());
             workspace_id = Some(result.request.workspace_id);
             if api_method.is_none() {
                 api_method = Some(result.request.method);
@@ -382,7 +398,13 @@ pub(super) fn evaluate_tool_policy(
         }
     }
 
-    let (capability, risk) = classify_mcp_action(tool_name, Some(arguments), api_method.as_deref());
+    let (capability, risk) = if tool_name == "unfour.api.send_request" && saved_request_has_scripts
+    {
+        (McpCapability::ApiMutate, McpRisk::Write)
+    } else {
+        classify_mcp_action(tool_name, Some(arguments), api_method.as_deref())
+            .ok_or_else(unclassified_policy_error)?
+    };
     let workspace = match workspace_id {
         Some(workspace_id) => workspace_context_by_id(command_bus, &workspace_id)?,
         None => active_workspace_context(command_bus)?,
@@ -498,6 +520,13 @@ fn unexpected_result() -> ToolCallError {
     ToolCallError::Execution {
         code: "COMMAND_BUS_RESULT_MISMATCH",
         message: "The command-bus returned an unexpected result.",
+    }
+}
+
+fn unclassified_policy_error() -> ToolCallError {
+    ToolCallError::Execution {
+        code: "MCP_TOOL_POLICY_UNCLASSIFIED",
+        message: "The MCP tool has no explicit policy classification and was denied.",
     }
 }
 

@@ -86,7 +86,8 @@ fn check_mcp_permission_never_allows_secret_reveal_or_destructive_full_access() 
 
 #[test]
 fn ssh_history_is_classified_as_workspace_read() {
-    let (capability, risk) = classify_mcp_action("unfour.ssh.list_history", None, None);
+    let (capability, risk) = classify_mcp_action("unfour.ssh.list_history", None, None)
+        .expect("registered tool must have explicit policy");
     assert_eq!(capability, McpCapability::WorkspaceRead);
     assert_eq!(risk, McpRisk::Read);
     assert!(check_mcp_permission(&workspace("prod", "auto"), capability, risk).is_ok());
@@ -110,8 +111,51 @@ fn ssh_exec_classifier_uses_effective_command_after_cwd_wrapping() {
         "cwd": "/srv/app"
     });
 
-    let (capability, risk) = classify_mcp_action("unfour.ssh.exec", arguments.as_object(), None);
+    let (capability, risk) = classify_mcp_action("unfour.ssh.exec", arguments.as_object(), None)
+        .expect("registered tool must have explicit policy");
 
     assert_eq!(capability, McpCapability::SshExec);
     assert_eq!(risk, McpRisk::Execute);
+}
+
+#[test]
+fn api_delete_tools_are_destructive() {
+    for tool_name in [
+        "unfour.api.delete_request",
+        "unfour.api.delete_collection",
+        "unfour.api.delete_environment",
+        "unfour.api.delete_environment_variable",
+    ] {
+        let (capability, risk) = classify_mcp_action(tool_name, None, None)
+            .expect("registered delete tool must have explicit policy");
+        assert_eq!(capability, McpCapability::ApiMutate, "{tool_name}");
+        assert_eq!(risk, McpRisk::Destructive, "{tool_name}");
+    }
+}
+
+#[test]
+fn unknown_tool_has_no_policy_fallback() {
+    assert_eq!(
+        classify_mcp_action("unfour.future.unclassified_write", None, None),
+        None
+    );
+}
+
+#[test]
+fn every_registered_tool_has_explicit_policy_classification() {
+    let mut tools = super::super::real::registered_tools();
+    tools.extend(super::super::workspace::registered_tools());
+    tools.extend(super::super::api::registered_tools());
+    tools.extend(super::super::database::registered_tools());
+    tools.extend(super::super::system::registered_tools());
+    tools.extend(super::super::activity::registered_tools());
+    tools.extend(super::super::ssh::registered_tools());
+
+    for tool in tools {
+        assert!(
+            classify_mcp_action(tool.definition.name, None, None).is_some(),
+            "registered MCP tool {} is missing explicit policy classification",
+            tool.definition.name
+        );
+    }
 }

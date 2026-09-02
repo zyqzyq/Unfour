@@ -150,6 +150,23 @@ and future-regression procedure, not a separate outstanding v0.9.0 item.
 - Call `unfour.system.health`.
 - Call workspace read tools.
 - Call API list/read tools against saved requests.
+- Create and update one API environment variable with
+  `unfour.api.set_environment_variable`; confirm empty values work, omitted
+  secret/description metadata is preserved on update, and explicit or
+  sensitive-key secrets are masked in the result.
+- Delete an API environment variable by key. In a guarded workspace, confirm
+  the first call returns `CONFIRMATION_REQUIRED`, an exact confirmed retry
+  succeeds, and a missing key returns stable `NOT_FOUND` output.
+- Prepare active `env-dev` and non-active `env-test` values for the same URL
+  variable. Call `unfour.api.send_request` with `environmentId=env-test` for
+  both an ad-hoc request and a saved request; confirm the test URL is used and
+  the Desktop active environment remains `env-dev`.
+- Replay a saved request whose pre-request script changes a header/environment
+  value and whose post-response script records a test/environment value.
+  Confirm both scripts execute and, with `environmentId`, both use the same
+  per-call environment.
+- Pass a missing, deleted, or cross-workspace `environmentId` and confirm the
+  send fails without falling back to the active environment.
 - Call database list/schema/read-only query tools against a disposable test
   database.
 - Call `unfour.activity.list`.
@@ -162,6 +179,8 @@ The following production-policy journey remains `NOT VERIFIED` for v0.9.0:
 
 - In a prod workspace, confirm permitted read-only MCP operations work.
 - Confirm forbidden write operations cannot execute directly.
+- Confirm environment-variable set/delete and scripted saved-request replay
+  cannot execute in prod/read-only policy.
 - Confirm applicable high-risk operations return `CONFIRMATION_REQUIRED`.
 - Confirm `confirmation_text` is bound to the exact payload being authorized.
 - Retry after confirmation and confirm execution follows the current policy.
