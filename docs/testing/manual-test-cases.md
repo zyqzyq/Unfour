@@ -4,7 +4,7 @@ These manual cases supplement automated tests for release candidates. Record
 `PASS`, `FAIL`, `NOT RUN`, or `NOT VERIFIED` for each relevant platform.
 
 > The recorded status below is for the published `v0.9.0` release. The current
-> source version is `v0.9.1`; rerun the applicable cases for its candidate and
+> source version is `v0.9.2`; rerun the applicable cases for its candidate and
 > do not inherit v0.9.0 results automatically.
 
 ## v0.9.0 recorded manual status
@@ -59,6 +59,10 @@ Sync entitlement -> billing portal journey.
   explains the restriction.
 - Delete a non-default workspace and confirm local state updates.
 - Change layout state, restart, and confirm layout restores.
+- Resize the API, SSH, and Database sidebars independently, switch modules,
+  restart, and confirm each module restores its own bounded width. Open a
+  legacy layout containing only the former single `sidebarWidth` and confirm
+  it migrates without losing a usable sidebar.
 - Upgrade an existing `v0.2.0` database and confirm Workspace, environment, and
   variable records remain available.
 - Confirm create/update/delete operations increment revisions and a failed
@@ -67,6 +71,22 @@ Sync entitlement -> billing portal journey.
   active environment, last-opened time, and default Workspace remain local.
 - Start desktop and MCP with the same storage profile and confirm they resolve
   the same database; confirm `dev`/`test` profiles do not open stable data.
+
+## Anonymous usage telemetry
+
+These checks apply to Stable Desktop builds. Test/dev builds should have
+telemetry network access disabled and should not show the production notice.
+
+- On first entry into the normal workbench, confirm the non-blocking notice
+  explains anonymous usage statistics and offers Learn more and Turn off.
+- Confirm the first send waits through the notice grace period, and turning
+  telemetry off during that period cancels the pending attempt.
+- In `Settings -> Privacy`, turn anonymous usage statistics off and on again;
+  confirm the preference persists and a successful installation sends at most
+  one `app_active` event per UTC day.
+- Inspect a test payload or server-side capture and confirm it contains only
+  the documented allowlisted fields, with no account, workspace, feature-usage,
+  or credential data.
 
 ## API Client
 
@@ -174,6 +194,9 @@ and future-regression procedure, not a separate outstanding v0.9.0 item.
 - Attempt a forbidden database write and confirm it is rejected.
 - Attempt a forbidden SSH command shape and confirm it is rejected.
 - Inspect returned data for secret masking.
+- On Windows, install under a path containing spaces, configure Cursor from
+  Settings, and confirm the generated `cmd.exe /c` command starts Unfour MCP
+  successfully.
 
 The following production-policy journey remains `NOT VERIFIED` for v0.9.0:
 

@@ -6,11 +6,52 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-09-02
+
+Maintenance and feature release following the `v0.9.1` source tag, focused on
+MCP execution semantics, privacy-preserving telemetry, and workspace
+usability.
+
+### Added
+
+- **Anonymous active-install telemetry** — Stable Desktop builds can record one
+  privacy-preserving `app_active` event per installation per UTC day, with a
+  first-run notice, Privacy settings, an independent OS-keychain installation
+  ID, and no account, workspace, or feature-usage fields. Test/dev builds keep
+  network telemetry disabled.
+- **MCP environment-variable tools** — Add
+  `unfour.api.set_environment_variable` and
+  `unfour.api.delete_environment_variable` through the command bus, including
+  empty values, metadata-preserving updates, sensitive-value masking, and
+  policy confirmation for guarded deletes.
+- **Store and product release assets** — Add the exact 300x300 Microsoft Store
+  listing icon and refresh product screenshots, including Workspace
+  Environments.
+
+### Changed
+
+- **MCP environment overrides and scripted replay** — `environmentId` now
+  selects the environment for the entire request-variable and pre/post-script
+  lifecycle without changing the Desktop active environment. Saved request
+  replay runs through the shared command-bus script path, and scripted replay
+  is treated as a write for read-only policy purposes.
+- **Fail-closed MCP policy** — Every registered tool now has an explicit
+  capability and risk classification; unknown or unclassified tools are
+  denied, and destructive API request, collection, environment, and variable
+  deletes are classified explicitly.
+- **Per-module sidebar layout** — API, SSH, and Database sidebars now have
+  independent defaults, bounds, and persisted widths, with compatibility for
+  the legacy single-width layout.
+
 ### Fixed
 
 - **Cursor MCP on Windows** — One-click Cursor configuration wraps sidecar
   paths that contain spaces (for example `D:\Program Files\Unfour\unfour-mcp.exe`)
   in `cmd.exe /c`, matching how Cursor still launches stdio servers.
+- **Telemetry lifecycle and failure handling** — Delay the first stable-build
+  attempt until after the notice grace period, cancel it immediately on opt-out,
+  avoid aggressive retries or redirect following, and record a successful day
+  only after a 2xx response.
 
 ## [0.9.1] - 2026-08-31
 
@@ -498,6 +539,7 @@ First public release.
 - Linux artifacts remain experimental/unverified until real-device smoke checks
   are complete.
 
+[0.9.2]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.2
 [0.9.1]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.1
 [0.9.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.0
 [0.8.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.8.0

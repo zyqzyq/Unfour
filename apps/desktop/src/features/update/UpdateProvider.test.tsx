@@ -17,7 +17,7 @@ import { UpdateProvider } from "./UpdateProvider";
 import { useUpdate } from "./useUpdate";
 
 const meta: UpdateMeta = {
-  name: "Unfour", version: "0.9.0", distribution: "standard", channel: "stable",
+  name: "Unfour", version: "0.9.2", distribution: "standard", channel: "stable",
   commit: null, updaterEnabled: true, endpoint: null,
 };
 
@@ -25,7 +25,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
   mocks.info.mockResolvedValue(meta);
-  mocks.check.mockResolvedValue({ version: "0.9.1", currentVersion: "0.9.0", date: null, body: null });
+  mocks.check.mockResolvedValue({ version: "0.9.3", currentVersion: "0.9.2", date: null, body: null });
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
@@ -47,7 +47,7 @@ it("installs the latest committed update once and clears pending progress timers
   expect(mocks.install).toHaveBeenCalledTimes(1);
   act(() => { progress({ event: "started", contentLength: 100 }); progress({ event: "progress", chunkLength: 30 }); });
   await act(() => vi.advanceTimersByTimeAsync(120));
-  expect(result.current.state).toMatchObject({ kind: "downloading", downloaded: 30, info: { version: "0.9.1" } });
+  expect(result.current.state).toMatchObject({ kind: "downloading", downloaded: 30, info: { version: "0.9.3" } });
   act(() => progress({ event: "downloaded" }));
   expect(result.current.state.kind).toBe("installing");
   await act(async () => { finish(); await install; });

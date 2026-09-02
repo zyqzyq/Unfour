@@ -155,7 +155,7 @@ Current status:
 
 Release claims remain limited by the current verification matrix.
 
-## v0.9.1 (Current source version)
+## v0.9.1 (Previous source checkpoint)
 
 Maintenance and release-hardening follow-up to the published v0.9.0 release:
 
@@ -168,9 +168,31 @@ Maintenance and release-hardening follow-up to the published v0.9.0 release:
 
 Current status:
 
-- source version is `0.9.1`; the latest published release remains `v0.9.0`;
-- the v0.9.0 publication evidence remains historical until a new v0.9.1
-  candidate is verified.
+- the `v0.9.1` tag is the comparison baseline for the current source;
+- the active release verification record still treats the v0.9.0 publication
+  evidence as historical.
+
+Release claims remain limited by the current verification matrix.
+
+## v0.9.2 (Current source version)
+
+The follow-up from the `v0.9.1` tag focuses on MCP correctness, privacy, and
+desktop usability:
+
+- anonymous active-install telemetry with a first-run notice, Privacy opt-out,
+  UTC daily gating, and a test/dev network-disable policy;
+- per-call MCP environment selection, saved-request script replay, API
+  environment-variable tools, and fail-closed capability/risk policy checks;
+- independent persisted sidebar widths for API, SSH, and Database, including
+  legacy single-width migration;
+- the Windows Cursor MCP path-with-spaces fix; and
+- refreshed README/product screenshots plus the Microsoft Store listing icon.
+
+Current status:
+
+- source version is `0.9.2`; release status is `NOT RELEASED`;
+- candidate artifact, platform, live-service, and manual verification remain
+  to be recorded in the active release matrix.
 
 Release claims remain limited by the current verification matrix.
 

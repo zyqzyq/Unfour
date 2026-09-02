@@ -1,16 +1,28 @@
-# v0.9.1 Release Verification
+# v0.9.2 Release Verification
 
-This document tracks v0.9.1 release preparation. The published v0.9.0 results
-remain below as historical evidence; a new v0.9.1 candidate needs fresh
-evidence and must not inherit those release results automatically.
+This document tracks v0.9.2 release preparation. The published v0.9.0 results
+remain below as historical evidence; the local `v0.9.1` tag is the comparison
+baseline. A new v0.9.2 candidate needs fresh evidence and must not inherit
+those release results automatically.
 
-## v0.9.1 preparation status
+## v0.9.2 preparation status
 
-- Source version: `0.9.1`; release status: `NOT RELEASED`.
+- Source version: `0.9.2`; release status: `NOT RELEASED`.
 - Version synchronization: `PASS` (`node scripts/sync-version.mjs --check`).
 - Cargo workspace lock/check: `PASS` (`cargo check --workspace --locked`).
-- Release contract suite: `PASS` (72 tests via the direct Node test command).
+- Release contract suite: `PASS` (73 tests via the direct Node test command).
 - Candidate artifact, platform, live-service, and manual gates: `NOT VERIFIED`.
+
+## v0.9.2 candidate scope
+
+The candidate adds anonymous active-install telemetry, per-module sidebar-width
+persistence, MCP environment-variable CRUD, per-call environment selection and
+scripted saved-request replay, fail-closed MCP policy classification, and the
+Windows Cursor path-with-spaces fix. Fresh candidate evidence is required for
+stable telemetry notice/opt-out behavior, the MCP environment and policy
+journeys, installed Cursor configuration under a path containing spaces, and
+sidebar restoration across modules. The Store icon and refreshed screenshots
+are release collateral and do not replace installer or platform verification.
 
 ## Previous v0.9.0 Final Release Verification Record
 

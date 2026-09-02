@@ -14,11 +14,13 @@ Unfour opens into a single workspace surface:
 
 ## Current Capabilities
 
-This guide documents the current v0.9.1 product capabilities. The published
+This guide documents the current v0.9.2 product capabilities. The published
 v0.9.0 verification record remains the latest completed release evidence until
-the v0.9.1 candidate is verified:
+the v0.9.2 candidate is verified:
 
 - The workspace shell is usable.
+- API, SSH, and Database sidebars keep independent bounded widths and restore
+  their own layout when switching modules or restarting the app.
 - API debugging supports request editing, Send, response viewing, history,
   saved requests, collections, environments, import/export, and request
   scripts with test and console results.
@@ -27,7 +29,12 @@ the v0.9.1 candidate is verified:
   Codex and Cursor can reproduce issues, inspect logs and database state, and
   make fixes alongside the user. Real v0.9.0 client checks completed in both
   Codex and Cursor, including server start, initialization, tool discovery,
-  tool calls, and access to real Unfour data/tools.
+  tool calls, and access to real Unfour data/tools. MCP also supports per-call
+  environment selection, saved-request script replay, and environment-variable
+  set/delete tools subject to policy and confirmation checks.
+- Stable Desktop builds show a one-time notice for anonymous active-install
+  statistics and expose an opt-out under `Settings -> Privacy`; test/dev builds
+  do not send telemetry. See [anonymous usage telemetry](../privacy/telemetry.md).
 - Unfour's core desktop features are free and open source under Apache-2.0. An
   active Pro subscription unlocks Cloud Sync in the same application.
 - SQLite, PostgreSQL, and MySQL database workflows are verified.
