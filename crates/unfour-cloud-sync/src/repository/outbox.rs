@@ -19,39 +19,47 @@ impl SyncRepository {
         let now = clock.now();
         let mut workspaces = Vec::new();
         for mutation in mutations {
-            let bindings: Vec<(String, String, bool)> = sqlx::query_as(
-                r#"SELECT binding.account_id, binding.cloud_workspace_id,
-                          binding.sync_enabled = 1
-                            AND binding.state <> 'paused'
-                            AND COALESCE(settings.sync_enabled, 0)
-                            AND EXISTS (
-                              SELECT 1 FROM cloud_sync_runtime_context AS runtime
-                              WHERE runtime.singleton = 1
-                                AND runtime.active_account_id = binding.account_id
-                            )
-                   FROM cloud_sync_workspace_bindings AS binding
-                   LEFT JOIN cloud_sync_account_settings AS settings
-                     ON settings.account_id = binding.account_id
-                   WHERE binding.local_workspace_id = ?1"#,
+            let Some(owner) =
+                Self::resolve_cloud_sync_owner_on(connection, &mutation.entity.workspace_id)
+                    .await?
+            else {
+                continue;
+            };
+            let network_enabled: bool = sqlx::query_scalar(
+                r#"SELECT EXISTS (
+                     SELECT 1
+                     FROM cloud_sync_workspace_bindings AS binding
+                     LEFT JOIN cloud_sync_account_settings AS settings
+                       ON settings.account_id = binding.account_id
+                     WHERE binding.account_id = ?1
+                       AND binding.local_workspace_id = ?2
+                       AND binding.cloud_workspace_id = ?3
+                       AND binding.sync_enabled = 1
+                       AND binding.state <> 'paused'
+                       AND COALESCE(settings.sync_enabled, 0) = 1
+                       AND EXISTS (
+                         SELECT 1 FROM cloud_sync_runtime_context AS runtime
+                         WHERE runtime.singleton = 1
+                           AND runtime.active_account_id = binding.account_id
+                       )
+                   )"#,
             )
+            .bind(&owner.account_id)
             .bind(&mutation.entity.workspace_id)
-            .fetch_all(&mut *connection)
+            .bind(&owner.cloud_workspace_id)
+            .fetch_one(&mut *connection)
             .await?;
-            let mut should_trigger = false;
-            for (account_id, cloud_workspace_id, network_enabled) in bindings {
-                Self::enqueue_on(
-                    connection,
-                    &account_id,
-                    &mutation.entity.workspace_id,
-                    &cloud_workspace_id,
-                    mutation,
-                    ids.next_id(),
-                    now,
-                )
-                .await?;
-                should_trigger |= network_enabled;
-            }
-            if should_trigger && !workspaces.contains(&mutation.entity.workspace_id) {
+            Self::enqueue_on(
+                connection,
+                &owner.account_id,
+                &mutation.entity.workspace_id,
+                &owner.cloud_workspace_id,
+                mutation,
+                ids.next_id(),
+                now,
+            )
+            .await?;
+            if network_enabled && !workspaces.contains(&mutation.entity.workspace_id) {
                 workspaces.push(mutation.entity.workspace_id.clone());
             }
         }
@@ -217,6 +225,12 @@ impl SyncRepository {
                WHERE outbox.account_id = ?1 AND outbox.cloud_workspace_id = ?2
                  AND outbox.status IN ('pending', 'uncertain')
                  AND (outbox.next_attempt_at IS NULL OR outbox.next_attempt_at <= ?3)
+                 AND EXISTS (
+                   SELECT 1 FROM cloud_sync_workspace_ownership AS owner
+                   WHERE owner.local_workspace_id = outbox.local_workspace_id
+                     AND owner.account_id = outbox.account_id
+                     AND owner.cloud_workspace_id = outbox.cloud_workspace_id
+                 )
                  AND NOT EXISTS (
                    SELECT 1 FROM cloud_sync_entity_state AS state
                    WHERE state.account_id = outbox.account_id

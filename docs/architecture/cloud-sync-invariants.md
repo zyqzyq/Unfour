@@ -24,6 +24,27 @@ and wake-up signal. It must never be used to decide whether a binding receives
 an outbox row. This keeps an offline or signed-out edit available for the
 binding that owns it without transferring ownership to another account.
 
+## Workspace ownership invariant
+
+A local workspace has at most one Cloud Sync owner at a time:
+
+```text
+local_workspace_id -> (account_id, cloud_workspace_id)
+```
+
+Sign-out does not remove ownership, and signing into another account does not
+transfer it. Rebinding is an explicit future ownership transition; it is not
+an implicit side effect of Enable. Historical duplicate bindings are retained
+for data safety but are unresolved until an explicit repair/rebind flow exists.
+
+## Mutation routing invariant
+
+Every local mutation resolves exactly one owner before it is captured. An
+unbound workspace produces no outbox row; an ambiguous workspace fails the
+mutation transaction so the business row cannot commit without durable intent.
+Pause, entitlement, and active-account state only affect network eligibility
+and wake-up, never the outbox destination.
+
 ## Account and pause behavior
 
 Bindings and outbox rows are always read and written with an explicit account
@@ -57,6 +78,21 @@ materialization must use the same redaction boundary as ordinary outbox
 capture. Secret values, credentials, private-key material, and other device
 local fields must not enter canonical payloads.
 
+Repair is allowed only when the supplied binding exactly matches the resolved
+workspace owner. A historical non-owner binding is skipped, while an
+ambiguous workspace fails closed with a stable ownership diagnostic; neither
+case may fan out local data.
+
+## Legacy paused bindings
+
+Before account pause reasons were persisted, `sync_enabled = 0` and
+`state = 'paused'` could mean either account sign-out or an explicit workspace
+pause. The upgrade preserves those rows as paused, records
+`cloud_sync_legacy_paused_binding_ambiguous`, and requires an explicit Enable.
+This conservative behavior avoids incorrectly resuming a workspace the user
+had deliberately paused. New account-context pauses carry a pause-reason row
+and can resume on re-authentication.
+
 ## Command bus and MCP
 
 All production mutable desktop and MCP command paths install
@@ -72,7 +108,8 @@ When changing Cloud Sync or a local mutating command, verify:
 
 1. A bound workspace mutation still commits an account-scoped outbox head
    when no account is active.
-2. Account A and B cannot consume one another's outbox rows.
+2. A local workspace has at most one owner; Account A and B cannot create,
+   consume, or repair one another's binding.
 3. Global/workspace pause preserves the outbox and suppresses network work.
 4. Re-authentication/resume runs repair before normal sync and does not move
    ownership implicitly.

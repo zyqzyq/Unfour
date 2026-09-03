@@ -26,6 +26,12 @@ impl SyncRepository {
                  lease_expires_at = NULL, last_error = NULL, updated_at = ?2
                WHERE account_id = ?1 AND status = 'dead'
                  AND last_error = 'protocol_version_unsupported'
+                 AND EXISTS (
+                   SELECT 1 FROM cloud_sync_workspace_ownership AS owner
+                   WHERE owner.local_workspace_id = cloud_sync_outbox.local_workspace_id
+                     AND owner.account_id = cloud_sync_outbox.account_id
+                     AND owner.cloud_workspace_id = cloud_sync_outbox.cloud_workspace_id
+                 )
                RETURNING local_workspace_id"#,
         )
         .bind(account_id)
@@ -63,7 +69,13 @@ impl SyncRepository {
                        ELSE NULL
                      END,
                      updated_at = ?3
-                   WHERE account_id = ?1 AND local_workspace_id = ?2"#,
+                   WHERE account_id = ?1 AND local_workspace_id = ?2
+                     AND EXISTS (
+                       SELECT 1 FROM cloud_sync_workspace_ownership AS owner
+                       WHERE owner.local_workspace_id = cloud_sync_workspace_bindings.local_workspace_id
+                         AND owner.account_id = cloud_sync_workspace_bindings.account_id
+                         AND owner.cloud_workspace_id = cloud_sync_workspace_bindings.cloud_workspace_id
+                     )"#,
             )
             .bind(account_id)
             .bind(workspace_id)
@@ -136,6 +148,12 @@ impl SyncRepository {
                FROM cloud_sync_outbox AS outbox
                WHERE outbox.account_id = ?1 AND outbox.local_workspace_id = ?2
                  AND outbox.status = 'dead'
+                 AND EXISTS (
+                   SELECT 1 FROM cloud_sync_workspace_ownership AS owner
+                   WHERE owner.local_workspace_id = outbox.local_workspace_id
+                     AND owner.account_id = outbox.account_id
+                     AND owner.cloud_workspace_id = outbox.cloud_workspace_id
+                 )
                ORDER BY outbox.created_at, outbox.entity_type, outbox.entity_id"#,
         )
         .bind(account_id)
@@ -173,7 +191,13 @@ impl SyncRepository {
                       content_revision, status, attempt_count, last_error
                FROM cloud_sync_outbox
                WHERE account_id = ?1 AND local_workspace_id = ?2
-                 AND operation_id = ?3 AND status = 'dead'"#,
+                 AND operation_id = ?3 AND status = 'dead'
+                 AND EXISTS (
+                   SELECT 1 FROM cloud_sync_workspace_ownership AS owner
+                   WHERE owner.local_workspace_id = cloud_sync_outbox.local_workspace_id
+                     AND owner.account_id = cloud_sync_outbox.account_id
+                     AND owner.cloud_workspace_id = cloud_sync_outbox.cloud_workspace_id
+                 )"#,
         )
         .bind(account_id)
         .bind(workspace_id)
@@ -486,6 +510,7 @@ impl SyncRepository {
         connection: &mut SqliteConnection,
         binding: &SyncBinding,
     ) -> Result<(), SyncError> {
+        Self::assert_workspace_owner_on(connection, binding).await?;
         let current: bool = sqlx::query_scalar(
             r#"SELECT EXISTS(SELECT 1 FROM cloud_sync_workspace_bindings
                WHERE account_id = ?1 AND local_workspace_id = ?2

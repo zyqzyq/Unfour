@@ -22,6 +22,9 @@ fn cloud_sync_migrator() -> Migrator {
 
 #[cfg(test)]
 mod tests {
+    #[path = "../ownership_tests.rs"]
+    mod ownership;
+
     use super::*;
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 
@@ -47,8 +50,9 @@ mod tests {
         "pro_sync_diagnostics",
         "pro_sync_account_settings",
     ];
-    const CLOUD_SYNC_TABLES: [&str; 9] = [
+    const CLOUD_SYNC_TABLES: [&str; 10] = [
         "cloud_sync_workspace_bindings",
+        "cloud_sync_workspace_ownership",
         "cloud_sync_runtime_context",
         "cloud_sync_outbox",
         "cloud_sync_entity_state",
@@ -901,9 +905,13 @@ mod tests {
     }
 
     async fn apply_historical_pro_migrations(pool: &SqlitePool) {
+        apply_cloud_sync_migrations_through(pool, HISTORICAL_PRO_MIGRATION_CUTOFF).await;
+    }
+
+    async fn apply_cloud_sync_migrations_through(pool: &SqlitePool, cutoff: i64) {
         for migration in cloud_sync_migrator()
             .iter()
-            .filter(|migration| migration.version <= HISTORICAL_PRO_MIGRATION_CUTOFF)
+            .filter(|migration| migration.version <= cutoff)
         {
             sqlx::raw_sql(migration.sql.as_ref())
                 .execute(pool)

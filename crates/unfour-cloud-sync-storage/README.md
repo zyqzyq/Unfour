@@ -9,7 +9,8 @@ effective order is:
 1. Core historical migrations.
 2. The eight historical Pro migrations, byte-for-byte unchanged.
 3. `20260827010000_core_cloud_sync_table_rename.sql`.
-4. Future Cloud Sync migrations.
+4. Future Cloud Sync migrations, including durable workspace ownership and
+   conservative handling of legacy paused bindings.
 
 The two sqlx migrators continue sharing `_sqlx_migrations` and both ignore
 missing records. This preserves historical Community and Pro databases that

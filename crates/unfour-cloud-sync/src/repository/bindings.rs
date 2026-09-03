@@ -46,7 +46,7 @@ impl SyncRepository {
     }
 
     pub async fn enabled_bindings(&self, account_id: &str) -> Result<Vec<SyncBinding>, SyncError> {
-        let sql = format!("SELECT {} FROM cloud_sync_workspace_bindings WHERE account_id = ?1 AND sync_enabled = 1 AND state <> 'paused' AND EXISTS (SELECT 1 FROM cloud_sync_account_settings WHERE account_id = ?1 AND sync_enabled = 1) ORDER BY created_at, local_workspace_id", Self::BINDING_COLUMNS);
+        let sql = format!("SELECT binding.{} FROM cloud_sync_workspace_bindings AS binding WHERE binding.account_id = ?1 AND binding.sync_enabled = 1 AND binding.state <> 'paused' AND EXISTS (SELECT 1 FROM cloud_sync_account_settings WHERE account_id = ?1 AND sync_enabled = 1) AND EXISTS (SELECT 1 FROM cloud_sync_workspace_ownership AS owner WHERE owner.local_workspace_id = binding.local_workspace_id AND owner.account_id = binding.account_id AND owner.cloud_workspace_id = binding.cloud_workspace_id) ORDER BY binding.created_at, binding.local_workspace_id", Self::BINDING_COLUMNS);
         sqlx::query_as::<_, SyncBinding>(&sql)
             .bind(account_id)
             .fetch_all(&self.pool)
@@ -68,7 +68,15 @@ impl SyncRepository {
             .execute(&mut *tx)
             .await?;
         sqlx::query(
-            "UPDATE cloud_sync_workspace_bindings SET sync_enabled = 0, state = 'paused', generation = generation + 1, updated_at = ?1 WHERE account_id = ?2",
+            r#"UPDATE cloud_sync_workspace_bindings AS binding
+               SET sync_enabled = 0, state = 'paused', generation = generation + 1, updated_at = ?1
+               WHERE binding.account_id = ?2
+                 AND EXISTS (
+                   SELECT 1 FROM cloud_sync_workspace_ownership AS owner
+                   WHERE owner.local_workspace_id = binding.local_workspace_id
+                     AND owner.account_id = binding.account_id
+                     AND owner.cloud_workspace_id = binding.cloud_workspace_id
+                 )"#,
         )
         .bind(now)
         .bind(account_id)
@@ -118,6 +126,12 @@ impl SyncRepository {
                    SELECT 1 FROM cloud_sync_account_binding_pause_reasons AS pause
                    WHERE pause.account_id = binding.account_id
                      AND pause.local_workspace_id = binding.local_workspace_id
+                 )
+                 AND EXISTS (
+                   SELECT 1 FROM cloud_sync_workspace_ownership AS owner
+                   WHERE owner.local_workspace_id = binding.local_workspace_id
+                     AND owner.account_id = binding.account_id
+                     AND owner.cloud_workspace_id = binding.cloud_workspace_id
                  )"#,
         )
         .bind(&now)
@@ -138,8 +152,14 @@ impl SyncRepository {
                      account_id, local_workspace_id, previous_state, created_at, updated_at
                    )
                    SELECT account_id, local_workspace_id, state, ?1, ?1
-                   FROM cloud_sync_workspace_bindings
-                   WHERE account_id <> ?2 AND sync_enabled = 1 AND state <> 'paused'
+                   FROM cloud_sync_workspace_bindings AS binding
+                   WHERE binding.account_id <> ?2 AND binding.sync_enabled = 1 AND binding.state <> 'paused'
+                     AND EXISTS (
+                       SELECT 1 FROM cloud_sync_workspace_ownership AS owner
+                       WHERE owner.local_workspace_id = binding.local_workspace_id
+                         AND owner.account_id = binding.account_id
+                         AND owner.cloud_workspace_id = binding.cloud_workspace_id
+                     )
                    ON CONFLICT(account_id, local_workspace_id) DO UPDATE SET
                      previous_state = excluded.previous_state,
                      updated_at = excluded.updated_at"#,
@@ -149,7 +169,15 @@ impl SyncRepository {
             .execute(&mut *tx)
             .await?;
             sqlx::query(
-                "UPDATE cloud_sync_workspace_bindings SET sync_enabled = 0, state = 'paused', generation = generation + 1, updated_at = ?1 WHERE account_id <> ?2 AND sync_enabled = 1",
+                r#"UPDATE cloud_sync_workspace_bindings AS binding
+                   SET sync_enabled = 0, state = 'paused', generation = generation + 1, updated_at = ?1
+                   WHERE binding.account_id <> ?2 AND binding.sync_enabled = 1
+                     AND EXISTS (
+                       SELECT 1 FROM cloud_sync_workspace_ownership AS owner
+                       WHERE owner.local_workspace_id = binding.local_workspace_id
+                         AND owner.account_id = binding.account_id
+                         AND owner.cloud_workspace_id = binding.cloud_workspace_id
+                     )"#,
             )
             .bind(&now)
             .bind(account_id)
@@ -204,7 +232,15 @@ impl SyncRepository {
         .execute(&mut *tx)
         .await?;
         sqlx::query(
-            "UPDATE cloud_sync_workspace_bindings SET generation = generation + 1, updated_at = ?1 WHERE account_id = ?2 AND sync_enabled = 1",
+            r#"UPDATE cloud_sync_workspace_bindings AS binding
+               SET generation = generation + 1, updated_at = ?1
+               WHERE binding.account_id = ?2 AND binding.sync_enabled = 1
+                 AND EXISTS (
+                   SELECT 1 FROM cloud_sync_workspace_ownership AS owner
+                   WHERE owner.local_workspace_id = binding.local_workspace_id
+                     AND owner.account_id = binding.account_id
+                     AND owner.cloud_workspace_id = binding.cloud_workspace_id
+                 )"#,
         )
         .bind(&now)
         .bind(account_id)
@@ -226,6 +262,12 @@ impl SyncRepository {
                WHERE account_id = (
                  SELECT active_account_id FROM cloud_sync_runtime_context WHERE singleton = 1
                ) AND sync_enabled = 1 AND state <> 'paused'
+                 AND EXISTS (
+                   SELECT 1 FROM cloud_sync_workspace_ownership AS owner
+                   WHERE owner.local_workspace_id = cloud_sync_workspace_bindings.local_workspace_id
+                     AND owner.account_id = cloud_sync_workspace_bindings.account_id
+                     AND owner.cloud_workspace_id = cloud_sync_workspace_bindings.cloud_workspace_id
+                 )
                ON CONFLICT(account_id, local_workspace_id) DO UPDATE SET
                  previous_state = excluded.previous_state,
                  updated_at = excluded.updated_at"#,
@@ -238,7 +280,13 @@ impl SyncRepository {
                SET sync_enabled = 0, state = 'paused', generation = generation + 1, updated_at = ?1
                WHERE account_id = (
                  SELECT active_account_id FROM cloud_sync_runtime_context WHERE singleton = 1
-               ) AND sync_enabled = 1 AND state <> 'paused'"#,
+               ) AND sync_enabled = 1 AND state <> 'paused'
+                 AND EXISTS (
+                   SELECT 1 FROM cloud_sync_workspace_ownership AS owner
+                   WHERE owner.local_workspace_id = cloud_sync_workspace_bindings.local_workspace_id
+                     AND owner.account_id = cloud_sync_workspace_bindings.account_id
+                     AND owner.cloud_workspace_id = cloud_sync_workspace_bindings.cloud_workspace_id
+                 )"#,
         )
         .bind(&now)
         .execute(&mut *tx)
@@ -261,7 +309,20 @@ impl SyncRepository {
         now: DateTime<Utc>,
     ) -> Result<(), SyncError> {
         let changed = sqlx::query(
-            "UPDATE cloud_sync_workspace_bindings SET generation = ?1, updated_at = ?2 WHERE account_id = ?3 AND local_workspace_id = ?4 AND sync_enabled = 1 AND state <> 'paused' AND EXISTS (SELECT 1 FROM cloud_sync_account_settings WHERE account_id = ?3 AND sync_enabled = 1)",
+            r#"UPDATE cloud_sync_workspace_bindings AS binding
+               SET generation = ?1, updated_at = ?2
+               WHERE binding.account_id = ?3 AND binding.local_workspace_id = ?4
+                 AND binding.sync_enabled = 1 AND binding.state <> 'paused'
+                 AND EXISTS (
+                   SELECT 1 FROM cloud_sync_account_settings
+                   WHERE account_id = ?3 AND sync_enabled = 1
+                 )
+                 AND EXISTS (
+                   SELECT 1 FROM cloud_sync_workspace_ownership AS owner
+                   WHERE owner.local_workspace_id = binding.local_workspace_id
+                     AND owner.account_id = binding.account_id
+                     AND owner.cloud_workspace_id = binding.cloud_workspace_id
+                 )"#,
         )
         .bind(generation as i64)
         .bind(now.to_rfc3339())
@@ -293,7 +354,19 @@ impl SyncRepository {
         .execute(&mut *tx)
         .await?;
         let changed = sqlx::query(
-            "UPDATE cloud_sync_workspace_bindings SET sync_enabled = ?1, state = CASE WHEN ?1 THEN CASE WHEN initial_confirmed >= initial_total THEN 'reconciling' ELSE 'uploading' END ELSE ?2 END, generation = generation + 1, updated_at = ?3 WHERE account_id = ?4 AND local_workspace_id = ?5",
+            r#"UPDATE cloud_sync_workspace_bindings AS binding
+               SET sync_enabled = ?1,
+                   state = CASE WHEN ?1 THEN CASE WHEN initial_confirmed >= initial_total THEN 'reconciling' ELSE 'uploading' END ELSE ?2 END,
+                   last_error = CASE WHEN ?1 THEN NULL ELSE last_error END,
+                   generation = generation + 1,
+                   updated_at = ?3
+               WHERE binding.account_id = ?4 AND binding.local_workspace_id = ?5
+                 AND EXISTS (
+                   SELECT 1 FROM cloud_sync_workspace_ownership AS owner
+                   WHERE owner.local_workspace_id = binding.local_workspace_id
+                     AND owner.account_id = binding.account_id
+                     AND owner.cloud_workspace_id = binding.cloud_workspace_id
+                 )"#,
         )
         .bind(enabled).bind(state).bind(now.to_rfc3339()).bind(account_id).bind(workspace_id)
         .execute(&mut *tx).await?.rows_affected();
@@ -406,10 +479,25 @@ impl SyncRepository {
         binding: &SyncBinding,
     ) -> Result<(), SyncError> {
         let generation: Option<i64> = sqlx::query_scalar(
-            "SELECT generation FROM cloud_sync_workspace_bindings WHERE account_id = ?1 AND local_workspace_id = ?2 AND sync_enabled = 1 AND state <> 'paused' AND EXISTS (SELECT 1 FROM cloud_sync_account_settings WHERE account_id = ?1 AND sync_enabled = 1)",
+            r#"SELECT binding.generation
+               FROM cloud_sync_workspace_bindings AS binding
+               WHERE binding.account_id = ?1 AND binding.local_workspace_id = ?2
+                 AND binding.cloud_workspace_id = ?3
+                 AND binding.sync_enabled = 1 AND binding.state <> 'paused'
+                 AND EXISTS (
+                   SELECT 1 FROM cloud_sync_account_settings
+                   WHERE account_id = ?1 AND sync_enabled = 1
+                 )
+                 AND EXISTS (
+                   SELECT 1 FROM cloud_sync_workspace_ownership AS owner
+                   WHERE owner.local_workspace_id = binding.local_workspace_id
+                     AND owner.account_id = binding.account_id
+                     AND owner.cloud_workspace_id = binding.cloud_workspace_id
+                 )"#,
         )
         .bind(&binding.account_id)
         .bind(&binding.local_workspace_id)
+        .bind(&binding.cloud_workspace_id)
         .fetch_optional(&mut *connection)
         .await?;
         (generation == Some(binding.generation))
@@ -425,9 +513,21 @@ impl SyncRepository {
         now: DateTime<Utc>,
     ) -> Result<(), SyncError> {
         let changed = sqlx::query(
-            "UPDATE cloud_sync_workspace_bindings SET state = ?1, last_error = ?2, consecutive_failure_count = CASE WHEN ?1 = 'active' AND ?2 IS NULL THEN 0 ELSE consecutive_failure_count END, updated_at = ?3 WHERE account_id = ?4 AND local_workspace_id = ?5 AND generation = ?6",
+            r#"UPDATE cloud_sync_workspace_bindings AS binding
+               SET state = ?1,
+                   last_error = ?2,
+                   consecutive_failure_count = CASE WHEN ?1 = 'active' AND ?2 IS NULL THEN 0 ELSE consecutive_failure_count END,
+                   updated_at = ?3
+               WHERE binding.account_id = ?4 AND binding.local_workspace_id = ?5
+                 AND binding.cloud_workspace_id = ?6 AND binding.generation = ?7
+                 AND EXISTS (
+                   SELECT 1 FROM cloud_sync_workspace_ownership AS owner
+                   WHERE owner.local_workspace_id = binding.local_workspace_id
+                     AND owner.account_id = binding.account_id
+                     AND owner.cloud_workspace_id = binding.cloud_workspace_id
+                 )"#,
         ).bind(state).bind(error).bind(now.to_rfc3339()).bind(&binding.account_id)
-         .bind(&binding.local_workspace_id).bind(binding.generation).execute(&self.pool).await?.rows_affected();
+         .bind(&binding.local_workspace_id).bind(&binding.cloud_workspace_id).bind(binding.generation).execute(&self.pool).await?.rows_affected();
         if changed != 1 {
             return Err(SyncError::AccountChanged);
         }
@@ -443,8 +543,27 @@ impl SyncRepository {
         now: DateTime<Utc>,
     ) -> Result<(), SyncError> {
         sqlx::query(
-            "UPDATE cloud_sync_workspace_bindings SET state = CASE WHEN state = 'conflict' THEN state ELSE 'error' END, last_error = ?1, consecutive_failure_count = consecutive_failure_count + 1, updated_at = ?2 WHERE account_id = ?3 AND local_workspace_id = ?4 AND generation = ?5",
-        ).bind(code).bind(now.to_rfc3339()).bind(account_id).bind(workspace_id).bind(generation as i64).execute(&self.pool).await?;
+            r#"UPDATE cloud_sync_workspace_bindings AS binding
+               SET state = CASE WHEN binding.state = 'conflict' THEN binding.state ELSE 'error' END,
+                   last_error = ?1,
+                   consecutive_failure_count = binding.consecutive_failure_count + 1,
+                   updated_at = ?2
+               WHERE binding.account_id = ?3 AND binding.local_workspace_id = ?4
+                 AND binding.generation = ?5
+                 AND EXISTS (
+                   SELECT 1 FROM cloud_sync_workspace_ownership AS owner
+                   WHERE owner.local_workspace_id = binding.local_workspace_id
+                     AND owner.account_id = binding.account_id
+                     AND owner.cloud_workspace_id = binding.cloud_workspace_id
+                 )"#,
+        )
+        .bind(code)
+        .bind(now.to_rfc3339())
+        .bind(account_id)
+        .bind(workspace_id)
+        .bind(generation as i64)
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 

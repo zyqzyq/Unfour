@@ -166,6 +166,26 @@ impl SyncService {
         account: SyncAccountContext,
         workspace_id: &str,
     ) -> Result<(), SyncError> {
+        match self
+            .repository
+            .resolve_cloud_sync_owner(workspace_id)
+            .await?
+        {
+            Some(owner)
+                if owner.account_id == account.account_id
+                    && self
+                        .repository
+                        .binding(&account.account_id, workspace_id)
+                        .await?
+                        .is_some_and(|binding| {
+                            binding.cloud_workspace_id == owner.cloud_workspace_id
+                        }) => {}
+            Some(owner) if owner.account_id != account.account_id => {
+                return Err(SyncError::WorkspaceOwnedByAnotherAccount)
+            }
+            Some(_) => return Err(SyncError::WorkspaceOwnershipInvariant),
+            None => return Err(SyncError::NotFound),
+        }
         self.revive_protocol_dead_letters_once(&account.account_id)
             .await?;
         let key = Self::flight_key(&account.account_id, workspace_id);

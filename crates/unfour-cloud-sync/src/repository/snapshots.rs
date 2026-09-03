@@ -107,6 +107,7 @@ impl SyncRepository {
         cursor: i64,
         now: &str,
     ) -> Result<(), SyncError> {
+        Self::ensure_new_binding_owner_available_on(connection, account_id, workspace_id).await?;
         sqlx::query(
             r#"INSERT INTO cloud_sync_workspace_bindings (
                  account_id, local_workspace_id, cloud_workspace_id, last_pulled_cursor,
@@ -123,6 +124,14 @@ impl SyncRepository {
         .bind(account_generation as i64)
         .bind(now)
         .execute(&mut *connection)
+        .await?;
+        Self::insert_workspace_owner_on(
+            connection,
+            account_id,
+            workspace_id,
+            cloud_workspace_id,
+            now,
+        )
         .await?;
         Ok(())
     }

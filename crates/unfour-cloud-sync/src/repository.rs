@@ -15,6 +15,7 @@ mod bootstrap;
 mod initial_upload;
 mod orphan_reconciliation;
 mod outbox;
+mod ownership;
 mod reconciliation;
 mod recovery;
 mod snapshots;

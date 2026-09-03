@@ -92,6 +92,31 @@ pub(crate) async fn database() -> LocalDb {
     db
 }
 
+pub(crate) async fn insert_binding(
+    db: &LocalDb,
+    account_id: &str,
+    workspace_id: &str,
+    cloud_workspace_id: &str,
+    sync_enabled: bool,
+    state: &str,
+) {
+    sqlx::query(
+        r#"INSERT INTO cloud_sync_workspace_bindings (
+             account_id, local_workspace_id, cloud_workspace_id,
+             sync_enabled, state, initial_cursor, created_at, updated_at
+           ) VALUES (?1, ?2, ?3, ?4, ?5, 0,
+                     '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z')"#,
+    )
+    .bind(account_id)
+    .bind(workspace_id)
+    .bind(cloud_workspace_id)
+    .bind(sync_enabled)
+    .bind(state)
+    .execute(db.pool())
+    .await
+    .unwrap();
+}
+
 pub(crate) async fn concurrent_database() -> LocalDb {
     static DATABASE_ID: AtomicUsize = AtomicUsize::new(0);
     let id = DATABASE_ID.fetch_add(1, Ordering::SeqCst);

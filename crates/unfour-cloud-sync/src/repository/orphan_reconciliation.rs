@@ -36,6 +36,14 @@ impl SyncRepository {
     ) -> Result<usize, SyncError> {
         let now = clock.now();
         let mut tx = self.pool.begin().await?;
+        let owner = Self::resolve_cloud_sync_owner_on(&mut tx, &binding.local_workspace_id)
+            .await?
+            .ok_or(SyncError::WorkspaceOwnershipInvariant)?;
+        if owner.account_id != binding.account_id
+            || owner.cloud_workspace_id != binding.cloud_workspace_id
+        {
+            return Ok(0);
+        }
         Self::assert_binding_generation_on(&mut tx, binding).await?;
 
         let keys =
@@ -132,12 +140,13 @@ impl SyncRepository {
         let rows: Vec<(String, String, Option<String>)> = sqlx::query_as(
             r#"WITH RECURSIVE folder_depth(id, depth) AS (
                  SELECT id, 0 FROM api_collection_folders
-                 WHERE parent_folder_id IS NULL AND deleted_at IS NULL
+                 WHERE workspace_id = ?1
+                   AND parent_folder_id IS NULL AND deleted_at IS NULL
                  UNION ALL
                  SELECT child.id, parent.depth + 1
                  FROM api_collection_folders AS child
                  JOIN folder_depth AS parent ON parent.id = child.parent_folder_id
-                 WHERE child.deleted_at IS NULL
+                 WHERE child.workspace_id = ?1 AND child.deleted_at IS NULL
                ), entities(entity_type, entity_id, parent_entity_id, depth) AS (
                  SELECT 'workspace', id, NULL, 0
                  FROM workspaces

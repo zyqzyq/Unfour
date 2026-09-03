@@ -282,6 +282,15 @@ impl SyncService {
 
     pub async fn enable(&self, workspace_id: &str) -> Result<(), SyncError> {
         let account = self.account().await?;
+        if let Some(owner) = self
+            .repository
+            .resolve_cloud_sync_owner(workspace_id)
+            .await?
+        {
+            if owner.account_id != account.account_id {
+                return Err(SyncError::WorkspaceOwnedByAnotherAccount);
+            }
+        }
         if let Some(binding) = self
             .repository
             .binding(&account.account_id, workspace_id)

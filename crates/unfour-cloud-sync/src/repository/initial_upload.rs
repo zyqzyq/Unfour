@@ -56,6 +56,7 @@ impl SyncRepository {
         let now = clock.now();
         let now_text = now.to_rfc3339();
         let mut tx = self.pool.begin().await?;
+        Self::ensure_new_binding_owner_available_on(&mut tx, account_id, workspace_id).await?;
         sqlx::query(
             r#"INSERT INTO cloud_sync_workspace_bindings (
                  account_id, local_workspace_id, cloud_workspace_id, last_pulled_cursor,
@@ -72,6 +73,14 @@ impl SyncRepository {
         .bind(account_generation as i64)
         .bind(&now_text)
         .execute(&mut *tx)
+        .await?;
+        Self::insert_workspace_owner_on(
+            &mut tx,
+            account_id,
+            workspace_id,
+            cloud_workspace_id,
+            &now_text,
+        )
         .await?;
 
         let keys = Self::live_entity_keys_on(&mut tx, workspace_id).await?;

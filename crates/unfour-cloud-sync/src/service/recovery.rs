@@ -18,6 +18,7 @@ impl SyncService {
             .binding(&account.account_id, workspace_id)
             .await?
             .ok_or(SyncError::NotFound)?;
+        self.repository.assert_workspace_owner(&binding).await?;
         let entry = self
             .repository
             .dead_letter(&account.account_id, workspace_id, operation_id)
@@ -56,6 +57,7 @@ impl SyncService {
             .binding(&account.account_id, workspace_id)
             .await?
             .ok_or(SyncError::NotFound)?;
+        self.repository.assert_workspace_owner(&binding).await?;
         let entry = self
             .repository
             .dead_letter(&account.account_id, workspace_id, operation_id)

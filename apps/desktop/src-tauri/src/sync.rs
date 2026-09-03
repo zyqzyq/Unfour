@@ -119,6 +119,15 @@ impl From<SyncError> for SyncCommandError {
                     "Cloud Sync is blocked by a permanently failed operation."
                 }
                 SyncError::Permanent => "Cloud Sync rejected a permanent request error.",
+                SyncError::WorkspaceOwnedByAnotherAccount => {
+                    "This local workspace is already owned by another Cloud Sync account."
+                }
+                SyncError::WorkspaceOwnershipAmbiguous => {
+                    "Cloud Sync found multiple historical owners for this workspace and stopped safely."
+                }
+                SyncError::WorkspaceOwnershipInvariant => {
+                    "Cloud Sync workspace ownership metadata is inconsistent."
+                }
             },
         }
     }

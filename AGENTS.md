@@ -48,6 +48,9 @@ React, TypeScript, and Rust.
 - Cloud-bound local mutations must retain durable outbox intent regardless of
   login, active account, entitlement, pause, offline, or worker state; see
   [Cloud Sync invariants](docs/architecture/cloud-sync-invariants.md).
+- A local workspace has at most one durable Cloud Sync owner
+  `(account_id, cloud_workspace_id)`; mutations and repair must resolve that
+  owner and must never fan out across historical bindings.
 - MCP tool names, schemas, command names, command keys, and stable error codes
   must remain English and must not be localized. UI layers may map stable
   message keys to localized user-facing copy.

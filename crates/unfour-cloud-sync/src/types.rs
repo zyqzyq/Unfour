@@ -39,6 +39,12 @@ pub enum SyncError {
     DeadLetterBlocked,
     #[error("cloud sync rejected a permanent request error")]
     Permanent,
+    #[error("the local workspace is owned by another cloud sync account")]
+    WorkspaceOwnedByAnotherAccount,
+    #[error("cloud sync found multiple historical owners for the local workspace")]
+    WorkspaceOwnershipAmbiguous,
+    #[error("cloud sync workspace ownership metadata is inconsistent")]
+    WorkspaceOwnershipInvariant,
 }
 
 impl SyncError {
@@ -59,6 +65,9 @@ impl SyncError {
             Self::CloudWorkspaceNotEmpty => "cloud_sync_cloud_workspace_not_empty",
             Self::DeadLetterBlocked => "cloud_sync_dead_letter_blocked",
             Self::Permanent => "cloud_sync_permanent_failure",
+            Self::WorkspaceOwnedByAnotherAccount => "cloud_sync_workspace_owned_by_another_account",
+            Self::WorkspaceOwnershipAmbiguous => "cloud_sync_workspace_ownership_ambiguous",
+            Self::WorkspaceOwnershipInvariant => "cloud_sync_workspace_ownership_invariant",
         }
     }
 }
@@ -99,6 +108,12 @@ impl IdGenerator for UuidGenerator {
 pub struct SyncAccountContext {
     pub account_id: String,
     pub generation: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyncWorkspaceOwner {
+    pub account_id: String,
+    pub cloud_workspace_id: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

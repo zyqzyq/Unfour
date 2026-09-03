@@ -17,6 +17,7 @@ pub(crate) struct MockTransport {
     pub(crate) snapshots: Mutex<VecDeque<SnapshotPage>>,
     pub(crate) roots: Mutex<Vec<String>>,
     pub(crate) created_workspace_id: Mutex<Option<String>>,
+    pub(crate) create_workspace_calls: AtomicUsize,
     pub(crate) account_id: Mutex<String>,
     pub(crate) generation: AtomicU64,
     pub(crate) fail_pushes: AtomicUsize,
@@ -126,6 +127,7 @@ impl SyncTransport for MockTransport {
         &self,
         root_entity_id: &str,
     ) -> Result<CloudWorkspace, TransportError> {
+        self.create_workspace_calls.fetch_add(1, Ordering::SeqCst);
         let _active = self.enter().await;
         Ok(CloudWorkspace {
             cloud_workspace_id: self
