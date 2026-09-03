@@ -500,10 +500,6 @@ async fn remote_apply_preserves_compatible_paths_and_core_clears_incompatible_pa
     let db = database().await;
     let seed = CommandBus::from_db(db.clone()).await.unwrap();
     let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
-    let transport = Arc::new(MockTransport::new());
-    let (service, _, _) = SyncRuntime::build(db.clone(), transport.clone());
-    service.enable(&workspace_id).await.unwrap();
-    clear_pushes(&transport);
     let ssh = seed
         .save_ssh_connection(ssh_input(
             &workspace_id,
@@ -524,6 +520,10 @@ async fn remote_apply_preserves_compatible_paths_and_core_clears_incompatible_pa
         ))
         .await
         .unwrap();
+    let transport = Arc::new(MockTransport::new());
+    let (service, _, _) = SyncRuntime::build(db.clone(), transport.clone());
+    service.enable(&workspace_id).await.unwrap();
+    clear_pushes(&transport);
 
     let mut cursor = service
         .status(&workspace_id)

@@ -47,7 +47,7 @@ mod tests {
         "pro_sync_diagnostics",
         "pro_sync_account_settings",
     ];
-    const CLOUD_SYNC_TABLES: [&str; 8] = [
+    const CLOUD_SYNC_TABLES: [&str; 9] = [
         "cloud_sync_workspace_bindings",
         "cloud_sync_runtime_context",
         "cloud_sync_outbox",
@@ -56,6 +56,7 @@ mod tests {
         "cloud_sync_snapshot_staging",
         "cloud_sync_diagnostics",
         "cloud_sync_account_settings",
+        "cloud_sync_account_binding_pause_reasons",
     ];
 
     async fn test_pool() -> SqlitePool {

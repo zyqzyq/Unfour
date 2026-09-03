@@ -48,6 +48,10 @@ pub struct SyncService {
     flights: Arc<Mutex<HashMap<String, FlightState>>>,
     global_limit: Arc<Semaphore>,
     worker_id: String,
+    /// Set only when a verified account transition may have made previously
+    /// account-paused bindings runnable. The desktop access gate consumes it
+    /// after it is opened, so activation never races the entitlement check.
+    activation_sync_pending: Arc<Mutex<Option<SyncAccountContext>>>,
     /// Accounts whose `protocol_version_unsupported` dead letters were already
     /// revived by this process (an upgraded build speaks a newer protocol, so
     /// one retry per app run is warranted).
@@ -99,6 +103,7 @@ impl SyncRuntime {
             flights: Arc::new(Mutex::new(HashMap::new())),
             global_limit: Arc::new(Semaphore::new(GLOBAL_WORKSPACE_CONCURRENCY)),
             worker_id,
+            activation_sync_pending: Arc::new(Mutex::new(None)),
             protocol_revival_done: Arc::new(Mutex::new(HashSet::new())),
         };
         (service, hook, receiver)
@@ -158,13 +163,38 @@ impl SyncService {
         &self,
         account: SyncAccountContext,
     ) -> Result<(), SyncError> {
-        self.repository
+        let context_changed = self
+            .repository
             .activate_account(
                 &account.account_id,
                 account.generation,
                 self.dependencies.clock.now(),
             )
-            .await
+            .await?;
+        if context_changed {
+            *self
+                .activation_sync_pending
+                .lock()
+                .expect("activation sync lock poisoned") = Some(account);
+        }
+        Ok(())
+    }
+
+    /// Starts the first post-activation sync only after the caller has opened
+    /// its credential/entitlement gate. Repeated account-state refreshes do
+    /// not schedule duplicate sync-all runs.
+    pub fn schedule_account_sync(&self) {
+        let pending = self
+            .activation_sync_pending
+            .lock()
+            .expect("activation sync lock poisoned")
+            .take();
+        if pending.is_some() {
+            let service = self.clone();
+            tokio::spawn(async move {
+                let _ = service.sync_all().await;
+            });
+        }
     }
 
     pub async fn deactivate_account_context(&self) -> Result<(), SyncError> {

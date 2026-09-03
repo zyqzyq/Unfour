@@ -48,6 +48,14 @@ impl LocalCommandBusAdapter {
         Self::from_command_bus_future(CommandBus::from_existing_default_storage_read_only())
     }
 
+    /// Opens the Community-compatible storage path without Cloud Sync.
+    ///
+    /// This is retained for explicit Community/test integrations. Production
+    /// mutable MCP must use [`Self::from_storage_mode`] so the unified
+    /// migration and `SyncOutboxHook` are installed.
+    #[deprecated(
+        note = "raw Community/test constructor; use from_storage_mode for production mutable MCP"
+    )]
     pub fn default_storage() -> AdapterResult {
         Self::from_command_bus_future(CommandBus::from_existing_default_storage())
     }
@@ -75,6 +83,11 @@ impl LocalCommandBusAdapter {
         Self::from_command_bus_future(CommandBus::from_existing_storage_dir_read_only(storage_dir))
     }
 
+    /// Opens a raw Community/test storage directory without Cloud Sync.
+    /// Production mutable MCP must use the unified storage-mode constructor.
+    #[deprecated(
+        note = "raw Community/test constructor; use from_storage_mode for production mutable MCP"
+    )]
     pub fn from_storage_dir(storage_dir: impl AsRef<Path>) -> AdapterResult {
         Self::from_command_bus_future(CommandBus::from_existing_storage_dir(storage_dir))
     }
@@ -89,6 +102,9 @@ impl LocalCommandBusAdapter {
         ))
     }
 
+    /// Creates an isolated raw test bus without Cloud Sync.
+    /// Production mutable MCP must use `from_storage_mode(StorageMode::Ephemeral)`.
+    #[deprecated(note = "raw test constructor; use from_storage_mode for production mutable MCP")]
     pub fn ephemeral() -> AdapterResult {
         Self::from_command_bus_future(CommandBus::ephemeral())
     }

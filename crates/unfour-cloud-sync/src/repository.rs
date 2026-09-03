@@ -13,6 +13,7 @@ mod attempts;
 mod bindings;
 mod bootstrap;
 mod initial_upload;
+mod orphan_reconciliation;
 mod outbox;
 mod reconciliation;
 mod recovery;

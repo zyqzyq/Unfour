@@ -127,6 +127,84 @@ async fn sign_out_pause_generation_rejects_an_old_in_flight_result() {
 }
 
 #[tokio::test]
+async fn sign_out_mutation_keeps_owned_outbox_and_only_owner_can_resume_it() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let environment = seed
+        .workspace_environment_create(workspace_id.clone(), "Test".into())
+        .await
+        .unwrap();
+    let transport = Arc::new(MockTransport::new());
+    let (service, hook, mut receiver) = SyncRuntime::build(db.clone(), transport.clone());
+    service.enable(&workspace_id).await.unwrap();
+    sqlx::query("DELETE FROM cloud_sync_outbox")
+        .execute(db.pool())
+        .await
+        .unwrap();
+
+    service.pause_current_account().await.unwrap();
+    let bus =
+        CommandBus::from_db_with_extensions(db.clone(), CommandBusExtensions::new(vec![hook]))
+            .await
+            .unwrap();
+    let variable = bus
+        .workspace_environment_variable_create(
+            workspace_id.clone(),
+            environment.id,
+            variable(None, "AFTER_SIGN_OUT", "preserved", false),
+        )
+        .await
+        .unwrap();
+
+    let stored: (String, String, String) = sqlx::query_as(
+        r#"SELECT account_id, entity_type, operation
+           FROM cloud_sync_outbox WHERE entity_id = ?1"#,
+    )
+    .bind(&variable.id)
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(
+        stored,
+        (
+            "account-a".into(),
+            "workspaceEnvironmentVariable".into(),
+            "upsert".into()
+        )
+    );
+    assert!(matches!(
+        receiver.try_recv(),
+        Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+    ));
+
+    let pushes_before_b = transport.pushes.lock().unwrap().len();
+    transport.switch_account("account-b");
+    service.activate_account_context().await.unwrap();
+    service.sync_all().await.unwrap();
+    assert_eq!(transport.pushes.lock().unwrap().len(), pushes_before_b);
+    let owner: String =
+        sqlx::query_scalar("SELECT account_id FROM cloud_sync_outbox WHERE entity_id = ?1")
+            .bind(&variable.id)
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert_eq!(owner, "account-a");
+
+    transport.switch_account("account-a");
+    service.activate_account_context().await.unwrap();
+    service.sync_all().await.unwrap();
+    let remaining: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM cloud_sync_outbox WHERE account_id = 'account-a' AND entity_id = ?1",
+    )
+    .bind(variable.id)
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(remaining, 0);
+}
+
+#[tokio::test]
 async fn global_pause_preserves_workspace_preferences_and_resumes_them() {
     let db = database().await;
     let seed = CommandBus::from_db(db.clone()).await.unwrap();

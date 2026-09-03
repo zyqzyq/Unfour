@@ -13,6 +13,8 @@ mod dead_letter_recovery;
 mod hierarchy_conflicts;
 #[path = "worker/initial_upload.rs"]
 mod initial_upload;
+#[path = "worker/orphans.rs"]
+mod orphans;
 #[path = "worker/pull_cursor.rs"]
 mod pull_cursor;
 #[path = "worker/push_retry.rs"]

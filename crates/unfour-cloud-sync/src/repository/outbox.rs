@@ -24,10 +24,12 @@ impl SyncRepository {
                           binding.sync_enabled = 1
                             AND binding.state <> 'paused'
                             AND COALESCE(settings.sync_enabled, 0)
+                            AND EXISTS (
+                              SELECT 1 FROM cloud_sync_runtime_context AS runtime
+                              WHERE runtime.singleton = 1
+                                AND runtime.active_account_id = binding.account_id
+                            )
                    FROM cloud_sync_workspace_bindings AS binding
-                   JOIN cloud_sync_runtime_context AS runtime
-                     ON runtime.singleton = 1
-                    AND runtime.active_account_id = binding.account_id
                    LEFT JOIN cloud_sync_account_settings AS settings
                      ON settings.account_id = binding.account_id
                    WHERE binding.local_workspace_id = ?1"#,

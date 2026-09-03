@@ -322,6 +322,27 @@ impl SyncService {
             .await?
             .ok_or(SyncError::NotFound)?;
 
+        // Versioned bootstrap handles known protocol migrations. The generic
+        // repair pass closes the durable-local-intent gap for live entities
+        // created by an older client or by a mutation path that escaped the
+        // hook. It is local-only, generation-fenced, idempotent, and must run
+        // before pull/push can observe an incomplete outbox.
+        self.repository
+            .reconcile_missing_local_sync_state(
+                &binding,
+                &self.api_client,
+                &self.ssh,
+                &self.database,
+                self.dependencies.ids.as_ref(),
+                self.dependencies.clock.as_ref(),
+            )
+            .await?;
+        binding = self
+            .repository
+            .binding(&account.account_id, workspace_id)
+            .await?
+            .ok_or(SyncError::NotFound)?;
+
         // Even a conflicted binding keeps pulling so a 409 delete conflict can
         // be hydrated with the protocol tombstone's deletedAt.
         self.pull(account, &binding).await?;

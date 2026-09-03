@@ -45,6 +45,9 @@ React, TypeScript, and Rust.
   surfaces must route through the Rust command bus boundary.
 - Tauri commands and MCP tools are adapters over the command bus, not places
   for duplicated domain logic.
+- Cloud-bound local mutations must retain durable outbox intent regardless of
+  login, active account, entitlement, pause, offline, or worker state; see
+  [Cloud Sync invariants](docs/architecture/cloud-sync-invariants.md).
 - MCP tool names, schemas, command names, command keys, and stable error codes
   must remain English and must not be localized. UI layers may map stable
   message keys to localized user-facing copy.

@@ -18,6 +18,36 @@ fn isolated_storage_dir() -> PathBuf {
     ))
 }
 
+fn run_normal_binary(storage_dir: &PathBuf, input: &str) -> Vec<Value> {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_unfour-mcp"))
+        .env_remove("UNFOUR_MCP_STORAGE_MODE")
+        .env("UNFOUR_DATA_DIR", storage_dir)
+        .env_remove("UNFOUR_STORAGE_PROFILE")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn normal unfour-mcp binary");
+    child
+        .stdin
+        .take()
+        .expect("stdin should be piped")
+        .write_all(input.as_bytes())
+        .expect("write normal-storage requests");
+    let output = child.wait_with_output().expect("wait for normal MCP EOF");
+    let stdout = String::from_utf8(output.stdout).expect("MCP stdout should be UTF-8");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "normal unfour-mcp exited unsuccessfully: {stderr}\nstdout: {stdout}"
+    );
+    stdout
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| serde_json::from_str::<Value>(line).expect("stdout line should be JSON"))
+        .collect()
+}
+
 #[test]
 fn ephemeral_binary_passes_registry_introspection_without_sqlite() {
     let storage_dir = isolated_storage_dir();
@@ -136,45 +166,61 @@ fn normal_binary_uses_unified_storage_enqueues_outbox_and_exits_on_eof() {
             )
             .await
             .expect("enable MCP workspace sync");
+        // Exercise the production unified MCP constructor while the account
+        // context is inactive. The local command must still leave an
+        // account-owned outbox row for the desktop worker to drain later.
+        repository
+            .deactivate_active_account(dependencies.clock.now())
+            .await
+            .expect("deactivate MCP sync account");
+        sqlx::query("DELETE FROM cloud_sync_outbox")
+            .execute(db.pool())
+            .await
+            .expect("clear setup outbox");
         db.pool().close().await;
     });
     drop(setup_runtime);
 
-    let input = concat!(
+    let create_input = concat!(
         r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"normal-storage-check","version":"0.1.0"}}}"#,
         "\n",
         r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
         "\n",
-        r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"unfour.workspace.create_variable","arguments":{"key":"UNIFIED_MCP_HOOK","value":"local","isEnabled":true}}}"#,
+        r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"unfour.api.create_environment","arguments":{"name":"MCP Environment"}}}"#,
         "\n"
     );
-    let mut child = Command::new(env!("CARGO_BIN_EXE_unfour-mcp"))
-        .env_remove("UNFOUR_MCP_STORAGE_MODE")
-        .env("UNFOUR_DATA_DIR", &storage_dir)
-        .env_remove("UNFOUR_STORAGE_PROFILE")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("spawn normal unfour-mcp binary");
-    child
-        .stdin
-        .take()
-        .expect("stdin should be piped")
-        .write_all(input.as_bytes())
-        .expect("write normal-storage request");
-    let output = child.wait_with_output().expect("wait for normal MCP EOF");
-    let stdout = String::from_utf8(output.stdout).expect("MCP stdout should be UTF-8");
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        output.status.success(),
-        "normal unfour-mcp exited unsuccessfully: {stderr}\nstdout: {stdout}"
+    let responses = run_normal_binary(&storage_dir, create_input);
+    assert_eq!(responses.len(), 2);
+    assert_eq!(responses[1]["id"], 2);
+    assert_eq!(responses[1]["result"]["isError"], false);
+    let environment_id = responses[1]["result"]["structuredContent"]["apiEnvironment"]["id"]
+        .as_str()
+        .expect("create_environment should return an id")
+        .to_string();
+
+    let update = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "unfour.api.update_environment",
+            "arguments": {
+                "environmentId": environment_id.clone(),
+                "name": "MCP Environment Updated",
+                "variables": [
+                    {"key": "HOST", "value": "example.test", "enabled": true},
+                    {"key": "PORT", "value": "443", "enabled": true}
+                ]
+            }
+        }
+    });
+    let update_input = format!(
+        "{}\n{}\n{}\n",
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"normal-storage-check","version":"0.1.0"}}}"#,
+        r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
+        update
     );
-    let responses = stdout
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| serde_json::from_str::<Value>(line).expect("stdout line should be JSON"))
-        .collect::<Vec<_>>();
+    let responses = run_normal_binary(&storage_dir, &update_input);
     assert_eq!(responses.len(), 2);
     assert_eq!(responses[1]["id"], 2);
     assert_eq!(responses[1]["result"]["isError"], false);
@@ -183,20 +229,65 @@ fn normal_binary_uses_unified_storage_enqueues_outbox_and_exits_on_eof() {
         .enable_all()
         .build()
         .expect("build query runtime");
-    let outbox_count: i64 = query_runtime.block_on(async {
+    let (environment_count, variable_count, outbox_rows, active_account): (
+        i64,
+        i64,
+        Vec<(String, String)>,
+        Option<String>,
+    ) = query_runtime.block_on(async {
         let db = LocalDb::connect_existing_path(&database_path)
             .await
             .expect("open migrated normal storage");
-        let count = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM cloud_sync_outbox WHERE entity_type = 'workspaceVariable'",
+        let environment_count = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM workspace_environments WHERE id = ?1 AND deleted_at IS NULL",
+        )
+        .bind(&environment_id)
+        .fetch_one(db.pool())
+        .await
+        .expect("query MCP environment");
+        let variable_count = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM workspace_environment_variables WHERE environment_id = ?1 AND deleted_at IS NULL",
+        )
+        .bind(&environment_id)
+        .fetch_one(db.pool())
+        .await
+        .expect("query MCP environment variables");
+        let outbox_rows = sqlx::query_as(
+            "SELECT account_id, entity_type FROM cloud_sync_outbox ORDER BY entity_type, entity_id",
+        )
+        .fetch_all(db.pool())
+        .await
+        .expect("query Cloud Sync outbox");
+        let active_account = sqlx::query_scalar(
+            "SELECT active_account_id FROM cloud_sync_runtime_context WHERE singleton = 1",
         )
         .fetch_one(db.pool())
         .await
-        .expect("query Cloud Sync outbox");
+        .expect("query inactive MCP account context");
         db.pool().close().await;
-        count
+        (environment_count, variable_count, outbox_rows, active_account)
     });
-    assert_eq!(outbox_count, 1);
+    assert_eq!(environment_count, 1);
+    assert_eq!(variable_count, 2);
+    assert_eq!(outbox_rows.len(), 3);
+    assert!(outbox_rows
+        .iter()
+        .all(|(account_id, _)| account_id == "mcp-account"));
+    assert_eq!(
+        outbox_rows
+            .iter()
+            .filter(|(_, entity_type)| entity_type == "workspaceEnvironment")
+            .count(),
+        1
+    );
+    assert_eq!(
+        outbox_rows
+            .iter()
+            .filter(|(_, entity_type)| entity_type == "workspaceEnvironmentVariable")
+            .count(),
+        2
+    );
+    assert_eq!(active_account, None);
     drop(query_runtime);
     let _ = std::fs::remove_dir_all(storage_dir);
 }

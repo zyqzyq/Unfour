@@ -106,7 +106,7 @@ async fn update_sync_account_context(
     // The just-fetched /v1/me response is authoritative. Do not let an older
     // positive cache survive a revoked entitlement if local cleanup fails.
     account.invalidate_entitlement_cache();
-    reconcile_sync_account_context(
+    let sync_context = reconcile_sync_account_context(
         &sync_state.access,
         account_state,
         account.generation(),
@@ -117,7 +117,16 @@ async fn update_sync_account_context(
         },
         || sync_state.service.deactivate_account_context(),
     )
-    .await
+    .await;
+    if sync_context == SyncAccountContextState::Ready {
+        // The activation helper commits local context before returning, while
+        // reconcile_sync_account_context opens the credential gate only after
+        // that commit succeeds. Schedule the worker at this boundary so a
+        // re-login drains preserved outbox rows without racing entitlement
+        // validation.
+        sync_state.service.schedule_account_sync();
+    }
+    sync_context
 }
 
 async fn sign_out_with_sync_cleanup<AccountFuture, SyncFuture>(

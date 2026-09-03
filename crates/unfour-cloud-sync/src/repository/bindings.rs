@@ -59,10 +59,22 @@ impl SyncRepository {
         account_id: &str,
         now: DateTime<Utc>,
     ) -> Result<(), SyncError> {
+        let now = now.to_rfc3339();
+        let mut tx = self.pool.begin().await?;
+        // This is an explicit account pause, so a later account activation
+        // must not mistake these rows for an automatic sign-out pause.
+        sqlx::query("DELETE FROM cloud_sync_account_binding_pause_reasons WHERE account_id = ?1")
+            .bind(account_id)
+            .execute(&mut *tx)
+            .await?;
         sqlx::query(
             "UPDATE cloud_sync_workspace_bindings SET sync_enabled = 0, state = 'paused', generation = generation + 1, updated_at = ?1 WHERE account_id = ?2",
         )
-        .bind(now.to_rfc3339()).bind(account_id).execute(&self.pool).await?;
+        .bind(now)
+        .bind(account_id)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
         Ok(())
     }
 
@@ -71,7 +83,7 @@ impl SyncRepository {
         account_id: &str,
         generation: u64,
         now: DateTime<Utc>,
-    ) -> Result<(), SyncError> {
+    ) -> Result<bool, SyncError> {
         let now = now.to_rfc3339();
         let mut tx = self.pool.begin().await?;
         sqlx::query(
@@ -87,7 +99,55 @@ impl SyncRepository {
         .fetch_optional(&mut *tx)
         .await?
         .flatten();
+        let mut context_changed = previous.as_deref() != Some(account_id);
+        let restored = sqlx::query(
+            r#"UPDATE cloud_sync_workspace_bindings AS binding
+               SET sync_enabled = 1,
+                   state = (
+                     SELECT previous_state
+                     FROM cloud_sync_account_binding_pause_reasons AS pause
+                     WHERE pause.account_id = binding.account_id
+                       AND pause.local_workspace_id = binding.local_workspace_id
+                   ),
+                   generation = generation + 1,
+                   updated_at = ?1
+               WHERE binding.account_id = ?2
+                 AND binding.sync_enabled = 0
+                 AND binding.state = 'paused'
+                 AND EXISTS (
+                   SELECT 1 FROM cloud_sync_account_binding_pause_reasons AS pause
+                   WHERE pause.account_id = binding.account_id
+                     AND pause.local_workspace_id = binding.local_workspace_id
+                 )"#,
+        )
+        .bind(&now)
+        .bind(account_id)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+        if restored > 0 {
+            context_changed = true;
+        }
+        sqlx::query("DELETE FROM cloud_sync_account_binding_pause_reasons WHERE account_id = ?1")
+            .bind(account_id)
+            .execute(&mut *tx)
+            .await?;
         if previous.as_deref() != Some(account_id) {
+            sqlx::query(
+                r#"INSERT INTO cloud_sync_account_binding_pause_reasons (
+                     account_id, local_workspace_id, previous_state, created_at, updated_at
+                   )
+                   SELECT account_id, local_workspace_id, state, ?1, ?1
+                   FROM cloud_sync_workspace_bindings
+                   WHERE account_id <> ?2 AND sync_enabled = 1 AND state <> 'paused'
+                   ON CONFLICT(account_id, local_workspace_id) DO UPDATE SET
+                     previous_state = excluded.previous_state,
+                     updated_at = excluded.updated_at"#,
+            )
+            .bind(&now)
+            .bind(account_id)
+            .execute(&mut *tx)
+            .await?;
             sqlx::query(
                 "UPDATE cloud_sync_workspace_bindings SET sync_enabled = 0, state = 'paused', generation = generation + 1, updated_at = ?1 WHERE account_id <> ?2 AND sync_enabled = 1",
             )
@@ -110,7 +170,7 @@ impl SyncRepository {
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
-        Ok(())
+        Ok(context_changed)
     }
 
     pub async fn global_sync_enabled(&self, account_id: &str) -> Result<bool, SyncError> {
@@ -158,11 +218,27 @@ impl SyncRepository {
         let now = now.to_rfc3339();
         let mut tx = self.pool.begin().await?;
         sqlx::query(
+            r#"INSERT INTO cloud_sync_account_binding_pause_reasons (
+                 account_id, local_workspace_id, previous_state, created_at, updated_at
+               )
+               SELECT account_id, local_workspace_id, state, ?1, ?1
+               FROM cloud_sync_workspace_bindings
+               WHERE account_id = (
+                 SELECT active_account_id FROM cloud_sync_runtime_context WHERE singleton = 1
+               ) AND sync_enabled = 1 AND state <> 'paused'
+               ON CONFLICT(account_id, local_workspace_id) DO UPDATE SET
+                 previous_state = excluded.previous_state,
+                 updated_at = excluded.updated_at"#,
+        )
+        .bind(&now)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
             r#"UPDATE cloud_sync_workspace_bindings
                SET sync_enabled = 0, state = 'paused', generation = generation + 1, updated_at = ?1
                WHERE account_id = (
                  SELECT active_account_id FROM cloud_sync_runtime_context WHERE singleton = 1
-               )"#,
+               ) AND sync_enabled = 1 AND state <> 'paused'"#,
         )
         .bind(&now)
         .execute(&mut *tx)
@@ -208,14 +284,23 @@ impl SyncRepository {
         now: DateTime<Utc>,
     ) -> Result<(), SyncError> {
         let state = if enabled { "error" } else { "paused" };
+        let mut tx = self.pool.begin().await?;
+        sqlx::query(
+            "DELETE FROM cloud_sync_account_binding_pause_reasons WHERE account_id = ?1 AND local_workspace_id = ?2",
+        )
+        .bind(account_id)
+        .bind(workspace_id)
+        .execute(&mut *tx)
+        .await?;
         let changed = sqlx::query(
             "UPDATE cloud_sync_workspace_bindings SET sync_enabled = ?1, state = CASE WHEN ?1 THEN CASE WHEN initial_confirmed >= initial_total THEN 'reconciling' ELSE 'uploading' END ELSE ?2 END, generation = generation + 1, updated_at = ?3 WHERE account_id = ?4 AND local_workspace_id = ?5",
         )
         .bind(enabled).bind(state).bind(now.to_rfc3339()).bind(account_id).bind(workspace_id)
-        .execute(&self.pool).await?.rows_affected();
+        .execute(&mut *tx).await?.rows_affected();
         if changed == 0 {
             return Err(SyncError::NotFound);
         }
+        tx.commit().await?;
         Ok(())
     }
 
