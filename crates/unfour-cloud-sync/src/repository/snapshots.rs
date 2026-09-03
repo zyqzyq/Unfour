@@ -112,9 +112,9 @@ impl SyncRepository {
                  account_id, local_workspace_id, cloud_workspace_id, last_pulled_cursor,
                  sync_enabled, state, initial_cursor, initial_total, initial_confirmed,
                  ssh_task_v3_bootstrap_state, connection_v4_bootstrap_state,
-                 generation, last_success_at, created_at, updated_at
+                 api_v2_bootstrap_state, generation, last_success_at, created_at, updated_at
                ) VALUES (?1, ?2, ?3, ?4, 1, 'reconciling', ?4, 0, 0,
-                         'completed', 'completed', ?5, ?6, ?6, ?6)"#,
+                         'completed', 'completed', 'completed', ?5, ?6, ?6, ?6)"#,
         )
         .bind(account_id)
         .bind(workspace_id)

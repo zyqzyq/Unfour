@@ -283,6 +283,93 @@ async fn api_initial_upload_uses_core_snapshots_and_existing_push_pipeline() {
 }
 
 #[tokio::test]
+async fn existing_bindings_backfill_api_entities_once_before_incremental_sync() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let collection = seed
+        .api_collection_create(workspace_id.clone(), "Accounts".into())
+        .await
+        .unwrap();
+    let folder = seed
+        .api_collection_folder_create(
+            workspace_id.clone(),
+            collection.id.clone(),
+            None,
+            "Root".into(),
+        )
+        .await
+        .unwrap();
+    let request = seed
+        .save_api_request(saved_api_request(
+            &workspace_id,
+            &collection.id,
+            Some(folder.id.clone()),
+        ))
+        .await
+        .unwrap();
+
+    let transport = Arc::new(MockTransport::new());
+    let (service, _, _) = SyncRuntime::build(db.clone(), transport.clone());
+    let dependencies = SyncDependencies::default();
+    service
+        .repository()
+        .create_binding_with_initial_outbox(
+            "account-a",
+            0,
+            &workspace_id,
+            "cloud-existing",
+            0,
+            dependencies.ids.as_ref(),
+            dependencies.clock.as_ref(),
+        )
+        .await
+        .unwrap();
+    // Simulate a binding created before the API sync protocol was introduced.
+    sqlx::query("UPDATE cloud_sync_workspace_bindings SET api_v2_bootstrap_state = 'pending'")
+        .execute(db.pool())
+        .await
+        .unwrap();
+
+    service.enable(&workspace_id).await.unwrap();
+
+    let operations = transport
+        .pushes
+        .lock()
+        .unwrap()
+        .iter()
+        .flat_map(|push| push.operations.iter())
+        .filter(|operation| {
+            matches!(
+                operation.entity_type,
+                SyncEntityType::ApiCollection
+                    | SyncEntityType::ApiFolder
+                    | SyncEntityType::ApiRequest
+            )
+        })
+        .map(|operation| (operation.entity_type, operation.entity_id.clone()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        operations,
+        vec![
+            (SyncEntityType::ApiCollection, collection.id),
+            (SyncEntityType::ApiFolder, folder.id),
+            (SyncEntityType::ApiRequest, request.id),
+        ]
+    );
+    let bootstrap_state: String =
+        sqlx::query_scalar("SELECT api_v2_bootstrap_state FROM cloud_sync_workspace_bindings")
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert_eq!(bootstrap_state, "completed");
+
+    let push_count = transport.pushes.lock().unwrap().len();
+    service.enable(&workspace_id).await.unwrap();
+    assert_eq!(transport.pushes.lock().unwrap().len(), push_count);
+}
+
+#[tokio::test]
 async fn empty_cloud_with_only_a_local_root_has_a_recoverable_initial_upload() {
     let db = database().await;
     let seed = CommandBus::from_db(db.clone()).await.unwrap();

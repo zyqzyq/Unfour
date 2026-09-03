@@ -269,6 +269,10 @@ impl SyncService {
                 && binding.state == "active"
                 && binding.ssh_task_v3_bootstrap_state == "completed"
                 && binding.connection_v4_bootstrap_state == "completed"
+                && self
+                    .repository
+                    .api_v2_bootstrap_completed(&account.account_id, workspace_id)
+                    .await?
             {
                 return Ok(());
             }

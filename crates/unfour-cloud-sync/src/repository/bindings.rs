@@ -219,6 +219,21 @@ impl SyncRepository {
         Ok(())
     }
 
+    pub async fn api_v2_bootstrap_completed(
+        &self,
+        account_id: &str,
+        workspace_id: &str,
+    ) -> Result<bool, SyncError> {
+        Ok(sqlx::query_scalar::<_, bool>(
+            "SELECT api_v2_bootstrap_state = 'completed' FROM cloud_sync_workspace_bindings WHERE account_id = ?1 AND local_workspace_id = ?2",
+        )
+        .bind(account_id)
+        .bind(workspace_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .unwrap_or(false))
+    }
+
     pub async fn status(
         &self,
         account_id: &str,

@@ -285,6 +285,19 @@ impl SyncService {
             .binding(&account.account_id, workspace_id)
             .await?
             .ok_or(SyncError::NotFound)?;
+        self.repository
+            .bootstrap_api_v2(
+                &binding,
+                &self.api_client,
+                self.dependencies.ids.as_ref(),
+                self.dependencies.clock.as_ref(),
+            )
+            .await?;
+        binding = self
+            .repository
+            .binding(&account.account_id, workspace_id)
+            .await?
+            .ok_or(SyncError::NotFound)?;
         if binding.connection_v4_bootstrap_state != "completed" {
             let snapshots = self.connection_snapshots(workspace_id).await?;
             // Only a binding still in its original Upload Local phase for an

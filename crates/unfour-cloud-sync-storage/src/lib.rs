@@ -132,6 +132,14 @@ mod tests {
         .await
         .expect("read Connection v4 bootstrap default");
         assert_eq!(connection_bootstrap_default, "'pending'");
+        let api_bootstrap_default: String = sqlx::query_scalar(
+            r#"SELECT dflt_value FROM pragma_table_info('cloud_sync_workspace_bindings')
+               WHERE name = 'api_v2_bootstrap_state'"#,
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("read API v2 bootstrap default");
+        assert_eq!(api_bootstrap_default, "'pending'");
     }
 
     #[tokio::test]

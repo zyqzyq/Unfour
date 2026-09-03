@@ -156,3 +156,60 @@ async fn global_pause_preserves_workspace_preferences_and_resumes_them() {
     assert!(transport.changes_calls.load(Ordering::SeqCst) > calls_before);
     barrier.wait().await;
 }
+
+#[tokio::test]
+async fn global_pause_keeps_environment_updates_in_the_outbox() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let environment = seed
+        .workspace_environment_create(workspace_id.clone(), "Test".into())
+        .await
+        .unwrap();
+    let environment_variable = seed
+        .workspace_environment_variable_create(
+            workspace_id.clone(),
+            environment.id.clone(),
+            variable(None, "HOST", "old.example.test", false),
+        )
+        .await
+        .unwrap();
+    let transport = Arc::new(MockTransport::new());
+    let (service, hook, _) = SyncRuntime::build(db.clone(), transport);
+    service.enable(&workspace_id).await.unwrap();
+    sqlx::query("DELETE FROM cloud_sync_outbox")
+        .execute(db.pool())
+        .await
+        .unwrap();
+    let bus =
+        CommandBus::from_db_with_extensions(db.clone(), CommandBusExtensions::new(vec![hook]))
+            .await
+            .unwrap();
+
+    service.set_global_sync_enabled(false).await.unwrap();
+    bus.workspace_environment_variable_update(
+        workspace_id,
+        environment.id,
+        environment_variable.id.clone(),
+        variable(
+            Some(environment_variable.id.clone()),
+            "HOST",
+            "new.example.test",
+            false,
+        ),
+    )
+    .await
+    .unwrap();
+
+    let outbox: (String, String, String) = sqlx::query_as(
+        r#"SELECT entity_type, operation, canonical_payload_json
+           FROM cloud_sync_outbox WHERE entity_id = ?1"#,
+    )
+    .bind(environment_variable.id)
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(outbox.0, "workspaceEnvironmentVariable");
+    assert_eq!(outbox.1, "upsert");
+    assert!(outbox.2.contains("new.example.test"));
+}

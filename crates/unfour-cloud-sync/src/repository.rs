@@ -8,6 +8,7 @@
 
 use sqlx::SqlitePool;
 
+mod api_bootstrap;
 mod attempts;
 mod bindings;
 mod bootstrap;
