@@ -104,6 +104,14 @@ pub(super) fn build_document(source: &OpenApiExportSource) -> AppResult<OpenApiD
             "x-unfour-script-schema-version".to_string(),
             serde_json::json!(request.request.script_schema_version),
         );
+        let request_settings: serde_json::Value =
+            serde_json::from_str(&request.request.settings_json)?;
+        if !request_settings.is_object() {
+            return Err(AppError::Validation(
+                "saved API request settings must be a JSON object".to_string(),
+            ));
+        }
+        extensions.insert("x-unfour-request-settings".to_string(), request_settings);
         if request.original_path != request.openapi_path {
             extensions.insert(
                 "x-unfour-original-path".to_string(),

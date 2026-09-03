@@ -119,6 +119,7 @@ impl CommandBusAdapter for StubCommandBus {
                         pre_request_script: None,
                         post_response_script: None,
                         script_schema_version: 1,
+                        settings_json: r#"{"timeoutMs":null}"#.to_string(),
                         created_at: String::new(),
                         updated_at: String::new(),
                         deleted_at: None,

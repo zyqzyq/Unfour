@@ -143,6 +143,7 @@ describe("savedRequestToInput", () => {
       preRequestScript: "console.log('before')",
       postResponseScript: "pm.test('ok', () => {})",
       scriptSchemaVersion: 1,
+      settingsJson: JSON.stringify({ timeoutMs: 60_000 }),
       createdAt: "2026-01-01T00:00:00Z",
       updatedAt: "2026-01-01T00:00:00Z",
       deletedAt: null,
@@ -161,6 +162,17 @@ describe("savedRequestToInput", () => {
     expect(result.timeoutMs).toBe(60_000);
     expect(result.preRequestScript).toBe("console.log('before')");
     expect(result.postResponseScript).toBe("pm.test('ok', () => {})");
+  });
+
+  it("preserves inherited and unlimited timeout settings", () => {
+    const inherited = makeSavedRequest("Inherited", "c-1", null);
+    expect(savedRequestToInput(inherited, "ws-1").timeoutMs).toBeNull();
+
+    const unlimited = {
+      ...inherited,
+      settingsJson: JSON.stringify({ timeoutMs: 0 }),
+    };
+    expect(savedRequestToInput(unlimited, "ws-1").timeoutMs).toBe(0);
   });
 });
 
@@ -334,6 +346,7 @@ function makeSavedRequest(
     preRequestScript: null,
     postResponseScript: null,
     scriptSchemaVersion: 1,
+    settingsJson: JSON.stringify({ timeoutMs: null }),
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",
     deletedAt: null,

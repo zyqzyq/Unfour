@@ -24,6 +24,18 @@ describe("formatError", () => {
 });
 
 describe("classifyRequestError", () => {
+  it("prefers stable API error codes over localized messages", () => {
+    expect(classifyRequestError({ code: "API_TIMEOUT", message: "localized" })).toBe(
+      "timeout",
+    );
+    expect(classifyRequestError({ code: "API_CANCELLED", message: "localized" })).toBe(
+      "cancelled",
+    );
+    expect(classifyRequestError({ code: "NETWORK_ERROR", message: "localized" })).toBe(
+      "network",
+    );
+  });
+
   it("detects timeouts", () => {
     expect(classifyRequestError(new Error("Request timed out"))).toBe("timeout");
     expect(classifyRequestError("connection timeout")).toBe("timeout");

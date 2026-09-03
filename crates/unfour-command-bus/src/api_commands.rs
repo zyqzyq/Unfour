@@ -1,4 +1,5 @@
 use super::*;
+use crate::api_execution::mcp_timeout;
 use crate::transaction::CommandActivity;
 use unfour_core::domain::CommandContext;
 
@@ -543,6 +544,7 @@ impl CommandBus {
                 environment_id_override.as_deref(),
             )
             .await?;
+        let resolved_input = self.resolve_desktop_api_timeout(resolved_input).await?;
         let response = self.api_client.send(resolved_input).await?;
         self.activity_log
             .record(
@@ -746,7 +748,7 @@ impl CommandBus {
 
         let headers: Vec<KeyValue> = serde_json::from_str(&saved.headers_json).unwrap_or_default();
         let query: Vec<KeyValue> = serde_json::from_str(&saved.query_json).unwrap_or_default();
-        let timeout_ms = timeout_ms_override.map(|t| t.min(60_000));
+        let timeout_ms = Some(mcp_timeout(timeout_ms_override)?);
 
         let input = ApiRequestInput {
             workspace_id: saved.workspace_id.clone(),
@@ -801,7 +803,7 @@ impl CommandBus {
             query,
             body: saved.body.clone(),
             body_kind: saved.body_kind.clone(),
-            timeout_ms: timeout_ms_override.map(|timeout| timeout.min(60_000)),
+            timeout_ms: Some(mcp_timeout(timeout_ms_override)?),
             pre_request_script: saved.pre_request_script.clone(),
             post_response_script: saved.post_response_script.clone(),
             script_schema_version: saved.script_schema_version,

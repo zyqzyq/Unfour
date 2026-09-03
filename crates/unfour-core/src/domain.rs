@@ -259,6 +259,7 @@ pub struct ApiRequestSnapshot {
     pub query: Vec<crate::models::KeyValue>,
     pub body: Option<String>,
     pub body_kind: String,
+    pub settings_json: String,
     pub pre_request_script: Option<String>,
     pub post_response_script: Option<String>,
     pub script_schema_version: i64,
@@ -439,11 +440,17 @@ pub struct ExternalApiRequestUpsert {
     pub query: Vec<crate::models::KeyValue>,
     pub body: Option<String>,
     pub body_kind: String,
+    #[serde(default = "default_api_request_settings_json")]
+    pub settings_json: String,
     pub pre_request_script: Option<String>,
     pub post_response_script: Option<String>,
     pub script_schema_version: i64,
     pub created_at: String,
     pub updated_at: String,
+}
+
+fn default_api_request_settings_json() -> String {
+    r#"{"timeoutMs":null}"#.to_string()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

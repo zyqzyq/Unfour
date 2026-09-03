@@ -1,12 +1,20 @@
 use super::*;
+use tokio_util::sync::CancellationToken;
 
 impl ApiClientService {
     pub async fn send(&self, input: ApiRequestInput) -> AppResult<ApiResponse> {
+        self.send_cancellable(input, CancellationToken::new()).await
+    }
+
+    pub async fn send_cancellable(
+        &self,
+        input: ApiRequestInput,
+        cancellation: CancellationToken,
+    ) -> AppResult<ApiResponse> {
         validate_workspace_id(&input.workspace_id)?;
         let method = parse_method(&input.method)?;
         let url = build_url(&input.url, &input.query)?;
-        let timeout =
-            Duration::from_millis(input.timeout_ms.unwrap_or(60_000).clamp(1_000, 300_000));
+        let timeout = request_timeout_duration(input.timeout_ms);
         let request_id = unfour_diag::new_request_id();
         let request_fields = serde_json::json!({
             "request_id": request_id.as_str(),
@@ -15,10 +23,10 @@ impl ApiClientService {
             "path": url.path(),
         });
 
-        let mut builder = self
-            .client
-            .request(method.clone(), url.clone())
-            .timeout(timeout);
+        let mut builder = self.client.request(method.clone(), url.clone());
+        if let Some(timeout) = timeout {
+            builder = builder.timeout(timeout);
+        }
         let mut has_content_type = false;
 
         for header in input.headers.iter().filter(|item| item.enabled) {
@@ -53,22 +61,26 @@ impl ApiClientService {
             None,
             request_fields.clone(),
         );
-        let response = match builder.send().await {
+        let response_result = tokio::select! {
+            _ = cancellation.cancelled() => return Err(cancelled_error()),
+            response = builder.send() => response,
+        };
+        let response = match response_result {
             Ok(response) => response,
             Err(error) => {
+                let error = classify_http_error(error);
                 unfour_diag::log_operation_event(
                     "api_request_failed",
                     "api_client",
                     "send",
                     "error",
                     Some(started.elapsed().as_millis()),
-                    Some("HTTP_ERROR"),
+                    Some(error.code()),
                     request_fields,
                 );
-                return Err(error.into());
+                return Err(error);
             }
         };
-        let duration_ms = started.elapsed().as_millis();
         let status = response.status();
         let response_headers = response
             .headers()
@@ -79,31 +91,42 @@ impl ApiClientService {
                 enabled: true,
             })
             .collect::<Vec<_>>();
-        let body = match response.text().await {
+        let body_result = tokio::select! {
+            _ = cancellation.cancelled() => return Err(cancelled_error()),
+            body = response.text() => body,
+        };
+        let body = match body_result {
             Ok(body) => body,
             Err(error) => {
+                let error = classify_http_error(error);
                 unfour_diag::log_operation_event(
                     "api_request_failed",
                     "api_client",
                     "send",
                     "error",
                     Some(started.elapsed().as_millis()),
-                    Some("HTTP_ERROR"),
+                    Some(error.code()),
                     request_fields,
                 );
-                return Err(error.into());
+                return Err(error);
             }
         };
-        let history_id = match self
-            .insert_history(
+        if cancellation.is_cancelled() {
+            return Err(cancelled_error());
+        }
+        let duration_ms = started.elapsed().as_millis();
+        let history_result = tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return Err(cancelled_error()),
+            result = self.insert_history(
                 &input,
                 status.as_u16(),
                 duration_ms,
                 &response_headers,
                 &body,
-            )
-            .await
-        {
+            ) => result,
+        };
+        let history_id = match history_result {
             Ok(history_id) => history_id,
             Err(error) => {
                 unfour_diag::log_operation_event(
@@ -189,5 +212,49 @@ impl ApiClientService {
         .await?;
 
         Ok(id)
+    }
+}
+
+fn request_timeout_duration(timeout_ms: Option<u64>) -> Option<Duration> {
+    match timeout_ms.unwrap_or(0) {
+        0 => None,
+        timeout_ms => Some(Duration::from_millis(timeout_ms)),
+    }
+}
+
+fn classify_http_error(error: reqwest::Error) -> AppError {
+    if error.is_timeout() {
+        AppError::ApiTimeout(error.to_string())
+    } else if error.is_connect() {
+        AppError::ApiNetwork(error.to_string())
+    } else {
+        AppError::Http(error)
+    }
+}
+
+fn cancelled_error() -> AppError {
+    AppError::ApiCancelled("cancelled by user".to_string())
+}
+
+#[cfg(test)]
+mod timeout_tests {
+    use super::*;
+
+    #[test]
+    fn zero_and_missing_are_unlimited() {
+        assert_eq!(request_timeout_duration(None), None);
+        assert_eq!(request_timeout_duration(Some(0)), None);
+    }
+
+    #[test]
+    fn positive_timeouts_are_exact_and_not_capped() {
+        assert_eq!(
+            request_timeout_duration(Some(1)),
+            Some(Duration::from_millis(1))
+        );
+        assert_eq!(
+            request_timeout_duration(Some(600_001)),
+            Some(Duration::from_millis(600_001))
+        );
     }
 }

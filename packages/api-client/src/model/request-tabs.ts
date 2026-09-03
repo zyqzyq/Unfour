@@ -46,9 +46,11 @@ export function createNewRequestTab(
 ): ApiTabsState {
   const tab: ApiRequestTab = {
     baseline: null,
+    cancelling: false,
     draft: emptyDraft(),
     execution: null,
     id,
+    executionId: null,
     requestTab: "query",
     lastRequest: null,
     response: null,
@@ -56,6 +58,7 @@ export function createNewRequestTab(
     saveError: null,
     savedRequestId: null,
     sendError: null,
+    sendErrorCode: null,
     sending: false,
     saving: false,
     source: "new",
@@ -85,9 +88,11 @@ export function openSavedRequest(
       ...state.tabs,
       {
         baseline: normalizeRequestDraft(draft),
+        cancelling: false,
         draft,
         execution: null,
         id,
+        executionId: null,
         requestTab: "query",
         lastRequest: null,
         response: null,
@@ -95,6 +100,7 @@ export function openSavedRequest(
         saveError: null,
         savedRequestId: saved.id,
         sendError: null,
+        sendErrorCode: null,
         sending: false,
         saving: false,
         source: "saved",
@@ -121,9 +127,11 @@ export function openHistoryRequest(
       ...state.tabs,
       {
         baseline: null,
+        cancelling: false,
         draft: inputToDraft(request),
         execution: null,
         id,
+        executionId: null,
         requestTab: "query",
         lastRequest: request,
         response: historyResponse(history),
@@ -131,6 +139,7 @@ export function openHistoryRequest(
         saveError: null,
         savedRequestId: null,
         sendError: null,
+        sendErrorCode: null,
         sending: false,
         saving: false,
         source: "history",
@@ -181,13 +190,17 @@ export function startTabSend(
   state: ApiTabsState,
   tabId: string,
   request: ApiRequestInput | null = null,
+  executionId: string | null = null,
 ): ApiTabsState {
   return updateTab(state, tabId, (tab) => ({
     ...tab,
     lastRequest: request ?? tab.lastRequest,
+    cancelling: false,
     execution: null,
+    executionId,
     response: null,
     sendError: null,
+    sendErrorCode: null,
     sending: true,
   }));
 }
@@ -200,8 +213,11 @@ export function completeTabSend(
   return updateTab(state, tabId, (tab) => ({
     ...tab,
     execution,
+    cancelling: false,
+    executionId: null,
     response: execution.response,
     sendError: execution.httpError,
+    sendErrorCode: execution.httpErrorCode,
     sending: false,
   }));
 }
@@ -210,12 +226,23 @@ export function failTabSend(
   state: ApiTabsState,
   tabId: string,
   error: string,
+  errorCode: string | null = null,
 ): ApiTabsState {
   return updateTab(state, tabId, (tab) => ({
     ...tab,
     response: null,
+    cancelling: false,
+    executionId: null,
     sendError: error,
+    sendErrorCode: errorCode,
     sending: false,
+  }));
+}
+
+export function startTabCancel(state: ApiTabsState, tabId: string): ApiTabsState {
+  return updateTab(state, tabId, (tab) => ({
+    ...tab,
+    cancelling: tab.sending,
   }));
 }
 
@@ -382,6 +409,7 @@ function emptyDraft(): RequestDraft {
     parentFolderId: null,
     query: [],
     rawBodyType: "json",
+    timeoutMs: null,
     preRequestScript: "",
     postResponseScript: "",
     url: "",
@@ -403,6 +431,7 @@ function inputToDraft(input: ReturnType<typeof savedRequestToInput>): RequestDra
     preRequestScript: input.preRequestScript ?? "",
     postResponseScript: input.postResponseScript ?? "",
     query,
+    timeoutMs: input.timeoutMs ?? null,
     url: syncUrlQuery(input.url, query),
   };
 }

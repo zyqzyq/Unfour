@@ -5,7 +5,9 @@ use sqlx::SqliteConnection;
 use unfour_core::domain::{
     CommandContext, DomainCommandResult, DomainEntityType, DomainMutation, MutationOperation,
 };
-use unfour_core::models::{ApiRequestInput, ApiSavedRequest};
+use unfour_core::models::{
+    ApiRequestInput, ApiRequestSettings, ApiSavedRequest, MAX_API_TIMEOUT_MS,
+};
 use unfour_core::{AppError, AppResult};
 
 use super::super::helpers::{normalize_collection_id, normalize_entity_id};
@@ -29,6 +31,7 @@ struct StoredRequestFields {
     method: String,
     headers_json: String,
     query_json: String,
+    settings_json: String,
 }
 
 impl ApiClientService {
@@ -48,11 +51,11 @@ impl ApiClientService {
             INSERT INTO api_requests (
               id, workspace_id, name, collection_id, parent_folder_id, sort_order,
               auth_json, method, url, headers_json, query_json, body, body_kind,
-              pre_request_script, post_response_script, script_schema_version,
+              settings_json, pre_request_script, post_response_script, script_schema_version,
               created_at, updated_at, revision, sync_status
             ) VALUES (
               ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
-              ?14, ?15, ?16, ?17, ?17, 1, 'local'
+              ?14, ?15, ?16, ?17, ?18, ?18, 1, 'local'
             )
             "#,
         )
@@ -77,6 +80,7 @@ impl ApiClientService {
         .bind(fields.query_json)
         .bind(input.body)
         .bind(input.body_kind)
+        .bind(fields.settings_json)
         .bind(input.pre_request_script)
         .bind(input.post_response_script)
         .bind(input.script_schema_version)
@@ -130,6 +134,7 @@ impl ApiClientService {
             && current.query_json == fields.query_json
             && current.body == input.body
             && current.body_kind == input.body_kind
+            && current.settings_json == fields.settings_json
             && current.pre_request_script == input.pre_request_script
             && current.post_response_script == input.post_response_script
             && current.script_schema_version == input.script_schema_version
@@ -142,10 +147,10 @@ impl ApiClientService {
             SET name = ?1, collection_id = ?2, parent_folder_id = ?3,
                 auth_json = ?4, method = ?5, url = ?6, headers_json = ?7,
                 query_json = ?8, body = ?9, body_kind = ?10,
-                pre_request_script = ?11, post_response_script = ?12,
-                script_schema_version = ?13, updated_at = ?14,
+                settings_json = ?11, pre_request_script = ?12, post_response_script = ?13,
+                script_schema_version = ?14, updated_at = ?15,
                 revision = revision + 1, sync_status = 'pending'
-            WHERE workspace_id = ?15 AND id = ?16 AND deleted_at IS NULL
+            WHERE workspace_id = ?16 AND id = ?17 AND deleted_at IS NULL
             RETURNING revision
             "#,
         )
@@ -159,6 +164,7 @@ impl ApiClientService {
         .bind(fields.query_json)
         .bind(input.body)
         .bind(input.body_kind)
+        .bind(fields.settings_json)
         .bind(input.pre_request_script)
         .bind(input.post_response_script)
         .bind(input.script_schema_version)
@@ -202,11 +208,11 @@ impl ApiClientService {
             INSERT INTO api_requests (
               id, workspace_id, name, collection_id, parent_folder_id, sort_order,
               auth_json, method, url, headers_json, query_json, body, body_kind,
-              pre_request_script, post_response_script, script_schema_version,
+              settings_json, pre_request_script, post_response_script, script_schema_version,
               created_at, updated_at, revision, sync_status
             ) VALUES (
               ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
-              ?14, ?15, ?16, ?17, ?17, 1, 'local'
+              ?14, ?15, ?16, ?17, ?18, ?18, 1, 'local'
             )
             "#,
         )
@@ -223,6 +229,7 @@ impl ApiClientService {
         .bind(source.query_json)
         .bind(source.body)
         .bind(source.body_kind)
+        .bind(source.settings_json)
         .bind(source.pre_request_script)
         .bind(source.post_response_script)
         .bind(source.script_schema_version)
@@ -445,6 +452,9 @@ async fn stored_request_fields_on(
         method: input.method.to_uppercase(),
         headers_json: serde_json::to_string(&input.headers)?,
         query_json: serde_json::to_string(&input.query)?,
+        settings_json: serde_json::to_string(&ApiRequestSettings {
+            timeout_ms: input.timeout_ms,
+        })?,
     })
 }
 
@@ -587,7 +597,7 @@ async fn sibling_requests_on(
         r#"
         SELECT id, workspace_id, name, collection_id, parent_folder_id,
                sort_order, auth_json, method, url, headers_json, query_json,
-               body, body_kind, pre_request_script, post_response_script,
+               body, body_kind, settings_json, pre_request_script, post_response_script,
                script_schema_version, created_at, updated_at, deleted_at,
                revision, sync_status, remote_id
         FROM api_requests
@@ -605,6 +615,14 @@ async fn sibling_requests_on(
 
 fn validate_request_input(input: &ApiRequestInput) -> AppResult<()> {
     super::super::helpers::validate_workspace_id(&input.workspace_id)?;
+    if input
+        .timeout_ms
+        .is_some_and(|value| value > MAX_API_TIMEOUT_MS)
+    {
+        return Err(AppError::Validation(format!(
+            "request timeout must be between 0 and {MAX_API_TIMEOUT_MS} milliseconds"
+        )));
+    }
     crate::script_runtime::validate_script_config(
         input.pre_request_script.as_deref(),
         input.post_response_script.as_deref(),

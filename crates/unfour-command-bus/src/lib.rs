@@ -1,4 +1,5 @@
 mod activity_summary;
+mod api_execution;
 mod storage_paths;
 mod transaction;
 
@@ -63,6 +64,7 @@ pub struct CommandBus {
     pub(crate) db: LocalDb,
     pub(crate) extensions: CommandBusExtensions,
     pub(crate) api_client: ApiClientService,
+    pub(crate) api_executions: api_execution::ApiExecutionManager,
     pub(crate) activity_log: ActivityLogService,
     pub(crate) database: DatabaseService,
     pub(crate) secret_store: SecretStore,

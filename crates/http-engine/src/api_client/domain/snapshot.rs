@@ -81,6 +81,7 @@ impl ApiClientService {
                     query: snapshot_key_values(&request.query_json)?,
                     body: snapshot_body(request.body.as_deref(), &request.body_kind),
                     body_kind: request.body_kind,
+                    settings_json: request.settings_json,
                     pre_request_script: request.pre_request_script,
                     post_response_script: request.post_response_script,
                     script_schema_version: request.script_schema_version,

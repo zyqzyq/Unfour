@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   deleteApiRequest,
+  cancelApiRequest,
   duplicateApiRequest,
   getApiHistoryDetail,
   listWorkspaceEnvironments,
@@ -13,7 +14,7 @@ import {
   type ApiRequestInput,
   type KeyValue,
 } from "@unfour/command-client";
-import { formatError } from "../model/api-request-state";
+import { errorCode, formatError } from "../model/api-request-state";
 import {
   DEFAULT_API_TAB_STATE,
   useApiRequestTabStore,
@@ -59,14 +60,16 @@ export function useApiRequestTabs(workspaceId: string) {
   });
 
   const sendMutation = useMutation({
-    mutationFn: ({ input }: { input: ApiRequestInput; tabId: string }) =>
-      sendApiRequest(input),
+    mutationFn: ({ executionId, input }: { executionId: string; input: ApiRequestInput; tabId: string }) =>
+      sendApiRequest(executionId, input),
     onSuccess: (execution, variables) => {
       useApiRequestTabStore.getState().completeTabSend(workspaceId, variables.tabId, execution);
       queryClient.invalidateQueries({ queryKey: ["api-history", workspaceId] });
     },
     onError: (error, variables) =>
-      useApiRequestTabStore.getState().failTabSend(workspaceId, variables.tabId, formatError(error)),
+      useApiRequestTabStore
+        .getState()
+        .failTabSend(workspaceId, variables.tabId, formatError(error), errorCode(error)),
   });
 
   const saveMutation = useMutation({
@@ -149,11 +152,18 @@ export function useApiRequestTabs(workspaceId: string) {
         return;
       }
       const input = tabToInput(tab, workspaceId, { purpose: "send" });
-      useApiRequestTabStore.getState().startTabSend(workspaceId, tab.id, input);
-      sendRequest({ input, tabId: tab.id });
+      const executionId = crypto.randomUUID();
+      useApiRequestTabStore.getState().startTabSend(workspaceId, tab.id, input, executionId);
+      sendRequest({ executionId, input, tabId: tab.id });
     },
     [sendRequest, workspaceId],
   );
+
+  const cancelTab = useCallback(async (tab: ApiRequestTab) => {
+    if (!tab.executionId || !tab.sending || tab.cancelling) return;
+    useApiRequestTabStore.getState().startTabCancel(workspaceId, tab.id);
+    await cancelApiRequest(tab.executionId);
+  }, [workspaceId]);
 
   const saveTab = useCallback(
     async (
@@ -198,6 +208,7 @@ export function useApiRequestTabs(workspaceId: string) {
     closeTabs: (tabIds: string[]) =>
       useApiRequestTabStore.getState().closeTabs(workspaceId, tabIds),
     newRequest,
+    cancelTab,
     openHistory,
     openSaved,
     saveTab,
@@ -253,7 +264,7 @@ export function tabToInput(
     postResponseScript: tab.draft.postResponseScript || null,
     scriptSchemaVersion: 1,
     temporaryVariables: purpose === "send" ? tab.draft.envVariables : [],
-    timeoutMs: 60_000,
+    timeoutMs: tab.draft.timeoutMs,
   };
 }
 

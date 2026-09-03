@@ -31,11 +31,13 @@ export function RequestParamsTabs({
   onQueryChange,
   onRawBodyTypeChange,
   onTabChange,
+  onTimeoutChange = () => undefined,
   query,
   rawBodyType,
   postResponseScript,
   preRequestScript,
   tab,
+  timeoutMs = null,
 }: {
   auth: ApiAuthConfig;
   body: string;
@@ -52,11 +54,13 @@ export function RequestParamsTabs({
   onQueryChange: (items: KeyValue[]) => void;
   onRawBodyTypeChange: (value: RequestRawBodyType) => void;
   onTabChange: (tab: RequestParamsTab) => void;
+  onTimeoutChange?: (value: number | null) => void;
   query: KeyValue[];
   rawBodyType: RequestRawBodyType;
   postResponseScript: string;
   preRequestScript: string;
   tab: RequestParamsTab;
+  timeoutMs?: number | null;
 }) {
   const { t } = useI18n();
 
@@ -137,8 +141,93 @@ export function RequestParamsTabs({
             preRequestScript={preRequestScript}
           />
         )}
+        {tab === "settings" && (
+          <PaneScroll>
+            <RequestSettingsPanel
+              onTimeoutChange={onTimeoutChange}
+              timeoutMs={timeoutMs}
+            />
+          </PaneScroll>
+        )}
       </div>
     </>
+  );
+}
+
+function RequestSettingsPanel({
+  onTimeoutChange,
+  timeoutMs,
+}: {
+  onTimeoutChange: (value: number | null) => void;
+  timeoutMs: number | null;
+}) {
+  const { t } = useI18n();
+  const custom = timeoutMs !== null;
+
+  return (
+    <section className="max-w-xl space-y-3">
+      <div>
+        <h3 className="text-[12px] font-semibold text-[var(--u-color-text)]">
+          {t("api.request.settings.timeoutTitle")}
+        </h3>
+        <p className="mt-1 text-[12px] leading-5 text-[var(--u-color-text-muted)]">
+          {t("api.request.settings.timeoutDescription")}
+        </p>
+      </div>
+      <div className="grid gap-2">
+        <label className="flex items-start gap-2 rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] p-3 text-[12px]">
+          <input
+            checked={!custom}
+            className="mt-0.5"
+            name="request-timeout-mode"
+            onChange={() => onTimeoutChange(null)}
+            type="radio"
+          />
+          <span>
+            <span className="block font-medium text-[var(--u-color-text)]">
+              {t("api.request.settings.inherit")}
+            </span>
+            <span className="mt-0.5 block text-[var(--u-color-text-muted)]">
+              {t("api.request.settings.inheritDescription")}
+            </span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2 rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] p-3 text-[12px]">
+          <input
+            checked={custom}
+            className="mt-0.5"
+            name="request-timeout-mode"
+            onChange={() => onTimeoutChange(0)}
+            type="radio"
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium text-[var(--u-color-text)]">
+              {t("api.request.settings.custom")}
+            </span>
+            <span className="mt-0.5 block text-[var(--u-color-text-muted)]">
+              {t("api.request.settings.customDescription")}
+            </span>
+            <Input
+              aria-label={t("api.request.settings.timeoutInput")}
+              className="mt-2 max-w-[220px] font-mono"
+              disabled={!custom}
+              max={Number.MAX_SAFE_INTEGER}
+              min={0}
+              onChange={(event) => {
+                const value = event.currentTarget.valueAsNumber;
+                onTimeoutChange(Number.isSafeInteger(value) && value >= 0 ? value : 0);
+              }}
+              step={1}
+              type="number"
+              value={timeoutMs ?? 0}
+            />
+          </span>
+        </label>
+      </div>
+      <p className="text-[11px] text-[var(--u-color-text-soft)]">
+        {t("api.request.settings.zeroUnlimited")}
+      </p>
+    </section>
   );
 }
 

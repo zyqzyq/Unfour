@@ -38,6 +38,10 @@ export function responseStateLabel(
   switch (state) {
     case "sending":
       return t("api.response.status.sending");
+    case "cancelling":
+      return t("api.response.status.cancelling");
+    case "cancelled":
+      return t("api.response.status.cancelled");
     case "network":
       return t("api.response.status.network");
     case "timeout":

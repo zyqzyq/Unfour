@@ -122,11 +122,17 @@ struct ApiRequestPayload {
     query: Vec<KeyValue>,
     body: Option<String>,
     body_kind: String,
+    #[serde(default = "default_api_request_settings_json")]
+    settings_json: String,
     pre_request_script: Option<String>,
     post_response_script: Option<String>,
     script_schema_version: i64,
     created_at: String,
     updated_at: String,
+}
+
+fn default_api_request_settings_json() -> String {
+    r#"{"timeoutMs":null}"#.to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -251,6 +257,7 @@ pub fn canonical_payload(snapshot: DomainSnapshot) -> Result<Option<Value>, Sync
             query: snapshot.query,
             body: snapshot.body,
             body_kind: snapshot.body_kind,
+            settings_json: snapshot.settings_json,
             pre_request_script: snapshot.pre_request_script,
             post_response_script: snapshot.post_response_script,
             script_schema_version: snapshot.script_schema_version,
@@ -923,6 +930,7 @@ pub fn parse_remote_change(
                         query: payload.query,
                         body: payload.body,
                         body_kind: payload.body_kind,
+                        settings_json: payload.settings_json,
                         pre_request_script: payload.pre_request_script,
                         post_response_script: payload.post_response_script,
                         script_schema_version: payload.script_schema_version,

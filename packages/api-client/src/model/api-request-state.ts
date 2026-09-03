@@ -11,7 +11,20 @@ export function formatError(error: unknown) {
   return String(error);
 }
 
-export function classifyRequestError(error: unknown): "failed" | "network" | "timeout" {
+export function errorCode(error: unknown): string | null {
+  if (typeof error !== "object" || !error || !("code" in error)) {
+    return null;
+  }
+  return String((error as { code: unknown }).code);
+}
+
+export function classifyRequestError(
+  error: unknown,
+): "cancelled" | "failed" | "network" | "timeout" {
+  const code = errorCode(error);
+  if (code === "API_CANCELLED") return "cancelled";
+  if (code === "API_TIMEOUT") return "timeout";
+  if (code === "NETWORK_ERROR") return "network";
   const message = formatError(error).toLowerCase();
   if (message.includes("timeout") || message.includes("timed out")) {
     return "timeout";
@@ -51,6 +64,8 @@ export function deriveApiRequestState({
 }
 
 export const apiRequestStateLabel: Record<ApiRequestState, string> = {
+  cancelled: "cancelled",
+  cancelling: "cancelling",
   failed: "failed",
   network: "network error",
   new: "new",
@@ -63,6 +78,8 @@ export const apiRequestStateLabel: Record<ApiRequestState, string> = {
 export const apiRequestStateTone: Record<ApiRequestState, "neutral" | "green" | "amber" | "red"> =
   {
     failed: "red",
+    cancelled: "neutral",
+    cancelling: "amber",
     network: "red",
     new: "neutral",
     selected: "neutral",

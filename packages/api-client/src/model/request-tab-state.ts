@@ -23,17 +23,16 @@ export function requestTabTitle(
 }
 
 export function requestTabVisualState(tab: ApiRequestTab): ApiTabVisualState {
+  if (tab.cancelling) {
+    return "cancelling";
+  }
   if (tab.sending) {
     return "sending";
   }
-  if (
-    tab.sendError ||
-    tab.execution?.preRequest.status === "failed" ||
-    tab.execution?.preRequest.status === "timeout" ||
-    tab.execution?.postResponse.status === "failed" ||
-    tab.execution?.postResponse.status === "timeout" ||
-    (tab.response && tab.response.status >= 400)
-  ) {
+  if (tab.sendErrorCode === "API_CANCELLED") {
+    return "cancelled";
+  }
+  if (hasRequestFailure(tab)) {
     return "failed";
   }
   if (tab.response) {
@@ -45,18 +44,14 @@ export function requestTabVisualState(tab: ApiRequestTab): ApiTabVisualState {
 export function deriveTabResponseState(
   tab: ApiRequestTab,
 ): ApiTabResponseState {
+  if (tab.cancelling) {
+    return "cancelling";
+  }
   if (tab.sending) {
     return "sending";
   }
   if (tab.sendError) {
-    const message = tab.sendError.toLowerCase();
-    if (message.includes("timeout") || message.includes("timed out")) {
-      return "timeout";
-    }
-    if (["network", "connection", "dns", "fetch"].some((term) => message.includes(term))) {
-      return "network";
-    }
-    return "failed";
+    return classifyTabSendError(tab.sendError, tab.sendErrorCode);
   }
   if (tab.execution?.preRequest.status === "timeout") {
     return "pre-script-timeout";
@@ -71,6 +66,32 @@ export function deriveTabResponseState(
     return "http-error";
   }
   return tab.response.body.trim() ? "success" : "empty";
+}
+
+function hasRequestFailure(tab: ApiRequestTab): boolean {
+  return Boolean(
+    tab.sendError ||
+      tab.execution?.preRequest.status === "failed" ||
+      tab.execution?.preRequest.status === "timeout" ||
+      tab.execution?.postResponse.status === "failed" ||
+      tab.execution?.postResponse.status === "timeout" ||
+      (tab.response && tab.response.status >= 400),
+  );
+}
+
+function classifyTabSendError(
+  error: string,
+  errorCode: string | null,
+): ApiTabResponseState {
+  if (errorCode === "API_CANCELLED") return "cancelled";
+  if (errorCode === "API_TIMEOUT") return "timeout";
+  if (errorCode === "NETWORK_ERROR") return "network";
+  const message = error.toLowerCase();
+  if (message.includes("timeout") || message.includes("timed out")) return "timeout";
+  if (["network", "connection", "dns", "fetch"].some((term) => message.includes(term))) {
+    return "network";
+  }
+  return "failed";
 }
 
 export function normalizeRequestDraft(draft: RequestDraft): string {
@@ -88,6 +109,7 @@ export function normalizeRequestDraft(draft: RequestDraft): string {
     preRequestScript: draft.preRequestScript,
     query: normalizeKeyValues(draft.query),
     rawBodyType: draft.rawBodyType,
+    timeoutMs: draft.timeoutMs,
     url: draft.url.trim(),
   });
 }

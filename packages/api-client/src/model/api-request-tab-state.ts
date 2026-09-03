@@ -20,6 +20,7 @@ import {
   setApiSplitDirection,
   setTabRequestPanel,
   setTabResponsePanel,
+  startTabCancel,
   startTabSave,
   startTabSend,
   updateTabDraft,
@@ -49,7 +50,7 @@ type ApiTabStore = {
   completeTabSave: (workspaceId: string, tabId: string, saved: ApiSavedRequest) => void;
   completeTabSend: (workspaceId: string, tabId: string, execution: RequestExecutionResult) => void;
   failTabSave: (workspaceId: string, tabId: string, error: string) => void;
-  failTabSend: (workspaceId: string, tabId: string, error: string) => void;
+  failTabSend: (workspaceId: string, tabId: string, error: string, errorCode?: string | null) => void;
   newRequest: (workspaceId: string) => void;
   openHistory: (workspaceId: string, history: ApiHistoryDetail) => void;
   openSaved: (workspaceId: string, saved: ApiSavedRequest) => void;
@@ -58,7 +59,13 @@ type ApiTabStore = {
   setRequestPanel: (workspaceId: string, tabId: string, requestTab: RequestParamsTab) => void;
   setResponsePanel: (workspaceId: string, tabId: string, responseTab: ResponseTab) => void;
   startTabSave: (workspaceId: string, tabId: string) => void;
-  startTabSend: (workspaceId: string, tabId: string, request: ApiRequestInput | null) => void;
+  startTabCancel: (workspaceId: string, tabId: string) => void;
+  startTabSend: (
+    workspaceId: string,
+    tabId: string,
+    request: ApiRequestInput | null,
+    executionId?: string | null,
+  ) => void;
   updateTabDraft: (workspaceId: string, tabId: string, patch: Partial<RequestDraft>) => void;
 };
 
@@ -123,10 +130,10 @@ export const useApiRequestTabStore = create<ApiTabStore>((set) => ({
         nextNewIndex: slice.nextNewIndex,
       })),
     ),
-  failTabSend: (workspaceId, tabId, error) =>
+  failTabSend: (workspaceId, tabId, error, errorCode) =>
     set((state) =>
       withWorkspace(state, workspaceId, (slice) => ({
-        ...failTabSend(slice, tabId, error),
+        ...failTabSend(slice, tabId, error, errorCode),
         nextNewIndex: slice.nextNewIndex,
       })),
     ),
@@ -189,10 +196,17 @@ export const useApiRequestTabStore = create<ApiTabStore>((set) => ({
         nextNewIndex: slice.nextNewIndex,
       })),
     ),
-  startTabSend: (workspaceId, tabId, request) =>
+  startTabCancel: (workspaceId, tabId) =>
     set((state) =>
       withWorkspace(state, workspaceId, (slice) => ({
-        ...startTabSend(slice, tabId, request),
+        ...startTabCancel(slice, tabId),
+        nextNewIndex: slice.nextNewIndex,
+      })),
+    ),
+  startTabSend: (workspaceId, tabId, request, executionId) =>
+    set((state) =>
+      withWorkspace(state, workspaceId, (slice) => ({
+        ...startTabSend(slice, tabId, request, executionId),
         nextNewIndex: slice.nextNewIndex,
       })),
     ),

@@ -1,6 +1,11 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
+/// Largest timeout that can cross the JavaScript boundary without losing
+/// integer precision. This is an input-safety bound, not a practical timeout
+/// policy or duration cap.
+pub const MAX_API_TIMEOUT_MS: u64 = 9_007_199_254_740_991;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiEnvironment {
@@ -75,6 +80,20 @@ pub struct ApiRequestInput {
     pub temporary_variables: Vec<KeyValue>,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiRequestSettings {
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiClientPreferences {
+    #[serde(default)]
+    pub request_timeout_ms: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiResponse {
@@ -135,6 +154,8 @@ pub struct ApiSavedRequest {
     pub query_json: String,
     pub body: Option<String>,
     pub body_kind: String,
+    #[serde(default = "default_request_settings_json")]
+    pub settings_json: String,
     #[serde(default)]
     pub pre_request_script: Option<String>,
     #[serde(default)]
@@ -231,8 +252,14 @@ impl ScriptExecutionResult {
 pub struct RequestExecutionResult {
     pub response: Option<ApiResponse>,
     pub http_error: Option<String>,
+    #[serde(default)]
+    pub http_error_code: Option<String>,
     pub pre_request: ScriptExecutionResult,
     pub post_response: ScriptExecutionResult,
+}
+
+fn default_request_settings_json() -> String {
+    r#"{"timeoutMs":null}"#.to_string()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

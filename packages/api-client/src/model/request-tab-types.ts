@@ -15,9 +15,11 @@ import type {
 
 export type ApiRequestTab = {
   baseline: string | null;
+  cancelling: boolean;
   draft: RequestDraft;
   execution: RequestExecutionResult | null;
   id: string;
+  executionId: string | null;
   requestTab: RequestParamsTab;
   lastRequest: ApiRequestInput | null;
   response: ApiResponse | null;
@@ -25,6 +27,7 @@ export type ApiRequestTab = {
   saveError: string | null;
   savedRequestId: string | null;
   sendError: string | null;
+  sendErrorCode: string | null;
   sending: boolean;
   saving: boolean;
   source: ApiTabSource;
@@ -50,12 +53,16 @@ export type ApiTabVisualState =
   | "unsaved"
   | "saving"
   | "sending"
+  | "cancelling"
+  | "cancelled"
   | "success"
   | "failed";
 
 export type ApiTabResponseState =
   | "idle"
   | "sending"
+  | "cancelling"
+  | "cancelled"
   | "success"
   | "empty"
   | "http-error"

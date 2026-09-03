@@ -50,6 +50,7 @@ export function savedRequestToInput(
   saved: ApiSavedRequest,
   workspaceId: string,
 ): ApiRequestInput {
+  const settings = parseRequestSettings(saved.settingsJson);
   return {
     workspaceId,
     name: saved.name,
@@ -65,7 +66,7 @@ export function savedRequestToInput(
     preRequestScript: saved.preRequestScript,
     postResponseScript: saved.postResponseScript,
     scriptSchemaVersion: saved.scriptSchemaVersion,
-    timeoutMs: 60_000,
+    timeoutMs: settings.timeoutMs,
   };
 }
 
@@ -84,8 +85,25 @@ export function historyDetailToInput(history: ApiHistoryDetail): ApiRequestInput
     preRequestScript: null,
     postResponseScript: null,
     scriptSchemaVersion: 1,
-    timeoutMs: 60_000,
+    timeoutMs: null,
   };
+}
+
+export function parseRequestSettings(value: unknown): { timeoutMs: number | null } {
+  if (typeof value !== "string" || !value.trim()) {
+    return { timeoutMs: null };
+  }
+  try {
+    const parsed = JSON.parse(value) as { timeoutMs?: unknown };
+    if (parsed.timeoutMs === null || parsed.timeoutMs === undefined) {
+      return { timeoutMs: null };
+    }
+    return Number.isSafeInteger(parsed.timeoutMs) && Number(parsed.timeoutMs) >= 0
+      ? { timeoutMs: Number(parsed.timeoutMs) }
+      : { timeoutMs: null };
+  } catch {
+    return { timeoutMs: null };
+  }
 }
 
 export * from "./request-utils/collection-tree";

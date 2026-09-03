@@ -17,6 +17,7 @@ unfour-diag = { path = "../unfour-diag" }
 unfour-local-storage = { path = "../local-storage" }
 uuid = { version = "1", features = ["serde", "v4"] }
 tokio = { version = "1", features = ["rt"] }
+tokio-util = "0.7"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }

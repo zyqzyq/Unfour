@@ -9,6 +9,7 @@ use crate::api_client::domain::secrets::{
 };
 use crate::api_client::domain::{collection_on, folder_on};
 use crate::api_client::helpers::normalize_entity_id;
+use unfour_core::models::ApiRequestSettings;
 
 pub(super) async fn upsert_request(
     connection: &mut SqliteConnection,
@@ -53,6 +54,9 @@ pub(super) async fn upsert_request(
         record.post_response_script.as_deref(),
         record.script_schema_version,
     )?;
+    serde_json::from_str::<ApiRequestSettings>(&record.settings_json).map_err(|_| {
+        AppError::Validation("external API request settings are invalid".to_string())
+    })?;
     let name = record.name.trim().to_string();
     if name.is_empty() {
         return Err(AppError::Validation(
@@ -63,7 +67,7 @@ pub(super) async fn upsert_request(
         r#"
         SELECT id, workspace_id, name, collection_id, parent_folder_id,
                sort_order, auth_json, method, url, headers_json, query_json,
-               body, body_kind, pre_request_script, post_response_script,
+               body, body_kind, settings_json, pre_request_script, post_response_script,
                script_schema_version, created_at, updated_at, deleted_at,
                revision, sync_status, remote_id
         FROM api_requests WHERE id = ?1
@@ -111,6 +115,7 @@ pub(super) async fn upsert_request(
             && current.query_json == query_json
             && current.body == body
             && current.body_kind == record.body_kind
+            && current.settings_json == record.settings_json
             && current.pre_request_script == record.pre_request_script
             && current.post_response_script == record.post_response_script
             && current.script_schema_version == record.script_schema_version
@@ -126,10 +131,10 @@ pub(super) async fn upsert_request(
             SET collection_id = ?1, parent_folder_id = ?2, name = ?3,
                 sort_order = ?4, auth_json = ?5, method = ?6, url = ?7,
                 headers_json = ?8, query_json = ?9, body = ?10, body_kind = ?11,
-                pre_request_script = ?12, post_response_script = ?13,
-                script_schema_version = ?14, created_at = ?15, updated_at = ?16,
+                settings_json = ?12, pre_request_script = ?13, post_response_script = ?14,
+                script_schema_version = ?15, created_at = ?16, updated_at = ?17,
                 deleted_at = NULL, revision = revision + 1, sync_status = 'local'
-            WHERE id = ?17 AND workspace_id = ?18 RETURNING revision
+            WHERE id = ?18 AND workspace_id = ?19 RETURNING revision
             "#,
             )
             .bind(record.collection_id)
@@ -143,6 +148,7 @@ pub(super) async fn upsert_request(
             .bind(query_json)
             .bind(body)
             .bind(record.body_kind)
+            .bind(record.settings_json)
             .bind(record.pre_request_script)
             .bind(record.post_response_script)
             .bind(record.script_schema_version)
@@ -159,11 +165,11 @@ pub(super) async fn upsert_request(
         INSERT INTO api_requests (
           id, workspace_id, name, collection_id, parent_folder_id, sort_order,
           auth_json, method, url, headers_json, query_json, body, body_kind,
-          pre_request_script, post_response_script, script_schema_version,
+          settings_json, pre_request_script, post_response_script, script_schema_version,
           created_at, updated_at, revision, sync_status
         ) VALUES (
           ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
-          ?14, ?15, ?16, ?17, ?18, 1, 'local'
+          ?14, ?15, ?16, ?17, ?18, ?19, 1, 'local'
         )
         "#,
     )
@@ -180,6 +186,7 @@ pub(super) async fn upsert_request(
     .bind(query_json)
     .bind(body)
     .bind(record.body_kind)
+    .bind(record.settings_json)
     .bind(record.pre_request_script)
     .bind(record.post_response_script)
     .bind(record.script_schema_version)

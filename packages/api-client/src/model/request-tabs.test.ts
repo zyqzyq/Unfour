@@ -27,6 +27,7 @@ import {
   requestTabTitle,
   requestTabVisualState,
   setApiSplitDirection,
+  startTabCancel,
   startTabSave,
   startTabSend,
   updateTabDraft,
@@ -40,6 +41,7 @@ describe("API request tab state", () => {
       "headers",
       "body",
       "scripts",
+      "settings",
     ]);
     expect(requestConfigTabs.map((tab) => tab.labelKey)).toEqual([
       "api.request.tabs.params",
@@ -47,6 +49,7 @@ describe("API request tab state", () => {
       "api.request.tabs.headers",
       "api.request.tabs.body",
       "api.request.tabs.scripts",
+      "api.request.tabs.settings",
     ]);
   });
 
@@ -55,6 +58,17 @@ describe("API request tab state", () => {
     expect(methodBadgeLabel("patch")).toBe("PATCH");
     expect(methodToneClass("POST")).toContain("success");
     expect(methodToneClass("GET")).toContain("info");
+  });
+
+  it("tracks cancelling and cancelled execution states by stable error code", () => {
+    let state = createNewRequestTab(emptyApiTabsState("ws-1"), "new:1");
+    state = startTabSend(state, "new:1", requestInput(), "execution-1");
+    state = startTabCancel(state, "new:1");
+    expect(deriveTabResponseState(state.tabs[0])).toBe("cancelling");
+
+    state = failTabSend(state, "new:1", "localized text", "API_CANCELLED");
+    expect(deriveTabResponseState(state.tabs[0])).toBe("cancelled");
+    expect(state.tabs[0].executionId).toBeNull();
   });
 
   it("opens or activates one tab per saved request", () => {
@@ -297,6 +311,7 @@ function savedRequest(id: string): ApiSavedRequest {
     preRequestScript: "console.log('before')",
     postResponseScript: "pm.test('ok', () => {})",
     scriptSchemaVersion: 1,
+    settingsJson: JSON.stringify({ timeoutMs: null }),
     createdAt: "2026-06-15T00:00:00Z",
     updatedAt: "2026-06-15T00:00:00Z",
     deletedAt: null,
@@ -355,6 +370,7 @@ function execution(responseValue: ApiResponse = response()): RequestExecutionRes
   return {
     response: responseValue,
     httpError: null,
+    httpErrorCode: null,
     preRequest: {
       status: "success",
       durationMs: 1,

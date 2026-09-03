@@ -2,6 +2,45 @@ use super::super::*;
 use super::support::{save_in_collection, service};
 
 #[tokio::test]
+async fn saved_request_reopen_and_duplicate_preserve_timeout_settings() {
+    let service = service().await;
+    let saved = service
+        .save_request(ApiRequestInput {
+            workspace_id: "workspace-a".to_string(),
+            name: Some("Custom timeout".to_string()),
+            parent_folder_id: None,
+            collection_id: None,
+            auth_json: None,
+            method: "GET".to_string(),
+            url: "https://example.test".to_string(),
+            headers: vec![],
+            query: vec![],
+            body: None,
+            body_kind: "none".to_string(),
+            timeout_ms: Some(0),
+            pre_request_script: None,
+            post_response_script: None,
+            script_schema_version: 1,
+            temporary_variables: vec![],
+        })
+        .await
+        .expect("save request");
+
+    assert_eq!(saved.settings_json, r#"{"timeoutMs":0}"#);
+    let reopened = service
+        .list_saved_requests("workspace-a".to_string())
+        .await
+        .expect("reopen request");
+    assert_eq!(reopened[0].settings_json, saved.settings_json);
+
+    let duplicated = service
+        .duplicate_request("workspace-a".to_string(), saved.id)
+        .await
+        .expect("duplicate request");
+    assert_eq!(duplicated.settings_json, r#"{"timeoutMs":0}"#);
+}
+
+#[tokio::test]
 async fn save_request_preserves_non_json_body_unchanged() {
     let service = service().await;
 

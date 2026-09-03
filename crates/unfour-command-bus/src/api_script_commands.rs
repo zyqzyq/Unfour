@@ -21,7 +21,17 @@ impl CommandBus {
         &self,
         input: ApiRequestInput,
     ) -> AppResult<RequestExecutionResult> {
-        self.send_api_request_with_scripts_in_environment(input, None)
+        let execution_id = unfour_core::id::new_id();
+        self.send_api_request_with_scripts_controlled(&execution_id, input)
+            .await
+    }
+
+    pub async fn send_api_request_with_scripts_controlled(
+        &self,
+        execution_id: &str,
+        input: ApiRequestInput,
+    ) -> AppResult<RequestExecutionResult> {
+        self.send_api_request_with_scripts_controlled_in_environment(execution_id, input, None)
             .await
     }
 
@@ -30,6 +40,30 @@ impl CommandBus {
         input: ApiRequestInput,
         environment_id_override: Option<String>,
     ) -> AppResult<RequestExecutionResult> {
+        let execution_id = unfour_core::id::new_id();
+        self.send_api_request_with_scripts_controlled_in_environment(
+            &execution_id,
+            input,
+            environment_id_override,
+        )
+        .await
+    }
+
+    async fn send_api_request_with_scripts_controlled_in_environment(
+        &self,
+        execution_id: &str,
+        input: ApiRequestInput,
+        environment_id_override: Option<String>,
+    ) -> AppResult<RequestExecutionResult> {
+        let execution = self.api_executions.register(execution_id)?;
+        let cancellation = execution.token();
+        let input = self.resolve_desktop_api_timeout(input).await?;
+        if cancellation.is_cancelled() {
+            return Ok(cancelled_execution(
+                ScriptExecutionResult::skipped(),
+                ScriptExecutionResult::skipped(),
+            ));
+        }
         validate_script_config(
             input.pre_request_script.as_deref(),
             input.post_response_script.as_deref(),
@@ -53,11 +87,15 @@ impl CommandBus {
                 .collect(),
             None,
         );
-        let pre = run_script(
-            input.pre_request_script.clone().unwrap_or_default(),
-            pre_input,
-        )
-        .await?;
+        let pre = tokio::select! {
+            _ = cancellation.cancelled() => {
+                return Ok(cancelled_execution(
+                    ScriptExecutionResult::skipped(),
+                    ScriptExecutionResult::skipped(),
+                ));
+            }
+            result = run_script(input.pre_request_script.clone().unwrap_or_default(), pre_input) => result?,
+        };
 
         if matches!(
             pre.execution.status,
@@ -66,9 +104,16 @@ impl CommandBus {
             return Ok(RequestExecutionResult {
                 response: None,
                 http_error: None,
+                http_error_code: None,
                 pre_request: pre.execution,
                 post_response: ScriptExecutionResult::skipped(),
             });
+        }
+        if cancellation.is_cancelled() {
+            return Ok(cancelled_execution(
+                pre.execution,
+                ScriptExecutionResult::skipped(),
+            ));
         }
         if pre.environment_changed {
             self.commit_script_environment(
@@ -77,6 +122,12 @@ impl CommandBus {
                 &pre.environment,
             )
             .await?;
+        }
+        if cancellation.is_cancelled() {
+            return Ok(cancelled_execution(
+                pre.execution,
+                ScriptExecutionResult::skipped(),
+            ));
         }
 
         let mut request = input.clone();
@@ -92,17 +143,33 @@ impl CommandBus {
         let resolved_request = self
             .resolve_api_request_input_for_environment(request, environment_id.as_deref())
             .await?;
-        let response = match self.api_client.send(resolved_request.clone()).await {
+        let response = match self
+            .api_client
+            .send_cancellable(resolved_request.clone(), cancellation.clone())
+            .await
+        {
             Ok(response) => response,
             Err(error) => {
+                let error_code = error.code().to_string();
                 return Ok(RequestExecutionResult {
                     response: None,
                     http_error: Some(error.to_string()),
+                    http_error_code: Some(error_code),
                     pre_request: pre.execution,
                     post_response: ScriptExecutionResult::skipped(),
                 });
             }
         };
+
+        if cancellation.is_cancelled() {
+            return Ok(RequestExecutionResult {
+                response: Some(response),
+                http_error: Some("API request cancelled: cancelled by user".to_string()),
+                http_error_code: Some("API_CANCELLED".to_string()),
+                pre_request: pre.execution,
+                post_response: ScriptExecutionResult::skipped(),
+            });
+        }
 
         let post_environment = self
             .script_environment(&input.workspace_id, environment_id.as_deref())
@@ -120,11 +187,27 @@ impl CommandBus {
                 &response.body,
             )),
         );
-        let post = run_script(
-            input.post_response_script.clone().unwrap_or_default(),
-            post_input,
-        )
-        .await?;
+        let post = tokio::select! {
+            _ = cancellation.cancelled() => {
+                return Ok(RequestExecutionResult {
+                    response: Some(response),
+                    http_error: Some("API request cancelled: cancelled by user".to_string()),
+                    http_error_code: Some("API_CANCELLED".to_string()),
+                    pre_request: pre.execution,
+                    post_response: ScriptExecutionResult::skipped(),
+                });
+            }
+            result = run_script(input.post_response_script.clone().unwrap_or_default(), post_input) => result?,
+        };
+        if cancellation.is_cancelled() {
+            return Ok(RequestExecutionResult {
+                response: Some(response),
+                http_error: Some("API request cancelled: cancelled by user".to_string()),
+                http_error_code: Some("API_CANCELLED".to_string()),
+                pre_request: pre.execution,
+                post_response: post.execution,
+            });
+        }
         if post.execution.status == ScriptExecutionStatus::Success && post.environment_changed {
             self.commit_script_environment(
                 &input.workspace_id,
@@ -132,6 +215,16 @@ impl CommandBus {
                 &post.environment,
             )
             .await?;
+        }
+
+        if cancellation.is_cancelled() {
+            return Ok(RequestExecutionResult {
+                response: Some(response),
+                http_error: Some("API request cancelled: cancelled by user".to_string()),
+                http_error_code: Some("API_CANCELLED".to_string()),
+                pre_request: pre.execution,
+                post_response: post.execution,
+            });
         }
 
         self.activity_log
@@ -152,6 +245,7 @@ impl CommandBus {
         Ok(RequestExecutionResult {
             response: Some(response),
             http_error: None,
+            http_error_code: None,
             pre_request: pre.execution,
             post_response: post.execution,
         })
@@ -215,6 +309,19 @@ impl CommandBus {
         )
         .await?;
         Ok(())
+    }
+}
+
+fn cancelled_execution(
+    pre_request: ScriptExecutionResult,
+    post_response: ScriptExecutionResult,
+) -> RequestExecutionResult {
+    RequestExecutionResult {
+        response: None,
+        http_error: Some("API request cancelled: cancelled by user".to_string()),
+        http_error_code: Some("API_CANCELLED".to_string()),
+        pre_request,
+        post_response,
     }
 }
 

@@ -198,18 +198,50 @@ pub(super) fn parse_optional_timeout(
     arguments: &Map<String, Value>,
 ) -> Result<Option<u64>, ToolCallError> {
     match arguments.get("timeoutMs") {
-        None => Ok(None),
+        None => Ok(Some(60_000)),
         Some(Value::Number(n)) => {
             let ms = n.as_u64().ok_or_else(|| {
                 ToolCallError::InvalidArguments(
-                    "argument `timeoutMs` must be a positive number".to_string(),
+                    "argument `timeoutMs` must be a non-negative integer".to_string(),
                 )
             })?;
-            Ok(Some(ms.min(60_000)))
+            Ok(Some(ms))
         }
         Some(_) => Err(ToolCallError::InvalidArguments(
             "argument `timeoutMs` must be a number".to_string(),
         )),
+    }
+}
+
+#[cfg(test)]
+mod timeout_tests {
+    use super::*;
+
+    #[test]
+    fn omitted_timeout_uses_the_mcp_safety_default() {
+        assert_eq!(parse_optional_timeout(&Map::new()).unwrap(), Some(60_000));
+    }
+
+    #[test]
+    fn zero_is_unlimited_and_positive_values_are_not_capped() {
+        let zero = serde_json::from_value::<Map<String, Value>>(json!({ "timeoutMs": 0 })).unwrap();
+        let long = serde_json::from_value::<Map<String, Value>>(json!({
+            "timeoutMs": 120_000
+        }))
+        .unwrap();
+        assert_eq!(parse_optional_timeout(&zero).unwrap(), Some(0));
+        assert_eq!(parse_optional_timeout(&long).unwrap(), Some(120_000));
+    }
+
+    #[test]
+    fn invalid_timeouts_are_rejected() {
+        for value in [json!(-1), json!(1.5), json!("1000")] {
+            let arguments = serde_json::from_value::<Map<String, Value>>(json!({
+                "timeoutMs": value
+            }))
+            .unwrap();
+            assert!(parse_optional_timeout(&arguments).is_err());
+        }
     }
 }
 

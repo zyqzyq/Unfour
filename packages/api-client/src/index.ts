@@ -1,5 +1,6 @@
 export { ApiClientPage } from "./ApiClientPage";
 export { ApiClientSidebar } from "./components/ApiClientSidebar";
+export { ApiClientSettings } from "./components/ApiClientSettings";
 export { ApiCollectionTree } from "./components/ApiCollectionTree";
 export { ApiRequestEditor } from "./components/ApiRequestEditor";
 export { ApiResponseViewer } from "./components/ApiResponseViewer";

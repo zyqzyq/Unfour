@@ -1,6 +1,7 @@
 import { call } from "./invoke";
 import type {
   ApiCollection,
+  ApiClientPreferences,
   ApiCollectionExportFormat,
   ApiCollectionExportResult,
   ApiCollectionFolder,
@@ -193,8 +194,20 @@ export function reorderApiRequests(
   });
 }
 
-export function sendApiRequest(input: ApiRequestInput) {
-  return call<RequestExecutionResult>("api_send_request_v2", { input });
+export function sendApiRequest(executionId: string, input: ApiRequestInput) {
+  return call<RequestExecutionResult>("api_send_request_v2", { executionId, input });
+}
+
+export function cancelApiRequest(executionId: string) {
+  return call<boolean>("api_cancel_request", { executionId });
+}
+
+export function getApiClientPreferences() {
+  return call<ApiClientPreferences>("api_client_preferences_get");
+}
+
+export function updateApiClientPreferences(preferences: ApiClientPreferences) {
+  return call<ApiClientPreferences>("api_client_preferences_update", { preferences });
 }
 
 export function saveApiRequest(input: ApiRequestInput) {

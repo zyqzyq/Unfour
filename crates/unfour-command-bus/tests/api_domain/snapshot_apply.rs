@@ -520,6 +520,7 @@ fn external_request(
         pre_request_script: None,
         post_response_script: None,
         script_schema_version: 1,
+        settings_json: r#"{"timeoutMs":null}"#.to_string(),
         created_at: "2026-08-12T00:00:00Z".to_string(),
         updated_at: "2026-08-12T00:00:00Z".to_string(),
     }))
@@ -636,6 +637,7 @@ fn request_apply(snapshot: &ApiRequestSnapshot) -> ExternalApiRequestApply {
         pre_request_script: snapshot.pre_request_script.clone(),
         post_response_script: snapshot.post_response_script.clone(),
         script_schema_version: snapshot.script_schema_version,
+        settings_json: snapshot.settings_json.clone(),
         created_at: snapshot.created_at.clone(),
         updated_at: snapshot.updated_at.clone(),
     }))

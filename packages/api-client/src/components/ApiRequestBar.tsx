@@ -8,7 +8,7 @@ import {
   type Ref,
   type RefObject,
 } from "react";
-import { Pencil, Save, Send } from "lucide-react";
+import { Pencil, Save, Send, Square } from "lucide-react";
 import { Button, IconButton, Input, useI18n } from "@unfour/ui";
 import { httpMethods } from "../constants/http-methods";
 import { requestTabTitle, type ApiRequestTab } from "../model/request-tabs";
@@ -17,6 +17,7 @@ export function ApiRequestBar({
   onNameCommit,
   onSave,
   onSend,
+  onStop = () => undefined,
   onUpdate,
   tab,
   urlInputRef,
@@ -24,6 +25,7 @@ export function ApiRequestBar({
   onNameCommit: (name: string) => void;
   onSave: (name?: string) => void;
   onSend: () => void;
+  onStop?: () => void;
   onUpdate: (patch: Partial<ApiRequestTab["draft"]>) => void;
   tab: ApiRequestTab;
   urlInputRef?: Ref<HTMLInputElement>;
@@ -83,15 +85,29 @@ export function ApiRequestBar({
           ref={urlInputRef}
           value={tab.draft.url}
         />
-        <Button
-          disabled={tab.sending || !tab.draft.url.trim()}
-          size="sm"
-          onClick={onSend}
-          type="button"
-        >
-          <Send size={14} />
-          {tab.sending ? t("api.actions.sending") : t("api.actions.send")}
-        </Button>
+        {tab.sending ? (
+          <Button
+            aria-label={tab.cancelling ? t("api.actions.cancelling") : t("api.actions.stop")}
+            disabled={tab.cancelling}
+            size="sm"
+            onClick={onStop}
+            type="button"
+            variant="danger"
+          >
+            <Square fill="currentColor" size={12} />
+            {tab.cancelling ? t("api.actions.cancelling") : t("api.actions.stop")}
+          </Button>
+        ) : (
+          <Button
+            disabled={!tab.draft.url.trim()}
+            size="sm"
+            onClick={onSend}
+            type="button"
+          >
+            <Send size={14} />
+            {t("api.actions.send")}
+          </Button>
+        )}
         <Button
           aria-label={tab.saving ? t("api.actions.saving") : t("api.actions.save")}
           disabled={tab.saving}

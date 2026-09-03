@@ -53,6 +53,42 @@ function renderAuth(auth: ApiAuthConfig) {
 }
 
 describe("RequestParamsTabs auth inputs", () => {
+  it("switches request timeout between inherit, custom, and unlimited", () => {
+    const onTimeoutChange = vi.fn();
+    render(
+      <I18nProvider initialLocale="en">
+        <RequestParamsTabs
+          auth={{ type: "none" }}
+          body=""
+          bodyMode="none"
+          formBody={[]}
+          headers={[]}
+          onAuthChange={vi.fn()}
+          onBodyChange={vi.fn()}
+          onBodyModeChange={vi.fn()}
+          onFormBodyChange={vi.fn()}
+          onHeadersChange={vi.fn()}
+          onPostResponseScriptChange={vi.fn()}
+          onPreRequestScriptChange={vi.fn()}
+          onQueryChange={vi.fn()}
+          onRawBodyTypeChange={vi.fn()}
+          onTabChange={vi.fn()}
+          onTimeoutChange={onTimeoutChange}
+          postResponseScript=""
+          preRequestScript=""
+          query={[]}
+          rawBodyType="json"
+          tab="settings"
+          timeoutMs={null}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("radio", { name: /Custom timeout/ }));
+    expect(onTimeoutChange).toHaveBeenCalledWith(0);
+    expect(screen.getByLabelText("Request timeout in milliseconds")).toBeDisabled();
+  });
+
   it("shows auth secret values as editable text instead of password fields", () => {
     const { rerender } = renderAuth({ type: "bearer", token: "secret-token" });
 

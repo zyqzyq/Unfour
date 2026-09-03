@@ -29,6 +29,25 @@ function baseTab(overrides: Partial<ApiRequestTab> = {}): ApiRequestTab {
 }
 
 describe("ResponseTabs", () => {
+  it("renders cancellation as its own state instead of a generic failure", () => {
+    render(
+      withI18n(
+        <ResponseTabs
+          onOpenAuthSettings={vi.fn()}
+          onResponseTabChange={vi.fn()}
+          onRetry={vi.fn()}
+          tab={baseTab({
+            sendError: "API request cancelled",
+            sendErrorCode: "API_CANCELLED",
+          })}
+        />,
+      ),
+    );
+
+    expect(screen.getByText("Request cancelled")).toBeInTheDocument();
+    expect(screen.queryByText("Request failed")).toBeNull();
+  });
+
   it("wraps and pretty-prints HTTP error details", () => {
     render(
       withI18n(
@@ -156,6 +175,7 @@ function execution(): RequestExecutionResult {
   return {
     response: response({ body: "{}" }),
     httpError: null,
+    httpErrorCode: null,
     preRequest: {
       status: "success",
       durationMs: 2,

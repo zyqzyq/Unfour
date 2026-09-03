@@ -198,7 +198,9 @@
       "save": "Save",
       "saving": "Saving",
       "send": "Send",
-      "sending": "Sending"
+      "sending": "Sending",
+      "stop": "Stop",
+      "cancelling": "Stopping"
     },
     "empty": {
       "noRequestOpen": "No request is open"
@@ -292,7 +294,18 @@
         "body": "Body",
         "headers": "Headers",
         "params": "Params",
-        "scripts": "Scripts"
+        "scripts": "Scripts",
+        "settings": "Settings"
+      },
+      "settings": {
+        "custom": "Custom timeout",
+        "customDescription": "Override the global value for this saved request.",
+        "inherit": "Use global default",
+        "inheritDescription": "Follow the API Client timeout configured in Settings.",
+        "timeoutDescription": "Choose whether this request inherits the desktop default or uses its own timeout.",
+        "timeoutInput": "Request timeout in milliseconds",
+        "timeoutTitle": "Request timeout",
+        "zeroUnlimited": "Milliseconds. Set 0 for no timeout."
       },
       "url": "Request URL",
       "urlPlaceholder": "https://api.example.com/resource"
@@ -320,6 +333,9 @@
     },
     "response": {
       "copyBody": "Copy response body",
+      "cancelledDescription": "Execution stopped before all request work completed. No history entry was written for this run.",
+      "cancelledTitle": "Request cancelled",
+      "cancellingDescription": "Stopping request execution…",
       "emptyBodyDescription": "The request succeeded. This endpoint returned an empty body.",
       "emptyBodyTitle": "{status} · No Content",
       "emptyDescription": "Send this request to see the response here.",
@@ -347,6 +363,8 @@
       "sendingDescription": "Sending request…",
       "status": {
         "failed": "failed",
+        "cancelled": "cancelled",
+        "cancelling": "stopping",
         "network": "no response",
         "noResponse": "no response",
         "sending": "sending",
@@ -370,6 +388,14 @@
       "timeoutDescription": "The request timed out before the server responded.",
       "timeoutTitle": "Request timed out",
       "title": "Response"
+    },
+    "settings": {
+      "defaultTimeout": "Default request timeout",
+      "defaultTimeoutDescription": "Used by requests set to inherit the global default.",
+      "description": "Control the default timeout for requests sent from the desktop API Client. Individual requests can override it.",
+      "saving": "Saving…",
+      "title": "API Client",
+      "zeroUnlimited": "Milliseconds. Set 0 for no timeout."
     },
     "tabs": {
       "close": "Close {title}",

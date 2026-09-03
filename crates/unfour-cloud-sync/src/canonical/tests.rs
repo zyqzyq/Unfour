@@ -226,6 +226,7 @@ fn api_snapshots_map_to_strict_canonical_payloads_and_parents() {
         pre_request_script: Some("console.log('pre')".into()),
         post_response_script: Some("console.log('post')".into()),
         script_schema_version: 1,
+        settings_json: r#"{"timeoutMs":120000}"#.into(),
         created_at: "2026-08-13T00:00:00Z".into(),
         updated_at: "2026-08-13T01:00:00Z".into(),
         revision: 9,
@@ -250,6 +251,7 @@ fn api_snapshots_map_to_strict_canonical_payloads_and_parents() {
         "preRequestScript",
         "postResponseScript",
         "scriptSchemaVersion",
+        "settingsJson",
         "createdAt",
         "updatedAt",
     ] {

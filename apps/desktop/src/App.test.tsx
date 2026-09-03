@@ -74,7 +74,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("desktop feature composition", () => {
-  it("injects slotted Privacy and Updates plus one Account & Sync navigation section", async () => {
+  it("injects API Client, Privacy, and Updates slots plus Account & Sync navigation", async () => {
     render(<App />);
 
     expect(screen.getByTestId("desktop-app")).toHaveTextContent("local desktop");
@@ -85,6 +85,7 @@ describe("desktop feature composition", () => {
     expect(
       extensions?.settingsSections?.map(({ id, slot }) => ({ id, slot })),
     ).toEqual([
+      { id: "api-client.settings", slot: "general" },
       { id: "telemetry.privacy", slot: "general" },
       { id: "account-sync.settings", slot: undefined },
       { id: "updates.settings", slot: "about" },

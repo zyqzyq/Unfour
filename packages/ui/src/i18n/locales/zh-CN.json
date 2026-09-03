@@ -198,7 +198,9 @@
       "save": "保存",
       "saving": "保存中",
       "send": "发送",
-      "sending": "发送中"
+      "sending": "发送中",
+      "stop": "停止",
+      "cancelling": "停止中"
     },
     "empty": {
       "noRequestOpen": "当前没有打开的请求"
@@ -292,7 +294,18 @@
         "body": "正文",
         "headers": "请求头",
         "params": "参数",
-        "scripts": "脚本"
+        "scripts": "脚本",
+        "settings": "设置"
+      },
+      "settings": {
+        "custom": "自定义超时",
+        "customDescription": "为此已保存请求覆盖全局值。",
+        "inherit": "使用全局默认值",
+        "inheritDescription": "使用“设置”中配置的 API 客户端超时。",
+        "timeoutDescription": "选择此请求继承桌面端默认值，或使用独立超时。",
+        "timeoutInput": "请求超时（毫秒）",
+        "timeoutTitle": "请求超时",
+        "zeroUnlimited": "单位为毫秒。设为 0 表示不限制超时。"
       },
       "url": "请求 URL",
       "urlPlaceholder": "https://api.example.com/resource"
@@ -320,6 +333,9 @@
     },
     "response": {
       "copyBody": "复制响应正文",
+      "cancelledDescription": "执行已在请求工作全部完成前停止，本次运行不会写入历史记录。",
+      "cancelledTitle": "请求已取消",
+      "cancellingDescription": "正在停止请求执行…",
       "emptyBodyDescription": "请求已成功。此端点返回了空正文。",
       "emptyBodyTitle": "{status} · 无内容",
       "emptyDescription": "发送此请求后，响应会显示在这里。",
@@ -347,6 +363,8 @@
       "sendingDescription": "正在发送请求…",
       "status": {
         "failed": "失败",
+        "cancelled": "已取消",
+        "cancelling": "停止中",
         "network": "无响应",
         "noResponse": "无响应",
         "sending": "发送中",
@@ -370,6 +388,14 @@
       "timeoutDescription": "服务器响应前，请求已超时。",
       "timeoutTitle": "请求超时",
       "title": "响应"
+    },
+    "settings": {
+      "defaultTimeout": "默认请求超时",
+      "defaultTimeoutDescription": "供设为继承全局默认值的请求使用。",
+      "description": "控制桌面端 API 客户端发送请求时使用的默认超时；单个请求可以覆盖此值。",
+      "saving": "保存中…",
+      "title": "API 客户端",
+      "zeroUnlimited": "单位为毫秒。设为 0 表示不限制超时。"
     },
     "tabs": {
       "close": "关闭 {title}",

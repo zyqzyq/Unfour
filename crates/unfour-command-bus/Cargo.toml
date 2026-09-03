@@ -8,6 +8,8 @@ license = "Apache-2.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sqlx = { version = "0.8", default-features = false, features = ["chrono", "json", "macros", "runtime-tokio-rustls", "sqlite"] }
+tokio = { version = "1", features = ["macros", "sync"] }
+tokio-util = "0.7"
 unfour-core = { path = "../unfour-core" }
 unfour-database-engine = { path = "../database-engine" }
 unfour-diag = { path = "../unfour-diag" }
@@ -19,7 +21,7 @@ unfour-ssh-engine = { path = "../ssh-engine" }
 unfour-workspace-engine = { path = "../workspace-engine" }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
 
 [features]
 default = []

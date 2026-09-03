@@ -141,6 +141,7 @@ async fn local_api_mutations_are_revisioned_noop_aware_and_hierarchical() {
         snapshot.post_response_script.as_deref(),
         Some("pm.test('ok', () => true);")
     );
+    assert_eq!(snapshot.settings_json, r#"{"timeoutMs":9999}"#);
     let serialized = serde_json::to_string(&snapshot).unwrap();
     for excluded in [
         "auth-device-secret",
@@ -150,7 +151,6 @@ async fn local_api_mutations_are_revisioned_noop_aware_and_hierarchical() {
         "body-device-secret",
         "runtime_only",
         "not-synced",
-        "timeoutMs",
     ] {
         assert!(!serialized.contains(excluded), "snapshot leaked {excluded}");
     }

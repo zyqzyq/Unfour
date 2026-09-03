@@ -5,7 +5,9 @@ use std::collections::{HashMap, HashSet};
 use unfour_core::domain::{
     CommandContext, DomainCommandResult, DomainEntityType, MutationOperation,
 };
-use unfour_core::models::{ApiCollectionImportResult, KeyValue};
+use unfour_core::models::{
+    ApiCollectionImportResult, ApiRequestSettings, KeyValue, MAX_API_TIMEOUT_MS,
+};
 
 mod value_parser;
 use value_parser::{parse_auth_json, parse_parameters, parse_request_body};
@@ -46,6 +48,7 @@ struct ParsedRequest {
     body: Option<String>,
     body_kind: String,
     auth_json: String,
+    settings_json: String,
     pre_request_script: Option<String>,
     post_response_script: Option<String>,
     script_schema_version: i64,
@@ -197,12 +200,12 @@ impl ApiClientService {
                 INSERT INTO api_requests (
                   id, workspace_id, name, collection_id, parent_folder_id,
                   sort_order, auth_json, method, url, headers_json, query_json,
-                  body, body_kind, pre_request_script, post_response_script,
+                  body, body_kind, settings_json, pre_request_script, post_response_script,
                   script_schema_version, created_at, updated_at, revision, sync_status
                 )
                 VALUES (
                   ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
-                  ?14, ?15, ?16, ?17, ?17, 1, 'local'
+                  ?14, ?15, ?16, ?17, ?18, ?18, 1, 'local'
                 )
                 "#,
             )
@@ -219,6 +222,7 @@ impl ApiClientService {
             .bind(serde_json::to_string(&request.query)?)
             .bind(&request.body)
             .bind(&request.body_kind)
+            .bind(&request.settings_json)
             .bind(&request.pre_request_script)
             .bind(&request.post_response_script)
             .bind(request.script_schema_version)
@@ -534,6 +538,7 @@ fn push_operation(
         }
     }
     let auth_json = parse_auth_json(root, operation)?;
+    let settings_json = parse_request_settings(operation)?;
     let pre_request_script = parse_optional_script(operation, "x-unfour-pre-request-script")?;
     let post_response_script = parse_optional_script(operation, "x-unfour-post-response-script")?;
     let script_schema_version = parse_script_schema_version(operation)?;
@@ -552,12 +557,36 @@ fn push_operation(
         body,
         body_kind,
         auth_json,
+        settings_json,
         pre_request_script,
         post_response_script,
         script_schema_version,
         sort_order: requests.len() as i64,
     });
     Ok(())
+}
+
+fn parse_request_settings(operation: &Map<String, Value>) -> AppResult<String> {
+    let Some(value) = operation.get("x-unfour-request-settings") else {
+        return Ok(r#"{"timeoutMs":null}"#.to_string());
+    };
+    if !value.is_object() {
+        return Err(import_validation(
+            "collection import x-unfour-request-settings must be an object",
+        ));
+    }
+    let settings: ApiRequestSettings = serde_json::from_value(value.clone()).map_err(|_| {
+        import_validation("collection import request timeout must be a non-negative integer")
+    })?;
+    if settings
+        .timeout_ms
+        .is_some_and(|timeout_ms| timeout_ms > MAX_API_TIMEOUT_MS)
+    {
+        return Err(import_validation(format!(
+            "collection import request timeout must not exceed {MAX_API_TIMEOUT_MS} milliseconds"
+        )));
+    }
+    Ok(serde_json::to_string(value)?)
 }
 
 fn parse_optional_script(operation: &Map<String, Value>, key: &str) -> AppResult<Option<String>> {

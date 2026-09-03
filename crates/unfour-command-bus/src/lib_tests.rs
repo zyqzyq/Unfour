@@ -5,9 +5,10 @@ mod api_environment_override;
 mod script_rollback;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use unfour_core::models::{
-    ApiCollectionExportFormat, ApiRequestInput, DatabaseConnectionInput, ScriptExecutionStatus,
-    SshConnectionInput, WorkspaceVariableInput,
+    ApiClientPreferences, ApiCollectionExportFormat, ApiRequestInput, DatabaseConnectionInput,
+    ScriptExecutionStatus, SshConnectionInput, WorkspaceVariableInput,
 };
+use unfour_core::AppError;
 use unfour_local_storage::LocalDb;
 
 async fn test_bus() -> CommandBus {
@@ -84,6 +85,112 @@ fn spawn_api_test_server() -> (String, std::sync::mpsc::Receiver<String>) {
     (format!("http://{address}/echo"), receiver)
 }
 
+fn spawn_slow_api_test_server(delay: std::time::Duration) -> String {
+    use std::io::{Read, Write};
+
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind slow test server");
+    let address = listener
+        .local_addr()
+        .expect("read slow test server address");
+    std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept API request");
+        let mut request = [0_u8; 1024];
+        let _ = stream.read(&mut request);
+        let body = r#"{"ok":true}"#;
+        write!(
+            stream,
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        )
+        .expect("write API response headers");
+        stream.flush().expect("flush API response headers");
+        std::thread::sleep(delay);
+        let _ = stream.write_all(body.as_bytes());
+    });
+    format!("http://{address}/slow")
+}
+
+#[tokio::test]
+async fn api_timeout_preference_defaults_to_zero_and_survives_bus_restart() {
+    let bus = test_bus().await;
+    assert_eq!(
+        bus.api_client_preferences()
+            .await
+            .expect("load default preferences")
+            .request_timeout_ms,
+        0
+    );
+
+    bus.update_api_client_preferences(ApiClientPreferences {
+        request_timeout_ms: 123_456,
+    })
+    .await
+    .expect("persist preferences");
+    let db = bus.db.clone();
+    drop(bus);
+
+    let restarted = CommandBus::from_db(db).await.expect("restart command bus");
+    assert_eq!(
+        restarted
+            .api_client_preferences()
+            .await
+            .expect("reload preferences")
+            .request_timeout_ms,
+        123_456
+    );
+}
+
+#[tokio::test]
+async fn controlled_api_cancellation_cleans_up_and_skips_post_script_and_history() {
+    let bus = test_bus().await;
+    let workspace_id = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let mut input = api_script_test_input(
+        workspace_id,
+        spawn_slow_api_test_server(std::time::Duration::from_millis(180)),
+    );
+    input.timeout_ms = Some(0);
+    input.post_response_script = Some("console.log('post ran');".to_string());
+    let execution_bus = bus.clone();
+    let task = tokio::spawn(async move {
+        execution_bus
+            .send_api_request_with_scripts_controlled("cancel-me", input)
+            .await
+    });
+
+    tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    assert_eq!(bus.api_executions.active_count(), 1);
+    assert!(bus.cancel_api_request("cancel-me"));
+    let result = task
+        .await
+        .expect("execution task joins")
+        .expect("cancelled execution returns a typed result");
+
+    assert_eq!(result.http_error_code.as_deref(), Some("API_CANCELLED"));
+    assert_eq!(result.post_response.status, ScriptExecutionStatus::Skipped);
+    assert_eq!(bus.api_executions.active_count(), 0);
+    assert!(!bus.cancel_api_request("unknown"));
+    let history_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM api_history")
+        .fetch_one(bus.db.pool())
+        .await
+        .expect("count history");
+    assert_eq!(history_count, 0);
+}
+
+#[tokio::test]
+async fn controlled_api_validation_failure_cleans_up_registry() {
+    let bus = test_bus().await;
+    let workspace_id = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let mut input = api_script_test_input(workspace_id, "https://example.test".to_string());
+    input.script_schema_version = 999;
+
+    let result = bus
+        .send_api_request_with_scripts_controlled("invalid", input)
+        .await;
+
+    assert!(matches!(result, Err(AppError::Validation(_))));
+    assert_eq!(bus.api_executions.active_count(), 0);
+}
+
 #[tokio::test]
 async fn api_pre_request_script_mutates_the_outbound_request() {
     let bus = test_bus().await;
@@ -110,6 +217,7 @@ pm.request.url = pm.request.url + "?source={{source}}";
     assert_eq!(result.pre_request.status, ScriptExecutionStatus::Success);
     assert_eq!(result.post_response.status, ScriptExecutionStatus::Skipped);
     assert_eq!(result.response.expect("HTTP response").status, 200);
+    assert_eq!(bus.api_executions.active_count(), 0);
     assert!(outbound.starts_with("GET /echo?source=pre HTTP/1.1"));
     assert!(outbound.to_ascii_lowercase().contains("x-from-script: yes"));
 }

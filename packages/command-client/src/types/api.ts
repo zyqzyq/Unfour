@@ -60,11 +60,15 @@ export type ApiRequestInput = {
   query: KeyValue[];
   body?: string;
   bodyKind: string;
-  timeoutMs?: number;
+  timeoutMs?: number | null;
   preRequestScript?: string | null;
   postResponseScript?: string | null;
   scriptSchemaVersion?: number;
   temporaryVariables?: KeyValue[];
+};
+
+export type ApiClientPreferences = {
+  requestTimeoutMs: number;
 };
 
 export type ApiResponse = {
@@ -127,6 +131,7 @@ export type ApiSavedRequest = {
   queryJson: string;
   body: string | null;
   bodyKind: string;
+  settingsJson: string;
   preRequestScript: string | null;
   postResponseScript: string | null;
   scriptSchemaVersion: number;
@@ -172,6 +177,7 @@ export type ScriptExecutionResult = {
 export type RequestExecutionResult = {
   response: ApiResponse | null;
   httpError: string | null;
+  httpErrorCode: string | null;
   preRequest: ScriptExecutionResult;
   postResponse: ScriptExecutionResult;
 };

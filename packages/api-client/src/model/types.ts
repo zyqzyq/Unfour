@@ -13,12 +13,14 @@ export type ApiRequestState =
   | "new"
   | "selected"
   | "sending"
+  | "cancelling"
+  | "cancelled"
   | "success"
   | "failed"
   | "network"
   | "timeout";
 
-export type RequestParamsTab = "query" | "auth" | "headers" | "body" | "scripts";
+export type RequestParamsTab = "query" | "auth" | "headers" | "body" | "scripts" | "settings";
 export type ResponsePanelTab = "response" | "history";
 export type ResponseTab = "body" | "headers" | "cookies" | "timing" | "request" | "tests" | "console";
 export type ApiSplitDirection = "vertical" | "horizontal";
@@ -53,6 +55,7 @@ export type RequestDraft = {
   preRequestScript: string;
   query: KeyValue[];
   rawBodyType: RequestRawBodyType;
+  timeoutMs: number | null;
   url: string;
 };
 

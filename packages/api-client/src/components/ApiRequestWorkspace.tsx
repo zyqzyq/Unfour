@@ -15,6 +15,7 @@ export function ApiRequestWorkspace({
   onResponseTabChange,
   onSave,
   onSend,
+  onStop,
   onUpdateDraft,
   urlInputRef,
 }: {
@@ -25,6 +26,7 @@ export function ApiRequestWorkspace({
   onResponseTabChange: (tabId: string, tab: ResponseTab) => void;
   onSave: (tab: ApiRequestTab, name?: string) => void;
   onSend: (tab: ApiRequestTab) => void;
+  onStop: (tab: ApiRequestTab) => void;
   onUpdateDraft: (tabId: string, patch: Partial<RequestDraft>) => void;
   urlInputRef: RefObject<HTMLInputElement | null>;
 }) {
@@ -34,6 +36,7 @@ export function ApiRequestWorkspace({
         onNameCommit={(name) => onRequestNameCommit(activeTab, name)}
         onSave={(name) => onSave(activeTab, name)}
         onSend={() => onSend(activeTab)}
+        onStop={() => onStop(activeTab)}
         onUpdate={(patch) => onUpdateDraft(activeTab.id, patch)}
         tab={activeTab}
         urlInputRef={urlInputRef}
@@ -70,11 +73,13 @@ export function ApiRequestWorkspace({
           onQueryChange={(query) => onUpdateDraft(activeTab.id, { query })}
           onRawBodyTypeChange={(rawBodyType) => onUpdateDraft(activeTab.id, { rawBodyType })}
           onTabChange={(tab) => onRequestTabChange(activeTab.id, tab)}
+          onTimeoutChange={(timeoutMs) => onUpdateDraft(activeTab.id, { timeoutMs })}
           query={activeTab.draft.query}
           rawBodyType={activeTab.draft.rawBodyType}
           postResponseScript={activeTab.draft.postResponseScript}
           preRequestScript={activeTab.draft.preRequestScript}
           tab={activeTab.requestTab}
+          timeoutMs={activeTab.draft.timeoutMs}
         />
         <ApiResponseViewer
           onOpenAuthSettings={() => onRequestTabChange(activeTab.id, "auth")}

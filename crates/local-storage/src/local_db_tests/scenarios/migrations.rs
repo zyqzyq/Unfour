@@ -32,6 +32,58 @@ async fn migrate_creates_all_tables() {
 }
 
 #[tokio::test]
+async fn api_request_settings_migration_defaults_existing_requests_to_inherit() {
+    let db = test_db().await;
+    sqlx::raw_sql(include_str!(
+        "../../../migrations/20260708221117_core_initial_schema.sql"
+    ))
+    .execute(db.pool())
+    .await
+    .expect("apply initial schema");
+    sqlx::raw_sql(include_str!(
+        "../../../migrations/20260728120000_core_api_request_scripts.sql"
+    ))
+    .execute(db.pool())
+    .await
+    .expect("apply request script schema");
+    sqlx::raw_sql(
+        r#"
+        INSERT INTO workspaces (
+          id, name, is_default, environment_type, mcp_policy,
+          created_at, updated_at, revision, sync_status
+        ) VALUES ('workspace-a', 'Workspace A', 1, 'dev', 'auto', 'now', 'now', 1, 'local');
+        INSERT INTO api_collections (
+          id, workspace_id, name, created_at, updated_at, revision, sync_status
+        ) VALUES ('collection-a', 'workspace-a', 'Collection A', 'now', 'now', 1, 'local');
+        INSERT INTO api_requests (
+          id, workspace_id, name, collection_id, method, url,
+          created_at, updated_at, revision, sync_status
+        ) VALUES (
+          'request-a', 'workspace-a', 'Legacy request', 'collection-a', 'GET',
+          'https://example.test', 'now', 'now', 1, 'local'
+        );
+        "#,
+    )
+    .execute(db.pool())
+    .await
+    .expect("insert legacy request");
+
+    sqlx::raw_sql(include_str!(
+        "../../../migrations/20260902010000_core_api_request_settings.sql"
+    ))
+    .execute(db.pool())
+    .await
+    .expect("apply request settings migration");
+
+    let settings_json: String =
+        sqlx::query_scalar("SELECT settings_json FROM api_requests WHERE id = 'request-a'")
+            .fetch_one(db.pool())
+            .await
+            .expect("read migrated request settings");
+    assert_eq!(settings_json, r#"{"timeoutMs":null}"#);
+}
+
+#[tokio::test]
 async fn workspace_variable_migration_preserves_legacy_api_environments() {
     let db = test_db().await;
     sqlx::raw_sql(include_str!(

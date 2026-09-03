@@ -34,6 +34,7 @@ export function ApiClientPage({
     closeTab,
     closeTabs,
     collectionStatus,
+    cancelTab,
     newRequest,
     openHistory,
     openSaved,
@@ -401,6 +402,7 @@ export function ApiClientPage({
               onResponseTabChange={setResponseTab}
               onSave={requestSave}
               onSend={sendTab}
+              onStop={(tab) => void cancelTab(tab)}
               onUpdateDraft={updateDraft}
               urlInputRef={urlInputRef}
             />

@@ -8,6 +8,7 @@ import { ApiRequestBar } from "./ApiRequestBar";
 function requestTab(): ApiRequestTab {
   return {
     baseline: null,
+    cancelling: false,
     draft: {
       auth: { type: "none" },
       body: "",
@@ -23,10 +24,12 @@ function requestTab(): ApiRequestTab {
       parentFolderId: null,
       query: [],
       rawBodyType: "json",
+      timeoutMs: null,
       url: "https://api.example.com/resource",
     },
     id: "new:1",
     execution: null,
+    executionId: null,
     lastRequest: null,
     requestTab: "query",
     response: null,
@@ -35,6 +38,7 @@ function requestTab(): ApiRequestTab {
     savedRequestId: null,
     saving: false,
     sendError: null,
+    sendErrorCode: null,
     sending: false,
     source: "new",
     sourceId: null,
@@ -46,6 +50,41 @@ afterEach(() => {
 });
 
 describe("ApiRequestBar", () => {
+  it("replaces Send with Stop and prevents repeated cancellation", () => {
+    const onStop = vi.fn();
+    const sending = { ...requestTab(), sending: true };
+    const { rerender } = render(
+      <I18nProvider initialLocale="en">
+        <ApiRequestBar
+          onNameCommit={vi.fn()}
+          onSave={vi.fn()}
+          onSend={vi.fn()}
+          onStop={onStop}
+          onUpdate={vi.fn()}
+          tab={sending}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    expect(onStop).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
+
+    rerender(
+      <I18nProvider initialLocale="en">
+        <ApiRequestBar
+          onNameCommit={vi.fn()}
+          onSave={vi.fn()}
+          onSend={vi.fn()}
+          onStop={onStop}
+          onUpdate={vi.fn()}
+          tab={{ ...sending, cancelling: true }}
+        />
+      </I18nProvider>,
+    );
+    expect(screen.getByRole("button", { name: "Stopping" })).toBeDisabled();
+  });
+
   it("keeps request controls focused and leaves environment switching to the tab bar", () => {
     render(
       <I18nProvider initialLocale="en">

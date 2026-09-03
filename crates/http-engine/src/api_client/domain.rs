@@ -157,7 +157,7 @@ async fn request_on(
         r#"
         SELECT id, workspace_id, name, collection_id, parent_folder_id,
                sort_order, auth_json, method, url, headers_json, query_json,
-               body, body_kind, pre_request_script, post_response_script,
+               body, body_kind, settings_json, pre_request_script, post_response_script,
                script_schema_version, created_at, updated_at, deleted_at,
                revision, sync_status, remote_id
         FROM api_requests
@@ -238,7 +238,7 @@ async fn list_requests_on(
         r#"
         SELECT id, workspace_id, name, collection_id, parent_folder_id,
                sort_order, auth_json, method, url, headers_json, query_json,
-               body, body_kind, pre_request_script, post_response_script,
+               body, body_kind, settings_json, pre_request_script, post_response_script,
                script_schema_version, created_at, updated_at, deleted_at,
                revision, sync_status, remote_id
         FROM api_requests

@@ -6,6 +6,7 @@ export const requestConfigTabs: Array<{ id: RequestParamsTab; labelKey: string }
   { id: "headers", labelKey: "api.request.tabs.headers" },
   { id: "body", labelKey: "api.request.tabs.body" },
   { id: "scripts", labelKey: "api.request.tabs.scripts" },
+  { id: "settings", labelKey: "api.request.tabs.settings" },
 ];
 
 export function methodBadgeLabel(method: string) {

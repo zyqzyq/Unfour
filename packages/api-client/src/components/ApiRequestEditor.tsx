@@ -23,11 +23,13 @@ export function ApiRequestEditor({
   onQueryChange,
   onRawBodyTypeChange,
   onTabChange,
+  onTimeoutChange,
   query,
   rawBodyType,
   postResponseScript,
   preRequestScript,
   tab,
+  timeoutMs,
 }: {
   auth: ApiAuthConfig;
   body: string;
@@ -44,11 +46,13 @@ export function ApiRequestEditor({
   onQueryChange: (items: KeyValue[]) => void;
   onRawBodyTypeChange: (value: RequestRawBodyType) => void;
   onTabChange: (tab: RequestParamsTab) => void;
+  onTimeoutChange: (value: number | null) => void;
   query: KeyValue[];
   rawBodyType: RequestRawBodyType;
   postResponseScript: string;
   preRequestScript: string;
   tab: RequestParamsTab;
+  timeoutMs: number | null;
 }) {
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -68,11 +72,13 @@ export function ApiRequestEditor({
         onQueryChange={onQueryChange}
         onRawBodyTypeChange={onRawBodyTypeChange}
         onTabChange={onTabChange}
+        onTimeoutChange={onTimeoutChange}
         query={query}
         rawBodyType={rawBodyType}
         postResponseScript={postResponseScript}
         preRequestScript={preRequestScript}
         tab={tab}
+        timeoutMs={timeoutMs}
       />
     </section>
   );

@@ -43,6 +43,7 @@ fn request(id: &str, method: &str, url: &str) -> ApiSavedRequest {
         pre_request_script: None,
         post_response_script: None,
         script_schema_version: 1,
+        settings_json: r#"{"timeoutMs":null}"#.to_string(),
         created_at: "2026-07-17T00:00:00Z".to_string(),
         updated_at: "2026-07-17T00:00:00Z".to_string(),
         deleted_at: None,
@@ -141,6 +142,18 @@ fn request_scripts_are_preserved_as_unfour_extensions() {
         "pm.test('ok', () => {})"
     );
     assert_eq!(operation["x-unfour-script-schema-version"], 1);
+}
+
+#[test]
+fn request_settings_are_preserved_as_an_unfour_extension() {
+    let mut configured = request("request-configured", "GET", "https://api.example.com/run");
+    configured.settings_json = r#"{"timeoutMs":120000}"#.to_string();
+
+    let value = document_json(&source(vec![configured]));
+    assert_eq!(
+        value["paths"]["/run"]["get"]["x-unfour-request-settings"]["timeoutMs"],
+        120_000
+    );
 }
 
 #[test]

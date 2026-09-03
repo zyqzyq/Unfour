@@ -25,6 +25,12 @@ pub enum AppError {
     ReadOnly(String),
     #[error("timeout: {0}")]
     Timeout(String),
+    #[error("API request timed out: {0}")]
+    ApiTimeout(String),
+    #[error("API network error: {0}")]
+    ApiNetwork(String),
+    #[error("API request cancelled: {0}")]
+    ApiCancelled(String),
     #[error("confirmation required: {message}")]
     ConfirmationRequired {
         message: String,
@@ -49,6 +55,9 @@ impl AppError {
             AppError::Validation(_) => "VALIDATION_ERROR",
             AppError::ReadOnly(_) => "READ_ONLY_CONNECTION",
             AppError::Timeout(_) => "QUERY_TIMEOUT",
+            AppError::ApiTimeout(_) => "API_TIMEOUT",
+            AppError::ApiNetwork(_) => "NETWORK_ERROR",
+            AppError::ApiCancelled(_) => "API_CANCELLED",
             AppError::ConfirmationRequired { .. } => "CONFIRMATION_REQUIRED",
             AppError::RowConflict(_) => "ROW_CONFLICT",
         }

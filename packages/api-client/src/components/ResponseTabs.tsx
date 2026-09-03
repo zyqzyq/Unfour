@@ -1,5 +1,5 @@
 import { responseCookies } from "./response-tab-helpers";
-import { AlertCircle, Copy, Send } from "lucide-react";
+import { AlertCircle, Ban, Copy, Send } from "lucide-react";
 import { Button, useI18n } from "@unfour/ui";
 import { formatByteSize } from "../request-utils";
 import {
@@ -102,7 +102,11 @@ export function ResponseTabs({
         />
       )}
       <div className="min-h-0 flex-1 overflow-hidden">
-        {responseState === "sending" && <SendingState />}
+        <ExecutionProgress
+          isScriptTab={isScriptTab}
+          responseState={responseState}
+          responseTab={tab.responseTab}
+        />
         {responseState === "idle" && tab.responseTab !== "request" && !isScriptTab && (
           <ResponsePaneState
             description={t("api.response.emptyDescription")}
@@ -162,7 +166,7 @@ export function ResponseTabs({
               </Button>
             </ResponsePaneState>
           )}
-        {responseState !== "sending" && tab.responseTab === "request" && (
+        {responseState !== "sending" && responseState !== "cancelling" && tab.responseTab === "request" && (
           <RequestSnapshot request={tab.lastRequest} />
         )}
         {responseState !== "sending" &&
@@ -196,5 +200,30 @@ export function ResponseTabs({
         )}
       </div>
     </section>
+  );
+}
+
+function ExecutionProgress({
+  isScriptTab,
+  responseState,
+  responseTab,
+}: {
+  isScriptTab: boolean;
+  responseState: ReturnType<typeof deriveTabResponseState>;
+  responseTab: ResponseTab;
+}) {
+  const { t } = useI18n();
+  if (responseState === "sending") return <SendingState />;
+  if (responseState === "cancelling") return <SendingState cancelling />;
+  if (responseState !== "cancelled" || responseTab === "request" || isScriptTab) {
+    return null;
+  }
+  return (
+    <ResponsePaneState
+      description={t("api.response.cancelledDescription")}
+      icon={<Ban size={24} />}
+      title={t("api.response.cancelledTitle")}
+      tone="empty"
+    />
   );
 }

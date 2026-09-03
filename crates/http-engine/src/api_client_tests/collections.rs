@@ -537,7 +537,7 @@ async fn unfour_openapi_export_imports_as_a_new_workspace_scoped_collection() {
             }],
             body: Some(r#"{"amount":1999}"#.to_string()),
             body_kind: "json".to_string(),
-            timeout_ms: None,
+            timeout_ms: Some(120_000),
             pre_request_script: Some(
                 "pm.request.headers.upsert({ key: 'X-Script', value: 'pre' });".to_string(),
             ),
@@ -619,6 +619,7 @@ async fn unfour_openapi_export_imports_as_a_new_workspace_scoped_collection() {
         Some("pm.test('status', () => pm.expect(pm.response.code).to.equal(200));")
     );
     assert_eq!(requests[0].script_schema_version, 1);
+    assert_eq!(requests[0].settings_json, r#"{"timeoutMs":120000}"#);
 }
 
 #[tokio::test]

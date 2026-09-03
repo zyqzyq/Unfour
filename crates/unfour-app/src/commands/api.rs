@@ -3,9 +3,10 @@ use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 use unfour_core::{
     models::{
-        ApiCollection, ApiCollectionExportFormat, ApiCollectionExportResult, ApiCollectionFolder,
-        ApiCollectionImportResult, ApiEnvironment, ApiHistoryDetail, ApiHistoryItem,
-        ApiRequestInput, ApiResponse, ApiSavedRequest, KeyValue, RequestExecutionResult,
+        ApiClientPreferences, ApiCollection, ApiCollectionExportFormat, ApiCollectionExportResult,
+        ApiCollectionFolder, ApiCollectionImportResult, ApiEnvironment, ApiHistoryDetail,
+        ApiHistoryItem, ApiRequestInput, ApiResponse, ApiSavedRequest, KeyValue,
+        RequestExecutionResult,
     },
     AppError, AppResult,
 };
@@ -296,14 +297,43 @@ pub async fn api_send_request(
 
 #[tauri::command]
 pub async fn api_send_request_v2(
+    execution_id: String,
     input: ApiRequestInput,
     state: State<'_, AppState>,
 ) -> AppResult<RequestExecutionResult> {
     trace_command(
         "api_send_request_v2",
-        state.command_bus.send_api_request_with_scripts(input),
+        state
+            .command_bus
+            .send_api_request_with_scripts_controlled(&execution_id, input),
     )
     .await
+}
+
+#[tauri::command]
+pub async fn api_cancel_request(
+    execution_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<bool> {
+    Ok(state.command_bus.cancel_api_request(&execution_id))
+}
+
+#[tauri::command]
+pub async fn api_client_preferences_get(
+    state: State<'_, AppState>,
+) -> AppResult<ApiClientPreferences> {
+    state.command_bus.api_client_preferences().await
+}
+
+#[tauri::command]
+pub async fn api_client_preferences_update(
+    preferences: ApiClientPreferences,
+    state: State<'_, AppState>,
+) -> AppResult<ApiClientPreferences> {
+    state
+        .command_bus
+        .update_api_client_preferences(preferences)
+        .await
 }
 
 #[tauri::command]

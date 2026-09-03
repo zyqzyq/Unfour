@@ -25,11 +25,18 @@ export function ResponseStatus({
 }) {
   const { t } = useI18n();
 
-  if (!response) {
-    const tone = state === "sending" ? "amber" : state === "idle" ? "neutral" : "red";
+  if (!response || state === "cancelling" || state === "cancelled") {
+    const tone =
+      state === "sending" || state === "cancelling"
+        ? "amber"
+        : state === "idle" || state === "cancelled"
+          ? "neutral"
+          : "red";
     return (
       <Badge className="h-[21px] gap-1.5 rounded-full px-2.5 text-[11px]" tone={tone}>
-        {state === "sending" && <Loader2 className="animate-spin" size={11} />}
+        {(state === "sending" || state === "cancelling") && (
+          <Loader2 className="animate-spin" size={11} />
+        )}
         {state === "idle" ? t("api.response.status.noResponse") : responseStateLabel(state, t)}
       </Badge>
     );
@@ -237,13 +244,13 @@ export function RequestKeyValueReadout({
   );
 }
 
-export function SendingState() {
+export function SendingState({ cancelling = false }: { cancelling?: boolean }) {
   const { t } = useI18n();
   return (
     <div className="flex h-full flex-col gap-4 p-5">
       <div className="flex items-center gap-2 text-[12px] text-[var(--u-color-text-muted)]">
         <Loader2 className="animate-spin text-[var(--u-color-primary)]" size={15} />
-        {t("api.response.sendingDescription")}
+        {t(cancelling ? "api.response.cancellingDescription" : "api.response.sendingDescription")}
       </div>
       <div className="flex max-w-xl animate-pulse flex-col gap-2">
         {[40, 86, 72, 80, 54, 68, 44].map((width) => (

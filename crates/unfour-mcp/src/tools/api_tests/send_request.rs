@@ -202,6 +202,7 @@ fn send_request_blocks_scripted_saved_get_in_prod() {
                             ),
                             post_response_script: None,
                             script_schema_version: 1,
+                            settings_json: r#"{"timeoutMs":null}"#.to_string(),
                             created_at: String::new(),
                             updated_at: String::new(),
                             deleted_at: None,
@@ -278,9 +279,9 @@ fn send_request_blocks_scripted_saved_get_in_prod() {
 }
 
 #[test]
-fn send_request_clamps_timeout_to_60s() {
-    // Sending with 120000ms should be clamped - the stub ignores timeout,
-    // but we verify the tool doesn't reject the call
+fn send_request_accepts_timeout_above_the_mcp_default() {
+    // Exact forwarding is covered at the parser and command-bus boundary;
+    // this verifies the public tool contract accepts the explicit value.
     let result = api_registry()
         .call(
             "unfour.api.send_request",

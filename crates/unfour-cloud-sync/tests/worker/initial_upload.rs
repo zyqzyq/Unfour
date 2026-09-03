@@ -241,10 +241,15 @@ async fn api_initial_upload_uses_core_snapshots_and_existing_push_pipeline() {
                 "preRequestScript",
                 "query",
                 "scriptSchemaVersion",
+                "settingsJson",
                 "sortOrder",
                 "updatedAt",
                 "url",
             ],
+        );
+        assert_eq!(
+            request_op.payload.as_ref().unwrap()["settingsJson"],
+            serde_json::json!(r#"{"timeoutMs":12345}"#)
         );
         for forbidden in [
             "id",
