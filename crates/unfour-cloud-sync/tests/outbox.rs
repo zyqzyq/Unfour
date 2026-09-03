@@ -208,13 +208,32 @@ async fn local_only_mutation_does_not_wake_the_sync_worker() {
         Arc::new(FixedClock),
         Some(trigger),
     ));
-    let bus = CommandBus::from_db_with_extensions(db, CommandBusExtensions::new(vec![hook]))
+    let bus =
+        CommandBus::from_db_with_extensions(db.clone(), CommandBusExtensions::new(vec![hook]))
+            .await
+            .unwrap();
+
+    let created = bus
+        .workspace_variable_create(
+            workspace_id.clone(),
+            variable(None, "LOCAL_ONLY", "value", false),
+        )
         .await
         .unwrap();
 
-    bus.workspace_variable_create(workspace_id, variable(None, "LOCAL_ONLY", "value", false))
+    let business: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM workspace_variables WHERE workspace_id = ?1 AND id = ?2",
+    )
+    .bind(&workspace_id)
+    .bind(&created.id)
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    let outbox: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM cloud_sync_outbox")
+        .fetch_one(db.pool())
         .await
         .unwrap();
+    assert_eq!((business, outbox), (1, 0));
 
     assert!(matches!(
         receiver.try_recv(),

@@ -9,8 +9,8 @@ use crate::{SyncBinding, SyncError, SyncWorkspaceOwner};
 
 impl SyncRepository {
     /// Resolve the one Cloud Sync owner for a local workspace. The explicit
-    /// ownership row is authoritative once present; the binding fallback keeps
-    /// this resolver safe for databases that are observed during migration.
+    /// ownership row is the authoritative runtime source; bindings without
+    /// that metadata are invariant violations rather than an implicit owner.
     pub async fn resolve_cloud_sync_owner(
         &self,
         workspace_id: &str,
@@ -55,10 +55,7 @@ impl SyncRepository {
         .await?;
         match bindings.as_slice() {
             [] => Ok(None),
-            [(account_id, cloud_workspace_id)] => Ok(Some(SyncWorkspaceOwner {
-                account_id: account_id.clone(),
-                cloud_workspace_id: cloud_workspace_id.clone(),
-            })),
+            [_] => Err(SyncError::WorkspaceOwnershipInvariant),
             _ => Err(SyncError::WorkspaceOwnershipAmbiguous),
         }
     }

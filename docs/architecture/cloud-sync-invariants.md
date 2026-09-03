@@ -37,6 +37,12 @@ transfer it. Rebinding is an explicit future ownership transition; it is not
 an implicit side effect of Enable. Historical duplicate bindings are retained
 for data safety but are unresolved until an explicit repair/rebind flow exists.
 
+`cloud_sync_workspace_ownership` is the authoritative runtime ownership source.
+When a binding exists without its matching ownership row, runtime resolution
+fails closed with an ownership invariant error; a binding is never treated as
+an implicit owner. A workspace is unbound only when it has neither an ownership
+row nor a Cloud Sync binding.
+
 ## Mutation routing invariant
 
 Every local mutation resolves exactly one owner before it is captured. An
