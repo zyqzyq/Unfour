@@ -932,5 +932,6 @@ impl CommandBusAdapterError {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 #[path = "command_bus_adapter_tests/mod.rs"]
 mod command_bus_adapter_tests;

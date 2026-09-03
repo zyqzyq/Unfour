@@ -251,5 +251,6 @@ pub(super) fn object_with_allowed_keys(
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 #[path = "tools_tests/mod.rs"]
 mod tools_tests;

@@ -22,7 +22,6 @@ fn cloud_sync_migrator() -> Migrator {
 
 #[cfg(test)]
 mod tests {
-    #[path = "../ownership_tests.rs"]
     mod ownership;
 
     use super::*;

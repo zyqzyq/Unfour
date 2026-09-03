@@ -356,5 +356,6 @@ fn handle_stdio_line<W: Write>(server: &McpServer, line: &str, writer: &mut W) -
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 #[path = "server_tests/mod.rs"]
 mod server_tests;
