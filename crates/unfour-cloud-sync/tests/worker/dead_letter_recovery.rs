@@ -829,3 +829,95 @@ async fn incremental_dead_letter_retry_uses_current_local_payload_and_server_bas
     assert_eq!(operation.payload.unwrap()["value"], "current local value");
     assert_eq!(restarted.status(&workspace_id).await.unwrap().dead_count, 0);
 }
+
+#[tokio::test]
+async fn api_request_invalid_entity_dead_letter_retry_rematerializes_current_settings() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let transport = Arc::new(MockTransport::new());
+    let (service, hook, _) = SyncRuntime::build(db.clone(), transport.clone());
+    service.enable(&workspace_id).await.unwrap();
+    let bus =
+        CommandBus::from_db_with_extensions(db.clone(), CommandBusExtensions::new(vec![hook]))
+            .await
+            .unwrap();
+    let collection = bus
+        .api_collection_create(workspace_id.clone(), "Retry API".into())
+        .await
+        .unwrap();
+    service.sync_workspace(&workspace_id).await.unwrap();
+
+    let mut input = saved_api_request(&workspace_id, &collection.id, None);
+    input.timeout_ms = None;
+    let request = bus.save_api_request(input).await.unwrap();
+    transport.fail_operation_once(&request.id, "invalid_sync_entity");
+    assert!(matches!(
+        service.sync_workspace(&workspace_id).await,
+        Err(SyncError::Permanent)
+    ));
+
+    let failed = service.status(&workspace_id).await.unwrap();
+    let old_operation_id = failed.dead_letters[0].operation_id.clone();
+    let old_payload = transport
+        .pushes
+        .lock()
+        .unwrap()
+        .iter()
+        .flat_map(|push| push.operations.iter())
+        .find(|operation| operation.entity_id == request.id)
+        .and_then(|operation| operation.payload.clone())
+        .expect("failed request payload");
+    assert_eq!(
+        old_payload["settingsJson"],
+        serde_json::json!(r#"{"timeoutMs":null}"#)
+    );
+
+    // Model an old dead row whose wire payload predates settingsJson while
+    // Core already contains the current execution setting. Keep the row dead
+    // so the explicit recovery state machine, rather than a local mutation,
+    // has to rematerialize it.
+    let mut legacy_payload = old_payload;
+    legacy_payload
+        .as_object_mut()
+        .expect("request payload object")
+        .remove("settingsJson");
+    sqlx::query("UPDATE cloud_sync_outbox SET canonical_payload_json = ?1 WHERE operation_id = ?2")
+        .bind(serde_json::to_string(&legacy_payload).unwrap())
+        .bind(&old_operation_id)
+        .execute(db.pool())
+        .await
+        .unwrap();
+    sqlx::query(
+        "UPDATE api_requests SET settings_json = ?1, revision = revision + 1 WHERE id = ?2",
+    )
+    .bind(r#"{"timeoutMs":30000}"#)
+    .bind(&request.id)
+    .execute(db.pool())
+    .await
+    .unwrap();
+
+    let new_operation_id = service
+        .retry_dead_letter_current_local(&workspace_id, &old_operation_id)
+        .await
+        .unwrap();
+    let repaired = transport
+        .pushes
+        .lock()
+        .unwrap()
+        .iter()
+        .flat_map(|push| push.operations.iter())
+        .find(|operation| operation.operation_id == new_operation_id)
+        .cloned()
+        .expect("rematerialized request push");
+    assert_ne!(new_operation_id, old_operation_id);
+    assert_eq!(repaired.payload_schema_version, PAYLOAD_SCHEMA_VERSION);
+    assert_eq!(
+        repaired.payload.as_ref().unwrap()["settingsJson"],
+        serde_json::json!(r#"{"timeoutMs":30000}"#)
+    );
+    let status = service.status(&workspace_id).await.unwrap();
+    assert_eq!(status.dead_count, 0);
+    assert_eq!(status.conflict_count, 0);
+    assert_eq!(status.binding.unwrap().state, "active");
+}

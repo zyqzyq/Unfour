@@ -230,7 +230,7 @@ fn api_json_fixtures_match_final_openapi_models() {
         "serverVersion":1,"payloadSchemaVersion":1,"payload":{
           "collectionId":"collection-1","parentFolderId":"folder-1","name":"List accounts",
           "sortOrder":0,"authJson":"{}","method":"GET","url":"https://example.test/accounts",
-          "headers":[],"query":[],"body":null,"bodyKind":"none","preRequestScript":null,
+          "headers":[],"query":[],"body":null,"bodyKind":"none","settingsJson":"{\"timeoutMs\":null}","preRequestScript":null,
           "postResponseScript":null,"scriptSchemaVersion":1,"createdAt":"2026-07-28T00:00:00Z",
           "updatedAt":"2026-07-28T00:00:00Z"
         }
@@ -495,13 +495,13 @@ async fn http_error_envelope_classifies_409_protocol_and_auth_without_guessing()
 
     let (transport, server) = transport_with_response(
         "400 Bad Request",
-        r#"{"error":{"code":"invalid_parent_entity","message":"parent is invalid","requestId":"r-operation","details":{"operationId":"failed-operation"}}}"#,
+        r#"{"error":{"code":"invalid_sync_entity","message":"operation is invalid","requestId":"r-operation","details":{"operationId":"failed-operation","operationIndex":1,"entityType":"apiRequest","entityId":"request-1","errorCode":"invalid_sync_entity"}}}"#,
     )
     .await;
     assert!(matches!(
         transport.push("cloud", &request).await,
         Err(TransportError::PermanentOperation { code, operation_id })
-            if code == "invalid_parent_entity" && operation_id == "failed-operation"
+            if code == "invalid_sync_entity" && operation_id == "failed-operation"
     ));
     server.await.unwrap();
 

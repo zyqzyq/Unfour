@@ -330,3 +330,115 @@ async fn gapped_changes_page_does_not_advance_the_pull_cursor() {
     .unwrap();
     assert_eq!(applied, 0);
 }
+
+#[tokio::test]
+async fn remote_api_request_changes_apply_each_settings_json_without_resetting_it() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let collection = seed
+        .api_collection_create(workspace_id.clone(), "Remote API".into())
+        .await
+        .unwrap();
+    let folder = seed
+        .api_collection_folder_create(
+            workspace_id.clone(),
+            collection.id.clone(),
+            None,
+            "Requests".into(),
+        )
+        .await
+        .unwrap();
+    let transport = Arc::new(MockTransport::new());
+    let (service, _, _) = SyncRuntime::build(db.clone(), transport.clone());
+    service.enable(&workspace_id).await.unwrap();
+    let binding = service
+        .status(&workspace_id)
+        .await
+        .unwrap()
+        .binding
+        .unwrap();
+    let base = binding.last_pulled_cursor;
+
+    let remote_request = |cursor: i64, operation_id: &str, settings_json: &str| RemoteChange {
+        cursor,
+        operation_id: operation_id.into(),
+        entity_type: SyncEntityType::ApiRequest,
+        entity_id: "remote-request".into(),
+        parent_entity_id: Some(folder.id.clone()),
+        operation: SyncOperation::Upsert,
+        server_version: cursor,
+        payload_schema_version: PAYLOAD_SCHEMA_VERSION,
+        payload: Some(serde_json::json!({
+            "collectionId": collection.id.clone(),
+            "parentFolderId": folder.id.clone(),
+            "name": "Remote request",
+            "sortOrder": 0,
+            "authJson": "{}",
+            "method": "GET",
+            "url": "https://example.test/remote",
+            "headers": [],
+            "query": [],
+            "body": null,
+            "bodyKind": "none",
+            "settingsJson": settings_json,
+            "preRequestScript": null,
+            "postResponseScript": null,
+            "scriptSchemaVersion": 1,
+            "createdAt": "2026-08-13T00:00:00Z",
+            "updatedAt": "2026-08-13T00:00:00Z"
+        })),
+        deleted_at: None,
+    };
+
+    transport.changes.lock().unwrap().push_back(ChangesPage {
+        protocol_version: PROTOCOL_VERSION,
+        cloud_workspace_id: binding.cloud_workspace_id.clone(),
+        current_cursor: base + 1,
+        next_cursor: base + 1,
+        changes: vec![remote_request(
+            base + 1,
+            "remote-request-default",
+            r#"{"timeoutMs":null}"#,
+        )],
+    });
+    service.sync_workspace(&workspace_id).await.unwrap();
+    let first_settings: String =
+        sqlx::query_scalar("SELECT settings_json FROM api_requests WHERE id = 'remote-request'")
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert_eq!(first_settings, r#"{"timeoutMs":null}"#);
+
+    transport.changes.lock().unwrap().push_back(ChangesPage {
+        protocol_version: PROTOCOL_VERSION,
+        cloud_workspace_id: binding.cloud_workspace_id,
+        current_cursor: base + 2,
+        next_cursor: base + 2,
+        changes: vec![remote_request(
+            base + 2,
+            "remote-request-custom",
+            r#"{"timeoutMs":30000}"#,
+        )],
+    });
+    service.sync_workspace(&workspace_id).await.unwrap();
+    let second_settings: String =
+        sqlx::query_scalar("SELECT settings_json FROM api_requests WHERE id = 'remote-request'")
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert_eq!(second_settings, r#"{"timeoutMs":30000}"#);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM cloud_sync_outbox WHERE entity_id = 'remote-request'",
+        )
+        .fetch_one(db.pool())
+        .await
+        .unwrap(),
+        0
+    );
+    assert_eq!(
+        service.status(&workspace_id).await.unwrap().conflict_count,
+        0
+    );
+}

@@ -6,7 +6,7 @@ use super::SyncRepository;
 use crate::canonical::canonical_snapshot_intent;
 use crate::{
     Clock, DeadLetterView, IdGenerator, OutboxEntry, SnapshotItem, SyncBinding, SyncEntityType,
-    SyncError,
+    SyncError, PAYLOAD_SCHEMA_VERSION,
 };
 
 impl SyncRepository {
@@ -301,7 +301,6 @@ impl SyncRepository {
         if operation_id_was_used {
             return Err(SyncError::InvalidData);
         }
-        Self::revive_legacy_batch_peers_on(&mut tx, binding, &entry, now).await?;
         let snapshot = canonical_snapshot_intent(snapshot)?;
         if snapshot.entity.workspace_id != binding.local_workspace_id
             || snapshot.entity.entity_id != entry.entity_id
@@ -309,18 +308,6 @@ impl SyncRepository {
         {
             return Err(SyncError::InvalidData);
         }
-        Self::enqueue_intent_on(
-            &mut tx,
-            &binding.account_id,
-            &binding.local_workspace_id,
-            &binding.cloud_workspace_id,
-            &snapshot.entity.entity_id,
-            snapshot.revision,
-            snapshot.intent,
-            new_operation_id.clone(),
-            now,
-        )
-        .await?;
         let reliable_base_version: i64 = sqlx::query_scalar(
             r#"SELECT MAX(?1, COALESCE((
                  SELECT server_version FROM cloud_sync_entity_state
@@ -335,15 +322,36 @@ impl SyncRepository {
         .bind(&entry.entity_id)
         .fetch_one(&mut *tx)
         .await?;
+        // Reviving a dead row is a recovery transition, not a normal local
+        // enqueue. Rewrite the same durable head from the freshly read Core
+        // snapshot so an old canonical payload (or an old content revision)
+        // can never be sent again. Keep the old operation's attempt row as
+        // history while assigning a new id to the pending operation.
+        Self::revive_legacy_batch_peers_on(&mut tx, binding, &entry, now).await?;
         let changed = sqlx::query(
-            r#"UPDATE cloud_sync_outbox SET base_version = ?1
-               WHERE account_id = ?2 AND local_workspace_id = ?3
-                 AND operation_id = ?4 AND status = 'pending'"#,
+            r#"UPDATE cloud_sync_outbox SET
+                 operation_id = ?1, parent_entity_id = ?2, operation = ?3,
+                 base_version = ?4, payload_schema_version = ?5,
+                 canonical_payload_json = ?6, deleted_at = ?7,
+                 content_revision = ?8, status = 'pending', attempt_count = 0,
+                 next_attempt_at = NULL, lease_owner = NULL,
+                 lease_started_at = NULL, lease_expires_at = NULL,
+                 last_error = NULL, updated_at = ?9
+               WHERE account_id = ?10 AND local_workspace_id = ?11
+                 AND operation_id = ?12 AND status = 'dead'"#,
         )
+        .bind(&new_operation_id)
+        .bind(&snapshot.intent.parent_entity_id)
+        .bind(snapshot.intent.operation.as_str())
         .bind(reliable_base_version)
+        .bind(PAYLOAD_SCHEMA_VERSION)
+        .bind(&snapshot.intent.payload_json)
+        .bind(&snapshot.intent.deleted_at)
+        .bind(snapshot.revision)
+        .bind(now.to_rfc3339())
         .bind(&binding.account_id)
         .bind(&binding.local_workspace_id)
-        .bind(&new_operation_id)
+        .bind(&entry.operation_id)
         .execute(&mut *tx)
         .await?
         .rows_affected();

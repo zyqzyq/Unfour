@@ -1,8 +1,8 @@
 use super::*;
 use unfour_core::domain::{
     ApiCollectionSnapshot, ApiFolderSnapshot, ApiRequestSnapshot, ConnectionSnapshot,
-    ConnectionSnapshotConfig, DomainSnapshot, ExternalConnectionApply, SshTaskSnapshot,
-    SshTaskStepSnapshot, TombstoneSnapshot, WorkspaceVariableSnapshot,
+    ConnectionSnapshotConfig, DomainSnapshot, ExternalApiRequestApply, ExternalConnectionApply,
+    SshTaskSnapshot, SshTaskStepSnapshot, TombstoneSnapshot, WorkspaceVariableSnapshot,
 };
 
 #[test]
@@ -226,7 +226,7 @@ fn api_snapshots_map_to_strict_canonical_payloads_and_parents() {
         pre_request_script: Some("console.log('pre')".into()),
         post_response_script: Some("console.log('post')".into()),
         script_schema_version: 1,
-        settings_json: r#"{"timeoutMs":120000}"#.into(),
+        settings_json: r#"{"timeoutMs":null}"#.into(),
         created_at: "2026-08-13T00:00:00Z".into(),
         updated_at: "2026-08-13T01:00:00Z".into(),
         revision: 9,
@@ -236,7 +236,11 @@ fn api_snapshots_map_to_strict_canonical_payloads_and_parents() {
     assert_eq!(request.intent.parent_entity_id.as_deref(), Some("folder-1"));
     let payload: Value =
         serde_json::from_str(request.intent.payload_json.as_deref().unwrap()).unwrap();
-    for expected in [
+    assert_eq!(
+        payload["settingsJson"],
+        serde_json::json!(r#"{"timeoutMs":null}"#)
+    );
+    let expected = [
         "collectionId",
         "parentFolderId",
         "name",
@@ -254,9 +258,11 @@ fn api_snapshots_map_to_strict_canonical_payloads_and_parents() {
         "settingsJson",
         "createdAt",
         "updatedAt",
-    ] {
-        assert!(payload.get(expected).is_some(), "missing {expected}");
+    ];
+    for expected in expected.iter() {
+        assert!(payload.get(*expected).is_some(), "missing {expected}");
     }
+    assert_eq!(payload.as_object().unwrap().len(), expected.len());
     for forbidden in [
         "id",
         "workspaceId",
@@ -293,6 +299,82 @@ fn api_remote_changes_decode_to_external_apply_pages_and_tombstones() {
     };
     let page = parse_remote_change("workspace-1", &folder).expect("folder page");
     assert_eq!(page.api_folders.len(), 1);
+
+    for (index, settings_json) in [r#"{"timeoutMs":null}"#, r#"{"timeoutMs":30000}"#]
+        .iter()
+        .enumerate()
+    {
+        let request = RemoteChange {
+            cursor: 2,
+            operation_id: format!("remote-request-{index}"),
+            entity_type: SyncEntityType::ApiRequest,
+            entity_id: "request-1".into(),
+            parent_entity_id: Some("folder-1".into()),
+            operation: SyncOperation::Upsert,
+            server_version: 1,
+            payload_schema_version: PAYLOAD_SCHEMA_VERSION,
+            payload: Some(serde_json::json!({
+                "collectionId": "collection-1",
+                "parentFolderId": "folder-1",
+                "name": "List accounts",
+                "sortOrder": 0,
+                "authJson": "{}",
+                "method": "GET",
+                "url": "https://example.test/accounts",
+                "headers": [],
+                "query": [],
+                "body": null,
+                "bodyKind": "none",
+                "settingsJson": settings_json,
+                "preRequestScript": null,
+                "postResponseScript": null,
+                "scriptSchemaVersion": 1,
+                "createdAt": "2026-08-13T00:00:00Z",
+                "updatedAt": "2026-08-13T00:00:00Z"
+            })),
+            deleted_at: None,
+        };
+        let page = parse_remote_change("workspace-1", &request).expect("request page");
+        let ExternalApiRequestApply::Upsert(record) = &page.api_requests[0] else {
+            panic!("expected API request upsert");
+        };
+        assert_eq!(record.settings_json, *settings_json);
+    }
+
+    let legacy_request = RemoteChange {
+        cursor: 3,
+        operation_id: "legacy-request".into(),
+        entity_type: SyncEntityType::ApiRequest,
+        entity_id: "request-legacy".into(),
+        parent_entity_id: Some("folder-1".into()),
+        operation: SyncOperation::Upsert,
+        server_version: 1,
+        payload_schema_version: PAYLOAD_SCHEMA_VERSION,
+        payload: Some(serde_json::json!({
+            "collectionId": "collection-1",
+            "parentFolderId": "folder-1",
+            "name": "Legacy request",
+            "sortOrder": 0,
+            "authJson": "{}",
+            "method": "GET",
+            "url": "https://example.test/legacy",
+            "headers": [],
+            "query": [],
+            "body": null,
+            "bodyKind": "none",
+            "preRequestScript": null,
+            "postResponseScript": null,
+            "scriptSchemaVersion": 1,
+            "createdAt": "2026-08-13T00:00:00Z",
+            "updatedAt": "2026-08-13T00:00:00Z"
+        })),
+        deleted_at: None,
+    };
+    let legacy_page = parse_remote_change("workspace-1", &legacy_request).unwrap();
+    let ExternalApiRequestApply::Upsert(record) = &legacy_page.api_requests[0] else {
+        panic!("expected legacy API request upsert");
+    };
+    assert_eq!(record.settings_json, r#"{"timeoutMs":null}"#);
 
     let delete = canonical_snapshot_intent(DomainSnapshot::Tombstone(TombstoneSnapshot {
         entity: DomainEntityKey::new(DomainEntityType::ApiRequest, "workspace-1", "request-1")

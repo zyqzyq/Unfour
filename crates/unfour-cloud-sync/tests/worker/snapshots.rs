@@ -257,6 +257,7 @@ async fn full_snapshot_download_restores_api_tree_through_core_external_apply() 
                     "query": [],
                     "body": null,
                     "bodyKind": "none",
+                    "settingsJson": "{\"timeoutMs\":30000}",
                     "preRequestScript": null,
                     "postResponseScript": null,
                     "scriptSchemaVersion": 1,
@@ -286,11 +287,18 @@ async fn full_snapshot_download_restores_api_tree_through_core_external_apply() 
     .await
     .unwrap();
     assert_eq!(restored, (1, 2, 1));
-    let location: (String, Option<String>) = sqlx::query_as(
-        "SELECT collection_id, parent_folder_id FROM api_requests WHERE id = 'request-1'",
+    let location: (String, Option<String>, String) = sqlx::query_as(
+        "SELECT collection_id, parent_folder_id, settings_json FROM api_requests WHERE id = 'request-1'",
     )
     .fetch_one(db.pool())
     .await
     .unwrap();
-    assert_eq!(location, ("collection-1".into(), Some("a-child".into())));
+    assert_eq!(
+        location,
+        (
+            "collection-1".into(),
+            Some("a-child".into()),
+            r#"{"timeoutMs":30000}"#.into()
+        )
+    );
 }
