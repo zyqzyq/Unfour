@@ -48,6 +48,7 @@ const translations: Record<string, string> = {
   "cloudSync.openCloudWorkspace": "Open Cloud Workspace",
   "cloudSync.contextUnavailable": "Cloud Sync unavailable",
   "cloudSync.contextUnavailableDescription": "Account is current, but sync is unavailable.",
+  "cloudSync.errors.invalidData": "The cloud could not recognize this local change.",
   "cloudSync.status.synced": "Synced",
   "cloudSync.status.syncing": "Syncing",
   "cloudSync.status.paused": "Paused",
@@ -397,6 +398,7 @@ describe("Cloud Sync UI", () => {
     render(<WorkspaceSyncDialog />);
     expect(screen.getByText("API_HOST")).toBeTruthy();
     expect(screen.getByText("Workspace variable")).toBeTruthy();
+    expect(screen.getByText("The cloud could not recognize this local change.")).toBeTruthy();
     expect(screen.getByText("invalid_sync_entity")).toBeTruthy();
     expect(screen.getByText("Changes pending")).toBeTruthy();
     expect(screen.getByText("Blocked changes")).toBeTruthy();

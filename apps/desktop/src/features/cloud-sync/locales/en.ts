@@ -88,7 +88,7 @@ const en = {
     offlineDescription: "Changes are kept locally and will retry automatically.",
     authRequiredDescription: "Sign in again to continue syncing. Your local changes will be kept.",
     capabilityRequiredDescription: "This account does not include Cloud Sync. Upgrade the plan to resume syncing; local changes will be kept.",
-    attentionDescription: "Some changes could not be synced automatically.",
+    attentionDescription: "Some changes need your attention; local changes are kept.",
   },
   conflict: {
     variableTitle: "Variable conflict",
@@ -107,7 +107,7 @@ const en = {
   },
   deadLetter: {
     title: "Changes requiring recovery",
-    description: "These local changes were permanently rejected and will not retry automatically.",
+    description: "These local changes were rejected by the cloud and will not retry automatically; local content is kept.",
     count: "Blocked changes",
     retryCurrentLocal: "Retry current local",
     useRemote: "Use cloud",
@@ -129,7 +129,10 @@ const en = {
   },
   errors: {
     network: "Cloud Sync cannot connect right now. Check your connection and try again.",
-    protocol: "This version of Unfour cannot use the current Cloud Sync service. Update the app and try again.",
+    server: "The Cloud Sync service cannot process this request right now. Try again shortly.",
+    protocol: "This app is not compatible with the current Cloud Sync protocol. Update the app and try again.",
+    invalidData: "The cloud could not recognize this local change, so automatic retries are paused. Update the app and retry, or use the cloud version.",
+    requestRejected: "The cloud rejected the sync request, which may indicate a client and service version mismatch. Update the app and try again.",
     context: "Cloud Sync is unavailable until its local account context is initialized.",
     capability: "This account does not include Cloud Sync.",
     relogin: "Your Cloud Sync session has expired. Sign out, then sign in again.",

@@ -29,6 +29,9 @@ function retryBlockCode(snapshot: AccountStateSnapshot | null | undefined): stri
   return null;
 }
 
+const ACCOUNT_SERVER_ERRORS = new Set(["internal_error", "not_ready"]);
+const ACCOUNT_PROTOCOL_ERRORS = new Set(["invalid_api_response", "method_not_allowed", "not_found"]);
+
 function refreshFailureCode(error: unknown): string {
   const code = syncErrorCode(error);
   if (["signed_out", "unauthorized", "desktop_session_expired"].includes(code)) {
@@ -36,9 +39,11 @@ function refreshFailureCode(error: unknown): string {
   }
   if (code === "entitlement_unavailable") return "cloud_sync_entitlement_required";
   if (code === "cloud_sync_account_changed") return code;
-  return code.startsWith("cloud_sync_") && code !== "cloud_sync_failed"
-    ? code
-    : "cloud_sync_transport_failed";
+  if (code === "api_unavailable") return "cloud_sync_transport_failed";
+  if (ACCOUNT_SERVER_ERRORS.has(code)) return "cloud_sync_server_unavailable";
+  if (ACCOUNT_PROTOCOL_ERRORS.has(code)) return "cloud_sync_protocol_incompatible";
+  if (code === "cloud_sync_failed") return "cloud_sync_transport_failed";
+  return code.startsWith("cloud_sync_") ? code : "cloud_sync_request_rejected";
 }
 
 export function CloudSyncProvider({ children }: { children: ReactNode }) {

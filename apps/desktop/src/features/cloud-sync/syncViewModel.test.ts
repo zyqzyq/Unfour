@@ -75,7 +75,11 @@ describe("getCloudSyncViewState", () => {
 
   it("keeps user-facing error categories distinct", () => {
     expect(syncErrorMessageKey("cloud_sync_transport_failed")).toBe("cloudSync.errors.network");
+    expect(syncErrorMessageKey("cloud_sync_server_unavailable")).toBe("cloudSync.errors.server");
     expect(syncErrorMessageKey("cloud_sync_protocol_incompatible")).toBe("cloudSync.errors.protocol");
+    expect(syncErrorMessageKey("invalid_sync_entity")).toBe("cloudSync.errors.invalidData");
+    expect(syncErrorMessageKey("cloud_sync_permanent_failure")).toBe("cloudSync.errors.requestRejected");
+    expect(syncErrorMessageKey("invalid_request")).toBe("cloudSync.errors.requestRejected");
     expect(syncErrorMessageKey("cloud_sync_context_unavailable")).toBe("cloudSync.errors.context");
     expect(syncErrorMessageKey("cloud_sync_entitlement_required")).toBe("cloudSync.errors.capability");
     expect(syncErrorMessageKey("cloud_sync_unauthorized")).toBe("cloudSync.errors.relogin");

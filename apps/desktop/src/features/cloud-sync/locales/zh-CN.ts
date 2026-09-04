@@ -88,7 +88,7 @@ const zhCN = {
     offlineDescription: "更改已保存在本地，恢复连接后会自动重试。",
     authRequiredDescription: "请重新登录账号，登录后会自动继续同步。",
     capabilityRequiredDescription: "此账号不具备云同步能力。升级套餐后可继续同步，本地更改会保留。",
-    attentionDescription: "部分更改无法自动同步。",
+    attentionDescription: "部分更改需要处理；本地更改会保留。",
   },
   conflict: {
     variableTitle: "变量冲突",
@@ -107,7 +107,7 @@ const zhCN = {
   },
   deadLetter: {
     title: "需要恢复的更改",
-    description: "这些本地更改已被永久拒绝，不会自动重试。",
+    description: "这些本地更改已被云端拒绝，不会自动重试；本地内容会保留。",
     count: "已阻塞更改",
     retryCurrentLocal: "按当前本地状态重试",
     useRemote: "使用云端",
@@ -129,7 +129,10 @@ const zhCN = {
   },
   errors: {
     network: "云同步暂时无法连接。请检查网络后重试。",
-    protocol: "当前版本无法使用云同步服务。请更新应用后重试。",
+    server: "云同步服务暂时无法处理请求，请稍后重试。",
+    protocol: "当前应用与云同步服务的协议不兼容，请更新应用后重试。",
+    invalidData: "云端无法识别这项本地更改，已停止自动重试。请更新应用后重试，或选择使用云端版本。",
+    requestRejected: "云端拒绝了同步请求，可能是应用与服务版本不匹配。请更新应用后重试。",
     context: "本地账号上下文完成初始化前，云同步不可用。",
     capability: "此账号不具备云同步能力。",
     relogin: "云同步登录状态已失效。请退出账号后重新登录。",

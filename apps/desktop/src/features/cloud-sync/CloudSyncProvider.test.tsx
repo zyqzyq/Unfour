@@ -328,4 +328,18 @@ describe("CloudSyncProvider account context boundary", () => {
     expect(screen.getByTestId("statuses")).toHaveTextContent("1");
     expect(mocks.syncNow).not.toHaveBeenCalled();
   });
+
+  it("does not present an account API rejection as a connectivity failure", async () => {
+    const accountValue = account(true, { kind: "ready" });
+    accountValue.refreshAccount = vi.fn().mockRejectedValue({ code: "invalid_request" });
+    mocks.account = accountValue;
+    render(<CloudSyncProvider><Probe /></CloudSyncProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("statuses")).toHaveTextContent("1"));
+    fireEvent.click(screen.getByRole("button", { name: "retry" }));
+
+    await waitFor(() => expect(screen.getByTestId("error"))
+      .toHaveTextContent("cloud_sync_request_rejected"));
+    expect(mocks.syncNow).not.toHaveBeenCalled();
+  });
 });

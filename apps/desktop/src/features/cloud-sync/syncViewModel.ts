@@ -2,8 +2,29 @@ import type { CloudSyncStatus, CloudSyncViewState } from "./syncTypes";
 
 const OFFLINE_ERRORS = new Set([
   "cloud_sync_transport_failed",
+  "cloud_sync_server_unavailable",
   "cloud_sync_temporarily_unavailable",
   "cloud_sync_timeout",
+]);
+
+const PROTOCOL_ERRORS = new Set([
+  "cloud_sync_protocol_incompatible",
+  "invalid_api_response",
+  "method_not_allowed",
+  "not_found",
+  "protocol_version_unsupported",
+]);
+
+const INVALID_DATA_ERRORS = new Set([
+  "cloud_sync_invalid_data",
+  "invalid_sync_entity",
+]);
+
+const REQUEST_REJECTED_ERRORS = new Set([
+  "cloud_sync_permanent_failure",
+  "cloud_sync_request_rejected",
+  "invalid_request",
+  "request_error",
 ]);
 
 const AUTH_ERRORS = new Set([
@@ -60,7 +81,10 @@ export function syncErrorMessageKey(code: string): string {
   if (["cloud_sync_transport_failed", "cloud_sync_temporarily_unavailable", "cloud_sync_timeout"].includes(code)) {
     return "cloudSync.errors.network";
   }
-  if (code === "cloud_sync_protocol_incompatible") return "cloudSync.errors.protocol";
+  if (code === "cloud_sync_server_unavailable") return "cloudSync.errors.server";
+  if (PROTOCOL_ERRORS.has(code)) return "cloudSync.errors.protocol";
+  if (INVALID_DATA_ERRORS.has(code)) return "cloudSync.errors.invalidData";
+  if (REQUEST_REJECTED_ERRORS.has(code)) return "cloudSync.errors.requestRejected";
   if (code === "cloud_sync_context_unavailable") return "cloudSync.errors.context";
   if (code === "cloud_sync_entitlement_required") return "cloudSync.errors.capability";
   if (["cloud_sync_unauthorized", "cloud_sync_not_authenticated"].includes(code)) return "cloudSync.errors.relogin";

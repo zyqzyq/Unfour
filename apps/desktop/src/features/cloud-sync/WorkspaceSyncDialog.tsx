@@ -61,7 +61,7 @@ function WorkspaceSyncDialogContent() {
       <DialogHeader><DialogTitle>{t("cloudSync.title")}</DialogTitle>{!busy && <DialogXClose label={t("cloudSync.close")} />}</DialogHeader>
       <DialogBody className="flex flex-col gap-3">
         <h3 className="text-sm font-semibold">{detailTarget?.name}</h3>
-        {errorCode && <ErrorState>{t(syncErrorMessageKey(errorCode))}</ErrorState>}
+        {errorCode && <ErrorState className="min-h-0 items-start justify-start text-left">{t(syncErrorMessageKey(errorCode))}</ErrorState>}
         <dl className="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-2 rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] p-3 text-xs">
           <dt className="text-[var(--u-color-text-muted)]">{t("cloudSync.detail.status")}</dt><dd><StatusBadge tone={viewStateTone(state)}>{state === "offline" ? t("cloudSync.detail.waitingConnection") : t(`cloudSync.status.${state}`)}</StatusBadge></dd>
           <dt className="text-[var(--u-color-text-muted)]">{t("cloudSync.detail.lastSynced")}</dt><dd>{formatRelativeTime(status?.binding?.lastSuccessAt ?? null, t)}</dd>
@@ -82,7 +82,11 @@ function WorkspaceSyncDialogContent() {
               <div className="min-w-0">
                 <div className="truncate font-semibold">{entry.entityName ?? entry.entityId}</div>
                 <div className="text-[var(--u-color-text-muted)]">{t(`cloudSync.deadLetter.entityType.${entry.entityType}`)}</div>
-                <code className="mt-1 block break-all text-[var(--u-color-danger)]">{entry.errorCode}</code>
+                <p className="mt-2 text-[var(--u-color-danger)]">{t(syncErrorMessageKey(entry.errorCode))}</p>
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-[var(--u-color-text-muted)]">{t("cloudSync.technicalDetails")}</summary>
+                  <code className="mt-1 block break-all text-[11px] text-[var(--u-color-text-soft)]">{entry.errorCode}</code>
+                </details>
               </div>
               <div className="mt-2 flex flex-wrap justify-end gap-2">
                 <Button disabled={busy} onClick={() => void run(() => retryDeadLetter(detailTarget.id, entry.operationId))} size="sm" type="button" variant="outline">{t("cloudSync.deadLetter.retryCurrentLocal")}</Button>
