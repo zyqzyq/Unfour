@@ -33,6 +33,19 @@ describe("workspace Cloud Sync actions", () => {
     expect(createCloudSyncWorkspaceActions(context, t, workspace).map((action) => action.label)).toEqual(["cloudSync.viewSyncStatus", "cloudSync.pauseCloudSync"]);
   });
 
+  it("offers issue recovery for an authentication-blocked workspace", () => {
+    const context = sync({
+      ...emptyStatus,
+      binding: {
+        accountId: "a", localWorkspaceId: "workspace", cloudWorkspaceId: "c", lastPulledCursor: 0,
+        syncEnabled: true, state: "error", initialCursor: 0, initialTotal: 0, initialConfirmed: 0,
+        initializationCheckpoint: null, sshTaskV3BootstrapState: "completed", connectionV4BootstrapState: "completed",
+        generation: 0, lastSuccessAt: null, lastError: "cloud_sync_unauthorized", consecutiveFailureCount: 1,
+      },
+    });
+    expect(createCloudSyncWorkspaceActions(context, t, workspace).map((action) => action.id)).toContain("cloud-sync.resolve-issue");
+  });
+
   it("disables first-time enable when Cloud Sync is unavailable", () => {
     const context = { ...sync(), available: false, hasCloudSyncCapability: false };
     const [action] = createCloudSyncWorkspaceActions(context, t, workspace);

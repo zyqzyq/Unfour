@@ -69,6 +69,7 @@ impl DesktopSessionProvider for AccountTokenProvider {
     }
 
     fn invalidate_cloud_sync(&self) {
+        self.access.deny();
         self.account.invalidate_entitlement_cache();
     }
 }
@@ -333,6 +334,23 @@ mod tests {
                 SyncError::Unauthorized
             );
         });
+    }
+
+    #[test]
+    fn remote_unauthorized_invalidates_the_cloud_sync_access_gate() {
+        let access = SyncAccessGate::default();
+        access.allow();
+        let account = AccountService::new(
+            "https://account.example.test",
+            "https://account.example.test",
+            false,
+        )
+        .expect("valid account configuration");
+        let provider = AccountTokenProvider::new(account, access.clone());
+
+        provider.invalidate_cloud_sync();
+
+        assert!(!access.is_allowed());
     }
 
     #[test]

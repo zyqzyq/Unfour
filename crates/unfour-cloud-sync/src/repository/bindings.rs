@@ -142,6 +142,56 @@ impl SyncRepository {
         if restored > 0 {
             context_changed = true;
         }
+        let resumed_auth_blocked = sqlx::query(
+            r#"UPDATE cloud_sync_outbox
+               SET status = 'pending',
+                   attempt_count = 0,
+                   next_attempt_at = NULL,
+                   lease_owner = NULL,
+                   lease_started_at = NULL,
+                   lease_expires_at = NULL,
+                   last_error = NULL,
+                   updated_at = ?1
+               WHERE account_id = ?2
+                 AND status IN ('pending', 'uncertain', 'dead')
+                 AND last_error IN ('unauthorized', 'cloud_sync_unauthorized')
+                 AND EXISTS (
+                   SELECT 1 FROM cloud_sync_workspace_ownership AS owner
+                   WHERE owner.local_workspace_id = cloud_sync_outbox.local_workspace_id
+                     AND owner.account_id = cloud_sync_outbox.account_id
+                     AND owner.cloud_workspace_id = cloud_sync_outbox.cloud_workspace_id
+                 )"#,
+        )
+        .bind(&now)
+        .bind(account_id)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+        if resumed_auth_blocked > 0 {
+            context_changed = true;
+        }
+        sqlx::query(
+            r#"UPDATE cloud_sync_workspace_bindings AS binding
+               SET state = CASE WHEN binding.state = 'error'
+                                THEN CASE WHEN binding.initial_confirmed >= binding.initial_total
+                                          THEN 'reconciling' ELSE 'uploading' END
+                                ELSE binding.state END,
+                   last_error = NULL,
+                   consecutive_failure_count = 0,
+                   updated_at = ?1
+               WHERE binding.account_id = ?2
+                 AND binding.last_error IN ('unauthorized', 'cloud_sync_unauthorized')
+                 AND EXISTS (
+                   SELECT 1 FROM cloud_sync_workspace_ownership AS owner
+                   WHERE owner.local_workspace_id = binding.local_workspace_id
+                     AND owner.account_id = binding.account_id
+                     AND owner.cloud_workspace_id = binding.cloud_workspace_id
+                 )"#,
+        )
+        .bind(&now)
+        .bind(account_id)
+        .execute(&mut *tx)
+        .await?;
         sqlx::query("DELETE FROM cloud_sync_account_binding_pause_reasons WHERE account_id = ?1")
             .bind(account_id)
             .execute(&mut *tx)

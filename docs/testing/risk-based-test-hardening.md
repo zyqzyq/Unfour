@@ -84,7 +84,7 @@ coverage 排名。`已补`表示这里描述的具体行为通过，不代表整
 | --- | --- | --- | --- |
 | 1 · P0 | logout 后旧 OAuth exchange 返回，session 被重新保存 | 只有 local sign-out/parser 测试，没有交错执行 | **已复现、修复、补测**；generation 检查与 keychain transition 锁 |
 | 2 · P1 | snapshot 未到末页便被应用，第二台得到不完整 workspace | 正常 pagination 与 apply 失败已测，但极限页数耗尽未测 | **待补**：`service/snapshots.rs` 在 `MAX_REMOTE_PAGES` 循环后未显式检查剩余 page token；10,000 页边界为静态风险线索，未复现 |
-| 3 · P1 | 旧 `/v1/me` / billing 的 invalid-session 响应与新登录交错 | parser/单次失效测试不能证明不会删掉更新的 credential | **待补**：`state`、`require_entitlement`、`finish_billing_request` 的删除路径需要 session/generation 绑定的交错测试；未声称已复现 |
+| 3 · P1 | 旧 `/v1/me` / billing 的 invalid-session 响应与新登录交错 | parser/单次失效测试不能证明不会删掉更新的 credential | **已修复、补测**：`state`、`require_entitlement`、`finish_billing_request` 均按 session/generation 绑定删除；旧响应不会清掉新登录凭据 |
 | 4 · P1 | entitlement/session 已到期但 30 秒 capability cache 尚未过期 | profile expiry 单测不能证明缓存不会越过有效期 | **部分已补**缓存到期/撤权；自身 expiresAt/validUntil 与缓存 TTL 交叉边界待补 |
 | 5 · P1 | Workspace 级联过程中 SQLite 与 keychain 一端失败 | SQLite hook/child/activity rollback 很强，但不能代替 OS secret store 故障 | **待补** fault injection，逐项断言记录、credential reference、outbox、active fallback；不得绕开 secret-store |
 | 6 · P1 | MCP confirmation 被带到另一 workspace/连接/SQL，或旧确认绕过新 policy | 原测试主要错误文本和一次 confirmed happy path，缺执行次数断言 | **已补**六种 payload 变更零执行、dry-run 零执行、policy 收紧后拒绝 |

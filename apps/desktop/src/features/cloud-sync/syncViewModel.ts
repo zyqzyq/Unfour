@@ -6,6 +6,12 @@ const OFFLINE_ERRORS = new Set([
   "cloud_sync_timeout",
 ]);
 
+const AUTH_ERRORS = new Set([
+  "unauthorized",
+  "cloud_sync_unauthorized",
+  "cloud_sync_not_authenticated",
+]);
+
 export function getCloudSyncViewState(
   status: CloudSyncStatus,
   globalEnabled: boolean,
@@ -15,6 +21,7 @@ export function getCloudSyncViewState(
   if (!globalEnabled || !binding.syncEnabled || binding.state === "paused") return "paused";
   if (status.conflictCount > 0 || binding.state === "conflict") return "attention";
   if (status.deadCount > 0) return "attention";
+  if (binding.lastError && AUTH_ERRORS.has(binding.lastError)) return "auth_required";
   if (binding.lastError && OFFLINE_ERRORS.has(binding.lastError)) return "offline";
   if (binding.state === "error") return "attention";
   if (binding.lastError) return "attention";
@@ -31,6 +38,7 @@ function syncInProgress(status: CloudSyncStatus, binding: NonNullable<CloudSyncS
 export function viewStateTone(state: CloudSyncViewState): "neutral" | "success" | "warning" | "danger" {
   if (state === "synced") return "success";
   if (state === "attention") return "danger";
+  if (state === "auth_required") return "danger";
   if (["syncing", "offline"].includes(state)) return "warning";
   return "neutral";
 }

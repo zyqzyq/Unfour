@@ -141,8 +141,8 @@ impl SyncService {
                 self.repository
                     .mark_not_sent(
                         &entries,
-                        "unauthorized",
-                        false,
+                        SyncError::Unauthorized.code(),
+                        true,
                         self.dependencies.clock.now(),
                     )
                     .await?;

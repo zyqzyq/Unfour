@@ -51,12 +51,15 @@ const translations: Record<string, string> = {
   "cloudSync.status.synced": "Synced",
   "cloudSync.status.syncing": "Syncing",
   "cloudSync.status.paused": "Paused",
+  "cloudSync.status.auth_required": "Sign-in required",
   "cloudSync.status.attention": "Needs attention",
   "cloudSync.pending": "Pending",
+  "cloudSync.retry": "Retry",
   "cloudSync.never": "Never",
   "cloudSync.detail.status": "Status",
   "cloudSync.detail.lastSynced": "Last synced",
   "cloudSync.detail.changesPending": "Changes pending",
+  "cloudSync.detail.authRequiredDescription": "Sign in again to continue syncing.",
   "cloudSync.advancedDiagnostics": "Advanced diagnostics",
   "cloudSync.conflict.variableTitle": "Variable conflict",
   "cloudSync.conflict.apiTitle": "API conflict",
@@ -267,7 +270,7 @@ describe("Cloud Sync UI", () => {
     mocks.listCloud.mockRejectedValueOnce(new Error("offline"));
     render(<CloudWorkspaceDialog {...extensionContext} />);
     expect(await screen.findByText("cloudSync.errors.generic")).toBeTruthy();
-    expect(screen.getByText("cloudSync.retry")).toBeTruthy();
+    expect(screen.getByText("Retry")).toBeTruthy();
   });
 
   it("shows a real empty cloud workspace state", async () => {
@@ -325,6 +328,28 @@ describe("Cloud Sync UI", () => {
     render(<WorkspaceSyncDialog />);
     expect(screen.getByText("Pending")).toBeTruthy();
     expect(screen.getByText("Changes pending")).toBeTruthy();
+  });
+
+  it("offers a retry when a workspace is blocked by an expired session", async () => {
+    mocks.context = {
+      ...baseContext(),
+      detailTarget: { id: workspace.id, name: workspace.name },
+      statuses: new Map([[workspace.id, {
+        ...emptyStatus,
+        binding: {
+          accountId: "account", localWorkspaceId: workspace.id, cloudWorkspaceId: "cloud",
+          lastPulledCursor: 1, syncEnabled: true, state: "error", initialCursor: 0,
+          initialTotal: 1, initialConfirmed: 1, initializationCheckpoint: null, generation: 1,
+          lastSuccessAt: null, lastError: "cloud_sync_unauthorized", consecutiveFailureCount: 1,
+        },
+        pendingCount: 1,
+      }]]),
+    };
+    render(<WorkspaceSyncDialog />);
+    expect(screen.getByText("Sign-in required")).toBeTruthy();
+    expect(screen.getByText("Sign in again to continue syncing.")).toBeTruthy();
+    fireEvent.click(screen.getByText("Retry"));
+    await waitFor(() => expect(mocks.context.retryWorkspace).toHaveBeenCalledWith("workspace"));
   });
 
   it("shows dead-letter details, counts them as pending, and confirms use-remote", async () => {

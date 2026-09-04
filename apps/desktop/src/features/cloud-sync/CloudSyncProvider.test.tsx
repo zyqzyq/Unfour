@@ -94,6 +94,7 @@ function Probe() {
       {String(sync.statuses.get("workspace")?.binding?.syncEnabled ?? false)}
     </span>
     <button onClick={() => void sync.enableWorkspace("workspace").catch(() => undefined)} type="button">enable</button>
+    <button onClick={() => void sync.retryWorkspace("workspace").catch(() => undefined)} type="button">retry</button>
   </div>;
 }
 
@@ -246,5 +247,21 @@ describe("CloudSyncProvider account context boundary", () => {
     expect(screen.getByTestId("error")).toHaveTextContent("none");
     expect(mocks.getLocalWorkspaces).toHaveBeenCalledTimes(1);
     expect(mocks.getGlobalSyncEnabled).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes the account before manually retrying a workspace", async () => {
+    const events: string[] = [];
+    const accountValue = account(true, { kind: "ready" });
+    accountValue.refreshAccount = vi.fn(async () => { events.push("account"); });
+    mocks.account = accountValue;
+    mocks.syncNow.mockImplementation(async () => { events.push("sync"); });
+    render(<CloudSyncProvider><Probe /></CloudSyncProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("statuses")).toHaveTextContent("1"));
+    fireEvent.click(screen.getByRole("button", { name: "retry" }));
+
+    await waitFor(() => expect(mocks.syncNow).toHaveBeenCalledWith("workspace"));
+    expect(events).toEqual(["account", "sync"]);
+    expect(accountValue.refreshAccount).toHaveBeenCalledTimes(1);
   });
 });

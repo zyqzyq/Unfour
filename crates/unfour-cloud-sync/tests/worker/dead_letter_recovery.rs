@@ -669,7 +669,7 @@ async fn protocol_dead_letters_revive_once_per_process_after_upgrade() {
 }
 
 #[tokio::test]
-async fn unauthorized_push_becomes_dead_and_is_not_automatically_retried() {
+async fn unauthorized_push_is_retryable_and_resumes_after_reauthentication() {
     let db = database().await;
     let seed = CommandBus::from_db(db.clone()).await.unwrap();
     let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
@@ -690,15 +690,38 @@ async fn unauthorized_push_becomes_dead_and_is_not_automatically_retried() {
         service.sync_workspace(&workspace_id).await,
         Err(SyncError::Unauthorized)
     ));
-    let blocked = service.status(&workspace_id).await.unwrap();
-    assert_eq!(blocked.dead_count, 1);
-    assert_eq!(blocked.dead_letters[0].error_code, "unauthorized");
+    let blocked: (String, String) = sqlx::query_as(
+        "SELECT status, last_error FROM cloud_sync_outbox WHERE account_id = 'account-a' AND local_workspace_id = ?1",
+    )
+    .bind(&workspace_id)
+    .fetch_one(service.repository().pool())
+    .await
+    .unwrap();
+    assert_eq!(blocked.0, "pending");
+    assert_eq!(blocked.1, "cloud_sync_unauthorized");
+    let binding_error: Option<String> = sqlx::query_scalar(
+        "SELECT last_error FROM cloud_sync_workspace_bindings WHERE account_id = 'account-a' AND local_workspace_id = ?1",
+    )
+    .bind(&workspace_id)
+    .fetch_one(service.repository().pool())
+    .await
+    .unwrap();
+    assert_eq!(binding_error.as_deref(), Some("cloud_sync_unauthorized"));
     let pushes = transport.pushes.lock().unwrap().len();
-    assert!(matches!(
-        service.sync_workspace(&workspace_id).await,
-        Err(SyncError::DeadLetterBlocked)
-    ));
-    assert_eq!(transport.pushes.lock().unwrap().len(), pushes);
+
+    transport.switch_account("account-a");
+    service.activate_account_context().await.unwrap();
+    let resumed = service.status(&workspace_id).await.unwrap();
+    assert_eq!(resumed.dead_count, 0);
+    assert_eq!(resumed.pending_count, 1);
+    assert_eq!(resumed.binding.as_ref().unwrap().state, "reconciling");
+    assert_eq!(resumed.binding.as_ref().unwrap().last_error, None);
+
+    service.sync_workspace(&workspace_id).await.unwrap();
+    assert_eq!(transport.pushes.lock().unwrap().len(), pushes + 1);
+    let completed = service.status(&workspace_id).await.unwrap();
+    assert_eq!(completed.pending_count, 0);
+    assert_eq!(completed.binding.as_ref().unwrap().last_error, None);
 }
 
 #[tokio::test]

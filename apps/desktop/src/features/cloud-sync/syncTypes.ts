@@ -35,6 +35,7 @@ export type CloudSyncViewState =
   | "synced"
   | "paused"
   | "offline"
+  | "auth_required"
   | "attention";
 
 export interface SyncWorkspaceTarget {

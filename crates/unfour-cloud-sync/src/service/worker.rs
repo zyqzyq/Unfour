@@ -235,7 +235,7 @@ impl SyncService {
                 }
 
                 if let Some(error) = terminal_error.take() {
-                    if !matches!(error, SyncError::AccountChanged | SyncError::Unauthorized) {
+                    if !matches!(error, SyncError::AccountChanged) {
                         let error_code = match self
                             .repository
                             .status(&current_account.account_id, workspace_id, false)

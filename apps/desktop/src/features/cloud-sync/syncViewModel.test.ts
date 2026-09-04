@@ -49,6 +49,17 @@ describe("getCloudSyncViewState", () => {
     }), true)).toBe("offline");
   });
 
+  it("maps authentication failures to a sign-in recovery state", () => {
+    expect(getCloudSyncViewState(status({}, {
+      state: "error",
+      lastError: "cloud_sync_unauthorized",
+    }), true)).toBe("auth_required");
+    expect(getCloudSyncViewState(status({}, {
+      state: "error",
+      lastError: "unauthorized",
+    }), true)).toBe("auth_required");
+  });
+
   it("maps conflicts, dead letters, and permanent errors to attention", () => {
     expect(getCloudSyncViewState(status({ conflictCount: 1 }), true)).toBe("attention");
     expect(getCloudSyncViewState(status({ deadCount: 1 }), true)).toBe("attention");

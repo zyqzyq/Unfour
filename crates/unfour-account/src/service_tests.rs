@@ -157,6 +157,99 @@ async fn sign_out_during_exchange_cannot_restore_the_deleted_session() {
 }
 
 #[tokio::test]
+async fn stale_state_response_cannot_sign_out_a_newer_session() {
+    let gate = Arc::new(tokio::sync::Barrier::new(2));
+    let api = TestApi::start(
+        vec![
+            (
+                401,
+                json!({"error":{"code":"desktop_session_expired","message":"expired","requestId":"stale-state"}}),
+            ),
+            (200, profile("active")),
+        ],
+        Some(gate.clone()),
+    )
+    .await;
+    let service = api.service();
+    save_session(&service).await;
+    let task = {
+        let service = service.clone();
+        tokio::spawn(async move { service.state().await })
+    };
+    tokio::time::timeout(Duration::from_secs(5), gate.wait())
+        .await
+        .unwrap();
+
+    service
+        .sessions
+        .save(StoredSession {
+            session_token: "B".repeat(43),
+            expires_at: time::OffsetDateTime::now_utc() + time::Duration::days(1),
+        })
+        .await
+        .unwrap();
+    service.advance_generation();
+    gate.wait().await;
+
+    assert!(matches!(
+        task.await.unwrap().unwrap(),
+        AccountState::SignedIn { .. }
+    ));
+    assert_eq!(
+        service
+            .sessions
+            .load()
+            .await
+            .unwrap()
+            .unwrap()
+            .session_token,
+        "B".repeat(43)
+    );
+    assert_eq!(api.finish().await.len(), 2);
+}
+
+#[tokio::test]
+async fn stale_entitlement_response_cannot_sign_out_a_newer_session() {
+    let gate = Arc::new(tokio::sync::Barrier::new(2));
+    let api = TestApi::start(
+        vec![
+            (
+                401,
+                json!({"error":{"code":"desktop_session_expired","message":"expired","requestId":"stale-entitlement"}}),
+            ),
+            (200, profile("active")),
+        ],
+        Some(gate.clone()),
+    )
+    .await;
+    let service = api.service();
+    save_session(&service).await;
+    let task = {
+        let service = service.clone();
+        tokio::spawn(async move { service.require_entitlement("cloud_sync").await })
+    };
+    tokio::time::timeout(Duration::from_secs(5), gate.wait())
+        .await
+        .unwrap();
+
+    service
+        .sessions
+        .save(StoredSession {
+            session_token: "B".repeat(43),
+            expires_at: time::OffsetDateTime::now_utc() + time::Duration::days(1),
+        })
+        .await
+        .unwrap();
+    service.advance_generation();
+    gate.wait().await;
+
+    let authorized = task.await.unwrap().unwrap();
+    assert_eq!(authorized.desktop_session_token(), "B".repeat(43));
+    assert_eq!(authorized.generation(), 1);
+    assert_eq!(api.finish().await.len(), 2);
+}
+
+#[tokio::test]
 async fn entitlement_cache_is_capability_scoped_and_revocation_is_rechecked() {
     let api = TestApi::start(
         vec![

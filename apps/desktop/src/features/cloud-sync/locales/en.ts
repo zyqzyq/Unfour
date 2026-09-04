@@ -46,6 +46,7 @@ const en = {
     synced: "Synced",
     paused: "Paused",
     offline: "Offline",
+    auth_required: "Sign-in required",
     attention: "Needs attention",
   },
   scope: {
@@ -84,6 +85,7 @@ const en = {
     changesPending: "{count} changes pending",
     waitingConnection: "Waiting for connection",
     offlineDescription: "Changes are kept locally and will retry automatically.",
+    authRequiredDescription: "Sign in again to continue syncing. Your local changes will be kept.",
     attentionDescription: "Some changes could not be synced automatically.",
   },
   conflict: {

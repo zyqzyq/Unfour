@@ -182,7 +182,7 @@ impl AccountService {
             .client
             .create_billing_checkout(&session.session_token)
             .await;
-        self.finish_billing_request(result).await
+        self.finish_billing_request(&session, result).await
     }
 
     /// Creates a customer portal link for the currently saved desktop session.
@@ -192,40 +192,67 @@ impl AccountService {
             .client
             .create_billing_portal(&session.session_token)
             .await;
-        self.finish_billing_request(result).await
+        self.finish_billing_request(&session, result).await
     }
 
     async fn active_stored_session(&self) -> Result<StoredSession, AccountError> {
-        let session = match self.sessions.load().await {
-            Ok(Some(session)) => session,
-            Ok(None) => return Err(AccountError::SignedOut),
-            Err(AccountError::CorruptStoredSession) => {
-                self.sessions.delete().await?;
-                self.advance_generation();
-                return Err(AccountError::SignedOut);
+        loop {
+            let session = match self.sessions.load().await {
+                Ok(Some(session)) => session,
+                Ok(None) => return Err(AccountError::SignedOut),
+                Err(AccountError::CorruptStoredSession) => {
+                    self.sessions.delete().await?;
+                    self.advance_generation();
+                    return Err(AccountError::SignedOut);
+                }
+                Err(error) => return Err(error),
+            };
+            if session.is_expired() {
+                if self.delete_session_if_current(&session).await? {
+                    return Err(AccountError::SignedOut);
+                }
+                continue;
             }
-            Err(error) => return Err(error),
-        };
-        if session.is_expired() {
-            self.sessions.delete().await?;
-            self.advance_generation();
-            return Err(AccountError::SignedOut);
+            return Ok(session);
         }
-        Ok(session)
     }
 
     async fn finish_billing_request(
         &self,
+        session: &StoredSession,
         result: Result<BillingUrl, AccountError>,
     ) -> Result<BillingUrl, AccountError> {
         match result {
             Err(error) if error.is_invalid_session() => {
-                self.sessions.delete().await?;
-                self.advance_generation();
-                Err(AccountError::SignedOut)
+                if self.delete_session_if_current(session).await? {
+                    Err(AccountError::SignedOut)
+                } else {
+                    Err(error)
+                }
             }
             result => result,
         }
+    }
+
+    /// Delete a session only when the invalid response belongs to the session
+    /// that is still stored. A delayed `/v1/me` or billing response must not
+    /// delete credentials written by a newer sign-in.
+    async fn delete_session_if_current(
+        &self,
+        expected: &StoredSession,
+    ) -> Result<bool, AccountError> {
+        let _transition = self.session_transition.lock().await;
+        let Some(current) = self.sessions.load().await? else {
+            return Ok(false);
+        };
+        if current.session_token != expected.session_token
+            || current.expires_at != expected.expires_at
+        {
+            return Ok(false);
+        }
+        self.sessions.delete().await?;
+        self.advance_generation();
+        Ok(true)
     }
 
     pub fn invalidate_entitlement_cache(&self) {
@@ -240,39 +267,51 @@ impl AccountService {
     }
 
     pub async fn state(&self) -> Result<AccountState, AccountError> {
-        if self
-            .pending
-            .lock()
-            .map_err(|_| AccountError::StateUnavailable)?
-            .is_some()
-        {
-            return Ok(AccountState::SigningIn);
-        }
-        let session = match self.sessions.load().await {
-            Ok(session) => session,
-            Err(AccountError::CorruptStoredSession) => {
-                self.sessions.delete().await?;
-                None
+        loop {
+            if self
+                .pending
+                .lock()
+                .map_err(|_| AccountError::StateUnavailable)?
+                .is_some()
+            {
+                return Ok(AccountState::SigningIn);
             }
-            Err(error) => return Err(error),
-        };
-        let Some(session) = session else {
-            return Ok(AccountState::SignedOut);
-        };
-        if session.is_expired() {
-            self.sessions.delete().await?;
-            self.advance_generation();
-            return Ok(AccountState::SignedOut);
-        }
+            let request_generation = self.generation();
+            let session = match self.sessions.load().await {
+                Ok(session) => session,
+                Err(AccountError::CorruptStoredSession) => {
+                    self.sessions.delete().await?;
+                    self.advance_generation();
+                    None
+                }
+                Err(error) => return Err(error),
+            };
+            let Some(session) = session else {
+                if request_generation == self.generation() {
+                    return Ok(AccountState::SignedOut);
+                }
+                continue;
+            };
+            if session.is_expired() {
+                if self.delete_session_if_current(&session).await? {
+                    return Ok(AccountState::SignedOut);
+                }
+                continue;
+            }
 
-        match self.client.get_account(&session.session_token).await {
-            Ok(profile) => Ok(AccountState::SignedIn { profile }),
-            Err(error) if error.is_invalid_session() => {
-                self.sessions.delete().await?;
-                self.advance_generation();
-                Ok(AccountState::SignedOut)
+            match self.client.get_account(&session.session_token).await {
+                Ok(profile) if request_generation == self.generation() => {
+                    return Ok(AccountState::SignedIn { profile });
+                }
+                Ok(_) => continue,
+                Err(error) if error.is_invalid_session() => {
+                    if self.delete_session_if_current(&session).await? {
+                        return Ok(AccountState::SignedOut);
+                    }
+                    continue;
+                }
+                Err(error) => return Err(error),
             }
-            Err(error) => Err(error),
         }
     }
 
@@ -285,54 +324,67 @@ impl AccountService {
         if entitlement_code.trim().is_empty() {
             return Err(AccountError::EntitlementUnavailable);
         }
-        let generation = self.generation();
-        if let Ok(cache) = self.entitlement_cache.lock() {
-            if let Some(cache) = cache.as_ref().filter(|cache| {
-                cache.entitlement_code == entitlement_code
-                    && cache.generation == generation
-                    && cache.expires_at > Instant::now()
-            }) {
-                return Ok(AuthorizedSession {
-                    session_token: cache.session_token.clone(),
-                    account_id: cache.account_id.clone(),
+        loop {
+            let generation = self.generation();
+            if let Ok(cache) = self.entitlement_cache.lock() {
+                if let Some(cache) = cache.as_ref().filter(|cache| {
+                    cache.entitlement_code == entitlement_code
+                        && cache.generation == generation
+                        && cache.expires_at > Instant::now()
+                }) {
+                    return Ok(AuthorizedSession {
+                        session_token: cache.session_token.clone(),
+                        account_id: cache.account_id.clone(),
+                        generation,
+                    });
+                }
+            }
+            let session = match self.sessions.load().await? {
+                Some(session) => session,
+                None => {
+                    if generation == self.generation() {
+                        return Err(AccountError::SignedOut);
+                    }
+                    continue;
+                }
+            };
+            if session.is_expired() {
+                if self.delete_session_if_current(&session).await? {
+                    return Err(AccountError::SignedOut);
+                }
+                continue;
+            }
+            let profile = match self.client.get_account(&session.session_token).await {
+                Ok(profile) if generation == self.generation() => profile,
+                Ok(_) => continue,
+                Err(error) if error.is_invalid_session() => {
+                    if self.delete_session_if_current(&session).await? {
+                        return Err(AccountError::SignedOut);
+                    }
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            if !profile.has_active_entitlement(entitlement_code, time::OffsetDateTime::now_utc()) {
+                return Err(AccountError::EntitlementUnavailable);
+            }
+            let account_id = profile.id;
+            let session_token = session.session_token;
+            if let Ok(mut cache) = self.entitlement_cache.lock() {
+                *cache = Some(CachedAuthorization {
+                    entitlement_code: entitlement_code.to_string(),
+                    session_token: session_token.clone(),
+                    account_id: account_id.clone(),
                     generation,
+                    expires_at: Instant::now() + ENTITLEMENT_CACHE_TTL,
                 });
             }
-        }
-        let session = self.sessions.load().await?.ok_or(AccountError::SignedOut)?;
-        if session.is_expired() {
-            self.sessions.delete().await?;
-            self.advance_generation();
-            return Err(AccountError::SignedOut);
-        }
-        let profile = match self.client.get_account(&session.session_token).await {
-            Ok(profile) => profile,
-            Err(error) if error.is_invalid_session() => {
-                self.sessions.delete().await?;
-                self.advance_generation();
-                return Err(AccountError::SignedOut);
-            }
-            Err(error) => return Err(error),
-        };
-        if !profile.has_active_entitlement(entitlement_code, time::OffsetDateTime::now_utc()) {
-            return Err(AccountError::EntitlementUnavailable);
-        }
-        let account_id = profile.id;
-        let session_token = session.session_token;
-        if let Ok(mut cache) = self.entitlement_cache.lock() {
-            *cache = Some(CachedAuthorization {
-                entitlement_code: entitlement_code.to_string(),
-                session_token: session_token.clone(),
-                account_id: account_id.clone(),
+            return Ok(AuthorizedSession {
+                session_token,
+                account_id,
                 generation,
-                expires_at: Instant::now() + ENTITLEMENT_CACHE_TTL,
             });
         }
-        Ok(AuthorizedSession {
-            session_token,
-            account_id,
-            generation,
-        })
     }
 
     /// Starts a new authorization attempt and returns the web URL to the Tauri adapter.
@@ -445,6 +497,50 @@ mod tests {
             .collect();
         assert_eq!(values.len(), 1);
         values.into_iter().next().expect("installation id")
+    }
+
+    #[tokio::test]
+    async fn stale_invalid_response_cannot_delete_a_newer_session() {
+        let service = test_service(unfour_secret_store::SecretStore::in_memory("unfour-test"));
+        let old = StoredSession {
+            session_token: "A".repeat(43),
+            expires_at: time::OffsetDateTime::now_utc() + time::Duration::days(1),
+        };
+        let current = StoredSession {
+            session_token: "B".repeat(43),
+            expires_at: old.expires_at,
+        };
+        service.sessions.save(old.clone()).await.unwrap();
+        service.sessions.save(current.clone()).await.unwrap();
+
+        let result = service
+            .finish_billing_request(
+                &old,
+                Err(AccountError::ApiRejected {
+                    status: 401,
+                    code: ApiErrorCode::DesktopSessionExpired,
+                }),
+            )
+            .await;
+
+        assert!(matches!(
+            result,
+            Err(AccountError::ApiRejected {
+                status: 401,
+                code: ApiErrorCode::DesktopSessionExpired,
+            })
+        ));
+        assert_eq!(
+            service
+                .sessions
+                .load()
+                .await
+                .unwrap()
+                .unwrap()
+                .session_token,
+            current.session_token
+        );
+        assert_eq!(service.generation(), 0);
     }
 
     #[test]

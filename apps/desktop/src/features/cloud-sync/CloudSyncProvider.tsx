@@ -18,6 +18,7 @@ import { CloudSyncContext } from "./useCloudSync";
 
 export function CloudSyncProvider({ children }: { children: ReactNode }) {
   const account = useAccount();
+  const { refreshAccount } = account;
   const hasCloudSyncCapability = account.state.kind === "signedIn"
     && hasActiveEntitlement(account.state.profile.entitlements, CLOUD_SYNC_ENTITLEMENT);
   const available = hasCloudSyncCapability && account.syncContext.kind === "ready";
@@ -45,6 +46,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     }
     const currentRequest = ++requestId.current;
     setLoading(true);
+    setRequestErrorCode(null);
     try {
       const [workspaceState, enabled] = await Promise.all([
         getLocalWorkspaces(),
@@ -125,6 +127,11 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     }
   }, [available, contextErrorCode, hasCloudSyncCapability, refreshNow]);
 
+  const retryWorkspace = useCallback(async (workspaceId: string) => {
+    await refreshAccount();
+    await runAndRefresh(() => syncNow(workspaceId));
+  }, [refreshAccount, runAndRefresh]);
+
   const errorCode = contextErrorCode ?? requestErrorCode;
   const visibleStatuses = useMemo(
     () => available ? statuses : new Map<string, CloudSyncStatus>(),
@@ -153,9 +160,9 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     refresh,
     refreshNow,
     retryDeadLetter: (workspaceId: string, operationId: string) => runRecoveryAndRefresh(() => retryDeadLetterCurrentLocal(workspaceId, operationId)),
-    retryWorkspace: (workspaceId: string) => runAndRefresh(() => syncNow(workspaceId)),
+    retryWorkspace,
     setServiceEnabled: (enabled: boolean) => runAndRefresh(() => setGlobalSyncEnabled(enabled)),
     replaceDeadLetterWithRemote: (workspaceId: string, operationId: string) => runRecoveryAndRefresh(() => replaceDeadLetterWithRemote(workspaceId, operationId)),
-  }), [available, cloudWorkspaceDialogOpen, detailTarget, enableTarget, errorCode, globalEnabled, hasCloudSyncCapability, loading, refresh, refreshNow, revision, runAndRefresh, runRecoveryAndRefresh, visibleStatuses]);
+  }), [available, cloudWorkspaceDialogOpen, detailTarget, enableTarget, errorCode, globalEnabled, hasCloudSyncCapability, loading, refresh, refreshNow, retryWorkspace, revision, runAndRefresh, runRecoveryAndRefresh, visibleStatuses]);
   return <CloudSyncContext.Provider value={value}>{children}</CloudSyncContext.Provider>;
 }

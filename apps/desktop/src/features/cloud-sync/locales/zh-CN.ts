@@ -46,6 +46,7 @@ const zhCN = {
     synced: "已同步",
     paused: "已暂停",
     offline: "离线",
+    auth_required: "需要重新登录",
     attention: "需要处理",
   },
   scope: {
@@ -84,6 +85,7 @@ const zhCN = {
     changesPending: "{count} 项更改待同步",
     waitingConnection: "等待网络连接",
     offlineDescription: "更改已保存在本地，恢复连接后会自动重试。",
+    authRequiredDescription: "请重新登录账号，登录后会自动继续同步。",
     attentionDescription: "部分更改无法自动同步。",
   },
   conflict: {
