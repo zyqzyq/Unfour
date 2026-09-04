@@ -91,7 +91,7 @@ The complete JSON payload is:
 {
   "event": "app_active",
   "installation_id": "<43-char-random-id>",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "platform": "windows",
   "arch": "x64",
   "channel": "stable",

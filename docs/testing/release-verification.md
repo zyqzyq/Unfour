@@ -1,28 +1,27 @@
-# v0.9.2 Release Verification
+# v0.9.3 Release Verification
 
-This document tracks v0.9.2 release preparation. The published v0.9.0 results
-remain below as historical evidence; the local `v0.9.1` tag is the comparison
-baseline. A new v0.9.2 candidate needs fresh evidence and must not inherit
+This document tracks v0.9.3 release preparation. The published v0.9.0 results
+remain below as historical evidence; the local `v0.9.2` tag is the comparison
+baseline. A new v0.9.3 candidate needs fresh evidence and must not inherit
 those release results automatically.
 
-## v0.9.2 preparation status
+## v0.9.3 preparation status
 
-- Source version: `0.9.2`; release status: `NOT RELEASED`.
+- Source version: `0.9.3`; release status: `NOT RELEASED`.
 - Version synchronization: `PASS` (`node scripts/sync-version.mjs --check`).
 - Cargo workspace lock/check: `PASS` (`cargo check --workspace --locked`).
 - Release contract suite: `PASS` (73 tests via the direct Node test command).
 - Candidate artifact, platform, live-service, and manual gates: `NOT VERIFIED`.
 
-## v0.9.2 candidate scope
+## v0.9.3 candidate scope
 
-The candidate adds anonymous active-install telemetry, per-module sidebar-width
-persistence, MCP environment-variable CRUD, per-call environment selection and
-scripted saved-request replay, fail-closed MCP policy classification, and the
-Windows Cursor path-with-spaces fix. Fresh candidate evidence is required for
-stable telemetry notice/opt-out behavior, the MCP environment and policy
-journeys, installed Cursor configuration under a path containing spaces, and
-sidebar restoration across modules. The Store icon and refreshed screenshots
-are release collateral and do not replace installer or platform verification.
+The candidate adds global and per-request API timeouts, active-request
+cancellation, clearer request naming and history display, authoritative Cloud
+Sync workspace ownership, durable outbox preservation during account
+inactivity, legacy/orphan binding recovery, legacy API entity bootstrap, and a
+consolidated settings navigation surface. Fresh candidate evidence is required
+for API timeout/cancellation behavior, Cloud Sync pause and legacy-data
+recovery journeys, and settings navigation across the supported modules.
 
 ## Previous v0.9.0 Final Release Verification Record
 

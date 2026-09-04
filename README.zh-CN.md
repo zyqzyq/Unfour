@@ -18,7 +18,7 @@ Unfour 在一个桌面应用中提供 API 测试、SSH、数据库工具和 MCP 
 </div>
 
 > [!WARNING]
-> 当前源码版本目标为 Unfour v0.9.2。产品统一为 Unfour。
+> 当前源码版本目标为 Unfour v0.9.3。产品统一为 Unfour。
 > Windows NSIS 安装包尚未签名，可能触发 SmartScreen 或其他操作系统安全警告。
 > 请使用 GitHub Release 中的 `SHA256SUMS.txt` 校验下载文件。
 
@@ -178,7 +178,7 @@ pnpm run test:rust      # cargo test --workspace
 
 ## 发布状态
 
-当前源码版本目标为 Unfour v0.9.2。产品统一为 Unfour。
+当前源码版本目标为 Unfour v0.9.3。产品统一为 Unfour。
 发布验证证据见：
 
 - `docs/testing/release-verification.md`

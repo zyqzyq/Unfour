@@ -175,7 +175,7 @@ The single desktop runtime lives under `apps/desktop/src-tauri`. It initializes
 unified storage, account state, Cloud Sync, and the outbox hook before handing
 the prepared command bus to `crates/unfour-app` for shared Tauri composition.
 There is no separate Pro client runtime. The product name is Unfour and the
-repository package version is `0.9.2`. Release readiness
+repository package version is `0.9.3`. Release readiness
 must be determined from the release verification documents, not from the
 version string alone.
 

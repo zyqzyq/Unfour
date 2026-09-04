@@ -1,15 +1,15 @@
-# v0.9.2 release checklist
+# v0.9.3 release checklist
 
-## v0.9.2 preparation status
+## v0.9.3 preparation status
 
-- Source version: `0.9.2`; comparison tag: `v0.9.1`
-  (`76fd53287044166ecf5e28283657cefaf1a6a99c`). The active verification record
+- Source version: `0.9.3`; comparison tag: `v0.9.2`
+  (`f824ddf4ae7121bd477a06deaee92dea067d0cf4`). The active verification record
   still lists `v0.9.0` as the latest completed published release.
 - Version synchronization: `PASS` (`node scripts/sync-version.mjs --check`).
 - Cargo workspace lock/check: `PASS` (`cargo check --workspace --locked`).
 - Release contract suite: `PASS` (73 tests via the direct Node test command).
 - Candidate artifact, platform, live-service, and manual checks: `NOT VERIFIED`;
-  they require fresh evidence for the v0.9.2 candidate.
+  they require fresh evidence for the v0.9.3 candidate.
 
 ## Previous v0.9.0 recorded release outcomes
 
@@ -38,10 +38,10 @@ The completed real Codex and Cursor checks supersede a separate basic MCP
 manual-smoke release gate. Keep the protocol smoke procedure for diagnostics
 and future regression use.
 
-The sections below preserve the reusable release procedure for v0.9.2. Their
-imperative steps are not additional v0.9.2 `PASS` claims; the v0.9.0 table above
+The sections below preserve the reusable release procedure for v0.9.3. Their
+imperative steps are not additional v0.9.3 `PASS` claims; the v0.9.0 table above
 and `docs/testing/release-verification.md` are historical outcome records until
-new v0.9.2 evidence is recorded.
+new v0.9.3 evidence is recorded.
 
 ## Shared gate
 

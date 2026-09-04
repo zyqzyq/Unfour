@@ -4,7 +4,7 @@ These manual cases supplement automated tests for release candidates. Record
 `PASS`, `FAIL`, `NOT RUN`, or `NOT VERIFIED` for each relevant platform.
 
 > The recorded status below is for the published `v0.9.0` release. The current
-> source version is `v0.9.2`; rerun the applicable cases for its candidate and
+> source version is `v0.9.3`; rerun the applicable cases for its candidate and
 > do not inherit v0.9.0 results automatically.
 
 ## v0.9.0 recorded manual status

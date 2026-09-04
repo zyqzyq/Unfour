@@ -6,6 +6,34 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-09-04
+
+Maintenance release following the `v0.9.2` source tag, focused on API request
+execution control and Cloud Sync reliability.
+
+### Added
+
+- **API request execution control** — Add global and per-request timeout
+  settings, explicit cancellation for active requests, and dedicated timeout
+  and cancellation states across Desktop and MCP execution paths.
+
+### Changed
+
+- **MCP timeout semantics** — Omitted `timeoutMs` uses a 60,000 ms safety
+  default, `timeoutMs: 0` is explicitly unlimited, and positive values are
+  preserved without a silent cap.
+- **Desktop settings navigation** — Consolidate account, Cloud Sync, privacy,
+  update, and MCP settings under the shared settings surface.
+
+### Fixed
+
+- **Cloud Sync ownership and recovery** — Resolve one authoritative cloud
+  workspace owner, preserve durable outbox intent while account access is
+  paused, reconcile legacy and orphan bindings safely, and bootstrap legacy
+  API entities during initial upload.
+- **API request naming and history display** — Improve request names, tabs, and
+  history labels so saved and historical requests retain a clear identity.
+
 ## [0.9.2] - 2026-09-02
 
 Maintenance and feature release following the `v0.9.1` source tag, focused on
@@ -539,6 +567,7 @@ First public release.
 - Linux artifacts remain experimental/unverified until real-device smoke checks
   are complete.
 
+[0.9.3]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.3
 [0.9.2]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.2
 [0.9.1]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.1
 [0.9.0]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.0

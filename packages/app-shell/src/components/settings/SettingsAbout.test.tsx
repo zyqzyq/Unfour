@@ -20,7 +20,7 @@ function renderAbout(children?: ReactNode) {
 beforeEach(() => {
   getAppInfo.mockResolvedValue({
     name: "Unfour",
-    version: "0.9.2",
+    version: "0.9.3",
     distribution: "microsoft-store",
     channel: "stable",
     commit: "0123456789abcdef-dirty",
@@ -45,7 +45,7 @@ describe("SettingsAbout", () => {
     expect(screen.getByRole("heading", { name: "Actions" })).toBeTruthy();
 
     await waitFor(() => {
-      expect(screen.getByText("0.9.2")).toBeTruthy();
+      expect(screen.getByText("0.9.3")).toBeTruthy();
       expect(screen.getByText("Microsoft Store")).toBeTruthy();
       expect(screen.getByText("Stable")).toBeTruthy();
       expect(screen.getByText("0123456789ab-dirty")).toBeTruthy();

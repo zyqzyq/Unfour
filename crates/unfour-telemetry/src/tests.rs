@@ -105,7 +105,7 @@ impl Harness {
         let clock = FixedClock::new("2026-09-01");
         let transport = Arc::new(MockTransport::with_responses(responses));
         let config =
-            TelemetryConfig::new("0.9.2", "windows", "x86_64", "stable", "standard", endpoint)
+            TelemetryConfig::new("0.9.3", "windows", "x86_64", "stable", "standard", endpoint)
                 .expect("valid test config");
         let service = TelemetryService::with_dependencies(
             db.clone(),
@@ -300,7 +300,7 @@ async fn payload_schema_contains_only_the_approved_fields() {
 
     assert_eq!(object.len(), 8);
     assert_eq!(value["event"], "app_active");
-    assert_eq!(value["version"], "0.9.2");
+    assert_eq!(value["version"], "0.9.3");
     assert_eq!(value["platform"], "windows");
     assert_eq!(value["arch"], "x64");
     assert_eq!(value["channel"], "stable");
@@ -387,7 +387,7 @@ fn test_payload() -> AppActivePayload {
     AppActivePayload {
         event: ACTIVE_EVENT,
         installation_id: "A".repeat(43),
-        version: "0.9.2".to_string(),
+        version: "0.9.3".to_string(),
         platform: "windows".to_string(),
         arch: "x64".to_string(),
         channel: "stable".to_string(),

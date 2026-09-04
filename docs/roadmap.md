@@ -174,7 +174,7 @@ Current status:
 
 Release claims remain limited by the current verification matrix.
 
-## v0.9.2 (Current source version)
+## v0.9.2 (Previous source checkpoint)
 
 The follow-up from the `v0.9.1` tag focuses on MCP correctness, privacy, and
 desktop usability:
@@ -190,7 +190,28 @@ desktop usability:
 
 Current status:
 
-- source version is `0.9.2`; release status is `NOT RELEASED`;
+- the `v0.9.2` tag is the comparison baseline for the current source;
+- the active release verification record still treats the v0.9.0 publication
+  evidence as historical.
+
+Release claims remain limited by the current verification matrix.
+
+## v0.9.3 (Current source version)
+
+The follow-up from the `v0.9.2` tag focuses on API execution controls and
+Cloud Sync reliability:
+
+- global and per-request API timeouts, active-request cancellation, and
+  explicit timeout/cancellation states;
+- clearer API request naming and history display;
+- authoritative Cloud Sync workspace ownership, durable outbox preservation
+  during account inactivity, orphan/legacy binding recovery, and legacy API
+  entity bootstrap; and
+- a consolidated desktop settings navigation surface.
+
+Current status:
+
+- source version is `0.9.3`; release status is `NOT RELEASED`;
 - candidate artifact, platform, live-service, and manual verification remain
   to be recorded in the active release matrix.
 
