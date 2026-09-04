@@ -13,26 +13,36 @@ execution control and Cloud Sync reliability.
 
 ### Added
 
-- **API request execution control** — Add global and per-request timeout
-  settings, explicit cancellation for active requests, and dedicated timeout
-  and cancellation states across Desktop and MCP execution paths.
+- **API request execution control** — Add a global desktop timeout, per-request
+  overrides, and `0` for no timeout. Stop cancels the in-flight request and
+  shows a cancelled state without writing history. Saved timeouts are included
+  in Cloud Sync and collection import/export.
 
 ### Changed
 
-- **MCP timeout semantics** — Omitted `timeoutMs` uses a 60,000 ms safety
-  default, `timeoutMs: 0` is explicitly unlimited, and positive values are
-  preserved without a silent cap.
-- **Desktop settings navigation** — Consolidate account, Cloud Sync, privacy,
-  update, and MCP settings under the shared settings surface.
+- **MCP request timeouts** — Omitted `timeoutMs` uses a 60,000 ms safety
+  default, `timeoutMs: 0` is unlimited, and positive values are used as given
+  instead of being silently capped at 60 seconds.
+- **Desktop Settings layout** — Combine Account and Cloud Sync under Account &
+  Sync, keep Privacy with General, place Updates on About, and show the
+  Stable/Test channel on the About page.
 
 ### Fixed
 
-- **Cloud Sync ownership and recovery** — Resolve one authoritative cloud
-  workspace owner, preserve durable outbox intent while account access is
-  paused, reconcile legacy and orphan bindings safely, and bootstrap legacy
-  API entities during initial upload.
-- **API request naming and history display** — Improve request names, tabs, and
-  history labels so saved and historical requests retain a clear identity.
+- **Cloud Sync after sign-in** — Expired sessions no longer permanently block
+  pending changes. Sign in again to resume sync; the UI shows Sign-in required
+  when the session has expired, or Cloud Sync plan required when the account
+  no longer includes it, and keeps local work.
+- **Cloud Sync ownership and pending changes** — Each local workspace keeps one
+  cloud owner, pending changes survive sign-out or paused access, older
+  workspaces upload previously unsynced API requests, and retrying a blocked
+  API request sends the current local request.
+- **Cloud Sync errors and diagnostics** — Distinguish temporary server,
+  protocol, and rejected-request failures more clearly, show last push/pull,
+  retry time, and server request details in diagnostics, and retry due work
+  without waiting for the next periodic cycle.
+- **API request naming and history** — Rename a request from the editor, keep a
+  clear name on tabs, and show the saved name or a readable path in history.
 
 ## [0.9.2] - 2026-09-02
 
