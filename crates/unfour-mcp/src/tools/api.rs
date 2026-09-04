@@ -223,9 +223,9 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                             "description": "Optional per-call environment override. It is used for variable resolution and saved request scripts without changing the workspace active environment."
                         },
                         "timeoutMs": {
-                            "type": "integer",
+                            "type": ["integer", "null"],
                             "minimum": 0,
-                            "description": "Optional timeout in milliseconds. Omitted defaults to 60000ms; 0 means unlimited; positive values are used exactly."
+                            "description": "Optional timeout in milliseconds. Omitted or null defaults to 60000ms; 0 means unlimited; positive values are used exactly."
                         }
                     },
                     "additionalProperties": false

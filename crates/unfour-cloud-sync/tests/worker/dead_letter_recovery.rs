@@ -849,7 +849,10 @@ async fn api_request_invalid_entity_dead_letter_retry_rematerializes_current_set
     service.sync_workspace(&workspace_id).await.unwrap();
 
     let mut input = saved_api_request(&workspace_id, &collection.id, None);
-    input.timeout_ms = None;
+    // Model a legacy server that incorrectly rejected the valid unlimited
+    // timeout representation. Recovery must still rebuild from Core rather
+    // than replaying this old canonical payload.
+    input.timeout_ms = Some(0);
     let request = bus.save_api_request(input).await.unwrap();
     transport.fail_operation_once(&request.id, "invalid_sync_entity");
     assert!(matches!(
@@ -870,7 +873,7 @@ async fn api_request_invalid_entity_dead_letter_retry_rematerializes_current_set
         .expect("failed request payload");
     assert_eq!(
         old_payload["settingsJson"],
-        serde_json::json!(r#"{"timeoutMs":null}"#)
+        serde_json::json!(r#"{"timeoutMs":0}"#)
     );
 
     // Model an old dead row whose wire payload predates settingsJson while

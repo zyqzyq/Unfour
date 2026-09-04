@@ -4,6 +4,7 @@ use unfour_core::domain::{
     ConnectionSnapshotConfig, DomainSnapshot, ExternalApiRequestApply, ExternalConnectionApply,
     SshTaskSnapshot, SshTaskStepSnapshot, TombstoneSnapshot, WorkspaceVariableSnapshot,
 };
+use unfour_core::models::{ApiRequestSettings, MAX_API_TIMEOUT_MS};
 
 #[test]
 fn secret_payload_has_no_identity_or_secret_value() {
@@ -273,6 +274,48 @@ fn api_snapshots_map_to_strict_canonical_payloads_and_parents() {
         "temporaryVariables",
     ] {
         assert!(payload.get(forbidden).is_none(), "unexpected {forbidden}");
+    }
+}
+
+#[test]
+fn api_request_canonical_payload_preserves_all_core_timeout_states() {
+    for (timeout_ms, expected_timeout) in [
+        (None, serde_json::json!(null)),
+        (Some(0), serde_json::json!(0)),
+        (Some(30_000), serde_json::json!(30_000)),
+        (
+            Some(MAX_API_TIMEOUT_MS),
+            serde_json::json!(MAX_API_TIMEOUT_MS),
+        ),
+    ] {
+        let settings_json = serde_json::to_string(&ApiRequestSettings { timeout_ms }).unwrap();
+        let payload = canonical_payload(DomainSnapshot::ApiRequest(ApiRequestSnapshot {
+            id: "request-timeout".into(),
+            workspace_id: "workspace-1".into(),
+            collection_id: "collection-1".into(),
+            parent_folder_id: None,
+            name: "Timeout request".into(),
+            sort_order: 0,
+            auth_json: "{}".into(),
+            method: "GET".into(),
+            url: "https://example.test/timeout".into(),
+            headers: Vec::new(),
+            query: Vec::new(),
+            body: None,
+            body_kind: "none".into(),
+            settings_json,
+            pre_request_script: None,
+            post_response_script: None,
+            script_schema_version: 1,
+            created_at: "2026-08-13T00:00:00Z".into(),
+            updated_at: "2026-08-13T00:00:00Z".into(),
+            revision: 1,
+        }))
+        .unwrap()
+        .unwrap();
+        let settings: Value =
+            serde_json::from_str(payload["settingsJson"].as_str().unwrap()).unwrap();
+        assert_eq!(settings["timeoutMs"], expected_timeout);
     }
 }
 

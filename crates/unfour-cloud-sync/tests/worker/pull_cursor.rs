@@ -391,43 +391,75 @@ async fn remote_api_request_changes_apply_each_settings_json_without_resetting_i
         deleted_at: None,
     };
 
-    transport.changes.lock().unwrap().push_back(ChangesPage {
-        protocol_version: PROTOCOL_VERSION,
-        cloud_workspace_id: binding.cloud_workspace_id.clone(),
-        current_cursor: base + 1,
-        next_cursor: base + 1,
-        changes: vec![remote_request(
-            base + 1,
-            "remote-request-default",
-            r#"{"timeoutMs":null}"#,
-        )],
-    });
-    service.sync_workspace(&workspace_id).await.unwrap();
-    let first_settings: String =
-        sqlx::query_scalar("SELECT settings_json FROM api_requests WHERE id = 'remote-request'")
-            .fetch_one(db.pool())
-            .await
-            .unwrap();
-    assert_eq!(first_settings, r#"{"timeoutMs":null}"#);
+    let accepted = [
+        (r#"{"timeoutMs":null}"#, serde_json::json!(null)),
+        (r#"{"timeoutMs":0}"#, serde_json::json!(0)),
+        (r#"{"timeoutMs":1}"#, serde_json::json!(1)),
+        (r#"{"timeoutMs":30000}"#, serde_json::json!(30000)),
+        (
+            r#"{"timeoutMs":9007199254740991}"#,
+            serde_json::json!(9007199254740991_u64),
+        ),
+    ];
+    for (index, (settings_json, expected_timeout)) in accepted.iter().enumerate() {
+        let cursor = base + index as i64 + 1;
+        transport.changes.lock().unwrap().push_back(ChangesPage {
+            protocol_version: PROTOCOL_VERSION,
+            cloud_workspace_id: binding.cloud_workspace_id.clone(),
+            current_cursor: cursor,
+            next_cursor: cursor,
+            changes: vec![remote_request(
+                cursor,
+                &format!("remote-request-{index}"),
+                settings_json,
+            )],
+        });
+        service.sync_workspace(&workspace_id).await.unwrap();
+        let stored_settings: String = sqlx::query_scalar(
+            "SELECT settings_json FROM api_requests WHERE id = 'remote-request'",
+        )
+        .fetch_one(db.pool())
+        .await
+        .unwrap();
+        let stored_settings: serde_json::Value = serde_json::from_str(&stored_settings).unwrap();
+        assert_eq!(stored_settings["timeoutMs"], *expected_timeout);
+    }
 
-    transport.changes.lock().unwrap().push_back(ChangesPage {
-        protocol_version: PROTOCOL_VERSION,
-        cloud_workspace_id: binding.cloud_workspace_id,
-        current_cursor: base + 2,
-        next_cursor: base + 2,
-        changes: vec![remote_request(
-            base + 2,
-            "remote-request-custom",
-            r#"{"timeoutMs":30000}"#,
-        )],
-    });
-    service.sync_workspace(&workspace_id).await.unwrap();
-    let second_settings: String =
-        sqlx::query_scalar("SELECT settings_json FROM api_requests WHERE id = 'remote-request'")
-            .fetch_one(db.pool())
+    let invalid_cursor = base + accepted.len() as i64 + 1;
+    for (index, settings_json) in [r#"{"timeoutMs":9007199254740992}"#, r#"{"timeoutMs":}"#]
+        .iter()
+        .enumerate()
+    {
+        transport.changes.lock().unwrap().push_back(ChangesPage {
+            protocol_version: PROTOCOL_VERSION,
+            cloud_workspace_id: binding.cloud_workspace_id.clone(),
+            current_cursor: invalid_cursor,
+            next_cursor: invalid_cursor,
+            changes: vec![remote_request(
+                invalid_cursor,
+                &format!("remote-request-invalid-{index}"),
+                settings_json,
+            )],
+        });
+        assert!(matches!(
+            service.sync_workspace(&workspace_id).await,
+            Err(SyncError::Core)
+        ));
+        let binding_after = service
+            .status(&workspace_id)
             .await
+            .unwrap()
+            .binding
             .unwrap();
-    assert_eq!(second_settings, r#"{"timeoutMs":30000}"#);
+        assert_eq!(binding_after.last_pulled_cursor, invalid_cursor - 1);
+        let stored_settings: String = sqlx::query_scalar(
+            "SELECT settings_json FROM api_requests WHERE id = 'remote-request'",
+        )
+        .fetch_one(db.pool())
+        .await
+        .unwrap();
+        assert_eq!(stored_settings, r#"{"timeoutMs":9007199254740991}"#);
+    }
     assert_eq!(
         sqlx::query_scalar::<_, i64>(
             "SELECT COUNT(*) FROM cloud_sync_outbox WHERE entity_id = 'remote-request'",

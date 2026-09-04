@@ -9,7 +9,7 @@ use crate::api_client::domain::secrets::{
 };
 use crate::api_client::domain::{collection_on, folder_on};
 use crate::api_client::helpers::normalize_entity_id;
-use unfour_core::models::ApiRequestSettings;
+use unfour_core::models::{ApiRequestSettings, MAX_API_TIMEOUT_MS};
 
 pub(super) async fn upsert_request(
     connection: &mut SqliteConnection,
@@ -21,6 +21,7 @@ pub(super) async fn upsert_request(
         &record.created_at,
         &record.updated_at,
     )?;
+    validate_request_settings_json(&record.settings_json)?;
     validate_owner(connection, "api_requests", &record.id, &record.workspace_id).await?;
     if doomed_orphan_to_skip(
         collection_on(
@@ -54,9 +55,6 @@ pub(super) async fn upsert_request(
         record.post_response_script.as_deref(),
         record.script_schema_version,
     )?;
-    serde_json::from_str::<ApiRequestSettings>(&record.settings_json).map_err(|_| {
-        AppError::Validation("external API request settings are invalid".to_string())
-    })?;
     let name = record.name.trim().to_string();
     if name.is_empty() {
         return Err(AppError::Validation(
@@ -195,4 +193,19 @@ pub(super) async fn upsert_request(
     .execute(&mut *connection)
     .await?;
     Ok(Some(1))
+}
+
+fn validate_request_settings_json(settings_json: &str) -> AppResult<()> {
+    let settings = serde_json::from_str::<ApiRequestSettings>(settings_json).map_err(|_| {
+        AppError::Validation("external API request settings are invalid".to_string())
+    })?;
+    if settings
+        .timeout_ms
+        .is_some_and(|timeout_ms| timeout_ms > MAX_API_TIMEOUT_MS)
+    {
+        return Err(AppError::Validation(format!(
+            "external API request timeout must be between 0 and {MAX_API_TIMEOUT_MS} milliseconds"
+        )));
+    }
+    Ok(())
 }

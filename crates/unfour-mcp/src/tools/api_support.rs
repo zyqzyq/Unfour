@@ -198,7 +198,7 @@ pub(super) fn parse_optional_timeout(
     arguments: &Map<String, Value>,
 ) -> Result<Option<u64>, ToolCallError> {
     match arguments.get("timeoutMs") {
-        None => Ok(Some(60_000)),
+        None | Some(Value::Null) => Ok(Some(60_000)),
         Some(Value::Number(n)) => {
             let ms = n.as_u64().ok_or_else(|| {
                 ToolCallError::InvalidArguments(
@@ -218,8 +218,16 @@ mod timeout_tests {
     use super::*;
 
     #[test]
-    fn omitted_timeout_uses_the_mcp_safety_default() {
+    fn omitted_or_null_timeout_uses_the_mcp_safety_default() {
         assert_eq!(parse_optional_timeout(&Map::new()).unwrap(), Some(60_000));
+        let explicit_null = serde_json::from_value::<Map<String, Value>>(json!({
+            "timeoutMs": null
+        }))
+        .unwrap();
+        assert_eq!(
+            parse_optional_timeout(&explicit_null).unwrap(),
+            Some(60_000)
+        );
     }
 
     #[test]

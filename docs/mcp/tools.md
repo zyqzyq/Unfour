@@ -134,9 +134,9 @@ Important limits:
   through the same versioned command-bus script path used by Desktop Send.
   Because scripts can mutate environment state, scripted saved requests are
   classified as writes even when their HTTP method is read-only.
-- Omitted `timeoutMs` uses a 60,000 ms safety timeout. `timeoutMs: 0` is
-  explicitly unlimited, and positive values are used exactly without a silent
-  cap.
+- Omitted or null `timeoutMs` uses a 60,000 ms safety timeout. `timeoutMs: 0`
+  is explicitly unlimited, and positive values are used exactly without a
+  silent cap.
 - Without `environmentId`, variables and scripts use the workspace active
   environment as before.
 - Delete operations require the confirmation handshake.
