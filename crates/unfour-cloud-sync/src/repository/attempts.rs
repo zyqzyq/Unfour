@@ -232,6 +232,69 @@ impl SyncRepository {
         Ok(true)
     }
 
+    /// Releases a whole atomically rolled-back batch without manufacturing
+    /// entity dead letters. Used for workspace/request failures that do not
+    /// safely identify one operation.
+    pub async fn release_batch_for_attention(
+        &self,
+        entries: &[OutboxEntry],
+        error_code: &str,
+        now: DateTime<Utc>,
+    ) -> Result<(), SyncError> {
+        let now = now.to_rfc3339();
+        let mut tx = self.pool.begin().await?;
+        for entry in entries {
+            sqlx::query(
+                r#"UPDATE cloud_sync_attempts SET status = 'failed', finished_at = ?1,
+                     lease_owner = NULL, lease_expires_at = NULL, error_code = ?2
+                   WHERE account_id = ?3 AND cloud_workspace_id = ?4 AND operation_id = ?5"#,
+            )
+            .bind(&now)
+            .bind(error_code)
+            .bind(&entry.account_id)
+            .bind(&entry.cloud_workspace_id)
+            .bind(&entry.operation_id)
+            .execute(&mut *tx)
+            .await?;
+            sqlx::query(
+                r#"UPDATE cloud_sync_outbox SET status = 'pending', next_attempt_at = NULL,
+                     lease_owner = NULL, lease_started_at = NULL, lease_expires_at = NULL,
+                     last_error = ?1, updated_at = ?2
+                   WHERE account_id = ?3 AND operation_id = ?4"#,
+            )
+            .bind(error_code)
+            .bind(&now)
+            .bind(&entry.account_id)
+            .bind(&entry.operation_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn defer_due_retries(
+        &self,
+        account_id: &str,
+        workspace_id: &str,
+        next_attempt_at: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> Result<(), SyncError> {
+        sqlx::query(
+            r#"UPDATE cloud_sync_outbox SET next_attempt_at = ?1, updated_at = ?2
+               WHERE account_id = ?3 AND local_workspace_id = ?4
+                 AND status IN ('pending', 'uncertain')
+                 AND next_attempt_at IS NOT NULL AND next_attempt_at <= ?2"#,
+        )
+        .bind(next_attempt_at.to_rfc3339())
+        .bind(now.to_rfc3339())
+        .bind(account_id)
+        .bind(workspace_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
     pub async fn apply_push_results(
         &self,
         binding: &SyncBinding,

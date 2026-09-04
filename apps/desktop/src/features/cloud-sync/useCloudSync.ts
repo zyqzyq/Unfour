@@ -12,6 +12,7 @@ export interface CloudSyncContextValue {
   loading: boolean;
   revision: number;
   statuses: ReadonlyMap<string, CloudSyncStatus>;
+  workspaceErrors: ReadonlyMap<string, string>;
   closeCloudWorkspaceDialog(): void;
   closeDetailDialog(): void;
   closeEnableDialog(): void;

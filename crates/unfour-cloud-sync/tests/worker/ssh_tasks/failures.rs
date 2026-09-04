@@ -170,7 +170,7 @@ async fn ssh_task_permanent_failure_keeps_steps_pending_and_blocked() {
 }
 
 #[tokio::test]
-async fn unknown_operation_id_uses_conservative_ssh_batch_fallback() {
+async fn unknown_operation_id_preserves_the_ssh_batch_for_attention() {
     let db = database().await;
     let seed = CommandBus::from_db(db.clone()).await.unwrap();
     let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
@@ -196,14 +196,14 @@ async fn unknown_operation_id_uses_conservative_ssh_batch_fallback() {
         Err(SyncError::Permanent)
     ));
     let status = service.status(&workspace_id).await.unwrap();
-    assert_eq!(status.dead_count, 4);
-    assert_eq!(status.pending_count, 0);
+    assert_eq!(status.dead_count, 0);
+    assert_eq!(status.pending_count, 4);
     for entity_id in [
         created.task.id.as_str(),
         created.steps[0].id.as_str(),
         created.steps[1].id.as_str(),
         created.steps[2].id.as_str(),
     ] {
-        assert_eq!(outbox_row(&db, entity_id).await.0, "dead".to_string());
+        assert_eq!(outbox_row(&db, entity_id).await.0, "pending".to_string());
     }
 }

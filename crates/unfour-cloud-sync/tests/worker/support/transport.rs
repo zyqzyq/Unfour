@@ -7,7 +7,8 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::Barrier;
 use unfour_cloud_sync::{
     ChangesPage, CloudWorkspace, PushRequest, PushResponse, PushResult, PushResultStatus,
-    SnapshotPage, SyncAccountContext, SyncTransport, TransportError, PROTOCOL_VERSION,
+    RemoteSyncProblem, RemoteSyncProblemCategory, SnapshotPage, SyncAccountContext, SyncPhase,
+    SyncTransport, TransportError, PROTOCOL_VERSION,
 };
 
 #[derive(Default)]
@@ -22,6 +23,7 @@ pub(crate) struct MockTransport {
     pub(crate) generation: AtomicU64,
     pub(crate) fail_pushes: AtomicUsize,
     pub(crate) permanent_pushes: AtomicUsize,
+    pub(crate) workspace_deleted_pushes: AtomicUsize,
     pub(crate) permanent_operation: Mutex<Option<(String, String)>>,
     pub(crate) unknown_permanent_operation: Mutex<Option<(String, String)>>,
     pub(crate) unauthorized_pushes: AtomicUsize,
@@ -63,7 +65,8 @@ impl MockTransport {
     }
 
     pub(crate) fn switch_account(&self, account_id: &str) {
-        *self.account_id.lock().unwrap() = account_id.into();
+        let mut current = self.account_id.lock().unwrap();
+        *current = account_id.into();
         self.generation.fetch_add(1, Ordering::SeqCst);
         self.cursor.store(0, Ordering::SeqCst);
     }
@@ -95,8 +98,9 @@ impl SyncTransport for MockTransport {
         if self.fail_account_on_call.load(Ordering::SeqCst) == call {
             return Err(TransportError::Unauthorized);
         }
+        let account_id = self.account_id.lock().unwrap();
         Ok(SyncAccountContext {
-            account_id: self.account_id.lock().unwrap().clone(),
+            account_id: account_id.clone(),
             generation: self.generation.load(Ordering::SeqCst),
         })
     }
@@ -183,13 +187,51 @@ impl SyncTransport for MockTransport {
             return Err(TransportError::PermanentOperation { code, operation_id });
         }
         if self
+            .workspace_deleted_pushes
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |value| {
+                (value > 0).then(|| value - 1)
+            })
+            .is_ok()
+        {
+            return Err(TransportError::Remote(RemoteSyncProblem {
+                server_error_code: "sync_workspace_deleted".into(),
+                request_id: Some("server-request-deleted".into()),
+                http_status: Some(409),
+                phase: SyncPhase::Push,
+                operation_id: None,
+                operation_index: None,
+                entity_type: None,
+                entity_id: None,
+                category: RemoteSyncProblemCategory::Workspace,
+            }));
+        }
+        if self
             .permanent_pushes
             .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |value| {
                 (value > 0).then(|| value - 1)
             })
             .is_ok()
         {
-            return Err(TransportError::Permanent("invalid_sync_entity".into()));
+            return Err(TransportError::Remote(RemoteSyncProblem {
+                server_error_code: "invalid_sync_entity".into(),
+                request_id: Some("server-request-invalid".into()),
+                http_status: Some(400),
+                phase: SyncPhase::Push,
+                operation_id: request
+                    .operations
+                    .first()
+                    .map(|operation| operation.operation_id.clone()),
+                operation_index: Some(0),
+                entity_type: request
+                    .operations
+                    .first()
+                    .map(|operation| operation.entity_type.as_str().to_string()),
+                entity_id: request
+                    .operations
+                    .first()
+                    .map(|operation| operation.entity_id.clone()),
+                category: RemoteSyncProblemCategory::OperationPermanent,
+            }));
         }
         if self
             .unauthorized_pushes

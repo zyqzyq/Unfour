@@ -1,4 +1,4 @@
-//! Account activation, workspace binding lifecycle, generation fencing and diagnostics.
+//! Account activation, workspace binding lifecycle and generation fencing.
 //! No network or Core writes; caller-owned transactions remain caller-owned.
 
 use chrono::{DateTime, Utc};
@@ -6,8 +6,6 @@ use sqlx::SqliteConnection;
 
 use super::SyncRepository;
 use crate::{SyncBinding, SyncError, SyncStatus};
-
-const DIAGNOSTIC_HISTORY_LIMIT: i64 = 200;
 
 impl SyncRepository {
     const BINDING_COLUMNS: &'static str = r#"
@@ -480,50 +478,6 @@ impl SyncRepository {
         })
     }
 
-    pub async fn diagnostics(
-        &self,
-        account_id: &str,
-        workspace_id: &str,
-    ) -> Result<Option<crate::SyncDiagnostics>, SyncError> {
-        let Some(binding) = self.binding(account_id, workspace_id).await? else {
-            return Ok(None);
-        };
-        let (pending_outbox_count, dead_outbox_count, next_retry_at): (i64, i64, Option<String>) =
-            sqlx::query_as(
-                r#"SELECT COUNT(*),
-                      COALESCE(SUM(CASE WHEN status = 'dead' THEN 1 ELSE 0 END), 0),
-                      MIN(CASE WHEN status <> 'dead' THEN next_attempt_at END)
-               FROM cloud_sync_outbox
-               WHERE account_id = ?1 AND local_workspace_id = ?2"#,
-            )
-            .bind(account_id)
-            .bind(workspace_id)
-            .fetch_one(&self.pool)
-            .await?;
-        let last_push_at = sqlx::query_scalar::<_, Option<String>>(
-            r#"SELECT MAX(finished_at) FROM cloud_sync_attempts
-               WHERE account_id = ?1 AND cloud_workspace_id = ?2
-                 AND status IN ('applied', 'no_op')"#,
-        )
-        .bind(account_id)
-        .bind(&binding.cloud_workspace_id)
-        .fetch_one(&self.pool)
-        .await?;
-        Ok(Some(crate::SyncDiagnostics {
-            local_workspace_id: binding.local_workspace_id,
-            remote_workspace_id: binding.cloud_workspace_id,
-            last_push_at,
-            last_pull_at: binding.last_success_at,
-            pending_outbox_count,
-            dead_outbox_count,
-            dead_letters: self.dead_letters(account_id, workspace_id).await?,
-            pull_cursor: binding.last_pulled_cursor,
-            last_error_code: binding.last_error,
-            consecutive_failure_count: binding.consecutive_failure_count,
-            next_retry_at,
-        }))
-    }
-
     pub(crate) async fn assert_binding_generation_on(
         connection: &mut SqliteConnection,
         binding: &SyncBinding,
@@ -626,24 +580,5 @@ impl SyncRepository {
             .fetch_optional(&self.pool)
             .await
             .map_err(Into::into)
-    }
-
-    pub(super) async fn record_diagnostic_on(
-        connection: &mut SqliteConnection,
-        account_id: &str,
-        cloud_workspace_id: Option<&str>,
-        category: &str,
-        error_code: &str,
-        entity_type: Option<&str>,
-        entity_id: Option<&str>,
-        now: &str,
-    ) -> Result<(), SyncError> {
-        sqlx::query(
-            "INSERT INTO cloud_sync_diagnostics (account_id, cloud_workspace_id, category, error_code, entity_type, entity_id, occurred_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        ).bind(account_id).bind(cloud_workspace_id).bind(category).bind(error_code).bind(entity_type).bind(entity_id).bind(now).execute(&mut *connection).await?;
-        sqlx::query(
-            "DELETE FROM cloud_sync_diagnostics WHERE account_id = ?1 AND id NOT IN (SELECT id FROM cloud_sync_diagnostics WHERE account_id = ?1 ORDER BY id DESC LIMIT ?2)",
-        ).bind(account_id).bind(DIAGNOSTIC_HISTORY_LIMIT).execute(&mut *connection).await?;
-        Ok(())
     }
 }

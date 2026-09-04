@@ -526,7 +526,7 @@ async fn dead_parent_blocks_children_until_parent_recovery() {
 }
 
 #[tokio::test]
-async fn permanent_error_without_operation_details_keeps_conservative_batch_fallback() {
+async fn permanent_error_with_operation_details_only_dead_letters_the_failed_operation() {
     let db = database().await;
     let seed = CommandBus::from_db(db.clone()).await.unwrap();
     let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
@@ -556,8 +556,8 @@ async fn permanent_error_without_operation_details_keeps_conservative_batch_fall
         Err(SyncError::Permanent)
     ));
     let status = service.status(&workspace_id).await.unwrap();
-    assert_eq!(status.dead_count, 2);
-    assert_eq!(status.pending_count, 0);
+    assert_eq!(status.dead_count, 1);
+    assert_eq!(status.pending_count, 1);
 }
 
 #[tokio::test]

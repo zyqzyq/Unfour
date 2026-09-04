@@ -6,10 +6,11 @@ import { useCloudSync } from "./useCloudSync";
 
 export function CloudSyncWorkspaceDecoration({ workspace }: DesktopAppWorkspaceDecorationProps) {
   const { t } = useI18n();
-  const { globalEnabled, openDetailDialog, statuses } = useCloudSync();
+  const { globalEnabled, openDetailDialog, statuses, workspaceErrors } = useCloudSync();
   const status = statuses.get(workspace.id);
-  if (!status?.binding) return null;
-  const state = getCloudSyncViewState(status, globalEnabled);
+  const workspaceError = workspaceErrors.get(workspace.id);
+  if (!status?.binding && !workspaceError) return null;
+  const state = workspaceError ? "attention" : getCloudSyncViewState(status!, globalEnabled);
   const label = t(`cloudSync.status.${state}`);
   return (
     <span

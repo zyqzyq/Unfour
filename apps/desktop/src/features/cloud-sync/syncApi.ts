@@ -79,6 +79,11 @@ export function getSyncDiagnostics(workspaceId: string): Promise<SyncDiagnostics
       lastErrorCode: status.binding.lastError,
       consecutiveFailureCount: status.binding.consecutiveFailureCount,
       nextRetryAt: null,
+      lastServerErrorCode: null,
+      lastServerRequestId: null,
+      lastHttpStatus: null,
+      lastSyncPhase: null,
+      recentEvents: [],
     }) : null);
   }
   return invoke("cloud_sync_diagnostics", { workspaceId });

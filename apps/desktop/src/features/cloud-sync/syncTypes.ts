@@ -66,6 +66,25 @@ export interface SyncDiagnostics {
   lastErrorCode: string | null;
   consecutiveFailureCount: number;
   nextRetryAt: string | null;
+  lastServerErrorCode: string | null;
+  lastServerRequestId: string | null;
+  lastHttpStatus: number | null;
+  lastSyncPhase: string | null;
+  recentEvents: SyncDiagnosticEvent[];
+}
+
+export interface SyncDiagnosticEvent {
+  source: "domain" | "local" | "remote" | null;
+  category: string;
+  errorCode: string;
+  requestId: string | null;
+  httpStatus: number | null;
+  phase: string | null;
+  operationId: string | null;
+  operationIndex: number | null;
+  entityType: string | null;
+  entityId: string | null;
+  occurredAt: string;
 }
 
 export interface DeadLetter {

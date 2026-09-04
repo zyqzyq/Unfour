@@ -10,7 +10,7 @@ const emptyStatus: CloudSyncStatus = { binding: null, pendingCount: 0, uncertain
 function sync(status = emptyStatus): CloudSyncContextValue {
   return {
     cloudWorkspaceDialogOpen: false, detailTarget: null, enableTarget: null, available: true, hasCloudSyncCapability: true, errorCode: null,
-    globalEnabled: true, loading: false, revision: 0, statuses: new Map([[workspace.id, status]]),
+    globalEnabled: true, loading: false, revision: 0, statuses: new Map([[workspace.id, status]]), workspaceErrors: new Map(),
     closeCloudWorkspaceDialog: vi.fn(), closeDetailDialog: vi.fn(), closeEnableDialog: vi.fn(), enableWorkspace: vi.fn(),
     openCloudWorkspaceDialog: vi.fn(), openDetailDialog: vi.fn(), openEnableDialog: vi.fn(), pauseWorkspace: vi.fn(),
     refresh: vi.fn(), refreshNow: vi.fn(), replaceDeadLetterWithRemote: vi.fn(), retryDeadLetter: vi.fn(), retryWorkspace: vi.fn(), setServiceEnabled: vi.fn(),

@@ -91,6 +91,7 @@ function Probe() {
     <span data-testid="available">{String(sync.available)}</span>
     <span data-testid="error">{sync.errorCode ?? "none"}</span>
     <span data-testid="statuses">{sync.statuses.size}</span>
+    <span data-testid="workspace-errors">{sync.workspaceErrors.size}</span>
     <span data-testid="binding-enabled">
       {String(sync.statuses.get("workspace")?.binding?.syncEnabled ?? false)}
     </span>
@@ -256,6 +257,39 @@ describe("CloudSyncProvider account context boundary", () => {
     expect(screen.getByTestId("error")).toHaveTextContent("none");
     expect(mocks.getLocalWorkspaces).toHaveBeenCalledTimes(1);
     expect(mocks.getGlobalSyncEnabled).toHaveBeenCalledTimes(1);
+  });
+
+  it("isolates one workspace status failure without clearing successful workspaces", async () => {
+    mocks.account = account(true, { kind: "ready" });
+    mocks.getLocalWorkspaces.mockResolvedValue({
+      activeWorkspaceId: "workspace-a",
+      workspaces: [
+        { id: "workspace-a", name: "A" },
+        { id: "workspace-b", name: "B" },
+        { id: "workspace-c", name: "C" },
+      ],
+    });
+    mocks.getCloudSyncStatus.mockImplementation(async (workspaceId: string) => {
+      if (workspaceId === "workspace-b") {
+        throw { code: "cloud_sync_storage_failed" };
+      }
+      return {
+        binding: null,
+        pendingCount: 0,
+        uncertainCount: 0,
+        inFlightCount: 0,
+        deadCount: 0,
+        deadLetters: [],
+        conflictCount: 0,
+        running: false,
+      };
+    });
+
+    render(<CloudSyncProvider><Probe /></CloudSyncProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("statuses")).toHaveTextContent("2"));
+    expect(screen.getByTestId("workspace-errors")).toHaveTextContent("1");
+    expect(screen.getByTestId("error")).toHaveTextContent("none");
   });
 
   it("refreshes the account before manually retrying a workspace", async () => {

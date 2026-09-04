@@ -6,7 +6,7 @@ use super::{SyncService, MAX_REMOTE_PAGES};
 use crate::canonical::snapshot_workspace_name;
 use crate::{
     parse_snapshot_item, CloudWorkspace, DownloadDecision, SnapshotItem, SyncAccountContext,
-    SyncEntityType, SyncError, SyncRepository, PROTOCOL_VERSION,
+    SyncEntityType, SyncError, SyncPhase, SyncRepository, TransportError, PROTOCOL_VERSION,
 };
 
 impl SyncService {
@@ -19,11 +19,10 @@ impl SyncService {
             return Err(SyncError::SafeReplaceUnavailable);
         }
         let account = self.account().await?;
+        let listed = self.transport.list_workspaces().await;
         let cloud = self
-            .transport
-            .list_workspaces()
-            .await
-            .map_err(SyncError::from)?
+            .finish_transport(&account.account_id, None, listed)
+            .await?
             .into_iter()
             .find(|workspace| workspace.cloud_workspace_id == cloud_workspace_id)
             .ok_or(SyncError::NotFound)?;
@@ -54,8 +53,9 @@ impl SyncService {
         let mut fixed_cursor = None;
         let mut page_token = None;
         let mut root_workspace_name = None;
+        let mut completed = false;
         for _ in 0..MAX_REMOTE_PAGES {
-            let page = self
+            let page = match self
                 .transport
                 .snapshot(
                     &cloud.cloud_workspace_id,
@@ -63,16 +63,59 @@ impl SyncService {
                     page_token.as_deref(),
                 )
                 .await
-                .map_err(SyncError::from)?;
+            {
+                Ok(page) => page,
+                Err(TransportError::Remote(problem)) => {
+                    self.record_remote_problem(
+                        &account.account_id,
+                        Some(&cloud.cloud_workspace_id),
+                        &problem,
+                    )
+                    .await;
+                    return Err(problem.sync_error());
+                }
+                Err(TransportError::RemoteConflict { problem, .. }) => {
+                    self.record_remote_problem(
+                        &account.account_id,
+                        Some(&cloud.cloud_workspace_id),
+                        &problem,
+                    )
+                    .await;
+                    return Err(SyncError::Conflict);
+                }
+                Err(error) => return Err(SyncError::from(error)),
+            };
             self.account_is_current(account)?;
             if page.protocol_version != PROTOCOL_VERSION
                 || page.cloud_workspace_id != cloud.cloud_workspace_id
                 || page.at_cursor < 0
                 || page.current_cursor < page.at_cursor
             {
+                let _ = self
+                    .repository
+                    .record_local_diagnostic(
+                        &account.account_id,
+                        Some(&cloud.cloud_workspace_id),
+                        "permanent",
+                        "snapshot_invalid_response",
+                        SyncPhase::Snapshot,
+                        self.dependencies.clock.now(),
+                    )
+                    .await;
                 return Err(SyncError::InvalidData);
             }
             if fixed_cursor.is_some_and(|cursor| cursor != page.at_cursor) {
+                let _ = self
+                    .repository
+                    .record_local_diagnostic(
+                        &account.account_id,
+                        Some(&cloud.cloud_workspace_id),
+                        "permanent",
+                        "snapshot_invalid_response",
+                        SyncPhase::Snapshot,
+                        self.dependencies.clock.now(),
+                    )
+                    .await;
                 return Err(SyncError::InvalidData);
             }
             fixed_cursor = Some(page.at_cursor);
@@ -95,8 +138,23 @@ impl SyncService {
                 .await?;
             page_token = page.next_page_token;
             if page_token.is_none() {
+                completed = true;
                 break;
             }
+        }
+        if !completed {
+            let _ = self
+                .repository
+                .record_local_diagnostic(
+                    &account.account_id,
+                    Some(&cloud.cloud_workspace_id),
+                    "permanent",
+                    "snapshot_invalid_response",
+                    SyncPhase::Snapshot,
+                    self.dependencies.clock.now(),
+                )
+                .await;
+            return Err(SyncError::InvalidData);
         }
         let at_cursor = fixed_cursor.ok_or(SyncError::InvalidData)?;
         let root_workspace_name = root_workspace_name.ok_or(SyncError::InvalidData)?;

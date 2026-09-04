@@ -22,6 +22,7 @@ fn cloud_sync_migrator() -> Migrator {
 
 #[cfg(test)]
 mod tests {
+    mod diagnostics;
     mod ownership;
 
     use super::*;
@@ -87,7 +88,6 @@ mod tests {
         for table in PRO_TABLES {
             assert!(!table_exists(&pool, table).await, "stale {table}");
         }
-
         sqlx::query(
             "INSERT INTO cloud_sync_account_settings (account_id, updated_at) VALUES ('new-account', '2026-07-29T00:00:00Z')",
         )

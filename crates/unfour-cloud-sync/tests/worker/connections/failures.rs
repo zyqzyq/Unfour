@@ -56,7 +56,7 @@ async fn permanent_connection_failure_isolated_from_batch_peers() {
 }
 
 #[tokio::test]
-async fn unknown_operation_id_keeps_the_existing_conservative_batch_fallback() {
+async fn unknown_operation_id_preserves_the_atomic_batch_for_attention() {
     let db = database().await;
     let seed = CommandBus::from_db(db.clone()).await.unwrap();
     let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
@@ -89,6 +89,7 @@ async fn unknown_operation_id_keeps_the_existing_conservative_batch_fallback() {
         SyncError::Permanent
     );
     let status = service.status(&workspace_id).await.unwrap();
-    assert_eq!(status.dead_count, 2);
-    assert_eq!(status.pending_count, 0);
+    assert_eq!(status.dead_count, 0);
+    assert_eq!(status.pending_count, 2);
+    assert_eq!(status.binding.unwrap().state, "error");
 }

@@ -1,6 +1,7 @@
 //! Periodic scheduling, singleflight ownership and the ordered reconciliation round.
 //! Keep error finalization and dirty-trigger draining inside the same flight.
 
+use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -11,6 +12,18 @@ use crate::{SyncAccountContext, SyncError};
 
 const LOCAL_DEBOUNCE: Duration = Duration::from_millis(500);
 const PERIODIC_PULL: Duration = Duration::from_secs(5 * 60);
+const SCHEDULER_ERROR_COOLDOWN: ChronoDuration = ChronoDuration::seconds(30);
+
+fn retry_delay(next_attempt_at: &str, now: DateTime<Utc>) -> Option<Duration> {
+    DateTime::parse_from_rfc3339(next_attempt_at)
+        .ok()
+        .map(|at| {
+            at.with_timezone(&Utc)
+                .signed_duration_since(now)
+                .to_std()
+                .unwrap_or(Duration::ZERO)
+        })
+}
 
 #[derive(Default)]
 pub(super) struct FlightState {
@@ -51,6 +64,31 @@ impl SyncService {
         let mut interval = tokio::time::interval(PERIODIC_PULL);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
+            let scheduled = self.repository.next_scheduled_retry().await.ok().flatten();
+            // Arm against the live session, not the DB generation captured with
+            // the retry row. `next_scheduled_retry` can race an account switch:
+            // the row still names the old owner while runtime context already
+            // stores the new generation, which would make a DB-generation fence
+            // pass and push for the previous account.
+            let armed_generation = self.transport.account_generation();
+            let scheduled = match scheduled {
+                Some((account_id, workspace_id, generation, at))
+                    if generation as u64 == armed_generation =>
+                {
+                    Some((account_id, workspace_id, generation, at))
+                }
+                Some(_) => {
+                    let _ = self.account().await;
+                    None
+                }
+                None => None,
+            };
+            let retry_delay = scheduled
+                .as_ref()
+                .and_then(|(_, _, _, at)| retry_delay(at, self.dependencies.clock.now()))
+                .unwrap_or(PERIODIC_PULL);
+            let retry_timer = tokio::time::sleep(retry_delay);
+            tokio::pin!(retry_timer);
             tokio::select! {
                 workspace = receiver.recv() => {
                     let Some(workspace) = workspace else { break };
@@ -58,11 +96,28 @@ impl SyncService {
                     let mut workspaces = HashSet::from([workspace]);
                     while let Ok(workspace) = receiver.try_recv() { workspaces.insert(workspace); }
                     for workspace in workspaces {
-                        let service = self.clone();
-                        tokio::spawn(async move { let _ = service.sync_workspace(&workspace).await; });
+                        let _ = self.sync_workspace_scheduled(&workspace).await;
                     }
                 }
                 _ = interval.tick() => { let _ = self.sync_all().await; }
+                _ = self.retry_scheduler_wakeup.notified() => {}
+                _ = &mut retry_timer => {
+                    if self.transport.account_generation() != armed_generation {
+                        let _ = self.account().await;
+                        continue;
+                    }
+                    if let Some((account_id, workspace_id, _, _)) = scheduled {
+                        if self.sync_workspace_scheduled(&workspace_id).await.is_err() {
+                            let now = self.dependencies.clock.now();
+                            let _ = self.repository.defer_due_retries(
+                                &account_id,
+                                &workspace_id,
+                                now + SCHEDULER_ERROR_COOLDOWN,
+                                now,
+                            ).await;
+                        }
+                    }
+                }
             }
         }
     }
@@ -150,6 +205,25 @@ impl SyncService {
     }
 
     pub async fn sync_workspace(&self, workspace_id: &str) -> Result<(), SyncError> {
+        let account = self.account().await?;
+        if !self
+            .repository
+            .global_sync_enabled(&account.account_id)
+            .await?
+        {
+            return Ok(());
+        }
+        self.repository
+            .prepare_manual_retry(
+                &account.account_id,
+                workspace_id,
+                self.dependencies.clock.now(),
+            )
+            .await?;
+        self.sync_workspace_for(account, workspace_id).await
+    }
+
+    async fn sync_workspace_scheduled(&self, workspace_id: &str) -> Result<(), SyncError> {
         let account = self.account().await?;
         if !self
             .repository
@@ -290,6 +364,15 @@ impl SyncService {
             .ok_or(SyncError::NotFound)?;
         if !binding.sync_enabled || binding.state == "paused" {
             return Ok(());
+        }
+        if binding.state == "error" {
+            match binding.last_error.as_deref() {
+                Some("cloud_sync_workspace_deleted") => return Err(SyncError::WorkspaceDeleted),
+                Some("cloud_sync_not_found") => return Err(SyncError::NotFound),
+                Some("cloud_sync_snapshot_required") => return Err(SyncError::SnapshotRequired),
+                Some("cloud_sync_permanent_failure") => return Err(SyncError::Permanent),
+                _ => {}
+            }
         }
 
         self.repository
@@ -473,5 +556,25 @@ impl SyncService {
                 .await?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test(start_paused = true)]
+    async fn retry_deadline_uses_one_paused_time_sleep() {
+        let now = DateTime::parse_from_rfc3339("2026-09-04T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let delay = retry_delay("2026-09-04T00:00:05Z", now).unwrap();
+        let sleep = tokio::time::sleep(delay);
+        tokio::pin!(sleep);
+
+        tokio::time::advance(Duration::from_secs(4)).await;
+        assert!(!sleep.as_mut().is_elapsed());
+        tokio::time::advance(Duration::from_secs(1)).await;
+        sleep.await;
     }
 }

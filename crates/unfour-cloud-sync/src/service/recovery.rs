@@ -3,7 +3,7 @@ use unfour_core::domain::DomainEntityKey;
 use super::{SyncService, MAX_REMOTE_PAGES};
 use crate::{
     parse_remote_change, parse_snapshot_item, OutboxEntry, RemoteChange, SnapshotItem, SyncBinding,
-    SyncError, SyncOperation, PAYLOAD_SCHEMA_VERSION, PROTOCOL_VERSION,
+    SyncError, SyncOperation, SyncPhase, TransportError, PAYLOAD_SCHEMA_VERSION, PROTOCOL_VERSION,
 };
 
 impl SyncService {
@@ -148,7 +148,7 @@ impl SyncService {
         let mut page_token = None;
         let mut found = None;
         for _ in 0..MAX_REMOTE_PAGES {
-            let page = self
+            let page = match self
                 .transport
                 .snapshot(
                     &binding.cloud_workspace_id,
@@ -156,13 +156,45 @@ impl SyncService {
                     page_token.as_deref(),
                 )
                 .await
-                .map_err(SyncError::from)?;
+            {
+                Ok(page) => page,
+                Err(TransportError::Remote(problem)) => {
+                    self.record_remote_problem(
+                        &account.account_id,
+                        Some(&binding.cloud_workspace_id),
+                        &problem,
+                    )
+                    .await;
+                    return Err(problem.sync_error());
+                }
+                Err(TransportError::RemoteConflict { problem, .. }) => {
+                    self.record_remote_problem(
+                        &account.account_id,
+                        Some(&binding.cloud_workspace_id),
+                        &problem,
+                    )
+                    .await;
+                    return Err(SyncError::Conflict);
+                }
+                Err(error) => return Err(SyncError::from(error)),
+            };
             self.account_is_current(account)?;
             if page.protocol_version != PROTOCOL_VERSION
                 || page.cloud_workspace_id != binding.cloud_workspace_id
                 || page.at_cursor != at_cursor
                 || page.current_cursor < page.at_cursor
             {
+                let _ = self
+                    .repository
+                    .record_local_diagnostic(
+                        &account.account_id,
+                        Some(&binding.cloud_workspace_id),
+                        "permanent",
+                        "snapshot_invalid_response",
+                        SyncPhase::Snapshot,
+                        self.dependencies.clock.now(),
+                    )
+                    .await;
                 return Err(SyncError::InvalidData);
             }
             for item in page.items {

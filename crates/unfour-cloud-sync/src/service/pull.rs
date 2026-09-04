@@ -7,7 +7,7 @@ use super::external_apply::merge_external_pages;
 use super::{SyncService, MAX_REMOTE_PAGES};
 use crate::{
     parse_remote_change, ChangesPage, SyncAccountContext, SyncBinding, SyncEntityType, SyncError,
-    SyncOperation, SyncRepository, PROTOCOL_VERSION,
+    SyncOperation, SyncPhase, SyncRepository, TransportError, PROTOCOL_VERSION,
 };
 
 const PULL_PAGE_LIMIT: usize = 200;
@@ -21,13 +21,47 @@ impl SyncService {
         let mut cursor = binding.last_pulled_cursor;
         let mut pinned_current = None;
         for _ in 0..MAX_REMOTE_PAGES {
-            let page = self
+            let page = match self
                 .transport
                 .changes(&binding.cloud_workspace_id, cursor, PULL_PAGE_LIMIT)
                 .await
-                .map_err(SyncError::from)?;
+            {
+                Ok(page) => page,
+                Err(TransportError::Remote(problem)) => {
+                    self.record_remote_problem(
+                        &account.account_id,
+                        Some(&binding.cloud_workspace_id),
+                        &problem,
+                    )
+                    .await;
+                    return Err(problem.sync_error());
+                }
+                Err(TransportError::RemoteConflict { problem, .. }) => {
+                    self.record_remote_problem(
+                        &account.account_id,
+                        Some(&binding.cloud_workspace_id),
+                        &problem,
+                    )
+                    .await;
+                    return Err(SyncError::Conflict);
+                }
+                Err(error) => return Err(SyncError::from(error)),
+            };
             self.account_is_current(account)?;
-            validate_changes_page(binding, cursor, pinned_current, &page)?;
+            if let Err(reason) = validate_changes_page(binding, cursor, pinned_current, &page) {
+                let _ = self
+                    .repository
+                    .record_local_diagnostic(
+                        &account.account_id,
+                        Some(&binding.cloud_workspace_id),
+                        "permanent",
+                        reason,
+                        SyncPhase::Changes,
+                        self.dependencies.clock.now(),
+                    )
+                    .await;
+                return Err(SyncError::InvalidData);
+            }
             pinned_current = Some(page.current_cursor);
             let now = self.dependencies.clock.now().to_rfc3339();
             let mut tx = self.repository.pool().begin().await?;
@@ -89,7 +123,22 @@ fn validate_changes_page(
     requested_cursor: i64,
     pinned_current: Option<i64>,
     page: &ChangesPage,
-) -> Result<(), SyncError> {
+) -> Result<(), &'static str> {
+    if page.protocol_version != PROTOCOL_VERSION {
+        return Err("pull_invalid_protocol_version");
+    }
+    if page.cloud_workspace_id != binding.cloud_workspace_id {
+        return Err("pull_workspace_mismatch");
+    }
+    if pinned_current.is_some_and(|current| current != page.current_cursor) {
+        return Err("pull_current_cursor_changed");
+    }
+    if page.current_cursor < requested_cursor
+        || page.next_cursor < requested_cursor
+        || page.next_cursor > page.current_cursor
+    {
+        return Err("pull_cursor_out_of_range");
+    }
     let cursor_sequence_is_complete = if page.changes.is_empty() {
         page.next_cursor == requested_cursor && page.current_cursor == requested_cursor
     } else {
@@ -100,16 +149,10 @@ fn validate_changes_page(
                 .windows(2)
                 .all(|pair| pair[0].cursor.checked_add(1) == Some(pair[1].cursor))
     };
-    let valid = page.protocol_version == PROTOCOL_VERSION
-        && page.cloud_workspace_id == binding.cloud_workspace_id
-        && page.current_cursor >= requested_cursor
-        && page.next_cursor >= requested_cursor
-        && page.next_cursor <= page.current_cursor
-        && pinned_current.is_none_or(|current| current == page.current_cursor)
-        && cursor_sequence_is_complete
+    let valid = cursor_sequence_is_complete
         && page
             .changes
             .iter()
             .all(|change| change.cursor > requested_cursor && change.cursor <= page.next_cursor);
-    valid.then_some(()).ok_or(SyncError::InvalidData)
+    valid.then_some(()).ok_or("pull_cursor_gap")
 }

@@ -71,6 +71,7 @@ function createCloudSyncContext(): CloudSyncContextValue {
     loading: false,
     revision: 1,
     statuses: new Map(),
+    workspaceErrors: new Map(),
     closeCloudWorkspaceDialog: () => undefined,
     closeDetailDialog: () => undefined,
     closeEnableDialog: () => undefined,

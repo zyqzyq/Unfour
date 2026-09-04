@@ -9,8 +9,8 @@ use tokio::sync::Barrier;
 use unfour_cloud_sync::{
     parse_snapshot_item, ApiErrorEnvelope, ChangesPage, CloudSyncAuthFailure,
     DesktopSessionCredential, DesktopSessionProvider, HttpSyncTransport, PushOperation,
-    PushRequest, PushResponse, SnapshotPage, SyncEntityType, SyncError, SyncOperation,
-    SyncTransport, TransportError, CLOUD_SYNC_ENTITLEMENT, PAYLOAD_SCHEMA_VERSION,
+    PushRequest, PushResponse, RemoteSyncProblemCategory, SnapshotPage, SyncEntityType, SyncError,
+    SyncOperation, SyncTransport, TransportError, CLOUD_SYNC_ENTITLEMENT, PAYLOAD_SCHEMA_VERSION,
     PROTOCOL_VERSION,
 };
 use unfour_core::domain::DomainEntityType;
@@ -376,7 +376,9 @@ async fn stale_cloud_sync_unauthorized_cannot_invalidate_a_newer_generation() {
 
     assert!(matches!(
         request.await.unwrap(),
-        Err(TransportError::Unauthorized)
+        Err(TransportError::Remote(problem))
+            if problem.category == RemoteSyncProblemCategory::Auth
+                && problem.request_id.as_deref() == Some("stale")
     ));
     assert_eq!(sessions.generation.load(Ordering::SeqCst), 8);
     assert_eq!(sessions.allowed_generation.load(Ordering::SeqCst), 8);
@@ -489,7 +491,8 @@ async fn http_error_envelope_classifies_409_protocol_and_auth_without_guessing()
     .await;
     assert!(matches!(
         transport.push("cloud", &request).await,
-        Err(TransportError::Conflict(_))
+        Err(TransportError::RemoteConflict { problem, .. })
+            if problem.request_id.as_deref() == Some("r1")
     ));
     server.await.unwrap();
 
@@ -500,8 +503,10 @@ async fn http_error_envelope_classifies_409_protocol_and_auth_without_guessing()
     .await;
     assert!(matches!(
         transport.push("cloud", &request).await,
-        Err(TransportError::PermanentOperation { code, operation_id })
-            if code == "invalid_sync_entity" && operation_id == "failed-operation"
+        Err(TransportError::Remote(problem))
+            if problem.server_error_code == "invalid_sync_entity"
+                && problem.operation_id.as_deref() == Some("failed-operation")
+                && problem.request_id.as_deref() == Some("r-operation")
     ));
     server.await.unwrap();
 
@@ -512,8 +517,9 @@ async fn http_error_envelope_classifies_409_protocol_and_auth_without_guessing()
     .await;
     assert!(matches!(
         transport.push("cloud", &request).await,
-        Err(TransportError::PermanentOperation { code, operation_id })
-            if code == "invalid_parent_entity" && operation_id == "nested-failed-op"
+        Err(TransportError::Remote(problem))
+            if problem.server_error_code == "invalid_parent_entity"
+                && problem.operation_id.as_deref() == Some("nested-failed-op")
     ));
     server.await.unwrap();
 
@@ -524,7 +530,9 @@ async fn http_error_envelope_classifies_409_protocol_and_auth_without_guessing()
     .await;
     assert!(matches!(
         transport.push("cloud", &request).await,
-        Err(TransportError::Permanent(code)) if code == "invalid_sync_entity"
+        Err(TransportError::Remote(problem))
+            if problem.category == RemoteSyncProblemCategory::OperationPermanent
+                && problem.operation_id.is_none()
     ));
     server.await.unwrap();
 
@@ -535,7 +543,9 @@ async fn http_error_envelope_classifies_409_protocol_and_auth_without_guessing()
     .await;
     assert!(matches!(
         transport.push("cloud", &request).await,
-        Err(TransportError::Permanent(code)) if code == "invalid_sync_entity"
+        Err(TransportError::Remote(problem))
+            if problem.category == RemoteSyncProblemCategory::OperationPermanent
+                && problem.operation_id.is_none()
     ));
     server.await.unwrap();
 
@@ -546,7 +556,8 @@ async fn http_error_envelope_classifies_409_protocol_and_auth_without_guessing()
     .await;
     assert!(matches!(
         transport.push("cloud", &request).await,
-        Err(TransportError::ProtocolIncompatible)
+        Err(TransportError::Remote(problem))
+            if problem.category == RemoteSyncProblemCategory::Protocol
     ));
     server.await.unwrap();
 
@@ -557,7 +568,8 @@ async fn http_error_envelope_classifies_409_protocol_and_auth_without_guessing()
     .await;
     assert!(matches!(
         transport.push("cloud", &request).await,
-        Err(TransportError::Unauthorized)
+        Err(TransportError::Remote(problem))
+            if problem.category == RemoteSyncProblemCategory::Auth
     ));
     server.await.unwrap();
 
@@ -568,7 +580,8 @@ async fn http_error_envelope_classifies_409_protocol_and_auth_without_guessing()
     .await;
     assert!(matches!(
         transport.push("cloud", &request).await,
-        Err(TransportError::EntitlementRequired)
+        Err(TransportError::Remote(problem))
+            if problem.category == RemoteSyncProblemCategory::Entitlement
     ));
     server.await.unwrap();
 }

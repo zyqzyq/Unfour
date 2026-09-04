@@ -7,7 +7,7 @@ use super::external_apply::merge_external_pages;
 use super::{SyncService, MAX_REMOTE_PAGES};
 use crate::{
     parse_snapshot_item, SnapshotItem, SyncAccountContext, SyncBinding, SyncEntityType, SyncError,
-    SyncRepository, PROTOCOL_VERSION,
+    SyncPhase, SyncRepository, PROTOCOL_VERSION,
 };
 
 impl SyncService {
@@ -46,21 +46,38 @@ impl SyncService {
         let mut page_token = None;
         let mut items = Vec::new();
         for _ in 0..MAX_REMOTE_PAGES {
-            let page = self
+            let response = self
                 .transport
                 .snapshot(
                     &binding.cloud_workspace_id,
                     fixed_cursor,
                     page_token.as_deref(),
                 )
-                .await
-                .map_err(SyncError::from)?;
+                .await;
+            let page = self
+                .finish_transport(
+                    &account.account_id,
+                    Some(&binding.cloud_workspace_id),
+                    response,
+                )
+                .await?;
             self.account_is_current(account)?;
             if page.protocol_version != PROTOCOL_VERSION
                 || page.cloud_workspace_id != binding.cloud_workspace_id
                 || page.at_cursor < 0
                 || page.current_cursor < page.at_cursor
             {
+                let _ = self
+                    .repository
+                    .record_local_diagnostic(
+                        &account.account_id,
+                        Some(&binding.cloud_workspace_id),
+                        "permanent",
+                        "snapshot_invalid_response",
+                        SyncPhase::Snapshot,
+                        self.dependencies.clock.now(),
+                    )
+                    .await;
                 return Err(SyncError::InvalidData);
             }
             if fixed_cursor.is_some_and(|cursor| cursor != page.at_cursor) {

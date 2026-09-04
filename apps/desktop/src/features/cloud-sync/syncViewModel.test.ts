@@ -85,6 +85,32 @@ describe("getCloudSyncViewState", () => {
     expect(syncErrorMessageKey("cloud_sync_unauthorized")).toBe("cloudSync.errors.relogin");
     expect(syncErrorMessageKey("cloud_sync_not_authenticated")).toBe("cloudSync.errors.relogin");
     expect(syncErrorMessageKey("cloud_sync_safe_replace_unavailable")).toBe("cloudSync.errors.safeReplaceUnavailable");
-    expect(syncErrorMessageKey("cloud_sync_storage_failed")).toBe("cloudSync.errors.generic");
+    const expected = new Map([
+      ["cloud_sync_not_found", "cloudSync.errors.workspaceNotFound"],
+      ["cloud_sync_storage_failed", "cloudSync.errors.storage"],
+      ["cloud_sync_core_apply_failed", "cloudSync.errors.localApply"],
+      ["cloud_sync_account_changed", "cloudSync.errors.accountChanged"],
+      ["cloud_sync_conflict", "cloudSync.errors.conflict"],
+      ["cloud_sync_local_workspace_not_empty", "cloudSync.errors.localWorkspaceNotEmpty"],
+      ["cloud_sync_workspace_name_conflict", "cloudSync.errors.workspaceNameConflict"],
+      ["cloud_sync_cloud_workspace_not_empty", "cloudSync.errors.cloudWorkspaceNotEmpty"],
+      ["cloud_sync_dead_letter_blocked", "cloudSync.errors.deadLetterBlocked"],
+      ["cloud_sync_workspace_owned_by_another_account", "cloudSync.errors.ownership"],
+      ["cloud_sync_workspace_ownership_ambiguous", "cloudSync.errors.ownership"],
+      ["cloud_sync_workspace_ownership_invariant", "cloudSync.errors.ownership"],
+      ["cloud_sync_snapshot_required", "cloudSync.errors.snapshotRequired"],
+      ["cloud_sync_workspace_deleted", "cloudSync.errors.workspaceDeleted"],
+      ["invalid_parent_entity", "cloudSync.errors.invalidData"],
+      ["payload_schema_version_unsupported", "cloudSync.errors.payloadSchema"],
+      ["operation_id_reuse", "cloudSync.errors.operationIdReuse"],
+      ["secret_value_not_allowed", "cloudSync.errors.secretRejected"],
+      ["request_too_large", "cloudSync.errors.tooLarge"],
+      ["payload_too_large", "cloudSync.errors.tooLarge"],
+      ["protocol_version_unsupported", "cloudSync.errors.protocol"],
+    ]);
+    for (const [code, key] of expected) {
+      expect(syncErrorMessageKey(code), code).toBe(key);
+      expect(syncErrorMessageKey(code), `${code} must not be generic`).not.toBe("cloudSync.errors.generic");
+    }
   });
 });

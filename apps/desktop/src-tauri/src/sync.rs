@@ -211,6 +211,12 @@ impl From<SyncError> for SyncCommandError {
                 SyncError::WorkspaceOwnershipInvariant => {
                     "Cloud Sync workspace ownership metadata is inconsistent."
                 }
+                SyncError::SnapshotRequired => {
+                    "Cloud Sync must restart from a new server snapshot."
+                }
+                SyncError::WorkspaceDeleted => {
+                    "The cloud workspace was deleted. Local changes were preserved."
+                }
             },
         }
     }

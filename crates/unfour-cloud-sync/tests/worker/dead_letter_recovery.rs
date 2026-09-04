@@ -110,13 +110,36 @@ async fn legacy_batch_dead_letters_are_revived_with_the_repaired_parent() {
         ))
         .await
         .unwrap();
-    // Simulate the pre-fix client, which had no operation-level details and
-    // therefore persisted every atomically rolled-back row as dead.
-    transport.permanent_pushes.store(1, Ordering::SeqCst);
-    assert!(matches!(
-        service.sync_workspace(&workspace_id).await,
-        Err(SyncError::Permanent)
-    ));
+    // Simulate a database left by the pre-fix client, which persisted every
+    // atomically rolled-back row as dead when operation context was absent.
+    sqlx::query(
+        "UPDATE cloud_sync_outbox SET status = 'dead', last_error = 'invalid_sync_entity' WHERE local_workspace_id = ?1",
+    )
+    .bind(&workspace_id)
+    .execute(db.pool())
+    .await
+    .unwrap();
+    sqlx::query(
+        r#"INSERT INTO cloud_sync_attempts (
+             account_id, cloud_workspace_id, operation_id, entity_type, entity_id,
+             base_version, status, started_at, finished_at, error_code
+           )
+           SELECT account_id, cloud_workspace_id, operation_id, entity_type, entity_id,
+                  base_version, 'failed', '2026-09-04T00:00:00Z',
+                  '2026-09-04T00:00:00Z', 'invalid_sync_entity'
+           FROM cloud_sync_outbox WHERE local_workspace_id = ?1"#,
+    )
+    .bind(&workspace_id)
+    .execute(db.pool())
+    .await
+    .unwrap();
+    sqlx::query(
+        "UPDATE cloud_sync_workspace_bindings SET state = 'error', last_error = 'cloud_sync_permanent_failure' WHERE local_workspace_id = ?1",
+    )
+    .bind(&workspace_id)
+    .execute(db.pool())
+    .await
+    .unwrap();
     let polluted = service.status(&workspace_id).await.unwrap();
     assert_eq!(polluted.dead_count, 3);
     let collection_dead = polluted

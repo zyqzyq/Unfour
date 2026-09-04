@@ -9,8 +9,8 @@ use url::Url;
 
 use crate::{
     ApiErrorEnvelope, ChangesPage, CloudWorkspace, CreateCloudWorkspaceRequest, PushRequest,
-    PushResponse, SnapshotPage, SyncAccountContext, SyncConflictDetails, SyncError,
-    PROTOCOL_VERSION,
+    PushResponse, RemoteSyncProblem, RemoteSyncProblemCategory, SnapshotPage, SyncAccountContext,
+    SyncConflictDetails, SyncError, SyncPhase, PROTOCOL_VERSION,
 };
 
 /// Opaque desktop-session credential. It is never serializable or clonable and
@@ -80,10 +80,18 @@ pub enum TransportError {
     NotFound,
     Conflict(SyncConflictDetails),
     Permanent(String),
-    PermanentOperation { code: String, operation_id: String },
+    PermanentOperation {
+        code: String,
+        operation_id: String,
+    },
     InvalidResponse,
     Retryable,
     ResultUnknown,
+    Remote(RemoteSyncProblem),
+    RemoteConflict {
+        problem: RemoteSyncProblem,
+        details: SyncConflictDetails,
+    },
 }
 
 impl fmt::Debug for TransportError {
@@ -103,6 +111,12 @@ impl fmt::Debug for TransportError {
             Self::InvalidResponse => formatter.write_str("InvalidResponse"),
             Self::Retryable => formatter.write_str("Retryable"),
             Self::ResultUnknown => formatter.write_str("ResultUnknown"),
+            Self::Remote(problem) => formatter.debug_tuple("Remote").field(problem).finish(),
+            Self::RemoteConflict { problem, details } => formatter
+                .debug_struct("RemoteConflict")
+                .field("problem", problem)
+                .field("details", details)
+                .finish(),
         }
     }
 }
@@ -119,6 +133,8 @@ impl From<TransportError> for SyncError {
             TransportError::PermanentOperation { .. } => Self::Permanent,
             TransportError::InvalidResponse => Self::InvalidData,
             TransportError::Retryable | TransportError::ResultUnknown => Self::Transport,
+            TransportError::Remote(problem) => problem.sync_error(),
+            TransportError::RemoteConflict { .. } => Self::Conflict,
         }
     }
 }
@@ -259,70 +275,211 @@ impl HttpSyncTransport {
     async fn decode<T: DeserializeOwned>(
         &self,
         response: AuthenticatedResponse,
+        phase: SyncPhase,
     ) -> Result<T, TransportError> {
         let AuthenticatedResponse {
             generation,
             response,
         } = response;
         let response = response.map_err(|error| {
-            if error.is_timeout() || error.is_connect() {
-                TransportError::ResultUnknown
+            let code = if error.is_timeout() {
+                "request_timeout"
+            } else if error.is_connect() {
+                "connection_failed"
             } else {
-                TransportError::Retryable
-            }
+                "request_failed"
+            };
+            TransportError::Remote(transport_failure_problem(phase, code, None))
         })?;
         let status = response.status();
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|_| TransportError::ResultUnknown)?;
+        let bytes = response.bytes().await.map_err(|_| {
+            TransportError::Remote(transport_failure_problem(
+                phase,
+                "response_body_interrupted",
+                Some(status.as_u16()),
+            ))
+        })?;
         if status.is_success() {
-            return serde_json::from_slice(&bytes).map_err(|_| TransportError::InvalidResponse);
+            return serde_json::from_slice(&bytes).map_err(|_| {
+                TransportError::Remote(RemoteSyncProblem {
+                    server_error_code: "invalid_api_response".into(),
+                    request_id: None,
+                    http_status: Some(status.as_u16()),
+                    phase,
+                    operation_id: None,
+                    operation_index: None,
+                    entity_type: None,
+                    entity_id: None,
+                    category: RemoteSyncProblemCategory::InvalidResponse,
+                })
+            });
         }
-        let envelope: ApiErrorEnvelope =
-            serde_json::from_slice(&bytes).map_err(|_| TransportError::InvalidResponse)?;
-        let error = envelope.error;
-        let code = error.code.clone();
-        match status {
-            StatusCode::UNAUTHORIZED => {
+        let error = serde_json::from_slice::<ApiErrorEnvelope>(&bytes)
+            .ok()
+            .map(|value| value.error);
+        let classified = classify_api_error(status, phase, error);
+        match &classified {
+            TransportError::Remote(problem)
+                if problem.category == RemoteSyncProblemCategory::Auth =>
+            {
                 self.invalidate_for_response(generation, CloudSyncAuthFailure::Unauthorized);
-                Err(TransportError::Unauthorized)
             }
-            StatusCode::FORBIDDEN if code == "entitlement_required" => {
+            TransportError::Remote(problem)
+                if problem.category == RemoteSyncProblemCategory::Entitlement =>
+            {
                 self.invalidate_for_response(generation, CloudSyncAuthFailure::EntitlementRequired);
-                Err(TransportError::EntitlementRequired)
             }
-            StatusCode::NOT_FOUND => Err(TransportError::NotFound),
-            StatusCode::CONFLICT if code == "base_version_conflict" => error
-                .conflict_details()
-                .map_or(Err(TransportError::InvalidResponse), |details| {
-                    Err(TransportError::Conflict(details))
-                }),
-            StatusCode::BAD_REQUEST if code == "protocol_version_unsupported" => {
-                Err(TransportError::ProtocolIncompatible)
-            }
-            StatusCode::BAD_REQUEST | StatusCode::CONFLICT | StatusCode::PAYLOAD_TOO_LARGE => {
-                match error.permanent_operation_details() {
-                    Some(details) => Err(TransportError::PermanentOperation {
-                        code: details.error_code.unwrap_or(code),
-                        operation_id: details.operation_id,
-                    }),
-                    None => Err(TransportError::Permanent(code)),
-                }
-            }
-            StatusCode::FORBIDDEN => Err(TransportError::Permanent(code)),
-            status if status.is_server_error() || status == StatusCode::TOO_MANY_REQUESTS => {
-                Err(TransportError::Retryable)
-            }
-            _ => match error.permanent_operation_details() {
-                Some(details) => Err(TransportError::PermanentOperation {
-                    code: details.error_code.unwrap_or(code),
-                    operation_id: details.operation_id,
-                }),
-                None => Err(TransportError::Permanent(code)),
-            },
+            _ => {}
         }
+        Err(classified)
     }
+}
+
+fn transport_failure_problem(
+    phase: SyncPhase,
+    code: &str,
+    http_status: Option<u16>,
+) -> RemoteSyncProblem {
+    RemoteSyncProblem {
+        server_error_code: code.into(),
+        request_id: None,
+        http_status,
+        phase,
+        operation_id: None,
+        operation_index: None,
+        entity_type: None,
+        entity_id: None,
+        category: if phase == SyncPhase::Push {
+            RemoteSyncProblemCategory::ResultUnknown
+        } else {
+            RemoteSyncProblemCategory::Retryable
+        },
+    }
+}
+
+fn classify_api_error(
+    status: StatusCode,
+    phase: SyncPhase,
+    error: Option<crate::ApiErrorDetail>,
+) -> TransportError {
+    if error.is_none() {
+        if status == StatusCode::UNAUTHORIZED {
+            let mut problem = transport_failure_problem(phase, "unauthorized", Some(401));
+            problem.category = RemoteSyncProblemCategory::Auth;
+            return TransportError::Remote(problem);
+        }
+        if status.is_server_error() || status == StatusCode::TOO_MANY_REQUESTS {
+            let mut problem = transport_failure_problem(
+                phase,
+                if status == StatusCode::TOO_MANY_REQUESTS {
+                    "rate_limited"
+                } else {
+                    "server_error"
+                },
+                Some(status.as_u16()),
+            );
+            problem.category = RemoteSyncProblemCategory::Retryable;
+            return TransportError::Remote(problem);
+        }
+        let mut problem =
+            transport_failure_problem(phase, "invalid_api_response", Some(status.as_u16()));
+        problem.category = RemoteSyncProblemCategory::InvalidResponse;
+        return TransportError::Remote(problem);
+    }
+    let code = error
+        .as_ref()
+        .map(|value| value.code.as_str())
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_string);
+    let Some(code) = code else {
+        return TransportError::Remote(RemoteSyncProblem {
+            server_error_code: "invalid_api_response".into(),
+            request_id: error
+                .as_ref()
+                .map(|value| value.request_id.trim())
+                .filter(|value| !value.is_empty())
+                .map(str::to_string),
+            http_status: Some(status.as_u16()),
+            phase,
+            operation_id: None,
+            operation_index: None,
+            entity_type: None,
+            entity_id: None,
+            category: RemoteSyncProblemCategory::InvalidResponse,
+        });
+    };
+    let operation = error
+        .as_ref()
+        .and_then(|value| value.permanent_operation_details());
+    let conflict_details = error.as_ref().and_then(|value| value.conflict_details());
+    let problem = |category| RemoteSyncProblem {
+        server_error_code: code.clone(),
+        request_id: error
+            .as_ref()
+            .map(|value| value.request_id.trim())
+            .filter(|value| !value.is_empty())
+            .map(str::to_string),
+        http_status: Some(status.as_u16()),
+        phase,
+        operation_id: operation.as_ref().map(|value| value.operation_id.clone()),
+        operation_index: operation.as_ref().and_then(|value| value.operation_index),
+        entity_type: operation
+            .as_ref()
+            .and_then(|value| value.entity_type.clone()),
+        entity_id: operation.as_ref().and_then(|value| value.entity_id.clone()),
+        category,
+    };
+    if status == StatusCode::UNAUTHORIZED || code == "unauthorized" {
+        return TransportError::Remote(problem(RemoteSyncProblemCategory::Auth));
+    }
+    if code == "entitlement_required" {
+        return TransportError::Remote(problem(RemoteSyncProblemCategory::Entitlement));
+    }
+    if code == "protocol_version_unsupported" {
+        return TransportError::Remote(problem(RemoteSyncProblemCategory::Protocol));
+    }
+    if code == "base_version_conflict" {
+        return match conflict_details {
+            Some(details) => TransportError::RemoteConflict {
+                problem: problem(RemoteSyncProblemCategory::Conflict),
+                details,
+            },
+            None => TransportError::Remote(problem(RemoteSyncProblemCategory::InvalidResponse)),
+        };
+    }
+    if code == "snapshot_required" {
+        return TransportError::Remote(problem(RemoteSyncProblemCategory::SnapshotRequired));
+    }
+    if status == StatusCode::NOT_FOUND
+        || matches!(
+            code.as_str(),
+            "sync_workspace_deleted" | "sync_workspace_not_found" | "not_found"
+        )
+    {
+        return TransportError::Remote(problem(RemoteSyncProblemCategory::Workspace));
+    }
+    if status.is_server_error() || status == StatusCode::TOO_MANY_REQUESTS {
+        return TransportError::Remote(problem(RemoteSyncProblemCategory::Retryable));
+    }
+    let operation_code = operation
+        .as_ref()
+        .and_then(|details| details.error_code.as_deref())
+        .unwrap_or(&code);
+    if matches!(
+        operation_code,
+        "invalid_sync_entity"
+            | "invalid_parent_entity"
+            | "payload_schema_version_unsupported"
+            | "operation_id_reuse"
+            | "secret_value_not_allowed"
+    ) || (operation.is_some()
+        && matches!(operation_code, "request_too_large" | "payload_too_large"))
+    {
+        let mut operation_problem = problem(RemoteSyncProblemCategory::OperationPermanent);
+        operation_problem.server_error_code = operation_code.to_string();
+        return TransportError::Remote(operation_problem);
+    }
+    TransportError::Remote(problem(RemoteSyncProblemCategory::RequestPermanent))
 }
 
 #[derive(Deserialize)]
@@ -351,7 +508,9 @@ impl SyncTransport for HttpSyncTransport {
         url.query_pairs_mut()
             .append_pair("protocolVersion", &PROTOCOL_VERSION.to_string());
         let response = self.request(Method::GET, url).await?.send().await;
-        let body = self.decode::<WorkspaceListResponse>(response).await?;
+        let body = self
+            .decode::<WorkspaceListResponse>(response, SyncPhase::ListWorkspaces)
+            .await?;
         if body.protocol_version != PROTOCOL_VERSION {
             return Err(TransportError::ProtocolIncompatible);
         }
@@ -373,7 +532,7 @@ impl SyncTransport for HttpSyncTransport {
             .json(&request)
             .send()
             .await;
-        self.decode(response).await
+        self.decode(response, SyncPhase::CreateWorkspace).await
     }
 
     async fn push(
@@ -388,7 +547,7 @@ impl SyncTransport for HttpSyncTransport {
             .json(request)
             .send()
             .await;
-        self.decode(response).await
+        self.decode(response, SyncPhase::Push).await
     }
 
     async fn changes(
@@ -403,7 +562,7 @@ impl SyncTransport for HttpSyncTransport {
             .append_pair("afterCursor", &after_cursor.to_string())
             .append_pair("limit", &limit.to_string());
         let response = self.request(Method::GET, url).await?.send().await;
-        self.decode(response).await
+        self.decode(response, SyncPhase::Changes).await
     }
 
     async fn snapshot(
@@ -425,21 +584,10 @@ impl SyncTransport for HttpSyncTransport {
             }
         }
         let response = self.request(Method::GET, url).await?.send().await;
-        self.decode(response).await
+        self.decode(response, SyncPhase::Snapshot).await
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn desktop_session_debug_is_redacted() {
-        let credential =
-            DesktopSessionCredential::new("very-secret-token".into(), "account-1".into(), 7)
-                .expect("credential");
-        let debug = format!("{credential:?}");
-        assert!(!debug.contains("very-secret-token"));
-        assert!(debug.contains("REDACTED"));
-    }
-}
+#[path = "transport_tests.rs"]
+mod tests;

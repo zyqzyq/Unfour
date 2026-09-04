@@ -133,7 +133,7 @@ const extensionContext: DesktopAppExtensionContext = { activeWorkspace: workspac
 function baseContext() {
   return {
     cloudWorkspaceDialogOpen: false, detailTarget: null, enableTarget: null, available: true, hasCloudSyncCapability: true, errorCode: null,
-    globalEnabled: true, loading: false, statuses: new Map([[workspace.id, emptyStatus]]),
+    globalEnabled: true, loading: false, statuses: new Map([[workspace.id, emptyStatus]]), workspaceErrors: new Map(),
     closeCloudWorkspaceDialog: vi.fn(), closeDetailDialog: vi.fn(), closeEnableDialog: vi.fn(), enableWorkspace: vi.fn().mockResolvedValue(undefined),
     openCloudWorkspaceDialog: vi.fn(), openDetailDialog: vi.fn(), openEnableDialog: vi.fn(), pauseWorkspace: vi.fn(),
     refreshNow: vi.fn().mockResolvedValue(undefined), replaceDeadLetterWithRemote: mocks.replaceDeadLetterWithRemote, retryDeadLetter: mocks.retryDeadLetter, retryWorkspace: vi.fn(), setServiceEnabled: vi.fn(),
@@ -242,6 +242,16 @@ describe("Cloud Sync UI", () => {
     }
   });
 
+  it("keeps a workspace status failure visible as an attention entry", () => {
+    mocks.context = {
+      ...baseContext(),
+      statuses: new Map(),
+      workspaceErrors: new Map([[workspace.id, "cloud_sync_storage_failed"]]),
+    };
+    render(<CloudSyncWorkspaceDecoration {...extensionContext} active placement="listItem" workspace={workspace} />);
+    expect(screen.getByRole("button").getAttribute("aria-label")).toBe("Needs attention");
+  });
+
   it("explains scope and only enables after confirmation", async () => {
     mocks.context = { ...baseContext(), enableTarget: { id: "workspace", name: "Backend" } };
     render(<EnableCloudSyncDialog />);
@@ -299,7 +309,7 @@ describe("Cloud Sync UI", () => {
     };
     render(<CloudSyncSection {...extensionContext} />);
     expect(screen.getByText("Cloud Sync unavailable")).toBeTruthy();
-    expect(screen.getByText("cloudSync.errors.generic")).toBeTruthy();
+    expect(screen.getByText("cloudSync.errors.storage")).toBeTruthy();
     expect(screen.queryByRole("switch")).toBeNull();
   });
 

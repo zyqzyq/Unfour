@@ -6,7 +6,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
-use tokio::sync::{mpsc, OnceCell, Semaphore};
+use tokio::sync::{mpsc, Notify, OnceCell, Semaphore};
 use unfour_command_bus::{CommandBus, TransactionalCommandHook, DEFAULT_SECRET_SERVICE};
 use unfour_database_engine::DatabaseService;
 use unfour_http_engine::ApiClientService;
@@ -56,6 +56,7 @@ pub struct SyncService {
     /// revived by this process (an upgraded build speaks a newer protocol, so
     /// one retry per app run is warranted).
     protocol_revival_done: Arc<Mutex<HashSet<String>>>,
+    retry_scheduler_wakeup: Arc<Notify>,
 }
 
 pub struct SyncRuntime;
@@ -105,6 +106,7 @@ impl SyncRuntime {
             worker_id,
             activation_sync_pending: Arc::new(Mutex::new(None)),
             protocol_revival_done: Arc::new(Mutex::new(HashSet::new())),
+            retry_scheduler_wakeup: Arc::new(Notify::new()),
         };
         (service, hook, receiver)
     }
@@ -180,6 +182,49 @@ impl SyncService {
         Ok(())
     }
 
+    async fn record_remote_problem(
+        &self,
+        account_id: &str,
+        cloud_workspace_id: Option<&str>,
+        problem: &crate::RemoteSyncProblem,
+    ) {
+        let _ = self
+            .repository
+            .record_remote_problem(
+                account_id,
+                cloud_workspace_id,
+                problem,
+                self.dependencies.clock.now(),
+            )
+            .await;
+    }
+
+    fn wake_retry_scheduler(&self) {
+        self.retry_scheduler_wakeup.notify_one();
+    }
+
+    async fn finish_transport<T>(
+        &self,
+        account_id: &str,
+        cloud_workspace_id: Option<&str>,
+        result: Result<T, TransportError>,
+    ) -> Result<T, SyncError> {
+        match result {
+            Ok(value) => Ok(value),
+            Err(TransportError::Remote(problem)) => {
+                self.record_remote_problem(account_id, cloud_workspace_id, &problem)
+                    .await;
+                Err(problem.sync_error())
+            }
+            Err(TransportError::RemoteConflict { problem, .. }) => {
+                self.record_remote_problem(account_id, cloud_workspace_id, &problem)
+                    .await;
+                Err(SyncError::Conflict)
+            }
+            Err(error) => Err(SyncError::from(error)),
+        }
+    }
+
     /// Starts the first post-activation sync only after the caller has opened
     /// its credential/entitlement gate. Repeated account-state refreshes do
     /// not schedule duplicate sync-all runs.
@@ -205,11 +250,10 @@ impl SyncService {
 
     pub async fn list_cloud_workspaces(&self) -> Result<Vec<CloudWorkspace>, SyncError> {
         let account = self.account().await?;
+        let listed = self.transport.list_workspaces().await;
         let mut workspaces = self
-            .transport
-            .list_workspaces()
-            .await
-            .map_err(SyncError::from)?;
+            .finish_transport(&account.account_id, None, listed)
+            .await?;
         for workspace in &mut workspaces {
             if workspace
                 .name
@@ -236,6 +280,29 @@ impl SyncService {
                 .await
             {
                 Ok(page) => page,
+                Err(TransportError::Remote(problem)) => {
+                    self.record_remote_problem(
+                        &account.account_id,
+                        Some(&workspace.cloud_workspace_id),
+                        &problem,
+                    )
+                    .await;
+                    match problem.sync_error() {
+                        error @ (SyncError::Unauthorized
+                        | SyncError::EntitlementRequired
+                        | SyncError::ProtocolIncompatible) => return Err(error),
+                        _ => continue,
+                    }
+                }
+                Err(TransportError::RemoteConflict { problem, .. }) => {
+                    self.record_remote_problem(
+                        &account.account_id,
+                        Some(&workspace.cloud_workspace_id),
+                        &problem,
+                    )
+                    .await;
+                    continue;
+                }
                 Err(TransportError::Unauthorized) => return Err(SyncError::Unauthorized),
                 Err(TransportError::EntitlementRequired) => {
                     return Err(SyncError::EntitlementRequired)
@@ -249,13 +316,39 @@ impl SyncService {
                 || page.cloud_workspace_id != workspace.cloud_workspace_id
                 || page.at_cursor != workspace.current_cursor
             {
+                let _ = self
+                    .repository
+                    .record_local_diagnostic(
+                        &account.account_id,
+                        Some(&workspace.cloud_workspace_id),
+                        "permanent",
+                        "snapshot_invalid_response",
+                        crate::SyncPhase::Snapshot,
+                        self.dependencies.clock.now(),
+                    )
+                    .await;
                 continue;
             }
             if let Some(item) = page.items.iter().find(|item| {
                 item.entity_type == SyncEntityType::Workspace
                     && item.entity_id == workspace.root_entity_id
             }) {
-                workspace.name = snapshot_workspace_name(&workspace.root_entity_id, item)?;
+                match snapshot_workspace_name(&workspace.root_entity_id, item) {
+                    Ok(name) => workspace.name = name,
+                    Err(_) => {
+                        let _ = self
+                            .repository
+                            .record_local_diagnostic(
+                                &account.account_id,
+                                Some(&workspace.cloud_workspace_id),
+                                "permanent",
+                                "snapshot_invalid_response",
+                                crate::SyncPhase::Snapshot,
+                                self.dependencies.clock.now(),
+                            )
+                            .await;
+                    }
+                }
             }
         }
         self.account_is_current(&account)?;
@@ -280,6 +373,7 @@ impl SyncService {
                 let _ = service.sync_all().await;
             });
         }
+        self.wake_retry_scheduler();
         Ok(())
     }
 
@@ -327,11 +421,10 @@ impl SyncService {
             }
             return self.sync_workspace_for(account, workspace_id).await;
         }
+        let created = self.transport.create_workspace(workspace_id).await;
         let cloud = self
-            .transport
-            .create_workspace(workspace_id)
-            .await
-            .map_err(SyncError::from)?;
+            .finish_transport(&account.account_id, None, created)
+            .await?;
         self.account_is_current(&account)?;
         if cloud.cloud_workspace_id.trim().is_empty()
             || cloud.root_entity_id != workspace_id
@@ -374,7 +467,9 @@ impl SyncService {
                 false,
                 self.dependencies.clock.now(),
             )
-            .await
+            .await?;
+        self.wake_retry_scheduler();
+        Ok(())
     }
 
     pub async fn status(&self, workspace_id: &str) -> Result<SyncStatus, SyncError> {

@@ -1,12 +1,15 @@
 //! Materialize and send bounded batches, then classify their transport outcomes.
 //! The repository owns leases and durable attempts; uncertain retries retain payloads.
 
+use std::collections::HashSet;
+
 use unfour_core::domain::{DomainEntityKey, DomainEntityType};
 
 use super::SyncService;
 use crate::{
-    OutboxEntry, PushOperation, PushRequest, SyncAccountContext, SyncBinding, SyncEntityType,
-    SyncError, SyncOperation, TransportError, PROTOCOL_VERSION,
+    OutboxEntry, PushOperation, PushRequest, RemoteSyncProblemCategory, SyncAccountContext,
+    SyncBinding, SyncEntityType, SyncError, SyncOperation, SyncPhase, TransportError,
+    PROTOCOL_VERSION,
 };
 
 const PUSH_BATCH_LIMIT: i64 = 50;
@@ -93,9 +96,17 @@ impl SyncService {
         if entries.is_empty() {
             return Ok(parked_oversized);
         }
+        // Recheck at the outbound side-effect boundary. A periodic flight can
+        // outlive an account switch while it materializes local snapshots;
+        // the post-response fence alone would prevent commits but not the old
+        // flight from sending a request with the new session. `mark_in_flight`
+        // awaits, so the live generation must be rechecked with no await
+        // between that fence and `transport.push`.
+        self.account_is_current(account)?;
         self.repository
             .mark_in_flight(&entries, &self.worker_id, self.dependencies.clock.now())
             .await?;
+        self.account_is_current(account)?;
         let request = PushRequest {
             protocol_version: PROTOCOL_VERSION,
             operations,
@@ -107,10 +118,22 @@ impl SyncService {
         self.account_is_current(account)?;
         match response {
             Ok(response) => {
-                if response.protocol_version != PROTOCOL_VERSION || response.current_cursor < 0 {
+                if let Err(reason) = validate_push_response(&entries, &response) {
                     self.repository
                         .mark_uncertain(&entries, self.dependencies.clock.now())
                         .await?;
+                    let _ = self
+                        .repository
+                        .record_local_diagnostic(
+                            &account.account_id,
+                            Some(&binding.cloud_workspace_id),
+                            "permanent",
+                            reason,
+                            SyncPhase::Push,
+                            self.dependencies.clock.now(),
+                        )
+                        .await;
+                    self.wake_retry_scheduler();
                     return Err(SyncError::InvalidData);
                 }
                 self.repository
@@ -137,6 +160,97 @@ impl SyncService {
                     .await?;
                 Err(SyncError::Conflict)
             }
+            Err(TransportError::RemoteConflict { problem, details }) => {
+                self.record_remote_problem(
+                    &account.account_id,
+                    Some(&binding.cloud_workspace_id),
+                    &problem,
+                )
+                .await;
+                self.repository
+                    .mark_not_sent(
+                        &entries,
+                        "base_version_conflict",
+                        true,
+                        self.dependencies.clock.now(),
+                    )
+                    .await?;
+                self.repository
+                    .record_push_conflict(binding, &details, self.dependencies.clock.now())
+                    .await?;
+                self.wake_retry_scheduler();
+                Err(SyncError::Conflict)
+            }
+            Err(TransportError::Remote(problem)) => {
+                self.record_remote_problem(
+                    &account.account_id,
+                    Some(&binding.cloud_workspace_id),
+                    &problem,
+                )
+                .await;
+                let now = self.dependencies.clock.now();
+                let error = problem.sync_error();
+                match problem.category {
+                    RemoteSyncProblemCategory::Auth | RemoteSyncProblemCategory::Entitlement => {
+                        self.repository
+                            .mark_not_sent(&entries, error.code(), true, now)
+                            .await?;
+                        self.wake_retry_scheduler();
+                    }
+                    RemoteSyncProblemCategory::Protocol => {
+                        self.repository
+                            .mark_not_sent(&entries, "protocol_version_unsupported", false, now)
+                            .await?;
+                    }
+                    RemoteSyncProblemCategory::OperationPermanent => {
+                        let marked = match problem.operation_id.as_deref() {
+                            Some(operation_id) => {
+                                self.repository
+                                    .mark_batch_permanent_failure(
+                                        &entries,
+                                        operation_id,
+                                        &problem.server_error_code,
+                                        now,
+                                    )
+                                    .await?
+                            }
+                            None => false,
+                        };
+                        if !marked {
+                            self.repository
+                                .release_batch_for_attention(
+                                    &entries,
+                                    &problem.server_error_code,
+                                    now,
+                                )
+                                .await?;
+                        }
+                    }
+                    RemoteSyncProblemCategory::Workspace
+                    | RemoteSyncProblemCategory::SnapshotRequired
+                    | RemoteSyncProblemCategory::RequestPermanent => {
+                        self.repository
+                            .release_batch_for_attention(&entries, &problem.server_error_code, now)
+                            .await?;
+                    }
+                    RemoteSyncProblemCategory::InvalidResponse
+                    | RemoteSyncProblemCategory::ResultUnknown => {
+                        self.repository.mark_uncertain(&entries, now).await?;
+                        self.wake_retry_scheduler();
+                    }
+                    RemoteSyncProblemCategory::Retryable => {
+                        self.repository
+                            .mark_not_sent(&entries, &problem.server_error_code, true, now)
+                            .await?;
+                        self.wake_retry_scheduler();
+                    }
+                    RemoteSyncProblemCategory::Conflict => {
+                        self.repository.mark_uncertain(&entries, now).await?;
+                        self.wake_retry_scheduler();
+                    }
+                }
+                Err(error)
+            }
             Err(TransportError::Unauthorized) => {
                 self.repository
                     .mark_not_sent(
@@ -146,6 +260,7 @@ impl SyncService {
                         self.dependencies.clock.now(),
                     )
                     .await?;
+                self.wake_retry_scheduler();
                 Err(SyncError::Unauthorized)
             }
             Err(TransportError::EntitlementRequired) => {
@@ -157,6 +272,7 @@ impl SyncService {
                         self.dependencies.clock.now(),
                     )
                     .await?;
+                self.wake_retry_scheduler();
                 Err(SyncError::EntitlementRequired)
             }
             Err(TransportError::ProtocolIncompatible) => {
@@ -177,25 +293,25 @@ impl SyncService {
                     .mark_batch_permanent_failure(&entries, &operation_id, &code, now)
                     .await?
                 {
-                    // A stale, malformed, or otherwise untrusted operation
-                    // reference cannot safely identify a row in this batch.
-                    // Preserve the old all-entries fallback instead of
-                    // guessing that any operation committed.
                     self.repository
-                        .mark_not_sent(&entries, &code, false, now)
+                        .release_batch_for_attention(&entries, &code, now)
                         .await?;
                 }
                 Err(SyncError::Permanent)
             }
             Err(TransportError::Permanent(code)) => {
                 self.repository
-                    .mark_not_sent(&entries, &code, false, self.dependencies.clock.now())
+                    .release_batch_for_attention(&entries, &code, self.dependencies.clock.now())
                     .await?;
                 Err(SyncError::Permanent)
             }
             Err(TransportError::NotFound) => {
                 self.repository
-                    .mark_not_sent(&entries, "not_found", false, self.dependencies.clock.now())
+                    .release_batch_for_attention(
+                        &entries,
+                        "not_found",
+                        self.dependencies.clock.now(),
+                    )
                     .await?;
                 Err(SyncError::NotFound)
             }
@@ -203,6 +319,7 @@ impl SyncService {
                 self.repository
                     .mark_uncertain(&entries, self.dependencies.clock.now())
                     .await?;
+                self.wake_retry_scheduler();
                 Err(SyncError::Transport)
             }
             Err(TransportError::Retryable) => {
@@ -214,10 +331,36 @@ impl SyncService {
                         self.dependencies.clock.now(),
                     )
                     .await?;
+                self.wake_retry_scheduler();
                 Err(SyncError::Transport)
             }
         }
     }
+}
+
+fn validate_push_response(
+    entries: &[OutboxEntry],
+    response: &crate::PushResponse,
+) -> Result<(), &'static str> {
+    if response.protocol_version != PROTOCOL_VERSION || response.current_cursor < 0 {
+        return Err("push_invalid_response");
+    }
+    if entries.len() != response.results.len() {
+        return Err("push_result_count_mismatch");
+    }
+    let expected = entries
+        .iter()
+        .map(|entry| entry.operation_id.as_str())
+        .collect::<HashSet<_>>();
+    let actual = response
+        .results
+        .iter()
+        .map(|result| result.operation_id.as_str())
+        .collect::<HashSet<_>>();
+    if actual.len() != response.results.len() || actual != expected {
+        return Err("push_missing_operation_result");
+    }
+    Ok(())
 }
 
 fn build_push_operation(entry: &OutboxEntry) -> Result<PushOperation, SyncError> {

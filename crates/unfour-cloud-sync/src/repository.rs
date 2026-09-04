@@ -12,6 +12,7 @@ mod api_bootstrap;
 mod attempts;
 mod bindings;
 mod bootstrap;
+mod diagnostics;
 mod initial_upload;
 mod orphan_reconciliation;
 mod outbox;

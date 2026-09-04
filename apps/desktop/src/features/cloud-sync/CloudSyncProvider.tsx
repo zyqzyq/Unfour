@@ -55,6 +55,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
   const contextErrorCode = account.syncContext.kind === "error" ? account.syncContext.code : null;
   const [revision, setRevision] = useState(0);
   const [statuses, setStatuses] = useState<Map<string, CloudSyncStatus>>(new Map());
+  const [workspaceErrors, setWorkspaceErrors] = useState<Map<string, string>>(new Map());
   const [globalEnabled, setGlobalEnabledState] = useState(false);
   const [loading, setLoading] = useState(false);
   const [requestErrorCode, setRequestErrorCode] = useState<string | null>(null);
@@ -70,6 +71,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     if (!available) {
       requestId.current += 1;
       setStatuses(new Map());
+      setWorkspaceErrors(new Map());
       setGlobalEnabledState(false);
       setRequestErrorCode(null);
       setLoading(false);
@@ -85,12 +87,31 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
         getGlobalSyncEnabled(),
       ]);
       if (currentRequest !== requestId.current) return;
-      const entries = await Promise.all(workspaceState.workspaces.map(async (workspace) => [
-        workspace.id,
-        await getCloudSyncStatus(workspace.id),
-      ] as const));
+      const results = await Promise.allSettled(
+        workspaceState.workspaces.map((workspace) => getCloudSyncStatus(workspace.id)),
+      );
       if (currentRequest !== requestId.current) return;
-      setStatuses(new Map(entries));
+      const errors = new Map<string, string>();
+      const successful = new Map<string, CloudSyncStatus>();
+      workspaceState.workspaces.forEach((workspace, index) => {
+        const result = results[index];
+        if (result.status === "fulfilled") {
+          successful.set(workspace.id, result.value);
+        } else {
+          errors.set(workspace.id, syncErrorCode(result.reason));
+        }
+      });
+      setStatuses((previous) => {
+        const next = new Map<string, CloudSyncStatus>();
+        workspaceState.workspaces.forEach((workspace) => {
+          const current = successful.get(workspace.id);
+          const prior = previous.get(workspace.id);
+          if (current) next.set(workspace.id, current);
+          else if (prior) next.set(workspace.id, prior);
+        });
+        return next;
+      });
+      setWorkspaceErrors(errors);
       setGlobalEnabledState(enabled);
       setRequestErrorCode(null);
     } catch (error) {
@@ -197,6 +218,10 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     () => available ? statuses : new Map<string, CloudSyncStatus>(),
     [available, statuses],
   );
+  const visibleWorkspaceErrors = useMemo(
+    () => available ? workspaceErrors : new Map<string, string>(),
+    [available, workspaceErrors],
+  );
 
   const value = useMemo(() => ({
     cloudWorkspaceDialogOpen,
@@ -209,6 +234,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     loading,
     revision,
     statuses: visibleStatuses,
+    workspaceErrors: visibleWorkspaceErrors,
     closeCloudWorkspaceDialog: () => setCloudWorkspaceDialogOpen(false),
     closeDetailDialog: () => setDetailTarget(null),
     closeEnableDialog: () => setEnableTarget(null),
@@ -223,6 +249,6 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     retryWorkspace,
     setServiceEnabled: (enabled: boolean) => runAndRefresh(() => setGlobalSyncEnabled(enabled)),
     replaceDeadLetterWithRemote: (workspaceId: string, operationId: string) => runRecoveryAndRefresh(() => replaceDeadLetterWithRemote(workspaceId, operationId)),
-  }), [available, cloudWorkspaceDialogOpen, detailTarget, enableTarget, errorCode, globalEnabled, hasCloudSyncCapability, loading, refresh, refreshNow, retryWorkspace, revision, runAndRefresh, runRecoveryAndRefresh, visibleStatuses]);
+  }), [available, cloudWorkspaceDialogOpen, detailTarget, enableTarget, errorCode, globalEnabled, hasCloudSyncCapability, loading, refresh, refreshNow, retryWorkspace, revision, runAndRefresh, runRecoveryAndRefresh, visibleStatuses, visibleWorkspaceErrors]);
   return <CloudSyncContext.Provider value={value}>{children}</CloudSyncContext.Provider>;
 }

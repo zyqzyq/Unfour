@@ -51,6 +51,54 @@ async fn api_request_uses_existing_uncertain_retry_and_dead_letter_paths() {
 }
 
 #[tokio::test]
+async fn workspace_deleted_preserves_the_entire_batch_without_dead_letters() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let transport = Arc::new(MockTransport::new());
+    let (service, hook, _) = SyncRuntime::build(db.clone(), transport.clone());
+    service.enable(&workspace_id).await.unwrap();
+    let bus =
+        CommandBus::from_db_with_extensions(db.clone(), CommandBusExtensions::new(vec![hook]))
+            .await
+            .unwrap();
+    bus.workspace_variable_create(workspace_id.clone(), variable(None, "KEEP_A", "a", false))
+        .await
+        .unwrap();
+    bus.workspace_variable_create(workspace_id.clone(), variable(None, "KEEP_B", "b", false))
+        .await
+        .unwrap();
+    transport
+        .workspace_deleted_pushes
+        .store(1, Ordering::SeqCst);
+
+    assert!(matches!(
+        service.sync_workspace(&workspace_id).await,
+        Err(SyncError::WorkspaceDeleted)
+    ));
+    let status = service.status(&workspace_id).await.unwrap();
+    assert_eq!(status.pending_count, 2);
+    assert_eq!(status.dead_count, 0);
+    let binding = status.binding.unwrap();
+    assert_eq!(binding.state, "error");
+    assert_eq!(
+        binding.last_error.as_deref(),
+        Some("cloud_sync_workspace_deleted")
+    );
+    let diagnostics = service.diagnostics(&workspace_id).await.unwrap().unwrap();
+    assert_eq!(
+        diagnostics.last_server_request_id.as_deref(),
+        Some("server-request-deleted")
+    );
+    assert_eq!(
+        diagnostics.last_server_error_code.as_deref(),
+        Some("sync_workspace_deleted")
+    );
+    assert_eq!(diagnostics.last_http_status, Some(409));
+    assert_eq!(diagnostics.last_sync_phase.as_deref(), Some("push"));
+}
+
+#[tokio::test]
 async fn lost_response_replays_same_operation_as_no_op_and_recovers() {
     let db = database().await;
     let seed = CommandBus::from_db(db.clone()).await.unwrap();

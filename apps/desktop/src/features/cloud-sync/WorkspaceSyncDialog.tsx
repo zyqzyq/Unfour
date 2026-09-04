@@ -34,13 +34,14 @@ export function WorkspaceSyncDialog() {
 
 function WorkspaceSyncDialogContent() {
   const { t } = useI18n();
-  const { closeDetailDialog, detailTarget, enableWorkspace, globalEnabled, pauseWorkspace, refreshNow, replaceDeadLetterWithRemote, retryDeadLetter, retryWorkspace, setServiceEnabled, statuses } = useCloudSync();
+  const { closeDetailDialog, detailTarget, enableWorkspace, globalEnabled, pauseWorkspace, refreshNow, replaceDeadLetterWithRemote, retryDeadLetter, retryWorkspace, setServiceEnabled, statuses, workspaceErrors } = useCloudSync();
   const [busy, setBusy] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<SyncDiagnostics | null>(null);
   const [remoteConfirmation, setRemoteConfirmation] = useState<DeadLetter | null>(null);
   const status = detailTarget ? statuses.get(detailTarget.id) : undefined;
-  const state = status ? getCloudSyncViewState(status, globalEnabled) : "local_only";
+  const workspaceError = detailTarget ? workspaceErrors.get(detailTarget.id) : undefined;
+  const state = workspaceError ? "attention" : status ? getCloudSyncViewState(status, globalEnabled) : "local_only";
   const pending = status ? status.pendingCount + status.uncertainCount + status.inFlightCount + status.deadCount : 0;
 
   const run = async (operation: () => Promise<void>) => {
@@ -61,7 +62,7 @@ function WorkspaceSyncDialogContent() {
       <DialogHeader><DialogTitle>{t("cloudSync.title")}</DialogTitle>{!busy && <DialogXClose label={t("cloudSync.close")} />}</DialogHeader>
       <DialogBody className="flex flex-col gap-3">
         <h3 className="text-sm font-semibold">{detailTarget?.name}</h3>
-        {errorCode && <ErrorState className="min-h-0 items-start justify-start text-left">{t(syncErrorMessageKey(errorCode))}</ErrorState>}
+        {(errorCode ?? workspaceError) && <ErrorState className="min-h-0 items-start justify-start text-left">{t(syncErrorMessageKey((errorCode ?? workspaceError)!))}</ErrorState>}
         <dl className="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-2 rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] p-3 text-xs">
           <dt className="text-[var(--u-color-text-muted)]">{t("cloudSync.detail.status")}</dt><dd><StatusBadge tone={viewStateTone(state)}>{state === "offline" ? t("cloudSync.detail.waitingConnection") : t(`cloudSync.status.${state}`)}</StatusBadge></dd>
           <dt className="text-[var(--u-color-text-muted)]">{t("cloudSync.detail.lastSynced")}</dt><dd>{formatRelativeTime(status?.binding?.lastSuccessAt ?? null, t)}</dd>
@@ -105,11 +106,18 @@ function WorkspaceSyncDialogContent() {
             <dt className="text-[var(--u-color-text-muted)]">{t("cloudSync.pendingOutboxCount")}</dt><dd>{diagnostics.pendingOutboxCount}</dd>
             <dt className="text-[var(--u-color-text-muted)]">{t("cloudSync.deadOutboxCount")}</dt><dd>{diagnostics.deadOutboxCount}</dd>
             <dt className="text-[var(--u-color-text-muted)]">{t("cloudSync.lastErrorCode")}</dt><dd className="font-mono">{diagnostics.lastErrorCode ?? "—"}</dd>
+            <dt className="text-[var(--u-color-text-muted)]">{t("cloudSync.lastPush")}</dt><dd>{formatRelativeTime(diagnostics.lastPushAt, t)}</dd>
+            <dt className="text-[var(--u-color-text-muted)]">{t("cloudSync.lastPull")}</dt><dd>{formatRelativeTime(diagnostics.lastPullAt, t)}</dd>
+            <dt className="text-[var(--u-color-text-muted)]">{t("cloudSync.consecutiveFailures")}</dt><dd>{diagnostics.consecutiveFailureCount}</dd>
+            <dt className="text-[var(--u-color-text-muted)]">{t("cloudSync.nextRetry")}</dt><dd>{diagnostics.nextRetryAt ? new Date(diagnostics.nextRetryAt).toLocaleString() : "—"}</dd>
+            <dt className="text-[var(--u-color-text-muted)]">{t("cloudSync.lastServerErrorCode")}</dt><dd className="break-all font-mono">{diagnostics.lastServerErrorCode ?? "—"}</dd>
+            <dt className="text-[var(--u-color-text-muted)]">{t("cloudSync.lastServerRequestId")}</dt><dd className="break-all font-mono">{diagnostics.lastServerRequestId ?? "—"}</dd>
+            <dt className="text-[var(--u-color-text-muted)]">{t("cloudSync.lastHttpStatusPhase")}</dt><dd className="font-mono">{diagnostics.lastHttpStatus ?? "—"} / {diagnostics.lastSyncPhase ?? "—"}</dd>
           </dl>}
         </details>
       </DialogBody>
       <DialogFooter>
-        {["offline", "auth_required", "capability_required"].includes(state) && detailTarget && <Button disabled={busy} onClick={() => void run(() => retryWorkspace(detailTarget.id))} size="sm" type="button">{t("cloudSync.retry")}</Button>}
+        {(["offline", "auth_required", "capability_required"].includes(state) || (state === "attention" && (status?.deadCount ?? 0) === 0 && (status?.conflictCount ?? 0) === 0)) && detailTarget && <Button disabled={busy} onClick={() => void run(() => retryWorkspace(detailTarget.id))} size="sm" type="button">{t("cloudSync.retry")}</Button>}
         {state !== "local_only" && detailTarget && <Button disabled={busy} onClick={() => void run(() => state === "paused" ? (globalEnabled ? enableWorkspace(detailTarget.id) : setServiceEnabled(true)) : pauseWorkspace(detailTarget.id))} size="sm" type="button" variant="outline">{state === "paused" ? t("cloudSync.resume") : t("cloudSync.pause")}</Button>}
         <Button disabled={busy} onClick={closeDetailDialog} size="sm" type="button" variant="ghost">{t("cloudSync.close")}</Button>
       </DialogFooter>

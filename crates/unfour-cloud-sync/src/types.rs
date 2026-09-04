@@ -4,82 +4,9 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use thiserror::Error;
 use unfour_core::domain::{DomainEntityKey, DomainEntityType, MutationOperation};
 
-#[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
-pub enum SyncError {
-    #[error("cloud sync is not authorized")]
-    Unauthorized,
-    #[error("cloud sync entitlement is unavailable")]
-    EntitlementRequired,
-    #[error("cloud sync protocol is incompatible")]
-    ProtocolIncompatible,
-    #[error("cloud sync resource was not found")]
-    NotFound,
-    #[error("cloud sync data is invalid")]
-    InvalidData,
-    #[error("cloud sync request failed")]
-    Transport,
-    #[error("cloud sync storage failed")]
-    Storage,
-    #[error("cloud sync core apply failed")]
-    Core,
-    #[error("cloud sync account changed while a request was running")]
-    AccountChanged,
-    #[error("cloud sync has an unresolved entity conflict")]
-    Conflict,
-    #[error("the target local workspace is not empty")]
-    LocalWorkspaceNotEmpty,
-    #[error("an active local workspace already uses the cloud workspace name")]
-    WorkspaceNameConflict,
-    #[error("safe cloud replacement is not available")]
-    SafeReplaceUnavailable,
-    #[error("the cloud workspace already contains data and needs an explicit initial direction")]
-    CloudWorkspaceNotEmpty,
-    #[error("cloud sync is blocked by a dead-letter operation")]
-    DeadLetterBlocked,
-    #[error("cloud sync rejected a permanent request error")]
-    Permanent,
-    #[error("the local workspace is owned by another cloud sync account")]
-    WorkspaceOwnedByAnotherAccount,
-    #[error("cloud sync found multiple historical owners for the local workspace")]
-    WorkspaceOwnershipAmbiguous,
-    #[error("cloud sync workspace ownership metadata is inconsistent")]
-    WorkspaceOwnershipInvariant,
-}
-
-impl SyncError {
-    pub const fn code(&self) -> &'static str {
-        match self {
-            Self::Unauthorized => "cloud_sync_unauthorized",
-            Self::EntitlementRequired => "cloud_sync_entitlement_required",
-            Self::ProtocolIncompatible => "cloud_sync_protocol_incompatible",
-            Self::NotFound => "cloud_sync_not_found",
-            Self::InvalidData => "cloud_sync_invalid_data",
-            Self::Transport => "cloud_sync_transport_failed",
-            Self::Storage => "cloud_sync_storage_failed",
-            Self::Core => "cloud_sync_core_apply_failed",
-            Self::AccountChanged => "cloud_sync_account_changed",
-            Self::Conflict => "cloud_sync_conflict",
-            Self::LocalWorkspaceNotEmpty => "cloud_sync_local_workspace_not_empty",
-            Self::WorkspaceNameConflict => "cloud_sync_workspace_name_conflict",
-            Self::SafeReplaceUnavailable => "cloud_sync_safe_replace_unavailable",
-            Self::CloudWorkspaceNotEmpty => "cloud_sync_cloud_workspace_not_empty",
-            Self::DeadLetterBlocked => "cloud_sync_dead_letter_blocked",
-            Self::Permanent => "cloud_sync_permanent_failure",
-            Self::WorkspaceOwnedByAnotherAccount => "cloud_sync_workspace_owned_by_another_account",
-            Self::WorkspaceOwnershipAmbiguous => "cloud_sync_workspace_ownership_ambiguous",
-            Self::WorkspaceOwnershipInvariant => "cloud_sync_workspace_ownership_invariant",
-        }
-    }
-}
-
-impl From<sqlx::Error> for SyncError {
-    fn from(_: sqlx::Error) -> Self {
-        Self::Storage
-    }
-}
+use crate::SyncError;
 
 pub trait Clock: Send + Sync {
     fn now(&self) -> DateTime<Utc>;
@@ -436,93 +363,6 @@ impl fmt::Debug for SyncConflictDetails {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ApiErrorEnvelope {
-    pub error: ApiErrorDetail,
-}
-
-#[derive(Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ApiErrorDetail {
-    pub code: String,
-    pub message: String,
-    pub request_id: String,
-    pub details: Option<Value>,
-}
-
-impl fmt::Debug for ApiErrorDetail {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("ApiErrorDetail")
-            .field("code", &self.code)
-            .field("request_id", &self.request_id)
-            .field("details", &self.details.as_ref().map(|_| "[PRESENT]"))
-            .finish()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct PermanentOperationDetails {
-    pub operation_id: String,
-    pub error_code: Option<String>,
-}
-
-impl ApiErrorDetail {
-    pub(crate) fn conflict_details(&self) -> Option<SyncConflictDetails> {
-        self.details
-            .as_ref()
-            .and_then(|details| serde_json::from_value(details.clone()).ok())
-    }
-
-    /// Operation failures have been returned by more than one API revision:
-    /// current responses put `operationId` directly in `details`, while an
-    /// intermediate response nested it under `failedOperation`. Accept those
-    /// explicit operation references, but never infer an operation from array
-    /// order or from an entity that is merely mentioned in the message.
-    pub(crate) fn permanent_operation_details(&self) -> Option<PermanentOperationDetails> {
-        self.details
-            .as_ref()
-            .and_then(find_permanent_operation_details)
-    }
-}
-
-fn find_permanent_operation_details(value: &Value) -> Option<PermanentOperationDetails> {
-    let object = value.as_object()?;
-    if let Some(operation_id) = ["operationId", "failedOperationId"]
-        .iter()
-        .find_map(|key| object.get(*key).and_then(Value::as_str))
-        .filter(|operation_id| !operation_id.trim().is_empty())
-    {
-        let error_code = ["errorCode", "code", "reasonCode"]
-            .iter()
-            .find_map(|key| object.get(*key).and_then(Value::as_str))
-            .filter(|code| !code.trim().is_empty())
-            .map(str::to_string);
-        return Some(PermanentOperationDetails {
-            operation_id: operation_id.to_string(),
-            error_code,
-        });
-    }
-
-    // Keep this list deliberately narrow. These keys describe an operation
-    // reference in the API error contract; arbitrary recursive searching
-    // would risk treating an unrelated payload id as the failed operation.
-    for key in [
-        "failedOperation",
-        "operationError",
-        "operationDetails",
-        "operation",
-    ] {
-        if let Some(details) = object.get(key) {
-            if let Some(found) = find_permanent_operation_details(details) {
-                return Some(found);
-            }
-        }
-    }
-    None
-}
-
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct OutboxEntry {
     pub account_id: String,
@@ -629,6 +469,27 @@ pub struct SyncDiagnostics {
     pub last_error_code: Option<String>,
     pub consecutive_failure_count: i64,
     pub next_retry_at: Option<String>,
+    pub last_server_error_code: Option<String>,
+    pub last_server_request_id: Option<String>,
+    pub last_http_status: Option<i64>,
+    pub last_sync_phase: Option<String>,
+    pub recent_events: Vec<SyncDiagnosticEvent>,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncDiagnosticEvent {
+    pub source: Option<String>,
+    pub category: String,
+    pub error_code: String,
+    pub request_id: Option<String>,
+    pub http_status: Option<i64>,
+    pub phase: Option<String>,
+    pub operation_id: Option<String>,
+    pub operation_index: Option<i64>,
+    pub entity_type: Option<String>,
+    pub entity_id: Option<String>,
+    pub occurred_at: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]

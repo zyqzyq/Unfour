@@ -1,5 +1,6 @@
 mod canonical;
 mod conflict_scope;
+mod error;
 mod hook;
 mod repository;
 mod service;
@@ -7,6 +8,7 @@ mod transport;
 mod types;
 
 pub use canonical::{canonical_payload, parse_remote_change, parse_snapshot_item};
+pub use error::*;
 pub use hook::SyncOutboxHook;
 pub use repository::SyncRepository;
 pub use service::{SyncRuntime, SyncService};
