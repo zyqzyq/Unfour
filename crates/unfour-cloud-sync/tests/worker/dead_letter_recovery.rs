@@ -725,6 +725,50 @@ async fn unauthorized_push_is_retryable_and_resumes_after_reauthentication() {
 }
 
 #[tokio::test]
+async fn entitlement_required_push_is_retryable_without_signing_out() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let transport = Arc::new(MockTransport::new());
+    let (service, hook, _) = SyncRuntime::build(db.clone(), transport.clone());
+    service.enable(&workspace_id).await.unwrap();
+    let bus = CommandBus::from_db_with_extensions(db, CommandBusExtensions::new(vec![hook]))
+        .await
+        .unwrap();
+    bus.workspace_variable_create(
+        workspace_id.clone(),
+        variable(None, "ENTITLEMENT_BLOCKED", "value", false),
+    )
+    .await
+    .unwrap();
+    transport.entitlement_pushes.store(1, Ordering::SeqCst);
+
+    assert!(matches!(
+        service.sync_workspace(&workspace_id).await,
+        Err(SyncError::EntitlementRequired)
+    ));
+    let status = service.status(&workspace_id).await.unwrap();
+    assert_eq!(status.dead_count, 0);
+    assert_eq!(status.pending_count, 1);
+    assert_eq!(
+        status
+            .binding
+            .as_ref()
+            .and_then(|binding| binding.last_error.as_deref()),
+        Some("cloud_sync_entitlement_required")
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM cloud_sync_outbox WHERE status = 'pending'",
+        )
+        .fetch_one(service.repository().pool())
+        .await
+        .unwrap(),
+        1
+    );
+}
+
+#[tokio::test]
 async fn incremental_dead_letter_retry_uses_current_local_payload_and_server_base() {
     let db = database().await;
     let seed = CommandBus::from_db(db.clone()).await.unwrap();

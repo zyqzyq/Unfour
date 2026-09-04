@@ -5,6 +5,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import type {
   AccountContextValue,
   AccountProfile,
+  AccountStateSnapshot,
   EntitlementStatus,
 } from "../account/accountTypes";
 
@@ -96,6 +97,14 @@ function Probe() {
     <button onClick={() => void sync.enableWorkspace("workspace").catch(() => undefined)} type="button">enable</button>
     <button onClick={() => void sync.retryWorkspace("workspace").catch(() => undefined)} type="button">retry</button>
   </div>;
+}
+
+function accountSnapshot(
+  accountValue: AccountContextValue,
+  account = accountValue.state,
+  syncContext = accountValue.syncContext,
+): AccountStateSnapshot {
+  return { account, syncContext };
 }
 
 beforeEach(() => {
@@ -252,7 +261,10 @@ describe("CloudSyncProvider account context boundary", () => {
   it("refreshes the account before manually retrying a workspace", async () => {
     const events: string[] = [];
     const accountValue = account(true, { kind: "ready" });
-    accountValue.refreshAccount = vi.fn(async () => { events.push("account"); });
+    accountValue.refreshAccount = vi.fn(async () => {
+      events.push("account");
+      return accountSnapshot(accountValue);
+    });
     mocks.account = accountValue;
     mocks.syncNow.mockImplementation(async () => { events.push("sync"); });
     render(<CloudSyncProvider><Probe /></CloudSyncProvider>);
@@ -263,5 +275,57 @@ describe("CloudSyncProvider account context boundary", () => {
     await waitFor(() => expect(mocks.syncNow).toHaveBeenCalledWith("workspace"));
     expect(events).toEqual(["account", "sync"]);
     expect(accountValue.refreshAccount).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not sync when refresh discovers a signed-out account", async () => {
+    const accountValue = account(true, { kind: "ready" });
+    accountValue.refreshAccount = vi.fn().mockResolvedValue({
+      account: { kind: "signedOut" },
+      syncContext: { kind: "inactive" },
+    });
+    mocks.account = accountValue;
+    const rendered = render(<CloudSyncProvider><Probe /></CloudSyncProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("statuses")).toHaveTextContent("1"));
+    fireEvent.click(screen.getByRole("button", { name: "retry" }));
+    await waitFor(() => expect(accountValue.refreshAccount).toHaveBeenCalledTimes(1));
+    mocks.account = anonymousAccount();
+    rendered.rerender(<CloudSyncProvider><Probe /></CloudSyncProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("error"))
+      .toHaveTextContent("cloud_sync_unauthorized"));
+    expect(mocks.syncNow).not.toHaveBeenCalled();
+  });
+
+  it("does not sync when refresh discovers that Cloud Sync entitlement is unavailable", async () => {
+    const accountValue = account(true, { kind: "ready" });
+    accountValue.refreshAccount = vi.fn().mockResolvedValue({
+      account: { kind: "signedIn", profile: profile(false) },
+      syncContext: { kind: "inactive" },
+    });
+    mocks.account = accountValue;
+    render(<CloudSyncProvider><Probe /></CloudSyncProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("statuses")).toHaveTextContent("1"));
+    fireEvent.click(screen.getByRole("button", { name: "retry" }));
+
+    await waitFor(() => expect(screen.getByTestId("error"))
+      .toHaveTextContent("cloud_sync_entitlement_required"));
+    expect(mocks.syncNow).not.toHaveBeenCalled();
+  });
+
+  it("does not sync when account refresh is temporarily unavailable", async () => {
+    const accountValue = account(true, { kind: "ready" });
+    accountValue.refreshAccount = vi.fn().mockRejectedValue({ code: "api_unavailable" });
+    mocks.account = accountValue;
+    render(<CloudSyncProvider><Probe /></CloudSyncProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("statuses")).toHaveTextContent("1"));
+    fireEvent.click(screen.getByRole("button", { name: "retry" }));
+
+    await waitFor(() => expect(screen.getByTestId("error"))
+      .toHaveTextContent("cloud_sync_transport_failed"));
+    expect(screen.getByTestId("statuses")).toHaveTextContent("1");
+    expect(mocks.syncNow).not.toHaveBeenCalled();
   });
 });

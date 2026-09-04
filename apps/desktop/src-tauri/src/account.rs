@@ -90,7 +90,7 @@ where
     };
     match result {
         Ok(SyncAccountContextState::Ready) => {
-            access.allow();
+            access.allow(generation);
             SyncAccountContextState::Ready
         }
         Ok(state) => state,
@@ -336,7 +336,7 @@ mod tests {
             assert_eq!(payload["account"]["kind"], "signedIn");
             assert_eq!(payload["syncContext"]["kind"], "error");
             assert_eq!(payload["syncContext"]["code"], "cloud_sync_storage_failed");
-            assert!(!access.is_allowed());
+            assert!(!access.is_allowed_for(7));
         });
     }
 
@@ -344,7 +344,7 @@ mod tests {
     fn revoked_entitlement_survives_cleanup_failure_and_closes_sync() {
         tauri::async_runtime::block_on(async {
             let access = crate::sync::SyncAccessGate::default();
-            access.allow();
+            access.allow(8);
             let account = signed_in_account(false);
             let sync_context = reconcile_sync_account_context(
                 &access,
@@ -376,7 +376,7 @@ mod tests {
                 .as_array()
                 .is_some_and(|values| values.is_empty()));
             assert_eq!(payload["syncContext"]["kind"], "error");
-            assert!(!access.is_allowed());
+            assert!(!access.is_allowed_for(8));
         });
     }
 
@@ -384,7 +384,7 @@ mod tests {
     fn suspended_entitlement_deactivates_context_and_closes_sync() {
         tauri::async_runtime::block_on(async {
             let access = crate::sync::SyncAccessGate::default();
-            access.allow();
+            access.allow(0);
             let mut account = signed_in_account(true);
             let AccountState::SignedIn { profile } = &mut account else {
                 panic!("expected signed-in account");
@@ -407,7 +407,7 @@ mod tests {
             assert!(matches!(account, AccountState::SignedIn { .. }));
             assert_eq!(sync_context, SyncAccountContextState::Inactive);
             assert!(deactivated.load(Ordering::SeqCst));
-            assert!(!access.is_allowed());
+            assert!(!access.is_allowed_for(9));
         });
     }
 
@@ -433,7 +433,7 @@ mod tests {
             .await;
             assert_eq!(state, SyncAccountContextState::Ready);
             assert!(activated.load(Ordering::SeqCst));
-            assert!(access.is_allowed());
+            assert!(access.is_allowed_for(9));
 
             let deactivated = AtomicBool::new(false);
             let state = reconcile_sync_account_context(
@@ -449,7 +449,7 @@ mod tests {
             .await;
             assert_eq!(state, SyncAccountContextState::Inactive);
             assert!(deactivated.load(Ordering::SeqCst));
-            assert!(!access.is_allowed());
+            assert!(!access.is_allowed_for(10));
         });
     }
 

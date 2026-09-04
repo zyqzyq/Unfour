@@ -261,6 +261,23 @@ impl AccountService {
         }
     }
 
+    /// Invalidates only a cache entry created for the expected account
+    /// generation. A delayed Cloud Sync response must not evict a newer
+    /// session's entitlement capability.
+    pub fn invalidate_entitlement_cache_for_generation(&self, expected_generation: u64) {
+        if self.generation() != expected_generation {
+            return;
+        }
+        if let Ok(mut cache) = self.entitlement_cache.lock() {
+            if cache
+                .as_ref()
+                .is_some_and(|cached| cached.generation == expected_generation)
+            {
+                cache.take();
+            }
+        }
+    }
+
     fn advance_generation(&self) {
         self.invalidate_entitlement_cache();
         self.generation.fetch_add(1, Ordering::SeqCst);

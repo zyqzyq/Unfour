@@ -52,6 +52,7 @@ const translations: Record<string, string> = {
   "cloudSync.status.syncing": "Syncing",
   "cloudSync.status.paused": "Paused",
   "cloudSync.status.auth_required": "Sign-in required",
+  "cloudSync.status.capability_required": "Cloud Sync plan required",
   "cloudSync.status.attention": "Needs attention",
   "cloudSync.pending": "Pending",
   "cloudSync.retry": "Retry",
@@ -60,6 +61,7 @@ const translations: Record<string, string> = {
   "cloudSync.detail.lastSynced": "Last synced",
   "cloudSync.detail.changesPending": "Changes pending",
   "cloudSync.detail.authRequiredDescription": "Sign in again to continue syncing.",
+  "cloudSync.detail.capabilityRequiredDescription": "Upgrade the plan to resume syncing.",
   "cloudSync.advancedDiagnostics": "Advanced diagnostics",
   "cloudSync.conflict.variableTitle": "Variable conflict",
   "cloudSync.conflict.apiTitle": "API conflict",
@@ -350,6 +352,27 @@ describe("Cloud Sync UI", () => {
     expect(screen.getByText("Sign in again to continue syncing.")).toBeTruthy();
     fireEvent.click(screen.getByText("Retry"));
     await waitFor(() => expect(mocks.context.retryWorkspace).toHaveBeenCalledWith("workspace"));
+  });
+
+  it("shows entitlement recovery without asking the user to sign in", () => {
+    mocks.context = {
+      ...baseContext(),
+      detailTarget: { id: workspace.id, name: workspace.name },
+      statuses: new Map([[workspace.id, {
+        ...emptyStatus,
+        binding: {
+          accountId: "account", localWorkspaceId: workspace.id, cloudWorkspaceId: "cloud",
+          lastPulledCursor: 1, syncEnabled: true, state: "error", initialCursor: 0,
+          initialTotal: 1, initialConfirmed: 1, initializationCheckpoint: null, generation: 1,
+          lastSuccessAt: null, lastError: "cloud_sync_entitlement_required", consecutiveFailureCount: 1,
+        },
+        pendingCount: 1,
+      }]]),
+    };
+    render(<WorkspaceSyncDialog />);
+    expect(screen.getByText("Cloud Sync plan required")).toBeTruthy();
+    expect(screen.getByText("Upgrade the plan to resume syncing.")).toBeTruthy();
+    expect(screen.queryByText("Sign-in required")).toBeNull();
   });
 
   it("shows dead-letter details, counts them as pending, and confirms use-remote", async () => {

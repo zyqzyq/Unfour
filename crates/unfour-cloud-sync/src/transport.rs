@@ -63,12 +63,19 @@ impl fmt::Debug for DesktopSessionCredential {
 pub trait DesktopSessionProvider: Send + Sync {
     async fn session_for_cloud_sync(&self) -> Result<DesktopSessionCredential, SyncError>;
     fn generation(&self) -> u64;
-    fn invalidate_cloud_sync(&self);
+    fn invalidate_cloud_sync(&self, request_generation: u64, failure: CloudSyncAuthFailure);
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CloudSyncAuthFailure {
+    Unauthorized,
+    EntitlementRequired,
 }
 
 #[derive(Clone)]
 pub enum TransportError {
     Unauthorized,
+    EntitlementRequired,
     ProtocolIncompatible,
     NotFound,
     Conflict(SyncConflictDetails),
@@ -90,6 +97,7 @@ impl fmt::Debug for TransportError {
                 .field("operation_id", operation_id)
                 .finish(),
             Self::Unauthorized => formatter.write_str("Unauthorized"),
+            Self::EntitlementRequired => formatter.write_str("EntitlementRequired"),
             Self::ProtocolIncompatible => formatter.write_str("ProtocolIncompatible"),
             Self::NotFound => formatter.write_str("NotFound"),
             Self::InvalidResponse => formatter.write_str("InvalidResponse"),
@@ -103,6 +111,7 @@ impl From<TransportError> for SyncError {
     fn from(value: TransportError) -> Self {
         match value {
             TransportError::Unauthorized => Self::Unauthorized,
+            TransportError::EntitlementRequired => Self::EntitlementRequired,
             TransportError::ProtocolIncompatible => Self::ProtocolIncompatible,
             TransportError::NotFound => Self::NotFound,
             TransportError::Conflict(_) => Self::Conflict,
@@ -148,6 +157,32 @@ pub struct HttpSyncTransport {
     sessions: std::sync::Arc<dyn DesktopSessionProvider>,
 }
 
+struct AuthenticatedRequest {
+    builder: reqwest::RequestBuilder,
+    generation: u64,
+}
+
+impl AuthenticatedRequest {
+    fn json<T: serde::Serialize>(self, body: &T) -> Self {
+        Self {
+            builder: self.builder.json(body),
+            generation: self.generation,
+        }
+    }
+
+    async fn send(self) -> AuthenticatedResponse {
+        AuthenticatedResponse {
+            generation: self.generation,
+            response: self.builder.send().await,
+        }
+    }
+}
+
+struct AuthenticatedResponse {
+    generation: u64,
+    response: Result<reqwest::Response, reqwest::Error>,
+}
+
 impl HttpSyncTransport {
     pub fn new(
         base_url: &str,
@@ -183,26 +218,52 @@ impl HttpSyncTransport {
             .map_err(|_| TransportError::InvalidResponse)
     }
 
+    fn map_session_error(error: SyncError) -> TransportError {
+        match error {
+            SyncError::Unauthorized => TransportError::Unauthorized,
+            SyncError::EntitlementRequired => TransportError::EntitlementRequired,
+            SyncError::Transport => TransportError::Retryable,
+            _ => TransportError::Unauthorized,
+        }
+    }
+
+    fn invalidate_for_response(&self, request_generation: u64, failure: CloudSyncAuthFailure) {
+        // Keep the check here as well as in the desktop provider. This avoids
+        // invoking an invalidation side effect for an already stale response;
+        // the provider repeats the fence to cover the check-to-call race.
+        if self.sessions.generation() == request_generation {
+            self.sessions
+                .invalidate_cloud_sync(request_generation, failure);
+        }
+    }
+
     async fn request(
         &self,
         method: Method,
         url: Url,
-    ) -> Result<reqwest::RequestBuilder, TransportError> {
+    ) -> Result<AuthenticatedRequest, TransportError> {
         let credential = self
             .sessions
             .session_for_cloud_sync()
             .await
-            .map_err(|_| TransportError::Unauthorized)?;
-        Ok(self
-            .client
-            .request(method, url)
-            .header("X-Desktop-Session", credential.expose_token()))
+            .map_err(Self::map_session_error)?;
+        Ok(AuthenticatedRequest {
+            builder: self
+                .client
+                .request(method, url)
+                .header("X-Desktop-Session", credential.expose_token()),
+            generation: credential.generation,
+        })
     }
 
     async fn decode<T: DeserializeOwned>(
         &self,
-        response: Result<reqwest::Response, reqwest::Error>,
+        response: AuthenticatedResponse,
     ) -> Result<T, TransportError> {
+        let AuthenticatedResponse {
+            generation,
+            response,
+        } = response;
         let response = response.map_err(|error| {
             if error.is_timeout() || error.is_connect() {
                 TransportError::ResultUnknown
@@ -223,9 +284,13 @@ impl HttpSyncTransport {
         let error = envelope.error;
         let code = error.code.clone();
         match status {
-            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
-                self.sessions.invalidate_cloud_sync();
+            StatusCode::UNAUTHORIZED => {
+                self.invalidate_for_response(generation, CloudSyncAuthFailure::Unauthorized);
                 Err(TransportError::Unauthorized)
+            }
+            StatusCode::FORBIDDEN if code == "entitlement_required" => {
+                self.invalidate_for_response(generation, CloudSyncAuthFailure::EntitlementRequired);
+                Err(TransportError::EntitlementRequired)
             }
             StatusCode::NOT_FOUND => Err(TransportError::NotFound),
             StatusCode::CONFLICT if code == "base_version_conflict" => error
@@ -245,6 +310,7 @@ impl HttpSyncTransport {
                     None => Err(TransportError::Permanent(code)),
                 }
             }
+            StatusCode::FORBIDDEN => Err(TransportError::Permanent(code)),
             status if status.is_server_error() || status == StatusCode::TOO_MANY_REQUESTS => {
                 Err(TransportError::Retryable)
             }
@@ -273,7 +339,7 @@ impl SyncTransport for HttpSyncTransport {
             .session_for_cloud_sync()
             .await
             .map(|value| value.context())
-            .map_err(|_| TransportError::Unauthorized)
+            .map_err(Self::map_session_error)
     }
 
     fn account_generation(&self) -> u64 {

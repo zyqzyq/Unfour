@@ -11,6 +11,8 @@ use unfour_core::domain::{DomainEntityKey, DomainEntityType, MutationOperation};
 pub enum SyncError {
     #[error("cloud sync is not authorized")]
     Unauthorized,
+    #[error("cloud sync entitlement is unavailable")]
+    EntitlementRequired,
     #[error("cloud sync protocol is incompatible")]
     ProtocolIncompatible,
     #[error("cloud sync resource was not found")]
@@ -51,6 +53,7 @@ impl SyncError {
     pub const fn code(&self) -> &'static str {
         match self {
             Self::Unauthorized => "cloud_sync_unauthorized",
+            Self::EntitlementRequired => "cloud_sync_entitlement_required",
             Self::ProtocolIncompatible => "cloud_sync_protocol_incompatible",
             Self::NotFound => "cloud_sync_not_found",
             Self::InvalidData => "cloud_sync_invalid_data",

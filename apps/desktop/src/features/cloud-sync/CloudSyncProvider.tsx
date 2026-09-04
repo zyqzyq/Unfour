@@ -13,8 +13,33 @@ import {
   syncErrorCode,
   syncNow,
 } from "./syncApi";
+import type { AccountStateSnapshot } from "../account/accountTypes";
 import type { CloudSyncStatus, SyncWorkspaceTarget } from "./syncTypes";
 import { CloudSyncContext } from "./useCloudSync";
+
+function retryBlockCode(snapshot: AccountStateSnapshot | null | undefined): string | null {
+  if (!snapshot) return "cloud_sync_account_changed";
+  if (snapshot.account.kind === "error") return "cloud_sync_transport_failed";
+  if (snapshot.account.kind !== "signedIn") return "cloud_sync_unauthorized";
+  if (!hasActiveEntitlement(snapshot.account.profile.entitlements, CLOUD_SYNC_ENTITLEMENT)) {
+    return "cloud_sync_entitlement_required";
+  }
+  if (snapshot.syncContext.kind === "error") return snapshot.syncContext.code;
+  if (snapshot.syncContext.kind !== "ready") return "cloud_sync_context_unavailable";
+  return null;
+}
+
+function refreshFailureCode(error: unknown): string {
+  const code = syncErrorCode(error);
+  if (["signed_out", "unauthorized", "desktop_session_expired"].includes(code)) {
+    return "cloud_sync_unauthorized";
+  }
+  if (code === "entitlement_unavailable") return "cloud_sync_entitlement_required";
+  if (code === "cloud_sync_account_changed") return code;
+  return code.startsWith("cloud_sync_") && code !== "cloud_sync_failed"
+    ? code
+    : "cloud_sync_transport_failed";
+}
 
 export function CloudSyncProvider({ children }: { children: ReactNode }) {
   const account = useAccount();
@@ -28,6 +53,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
   const [globalEnabled, setGlobalEnabledState] = useState(false);
   const [loading, setLoading] = useState(false);
   const [requestErrorCode, setRequestErrorCode] = useState<string | null>(null);
+  const [retryErrorCode, setRetryErrorCode] = useState<string | null>(null);
   const [enableTarget, setEnableTarget] = useState<SyncWorkspaceTarget | null>(null);
   const [detailTarget, setDetailTarget] = useState<SyncWorkspaceTarget | null>(null);
   const [cloudWorkspaceDialogOpen, setCloudWorkspaceDialogOpen] = useState(false);
@@ -47,6 +73,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     const currentRequest = ++requestId.current;
     setLoading(true);
     setRequestErrorCode(null);
+    setRetryErrorCode(null);
     try {
       const [workspaceState, enabled] = await Promise.all([
         getLocalWorkspaces(),
@@ -94,10 +121,12 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       const error = { code: contextErrorCode ?? (hasCloudSyncCapability
         ? "cloud_sync_context_unavailable"
         : "cloud_sync_entitlement_required") };
+      setRetryErrorCode(null);
       setRequestErrorCode(error.code);
       throw error;
     }
     setRequestErrorCode(null);
+    setRetryErrorCode(null);
     try {
       await operation();
       await refreshNow();
@@ -113,10 +142,12 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       const error = { code: contextErrorCode ?? (hasCloudSyncCapability
         ? "cloud_sync_context_unavailable"
         : "cloud_sync_entitlement_required") };
+      setRetryErrorCode(null);
       setRequestErrorCode(error.code);
       throw error;
     }
     setRequestErrorCode(null);
+    setRetryErrorCode(null);
     try {
       await operation();
     } catch (error) {
@@ -128,11 +159,35 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
   }, [available, contextErrorCode, hasCloudSyncCapability, refreshNow]);
 
   const retryWorkspace = useCallback(async (workspaceId: string) => {
-    await refreshAccount();
-    await runAndRefresh(() => syncNow(workspaceId));
-  }, [refreshAccount, runAndRefresh]);
+    let snapshot: AccountStateSnapshot | null;
+    try {
+      snapshot = await refreshAccount();
+    } catch (error) {
+      const code = refreshFailureCode(error);
+      setRequestErrorCode(null);
+      setRetryErrorCode(code);
+      throw { code };
+    }
+    const blockedCode = retryBlockCode(snapshot);
+    if (blockedCode) {
+      setRequestErrorCode(null);
+      setRetryErrorCode(blockedCode);
+      throw { code: blockedCode };
+    }
+    setRequestErrorCode(null);
+    setRetryErrorCode(null);
+    try {
+      await syncNow(workspaceId);
+      await refreshNow();
+    } catch (error) {
+      const code = syncErrorCode(error);
+      setRetryErrorCode(null);
+      setRequestErrorCode(code);
+      throw error;
+    }
+  }, [refreshAccount, refreshNow]);
 
-  const errorCode = contextErrorCode ?? requestErrorCode;
+  const errorCode = contextErrorCode ?? retryErrorCode ?? requestErrorCode;
   const visibleStatuses = useMemo(
     () => available ? statuses : new Map<string, CloudSyncStatus>(),
     [available, statuses],

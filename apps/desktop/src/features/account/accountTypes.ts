@@ -52,7 +52,7 @@ export interface AccountContextValue {
   signIn(): void;
   signOut(): void;
   retry(): void;
-  refreshAccount(): Promise<void>;
+  refreshAccount(): Promise<AccountStateSnapshot | null>;
   refreshing: boolean;
   setMockState(state: AccountMockState): void;
 }

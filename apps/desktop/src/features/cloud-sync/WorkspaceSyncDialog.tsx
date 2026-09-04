@@ -70,6 +70,7 @@ function WorkspaceSyncDialogContent() {
         </dl>
         {state === "offline" && <p className="text-xs text-[var(--u-color-text-muted)]">{t("cloudSync.detail.offlineDescription")}</p>}
         {state === "auth_required" && <p className="text-xs text-[var(--u-color-danger)]">{t("cloudSync.detail.authRequiredDescription")}</p>}
+        {state === "capability_required" && <p className="text-xs text-[var(--u-color-warning)]">{t("cloudSync.detail.capabilityRequiredDescription")}</p>}
         {state === "attention" && <><p className="text-xs text-[var(--u-color-warning)]">{t("cloudSync.detail.attentionDescription")}</p>{status && status.conflictCount > 0 && detailTarget && <SyncConflictList onResolved={() => void refreshNow()} workspaceId={detailTarget.id} />}</>}
         {status && status.deadLetters.length > 0 && detailTarget && <section aria-label={t("cloudSync.deadLetter.title")} className="flex flex-col gap-2">
           <div>
@@ -104,7 +105,7 @@ function WorkspaceSyncDialogContent() {
         </details>
       </DialogBody>
       <DialogFooter>
-        {["offline", "auth_required"].includes(state) && detailTarget && <Button disabled={busy} onClick={() => void run(() => retryWorkspace(detailTarget.id))} size="sm" type="button">{t("cloudSync.retry")}</Button>}
+        {["offline", "auth_required", "capability_required"].includes(state) && detailTarget && <Button disabled={busy} onClick={() => void run(() => retryWorkspace(detailTarget.id))} size="sm" type="button">{t("cloudSync.retry")}</Button>}
         {state !== "local_only" && detailTarget && <Button disabled={busy} onClick={() => void run(() => state === "paused" ? (globalEnabled ? enableWorkspace(detailTarget.id) : setServiceEnabled(true)) : pauseWorkspace(detailTarget.id))} size="sm" type="button" variant="outline">{state === "paused" ? t("cloudSync.resume") : t("cloudSync.pause")}</Button>}
         <Button disabled={busy} onClick={closeDetailDialog} size="sm" type="button" variant="ghost">{t("cloudSync.close")}</Button>
       </DialogFooter>

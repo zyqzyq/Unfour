@@ -11,8 +11,8 @@ pub use hook::SyncOutboxHook;
 pub use repository::SyncRepository;
 pub use service::{SyncRuntime, SyncService};
 pub use transport::{
-    DesktopSessionCredential, DesktopSessionProvider, HttpSyncTransport, SyncTransport,
-    TransportError,
+    CloudSyncAuthFailure, DesktopSessionCredential, DesktopSessionProvider, HttpSyncTransport,
+    SyncTransport, TransportError,
 };
 pub use types::*;
 

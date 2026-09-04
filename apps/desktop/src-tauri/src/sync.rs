@@ -1,16 +1,13 @@
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use serde::Serialize;
 use tauri::State;
-use unfour_account::AccountService;
+use unfour_account::{AccountError, AccountService};
 use unfour_cloud_sync::{
-    CloudWorkspace, DesktopSessionCredential, DesktopSessionProvider, DownloadDecision,
-    SyncConflictView, SyncDiagnostics, SyncEntityType, SyncError, SyncService, SyncStatus,
-    CLOUD_SYNC_ENTITLEMENT,
+    CloudSyncAuthFailure, CloudWorkspace, DesktopSessionCredential, DesktopSessionProvider,
+    DownloadDecision, SyncConflictView, SyncDiagnostics, SyncEntityType, SyncError, SyncService,
+    SyncStatus, CLOUD_SYNC_ENTITLEMENT,
 };
 
 pub struct AccountTokenProvider {
@@ -24,37 +21,109 @@ impl AccountTokenProvider {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SyncAccessState {
+    Closed,
+    Allowed { generation: u64 },
+    EntitlementRequired { generation: u64 },
+}
+
+impl Default for SyncAccessState {
+    fn default() -> Self {
+        Self::Closed
+    }
+}
+
 #[derive(Clone, Default)]
 pub(crate) struct SyncAccessGate {
-    allowed: Arc<AtomicBool>,
+    state: Arc<Mutex<SyncAccessState>>,
 }
 
 impl SyncAccessGate {
-    pub(crate) fn allow(&self) {
-        self.allowed.store(true, Ordering::SeqCst);
+    pub(crate) fn allow(&self, generation: u64) {
+        *self.state.lock().expect("sync access lock poisoned") =
+            SyncAccessState::Allowed { generation };
     }
 
     pub(crate) fn deny(&self) {
-        self.allowed.store(false, Ordering::SeqCst);
+        *self.state.lock().expect("sync access lock poisoned") = SyncAccessState::Closed;
     }
 
-    pub(crate) fn is_allowed(&self) -> bool {
-        self.allowed.load(Ordering::SeqCst)
+    pub(crate) fn is_allowed_for(&self, generation: u64) -> bool {
+        matches!(
+            *self.state.lock().expect("sync access lock poisoned"),
+            SyncAccessState::Allowed {
+                generation: allowed_generation
+            } if allowed_generation == generation
+        )
+    }
+
+    fn error_for(&self, generation: u64) -> Option<SyncError> {
+        match *self.state.lock().expect("sync access lock poisoned") {
+            SyncAccessState::EntitlementRequired {
+                generation: denied_generation,
+            } if denied_generation == generation => Some(SyncError::EntitlementRequired),
+            _ => None,
+        }
+    }
+
+    fn deny_if_generation(&self, request_generation: u64, failure: CloudSyncAuthFailure) -> bool {
+        let mut state = self.state.lock().expect("sync access lock poisoned");
+        if !matches!(
+            *state,
+            SyncAccessState::Allowed { generation } if generation == request_generation
+        ) {
+            return false;
+        }
+        *state = match failure {
+            CloudSyncAuthFailure::Unauthorized => SyncAccessState::Closed,
+            CloudSyncAuthFailure::EntitlementRequired => SyncAccessState::EntitlementRequired {
+                generation: request_generation,
+            },
+        };
+        true
     }
 }
 
 #[async_trait]
 impl DesktopSessionProvider for AccountTokenProvider {
     async fn session_for_cloud_sync(&self) -> Result<DesktopSessionCredential, SyncError> {
-        if !self.access.is_allowed() {
+        let request_generation = self.account.generation();
+        self.access
+            .error_for(request_generation)
+            .map_or(Ok(()), Err)?;
+        if !self.access.is_allowed_for(request_generation) {
             return Err(SyncError::Unauthorized);
         }
         let session = self
             .account
             .require_entitlement(CLOUD_SYNC_ENTITLEMENT)
             .await
-            .map_err(|_| SyncError::Unauthorized)?;
-        if !self.access.is_allowed() {
+            .map_err(|error| match error {
+                AccountError::EntitlementUnavailable => SyncError::EntitlementRequired,
+                AccountError::SignedOut => SyncError::Unauthorized,
+                _ => SyncError::Transport,
+            });
+        let session = match session {
+            Ok(session) => session,
+            Err(error @ (SyncError::Unauthorized | SyncError::EntitlementRequired)) => {
+                let failure = if error == SyncError::EntitlementRequired {
+                    CloudSyncAuthFailure::EntitlementRequired
+                } else {
+                    CloudSyncAuthFailure::Unauthorized
+                };
+                self.deny_for_generation(request_generation, failure);
+                return Err(error);
+            }
+            Err(error) => return Err(error),
+        };
+        if !self.access.is_allowed_for(session.generation()) {
+            return Err(self
+                .access
+                .error_for(session.generation())
+                .unwrap_or(SyncError::Unauthorized));
+        }
+        if self.account.generation() != session.generation() {
             return Err(SyncError::Unauthorized);
         }
         DesktopSessionCredential::new(
@@ -68,9 +137,19 @@ impl DesktopSessionProvider for AccountTokenProvider {
         self.account.generation()
     }
 
-    fn invalidate_cloud_sync(&self) {
-        self.access.deny();
-        self.account.invalidate_entitlement_cache();
+    fn invalidate_cloud_sync(&self, request_generation: u64, failure: CloudSyncAuthFailure) {
+        self.deny_for_generation(request_generation, failure);
+    }
+}
+
+impl AccountTokenProvider {
+    fn deny_for_generation(&self, request_generation: u64, failure: CloudSyncAuthFailure) {
+        if self.account.generation() != request_generation {
+            return;
+        }
+        self.access.deny_if_generation(request_generation, failure);
+        self.account
+            .invalidate_entitlement_cache_for_generation(request_generation);
     }
 }
 
@@ -97,7 +176,10 @@ impl From<SyncError> for SyncCommandError {
         Self {
             code: error.code(),
             message: match error {
-                SyncError::Unauthorized => "Cloud Sync requires an active cloud_sync entitlement.",
+                SyncError::Unauthorized => "Cloud Sync requires a valid desktop session.",
+                SyncError::EntitlementRequired => {
+                    "This account does not include an active cloud_sync entitlement."
+                }
                 SyncError::ProtocolIncompatible => "The Cloud Sync protocol is incompatible.",
                 SyncError::NotFound => "The Cloud Sync resource was not found.",
                 SyncError::InvalidData => "Cloud Sync rejected invalid data.",
@@ -339,7 +421,7 @@ mod tests {
     #[test]
     fn remote_unauthorized_invalidates_the_cloud_sync_access_gate() {
         let access = SyncAccessGate::default();
-        access.allow();
+        access.allow(0);
         let account = AccountService::new(
             "https://account.example.test",
             "https://account.example.test",
@@ -348,9 +430,26 @@ mod tests {
         .expect("valid account configuration");
         let provider = AccountTokenProvider::new(account, access.clone());
 
-        provider.invalidate_cloud_sync();
+        provider.invalidate_cloud_sync(0, CloudSyncAuthFailure::Unauthorized);
 
-        assert!(!access.is_allowed());
+        assert!(!access.is_allowed_for(0));
+    }
+
+    #[test]
+    fn stale_generation_unauthorized_does_not_invalidate_newer_gate() {
+        let access = SyncAccessGate::default();
+        access.allow(2);
+        let account = AccountService::new(
+            "https://account.example.test",
+            "https://account.example.test",
+            false,
+        )
+        .expect("valid account configuration");
+        let provider = AccountTokenProvider::new(account, access.clone());
+
+        provider.invalidate_cloud_sync(1, CloudSyncAuthFailure::Unauthorized);
+
+        assert!(access.is_allowed_for(2));
     }
 
     #[test]

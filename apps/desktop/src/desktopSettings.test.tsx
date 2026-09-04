@@ -53,7 +53,7 @@ function createAccountContext(): AccountContextValue {
     signIn: () => undefined,
     signOut: () => undefined,
     retry: () => undefined,
-    refreshAccount: async () => undefined,
+    refreshAccount: async () => null,
     refreshing: false,
     setMockState: () => undefined,
   };

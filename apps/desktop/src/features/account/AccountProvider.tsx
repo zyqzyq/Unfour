@@ -90,12 +90,19 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     if (stateRef.current.kind !== "signedIn") applyState({ kind: "error" });
   }, [applyState, supersedePendingAccountRequests]);
 
-  const refreshAccount = useCallback(async () => {
-    if (preview) return;
+  const refreshAccount = useCallback(async (): Promise<AccountStateSnapshot | null> => {
+    if (preview) {
+      return {
+        account: stateRef.current,
+        syncContext: stateRef.current.kind === "signedIn"
+          ? { kind: "ready" }
+          : { kind: "inactive" },
+      };
+    }
     const displayGeneration = ++refreshDisplayGenerationRef.current;
     setRefreshing(true);
     try {
-      await refreshController.refresh();
+      return await refreshController.refresh();
     } finally {
       if (displayGeneration === refreshDisplayGenerationRef.current) {
         setRefreshing(false);

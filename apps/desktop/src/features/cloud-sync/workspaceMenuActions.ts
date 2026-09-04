@@ -33,7 +33,7 @@ export function createCloudSyncWorkspaceActions(
     label: t("cloudSync.resumeCloudSync"),
     run: () => sync.enableWorkspace(workspace.id),
   }];
-  if (["attention", "auth_required"].includes(state)) actions.push({
+  if (["attention", "auth_required", "capability_required"].includes(state)) actions.push({
     id: "cloud-sync.resolve-issue",
     label: t("cloudSync.resolveSyncIssue"),
     run: () => sync.openDetailDialog({ id: workspace.id, name: workspace.name }),

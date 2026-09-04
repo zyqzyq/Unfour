@@ -197,7 +197,7 @@ mod unified_runtime_tests {
         .expect("network availability must not gate local startup");
 
         assert_eq!(runtime.account_state.service().generation(), 0);
-        assert!(!runtime.sync_state.access.is_allowed());
+        assert!(!runtime.sync_state.access.is_allowed_for(0));
         let workspace_state = runtime
             .command_bus
             .list_workspaces()

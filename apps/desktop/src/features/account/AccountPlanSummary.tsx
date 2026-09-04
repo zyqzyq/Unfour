@@ -22,7 +22,7 @@ export function AccountPlanSummary({ profile }: { profile: AccountProfile }) {
 
   const runAction = (
     action: PlanAction,
-    operation: () => Promise<void>,
+    operation: () => Promise<unknown>,
   ) => {
     setActionError(null);
     setPendingAction(action);

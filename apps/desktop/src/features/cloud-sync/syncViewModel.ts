@@ -12,6 +12,10 @@ const AUTH_ERRORS = new Set([
   "cloud_sync_not_authenticated",
 ]);
 
+const CAPABILITY_ERRORS = new Set([
+  "cloud_sync_entitlement_required",
+]);
+
 export function getCloudSyncViewState(
   status: CloudSyncStatus,
   globalEnabled: boolean,
@@ -21,11 +25,19 @@ export function getCloudSyncViewState(
   if (!globalEnabled || !binding.syncEnabled || binding.state === "paused") return "paused";
   if (status.conflictCount > 0 || binding.state === "conflict") return "attention";
   if (status.deadCount > 0) return "attention";
-  if (binding.lastError && AUTH_ERRORS.has(binding.lastError)) return "auth_required";
-  if (binding.lastError && OFFLINE_ERRORS.has(binding.lastError)) return "offline";
+  const errorState = getErrorViewState(binding.lastError);
+  if (errorState) return errorState;
   if (binding.state === "error") return "attention";
   if (binding.lastError) return "attention";
   return syncInProgress(status, binding) ? "syncing" : "synced";
+}
+
+function getErrorViewState(error: string | null): CloudSyncViewState | null {
+  if (!error) return null;
+  if (AUTH_ERRORS.has(error)) return "auth_required";
+  if (CAPABILITY_ERRORS.has(error)) return "capability_required";
+  if (OFFLINE_ERRORS.has(error)) return "offline";
+  return null;
 }
 
 function syncInProgress(status: CloudSyncStatus, binding: NonNullable<CloudSyncStatus["binding"]>) {
@@ -39,6 +51,7 @@ export function viewStateTone(state: CloudSyncViewState): "neutral" | "success" 
   if (state === "synced") return "success";
   if (state === "attention") return "danger";
   if (state === "auth_required") return "danger";
+  if (state === "capability_required") return "warning";
   if (["syncing", "offline"].includes(state)) return "warning";
   return "neutral";
 }

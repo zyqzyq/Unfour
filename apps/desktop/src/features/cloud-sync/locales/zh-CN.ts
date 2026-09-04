@@ -47,6 +47,7 @@ const zhCN = {
     paused: "已暂停",
     offline: "离线",
     auth_required: "需要重新登录",
+    capability_required: "需要云同步套餐",
     attention: "需要处理",
   },
   scope: {
@@ -86,6 +87,7 @@ const zhCN = {
     waitingConnection: "等待网络连接",
     offlineDescription: "更改已保存在本地，恢复连接后会自动重试。",
     authRequiredDescription: "请重新登录账号，登录后会自动继续同步。",
+    capabilityRequiredDescription: "此账号不具备云同步能力。升级套餐后可继续同步，本地更改会保留。",
     attentionDescription: "部分更改无法自动同步。",
   },
   conflict: {

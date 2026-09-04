@@ -47,6 +47,7 @@ const en = {
     paused: "Paused",
     offline: "Offline",
     auth_required: "Sign-in required",
+    capability_required: "Cloud Sync plan required",
     attention: "Needs attention",
   },
   scope: {
@@ -86,6 +87,7 @@ const en = {
     waitingConnection: "Waiting for connection",
     offlineDescription: "Changes are kept locally and will retry automatically.",
     authRequiredDescription: "Sign in again to continue syncing. Your local changes will be kept.",
+    capabilityRequiredDescription: "This account does not include Cloud Sync. Upgrade the plan to resume syncing; local changes will be kept.",
     attentionDescription: "Some changes could not be synced automatically.",
   },
   conflict: {

@@ -1,14 +1,17 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
+use tokio::sync::Barrier;
 use unfour_cloud_sync::{
-    parse_snapshot_item, ApiErrorEnvelope, ChangesPage, DesktopSessionCredential,
-    DesktopSessionProvider, HttpSyncTransport, PushOperation, PushRequest, PushResponse,
-    SnapshotPage, SyncEntityType, SyncError, SyncOperation, SyncTransport, TransportError,
-    CLOUD_SYNC_ENTITLEMENT, PAYLOAD_SCHEMA_VERSION, PROTOCOL_VERSION,
+    parse_snapshot_item, ApiErrorEnvelope, ChangesPage, CloudSyncAuthFailure,
+    DesktopSessionCredential, DesktopSessionProvider, HttpSyncTransport, PushOperation,
+    PushRequest, PushResponse, SnapshotPage, SyncEntityType, SyncError, SyncOperation,
+    SyncTransport, TransportError, CLOUD_SYNC_ENTITLEMENT, PAYLOAD_SCHEMA_VERSION,
+    PROTOCOL_VERSION,
 };
 use unfour_core::domain::DomainEntityType;
 
@@ -104,8 +107,47 @@ impl DesktopSessionProvider for FixedSession {
     fn generation(&self) -> u64 {
         self.0.load(Ordering::SeqCst)
     }
-    fn invalidate_cloud_sync(&self) {
+    fn invalidate_cloud_sync(&self, _request_generation: u64, _failure: CloudSyncAuthFailure) {
         self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+struct GenerationFenceSession {
+    generation: AtomicU64,
+    allowed_generation: AtomicU64,
+    invalidations: AtomicUsize,
+}
+
+impl GenerationFenceSession {
+    fn new(generation: u64) -> Self {
+        Self {
+            generation: AtomicU64::new(generation),
+            allowed_generation: AtomicU64::new(generation),
+            invalidations: AtomicUsize::new(0),
+        }
+    }
+}
+
+#[async_trait]
+impl DesktopSessionProvider for GenerationFenceSession {
+    async fn session_for_cloud_sync(&self) -> Result<DesktopSessionCredential, SyncError> {
+        let generation = self.generation.load(Ordering::SeqCst);
+        DesktopSessionCredential::new(
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-abcde".into(),
+            "account-fence".into(),
+            generation,
+        )
+    }
+
+    fn generation(&self) -> u64 {
+        self.generation.load(Ordering::SeqCst)
+    }
+
+    fn invalidate_cloud_sync(&self, request_generation: u64, _failure: CloudSyncAuthFailure) {
+        self.invalidations.fetch_add(1, Ordering::SeqCst);
+        if self.allowed_generation.load(Ordering::SeqCst) == request_generation {
+            self.allowed_generation.store(0, Ordering::SeqCst);
+        }
     }
 }
 
@@ -296,6 +338,53 @@ async fn real_http_request_uses_desktop_session_header_and_never_bearer() {
 }
 
 #[tokio::test]
+async fn stale_cloud_sync_unauthorized_cannot_invalidate_a_newer_generation() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let request_seen = Arc::new(Barrier::new(2));
+    let release_response = Arc::new(Barrier::new(2));
+    let server_request_seen = request_seen.clone();
+    let server_release_response = release_response.clone();
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut request = vec![0_u8; 8192];
+        let _ = socket.read(&mut request).await.unwrap();
+        server_request_seen.wait().await;
+        server_release_response.wait().await;
+        let body = r#"{"error":{"code":"unauthorized","message":"expired","requestId":"stale","details":null}}"#;
+        let response = format!(
+            "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        socket.write_all(response.as_bytes()).await.unwrap();
+    });
+    let sessions = Arc::new(GenerationFenceSession::new(7));
+    let transport =
+        Arc::new(HttpSyncTransport::new(&format!("http://{address}"), sessions.clone()).unwrap());
+    let request = {
+        let transport = transport.clone();
+        tokio::spawn(async move { transport.list_workspaces().await })
+    };
+
+    tokio::time::timeout(Duration::from_secs(5), request_seen.wait())
+        .await
+        .expect("the old request reached the server");
+    sessions.generation.store(8, Ordering::SeqCst);
+    sessions.allowed_generation.store(8, Ordering::SeqCst);
+    release_response.wait().await;
+
+    assert!(matches!(
+        request.await.unwrap(),
+        Err(TransportError::Unauthorized)
+    ));
+    assert_eq!(sessions.generation.load(Ordering::SeqCst), 8);
+    assert_eq!(sessions.allowed_generation.load(Ordering::SeqCst), 8);
+    assert_eq!(sessions.invalidations.load(Ordering::SeqCst), 0);
+    server.await.unwrap();
+}
+
+#[tokio::test]
 async fn every_http_cloud_sync_endpoint_declares_protocol_v4() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
@@ -469,6 +558,17 @@ async fn http_error_envelope_classifies_409_protocol_and_auth_without_guessing()
     assert!(matches!(
         transport.push("cloud", &request).await,
         Err(TransportError::Unauthorized)
+    ));
+    server.await.unwrap();
+
+    let (transport, server) = transport_with_response(
+        "403 Forbidden",
+        r#"{"error":{"code":"entitlement_required","message":"upgrade required","requestId":"r4","details":null}}"#,
+    )
+    .await;
+    assert!(matches!(
+        transport.push("cloud", &request).await,
+        Err(TransportError::EntitlementRequired)
     ));
     server.await.unwrap();
 }

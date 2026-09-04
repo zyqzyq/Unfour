@@ -237,6 +237,9 @@ impl SyncService {
             {
                 Ok(page) => page,
                 Err(TransportError::Unauthorized) => return Err(SyncError::Unauthorized),
+                Err(TransportError::EntitlementRequired) => {
+                    return Err(SyncError::EntitlementRequired)
+                }
                 Err(TransportError::ProtocolIncompatible) => {
                     return Err(SyncError::ProtocolIncompatible)
                 }

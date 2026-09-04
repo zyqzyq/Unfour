@@ -148,6 +148,17 @@ impl SyncService {
                     .await?;
                 Err(SyncError::Unauthorized)
             }
+            Err(TransportError::EntitlementRequired) => {
+                self.repository
+                    .mark_not_sent(
+                        &entries,
+                        SyncError::EntitlementRequired.code(),
+                        true,
+                        self.dependencies.clock.now(),
+                    )
+                    .await?;
+                Err(SyncError::EntitlementRequired)
+            }
             Err(TransportError::ProtocolIncompatible) => {
                 self.repository
                     .mark_not_sent(

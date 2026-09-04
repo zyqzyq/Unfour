@@ -25,6 +25,7 @@ pub(crate) struct MockTransport {
     pub(crate) permanent_operation: Mutex<Option<(String, String)>>,
     pub(crate) unknown_permanent_operation: Mutex<Option<(String, String)>>,
     pub(crate) unauthorized_pushes: AtomicUsize,
+    pub(crate) entitlement_pushes: AtomicUsize,
     pub(crate) fail_on_push_number: AtomicUsize,
     pub(crate) no_op_pushes: AtomicUsize,
     pub(crate) active_calls: AtomicUsize,
@@ -198,6 +199,15 @@ impl SyncTransport for MockTransport {
             .is_ok()
         {
             return Err(TransportError::Unauthorized);
+        }
+        if self
+            .entitlement_pushes
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |value| {
+                (value > 0).then(|| value - 1)
+            })
+            .is_ok()
+        {
+            return Err(TransportError::EntitlementRequired);
         }
         if self
             .fail_pushes
