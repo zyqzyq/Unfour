@@ -35,6 +35,23 @@ pub enum DomainEntityType {
     SshTaskStep,
 }
 
+impl DomainEntityType {
+    /// Complete domain entity enumeration. Cloud Sync uses this to prove that
+    /// every currently syncable domain type has exactly one Registry entry.
+    pub const ALL: [Self; 10] = [
+        Self::Workspace,
+        Self::Connection,
+        Self::WorkspaceVariable,
+        Self::WorkspaceEnvironment,
+        Self::WorkspaceEnvironmentVariable,
+        Self::ApiCollection,
+        Self::ApiFolder,
+        Self::ApiRequest,
+        Self::SshTask,
+        Self::SshTaskStep,
+    ];
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DomainEntityKey {

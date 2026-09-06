@@ -130,7 +130,7 @@ fn connection_snapshots_use_a_strict_device_local_safe_allowlist() {
     let change = RemoteChange {
         cursor: 1,
         operation_id: "remote-connection".into(),
-        entity_type: SyncEntityType::Connection,
+        entity_type: SyncEntityType::Connection.as_str().into(),
         entity_id: "ssh-1".into(),
         parent_entity_id: None,
         operation: SyncOperation::Upsert,
@@ -324,7 +324,7 @@ fn api_remote_changes_decode_to_external_apply_pages_and_tombstones() {
     let folder = RemoteChange {
         cursor: 1,
         operation_id: "remote-folder".into(),
-        entity_type: SyncEntityType::ApiFolder,
+        entity_type: SyncEntityType::ApiFolder.as_str().into(),
         entity_id: "folder-1".into(),
         parent_entity_id: Some("collection-1".into()),
         operation: SyncOperation::Upsert,
@@ -350,7 +350,7 @@ fn api_remote_changes_decode_to_external_apply_pages_and_tombstones() {
         let request = RemoteChange {
             cursor: 2,
             operation_id: format!("remote-request-{index}"),
-            entity_type: SyncEntityType::ApiRequest,
+            entity_type: SyncEntityType::ApiRequest.as_str().into(),
             entity_id: "request-1".into(),
             parent_entity_id: Some("folder-1".into()),
             operation: SyncOperation::Upsert,
@@ -387,7 +387,7 @@ fn api_remote_changes_decode_to_external_apply_pages_and_tombstones() {
     let legacy_request = RemoteChange {
         cursor: 3,
         operation_id: "legacy-request".into(),
-        entity_type: SyncEntityType::ApiRequest,
+        entity_type: SyncEntityType::ApiRequest.as_str().into(),
         entity_id: "request-legacy".into(),
         parent_entity_id: Some("folder-1".into()),
         operation: SyncOperation::Upsert,
@@ -517,7 +517,7 @@ fn ssh_task_snapshots_are_intrinsic_and_remote_pages_enforce_the_task_parent() {
     let remote_step = RemoteChange {
         cursor: 1,
         operation_id: "remote-step".into(),
-        entity_type: SyncEntityType::SshTaskStep,
+        entity_type: SyncEntityType::SshTaskStep.as_str().into(),
         entity_id: "step-1".into(),
         parent_entity_id: Some("task-1".into()),
         operation: SyncOperation::Upsert,
@@ -539,7 +539,7 @@ fn ssh_task_snapshots_are_intrinsic_and_remote_pages_enforce_the_task_parent() {
     let task_delete = RemoteChange {
         cursor: 2,
         operation_id: "delete-task".into(),
-        entity_type: SyncEntityType::SshTask,
+        entity_type: SyncEntityType::SshTask.as_str().into(),
         entity_id: "task-1".into(),
         parent_entity_id: None,
         operation: SyncOperation::Delete,

@@ -1,11 +1,12 @@
 //! Generic live-entity repair for historical outbox gaps.
 
 use super::support::*;
-use unfour_cloud_sync::SyncRepository;
+use unfour_cloud_sync::{SyncEntityAdapters, SyncRepository};
 use unfour_database_engine::DatabaseService;
 use unfour_http_engine::ApiClientService;
 use unfour_secret_store::SecretStore;
 use unfour_ssh_engine::SshService;
+use unfour_workspace_engine::WorkspaceService;
 
 #[tokio::test]
 async fn generic_repair_requeues_live_core_entities_redacts_secrets_and_is_idempotent() {
@@ -147,13 +148,13 @@ async fn generic_repair_only_runs_for_the_explicit_workspace_owner() {
     let api_client = ApiClientService::new(db.clone());
     let ssh = SshService::new(db.clone(), secret_store.clone());
     let database_service = DatabaseService::new(db.clone()).with_secret_store(secret_store);
+    let workspace = WorkspaceService::new(db.clone());
+    let adapters = SyncEntityAdapters::new(&workspace, &api_client, &ssh, &database_service);
 
     let repaired_by_b = repository
         .reconcile_missing_local_sync_state(
             &non_owner_binding,
-            &api_client,
-            &ssh,
-            &database_service,
+            &adapters,
             dependencies.ids.as_ref(),
             dependencies.clock.as_ref(),
         )
@@ -170,9 +171,7 @@ async fn generic_repair_only_runs_for_the_explicit_workspace_owner() {
     let repaired_by_a = repository
         .reconcile_missing_local_sync_state(
             &owner_binding,
-            &api_client,
-            &ssh,
-            &database_service,
+            &adapters,
             dependencies.ids.as_ref(),
             dependencies.clock.as_ref(),
         )

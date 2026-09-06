@@ -158,6 +158,7 @@ const en = {
     deadLetterBlocked: "One or more local changes need recovery before syncing can continue.",
     ownership: "Cloud Sync workspace ownership could not be verified. No local or cloud data was overwritten.",
     payloadSchema: "This change uses a payload format the cloud does not support. Update the app before retrying.",
+    compatibilityWaiting: "Sync is waiting for a compatible app or cloud service version. Your local changes are preserved and will retry automatically.",
     operationIdReuse: "The cloud rejected a reused operation identity. Retry the current local state to create a new operation.",
     secretRejected: "This change contains a value that Cloud Sync treats as secret. Remove it from synced data and retry.",
     tooLarge: "This change is too large for Cloud Sync. Reduce its size, then retry the current local state.",

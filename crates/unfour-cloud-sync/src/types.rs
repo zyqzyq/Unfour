@@ -46,8 +46,7 @@ pub struct SyncWorkspaceOwner {
     pub cloud_workspace_id: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SyncEntityType {
     Workspace,
     Connection,
@@ -61,49 +60,41 @@ pub enum SyncEntityType {
     SshTaskStep,
 }
 
+impl Serialize for SyncEntityType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for SyncEntityType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let wire_name = String::deserialize(deserializer)?;
+        Self::parse(&wire_name)
+            .map_err(|_| serde::de::Error::custom("unsupported sync entity type"))
+    }
+}
+
 impl SyncEntityType {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Workspace => "workspace",
-            Self::Connection => "connection",
-            Self::WorkspaceVariable => "workspaceVariable",
-            Self::WorkspaceEnvironment => "workspaceEnvironment",
-            Self::WorkspaceEnvironmentVariable => "workspaceEnvironmentVariable",
-            Self::ApiCollection => "apiCollection",
-            Self::ApiFolder => "apiFolder",
-            Self::ApiRequest => "apiRequest",
-            Self::SshTask => "sshTask",
-            Self::SshTaskStep => "sshTaskStep",
-        }
+    pub fn as_str(self) -> &'static str {
+        crate::sync_entity_descriptor(self).wire_name
     }
 
-    pub const fn topology_rank(self) -> i64 {
-        match self {
-            Self::Workspace => 0,
-            Self::WorkspaceVariable
-            | Self::Connection
-            | Self::WorkspaceEnvironment
-            | Self::ApiCollection
-            | Self::SshTask => 1,
-            Self::WorkspaceEnvironmentVariable | Self::ApiFolder | Self::SshTaskStep => 2,
-            Self::ApiRequest => 3,
-        }
+    pub fn topology_rank(self) -> i64 {
+        crate::sync_entity_descriptor(self).topology_rank
     }
 
     pub fn parse(value: &str) -> Result<Self, SyncError> {
-        match value {
-            "workspace" => Ok(Self::Workspace),
-            "connection" => Ok(Self::Connection),
-            "workspaceVariable" => Ok(Self::WorkspaceVariable),
-            "workspaceEnvironment" => Ok(Self::WorkspaceEnvironment),
-            "workspaceEnvironmentVariable" => Ok(Self::WorkspaceEnvironmentVariable),
-            "apiCollection" => Ok(Self::ApiCollection),
-            "apiFolder" => Ok(Self::ApiFolder),
-            "apiRequest" => Ok(Self::ApiRequest),
-            "sshTask" => Ok(Self::SshTask),
-            "sshTaskStep" => Ok(Self::SshTaskStep),
-            _ => Err(SyncError::InvalidData),
-        }
+        crate::SYNC_ENTITY_REGISTRY
+            .iter()
+            .find(|descriptor| descriptor.wire_name == value)
+            .map(|descriptor| descriptor.entity_type)
+            .ok_or(SyncError::InvalidData)
     }
 }
 
@@ -175,7 +166,7 @@ impl From<MutationOperation> for SyncOperation {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct CloudWorkspace {
     pub cloud_workspace_id: String,
     pub root_entity_id: String,
@@ -236,7 +227,7 @@ pub enum PushResultStatus {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct PushResult {
     pub operation_id: String,
     pub server_version: i64,
@@ -245,7 +236,7 @@ pub struct PushResult {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct PushResponse {
     pub protocol_version: u32,
     pub current_cursor: i64,
@@ -253,11 +244,13 @@ pub struct PushResponse {
 }
 
 #[derive(Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct RemoteChange {
     pub cursor: i64,
     pub operation_id: String,
-    pub entity_type: SyncEntityType,
+    /// Raw wire name. Recognition belongs to the Registry-backed apply layer so
+    /// a future entity cannot make the entire Changes page fail to decode.
+    pub entity_type: String,
     pub entity_id: String,
     pub parent_entity_id: Option<String>,
     pub operation: SyncOperation,
@@ -283,9 +276,13 @@ impl fmt::Debug for RemoteChange {
 }
 
 impl RemoteChange {
-    pub fn key(&self, workspace_id: &str) -> DomainEntityKey {
+    pub fn known_entity_type(&self) -> Option<SyncEntityType> {
+        SyncEntityType::parse(&self.entity_type).ok()
+    }
+
+    pub fn key(&self, workspace_id: &str, entity_type: SyncEntityType) -> DomainEntityKey {
         let mut key = DomainEntityKey::new(
-            DomainEntityType::from(self.entity_type),
+            DomainEntityType::from(entity_type),
             workspace_id,
             &self.entity_id,
         );
@@ -295,7 +292,7 @@ impl RemoteChange {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct ChangesPage {
     pub protocol_version: u32,
     pub cloud_workspace_id: String,
@@ -305,9 +302,10 @@ pub struct ChangesPage {
 }
 
 #[derive(Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct SnapshotItem {
-    pub entity_type: SyncEntityType,
+    /// Raw wire name for the same tolerant-reader reason as `RemoteChange`.
+    pub entity_type: String,
     pub entity_id: String,
     pub parent_entity_id: Option<String>,
     pub server_version: i64,
@@ -327,8 +325,22 @@ impl fmt::Debug for SnapshotItem {
     }
 }
 
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProtocolDeclaration {
+    pub supported_protocol_versions: Vec<u32>,
+    #[serde(default)]
+    pub features: Vec<String>,
+}
+
+impl SnapshotItem {
+    pub fn known_entity_type(&self) -> Option<SyncEntityType> {
+        SyncEntityType::parse(&self.entity_type).ok()
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct SnapshotPage {
     pub protocol_version: u32,
     pub cloud_workspace_id: String,
@@ -339,14 +351,14 @@ pub struct SnapshotPage {
 }
 
 #[derive(Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncConflictDetails {
     pub entity_type: SyncEntityType,
     pub entity_id: String,
     pub parent_entity_id: Option<String>,
     pub server_version: i64,
     pub operation: SyncOperation,
-    pub payload_schema_version: Option<i64>,
+    pub payload_schema_version: i64,
     pub payload: Option<Value>,
 }
 
@@ -406,8 +418,6 @@ pub struct SyncBinding {
     pub initial_total: i64,
     pub initial_confirmed: i64,
     pub initialization_checkpoint: Option<String>,
-    pub ssh_task_v3_bootstrap_state: String,
-    pub connection_v4_bootstrap_state: String,
     pub generation: i64,
     pub last_success_at: Option<String>,
     pub last_error: Option<String>,
@@ -422,11 +432,28 @@ pub struct SyncConflict {
     pub entity_type: String,
     pub entity_id: String,
     pub server_version: i64,
+    pub conflict_payload_schema_version: Option<i64>,
     pub conflict_remote_payload_json: Option<String>,
     pub conflict_remote_operation: Option<String>,
     pub conflict_parent_entity_id: Option<String>,
     pub conflict_deleted_at: Option<String>,
     pub conflict_operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct RemoteEntityRecord {
+    pub account_id: String,
+    pub cloud_workspace_id: String,
+    pub entity_type: String,
+    pub entity_id: String,
+    pub parent_entity_id: Option<String>,
+    pub server_version: i64,
+    pub payload_schema_version: i64,
+    pub operation: String,
+    pub canonical_payload_json: Option<String>,
+    pub deleted_at: Option<String>,
+    pub operation_id: Option<String>,
+    pub compatibility_state: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

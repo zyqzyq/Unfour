@@ -29,7 +29,7 @@ describe("workspace Cloud Sync actions", () => {
   });
 
   it("offers view and pause for an enabled workspace", () => {
-    const context = sync({ ...emptyStatus, binding: { accountId: "a", localWorkspaceId: "workspace", cloudWorkspaceId: "c", lastPulledCursor: 0, syncEnabled: true, state: "active", initialCursor: 0, initialTotal: 0, initialConfirmed: 0, initializationCheckpoint: null, sshTaskV3BootstrapState: "completed", connectionV4BootstrapState: "completed", generation: 0, lastSuccessAt: null, lastError: null, consecutiveFailureCount: 0 } });
+    const context = sync({ ...emptyStatus, binding: { accountId: "a", localWorkspaceId: "workspace", cloudWorkspaceId: "c", lastPulledCursor: 0, syncEnabled: true, state: "active", initialCursor: 0, initialTotal: 0, initialConfirmed: 0, initializationCheckpoint: null, generation: 0, lastSuccessAt: null, lastError: null, consecutiveFailureCount: 0 } });
     expect(createCloudSyncWorkspaceActions(context, t, workspace).map((action) => action.label)).toEqual(["cloudSync.viewSyncStatus", "cloudSync.pauseCloudSync"]);
   });
 
@@ -39,7 +39,7 @@ describe("workspace Cloud Sync actions", () => {
       binding: {
         accountId: "a", localWorkspaceId: "workspace", cloudWorkspaceId: "c", lastPulledCursor: 0,
         syncEnabled: true, state: "error", initialCursor: 0, initialTotal: 0, initialConfirmed: 0,
-        initializationCheckpoint: null, sshTaskV3BootstrapState: "completed", connectionV4BootstrapState: "completed",
+        initializationCheckpoint: null,
         generation: 0, lastSuccessAt: null, lastError: "cloud_sync_unauthorized", consecutiveFailureCount: 1,
       },
     });

@@ -3,8 +3,6 @@
 use super::support::*;
 use unfour_core::models::{SshConnectionInput, SshTaskSaveInput, SshTaskStepInput};
 
-#[path = "ssh_tasks/bootstrap.rs"]
-mod bootstrap;
 #[path = "ssh_tasks/conflicts.rs"]
 mod conflicts;
 #[path = "ssh_tasks/failures.rs"]
@@ -76,7 +74,7 @@ fn remote_task(cursor: i64, operation_id: &str) -> RemoteChange {
     RemoteChange {
         cursor,
         operation_id: operation_id.into(),
-        entity_type: SyncEntityType::SshTask,
+        entity_type: SyncEntityType::SshTask.as_str().into(),
         entity_id: "remote-task".into(),
         parent_entity_id: None,
         operation: SyncOperation::Upsert,
@@ -97,7 +95,7 @@ fn remote_step(cursor: i64, operation_id: &str) -> RemoteChange {
     RemoteChange {
         cursor,
         operation_id: operation_id.into(),
-        entity_type: SyncEntityType::SshTaskStep,
+        entity_type: SyncEntityType::SshTaskStep.as_str().into(),
         entity_id: "remote-step".into(),
         parent_entity_id: Some("remote-task".into()),
         operation: SyncOperation::Upsert,
@@ -192,7 +190,6 @@ async fn initial_ssh_task_upload_uses_core_canonical_snapshots_and_topology() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(binding.ssh_task_v3_bootstrap_state, "completed");
     assert_eq!(binding.initial_total as usize, operations.len());
     let task_index = operations
         .iter()
@@ -483,7 +480,7 @@ async fn pulled_ssh_tasks_apply_idempotently_without_bindings_runs_or_outbox_ech
             RemoteChange {
                 cursor: duplicate_cursor + 1,
                 operation_id: "remote-task-delete".into(),
-                entity_type: SyncEntityType::SshTask,
+                entity_type: SyncEntityType::SshTask.as_str().into(),
                 entity_id: "remote-task".into(),
                 parent_entity_id: None,
                 operation: SyncOperation::Delete,
@@ -495,7 +492,7 @@ async fn pulled_ssh_tasks_apply_idempotently_without_bindings_runs_or_outbox_ech
             RemoteChange {
                 cursor: delete_cursor,
                 operation_id: "remote-step-delete".into(),
-                entity_type: SyncEntityType::SshTaskStep,
+                entity_type: SyncEntityType::SshTaskStep.as_str().into(),
                 entity_id: "remote-step".into(),
                 parent_entity_id: Some("remote-task".into()),
                 operation: SyncOperation::Delete,
@@ -560,7 +557,7 @@ async fn pull_workspace_delete_cascades_ssh_tasks_and_steps() {
         changes: vec![RemoteChange {
             cursor: base_cursor + 1,
             operation_id: "remote-workspace-delete".into(),
-            entity_type: SyncEntityType::Workspace,
+            entity_type: SyncEntityType::Workspace.as_str().into(),
             entity_id: workspace_id.clone(),
             parent_entity_id: None,
             operation: SyncOperation::Delete,

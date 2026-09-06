@@ -181,6 +181,9 @@ impl From<SyncError> for SyncCommandError {
                     "This account does not include an active cloud_sync entitlement."
                 }
                 SyncError::ProtocolIncompatible => "The Cloud Sync protocol is incompatible.",
+                SyncError::CompatibilityWaiting => {
+                    "Cloud Sync is waiting for a compatible app or cloud service version."
+                }
                 SyncError::NotFound => "The Cloud Sync resource was not found.",
                 SyncError::InvalidData => "Cloud Sync rejected invalid data.",
                 SyncError::Transport => "Cloud Sync could not confirm the server result.",
@@ -482,8 +485,6 @@ mod tests {
                 initial_total: 1,
                 initial_confirmed: 0,
                 initialization_checkpoint: None,
-                ssh_task_v3_bootstrap_state: "completed".into(),
-                connection_v4_bootstrap_state: "completed".into(),
                 generation: 1,
                 last_success_at: None,
                 last_error: Some("cloud_sync_dead_letter_blocked".into()),

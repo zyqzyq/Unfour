@@ -235,7 +235,7 @@ async fn multi_page_changes_continue_until_next_cursor_equals_current_cursor() {
         RemoteChange {
             cursor,
             operation_id: format!("remote-{cursor}"),
-            entity_type: SyncEntityType::WorkspaceVariable,
+            entity_type: SyncEntityType::WorkspaceVariable.as_str().into(),
             entity_id: id.into(),
             parent_entity_id: Some(workspace_id.clone()),
             operation: SyncOperation::Upsert,
@@ -279,6 +279,496 @@ async fn multi_page_changes_continue_until_next_cursor_equals_current_cursor() {
             .last_pulled_cursor,
         base + 2
     );
+}
+
+#[tokio::test]
+async fn pull_retains_future_entities_advances_cursor_and_blocks_unsafe_apply() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let transport = Arc::new(MockTransport::new());
+    let (service, _, _) = SyncRuntime::build(db.clone(), transport.clone());
+    service.enable(&workspace_id).await.unwrap();
+    let binding = service
+        .status(&workspace_id)
+        .await
+        .unwrap()
+        .binding
+        .unwrap();
+    let base = binding.last_pulled_cursor;
+
+    let mut first_payload = variable_payload("one");
+    first_payload["key"] = serde_json::json!("FIRST");
+    first_payload["futureOptionalField"] = serde_json::json!({"ignored": true});
+    let future_api_payload = serde_json::json!({
+        "collectionId": "future-collection",
+        "parentFolderId": null,
+        "name": "Future body mode",
+        "sortOrder": 0,
+        "authJson": "{}",
+        "method": "POST",
+        "url": "https://example.test/future",
+        "headers": [],
+        "query": [],
+        "body": "future",
+        "bodyKind": "multipart",
+        "settingsJson": "{\"timeoutMs\":null}",
+        "preRequestScript": null,
+        "postResponseScript": null,
+        "scriptSchemaVersion": 1,
+        "createdAt": "2026-08-13T00:00:00Z",
+        "updatedAt": "2026-08-13T00:00:00Z"
+    });
+    transport.changes.lock().unwrap().push_back(ChangesPage {
+        protocol_version: PROTOCOL_VERSION,
+        cloud_workspace_id: binding.cloud_workspace_id.clone(),
+        current_cursor: base + 5,
+        next_cursor: base + 5,
+        changes: vec![
+            RemoteChange {
+                cursor: base + 1,
+                operation_id: "known-before".into(),
+                entity_type: SyncEntityType::WorkspaceVariable.as_str().into(),
+                entity_id: "known-before".into(),
+                parent_entity_id: Some(workspace_id.clone()),
+                operation: SyncOperation::Upsert,
+                server_version: 1,
+                payload_schema_version: PAYLOAD_SCHEMA_VERSION,
+                payload: Some(first_payload),
+                deleted_at: None,
+            },
+            RemoteChange {
+                cursor: base + 2,
+                operation_id: "future-entity".into(),
+                entity_type: "flowNode".into(),
+                entity_id: "future-node".into(),
+                parent_entity_id: Some(workspace_id.clone()),
+                operation: SyncOperation::Upsert,
+                server_version: 1,
+                payload_schema_version: PAYLOAD_SCHEMA_VERSION,
+                payload: Some(serde_json::json!({"future": true})),
+                deleted_at: None,
+            },
+            RemoteChange {
+                cursor: base + 3,
+                operation_id: "future-subtype".into(),
+                entity_type: SyncEntityType::ApiRequest.as_str().into(),
+                entity_id: "future-api-request".into(),
+                parent_entity_id: Some("future-collection".into()),
+                operation: SyncOperation::Upsert,
+                server_version: 1,
+                payload_schema_version: PAYLOAD_SCHEMA_VERSION,
+                payload: Some(future_api_payload),
+                deleted_at: None,
+            },
+            RemoteChange {
+                cursor: base + 4,
+                operation_id: "child-of-future-parent".into(),
+                entity_type: SyncEntityType::WorkspaceEnvironmentVariable.as_str().into(),
+                entity_id: "blocked-known-child".into(),
+                parent_entity_id: Some("future-node".into()),
+                operation: SyncOperation::Upsert,
+                server_version: 1,
+                payload_schema_version: PAYLOAD_SCHEMA_VERSION,
+                payload: Some(variable_payload("must-not-apply")),
+                deleted_at: None,
+            },
+            remote_variable_change(
+                &workspace_id,
+                base + 5,
+                "known-after",
+                "known-after",
+                "AFTER",
+                "two",
+            ),
+        ],
+    });
+
+    assert!(matches!(
+        service.sync_workspace(&workspace_id).await,
+        Err(SyncError::CompatibilityWaiting)
+    ));
+
+    let values: Vec<(String, String)> = sqlx::query_as(
+        "SELECT id, value FROM workspace_variables WHERE id IN ('known-before', 'known-after') ORDER BY id",
+    )
+    .fetch_all(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(values, Vec::<(String, String)>::new());
+    let skipped_business_rows: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM api_requests WHERE id = 'future-api-request'")
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert_eq!(skipped_business_rows, 0);
+    let skipped_state_rows: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM cloud_sync_entity_state WHERE entity_id IN ('future-node', 'future-api-request', 'blocked-known-child')",
+    )
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(skipped_state_rows, 0);
+
+    let retained: Vec<(String, String, i64, String)> = sqlx::query_as(
+        r#"SELECT entity_type, entity_id, server_version, compatibility_state
+           FROM cloud_sync_remote_entity
+           WHERE cloud_workspace_id = ?1 ORDER BY entity_id"#,
+    )
+    .bind(&binding.cloud_workspace_id)
+    .fetch_all(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(retained.len(), 5);
+    assert!(retained.iter().any(|row| {
+        row.0 == "flowNode" && row.1 == "future-node" && row.3 == "deferred_compatibility"
+    }));
+    let preserved_payload: String = sqlx::query_scalar(
+        "SELECT canonical_payload_json FROM cloud_sync_remote_entity WHERE entity_id = 'known-before'",
+    )
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert!(preserved_payload.contains("futureOptionalField"));
+
+    let status = service.status(&workspace_id).await.unwrap();
+    let binding = status.binding.unwrap();
+    assert_eq!(binding.last_pulled_cursor, base + 5);
+    assert_eq!(binding.state, "error");
+    assert_eq!(
+        binding.last_error.as_deref(),
+        Some("cloud_sync_compatibility_waiting")
+    );
+    assert_eq!(status.dead_count, 0);
+    let diagnostics: Vec<(String, String, String)> = sqlx::query_as(
+        r#"SELECT error_code, entity_type, entity_id
+           FROM cloud_sync_diagnostics
+           WHERE error_code = 'remote_entity_compatibility_deferred'
+           ORDER BY id"#,
+    )
+    .fetch_all(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(
+        diagnostics,
+        vec![
+            (
+                "remote_entity_compatibility_deferred".into(),
+                "workspaceVariable".into(),
+                "known-before".into(),
+            ),
+            (
+                "remote_entity_compatibility_deferred".into(),
+                "flowNode".into(),
+                "future-node".into(),
+            ),
+            (
+                "remote_entity_compatibility_deferred".into(),
+                "apiRequest".into(),
+                "future-api-request".into(),
+            ),
+        ]
+    );
+
+    let (restarted, _, _) = SyncRuntime::build(db.clone(), transport.clone());
+    assert!(matches!(
+        restarted.sync_workspace(&workspace_id).await,
+        Err(SyncError::CompatibilityWaiting)
+    ));
+    let retained_after_restart: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM cloud_sync_remote_entity WHERE cloud_workspace_id = ?1",
+    )
+    .bind(&binding.cloud_workspace_id)
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(retained_after_restart, 5);
+    assert_eq!(
+        restarted
+            .status(&workspace_id)
+            .await
+            .unwrap()
+            .binding
+            .unwrap()
+            .last_pulled_cursor,
+        base + 5,
+    );
+}
+
+#[tokio::test]
+async fn restarted_new_reader_reclassifies_and_applies_a_retained_complete_envelope() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let transport = Arc::new(MockTransport::new());
+    let (old_runtime, _, _) = SyncRuntime::build(db.clone(), transport.clone());
+    old_runtime.enable(&workspace_id).await.unwrap();
+    let binding = old_runtime
+        .status(&workspace_id)
+        .await
+        .unwrap()
+        .binding
+        .unwrap();
+    let payload = variable_payload("retained-value");
+
+    // This row models a complete envelope retained by an older reader. The
+    // current runtime must re-evaluate compatibility instead of trusting the
+    // persisted deferred classification or rebuilding from local defaults.
+    sqlx::query(
+        r#"INSERT INTO cloud_sync_remote_entity (
+             account_id, cloud_workspace_id, entity_type, entity_id,
+             parent_entity_id, server_version, payload_schema_version,
+             operation, canonical_payload_json, deleted_at, operation_id,
+             compatibility_state, created_at, updated_at
+           ) VALUES (?1, ?2, 'workspaceVariable', 'reader-upgrade-variable',
+                     ?3, 7, 1, 'upsert', ?4, NULL, 'retained-operation',
+                     'deferred_compatibility', '2026-08-13T00:00:00Z',
+                     '2026-08-13T00:00:00Z')"#,
+    )
+    .bind(&binding.account_id)
+    .bind(&binding.cloud_workspace_id)
+    .bind(&workspace_id)
+    .bind(serde_json::to_string(&payload).unwrap())
+    .execute(db.pool())
+    .await
+    .unwrap();
+    drop(old_runtime);
+
+    let (upgraded_runtime, _, _) = SyncRuntime::build(db.clone(), transport);
+    upgraded_runtime
+        .sync_workspace(&workspace_id)
+        .await
+        .unwrap();
+
+    let value: String = sqlx::query_scalar(
+        "SELECT value FROM workspace_variables WHERE id = 'reader-upgrade-variable'",
+    )
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(value, "retained-value");
+    let remote: (String, String, i64) = sqlx::query_as(
+        r#"SELECT compatibility_state, canonical_payload_json, payload_schema_version
+           FROM cloud_sync_remote_entity WHERE entity_id = 'reader-upgrade-variable'"#,
+    )
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(remote.0, "supported");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&remote.1).unwrap(),
+        payload
+    );
+    assert_eq!(remote.2, 1);
+    let state: (i64, String, Option<String>) = sqlx::query_as(
+        r#"SELECT server_version, sync_status, last_operation_id
+           FROM cloud_sync_entity_state WHERE entity_id = 'reader-upgrade-variable'"#,
+    )
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(
+        state,
+        (7, "synced".into(), Some("retained-operation".into()))
+    );
+}
+
+#[tokio::test]
+async fn retained_snapshot_replay_preserves_local_intent_without_inventing_operation_id() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let transport = Arc::new(MockTransport::new());
+    let (old_runtime, hook, _) = SyncRuntime::build(db.clone(), transport.clone());
+    old_runtime.enable(&workspace_id).await.unwrap();
+    transport.pushes.lock().unwrap().clear();
+    let bus =
+        CommandBus::from_db_with_extensions(db.clone(), CommandBusExtensions::new(vec![hook]))
+            .await
+            .unwrap();
+    let local = bus
+        .workspace_variable_create(
+            workspace_id.clone(),
+            variable(
+                Some("snapshot-replay-conflict".into()),
+                "LOCAL",
+                "local-intent",
+                false,
+            ),
+        )
+        .await
+        .unwrap();
+    let entity_id = local.id;
+    let binding = old_runtime
+        .status(&workspace_id)
+        .await
+        .unwrap()
+        .binding
+        .unwrap();
+    let mut remote_payload = variable_payload("remote-value");
+    remote_payload["key"] = serde_json::json!("REMOTE");
+    sqlx::query(
+        r#"INSERT INTO cloud_sync_remote_entity (
+             account_id, cloud_workspace_id, entity_type, entity_id,
+             parent_entity_id, server_version, payload_schema_version,
+             operation, canonical_payload_json, deleted_at, operation_id,
+             compatibility_state, created_at, updated_at
+           ) VALUES (?1, ?2, 'workspaceVariable', ?3, ?4, 9, 1, 'upsert',
+                     ?5, NULL, NULL, 'deferred_compatibility',
+                     '2026-08-13T00:00:00Z', '2026-08-13T00:00:00Z')"#,
+    )
+    .bind(&binding.account_id)
+    .bind(&binding.cloud_workspace_id)
+    .bind(&entity_id)
+    .bind(&workspace_id)
+    .bind(serde_json::to_string(&remote_payload).unwrap())
+    .execute(db.pool())
+    .await
+    .unwrap();
+    drop(old_runtime);
+
+    let (upgraded_runtime, _, _) = SyncRuntime::build(db.clone(), transport.clone());
+    let replay_result = upgraded_runtime.sync_workspace(&workspace_id).await;
+    assert!(
+        matches!(replay_result, Err(SyncError::Conflict)),
+        "unexpected replay result: {replay_result:?}"
+    );
+    let local_value: String =
+        sqlx::query_scalar("SELECT value FROM workspace_variables WHERE id = ?1")
+            .bind(&entity_id)
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert_eq!(local_value, "local-intent");
+    let conflict: (String, i64, Option<String>) = sqlx::query_as(
+        r#"SELECT sync_status, conflict_payload_schema_version, conflict_operation_id
+           FROM cloud_sync_entity_state WHERE entity_id = ?1"#,
+    )
+    .bind(&entity_id)
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(conflict, ("conflict".into(), 1, None));
+    let outbox: (String, i64) = sqlx::query_as(
+        "SELECT status, payload_schema_version FROM cloud_sync_outbox WHERE entity_id = ?1",
+    )
+    .bind(&entity_id)
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(outbox, ("pending".into(), 1));
+    assert!(transport.pushes.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn delete_then_restore_converges_in_page_across_pages_and_after_old_redelivery() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let transport = Arc::new(MockTransport::new());
+    let (service, _, _) = SyncRuntime::build(db.clone(), transport.clone());
+    service.enable(&workspace_id).await.unwrap();
+    let binding = service
+        .status(&workspace_id)
+        .await
+        .unwrap()
+        .binding
+        .unwrap();
+    let base = binding.last_pulled_cursor;
+    let entity_id = "delete-restore-variable";
+    let upsert = |cursor: i64, server_version: i64, value: &str| RemoteChange {
+        cursor,
+        operation_id: format!("restore-{cursor}"),
+        entity_type: SyncEntityType::WorkspaceVariable.as_str().into(),
+        entity_id: entity_id.into(),
+        parent_entity_id: Some(workspace_id.clone()),
+        operation: SyncOperation::Upsert,
+        server_version,
+        payload_schema_version: PAYLOAD_SCHEMA_VERSION,
+        payload: Some(variable_payload(value)),
+        deleted_at: None,
+    };
+    let delete = |cursor: i64, server_version: i64| RemoteChange {
+        cursor,
+        operation_id: format!("delete-{cursor}"),
+        entity_type: SyncEntityType::WorkspaceVariable.as_str().into(),
+        entity_id: entity_id.into(),
+        parent_entity_id: Some(workspace_id.clone()),
+        operation: SyncOperation::Delete,
+        server_version,
+        payload_schema_version: PAYLOAD_SCHEMA_VERSION,
+        payload: None,
+        deleted_at: Some(format!("2026-09-06T00:00:{server_version:02}Z")),
+    };
+
+    transport.changes.lock().unwrap().push_back(ChangesPage {
+        protocol_version: PROTOCOL_VERSION,
+        cloud_workspace_id: binding.cloud_workspace_id.clone(),
+        current_cursor: base + 3,
+        next_cursor: base + 3,
+        changes: vec![
+            upsert(base + 1, 1, "created"),
+            delete(base + 2, 2),
+            upsert(base + 3, 3, "same-page-restored"),
+        ],
+    });
+    service.sync_workspace(&workspace_id).await.unwrap();
+    let same_page: (String, Option<String>) =
+        sqlx::query_as("SELECT value, deleted_at FROM workspace_variables WHERE id = ?1")
+            .bind(entity_id)
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert_eq!(same_page, ("same-page-restored".into(), None));
+
+    transport.changes.lock().unwrap().extend([
+        ChangesPage {
+            protocol_version: PROTOCOL_VERSION,
+            cloud_workspace_id: binding.cloud_workspace_id.clone(),
+            current_cursor: base + 5,
+            next_cursor: base + 4,
+            changes: vec![delete(base + 4, 4)],
+        },
+        ChangesPage {
+            protocol_version: PROTOCOL_VERSION,
+            cloud_workspace_id: binding.cloud_workspace_id.clone(),
+            current_cursor: base + 5,
+            next_cursor: base + 5,
+            changes: vec![upsert(base + 5, 5, "cross-page-restored")],
+        },
+    ]);
+    service.sync_workspace(&workspace_id).await.unwrap();
+    let cross_page: (String, Option<String>) =
+        sqlx::query_as("SELECT value, deleted_at FROM workspace_variables WHERE id = ?1")
+            .bind(entity_id)
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert_eq!(cross_page, ("cross-page-restored".into(), None));
+
+    transport.changes.lock().unwrap().push_back(ChangesPage {
+        protocol_version: PROTOCOL_VERSION,
+        cloud_workspace_id: binding.cloud_workspace_id.clone(),
+        current_cursor: base + 6,
+        next_cursor: base + 6,
+        changes: vec![delete(base + 6, 4)],
+    });
+    service.sync_workspace(&workspace_id).await.unwrap();
+    let redelivered: (String, Option<String>) =
+        sqlx::query_as("SELECT value, deleted_at FROM workspace_variables WHERE id = ?1")
+            .bind(entity_id)
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert_eq!(redelivered, ("cross-page-restored".into(), None));
+    let retained: (i64, String) = sqlx::query_as(
+        "SELECT server_version, operation FROM cloud_sync_remote_entity WHERE entity_id = ?1",
+    )
+    .bind(entity_id)
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(retained, (5, "upsert".into()));
 }
 
 #[tokio::test]
@@ -363,7 +853,7 @@ async fn remote_api_request_changes_apply_each_settings_json_without_resetting_i
     let remote_request = |cursor: i64, operation_id: &str, settings_json: &str| RemoteChange {
         cursor,
         operation_id: operation_id.into(),
-        entity_type: SyncEntityType::ApiRequest,
+        entity_type: SyncEntityType::ApiRequest.as_str().into(),
         entity_id: "remote-request".into(),
         parent_entity_id: Some(folder.id.clone()),
         operation: SyncOperation::Upsert,

@@ -8,10 +8,8 @@
 
 use sqlx::SqlitePool;
 
-mod api_bootstrap;
 mod attempts;
 mod bindings;
-mod bootstrap;
 mod diagnostics;
 mod initial_upload;
 mod orphan_reconciliation;
@@ -19,6 +17,7 @@ mod outbox;
 mod ownership;
 mod reconciliation;
 mod recovery;
+mod remote_entities;
 mod snapshots;
 
 #[derive(Clone)]

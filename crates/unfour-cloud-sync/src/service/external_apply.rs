@@ -2,10 +2,13 @@
 //! Callers commit before invoking cleanup of credentials and runtime resources.
 
 use sqlx::SqliteConnection;
+use std::collections::HashSet;
 use unfour_core::domain::{
-    validate_external_connection_delete, CommandContext, ExternalApplyPage,
-    ExternalConnectionApply, ExternalWorkspaceApply, MutationOrigin, DATABASE_CONNECTION_TYPE,
-    SSH_CONNECTION_TYPE,
+    validate_external_connection_delete, CommandContext, ExternalApiCollectionApply,
+    ExternalApiFolderApply, ExternalApiRequestApply, ExternalApplyPage, ExternalConnectionApply,
+    ExternalSshTaskApply, ExternalSshTaskStepApply, ExternalWorkspaceApply,
+    ExternalWorkspaceEnvironmentApply, ExternalWorkspaceEnvironmentVariableApply,
+    ExternalWorkspaceVariableApply, MutationOrigin, DATABASE_CONNECTION_TYPE, SSH_CONNECTION_TYPE,
 };
 use unfour_database_engine::DatabaseConnectionCleanup;
 use unfour_ssh_engine::SshConnectionCleanup;
@@ -169,7 +172,66 @@ pub(super) fn merge_external_pages(pages: Vec<ExternalApplyPage>) -> ExternalApp
         merged.ssh_tasks.append(&mut page.ssh_tasks);
         merged.ssh_task_steps.append(&mut page.ssh_task_steps);
     }
+    // Domain adapters group upserts and deletes for parent-first/child-first
+    // application. Collapse repeated changes for the same entity before that
+    // grouping so a later restore cannot be reordered behind its earlier
+    // tombstone.
+    retain_last_by_key(&mut merged.workspaces, |change| match change {
+        ExternalWorkspaceApply::Upsert(record) => &record.id,
+        ExternalWorkspaceApply::Delete(delete) => &delete.entity.entity_id,
+    });
+    retain_last_by_key(&mut merged.connections, |change| match change {
+        ExternalConnectionApply::Upsert(record) => &record.id,
+        ExternalConnectionApply::Delete(delete) => &delete.entity.entity_id,
+    });
+    retain_last_by_key(&mut merged.workspace_variables, |change| match change {
+        ExternalWorkspaceVariableApply::Upsert(record) => &record.id,
+        ExternalWorkspaceVariableApply::Delete(delete) => &delete.entity.entity_id,
+    });
+    retain_last_by_key(&mut merged.workspace_environments, |change| match change {
+        ExternalWorkspaceEnvironmentApply::Upsert(record) => &record.id,
+        ExternalWorkspaceEnvironmentApply::Delete(delete) => &delete.entity.entity_id,
+    });
+    retain_last_by_key(
+        &mut merged.workspace_environment_variables,
+        |change| match change {
+            ExternalWorkspaceEnvironmentVariableApply::Upsert(record) => &record.id,
+            ExternalWorkspaceEnvironmentVariableApply::Delete(delete) => &delete.entity.entity_id,
+        },
+    );
+    retain_last_by_key(&mut merged.api_collections, |change| match change {
+        ExternalApiCollectionApply::Upsert(record) => &record.id,
+        ExternalApiCollectionApply::Delete(delete) => &delete.entity.entity_id,
+    });
+    retain_last_by_key(&mut merged.api_folders, |change| match change {
+        ExternalApiFolderApply::Upsert(record) => &record.id,
+        ExternalApiFolderApply::Delete(delete) => &delete.entity.entity_id,
+    });
+    retain_last_by_key(&mut merged.api_requests, |change| match change {
+        ExternalApiRequestApply::Upsert(record) => &record.id,
+        ExternalApiRequestApply::Delete(delete) => &delete.entity.entity_id,
+    });
+    retain_last_by_key(&mut merged.ssh_tasks, |change| match change {
+        ExternalSshTaskApply::Upsert(record) => &record.id,
+        ExternalSshTaskApply::Delete(delete) => &delete.entity.entity_id,
+    });
+    retain_last_by_key(&mut merged.ssh_task_steps, |change| match change {
+        ExternalSshTaskStepApply::Upsert(record) => &record.id,
+        ExternalSshTaskStepApply::Delete(delete) => &delete.entity.entity_id,
+    });
     merged
+}
+
+fn retain_last_by_key<T>(items: &mut Vec<T>, key: impl Fn(&T) -> &str) {
+    let mut seen = HashSet::new();
+    let mut retained = Vec::with_capacity(items.len());
+    while let Some(item) = items.pop() {
+        if seen.insert(key(&item).to_string()) {
+            retained.push(item);
+        }
+    }
+    retained.reverse();
+    *items = retained;
 }
 
 fn external_page_is_empty(page: &ExternalApplyPage) -> bool {

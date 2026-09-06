@@ -36,7 +36,7 @@ async fn pending_local_intent_blocks_remote_upsert_and_delete_without_losing_loc
         changes: vec![RemoteChange {
             cursor: cursor + 1,
             operation_id: "remote-upsert".into(),
-            entity_type: SyncEntityType::WorkspaceVariable,
+            entity_type: SyncEntityType::WorkspaceVariable.as_str().into(),
             entity_id: local.id.clone(),
             parent_entity_id: Some(workspace_id.clone()),
             operation: SyncOperation::Upsert,
@@ -90,7 +90,7 @@ async fn pending_local_intent_blocks_remote_upsert_and_delete_without_losing_loc
         changes: vec![RemoteChange {
             cursor: cursor + 1,
             operation_id: "remote-delete".into(),
-            entity_type: SyncEntityType::WorkspaceVariable,
+            entity_type: SyncEntityType::WorkspaceVariable.as_str().into(),
             entity_id: local.id.clone(),
             parent_entity_id: Some(workspace_id.clone()),
             operation: SyncOperation::Delete,
@@ -111,4 +111,79 @@ async fn pending_local_intent_blocks_remote_upsert_and_delete_without_losing_loc
             .await
             .unwrap();
     assert_eq!(row, ("new-local".into(), None));
+}
+
+#[tokio::test]
+async fn future_schema_push_conflict_is_preserved_and_cannot_be_resolved_as_schema_one() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let transport = Arc::new(MockTransport::new());
+    let (service, hook, _) = SyncRuntime::build(db.clone(), transport.clone());
+    service.enable(&workspace_id).await.unwrap();
+    transport.pushes.lock().unwrap().clear();
+    let bus =
+        CommandBus::from_db_with_extensions(db.clone(), CommandBusExtensions::new(vec![hook]))
+            .await
+            .unwrap();
+    let local = bus
+        .workspace_variable_create(
+            workspace_id.clone(),
+            variable(None, "LOCAL", "local-value", false),
+        )
+        .await
+        .unwrap();
+    let before: (String, String, i64) = sqlx::query_as(
+        r#"SELECT operation_id, canonical_payload_json, payload_schema_version
+           FROM cloud_sync_outbox WHERE entity_id = ?1"#,
+    )
+    .bind(&local.id)
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    *transport.push_conflict.lock().unwrap() = Some(unfour_cloud_sync::SyncConflictDetails {
+        entity_type: SyncEntityType::WorkspaceVariable,
+        entity_id: local.id.clone(),
+        parent_entity_id: Some(workspace_id.clone()),
+        server_version: 8,
+        operation: SyncOperation::Upsert,
+        payload_schema_version: 7,
+        payload: Some(variable_payload("future-remote")),
+    });
+
+    assert!(matches!(
+        service.sync_workspace(&workspace_id).await,
+        Err(SyncError::Conflict)
+    ));
+    let stored: (i64, Option<String>, String) = sqlx::query_as(
+        r#"SELECT conflict_payload_schema_version, conflict_operation_id, sync_status
+           FROM cloud_sync_entity_state WHERE entity_id = ?1"#,
+    )
+    .bind(&local.id)
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(stored, (7, None, "conflict".into()));
+    assert!(matches!(
+        service
+            .keep_local(&workspace_id, SyncEntityType::WorkspaceVariable, &local.id)
+            .await,
+        Err(SyncError::CompatibilityWaiting)
+    ));
+    assert!(matches!(
+        service
+            .use_remote(&workspace_id, SyncEntityType::WorkspaceVariable, &local.id)
+            .await,
+        Err(SyncError::CompatibilityWaiting)
+    ));
+    let after: (String, String, i64, String) = sqlx::query_as(
+        r#"SELECT operation_id, canonical_payload_json, payload_schema_version, status
+           FROM cloud_sync_outbox WHERE entity_id = ?1"#,
+    )
+    .bind(&local.id)
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!((after.0, after.1, after.2), before);
+    assert_eq!(after.3, "pending");
 }

@@ -234,8 +234,6 @@ describe("CloudSyncProvider account context boundary", () => {
         initialTotal: 1,
         initialConfirmed: 1,
         initializationCheckpoint: null,
-        sshTaskV3BootstrapState: "completed",
-        connectionV4BootstrapState: "completed",
         generation: 1,
         lastSuccessAt: "2026-08-27T00:00:00.000Z",
         lastError: null,

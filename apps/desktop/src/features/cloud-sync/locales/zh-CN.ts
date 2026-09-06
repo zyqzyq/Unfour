@@ -158,6 +158,7 @@ const zhCN = {
     deadLetterBlocked: "一个或多个本地更改需要恢复，处理后才能继续同步。",
     ownership: "无法验证云同步工作区的所有权；本地和云端数据均未被覆盖。",
     payloadSchema: "此更改使用了云端不支持的数据格式。请更新应用后重试。",
+    compatibilityWaiting: "同步正在等待兼容的应用或云服务版本。本地更改已保留，并会自动重试。",
     operationIdReuse: "云端拒绝了重复使用的操作标识。请按当前本地状态重试以创建新操作。",
     secretRejected: "此更改包含云同步视为 Secret 的值。请从同步数据中移除后重试。",
     tooLarge: "此更改超过云同步大小限制。请缩小内容后按当前本地状态重试。",

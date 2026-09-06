@@ -154,18 +154,30 @@ fn normal_binary_uses_unified_storage_enqueues_outbox_and_exits_on_eof() {
             .activate_account("mcp-account", 1, dependencies.clock.now())
             .await
             .expect("activate MCP sync account");
-        repository
-            .create_binding_with_initial_outbox(
-                "mcp-account",
-                1,
-                &workspace_id,
-                "mcp-cloud-workspace",
-                0,
-                dependencies.ids.as_ref(),
-                dependencies.clock.as_ref(),
-            )
-            .await
-            .expect("enable MCP workspace sync");
+        let now = dependencies.clock.now().to_rfc3339();
+        sqlx::query(
+            r#"INSERT INTO cloud_sync_workspace_bindings (
+                 account_id, local_workspace_id, cloud_workspace_id, last_pulled_cursor,
+                 sync_enabled, state, initial_cursor, initial_total, initial_confirmed,
+                 generation, created_at, updated_at
+               ) VALUES ('mcp-account', ?1, 'mcp-cloud-workspace', 0,
+                         1, 'active', 0, 0, 0, 1, ?2, ?2)"#,
+        )
+        .bind(&workspace_id)
+        .bind(&now)
+        .execute(db.pool())
+        .await
+        .expect("create MCP smoke binding");
+        sqlx::query(
+            r#"INSERT INTO cloud_sync_workspace_ownership (
+                 local_workspace_id, account_id, cloud_workspace_id, created_at, updated_at
+               ) VALUES (?1, 'mcp-account', 'mcp-cloud-workspace', ?2, ?2)"#,
+        )
+        .bind(&workspace_id)
+        .bind(&now)
+        .execute(db.pool())
+        .await
+        .expect("create MCP smoke binding owner");
         // Exercise the production unified MCP constructor while the account
         // context is inactive. The local command must still leave an
         // account-owned outbox row for the desktop worker to drain later.

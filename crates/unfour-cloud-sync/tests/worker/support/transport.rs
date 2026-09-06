@@ -6,9 +6,10 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::Barrier;
 use unfour_cloud_sync::{
-    ChangesPage, CloudWorkspace, PushRequest, PushResponse, PushResult, PushResultStatus,
-    RemoteSyncProblem, RemoteSyncProblemCategory, SnapshotPage, SyncAccountContext, SyncPhase,
-    SyncTransport, TransportError, PROTOCOL_VERSION,
+    ChangesPage, CloudWorkspace, ProtocolDeclaration, PushRequest, PushResponse, PushResult,
+    PushResultStatus, RemoteSyncProblem, RemoteSyncProblemCategory, SnapshotPage,
+    SyncAccountContext, SyncConflictDetails, SyncPhase, SyncTransport, TransportError,
+    PROTOCOL_VERSION,
 };
 
 #[derive(Default)]
@@ -25,6 +26,8 @@ pub(crate) struct MockTransport {
     pub(crate) permanent_pushes: AtomicUsize,
     pub(crate) workspace_deleted_pushes: AtomicUsize,
     pub(crate) permanent_operation: Mutex<Option<(String, String)>>,
+    pub(crate) compatibility_operation: Mutex<Option<(String, String)>>,
+    pub(crate) push_conflict: Mutex<Option<SyncConflictDetails>>,
     pub(crate) unknown_permanent_operation: Mutex<Option<(String, String)>>,
     pub(crate) unauthorized_pushes: AtomicUsize,
     pub(crate) entitlement_pushes: AtomicUsize,
@@ -40,6 +43,7 @@ pub(crate) struct MockTransport {
     pub(crate) push_barrier: Mutex<Option<Arc<Barrier>>>,
     pub(crate) changes_barrier: Mutex<Option<Arc<Barrier>>>,
     pub(crate) snapshot_barrier: Mutex<Option<Arc<Barrier>>>,
+    pub(crate) protocol_versions: Mutex<Vec<u32>>,
 }
 
 struct ActiveCall<'a>(&'a MockTransport);
@@ -54,6 +58,7 @@ impl MockTransport {
         Self {
             roots: Mutex::new(vec!["workspace-remote".into()]),
             account_id: Mutex::new("account-a".into()),
+            protocol_versions: Mutex::new(vec![PROTOCOL_VERSION]),
             ..Self::default()
         }
     }
@@ -73,6 +78,11 @@ impl MockTransport {
 
     pub(crate) fn fail_operation_once(&self, entity_id: &str, code: &str) {
         *self.permanent_operation.lock().unwrap() = Some((entity_id.to_string(), code.to_string()));
+    }
+
+    pub(crate) fn defer_operation_once(&self, entity_id: &str, code: &str) {
+        *self.compatibility_operation.lock().unwrap() =
+            Some((entity_id.to_string(), code.to_string()));
     }
 
     pub(crate) fn fail_unknown_operation_once(&self, operation_id: &str, code: &str) {
@@ -107,6 +117,13 @@ impl SyncTransport for MockTransport {
 
     fn account_generation(&self) -> u64 {
         self.generation.load(Ordering::SeqCst)
+    }
+
+    async fn protocol(&self) -> Result<ProtocolDeclaration, TransportError> {
+        Ok(ProtocolDeclaration {
+            supported_protocol_versions: self.protocol_versions.lock().unwrap().clone(),
+            features: Vec::new(),
+        })
     }
 
     async fn list_workspaces(&self) -> Result<Vec<CloudWorkspace>, TransportError> {
@@ -161,6 +178,9 @@ impl SyncTransport for MockTransport {
         }
         let _active = self.enter().await;
         self.pushes.lock().unwrap().push(request.clone());
+        if let Some(details) = self.push_conflict.lock().unwrap().take() {
+            return Err(TransportError::Conflict(details));
+        }
         let push_number = self.pushes.lock().unwrap().len();
         if self.fail_on_push_number.load(Ordering::SeqCst) == push_number {
             self.fail_on_push_number.store(0, Ordering::SeqCst);
@@ -169,6 +189,39 @@ impl SyncTransport for MockTransport {
         if let Some((operation_id, code)) = self.unknown_permanent_operation.lock().unwrap().take()
         {
             return Err(TransportError::PermanentOperation { code, operation_id });
+        }
+        let compatibility_failure = self
+            .compatibility_operation
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|(entity_id, code)| {
+                request
+                    .operations
+                    .iter()
+                    .find(|operation| operation.entity_id == *entity_id)
+                    .map(|operation| {
+                        (
+                            operation.operation_id.clone(),
+                            operation.entity_type.as_str().to_string(),
+                            operation.entity_id.clone(),
+                            code.clone(),
+                        )
+                    })
+            });
+        if let Some((operation_id, entity_type, entity_id, code)) = compatibility_failure {
+            self.compatibility_operation.lock().unwrap().take();
+            return Err(TransportError::Remote(RemoteSyncProblem {
+                server_error_code: code,
+                request_id: Some("server-request-compatibility".into()),
+                http_status: Some(400),
+                phase: SyncPhase::Push,
+                operation_id: Some(operation_id),
+                operation_index: None,
+                entity_type: Some(entity_type),
+                entity_id: Some(entity_id),
+                category: RemoteSyncProblemCategory::Compatibility,
+            }));
         }
         let operation_failure =
             self.permanent_operation

@@ -5,6 +5,7 @@ use unfour_core::domain::DomainEntityKey;
 
 use super::SyncService;
 use crate::conflict_scope;
+use crate::remote_compatibility::{remote_change_disposition, RemoteEntityDisposition};
 use crate::{
     canonical_payload, parse_remote_change, RemoteChange, SyncConflictView, SyncEntityType,
     SyncError, SyncOperation, SyncRepository,
@@ -75,6 +76,7 @@ impl SyncService {
                 entity_id,
             )
             .await?;
+        ensure_conflict_is_supported(&conflict)?;
         if matches!(
             entity_type,
             SyncEntityType::Connection
@@ -88,6 +90,7 @@ impl SyncService {
                 .await?;
             let mut snapshots = Vec::with_capacity(scoped.len());
             for item in &scoped {
+                ensure_conflict_is_supported(item)?;
                 let scoped_type = SyncEntityType::parse(&item.entity_type)?;
                 let mut key =
                     DomainEntityKey::new(scoped_type.into(), workspace_id, &item.entity_id);
@@ -144,37 +147,16 @@ impl SyncService {
                 entity_id,
             )
             .await?;
-        let operation = SyncOperation::parse(
-            conflict
-                .conflict_remote_operation
-                .as_deref()
-                .ok_or(SyncError::InvalidData)?,
-        )?;
-        let change = RemoteChange {
-            cursor: binding.last_pulled_cursor,
-            operation_id: conflict
-                .conflict_operation_id
-                .clone()
-                .unwrap_or_else(|| "conflict-resolution".into()),
-            entity_type,
-            entity_id: entity_id.to_string(),
-            parent_entity_id: conflict.conflict_parent_entity_id.clone(),
-            operation,
-            server_version: conflict.server_version,
-            payload_schema_version: crate::PAYLOAD_SCHEMA_VERSION,
-            payload: conflict
-                .conflict_remote_payload_json
-                .as_deref()
-                .map(serde_json::from_str)
-                .transpose()
-                .map_err(|_| SyncError::InvalidData)?,
-            deleted_at: conflict.conflict_deleted_at.clone(),
-        };
+        let change = conflict_change(&conflict, binding.last_pulled_cursor)?;
+        ensure_remote_change_is_supported(&change)?;
         let external = parse_remote_change(workspace_id, &change)?;
         let now = self.dependencies.clock.now().to_rfc3339();
         let mut tx = self.repository.pool().begin().await?;
         SyncRepository::assert_binding_generation_on(&mut tx, &binding).await?;
         let scoped_conflicts = conflict_scope::conflicts_on(&mut tx, &binding, &conflict).await?;
+        for scoped_conflict in &scoped_conflicts {
+            ensure_conflict_is_supported(scoped_conflict)?;
+        }
         conflict_scope::abandon_intents_on(&mut tx, &binding, &conflict).await?;
         let cleanup = self
             .apply_external_page_on(&mut tx, "pro.sync.conflict.use_remote", external)
@@ -187,4 +169,43 @@ impl SyncService {
         self.finish_external_cleanup(cleanup).await;
         Ok(())
     }
+}
+
+fn ensure_conflict_is_supported(conflict: &crate::SyncConflict) -> Result<(), SyncError> {
+    ensure_remote_change_is_supported(&conflict_change(conflict, 0)?)
+}
+
+fn ensure_remote_change_is_supported(change: &RemoteChange) -> Result<(), SyncError> {
+    match remote_change_disposition(change)? {
+        RemoteEntityDisposition::Apply(_) => Ok(()),
+        RemoteEntityDisposition::SkipUnknownEntity
+        | RemoteEntityDisposition::SkipUnsupportedPayload => Err(SyncError::CompatibilityWaiting),
+    }
+}
+
+fn conflict_change(conflict: &crate::SyncConflict, cursor: i64) -> Result<RemoteChange, SyncError> {
+    Ok(RemoteChange {
+        cursor,
+        operation_id: conflict.conflict_operation_id.clone().unwrap_or_default(),
+        entity_type: conflict.entity_type.clone(),
+        entity_id: conflict.entity_id.clone(),
+        parent_entity_id: conflict.conflict_parent_entity_id.clone(),
+        operation: SyncOperation::parse(
+            conflict
+                .conflict_remote_operation
+                .as_deref()
+                .ok_or(SyncError::InvalidData)?,
+        )?,
+        server_version: conflict.server_version,
+        payload_schema_version: conflict
+            .conflict_payload_schema_version
+            .ok_or(SyncError::InvalidData)?,
+        payload: conflict
+            .conflict_remote_payload_json
+            .as_deref()
+            .map(serde_json::from_str)
+            .transpose()
+            .map_err(|_| SyncError::InvalidData)?,
+        deleted_at: conflict.conflict_deleted_at.clone(),
+    })
 }

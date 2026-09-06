@@ -181,7 +181,7 @@ pub(crate) fn remote_variable_change(
     RemoteChange {
         cursor,
         operation_id: operation_id.into(),
-        entity_type: SyncEntityType::WorkspaceVariable,
+        entity_type: SyncEntityType::WorkspaceVariable.as_str().into(),
         entity_id: entity_id.into(),
         parent_entity_id: Some(workspace_id.into()),
         operation: SyncOperation::Upsert,

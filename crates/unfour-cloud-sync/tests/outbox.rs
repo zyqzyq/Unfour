@@ -20,8 +20,9 @@ use unfour_core::models::{
 };
 use unfour_core::{AppError, AppResult};
 use unfour_local_storage::LocalDb;
-use unfour_secret_store::SecretStore;
-use unfour_ssh_engine::SshService;
+
+mod support;
+use support::create_registry_binding;
 
 struct FixedClock;
 
@@ -147,18 +148,18 @@ async fn hooked_bus(
     let ids: Arc<dyn IdGenerator> = Arc::new(SequenceIds::default());
     let clock: Arc<dyn Clock> = Arc::new(FixedClock);
     let repository = SyncRepository::new(db.pool().clone());
-    repository
-        .create_binding_with_initial_outbox(
-            "account-1",
-            0,
-            &workspace_id,
-            "cloud-1",
-            0,
-            ids.as_ref(),
-            clock.as_ref(),
-        )
-        .await
-        .expect("binding");
+    create_registry_binding(
+        &repository,
+        &db,
+        "account-1",
+        0,
+        &workspace_id,
+        "cloud-1",
+        ids.as_ref(),
+        clock.as_ref(),
+    )
+    .await
+    .expect("binding");
     repository
         .activate_account("account-1", 0, clock.now())
         .await
@@ -249,18 +250,18 @@ async fn global_pause_captures_outbox_without_waking_the_sync_worker() {
     let ids: Arc<dyn IdGenerator> = Arc::new(SequenceIds::default());
     let clock: Arc<dyn Clock> = Arc::new(FixedClock);
     let repository = SyncRepository::new(db.pool().clone());
-    repository
-        .create_binding_with_initial_outbox(
-            "account-1",
-            0,
-            &workspace_id,
-            "cloud-1",
-            0,
-            ids.as_ref(),
-            clock.as_ref(),
-        )
-        .await
-        .unwrap();
+    create_registry_binding(
+        &repository,
+        &db,
+        "account-1",
+        0,
+        &workspace_id,
+        "cloud-1",
+        ids.as_ref(),
+        clock.as_ref(),
+    )
+    .await
+    .unwrap();
     repository
         .activate_account("account-1", 0, clock.now())
         .await
@@ -296,18 +297,18 @@ async fn workspace_pause_captures_outbox_without_waking_the_sync_worker() {
     let ids: Arc<dyn IdGenerator> = Arc::new(SequenceIds::default());
     let clock: Arc<dyn Clock> = Arc::new(FixedClock);
     let repository = SyncRepository::new(db.pool().clone());
-    repository
-        .create_binding_with_initial_outbox(
-            "account-1",
-            0,
-            &workspace_id,
-            "cloud-1",
-            0,
-            ids.as_ref(),
-            clock.as_ref(),
-        )
-        .await
-        .unwrap();
+    create_registry_binding(
+        &repository,
+        &db,
+        "account-1",
+        0,
+        &workspace_id,
+        "cloud-1",
+        ids.as_ref(),
+        clock.as_ref(),
+    )
+    .await
+    .unwrap();
     repository
         .activate_account("account-1", 0, clock.now())
         .await
@@ -875,20 +876,17 @@ async fn initial_ssh_snapshot_failure_rolls_back_binding_and_outbox() {
         .unwrap();
 
     let repository = SyncRepository::new(db.pool().clone());
-    let ssh = SshService::new(db.clone(), SecretStore::in_memory("initial-sync-rollback"));
-    let result = repository
-        .create_binding_with_initial_outbox_and_domain_entities(
-            "account-1",
-            0,
-            &workspace_id,
-            "cloud-1",
-            0,
-            None,
-            Some(&ssh),
-            &SequenceIds::default(),
-            &FixedClock,
-        )
-        .await;
+    let result = create_registry_binding(
+        &repository,
+        &db,
+        "account-1",
+        0,
+        &workspace_id,
+        "cloud-1",
+        &SequenceIds::default(),
+        &FixedClock,
+    )
+    .await;
 
     assert!(matches!(result, Err(unfour_cloud_sync::SyncError::Core)));
     let binding_count: i64 =

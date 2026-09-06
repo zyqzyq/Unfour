@@ -274,7 +274,7 @@ async fn dead_letter_use_remote_restores_the_cloud_entity_atomically() {
         at_cursor: binding.last_pulled_cursor,
         current_cursor: binding.last_pulled_cursor,
         items: vec![SnapshotItem {
-            entity_type: SyncEntityType::WorkspaceVariable,
+            entity_type: SyncEntityType::WorkspaceVariable.as_str().into(),
             entity_id: created.id.clone(),
             parent_entity_id: Some(workspace_id.clone()),
             server_version: 1,
@@ -388,7 +388,7 @@ async fn cursor_change_during_remote_recovery_rolls_back_and_keeps_dead() {
         at_cursor: binding.last_pulled_cursor,
         current_cursor: binding.last_pulled_cursor,
         items: vec![SnapshotItem {
-            entity_type: SyncEntityType::Workspace,
+            entity_type: SyncEntityType::Workspace.as_str().into(),
             entity_id: workspace_id.clone(),
             parent_entity_id: None,
             server_version: 1,

@@ -17,12 +17,12 @@ use unfour_workspace_engine::WorkspaceService;
 
 use crate::canonical::snapshot_workspace_name;
 use crate::{
-    CloudWorkspace, SyncAccountContext, SyncDependencies, SyncEntityType, SyncError,
-    SyncOutboxHook, SyncRepository, SyncStatus, SyncTransport, TransportError, PROTOCOL_VERSION,
+    CloudWorkspace, SyncAccountContext, SyncDependencies, SyncEntityAdapters, SyncEntityType,
+    SyncError, SyncOutboxHook, SyncRepository, SyncStatus, SyncTransport, TransportError,
+    PROTOCOL_VERSION,
 };
 use worker::FlightState;
 
-mod bootstrap;
 mod conflicts;
 mod external_apply;
 mod pull;
@@ -143,6 +143,21 @@ impl SyncService {
         Ok(account)
     }
 
+    async fn ensure_protocol(&self, account: &SyncAccountContext) -> Result<(), SyncError> {
+        let declaration = self.transport.protocol().await;
+        let declaration = self
+            .finish_transport(&account.account_id, None, declaration)
+            .await?;
+        self.account_is_current(account)?;
+        if !declaration
+            .supported_protocol_versions
+            .contains(&PROTOCOL_VERSION)
+        {
+            return Err(SyncError::ProtocolIncompatible);
+        }
+        Ok(())
+    }
+
     fn account_is_current(&self, account: &SyncAccountContext) -> Result<(), SyncError> {
         (self.transport.account_generation() == account.generation)
             .then_some(())
@@ -250,6 +265,7 @@ impl SyncService {
 
     pub async fn list_cloud_workspaces(&self) -> Result<Vec<CloudWorkspace>, SyncError> {
         let account = self.account().await?;
+        self.ensure_protocol(&account).await?;
         let listed = self.transport.list_workspaces().await;
         let mut workspaces = self
             .finish_transport(&account.account_id, None, listed)
@@ -330,7 +346,7 @@ impl SyncService {
                 continue;
             }
             if let Some(item) = page.items.iter().find(|item| {
-                item.entity_type == SyncEntityType::Workspace
+                item.entity_type == SyncEntityType::Workspace.as_str()
                     && item.entity_id == workspace.root_entity_id
             }) {
                 match snapshot_workspace_name(&workspace.root_entity_id, item) {
@@ -379,6 +395,7 @@ impl SyncService {
 
     pub async fn enable(&self, workspace_id: &str) -> Result<(), SyncError> {
         let account = self.account().await?;
+        self.ensure_protocol(&account).await?;
         if let Some(owner) = self
             .repository
             .resolve_cloud_sync_owner(workspace_id)
@@ -401,15 +418,7 @@ impl SyncService {
                     self.dependencies.clock.now(),
                 )
                 .await?;
-            if binding.sync_enabled
-                && binding.state == "active"
-                && binding.ssh_task_v3_bootstrap_state == "completed"
-                && binding.connection_v4_bootstrap_state == "completed"
-                && self
-                    .repository
-                    .api_v2_bootstrap_completed(&account.account_id, workspace_id)
-                    .await?
-            {
+            if binding.sync_enabled && binding.state == "active" {
                 return Ok(());
             }
             if !self
@@ -436,14 +445,18 @@ impl SyncService {
             return Err(SyncError::CloudWorkspaceNotEmpty);
         }
         self.repository
-            .create_binding_with_initial_outbox_and_domain_entities(
+            .create_binding_with_initial_outbox(
                 &account.account_id,
                 account.generation,
                 workspace_id,
                 &cloud.cloud_workspace_id,
                 cloud.current_cursor,
-                Some(&self.api_client),
-                Some(&self.ssh),
+                &SyncEntityAdapters::new(
+                    &self.workspace,
+                    &self.api_client,
+                    &self.ssh,
+                    &self.database,
+                ),
                 self.dependencies.ids.as_ref(),
                 self.dependencies.clock.as_ref(),
             )

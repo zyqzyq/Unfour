@@ -3,8 +3,6 @@
 use super::support::*;
 use unfour_core::models::{DatabaseConnectionInput, SshConnectionInput};
 
-#[path = "connections/bootstrap.rs"]
-mod bootstrap;
 #[path = "connections/failures.rs"]
 mod failures;
 
@@ -82,11 +80,11 @@ fn remote_connection(
     RemoteChange {
         cursor,
         operation_id: operation_id.into(),
-        entity_type: SyncEntityType::Connection,
+        entity_type: SyncEntityType::Connection.as_str().into(),
         entity_id: id.into(),
         parent_entity_id: None,
         operation: SyncOperation::Upsert,
-        server_version: 1,
+        server_version: cursor,
         payload_schema_version: PAYLOAD_SCHEMA_VERSION,
         payload: Some(payload),
         deleted_at: None,
@@ -120,7 +118,7 @@ async fn snapshot_download_creates_connection_aggregates_without_device_material
         current_cursor: 1,
         items: vec![
             SnapshotItem {
-                entity_type: SyncEntityType::Workspace,
+                entity_type: SyncEntityType::Workspace.as_str().into(),
                 entity_id: "remote-workspace".into(),
                 parent_entity_id: None,
                 server_version: 1,
@@ -128,7 +126,7 @@ async fn snapshot_download_creates_connection_aggregates_without_device_material
                 payload: workspace_payload("Remote Workspace"),
             },
             SnapshotItem {
-                entity_type: SyncEntityType::Connection,
+                entity_type: SyncEntityType::Connection.as_str().into(),
                 entity_id: "remote-snapshot-ssh".into(),
                 parent_entity_id: None,
                 server_version: 1,
@@ -161,13 +159,6 @@ async fn snapshot_download_creates_connection_aggregates_without_device_material
         .unwrap();
     assert!(connection.key_path.is_none());
     assert!(connection.credential_ref.is_none());
-    let binding = service
-        .status("remote-workspace")
-        .await
-        .unwrap()
-        .binding
-        .unwrap();
-    assert_eq!(binding.connection_v4_bootstrap_state, "completed");
 }
 
 #[tokio::test]
@@ -715,7 +706,7 @@ async fn remote_workspace_delete_cascades_connections_without_local_echo() {
         changes: vec![RemoteChange {
             cursor: base + 1,
             operation_id: "remote-workspace-delete".into(),
-            entity_type: SyncEntityType::Workspace,
+            entity_type: SyncEntityType::Workspace.as_str().into(),
             entity_id: workspace.id.clone(),
             parent_entity_id: None,
             operation: SyncOperation::Delete,

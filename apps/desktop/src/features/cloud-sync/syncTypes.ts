@@ -21,8 +21,6 @@ export interface SyncBinding {
   initialTotal: number;
   initialConfirmed: number;
   initializationCheckpoint: string | null;
-  sshTaskV3BootstrapState: "pending" | "completed";
-  connectionV4BootstrapState: "pending" | "completed";
   generation: number;
   lastSuccessAt: string | null;
   lastError: string | null;

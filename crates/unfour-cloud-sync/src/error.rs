@@ -14,6 +14,8 @@ pub enum SyncError {
     EntitlementRequired,
     #[error("cloud sync protocol is incompatible")]
     ProtocolIncompatible,
+    #[error("cloud sync is waiting for a compatible client or server")]
+    CompatibilityWaiting,
     #[error("cloud sync resource was not found")]
     NotFound,
     #[error("cloud sync data is invalid")]
@@ -58,6 +60,7 @@ impl SyncError {
             Self::Unauthorized => "cloud_sync_unauthorized",
             Self::EntitlementRequired => "cloud_sync_entitlement_required",
             Self::ProtocolIncompatible => "cloud_sync_protocol_incompatible",
+            Self::CompatibilityWaiting => "cloud_sync_compatibility_waiting",
             Self::NotFound => "cloud_sync_not_found",
             Self::InvalidData => "cloud_sync_invalid_data",
             Self::Transport => "cloud_sync_transport_failed",
@@ -87,13 +90,13 @@ impl From<sqlx::Error> for SyncError {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct ApiErrorEnvelope {
     pub error: ApiErrorDetail,
 }
 
 #[derive(Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct ApiErrorDetail {
     pub code: String,
     pub message: String,
@@ -105,6 +108,7 @@ pub struct ApiErrorDetail {
 #[serde(rename_all = "snake_case")]
 pub enum SyncPhase {
     Account,
+    Protocol,
     ListWorkspaces,
     CreateWorkspace,
     Push,
@@ -116,6 +120,7 @@ impl SyncPhase {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Account => "account",
+            Self::Protocol => "protocol",
             Self::ListWorkspaces => "list_workspaces",
             Self::CreateWorkspace => "create_workspace",
             Self::Push => "push",
@@ -130,6 +135,7 @@ pub enum RemoteSyncProblemCategory {
     Auth,
     Entitlement,
     Protocol,
+    Compatibility,
     Conflict,
     OperationPermanent,
     RequestPermanent,
@@ -159,6 +165,7 @@ impl RemoteSyncProblem {
             RemoteSyncProblemCategory::Auth => SyncError::Unauthorized,
             RemoteSyncProblemCategory::Entitlement => SyncError::EntitlementRequired,
             RemoteSyncProblemCategory::Protocol => SyncError::ProtocolIncompatible,
+            RemoteSyncProblemCategory::Compatibility => SyncError::CompatibilityWaiting,
             RemoteSyncProblemCategory::Conflict => SyncError::Conflict,
             RemoteSyncProblemCategory::Workspace
                 if self.server_error_code == "sync_workspace_deleted" =>
@@ -180,6 +187,7 @@ impl RemoteSyncProblem {
         match self.category {
             RemoteSyncProblemCategory::Auth
             | RemoteSyncProblemCategory::Entitlement
+            | RemoteSyncProblemCategory::Compatibility
             | RemoteSyncProblemCategory::Retryable
             | RemoteSyncProblemCategory::ResultUnknown => "retryable",
             RemoteSyncProblemCategory::Conflict => "conflict",

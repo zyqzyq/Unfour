@@ -16,7 +16,7 @@ fn remote_delete_change(
     RemoteChange {
         cursor,
         operation_id: operation_id.into(),
-        entity_type,
+        entity_type: entity_type.as_str().into(),
         entity_id: entity_id.into(),
         parent_entity_id: parent_entity_id.map(str::to_string),
         operation: SyncOperation::Delete,
@@ -572,7 +572,7 @@ async fn failed_api_snapshot_apply_does_not_leave_a_workspace_without_binding() 
         current_cursor: 1,
         items: vec![
             SnapshotItem {
-                entity_type: SyncEntityType::Workspace,
+                entity_type: SyncEntityType::Workspace.as_str().into(),
                 entity_id: "workspace-remote".into(),
                 parent_entity_id: None,
                 server_version: 1,
@@ -582,7 +582,7 @@ async fn failed_api_snapshot_apply_does_not_leave_a_workspace_without_binding() 
             // Orphans are skipped rather than failing apply, so trigger the
             // rollback with a record core still hard-rejects: a blank name.
             SnapshotItem {
-                entity_type: SyncEntityType::ApiCollection,
+                entity_type: SyncEntityType::ApiCollection.as_str().into(),
                 entity_id: "collection-bad".into(),
                 parent_entity_id: Some("workspace-remote".into()),
                 server_version: 1,
@@ -635,7 +635,7 @@ async fn failed_api_pull_rolls_back_collection_apply_and_cursor() {
             RemoteChange {
                 cursor: base_cursor + 1,
                 operation_id: "remote-collection".into(),
-                entity_type: SyncEntityType::ApiCollection,
+                entity_type: SyncEntityType::ApiCollection.as_str().into(),
                 entity_id: "collection-1".into(),
                 parent_entity_id: Some(workspace_id.clone()),
                 operation: SyncOperation::Upsert,
@@ -649,7 +649,7 @@ async fn failed_api_pull_rolls_back_collection_apply_and_cursor() {
             RemoteChange {
                 cursor: base_cursor + 2,
                 operation_id: "remote-collection-bad".into(),
-                entity_type: SyncEntityType::ApiCollection,
+                entity_type: SyncEntityType::ApiCollection.as_str().into(),
                 entity_id: "collection-bad".into(),
                 parent_entity_id: Some(workspace_id.clone()),
                 operation: SyncOperation::Upsert,
@@ -704,7 +704,7 @@ async fn pull_skips_api_orphans_under_concurrently_deleted_parents() {
         changes: vec![RemoteChange {
             cursor: base_cursor + 1,
             operation_id: "orphan-request".into(),
-            entity_type: SyncEntityType::ApiRequest,
+            entity_type: SyncEntityType::ApiRequest.as_str().into(),
             entity_id: "request-1".into(),
             parent_entity_id: Some("missing-collection".into()),
             operation: SyncOperation::Upsert,

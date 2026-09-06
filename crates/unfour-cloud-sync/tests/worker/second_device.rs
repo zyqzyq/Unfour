@@ -64,7 +64,7 @@ async fn pushed_data_bootstraps_second_device_then_tombstone_survives_restart_wi
             items: operations
                 .iter()
                 .map(|operation| SnapshotItem {
-                    entity_type: operation.entity_type,
+                    entity_type: operation.entity_type.as_str().into(),
                     entity_id: operation.entity_id.clone(),
                     parent_entity_id: operation.parent_entity_id.clone(),
                     server_version: operation.base_version + 1,
@@ -127,7 +127,7 @@ async fn pushed_data_bootstraps_second_device_then_tombstone_survives_restart_wi
             changes: vec![RemoteChange {
                 cursor: cursor + 1,
                 operation_id: tombstone.operation_id,
-                entity_type: tombstone.entity_type,
+                entity_type: tombstone.entity_type.as_str().into(),
                 entity_id: tombstone.entity_id,
                 parent_entity_id: tombstone.parent_entity_id,
                 operation: tombstone.operation,
@@ -171,7 +171,7 @@ async fn account_switch_during_snapshot_discards_old_account_data_and_staging() 
         current_cursor: 1,
         next_page_token: None,
         items: vec![SnapshotItem {
-            entity_type: SyncEntityType::Workspace,
+            entity_type: SyncEntityType::Workspace.as_str().into(),
             entity_id: "workspace-remote".into(),
             parent_entity_id: None,
             server_version: 1,

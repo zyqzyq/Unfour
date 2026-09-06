@@ -12,7 +12,7 @@ fn remote_delete_change(
     RemoteChange {
         cursor,
         operation_id: operation_id.into(),
-        entity_type,
+        entity_type: entity_type.as_str().into(),
         entity_id: entity_id.into(),
         parent_entity_id: parent_entity_id.map(str::to_string),
         operation: SyncOperation::Delete,
@@ -503,7 +503,7 @@ async fn failed_external_apply_rolls_back_hierarchy_conflict_and_cursor_before_r
             RemoteChange {
                 cursor: base_cursor + 2,
                 operation_id: "invalid-environment-upsert".into(),
-                entity_type: SyncEntityType::WorkspaceEnvironment,
+                entity_type: SyncEntityType::WorkspaceEnvironment.as_str().into(),
                 entity_id: "invalid-environment".into(),
                 parent_entity_id: Some(workspace_id.clone()),
                 operation: SyncOperation::Upsert,
@@ -694,7 +694,7 @@ async fn pull_skips_environment_variable_orphans_under_deleted_parents() {
         changes: vec![RemoteChange {
             cursor: base_cursor + 1,
             operation_id: "orphan-env-var".into(),
-            entity_type: SyncEntityType::WorkspaceEnvironmentVariable,
+            entity_type: SyncEntityType::WorkspaceEnvironmentVariable.as_str().into(),
             entity_id: "orphan-1".into(),
             parent_entity_id: Some("missing-environment".into()),
             operation: SyncOperation::Upsert,

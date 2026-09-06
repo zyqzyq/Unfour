@@ -8,9 +8,9 @@ use serde::Deserialize;
 use url::Url;
 
 use crate::{
-    ApiErrorEnvelope, ChangesPage, CloudWorkspace, CreateCloudWorkspaceRequest, PushRequest,
-    PushResponse, RemoteSyncProblem, RemoteSyncProblemCategory, SnapshotPage, SyncAccountContext,
-    SyncConflictDetails, SyncError, SyncPhase, PROTOCOL_VERSION,
+    ApiErrorEnvelope, ChangesPage, CloudWorkspace, CreateCloudWorkspaceRequest,
+    ProtocolDeclaration, PushRequest, PushResponse, RemoteSyncProblem, RemoteSyncProblemCategory,
+    SnapshotPage, SyncAccountContext, SyncConflictDetails, SyncError, SyncPhase, PROTOCOL_VERSION,
 };
 
 /// Opaque desktop-session credential. It is never serializable or clonable and
@@ -143,6 +143,7 @@ impl From<TransportError> for SyncError {
 pub trait SyncTransport: Send + Sync {
     async fn account_context(&self) -> Result<SyncAccountContext, TransportError>;
     fn account_generation(&self) -> u64;
+    async fn protocol(&self) -> Result<ProtocolDeclaration, TransportError>;
     async fn list_workspaces(&self) -> Result<Vec<CloudWorkspace>, TransportError>;
     async fn create_workspace(
         &self,
@@ -435,8 +436,21 @@ fn classify_api_error(
     if code == "entitlement_required" {
         return TransportError::Remote(problem(RemoteSyncProblemCategory::Entitlement));
     }
-    if code == "protocol_version_unsupported" {
-        return TransportError::Remote(problem(RemoteSyncProblemCategory::Protocol));
+    let classified_operation_code = operation
+        .as_ref()
+        .and_then(|details| details.error_code.as_deref())
+        .unwrap_or(&code);
+    if matches!(
+        classified_operation_code,
+        "protocol_version_unsupported"
+            | "feature_unsupported"
+            | "entity_type_unsupported"
+            | "payload_schema_version_unsupported"
+            | "field_unsupported"
+    ) {
+        let mut compatibility = problem(RemoteSyncProblemCategory::Compatibility);
+        compatibility.server_error_code = classified_operation_code.to_string();
+        return TransportError::Remote(compatibility);
     }
     if code == "base_version_conflict" {
         return match conflict_details {
@@ -469,7 +483,6 @@ fn classify_api_error(
         operation_code,
         "invalid_sync_entity"
             | "invalid_parent_entity"
-            | "payload_schema_version_unsupported"
             | "operation_id_reuse"
             | "secret_value_not_allowed"
     ) || (operation.is_some()
@@ -483,7 +496,7 @@ fn classify_api_error(
 }
 
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct WorkspaceListResponse {
     protocol_version: u32,
     workspaces: Vec<CloudWorkspace>,
@@ -501,6 +514,12 @@ impl SyncTransport for HttpSyncTransport {
 
     fn account_generation(&self) -> u64 {
         self.sessions.generation()
+    }
+
+    async fn protocol(&self) -> Result<ProtocolDeclaration, TransportError> {
+        let url = self.endpoint("v1/sync/protocol")?;
+        let response = self.request(Method::GET, url).await?.send().await;
+        self.decode(response, SyncPhase::Protocol).await
     }
 
     async fn list_workspaces(&self) -> Result<Vec<CloudWorkspace>, TransportError> {

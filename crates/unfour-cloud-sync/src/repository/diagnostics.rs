@@ -142,6 +142,63 @@ impl SyncRepository {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) async fn record_remote_skip(
+        &self,
+        account_id: &str,
+        cloud_workspace_id: &str,
+        error_code: &str,
+        phase: SyncPhase,
+        entity_type: &str,
+        entity_id: &str,
+        now: DateTime<Utc>,
+    ) -> Result<(), SyncError> {
+        let mut tx = self.pool.begin().await?;
+        Self::record_remote_skip_on(
+            &mut tx,
+            account_id,
+            cloud_workspace_id,
+            error_code,
+            phase,
+            entity_type,
+            entity_id,
+            &now.to_rfc3339(),
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) async fn record_remote_skip_on(
+        connection: &mut SqliteConnection,
+        account_id: &str,
+        cloud_workspace_id: &str,
+        error_code: &str,
+        phase: SyncPhase,
+        entity_type: &str,
+        entity_id: &str,
+        now: &str,
+    ) -> Result<(), SyncError> {
+        Self::record_diagnostic_context_on(
+            connection,
+            account_id,
+            Some(cloud_workspace_id),
+            "permanent",
+            error_code,
+            Some("remote"),
+            None,
+            None,
+            Some(phase),
+            None,
+            None,
+            Some(entity_type),
+            Some(entity_id),
+            now,
+        )
+        .await
+    }
+
     pub async fn prepare_manual_retry(
         &self,
         account_id: &str,

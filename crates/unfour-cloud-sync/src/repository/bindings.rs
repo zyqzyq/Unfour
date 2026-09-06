@@ -11,8 +11,7 @@ impl SyncRepository {
     const BINDING_COLUMNS: &'static str = r#"
         account_id, local_workspace_id, cloud_workspace_id, last_pulled_cursor,
         sync_enabled, state, initial_cursor, initial_total, initial_confirmed, initialization_checkpoint,
-        ssh_task_v3_bootstrap_state, connection_v4_bootstrap_state, generation,
-        last_success_at, last_error, consecutive_failure_count
+        generation, last_success_at, last_error, consecutive_failure_count
     "#;
 
     pub async fn binding(
@@ -423,21 +422,6 @@ impl SyncRepository {
         }
         tx.commit().await?;
         Ok(())
-    }
-
-    pub async fn api_v2_bootstrap_completed(
-        &self,
-        account_id: &str,
-        workspace_id: &str,
-    ) -> Result<bool, SyncError> {
-        Ok(sqlx::query_scalar::<_, bool>(
-            "SELECT api_v2_bootstrap_state = 'completed' FROM cloud_sync_workspace_bindings WHERE account_id = ?1 AND local_workspace_id = ?2",
-        )
-        .bind(account_id)
-        .bind(workspace_id)
-        .fetch_optional(&self.pool)
-        .await?
-        .unwrap_or(false))
     }
 
     pub async fn status(

@@ -1,12 +1,15 @@
 //! Download a pinned snapshot into staging, then atomically install a new workspace.
 //! Never reuse this path as an implicit replacement of an existing local workspace.
 
+use std::collections::HashSet;
+
 use super::external_apply::merge_external_pages;
 use super::{SyncService, MAX_REMOTE_PAGES};
 use crate::canonical::snapshot_workspace_name;
+use crate::remote_compatibility::{snapshot_item_disposition, RemoteEntityDisposition};
 use crate::{
     parse_snapshot_item, CloudWorkspace, DownloadDecision, SnapshotItem, SyncAccountContext,
-    SyncEntityType, SyncError, SyncPhase, SyncRepository, TransportError, PROTOCOL_VERSION,
+    SyncBinding, SyncError, SyncPhase, SyncRepository, TransportError, PROTOCOL_VERSION,
 };
 
 impl SyncService {
@@ -19,6 +22,7 @@ impl SyncService {
             return Err(SyncError::SafeReplaceUnavailable);
         }
         let account = self.account().await?;
+        self.ensure_protocol(&account).await?;
         let listed = self.transport.list_workspaces().await;
         let cloud = self
             .finish_transport(&account.account_id, None, listed)
@@ -119,12 +123,48 @@ impl SyncService {
                 return Err(SyncError::InvalidData);
             }
             fixed_cursor = Some(page.at_cursor);
-            for item in &page.items {
-                if let Some(name) = snapshot_workspace_name(&cloud.root_entity_id, item)? {
-                    if root_workspace_name.replace(name).is_some() {
-                        return Err(SyncError::InvalidData);
+            let mut staged_items = Vec::new();
+            for item in page.items {
+                match snapshot_item_disposition(&item)? {
+                    RemoteEntityDisposition::Apply(_) => {}
+                    RemoteEntityDisposition::SkipUnknownEntity => {
+                        self.repository
+                            .record_remote_skip(
+                                &account.account_id,
+                                &cloud.cloud_workspace_id,
+                                "remote_entity_compatibility_deferred",
+                                SyncPhase::Snapshot,
+                                &item.entity_type,
+                                &item.entity_id,
+                                self.dependencies.clock.now(),
+                            )
+                            .await?;
+                    }
+                    RemoteEntityDisposition::SkipUnsupportedPayload => {
+                        self.repository
+                            .record_remote_skip(
+                                &account.account_id,
+                                &cloud.cloud_workspace_id,
+                                "remote_entity_compatibility_deferred",
+                                SyncPhase::Snapshot,
+                                &item.entity_type,
+                                &item.entity_id,
+                                self.dependencies.clock.now(),
+                            )
+                            .await?;
                     }
                 }
+                if matches!(
+                    snapshot_item_disposition(&item),
+                    Ok(RemoteEntityDisposition::Apply(_))
+                ) {
+                    if let Some(name) = snapshot_workspace_name(&cloud.root_entity_id, &item)? {
+                        if root_workspace_name.replace(name).is_some() {
+                            return Err(SyncError::InvalidData);
+                        }
+                    }
+                }
+                staged_items.push(item);
             }
             self.repository
                 .stage_snapshot_page(
@@ -132,7 +172,7 @@ impl SyncService {
                     &account.account_id,
                     &cloud.cloud_workspace_id,
                     page.at_cursor,
-                    &page.items,
+                    &staged_items,
                     &self.dependencies.clock.now().to_rfc3339(),
                 )
                 .await?;
@@ -178,19 +218,48 @@ impl SyncService {
         if rows.is_empty() {
             return Err(SyncError::InvalidData);
         }
-        let mut pages = Vec::with_capacity(rows.len());
         let mut items = Vec::with_capacity(rows.len());
         for row in rows {
             let item = SnapshotItem {
-                entity_type: SyncEntityType::parse(&row.0)?,
+                entity_type: row.0,
                 entity_id: row.1,
                 parent_entity_id: row.2,
                 server_version: row.3,
                 payload_schema_version: row.4,
                 payload: serde_json::from_str(&row.5).map_err(|_| SyncError::InvalidData)?,
             };
-            pages.push(parse_snapshot_item(&cloud.root_entity_id, &item)?);
             items.push(item);
+        }
+        let mut blocked_parent_ids = items
+            .iter()
+            .filter_map(|item| match snapshot_item_disposition(item) {
+                Ok(RemoteEntityDisposition::SkipUnknownEntity)
+                | Ok(RemoteEntityDisposition::SkipUnsupportedPayload) => {
+                    Some(item.entity_id.clone())
+                }
+                _ => None,
+            })
+            .collect::<HashSet<_>>();
+        let has_deferred = !blocked_parent_ids.is_empty();
+        let mut pages = Vec::with_capacity(items.len());
+        let mut applied_items = Vec::with_capacity(items.len());
+        for item in &items {
+            if !matches!(
+                snapshot_item_disposition(item)?,
+                RemoteEntityDisposition::Apply(_)
+            ) {
+                continue;
+            }
+            if item
+                .parent_entity_id
+                .as_ref()
+                .is_some_and(|parent| blocked_parent_ids.contains(parent))
+            {
+                blocked_parent_ids.insert(item.entity_id.clone());
+                continue;
+            }
+            pages.push(parse_snapshot_item(&cloud.root_entity_id, item)?);
+            applied_items.push(item.clone());
         }
         let cleanup = self
             .apply_external_page_on(&mut tx, "pro.sync.snapshot", merge_external_pages(pages))
@@ -206,6 +275,22 @@ impl SyncService {
         )
         .await?;
         for item in &items {
+            let compatibility_state = match snapshot_item_disposition(item)? {
+                RemoteEntityDisposition::Apply(_) => "supported",
+                RemoteEntityDisposition::SkipUnknownEntity
+                | RemoteEntityDisposition::SkipUnsupportedPayload => "deferred_compatibility",
+            };
+            SyncRepository::record_snapshot_remote_on(
+                &mut tx,
+                &account.account_id,
+                &cloud.cloud_workspace_id,
+                item,
+                compatibility_state,
+                &now,
+            )
+            .await?;
+        }
+        for item in &applied_items {
             SyncRepository::record_snapshot_state_on(
                 &mut tx,
                 &account.account_id,
@@ -215,6 +300,26 @@ impl SyncService {
             )
             .await?;
         }
+        if has_deferred {
+            let installed = SyncBinding {
+                account_id: account.account_id.clone(),
+                local_workspace_id: cloud.root_entity_id.clone(),
+                cloud_workspace_id: cloud.cloud_workspace_id.clone(),
+                last_pulled_cursor: at_cursor,
+                sync_enabled: true,
+                state: "reconciling".into(),
+                initial_cursor: Some(at_cursor),
+                initial_total: 0,
+                initial_confirmed: 0,
+                initialization_checkpoint: None,
+                generation: account.generation as i64,
+                last_success_at: Some(now.clone()),
+                last_error: None,
+                consecutive_failure_count: 0,
+            };
+            SyncRepository::mark_binding_compatibility_waiting_on(&mut tx, &installed, &now)
+                .await?;
+        }
         tx.commit().await?;
         self.finish_external_cleanup(cleanup).await;
         let binding = self
@@ -222,9 +327,11 @@ impl SyncService {
             .binding(&account.account_id, &cloud.root_entity_id)
             .await?
             .ok_or(SyncError::NotFound)?;
-        self.repository
-            .set_binding_state(&binding, "active", None, self.dependencies.clock.now())
-            .await?;
+        if !has_deferred {
+            self.repository
+                .set_binding_state(&binding, "active", None, self.dependencies.clock.now())
+                .await?;
+        }
         Ok(cloud.root_entity_id.clone())
     }
 }

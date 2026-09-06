@@ -14,12 +14,13 @@ use unfour_core::domain::{
 };
 use unfour_core::models::KeyValue;
 
+use crate::canonical_parent::{canonical_parent, protocol_parent, validate_parent};
 use crate::{
     RemoteChange, SnapshotItem, SyncEntityType, SyncError, SyncOperation, PAYLOAD_SCHEMA_VERSION,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct WorkspacePayload {
     name: String,
     environment_type: String,
@@ -29,11 +30,11 @@ struct WorkspacePayload {
     deleted_at: Option<String>,
 }
 
-/// Protocol-v4 Connection payload. This is deliberately an allowlist rather
+/// Protocol 5 Connection payload. This is deliberately an allowlist rather
 /// than a serialized local connection so device-local credentials and paths
 /// cannot cross the Cloud Sync boundary.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct ConnectionPayload {
     id: String,
     workspace_id: String,
@@ -47,7 +48,7 @@ struct ConnectionPayload {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct VariablePayload {
     key: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -79,7 +80,7 @@ impl std::fmt::Debug for VariablePayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct EnvironmentPayload {
     name: String,
     sort_order: i64,
@@ -89,7 +90,7 @@ struct EnvironmentPayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct ApiCollectionPayload {
     name: String,
     description: Option<String>,
@@ -98,7 +99,7 @@ struct ApiCollectionPayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct ApiFolderPayload {
     collection_id: String,
     parent_folder_id: Option<String>,
@@ -109,7 +110,7 @@ struct ApiFolderPayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct ApiRequestPayload {
     collection_id: String,
     parent_folder_id: Option<String>,
@@ -136,7 +137,7 @@ fn default_api_request_settings_json() -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct SshTaskPayload {
     name: String,
     description: String,
@@ -146,7 +147,7 @@ struct SshTaskPayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct SshTaskStepPayload {
     task_id: String,
     name: String,
@@ -625,64 +626,6 @@ pub(crate) async fn canonical_intent_on(
     })
 }
 
-async fn protocol_parent(
-    connection: &mut SqliteConnection,
-    mutation: &DomainMutation,
-) -> Result<Option<String>, SyncError> {
-    Ok(match mutation.entity.entity_type {
-        DomainEntityType::Workspace => None,
-        DomainEntityType::Connection => None,
-        DomainEntityType::WorkspaceVariable
-        | DomainEntityType::WorkspaceEnvironment
-        | DomainEntityType::ApiCollection => Some(mutation.entity.workspace_id.clone()),
-        DomainEntityType::SshTask => None,
-        DomainEntityType::WorkspaceEnvironmentVariable => {
-            if let Some(parent) = &mutation.entity.parent_entity_id {
-                Some(parent.clone())
-            } else {
-                Some(
-                    sqlx::query_scalar::<_, String>(
-                        "SELECT environment_id FROM workspace_environment_variables WHERE id = ?1 AND workspace_id = ?2",
-                    )
-                    .bind(&mutation.entity.entity_id)
-                    .bind(&mutation.entity.workspace_id)
-                    .fetch_one(&mut *connection)
-                    .await?,
-                )
-            }
-        }
-        DomainEntityType::ApiFolder
-        | DomainEntityType::ApiRequest
-        | DomainEntityType::SshTaskStep => canonical_parent(
-            SyncEntityType::from(mutation.entity.entity_type),
-            &mutation.entity.workspace_id,
-            mutation.entity.parent_entity_id.as_deref(),
-        )?,
-    })
-}
-
-fn canonical_parent(
-    entity_type: SyncEntityType,
-    workspace_id: &str,
-    parent: Option<&str>,
-) -> Result<Option<String>, SyncError> {
-    match entity_type {
-        SyncEntityType::Workspace => Ok(None),
-        SyncEntityType::Connection => Ok(None),
-        SyncEntityType::WorkspaceVariable
-        | SyncEntityType::WorkspaceEnvironment
-        | SyncEntityType::ApiCollection => Ok(Some(workspace_id.to_string())),
-        SyncEntityType::SshTask => Ok(None),
-        SyncEntityType::WorkspaceEnvironmentVariable
-        | SyncEntityType::ApiFolder
-        | SyncEntityType::ApiRequest
-        | SyncEntityType::SshTaskStep => parent
-            .filter(|value| !value.trim().is_empty())
-            .map(|value| Some(value.to_string()))
-            .ok_or(SyncError::InvalidData),
-    }
-}
-
 fn external_value(
     is_secret: bool,
     value: Option<String>,
@@ -698,12 +641,14 @@ pub fn parse_snapshot_item(
     workspace_id: &str,
     item: &SnapshotItem,
 ) -> Result<ExternalApplyPage, SyncError> {
-    parse_remote_change(
+    let entity_type = SyncEntityType::parse(&item.entity_type)?;
+    parse_remote_change_as(
         workspace_id,
+        entity_type,
         &RemoteChange {
             cursor: 0,
             operation_id: "snapshot".to_string(),
-            entity_type: item.entity_type,
+            entity_type: item.entity_type.clone(),
             entity_id: item.entity_id.clone(),
             parent_entity_id: item.parent_entity_id.clone(),
             operation: SyncOperation::Upsert,
@@ -719,7 +664,7 @@ pub(crate) fn snapshot_workspace_name(
     workspace_id: &str,
     item: &SnapshotItem,
 ) -> Result<Option<String>, SyncError> {
-    if item.entity_type != SyncEntityType::Workspace {
+    if item.entity_type != SyncEntityType::Workspace.as_str() {
         return Ok(None);
     }
     let page = parse_snapshot_item(workspace_id, item)?;
@@ -730,10 +675,19 @@ pub(crate) fn snapshot_workspace_name(
 }
 
 /// Strict Cloud Sync payload parser. Most entity identities come only from the
-/// envelope. Protocol-v4 Connection payloads repeat their aggregate identity;
+/// envelope. Protocol 5 Connection payloads repeat their aggregate identity;
 /// those fields must exactly match the envelope and target workspace.
 pub fn parse_remote_change(
     workspace_id: &str,
+    change: &RemoteChange,
+) -> Result<ExternalApplyPage, SyncError> {
+    let entity_type = SyncEntityType::parse(&change.entity_type)?;
+    parse_remote_change_as(workspace_id, entity_type, change)
+}
+
+pub(crate) fn parse_remote_change_as(
+    workspace_id: &str,
+    entity_type: SyncEntityType,
     change: &RemoteChange,
 ) -> Result<ExternalApplyPage, SyncError> {
     if change.entity_id.trim().is_empty()
@@ -744,7 +698,7 @@ pub fn parse_remote_change(
     }
     validate_parent(
         workspace_id,
-        change.entity_type,
+        entity_type,
         &change.entity_id,
         change.parent_entity_id.as_deref(),
     )?;
@@ -754,17 +708,17 @@ pub fn parse_remote_change(
         }
         let deleted_at = change.deleted_at.clone().ok_or(SyncError::InvalidData)?;
         let delete = ExternalDelete {
-            entity: change.key(workspace_id),
+            entity: change.key(workspace_id, entity_type),
             deleted_at,
         };
-        return Ok(delete_page(change.entity_type, delete));
+        return Ok(delete_page(entity_type, delete));
     }
     if change.deleted_at.is_some() {
         return Err(SyncError::InvalidData);
     }
     let payload = change.payload.clone().ok_or(SyncError::InvalidData)?;
     let mut page = ExternalApplyPage::default();
-    match change.entity_type {
+    match entity_type {
         SyncEntityType::Workspace => {
             let payload: WorkspacePayload =
                 serde_json::from_value(payload).map_err(|_| SyncError::InvalidData)?;
@@ -977,31 +931,6 @@ pub fn parse_remote_change(
         }
     }
     Ok(page)
-}
-
-fn validate_parent(
-    workspace_id: &str,
-    entity_type: SyncEntityType,
-    entity_id: &str,
-    parent: Option<&str>,
-) -> Result<(), SyncError> {
-    let valid = match entity_type {
-        SyncEntityType::Workspace => entity_id == workspace_id && parent.is_none(),
-        SyncEntityType::Connection => parent.is_none(),
-        SyncEntityType::WorkspaceVariable | SyncEntityType::WorkspaceEnvironment => {
-            parent == Some(workspace_id)
-        }
-        SyncEntityType::WorkspaceEnvironmentVariable => {
-            parent.is_some_and(|value| !value.trim().is_empty())
-        }
-        SyncEntityType::ApiCollection => parent == Some(workspace_id),
-        SyncEntityType::ApiFolder | SyncEntityType::ApiRequest => {
-            parent.is_some_and(|value| !value.trim().is_empty())
-        }
-        SyncEntityType::SshTask => parent.is_none(),
-        SyncEntityType::SshTaskStep => parent.is_some_and(|value| !value.trim().is_empty()),
-    };
-    valid.then_some(()).ok_or(SyncError::InvalidData)
 }
 
 fn delete_page(entity_type: SyncEntityType, delete: ExternalDelete) -> ExternalApplyPage {

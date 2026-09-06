@@ -55,13 +55,17 @@ impl SyncRepository {
             .bind(account_id)
             .bind(cloud_workspace_id)
             .bind(page_cursor)
-            .bind(item.entity_type.as_str())
+            .bind(&item.entity_type)
             .bind(&item.entity_id)
             .bind(&item.parent_entity_id)
             .bind(item.server_version)
             .bind(item.payload_schema_version)
             .bind(payload)
-            .bind(item.entity_type.topology_rank())
+            .bind(
+                item.known_entity_type()
+                    .map(|entity_type| entity_type.topology_rank())
+                    .unwrap_or(100),
+            )
             .bind(now)
             .execute(&mut *tx)
             .await?;
@@ -112,10 +116,9 @@ impl SyncRepository {
             r#"INSERT INTO cloud_sync_workspace_bindings (
                  account_id, local_workspace_id, cloud_workspace_id, last_pulled_cursor,
                  sync_enabled, state, initial_cursor, initial_total, initial_confirmed,
-                 ssh_task_v3_bootstrap_state, connection_v4_bootstrap_state,
-                 api_v2_bootstrap_state, generation, last_success_at, created_at, updated_at
+                 generation, last_success_at, created_at, updated_at
                ) VALUES (?1, ?2, ?3, ?4, 1, 'reconciling', ?4, 0, 0,
-                         'completed', 'completed', 'completed', ?5, ?6, ?6, ?6)"#,
+                         ?5, ?6, ?6, ?6)"#,
         )
         .bind(account_id)
         .bind(workspace_id)
@@ -150,7 +153,7 @@ impl SyncRepository {
                ) VALUES (?1, ?2, ?3, ?4, ?5, 'synced', ?6)
                ON CONFLICT(account_id, cloud_workspace_id, entity_type, entity_id) DO UPDATE SET
                  server_version = excluded.server_version, sync_status = 'synced', updated_at = excluded.updated_at"#,
-        ).bind(account_id).bind(cloud_workspace_id).bind(item.entity_type.as_str())
+        ).bind(account_id).bind(cloud_workspace_id).bind(&item.entity_type)
          .bind(&item.entity_id).bind(item.server_version).bind(now).execute(&mut *connection).await?;
         Ok(())
     }

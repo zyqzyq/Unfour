@@ -7,9 +7,10 @@ use sqlx::SqliteConnection;
 use super::SyncRepository;
 use crate::canonical::canonical_snapshot_intent;
 use crate::conflict_scope;
+use crate::entity_registry::{local_is_deleted_on, local_revision_on};
 use crate::{
     Clock, IdGenerator, RemoteChange, SyncBinding, SyncConflict, SyncConflictDetails,
-    SyncEntityType, SyncError, PAYLOAD_SCHEMA_VERSION,
+    SyncEntityType, SyncError,
 };
 use unfour_core::domain::{
     DomainEntityKey, DomainMutation, DomainSnapshot, MutationOperation, MutationOrigin,
@@ -22,16 +23,25 @@ impl SyncRepository {
         connection: &mut SqliteConnection,
         binding: &SyncBinding,
         change: &RemoteChange,
+        entity_type: SyncEntityType,
         now: &str,
     ) -> Result<bool, SyncError> {
-        Self::prepare_remote_change_with_aggregate_root_on(connection, binding, change, None, now)
-            .await
+        Self::prepare_remote_change_with_aggregate_root_on(
+            connection,
+            binding,
+            change,
+            entity_type,
+            None,
+            now,
+        )
+        .await
     }
 
     pub(crate) async fn prepare_remote_change_with_aggregate_root_on(
         connection: &mut SqliteConnection,
         binding: &SyncBinding,
         change: &RemoteChange,
+        entity_type: SyncEntityType,
         aggregate_delete_root: Option<(SyncEntityType, &str)>,
         now: &str,
     ) -> Result<bool, SyncError> {
@@ -74,15 +84,16 @@ impl SyncRepository {
                 r#"UPDATE cloud_sync_outbox SET base_version = MAX(base_version, ?1), updated_at = ?2
                    WHERE account_id = ?3 AND cloud_workspace_id = ?4 AND entity_type = ?5 AND entity_id = ?6"#,
             ).bind(change.server_version).bind(now).bind(&binding.account_id).bind(&binding.cloud_workspace_id)
-             .bind(change.entity_type.as_str()).bind(&change.entity_id).execute(&mut *connection).await?;
-            Self::record_remote_state_on(connection, binding, change, "synced", now).await?;
+             .bind(entity_type.as_str()).bind(&change.entity_id).execute(&mut *connection).await?;
+            Self::record_remote_state_on(connection, binding, change, entity_type, "synced", now)
+                .await?;
             return Ok(false);
         }
         // A children-first aggregate delete must be checked against its root
         // before any child tombstone is applied. The child still gets its own
         // conflict shadow so keep-local can re-push its remote base version.
         let (intent_entity_type, intent_entity_id) =
-            aggregate_delete_root.unwrap_or((change.entity_type, &change.entity_id));
+            aggregate_delete_root.unwrap_or((entity_type, &change.entity_id));
         let local_intent = conflict_scope::has_local_intent_on(
             connection,
             binding,
@@ -92,7 +103,8 @@ impl SyncRepository {
         )
         .await?;
         if local_intent {
-            Self::record_remote_state_on(connection, binding, change, "conflict", now).await?;
+            Self::record_remote_state_on(connection, binding, change, entity_type, "conflict", now)
+                .await?;
             sqlx::query(
                 "UPDATE cloud_sync_workspace_bindings SET state = 'conflict', last_error = 'remote_local_conflict', updated_at = ?1 WHERE account_id = ?2 AND local_workspace_id = ?3",
             ).bind(now).bind(&binding.account_id).bind(&binding.local_workspace_id).execute(&mut *connection).await?;
@@ -102,7 +114,7 @@ impl SyncRepository {
                 Some(&binding.cloud_workspace_id),
                 "conflict",
                 "remote_local_conflict",
-                Some(change.entity_type.as_str()),
+                Some(entity_type.as_str()),
                 Some(&change.entity_id),
                 now,
             )
@@ -112,10 +124,107 @@ impl SyncRepository {
         Ok(true)
     }
 
+    /// Re-evaluates a retained remote envelope after a reader upgrade. Unlike
+    /// normal pull preparation this never acknowledges an operation attempt:
+    /// replay is a local recovery action and must not reinterpret old network
+    /// attempt rows. Any current local intent remains authoritative and turns
+    /// into the existing conflict representation.
+    pub(crate) async fn prepare_remote_replay_on(
+        connection: &mut SqliteConnection,
+        binding: &SyncBinding,
+        change: &RemoteChange,
+        operation_id: Option<&str>,
+        entity_type: SyncEntityType,
+        now: &str,
+    ) -> Result<bool, SyncError> {
+        let local_intent = conflict_scope::has_local_intent_on(
+            connection,
+            binding,
+            entity_type,
+            &change.entity_id,
+            change.operation,
+        )
+        .await?;
+        let already_conflicted: bool = sqlx::query_scalar(
+            r#"SELECT EXISTS(SELECT 1 FROM cloud_sync_entity_state
+               WHERE account_id = ?1 AND cloud_workspace_id = ?2
+                 AND entity_type = ?3 AND entity_id = ?4
+                 AND sync_status = 'conflict')"#,
+        )
+        .bind(&binding.account_id)
+        .bind(&binding.cloud_workspace_id)
+        .bind(entity_type.as_str())
+        .bind(&change.entity_id)
+        .fetch_one(&mut *connection)
+        .await?;
+        if local_intent || already_conflicted {
+            if !already_conflicted {
+                Self::record_remote_state_with_operation_id_on(
+                    connection,
+                    binding,
+                    change,
+                    operation_id,
+                    entity_type,
+                    "conflict",
+                    now,
+                )
+                .await?;
+                sqlx::query(
+                    r#"UPDATE cloud_sync_workspace_bindings
+                       SET state = 'conflict', last_error = 'remote_local_conflict', updated_at = ?1
+                       WHERE account_id = ?2 AND local_workspace_id = ?3
+                         AND cloud_workspace_id = ?4 AND generation = ?5"#,
+                )
+                .bind(now)
+                .bind(&binding.account_id)
+                .bind(&binding.local_workspace_id)
+                .bind(&binding.cloud_workspace_id)
+                .bind(binding.generation)
+                .execute(&mut *connection)
+                .await?;
+                Self::record_diagnostic_on(
+                    connection,
+                    &binding.account_id,
+                    Some(&binding.cloud_workspace_id),
+                    "conflict",
+                    "remote_local_conflict",
+                    Some(entity_type.as_str()),
+                    Some(&change.entity_id),
+                    now,
+                )
+                .await?;
+            }
+            return Ok(false);
+        }
+        Ok(true)
+    }
+
     pub(super) async fn record_remote_state_on(
         connection: &mut SqliteConnection,
         binding: &SyncBinding,
         change: &RemoteChange,
+        entity_type: SyncEntityType,
+        status: &str,
+        now: &str,
+    ) -> Result<(), SyncError> {
+        Self::record_remote_state_with_operation_id_on(
+            connection,
+            binding,
+            change,
+            Some(&change.operation_id),
+            entity_type,
+            status,
+            now,
+        )
+        .await
+    }
+
+    async fn record_remote_state_with_operation_id_on(
+        connection: &mut SqliteConnection,
+        binding: &SyncBinding,
+        change: &RemoteChange,
+        operation_id: Option<&str>,
+        entity_type: SyncEntityType,
         status: &str,
         now: &str,
     ) -> Result<(), SyncError> {
@@ -128,7 +237,8 @@ impl SyncRepository {
         sqlx::query(
             r#"INSERT INTO cloud_sync_entity_state (
                  account_id, cloud_workspace_id, entity_type, entity_id, server_version,
-                 last_operation_id, sync_status, conflict_remote_payload_json,
+                 last_operation_id, sync_status, conflict_payload_schema_version,
+                 conflict_remote_payload_json,
                  conflict_remote_operation, conflict_parent_entity_id, conflict_deleted_at,
                  conflict_operation_id, updated_at
                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7,
@@ -136,19 +246,22 @@ impl SyncRepository {
                          CASE WHEN ?7 = 'conflict' THEN ?9 ELSE NULL END,
                          CASE WHEN ?7 = 'conflict' THEN ?10 ELSE NULL END,
                          CASE WHEN ?7 = 'conflict' THEN ?11 ELSE NULL END,
-                         CASE WHEN ?7 = 'conflict' THEN ?6 ELSE NULL END, ?12)
+                         CASE WHEN ?7 = 'conflict' THEN ?12 ELSE NULL END,
+                         CASE WHEN ?7 = 'conflict' THEN ?6 ELSE NULL END, ?13)
                ON CONFLICT(account_id, cloud_workspace_id, entity_type, entity_id) DO UPDATE SET
                  server_version = excluded.server_version, last_operation_id = excluded.last_operation_id,
                  sync_status = excluded.sync_status,
+                 conflict_payload_schema_version = excluded.conflict_payload_schema_version,
                  conflict_remote_payload_json = excluded.conflict_remote_payload_json,
                  conflict_remote_operation = excluded.conflict_remote_operation,
                  conflict_parent_entity_id = excluded.conflict_parent_entity_id,
                  conflict_deleted_at = excluded.conflict_deleted_at,
                  conflict_operation_id = excluded.conflict_operation_id, updated_at = excluded.updated_at"#,
-        ).bind(&binding.account_id).bind(&binding.cloud_workspace_id).bind(change.entity_type.as_str())
-         .bind(&change.entity_id).bind(change.server_version).bind(&change.operation_id).bind(status)
-         .bind(payload_json).bind(change.operation.as_str()).bind(&change.parent_entity_id)
-         .bind(&change.deleted_at).bind(now).execute(&mut *connection).await?;
+        ).bind(&binding.account_id).bind(&binding.cloud_workspace_id).bind(entity_type.as_str())
+         .bind(&change.entity_id).bind(change.server_version).bind(operation_id).bind(status)
+         .bind(change.payload_schema_version).bind(payload_json).bind(change.operation.as_str())
+         .bind(&change.parent_entity_id).bind(&change.deleted_at).bind(now)
+         .execute(&mut *connection).await?;
         Ok(())
     }
 
@@ -156,9 +269,10 @@ impl SyncRepository {
         connection: &mut SqliteConnection,
         binding: &SyncBinding,
         change: &RemoteChange,
+        entity_type: SyncEntityType,
         now: &str,
     ) -> Result<(), SyncError> {
-        Self::record_remote_state_on(connection, binding, change, "synced", now).await
+        Self::record_remote_state_on(connection, binding, change, entity_type, "synced", now).await
     }
 
     pub async fn record_push_conflict(
@@ -169,22 +283,29 @@ impl SyncRepository {
     ) -> Result<(), SyncError> {
         let change = RemoteChange {
             cursor: binding.last_pulled_cursor,
-            operation_id: "server-conflict".into(),
-            entity_type: details.entity_type,
+            operation_id: String::new(),
+            entity_type: details.entity_type.as_str().into(),
             entity_id: details.entity_id.clone(),
             parent_entity_id: details.parent_entity_id.clone(),
             operation: details.operation,
             server_version: details.server_version.max(1),
-            payload_schema_version: details
-                .payload_schema_version
-                .unwrap_or(PAYLOAD_SCHEMA_VERSION),
+            payload_schema_version: details.payload_schema_version,
             payload: details.payload.clone(),
             deleted_at: None,
         };
         let now = now.to_rfc3339();
         let mut tx = self.pool.begin().await?;
         Self::assert_binding_generation_on(&mut tx, binding).await?;
-        Self::record_remote_state_on(&mut tx, binding, &change, "conflict", &now).await?;
+        Self::record_remote_state_with_operation_id_on(
+            &mut tx,
+            binding,
+            &change,
+            None,
+            details.entity_type,
+            "conflict",
+            &now,
+        )
+        .await?;
         sqlx::query("UPDATE cloud_sync_workspace_bindings SET state = 'conflict', last_error = 'base_version_conflict', updated_at = ?1 WHERE account_id = ?2 AND local_workspace_id = ?3")
             .bind(&now).bind(&binding.account_id).bind(&binding.local_workspace_id).execute(&mut *tx).await?;
         tx.commit().await?;
@@ -205,7 +326,19 @@ impl SyncRepository {
                    WHERE account_id = cloud_sync_workspace_bindings.account_id
                      AND local_workspace_id = cloud_sync_workspace_bindings.local_workspace_id
                      AND status = 'dead'
-                 ) THEN COALESCE(last_error, 'cloud_sync_dead_letter_blocked') ELSE NULL END,
+                 ) THEN COALESCE(last_error, 'cloud_sync_dead_letter_blocked')
+                 WHEN EXISTS (
+                   SELECT 1 FROM cloud_sync_outbox
+                   WHERE account_id = cloud_sync_workspace_bindings.account_id
+                     AND local_workspace_id = cloud_sync_workspace_bindings.local_workspace_id
+                     AND status = 'pending'
+                     AND last_error IN (
+                       'protocol_version_unsupported', 'feature_unsupported',
+                       'entity_type_unsupported', 'payload_schema_version_unsupported',
+                       'field_unsupported'
+                     )
+                 ) THEN 'cloud_sync_compatibility_waiting'
+                 ELSE NULL END,
                  updated_at = ?2
                WHERE account_id = ?3 AND local_workspace_id = ?4 AND generation = ?5"#,
         )
@@ -230,7 +363,8 @@ impl SyncRepository {
     ) -> Result<Vec<SyncConflict>, SyncError> {
         sqlx::query_as::<_, SyncConflict>(
             r#"SELECT state.account_id, state.cloud_workspace_id, state.entity_type, state.entity_id,
-                      state.server_version, state.conflict_remote_payload_json,
+                      state.server_version, state.conflict_payload_schema_version,
+                      state.conflict_remote_payload_json,
                       state.conflict_remote_operation, state.conflict_parent_entity_id,
                       state.conflict_deleted_at, state.conflict_operation_id
                FROM cloud_sync_entity_state AS state JOIN cloud_sync_workspace_bindings AS binding
@@ -249,7 +383,7 @@ impl SyncRepository {
     ) -> Result<SyncConflict, SyncError> {
         sqlx::query_as::<_, SyncConflict>(
             r#"SELECT account_id, cloud_workspace_id, entity_type, entity_id, server_version,
-                      conflict_remote_payload_json, conflict_remote_operation,
+                      conflict_payload_schema_version, conflict_remote_payload_json, conflict_remote_operation,
                       conflict_parent_entity_id, conflict_deleted_at, conflict_operation_id
                FROM cloud_sync_entity_state WHERE account_id = ?1 AND cloud_workspace_id = ?2
                  AND entity_type = ?3 AND entity_id = ?4 AND sync_status = 'conflict'"#,
@@ -292,16 +426,17 @@ impl SyncRepository {
         let conflicts = conflict_scope::conflicts_on(&mut tx, binding, conflict).await?;
         for scoped_conflict in &conflicts {
             let entity_type = SyncEntityType::parse(&scoped_conflict.entity_type)?;
-            let revision = Self::entity_revision_on(
+            let revision = local_revision_on(
                 &mut tx,
                 &binding.local_workspace_id,
+                entity_type,
                 &scoped_conflict.entity_id,
             )
             .await?;
-            let operation = if Self::entity_is_deleted_on(
+            let operation = if local_is_deleted_on(
                 &mut tx,
-                entity_type,
                 &binding.local_workspace_id,
+                entity_type,
                 &scoped_conflict.entity_id,
             )
             .await?
@@ -419,27 +554,6 @@ impl SyncRepository {
         Ok(())
     }
 
-    async fn entity_is_deleted_on(
-        connection: &mut SqliteConnection,
-        entity_type: SyncEntityType,
-        workspace_id: &str,
-        entity_id: &str,
-    ) -> Result<bool, SyncError> {
-        let deleted: Option<String> = match entity_type {
-            SyncEntityType::Workspace => sqlx::query_scalar("SELECT deleted_at FROM workspaces WHERE id = ?1").bind(entity_id).fetch_one(&mut *connection).await?,
-            SyncEntityType::Connection => sqlx::query_scalar("SELECT deleted_at FROM connections WHERE id = ?1 AND workspace_id = ?2").bind(entity_id).bind(workspace_id).fetch_one(&mut *connection).await?,
-            SyncEntityType::WorkspaceVariable => sqlx::query_scalar("SELECT deleted_at FROM workspace_variables WHERE id = ?1 AND workspace_id = ?2").bind(entity_id).bind(workspace_id).fetch_one(&mut *connection).await?,
-            SyncEntityType::WorkspaceEnvironment => sqlx::query_scalar("SELECT deleted_at FROM workspace_environments WHERE id = ?1 AND workspace_id = ?2").bind(entity_id).bind(workspace_id).fetch_one(&mut *connection).await?,
-            SyncEntityType::WorkspaceEnvironmentVariable => sqlx::query_scalar("SELECT deleted_at FROM workspace_environment_variables WHERE id = ?1 AND workspace_id = ?2").bind(entity_id).bind(workspace_id).fetch_one(&mut *connection).await?,
-            SyncEntityType::ApiCollection => sqlx::query_scalar("SELECT deleted_at FROM api_collections WHERE id = ?1 AND workspace_id = ?2").bind(entity_id).bind(workspace_id).fetch_one(&mut *connection).await?,
-            SyncEntityType::ApiFolder => sqlx::query_scalar("SELECT deleted_at FROM api_collection_folders WHERE id = ?1 AND workspace_id = ?2").bind(entity_id).bind(workspace_id).fetch_one(&mut *connection).await?,
-            SyncEntityType::ApiRequest => sqlx::query_scalar("SELECT deleted_at FROM api_requests WHERE id = ?1 AND workspace_id = ?2").bind(entity_id).bind(workspace_id).fetch_one(&mut *connection).await?,
-            SyncEntityType::SshTask => sqlx::query_scalar("SELECT deleted_at FROM ssh_task WHERE id = ?1 AND workspace_id = ?2").bind(entity_id).bind(workspace_id).fetch_one(&mut *connection).await?,
-            SyncEntityType::SshTaskStep => sqlx::query_scalar("SELECT deleted_at FROM ssh_task_step WHERE id = ?1 AND workspace_id = ?2").bind(entity_id).bind(workspace_id).fetch_one(&mut *connection).await?,
-        };
-        Ok(deleted.is_some())
-    }
-
     pub async fn clear_conflict_on(
         connection: &mut SqliteConnection,
         binding: &SyncBinding,
@@ -449,6 +563,7 @@ impl SyncRepository {
     ) -> Result<(), SyncError> {
         sqlx::query(
             r#"UPDATE cloud_sync_entity_state SET sync_status = 'synced',
+                 conflict_payload_schema_version = NULL,
                  conflict_remote_payload_json = NULL, conflict_remote_operation = NULL,
                  conflict_parent_entity_id = NULL, conflict_deleted_at = NULL,
                  conflict_operation_id = NULL, updated_at = ?1

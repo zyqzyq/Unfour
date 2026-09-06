@@ -66,16 +66,22 @@ not discard pending, uncertain, conflict, or dead-letter history. Re-enabling
 sync wakes the worker, which then processes the existing account-scoped
 outbox.
 
-## Repair before normal sync
+## Registry-driven initial upload and repair
 
-Before pull/push, the worker runs a generic, idempotent reconciliation pass
-after the versioned API/SSH/Connection bootstrap passes. It enumerates live
-syncable entities, and for each entity with neither matching entity state nor
-matching outbox history for the exact binding, captures a canonical redacted
-upsert into the outbox. The pass is generation-fenced, uses one local SQLite
-transaction, preserves parent-before-child ordering, and writes no completion
-marker. Running it again is safe: known state is skipped and the outbox
-upsert is coalesced by its account/cloud/entity key.
+A new binding enumerates every entity in the Sync Entity Registry, reads its
+domain snapshot through the registered adapter, canonicalizes it, and captures
+the complete initial outbox in the binding transaction. No entity is onboarded
+through a versioned bootstrap path.
+
+Before pull/push, the worker also runs a generic, idempotent reconciliation
+pass. It uses the same Registry enumeration and snapshot adapters, and for each
+live entity with neither matching entity state nor matching outbox history for
+the exact binding, captures a canonical redacted upsert into the outbox. This is
+exceptional repair for corrupt/old local state or an escaped mutation hook; it
+is not a normal first-sync path. The pass is generation-fenced, uses one local
+SQLite transaction, preserves parent-before-child ordering, and writes no
+completion marker. Running it again is safe: known state is skipped and the
+outbox upsert is coalesced by its account/cloud/entity key.
 
 The repair covers the current syncable set: Workspace, Connection,
 WorkspaceVariable, WorkspaceEnvironment, WorkspaceEnvironmentVariable,
@@ -88,6 +94,19 @@ Repair is allowed only when the supplied binding exactly matches the resolved
 workspace owner. A historical non-owner binding is skipped, while an
 ambiguous workspace fails closed with a stable ownership diagnostic; neither
 case may fan out local data.
+
+Changes and Snapshot consume one complete remote stream; ordinary entities do
+not use client capability upload, multi-round negotiation, or per-client
+filtering. `GET /v1/sync/protocol` declares exactly
+`{"supportedProtocolVersions":[5],"features":[]}` (unknown optional envelope
+fields and feature names are tolerated). `protocolVersion = 5` identifies the
+common wire engine, while the Registry set remains additive. Readers preserve
+raw entity names and complete remote envelopes. Unknown entities, future
+payload schemas, or unsupported critical subtypes are retained with
+diagnostics, advance the Changes cursor transactionally, and put the affected
+workspace into compatibility waiting without partial business apply.
+Snapshot staging follows the same rule while preserving page pagination and
+its pinned cursor.
 
 ## Legacy paused bindings
 
@@ -122,3 +141,9 @@ When changing Cloud Sync or a local mutating command, verify:
 5. Reconciliation is idempotent, parent ordered, generation fenced, and
    redaction safe.
 6. Desktop and MCP production constructors route through the hook.
+7. Unknown future entities and unsupported entity-local payloads cannot create
+   dead letters or partial applies; they remain durably retained and put the
+   affected workspace into compatibility waiting while cursor progress is
+   based on the complete remote stream.
+8. A new entity is additive and cannot become a prerequisite for interpreting
+   an existing entity.

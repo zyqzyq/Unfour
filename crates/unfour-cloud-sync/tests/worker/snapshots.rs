@@ -13,7 +13,7 @@ async fn cloud_workspace_list_uses_the_root_snapshot_name() {
         at_cursor: 1,
         current_cursor: 1,
         items: vec![SnapshotItem {
-            entity_type: SyncEntityType::Workspace,
+            entity_type: SyncEntityType::Workspace.as_str().into(),
             entity_id: "workspace-remote".into(),
             parent_entity_id: None,
             server_version: 1,
@@ -50,7 +50,7 @@ async fn download_reports_a_workspace_name_conflict_before_core_apply() {
         at_cursor: 1,
         current_cursor: 1,
         items: vec![SnapshotItem {
-            entity_type: SyncEntityType::Workspace,
+            entity_type: SyncEntityType::Workspace.as_str().into(),
             entity_id: "workspace-remote".into(),
             parent_entity_id: None,
             server_version: 1,
@@ -90,7 +90,7 @@ async fn download_is_paged_staged_atomic_and_refuses_an_existing_local_root() {
         at_cursor: 2,
         current_cursor: 2,
         items: vec![SnapshotItem {
-            entity_type: SyncEntityType::Workspace,
+            entity_type: SyncEntityType::Workspace.as_str().into(),
             entity_id: local_id.clone(),
             parent_entity_id: None,
             server_version: 1,
@@ -132,7 +132,7 @@ async fn download_is_paged_staged_atomic_and_refuses_an_existing_local_root() {
             at_cursor: 2,
             current_cursor: 2,
             items: vec![SnapshotItem {
-                entity_type: SyncEntityType::Workspace,
+                entity_type: SyncEntityType::Workspace.as_str().into(),
                 entity_id: "workspace-new".into(),
                 parent_entity_id: None,
                 server_version: 1,
@@ -147,7 +147,7 @@ async fn download_is_paged_staged_atomic_and_refuses_an_existing_local_root() {
             at_cursor: 2,
             current_cursor: 2,
             items: vec![SnapshotItem {
-                entity_type: SyncEntityType::WorkspaceVariable,
+                entity_type: SyncEntityType::WorkspaceVariable.as_str().into(),
                 entity_id: "remote-variable".into(),
                 parent_entity_id: Some("workspace-new".into()),
                 server_version: 1,
@@ -176,6 +176,155 @@ async fn download_is_paged_staged_atomic_and_refuses_an_existing_local_root() {
 }
 
 #[tokio::test]
+async fn snapshot_download_skips_future_entities_and_keeps_paging() {
+    let db = database().await;
+    let transport = Arc::new(MockTransport::new());
+    *transport.roots.lock().unwrap() = vec!["workspace-future".into()];
+    transport.cursor.store(3, Ordering::SeqCst);
+    transport.snapshots.lock().unwrap().extend([
+        SnapshotPage {
+            protocol_version: PROTOCOL_VERSION,
+            cloud_workspace_id: "cloud-1".into(),
+            at_cursor: 3,
+            current_cursor: 3,
+            items: vec![
+                SnapshotItem {
+                    entity_type: SyncEntityType::Workspace.as_str().into(),
+                    entity_id: "workspace-future".into(),
+                    parent_entity_id: None,
+                    server_version: 1,
+                    payload_schema_version: PAYLOAD_SCHEMA_VERSION,
+                    payload: workspace_payload("Future-compatible snapshot"),
+                },
+                SnapshotItem {
+                    entity_type: "flowNode".into(),
+                    entity_id: "future-node".into(),
+                    parent_entity_id: Some("workspace-future".into()),
+                    server_version: 1,
+                    payload_schema_version: PAYLOAD_SCHEMA_VERSION,
+                    payload: serde_json::json!({"future": true}),
+                },
+            ],
+            next_page_token: Some("page-2".into()),
+        },
+        SnapshotPage {
+            protocol_version: PROTOCOL_VERSION,
+            cloud_workspace_id: "cloud-1".into(),
+            at_cursor: 3,
+            current_cursor: 3,
+            items: vec![
+                SnapshotItem {
+                    entity_type: SyncEntityType::WorkspaceVariable.as_str().into(),
+                    entity_id: "snapshot-known".into(),
+                    parent_entity_id: Some("workspace-future".into()),
+                    server_version: 1,
+                    payload_schema_version: PAYLOAD_SCHEMA_VERSION,
+                    payload: variable_payload("preserved"),
+                },
+                SnapshotItem {
+                    entity_type: SyncEntityType::ApiRequest.as_str().into(),
+                    entity_id: "snapshot-future-subtype".into(),
+                    parent_entity_id: Some("future-collection".into()),
+                    server_version: 1,
+                    payload_schema_version: PAYLOAD_SCHEMA_VERSION,
+                    payload: serde_json::json!({
+                        "collectionId": "future-collection",
+                        "parentFolderId": null,
+                        "name": "Future body mode",
+                        "sortOrder": 0,
+                        "authJson": "{}",
+                        "method": "POST",
+                        "url": "https://example.test/future",
+                        "headers": [],
+                        "query": [],
+                        "body": "future",
+                        "bodyKind": "multipart",
+                        "settingsJson": "{\"timeoutMs\":null}",
+                        "preRequestScript": null,
+                        "postResponseScript": null,
+                        "scriptSchemaVersion": 1,
+                        "createdAt": "2026-08-13T00:00:00Z",
+                        "updatedAt": "2026-08-13T00:00:00Z"
+                    }),
+                },
+            ],
+            next_page_token: None,
+        },
+    ]);
+    let (service, _, _) = SyncRuntime::build(db.clone(), transport.clone());
+
+    let workspace_id = service
+        .download_workspace("cloud-1", DownloadDecision::DownloadToNewWorkspace)
+        .await
+        .unwrap();
+
+    assert_eq!(workspace_id, "workspace-future");
+    assert_eq!(transport.snapshot_calls.load(Ordering::SeqCst), 2);
+    let value: String =
+        sqlx::query_scalar("SELECT value FROM workspace_variables WHERE id = 'snapshot-known'")
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert_eq!(value, "preserved");
+    let skipped_business_rows: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM api_requests WHERE id = 'snapshot-future-subtype'",
+    )
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(skipped_business_rows, 0);
+    let status = service.status(&workspace_id).await.unwrap();
+    let binding = status.binding.unwrap();
+    assert_eq!(binding.last_pulled_cursor, 3);
+    assert_eq!(binding.state, "error");
+    assert_eq!(
+        binding.last_error.as_deref(),
+        Some("cloud_sync_compatibility_waiting")
+    );
+    assert_eq!(status.dead_count, 0);
+    let diagnostics: Vec<(String, String)> = sqlx::query_as(
+        r#"SELECT error_code, entity_type FROM cloud_sync_diagnostics
+           WHERE cloud_workspace_id = 'cloud-1'
+             AND error_code = 'remote_entity_compatibility_deferred'
+           ORDER BY id"#,
+    )
+    .fetch_all(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(
+        diagnostics,
+        vec![
+            (
+                "remote_entity_compatibility_deferred".into(),
+                "flowNode".into(),
+            ),
+            (
+                "remote_entity_compatibility_deferred".into(),
+                "apiRequest".into(),
+            ),
+        ]
+    );
+    let staged: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM cloud_sync_snapshot_staging")
+        .fetch_one(db.pool())
+        .await
+        .unwrap();
+    assert_eq!(staged, 0);
+    let retained: Vec<(String, Option<String>, String)> = sqlx::query_as(
+        r#"SELECT entity_id, operation_id, compatibility_state
+           FROM cloud_sync_remote_entity WHERE cloud_workspace_id = 'cloud-1'
+           ORDER BY entity_id"#,
+    )
+    .fetch_all(db.pool())
+    .await
+    .unwrap();
+    assert!(retained.len() >= 4);
+    assert!(retained.iter().all(|row| row.1.is_none()));
+    assert!(retained
+        .iter()
+        .any(|row| row.0 == "future-node" && row.2 == "deferred_compatibility"));
+}
+
+#[tokio::test]
 async fn full_snapshot_download_restores_api_tree_through_core_external_apply() {
     let db = database().await;
     let transport = Arc::new(MockTransport::new());
@@ -188,7 +337,7 @@ async fn full_snapshot_download_restores_api_tree_through_core_external_apply() 
         current_cursor: 1,
         items: vec![
             SnapshotItem {
-                entity_type: SyncEntityType::Workspace,
+                entity_type: SyncEntityType::Workspace.as_str().into(),
                 entity_id: workspace_id.into(),
                 parent_entity_id: None,
                 server_version: 1,
@@ -196,7 +345,7 @@ async fn full_snapshot_download_restores_api_tree_through_core_external_apply() 
                 payload: workspace_payload("Remote API"),
             },
             SnapshotItem {
-                entity_type: SyncEntityType::ApiCollection,
+                entity_type: SyncEntityType::ApiCollection.as_str().into(),
                 entity_id: "collection-1".into(),
                 parent_entity_id: Some(workspace_id.into()),
                 server_version: 1,
@@ -210,7 +359,7 @@ async fn full_snapshot_download_restores_api_tree_through_core_external_apply() 
             },
             // Deliberately child-before-parent; Core owns folder topology.
             SnapshotItem {
-                entity_type: SyncEntityType::ApiFolder,
+                entity_type: SyncEntityType::ApiFolder.as_str().into(),
                 entity_id: "a-child".into(),
                 parent_entity_id: Some("z-root".into()),
                 server_version: 1,
@@ -225,7 +374,7 @@ async fn full_snapshot_download_restores_api_tree_through_core_external_apply() 
                 }),
             },
             SnapshotItem {
-                entity_type: SyncEntityType::ApiFolder,
+                entity_type: SyncEntityType::ApiFolder.as_str().into(),
                 entity_id: "z-root".into(),
                 parent_entity_id: Some("collection-1".into()),
                 server_version: 1,
@@ -240,7 +389,7 @@ async fn full_snapshot_download_restores_api_tree_through_core_external_apply() 
                 }),
             },
             SnapshotItem {
-                entity_type: SyncEntityType::ApiRequest,
+                entity_type: SyncEntityType::ApiRequest.as_str().into(),
                 entity_id: "request-1".into(),
                 parent_entity_id: Some("a-child".into()),
                 server_version: 1,

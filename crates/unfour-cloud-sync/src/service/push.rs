@@ -199,8 +199,20 @@ impl SyncService {
                     }
                     RemoteSyncProblemCategory::Protocol => {
                         self.repository
-                            .mark_not_sent(&entries, "protocol_version_unsupported", false, now)
+                            .mark_not_sent(&entries, "protocol_version_unsupported", true, now)
                             .await?;
+                        self.wake_retry_scheduler();
+                    }
+                    RemoteSyncProblemCategory::Compatibility => {
+                        self.repository
+                            .mark_batch_compatibility_waiting(
+                                &entries,
+                                problem.operation_id.as_deref(),
+                                &problem.server_error_code,
+                                now,
+                            )
+                            .await?;
+                        self.wake_retry_scheduler();
                     }
                     RemoteSyncProblemCategory::OperationPermanent => {
                         let marked = match problem.operation_id.as_deref() {
@@ -280,10 +292,11 @@ impl SyncService {
                     .mark_not_sent(
                         &entries,
                         "protocol_version_unsupported",
-                        false,
+                        true,
                         self.dependencies.clock.now(),
                     )
                     .await?;
+                self.wake_retry_scheduler();
                 Err(SyncError::ProtocolIncompatible)
             }
             Err(TransportError::PermanentOperation { code, operation_id }) => {

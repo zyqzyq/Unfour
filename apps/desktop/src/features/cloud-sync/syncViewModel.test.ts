@@ -13,8 +13,6 @@ const binding: SyncBinding = {
   initialTotal: 1,
   initialConfirmed: 1,
   initializationCheckpoint: null,
-  sshTaskV3BootstrapState: "completed",
-  connectionV4BootstrapState: "completed",
   generation: 1,
   lastSuccessAt: "2026-08-08T00:00:00.000Z",
   lastError: null,
@@ -71,6 +69,10 @@ describe("getCloudSyncViewState", () => {
     expect(getCloudSyncViewState(status({ conflictCount: 1 }), true)).toBe("attention");
     expect(getCloudSyncViewState(status({ deadCount: 1 }), true)).toBe("attention");
     expect(getCloudSyncViewState(status({}, { state: "error" }), true)).toBe("attention");
+    expect(getCloudSyncViewState(status({}, {
+      state: "error",
+      lastError: "cloud_sync_compatibility_waiting",
+    }), true)).toBe("attention");
   });
 
   it("keeps user-facing error categories distinct", () => {
@@ -101,12 +103,16 @@ describe("getCloudSyncViewState", () => {
       ["cloud_sync_snapshot_required", "cloudSync.errors.snapshotRequired"],
       ["cloud_sync_workspace_deleted", "cloudSync.errors.workspaceDeleted"],
       ["invalid_parent_entity", "cloudSync.errors.invalidData"],
-      ["payload_schema_version_unsupported", "cloudSync.errors.payloadSchema"],
+      ["cloud_sync_compatibility_waiting", "cloudSync.errors.compatibilityWaiting"],
+      ["payload_schema_version_unsupported", "cloudSync.errors.compatibilityWaiting"],
+      ["feature_unsupported", "cloudSync.errors.compatibilityWaiting"],
+      ["entity_type_unsupported", "cloudSync.errors.compatibilityWaiting"],
+      ["field_unsupported", "cloudSync.errors.compatibilityWaiting"],
       ["operation_id_reuse", "cloudSync.errors.operationIdReuse"],
       ["secret_value_not_allowed", "cloudSync.errors.secretRejected"],
       ["request_too_large", "cloudSync.errors.tooLarge"],
       ["payload_too_large", "cloudSync.errors.tooLarge"],
-      ["protocol_version_unsupported", "cloudSync.errors.protocol"],
+      ["protocol_version_unsupported", "cloudSync.errors.compatibilityWaiting"],
     ]);
     for (const [code, key] of expected) {
       expect(syncErrorMessageKey(code), code).toBe(key);

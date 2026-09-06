@@ -346,6 +346,7 @@ impl SyncService {
         workspace_id: &str,
     ) -> Result<(), SyncError> {
         self.account_is_current(account)?;
+        self.ensure_protocol(account).await?;
         self.repository
             .claim_generation(
                 &account.account_id,
@@ -357,7 +358,7 @@ impl SyncService {
         self.repository
             .recover_expired_leases(&account.account_id, self.dependencies.clock.now())
             .await?;
-        let mut binding = self
+        let binding = self
             .repository
             .binding(&account.account_id, workspace_id)
             .await?
@@ -375,81 +376,13 @@ impl SyncService {
             }
         }
 
-        self.repository
-            .bootstrap_ssh_task_v3(
-                &binding,
-                &self.ssh,
-                self.dependencies.ids.as_ref(),
-                self.dependencies.clock.as_ref(),
-            )
-            .await?;
-        binding = self
-            .repository
-            .binding(&account.account_id, workspace_id)
-            .await?
-            .ok_or(SyncError::NotFound)?;
-        self.repository
-            .bootstrap_api_v2(
-                &binding,
-                &self.api_client,
-                self.dependencies.ids.as_ref(),
-                self.dependencies.clock.as_ref(),
-            )
-            .await?;
-        binding = self
-            .repository
-            .binding(&account.account_id, workspace_id)
-            .await?
-            .ok_or(SyncError::NotFound)?;
-        if binding.connection_v4_bootstrap_state != "completed" {
-            let snapshots = self.connection_snapshots(workspace_id).await?;
-            // Only a binding still in its original Upload Local phase for an
-            // empty cloud workspace may skip the snapshot. Initial counters
-            // are not a protocol-provenance bit: a v3 binding can still be
-            // uploading while its old cursor has already crossed remote
-            // Connection history that v4 must recover.
-            let is_empty_cloud_initial_upload = binding.state == "uploading"
-                && binding.initial_cursor == Some(0)
-                && binding.last_pulled_cursor == 0;
-            let remote_items = if is_empty_cloud_initial_upload {
-                Vec::new()
-            } else {
-                self.connection_snapshot_items(account, &binding).await?
-            };
-            self.bootstrap_connection_v4(account, &binding, snapshots, &remote_items)
-                .await?;
-        }
-        binding = self
-            .repository
-            .binding(&account.account_id, workspace_id)
-            .await?
-            .ok_or(SyncError::NotFound)?;
-
-        // Versioned bootstrap handles known protocol migrations. The generic
-        // repair pass closes the durable-local-intent gap for live entities
-        // created by an older client or by a mutation path that escaped the
-        // hook. It is local-only, generation-fenced, idempotent, and must run
-        // before pull/push can observe an incomplete outbox.
-        self.repository
-            .reconcile_missing_local_sync_state(
-                &binding,
-                &self.api_client,
-                &self.ssh,
-                &self.database,
-                self.dependencies.ids.as_ref(),
-                self.dependencies.clock.as_ref(),
-            )
-            .await?;
-        binding = self
-            .repository
-            .binding(&account.account_id, workspace_id)
-            .await?
-            .ok_or(SyncError::NotFound)?;
-
         // Even a conflicted binding keeps pulling so a 409 delete conflict can
-        // be hydrated with the protocol tombstone's deletedAt.
+        // be hydrated with the protocol tombstone's deletedAt. Pull and remote
+        // replay intentionally precede local repair: an upgraded reader must
+        // restore retained fields before any full replacement payload is
+        // generated for the server.
         self.pull(account, &binding).await?;
-        binding = self
+        let mut binding = self
             .repository
             .binding(&account.account_id, workspace_id)
             .await?
@@ -457,6 +390,27 @@ impl SyncService {
         if binding.state == "conflict" {
             return Err(SyncError::Conflict);
         }
+        // Normal first sync is registry-driven initial upload. This generic
+        // pass is only an idempotent repair for missing state/outbox caused by
+        // abnormal local history or a mutation hook gap.
+        self.repository
+            .reconcile_missing_local_sync_state(
+                &binding,
+                &crate::SyncEntityAdapters::new(
+                    &self.workspace,
+                    &self.api_client,
+                    &self.ssh,
+                    &self.database,
+                ),
+                self.dependencies.ids.as_ref(),
+                self.dependencies.clock.as_ref(),
+            )
+            .await?;
+        binding = self
+            .repository
+            .binding(&account.account_id, workspace_id)
+            .await?
+            .ok_or(SyncError::NotFound)?;
         let before_push = self
             .repository
             .status(&account.account_id, workspace_id, true)

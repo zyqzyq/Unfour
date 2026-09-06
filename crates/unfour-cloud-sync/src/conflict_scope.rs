@@ -175,7 +175,7 @@ pub(crate) async fn conflicts_on(
     .await?;
     let sql = format!(
         r#"SELECT account_id, cloud_workspace_id, entity_type, entity_id, server_version,
-                  conflict_remote_payload_json, conflict_remote_operation,
+                  conflict_payload_schema_version, conflict_remote_payload_json, conflict_remote_operation,
                   conflict_parent_entity_id, conflict_deleted_at, conflict_operation_id
            FROM cloud_sync_entity_state
            WHERE account_id = ?1 AND cloud_workspace_id = ?2 AND sync_status = 'conflict'

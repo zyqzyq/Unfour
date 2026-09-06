@@ -27,7 +27,7 @@ async fn remote_task_delete_conflict_scopes_over_local_steps_and_keep_local_rest
         changes: vec![RemoteChange {
             cursor: 1,
             operation_id: "remote-task-delete-conflict".into(),
-            entity_type: SyncEntityType::SshTask,
+            entity_type: SyncEntityType::SshTask.as_str().into(),
             entity_id: created.task.id.clone(),
             parent_entity_id: None,
             operation: SyncOperation::Delete,
@@ -121,7 +121,7 @@ async fn children_first_remote_task_delete_keeps_all_steps_after_task_only_keep_
         .map(|(index, step)| RemoteChange {
             cursor: index as i64 + 1,
             operation_id: aggregate_operation_id.into(),
-            entity_type: SyncEntityType::SshTaskStep,
+            entity_type: SyncEntityType::SshTaskStep.as_str().into(),
             entity_id: step.id.clone(),
             parent_entity_id: Some(created.task.id.clone()),
             operation: SyncOperation::Delete,
@@ -133,7 +133,7 @@ async fn children_first_remote_task_delete_keeps_all_steps_after_task_only_keep_
         .chain(std::iter::once(RemoteChange {
             cursor: created.steps.len() as i64 + 1,
             operation_id: aggregate_operation_id.into(),
-            entity_type: SyncEntityType::SshTask,
+            entity_type: SyncEntityType::SshTask.as_str().into(),
             entity_id: created.task.id.clone(),
             parent_entity_id: None,
             operation: SyncOperation::Delete,
@@ -261,7 +261,7 @@ async fn standalone_remote_step_delete_still_applies_with_local_task_metadata_in
         changes: vec![RemoteChange {
             cursor: 1,
             operation_id: "remote-standalone-step-delete".into(),
-            entity_type: SyncEntityType::SshTaskStep,
+            entity_type: SyncEntityType::SshTaskStep.as_str().into(),
             entity_id: removed_step_id.clone(),
             parent_entity_id: Some(created.task.id.clone()),
             operation: SyncOperation::Delete,

@@ -7,7 +7,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::Barrier;
 use unfour_cloud_sync::{
-    parse_snapshot_item, ApiErrorEnvelope, ChangesPage, CloudSyncAuthFailure,
+    parse_remote_change, parse_snapshot_item, ApiErrorEnvelope, ChangesPage, CloudSyncAuthFailure,
     DesktopSessionCredential, DesktopSessionProvider, HttpSyncTransport, PushOperation,
     PushRequest, PushResponse, RemoteSyncProblemCategory, SnapshotPage, SyncEntityType, SyncError,
     SyncOperation, SyncTransport, TransportError, CLOUD_SYNC_ENTITLEMENT, PAYLOAD_SCHEMA_VERSION,
@@ -18,8 +18,8 @@ use unfour_core::domain::DomainEntityType;
 struct FixedSession(AtomicU64);
 
 #[test]
-fn protocol_v4_connection_entity_contract_is_stable() {
-    assert_eq!(PROTOCOL_VERSION, 4);
+fn protocol_5_connection_entity_contract_is_stable() {
+    assert_eq!(PROTOCOL_VERSION, 5);
     assert_eq!(SyncEntityType::Connection.as_str(), "connection");
     assert_eq!(
         SyncEntityType::parse("connection").unwrap(),
@@ -39,7 +39,7 @@ fn protocol_v4_connection_entity_contract_is_stable() {
 #[test]
 fn cloud_sync_wire_names_and_push_fields_are_stable() {
     assert_eq!(CLOUD_SYNC_ENTITLEMENT, "cloud_sync");
-    assert_eq!(PROTOCOL_VERSION, 4);
+    assert_eq!(PROTOCOL_VERSION, 5);
     assert_eq!(PAYLOAD_SCHEMA_VERSION, 1);
 
     let entity_types = [
@@ -79,7 +79,7 @@ fn cloud_sync_wire_names_and_push_fields_are_stable() {
     assert_eq!(
         serde_json::to_value(request).unwrap(),
         serde_json::json!({
-            "protocolVersion": 4,
+            "protocolVersion": 5,
             "operations": [{
                 "operationId": "operation-contract",
                 "entityType": "workspaceVariable",
@@ -155,7 +155,7 @@ impl DesktopSessionProvider for GenerationFenceSession {
 fn api_json_fixtures_match_final_openapi_models() {
     let changes: ChangesPage = serde_json::from_str(
         r#"{
-      "protocolVersion":4,"cloudWorkspaceId":"550e8400-e29b-41d4-a716-446655440010",
+      "protocolVersion":5,"cloudWorkspaceId":"550e8400-e29b-41d4-a716-446655440010",
       "currentCursor":9223372036854775807,"nextCursor":2,"changes":[{
         "cursor":2,"operationId":"operation-2","entityType":"workspaceVariable",
         "entityId":"variable-1","parentEntityId":"workspace-1","operation":"delete",
@@ -177,7 +177,7 @@ fn api_json_fixtures_match_final_openapi_models() {
 
     let snapshot: SnapshotPage = serde_json::from_str(
         r#"{
-      "protocolVersion":4,"cloudWorkspaceId":"550e8400-e29b-41d4-a716-446655440010",
+      "protocolVersion":5,"cloudWorkspaceId":"550e8400-e29b-41d4-a716-446655440010",
       "atCursor":9,"currentCursor":12,"items":[{
         "entityType":"workspace","entityId":"workspace-1","parentEntityId":null,
         "serverVersion":1,"payloadSchemaVersion":1,"payload":{
@@ -277,7 +277,7 @@ fn api_json_fixtures_match_final_openapi_models() {
 
     let push: PushResponse = serde_json::from_str(
         r#"{
-      "protocolVersion":4,"currentCursor":9,"results":[
+      "protocolVersion":5,"currentCursor":9,"results":[
         {"operationId":"one","serverVersion":2,"cursor":9,"status":"applied"},
         {"operationId":"two","serverVersion":2,"cursor":9,"status":"noOp"}
       ]
@@ -300,13 +300,52 @@ fn api_json_fixtures_match_final_openapi_models() {
     assert!(
         serde_json::from_str::<ChangesPage>(
             r#"{
-      "protocolVersion":4,"cloudWorkspaceId":"cloud","currentCursor":1,
+      "protocolVersion":5,"cloudWorkspaceId":"cloud","currentCursor":1,
       "nextCursor":"1","changes":[],"hasMore":false
     }"#
         )
         .is_err(),
         "legacy string cursor/hasMore must stay rejected"
     );
+}
+
+#[test]
+fn protocol_5_envelopes_ignore_additive_optional_fields() {
+    let page: ChangesPage = serde_json::from_value(serde_json::json!({
+        "protocolVersion": 5,
+        "cloudWorkspaceId": "cloud",
+        "currentCursor": 1,
+        "nextCursor": 1,
+        "futurePageMetadata": {"safeToIgnore": true},
+        "changes": [{
+            "cursor": 1,
+            "operationId": "additive-change",
+            "entityType": "workspaceVariable",
+            "entityId": "variable-additive",
+            "parentEntityId": "workspace-additive",
+            "operation": "upsert",
+            "serverVersion": 1,
+            "payloadSchemaVersion": 1,
+            "payload": {
+                "key": "ADDITIVE",
+                "value": "accepted",
+                "isSecret": false,
+                "isEnabled": true,
+                "description": null,
+                "sortOrder": 0,
+                "createdAt": "2026-08-13T00:00:00Z",
+                "updatedAt": "2026-08-13T00:00:00Z",
+                "deletedAt": null
+            },
+            "deletedAt": null,
+            "futureChangeMetadata": "ignored"
+        }]
+    }))
+    .expect("additive protocol fields");
+
+    assert_eq!(page.protocol_version, PROTOCOL_VERSION);
+    parse_remote_change("workspace-additive", &page.changes[0])
+        .expect("canonical payload with additive envelope fields");
 }
 
 #[tokio::test]
@@ -320,7 +359,7 @@ async fn real_http_request_uses_desktop_session_header_and_never_bearer() {
         let request = String::from_utf8_lossy(&request[..count]).to_ascii_lowercase();
         assert!(request.contains("x-desktop-session: abcdefghijklmnopqrstuvwxyz0123456789_-abcde"));
         assert!(!request.contains("authorization:"));
-        let body = r#"{"protocolVersion":4,"workspaces":[]}"#;
+        let body = r#"{"protocolVersion":5,"workspaces":[]}"#;
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             body.len(), body
@@ -334,7 +373,7 @@ async fn real_http_request_uses_desktop_session_header_and_never_bearer() {
     .unwrap();
     assert!(transport.list_workspaces().await.unwrap().is_empty());
     server.await.unwrap();
-    assert_eq!(PROTOCOL_VERSION, 4);
+    assert_eq!(PROTOCOL_VERSION, 5);
 }
 
 #[tokio::test]
@@ -387,16 +426,17 @@ async fn stale_cloud_sync_unauthorized_cannot_invalidate_a_newer_generation() {
 }
 
 #[tokio::test]
-async fn every_http_cloud_sync_endpoint_declares_protocol_v4() {
+async fn http_sync_endpoints_use_protocol_5_declaration_and_full_streams() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let server = tokio::spawn(async move {
         let responses = [
-            r#"{"protocolVersion":4,"workspaces":[]}"#,
+            r#"{"supportedProtocolVersions":[5],"features":[],"futureDeclarationField":true}"#,
+            r#"{"protocolVersion":5,"workspaces":[]}"#,
             r#"{"cloudWorkspaceId":"cloud","rootEntityId":"workspace","name":null,"currentCursor":0,"createdAt":"2026-08-21T00:00:00Z","updatedAt":"2026-08-21T00:00:00Z"}"#,
-            r#"{"protocolVersion":4,"currentCursor":0,"results":[]}"#,
-            r#"{"protocolVersion":4,"cloudWorkspaceId":"cloud","currentCursor":0,"nextCursor":0,"changes":[]}"#,
-            r#"{"protocolVersion":4,"cloudWorkspaceId":"cloud","atCursor":0,"currentCursor":0,"items":[],"nextPageToken":null}"#,
+            r#"{"protocolVersion":5,"currentCursor":0,"results":[]}"#,
+            r#"{"protocolVersion":5,"cloudWorkspaceId":"cloud","currentCursor":0,"nextCursor":0,"changes":[]}"#,
+            r#"{"protocolVersion":5,"cloudWorkspaceId":"cloud","atCursor":0,"currentCursor":0,"items":[],"nextPageToken":null}"#,
         ];
         for (index, body) in responses.into_iter().enumerate() {
             let (mut socket, _) = listener.accept().await.unwrap();
@@ -404,21 +444,31 @@ async fn every_http_cloud_sync_endpoint_declares_protocol_v4() {
             let count = socket.read(&mut request).await.unwrap();
             let request = String::from_utf8_lossy(&request[..count]);
             match index {
-                0 => assert!(request.starts_with("GET /v1/sync/workspaces?protocolVersion=4 ")),
-                1 => {
-                    assert!(request.starts_with("POST /v1/sync/workspaces "));
-                    assert!(request.contains(r#""protocolVersion":4"#));
+                0 => {
+                    assert!(request.starts_with("GET /v1/sync/protocol "));
+                    assert!(!request.contains("protocolVersion"));
                 }
+                1 => assert!(request.starts_with("GET /v1/sync/workspaces?protocolVersion=5 ")),
                 2 => {
-                    assert!(request.starts_with("POST /v1/sync/workspaces/cloud/push "));
-                    assert!(request.contains(r#""protocolVersion":4"#));
+                    assert!(request.starts_with("POST /v1/sync/workspaces "));
+                    assert!(request.contains(r#""protocolVersion":5"#));
                 }
-                3 => assert!(request.contains(
-                    "/v1/sync/workspaces/cloud/changes?protocolVersion=4&afterCursor=0&limit=200"
-                )),
-                4 => assert!(request.contains(
-                    "/v1/sync/workspaces/cloud/snapshot?protocolVersion=4&atCursor=0&pageToken=next"
-                )),
+                3 => {
+                    assert!(request.starts_with("POST /v1/sync/workspaces/cloud/push "));
+                    assert!(request.contains(r#""protocolVersion":5"#));
+                }
+                4 => {
+                    assert!(request.contains(
+                        "/v1/sync/workspaces/cloud/changes?protocolVersion=5&afterCursor=0&limit=200"
+                    ));
+                    assert!(!request.contains("supportedEntityTypes"));
+                }
+                5 => {
+                    assert!(request.contains(
+                        "/v1/sync/workspaces/cloud/snapshot?protocolVersion=5&atCursor=0&pageToken=next"
+                    ));
+                    assert!(!request.contains("supportedEntityTypes"));
+                }
                 _ => unreachable!(),
             }
             let response = format!(
@@ -433,6 +483,9 @@ async fn every_http_cloud_sync_endpoint_declares_protocol_v4() {
         Arc::new(FixedSession(AtomicU64::new(0))),
     )
     .unwrap();
+    let declaration = transport.protocol().await.unwrap();
+    assert_eq!(declaration.supported_protocol_versions, vec![5]);
+    assert!(declaration.features.is_empty());
     transport.list_workspaces().await.unwrap();
     transport.create_workspace("workspace").await.unwrap();
     transport
@@ -450,6 +503,29 @@ async fn every_http_cloud_sync_endpoint_declares_protocol_v4() {
         .snapshot("cloud", Some(0), Some("next"))
         .await
         .unwrap();
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn transport_preserves_unknown_remote_entities_for_the_tolerant_reader() {
+    let (transport, server) = transport_with_response(
+        "200 OK",
+        r#"{"protocolVersion":5,"cloudWorkspaceId":"cloud","currentCursor":1,"nextCursor":1,"changes":[{"cursor":1,"operationId":"future-op","entityType":"futureEntity","entityId":"future-1","parentEntityId":null,"operation":"upsert","serverVersion":1,"payloadSchemaVersion":1,"payload":{"secret":"must-not-surface"},"deletedAt":null}]}"#,
+    )
+    .await;
+    let changes = transport.changes("cloud", 0, 200).await.unwrap();
+    assert_eq!(changes.changes[0].entity_type, "futureEntity");
+    assert!(changes.changes[0].known_entity_type().is_none());
+    server.await.unwrap();
+
+    let (transport, server) = transport_with_response(
+        "200 OK",
+        r#"{"protocolVersion":5,"cloudWorkspaceId":"cloud","atCursor":1,"currentCursor":1,"items":[{"entityType":"futureEntity","entityId":"future-1","parentEntityId":null,"serverVersion":1,"payloadSchemaVersion":1,"payload":{"secret":"must-not-surface"},"deletedAt":null}],"nextPageToken":null}"#,
+    )
+    .await;
+    let snapshot = transport.snapshot("cloud", Some(1), None).await.unwrap();
+    assert_eq!(snapshot.items[0].entity_type, "futureEntity");
+    assert!(snapshot.items[0].known_entity_type().is_none());
     server.await.unwrap();
 }
 
@@ -557,7 +633,7 @@ async fn http_error_envelope_classifies_409_protocol_and_auth_without_guessing()
     assert!(matches!(
         transport.push("cloud", &request).await,
         Err(TransportError::Remote(problem))
-            if problem.category == RemoteSyncProblemCategory::Protocol
+            if problem.category == RemoteSyncProblemCategory::Compatibility
     ));
     server.await.unwrap();
 

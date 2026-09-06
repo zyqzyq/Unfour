@@ -53,7 +53,19 @@ fn remote_error_codes_drive_classification_and_keep_safe_context() {
             StatusCode::BAD_REQUEST,
             "protocol_version_unsupported",
             None,
-            RemoteSyncProblemCategory::Protocol,
+            RemoteSyncProblemCategory::Compatibility,
+        ),
+        (
+            StatusCode::BAD_REQUEST,
+            "feature_unsupported",
+            operation.clone(),
+            RemoteSyncProblemCategory::Compatibility,
+        ),
+        (
+            StatusCode::BAD_REQUEST,
+            "entity_type_unsupported",
+            operation.clone(),
+            RemoteSyncProblemCategory::Compatibility,
         ),
         (
             StatusCode::BAD_REQUEST,
@@ -71,7 +83,13 @@ fn remote_error_codes_drive_classification_and_keep_safe_context() {
             StatusCode::BAD_REQUEST,
             "payload_schema_version_unsupported",
             operation.clone(),
-            RemoteSyncProblemCategory::OperationPermanent,
+            RemoteSyncProblemCategory::Compatibility,
+        ),
+        (
+            StatusCode::BAD_REQUEST,
+            "field_unsupported",
+            operation.clone(),
+            RemoteSyncProblemCategory::Compatibility,
         ),
         (
             StatusCode::CONFLICT,

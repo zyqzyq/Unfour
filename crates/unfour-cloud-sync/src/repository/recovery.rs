@@ -5,8 +5,8 @@ use unfour_core::domain::DomainSnapshot;
 use super::SyncRepository;
 use crate::canonical::canonical_snapshot_intent;
 use crate::{
-    Clock, DeadLetterView, IdGenerator, OutboxEntry, SnapshotItem, SyncBinding, SyncEntityType,
-    SyncError, PAYLOAD_SCHEMA_VERSION,
+    sync_entity_descriptor, Clock, DeadLetterView, IdGenerator, OutboxEntry, RecoveryPolicy,
+    SnapshotItem, SyncBinding, SyncEntityType, SyncError, PAYLOAD_SCHEMA_VERSION,
 };
 
 impl SyncRepository {
@@ -360,6 +360,7 @@ impl SyncRepository {
         }
         sqlx::query(
             r#"UPDATE cloud_sync_entity_state SET sync_status = 'synced',
+                 conflict_payload_schema_version = NULL,
                  conflict_remote_payload_json = NULL, conflict_remote_operation = NULL,
                  conflict_parent_entity_id = NULL, conflict_deleted_at = NULL,
                  conflict_operation_id = NULL, updated_at = ?1
@@ -388,9 +389,9 @@ impl SyncRepository {
         entry: &OutboxEntry,
     ) -> Result<(), SyncError> {
         let entity_type = SyncEntityType::parse(&entry.entity_type)?;
-        match entity_type {
-            SyncEntityType::Workspace => Err(SyncError::SafeReplaceUnavailable),
-            SyncEntityType::WorkspaceEnvironment => {
+        match sync_entity_descriptor(entity_type).recovery_policy {
+            RecoveryPolicy::NeverReplaceRemoteAbsence => Err(SyncError::SafeReplaceUnavailable),
+            RecoveryPolicy::EnvironmentChildren => {
                 let dependent_intents: bool = sqlx::query_scalar(
                     r#"SELECT EXISTS(SELECT 1 FROM cloud_sync_outbox
                        WHERE account_id = ?1 AND cloud_workspace_id = ?2
@@ -409,11 +410,11 @@ impl SyncRepository {
                 }
                 Ok(())
             }
-            SyncEntityType::ApiCollection | SyncEntityType::ApiFolder => {
+            RecoveryPolicy::ApiSubtree => {
                 Self::ensure_api_subtree_absence_is_safe_on(connection, binding, entry, entity_type)
                     .await
             }
-            SyncEntityType::SshTask => {
+            RecoveryPolicy::SshTaskChildren => {
                 let has_local_children: bool = sqlx::query_scalar(
                     r#"SELECT EXISTS(
                          SELECT 1 FROM ssh_task_step
@@ -437,7 +438,7 @@ impl SyncRepository {
                 }
                 Ok(())
             }
-            _ => Ok(()),
+            RecoveryPolicy::Leaf => Ok(()),
         }
     }
 
@@ -543,7 +544,7 @@ impl SyncRepository {
         now: DateTime<Utc>,
     ) -> Result<(), SyncError> {
         if let Some(item) = remote {
-            if item.entity_type.as_str() != entry.entity_type || item.entity_id != entry.entity_id {
+            if item.entity_type != entry.entity_type || item.entity_id != entry.entity_id {
                 return Err(SyncError::InvalidData);
             }
             Self::record_snapshot_state_on(
@@ -556,6 +557,7 @@ impl SyncRepository {
             .await?;
             sqlx::query(
                 r#"UPDATE cloud_sync_entity_state SET
+                     conflict_payload_schema_version = NULL,
                      conflict_remote_payload_json = NULL,
                      conflict_remote_operation = NULL,
                      conflict_parent_entity_id = NULL,

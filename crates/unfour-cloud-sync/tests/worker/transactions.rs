@@ -211,7 +211,7 @@ async fn failed_core_pull_rolls_back_own_ack_and_cross_domain_writes_then_retrie
             RemoteChange {
                 cursor: base + 3,
                 operation_id: "remote-collection-op".into(),
-                entity_type: SyncEntityType::ApiCollection,
+                entity_type: SyncEntityType::ApiCollection.as_str().into(),
                 entity_id: "remote-collection".into(),
                 parent_entity_id: Some(workspace_id.clone()),
                 operation: SyncOperation::Upsert,
@@ -321,13 +321,13 @@ async fn late_snapshot_failure_rolls_back_connections_and_cleans_staging_before_
         next_page_token: Some("next".into()),
         items: vec![
             item(
-                SyncEntityType::Workspace,
+                SyncEntityType::Workspace.as_str().into(),
                 workspace_id,
                 None,
                 workspace_payload("Atomic download"),
             ),
             item(
-                SyncEntityType::Connection,
+                SyncEntityType::Connection.as_str().into(),
                 "snapshot-ssh",
                 None,
                 serde_json::json!({
@@ -346,7 +346,7 @@ async fn late_snapshot_failure_rolls_back_connections_and_cleans_staging_before_
         current_cursor: 8,
         next_page_token: None,
         items: vec![item(
-            SyncEntityType::ApiCollection,
+            SyncEntityType::ApiCollection.as_str().into(),
             "snapshot-collection",
             Some(workspace_id),
             serde_json::json!({"name": " ", "description": null,

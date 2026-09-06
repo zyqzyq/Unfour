@@ -12,7 +12,15 @@ const PROTOCOL_ERRORS = new Set([
   "invalid_api_response",
   "method_not_allowed",
   "not_found",
+]);
+
+const COMPATIBILITY_ERRORS = new Set([
+  "cloud_sync_compatibility_waiting",
   "protocol_version_unsupported",
+  "feature_unsupported",
+  "entity_type_unsupported",
+  "payload_schema_version_unsupported",
+  "field_unsupported",
 ]);
 
 const INVALID_DATA_ERRORS = new Set([
@@ -92,10 +100,10 @@ export function syncErrorMessageKey(code: string): string {
   }
   if (code === "cloud_sync_server_unavailable") return "cloudSync.errors.server";
   if (PROTOCOL_ERRORS.has(code)) return "cloudSync.errors.protocol";
+  if (COMPATIBILITY_ERRORS.has(code)) return "cloudSync.errors.compatibilityWaiting";
   if (INVALID_DATA_ERRORS.has(code)) return "cloudSync.errors.invalidData";
   if (REQUEST_REJECTED_ERRORS.has(code)) return "cloudSync.errors.requestRejected";
   if (TOO_LARGE_ERRORS.has(code)) return "cloudSync.errors.tooLarge";
-  if (code === "payload_schema_version_unsupported") return "cloudSync.errors.payloadSchema";
   if (code === "operation_id_reuse") return "cloudSync.errors.operationIdReuse";
   if (code === "secret_value_not_allowed") return "cloudSync.errors.secretRejected";
   if (code === "cloud_sync_context_unavailable") return "cloudSync.errors.context";

@@ -120,6 +120,7 @@ impl SyncRepository {
                  parent_entity_id = excluded.parent_entity_id,
                  operation = excluded.operation,
                  base_version = MAX(cloud_sync_outbox.base_version, excluded.base_version),
+                 payload_schema_version = excluded.payload_schema_version,
                  canonical_payload_json = excluded.canonical_payload_json,
                  deleted_at = excluded.deleted_at,
                  content_revision = excluded.content_revision,
@@ -156,12 +157,14 @@ impl SyncRepository {
         }
         let changed = sqlx::query(
             r#"UPDATE cloud_sync_outbox SET parent_entity_id = ?1,
-                 canonical_payload_json = ?2, deleted_at = ?3, updated_at = ?4
-               WHERE account_id = ?5 AND local_workspace_id = ?6
-                 AND operation_id = ?7 AND content_revision = ?8
+                 payload_schema_version = ?2, canonical_payload_json = ?3,
+                 deleted_at = ?4, updated_at = ?5
+               WHERE account_id = ?6 AND local_workspace_id = ?7
+                 AND operation_id = ?8 AND content_revision = ?9
                  AND status IN ('pending', 'uncertain')"#,
         )
         .bind(&snapshot.intent.parent_entity_id)
+        .bind(PAYLOAD_SCHEMA_VERSION)
         .bind(&snapshot.intent.payload_json)
         .bind(&snapshot.intent.deleted_at)
         .bind(now.to_rfc3339())
@@ -177,6 +180,7 @@ impl SyncRepository {
         }
         let mut materialized = entry.clone();
         materialized.parent_entity_id = snapshot.intent.parent_entity_id;
+        materialized.payload_schema_version = PAYLOAD_SCHEMA_VERSION;
         materialized.canonical_payload_json = snapshot.intent.payload_json;
         materialized.deleted_at = snapshot.intent.deleted_at;
         Ok(Some(materialized))
@@ -379,24 +383,5 @@ impl SyncRepository {
                         outbox.created_at, outbox.entity_id LIMIT ?4"#,
         ).bind(account_id).bind(cloud_workspace_id).bind(now.to_rfc3339()).bind(limit)
          .fetch_all(&self.pool).await.map_err(Into::into)
-    }
-
-    pub(super) async fn entity_revision_on(
-        connection: &mut SqliteConnection,
-        workspace_id: &str,
-        entity_id: &str,
-    ) -> Result<i64, SyncError> {
-        sqlx::query_scalar::<_, i64>(
-            r#"SELECT revision FROM workspaces WHERE id = ?1 AND id = ?2
-               UNION ALL SELECT revision FROM workspace_variables WHERE id = ?2 AND workspace_id = ?1
-               UNION ALL SELECT revision FROM workspace_environments WHERE id = ?2 AND workspace_id = ?1
-               UNION ALL SELECT revision FROM workspace_environment_variables WHERE id = ?2 AND workspace_id = ?1
-               UNION ALL SELECT revision FROM api_collections WHERE id = ?2 AND workspace_id = ?1
-               UNION ALL SELECT revision FROM api_collection_folders WHERE id = ?2 AND workspace_id = ?1
-               UNION ALL SELECT revision FROM api_requests WHERE id = ?2 AND workspace_id = ?1
-               UNION ALL SELECT revision FROM connections WHERE id = ?2 AND workspace_id = ?1
-               UNION ALL SELECT revision FROM ssh_task WHERE id = ?2 AND workspace_id = ?1
-               UNION ALL SELECT revision FROM ssh_task_step WHERE id = ?2 AND workspace_id = ?1 LIMIT 1"#,
-        ).bind(workspace_id).bind(entity_id).fetch_one(&mut *connection).await.map_err(Into::into)
     }
 }

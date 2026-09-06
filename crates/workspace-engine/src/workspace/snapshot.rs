@@ -13,7 +13,18 @@ use super::{get_workspace_on, WorkspaceService};
 impl WorkspaceService {
     pub async fn read_snapshot(&self, key: &DomainEntityKey) -> AppResult<DomainSnapshot> {
         let mut connection = self.db.pool().acquire().await?;
-        read_snapshot_on(&mut connection, key).await
+        self.read_snapshot_on(&mut connection, key).await
+    }
+
+    /// Reads a workspace-owned domain snapshot on the caller's transaction.
+    /// Cloud Sync uses this to make entity enumeration, redaction, and initial
+    /// outbox capture one atomic operation.
+    pub async fn read_snapshot_on(
+        &self,
+        connection: &mut SqliteConnection,
+        key: &DomainEntityKey,
+    ) -> AppResult<DomainSnapshot> {
+        read_snapshot_on(connection, key).await
     }
 }
 

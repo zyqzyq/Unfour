@@ -1,6 +1,9 @@
 //! Initial upload payloads, topology and restart checkpoints.
 
 use super::support::*;
+use std::collections::HashSet;
+use unfour_cloud_sync::SYNC_ENTITY_REGISTRY;
+use unfour_core::models::{SshConnectionInput, SshTaskSaveInput, SshTaskStepInput};
 
 #[tokio::test]
 async fn initial_upload_is_topological_and_matches_all_four_v1_payloads() {
@@ -283,12 +286,29 @@ async fn api_initial_upload_uses_core_snapshots_and_existing_push_pipeline() {
 }
 
 #[tokio::test]
-async fn existing_bindings_backfill_api_entities_once_before_incremental_sync() {
+async fn initial_upload_entity_types_match_registry_exactly() {
     let db = database().await;
     let seed = CommandBus::from_db(db.clone()).await.unwrap();
     let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    seed.workspace_variable_create(
+        workspace_id.clone(),
+        variable(None, "PLAIN", "value", false),
+    )
+    .await
+    .unwrap();
+    let environment = seed
+        .workspace_environment_create(workspace_id.clone(), "Test".into())
+        .await
+        .unwrap();
+    seed.workspace_environment_variable_create(
+        workspace_id.clone(),
+        environment.id,
+        variable(None, "HOST", "example.test", false),
+    )
+    .await
+    .unwrap();
     let collection = seed
-        .api_collection_create(workspace_id.clone(), "Accounts".into())
+        .api_collection_create(workspace_id.clone(), "Registry".into())
         .await
         .unwrap();
     let folder = seed
@@ -296,41 +316,57 @@ async fn existing_bindings_backfill_api_entities_once_before_incremental_sync() 
             workspace_id.clone(),
             collection.id.clone(),
             None,
-            "Root".into(),
+            "Folder".into(),
         )
         .await
         .unwrap();
-    let request = seed
-        .save_api_request(saved_api_request(
-            &workspace_id,
-            &collection.id,
-            Some(folder.id.clone()),
-        ))
-        .await
-        .unwrap();
+    seed.save_api_request(saved_api_request(
+        &workspace_id,
+        &collection.id,
+        Some(folder.id),
+    ))
+    .await
+    .unwrap();
+    seed.save_ssh_connection(SshConnectionInput {
+        id: None,
+        workspace_id: workspace_id.clone(),
+        name: "Registry SSH".into(),
+        host: "registry.internal".into(),
+        port: Some(22),
+        username: "developer".into(),
+        auth_kind: "private-key".into(),
+        key_path: Some("registry-test-key".into()),
+        credential_ref: None,
+        secret: None,
+    })
+    .await
+    .unwrap();
+    seed.save_ssh_task(SshTaskSaveInput {
+        id: None,
+        workspace_id: workspace_id.clone(),
+        name: "Registry task".into(),
+        description: String::new(),
+        default_connection_id: None,
+        steps: vec![SshTaskStepInput {
+            id: None,
+            name: "Run".into(),
+            step_type: "command".into(),
+            position: 0,
+            enabled: true,
+            config_version: Some(1),
+            config_json: serde_json::json!({
+                "command": "echo registry",
+                "workingDirectory": "",
+                "timeoutSeconds": 30,
+                "continueOnError": false
+            }),
+        }],
+    })
+    .await
+    .unwrap();
 
     let transport = Arc::new(MockTransport::new());
-    let (service, _, _) = SyncRuntime::build(db.clone(), transport.clone());
-    let dependencies = SyncDependencies::default();
-    service
-        .repository()
-        .create_binding_with_initial_outbox(
-            "account-a",
-            0,
-            &workspace_id,
-            "cloud-existing",
-            0,
-            dependencies.ids.as_ref(),
-            dependencies.clock.as_ref(),
-        )
-        .await
-        .unwrap();
-    // Simulate a binding created before the API sync protocol was introduced.
-    sqlx::query("UPDATE cloud_sync_workspace_bindings SET api_v2_bootstrap_state = 'pending'")
-        .execute(db.pool())
-        .await
-        .unwrap();
-
+    let (service, _, _) = SyncRuntime::build(db, transport.clone());
     service.enable(&workspace_id).await.unwrap();
 
     let operations = transport
@@ -339,34 +375,22 @@ async fn existing_bindings_backfill_api_entities_once_before_incremental_sync() 
         .unwrap()
         .iter()
         .flat_map(|push| push.operations.iter())
-        .filter(|operation| {
-            matches!(
-                operation.entity_type,
-                SyncEntityType::ApiCollection
-                    | SyncEntityType::ApiFolder
-                    | SyncEntityType::ApiRequest
-            )
-        })
-        .map(|operation| (operation.entity_type, operation.entity_id.clone()))
+        .map(|operation| operation.entity_type.as_str())
         .collect::<Vec<_>>();
-    assert_eq!(
-        operations,
-        vec![
-            (SyncEntityType::ApiCollection, collection.id),
-            (SyncEntityType::ApiFolder, folder.id),
-            (SyncEntityType::ApiRequest, request.id),
-        ]
-    );
-    let bootstrap_state: String =
-        sqlx::query_scalar("SELECT api_v2_bootstrap_state FROM cloud_sync_workspace_bindings")
-            .fetch_one(db.pool())
-            .await
-            .unwrap();
-    assert_eq!(bootstrap_state, "completed");
-
-    let push_count = transport.pushes.lock().unwrap().len();
-    service.enable(&workspace_id).await.unwrap();
-    assert_eq!(transport.pushes.lock().unwrap().len(), push_count);
+    let uploaded = operations.iter().copied().collect::<HashSet<_>>();
+    let registered = SYNC_ENTITY_REGISTRY
+        .iter()
+        .map(|descriptor| descriptor.wire_name)
+        .collect::<HashSet<_>>();
+    assert_eq!(uploaded, registered);
+    let binding = service
+        .status(&workspace_id)
+        .await
+        .unwrap()
+        .binding
+        .unwrap();
+    assert_eq!(binding.initial_total as usize, operations.len());
+    assert_eq!(binding.initial_confirmed, binding.initial_total);
 }
 
 #[tokio::test]

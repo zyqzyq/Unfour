@@ -73,7 +73,7 @@ impl SyncService {
                 &RemoteChange {
                     cursor: binding.last_pulled_cursor,
                     operation_id: "dead-letter-use-remote".into(),
-                    entity_type: crate::SyncEntityType::parse(&entry.entity_type)?,
+                    entity_type: entry.entity_type.clone(),
                     entity_id: entry.entity_id.clone(),
                     parent_entity_id: entry.parent_entity_id.clone(),
                     operation: SyncOperation::Delete,
@@ -198,7 +198,7 @@ impl SyncService {
                 return Err(SyncError::InvalidData);
             }
             for item in page.items {
-                if item.entity_type.as_str() == entry.entity_type
+                if item.entity_type == entry.entity_type
                     && item.entity_id == entry.entity_id
                     && found.replace(item).is_some()
                 {

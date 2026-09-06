@@ -225,21 +225,29 @@ mod unified_runtime_tests {
             .activate_account("account-test", 1, dependencies.clock.now())
             .await
             .expect("activate test account context");
-        runtime
-            .sync_state
-            .service
-            .repository()
-            .create_binding_with_initial_outbox(
-                "account-test",
-                1,
-                &workspace_id,
-                "cloud-workspace-test",
-                0,
-                dependencies.ids.as_ref(),
-                dependencies.clock.as_ref(),
-            )
-            .await
-            .expect("create enabled Cloud Sync binding");
+        let now = dependencies.clock.now().to_rfc3339();
+        sqlx::query(
+            r#"INSERT INTO cloud_sync_workspace_bindings (
+                 account_id, local_workspace_id, cloud_workspace_id, sync_enabled,
+                 state, initial_cursor, generation, created_at, updated_at
+               ) VALUES ('account-test', ?1, 'cloud-workspace-test', 1,
+                         'active', 0, 1, ?2, ?2)"#,
+        )
+        .bind(&workspace_id)
+        .bind(&now)
+        .execute(db.pool())
+        .await
+        .expect("create enabled Cloud Sync binding fixture");
+        sqlx::query(
+            r#"INSERT INTO cloud_sync_workspace_ownership (
+                 local_workspace_id, account_id, cloud_workspace_id, created_at, updated_at
+               ) VALUES (?1, 'account-test', 'cloud-workspace-test', ?2, ?2)"#,
+        )
+        .bind(&workspace_id)
+        .bind(&now)
+        .execute(db.pool())
+        .await
+        .expect("create Cloud Sync ownership fixture");
 
         runtime
             .command_bus

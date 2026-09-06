@@ -50,7 +50,7 @@ mod tests {
         "pro_sync_diagnostics",
         "pro_sync_account_settings",
     ];
-    const CLOUD_SYNC_TABLES: [&str; 10] = [
+    const CLOUD_SYNC_TABLES: [&str; 11] = [
         "cloud_sync_workspace_bindings",
         "cloud_sync_workspace_ownership",
         "cloud_sync_runtime_context",
@@ -61,6 +61,7 @@ mod tests {
         "cloud_sync_diagnostics",
         "cloud_sync_account_settings",
         "cloud_sync_account_binding_pause_reasons",
+        "cloud_sync_remote_entity",
     ];
 
     async fn test_pool() -> SqlitePool {
@@ -109,7 +110,7 @@ mod tests {
             .bind(table)
             .fetch_one(&pool)
             .await
-            .expect("read protocol v4 sync schema");
+            .expect("read Cloud Sync schema");
             assert!(
                 schema.contains("'connection'"),
                 "{table} rejects connection"
@@ -120,30 +121,102 @@ mod tests {
                 "{table} rejects sshTaskStep"
             );
         }
-        let bootstrap_default: String = sqlx::query_scalar(
-            r#"SELECT dflt_value FROM pragma_table_info('cloud_sync_workspace_bindings')
-               WHERE name = 'ssh_task_v3_bootstrap_state'"#,
+        for retired in [
+            "api_v2_bootstrap_state",
+            "ssh_task_v3_bootstrap_state",
+            "connection_v4_bootstrap_state",
+        ] {
+            let count: i64 = sqlx::query_scalar(
+                r#"SELECT COUNT(*) FROM pragma_table_info('cloud_sync_workspace_bindings')
+                   WHERE name = ?1"#,
+            )
+            .bind(retired)
+            .fetch_one(&pool)
+            .await
+            .expect("inspect retired bootstrap column");
+            assert_eq!(count, 0, "{retired} must be retired");
+        }
+    }
+
+    #[tokio::test]
+    async fn protocol_five_storage_accepts_future_remote_envelopes_without_weakening_invariants() {
+        let pool = test_pool().await;
+        migrate(&pool).await.expect("run merged migrations");
+        let workspace_id = "future-local-workspace";
+        sqlx::query(
+            r#"INSERT INTO workspaces (
+                 id, name, is_default, last_opened_at, environment_type, mcp_policy,
+                 created_at, updated_at, revision
+               ) VALUES (?1, 'Future local', 0, NULL, 'dev', 'auto',
+                         '2026-09-06T00:00:00Z', '2026-09-06T00:00:00Z', 1)"#,
+        )
+        .bind(workspace_id)
+        .execute(&pool)
+        .await
+        .expect("insert local workspace");
+        sqlx::query(
+            r#"INSERT INTO cloud_sync_workspace_bindings (
+                 account_id, local_workspace_id, cloud_workspace_id, state,
+                 created_at, updated_at
+               ) VALUES ('future-account', ?1, 'future-cloud', 'active',
+                         '2026-09-06T00:00:00Z', '2026-09-06T00:00:00Z')"#,
+        )
+        .bind(workspace_id)
+        .execute(&pool)
+        .await
+        .expect("insert binding");
+        sqlx::query(
+            r#"INSERT INTO cloud_sync_remote_entity (
+                 account_id, cloud_workspace_id, entity_type, entity_id,
+                 parent_entity_id, server_version, payload_schema_version,
+                 operation, canonical_payload_json, deleted_at, operation_id,
+                 compatibility_state, created_at, updated_at
+               ) VALUES ('future-account', 'future-cloud', 'futureEntity', 'future-1',
+                         ?1, 3, 9, 'upsert', '{"future":true}', NULL, NULL,
+                         'deferred_compatibility', '2026-09-06T00:00:00Z',
+                         '2026-09-06T00:00:00Z')"#,
+        )
+        .bind(workspace_id)
+        .execute(&pool)
+        .await
+        .expect("retain unknown entity and future schema");
+        let stored: (String, i64, Option<String>) = sqlx::query_as(
+            r#"SELECT entity_type, payload_schema_version, operation_id
+               FROM cloud_sync_remote_entity WHERE entity_id = 'future-1'"#,
         )
         .fetch_one(&pool)
         .await
-        .expect("read SSH Task v3 bootstrap default");
-        assert_eq!(bootstrap_default, "'pending'");
-        let connection_bootstrap_default: String = sqlx::query_scalar(
-            r#"SELECT dflt_value FROM pragma_table_info('cloud_sync_workspace_bindings')
-               WHERE name = 'connection_v4_bootstrap_state'"#,
+        .expect("read retained envelope");
+        assert_eq!(stored, ("futureEntity".into(), 9, None));
+
+        assert!(sqlx::query(
+            r#"UPDATE cloud_sync_remote_entity SET compatibility_state = 'ignored'
+               WHERE entity_id = 'future-1'"#,
         )
-        .fetch_one(&pool)
+        .execute(&pool)
         .await
-        .expect("read Connection v4 bootstrap default");
-        assert_eq!(connection_bootstrap_default, "'pending'");
-        let api_bootstrap_default: String = sqlx::query_scalar(
-            r#"SELECT dflt_value FROM pragma_table_info('cloud_sync_workspace_bindings')
-               WHERE name = 'api_v2_bootstrap_state'"#,
+        .is_err());
+        assert!(sqlx::query(
+            r#"UPDATE cloud_sync_remote_entity
+               SET operation = 'delete', canonical_payload_json = NULL, deleted_at = NULL
+               WHERE entity_id = 'future-1'"#,
         )
-        .fetch_one(&pool)
+        .execute(&pool)
         .await
-        .expect("read API v2 bootstrap default");
-        assert_eq!(api_bootstrap_default, "'pending'");
+        .is_err());
+        sqlx::query(
+            r#"INSERT INTO cloud_sync_snapshot_staging (
+                 stage_id, account_id, cloud_workspace_id, at_cursor,
+                 entity_type, entity_id, parent_entity_id, server_version,
+                 payload_schema_version, payload_json, topology_rank, created_at
+               ) VALUES ('future-stage', 'future-account', 'future-cloud', 4,
+                         'futureEntity', 'future-snapshot', ?1, 2, 12,
+                         '{"future":true}', 100, '2026-09-06T00:00:00Z')"#,
+        )
+        .bind(workspace_id)
+        .execute(&pool)
+        .await
+        .expect("stage future snapshot item");
     }
 
     #[tokio::test]
@@ -799,16 +872,15 @@ mod tests {
         assert_eq!(conflict.9.as_deref(), Some("folder-v3"));
         assert_eq!(conflict.11.as_deref(), Some("remote-conflict"));
 
-        let binding: (i64, String, String, i64, i64) = sqlx::query_as(
-            r#"SELECT last_pulled_cursor, ssh_task_v3_bootstrap_state,
-                      connection_v4_bootstrap_state, initial_total, initial_confirmed
+        let binding: (i64, i64, i64) = sqlx::query_as(
+            r#"SELECT last_pulled_cursor, initial_total, initial_confirmed
                FROM cloud_sync_workspace_bindings
                WHERE local_workspace_id = 'v3-retained-workspace'"#,
         )
         .fetch_one(&pool)
         .await
         .expect("read retained binding");
-        assert_eq!(binding, (102, "completed".into(), "pending".into(), 23, 23));
+        assert_eq!(binding, (102, 23, 23));
 
         let foreign_key_rows = sqlx::query("PRAGMA foreign_key_check")
             .fetch_all(&pool)
@@ -831,7 +903,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn protocol_v4_reconciliation_migration_reopens_completed_bootstrap() {
+    async fn registry_migration_retires_versioned_bootstrap_columns() {
         let pool = test_pool().await;
         let db = unfour_local_storage::LocalDb::from_pool(pool.clone());
         db.migrate().await.expect("run core migrations");
@@ -880,27 +952,49 @@ mod tests {
         .await
         .expect("insert completed bootstrap binding");
 
-        migrate(&pool)
-            .await
-            .expect("run reconciliation retry migration");
-        let state: String = sqlx::query_scalar(
-            "SELECT connection_v4_bootstrap_state FROM cloud_sync_workspace_bindings",
+        migrate(&pool).await.expect("run registry migration");
+        let columns: i64 = sqlx::query_scalar(
+            r#"SELECT COUNT(*) FROM pragma_table_info('cloud_sync_workspace_bindings')
+               WHERE name IN ('api_v2_bootstrap_state', 'ssh_task_v3_bootstrap_state',
+                              'connection_v4_bootstrap_state')"#,
         )
         .fetch_one(&pool)
         .await
-        .expect("read reopened bootstrap state");
-        assert_eq!(state, "pending");
+        .expect("read retired bootstrap columns");
+        assert_eq!(columns, 0);
+        let workspace: (String, i64) = sqlx::query_as(
+            "SELECT name, revision FROM workspaces WHERE id = 'completed-bootstrap-workspace'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("existing business workspace survives registry migration");
+        assert_eq!(workspace, ("Completed bootstrap".into(), 1));
+        let binding: (String, i64, i64, String) = sqlx::query_as(
+            r#"SELECT cloud_workspace_id, last_pulled_cursor, initial_confirmed, state
+               FROM cloud_sync_workspace_bindings
+               WHERE account_id = 'account-retry'
+                 AND local_workspace_id = 'completed-bootstrap-workspace'"#,
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("existing sync binding survives registry migration");
+        assert_eq!(
+            binding,
+            ("cloud-completed-bootstrap".into(), 17, 1, "active".into())
+        );
 
         migrate(&pool)
             .await
             .expect("rerun reconciliation retry migration");
-        let state_after_retry: String = sqlx::query_scalar(
-            "SELECT connection_v4_bootstrap_state FROM cloud_sync_workspace_bindings",
+        let columns_after_retry: i64 = sqlx::query_scalar(
+            r#"SELECT COUNT(*) FROM pragma_table_info('cloud_sync_workspace_bindings')
+               WHERE name IN ('api_v2_bootstrap_state', 'ssh_task_v3_bootstrap_state',
+                              'connection_v4_bootstrap_state')"#,
         )
         .fetch_one(&pool)
         .await
-        .expect("read idempotent bootstrap state");
-        assert_eq!(state_after_retry, "pending");
+        .expect("read idempotently retired bootstrap columns");
+        assert_eq!(columns_after_retry, 0);
     }
 
     async fn apply_historical_pro_migrations(pool: &SqlitePool) {

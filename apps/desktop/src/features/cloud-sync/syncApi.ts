@@ -20,8 +20,6 @@ export function getCloudSyncStatus(workspaceId: string): Promise<CloudSyncStatus
         initialTotal: 1,
         initialConfirmed: 1,
         initializationCheckpoint: "preview-operation",
-        sshTaskV3BootstrapState: "completed",
-        connectionV4BootstrapState: "completed",
         generation: 0,
         lastSuccessAt: new Date().toISOString(),
         lastError: null,

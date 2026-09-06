@@ -232,6 +232,84 @@ impl SyncRepository {
         Ok(true)
     }
 
+    /// A compatibility rejection rolls the server batch back atomically, but
+    /// no valid local intent becomes a dead letter. When the server identifies
+    /// one operation, only that operation is delayed; independent peers are
+    /// immediately eligible for a smaller subsequent batch.
+    pub async fn mark_batch_compatibility_waiting(
+        &self,
+        entries: &[OutboxEntry],
+        failed_operation_id: Option<&str>,
+        error_code: &str,
+        now: DateTime<Utc>,
+    ) -> Result<(), SyncError> {
+        let identified = failed_operation_id.filter(|operation_id| {
+            entries
+                .iter()
+                .any(|entry| entry.operation_id == *operation_id)
+        });
+        let now_text = now.to_rfc3339();
+        let mut tx = self.pool.begin().await?;
+        for entry in entries {
+            let waits = identified.is_none_or(|operation_id| entry.operation_id == operation_id);
+            let exponent = entry.attempt_count.clamp(0, 8) as u32;
+            let jitter_ms = entry.operation_id.bytes().fold(0_u64, |value, byte| {
+                value.wrapping_mul(31).wrapping_add(byte as u64)
+            }) % 1_000;
+            let next = now
+                + Duration::seconds((1_i64 << exponent).min(300))
+                + Duration::milliseconds(jitter_ms as i64);
+            let persisted_error = waits.then_some(error_code);
+            sqlx::query(
+                r#"UPDATE cloud_sync_attempts SET status = 'failed', finished_at = ?1,
+                     lease_owner = NULL, lease_expires_at = NULL, error_code = ?2
+                   WHERE account_id = ?3 AND cloud_workspace_id = ?4 AND operation_id = ?5"#,
+            )
+            .bind(&now_text)
+            .bind(if waits {
+                error_code
+            } else {
+                "batch_rolled_back"
+            })
+            .bind(&entry.account_id)
+            .bind(&entry.cloud_workspace_id)
+            .bind(&entry.operation_id)
+            .execute(&mut *tx)
+            .await?;
+            sqlx::query(
+                r#"UPDATE cloud_sync_outbox SET status = 'pending',
+                     attempt_count = attempt_count + 1, next_attempt_at = ?1,
+                     lease_owner = NULL, lease_started_at = NULL, lease_expires_at = NULL,
+                     last_error = ?2, updated_at = ?3
+                   WHERE account_id = ?4 AND operation_id = ?5"#,
+            )
+            .bind(waits.then(|| next.to_rfc3339()))
+            .bind(persisted_error)
+            .bind(&now_text)
+            .bind(&entry.account_id)
+            .bind(&entry.operation_id)
+            .execute(&mut *tx)
+            .await?;
+            Self::record_diagnostic_on(
+                &mut tx,
+                &entry.account_id,
+                Some(&entry.cloud_workspace_id),
+                "retryable",
+                if waits {
+                    error_code
+                } else {
+                    "batch_rolled_back"
+                },
+                Some(&entry.entity_type),
+                Some(&entry.entity_id),
+                &now_text,
+            )
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
     /// Releases a whole atomically rolled-back batch without manufacturing
     /// entity dead letters. Used for workspace/request failures that do not
     /// safely identify one operation.

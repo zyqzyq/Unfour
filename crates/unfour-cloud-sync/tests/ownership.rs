@@ -7,6 +7,9 @@ use unfour_core::models::WorkspaceVariableInput;
 use unfour_core::AppError;
 use unfour_local_storage::LocalDb;
 
+mod support;
+use support::create_registry_binding;
+
 fn variable(key: &str) -> WorkspaceVariableInput {
     WorkspaceVariableInput {
         id: None,
@@ -37,6 +40,26 @@ async fn database() -> LocalDb {
     db
 }
 
+async fn create_owner_binding(
+    repository: &SyncRepository,
+    db: &LocalDb,
+    workspace_id: &str,
+    dependencies: &SyncDependencies,
+) {
+    create_registry_binding(
+        repository,
+        db,
+        "account-a",
+        0,
+        workspace_id,
+        "cloud-a",
+        dependencies.ids.as_ref(),
+        dependencies.clock.as_ref(),
+    )
+    .await
+    .expect("owner binding");
+}
+
 #[tokio::test]
 async fn ambiguous_historical_bindings_fail_mutation_without_fanout() {
     let db = database().await;
@@ -44,18 +67,7 @@ async fn ambiguous_historical_bindings_fail_mutation_without_fanout() {
     let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
     let dependencies = SyncDependencies::default();
     let repository = SyncRepository::new(db.pool().clone());
-    repository
-        .create_binding_with_initial_outbox(
-            "account-a",
-            0,
-            &workspace_id,
-            "cloud-a",
-            0,
-            dependencies.ids.as_ref(),
-            dependencies.clock.as_ref(),
-        )
-        .await
-        .expect("owner binding");
+    create_owner_binding(&repository, &db, &workspace_id, &dependencies).await;
     sqlx::query(
         r#"INSERT INTO cloud_sync_workspace_bindings (
              account_id, local_workspace_id, cloud_workspace_id,
@@ -115,18 +127,7 @@ async fn single_binding_without_owner_fails_mutation_without_fallback() {
     let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
     let dependencies = SyncDependencies::default();
     let repository = SyncRepository::new(db.pool().clone());
-    repository
-        .create_binding_with_initial_outbox(
-            "account-a",
-            0,
-            &workspace_id,
-            "cloud-a",
-            0,
-            dependencies.ids.as_ref(),
-            dependencies.clock.as_ref(),
-        )
-        .await
-        .expect("owner binding");
+    create_owner_binding(&repository, &db, &workspace_id, &dependencies).await;
     sqlx::query("DELETE FROM cloud_sync_workspace_ownership WHERE local_workspace_id = ?1")
         .bind(&workspace_id)
         .execute(db.pool())
