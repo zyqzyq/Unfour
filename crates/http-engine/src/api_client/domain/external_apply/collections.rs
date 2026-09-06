@@ -1,5 +1,6 @@
 use sqlx::SqliteConnection;
 use unfour_core::domain::ExternalApiCollectionUpsert;
+use unfour_core::domain::ExternalMaterialization;
 use unfour_core::{AppError, AppResult};
 
 use super::helpers::{validate_external_record, validate_owner};
@@ -8,7 +9,7 @@ use crate::api_client::domain::{validate_workspace_on, ApiCollectionDomainRow};
 pub(super) async fn upsert_collection(
     connection: &mut SqliteConnection,
     record: ExternalApiCollectionUpsert,
-) -> AppResult<Option<i64>> {
+) -> AppResult<ExternalMaterialization> {
     validate_external_record(
         &record.id,
         &record.workspace_id,
@@ -50,9 +51,9 @@ pub(super) async fn upsert_collection(
             && current.created_at == record.created_at
             && current.updated_at == record.updated_at
         {
-            return Ok(None);
+            return Ok(ExternalMaterialization::AlreadyEquivalent);
         }
-        return Ok(Some(
+        return Ok(ExternalMaterialization::Applied(
             sqlx::query_scalar(
                 r#"
             UPDATE api_collections
@@ -87,5 +88,5 @@ pub(super) async fn upsert_collection(
     .bind(record.updated_at)
     .execute(&mut *connection)
     .await?;
-    Ok(Some(1))
+    Ok(ExternalMaterialization::Applied(1))
 }

@@ -1,7 +1,7 @@
 use sqlx::SqliteConnection;
 use unfour_core::domain::{
-    CommandContext, DomainEntityType, DomainMutation, ExternalWorkspaceEnvironmentApply,
-    ExternalWorkspaceEnvironmentUpsert, MutationOperation,
+    CommandContext, DomainEntityKey, DomainEntityType, DomainMutation, ExternalMaterialization,
+    ExternalWorkspaceEnvironmentApply, ExternalWorkspaceEnvironmentUpsert, MutationOperation,
 };
 use unfour_core::AppResult;
 
@@ -19,21 +19,27 @@ pub(super) async fn apply_environment(
     context: &CommandContext,
     change: ExternalWorkspaceEnvironmentApply,
     mutations: &mut Vec<DomainMutation>,
+    materialized: &mut Vec<DomainEntityKey>,
 ) -> AppResult<()> {
     match change {
         ExternalWorkspaceEnvironmentApply::Upsert(record) => {
             let workspace_id = record.workspace_id.clone();
             let id = record.id.clone();
-            if let Some(revision) = upsert_environment(connection, record).await? {
-                mutations.push(entity_mutation(
-                    context,
-                    DomainEntityType::WorkspaceEnvironment,
-                    MutationOperation::Upsert,
-                    &workspace_id,
-                    &id,
-                    revision,
-                ));
-            }
+            upsert_environment(connection, record).await?.record(
+                mutations,
+                materialized,
+                DomainEntityKey::new(DomainEntityType::WorkspaceEnvironment, &workspace_id, &id),
+                |revision| {
+                    entity_mutation(
+                        context,
+                        DomainEntityType::WorkspaceEnvironment,
+                        MutationOperation::Upsert,
+                        &workspace_id,
+                        &id,
+                        revision,
+                    )
+                },
+            );
         }
         ExternalWorkspaceEnvironmentApply::Delete(delete) => {
             validate_delete(&delete, DomainEntityType::WorkspaceEnvironment)?;
@@ -58,6 +64,7 @@ pub(super) async fn apply_environment(
                     &delete.entity.entity_id,
                     revision,
                 ));
+                materialized.push(delete.entity.clone());
                 let children: Vec<(String, i64)> = sqlx::query_as(
                     r#"
                     UPDATE workspace_environment_variables
@@ -81,6 +88,14 @@ pub(super) async fn apply_environment(
                         &delete.entity.entity_id,
                         revision,
                     ));
+                    materialized.push(
+                        DomainEntityKey::new(
+                            DomainEntityType::WorkspaceEnvironmentVariable,
+                            &delete.entity.workspace_id,
+                            &id,
+                        )
+                        .with_parent_entity_id(&delete.entity.entity_id),
+                    );
                 }
                 if was_active {
                     update_active_environment_after_delete_on(
@@ -91,6 +106,8 @@ pub(super) async fn apply_environment(
                     )
                     .await?;
                 }
+            } else {
+                materialized.push(delete.entity.clone());
             }
         }
     }
@@ -100,11 +117,11 @@ pub(super) async fn apply_environment(
 async fn upsert_environment(
     connection: &mut SqliteConnection,
     record: ExternalWorkspaceEnvironmentUpsert,
-) -> AppResult<Option<i64>> {
+) -> AppResult<ExternalMaterialization> {
     if doomed_orphan_to_skip(get_workspace_on(connection, &record.workspace_id, false).await)?
         .is_none()
     {
-        return Ok(None);
+        return Ok(ExternalMaterialization::NotApplied);
     }
     let name = normalize_environment_name(record.name)?;
     let current = sqlx::query_as::<_, WorkspaceEnvironmentRow>(
@@ -125,9 +142,9 @@ async fn upsert_environment(
             && current.created_at == record.created_at
             && current.updated_at == record.updated_at
         {
-            return Ok(None);
+            return Ok(ExternalMaterialization::AlreadyEquivalent);
         }
-        return Ok(Some(
+        return Ok(ExternalMaterialization::Applied(
             sqlx::query_scalar(
                 r#"
                 UPDATE workspace_environments
@@ -161,5 +178,5 @@ async fn upsert_environment(
     .bind(record.updated_at)
     .execute(&mut *connection)
     .await?;
-    Ok(Some(1))
+    Ok(ExternalMaterialization::Applied(1))
 }

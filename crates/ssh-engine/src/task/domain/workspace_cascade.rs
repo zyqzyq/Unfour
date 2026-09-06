@@ -1,6 +1,8 @@
 use chrono::Utc;
 use sqlx::SqliteConnection;
-use unfour_core::domain::{CommandContext, DomainEntityType, DomainMutation, MutationOperation};
+use unfour_core::domain::{
+    CommandContext, DomainEntityKey, DomainEntityType, DomainMutation, MutationOperation,
+};
 use unfour_core::AppResult;
 
 use super::{delete_live_steps_on, delete_task_steps_on, mutation, SshService};
@@ -11,13 +13,16 @@ impl SshService {
     /// steps cannot remain as orphans. SQL `ON DELETE CASCADE` does not fire
     /// on tombstones. Does not require the workspace row to still be live —
     /// the caller may already have tombstoned it.
+    ///
+    /// The second return value is the complete materialized set: entities this
+    /// cascade actually tombstoned, plus already-deleted equivalents.
     pub async fn delete_workspace_ssh_task_entities_on(
         &self,
         connection: &mut SqliteConnection,
         context: &CommandContext,
         workspace_id: &str,
         deleted_at: Option<&str>,
-    ) -> AppResult<Vec<DomainMutation>> {
+    ) -> AppResult<(Vec<DomainMutation>, Vec<DomainEntityKey>)> {
         let deleted_at = deleted_at
             .map(str::to_string)
             .unwrap_or_else(|| Utc::now().to_rfc3339());
@@ -70,8 +75,50 @@ impl SshService {
             delete_live_steps_on(connection, context, workspace_id, None, &deleted_at).await?,
         );
 
-        Ok(mutations)
+        let mut materialized: Vec<DomainEntityKey> = mutations
+            .iter()
+            .map(|mutation| mutation.entity.clone())
+            .collect();
+        materialized.extend(already_tombstoned_ssh_task_keys(connection, workspace_id).await?);
+        Ok((mutations, materialized))
     }
+}
+
+async fn already_tombstoned_ssh_task_keys(
+    connection: &mut SqliteConnection,
+    workspace_id: &str,
+) -> AppResult<Vec<DomainEntityKey>> {
+    let mut keys = Vec::new();
+    let steps: Vec<(String, String)> = sqlx::query_as(
+        r#"
+        SELECT id, task_id FROM ssh_task_step
+        WHERE workspace_id = ?1 AND deleted_at IS NOT NULL
+        ORDER BY id
+        "#,
+    )
+    .bind(workspace_id)
+    .fetch_all(&mut *connection)
+    .await?;
+    keys.extend(steps.into_iter().map(|(id, task_id)| {
+        DomainEntityKey::new(DomainEntityType::SshTaskStep, workspace_id, id)
+            .with_parent_entity_id(task_id)
+    }));
+    let tasks: Vec<String> = sqlx::query_scalar(
+        r#"
+        SELECT id FROM ssh_task
+        WHERE workspace_id = ?1 AND deleted_at IS NOT NULL
+        ORDER BY id
+        "#,
+    )
+    .bind(workspace_id)
+    .fetch_all(&mut *connection)
+    .await?;
+    keys.extend(
+        tasks
+            .into_iter()
+            .map(|id| DomainEntityKey::new(DomainEntityType::SshTask, workspace_id, id)),
+    );
+    Ok(keys)
 }
 
 async fn soft_delete_task_on(

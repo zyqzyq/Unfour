@@ -16,6 +16,7 @@ use unfour_ssh_engine::{SshConnectionCleanup, SshService};
 
 pub(crate) struct FeatureCascadeOutcome {
     pub mutations: Vec<DomainMutation>,
+    pub materialized: Vec<DomainEntityKey>,
     pub ssh_connection_cleanups: Vec<SshConnectionCleanup>,
     pub database_connection_cleanups: Vec<DatabaseConnectionCleanup>,
 }
@@ -40,26 +41,36 @@ pub(crate) async fn cascade_workspace_feature_entities_on(
     workspace_id: &str,
     deleted_at: Option<&str>,
 ) -> AppResult<FeatureCascadeOutcome> {
-    let mut mutations = api_client
+    let (mut mutations, mut materialized) = api_client
         .delete_workspace_api_entities_on(connection, context, workspace_id, deleted_at)
         .await?;
-    mutations.extend(
-        ssh.delete_workspace_ssh_task_entities_on(connection, context, workspace_id, deleted_at)
-            .await?,
-    );
+    let (ssh_mutations, ssh_materialized) = ssh
+        .delete_workspace_ssh_task_entities_on(connection, context, workspace_id, deleted_at)
+        .await?;
+    mutations.extend(ssh_mutations);
+    materialized.extend(ssh_materialized);
     let resolved_deleted_at = deleted_at
         .map(str::to_string)
         .unwrap_or_else(unfour_workspace_engine::WorkspaceService::rfc3339_now);
-    let (connection_mutations, ssh_connection_cleanups) = ssh
+    let (connection_mutations, ssh_connection_cleanups, ssh_connection_materialized) = ssh
         .delete_workspace_connections_on(connection, context, workspace_id, &resolved_deleted_at)
         .await?;
     mutations.extend(connection_mutations);
-    let (connection_mutations, database_connection_cleanups) = database
-        .delete_workspace_connections_on(connection, context, workspace_id, &resolved_deleted_at)
-        .await?;
+    materialized.extend(ssh_connection_materialized);
+    let (connection_mutations, database_connection_cleanups, database_connection_materialized) =
+        database
+            .delete_workspace_connections_on(
+                connection,
+                context,
+                workspace_id,
+                &resolved_deleted_at,
+            )
+            .await?;
     mutations.extend(connection_mutations);
+    materialized.extend(database_connection_materialized);
     Ok(FeatureCascadeOutcome {
         mutations,
+        materialized,
         ssh_connection_cleanups,
         database_connection_cleanups,
     })
@@ -174,6 +185,7 @@ impl CommandBus {
                         let ssh_page = page.clone();
                         let connection_changes = page.connections.clone();
                         let mut mutations = Vec::new();
+                        let mut cascade_materialized = Vec::new();
                         let mut ssh_connection_cleanups = Vec::new();
                         let mut database_connection_cleanups = Vec::new();
                         for (workspace_id, deleted_at) in &workspace_deletes {
@@ -188,6 +200,7 @@ impl CommandBus {
                             )
                             .await?;
                             mutations.extend(cascade.mutations);
+                            cascade_materialized.extend(cascade.materialized);
                             ssh_connection_cleanups.extend(cascade.ssh_connection_cleanups);
                             database_connection_cleanups
                                 .extend(cascade.database_connection_cleanups);
@@ -220,10 +233,25 @@ impl CommandBus {
                             workspace_outcome.value.secret_material_outcomes;
                         secret_material_outcomes.extend(api_outcome.value.secret_material_outcomes);
                         secret_material_outcomes.extend(ssh_outcome.value.secret_material_outcomes);
+                        let mut materialized_entities =
+                            workspace_outcome.value.materialized_entities;
+                        materialized_entities.extend(cascade_materialized);
+                        materialized_entities.extend(api_outcome.value.materialized_entities);
+                        materialized_entities.extend(ssh_outcome.value.materialized_entities);
+                        materialized_entities.extend(
+                            mutations
+                                .iter()
+                                .filter(|mutation| {
+                                    mutation.entity.entity_type
+                                        == unfour_core::domain::DomainEntityType::Connection
+                                })
+                                .map(|mutation| mutation.entity.clone()),
+                        );
                         let report = ExternalApplyReport {
                             applied_count: mutations.len(),
                             mutations: mutations.clone(),
                             secret_material_outcomes,
+                            materialized_entities,
                         };
                         Ok(DomainCommandResult::new(
                             ExternalPageOutcome {
@@ -392,6 +420,7 @@ async fn apply_external_connection_changes_on(
     }
     Ok(FeatureCascadeOutcome {
         mutations,
+        materialized: Vec::new(),
         ssh_connection_cleanups,
         database_connection_cleanups,
     })

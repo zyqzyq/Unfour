@@ -125,6 +125,9 @@ impl SyncService {
         {
             return Err(SyncError::AccountChanged);
         }
+        if !cleanup.materialized(entity_type.into(), &current_entry.entity_id) {
+            return Err(SyncError::Core);
+        }
         crate::SyncRepository::finish_remote_dead_letter_on(
             &mut tx,
             &binding,

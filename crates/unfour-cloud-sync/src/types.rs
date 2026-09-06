@@ -93,6 +93,10 @@ impl SyncEntityType {
         crate::sync_entity_descriptor(self).payload_schema_version
     }
 
+    pub fn reader_revision(self) -> i64 {
+        crate::sync_entity_descriptor(self).reader_revision
+    }
+
     pub fn parse(value: &str) -> Result<Self, SyncError> {
         crate::SYNC_ENTITY_REGISTRY
             .iter()

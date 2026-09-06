@@ -170,31 +170,25 @@ impl SyncRepository {
         connection: &mut SqliteConnection,
         binding: &SyncBinding,
     ) -> Result<Vec<RemoteEntityRecord>, SyncError> {
-        sqlx::query_as::<_, RemoteEntityRecord>(
+        let mut records = sqlx::query_as::<_, RemoteEntityRecord>(
             r#"SELECT account_id, cloud_workspace_id, entity_type, entity_id,
                       parent_entity_id, server_version, payload_schema_version,
                       operation, canonical_payload_json, deleted_at, operation_id,
                       compatibility_state
                FROM cloud_sync_remote_entity
-               WHERE account_id = ?1 AND cloud_workspace_id = ?2
-               ORDER BY CASE entity_type
-                 WHEN 'workspace' THEN 0
-                 WHEN 'workspaceVariable' THEN 1
-                 WHEN 'workspaceEnvironment' THEN 1
-                 WHEN 'connection' THEN 1
-                 WHEN 'apiCollection' THEN 1
-                 WHEN 'sshTask' THEN 1
-                 WHEN 'workspaceEnvironmentVariable' THEN 2
-                 WHEN 'apiFolder' THEN 2
-                 WHEN 'sshTaskStep' THEN 2
-                 WHEN 'apiRequest' THEN 3
-                 ELSE 100 END, entity_type, entity_id"#,
+               WHERE account_id = ?1 AND cloud_workspace_id = ?2"#,
         )
         .bind(&binding.account_id)
         .bind(&binding.cloud_workspace_id)
         .fetch_all(&mut *connection)
-        .await
-        .map_err(Into::into)
+        .await?;
+        records.sort_by(|left, right| {
+            crate::topology_rank_for_wire(&left.entity_type)
+                .cmp(&crate::topology_rank_for_wire(&right.entity_type))
+                .then_with(|| left.entity_type.cmp(&right.entity_type))
+                .then_with(|| left.entity_id.cmp(&right.entity_id))
+        });
+        Ok(records)
     }
 
     pub(crate) async fn mark_binding_compatibility_waiting_on(
@@ -248,8 +242,9 @@ impl SyncRepository {
         binding: &SyncBinding,
         record: &RemoteEntityRecord,
     ) -> Result<bool, SyncError> {
-        let current: Option<(i64, String)> = sqlx::query_as(
-            r#"SELECT server_version, sync_status FROM cloud_sync_entity_state
+        let current: Option<(i64, String, i64)> = sqlx::query_as(
+            r#"SELECT server_version, sync_status, applied_reader_revision
+               FROM cloud_sync_entity_state
                WHERE account_id = ?1 AND cloud_workspace_id = ?2
                  AND entity_type = ?3 AND entity_id = ?4"#,
         )
@@ -259,8 +254,9 @@ impl SyncRepository {
         .bind(&record.entity_id)
         .fetch_optional(&mut *connection)
         .await?;
-        Ok(current.is_some_and(|(version, status)| {
-            version == record.server_version && status == "synced"
+        let reader_revision = crate::reader_revision_for_wire(&record.entity_type);
+        Ok(current.is_some_and(|(version, status, applied)| {
+            version == record.server_version && status == "synced" && applied >= reader_revision
         }))
     }
 
@@ -273,12 +269,14 @@ impl SyncRepository {
         sqlx::query(
             r#"INSERT INTO cloud_sync_entity_state (
                  account_id, cloud_workspace_id, entity_type, entity_id,
-                 server_version, last_operation_id, sync_status, updated_at
-               ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'synced', ?7)
+                 server_version, last_operation_id, sync_status,
+                 applied_reader_revision, updated_at
+               ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'synced', ?7, ?8)
                ON CONFLICT(account_id, cloud_workspace_id, entity_type, entity_id) DO UPDATE SET
                  server_version = excluded.server_version,
                  last_operation_id = excluded.last_operation_id,
                  sync_status = 'synced',
+                 applied_reader_revision = excluded.applied_reader_revision,
                  conflict_payload_schema_version = NULL,
                  conflict_remote_payload_json = NULL,
                  conflict_remote_operation = NULL,
@@ -295,6 +293,7 @@ impl SyncRepository {
         .bind(&record.entity_id)
         .bind(record.server_version)
         .bind(&record.operation_id)
+        .bind(crate::reader_revision_for_wire(&record.entity_type))
         .bind(now)
         .execute(&mut *connection)
         .await?;

@@ -52,6 +52,10 @@ pub struct SyncEntityDescriptor {
     /// Current canonical payload schema understood and emitted for this entity.
     /// Entity schemas evolve independently without changing Protocol 5.
     pub payload_schema_version: i64,
+    /// Local materialization completeness for this entity's reader. Bump only
+    /// when this reader starts applying an additive field; do not bump Protocol
+    /// or payloadSchemaVersion.
+    pub reader_revision: i64,
     pub workspace_scoped: bool,
     pub parent_dependency: ParentDependency,
     pub initial_upload: bool,
@@ -231,6 +235,7 @@ const fn descriptor(
         domain_entity_type,
         wire_name,
         payload_schema_version,
+        reader_revision: 1,
         workspace_scoped,
         parent_dependency,
         initial_upload: true,
@@ -260,6 +265,18 @@ pub fn sync_entity_descriptor_for_domain(
         .iter()
         .find(|descriptor| descriptor.domain_entity_type == entity_type)
         .expect("every syncable DomainEntityType must be registered")
+}
+
+pub fn reader_revision_for_wire(entity_type: &str) -> i64 {
+    crate::SyncEntityType::parse(entity_type)
+        .map(crate::SyncEntityType::reader_revision)
+        .unwrap_or(0)
+}
+
+pub fn topology_rank_for_wire(entity_type: &str) -> i64 {
+    crate::SyncEntityType::parse(entity_type)
+        .map(crate::SyncEntityType::topology_rank)
+        .unwrap_or(100)
 }
 
 pub struct SyncEntityAdapters<'a> {
@@ -428,6 +445,35 @@ pub(crate) async fn local_is_deleted_on(
     Ok(deleted.is_some())
 }
 
+/// Missing or already-tombstoned local rows match a scoped remote delete.
+/// Live rows and cross-workspace ownership do not.
+pub(crate) async fn local_delete_is_already_equivalent_on(
+    connection: &mut SqliteConnection,
+    workspace_id: &str,
+    entity_type: SyncEntityType,
+    entity_id: &str,
+) -> Result<bool, SyncError> {
+    let storage = sync_entity_descriptor(entity_type).local_storage;
+    let owner_column = storage.workspace_column.unwrap_or("id");
+    let sql = format!(
+        "SELECT {}, deleted_at FROM {} WHERE id = ?1",
+        owner_column, storage.table
+    );
+    let row: Option<(String, Option<String>)> = sqlx::query_as(&sql)
+        .bind(entity_id)
+        .fetch_optional(&mut *connection)
+        .await?;
+    match row {
+        None => Ok(true),
+        Some((owner, deleted_at)) => {
+            if owner != workspace_id {
+                return Err(SyncError::InvalidData);
+            }
+            Ok(deleted_at.is_some())
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
@@ -455,6 +501,7 @@ mod tests {
         );
         assert!(SYNC_ENTITY_REGISTRY.iter().all(|descriptor| {
             descriptor.payload_schema_version >= 1
+                && descriptor.reader_revision >= 1
                 && descriptor.initial_upload
                 && descriptor.supports_tombstone
         }));
@@ -488,6 +535,15 @@ mod tests {
         );
         assert_eq!(
             sync_entity_descriptor(SyncEntityType::SshTask).payload_schema_version,
+            1
+        );
+        let api_request_reader = SyncEntityDescriptor {
+            reader_revision: 2,
+            ..api_request
+        };
+        assert_eq!(api_request_reader.reader_revision, 2);
+        assert_eq!(
+            sync_entity_descriptor(SyncEntityType::Workspace).reader_revision,
             1
         );
     }

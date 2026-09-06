@@ -1,5 +1,6 @@
 use super::support::*;
 use unfour_cloud_sync::SyncService;
+use unfour_core::models::{DatabaseConnectionInput, SshConnectionInput};
 
 fn remote_delete_change(
     cursor: i64,
@@ -792,4 +793,203 @@ async fn pull_workspace_delete_cascades_live_local_descendants() {
     assert!(tombstoned.2.is_some());
     assert!(tombstoned.3.is_some());
     assert_eq!(tombstoned.4, base_cursor + 1);
+}
+
+#[tokio::test]
+async fn use_remote_workspace_delete_must_resolve_cross_module_cascade_conflicts() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let collection = seed
+        .api_collection_create(workspace_id.clone(), "Accounts".into())
+        .await
+        .unwrap();
+    let request = seed
+        .save_api_request(saved_api_request(&workspace_id, &collection.id, None))
+        .await
+        .unwrap();
+    let ssh = seed
+        .save_ssh_connection(SshConnectionInput {
+            id: None,
+            workspace_id: workspace_id.clone(),
+            name: "SSH host".into(),
+            host: "ssh.example.test".into(),
+            port: Some(22),
+            username: "deploy".into(),
+            auth_kind: "private-key".into(),
+            key_path: Some(r"C:\device\cascade-key".into()),
+            credential_ref: None,
+            secret: None,
+        })
+        .await
+        .unwrap();
+    let database_connection = seed
+        .save_database_connection(DatabaseConnectionInput {
+            id: None,
+            workspace_id: workspace_id.clone(),
+            name: "App DB".into(),
+            driver: "sqlite".into(),
+            host: None,
+            port: None,
+            database: None,
+            username: None,
+            ssl_mode: None,
+            sqlite_path: Some(r"C:\device\app.sqlite".into()),
+            credential_ref: None,
+            read_only: false,
+        })
+        .await
+        .unwrap();
+    let transport = Arc::new(MockTransport::new());
+    let (service, hook, _) = SyncRuntime::build(db.clone(), transport.clone());
+    service.enable(&workspace_id).await.unwrap();
+    let bus =
+        CommandBus::from_db_with_extensions(db.clone(), CommandBusExtensions::new(vec![hook]))
+            .await
+            .unwrap();
+    bus.api_collection_rename(
+        workspace_id.clone(),
+        collection.id.clone(),
+        "Local collection".into(),
+    )
+    .await
+    .unwrap();
+    bus.update_api_request(workspace_id.clone(), request.id.clone(), {
+        let mut input = saved_api_request(&workspace_id, &collection.id, None);
+        input.name = Some("Local request".into());
+        input
+    })
+    .await
+    .unwrap();
+    bus.save_ssh_connection(SshConnectionInput {
+        id: Some(ssh.id.clone()),
+        workspace_id: workspace_id.clone(),
+        name: "Local SSH".into(),
+        host: "ssh.example.test".into(),
+        port: Some(22),
+        username: "deploy".into(),
+        auth_kind: "private-key".into(),
+        key_path: Some(r"C:\device\cascade-key".into()),
+        credential_ref: None,
+        secret: None,
+    })
+    .await
+    .unwrap();
+    bus.save_database_connection(DatabaseConnectionInput {
+        id: Some(database_connection.id.clone()),
+        workspace_id: workspace_id.clone(),
+        name: "Local DB".into(),
+        driver: "sqlite".into(),
+        host: None,
+        port: None,
+        database: None,
+        username: None,
+        ssl_mode: None,
+        sqlite_path: Some(r"C:\device\app.sqlite".into()),
+        credential_ref: None,
+        read_only: false,
+    })
+    .await
+    .unwrap();
+    let cursor = service
+        .status(&workspace_id)
+        .await
+        .unwrap()
+        .binding
+        .unwrap()
+        .last_pulled_cursor;
+    transport.changes.lock().unwrap().push_back(ChangesPage {
+        protocol_version: PROTOCOL_VERSION,
+        cloud_workspace_id: "cloud-created".into(),
+        current_cursor: cursor + 5,
+        next_cursor: cursor + 5,
+        changes: vec![
+            remote_delete_change(
+                cursor + 1,
+                "remote-delete-request",
+                SyncEntityType::ApiRequest,
+                &request.id,
+                Some(&collection.id),
+                2,
+            ),
+            remote_delete_change(
+                cursor + 2,
+                "remote-delete-collection",
+                SyncEntityType::ApiCollection,
+                &collection.id,
+                None,
+                2,
+            ),
+            remote_delete_change(
+                cursor + 3,
+                "remote-delete-ssh",
+                SyncEntityType::Connection,
+                &ssh.id,
+                None,
+                2,
+            ),
+            remote_delete_change(
+                cursor + 4,
+                "remote-delete-database",
+                SyncEntityType::Connection,
+                &database_connection.id,
+                None,
+                2,
+            ),
+            remote_delete_change(
+                cursor + 5,
+                "remote-delete-workspace",
+                SyncEntityType::Workspace,
+                &workspace_id,
+                None,
+                2,
+            ),
+        ],
+    });
+    transport
+        .cursor
+        .store((cursor + 5) as u64, Ordering::SeqCst);
+    assert_eq!(
+        service.sync_workspace(&workspace_id).await.unwrap_err(),
+        SyncError::Conflict
+    );
+    sqlx::query("UPDATE api_requests SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2")
+        .bind("2026-09-06T09:00:00Z")
+        .bind(&request.id)
+        .execute(db.pool())
+        .await
+        .unwrap();
+    assert_eq!(
+        service.status(&workspace_id).await.unwrap().conflict_count,
+        5
+    );
+
+    service
+        .use_remote(&workspace_id, SyncEntityType::Workspace, &workspace_id)
+        .await
+        .expect("workspace use-remote must materialize API and connection cascade results");
+    let status = service.status(&workspace_id).await.unwrap();
+    assert_eq!(status.conflict_count, 0);
+    assert_eq!(status.pending_count, 0);
+    let tombstoned: (Option<String>, i64, i64, i64, i64) = sqlx::query_as(
+        r#"SELECT
+             (SELECT deleted_at FROM workspaces WHERE id = ?1),
+             (SELECT COUNT(*) FROM api_collections WHERE id = ?2 AND deleted_at IS NULL),
+             (SELECT COUNT(*) FROM api_requests WHERE id = ?3 AND deleted_at IS NULL),
+             (SELECT COUNT(*) FROM connections WHERE id = ?4 AND deleted_at IS NULL),
+             (SELECT COUNT(*) FROM connections WHERE id = ?5 AND deleted_at IS NULL)"#,
+    )
+    .bind(&workspace_id)
+    .bind(&collection.id)
+    .bind(&request.id)
+    .bind(&ssh.id)
+    .bind(&database_connection.id)
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert!(tombstoned.0.is_some());
+    assert_eq!(tombstoned.1, 0);
+    assert_eq!(tombstoned.2, 0);
+    assert_eq!(tombstoned.3, 0);
+    assert_eq!(tombstoned.4, 0);
 }

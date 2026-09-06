@@ -1,10 +1,10 @@
 use sqlx::{FromRow, SqliteConnection};
 use unfour_core::domain::{
-    connection_mutation, validate_connection_domain_key, validate_external_connection_delete,
-    validate_external_connection_upsert, CommandContext, ConnectionSnapshot,
-    ConnectionSnapshotConfig, DomainCommandResult, DomainEntityKey, DomainMutation, DomainSnapshot,
-    ExternalConnectionApply, ExternalConnectionUpsert, ExternalDelete, MutationOperation,
-    MutationOrigin, TombstoneSnapshot,
+    connection_entity_key, connection_mutation, validate_connection_domain_key,
+    validate_external_connection_delete, validate_external_connection_upsert, CommandContext,
+    ConnectionSnapshot, ConnectionSnapshotConfig, DomainCommandResult, DomainEntityKey,
+    DomainMutation, DomainSnapshot, ExternalConnectionApply, ExternalConnectionUpsert,
+    ExternalDelete, MutationOperation, MutationOrigin, TombstoneSnapshot,
 };
 
 use super::*;
@@ -440,7 +440,11 @@ impl DatabaseService {
         context: &CommandContext,
         workspace_id: &str,
         deleted_at: &str,
-    ) -> AppResult<(Vec<DomainMutation>, Vec<DatabaseConnectionCleanup>)> {
+    ) -> AppResult<(
+        Vec<DomainMutation>,
+        Vec<DatabaseConnectionCleanup>,
+        Vec<DomainEntityKey>,
+    )> {
         let rows: Vec<(String, Option<String>)> = sqlx::query_as(
             r#"
             SELECT id, credential_ref FROM connections
@@ -482,7 +486,14 @@ impl DatabaseService {
                 credential_ref,
             ));
         }
-        Ok((mutations, cleanups))
+        let mut materialized: Vec<DomainEntityKey> = mutations
+            .iter()
+            .map(|mutation| mutation.entity.clone())
+            .collect();
+        materialized.extend(
+            already_tombstoned_connection_keys(connection, workspace_id, "database").await?,
+        );
+        Ok((mutations, cleanups, materialized))
     }
 
     pub async fn cleanup_connection_changes(&self, cleanups: Vec<DatabaseConnectionCleanup>) {
@@ -500,4 +511,26 @@ impl DatabaseService {
             }
         }
     }
+}
+
+async fn already_tombstoned_connection_keys(
+    connection: &mut SqliteConnection,
+    workspace_id: &str,
+    connection_type: &str,
+) -> AppResult<Vec<DomainEntityKey>> {
+    let ids: Vec<String> = sqlx::query_scalar(
+        r#"
+        SELECT id FROM connections
+        WHERE workspace_id = ?1 AND connection_type = ?2 AND deleted_at IS NOT NULL
+        ORDER BY id
+        "#,
+    )
+    .bind(workspace_id)
+    .bind(connection_type)
+    .fetch_all(&mut *connection)
+    .await?;
+    Ok(ids
+        .into_iter()
+        .map(|id| connection_entity_key(workspace_id, id))
+        .collect())
 }

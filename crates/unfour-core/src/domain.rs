@@ -569,12 +569,59 @@ pub struct SecretMaterialOutcome {
     pub status: SecretMaterialStatus,
 }
 
+/// Outcome of one external entity write. Cloud Sync may mark `synced` only for
+/// `Applied` and `AlreadyEquivalent`. `NotApplied` means the remote envelope
+/// must stay retained without claiming materialization.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExternalMaterialization {
+    Applied(i64),
+    AlreadyEquivalent,
+    NotApplied,
+}
+
+impl ExternalMaterialization {
+    pub fn from_optional_revision(revision: Option<i64>) -> Self {
+        match revision {
+            Some(revision) => Self::Applied(revision),
+            None => Self::AlreadyEquivalent,
+        }
+    }
+
+    pub fn is_materialized(self) -> bool {
+        !matches!(self, Self::NotApplied)
+    }
+
+    pub fn applied_revision(self) -> Option<i64> {
+        match self {
+            Self::Applied(revision) => Some(revision),
+            Self::AlreadyEquivalent | Self::NotApplied => None,
+        }
+    }
+
+    pub fn record(
+        self,
+        mutations: &mut Vec<DomainMutation>,
+        materialized: &mut Vec<DomainEntityKey>,
+        key: DomainEntityKey,
+        mutation: impl FnOnce(i64) -> DomainMutation,
+    ) {
+        if self.is_materialized() {
+            materialized.push(key);
+        }
+        if let Some(revision) = self.applied_revision() {
+            mutations.push(mutation(revision));
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExternalApplyReport {
     pub applied_count: usize,
     pub mutations: Vec<DomainMutation>,
     pub secret_material_outcomes: Vec<SecretMaterialOutcome>,
+    #[serde(default)]
+    pub materialized_entities: Vec<DomainEntityKey>,
 }
 
 #[cfg(test)]
@@ -604,5 +651,27 @@ mod tests {
         assert!(page.api_requests.is_empty());
         assert!(page.ssh_tasks.is_empty());
         assert!(page.ssh_task_steps.is_empty());
+    }
+
+    #[test]
+    fn not_applied_is_never_materialized() {
+        let mut mutations = Vec::new();
+        let mut materialized = Vec::new();
+        ExternalMaterialization::NotApplied.record(
+            &mut mutations,
+            &mut materialized,
+            DomainEntityKey::new(DomainEntityType::SshTaskStep, "ws", "step"),
+            |_| unreachable!("not-applied must not emit a mutation"),
+        );
+        assert!(mutations.is_empty());
+        assert!(materialized.is_empty());
+        ExternalMaterialization::AlreadyEquivalent.record(
+            &mut mutations,
+            &mut materialized,
+            DomainEntityKey::new(DomainEntityType::SshTaskStep, "ws", "step"),
+            |_| unreachable!("already-equivalent must not emit a mutation"),
+        );
+        assert!(mutations.is_empty());
+        assert_eq!(materialized.len(), 1);
     }
 }

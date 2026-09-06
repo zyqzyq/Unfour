@@ -291,6 +291,12 @@ impl SyncService {
             .await?;
         }
         for item in &applied_items {
+            let Ok(entity_type) = crate::SyncEntityType::parse(&item.entity_type) else {
+                continue;
+            };
+            if !cleanup.materialized(entity_type.into(), &item.entity_id) {
+                continue;
+            }
             SyncRepository::record_snapshot_state_on(
                 &mut tx,
                 &account.account_id,

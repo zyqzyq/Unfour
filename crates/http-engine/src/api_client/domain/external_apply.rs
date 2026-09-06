@@ -6,10 +6,10 @@ mod requests;
 
 use sqlx::SqliteConnection;
 use unfour_core::domain::{
-    CommandContext, DomainCommandResult, DomainEntityType, ExternalApiCollectionApply,
-    ExternalApiCollectionUpsert, ExternalApiFolderApply, ExternalApiFolderUpsert,
-    ExternalApiRequestApply, ExternalApiRequestUpsert, ExternalApplyPage, ExternalApplyReport,
-    ExternalDelete, MutationOperation, MutationOrigin,
+    CommandContext, DomainCommandResult, DomainEntityKey, DomainEntityType,
+    ExternalApiCollectionApply, ExternalApiCollectionUpsert, ExternalApiFolderApply,
+    ExternalApiFolderUpsert, ExternalApiRequestApply, ExternalApiRequestUpsert, ExternalApplyPage,
+    ExternalApplyReport, ExternalDelete, MutationOperation, MutationOrigin,
 };
 use unfour_core::{AppError, AppResult};
 
@@ -35,54 +35,97 @@ impl ApiClientService {
         let (folder_upserts, folder_deletes) = split_folders(page.api_folders);
         let (request_upserts, request_deletes) = split_requests(page.api_requests);
         let mut mutations = Vec::new();
+        let mut materialized_entities = Vec::new();
 
         for record in collection_upserts {
-            if let Some(revision) = upsert_collection(connection, record.clone()).await? {
-                mutations.push(mutation(
-                    context,
-                    DomainEntityType::ApiCollection,
-                    MutationOperation::Upsert,
-                    &record.workspace_id,
-                    &record.id,
-                    None,
-                    revision,
-                ));
-            }
+            let workspace_id = record.workspace_id.clone();
+            let id = record.id.clone();
+            upsert_collection(connection, record.clone()).await?.record(
+                &mut mutations,
+                &mut materialized_entities,
+                DomainEntityKey::new(DomainEntityType::ApiCollection, &workspace_id, &id),
+                |revision| {
+                    mutation(
+                        context,
+                        DomainEntityType::ApiCollection,
+                        MutationOperation::Upsert,
+                        &workspace_id,
+                        &id,
+                        None,
+                        revision,
+                    )
+                },
+            );
         }
-        apply_folder_upserts(connection, context, folder_upserts, &mut mutations).await?;
+        apply_folder_upserts(
+            connection,
+            context,
+            folder_upserts,
+            &mut mutations,
+            &mut materialized_entities,
+        )
+        .await?;
         for record in request_upserts {
             let workspace_id = record.workspace_id.clone();
             let id = record.id.clone();
             let parent =
                 effective_parent(&record.collection_id, record.parent_folder_id.as_deref())
                     .to_string();
-            if let Some(revision) = upsert_request(connection, record).await? {
-                mutations.push(mutation(
-                    context,
-                    DomainEntityType::ApiRequest,
-                    MutationOperation::Upsert,
-                    &workspace_id,
-                    &id,
-                    Some(&parent),
-                    revision,
-                ));
-            }
+            upsert_request(connection, record).await?.record(
+                &mut mutations,
+                &mut materialized_entities,
+                DomainEntityKey::new(DomainEntityType::ApiRequest, &workspace_id, &id)
+                    .with_parent_entity_id(&parent),
+                |revision| {
+                    mutation(
+                        context,
+                        DomainEntityType::ApiRequest,
+                        MutationOperation::Upsert,
+                        &workspace_id,
+                        &id,
+                        Some(&parent),
+                        revision,
+                    )
+                },
+            );
         }
 
         for delete in request_deletes {
-            apply_request_delete(connection, context, delete, &mut mutations).await?;
+            apply_request_delete(
+                connection,
+                context,
+                delete,
+                &mut mutations,
+                &mut materialized_entities,
+            )
+            .await?;
         }
         for delete in folder_deletes {
-            apply_folder_delete(connection, context, delete, &mut mutations).await?;
+            apply_folder_delete(
+                connection,
+                context,
+                delete,
+                &mut mutations,
+                &mut materialized_entities,
+            )
+            .await?;
         }
         for delete in collection_deletes {
-            apply_collection_delete(connection, context, delete, &mut mutations).await?;
+            apply_collection_delete(
+                connection,
+                context,
+                delete,
+                &mut mutations,
+                &mut materialized_entities,
+            )
+            .await?;
         }
 
         let report = ExternalApplyReport {
             applied_count: mutations.len(),
             mutations: mutations.clone(),
             secret_material_outcomes: Vec::new(),
+            materialized_entities,
         };
         Ok(DomainCommandResult::new(report, mutations))
     }

@@ -439,12 +439,17 @@ impl SyncRepository {
         sqlx::query(
             r#"INSERT INTO cloud_sync_entity_state (
                  account_id, cloud_workspace_id, entity_type, entity_id, server_version,
-                 last_operation_id, sync_status, updated_at
-               ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'synced', ?7)
+                 last_operation_id, sync_status, applied_reader_revision, updated_at
+               ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'synced', ?7, ?8)
                ON CONFLICT(account_id, cloud_workspace_id, entity_type, entity_id) DO UPDATE SET
                  server_version = MAX(server_version, excluded.server_version),
                  last_operation_id = excluded.last_operation_id,
                  sync_status = CASE WHEN sync_status = 'conflict' THEN 'conflict' ELSE 'synced' END,
+                 applied_reader_revision = CASE
+                   WHEN cloud_sync_entity_state.sync_status = 'conflict'
+                     THEN cloud_sync_entity_state.applied_reader_revision
+                   ELSE MAX(cloud_sync_entity_state.applied_reader_revision, excluded.applied_reader_revision)
+                 END,
                  updated_at = excluded.updated_at"#,
         )
         .bind(&entry.account_id)
@@ -453,6 +458,7 @@ impl SyncRepository {
         .bind(&entry.entity_id)
         .bind(server_version)
         .bind(&entry.operation_id)
+        .bind(crate::reader_revision_for_wire(&entry.entity_type))
         .bind(now)
         .execute(&mut *connection)
         .await?;

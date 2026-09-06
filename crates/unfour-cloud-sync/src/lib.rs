@@ -13,8 +13,9 @@ mod types;
 
 pub use canonical::{canonical_payload, parse_remote_change, parse_snapshot_item};
 pub use entity_registry::{
-    sync_entity_descriptor, sync_entity_descriptor_for_domain, ParentDependency, RecoveryPolicy,
-    SnapshotProvider, SyncEntityAdapters, SyncEntityDescriptor, SYNC_ENTITY_REGISTRY,
+    reader_revision_for_wire, sync_entity_descriptor, sync_entity_descriptor_for_domain,
+    topology_rank_for_wire, ParentDependency, RecoveryPolicy, SnapshotProvider, SyncEntityAdapters,
+    SyncEntityDescriptor, SYNC_ENTITY_REGISTRY,
 };
 pub use error::*;
 pub use execution_guard::CloudSyncSshTaskExecutionGuard;

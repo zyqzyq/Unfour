@@ -1,5 +1,5 @@
 use sqlx::SqliteConnection;
-use unfour_core::domain::ExternalApiRequestUpsert;
+use unfour_core::domain::{ExternalApiRequestUpsert, ExternalMaterialization};
 use unfour_core::models::ApiSavedRequest;
 use unfour_core::{AppError, AppResult};
 
@@ -14,7 +14,7 @@ use unfour_core::models::{ApiRequestSettings, MAX_API_TIMEOUT_MS};
 pub(super) async fn upsert_request(
     connection: &mut SqliteConnection,
     mut record: ExternalApiRequestUpsert,
-) -> AppResult<Option<i64>> {
+) -> AppResult<ExternalMaterialization> {
     validate_external_record(
         &record.id,
         &record.workspace_id,
@@ -34,7 +34,7 @@ pub(super) async fn upsert_request(
     )?
     .is_none()
     {
-        return Ok(None);
+        return Ok(ExternalMaterialization::NotApplied);
     }
     record.parent_folder_id = normalize_entity_id(record.parent_folder_id);
     if let Some(parent_id) = record.parent_folder_id.as_deref() {
@@ -42,7 +42,7 @@ pub(super) async fn upsert_request(
             folder_on(connection, &record.workspace_id, parent_id, false).await,
         )?
         else {
-            return Ok(None);
+            return Ok(ExternalMaterialization::NotApplied);
         };
         if parent.collection_id != record.collection_id {
             return Err(AppError::Validation(
@@ -120,9 +120,9 @@ pub(super) async fn upsert_request(
             && current.created_at == record.created_at
             && current.updated_at == record.updated_at
         {
-            return Ok(None);
+            return Ok(ExternalMaterialization::AlreadyEquivalent);
         }
-        return Ok(Some(
+        return Ok(ExternalMaterialization::Applied(
             sqlx::query_scalar(
                 r#"
             UPDATE api_requests
@@ -192,7 +192,7 @@ pub(super) async fn upsert_request(
     .bind(record.updated_at)
     .execute(&mut *connection)
     .await?;
-    Ok(Some(1))
+    Ok(ExternalMaterialization::Applied(1))
 }
 
 fn validate_request_settings_json(settings_json: &str) -> AppResult<()> {

@@ -234,23 +234,33 @@ impl SyncRepository {
             .map(serde_json::to_string)
             .transpose()
             .map_err(|_| SyncError::InvalidData)?;
+        let applied_reader_revision = if status == "synced" {
+            entity_type.reader_revision()
+        } else {
+            0
+        };
         sqlx::query(
             r#"INSERT INTO cloud_sync_entity_state (
                  account_id, cloud_workspace_id, entity_type, entity_id, server_version,
-                 last_operation_id, sync_status, conflict_payload_schema_version,
+                 last_operation_id, sync_status, applied_reader_revision,
+                 conflict_payload_schema_version,
                  conflict_remote_payload_json,
                  conflict_remote_operation, conflict_parent_entity_id, conflict_deleted_at,
                  conflict_operation_id, updated_at
-               ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7,
-                         CASE WHEN ?7 = 'conflict' THEN ?8 ELSE NULL END,
+               ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
                          CASE WHEN ?7 = 'conflict' THEN ?9 ELSE NULL END,
                          CASE WHEN ?7 = 'conflict' THEN ?10 ELSE NULL END,
                          CASE WHEN ?7 = 'conflict' THEN ?11 ELSE NULL END,
                          CASE WHEN ?7 = 'conflict' THEN ?12 ELSE NULL END,
-                         CASE WHEN ?7 = 'conflict' THEN ?6 ELSE NULL END, ?13)
+                         CASE WHEN ?7 = 'conflict' THEN ?13 ELSE NULL END,
+                         CASE WHEN ?7 = 'conflict' THEN ?6 ELSE NULL END, ?14)
                ON CONFLICT(account_id, cloud_workspace_id, entity_type, entity_id) DO UPDATE SET
                  server_version = excluded.server_version, last_operation_id = excluded.last_operation_id,
                  sync_status = excluded.sync_status,
+                 applied_reader_revision = CASE
+                   WHEN excluded.sync_status = 'synced' THEN excluded.applied_reader_revision
+                   ELSE cloud_sync_entity_state.applied_reader_revision
+                 END,
                  conflict_payload_schema_version = excluded.conflict_payload_schema_version,
                  conflict_remote_payload_json = excluded.conflict_remote_payload_json,
                  conflict_remote_operation = excluded.conflict_remote_operation,
@@ -259,6 +269,7 @@ impl SyncRepository {
                  conflict_operation_id = excluded.conflict_operation_id, updated_at = excluded.updated_at"#,
         ).bind(&binding.account_id).bind(&binding.cloud_workspace_id).bind(entity_type.as_str())
          .bind(&change.entity_id).bind(change.server_version).bind(operation_id).bind(status)
+         .bind(applied_reader_revision)
          .bind(change.payload_schema_version).bind(payload_json).bind(change.operation.as_str())
          .bind(&change.parent_entity_id).bind(&change.deleted_at).bind(now)
          .execute(&mut *connection).await?;
@@ -563,12 +574,13 @@ impl SyncRepository {
     ) -> Result<(), SyncError> {
         sqlx::query(
             r#"UPDATE cloud_sync_entity_state SET sync_status = 'synced',
+                 applied_reader_revision = MAX(applied_reader_revision, ?1),
                  conflict_payload_schema_version = NULL,
                  conflict_remote_payload_json = NULL, conflict_remote_operation = NULL,
                  conflict_parent_entity_id = NULL, conflict_deleted_at = NULL,
-                 conflict_operation_id = NULL, updated_at = ?1
-               WHERE account_id = ?2 AND cloud_workspace_id = ?3 AND entity_type = ?4 AND entity_id = ?5"#,
-        ).bind(now).bind(&binding.account_id).bind(&binding.cloud_workspace_id)
+                 conflict_operation_id = NULL, updated_at = ?2
+               WHERE account_id = ?3 AND cloud_workspace_id = ?4 AND entity_type = ?5 AND entity_id = ?6"#,
+        ).bind(crate::reader_revision_for_wire(&conflict.entity_type)).bind(now).bind(&binding.account_id).bind(&binding.cloud_workspace_id)
          .bind(&conflict.entity_type).bind(&conflict.entity_id).execute(&mut *connection).await?;
         if delete_intent {
             sqlx::query("DELETE FROM cloud_sync_outbox WHERE account_id = ?1 AND cloud_workspace_id = ?2 AND entity_type = ?3 AND entity_id = ?4")

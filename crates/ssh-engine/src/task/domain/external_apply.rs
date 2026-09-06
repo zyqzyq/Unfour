@@ -1,8 +1,9 @@
 use sqlx::{FromRow, SqliteConnection};
 use unfour_core::domain::{
-    CommandContext, DomainCommandResult, DomainEntityType, DomainMutation, ExternalApplyPage,
-    ExternalApplyReport, ExternalDelete, ExternalSshTaskApply, ExternalSshTaskStepApply,
-    ExternalSshTaskStepUpsert, ExternalSshTaskUpsert, MutationOperation, MutationOrigin,
+    CommandContext, DomainCommandResult, DomainEntityKey, DomainEntityType, DomainMutation,
+    ExternalApplyPage, ExternalApplyReport, ExternalDelete, ExternalMaterialization,
+    ExternalSshTaskApply, ExternalSshTaskStepApply, ExternalSshTaskStepUpsert,
+    ExternalSshTaskUpsert, MutationOperation, MutationOrigin,
 };
 use unfour_core::{AppError, AppResult};
 
@@ -53,51 +54,78 @@ impl SshService {
         let (task_upserts, task_deletes) = split_tasks(page.ssh_tasks);
         let (step_upserts, step_deletes) = split_steps(page.ssh_task_steps);
         let mut mutations = Vec::new();
+        let mut materialized_entities = Vec::new();
 
         for record in task_upserts {
             let workspace_id = record.workspace_id.clone();
             let id = record.id.clone();
-            if let Some(revision) = upsert_task(connection, record).await? {
-                mutations.push(mutation(
-                    context,
-                    DomainEntityType::SshTask,
-                    MutationOperation::Upsert,
-                    &workspace_id,
-                    &id,
-                    None,
-                    revision,
-                ));
-            }
+            upsert_task(connection, record).await?.record(
+                &mut mutations,
+                &mut materialized_entities,
+                DomainEntityKey::new(DomainEntityType::SshTask, &workspace_id, &id),
+                |revision| {
+                    mutation(
+                        context,
+                        DomainEntityType::SshTask,
+                        MutationOperation::Upsert,
+                        &workspace_id,
+                        &id,
+                        None,
+                        revision,
+                    )
+                },
+            );
         }
 
         for record in step_upserts {
             let workspace_id = record.workspace_id.clone();
             let task_id = record.task_id.clone();
             let id = record.id.clone();
-            if let Some(revision) = upsert_step(connection, record).await? {
-                mutations.push(mutation(
-                    context,
-                    DomainEntityType::SshTaskStep,
-                    MutationOperation::Upsert,
-                    &workspace_id,
-                    &id,
-                    Some(&task_id),
-                    revision,
-                ));
-            }
+            upsert_step(connection, record).await?.record(
+                &mut mutations,
+                &mut materialized_entities,
+                DomainEntityKey::new(DomainEntityType::SshTaskStep, &workspace_id, &id)
+                    .with_parent_entity_id(&task_id),
+                |revision| {
+                    mutation(
+                        context,
+                        DomainEntityType::SshTaskStep,
+                        MutationOperation::Upsert,
+                        &workspace_id,
+                        &id,
+                        Some(&task_id),
+                        revision,
+                    )
+                },
+            );
         }
 
         for delete in step_deletes {
-            apply_step_delete(connection, context, delete, &mut mutations).await?;
+            apply_step_delete(
+                connection,
+                context,
+                delete,
+                &mut mutations,
+                &mut materialized_entities,
+            )
+            .await?;
         }
         for delete in task_deletes {
-            apply_task_delete(connection, context, delete, &mut mutations).await?;
+            apply_task_delete(
+                connection,
+                context,
+                delete,
+                &mut mutations,
+                &mut materialized_entities,
+            )
+            .await?;
         }
 
         let report = ExternalApplyReport {
             applied_count: mutations.len(),
             mutations: mutations.clone(),
             secret_material_outcomes: Vec::new(),
+            materialized_entities,
         };
         Ok(DomainCommandResult::new(report, mutations))
     }
@@ -134,7 +162,7 @@ fn split_steps(
 async fn upsert_task(
     connection: &mut SqliteConnection,
     record: ExternalSshTaskUpsert,
-) -> AppResult<Option<i64>> {
+) -> AppResult<ExternalMaterialization> {
     validate_external_record(
         &record.id,
         &record.workspace_id,
@@ -176,9 +204,9 @@ async fn upsert_task(
             && current.created_at == record.created_at
             && current.updated_at == record.updated_at
         {
-            return Ok(None);
+            return Ok(ExternalMaterialization::AlreadyEquivalent);
         }
-        return Ok(Some(
+        return Ok(ExternalMaterialization::Applied(
             sqlx::query_scalar(
                 r#"
                 UPDATE ssh_task
@@ -217,13 +245,13 @@ async fn upsert_task(
     .bind(record.updated_at)
     .execute(&mut *connection)
     .await?;
-    Ok(Some(1))
+    Ok(ExternalMaterialization::Applied(1))
 }
 
 async fn upsert_step(
     connection: &mut SqliteConnection,
     record: ExternalSshTaskStepUpsert,
-) -> AppResult<Option<i64>> {
+) -> AppResult<ExternalMaterialization> {
     validate_external_record(
         &record.id,
         &record.workspace_id,
@@ -263,7 +291,7 @@ async fn upsert_step(
             .fetch_optional(&mut *connection)
             .await?;
     let Some((parent_workspace_id, parent_deleted_at)) = parent else {
-        return Ok(None);
+        return Ok(ExternalMaterialization::NotApplied);
     };
     if parent_workspace_id != record.workspace_id {
         return Err(AppError::Validation(
@@ -271,7 +299,7 @@ async fn upsert_step(
         ));
     }
     if parent_deleted_at.is_some() {
-        return Ok(None);
+        return Ok(ExternalMaterialization::NotApplied);
     }
 
     let current = sqlx::query_as::<_, CurrentStep>(
@@ -322,10 +350,10 @@ async fn upsert_step(
             && current.created_at == record.created_at
             && current.updated_at == record.updated_at
         {
-            return Ok(None);
+            return Ok(ExternalMaterialization::AlreadyEquivalent);
         }
         let config_json = serde_json::to_string(&restored_config)?;
-        return Ok(Some(
+        return Ok(ExternalMaterialization::Applied(
             sqlx::query_scalar(
                 r#"
                 UPDATE ssh_task_step
@@ -375,7 +403,7 @@ async fn upsert_step(
     .bind(record.updated_at)
     .execute(&mut *connection)
     .await?;
-    Ok(Some(1))
+    Ok(ExternalMaterialization::Applied(1))
 }
 
 async fn apply_step_delete(
@@ -383,6 +411,7 @@ async fn apply_step_delete(
     context: &CommandContext,
     delete: ExternalDelete,
     mutations: &mut Vec<DomainMutation>,
+    materialized: &mut Vec<DomainEntityKey>,
 ) -> AppResult<()> {
     validate_delete(&delete, DomainEntityType::SshTaskStep)?;
     let current: Option<(String, String, Option<String>)> =
@@ -391,6 +420,7 @@ async fn apply_step_delete(
             .fetch_optional(&mut *connection)
             .await?;
     let Some((workspace_id, task_id, deleted_at)) = current else {
+        materialized.push(delete.entity.clone());
         return Ok(());
     };
     if workspace_id != delete.entity.workspace_id {
@@ -399,6 +429,7 @@ async fn apply_step_delete(
         ));
     }
     if deleted_at.is_some() {
+        materialized.push(delete.entity.clone());
         return Ok(());
     }
     if delete
@@ -433,6 +464,7 @@ async fn apply_step_delete(
         Some(&task_id),
         revision,
     ));
+    materialized.push(delete.entity);
     Ok(())
 }
 
@@ -441,6 +473,7 @@ async fn apply_task_delete(
     context: &CommandContext,
     delete: ExternalDelete,
     mutations: &mut Vec<DomainMutation>,
+    materialized: &mut Vec<DomainEntityKey>,
 ) -> AppResult<()> {
     validate_delete(&delete, DomainEntityType::SshTask)?;
     let current: Option<(String, Option<String>)> =
@@ -449,6 +482,7 @@ async fn apply_task_delete(
             .fetch_optional(&mut *connection)
             .await?;
     let Some((workspace_id, deleted_at)) = current else {
+        materialized.push(delete.entity.clone());
         return Ok(());
     };
     if workspace_id != delete.entity.workspace_id {
@@ -457,18 +491,23 @@ async fn apply_task_delete(
         ));
     }
     if deleted_at.is_some() {
+        materialized.push(delete.entity.clone());
         return Ok(());
     }
-    mutations.extend(
-        delete_task_steps_on(
-            connection,
-            context,
-            &delete.entity.workspace_id,
-            &delete.entity.entity_id,
-            &delete.deleted_at,
-        )
-        .await?,
+    let step_mutations = delete_task_steps_on(
+        connection,
+        context,
+        &delete.entity.workspace_id,
+        &delete.entity.entity_id,
+        &delete.deleted_at,
+    )
+    .await?;
+    materialized.extend(
+        step_mutations
+            .iter()
+            .map(|mutation| mutation.entity.clone()),
     );
+    mutations.extend(step_mutations);
     let revision: i64 = sqlx::query_scalar(
         r#"
         UPDATE ssh_task
@@ -491,6 +530,7 @@ async fn apply_task_delete(
         None,
         revision,
     ));
+    materialized.push(delete.entity);
     Ok(())
 }
 

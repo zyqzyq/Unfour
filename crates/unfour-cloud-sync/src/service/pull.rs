@@ -173,6 +173,9 @@ impl SyncService {
                 .apply_external_page_on(&mut tx, "pro.sync.pull", external)
                 .await?;
             for (change, entity_type) in safe_changes {
+                if !cleanup.materialized(entity_type.into(), &change.entity_id) {
+                    continue;
+                }
                 SyncRepository::record_applied_remote_on(
                     &mut tx,
                     binding,
@@ -270,6 +273,12 @@ impl SyncService {
             )
             .await?;
         for record in &applied {
+            let Ok(entity_type) = crate::SyncEntityType::parse(&record.entity_type) else {
+                continue;
+            };
+            if !cleanup.materialized(entity_type.into(), &record.entity_id) {
+                continue;
+            }
             SyncRepository::record_replayed_remote_state_on(&mut tx, binding, record, &now).await?;
         }
         tx.commit().await?;

@@ -149,12 +149,22 @@ impl SyncRepository {
         sqlx::query(
             r#"INSERT INTO cloud_sync_entity_state (
                  account_id, cloud_workspace_id, entity_type, entity_id, server_version,
-                 sync_status, updated_at
-               ) VALUES (?1, ?2, ?3, ?4, ?5, 'synced', ?6)
+                 sync_status, applied_reader_revision, updated_at
+               ) VALUES (?1, ?2, ?3, ?4, ?5, 'synced', ?6, ?7)
                ON CONFLICT(account_id, cloud_workspace_id, entity_type, entity_id) DO UPDATE SET
-                 server_version = excluded.server_version, sync_status = 'synced', updated_at = excluded.updated_at"#,
-        ).bind(account_id).bind(cloud_workspace_id).bind(&item.entity_type)
-         .bind(&item.entity_id).bind(item.server_version).bind(now).execute(&mut *connection).await?;
+                 server_version = excluded.server_version, sync_status = 'synced',
+                 applied_reader_revision = excluded.applied_reader_revision,
+                 updated_at = excluded.updated_at"#,
+        )
+        .bind(account_id)
+        .bind(cloud_workspace_id)
+        .bind(&item.entity_type)
+        .bind(&item.entity_id)
+        .bind(item.server_version)
+        .bind(crate::reader_revision_for_wire(&item.entity_type))
+        .bind(now)
+        .execute(&mut *connection)
+        .await?;
         Ok(())
     }
 }

@@ -1,8 +1,8 @@
 use chrono::Utc;
 use sqlx::SqliteConnection;
 use unfour_core::domain::{
-    CommandContext, DomainEntityType, DomainMutation, ExternalWorkspaceApply,
-    ExternalWorkspaceUpsert, MutationOperation,
+    CommandContext, DomainEntityKey, DomainEntityType, DomainMutation, ExternalMaterialization,
+    ExternalWorkspaceApply, ExternalWorkspaceUpsert, MutationOperation,
 };
 use unfour_core::models::Workspace;
 use unfour_core::{AppError, AppResult};
@@ -19,18 +19,17 @@ pub(super) async fn apply_workspace(
     context: &CommandContext,
     change: ExternalWorkspaceApply,
     mutations: &mut Vec<DomainMutation>,
+    materialized: &mut Vec<DomainEntityKey>,
 ) -> AppResult<()> {
     match change {
         ExternalWorkspaceApply::Upsert(record) => {
             let id = record.id.clone();
-            if let Some(revision) = upsert_workspace(connection, record).await? {
-                mutations.push(workspace_mutation(
-                    context,
-                    MutationOperation::Upsert,
-                    &id,
-                    revision,
-                ));
-            }
+            upsert_workspace(connection, record).await?.record(
+                mutations,
+                materialized,
+                DomainEntityKey::new(DomainEntityType::Workspace, &id, &id),
+                |revision| workspace_mutation(context, MutationOperation::Upsert, &id, revision),
+            );
         }
         ExternalWorkspaceApply::Delete(delete) => {
             validate_delete(&delete, DomainEntityType::Workspace)?;
@@ -40,16 +39,17 @@ pub(super) async fn apply_workspace(
                 ));
             }
             let current = get_workspace_on(connection, &delete.entity.workspace_id, true).await?;
-            mutations.extend(
-                cascade_delete_workspace_children_on(
-                    connection,
-                    context,
-                    &delete.entity.workspace_id,
-                    &delete.deleted_at,
-                )
-                .await?,
-            );
+            let cascade = cascade_delete_workspace_children_on(
+                connection,
+                context,
+                &delete.entity.workspace_id,
+                &delete.deleted_at,
+            )
+            .await?;
+            materialized.extend(cascade.iter().map(|mutation| mutation.entity.clone()));
+            mutations.extend(cascade);
             if current.deleted_at.is_some() {
+                materialized.push(delete.entity.clone());
                 return Ok(());
             }
             let active_count: i64 =
@@ -72,6 +72,7 @@ pub(super) async fn apply_workspace(
                     &delete.entity.workspace_id,
                     revision,
                 ));
+                materialized.push(delete.entity.clone());
                 if deleting_last {
                     let (fallback_id, fallback_revision) =
                         create_external_fallback_workspace(connection).await?;
@@ -154,7 +155,7 @@ async fn available_default_workspace_name(connection: &mut SqliteConnection) -> 
 async fn upsert_workspace(
     connection: &mut SqliteConnection,
     record: ExternalWorkspaceUpsert,
-) -> AppResult<Option<i64>> {
+) -> AppResult<ExternalMaterialization> {
     let name = normalize_name(record.name)?;
     let environment_type = normalize_environment_type(Some(record.environment_type))?;
     let mcp_policy = normalize_mcp_policy(Some(record.mcp_policy))?;
@@ -176,7 +177,7 @@ async fn upsert_workspace(
             && current.created_at == record.created_at
             && current.updated_at == record.updated_at
         {
-            return Ok(None);
+            return Ok(ExternalMaterialization::AlreadyEquivalent);
         }
         let revision = sqlx::query_scalar(
             r#"
@@ -195,7 +196,7 @@ async fn upsert_workspace(
         .bind(record.id)
         .fetch_one(&mut *connection)
         .await?;
-        return Ok(Some(revision));
+        return Ok(ExternalMaterialization::Applied(revision));
     }
 
     sqlx::query(
@@ -215,5 +216,5 @@ async fn upsert_workspace(
     .execute(&mut *connection)
     .await?;
     insert_workspace_companions(connection, &record.id, &record.created_at).await?;
-    Ok(Some(1))
+    Ok(ExternalMaterialization::Applied(1))
 }

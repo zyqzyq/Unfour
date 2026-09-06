@@ -360,13 +360,15 @@ impl SyncRepository {
         }
         sqlx::query(
             r#"UPDATE cloud_sync_entity_state SET sync_status = 'synced',
+                 applied_reader_revision = MAX(applied_reader_revision, ?1),
                  conflict_payload_schema_version = NULL,
                  conflict_remote_payload_json = NULL, conflict_remote_operation = NULL,
                  conflict_parent_entity_id = NULL, conflict_deleted_at = NULL,
-                 conflict_operation_id = NULL, updated_at = ?1
-               WHERE account_id = ?2 AND cloud_workspace_id = ?3
-                 AND entity_type = ?4 AND entity_id = ?5"#,
+                 conflict_operation_id = NULL, updated_at = ?2
+               WHERE account_id = ?3 AND cloud_workspace_id = ?4
+                 AND entity_type = ?5 AND entity_id = ?6"#,
         )
+        .bind(crate::reader_revision_for_wire(&entry.entity_type))
         .bind(now.to_rfc3339())
         .bind(&binding.account_id)
         .bind(&binding.cloud_workspace_id)

@@ -2,7 +2,8 @@ use std::collections::HashSet;
 
 use sqlx::SqliteConnection;
 use unfour_core::domain::{
-    CommandContext, DomainEntityType, DomainMutation, ExternalApiFolderUpsert, MutationOperation,
+    CommandContext, DomainEntityKey, DomainEntityType, DomainMutation, ExternalApiFolderUpsert,
+    ExternalMaterialization, MutationOperation,
 };
 use unfour_core::models::ApiCollectionFolder;
 use unfour_core::{AppError, AppResult};
@@ -23,6 +24,7 @@ pub(super) async fn apply_folder_upserts(
     context: &CommandContext,
     mut pending: Vec<ExternalApiFolderUpsert>,
     mutations: &mut Vec<DomainMutation>,
+    materialized: &mut Vec<DomainEntityKey>,
 ) -> AppResult<()> {
     while !pending.is_empty() {
         let pending_ids = pending
@@ -55,17 +57,23 @@ pub(super) async fn apply_folder_upserts(
             let parent =
                 effective_parent(&record.collection_id, record.parent_folder_id.as_deref())
                     .to_string();
-            if let Some(revision) = upsert_folder(connection, record).await? {
-                mutations.push(mutation(
-                    context,
-                    DomainEntityType::ApiFolder,
-                    MutationOperation::Upsert,
-                    &workspace_id,
-                    &id,
-                    Some(&parent),
-                    revision,
-                ));
-            }
+            upsert_folder(connection, record).await?.record(
+                mutations,
+                materialized,
+                DomainEntityKey::new(DomainEntityType::ApiFolder, &workspace_id, &id)
+                    .with_parent_entity_id(&parent),
+                |revision| {
+                    mutation(
+                        context,
+                        DomainEntityType::ApiFolder,
+                        MutationOperation::Upsert,
+                        &workspace_id,
+                        &id,
+                        Some(&parent),
+                        revision,
+                    )
+                },
+            );
             applied += 1;
         }
         if applied == 0 {
@@ -81,7 +89,7 @@ pub(super) async fn apply_folder_upserts(
 async fn upsert_folder(
     connection: &mut SqliteConnection,
     mut record: ExternalApiFolderUpsert,
-) -> AppResult<Option<i64>> {
+) -> AppResult<ExternalMaterialization> {
     validate_external_record(
         &record.id,
         &record.workspace_id,
@@ -106,7 +114,7 @@ async fn upsert_folder(
     )?
     .is_none()
     {
-        return Ok(None);
+        return Ok(ExternalMaterialization::NotApplied);
     }
     record.parent_folder_id = normalize_entity_id(record.parent_folder_id);
     // Strict-producer / lenient-consumer contract: local commands validate
@@ -129,7 +137,7 @@ async fn upsert_folder(
             folder_on(connection, &record.workspace_id, parent_id, false).await,
         )?
         else {
-            return Ok(None);
+            return Ok(ExternalMaterialization::NotApplied);
         };
         if parent.collection_id != record.collection_id {
             return Err(AppError::Validation(
@@ -190,9 +198,9 @@ async fn upsert_folder(
             && current.created_at == record.created_at
             && current.updated_at == record.updated_at
         {
-            return Ok(None);
+            return Ok(ExternalMaterialization::AlreadyEquivalent);
         }
-        return Ok(Some(
+        return Ok(ExternalMaterialization::Applied(
             sqlx::query_scalar(
                 r#"
             UPDATE api_collection_folders
@@ -232,5 +240,5 @@ async fn upsert_folder(
     .bind(record.updated_at)
     .execute(&mut *connection)
     .await?;
-    Ok(Some(1))
+    Ok(ExternalMaterialization::Applied(1))
 }

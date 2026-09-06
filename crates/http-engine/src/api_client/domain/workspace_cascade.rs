@@ -1,6 +1,8 @@
 use chrono::Utc;
 use sqlx::SqliteConnection;
-use unfour_core::domain::{CommandContext, DomainEntityType, DomainMutation, MutationOperation};
+use unfour_core::domain::{
+    CommandContext, DomainEntityKey, DomainEntityType, DomainMutation, MutationOperation,
+};
 use unfour_core::AppResult;
 
 use super::collections::{
@@ -12,13 +14,16 @@ impl ApiClientService {
     /// Soft-delete every live API entity in a workspace, children first.
     /// Used when the workspace itself is tombstoned so leftover live
     /// collections/folders/requests cannot remain as orphans.
+    ///
+    /// The second return value is the complete materialized set: entities this
+    /// cascade actually tombstoned, plus already-deleted equivalents.
     pub async fn delete_workspace_api_entities_on(
         &self,
         connection: &mut SqliteConnection,
         context: &CommandContext,
         workspace_id: &str,
         deleted_at: Option<&str>,
-    ) -> AppResult<Vec<DomainMutation>> {
+    ) -> AppResult<(Vec<DomainMutation>, Vec<DomainEntityKey>)> {
         let deleted_at = deleted_at
             .map(str::to_string)
             .unwrap_or_else(|| Utc::now().to_rfc3339());
@@ -124,6 +129,64 @@ impl ApiClientService {
             }
         }
 
-        Ok(mutations)
+        let mut materialized: Vec<DomainEntityKey> = mutations
+            .iter()
+            .map(|mutation| mutation.entity.clone())
+            .collect();
+        materialized.extend(already_tombstoned_api_keys(connection, workspace_id).await?);
+        Ok((mutations, materialized))
     }
+}
+
+async fn already_tombstoned_api_keys(
+    connection: &mut SqliteConnection,
+    workspace_id: &str,
+) -> AppResult<Vec<DomainEntityKey>> {
+    let mut keys = Vec::new();
+    let requests: Vec<String> = sqlx::query_scalar(
+        r#"
+        SELECT id FROM api_requests
+        WHERE workspace_id = ?1 AND deleted_at IS NOT NULL
+        ORDER BY id
+        "#,
+    )
+    .bind(workspace_id)
+    .fetch_all(&mut *connection)
+    .await?;
+    keys.extend(
+        requests
+            .into_iter()
+            .map(|id| DomainEntityKey::new(DomainEntityType::ApiRequest, workspace_id, id)),
+    );
+    let folders: Vec<String> = sqlx::query_scalar(
+        r#"
+        SELECT id FROM api_collection_folders
+        WHERE workspace_id = ?1 AND deleted_at IS NOT NULL
+        ORDER BY id
+        "#,
+    )
+    .bind(workspace_id)
+    .fetch_all(&mut *connection)
+    .await?;
+    keys.extend(
+        folders
+            .into_iter()
+            .map(|id| DomainEntityKey::new(DomainEntityType::ApiFolder, workspace_id, id)),
+    );
+    let collections: Vec<String> = sqlx::query_scalar(
+        r#"
+        SELECT id FROM api_collections
+        WHERE workspace_id = ?1 AND deleted_at IS NOT NULL
+        ORDER BY id
+        "#,
+    )
+    .bind(workspace_id)
+    .fetch_all(&mut *connection)
+    .await?;
+    keys.extend(
+        collections
+            .into_iter()
+            .map(|id| DomainEntityKey::new(DomainEntityType::ApiCollection, workspace_id, id)),
+    );
+    Ok(keys)
 }

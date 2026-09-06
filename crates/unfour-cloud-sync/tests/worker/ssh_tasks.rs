@@ -714,3 +714,267 @@ async fn pull_workspace_delete_cascades_ssh_tasks_and_steps() {
     assert_eq!(tombstoned.1, 1);
     assert_eq!(tombstoned.2, created.steps.len() as i64);
 }
+
+#[tokio::test]
+async fn missing_parent_child_is_not_marked_synced() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let transport = Arc::new(MockTransport::new());
+    let (service, _, _) = SyncRuntime::build(db.clone(), transport.clone());
+    service.enable(&workspace_id).await.unwrap();
+    let start_cursor = service
+        .status(&workspace_id)
+        .await
+        .unwrap()
+        .binding
+        .unwrap()
+        .last_pulled_cursor;
+    transport.changes.lock().unwrap().push_back(ChangesPage {
+        protocol_version: PROTOCOL_VERSION,
+        cloud_workspace_id: "cloud-created".into(),
+        current_cursor: start_cursor + 1,
+        next_cursor: start_cursor + 1,
+        changes: vec![remote_step(start_cursor + 1, "orphan-step-op")],
+    });
+    transport
+        .cursor
+        .store((start_cursor + 1) as u64, Ordering::SeqCst);
+    service.sync_workspace(&workspace_id).await.unwrap();
+
+    let child_row: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM ssh_task_step WHERE id = 'remote-step'")
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert_eq!(child_row, 0);
+    let synced: i64 = sqlx::query_scalar(
+        r#"SELECT COUNT(*) FROM cloud_sync_entity_state
+           WHERE entity_id = 'remote-step' AND sync_status = 'synced'"#,
+    )
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(synced, 0);
+    let retained: (String, i64) = sqlx::query_as(
+        r#"SELECT compatibility_state, server_version
+           FROM cloud_sync_remote_entity WHERE entity_id = 'remote-step'"#,
+    )
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(retained, ("supported".into(), 1));
+}
+
+#[tokio::test]
+async fn retained_replay_restores_parent_then_child_without_new_server_version() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let transport = Arc::new(MockTransport::new());
+    let (service, _, _) = SyncRuntime::build(db.clone(), transport.clone());
+    service.enable(&workspace_id).await.unwrap();
+    let start_cursor = service
+        .status(&workspace_id)
+        .await
+        .unwrap()
+        .binding
+        .unwrap()
+        .last_pulled_cursor;
+    transport.changes.lock().unwrap().push_back(ChangesPage {
+        protocol_version: PROTOCOL_VERSION,
+        cloud_workspace_id: "cloud-created".into(),
+        current_cursor: start_cursor + 1,
+        next_cursor: start_cursor + 1,
+        changes: vec![remote_step(start_cursor + 1, "orphan-step-op")],
+    });
+    transport
+        .cursor
+        .store((start_cursor + 1) as u64, Ordering::SeqCst);
+    service.sync_workspace(&workspace_id).await.unwrap();
+    let binding = service
+        .status(&workspace_id)
+        .await
+        .unwrap()
+        .binding
+        .unwrap();
+    let parent = remote_task(start_cursor + 1, "orphan-task-op");
+    sqlx::query(
+        r#"INSERT INTO cloud_sync_remote_entity (
+             account_id, cloud_workspace_id, entity_type, entity_id,
+             parent_entity_id, server_version, payload_schema_version,
+             operation, canonical_payload_json, deleted_at, operation_id,
+             compatibility_state, created_at, updated_at
+           ) VALUES (?1, ?2, 'sshTask', 'remote-task', NULL, 1, 1, 'upsert',
+                     ?3, NULL, 'orphan-task-op', 'supported',
+                     '2026-08-17T00:00:00Z', '2026-08-17T00:00:00Z')"#,
+    )
+    .bind(&binding.account_id)
+    .bind(&binding.cloud_workspace_id)
+    .bind(serde_json::to_string(parent.payload.as_ref().unwrap()).unwrap())
+    .execute(db.pool())
+    .await
+    .unwrap();
+
+    service.sync_workspace(&workspace_id).await.unwrap();
+
+    let restored: (String, String) = sqlx::query_as(
+        "SELECT task.name, step.name FROM ssh_task task JOIN ssh_task_step step ON step.task_id = task.id WHERE task.id = 'remote-task' AND step.id = 'remote-step'",
+    )
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(restored, ("Remote task".into(), "Restart".into()));
+    let states: Vec<(String, String, i64)> = sqlx::query_as(
+        r#"SELECT entity_id, sync_status, server_version
+           FROM cloud_sync_entity_state
+           WHERE entity_id IN ('remote-task', 'remote-step')
+           ORDER BY entity_id"#,
+    )
+    .fetch_all(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(
+        states,
+        vec![
+            ("remote-step".into(), "synced".into(), 1),
+            ("remote-task".into(), "synced".into(), 1),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn supported_but_not_materialized_step_fails_closed_then_clears_after_restore() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let task = seed
+        .save_ssh_task(task_input(&workspace_id, "Incomplete supported task"))
+        .await
+        .unwrap();
+    let transport = Arc::new(MockTransport::new());
+    let (service, hook, _) = SyncRuntime::build(db.clone(), transport.clone());
+    service.enable(&workspace_id).await.unwrap();
+    let binding = service
+        .status(&workspace_id)
+        .await
+        .unwrap()
+        .binding
+        .unwrap();
+    let mut step = remote_step(1, "supported-unapplied-step");
+    step.entity_id = "supported-unapplied-step".into();
+    step.parent_entity_id = Some(task.task.id.clone());
+    step.payload.as_mut().unwrap()["taskId"] = serde_json::json!(task.task.id);
+    sqlx::query(
+        r#"INSERT INTO cloud_sync_remote_entity (
+             account_id, cloud_workspace_id, entity_type, entity_id,
+             parent_entity_id, server_version, payload_schema_version,
+             operation, canonical_payload_json, deleted_at, operation_id,
+             compatibility_state, created_at, updated_at
+           ) VALUES (?1, ?2, 'sshTaskStep', ?3, ?4, 2, 1, 'upsert', ?5, NULL,
+                     'supported-unapplied-step', 'supported',
+                     '2026-09-06T00:00:00Z', '2026-09-06T00:00:00Z')"#,
+    )
+    .bind(&binding.account_id)
+    .bind(&binding.cloud_workspace_id)
+    .bind(&step.entity_id)
+    .bind(&task.task.id)
+    .bind(serde_json::to_string(step.payload.as_ref().unwrap()).unwrap())
+    .execute(db.pool())
+    .await
+    .unwrap();
+    let guard = Arc::new(CloudSyncSshTaskExecutionGuard::new(db.clone()));
+    let bus = CommandBus::from_db_with_extensions(
+        db.clone(),
+        CommandBusExtensions::new(vec![hook]).with_ssh_task_execution_guards(vec![guard]),
+    )
+    .await
+    .unwrap();
+
+    let error = bus
+        .run_ssh_task(SshTaskRunInput {
+            workspace_id: workspace_id.clone(),
+            task_id: task.task.id.clone(),
+            connection_id: None,
+            inputs: Default::default(),
+            secret_input_names: Vec::new(),
+        })
+        .await
+        .unwrap_err();
+    assert!(matches!(error, AppError::SshTaskIncompleteRemoteState));
+
+    service.sync_workspace(&workspace_id).await.unwrap();
+    let restored: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM ssh_task_step WHERE id = 'supported-unapplied-step' AND deleted_at IS NULL",
+    )
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(restored, 1);
+
+    let error = bus
+        .run_ssh_task(SshTaskRunInput {
+            workspace_id,
+            task_id: task.task.id,
+            connection_id: None,
+            inputs: Default::default(),
+            secret_input_names: Vec::new(),
+        })
+        .await
+        .unwrap_err();
+    assert!(matches!(error, AppError::Validation(_)));
+}
+
+#[tokio::test]
+async fn supported_but_not_materialized_task_does_not_block_an_unrelated_task() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let task = seed
+        .save_ssh_task(task_input(&workspace_id, "Runnable local task"))
+        .await
+        .unwrap();
+    let transport = Arc::new(MockTransport::new());
+    let (service, hook, _) = SyncRuntime::build(db.clone(), transport);
+    service.enable(&workspace_id).await.unwrap();
+    let binding = service
+        .status(&workspace_id)
+        .await
+        .unwrap()
+        .binding
+        .unwrap();
+    sqlx::query(
+        r#"INSERT INTO cloud_sync_remote_entity (
+             account_id, cloud_workspace_id, entity_type, entity_id,
+             parent_entity_id, server_version, payload_schema_version,
+             operation, canonical_payload_json, deleted_at, operation_id,
+             compatibility_state, created_at, updated_at
+           ) VALUES (?1, ?2, 'sshTask', 'unrelated-incomplete-task', NULL, 4, 1,
+                     'upsert', '{}', NULL, 'unrelated-incomplete', 'supported',
+                     '2026-09-06T00:00:00Z', '2026-09-06T00:00:00Z')"#,
+    )
+    .bind(&binding.account_id)
+    .bind(&binding.cloud_workspace_id)
+    .execute(db.pool())
+    .await
+    .unwrap();
+    let guard = Arc::new(CloudSyncSshTaskExecutionGuard::new(db.clone()));
+    let bus = CommandBus::from_db_with_extensions(
+        db,
+        CommandBusExtensions::new(vec![hook]).with_ssh_task_execution_guards(vec![guard]),
+    )
+    .await
+    .unwrap();
+
+    let error = bus
+        .run_ssh_task(SshTaskRunInput {
+            workspace_id,
+            task_id: task.task.id,
+            connection_id: None,
+            inputs: Default::default(),
+            secret_input_names: Vec::new(),
+        })
+        .await
+        .unwrap_err();
+    assert!(matches!(error, AppError::Validation(_)));
+}

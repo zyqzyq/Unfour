@@ -5,6 +5,7 @@ use unfour_core::domain::DomainEntityKey;
 
 use super::SyncService;
 use crate::conflict_scope;
+use crate::entity_registry::local_delete_is_already_equivalent_on;
 use crate::remote_compatibility::{remote_change_disposition, RemoteEntityDisposition};
 use crate::{
     canonical_payload, parse_remote_change, RemoteChange, SyncConflictView, SyncEntityType,
@@ -162,6 +163,21 @@ impl SyncService {
             .apply_external_page_on(&mut tx, "pro.sync.conflict.use_remote", external)
             .await?;
         for scoped_conflict in &scoped_conflicts {
+            let entity_type = crate::SyncEntityType::parse(&scoped_conflict.entity_type)?;
+            if !cleanup.materialized(entity_type.into(), &scoped_conflict.entity_id) {
+                let scoped_change = conflict_change(scoped_conflict, binding.last_pulled_cursor)?;
+                if scoped_change.operation != SyncOperation::Delete
+                    || !local_delete_is_already_equivalent_on(
+                        &mut tx,
+                        workspace_id,
+                        entity_type,
+                        &scoped_conflict.entity_id,
+                    )
+                    .await?
+                {
+                    return Err(SyncError::Core);
+                }
+            }
             SyncRepository::clear_conflict_on(&mut tx, &binding, scoped_conflict, false, &now)
                 .await?;
         }

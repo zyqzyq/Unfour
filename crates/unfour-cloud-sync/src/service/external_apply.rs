@@ -4,11 +4,12 @@
 use sqlx::SqliteConnection;
 use std::collections::HashSet;
 use unfour_core::domain::{
-    validate_external_connection_delete, CommandContext, ExternalApiCollectionApply,
-    ExternalApiFolderApply, ExternalApiRequestApply, ExternalApplyPage, ExternalConnectionApply,
-    ExternalSshTaskApply, ExternalSshTaskStepApply, ExternalWorkspaceApply,
-    ExternalWorkspaceEnvironmentApply, ExternalWorkspaceEnvironmentVariableApply,
-    ExternalWorkspaceVariableApply, MutationOrigin, DATABASE_CONNECTION_TYPE, SSH_CONNECTION_TYPE,
+    validate_external_connection_delete, CommandContext, DomainEntityKey, DomainEntityType,
+    ExternalApiCollectionApply, ExternalApiFolderApply, ExternalApiRequestApply, ExternalApplyPage,
+    ExternalConnectionApply, ExternalSshTaskApply, ExternalSshTaskStepApply,
+    ExternalWorkspaceApply, ExternalWorkspaceEnvironmentApply,
+    ExternalWorkspaceEnvironmentVariableApply, ExternalWorkspaceVariableApply, MutationOrigin,
+    DATABASE_CONNECTION_TYPE, SSH_CONNECTION_TYPE,
 };
 use unfour_database_engine::DatabaseConnectionCleanup;
 use unfour_ssh_engine::SshConnectionCleanup;
@@ -20,6 +21,31 @@ use crate::SyncError;
 pub(super) struct ExternalApplyCleanup {
     ssh_connections: Vec<SshConnectionCleanup>,
     database_connections: Vec<DatabaseConnectionCleanup>,
+    materialized: HashSet<(DomainEntityType, String)>,
+}
+
+impl ExternalApplyCleanup {
+    pub(super) fn materialized(&self, entity_type: DomainEntityType, entity_id: &str) -> bool {
+        self.materialized
+            .contains(&(entity_type, entity_id.to_string()))
+    }
+
+    fn record_keys(&mut self, keys: impl IntoIterator<Item = DomainEntityKey>) {
+        self.materialized
+            .extend(keys.into_iter().map(|key| (key.entity_type, key.entity_id)));
+    }
+
+    fn record_connection(&mut self, change: &ExternalConnectionApply) {
+        let key = match change {
+            ExternalConnectionApply::Upsert(record) => DomainEntityKey::new(
+                DomainEntityType::Connection,
+                &record.workspace_id,
+                &record.id,
+            ),
+            ExternalConnectionApply::Delete(delete) => delete.entity.clone(),
+        };
+        self.materialized.insert((key.entity_type, key.entity_id));
+    }
 }
 
 impl SyncService {
@@ -46,7 +72,8 @@ impl SyncService {
             .collect();
         let mut cleanup = ExternalApplyCleanup::default();
         for (workspace_id, deleted_at) in &workspace_deletes {
-            self.api_client
+            let (_, materialized) = self
+                .api_client
                 .delete_workspace_api_entities_on(
                     connection,
                     &context,
@@ -55,7 +82,9 @@ impl SyncService {
                 )
                 .await
                 .map_err(|_| SyncError::Core)?;
-            self.ssh
+            cleanup.record_keys(materialized);
+            let (_, materialized) = self
+                .ssh
                 .delete_workspace_ssh_task_entities_on(
                     connection,
                     &context,
@@ -64,23 +93,28 @@ impl SyncService {
                 )
                 .await
                 .map_err(|_| SyncError::Core)?;
-            let (_, cleanups) = self
+            cleanup.record_keys(materialized);
+            let (_, cleanups, materialized) = self
                 .ssh
                 .delete_workspace_connections_on(connection, &context, workspace_id, deleted_at)
                 .await
                 .map_err(|_| SyncError::Core)?;
+            cleanup.record_keys(materialized);
             cleanup.ssh_connections.extend(cleanups);
-            let (_, cleanups) = self
+            let (_, cleanups, materialized) = self
                 .database
                 .delete_workspace_connections_on(connection, &context, workspace_id, deleted_at)
                 .await
                 .map_err(|_| SyncError::Core)?;
+            cleanup.record_keys(materialized);
             cleanup.database_connections.extend(cleanups);
         }
-        self.workspace
+        let workspace_outcome = self
+            .workspace
             .apply_external_page_on(connection, &context, page.clone())
             .await
             .map_err(|_| SyncError::Core)?;
+        cleanup.record_keys(workspace_outcome.value.materialized_entities);
         for change in page.connections.clone() {
             let connection_type = match &change {
                 ExternalConnectionApply::Upsert(record) => record.connection_type.as_str(),
@@ -93,6 +127,7 @@ impl SyncService {
                     .fetch_optional(&mut *connection)
                     .await?;
                     let Some((workspace_id, connection_type)) = row else {
+                        cleanup.record_connection(&change);
                         continue;
                     };
                     if workspace_id != delete.entity.workspace_id {
@@ -111,9 +146,16 @@ impl SyncService {
                 SSH_CONNECTION_TYPE => {
                     let outcome = self
                         .ssh
-                        .apply_external_connection_on(connection, &context, change)
+                        .apply_external_connection_on(connection, &context, change.clone())
                         .await
                         .map_err(|_| SyncError::Core)?;
+                    cleanup.record_connection(&change);
+                    cleanup.record_keys(
+                        outcome
+                            .mutations
+                            .into_iter()
+                            .map(|mutation| mutation.entity),
+                    );
                     if let Some(value) = outcome.value {
                         cleanup.ssh_connections.push(value);
                     }
@@ -121,9 +163,16 @@ impl SyncService {
                 DATABASE_CONNECTION_TYPE => {
                     let outcome = self
                         .database
-                        .apply_external_connection_on(connection, &context, change)
+                        .apply_external_connection_on(connection, &context, change.clone())
                         .await
                         .map_err(|_| SyncError::Core)?;
+                    cleanup.record_connection(&change);
+                    cleanup.record_keys(
+                        outcome
+                            .mutations
+                            .into_iter()
+                            .map(|mutation| mutation.entity),
+                    );
                     if let Some(value) = outcome.value {
                         cleanup.database_connections.push(value);
                     }
@@ -131,14 +180,18 @@ impl SyncService {
                 _ => return Err(SyncError::InvalidData),
             }
         }
-        self.api_client
+        let api_outcome = self
+            .api_client
             .apply_external_page_on(connection, &context, page.clone())
             .await
             .map_err(|_| SyncError::Core)?;
-        self.ssh
+        cleanup.record_keys(api_outcome.value.materialized_entities);
+        let ssh_outcome = self
+            .ssh
             .apply_external_task_page_on(connection, &context, page)
             .await
             .map_err(|_| SyncError::Core)?;
+        cleanup.record_keys(ssh_outcome.value.materialized_entities);
         Ok(cleanup)
     }
 

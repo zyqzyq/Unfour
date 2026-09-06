@@ -24,12 +24,27 @@ impl WorkspaceService {
             ));
         }
         let mut mutations = Vec::new();
+        let mut materialized_entities = Vec::new();
         let mut secret_material_outcomes = Vec::new();
         for change in page.workspaces {
-            workspace::apply_workspace(connection, context, change, &mut mutations).await?;
+            workspace::apply_workspace(
+                connection,
+                context,
+                change,
+                &mut mutations,
+                &mut materialized_entities,
+            )
+            .await?;
         }
         for change in page.workspace_environments {
-            environment::apply_environment(connection, context, change, &mut mutations).await?;
+            environment::apply_environment(
+                connection,
+                context,
+                change,
+                &mut mutations,
+                &mut materialized_entities,
+            )
+            .await?;
         }
         for change in page.workspace_variables {
             variable::apply_workspace_variable(
@@ -37,6 +52,7 @@ impl WorkspaceService {
                 context,
                 change,
                 &mut mutations,
+                &mut materialized_entities,
                 &mut secret_material_outcomes,
             )
             .await?;
@@ -47,6 +63,7 @@ impl WorkspaceService {
                 context,
                 change,
                 &mut mutations,
+                &mut materialized_entities,
                 &mut secret_material_outcomes,
             )
             .await?;
@@ -55,6 +72,7 @@ impl WorkspaceService {
             applied_count: mutations.len(),
             mutations: mutations.clone(),
             secret_material_outcomes,
+            materialized_entities,
         };
         Ok(DomainCommandResult::new(report, mutations))
     }

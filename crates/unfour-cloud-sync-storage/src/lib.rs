@@ -121,6 +121,14 @@ mod tests {
                 "{table} rejects sshTaskStep"
             );
         }
+        let reader_revision_column: i64 = sqlx::query_scalar(
+            r#"SELECT COUNT(*) FROM pragma_table_info('cloud_sync_entity_state')
+               WHERE name = 'applied_reader_revision'"#,
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("inspect applied_reader_revision");
+        assert_eq!(reader_revision_column, 1);
         for retired in [
             "api_v2_bootstrap_state",
             "ssh_task_v3_bootstrap_state",

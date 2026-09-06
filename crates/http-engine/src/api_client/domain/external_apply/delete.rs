@@ -1,6 +1,7 @@
 use sqlx::SqliteConnection;
 use unfour_core::domain::{
-    CommandContext, DomainEntityType, DomainMutation, ExternalDelete, MutationOperation,
+    CommandContext, DomainEntityKey, DomainEntityType, DomainMutation, ExternalDelete,
+    MutationOperation,
 };
 use unfour_core::models::{ApiCollectionFolder, ApiSavedRequest};
 use unfour_core::{AppError, AppResult};
@@ -16,12 +17,15 @@ pub(super) async fn apply_request_delete(
     context: &CommandContext,
     delete: ExternalDelete,
     mutations: &mut Vec<DomainMutation>,
+    materialized: &mut Vec<DomainEntityKey>,
 ) -> AppResult<()> {
     validate_delete(&delete, DomainEntityType::ApiRequest)?;
     let Some(current) = owned_request_for_delete(connection, &delete).await? else {
+        materialized.push(delete.entity);
         return Ok(());
     };
     if current.deleted_at.is_some() {
+        materialized.push(delete.entity);
         return Ok(());
     }
     validate_parent(
@@ -47,6 +51,7 @@ pub(super) async fn apply_request_delete(
         )),
         revision,
     ));
+    materialized.push(delete.entity);
     Ok(())
 }
 
@@ -55,28 +60,35 @@ pub(super) async fn apply_folder_delete(
     context: &CommandContext,
     delete: ExternalDelete,
     mutations: &mut Vec<DomainMutation>,
+    materialized: &mut Vec<DomainEntityKey>,
 ) -> AppResult<()> {
     validate_delete(&delete, DomainEntityType::ApiFolder)?;
     let Some(current) = owned_folder_for_delete(connection, &delete).await? else {
+        materialized.push(delete.entity);
         return Ok(());
     };
     if current.deleted_at.is_some() {
+        materialized.push(delete.entity);
         return Ok(());
     }
     validate_parent(
         &delete,
         effective_parent(&current.collection_id, current.parent_folder_id.as_deref()),
     )?;
-    mutations.extend(
-        delete_folder_tree_on(
-            connection,
-            context,
-            &delete.entity.workspace_id,
-            &delete.entity.entity_id,
-            &delete.deleted_at,
-        )
-        .await?,
+    let folder_mutations = delete_folder_tree_on(
+        connection,
+        context,
+        &delete.entity.workspace_id,
+        &delete.entity.entity_id,
+        &delete.deleted_at,
+    )
+    .await?;
+    materialized.extend(
+        folder_mutations
+            .iter()
+            .map(|mutation| mutation.entity.clone()),
     );
+    mutations.extend(folder_mutations);
     Ok(())
 }
 
@@ -85,6 +97,7 @@ pub(super) async fn apply_collection_delete(
     context: &CommandContext,
     delete: ExternalDelete,
     mutations: &mut Vec<DomainMutation>,
+    materialized: &mut Vec<DomainEntityKey>,
 ) -> AppResult<()> {
     validate_delete(&delete, DomainEntityType::ApiCollection)?;
     let owner: Option<(String, Option<String>)> =
@@ -93,6 +106,7 @@ pub(super) async fn apply_collection_delete(
             .fetch_optional(&mut *connection)
             .await?;
     let Some((workspace_id, deleted)) = owner else {
+        materialized.push(delete.entity);
         return Ok(());
     };
     if workspace_id != delete.entity.workspace_id {
@@ -101,18 +115,23 @@ pub(super) async fn apply_collection_delete(
         ));
     }
     if deleted.is_some() {
+        materialized.push(delete.entity);
         return Ok(());
     }
-    mutations.extend(
-        delete_collection_tree_on(
-            connection,
-            context,
-            &delete.entity.workspace_id,
-            &delete.entity.entity_id,
-            &delete.deleted_at,
-        )
-        .await?,
+    let collection_mutations = delete_collection_tree_on(
+        connection,
+        context,
+        &delete.entity.workspace_id,
+        &delete.entity.entity_id,
+        &delete.deleted_at,
+    )
+    .await?;
+    materialized.extend(
+        collection_mutations
+            .iter()
+            .map(|mutation| mutation.entity.clone()),
     );
+    mutations.extend(collection_mutations);
     Ok(())
 }
 
