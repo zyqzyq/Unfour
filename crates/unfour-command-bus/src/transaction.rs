@@ -24,20 +24,45 @@ pub trait TransactionalCommandHook: Send + Sync {
     ) -> Pin<Box<dyn Future<Output = AppResult<()>> + Send + 'a>>;
 }
 
+/// Application-layer policy checked immediately before a saved SSH Task can
+/// reach the SSH engine. Desktop and MCP install the same guards on their
+/// shared Command Bus instead of duplicating execution safety in adapters.
+pub trait SshTaskExecutionGuard: Send + Sync {
+    fn validate<'a>(
+        &'a self,
+        workspace_id: &'a str,
+        task_id: &'a str,
+    ) -> Pin<Box<dyn Future<Output = AppResult<()>> + Send + 'a>>;
+}
+
 #[derive(Clone, Default)]
 pub struct CommandBusExtensions {
     transactional_hooks: Arc<[Arc<dyn TransactionalCommandHook>]>,
+    ssh_task_execution_guards: Arc<[Arc<dyn SshTaskExecutionGuard>]>,
 }
 
 impl CommandBusExtensions {
     pub fn new(transactional_hooks: Vec<Arc<dyn TransactionalCommandHook>>) -> Self {
         Self {
             transactional_hooks: transactional_hooks.into(),
+            ssh_task_execution_guards: Arc::default(),
         }
+    }
+
+    pub fn with_ssh_task_execution_guards(
+        mut self,
+        guards: Vec<Arc<dyn SshTaskExecutionGuard>>,
+    ) -> Self {
+        self.ssh_task_execution_guards = guards.into();
+        self
     }
 
     pub fn transactional_hooks(&self) -> &[Arc<dyn TransactionalCommandHook>] {
         &self.transactional_hooks
+    }
+
+    pub fn ssh_task_execution_guards(&self) -> &[Arc<dyn SshTaskExecutionGuard>] {
+        &self.ssh_task_execution_guards
     }
 }
 

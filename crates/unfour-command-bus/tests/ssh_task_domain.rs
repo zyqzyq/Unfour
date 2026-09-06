@@ -4,7 +4,9 @@ use std::sync::Arc;
 
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::SqliteConnection;
-use unfour_command_bus::{CommandBus, CommandBusExtensions, TransactionalCommandHook};
+use unfour_command_bus::{
+    CommandBus, CommandBusExtensions, SshTaskExecutionGuard, TransactionalCommandHook,
+};
 use unfour_core::domain::{
     CommandContext, DomainEntityKey, DomainEntityType, DomainMutation, DomainSnapshot,
     ExternalApplyPage, ExternalDelete, ExternalSshTaskApply, ExternalSshTaskStepApply,
@@ -12,7 +14,7 @@ use unfour_core::domain::{
     ExternalWorkspaceUpsert, MutationOrigin, SshTaskSnapshot, SshTaskStepSnapshot,
 };
 use unfour_core::models::{
-    SshTaskDetail, SshTaskSaveInput, SshTaskStepInput, SshTasksReorderInput,
+    SshTaskDetail, SshTaskRunInput, SshTaskSaveInput, SshTaskStepInput, SshTasksReorderInput,
 };
 use unfour_core::{AppError, AppResult};
 use unfour_local_storage::LocalDb;
@@ -24,6 +26,18 @@ mod workspace_cascade;
 struct RecordingHook {
     local_only: bool,
     fail_on: Option<&'static str>,
+}
+
+struct RejectingTaskExecutionGuard;
+
+impl SshTaskExecutionGuard for RejectingTaskExecutionGuard {
+    fn validate<'a>(
+        &'a self,
+        _workspace_id: &'a str,
+        _task_id: &'a str,
+    ) -> Pin<Box<dyn Future<Output = AppResult<()>> + Send + 'a>> {
+        Box::pin(async { Err(AppError::SshTaskIncompleteRemoteState) })
+    }
 }
 
 impl TransactionalCommandHook for RecordingHook {
@@ -282,6 +296,32 @@ async fn local_task_and_step_lifecycle_emits_transactional_mutations() {
         .unwrap(),
         DomainSnapshot::Tombstone(_)
     ));
+}
+
+#[tokio::test]
+async fn task_execution_guards_run_before_the_ssh_service() {
+    let db = database().await;
+    let bus = CommandBus::from_db_with_extensions(
+        db,
+        CommandBusExtensions::default()
+            .with_ssh_task_execution_guards(vec![Arc::new(RejectingTaskExecutionGuard)]),
+    )
+    .await
+    .unwrap();
+    let workspace_id = bus.list_workspaces().await.unwrap().active_workspace_id;
+
+    let error = bus
+        .run_ssh_task(SshTaskRunInput {
+            workspace_id,
+            task_id: "missing-task-that-service-would-reject".into(),
+            connection_id: None,
+            inputs: Default::default(),
+            secret_input_names: Vec::new(),
+        })
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, AppError::SshTaskIncompleteRemoteState));
 }
 
 #[tokio::test]

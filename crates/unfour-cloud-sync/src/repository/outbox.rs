@@ -6,7 +6,7 @@ use sqlx::SqliteConnection;
 
 use super::SyncRepository;
 use crate::canonical::{canonical_intent_on, canonical_snapshot_intent, CanonicalIntent};
-use crate::{Clock, IdGenerator, OutboxEntry, SyncError, PAYLOAD_SCHEMA_VERSION};
+use crate::{Clock, IdGenerator, OutboxEntry, SyncError};
 use unfour_core::domain::{DomainMutation, DomainSnapshot};
 
 impl SyncRepository {
@@ -107,6 +107,7 @@ impl SyncRepository {
                WHERE account_id = ?1 AND cloud_workspace_id = ?2 AND entity_type = ?3 AND entity_id = ?4"#,
         ).bind(account_id).bind(cloud_workspace_id).bind(intent.entity_type.as_str())
          .bind(entity_id).fetch_optional(&mut *connection).await?.unwrap_or(0);
+        let payload_schema_version = intent.entity_type.payload_schema_version();
         let now = now.to_rfc3339();
         sqlx::query(
             r#"INSERT INTO cloud_sync_outbox (
@@ -131,7 +132,7 @@ impl SyncRepository {
         )
         .bind(account_id).bind(workspace_id).bind(cloud_workspace_id).bind(intent.entity_type.as_str())
         .bind(entity_id).bind(operation_id).bind(intent.parent_entity_id)
-        .bind(intent.operation.as_str()).bind(base_version).bind(PAYLOAD_SCHEMA_VERSION)
+        .bind(intent.operation.as_str()).bind(base_version).bind(payload_schema_version)
         .bind(intent.payload_json).bind(intent.deleted_at).bind(content_revision).bind(now)
         .execute(&mut *connection).await?;
         Ok(())
@@ -155,6 +156,7 @@ impl SyncRepository {
         {
             return Ok(None);
         }
+        let payload_schema_version = snapshot.intent.entity_type.payload_schema_version();
         let changed = sqlx::query(
             r#"UPDATE cloud_sync_outbox SET parent_entity_id = ?1,
                  payload_schema_version = ?2, canonical_payload_json = ?3,
@@ -164,7 +166,7 @@ impl SyncRepository {
                  AND status IN ('pending', 'uncertain')"#,
         )
         .bind(&snapshot.intent.parent_entity_id)
-        .bind(PAYLOAD_SCHEMA_VERSION)
+        .bind(payload_schema_version)
         .bind(&snapshot.intent.payload_json)
         .bind(&snapshot.intent.deleted_at)
         .bind(now.to_rfc3339())
@@ -180,7 +182,7 @@ impl SyncRepository {
         }
         let mut materialized = entry.clone();
         materialized.parent_entity_id = snapshot.intent.parent_entity_id;
-        materialized.payload_schema_version = PAYLOAD_SCHEMA_VERSION;
+        materialized.payload_schema_version = payload_schema_version;
         materialized.canonical_payload_json = snapshot.intent.payload_json;
         materialized.deleted_at = snapshot.intent.deleted_at;
         Ok(Some(materialized))

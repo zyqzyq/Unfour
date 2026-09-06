@@ -47,7 +47,7 @@ mod ssh_commands;
 mod workspace_variable_commands;
 
 pub use command_models::*;
-pub use transaction::{CommandBusExtensions, TransactionalCommandHook};
+pub use transaction::{CommandBusExtensions, SshTaskExecutionGuard, TransactionalCommandHook};
 
 /// OS keychain service name under which credentials are stored. Must match the
 /// value the desktop app passes to `SecretStore::new` (see

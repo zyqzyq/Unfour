@@ -6,7 +6,7 @@ use super::SyncRepository;
 use crate::canonical::canonical_snapshot_intent;
 use crate::{
     sync_entity_descriptor, Clock, DeadLetterView, IdGenerator, OutboxEntry, RecoveryPolicy,
-    SnapshotItem, SyncBinding, SyncEntityType, SyncError, PAYLOAD_SCHEMA_VERSION,
+    SnapshotItem, SyncBinding, SyncEntityType, SyncError,
 };
 
 impl SyncRepository {
@@ -344,7 +344,7 @@ impl SyncRepository {
         .bind(&snapshot.intent.parent_entity_id)
         .bind(snapshot.intent.operation.as_str())
         .bind(reliable_base_version)
-        .bind(PAYLOAD_SCHEMA_VERSION)
+        .bind(snapshot.intent.entity_type.payload_schema_version())
         .bind(&snapshot.intent.payload_json)
         .bind(&snapshot.intent.deleted_at)
         .bind(snapshot.revision)

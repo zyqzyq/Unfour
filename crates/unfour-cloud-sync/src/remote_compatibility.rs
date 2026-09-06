@@ -7,9 +7,7 @@
 
 use serde_json::Value;
 
-use crate::{
-    RemoteChange, SnapshotItem, SyncEntityType, SyncError, SyncOperation, PAYLOAD_SCHEMA_VERSION,
-};
+use crate::{RemoteChange, SnapshotItem, SyncEntityType, SyncError, SyncOperation};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RemoteEntityDisposition {
@@ -60,127 +58,18 @@ fn remote_entity_disposition(
             .then_some(RemoteEntityDisposition::Apply(entity_type))
             .ok_or(SyncError::InvalidData);
     }
-    if payload_schema_version > PAYLOAD_SCHEMA_VERSION {
+    let reader_schema_version = entity_type.payload_schema_version();
+    if payload_schema_version > reader_schema_version {
         return Ok(RemoteEntityDisposition::SkipUnsupportedPayload);
     }
+    if payload_schema_version != reader_schema_version {
+        return Err(SyncError::InvalidData);
+    }
     let payload = payload.ok_or(SyncError::InvalidData)?;
-    if payload_has_unknown_fields(entity_type, payload)?
-        || payload_has_unsupported_subtype(entity_type, payload)?
-    {
+    if payload_has_unsupported_subtype(entity_type, payload)? {
         return Ok(RemoteEntityDisposition::SkipUnsupportedPayload);
     }
     Ok(RemoteEntityDisposition::Apply(entity_type))
-}
-
-fn payload_has_unknown_fields(
-    entity_type: SyncEntityType,
-    payload: &Value,
-) -> Result<bool, SyncError> {
-    let object = payload.as_object().ok_or(SyncError::InvalidData)?;
-    let allowed: &[&str] = match entity_type {
-        SyncEntityType::Workspace => &[
-            "name",
-            "environmentType",
-            "mcpPolicy",
-            "createdAt",
-            "updatedAt",
-            "deletedAt",
-        ],
-        SyncEntityType::Connection => &[
-            "id",
-            "workspaceId",
-            "connectionType",
-            "name",
-            "host",
-            "port",
-            "config",
-            "createdAt",
-            "updatedAt",
-        ],
-        SyncEntityType::WorkspaceVariable | SyncEntityType::WorkspaceEnvironmentVariable => &[
-            "key",
-            "value",
-            "isSecret",
-            "isEnabled",
-            "description",
-            "sortOrder",
-            "createdAt",
-            "updatedAt",
-            "deletedAt",
-        ],
-        SyncEntityType::WorkspaceEnvironment => {
-            &["name", "sortOrder", "createdAt", "updatedAt", "deletedAt"]
-        }
-        SyncEntityType::ApiCollection => &["name", "description", "createdAt", "updatedAt"],
-        SyncEntityType::ApiFolder => &[
-            "collectionId",
-            "parentFolderId",
-            "name",
-            "sortOrder",
-            "createdAt",
-            "updatedAt",
-        ],
-        SyncEntityType::ApiRequest => &[
-            "collectionId",
-            "parentFolderId",
-            "name",
-            "sortOrder",
-            "authJson",
-            "method",
-            "url",
-            "headers",
-            "query",
-            "body",
-            "bodyKind",
-            "settingsJson",
-            "preRequestScript",
-            "postResponseScript",
-            "scriptSchemaVersion",
-            "createdAt",
-            "updatedAt",
-        ],
-        SyncEntityType::SshTask => &["name", "description", "sortOrder", "createdAt", "updatedAt"],
-        SyncEntityType::SshTaskStep => &[
-            "taskId",
-            "name",
-            "stepType",
-            "position",
-            "enabled",
-            "configVersion",
-            "configJson",
-            "createdAt",
-            "updatedAt",
-        ],
-    };
-    if object.keys().any(|key| !allowed.contains(&key.as_str())) {
-        return Ok(true);
-    }
-    if entity_type == SyncEntityType::Connection {
-        let Some(config) = object.get("config") else {
-            return Ok(false);
-        };
-        let config = config.as_object().ok_or(SyncError::InvalidData)?;
-        let kind = string_field(config, "kind")?;
-        let allowed_config: &[&str] = match kind {
-            Some("ssh") => &["kind", "username", "authMethod"],
-            Some("database") => &[
-                "kind",
-                "driver",
-                "databaseName",
-                "username",
-                "sslMode",
-                "readOnly",
-            ],
-            _ => return Ok(false),
-        };
-        if config
-            .keys()
-            .any(|key| !allowed_config.contains(&key.as_str()))
-        {
-            return Ok(true);
-        }
-    }
-    Ok(false)
 }
 
 fn payload_has_unsupported_subtype(
@@ -343,7 +232,7 @@ mod tests {
             parent_entity_id: Some("workspace".into()),
             operation: SyncOperation::Upsert,
             server_version: 1,
-            payload_schema_version: PAYLOAD_SCHEMA_VERSION + 1,
+            payload_schema_version: SyncEntityType::WorkspaceVariable.payload_schema_version() + 1,
             payload: Some(serde_json::json!({"future": true})),
             deleted_at: None,
         };

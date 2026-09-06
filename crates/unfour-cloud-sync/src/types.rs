@@ -89,6 +89,10 @@ impl SyncEntityType {
         crate::sync_entity_descriptor(self).topology_rank
     }
 
+    pub fn payload_schema_version(self) -> i64 {
+        crate::sync_entity_descriptor(self).payload_schema_version
+    }
+
     pub fn parse(value: &str) -> Result<Self, SyncError> {
         crate::SYNC_ENTITY_REGISTRY
             .iter()

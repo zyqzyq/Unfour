@@ -49,6 +49,9 @@ pub struct SyncEntityDescriptor {
     pub entity_type: SyncEntityType,
     pub domain_entity_type: DomainEntityType,
     pub wire_name: &'static str,
+    /// Current canonical payload schema understood and emitted for this entity.
+    /// Entity schemas evolve independently without changing Protocol 5.
+    pub payload_schema_version: i64,
     pub workspace_scoped: bool,
     pub parent_dependency: ParentDependency,
     pub initial_upload: bool,
@@ -70,6 +73,7 @@ pub const SYNC_ENTITY_REGISTRY: &[SyncEntityDescriptor] = &[
         SyncEntityType::Workspace,
         DomainEntityType::Workspace,
         "workspace",
+        1,
         false,
         ParentDependency::None,
         SnapshotProvider::Workspace,
@@ -83,6 +87,7 @@ pub const SYNC_ENTITY_REGISTRY: &[SyncEntityDescriptor] = &[
         SyncEntityType::Connection,
         DomainEntityType::Connection,
         "connection",
+        1,
         true,
         ParentDependency::None,
         SnapshotProvider::Connection,
@@ -96,6 +101,7 @@ pub const SYNC_ENTITY_REGISTRY: &[SyncEntityDescriptor] = &[
         SyncEntityType::WorkspaceVariable,
         DomainEntityType::WorkspaceVariable,
         "workspaceVariable",
+        1,
         true,
         ParentDependency::Workspace,
         SnapshotProvider::Workspace,
@@ -109,6 +115,7 @@ pub const SYNC_ENTITY_REGISTRY: &[SyncEntityDescriptor] = &[
         SyncEntityType::WorkspaceEnvironment,
         DomainEntityType::WorkspaceEnvironment,
         "workspaceEnvironment",
+        1,
         true,
         ParentDependency::Workspace,
         SnapshotProvider::Workspace,
@@ -122,6 +129,7 @@ pub const SYNC_ENTITY_REGISTRY: &[SyncEntityDescriptor] = &[
         SyncEntityType::WorkspaceEnvironmentVariable,
         DomainEntityType::WorkspaceEnvironmentVariable,
         "workspaceEnvironmentVariable",
+        1,
         true,
         ParentDependency::Entity(WORKSPACE_ENVIRONMENT_PARENT),
         SnapshotProvider::Workspace,
@@ -135,6 +143,7 @@ pub const SYNC_ENTITY_REGISTRY: &[SyncEntityDescriptor] = &[
         SyncEntityType::ApiCollection,
         DomainEntityType::ApiCollection,
         "apiCollection",
+        1,
         true,
         ParentDependency::Workspace,
         SnapshotProvider::ApiClient,
@@ -148,6 +157,7 @@ pub const SYNC_ENTITY_REGISTRY: &[SyncEntityDescriptor] = &[
         SyncEntityType::ApiFolder,
         DomainEntityType::ApiFolder,
         "apiFolder",
+        1,
         true,
         ParentDependency::Entity(API_FOLDER_PARENTS),
         SnapshotProvider::ApiClient,
@@ -161,6 +171,7 @@ pub const SYNC_ENTITY_REGISTRY: &[SyncEntityDescriptor] = &[
         SyncEntityType::ApiRequest,
         DomainEntityType::ApiRequest,
         "apiRequest",
+        1,
         true,
         ParentDependency::Entity(API_FOLDER_PARENTS),
         SnapshotProvider::ApiClient,
@@ -174,6 +185,7 @@ pub const SYNC_ENTITY_REGISTRY: &[SyncEntityDescriptor] = &[
         SyncEntityType::SshTask,
         DomainEntityType::SshTask,
         "sshTask",
+        1,
         true,
         ParentDependency::None,
         SnapshotProvider::SshTask,
@@ -187,6 +199,7 @@ pub const SYNC_ENTITY_REGISTRY: &[SyncEntityDescriptor] = &[
         SyncEntityType::SshTaskStep,
         DomainEntityType::SshTaskStep,
         "sshTaskStep",
+        1,
         true,
         ParentDependency::Entity(SSH_TASK_PARENT),
         SnapshotProvider::SshTask,
@@ -203,6 +216,7 @@ const fn descriptor(
     entity_type: SyncEntityType,
     domain_entity_type: DomainEntityType,
     wire_name: &'static str,
+    payload_schema_version: i64,
     workspace_scoped: bool,
     parent_dependency: ParentDependency,
     snapshot_provider: SnapshotProvider,
@@ -216,6 +230,7 @@ const fn descriptor(
         entity_type,
         domain_entity_type,
         wire_name,
+        payload_schema_version,
         workspace_scoped,
         parent_dependency,
         initial_upload: true,
@@ -438,9 +453,11 @@ mod tests {
                 .map(SyncEntityType::from)
                 .collect::<HashSet<_>>()
         );
-        assert!(SYNC_ENTITY_REGISTRY
-            .iter()
-            .all(|descriptor| { descriptor.initial_upload && descriptor.supports_tombstone }));
+        assert!(SYNC_ENTITY_REGISTRY.iter().all(|descriptor| {
+            descriptor.payload_schema_version >= 1
+                && descriptor.initial_upload
+                && descriptor.supports_tombstone
+        }));
         for descriptor in SYNC_ENTITY_REGISTRY {
             assert_eq!(
                 serde_json::to_value(descriptor.entity_type).unwrap(),
@@ -458,5 +475,20 @@ mod tests {
                 assert!(parents.iter().all(|parent| types.contains(parent)));
             }
         }
+
+        let api_request = *sync_entity_descriptor(SyncEntityType::ApiRequest);
+        let api_request_v2 = SyncEntityDescriptor {
+            payload_schema_version: 2,
+            ..api_request
+        };
+        assert_eq!(api_request_v2.payload_schema_version, 2);
+        assert_eq!(
+            sync_entity_descriptor(SyncEntityType::Workspace).payload_schema_version,
+            1
+        );
+        assert_eq!(
+            sync_entity_descriptor(SyncEntityType::SshTask).payload_schema_version,
+            1
+        );
     }
 }

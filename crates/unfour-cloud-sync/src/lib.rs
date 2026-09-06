@@ -3,6 +3,7 @@ mod canonical_parent;
 mod conflict_scope;
 mod entity_registry;
 mod error;
+mod execution_guard;
 mod hook;
 mod remote_compatibility;
 mod repository;
@@ -16,6 +17,7 @@ pub use entity_registry::{
     SnapshotProvider, SyncEntityAdapters, SyncEntityDescriptor, SYNC_ENTITY_REGISTRY,
 };
 pub use error::*;
+pub use execution_guard::CloudSyncSshTaskExecutionGuard;
 pub use hook::SyncOutboxHook;
 pub use repository::SyncRepository;
 pub use service::{SyncRuntime, SyncService};
@@ -30,4 +32,6 @@ pub const CLOUD_SYNC_ENTITLEMENT: &str = "cloud_sync";
 /// Adding an ordinary Registry entity does not change this value; readers skip
 /// future entity names they do not recognize.
 pub const PROTOCOL_VERSION: u32 = 5;
+/// Legacy default retained for wire fixtures and downstream compatibility
+/// tests. Production schema selection must use the Sync Entity Registry.
 pub const PAYLOAD_SCHEMA_VERSION: i64 = 1;

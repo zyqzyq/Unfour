@@ -38,6 +38,10 @@ pub enum AppError {
     },
     #[error("row conflict: {0}")]
     RowConflict(String),
+    #[error(
+        "SSH task cannot run because its latest remote state requires a newer compatible client"
+    )]
+    SshTaskIncompleteRemoteState,
 }
 
 impl AppError {
@@ -60,6 +64,7 @@ impl AppError {
             AppError::ApiCancelled(_) => "API_CANCELLED",
             AppError::ConfirmationRequired { .. } => "CONFIRMATION_REQUIRED",
             AppError::RowConflict(_) => "ROW_CONFLICT",
+            AppError::SshTaskIncompleteRemoteState => "SSH_TASK_INCOMPLETE_REMOTE_STATE",
         }
     }
 }

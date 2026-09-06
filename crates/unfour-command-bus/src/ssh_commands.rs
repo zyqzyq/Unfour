@@ -432,6 +432,9 @@ impl CommandBus {
     pub async fn run_ssh_task(&self, input: SshTaskRunInput) -> AppResult<SshTaskRun> {
         let workspace_id = input.workspace_id.clone();
         let task_id = input.task_id.clone();
+        for guard in self.extensions.ssh_task_execution_guards() {
+            guard.validate(&workspace_id, &task_id).await?;
+        }
         let run = self.ssh.run_task(input).await?;
         self.activity_log
             .record(

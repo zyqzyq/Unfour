@@ -908,6 +908,9 @@ impl CommandBusAdapterError {
 
     fn from_ssh_app_error(message: &'static str, error: &AppError) -> Self {
         let message = match error {
+            AppError::SshTaskIncompleteRemoteState => {
+                "The SSH task cannot run because its latest remote state requires a newer compatible client."
+            }
             AppError::Validation(reason) if reason.contains("control characters") => {
                 "SSH command validation failed: control characters/newlines are not allowed."
             }

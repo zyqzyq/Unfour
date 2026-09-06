@@ -15,6 +15,16 @@ use unfour_core::models::{KeyValue, SshConnectionInput, WorkspaceVariableInput};
 use unfour_core::AppError;
 use unfour_local_storage::LocalDb;
 
+#[test]
+fn incomplete_remote_task_error_keeps_its_stable_code_at_the_mcp_boundary() {
+    let mapped = CommandBusAdapterError::from_ssh_app_error(
+        "fallback",
+        &AppError::SshTaskIncompleteRemoteState,
+    );
+    assert_eq!(mapped.code, "SSH_TASK_INCOMPLETE_REMOTE_STATE");
+    assert!(mapped.message.contains("newer compatible client"));
+}
+
 struct EnvironmentSqlHook {
     fail_on: Option<&'static str>,
 }

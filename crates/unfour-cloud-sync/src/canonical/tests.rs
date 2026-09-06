@@ -1,4 +1,5 @@
 use super::*;
+use crate::PAYLOAD_SCHEMA_VERSION;
 use unfour_core::domain::{
     ApiCollectionSnapshot, ApiFolderSnapshot, ApiRequestSnapshot, ConnectionSnapshot,
     ConnectionSnapshotConfig, DomainSnapshot, ExternalApiRequestApply, ExternalConnectionApply,
@@ -544,7 +545,7 @@ fn ssh_task_snapshots_are_intrinsic_and_remote_pages_enforce_the_task_parent() {
         parent_entity_id: None,
         operation: SyncOperation::Delete,
         server_version: 2,
-        payload_schema_version: PAYLOAD_SCHEMA_VERSION,
+        payload_schema_version: SyncEntityType::SshTask.payload_schema_version() + 1,
         payload: None,
         deleted_at: Some("2026-08-17T02:00:00Z".into()),
     };

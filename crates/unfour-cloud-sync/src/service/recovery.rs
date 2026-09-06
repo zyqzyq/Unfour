@@ -3,7 +3,7 @@ use unfour_core::domain::DomainEntityKey;
 use super::{SyncService, MAX_REMOTE_PAGES};
 use crate::{
     parse_remote_change, parse_snapshot_item, OutboxEntry, RemoteChange, SnapshotItem, SyncBinding,
-    SyncError, SyncOperation, SyncPhase, TransportError, PAYLOAD_SCHEMA_VERSION, PROTOCOL_VERSION,
+    SyncError, SyncOperation, SyncPhase, TransportError, PROTOCOL_VERSION,
 };
 
 impl SyncService {
@@ -62,6 +62,7 @@ impl SyncService {
             .repository
             .dead_letter(&account.account_id, workspace_id, operation_id)
             .await?;
+        let entity_type = crate::SyncEntityType::parse(&entry.entity_type)?;
         let remote = self
             .snapshot_dead_letter_entity(&account, &binding, &entry)
             .await?;
@@ -78,7 +79,7 @@ impl SyncService {
                     parent_entity_id: entry.parent_entity_id.clone(),
                     operation: SyncOperation::Delete,
                     server_version: entry.base_version.max(1),
-                    payload_schema_version: PAYLOAD_SCHEMA_VERSION,
+                    payload_schema_version: entity_type.payload_schema_version(),
                     payload: None,
                     deleted_at: Some(now.to_rfc3339()),
                 },

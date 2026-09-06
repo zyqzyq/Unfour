@@ -15,9 +15,7 @@ use unfour_core::domain::{
 use unfour_core::models::KeyValue;
 
 use crate::canonical_parent::{canonical_parent, protocol_parent, validate_parent};
-use crate::{
-    RemoteChange, SnapshotItem, SyncEntityType, SyncError, SyncOperation, PAYLOAD_SCHEMA_VERSION,
-};
+use crate::{RemoteChange, SnapshotItem, SyncEntityType, SyncError, SyncOperation};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -692,7 +690,7 @@ pub(crate) fn parse_remote_change_as(
 ) -> Result<ExternalApplyPage, SyncError> {
     if change.entity_id.trim().is_empty()
         || change.server_version < 1
-        || change.payload_schema_version != PAYLOAD_SCHEMA_VERSION
+        || change.payload_schema_version < 1
     {
         return Err(SyncError::InvalidData);
     }
@@ -707,11 +705,15 @@ pub(crate) fn parse_remote_change_as(
             return Err(SyncError::InvalidData);
         }
         let deleted_at = change.deleted_at.clone().ok_or(SyncError::InvalidData)?;
+        chrono::DateTime::parse_from_rfc3339(&deleted_at).map_err(|_| SyncError::InvalidData)?;
         let delete = ExternalDelete {
             entity: change.key(workspace_id, entity_type),
             deleted_at,
         };
         return Ok(delete_page(entity_type, delete));
+    }
+    if change.payload_schema_version != entity_type.payload_schema_version() {
+        return Err(SyncError::InvalidData);
     }
     if change.deleted_at.is_some() {
         return Err(SyncError::InvalidData);

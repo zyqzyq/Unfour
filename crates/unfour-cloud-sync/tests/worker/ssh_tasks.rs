@@ -1,7 +1,11 @@
 //! Routine SSH Task upload, edits, external application and workspace deletion.
 
 use super::support::*;
-use unfour_core::models::{SshConnectionInput, SshTaskSaveInput, SshTaskStepInput};
+use unfour_cloud_sync::CloudSyncSshTaskExecutionGuard;
+use unfour_core::models::{
+    SshConnectionInput, SshTaskRunInput, SshTaskSaveInput, SshTaskStepInput,
+};
+use unfour_core::AppError;
 
 #[path = "ssh_tasks/conflicts.rs"]
 mod conflicts;
@@ -68,6 +72,133 @@ fn pushed_operations(transport: &MockTransport) -> Vec<unfour_cloud_sync::PushOp
 
 fn clear_pushes(transport: &MockTransport) {
     transport.pushes.lock().unwrap().clear();
+}
+
+async fn insert_deferred_remote_entity(
+    db: &LocalDb,
+    binding: &unfour_cloud_sync::SyncBinding,
+    entity_type: &str,
+    entity_id: &str,
+    parent_entity_id: Option<&str>,
+) {
+    sqlx::query(
+        r#"INSERT INTO cloud_sync_remote_entity (
+             account_id, cloud_workspace_id, entity_type, entity_id,
+             parent_entity_id, server_version, payload_schema_version,
+             operation, canonical_payload_json, deleted_at, operation_id,
+             compatibility_state, created_at, updated_at
+           ) VALUES (?1, ?2, ?3, ?4, ?5, 2, 2, 'upsert', '{}', NULL,
+                     'future-remote', 'deferred_compatibility',
+                     '2026-09-06T00:00:00Z', '2026-09-06T00:00:00Z')"#,
+    )
+    .bind(&binding.account_id)
+    .bind(&binding.cloud_workspace_id)
+    .bind(entity_type)
+    .bind(entity_id)
+    .bind(parent_entity_id)
+    .execute(db.pool())
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn deferred_remote_step_fails_closed_before_running_stale_local_task() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let task = seed
+        .save_ssh_task(task_input(&workspace_id, "Incomplete remote task"))
+        .await
+        .unwrap();
+    let transport = Arc::new(MockTransport::new());
+    let (service, hook, _) = SyncRuntime::build(db.clone(), transport);
+    service.enable(&workspace_id).await.unwrap();
+    let binding = service
+        .status(&workspace_id)
+        .await
+        .unwrap()
+        .binding
+        .unwrap();
+    insert_deferred_remote_entity(
+        &db,
+        &binding,
+        SyncEntityType::SshTaskStep.as_str(),
+        "future-step",
+        Some(&task.task.id),
+    )
+    .await;
+    let guard = Arc::new(CloudSyncSshTaskExecutionGuard::new(db.clone()));
+    let bus = CommandBus::from_db_with_extensions(
+        db.clone(),
+        CommandBusExtensions::new(vec![hook]).with_ssh_task_execution_guards(vec![guard]),
+    )
+    .await
+    .unwrap();
+
+    let error = bus
+        .run_ssh_task(SshTaskRunInput {
+            workspace_id: workspace_id.clone(),
+            task_id: task.task.id.clone(),
+            connection_id: None,
+            inputs: Default::default(),
+            secret_input_names: Vec::new(),
+        })
+        .await
+        .unwrap_err();
+    assert!(matches!(error, AppError::SshTaskIncompleteRemoteState));
+    let run_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ssh_task_run WHERE task_id = ?1")
+        .bind(&task.task.id)
+        .fetch_one(db.pool())
+        .await
+        .unwrap();
+    assert_eq!(run_count, 0);
+}
+
+#[tokio::test]
+async fn deferred_remote_task_does_not_block_an_unrelated_local_task() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let task = seed
+        .save_ssh_task(task_input(&workspace_id, "Runnable local task"))
+        .await
+        .unwrap();
+    let transport = Arc::new(MockTransport::new());
+    let (service, hook, _) = SyncRuntime::build(db.clone(), transport);
+    service.enable(&workspace_id).await.unwrap();
+    let binding = service
+        .status(&workspace_id)
+        .await
+        .unwrap()
+        .binding
+        .unwrap();
+    insert_deferred_remote_entity(
+        &db,
+        &binding,
+        SyncEntityType::SshTask.as_str(),
+        "unrelated-future-task",
+        None,
+    )
+    .await;
+    let guard = Arc::new(CloudSyncSshTaskExecutionGuard::new(db.clone()));
+    let bus = CommandBus::from_db_with_extensions(
+        db,
+        CommandBusExtensions::new(vec![hook]).with_ssh_task_execution_guards(vec![guard]),
+    )
+    .await
+    .unwrap();
+
+    let error = bus
+        .run_ssh_task(SshTaskRunInput {
+            workspace_id,
+            task_id: task.task.id,
+            connection_id: None,
+            inputs: Default::default(),
+            secret_input_names: Vec::new(),
+        })
+        .await
+        .unwrap_err();
+    assert!(matches!(error, AppError::Validation(_)));
 }
 
 fn remote_task(cursor: i64, operation_id: &str) -> RemoteChange {

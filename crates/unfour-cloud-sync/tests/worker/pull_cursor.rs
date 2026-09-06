@@ -299,7 +299,6 @@ async fn pull_retains_future_entities_advances_cursor_and_blocks_unsafe_apply() 
 
     let mut first_payload = variable_payload("one");
     first_payload["key"] = serde_json::json!("FIRST");
-    first_payload["futureOptionalField"] = serde_json::json!({"ignored": true});
     let future_api_payload = serde_json::json!({
         "collectionId": "future-collection",
         "parentFolderId": null,
@@ -423,14 +422,6 @@ async fn pull_retains_future_entities_advances_cursor_and_blocks_unsafe_apply() 
     assert!(retained.iter().any(|row| {
         row.0 == "flowNode" && row.1 == "future-node" && row.3 == "deferred_compatibility"
     }));
-    let preserved_payload: String = sqlx::query_scalar(
-        "SELECT canonical_payload_json FROM cloud_sync_remote_entity WHERE entity_id = 'known-before'",
-    )
-    .fetch_one(db.pool())
-    .await
-    .unwrap();
-    assert!(preserved_payload.contains("futureOptionalField"));
-
     let status = service.status(&workspace_id).await.unwrap();
     let binding = status.binding.unwrap();
     assert_eq!(binding.last_pulled_cursor, base + 5);
@@ -452,11 +443,6 @@ async fn pull_retains_future_entities_advances_cursor_and_blocks_unsafe_apply() 
     assert_eq!(
         diagnostics,
         vec![
-            (
-                "remote_entity_compatibility_deferred".into(),
-                "workspaceVariable".into(),
-                "known-before".into(),
-            ),
             (
                 "remote_entity_compatibility_deferred".into(),
                 "flowNode".into(),
@@ -493,6 +479,130 @@ async fn pull_retains_future_entities_advances_cursor_and_blocks_unsafe_apply() 
             .last_pulled_cursor,
         base + 5,
     );
+}
+
+#[tokio::test]
+async fn additive_optional_payload_field_is_retained_and_applied_without_waiting() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let transport = Arc::new(MockTransport::new());
+    let (service, _, _) = SyncRuntime::build(db.clone(), transport.clone());
+    service.enable(&workspace_id).await.unwrap();
+    let binding = service
+        .status(&workspace_id)
+        .await
+        .unwrap()
+        .binding
+        .unwrap();
+    let mut payload = variable_payload("applied");
+    payload["key"] = serde_json::json!("ADDITIVE");
+    payload["futureOptionalField"] = serde_json::json!({"preserved": true});
+    transport.changes.lock().unwrap().push_back(ChangesPage {
+        protocol_version: PROTOCOL_VERSION,
+        cloud_workspace_id: binding.cloud_workspace_id.clone(),
+        current_cursor: binding.last_pulled_cursor + 1,
+        next_cursor: binding.last_pulled_cursor + 1,
+        changes: vec![RemoteChange {
+            cursor: binding.last_pulled_cursor + 1,
+            operation_id: "additive-field".into(),
+            entity_type: SyncEntityType::WorkspaceVariable.as_str().into(),
+            entity_id: "variable-additive".into(),
+            parent_entity_id: Some(workspace_id.clone()),
+            operation: SyncOperation::Upsert,
+            server_version: 1,
+            payload_schema_version: SyncEntityType::WorkspaceVariable.payload_schema_version(),
+            payload: Some(payload),
+            deleted_at: None,
+        }],
+    });
+
+    service.sync_workspace(&workspace_id).await.unwrap();
+
+    let value: String =
+        sqlx::query_scalar("SELECT value FROM workspace_variables WHERE id = 'variable-additive'")
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert_eq!(value, "applied");
+    let retained: (String, String) = sqlx::query_as(
+        r#"SELECT canonical_payload_json, compatibility_state
+           FROM cloud_sync_remote_entity WHERE entity_id = 'variable-additive'"#,
+    )
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert!(retained.0.contains("futureOptionalField"));
+    assert_eq!(retained.1, "supported");
+    let status = service.status(&workspace_id).await.unwrap();
+    assert_eq!(
+        status.binding.as_ref().unwrap().last_pulled_cursor,
+        binding.last_pulled_cursor + 1
+    );
+    assert_ne!(status.binding.as_ref().unwrap().state, "error");
+    assert_eq!(status.dead_count, 0);
+}
+
+#[tokio::test]
+async fn future_schema_tombstone_for_known_entity_applies_without_waiting() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let variable = seed
+        .workspace_variable_create(
+            workspace_id.clone(),
+            variable(None, "DELETE_ME", "local", false),
+        )
+        .await
+        .unwrap();
+    let transport = Arc::new(MockTransport::new());
+    let (service, _, _) = SyncRuntime::build(db.clone(), transport.clone());
+    service.enable(&workspace_id).await.unwrap();
+    let binding = service
+        .status(&workspace_id)
+        .await
+        .unwrap()
+        .binding
+        .unwrap();
+    transport.changes.lock().unwrap().push_back(ChangesPage {
+        protocol_version: PROTOCOL_VERSION,
+        cloud_workspace_id: binding.cloud_workspace_id.clone(),
+        current_cursor: binding.last_pulled_cursor + 1,
+        next_cursor: binding.last_pulled_cursor + 1,
+        changes: vec![RemoteChange {
+            cursor: binding.last_pulled_cursor + 1,
+            operation_id: "future-schema-delete".into(),
+            entity_type: SyncEntityType::WorkspaceVariable.as_str().into(),
+            entity_id: variable.id.clone(),
+            parent_entity_id: Some(workspace_id.clone()),
+            operation: SyncOperation::Delete,
+            server_version: 2,
+            payload_schema_version: SyncEntityType::WorkspaceVariable.payload_schema_version() + 1,
+            payload: None,
+            deleted_at: Some("2026-09-06T01:00:00Z".into()),
+        }],
+    });
+
+    service.sync_workspace(&workspace_id).await.unwrap();
+
+    let deleted_at: Option<String> =
+        sqlx::query_scalar("SELECT deleted_at FROM workspace_variables WHERE id = ?1")
+            .bind(&variable.id)
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert!(deleted_at.is_some());
+    let compatibility_state: String = sqlx::query_scalar(
+        "SELECT compatibility_state FROM cloud_sync_remote_entity WHERE entity_id = ?1",
+    )
+    .bind(&variable.id)
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(compatibility_state, "supported");
+    let status = service.status(&workspace_id).await.unwrap();
+    assert_ne!(status.binding.as_ref().unwrap().state, "error");
+    assert_eq!(status.dead_count, 0);
 }
 
 #[tokio::test]

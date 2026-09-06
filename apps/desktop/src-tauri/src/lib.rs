@@ -139,7 +139,11 @@ async fn initialize_unified_runtime_with_db(
         .map_err(|error| AppError::Config(error.code().to_string()))?;
     let (sync_service, sync_hook, sync_receiver) =
         unfour_cloud_sync::SyncRuntime::build(db.clone(), Arc::new(transport));
-    let command_bus_extensions = CommandBusExtensions::new(vec![sync_hook]);
+    let sync_execution_guard = Arc::new(unfour_cloud_sync::CloudSyncSshTaskExecutionGuard::new(
+        db.clone(),
+    ));
+    let command_bus_extensions = CommandBusExtensions::new(vec![sync_hook])
+        .with_ssh_task_execution_guards(vec![sync_execution_guard]);
     let secret_store = SecretStore::new(DEFAULT_SECRET_SERVICE);
     let telemetry_state = telemetry::TelemetryAppState::new(
         unfour_telemetry::TelemetryService::new(db.clone(), secret_store.clone(), telemetry_config),
@@ -164,7 +168,7 @@ async fn initialize_unified_runtime_with_db(
 mod unified_runtime_tests {
     use super::*;
     use unfour_cloud_sync::{SyncDependencies, SyncError};
-    use unfour_core::models::WorkspaceVariableInput;
+    use unfour_core::models::{SshTaskRunInput, WorkspaceVariableInput};
 
     fn test_root() -> std::path::PathBuf {
         std::env::temp_dir().join(format!(
@@ -248,6 +252,33 @@ mod unified_runtime_tests {
         .execute(db.pool())
         .await
         .expect("create Cloud Sync ownership fixture");
+
+        sqlx::query(
+            r#"INSERT INTO cloud_sync_remote_entity (
+                 account_id, cloud_workspace_id, entity_type, entity_id,
+                 parent_entity_id, server_version, payload_schema_version,
+                 operation, canonical_payload_json, deleted_at, operation_id,
+                 compatibility_state, created_at, updated_at
+               ) VALUES ('account-test', 'cloud-workspace-test', 'sshTask',
+                         'desktop-incomplete-task', NULL, 2, 2, 'upsert', '{}',
+                         NULL, 'desktop-future-task', 'deferred_compatibility', ?1, ?1)"#,
+        )
+        .bind(&now)
+        .execute(db.pool())
+        .await
+        .expect("create incomplete remote SSH Task fixture");
+        let task_error = runtime
+            .command_bus
+            .run_ssh_task(SshTaskRunInput {
+                workspace_id: workspace_id.clone(),
+                task_id: "desktop-incomplete-task".to_string(),
+                connection_id: None,
+                inputs: Default::default(),
+                secret_input_names: Vec::new(),
+            })
+            .await
+            .expect_err("desktop command path must fail closed before SSH execution");
+        assert_eq!(task_error.code(), "SSH_TASK_INCOMPLETE_REMOTE_STATE");
 
         runtime
             .command_bus
