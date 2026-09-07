@@ -107,6 +107,13 @@ for (const set of migrationSets) {
       errors.push(`${entry}: filename must include ${requiredMarker}`);
     }
 
+    const sqlBytes = readFileSync(path.join(set.dir, file));
+    if (sqlBytes.includes(0x0d)) {
+      errors.push(
+        `${entry}: migration SQL must use LF line endings; sqlx checksums the raw bytes`,
+      );
+    }
+
     if (historicalHash) {
       const actualHash = createHash("sha256")
         .update(readFileSync(path.join(set.dir, file)))

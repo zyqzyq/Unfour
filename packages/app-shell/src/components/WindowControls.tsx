@@ -16,6 +16,10 @@ export function WindowControls() {
     }
     let disposed = false;
     let unlisten: (() => void) | undefined;
+    // The window is created hidden so window-state can restore size first.
+    // Reveal it once the shell chrome is mounted; otherwise a packaged first
+    // launch stays invisible (local builds often still appear via saved state).
+    void appWindow.show().catch(() => undefined);
     const updateMaximized = () => {
       void appWindow
         .isMaximized()

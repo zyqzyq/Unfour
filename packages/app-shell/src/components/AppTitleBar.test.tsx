@@ -12,6 +12,7 @@ const { mockWindow } = vi.hoisted(() => ({
   mockWindow: {
     isMaximized: vi.fn().mockResolvedValue(false),
     onResized: vi.fn().mockResolvedValue(vi.fn()),
+    show: vi.fn().mockResolvedValue(undefined),
     minimize: vi.fn(),
     toggleMaximize: vi.fn().mockResolvedValue(undefined),
     startDragging: vi.fn().mockResolvedValue(undefined),
@@ -91,6 +92,7 @@ function environment(id: string, name: string, isActive = false): WorkspaceEnvir
 describe("AppTitleBar settings entry", () => {
   it("registers the window resize listener only once across title-bar rerenders", async () => {
     mockWindow.onResized.mockClear();
+    mockWindow.show.mockClear();
     const activeWorkspace = workspace();
     const { rerender } = render(
       <AppTitleBar
@@ -102,6 +104,7 @@ describe("AppTitleBar settings entry", () => {
       { wrapper: createWrapper() },
     );
     await waitFor(() => expect(mockWindow.onResized).toHaveBeenCalledTimes(1));
+    expect(mockWindow.show).toHaveBeenCalled();
 
     rerender(
       <AppTitleBar

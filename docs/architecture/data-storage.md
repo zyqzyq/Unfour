@@ -173,7 +173,12 @@ as `core_YYYYMMDDHHMMSS_xxx.sql` because sqlx would parse `core` as the
 version. Both embedded migrators behind the unified entry point must enable
 sqlx `set_ignore_missing(true)` so each migration set can ignore the other's
 records in `_sqlx_migrations`. This only handles missing/unknown records; it
-does not permit changing the checksum of an already applied migration.
+does not permit changing the checksum of an already applied migration, except
+for a line-ending compatibility rewrite. sqlx hashes raw file bytes, so a
+Windows working tree can embed CRLF into a newly added migration while Git and
+CI store LF. Opening that database from the other checksum fails with
+`VersionMismatch`. The migrators rewrite `_sqlx_migrations.checksum` only when
+the stored hash is the LF/CRLF equivalent of the embedded SQL.
 
 Do not rename, delete, or edit the content of already-published migrations.
 If a published schema needs correcting, add a new compatible migration instead.

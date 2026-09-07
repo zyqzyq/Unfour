@@ -22,8 +22,13 @@ unsafe extern "C" {}
 pub fn run() {
     let config = update::app_config();
 
-    let runtime = tauri::async_runtime::block_on(initialize_unified_runtime())
-        .expect("error while initializing the Unfour desktop runtime");
+    let runtime = match tauri::async_runtime::block_on(initialize_unified_runtime()) {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            report_startup_failure(&error);
+            std::process::exit(1);
+        }
+    };
     let UnifiedDesktopRuntime {
         command_bus,
         account_state,
@@ -162,6 +167,40 @@ async fn initialize_unified_runtime_with_db(
         sync_receiver,
         telemetry_state,
     })
+}
+
+fn report_startup_failure(error: &AppError) {
+    let message = format!("Unfour failed to start.\n\n{error}");
+    eprintln!("{message}");
+    #[cfg(windows)]
+    {
+        fn to_wide(value: &str) -> Vec<u16> {
+            use std::os::windows::ffi::OsStrExt;
+            std::ffi::OsStr::new(value)
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect()
+        }
+        #[link(name = "user32")]
+        extern "system" {
+            fn MessageBoxW(
+                hwnd: *mut core::ffi::c_void,
+                text: *const u16,
+                caption: *const u16,
+                flags: u32,
+            ) -> i32;
+        }
+        let caption = to_wide("Unfour");
+        let text = to_wide(&message);
+        unsafe {
+            MessageBoxW(
+                std::ptr::null_mut(),
+                text.as_ptr(),
+                caption.as_ptr(),
+                0x00000010,
+            );
+        }
+    }
 }
 
 #[cfg(test)]

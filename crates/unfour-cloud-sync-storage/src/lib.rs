@@ -7,10 +7,9 @@ use unfour_core::AppResult;
 pub async fn migrate(pool: &SqlitePool) -> AppResult<()> {
     let core = unfour_local_storage::LocalDb::from_pool(pool.clone());
     core.migrate().await?;
-    cloud_sync_migrator()
-        .run(pool)
-        .await
-        .map_err(sqlx::Error::from)?;
+    let migrator = cloud_sync_migrator();
+    unfour_local_storage::reconcile_sqlx_line_ending_checksums(pool, &migrator).await?;
+    migrator.run(pool).await.map_err(sqlx::Error::from)?;
     Ok(())
 }
 

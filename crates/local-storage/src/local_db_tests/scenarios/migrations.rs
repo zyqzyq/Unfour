@@ -401,3 +401,36 @@ async fn multipart_history_migration_preserves_existing_rows() {
             .unwrap();
     assert_eq!(row, ("json".into(), "legacy-body".into()));
 }
+
+#[tokio::test]
+async fn migrate_rewrites_crlf_checksums_to_the_embedded_line_ending() {
+    let db = test_db().await;
+    db.migrate().await.expect("initial migrate");
+    let original: Vec<u8> =
+        sqlx::query_scalar("SELECT checksum FROM _sqlx_migrations WHERE version = 20260906020000")
+            .fetch_one(db.pool())
+            .await
+            .expect("read checksum");
+    let sql = include_str!("../../../migrations/20260906020000_core_api_history_body_kind.sql");
+    let alternate = crate::line_ending_checksums::alternate_line_ending_checksum(sql)
+        .expect("migration has a newline");
+    assert_ne!(
+        alternate, original,
+        "LF and CRLF checksums must differ so the repair path is exercised"
+    );
+    sqlx::query("UPDATE _sqlx_migrations SET checksum = ?1 WHERE version = 20260906020000")
+        .bind(&alternate)
+        .execute(db.pool())
+        .await
+        .expect("plant opposite line-ending checksum");
+
+    db.migrate()
+        .await
+        .expect("migrate after line-ending checksum drift");
+    let restored: Vec<u8> =
+        sqlx::query_scalar("SELECT checksum FROM _sqlx_migrations WHERE version = 20260906020000")
+            .fetch_one(db.pool())
+            .await
+            .expect("read restored checksum");
+    assert_eq!(restored, original);
+}

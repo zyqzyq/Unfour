@@ -147,10 +147,21 @@ impl LocalDb {
             None,
             serde_json::json!({}),
         );
-        let result = core_migrator()
-            .run(&self.pool)
-            .await
-            .map_err(sqlx::Error::from);
+        let migrator = core_migrator();
+        if let Err(error) = crate::reconcile_sqlx_line_ending_checksums(&self.pool, &migrator).await
+        {
+            unfour_diag::log_operation_event(
+                "migration_failed",
+                "local_storage",
+                "migrate",
+                "error",
+                Some(started.elapsed().as_millis()),
+                Some("DATABASE_ERROR"),
+                serde_json::json!({}),
+            );
+            return Err(error);
+        }
+        let result = migrator.run(&self.pool).await.map_err(sqlx::Error::from);
 
         match result {
             Ok(()) => {
