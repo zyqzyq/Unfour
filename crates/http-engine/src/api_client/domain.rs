@@ -1,5 +1,6 @@
 mod collections;
 mod external_apply;
+mod multipart_secrets;
 mod requests;
 mod secrets;
 mod snapshot;

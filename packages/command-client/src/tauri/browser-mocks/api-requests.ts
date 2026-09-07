@@ -179,9 +179,13 @@ export async function handleApiRequestMock<T>(
     return mockStore.savedRequests.filter((item) => item.workspaceId === workspaceId) as T;
   }
 
+  if (command === "api_request_file_pick") return null as T;
   if (command === "api_send_request_v2" || command === "api_send_request") {
     const input = args?.input as ApiRequestInput;
     const versioned = command === "api_send_request_v2";
+    if (input.bodyKind === "multipart-form-data" && !["GET", "HEAD"].includes(input.method)) {
+      throw new Error("Multipart send requires the desktop runtime.");
+    }
     const executionId = String(args?.executionId ?? crypto.randomUUID());
     if (activeApiExecutions.has(executionId)) {
       throw { code: "VALIDATION_ERROR", message: "API execution id is already active" };
@@ -268,6 +272,7 @@ export async function handleApiRequestMock<T>(
           url: resolved.url,
           requestHeadersJson: JSON.stringify(redactHeaders(input.headers)),
           requestQueryJson: JSON.stringify(input.query),
+          requestBodyKind: input.bodyKind,
           requestBody: redactJsonBody(input.body),
           status: result.status,
           durationMs: result.durationMs,

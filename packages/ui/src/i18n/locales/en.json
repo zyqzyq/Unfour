@@ -188,6 +188,24 @@
     }
   },
   "api": {
+    "multipart": {
+      "mode": "form-data",
+      "contentType": "Content-Type is generated automatically for form-data.",
+      "pickError": "Could not select a file. Please try again.",
+      "enabled": "Enabled",
+      "key": "Key",
+      "type": "Type",
+      "value": "Value",
+      "text": "Text",
+      "file": "File",
+      "notSelected": "file not selected",
+      "select": "Select File",
+      "clear": "Clear",
+      "delete": "Delete row",
+      "add": "Add row",
+      "keyError": "Multipart field key cannot be empty.",
+      "fileError": "Multipart file requires a local file selection."
+    },
     "actions": {
       "deleteRequest": "Delete request",
       "duplicate": "Duplicate",

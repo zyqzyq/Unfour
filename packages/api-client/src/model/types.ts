@@ -31,7 +31,7 @@ export type ApiOpenIntent =
   | { action?: "open" | "send"; kind: "saved"; nonce: number; requestId: string }
   | { action?: "open" | "save"; historyId: string; kind: "history"; nonce: number };
 
-export type RequestBodyMode = "none" | "raw" | "form";
+export type RequestBodyMode = "none" | "raw" | "form" | "multipart";
 export type RequestRawBodyType = "json" | "text";
 export type ApiAuthPlacement = "header" | "query";
 export type ApiAuthConfig =
@@ -40,7 +40,12 @@ export type ApiAuthConfig =
   | { password: string; type: "basic"; username: string }
   | { addTo: ApiAuthPlacement; key: string; type: "api-key"; value: string };
 
+export type MultipartPart =
+  | { id: string; enabled: boolean; key: string; type: "text"; value: string }
+  | { id: string; enabled: boolean; key: string; type: "file"; fileName: string | null; filePath: string | null };
+
 export type RequestDraft = {
+  multipartParts: MultipartPart[];
   auth: ApiAuthConfig;
   body: string;
   bodyMode: RequestBodyMode;

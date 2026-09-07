@@ -73,7 +73,7 @@ impl ApiClientService {
             r#"
             SELECT DISTINCT
               history.id, history.workspace_id, history.name, history.method, history.url,
-              history.request_headers_json, history.request_query_json, history.request_body,
+              history.request_headers_json, history.request_query_json, history.request_body, history.request_body_kind,
               history.status, history.duration_ms, history.response_headers_json,
               history.response_body_preview, history.created_at, history.updated_at
             FROM api_history history

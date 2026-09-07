@@ -340,6 +340,7 @@ function historyDetail(
     url: "https://history.test",
     requestHeadersJson: "[]",
     requestQueryJson: "[]",
+    requestBodyKind: "json",
     requestBody: null,
     status: 200,
     durationMs: 12,
@@ -421,3 +422,17 @@ function historyItem(id: string, createdAt: string): ApiHistoryItem {
     remoteId: null,
   };
 }
+
+
+describe("multipart saved and history reopen", () => {
+  const definition = JSON.stringify([{ id: "file-1", enabled: true, key: "avatar", type: "file", fileName: "avatar.png" }]);
+  it("retains current tab binding after save but clears it on reopen", () => {
+    let state = createNewRequestTab(emptyApiTabsState("ws-1"), "new:multipart");
+    state = updateTabDraft(state, "new:multipart", { bodyMode: "multipart", multipartParts: [{ id: "file-1", enabled: true, key: "avatar", type: "file", fileName: "avatar.png", filePath: "C:/private/avatar.png" }] });
+    const saved = { ...savedRequest("multipart"), bodyKind: "multipart-form-data", body: definition };
+    state = completeTabSave(state, "new:multipart", saved);
+    expect(state.tabs[0].draft.multipartParts[0]).toMatchObject({ filePath: "C:/private/avatar.png" });
+    expect(state.tabs[0].baseline).not.toContain("filePath");
+    expect(openSavedRequest(emptyApiTabsState("ws-1"), saved).tabs[0].draft.multipartParts[0]).toMatchObject({ filePath: null, fileName: "avatar.png" });
+  });
+});

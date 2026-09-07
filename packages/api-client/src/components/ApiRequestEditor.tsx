@@ -1,3 +1,4 @@
+import type { MultipartPart } from "../model/types";
 import type { KeyValue } from "@unfour/command-client";
 import type {
   ApiAuthConfig,
@@ -11,6 +12,8 @@ export function ApiRequestEditor({
   auth,
   body,
   bodyMode,
+  multipartParts,
+  onMultipartPartsChange,
   formBody,
   headers,
   onAuthChange,
@@ -34,6 +37,8 @@ export function ApiRequestEditor({
   auth: ApiAuthConfig;
   body: string;
   bodyMode: RequestBodyMode;
+  multipartParts: MultipartPart[];
+  onMultipartPartsChange: (parts: MultipartPart[]) => void;
   formBody: KeyValue[];
   headers: KeyValue[];
   onAuthChange: (value: ApiAuthConfig) => void;
@@ -60,6 +65,8 @@ export function ApiRequestEditor({
         auth={auth}
         body={body}
         bodyMode={bodyMode}
+        multipartParts={multipartParts}
+        onMultipartPartsChange={onMultipartPartsChange}
         formBody={formBody}
         headers={headers}
         onAuthChange={onAuthChange}

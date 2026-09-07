@@ -376,3 +376,28 @@ async fn table_exists(pool: &sqlx::SqlitePool, table_name: &str) -> bool {
             .expect("check table");
     exists.is_some()
 }
+
+#[tokio::test]
+async fn multipart_history_migration_preserves_existing_rows() {
+    let db = test_db().await;
+    sqlx::raw_sql(include_str!(
+        "../../../migrations/20260708221117_core_initial_schema.sql"
+    ))
+    .execute(db.pool())
+    .await
+    .unwrap();
+    sqlx::raw_sql("INSERT INTO workspaces (id,name,is_default,created_at,updated_at) VALUES ('w','w',1,'now','now'); INSERT INTO api_history (id,workspace_id,method,url,request_body,created_at,updated_at) VALUES ('h','w','POST','http://example.test','legacy-body','now','now');")
+        .execute(db.pool()).await.unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../../migrations/20260906020000_core_api_history_body_kind.sql"
+    ))
+    .execute(db.pool())
+    .await
+    .unwrap();
+    let row: (String, String) =
+        sqlx::query_as("SELECT request_body_kind, request_body FROM api_history WHERE id='h'")
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert_eq!(row, ("json".into(), "legacy-body".into()));
+}

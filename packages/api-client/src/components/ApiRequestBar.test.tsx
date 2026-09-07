@@ -17,6 +17,7 @@ function requestTab(): ApiRequestTab {
       envVariables: [],
       preRequestScript: "",
       postResponseScript: "",
+      multipartParts: [],
       formBody: [],
       headers: [],
       method: "GET",

@@ -78,7 +78,9 @@ pub(super) fn snapshot_key_values(value: &str) -> AppResult<Vec<KeyValue>> {
 
 pub(super) fn snapshot_body(value: Option<&str>, body_kind: &str) -> Option<String> {
     value.map(|value| {
-        if is_form_urlencoded(body_kind) {
+        if body_kind == unfour_core::models::MULTIPART_BODY_KIND {
+            super::multipart_secrets::snapshot(value)
+        } else if is_form_urlencoded(body_kind) {
             snapshot_form_body(value)
         } else {
             redact_json_body(value).0
@@ -182,7 +184,9 @@ pub(super) fn restore_body(
     body_kind: &str,
 ) -> Option<String> {
     external.map(|value| {
-        if is_form_urlencoded(body_kind) {
+        if body_kind == unfour_core::models::MULTIPART_BODY_KIND {
+            super::multipart_secrets::restore(&value, current)
+        } else if is_form_urlencoded(body_kind) {
             restore_form_body(value, current)
         } else {
             restore_redacted_json(&value, current).unwrap_or(value)

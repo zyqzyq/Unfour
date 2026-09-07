@@ -188,6 +188,24 @@
     }
   },
   "api": {
+    "multipart": {
+      "mode": "form-data",
+      "contentType": "form-data 的 Content-Type 由系统自动生成。",
+      "pickError": "无法选择文件，请重试。",
+      "enabled": "启用",
+      "key": "键",
+      "type": "类型",
+      "value": "值",
+      "text": "文本",
+      "file": "文件",
+      "notSelected": "尚未选择文件",
+      "select": "选择文件",
+      "clear": "清除",
+      "delete": "删除行",
+      "add": "添加行",
+      "keyError": "Multipart 字段的键不能为空。",
+      "fileError": "Multipart 文件字段需要选择本地文件。"
+    },
     "actions": {
       "deleteRequest": "删除请求",
       "duplicate": "复制",

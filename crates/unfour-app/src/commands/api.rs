@@ -415,3 +415,26 @@ pub async fn api_request_delete(
         .delete_api_request(workspace_id, request_id)
         .await
 }
+
+/// The selected path is returned only to this desktop runtime, without logging.
+#[tauri::command]
+pub async fn api_request_file_pick(
+    app: AppHandle,
+) -> AppResult<Option<unfour_core::models::ApiPickedFile>> {
+    let Some(selected) = app.dialog().file().blocking_pick_file() else {
+        return Ok(None);
+    };
+    let path = selected
+        .into_path()
+        .map_err(|_| AppError::Validation("Invalid selected file".into()))?;
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| AppError::Validation("Invalid selected filename".into()))?
+        .to_string();
+    let path = path
+        .to_str()
+        .ok_or_else(|| AppError::Validation("Invalid selected file".into()))?
+        .to_string();
+    Ok(Some(unfour_core::models::ApiPickedFile { path, name }))
+}

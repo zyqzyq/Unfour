@@ -615,6 +615,9 @@ async fn sibling_requests_on(
 
 fn validate_request_input(input: &ApiRequestInput) -> AppResult<()> {
     super::super::helpers::validate_workspace_id(&input.workspace_id)?;
+    if input.body_kind == unfour_core::models::MULTIPART_BODY_KIND {
+        unfour_core::models::parse_multipart_definition(input.body.as_deref())?;
+    }
     if input
         .timeout_ms
         .is_some_and(|value| value > MAX_API_TIMEOUT_MS)

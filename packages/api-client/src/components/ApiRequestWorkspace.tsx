@@ -54,9 +54,12 @@ export function ApiRequestWorkspace({
         resizable
       >
         <ApiRequestEditor
+          key={activeTab.id}
           auth={activeTab.draft.auth}
           body={activeTab.draft.body}
           bodyMode={activeTab.draft.bodyMode}
+          multipartParts={activeTab.draft.multipartParts}
+          onMultipartPartsChange={(multipartParts) => onUpdateDraft(activeTab.id, { multipartParts })}
           formBody={activeTab.draft.formBody}
           headers={activeTab.draft.headers}
           onAuthChange={(auth) => onUpdateDraft(activeTab.id, { auth })}

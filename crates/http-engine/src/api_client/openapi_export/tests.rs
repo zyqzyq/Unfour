@@ -79,6 +79,7 @@ fn history(request: &ApiSavedRequest, id: &str, status: i64, body: &str) -> ApiH
         url: request.url.clone(),
         request_headers_json: request.headers_json.clone(),
         request_query_json: request.query_json.clone(),
+        request_body_kind: "json".into(),
         request_body: request.body.clone(),
         status: Some(status),
         duration_ms: Some(25),

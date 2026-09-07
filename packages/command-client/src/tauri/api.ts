@@ -245,3 +245,7 @@ export function getApiHistoryDetail(workspaceId: string, historyId: string) {
 export function listSavedApiRequests(workspaceId: string) {
   return call<ApiSavedRequest[]>("api_saved_requests", { workspaceId });
 }
+
+export function pickApiRequestFile() {
+  return call<import("../types").ApiPickedFile | null>("api_request_file_pick");
+}

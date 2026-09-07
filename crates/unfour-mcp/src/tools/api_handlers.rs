@@ -174,6 +174,7 @@ pub(super) fn api_send_request(
             pre_request_script: None,
             post_response_script: None,
             script_schema_version: 1,
+            multipart_parts: vec![],
             temporary_variables: vec![],
         };
         command_bus.send_api_request_in_environment(input, environment_id.as_deref())
@@ -264,6 +265,7 @@ pub(super) fn api_create_request(
         pre_request_script: None,
         post_response_script: None,
         script_schema_version: 1,
+        multipart_parts: vec![],
         temporary_variables: vec![],
     };
 
@@ -331,6 +333,7 @@ pub(super) fn api_update_request(
         pre_request_script: existing.pre_request_script.clone(),
         post_response_script: existing.post_response_script.clone(),
         script_schema_version: existing.script_schema_version,
+        multipart_parts: vec![],
         temporary_variables: vec![],
     };
 

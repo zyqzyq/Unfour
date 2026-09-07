@@ -75,6 +75,7 @@ pub(super) async fn save_in_collection(
             pre_request_script: None,
             post_response_script: None,
             script_schema_version: 1,
+            multipart_parts: vec![],
             temporary_variables: vec![],
         })
         .await

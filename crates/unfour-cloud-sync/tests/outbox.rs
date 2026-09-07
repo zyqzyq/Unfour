@@ -82,6 +82,7 @@ fn api_request(
         pre_request_script: Some("console.log('pre')".into()),
         post_response_script: Some("console.log('post')".into()),
         script_schema_version: 1,
+        multipart_parts: vec![],
         temporary_variables: vec![KeyValue {
             key: "runtime".into(),
             value: "raw-runtime-secret".into(),

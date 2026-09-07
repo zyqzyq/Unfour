@@ -87,6 +87,7 @@ async fn folders_and_parent_folder_requests_drive_collection_tree() {
             pre_request_script: None,
             post_response_script: None,
             script_schema_version: 1,
+            multipart_parts: vec![],
             temporary_variables: vec![],
         })
         .await
@@ -137,6 +138,7 @@ async fn folders_and_parent_folder_requests_drive_collection_tree() {
             pre_request_script: None,
             post_response_script: None,
             script_schema_version: 1,
+            multipart_parts: vec![],
             temporary_variables: vec![],
         })
         .await
@@ -222,6 +224,7 @@ async fn folder_delete_recursively_soft_deletes_descendants_and_requests() {
             pre_request_script: None,
             post_response_script: None,
             script_schema_version: 1,
+            multipart_parts: vec![],
             temporary_variables: vec![],
         })
         .await
@@ -300,6 +303,7 @@ async fn collection_delete_soft_deletes_folders_and_requests() {
             pre_request_script: None,
             post_response_script: None,
             script_schema_version: 1,
+            multipart_parts: vec![],
             temporary_variables: vec![],
         })
         .await
@@ -485,6 +489,7 @@ async fn collection_is_scoped_to_workspace() {
             pre_request_script: None,
             post_response_script: None,
             script_schema_version: 1,
+            multipart_parts: vec![],
             temporary_variables: vec![],
         })
         .await;
@@ -545,6 +550,7 @@ async fn unfour_openapi_export_imports_as_a_new_workspace_scoped_collection() {
                 "pm.test('status', () => pm.expect(pm.response.code).to.equal(200));".to_string(),
             ),
             script_schema_version: 1,
+            multipart_parts: vec![],
             temporary_variables: vec![],
         })
         .await

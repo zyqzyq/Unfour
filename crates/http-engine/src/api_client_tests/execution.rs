@@ -108,6 +108,7 @@ fn request(url: &str, timeout_ms: Option<u64>) -> ApiRequestInput {
         pre_request_script: None,
         post_response_script: None,
         script_schema_version: 1,
+        multipart_parts: vec![],
         temporary_variables: vec![],
     }
 }

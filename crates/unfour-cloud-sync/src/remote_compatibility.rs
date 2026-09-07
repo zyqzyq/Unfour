@@ -148,6 +148,7 @@ fn api_request_has_unsupported_subtype(
                 | "form-urlencoded"
                 | "x-www-form-urlencoded"
                 | "urlencoded"
+                | "multipart-form-data"
         )
     }) {
         return Ok(true);
@@ -221,6 +222,21 @@ fn integer_field(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn multipart_is_supported_but_future_body_kind_is_deferred() {
+        for (kind, expected) in [
+            ("multipart-form-data", false),
+            ("future-multipart-v2", true),
+        ] {
+            let payload = serde_json::json!({"bodyKind": kind});
+            assert_eq!(
+                api_request_has_unsupported_subtype(payload.as_object().unwrap()).unwrap(),
+                expected
+            );
+        }
+        assert_eq!(crate::PROTOCOL_VERSION, 5);
+    }
 
     #[test]
     fn newer_entity_payload_schema_is_deferred_without_changing_protocol_5() {

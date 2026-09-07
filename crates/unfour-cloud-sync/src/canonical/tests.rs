@@ -557,3 +557,40 @@ fn ssh_task_snapshots_are_intrinsic_and_remote_pages_enforce_the_task_parent() {
         1
     );
 }
+
+#[test]
+fn multipart_canonical_payload_has_only_safe_definition() {
+    let mut snapshot = ApiRequestSnapshot {
+        id: "r".into(),
+        workspace_id: "w".into(),
+        collection_id: "c".into(),
+        parent_folder_id: None,
+        name: "Upload".into(),
+        sort_order: 0,
+        auth_json: "{\"type\":\"none\"}".into(),
+        method: "POST".into(),
+        url: "https://example.test".into(),
+        headers: vec![],
+        query: vec![],
+        body_kind: "multipart-form-data".into(),
+        body: Some(
+            r#"[{"id":"f","enabled":true,"key":"avatar","type":"file","fileName":"avatar.png"}]"#
+                .into(),
+        ),
+        settings_json: "{}".into(),
+        pre_request_script: None,
+        post_response_script: None,
+        script_schema_version: 1,
+        created_at: "now".into(),
+        updated_at: "now".into(),
+        revision: 1,
+    };
+    let payload = canonical_payload(DomainSnapshot::ApiRequest(snapshot.clone()))
+        .unwrap()
+        .unwrap();
+    assert_eq!(payload["bodyKind"], "multipart-form-data");
+    assert!(payload.to_string().contains("avatar.png"));
+    assert!(!payload.to_string().contains("filePath"));
+    snapshot.body = Some(r#"[{"id":"f","enabled":true,"key":"avatar","type":"file","fileName":"avatar.png","filePath":"/private/avatar.png"}]"#.into());
+    assert!(canonical_payload(DomainSnapshot::ApiRequest(snapshot)).is_err());
+}

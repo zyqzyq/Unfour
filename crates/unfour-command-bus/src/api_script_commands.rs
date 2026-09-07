@@ -64,6 +64,9 @@ impl CommandBus {
                 ScriptExecutionResult::skipped(),
             ));
         }
+        if input.body_kind == unfour_core::models::MULTIPART_BODY_KIND {
+            unfour_core::models::parse_multipart_definition(input.body.as_deref())?;
+        }
         validate_script_config(
             input.pre_request_script.as_deref(),
             input.post_response_script.as_deref(),
@@ -113,6 +116,13 @@ impl CommandBus {
             return Ok(cancelled_execution(
                 pre.execution,
                 ScriptExecutionResult::skipped(),
+            ));
+        }
+        if input.body_kind == unfour_core::models::MULTIPART_BODY_KIND
+            && pre.request.body_raw != input.body
+        {
+            return Err(AppError::Validation(
+                "Multipart body mutation from pre-request scripts is not supported yet.".into(),
             ));
         }
         if pre.environment_changed {

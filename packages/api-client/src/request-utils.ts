@@ -1,3 +1,4 @@
+import { multipartDefinition, parseMultipartDefinition } from "./model/multipart";
 import type {
   ApiHistoryDetail,
   ApiRequestInput,
@@ -81,7 +82,7 @@ export function historyDetailToInput(history: ApiHistoryDetail): ApiRequestInput
     headers: parseKeyValues(history.requestHeadersJson),
     query: parseKeyValues(history.requestQueryJson),
     body: history.requestBody ?? undefined,
-    bodyKind: "json",
+    bodyKind: history.requestBodyKind ?? "json",
     preRequestScript: null,
     postResponseScript: null,
     scriptSchemaVersion: 1,
@@ -130,14 +131,25 @@ export function bodyFieldsFromInput(
 ): {
   body: string;
   bodyMode: RequestBodyMode;
+  multipartParts: RequestDraft["multipartParts"];
   formBody: KeyValue[];
   rawBodyType: RequestRawBodyType;
 } {
   const normalized = bodyKind.trim().toLowerCase();
+  if (normalized === "multipart-form-data") {
+    return {
+      body: "",
+      bodyMode: "multipart",
+      formBody: [],
+      rawBodyType: "json",
+      multipartParts: parseMultipartDefinition(body ?? "[]"),
+    };
+  }
   if (normalized === "none") {
     return {
       body: "",
       bodyMode: "none",
+      multipartParts: [],
       formBody: [],
       rawBodyType: "json",
     };
@@ -146,6 +158,7 @@ export function bodyFieldsFromInput(
     return {
       body: body ?? "",
       bodyMode: "raw",
+      multipartParts: [],
       formBody: [],
       rawBodyType: "text",
     };
@@ -158,6 +171,7 @@ export function bodyFieldsFromInput(
     return {
       body: "",
       bodyMode: "form",
+      multipartParts: [],
       formBody: parseFormBody(body ?? ""),
       rawBodyType: "json",
     };
@@ -165,6 +179,7 @@ export function bodyFieldsFromInput(
   return {
     body: body ?? "",
     bodyMode: "raw",
+    multipartParts: [],
     formBody: [],
     rawBodyType: "json",
   };
@@ -174,6 +189,12 @@ export function bodyFieldsToInput(
   draft: RequestDraft,
   purpose: "save" | "send",
 ): Pick<ApiRequestInput, "body" | "bodyKind"> {
+  if (draft.bodyMode === "multipart") {
+    return {
+      bodyKind: "multipart-form-data",
+      body: JSON.stringify(multipartDefinition(draft.multipartParts)),
+    };
+  }
   if (draft.bodyMode === "none") {
     return { body: undefined, bodyKind: "none" };
   }

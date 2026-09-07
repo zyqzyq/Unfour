@@ -173,6 +173,12 @@ fn snapshot_value(
 /// hook uses `canonical_intent_on` below so intrinsic fields are captured from
 /// the same committed SQLite view; this helper is for safe UI display.
 pub fn canonical_payload(snapshot: DomainSnapshot) -> Result<Option<Value>, SyncError> {
+    if let DomainSnapshot::ApiRequest(request) = &snapshot {
+        if request.body_kind == unfour_core::models::MULTIPART_BODY_KIND {
+            unfour_core::models::parse_multipart_definition(request.body.as_deref())
+                .map_err(|_| SyncError::InvalidData)?;
+        }
+    }
     let value = match snapshot {
         DomainSnapshot::Workspace(snapshot) => serde_json::to_value(WorkspacePayload {
             name: snapshot.name,

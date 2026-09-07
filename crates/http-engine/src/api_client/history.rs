@@ -43,7 +43,7 @@ impl ApiClientService {
             r#"
             SELECT
               id, workspace_id, name, method, url, request_headers_json, request_query_json,
-              request_body, status, duration_ms, response_headers_json, response_body_preview,
+              request_body, request_body_kind, status, duration_ms, response_headers_json, response_body_preview,
               created_at, updated_at
             FROM api_history
             WHERE workspace_id = ?1 AND id = ?2

@@ -1,4 +1,6 @@
 mod api;
+mod multipart;
+pub use multipart::*;
 mod credentials;
 mod database;
 mod sftp;

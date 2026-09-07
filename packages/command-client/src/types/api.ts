@@ -48,7 +48,12 @@ export type ApiCollectionFolder = {
   deletedAt: string | null;
 };
 
+/** Transient desktop binding, joined to the safe body definition by id. */
+export type ApiMultipartRuntimePart = { id: string; filePath: string };
+export type ApiPickedFile = { path: string; name: string };
+
 export type ApiRequestInput = {
+  multipartParts?: ApiMultipartRuntimePart[];
   workspaceId: string;
   name?: string;
   parentFolderId?: string | null;
@@ -105,6 +110,7 @@ export type ApiHistoryDetail = {
   requestHeadersJson: string;
   requestQueryJson: string;
   requestBody: string | null;
+  requestBodyKind: string;
   status: number | null;
   durationMs: number | null;
   responseHeadersJson: string;

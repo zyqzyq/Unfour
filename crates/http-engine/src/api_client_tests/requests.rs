@@ -21,6 +21,7 @@ async fn saved_request_reopen_and_duplicate_preserve_timeout_settings() {
             pre_request_script: None,
             post_response_script: None,
             script_schema_version: 1,
+            multipart_parts: vec![],
             temporary_variables: vec![],
         })
         .await
@@ -62,6 +63,7 @@ async fn save_request_preserves_non_json_body_unchanged() {
             pre_request_script: None,
             post_response_script: None,
             script_schema_version: 1,
+            multipart_parts: vec![],
             temporary_variables: vec![],
         })
         .await
@@ -123,6 +125,7 @@ async fn save_request_defaults_name_and_lists_by_workspace() {
             pre_request_script: None,
             post_response_script: None,
             script_schema_version: 1,
+            multipart_parts: vec![],
             temporary_variables: vec![],
         })
         .await
@@ -144,6 +147,7 @@ async fn save_request_defaults_name_and_lists_by_workspace() {
             pre_request_script: None,
             post_response_script: None,
             script_schema_version: 1,
+            multipart_parts: vec![],
             temporary_variables: vec![],
         })
         .await
@@ -188,6 +192,7 @@ async fn duplicate_request_copies_template_inside_workspace() {
             pre_request_script: None,
             post_response_script: None,
             script_schema_version: 1,
+            multipart_parts: vec![],
             temporary_variables: vec![],
         })
         .await
@@ -228,6 +233,7 @@ async fn delete_request_soft_deletes_and_returns_remaining_workspace_items() {
             pre_request_script: None,
             post_response_script: None,
             script_schema_version: 1,
+            multipart_parts: vec![],
             temporary_variables: vec![],
         })
         .await
@@ -249,6 +255,7 @@ async fn delete_request_soft_deletes_and_returns_remaining_workspace_items() {
             pre_request_script: None,
             post_response_script: None,
             script_schema_version: 1,
+            multipart_parts: vec![],
             temporary_variables: vec![],
         })
         .await
@@ -367,6 +374,7 @@ async fn update_request_reuses_existing_record_and_validates_collection() {
                 pre_request_script: None,
                 post_response_script: None,
                 script_schema_version: 1,
+                multipart_parts: vec![],
                 temporary_variables: vec![],
             },
         )
@@ -405,6 +413,7 @@ async fn update_request_reuses_existing_record_and_validates_collection() {
                 pre_request_script: None,
                 post_response_script: None,
                 script_schema_version: 1,
+                multipart_parts: vec![],
                 temporary_variables: vec![],
             },
         )

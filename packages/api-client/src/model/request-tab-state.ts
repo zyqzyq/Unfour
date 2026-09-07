@@ -1,3 +1,4 @@
+import { multipartDefinition } from "./multipart";
 import type { ApiTabSaveState, RequestDraft } from "./types";
 import type {
   ApiRequestTab,
@@ -100,6 +101,7 @@ export function normalizeRequestDraft(draft: RequestDraft): string {
     body: draft.body,
     bodyMode: draft.bodyMode,
     collectionId: draft.collectionId,
+    multipartParts: multipartDefinition(draft.multipartParts),
     formBody: normalizeKeyValues(draft.formBody),
     headers: normalizeKeyValues(draft.headers),
     method: draft.method.toUpperCase(),

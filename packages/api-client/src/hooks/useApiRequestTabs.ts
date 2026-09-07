@@ -1,3 +1,5 @@
+import { useI18n, createTranslator, type TFunction } from "@unfour/ui";
+import { multipartRuntimeInput, multipartValidation } from "../model/multipart";
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -37,6 +39,7 @@ import type {
 } from "../model/types";
 
 export function useApiRequestTabs(workspaceId: string) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const [collectionStatus, setCollectionStatus] = useState("");
   const state = useApiRequestTabStore(
@@ -146,7 +149,7 @@ export function useApiRequestTabs(workspaceId: string) {
 
   const sendTab = useCallback(
     (tab: ApiRequestTab) => {
-      const validationError = validateBeforeSend(tab);
+      const validationError = validateBeforeSend(tab, t);
       if (validationError) {
         useApiRequestTabStore.getState().failTabSend(workspaceId, tab.id, validationError);
         return;
@@ -156,7 +159,7 @@ export function useApiRequestTabs(workspaceId: string) {
       useApiRequestTabStore.getState().startTabSend(workspaceId, tab.id, input, executionId);
       sendRequest({ executionId, input, tabId: tab.id });
     },
-    [sendRequest, workspaceId],
+    [sendRequest, workspaceId, t],
   );
 
   const cancelTab = useCallback(async (tab: ApiRequestTab) => {
@@ -260,6 +263,7 @@ export function tabToInput(
         ? undefined
         : body.body,
     bodyKind: body.bodyKind,
+    ...multipartRuntimeInput(tab.draft, purpose),
     preRequestScript: tab.draft.preRequestScript || null,
     postResponseScript: tab.draft.postResponseScript || null,
     scriptSchemaVersion: 1,
@@ -268,7 +272,11 @@ export function tabToInput(
   };
 }
 
-function validateBeforeSend(tab: ApiRequestTab): string | null {
+export function validateBeforeSend(tab: ApiRequestTab, t: TFunction = createTranslator("en")): string | null {
+  if (tab.draft.bodyMode === "multipart" && !["GET", "HEAD"].includes(tab.draft.method)) {
+    const issue = multipartValidation(tab.draft.multipartParts);
+    if (issue) return t(issue === "key" ? "api.multipart.keyError" : "api.multipart.fileError");
+  }
   if (
     tab.draft.bodyMode === "raw" &&
     tab.draft.rawBodyType === "json" &&

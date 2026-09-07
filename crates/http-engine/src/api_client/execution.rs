@@ -12,6 +12,9 @@ impl ApiClientService {
         cancellation: CancellationToken,
     ) -> AppResult<ApiResponse> {
         validate_workspace_id(&input.workspace_id)?;
+        if input.body_kind == unfour_core::models::MULTIPART_BODY_KIND {
+            unfour_core::models::parse_multipart_definition(input.body.as_deref())?;
+        }
         let method = parse_method(&input.method)?;
         let url = build_url(&input.url, &input.query)?;
         let timeout = request_timeout_duration(input.timeout_ms);
@@ -31,6 +34,9 @@ impl ApiClientService {
 
         for header in input.headers.iter().filter(|item| item.enabled) {
             if header.key.trim().eq_ignore_ascii_case("content-type") {
+                if input.body_kind == unfour_core::models::MULTIPART_BODY_KIND {
+                    continue;
+                }
                 has_content_type = true;
             }
             let name = HeaderName::from_bytes(header.key.trim().as_bytes()).map_err(|_| {
@@ -42,7 +48,15 @@ impl ApiClientService {
             builder = builder.header(name, value);
         }
 
-        if let Some(body) = input.body.clone().filter(|body| !body.is_empty()) {
+        if input.body_kind == unfour_core::models::MULTIPART_BODY_KIND {
+            if !matches!(method, Method::GET | Method::HEAD) {
+                let form = tokio::select! {
+                    _ = cancellation.cancelled() => return Err(cancelled_error()),
+                    form = super::multipart::build_form(&input) => form?,
+                };
+                builder = builder.multipart(form);
+            }
+        } else if let Some(body) = input.body.clone().filter(|body| !body.is_empty()) {
             if input.body_kind == "json" && !has_content_type {
                 builder = builder.header(CONTENT_TYPE, "application/json");
             }
@@ -190,9 +204,9 @@ impl ApiClientService {
             INSERT INTO api_history (
               id, workspace_id, name, method, url, request_headers_json, request_query_json,
               request_body, status, duration_ms, response_headers_json, response_body_preview,
-              created_at, updated_at
+              created_at, updated_at, request_body_kind
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13, ?14)
             "#,
         )
         .bind(&id)
@@ -208,6 +222,7 @@ impl ApiClientService {
         .bind(serde_json::to_string(response_headers)?)
         .bind(body_preview)
         .bind(now)
+        .bind(&input.body_kind)
         .execute(self.db.pool())
         .await?;
 

@@ -138,6 +138,7 @@ impl CommandBusAdapter for ApiStubCommandBus {
                             url: "https://api.example.com/users?api_key=secret".to_string(),
                             request_headers_json: r#"[{"key":"Authorization","value":"Bearer secret-token","enabled":true}]"#.to_string(),
                             request_query_json: r#"[{"key":"token","value":"secret","enabled":true}]"#.to_string(),
+                            request_body_kind: "json".into(),
                             request_body: Some(r#"{"name":"test","password":"secret123"}"#.to_string()),
                             status: Some(401),
                             duration_ms: Some(120),

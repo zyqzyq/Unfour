@@ -562,19 +562,54 @@ impl CommandBus {
             ),
             None => None,
         };
-        input.body = match input.body {
-            Some(body) => Some(
-                self.workspace
+        if input.body_kind == unfour_core::models::MULTIPART_BODY_KIND {
+            use unfour_core::models::{parse_multipart_definition, ApiMultipartPart};
+            let mut parts = parse_multipart_definition(input.body.as_deref())?;
+            for part in &mut parts {
+                if !part.enabled() {
+                    continue;
+                }
+                let (key, value) = match part {
+                    ApiMultipartPart::Text { key, value, .. } => (key, Some(value)),
+                    ApiMultipartPart::File { key, .. } => (key, None),
+                };
+                *key = self
+                    .workspace
                     .resolve_variables_with_overrides(
                         &input.workspace_id,
                         environment_id,
-                        &body,
+                        key,
                         &input.temporary_variables,
                     )
-                    .await?,
-            ),
-            None => None,
-        };
+                    .await?;
+                if let Some(value) = value {
+                    *value = self
+                        .workspace
+                        .resolve_variables_with_overrides(
+                            &input.workspace_id,
+                            environment_id,
+                            value,
+                            &input.temporary_variables,
+                        )
+                        .await?;
+                }
+            }
+            input.body = Some(serde_json::to_string(&parts)?);
+        } else {
+            input.body = match input.body {
+                Some(body) => Some(
+                    self.workspace
+                        .resolve_variables_with_overrides(
+                            &input.workspace_id,
+                            environment_id,
+                            &body,
+                            &input.temporary_variables,
+                        )
+                        .await?,
+                ),
+                None => None,
+            };
+        }
         input.headers = self
             .resolve_api_key_values(
                 &input.workspace_id,

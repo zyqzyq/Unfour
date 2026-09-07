@@ -1,3 +1,5 @@
+import { MultipartFormEditor } from "./MultipartFormEditor";
+import type { MultipartPart } from "../model/types";
 import { useState } from "react";
 import type * as React from "react";
 import Editor from "@monaco-editor/react";
@@ -19,6 +21,8 @@ export function RequestParamsTabs({
   auth,
   body,
   bodyMode,
+  multipartParts,
+  onMultipartPartsChange,
   formBody,
   headers,
   onAuthChange,
@@ -42,6 +46,8 @@ export function RequestParamsTabs({
   auth: ApiAuthConfig;
   body: string;
   bodyMode: RequestBodyMode;
+  multipartParts: MultipartPart[];
+  onMultipartPartsChange: (parts: MultipartPart[]) => void;
   formBody: KeyValue[];
   headers: KeyValue[];
   onAuthChange: (value: ApiAuthConfig) => void;
@@ -85,6 +91,8 @@ export function RequestParamsTabs({
                       ? 0
                       : bodyMode === "form"
                         ? enabledCount(formBody)
+                        : bodyMode === "multipart"
+                          ? multipartParts.filter((part) => part.enabled).length
                         : body.trim()
                           ? 1
                           : 0
@@ -120,7 +128,9 @@ export function RequestParamsTabs({
           <BodyEditor
             body={body}
             bodyMode={bodyMode}
-            formBody={formBody}
+            multipartParts={multipartParts}
+        onMultipartPartsChange={onMultipartPartsChange}
+        formBody={formBody}
             onBodyChange={onBodyChange}
             onBodyModeChange={onBodyModeChange}
             onFormBodyChange={onFormBodyChange}
@@ -280,6 +290,8 @@ function PaneScroll({ children }: { children: React.ReactNode }) {
 function BodyEditor({
   body,
   bodyMode,
+  multipartParts,
+  onMultipartPartsChange,
   formBody,
   onBodyChange,
   onBodyModeChange,
@@ -289,6 +301,8 @@ function BodyEditor({
 }: {
   body: string;
   bodyMode: RequestBodyMode;
+  multipartParts: MultipartPart[];
+  onMultipartPartsChange: (parts: MultipartPart[]) => void;
   formBody: KeyValue[];
   onBodyChange: (value: string) => void;
   onBodyModeChange: (value: RequestBodyMode) => void;
@@ -321,6 +335,7 @@ function BodyEditor({
             { id: "none", label: "none" },
             { id: "raw", label: "raw" },
             { id: "form", label: "x-www-form-urlencoded" },
+            { id: "multipart", label: t("api.multipart.mode") },
           ]}
           onChange={onBodyModeChange}
           value={bodyMode}
@@ -376,6 +391,7 @@ function BodyEditor({
             value={body}
           />
         )}
+        {bodyMode === "multipart" && <PaneScroll><MultipartFormEditor parts={multipartParts} onChange={onMultipartPartsChange} /></PaneScroll>}
         {bodyMode === "form" && (
           <PaneScroll>
             <KeyValueEditor

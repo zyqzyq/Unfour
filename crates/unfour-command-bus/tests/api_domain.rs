@@ -161,6 +161,7 @@ fn request_input(
         pre_request_script: Some("pm.variables.set('trace', '1');".to_string()),
         post_response_script: Some("pm.test('ok', () => true);".to_string()),
         script_schema_version: 1,
+        multipart_parts: vec![],
         temporary_variables: vec![KeyValue {
             key: "runtime_only".to_string(),
             value: "not-synced".to_string(),

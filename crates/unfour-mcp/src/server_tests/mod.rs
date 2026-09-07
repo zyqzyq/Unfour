@@ -147,6 +147,7 @@ impl CommandBusAdapter for StubCommandBus {
                         url: "https://example.com".to_string(),
                         request_headers_json: "[]".to_string(),
                         request_query_json: "[]".to_string(),
+                        request_body_kind: "json".into(),
                         request_body: None,
                         status: Some(200),
                         duration_ms: Some(10),

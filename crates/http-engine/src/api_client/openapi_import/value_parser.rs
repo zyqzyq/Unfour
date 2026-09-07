@@ -139,6 +139,9 @@ pub(super) fn parse_request_body(
     } else {
         String::new()
     };
+    if body_kind == unfour_core::models::MULTIPART_BODY_KIND {
+        unfour_core::models::parse_multipart_definition(Some(&body))?;
+    }
     Ok((Some(body), body_kind, Some(content_type.clone())))
 }
 

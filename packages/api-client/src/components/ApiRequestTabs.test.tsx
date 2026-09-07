@@ -16,6 +16,7 @@ function requestTab(overrides: Partial<ApiRequestTab> = {}): ApiRequestTab {
       envVariables: [],
       preRequestScript: "",
       postResponseScript: "",
+      multipartParts: [],
       formBody: [],
       headers: [],
       method: "GET",

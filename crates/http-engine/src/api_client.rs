@@ -17,6 +17,7 @@ mod collections;
 mod domain;
 mod execution;
 mod history;
+mod multipart;
 mod openapi_export;
 mod openapi_import;
 mod requests;

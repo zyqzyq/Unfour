@@ -78,6 +78,8 @@ pub struct ApiRequestInput {
     pub script_schema_version: i64,
     #[serde(default)]
     pub temporary_variables: Vec<KeyValue>,
+    #[serde(default, skip_serializing)]
+    pub multipart_parts: Vec<super::ApiMultipartRuntimePart>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -130,6 +132,7 @@ pub struct ApiHistoryDetail {
     pub request_headers_json: String,
     pub request_query_json: String,
     pub request_body: Option<String>,
+    pub request_body_kind: String,
     pub status: Option<i64>,
     pub duration_ms: Option<i64>,
     pub response_headers_json: String,

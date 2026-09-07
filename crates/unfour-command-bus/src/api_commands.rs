@@ -766,6 +766,7 @@ impl CommandBus {
             pre_request_script: saved.pre_request_script.clone(),
             post_response_script: saved.post_response_script.clone(),
             script_schema_version: saved.script_schema_version,
+            multipart_parts: vec![],
             temporary_variables: vec![],
         };
 
@@ -807,6 +808,7 @@ impl CommandBus {
             pre_request_script: saved.pre_request_script.clone(),
             post_response_script: saved.post_response_script.clone(),
             script_schema_version: saved.script_schema_version,
+            multipart_parts: vec![],
             temporary_variables: vec![],
         };
 

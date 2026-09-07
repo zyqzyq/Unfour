@@ -1,3 +1,5 @@
+#[path = "lib_tests/multipart.rs"]
+mod multipart;
 use super::*;
 #[path = "lib_tests/api_environment_override.rs"]
 mod api_environment_override;
@@ -43,6 +45,7 @@ fn api_script_test_input(workspace_id: String, url: String) -> ApiRequestInput {
         pre_request_script: None,
         post_response_script: None,
         script_schema_version: 1,
+        multipart_parts: vec![],
         temporary_variables: vec![],
     }
 }
@@ -428,6 +431,7 @@ async fn save_and_list_api_requests() {
         pre_request_script: Some("console.log('saved pre')".to_string()),
         post_response_script: Some("pm.test('saved post', () => {})".to_string()),
         script_schema_version: 1,
+        multipart_parts: vec![],
         temporary_variables: vec![],
     };
 
@@ -473,6 +477,7 @@ async fn save_and_list_api_requests() {
         pre_request_script: None,
         post_response_script: None,
         script_schema_version: 1,
+        multipart_parts: vec![],
         temporary_variables: vec![],
     };
 
@@ -514,6 +519,7 @@ async fn collection_openapi_export_uses_command_bus_and_persisted_requests() {
         pre_request_script: None,
         post_response_script: None,
         script_schema_version: 1,
+        multipart_parts: vec![],
         temporary_variables: vec![],
     })
     .await
@@ -576,6 +582,7 @@ async fn execute_saved_api_request_rejects_mismatched_workspace() {
             pre_request_script: None,
             post_response_script: None,
             script_schema_version: 1,
+            multipart_parts: vec![],
             temporary_variables: vec![],
         })
         .await
@@ -732,6 +739,7 @@ async fn api_read_commands_use_real_collection_ids() {
             pre_request_script: None,
             post_response_script: None,
             script_schema_version: 1,
+            multipart_parts: vec![],
             temporary_variables: vec![],
         })
         .await
@@ -834,6 +842,7 @@ async fn api_request_resolution_uses_current_workspace_environment_then_workspac
         pre_request_script: None,
         post_response_script: None,
         script_schema_version: 1,
+        multipart_parts: vec![],
         temporary_variables: vec![],
     };
     let resolved = bus

@@ -1,3 +1,4 @@
+import { attachMultipartBindings } from "./multipart";
 import type {
   ApiHistoryDetail,
   ApiHistoryItem,
@@ -194,7 +195,7 @@ export function startTabSend(
 ): ApiTabsState {
   return updateTab(state, tabId, (tab) => ({
     ...tab,
-    lastRequest: request ?? tab.lastRequest,
+    lastRequest: request ? { ...request, multipartParts: undefined } : tab.lastRequest,
     cancelling: false,
     execution: null,
     executionId,
@@ -264,6 +265,10 @@ export function completeTabSave(
 ): ApiTabsState {
   const nextId = `saved:${saved.id}`;
   const savedDraft = inputToDraft(savedRequestToInput(saved, state.workspaceId));
+  savedDraft.multipartParts = attachMultipartBindings(
+    savedDraft.multipartParts,
+    state.tabs.find((tab) => tab.id === tabId)?.draft.multipartParts ?? [],
+  );
   const existingIndex = state.tabs.findIndex(
     (tab) => tab.id === nextId && tab.id !== tabId,
   );
@@ -402,6 +407,7 @@ function emptyDraft(): RequestDraft {
     bodyMode: "none",
     collectionId: null,
     envVariables: [],
+    multipartParts: [],
     formBody: [],
     headers: [],
     method: "GET",

@@ -50,3 +50,35 @@
 - `pnpm run build`
 - For behavior changes, manually verify opening a request, Send, save, history,
   and response rendering.
+
+## Multipart V1
+
+`form-data` supports ordered Text/File rows with stable IDs, duplicate keys,
+empty text values, and disabled rows. Saved `bodyKind` is
+`multipart-form-data`; `body` is a JSON array of
+`{ id, enabled, key, type: "text", value }` or
+`{ id, enabled, key, type: "file", fileName }` definitions.
+
+Only the current draft holds `filePath`. The Desktop send DTO carries
+`multipartParts: [{ id, filePath }]` as transient bindings joined to that
+safe definition. Save omits these bindings; Rust rejects paths/unknown fields
+inside definitions and excludes runtime bindings from serialization and Debug.
+Saving preserves bindings in the current tab by ID; saved/history reopen
+requires selecting each enabled file again. MCP does not accept bindings and
+fails closed for enabled File parts. GET/HEAD send no body.
+
+The picker follows `pickApiRequestFile` -> `api_request_file_pick` -> Tauri
+DialogExt and reads no content. Rust uses asynchronous file handles and reqwest
+streaming multipart parts. The existing reqwest dependency enables `multipart`
+and `stream` (with their transitive lockfile dependencies); Tokio enables
+`fs` and `macros` for file opening and cancellation. No filesystem frontend
+library or upload manager is added. reqwest owns Content-Type/boundary and
+replaces explicit Content-Type during multipart sending.
+
+Environment resolution covers Text key/value and File key, never fileName or
+filePath. Pre-request scripts retain existing method/URL/header/environment
+APIs; changing multipart body is rejected. History stores its actual body kind.
+Cloud Sync keeps Protocol 5, payload versions, and reader revisions unchanged;
+unknown future body kinds remain deferred. Sensitive Text values are redacted
+by field key in snapshots and restored from local data by stable part ID.
+OpenAPI uses the existing extension fallback rather than multipart schema mapping.

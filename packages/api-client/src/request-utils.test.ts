@@ -103,6 +103,7 @@ describe("body field helpers", () => {
       preRequestScript: "",
       postResponseScript: "",
       parentFolderId: null,
+      multipartParts: [],
       formBody: [
         { key: "a", value: "1", enabled: true },
         { key: "b", value: "2", enabled: false },

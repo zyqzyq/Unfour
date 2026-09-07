@@ -93,6 +93,9 @@ pub(super) async fn upsert_request(
         current.as_ref().and_then(|request| request.body.as_deref()),
         &record.body_kind,
     );
+    if record.body_kind == unfour_core::models::MULTIPART_BODY_KIND {
+        unfour_core::models::parse_multipart_definition(body.as_deref())?;
+    }
     let url = restore_url(
         &record.url,
         current.as_ref().map(|request| request.url.as_str()),

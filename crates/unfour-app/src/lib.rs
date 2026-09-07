@@ -409,6 +409,7 @@ macro_rules! generate_handlers {
             unfour_app::commands::api_saved_requests,
             unfour_app::commands::api_send_request,
             unfour_app::commands::api_send_request_v2,
+            unfour_app::commands::api_request_file_pick,
             unfour_app::commands::api_cancel_request,
             unfour_app::commands::api_client_preferences_get,
             unfour_app::commands::api_client_preferences_update,
