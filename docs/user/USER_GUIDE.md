@@ -14,16 +14,18 @@ Unfour opens into a single workspace surface:
 
 ## Current Capabilities
 
-This guide documents the current v0.9.3 product capabilities. The published
+This guide documents the current v0.9.4 product capabilities. The published
 v0.9.0 verification record remains the latest completed release evidence until
-the v0.9.3 candidate is verified:
+the v0.9.4 candidate is verified:
 
 - The workspace shell is usable.
 - API, SSH, and Database sidebars keep independent bounded widths and restore
   their own layout when switching modules or restarting the app.
 - API debugging supports request editing, Send/cancel, response viewing,
   history, saved requests, collections, environments, import/export, request
-  timeouts, and request scripts with test and console results.
+  timeouts, multipart text/file form-data, and request scripts with test and
+  console results. File selections are transient and must be reselected when
+  reopening saved or historical multipart requests.
 - Local MCP is available through the stdio `unfour-mcp` server. It uses the
   same command bus and the same saved API, SSH, and database connections, so
   Codex and Cursor can reproduce issues, inspect logs and database state, and

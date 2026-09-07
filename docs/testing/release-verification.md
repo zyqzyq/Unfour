@@ -1,27 +1,26 @@
-# v0.9.3 Release Verification
+# v0.9.4 Release Verification
 
-This document tracks v0.9.3 release preparation. The published v0.9.0 results
-remain below as historical evidence; the local `v0.9.2` tag is the comparison
-baseline. A new v0.9.3 candidate needs fresh evidence and must not inherit
+This document tracks v0.9.4 release preparation. The published v0.9.0 results
+remain below as historical evidence; the local `v0.9.3` tag is the comparison
+baseline. A new v0.9.4 candidate needs fresh evidence and must not inherit
 those release results automatically.
 
-## v0.9.3 preparation status
+## v0.9.4 preparation status
 
-- Source version: `0.9.3`; release status: `NOT RELEASED`.
+- Source version: `0.9.4`; release status: `NOT RELEASED`.
 - Version synchronization: `PASS` (`node scripts/sync-version.mjs --check`).
 - Cargo workspace lock/check: `PASS` (`cargo check --workspace --locked`).
-- Release contract suite: `PASS` (73 tests via the direct Node test command).
+- Release contract suite: `NOT VERIFIED` (run the direct Node test command for
+  the v0.9.4 candidate).
 - Candidate artifact, platform, live-service, and manual gates: `NOT VERIFIED`.
 
-## v0.9.3 candidate scope
+## v0.9.4 candidate scope
 
-The candidate adds global and per-request API timeouts, active-request
-cancellation, clearer request naming and history display, authoritative Cloud
-Sync workspace ownership, durable outbox preservation during account
-inactivity, legacy/orphan binding recovery, legacy API entity bootstrap, and a
-consolidated settings navigation surface. Fresh candidate evidence is required
-for API timeout/cancellation behavior, Cloud Sync pause and legacy-data
-recovery journeys, and settings navigation across the supported modules.
+The candidate adds multipart text/file form-data requests with transient file
+bindings, streamed uploads, body-kind-aware history, and Cloud Sync Protocol 5
+compatibility hardening. Fresh candidate evidence is required for multipart
+request editing and upload behavior, Cloud Sync incomplete-apply and workspace
+delete recovery, and the existing supported-module regression matrix.
 
 ## Previous v0.9.0 Final Release Verification Record
 

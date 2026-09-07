@@ -196,7 +196,7 @@ Current status:
 
 Release claims remain limited by the current verification matrix.
 
-## v0.9.3 (Current source version)
+## v0.9.3 (Previous source checkpoint)
 
 The follow-up from the `v0.9.2` tag focuses on API execution controls and
 Cloud Sync reliability:
@@ -211,7 +211,25 @@ Cloud Sync reliability:
 
 Current status:
 
-- source version is `0.9.3`; release status is `NOT RELEASED`;
+- the `v0.9.3` tag is the comparison baseline for the current source;
+- the active release verification record still treats the v0.9.0 publication
+  evidence as historical.
+
+Release claims remain limited by the current verification matrix.
+
+## v0.9.4 (Current source version)
+
+The follow-up from the `v0.9.3` tag focuses on multipart API requests and Cloud
+Sync Protocol 5 compatibility:
+
+- ordered multipart text/file fields, transient file bindings, streamed upload,
+  and body-kind-aware request history; and
+- Protocol 5 client freeze, entity/reader-revision tracking, compatibility
+  hardening, fail-closed incomplete apply, and workspace delete resolution.
+
+Current status:
+
+- source version is `0.9.4`; release status is `NOT RELEASED`;
 - candidate artifact, platform, live-service, and manual verification remain
   to be recorded in the active release matrix.
 

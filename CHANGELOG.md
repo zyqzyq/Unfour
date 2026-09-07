@@ -6,6 +6,27 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-09-07
+
+Feature release following the `v0.9.3` source tag, focused on multipart API
+requests and Cloud Sync Protocol 5 compatibility.
+
+### Added
+
+- **Multipart form-data requests** — Add ordered text and file fields,
+  duplicate keys, empty values, disabled rows, file picking, streamed uploads,
+  and request-body history that preserves the actual body kind. File paths
+  remain transient bindings and are not persisted or synchronized.
+- **Cloud Sync Protocol 5 foundations** — Freeze the Protocol 5 client and add
+  entity registry and reader-revision tracking for safer remote reconciliation.
+
+### Fixed
+
+- **Cloud Sync compatibility and apply safety** — Close Protocol 5 compatibility
+  gaps, fail closed when remote changes cannot be applied completely, preserve
+  local intent for replay, and resolve workspace delete tombstones that are
+  already equivalent to local state.
+
 ## [0.9.3] - 2026-09-04
 
 Maintenance release following the `v0.9.2` source tag, focused on API request
@@ -577,6 +598,7 @@ First public release.
 - Linux artifacts remain experimental/unverified until real-device smoke checks
   are complete.
 
+[0.9.4]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.4
 [0.9.3]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.3
 [0.9.2]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.2
 [0.9.1]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.1
