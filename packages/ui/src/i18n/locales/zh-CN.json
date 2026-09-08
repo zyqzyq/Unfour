@@ -130,6 +130,12 @@
         "unavailable": "不可用",
         "website": "网站",
         "github": "GitHub",
+        "feedback": "反馈与支持",
+        "feedbackIntro": "Unfour 目前由我独立开发，每一条反馈我都会看。",
+        "sendFeedback": "发送反馈",
+        "sendFeedbackDescription": "告诉我哪些地方好用、哪里不顺手，或者你希望改进什么。",
+        "reportIssue": "报告问题",
+        "reportIssueDescription": "报告可复现的问题或异常行为。",
         "actions": "操作",
         "copyVersionInfo": "复制版本信息"
       }

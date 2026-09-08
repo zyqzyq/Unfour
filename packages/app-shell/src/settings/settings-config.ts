@@ -4,6 +4,8 @@ export const APP_NAME = "Unfour";
 export const APP_VERSION = rootPackage.version;
 export const APP_WEBSITE_URL = "https://unfour.dev/";
 export const APP_GITHUB_URL = "https://github.com/zyqzyq/Unfour";
+export const APP_FEEDBACK_URL = `${APP_GITHUB_URL}/discussions`;
+export const APP_BUG_REPORT_URL = `${APP_GITHUB_URL}/issues/new?template=bug_report.yml`;
 
 export type VersionInfoApp = {
   name: string;

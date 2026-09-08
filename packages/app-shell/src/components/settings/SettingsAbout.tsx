@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Button, useI18n } from "@unfour/ui";
 import {
+  APP_BUG_REPORT_URL,
+  APP_FEEDBACK_URL,
   APP_GITHUB_URL,
   APP_NAME,
   APP_VERSION,
@@ -123,6 +125,24 @@ export function SettingsAbout({ children }: { children?: ReactNode }) {
 
       {children ? <div className="space-y-4">{children}</div> : null}
 
+      <SettingsGroup
+        description={t("app.settings.about.feedbackIntro")}
+        title={t("app.settings.about.feedback")}
+      >
+        <div className="space-y-3">
+          <FeedbackLink
+            description={t("app.settings.about.sendFeedbackDescription")}
+            href={APP_FEEDBACK_URL}
+            label={t("app.settings.about.sendFeedback")}
+          />
+          <FeedbackLink
+            description={t("app.settings.about.reportIssueDescription")}
+            href={APP_BUG_REPORT_URL}
+            label={t("app.settings.about.reportIssue")}
+          />
+        </div>
+      </SettingsGroup>
+
       <SettingsGroup title={t("app.settings.about.actions")}>
         <Button onClick={() => void copyVersionInfo()} size="sm" type="button" variant="secondary">
           {copyState === "copied"
@@ -162,5 +182,22 @@ function ExternalLinkValue({ href, label }: { href: string; label: string }) {
       <span className="truncate">{label}</span>
       <ExternalLink className="shrink-0" size={12} />
     </a>
+  );
+}
+
+function FeedbackLink({
+  description,
+  href,
+  label,
+}: {
+  description: string;
+  href: string;
+  label: string;
+}) {
+  return (
+    <div>
+      <ExternalLinkValue href={href} label={label} />
+      <p className="mt-1 text-[12px] leading-5 text-[var(--u-color-text-muted)]">{description}</p>
+    </div>
   );
 }

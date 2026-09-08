@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  APP_BUG_REPORT_URL,
+  APP_FEEDBACK_URL,
   APP_GITHUB_URL,
   APP_VERSION,
   APP_WEBSITE_URL,
@@ -12,6 +14,10 @@ describe("settings config", () => {
     expect(APP_VERSION).toMatch(/^\d+\.\d+\.\d+(-[A-Za-z0-9.-]+)?$/);
     expect(APP_WEBSITE_URL).toBe("https://unfour.dev/");
     expect(APP_GITHUB_URL).toBe("https://github.com/zyqzyq/Unfour");
+    expect(APP_FEEDBACK_URL).toBe("https://github.com/zyqzyq/Unfour/discussions");
+    expect(APP_BUG_REPORT_URL).toBe(
+      "https://github.com/zyqzyq/Unfour/issues/new?template=bug_report.yml",
+    );
   });
 
   it("formats copyable version details for support reports", () => {

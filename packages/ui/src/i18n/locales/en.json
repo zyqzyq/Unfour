@@ -130,6 +130,12 @@
         "unavailable": "Unavailable",
         "website": "Website",
         "github": "GitHub",
+        "feedback": "Feedback & Support",
+        "feedbackIntro": "Building Unfour solo — I read every piece of feedback.",
+        "sendFeedback": "Send feedback",
+        "sendFeedbackDescription": "Share what worked, what felt confusing, or what you’d like to see improved.",
+        "reportIssue": "Report an issue",
+        "reportIssueDescription": "Report a reproducible bug or unexpected behavior.",
         "actions": "Actions",
         "copyVersionInfo": "Copy version info"
       }

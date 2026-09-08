@@ -21,7 +21,7 @@ body:
     attributes:
       label: Related module
       options:
-        - API Debugger
+        - API Client
         - SSH Terminal
         - Database
         - Workspace / shell
