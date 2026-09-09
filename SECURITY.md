@@ -21,7 +21,7 @@ Instead, report privately through one of:
 
 - GitHub's [private vulnerability reporting](https://github.com/zyqzyq/Unfour/security/advisories/new)
   (preferred), or
-- email to the maintainer at **zyqreid@gmail.com** with the subject
+- email to the maintainer at **support@unfour.dev** with the subject
   `[SECURITY] Unfour`.
 
 Please include:

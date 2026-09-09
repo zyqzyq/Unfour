@@ -280,21 +280,13 @@ If Unfour is useful to you, you can support its continued open-source developmen
 
 Sponsorship is optional and does not include Unfour Pro or paid cloud services.
 
-## Built with Codex & GPT-5.6
+## Why Unfour?
 
-Codex was used to review the Rust and TypeScript architecture, implement and
-refactor Tauri commands, add tests, and investigate build failures and MCP
-process lifecycle issues.
+The name “Unfour” is partly inspired by the Chinese idea of **四不像** — something that doesn’t quite fit into any single category.
 
-GPT-5.6 helped analyze SSH and database permission boundaries, refine MCP tool
-design, and plan the project architecture and release process.
+Unfour isn’t just an API client, an SSH tool, a database client, or an agent workspace. It brings those usually separate capabilities together, so the name carries a bit of self-deprecating humor: it’s not quite any one of them, but has a little of each.
 
-The local Unfour MCP server lets Codex and Cursor use the same saved API, SSH,
-and database connections for diagnostic inspection and runtime re-checks. It
-follows the same command bus, workspace scope, credential handling, and confirmation
-controls as the desktop app. Codex and Cursor can participate in the
-troubleshooting loop through MCP, but connecting them does not automatically
-run a complete root-cause playbook.
+In traditional Chinese mythology, 四不像 is also associated with an auspicious mythical creature. That gave the name another meaning for me — a small hope that Unfour can grow into something a little unusual, but genuinely useful and built to last.
 
 ## License
 

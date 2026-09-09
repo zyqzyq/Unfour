@@ -21,7 +21,7 @@ Requirements:
 git clone https://github.com/zyqzyq/Unfour.git
 cd Unfour
 pnpm install
-pnpm run tauri dev
+pnpm tauri dev
 ```
 
 ## Project Architecture
