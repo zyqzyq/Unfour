@@ -1,4 +1,4 @@
-import { PanelBottom, PanelLeft, PanelRight } from "lucide-react";
+import { PanelBottom, PanelLeft } from "lucide-react";
 import { IconButton, cn, useI18n } from "@unfour/ui";
 
 const activeClass = "bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]";
@@ -8,16 +8,12 @@ const statusBarButtonClass =
 export function LayoutControls({
   bottomPanelCollapsed,
   onToggleBottomPanel,
-  onToggleInspector,
   onToggleSidebar,
-  rightInspectorCollapsed,
   sidebarCollapsed,
 }: {
   bottomPanelCollapsed: boolean;
-  onToggleBottomPanel: () => void;
-  onToggleInspector: () => void;
+  onToggleBottomPanel?: () => void;
   onToggleSidebar: () => void;
-  rightInspectorCollapsed: boolean;
   sidebarCollapsed: boolean;
 }) {
   const { t } = useI18n();
@@ -33,7 +29,7 @@ export function LayoutControls({
       >
         <PanelLeft size={13} />
       </IconButton>
-      <IconButton
+      {onToggleBottomPanel && <IconButton
         aria-pressed={!bottomPanelCollapsed}
         className={cn(statusBarButtonClass, !bottomPanelCollapsed && activeClass)}
         label={t("app.titlebar.toggleBottomPanel")}
@@ -41,16 +37,7 @@ export function LayoutControls({
         size="compact"
       >
         <PanelBottom size={13} />
-      </IconButton>
-      <IconButton
-        aria-pressed={!rightInspectorCollapsed}
-        className={cn(statusBarButtonClass, !rightInspectorCollapsed && activeClass)}
-        label={t("app.titlebar.toggleInspector")}
-        onClick={onToggleInspector}
-        size="compact"
-      >
-        <PanelRight size={13} />
-      </IconButton>
+      </IconButton>}
     </div>
   );
 }

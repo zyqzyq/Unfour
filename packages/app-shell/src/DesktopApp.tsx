@@ -2,7 +2,10 @@ import AppShell from "./AppShell";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  CommandPalette,
+  Button,
+  EmptyState,
+  ErrorState,
+  LoadingState,
   ConfirmDialog,
   FeedbackProvider,
   MainWorkspace,
@@ -10,21 +13,18 @@ import {
   useI18n,
 } from "@unfour/ui";
 import {
-  exportDiagnosticsBundle,
   getSystemHealth,
   getWorkspaceLayout,
   getWorkspaceState,
   listDatabaseConnections,
   listWorkspaceEnvironments,
-  openDiagnosticsDir,
-  openLogDir,
   setActiveWorkspace as setActiveWorkspaceCommand,
   setActiveWorkspaceEnvironment,
   type WorkspaceState,
 } from "@unfour/command-client";
 import { useWorkspaceStore } from "@unfour/workspace-core";
 import { AppTitleBar } from "./components/AppTitleBar";
-import { BottomPanelPlaceholder } from "./components/BottomPanelPlaceholder";
+import { DesktopCommandPalette } from "./components/DesktopCommandPalette";
 import {
   ApiClientModule, DatabaseModule, SshTerminalLogPanel, SshTerminalModule,
   SshTerminalStatusBar, WorkspaceEnvironmentsModule,
@@ -33,9 +33,7 @@ import {
 import { LayoutControls } from "./components/LayoutControls";
 import { ModuleActivityBar } from "./components/ModuleActivityBar";
 import { ModuleSidebar } from "./components/ModuleSidebar";
-import { RightInspectorPlaceholder } from "./components/RightInspectorPlaceholder";
 import { StatusBarPlaceholder } from "./components/StatusBarPlaceholder";
-import { CommandPaletteAction } from "./components/utils";
 import { useLayoutPersistence } from "./components/useLayoutPersistence";
 import { useFeatureModulePreload } from "./components/useFeatureModulePreload";
 import { usePersistentFeatureMounts } from "./components/usePersistentFeatureMounts";
@@ -58,28 +56,23 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
   const [sshSidebarContent, setSshSidebarContent] = useState<ReactNode>(null);
   const [databaseSidebarContent, setDatabaseSidebarContent] = useState<ReactNode>(null);
   const [databaseStatusBarContent, setDatabaseStatusBarContent] = useState<ReactNode>(null);
-  const [rightInspectorCollapsed, setRightInspectorCollapsed] = useState(true);
   const [variableManagerRequest, setVariableManagerRequest] = useState<{
     environmentId: string | null;
-    nonce: number;
     workspaceId: string;
   } | null>(null);
   const [variableManagerDirty, setVariableManagerDirty] = useState(false);
   const [pendingVariableManagerLeave, setPendingVariableManagerLeave] = useState<
     | { kind: "activate-workspace"; workspaceId: string }
     | { kind: "select-module"; tabId: string }
-    | { kind: "toggle-sidebar" }
     | null
   >(null);
   const {
     activeTabId,
     activeWorkspaceId,
     bottomPanelHeight,
-    rightInspectorWidth,
     setActiveTab: setActiveTabInStore,
     setActiveWorkspace,
     setBottomPanelHeight,
-    setRightInspectorWidth,
     setSelectedApiRequest,
     setModuleSidebarWidth,
     sidebarCollapsed,
@@ -122,15 +115,6 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
   });
   useWorkspaceInit(workspaceQuery.data?.activeWorkspaceId, workspaceLayoutQuery.data, sidebarDatabaseConnectionsQuery.data);
   useLayoutPersistence(activeWorkspace?.id ?? null);
-  const runCommandPaletteAction = useCallback(
-    (action: () => void | Promise<unknown>) => {
-      setCommandPaletteOpen(false);
-      void Promise.resolve(action()).catch((error) =>
-        handleError(error, { key: "feedback.command.actionFailed" }),
-      );
-    },
-    [handleError],
-  );
   const activateWorkspaceMutation = useMutation({
     mutationFn: setActiveWorkspaceCommand,
     onMutate: async (workspaceId) => {
@@ -185,13 +169,12 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
     Boolean(activeWorkspace) &&
     variableManagerRequest?.workspaceId === activeWorkspace?.id;
   const handleManageVariables = useCallback(() => {
-    if (!activeWorkspace) return;
-    setVariableManagerRequest((current) => ({
+    if (!activeWorkspace || variableManagerOpen) return;
+    setVariableManagerRequest({
       environmentId: activeEnvironment?.id ?? null,
-      nonce: (current?.nonce ?? 0) + 1,
       workspaceId: activeWorkspace.id,
-    }));
-  }, [activeEnvironment?.id, activeWorkspace]);
+    });
+  }, [activeEnvironment?.id, activeWorkspace, variableManagerOpen]);
   const refreshWorkspaceEnvironments = useCallback(() => {
     if (!activeWorkspace?.id) return;
     void queryClient.refetchQueries({
@@ -207,8 +190,7 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
     (
       leave:
         | { kind: "activate-workspace"; workspaceId: string }
-        | { kind: "select-module"; tabId: string }
-        | { kind: "toggle-sidebar" },
+        | { kind: "select-module"; tabId: string },
     ) => {
       closeVariableManager();
       if (leave.kind === "select-module") {
@@ -225,16 +207,11 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
     (
       leave:
         | { kind: "activate-workspace"; workspaceId: string }
-        | { kind: "select-module"; tabId: string }
-        | { kind: "toggle-sidebar" },
+        | { kind: "select-module"; tabId: string },
     ) => {
       if (!variableManagerOpen) {
         if (leave.kind === "select-module") {
           setActiveTab(leave.tabId);
-          return;
-        }
-        if (leave.kind === "toggle-sidebar") {
-          toggleSidebar();
           return;
         }
         activateWorkspaceMutation.mutate(leave.workspaceId);
@@ -250,7 +227,6 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
       activateWorkspaceMutation,
       applyVariableManagerLeave,
       setActiveTab,
-      toggleSidebar,
       variableManagerDirty,
       variableManagerOpen,
     ],
@@ -265,13 +241,6 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
     },
     [handlePreloadFeature, requestLeaveVariableManager, tabs],
   );
-  const handleToggleSidebar = useCallback(() => {
-    if (variableManagerOpen) {
-      requestLeaveVariableManager({ kind: "toggle-sidebar" });
-      return;
-    }
-    toggleSidebar();
-  }, [requestLeaveVariableManager, toggleSidebar, variableManagerOpen]);
   const handleActivateWorkspace = useCallback(
     (workspaceId: string) => {
       if (workspaceId === activeWorkspace?.id || activateWorkspaceMutation.isPending) return;
@@ -312,18 +281,18 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
   const WorkspaceVariableDecoration = extensions?.workspaceVariableDecoration;
   const layoutControls = useMemo(
     () => (
-      <LayoutControls
+      !variableManagerOpen && <LayoutControls
         bottomPanelCollapsed={bottomPanelCollapsed}
-        onToggleBottomPanel={() => setBottomPanelCollapsed((collapsed) => !collapsed)}
-        onToggleInspector={() => setRightInspectorCollapsed((collapsed) => !collapsed)}
+        onToggleBottomPanel={activeTab.kind === "ssh"
+          ? () => setBottomPanelCollapsed((collapsed) => !collapsed) : undefined}
         onToggleSidebar={toggleSidebar}
-        rightInspectorCollapsed={rightInspectorCollapsed}
         sidebarCollapsed={sidebarCollapsed}
       />
     ),
     [
       bottomPanelCollapsed,
-      rightInspectorCollapsed,
+      activeTab.kind,
+      variableManagerOpen,
       sidebarCollapsed,
       toggleSidebar,
     ],
@@ -342,39 +311,25 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
       <AppShell
         activityBar={
           <ModuleActivityBar
-            activeKind={activeTab.kind}
+            activeKind={variableManagerOpen ? null : activeTab.kind}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
             onPreload={handlePreloadFeature}
             sidebarCollapsed={sidebarCollapsed || variableManagerOpen}
             onSelect={handleSelectModule}
-            onToggleSidebar={handleToggleSidebar}
+            onToggleSidebar={toggleSidebar}
           />
         }
         bottomPanel={
-          variableManagerOpen ? undefined : activeTab.kind === "ssh" && activeWorkspace ? (
+          !variableManagerOpen && activeTab.kind === "ssh" && activeWorkspace ? (
             <SshTerminalLogPanel
-              fallback={
-                <BottomPanelPlaceholder
-                  collapsed={bottomPanelCollapsed}
-                  height={bottomPanelHeight}
-                  onCollapse={() => setBottomPanelCollapsed(true)}
-                  onHeightChange={setBottomPanelHeight}
-                />
-              }
+              fallback={null}
               collapsed={bottomPanelCollapsed}
               height={bottomPanelHeight}
               onCollapse={() => setBottomPanelCollapsed(true)}
               onHeightChange={setBottomPanelHeight}
               workspaceId={activeWorkspace.id}
             />
-          ) : (
-            <BottomPanelPlaceholder
-              collapsed={bottomPanelCollapsed}
-              height={bottomPanelHeight}
-              onCollapse={() => setBottomPanelCollapsed(true)}
-              onHeightChange={setBottomPanelHeight}
-            />
-          )
+          ) : undefined
         }
         globalToolbar={
           <AppTitleBar
@@ -401,17 +356,6 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
             workspaces={workspaceQuery.data?.workspaces ?? []}
           />
         }
-        rightInspector={
-          variableManagerOpen ? undefined : (
-            <RightInspectorPlaceholder
-              activeTab={activeTab}
-              collapsed={rightInspectorCollapsed}
-              onCollapse={() => setRightInspectorCollapsed(true)}
-              onWidthChange={setRightInspectorWidth}
-              width={rightInspectorWidth}
-            />
-          )
-        }
         sidebar={
           <ModuleSidebar
             activeTab={activeTab}
@@ -430,7 +374,8 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
                 <StatusBarPlaceholder
                   activeTab={activeTab}
                   activeWorkspace={activeWorkspace}
-                  healthReady={healthQuery.data?.storageReady === true}
+                  healthReady={healthQuery.data?.storageReady}
+                  healthError={healthQuery.isError}
                   rightAccessory={statusBarRightAccessory}
                 />
               }
@@ -442,7 +387,8 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
                 <StatusBarPlaceholder
                   activeTab={activeTab}
                   activeWorkspace={activeWorkspace}
-                  healthReady={healthQuery.data?.storageReady === true}
+                  healthReady={healthQuery.data?.storageReady}
+                  healthError={healthQuery.isError}
                   rightAccessory={statusBarRightAccessory}
                 />
               }
@@ -456,7 +402,8 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
             <StatusBarPlaceholder
               activeTab={activeTab}
               activeWorkspace={activeWorkspace}
-              healthReady={healthQuery.data?.storageReady === true}
+              healthReady={healthQuery.data?.storageReady}
+              healthError={healthQuery.isError}
               rightAccessory={statusBarRightAccessory}
             />
           )
@@ -466,6 +413,22 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
             className="[&>section]:p-0"
             tabBar={null}
           >
+            {!activeWorkspace && (workspaceQuery.isError ? (
+              <ErrorState className="h-full rounded-none border-0">
+                <div className="space-y-2" role="alert">
+                  <p>{t("app.workspace.loadFailed")}</p>
+                  <Button disabled={workspaceQuery.isFetching} onClick={() => void workspaceQuery.refetch()} size="sm">
+                    {t("common.actions.retry")}
+                  </Button>
+                </div>
+              </ErrorState>
+            ) : workspaceQuery.isPending ? (
+              <LoadingState className="h-full rounded-none border-0" />
+            ) : (
+              <EmptyState className="h-full rounded-none border-0">
+                {t("app.workspace.createToStart")}
+              </EmptyState>
+            ))}
             {activeWorkspace && shouldMountApi && (
               <div
                 className={
@@ -518,7 +481,7 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
             {activeWorkspace && variableManagerOpen && variableManagerRequest && (
               <WorkspaceEnvironmentsModule
                 initialEnvironmentId={variableManagerRequest.environmentId}
-                key={`${activeWorkspace.id}:${variableManagerRequest.nonce}`}
+                key={activeWorkspace.id}
                 onClose={closeVariableManager}
                 onDirtyChange={setVariableManagerDirty}
                 variableDecoration={
@@ -548,46 +511,13 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
         open={pendingVariableManagerLeave !== null}
         title={t("variables.discardChangesTitle")}
       />
-      <CommandPalette
-        actions={
-          <>
-            <CommandPaletteAction
-              onSelect={() => runCommandPaletteAction(() => handleSelectModule("api-main"))}
-            >
-              {t("app.commandPalette.openApiClient")}
-            </CommandPaletteAction>
-            <CommandPaletteAction
-              onSelect={() =>
-                runCommandPaletteAction(() => handleSelectModule("database-main"))
-              }
-            >
-              {t("app.commandPalette.openDatabase")}
-            </CommandPaletteAction>
-            <CommandPaletteAction
-              onSelect={() => runCommandPaletteAction(() => handleSelectModule("ssh-main"))}
-            >
-              {t("app.commandPalette.openSshTerminal")}
-            </CommandPaletteAction>
-            <CommandPaletteAction onSelect={() => runCommandPaletteAction(openLogDir)}>
-              {t("app.commandPalette.openLogDir")}
-            </CommandPaletteAction>
-            <CommandPaletteAction onSelect={() => runCommandPaletteAction(openDiagnosticsDir)}>
-              {t("app.commandPalette.openDiagnosticsDir")}
-            </CommandPaletteAction>
-            <CommandPaletteAction onSelect={() => runCommandPaletteAction(exportDiagnosticsBundle)}>
-              {t("app.commandPalette.exportDiagnosticsBundle")}
-            </CommandPaletteAction>
-            {extensions?.commandPaletteActions?.map((action) => (
-              <CommandPaletteAction
-                key={action.id}
-                onSelect={() => runCommandPaletteAction(() => action.run(extensionContext))}
-              >
-                {action.label}
-              </CommandPaletteAction>
-            ))}
-          </>
-        }
+      <DesktopCommandPalette
+        extensionContext={extensionContext}
+        extensionActions={extensions?.commandPaletteActions}
         onClose={() => setCommandPaletteOpen(false)}
+        onOpen={() => setCommandPaletteOpen(true)}
+        onSelectModule={handleSelectModule}
+        onManageVariables={activeWorkspace ? handleManageVariables : undefined}
         open={commandPaletteOpen}
       />
       {Overlays && <Overlays {...extensionContext} />}

@@ -11,9 +11,7 @@ describe("LayoutControls", () => {
       <LayoutControls
         bottomPanelCollapsed={false}
         onToggleBottomPanel={vi.fn()}
-        onToggleInspector={vi.fn()}
         onToggleSidebar={vi.fn()}
-        rightInspectorCollapsed
         sidebarCollapsed
       />,
     );
@@ -26,34 +24,32 @@ describe("LayoutControls", () => {
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: "Toggle inspector" })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
+    expect(screen.queryByRole("button", { name: "Toggle inspector" })).toBeNull();
   });
 
   it("invokes each layout toggle handler", () => {
     const onToggleBottomPanel = vi.fn();
-    const onToggleInspector = vi.fn();
     const onToggleSidebar = vi.fn();
 
     render(
       <LayoutControls
         bottomPanelCollapsed
         onToggleBottomPanel={onToggleBottomPanel}
-        onToggleInspector={onToggleInspector}
         onToggleSidebar={onToggleSidebar}
-        rightInspectorCollapsed
         sidebarCollapsed={false}
       />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
     fireEvent.click(screen.getByRole("button", { name: "Toggle bottom panel" }));
-    fireEvent.click(screen.getByRole("button", { name: "Toggle inspector" }));
 
     expect(onToggleSidebar).toHaveBeenCalledTimes(1);
     expect(onToggleBottomPanel).toHaveBeenCalledTimes(1);
-    expect(onToggleInspector).toHaveBeenCalledTimes(1);
+  });
+
+  it("only exposes the sidebar control when no module output is available", () => {
+    render(<LayoutControls bottomPanelCollapsed onToggleSidebar={vi.fn()} sidebarCollapsed={false} />);
+    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Toggle bottom panel" })).toBeNull();
   });
 });

@@ -8,6 +8,8 @@
       "openLogDir": "Open Log Directory",
       "openSshTerminal": "Open SSH Terminal",
       "exportDiagnosticsBundle": "Export Diagnostics Bundle",
+      "results": "Commands",
+      "noResults": "No matching commands",
       "placeholder": "Search commands"
     },
     "errorBoundary": {
@@ -37,6 +39,7 @@
       "checkingStorage": "Checking storage",
       "connected": "Connected",
       "ready": "Ready",
+      "storageUnavailable": "Storage unavailable",
       "storageReady": "Storage ready"
     },
     "theme": {
@@ -141,6 +144,8 @@
       }
     },
     "workspace": {
+      "loadFailed": "Could not load workspaces. Retry to restore your workbench.",
+      "createToStart": "Create a workspace from the workspace menu to get started.",
       "changeEnvironment": "Change Environment",
       "deleteCurrent": "Delete current",
       "defaultBadge": "default",

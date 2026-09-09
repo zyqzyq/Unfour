@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { DesktopApp } from "./DesktopApp";
 import type {
   DesktopAppExtensionContext,
@@ -13,6 +13,9 @@ import type {
 const queryMocks = vi.hoisted(() => ({
   invalidateQueries: vi.fn().mockResolvedValue(undefined),
   mutate: vi.fn(),
+  refetch: vi.fn(),
+  workspaceFailure: false,
+  workspacePending: false,
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -22,6 +25,8 @@ vi.mock("@tanstack/react-query", () => ({
       return { data: { storageReady: true } };
     }
     if (queryKey[0] === "workspaces") {
+      if (queryMocks.workspaceFailure) return { isError: true, refetch: queryMocks.refetch };
+      if (queryMocks.workspacePending) return { isPending: true };
       return {
         data: {
           activeWorkspaceId: "ws-default",
@@ -96,8 +101,13 @@ vi.mock("@unfour/workspace-core", () => ({
 }));
 
 vi.mock("@unfour/ui", () => ({
-  CommandPalette: ({ actions, open }: { actions: ReactNode; open: boolean }) =>
-    open ? <div aria-label="Command palette">{actions}</div> : null,
+  Button: ({ children, onClick }: { children: ReactNode; onClick: () => void }) => <button onClick={onClick}>{children}</button>,
+  EmptyState: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  ErrorState: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  CommandPalette: ({ items, open }: { items: { id: string; label: ReactNode; onSelect: () => void }[]; open: boolean }) =>
+    open ? <div aria-label="Command palette">{items.map((item) => (
+      <button key={item.id} onClick={item.onSelect}>{item.label}</button>
+    ))}</div> : null,
   ConfirmDialog: ({
     confirmLabel,
     onConfirm,
@@ -176,6 +186,7 @@ vi.mock("./components/LazyFeatureModules", () => ({
   }) => (
     <div>
       Workspace manager: {initialEnvironmentId}
+      <input aria-label="Variable draft" defaultValue="" />
       <button onClick={() => onDirtyChange?.(true)} type="button">
         Mark variables dirty
       </button>
@@ -288,10 +299,53 @@ vi.mock("./components/StatusBarPlaceholder", () => ({
 vi.mock("./components/useLayoutPersistence", () => ({ useLayoutPersistence: vi.fn() }));
 vi.mock("./components/useWorkspaceInit", () => ({ useWorkspaceInit: vi.fn() }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  queryMocks.workspaceFailure = false;
+  queryMocks.workspacePending = false;
+});
 
 describe("DesktopApp extensions", () => {
-  it("renders every extension surface with readonly shell context", () => {
+  it("shows a recoverable startup error instead of an empty workbench", () => {
+    queryMocks.workspaceFailure = true;
+    render(<DesktopApp />);
+    expect(screen.getByRole("alert")).toHaveTextContent("app.workspace.loadFailed");
+    fireEvent.click(screen.getByRole("button", { name: "common.actions.retry" }));
+    expect(queryMocks.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a loading surface while workspace startup is pending", () => {
+    queryMocks.workspacePending = true;
+    render(<DesktopApp />);
+    expect(screen.getByText("Loading")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("keeps the variable draft and leave guard when Manage is invoked again", () => {
+    render(<DesktopApp />);
+    fireEvent.click(screen.getByRole("button", { name: "Manage variables" }));
+    const draft = screen.getByRole("textbox", { name: "Variable draft" });
+    fireEvent.change(draft, { target: { value: "unsaved backend URL" } });
+    fireEvent.click(screen.getByRole("button", { name: "Mark variables dirty" }));
+    fireEvent.click(screen.getByRole("button", { name: "Manage variables" }));
+    expect(screen.getByRole("textbox", { name: "Variable draft" })).toBe(draft);
+    expect(draft).toHaveValue("unsaved backend URL");
+    fireEvent.click(screen.getByRole("button", { name: "Open SSH Terminal" }));
+    expect(screen.getByRole("dialog", { name: "variables.discardChangesTitle" })).toBeInTheDocument();
+  });
+
+  it("opens commands by keyboard and retains the dirty guard for command navigation", async () => {
+    render(<DesktopApp />);
+    fireEvent.click(screen.getByRole("button", { name: "Manage variables" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark variables dirty" }));
+    fireEvent.keyDown(window, { key: "P", ctrlKey: true, shiftKey: true });
+    fireEvent.click(screen.getByRole("button", { name: "app.commandPalette.openSshTerminal" }));
+    await screen.findByRole("dialog", { name: "variables.discardChangesTitle" });
+    expect(screen.getByText("Workspace manager: env-dev")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Command palette")).toBeNull();
+  });
+
+  it("renders every extension surface with readonly shell context", async () => {
     const commandRun = vi.fn();
     const observedContexts: DesktopAppExtensionContext[] = [];
     const observe = (label: string) => (context: DesktopAppExtensionContext) => {
@@ -353,7 +407,7 @@ describe("DesktopApp extensions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open command palette" }));
     fireEvent.click(screen.getByRole("button", { name: "Edition command" }));
 
-    expect(commandRun).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(commandRun).toHaveBeenCalledTimes(1));
     expect(commandRun).toHaveBeenCalledWith(
       expect.objectContaining({
         activeTab: expect.objectContaining({ id: "api-main" }),

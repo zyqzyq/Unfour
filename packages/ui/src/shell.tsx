@@ -26,7 +26,7 @@ export function AppShellFrame({
   return (
     <div
       className={cn(
-        "app-shell flex h-screen min-h-[680px] flex-col bg-[var(--u-color-bg)] text-[13px] leading-[var(--u-line-height-ui)] text-[var(--u-color-text)]",
+        "app-shell flex h-dvh min-h-0 flex-col overflow-hidden bg-[var(--u-color-bg)] text-[13px] leading-[var(--u-line-height-ui)] text-[var(--u-color-text)]",
         className,
       )}
     >
@@ -86,7 +86,7 @@ export function GlobalToolbar({
       )}
     >
       <div
-        className="flex h-full shrink-0 items-center gap-1 px-2"
+        className="flex h-full min-w-0 shrink items-center gap-1 px-2"
         style={isMac ? { paddingLeft: 72 } : undefined}
       >
         {left}
@@ -332,38 +332,4 @@ export function SplitPane({
   );
 }
 
-export function CommandPalette({
-  actions,
-  onClose,
-  open,
-}: {
-  actions?: React.ReactNode;
-  onClose: () => void;
-  open: boolean;
-}) {
-  if (!open) {
-    return null;
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-[color:color-mix(in_srgb,var(--u-color-text)_24%,transparent)] pt-[14vh]">
-      <div className="w-[min(640px,calc(100vw-32px))] overflow-hidden rounded-[var(--u-radius-lg)] border border-[var(--u-color-border)] bg-[var(--u-color-surface)] shadow-lg">
-        <div className="border-b border-[var(--u-color-border)] p-2">
-          <input
-            autoFocus
-            className="h-[var(--u-size-input)] w-full rounded-[var(--u-radius-sm)] border border-[var(--u-color-input)] bg-[var(--u-color-surface)] px-2 text-[13px] text-[var(--u-color-text)] outline-none focus:border-[var(--u-color-focus)]"
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                onClose();
-              }
-            }}
-            placeholder="Search commands"
-          />
-        </div>
-        <div className="max-h-[360px] overflow-y-auto p-1 text-[13px]">{actions}</div>
-      </div>
-      <button aria-label="Close command palette" className="absolute inset-0 -z-10" onClick={onClose} type="button" />
-    </div>
-  );
-}
-
+export { CommandPalette } from "./command-palette";

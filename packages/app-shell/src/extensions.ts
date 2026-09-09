@@ -40,6 +40,8 @@ export type DesktopAppSettingsSection =
 export type DesktopAppCommandPaletteAction = Readonly<{
   id: DesktopAppExtensionId;
   label: ReactNode;
+  /** Searchable text when the label renders through a custom component. */
+  searchText?: string;
   run: (context: DesktopAppExtensionContext) => void | Promise<unknown>;
 }>;
 

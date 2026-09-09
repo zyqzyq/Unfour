@@ -8,6 +8,8 @@
       "openLogDir": "打开日志目录",
       "openSshTerminal": "打开 SSH 终端",
       "exportDiagnosticsBundle": "导出诊断包",
+      "results": "命令列表",
+      "noResults": "没有匹配的命令",
       "placeholder": "搜索命令"
     },
     "errorBoundary": {
@@ -37,6 +39,7 @@
       "checkingStorage": "正在检查存储",
       "connected": "已连接",
       "ready": "就绪",
+      "storageUnavailable": "本地存储不可用",
       "storageReady": "存储就绪"
     },
     "theme": {
@@ -141,6 +144,8 @@
       }
     },
     "workspace": {
+      "loadFailed": "无法加载工作区，请重试以恢复工作台。",
+      "createToStart": "从左上角工作区菜单新建工作区以开始使用。",
       "changeEnvironment": "修改环境",
       "deleteCurrent": "删除当前工作区",
       "defaultBadge": "默认",

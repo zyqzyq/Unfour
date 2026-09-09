@@ -13,7 +13,7 @@ export function ModuleActivityBar({
   onSelect,
   onToggleSidebar,
 }: {
-  activeKind: ModuleSwitcherItem["kind"];
+  activeKind: ModuleSwitcherItem["kind"] | null;
   onOpenCommandPalette: () => void;
   onPreload?: (kind: ModuleSwitcherItem["kind"]) => void;
   sidebarCollapsed: boolean;
@@ -27,9 +27,6 @@ export function ModuleActivityBar({
       onToggleSidebar();
     } else {
       onSelect(item.id);
-      if (sidebarCollapsed) {
-        onToggleSidebar();
-      }
     }
   }
 
@@ -70,7 +67,7 @@ export function ModuleActivityBar({
           aria-label={t("app.commandPalette.open")}
           className="flex h-9 w-9 items-center justify-center rounded-[var(--u-radius-md)] text-[var(--u-color-text-soft)] transition-colors duration-150 hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--u-color-focus)]"
           onClick={onOpenCommandPalette}
-          title={t("app.commandPalette.open")}
+          title={`${t("app.commandPalette.open")} (Ctrl/Cmd+Shift+P)`}
           type="button"
         >
           <Search size={18} />

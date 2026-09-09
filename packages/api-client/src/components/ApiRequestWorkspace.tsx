@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { SplitPane } from "@unfour/ui";
 
 import type { ApiRequestTab } from "../model/request-tabs";
@@ -30,6 +30,22 @@ export function ApiRequestWorkspace({
   onUpdateDraft: (tabId: string, patch: Partial<RequestDraft>) => void;
   urlInputRef: RefObject<HTMLInputElement | null>;
 }) {
+  const splitHostRef = useRef<HTMLDivElement>(null);
+  const [stacked, setStacked] = useState(false);
+  useLayoutEffect(() => {
+    const host = splitHostRef.current;
+    if (!host || typeof ResizeObserver === "undefined") return;
+    const measure = () => {
+      const width = host.getBoundingClientRect().width;
+      // Hidden, kept-alive modules report zero; retain their last layout.
+      if (width > 0) setStacked(width < 760);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <>
       <ApiRequestBar
@@ -46,51 +62,53 @@ export function ApiRequestWorkspace({
           {collectionStatus}
         </div>
       )}
-      <SplitPane
-        className="min-h-0 flex-1"
-        defaultRatio={46}
-        minPaneSize={280}
-        orientation="horizontal"
-        resizable
-      >
-        <ApiRequestEditor
-          key={activeTab.id}
-          auth={activeTab.draft.auth}
-          body={activeTab.draft.body}
-          bodyMode={activeTab.draft.bodyMode}
-          multipartParts={activeTab.draft.multipartParts}
-          onMultipartPartsChange={(multipartParts) => onUpdateDraft(activeTab.id, { multipartParts })}
-          formBody={activeTab.draft.formBody}
-          headers={activeTab.draft.headers}
-          onAuthChange={(auth) => onUpdateDraft(activeTab.id, { auth })}
-          onBodyChange={(body) => onUpdateDraft(activeTab.id, { body })}
-          onBodyModeChange={(bodyMode) => onUpdateDraft(activeTab.id, { bodyMode })}
-          onFormBodyChange={(formBody) => onUpdateDraft(activeTab.id, { formBody })}
-          onHeadersChange={(headers) => onUpdateDraft(activeTab.id, { headers })}
-          onPostResponseScriptChange={(postResponseScript) =>
-            onUpdateDraft(activeTab.id, { postResponseScript })
-          }
-          onPreRequestScriptChange={(preRequestScript) =>
-            onUpdateDraft(activeTab.id, { preRequestScript })
-          }
-          onQueryChange={(query) => onUpdateDraft(activeTab.id, { query })}
-          onRawBodyTypeChange={(rawBodyType) => onUpdateDraft(activeTab.id, { rawBodyType })}
-          onTabChange={(tab) => onRequestTabChange(activeTab.id, tab)}
-          onTimeoutChange={(timeoutMs) => onUpdateDraft(activeTab.id, { timeoutMs })}
-          query={activeTab.draft.query}
-          rawBodyType={activeTab.draft.rawBodyType}
-          postResponseScript={activeTab.draft.postResponseScript}
-          preRequestScript={activeTab.draft.preRequestScript}
-          tab={activeTab.requestTab}
-          timeoutMs={activeTab.draft.timeoutMs}
-        />
-        <ApiResponseViewer
-          onOpenAuthSettings={() => onRequestTabChange(activeTab.id, "auth")}
-          onResponseTabChange={(tab) => onResponseTabChange(activeTab.id, tab)}
-          onRetry={() => onSend(activeTab)}
-          tab={activeTab}
-        />
-      </SplitPane>
+      <div className="flex min-h-0 min-w-0 flex-1" ref={splitHostRef}>
+        <SplitPane
+          className="min-h-0 flex-1"
+          defaultRatio={46}
+          minPaneSize={stacked ? 140 : 280}
+          orientation={stacked ? "vertical" : "horizontal"}
+          resizable
+        >
+          <ApiRequestEditor
+            key={activeTab.id}
+            auth={activeTab.draft.auth}
+            body={activeTab.draft.body}
+            bodyMode={activeTab.draft.bodyMode}
+            multipartParts={activeTab.draft.multipartParts}
+            onMultipartPartsChange={(multipartParts) => onUpdateDraft(activeTab.id, { multipartParts })}
+            formBody={activeTab.draft.formBody}
+            headers={activeTab.draft.headers}
+            onAuthChange={(auth) => onUpdateDraft(activeTab.id, { auth })}
+            onBodyChange={(body) => onUpdateDraft(activeTab.id, { body })}
+            onBodyModeChange={(bodyMode) => onUpdateDraft(activeTab.id, { bodyMode })}
+            onFormBodyChange={(formBody) => onUpdateDraft(activeTab.id, { formBody })}
+            onHeadersChange={(headers) => onUpdateDraft(activeTab.id, { headers })}
+            onPostResponseScriptChange={(postResponseScript) =>
+              onUpdateDraft(activeTab.id, { postResponseScript })
+            }
+            onPreRequestScriptChange={(preRequestScript) =>
+              onUpdateDraft(activeTab.id, { preRequestScript })
+            }
+            onQueryChange={(query) => onUpdateDraft(activeTab.id, { query })}
+            onRawBodyTypeChange={(rawBodyType) => onUpdateDraft(activeTab.id, { rawBodyType })}
+            onTabChange={(tab) => onRequestTabChange(activeTab.id, tab)}
+            onTimeoutChange={(timeoutMs) => onUpdateDraft(activeTab.id, { timeoutMs })}
+            query={activeTab.draft.query}
+            rawBodyType={activeTab.draft.rawBodyType}
+            postResponseScript={activeTab.draft.postResponseScript}
+            preRequestScript={activeTab.draft.preRequestScript}
+            tab={activeTab.requestTab}
+            timeoutMs={activeTab.draft.timeoutMs}
+          />
+          <ApiResponseViewer
+            onOpenAuthSettings={() => onRequestTabChange(activeTab.id, "auth")}
+            onResponseTabChange={(tab) => onResponseTabChange(activeTab.id, tab)}
+            onRetry={() => onSend(activeTab)}
+            tab={activeTab}
+          />
+        </SplitPane>
+      </div>
     </>
   );
 }
