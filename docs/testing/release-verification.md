@@ -22,6 +22,87 @@ compatibility hardening. Fresh candidate evidence is required for multipart
 request editing and upload behavior, Cloud Sync incomplete-apply and workspace
 delete recovery, and the existing supported-module regression matrix.
 
+## Database SQL execution baseline — 2026-09-11
+
+This is scoped implementation evidence, not a new release or a claim of live
+PostgreSQL/MySQL verification. The manual SQL matrix is in
+`docs/testing/manual-test-cases.md`.
+
+- Replaced frontend per-statement requests with one command-bus script call and
+  one checked-out physical connection. No implicit batch transaction is added;
+  explicit BEGIN/COMMIT/ROLLBACK retain database semantics. Open transactions and
+  TEMP/session state are discarded when the batch connection is released.
+- Whole-script read-only/confirmation preflight precedes all SQL. Execution stops
+  at the first error. Each statement retains its source range, SQL, ordinal,
+  success/failed/skipped state, result, and original driver error.
+- SQL is no longer rewritten by appending LIMIT or dispatched using a row-return
+  keyword guess. The driver stream is drained while retained rows are capped, so
+  RETURNING writes are not partially consumed. Multiple rowsets from one statement
+  are not merged; the first is retained and the script surfaces an omission warning.
+- Parsing uses `sqlparser` 0.62's dialect tokenizer. SQLite trigger completeness
+  uses the same `libsqlite3-sys` version already used by SQLx. `futures-util` is a
+  direct dependency for bounded stream consumption. These three direct dependencies
+  are task-specific; only sqlparser adds a new package to the lockfile.
+- Stop prevents later statements, waits for the current statement/timeout, and
+  preserves its outcome. Confirmation edits, repeated Run, tab remounts, and history
+  workspace capture are guarded. Local activity-log failure becomes a warning, not
+  a false SQL failure that could encourage duplicate mutation execution.
+- Newly found issues addressed: mutation PRAGMAs classified as reads, stale
+  confirmation/keyboard closures, permission errors marking the connection failed,
+  late history writing to a newly selected workspace, and incompatible result shapes
+  being merged into one table.
+
+Deliberate limits: MySQL DELIMITER/executable-comment client scripts are rejected
+before execution; no stored-routine client interpreter, transaction manager,
+continue-on-error, parallel execution, or background job system was added. Stop
+is not an immediate server interrupt. Zero-row results may still lack driver column
+metadata. Safety classification is conservative lexical policy, not a replacement
+for database permissions or a full engine semantic analyzer.
+
+Verification: final command outcomes for this change are recorded in the task
+report. Automated coverage includes SQLite execution, dialect boundaries, read-only
+preflight for all three drivers, RETURNING/WITH, repeat failures, statement results,
+Stop, confirmation, and history scoping. PostgreSQL/MySQL live service and desktop
+manual UI checks remain NOT VERIFIED in this environment (no configured test
+servers or installed database/container clients).
+
+### Modified-file responsibilities
+
+- `crates/database-engine/Cargo.toml`, `Cargo.lock`: parser and stream dependencies.
+- `crates/database-engine/src/database.rs`: register scoped execution modules.
+- `crates/database-engine/src/database/{script_parser,scripts,script_connection}.rs`:
+  source boundaries, batch preflight/Stop/results, and one-session driver execution.
+- `crates/database-engine/src/database/{queries,sql}.rs`: reuse execution for the
+  single-statement API; remove unsafe splitting, LIMIT and row-return heuristics;
+  retain conservative safety checks using lexical tokens.
+- `crates/database-engine/src/database_tests/{mod,scripts}.rs`: engine regression tests.
+- `crates/unfour-core/src/models/database.rs`,
+  `packages/command-client/src/types/database.ts`: matching script contracts.
+- `crates/unfour-command-bus/src/database_commands.rs`,
+  `crates/unfour-command-bus/tests/database_script.rs`: adapters, activity outcome
+  preservation, and regression coverage.
+- `crates/unfour-app/src/commands/database.rs`, `crates/unfour-app/src/lib.rs`,
+  `packages/command-client/src/tauri/database.ts`: Tauri registration and typed calls.
+- `packages/command-client/src/tauri/browser-mocks/database.ts`: explicit desktop
+  requirement instead of pretending a browser mock has physical SQL sessions.
+- `packages/database/src/model/{run-sql-batch,run-sql-batch.test,types}.ts`: script
+  snapshot/confirmation inputs and frontend state; the obsolete `sql-statements.ts`
+  and its test were removed, with parser cases moved to Rust.
+- `packages/database/src/hooks/{useDatabaseSqlRunner.ts,useDatabaseSqlRunner.test.tsx}`:
+  outcome/Stop/confirmation/repeat-run handling and tests.
+- `packages/database/src/hooks/{useQueryHistory.ts,useQueryHistory.test.tsx,
+  useDatabaseQueryWorkspaceActions.ts}`: original-workspace history capture.
+- `packages/database/src/components/{SqlEditorTab,DatabaseWorkspace,QueryResultPanel,
+  QueryResultPanel.test,SqlBatchMessages}.tsx`: statement UX, keyboard callbacks,
+  pending-run close handling, and UI regressions.
+- `packages/ui/src/i18n/locales/{en,zh-CN}.json`: shared localized execution messages.
+- `docs/testing/{manual-test-cases,release-verification}.md`: manual matrix and scope.
+
+Business logic and cross-layer command contracts changed; package ownership and
+dependency direction did not. Cross-package changes are limited to the Database
+execution contract, its adapters, and shared locale dictionaries. Prioritize human
+review of the parser, script connection lifetime, safety policy, and SQL runner.
+
 ## Previous v0.9.0 Final Release Verification Record
 
 This document records the final status of the published `v0.9.0` release. It

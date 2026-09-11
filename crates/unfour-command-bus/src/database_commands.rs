@@ -3,6 +3,32 @@ use crate::transaction::CommandActivity;
 use unfour_core::domain::CommandContext;
 
 impl CommandBus {
+    pub async fn execute_database_script(
+        &self,
+        input: unfour_core::models::DatabaseScriptInput,
+    ) -> AppResult<unfour_core::models::DatabaseScriptResult> {
+        let mut result = self.database.execute_script(input.clone()).await?;
+        // SQL outcomes must survive a local activity-store failure: reporting a
+        // successful mutation as a query failure could cause an unsafe retry.
+        if let Err(error) = self.activity_log.record(
+            Some(&input.query.workspace_id), "database.script.execute", Some(&input.query.connection_id),
+            serde_json::json!({
+                "statementCount": result.statements.len(), "stopped": result.stopped,
+                "successCount": result.statements.iter().filter(|s| s.status == "success").count(),
+                "failedCount": result.statements.iter().filter(|s| s.status == "failed").count(),
+            }),
+        ).await {
+            result.warnings.push("database.batch.activityFailed".into());
+            unfour_diag::log_operation_event("activity_record_failed", "database", "execute_script", "error",
+                None, Some(unfour_diag::app_error_kind(&error)), serde_json::json!({}));
+        }
+        Ok(result)
+    }
+
+    pub fn stop_database_script(&self, workspace_id: String, run_id: String) -> AppResult<bool> {
+        self.database.stop_script(workspace_id, run_id)
+    }
+
     pub async fn list_database_connections(
         &self,
         workspace_id: String,

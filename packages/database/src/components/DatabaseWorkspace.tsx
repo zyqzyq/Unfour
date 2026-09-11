@@ -103,6 +103,7 @@ export function DatabaseWorkspace({
 }) {
   const { t } = useI18n();
   const [pendingCloseId, setPendingCloseId] = useState<DatabaseWorkspaceTabId | null>(null);
+  const [blockedCloseId, setBlockedCloseId] = useState<string | null>(null);
   const activeQuery = activeTab?.kind === "query" ? activeTab : null;
   const activeTable = activeTab?.kind === "table" ? activeTab : null;
 
@@ -149,6 +150,7 @@ export function DatabaseWorkspace({
         activeId={activeTabId}
         onClose={(tabId) => {
           const tab = tabs.find((candidate) => candidate.id === tabId);
+          if (tab?.kind === "query" && tab.loading) { setBlockedCloseId(tabId); return; }
           if (tab?.kind === "table" && (tab.pendingChanges?.length ?? 0) > 0) {
             setPendingCloseId(tabId);
           } else {
@@ -159,6 +161,7 @@ export function DatabaseWorkspace({
         onSelect={(tabId) => onSelectTab(tabId as DatabaseWorkspaceTabId)}
         tabs={workspaceTabs}
       />
+      {tabs.some((tab) => tab.id === blockedCloseId && tab.loading) ? <div role="status" className="px-2 py-1 text-[12px]">{t("database.batch.closeRunning")}</div> : null}
       <div className="flex min-h-0 flex-1 flex-col">
         {/* Table branch — keep mounted, toggle visibility to avoid remount flash */}
         <div className={showTable ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
@@ -218,7 +221,7 @@ export function DatabaseWorkspace({
                 active={active}
                 catalogOptions={catalogOptions}
                 connections={connections}
-                executePending={executePending}
+                executePending={executePending || Boolean(renderQuery.loading)}
                 onChangeQueryContext={onChangeQueryContext}
                 onClearSql={onClearSql}
                 onRun={onRun}
@@ -240,7 +243,7 @@ export function DatabaseWorkspace({
                 activeTab={renderQuery.resultTab}
                 error={renderQuery.error}
                 history={history}
-                isPending={executePending}
+                isPending={Boolean(renderQuery.loading)}
                 onClearHistory={onClearHistory}
                 onSelectHistory={onSelectHistory}
                 onSelectResultSet={onSelectResultSet}
@@ -248,6 +251,9 @@ export function DatabaseWorkspace({
                 pendingConfirmation={renderQuery.pendingConfirmation}
                 result={renderQuery.result}
                 results={renderQuery.results}
+                statements={renderQuery.statements}
+                executionNotice={renderQuery.executionNotice}
+                confirmationSql={renderQuery.confirmationSql}
               />
             </SplitPane>
           )}

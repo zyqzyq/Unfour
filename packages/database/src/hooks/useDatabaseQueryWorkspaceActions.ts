@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useRef } from "react";
 import type {
   DatabaseConnection,
   DatabaseQueryResult,
@@ -52,6 +52,8 @@ export function useDatabaseQueryWorkspaceActions({
   setSelectedTable,
   t,
 }: DatabaseQueryWorkspaceActionsOptions) {
+  const currentHistoryWorkspace = useRef(queryHistoryQuery.workspaceId);
+  useEffect(() => { currentHistoryWorkspace.current = queryHistoryQuery.workspaceId; }, [queryHistoryQuery.workspaceId]);
   function startNewQuery(
     connectionId = selectedConnectionId ?? activeQueryTab?.connectionId ?? activeTableTab?.connectionId ?? null,
   ) {
@@ -105,7 +107,9 @@ export function useDatabaseQueryWorkspaceActions({
       executedAt: now,
       id: `${now}-${Math.random().toString(36).slice(2, 8)}`,
     };
-    setQueryHistory((current) => [historyEntry, ...current].slice(0, maxHistoryEntries));
+    if (currentHistoryWorkspace.current === queryHistoryQuery.workspaceId) {
+      setQueryHistory((current) => [historyEntry, ...current].slice(0, maxHistoryEntries));
+    }
     queryHistoryQuery.record(historyEntry);
   }
 

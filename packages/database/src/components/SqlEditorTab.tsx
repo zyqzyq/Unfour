@@ -25,7 +25,6 @@ import {
   useTheme,
 } from "@unfour/ui";
 import { useSavedSql } from "../hooks/useSavedSql";
-import { statementAtOffset } from "../model/sql-statements";
 import type { RunSqlOptions } from "../model/types";
 import { formatSql } from "../result-utils";
 import { formatDatabaseError } from "../result-utils";
@@ -154,24 +153,17 @@ export function SqlEditorTab({
     onRunRef.current({ mode: "all" });
   };
 
-  // EXPLAIN the current selection (or statement under cursor) without mutating
-  // the editor text. The wrapped statement is read-only, so it bypasses confirmation.
+  // The backend resolves the selected statement and applies EXPLAIN safety.
   const explainFromEditor = () => {
     const editor = editorRef.current;
     const model = editor?.getModel();
     const selection = editor?.getSelection();
     const selected = selection && model ? model.getValueInRange(selection) : "";
-    let base = selected?.trim() ? selected : "";
-    if (!base) {
-      const position = editor?.getPosition();
-      const cursorOffset = model && position ? model.getOffsetAt(position) : 0;
-      base = statementAtOffset(sql, cursorOffset)?.sql ?? "";
-    }
-    base = base.trim();
-    if (!base) {
-      return;
-    }
-    onRunRef.current({ mode: "current", sql: `EXPLAIN ${base}` });
+    const position = editor?.getPosition();
+    onRunRef.current({ mode: "current", explain: true,
+      sql: selected?.trim() ? selected : undefined,
+      cursorOffset: model && position ? model.getOffsetAt(position) : 0,
+    });
   };
 
   const formatEditor = () => {
@@ -213,13 +205,16 @@ export function SqlEditorTab({
     void savedSql.remove(item.id);
   };
 
+  const editorActionsRef = useRef({ runFromEditor, runAllFromEditor });
+  useEffect(() => { editorActionsRef.current = { runFromEditor, runAllFromEditor }; });
+
   const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, runFromEditor);
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => editorActionsRef.current.runFromEditor());
     editor.addCommand(
       monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter,
-      runAllFromEditor,
+      () => editorActionsRef.current.runAllFromEditor(),
     );
 
     configureSqlEditorThemes(monaco, theme);
@@ -286,6 +281,7 @@ export function SqlEditorTab({
                 <Play size={13} />
                 {pendingConfirmation ? t("database.actions.confirmRun") : t("database.actions.run")}
               </Button>
+              {pendingConfirmation ? <Button onClick={() => onRunRef.current({ cancelConfirmation: true })} size="sm" type="button">{t("common.confirm.cancel")}</Button> : null}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <IconButton

@@ -201,6 +201,28 @@ export type DatabaseQueryResult = {
   safety: DatabaseQuerySafety;
 };
 
+export type DatabaseScriptInput = DatabaseQueryInput & {
+  runId: string;
+  cursorOffset?: number;
+  explain?: boolean;
+};
+
+export type DatabaseStatementResult = {
+  index: number;
+  start: number;
+  end: number;
+  sql: string;
+  status: "success" | "failed" | "skipped";
+  result: DatabaseQueryResult | null;
+  error: { code: string; message: string } | null;
+};
+
+export type DatabaseScriptResult = {
+  statements: DatabaseStatementResult[];
+  stopped: boolean;
+  warnings?: string[];
+};
+
 export type DatabaseResultColumn = {
   name: string;
   dataType: string;

@@ -1,109 +1,46 @@
-import { describe, expect, it, vi } from "vitest";
-import type { DatabaseQueryResult } from "@unfour/command-client";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { executeDatabaseScript } from "@unfour/command-client";
+import { canConfirmBatch, createSqlBatch, executeSqlBatch, sqlAwaitingConfirmation } from "./run-sql-batch";
+import type { DatabaseQueryWorkspaceTab } from "./types";
+vi.mock("@unfour/command-client", () => ({ executeDatabaseScript: vi.fn() }));
+const tab: DatabaseQueryWorkspaceTab = {
+  id: "q1", kind: "query", title: "SQL", sql: "SELECT 1; DELETE FROM t;",
+  catalog: null, schema: null, connectionId: "db1", error: null, result: null,
+  results: [], activeResultIndex: 0, pendingConfirmation: false, resultTab: "results",
+};
+beforeEach(() => vi.clearAllMocks());
 
-vi.mock("@unfour/command-client", () => ({
-  executeDatabaseQuery: vi.fn(),
-}));
-
-import { executeDatabaseQuery } from "@unfour/command-client";
-import { executeSqlBatch } from "./run-sql-batch";
-
-const executeMock = vi.mocked(executeDatabaseQuery);
-
-function result(patch: Partial<DatabaseQueryResult> = {}): DatabaseQueryResult {
-  return {
-    columns: [{ name: "n", dataType: "int" }],
-    rows: [["1"]],
-    affectedRows: 0,
-    durationMs: 3,
-    safety: { classification: "read", requiresConfirmation: false, confirmed: true, message: null },
-    ...patch,
-  };
-}
-
-describe("executeSqlBatch", () => {
-  it("runs statements sequentially and collects results", async () => {
-    executeMock.mockResolvedValueOnce(result()).mockResolvedValueOnce(result({ rows: [["2"]] }));
-    const onStatementSuccess = vi.fn();
-    const onSuccess = vi.fn();
-
-    const outcome = await executeSqlBatch(
-      {
-        catalog: null,
-        collected: [],
-        connectionId: "conn-1",
-        nextIndex: 0,
-        schema: null,
-        statements: ["select 1", "select 2"],
-        tabId: "tab-1",
-      },
-      false,
-      {
-        cancelled: () => false,
-        onConfirmationRequired: vi.fn(),
-        onError: vi.fn(),
-        onStatementSuccess,
-        onSuccess,
-        workspaceId: "ws-1",
-      },
-    );
-
-    expect(outcome).toBe("completed");
-    expect(executeMock).toHaveBeenCalledTimes(2);
-    expect(onStatementSuccess).toHaveBeenCalledTimes(2);
-    expect(onSuccess.mock.calls[0]?.[1]).toHaveLength(2);
+describe("SQL script command", () => {
+  it("previews only the backend-selected current statement for confirmation", () => {
+    const batch = createSqlBatch(tab, { cursorOffset: 15 }, "ws");
+    expect(sqlAwaitingConfirmation(batch, { details: { statementRanges: [{ start: 10, end: tab.sql.length }] } })).toBe("DELETE FROM t;");
   });
-
-  it("pauses on CONFIRMATION_REQUIRED and resumes from the same statement", async () => {
-    executeMock
-      .mockResolvedValueOnce(result())
-      .mockRejectedValueOnce({ code: "CONFIRMATION_REQUIRED" })
-      .mockResolvedValueOnce(result({ affectedRows: 1, columns: [], rows: [] }));
-
-    const onConfirmationRequired = vi.fn();
-    const first = await executeSqlBatch(
-      {
-        catalog: null,
-        collected: [],
-        connectionId: "conn-1",
-        nextIndex: 0,
-        schema: null,
-        statements: ["select 1", "delete from t"],
-        tabId: "tab-1",
-      },
-      false,
-      {
-        cancelled: () => false,
-        onConfirmationRequired,
-        onError: vi.fn(),
-        onStatementSuccess: vi.fn(),
-        onSuccess: vi.fn(),
-        workspaceId: "ws-1",
-      },
-    );
-
-    expect(first).toBe("confirmation");
-    const paused = onConfirmationRequired.mock.calls[0]?.[0];
-    expect(paused.nextIndex).toBe(1);
-    expect(paused.collected).toHaveLength(1);
-
-    const onSuccess = vi.fn();
-    const second = await executeSqlBatch(paused, true, {
-      cancelled: () => false,
-      onConfirmationRequired: vi.fn(),
-      onError: vi.fn(),
-      onStatementSuccess: vi.fn(),
-      onSuccess,
-      workspaceId: "ws-1",
-    });
-
-    expect(second).toBe("completed");
-    expect(executeMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        sql: "delete from t",
-        confirmMutation: true,
-      }),
-    );
-    expect(onSuccess.mock.calls[0]?.[1]).toHaveLength(2);
+  it("sends Run All as a single unmodified script", async () => {
+    const batch = createSqlBatch(tab, { mode: "all" }, "ws");
+    await executeSqlBatch(batch, false);
+    expect(executeDatabaseScript).toHaveBeenCalledTimes(1);
+    expect(executeDatabaseScript).toHaveBeenCalledWith(expect.objectContaining({ sql: tab.sql, cursorOffset: undefined, confirmMutation: false }));
+  });
+  it("uses selection before cursor and leaves dialect parsing to Rust", () => {
+    const selected = "DO $$ BEGIN PERFORM ';'; END; $$; SELECT 2;";
+    const batch = createSqlBatch(tab, { sql: selected, cursorOffset: 18 }, "ws");
+    expect(batch.input.sql).toBe(selected);
+    expect(batch.input.cursorOffset).toBeUndefined();
+    expect(createSqlBatch(tab, { cursorOffset: 17 }, "ws").input.cursorOffset).toBe(17);
+  });
+  it("confirms the whole original script and invalidates confirmation after edits or context changes", async () => {
+    const batch = createSqlBatch(tab, { mode: "all" }, "ws");
+    expect(canConfirmBatch(batch, tab, "ws")).toBe(true);
+    for (const patch of [{ sql: "DROP TABLE t" }, { connectionId: "db2" }, { schema: "other" }, { catalog: "other" }]) {
+      expect(canConfirmBatch(batch, { ...tab, ...patch }, "ws")).toBe(false);
+    }
+    expect(canConfirmBatch(batch, tab, "other")).toBe(false);
+    await executeSqlBatch(batch, true);
+    expect(executeDatabaseScript).toHaveBeenCalledWith(expect.objectContaining({ sql: tab.sql, confirmMutation: true }));
+  });
+  it("preserves statement errors and skipped entries from one execution", async () => {
+    const output = { stopped: false, statements: [{ index: 2, status: "failed", error: { code: "DATABASE_ERROR", message: "already exists" } }, { index: 3, status: "skipped" }] };
+    vi.mocked(executeDatabaseScript).mockResolvedValueOnce(output as Awaited<ReturnType<typeof executeDatabaseScript>>);
+    expect(await executeSqlBatch(createSqlBatch(tab, { mode: "all" }, "ws"), true)).toBe(output);
   });
 });

@@ -558,6 +558,23 @@
       "taskSaveFailed": "保存 SSH Task 失败"
     },
     "database": {
+    "batch": {
+      "additionalResults": "某条语句返回了多个结果集，仅显示其首个结果集；其余结果已读取完毕，没有重复执行语句。",
+      "emptyRows": "查询完成，未返回数据行（{durationMs} ms）。",
+      "activityFailed": "SQL 执行结果已保留，但本地活动日志写入失败。请勿为修复日志而重复执行已完成的写操作。",
+      "closeRunning": "请先停止脚本并等待执行结果，再关闭此 SQL 标签页。",
+      "confirmationSql": "等待确认的脚本",
+      "statement": "第 {index} 条 · {status}",
+      "success": "成功",
+      "failed": "失败",
+      "skipped": "未执行",
+      "sql": "执行的 SQL 语句",
+      "skippedDetail": "脚本已停止，此语句未执行。",
+      "stopping": "正在停止：等待当前语句结束或超时，当前语句的修改仍可能生效。",
+      "stopped": "已停止，保留已完成语句的结果。批次连接已关闭，未提交事务会回滚。",
+      "stopRetry": "停止请求未被确认，请重试 Stop；执行可能仍在继续。",
+      "sessionEnded": "批次连接已关闭。语句成功不代表事务已提交；未提交事务会回滚，临时表和会话状态不会延续到下次执行。"
+    },
       "savedSqlDeleteFailed": "删除已保存 SQL 失败",
       "clipboardFailed": "复制到剪贴板失败"
     },

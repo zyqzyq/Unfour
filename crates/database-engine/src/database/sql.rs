@@ -207,29 +207,6 @@ impl SqlDialect {
     }
 }
 
-pub(super) fn returns_rows(sql: &str) -> bool {
-    let keyword = sql
-        .split_whitespace()
-        .next()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    matches!(
-        keyword.as_str(),
-        "select" | "with" | "pragma" | "explain" | "show"
-    ) && detect_select_into(sql).is_none()
-}
-
-pub(super) fn validate_single_statement(sql: &str) -> AppResult<()> {
-    let trimmed = sql.trim();
-    let without_trailing = trimmed.trim_end_matches(';').trim_end();
-    if without_trailing.contains(';') {
-        return Err(AppError::Validation(
-            "only one SQL statement can be executed at a time".to_string(),
-        ));
-    }
-    Ok(())
-}
-
 /// Data-modifying keywords used to detect a write hidden behind an
 /// `EXPLAIN`/`WITH` wrapper. PostgreSQL executes `EXPLAIN ANALYZE <write>` and
 /// data-modifying CTEs (`WITH t AS (DELETE ... RETURNING *) ...`), both of which
@@ -341,7 +318,17 @@ pub(super) fn read_safety() -> DatabaseQuerySafety {
     }
 }
 
+#[cfg(test)]
 pub(super) fn classify_query(sql: &str) -> DatabaseQuerySafety {
+    classify_query_for_driver(sql, "generic")
+}
+
+pub(super) fn classify_query_for_driver(sql: &str, driver: &str) -> DatabaseQuerySafety {
+    let words = super::script_parser::safety_words(sql, driver).unwrap_or_default();
+    classify_words(&words)
+}
+
+fn classify_words(sql: &str) -> DatabaseQuerySafety {
     let keyword = sql
         .split_whitespace()
         .next()
@@ -352,7 +339,30 @@ pub(super) fn classify_query(sql: &str) -> DatabaseQuerySafety {
         // `select` leads, but PostgreSQL `SELECT INTO table` and MySQL
         // `SELECT ... INTO OUTFILE|DUMPFILE` are writes despite the keyword.
         "select" => detect_select_into(sql).unwrap_or_else(read_safety),
-        "pragma" | "show" => read_safety(),
+        "show" => read_safety(),
+        // PRAGMA can change writable_schema, foreign_keys, journal_mode, etc.
+        // Only explicitly known inspection pragmas are safe without confirmation.
+        "pragma"
+            if [
+                "table_info",
+                "table_xinfo",
+                "index_list",
+                "index_info",
+                "index_xinfo",
+                "foreign_key_list",
+                "database_list",
+                "compile_options",
+            ]
+            .contains(
+                &sql.split_whitespace()
+                    .nth(1)
+                    .unwrap_or_default()
+                    .to_ascii_lowercase()
+                    .as_str(),
+            ) && !sql.contains('=') =>
+        {
+            read_safety()
+        }
         // EXPLAIN and WITH can wrap a statement that actually writes (EXPLAIN
         // ANALYZE <write>, data-modifying CTEs, and SELECT ... INTO table /
         // INTO OUTFILE in PostgreSQL/MySQL), so look past the wrapper before
@@ -392,16 +402,6 @@ pub(super) fn classify_query(sql: &str) -> DatabaseQuerySafety {
                     .to_string(),
             ),
         },
-    }
-}
-
-pub(super) fn sql_with_limit(sql: &str, limit: u32) -> String {
-    let trimmed = sql.trim().trim_end_matches(';');
-    let lower = trimmed.to_ascii_lowercase();
-    if (lower.starts_with("select") || lower.starts_with("with")) && !lower.contains(" limit ") {
-        format!("{} LIMIT {}", trimmed, limit)
-    } else {
-        trimmed.to_string()
     }
 }
 

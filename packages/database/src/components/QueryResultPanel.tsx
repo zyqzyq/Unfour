@@ -1,6 +1,6 @@
 import { Clipboard, Download, FileDown, FileJson, Info, Trash2 } from "lucide-react";
 import { useState } from "react";
-import type { DatabaseQueryResult } from "@unfour/command-client";
+import type { DatabaseQueryResult, DatabaseStatementResult } from "@unfour/command-client";
 import {
   Button,
   DropdownMenu,
@@ -21,6 +21,7 @@ import type { DatabaseResultTab, SqlHistoryEntry } from "../model/types";
 import { describeDatabaseError, serializeDatabaseResult, serializeDatabaseResultJson } from "../result-utils";
 import { DatabaseErrorDetails } from "./DatabaseErrorDetails";
 import { TableDataGrid } from "./TableDataGrid";
+import { SqlBatchMessages } from "./SqlBatchMessages";
 
 export function QueryResultPanel({
   activeResultIndex,
@@ -35,6 +36,9 @@ export function QueryResultPanel({
   pendingConfirmation,
   result,
   results,
+  statements = [],
+  executionNotice,
+  confirmationSql,
 }: {
   activeResultIndex: number;
   activeTab: DatabaseResultTab;
@@ -48,8 +52,13 @@ export function QueryResultPanel({
   pendingConfirmation: boolean;
   result: DatabaseQueryResult | null;
   results: DatabaseQueryResult[];
+  statements?: DatabaseStatementResult[];
+  executionNotice?: string | null;
+  confirmationSql?: string | null;
 }) {
   const { t } = useI18n();
+  const statement = statements[activeResultIndex];
+  const selectedError = error ?? statement?.error;
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const [lastResult, setLastResult] = useState(result);
   if (result !== lastResult) {
@@ -115,7 +124,7 @@ export function QueryResultPanel({
       />
       <Toolbar className="h-8">
         <ToolbarGroup>
-          {error ? (
+          {selectedError ? (
             <StatusBadge tone="danger">{t("database.result.statusFailed")}</StatusBadge>
           ) : result ? (
             <StatusBadge tone="success">{t("database.result.statusOk")}</StatusBadge>
@@ -170,7 +179,22 @@ export function QueryResultPanel({
           )}
         </ToolbarGroup>
       </Toolbar>
-      {activeTab === "results" && results.length > 1 ? (
+      {executionNotice ? <div role="status" className="px-2 py-1 text-[12px] text-[var(--u-color-text-muted)]">{executionNotice}</div> : null}
+      {pendingConfirmation && confirmationSql ? <pre aria-label={t("database.batch.confirmationSql")} className="max-h-32 shrink-0 overflow-auto p-2 text-[12px]">{confirmationSql}</pre> : null}
+      {activeTab === "results" && statements.length ? (
+        <>
+          <Tabs
+            activeId={`statement-${activeResultIndex}`}
+            onSelect={(id) => onSelectResultSet(Number(id.replace("statement-", "")))}
+            tabs={statements.map((entry, index) => ({
+              id: `statement-${index}`,
+              title: t("database.batch.statement", { index: entry.index, status: t(`database.batch.${entry.status}`) }),
+            }))}
+          />
+          <pre className="max-h-24 shrink-0 overflow-auto border-b border-[var(--u-color-border)] p-2 text-[12px]" aria-label={t("database.batch.sql")}>{statement?.sql}</pre>
+        </>
+      ) : null}
+      {activeTab === "results" && !statements.length && results.length > 1 ? (
         <Tabs
           activeId={`result-${activeResultIndex}`}
           className="h-[28px] border-b border-[var(--u-color-border)]"
@@ -186,9 +210,11 @@ export function QueryResultPanel({
           }))}
         />
       ) : null}
-      {activeTab === "results" && renderResults({ error, isPending, pendingConfirmation, result, t })}
-      {activeTab === "messages" && <Messages results={results} result={result} t={t} />}
-      {activeTab === "logs" && <Logs error={error} isPending={isPending} results={results} result={result} t={t} />}
+      {activeTab === "results" && (statement?.status === "skipped"
+        ? <EmptyState>{t("database.batch.skippedDetail")}</EmptyState>
+        : renderResults({ error: selectedError, isPending, pendingConfirmation, result, t }))}
+      {activeTab === "messages" && (statements.length ? <SqlBatchMessages statements={statements} /> : <Messages results={results} result={result} t={t} />)}
+      {activeTab === "logs" && (statements.length ? <SqlBatchMessages statements={statements} /> : <Logs error={error} isPending={isPending} results={results} result={result} t={t} />)}
       {activeTab === "history" && <History entries={history} onSelect={onSelectHistory} />}
     </section>
   );
@@ -265,7 +291,9 @@ function renderResults({
   if (result.columns.length === 0) {
     return (
       <EmptyState className="m-2 min-h-0 flex-1">
-        {t("database.result.affectedRows", { rows: result.affectedRows, durationMs: result.durationMs })}
+        {result.safety.classification === "read"
+          ? t("database.batch.emptyRows", { durationMs: result.durationMs })
+          : t("database.result.affectedRows", { rows: result.affectedRows, durationMs: result.durationMs })}
       </EmptyState>
     );
   }

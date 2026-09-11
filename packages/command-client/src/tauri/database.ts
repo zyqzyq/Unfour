@@ -6,6 +6,8 @@ import type {
   DatabaseConnectionInput,
   DatabaseQueryInput,
   DatabaseQueryResult,
+  DatabaseScriptInput,
+  DatabaseScriptResult,
   DatabaseRowMutationInput,
   DatabaseRowMutationResult,
   DatabaseSchema,
@@ -67,6 +69,14 @@ export function listDatabaseCatalogs(workspaceId: string, connectionId: string) 
 
 export function executeDatabaseQuery(input: DatabaseQueryInput) {
   return call<DatabaseQueryResult>("database_query_execute", { input });
+}
+
+export function executeDatabaseScript(input: DatabaseScriptInput) {
+  return call<DatabaseScriptResult>("database_script_execute", { input });
+}
+
+export function stopDatabaseScript(workspaceId: string, runId: string) {
+  return call<boolean>("database_script_stop", { workspaceId, runId });
 }
 
 export function recordDatabaseQueryHistory(input: DbQueryHistoryEntry) {

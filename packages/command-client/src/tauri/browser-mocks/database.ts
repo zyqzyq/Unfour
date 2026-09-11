@@ -22,6 +22,10 @@ export function handleDatabaseMock<T>(
   command: string,
   args?: Record<string, unknown>,
 ): MockResult<T> {
+  if (command === "database_script_execute" || command === "database_script_stop") {
+    // Browser fixtures cannot guarantee physical-session SQL semantics.
+    throw { code: "UNSUPPORTED_OPERATION", message: "SQL script execution requires the desktop database engine." };
+  }
   if (command === "database_connections_list") {
     const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
     return mockStore.databaseConnections.filter(

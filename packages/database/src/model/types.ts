@@ -2,6 +2,7 @@ import type {
   DatabaseCellValue,
   DatabaseConnection,
   DatabaseQueryResult,
+  DatabaseStatementResult,
   DatabaseSchema,
   DatabaseTable,
 } from "@unfour/command-client";
@@ -79,6 +80,8 @@ export type DatabaseResultTab = "results" | "messages" | "logs" | "history";
 
 /** Options for Run Current / Run All from the SQL editor. */
 export type RunSqlOptions = {
+  explain?: boolean;
+  cancelConfirmation?: boolean;
   cursorOffset?: number;
   mode?: "current" | "all";
   /** Continue a paused batch after CONFIRMATION_REQUIRED. */
@@ -121,6 +124,10 @@ export type DatabaseQueryWorkspaceTab = {
   result: DatabaseQueryResult | null;
   /** All result sets from the latest Run / Run All (SELECT and non-SELECT). */
   results: DatabaseQueryResult[];
+  statements?: DatabaseStatementResult[];
+  executionNotice?: string | null;
+  executionRunId?: string | null;
+  confirmationSql?: string | null;
   resultTab: DatabaseResultTab;
   schema: string | null;
   sql: string;

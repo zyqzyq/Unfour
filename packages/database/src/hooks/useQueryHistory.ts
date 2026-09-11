@@ -28,8 +28,8 @@ export function useQueryHistory(
   const entries = useMemo(() => (query.data ?? []).map(fromPersistedHistory), [query.data]);
 
   const recordMutation = useMutation({
-    mutationFn: (entry: SqlHistoryEntry) =>
-      recordDatabaseQueryHistory(toPersistedHistory(workspaceId, entry)),
+    mutationFn: ({ entry, targetWorkspaceId }: { entry: SqlHistoryEntry; targetWorkspaceId: string }) =>
+      recordDatabaseQueryHistory(toPersistedHistory(targetWorkspaceId, entry)),
   });
 
   const clearMutation = useMutation({
@@ -44,9 +44,10 @@ export function useQueryHistory(
 
   return {
     ...query,
+    workspaceId,
     clear: () => clearMutation.mutate(),
     entries,
-    record: (entry: SqlHistoryEntry) => recordMutation.mutate(entry),
+    record: (entry: SqlHistoryEntry) => recordMutation.mutate({ entry, targetWorkspaceId: workspaceId }),
   };
 }
 

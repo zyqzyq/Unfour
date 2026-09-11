@@ -149,6 +149,38 @@ Use disposable local or test databases only.
 - Run invalid SQL and confirm error detail is useful and sanitized.
 - Run mutation SQL and confirm explicit confirmation is required.
 - Confirm mutation execution works only after confirmation.
+- SQL execution baseline (2026-09-11; use fresh disposable table names):
+  - Run All `CREATE TEMPORARY TABLE batch_tmp(n INT); BEGIN; INSERT INTO
+    batch_tmp VALUES (1),(2); SELECT * FROM batch_tmp; ROLLBACK; SELECT
+    count(*) FROM batch_tmp;`. Confirm once before any execution. The in-batch
+    SELECT sees two rows and the final count is zero on PostgreSQL/MySQL/SQLite.
+    A new run has a new session; no TEMP or session state is promised across runs.
+  - Put valid reads before a duplicate CREATE or invalid statement. Verify the
+    failed statement number and SQL, retained earlier results, and skipped suffix
+    in Results, Messages, and Logs. Repeat the script: legitimate duplicate-object
+    errors must remain errors, not be swallowed or trigger automatic retry.
+  - Run Current with a multi-statement selection, then without selection at a
+    later statement (include non-ASCII text before the cursor). Verify selection
+    priority and the exact statement shown before confirmation. Edit the SQL or
+    connection context while awaiting confirmation; the old approval must not apply.
+  - Check quoted semicolons/comments, PostgreSQL tagged dollar strings, and a
+    SQLite trigger containing CASE/END and several inner statements. MySQL
+    DELIMITER and executable-comment scripts are explicitly rejected before any
+    execution; they are not supported as client scripts in this baseline.
+  - On PostgreSQL/SQLite, verify INSERT/UPDATE/DELETE RETURNING and WITH followed
+    by UPDATE/DELETE affect every matching row even above the display row cap.
+    On MySQL, unsupported RETURNING syntax must remain a statement-specific server
+    error. Verify SELECT INTO table / INTO OUTFILE requires confirmation and is
+    blocked on a read-only connection, with no SQL LIMIT rewrite.
+  - Stop a script during a slow statement: Run remains disabled until that
+    statement completes or times out; later statements are skipped, and the
+    actual completed result is retained. Stop does not promise immediate server
+    cancellation or undo committed changes. Open transactions end with the session.
+  - Switch workspace/module while a query is pending. Verify its history remains
+    in the original workspace, returning to the SQL tab shows the pending run,
+    and a late response cannot overwrite a newer execution.
+  - For procedures with multiple result sets, verify only the first set is shown,
+    later sets are not merged into it, and the omission warning is visible.
 - Preview table data with pagination.
 - Enter table editing after the initial preview loads and confirm both edit and
   delete row actions remain visible.

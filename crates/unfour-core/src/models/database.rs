@@ -243,6 +243,39 @@ pub struct DatabaseQueryInput {
     pub timeout_ms: Option<u64>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseScriptInput {
+    #[serde(flatten)]
+    pub query: DatabaseQueryInput,
+    pub run_id: String,
+    /// UTF-16 editor offset. None executes the entire supplied script/selection.
+    pub cursor_offset: Option<usize>,
+    #[serde(default)]
+    pub explain: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseStatementResult {
+    pub index: usize,
+    pub start: usize,
+    pub end: usize,
+    pub sql: String,
+    /// success, failed, or skipped; success does not imply a transaction committed.
+    pub status: String,
+    pub result: Option<DatabaseQueryResult>,
+    pub error: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseScriptResult {
+    pub statements: Vec<DatabaseStatementResult>,
+    pub stopped: bool,
+    pub warnings: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct DbQueryHistoryEntry {

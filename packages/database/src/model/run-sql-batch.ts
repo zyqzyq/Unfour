@@ -1,88 +1,50 @@
-import { executeDatabaseQuery, type DatabaseQueryResult } from "@unfour/command-client";
-import { isConfirmationRequired } from "../result-utils";
+import { executeDatabaseScript, type DatabaseScriptInput } from "@unfour/command-client";
+import type { DatabaseQueryWorkspaceTab, RunSqlOptions } from "./types";
 
 export type SqlBatchState = {
-  catalog: string | null;
-  collected: DatabaseQueryResult[];
-  connectionId: string;
-  nextIndex: number;
-  schema: string | null;
-  statements: string[];
   tabId: string;
+  source: string;
+  input: DatabaseScriptInput;
 };
 
-type ExecuteSqlBatchDeps = {
-  cancelled: () => boolean;
-  onConfirmationRequired: (batch: SqlBatchState, collected: DatabaseQueryResult[], error: unknown) => void;
-  onError: (batch: SqlBatchState, collected: DatabaseQueryResult[], sql: string, error: unknown) => void;
-  onStatementSuccess: (
-    batch: SqlBatchState,
-    collected: DatabaseQueryResult[],
-    sql: string,
-    result: DatabaseQueryResult,
-  ) => void;
-  onSuccess: (batch: SqlBatchState, collected: DatabaseQueryResult[]) => void;
-  workspaceId: string;
-};
+/** Preserve source SQL; all dialect parsing and preflight live in Rust. */
+export function createSqlBatch(tab: DatabaseQueryWorkspaceTab, options: RunSqlOptions, workspaceId: string): SqlBatchState {
+  return {
+    tabId: tab.id,
+    source: tab.sql,
+    input: {
+      workspaceId,
+      connectionId: tab.connectionId ?? "",
+      catalog: tab.catalog,
+      schema: tab.schema,
+      sql: options.sql ?? tab.sql,
+      cursorOffset: options.sql === undefined && options.mode !== "all" ? options.cursorOffset ?? 0 : undefined,
+      runId: crypto.randomUUID(),
+      explain: options.explain,
+      limit: 100,
+      confirmMutation: false,
+    },
+  };
+}
 
-/**
- * Sequentially execute single-statement backend calls for a Run Current / Run All
- * script. Pauses on CONFIRMATION_REQUIRED so the UI can resume with confirmMutation.
- */
-export async function executeSqlBatch(
-  batch: SqlBatchState,
-  confirmMutation: boolean,
-  deps: ExecuteSqlBatchDeps,
-): Promise<"completed" | "confirmation" | "error" | "cancelled"> {
-  const collected = [...batch.collected];
-  // After the user confirms once in a script, keep confirming later writes
-  // in the same Run All so a migration is not interrupted per statement.
-  const confirmRemaining = confirmMutation;
+export function canConfirmBatch(batch: SqlBatchState, tab: DatabaseQueryWorkspaceTab, workspaceId: string) {
+  return batch.tabId === tab.id && batch.source === tab.sql &&
+    batch.input.workspaceId === workspaceId && batch.input.connectionId === tab.connectionId &&
+    batch.input.catalog === tab.catalog && batch.input.schema === tab.schema;
+}
 
-  for (let index = batch.nextIndex; index < batch.statements.length; index += 1) {
-    if (deps.cancelled()) {
-      return "cancelled";
-    }
+export function executeSqlBatch(batch: SqlBatchState, confirmMutation: boolean) {
+  return executeDatabaseScript({ ...batch.input, confirmMutation });
+}
 
-    const sql = batch.statements[index]!;
-    const current: SqlBatchState = { ...batch, collected, nextIndex: index };
-
-    try {
-      const result = await executeDatabaseQuery({
-        workspaceId: deps.workspaceId,
-        connectionId: batch.connectionId,
-        sql,
-        limit: 100,
-        confirmMutation: confirmRemaining,
-        catalog: batch.catalog,
-        schema: batch.schema,
-      });
-
-      if (deps.cancelled()) {
-        return "cancelled";
-      }
-
-      collected.push(result);
-      deps.onStatementSuccess(current, collected, sql, result);
-    } catch (error) {
-      if (deps.cancelled()) {
-        return "cancelled";
-      }
-
-      if (isConfirmationRequired(error)) {
-        deps.onConfirmationRequired({ ...batch, collected, nextIndex: index }, collected, error);
-        return "confirmation";
-      }
-
-      deps.onError(current, collected, sql, error);
-      return "error";
-    }
-  }
-
-  if (deps.cancelled()) {
-    return "cancelled";
-  }
-
-  deps.onSuccess(batch, collected);
-  return "completed";
+export function sqlAwaitingConfirmation(batch: SqlBatchState, error: unknown): string {
+  const details = error && typeof error === "object" && "details" in error ? error.details : null;
+  const ranges = details && typeof details === "object" && "statementRanges" in details ? details.statementRanges : null;
+  if (!Array.isArray(ranges)) return batch.input.sql;
+  const sql = ranges.flatMap((range: unknown) => {
+    if (!range || typeof range !== "object" || !("start" in range) || !("end" in range)) return [];
+    if (typeof range.start !== "number" || typeof range.end !== "number") return [];
+    return [batch.input.sql.slice(range.start, range.end)];
+  }).join("\n");
+  return batch.input.explain ? `EXPLAIN ${sql}` : sql;
 }

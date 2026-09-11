@@ -65,6 +65,18 @@ describe("dbQueryHistoryQueryKey", () => {
 });
 
 describe("useQueryHistory", () => {
+  it("retains the original workspace for a late execution callback after switching workspace", async () => {
+    listMock.mockResolvedValue([]);
+    recordMock.mockResolvedValue(undefined);
+    const { Wrapper } = createWrapper();
+    const { result, rerender } = renderHook(({ workspace }) => useQueryHistory(workspace, 50), {
+      wrapper: Wrapper, initialProps: { workspace: "ws-1" },
+    });
+    const recordOriginal = result.current.record;
+    rerender({ workspace: "ws-2" });
+    recordOriginal({ id: "late", connectionId: "conn-1", connectionName: "Local", sql: "SELECT 1", status: "success", executedAt: "2026-01-01T00:00:00Z" });
+    await waitFor(() => expect(recordMock).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: "ws-1" })));
+  });
   it("stays disabled while the Database surface is inactive", () => {
     const { Wrapper } = createWrapper();
     renderHook(() => useQueryHistory("ws-1", 50, { active: false }), {

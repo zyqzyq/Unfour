@@ -559,6 +559,23 @@
       "taskSaveFailed": "Failed to save SSH task"
     },
     "database": {
+    "batch": {
+      "additionalResults": "A statement returned multiple result sets. Only its first set is shown; additional sets were drained without re-executing the statement.",
+      "emptyRows": "Query completed with no rows ({durationMs} ms).",
+      "activityFailed": "SQL outcomes are shown, but local activity logging failed. Do not rerun completed mutations just to repair the log.",
+      "closeRunning": "Stop the running script and wait for its outcome before closing this SQL tab.",
+      "confirmationSql": "Script awaiting confirmation",
+      "statement": "Statement {index} · {status}",
+      "success": "Success",
+      "failed": "Failed",
+      "skipped": "Skipped",
+      "sql": "Executed SQL statement",
+      "skippedDetail": "Not executed because the script stopped.",
+      "stopping": "Stopping after the current statement finishes or times out. Its changes may still take effect.",
+      "stopped": "Stopped. Completed statement results are retained. The batch session is closed; uncommitted transactions are rolled back.",
+      "stopRetry": "Stop was not acknowledged. Try Stop again; execution may still be running.",
+      "sessionEnded": "Batch session closed. Success means the statement completed, not that a transaction committed. Open transactions are rolled back; TEMP/session state does not carry into another run."
+    },
       "savedSqlDeleteFailed": "Failed to delete saved SQL",
       "clipboardFailed": "Copy to clipboard failed"
     },

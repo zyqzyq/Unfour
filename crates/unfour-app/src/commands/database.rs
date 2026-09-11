@@ -14,6 +14,27 @@ use unfour_core::{
 use super::trace_command;
 
 #[tauri::command]
+pub async fn database_script_execute(
+    input: unfour_core::models::DatabaseScriptInput,
+    state: State<'_, AppState>,
+) -> AppResult<unfour_core::models::DatabaseScriptResult> {
+    trace_command(
+        "database_script_execute",
+        state.command_bus.execute_database_script(input),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn database_script_stop(
+    workspace_id: String,
+    run_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<bool> {
+    state.command_bus.stop_database_script(workspace_id, run_id)
+}
+
+#[tauri::command]
 pub async fn database_connections_list(
     workspace_id: String,
     state: State<'_, AppState>,

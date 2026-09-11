@@ -7,6 +7,11 @@ license = "Apache-2.0"
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
 serde_json = "1"
+# Dialect-aware lexical boundaries; SQLite's own completeness check handles triggers.
+sqlparser = { version = "0.62", default-features = false, features = ["std"] }
+libsqlite3-sys = "0.30.1"
+# Drain query streams while retaining only the requested number of rows.
+futures-util = "0.3"
 sqlx = { version = "0.8", default-features = false, features = ["chrono", "json", "macros", "mysql", "postgres", "runtime-tokio-rustls", "sqlite", "uuid"] }
 tokio = { version = "1", default-features = false, features = ["time"] }
 unfour-core = { path = "../unfour-core" }
