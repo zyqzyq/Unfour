@@ -92,7 +92,7 @@ impl SyncRepository {
         let now = now.to_rfc3339();
         let mut tx = self.pool.begin().await?;
         sqlx::query(
-            "INSERT OR IGNORE INTO cloud_sync_account_settings (account_id, sync_enabled, updated_at) VALUES (?1, 0, ?2)",
+            "INSERT OR IGNORE INTO cloud_sync_account_settings (account_id, sync_enabled, updated_at) VALUES (?1, 1, ?2)",
         )
         .bind(account_id)
         .bind(&now)

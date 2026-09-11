@@ -9,6 +9,8 @@ mod api_hierarchy;
 mod connections;
 #[path = "worker/dead_letter_recovery.rs"]
 mod dead_letter_recovery;
+#[path = "worker/global_defaults.rs"]
+mod global_defaults;
 #[path = "worker/hierarchy_conflicts.rs"]
 mod hierarchy_conflicts;
 #[path = "worker/initial_upload.rs"]

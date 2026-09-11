@@ -43,6 +43,7 @@ function WorkspaceSyncDialogContent() {
   const workspaceError = detailTarget ? workspaceErrors.get(detailTarget.id) : undefined;
   const state = workspaceError ? "attention" : status ? getCloudSyncViewState(status, globalEnabled) : "local_only";
   const pending = status ? status.pendingCount + status.uncertainCount + status.inFlightCount + status.deadCount : 0;
+  const workspacePaused = status?.binding && (!status.binding.syncEnabled || status.binding.state === "paused");
 
   const run = async (operation: () => Promise<void>) => {
     setBusy(true);
@@ -69,6 +70,7 @@ function WorkspaceSyncDialogContent() {
           {pending > 0 && <><dt className="text-[var(--u-color-text-muted)]">{t("cloudSync.pending")}</dt><dd>{t("cloudSync.detail.changesPending", { count: pending })}</dd></>}
           {status && status.deadCount > 0 && <><dt className="text-[var(--u-color-text-muted)]">{t("cloudSync.deadLetter.count")}</dt><dd>{status.deadCount}</dd></>}
         </dl>
+        {status?.binding && !globalEnabled && <p className="text-xs text-[var(--u-color-warning)]">{t("cloudSync.servicePausedDescription")}</p>}
         {state === "offline" && <p className="text-xs text-[var(--u-color-text-muted)]">{t("cloudSync.detail.offlineDescription")}</p>}
         {state === "auth_required" && <p className="text-xs text-[var(--u-color-danger)]">{t("cloudSync.detail.authRequiredDescription")}</p>}
         {state === "capability_required" && <p className="text-xs text-[var(--u-color-warning)]">{t("cloudSync.detail.capabilityRequiredDescription")}</p>}
@@ -118,7 +120,8 @@ function WorkspaceSyncDialogContent() {
       </DialogBody>
       <DialogFooter>
         {(["offline", "auth_required", "capability_required"].includes(state) || (state === "attention" && (status?.deadCount ?? 0) === 0 && (status?.conflictCount ?? 0) === 0)) && detailTarget && <Button disabled={busy} onClick={() => void run(() => retryWorkspace(detailTarget.id))} size="sm" type="button">{t("cloudSync.retry")}</Button>}
-        {state !== "local_only" && detailTarget && <Button disabled={busy} onClick={() => void run(() => state === "paused" ? (globalEnabled ? enableWorkspace(detailTarget.id) : setServiceEnabled(true)) : pauseWorkspace(detailTarget.id))} size="sm" type="button" variant="outline">{state === "paused" ? t("cloudSync.resume") : t("cloudSync.pause")}</Button>}
+        {status?.binding && !globalEnabled && <Button disabled={busy} onClick={() => void run(() => setServiceEnabled(true))} size="sm" type="button" variant="outline">{t("cloudSync.resumeGlobal")}</Button>}
+        {status?.binding && detailTarget && <Button disabled={busy} onClick={() => void run(() => workspacePaused ? enableWorkspace(detailTarget.id) : pauseWorkspace(detailTarget.id))} size="sm" type="button" variant="outline">{workspacePaused ? t("cloudSync.resume") : t("cloudSync.pause")}</Button>}
         <Button disabled={busy} onClick={closeDetailDialog} size="sm" type="button" variant="ghost">{t("cloudSync.close")}</Button>
       </DialogFooter>
     </DialogContent>

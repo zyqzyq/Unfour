@@ -32,6 +32,7 @@ export type CloudSyncViewState =
   | "syncing"
   | "synced"
   | "paused"
+  | "globally_paused"
   | "offline"
   | "auth_required"
   | "capability_required"

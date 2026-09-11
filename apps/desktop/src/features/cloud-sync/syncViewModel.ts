@@ -60,7 +60,8 @@ export function getCloudSyncViewState(
 ): CloudSyncViewState {
   const binding = status.binding;
   if (!binding) return "local_only";
-  if (!globalEnabled || !binding.syncEnabled || binding.state === "paused") return "paused";
+  if (!binding.syncEnabled || binding.state === "paused") return "paused";
+  if (!globalEnabled) return "globally_paused";
   if (status.conflictCount > 0 || binding.state === "conflict") return "attention";
   if (status.deadCount > 0) return "attention";
   const errorState = getErrorViewState(binding.lastError);

@@ -53,6 +53,23 @@ and wake-up, never the outbox destination.
 
 ## Account and pause behavior
 
+First account activation on a device explicitly initializes Global Sync to ON.
+The runtime uses INSERT OR IGNORE: all existing settings, including legacy OFF
+values whose intent is unknown, are preserved. The historical SQL DEFAULT 0
+remains unchanged for migration checksum compatibility; runtime activation is
+the account-settings initialization boundary, not that historical SQL default.
+Enable and Download never overwrite the account preference.
+
+Global Sync ON does not bind local workspaces. Only explicit Enable or cloud
+Download creates a binding and owner; unbound workspaces remain local-only and
+produce no outbox. Enable captures the initial upload and immediately runs sync
+when globally enabled and eligible. Download installs an enabled binding, which
+participates in subsequent mutation-triggered and periodic sync.
+
+The UI distinguishes workspace pause from global pause. A workspace pause takes
+precedence in its badge; details also show the global pause when both apply.
+Workspace resume and global resume are separate actions.
+
 Bindings and outbox rows are always read and written with an explicit account
 and cloud workspace scope. A mutation made while account A is inactive may
 create or update A's outbox head, but it must not create B's row or become

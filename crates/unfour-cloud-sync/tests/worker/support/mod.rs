@@ -89,7 +89,6 @@ pub(crate) async fn database() -> LocalDb {
     let db = LocalDb::from_pool(pool);
     db.migrate().await.unwrap();
     unfour_cloud_sync_storage::migrate(db.pool()).await.unwrap();
-    enable_test_accounts(&db).await;
     db
 }
 
@@ -135,22 +134,7 @@ pub(crate) async fn concurrent_database() -> LocalDb {
     let db = LocalDb::from_pool(pool);
     db.migrate().await.unwrap();
     unfour_cloud_sync_storage::migrate(db.pool()).await.unwrap();
-    enable_test_accounts(&db).await;
     db
-}
-
-async fn enable_test_accounts(db: &LocalDb) {
-    // Worker tests exercise active synchronization; production accounts still
-    // use the persisted default-off setting created by account activation.
-    for account_id in ["account-a", "account-b"] {
-        sqlx::query(
-            "INSERT INTO cloud_sync_account_settings (account_id, sync_enabled, updated_at) VALUES (?1, 1, '2026-07-29T00:00:00Z')",
-        )
-        .bind(account_id)
-        .execute(db.pool())
-        .await
-        .unwrap();
-    }
 }
 
 pub(crate) fn workspace_payload(name: &str) -> serde_json::Value {

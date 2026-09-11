@@ -52,6 +52,10 @@ const translations: Record<string, string> = {
   "cloudSync.status.synced": "Synced",
   "cloudSync.status.syncing": "Syncing",
   "cloudSync.status.paused": "Paused",
+  "cloudSync.status.globally_paused": "Cloud Sync globally paused",
+  "cloudSync.resumeGlobal": "Resume global sync",
+  "cloudSync.resume": "Resume Cloud Sync",
+  "cloudSync.pause": "Pause Cloud Sync",
   "cloudSync.status.auth_required": "Sign-in required",
   "cloudSync.status.capability_required": "Cloud Sync plan required",
   "cloudSync.status.attention": "Needs attention",
@@ -151,6 +155,30 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Cloud Sync request lifecycles", () => {
+  it.each([true, false])("keeps global and workspace resume actions separate (workspace enabled: %s)", async (syncEnabled) => {
+    const context = baseContext();
+    mocks.context = {
+      ...context, globalEnabled: false, detailTarget: { id: workspace.id, name: workspace.name },
+      statuses: new Map([[workspace.id, { ...emptyStatus, binding: {
+        accountId: "account", localWorkspaceId: workspace.id, cloudWorkspaceId: "cloud",
+        lastPulledCursor: 1, syncEnabled, state: syncEnabled ? "active" : "paused",
+        initialCursor: 0, initialTotal: 1, initialConfirmed: 1, initializationCheckpoint: null,
+        generation: 1, lastSuccessAt: null, lastError: null, consecutiveFailureCount: 0,
+      } }]]),
+    };
+    render(<WorkspaceSyncDialog />);
+    expect(screen.getByText(syncEnabled ? "Cloud Sync globally paused" : "Paused")).toBeTruthy();
+    fireEvent.click(screen.getByText("Resume global sync"));
+    await waitFor(() => expect(context.setServiceEnabled).toHaveBeenCalledWith(true));
+    expect(context.enableWorkspace).not.toHaveBeenCalled();
+    expect(context.pauseWorkspace).not.toHaveBeenCalled();
+    await waitFor(() => expect((screen.getByText("Resume global sync") as HTMLButtonElement).disabled).toBe(false));
+    context.setServiceEnabled.mockClear();
+    fireEvent.click(screen.getByText(syncEnabled ? "Pause Cloud Sync" : "Resume Cloud Sync"));
+    await waitFor(() => expect(syncEnabled ? context.pauseWorkspace : context.enableWorkspace).toHaveBeenCalledWith(workspace.id));
+    expect(context.setServiceEnabled).not.toHaveBeenCalled();
+  });
+
   it("drops a recovery confirmation when the detail target changes", () => {
     mocks.context = {
       ...baseContext(), detailTarget: { id: "old", name: "Old" },

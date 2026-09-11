@@ -267,6 +267,10 @@ async fn global_pause_captures_outbox_without_waking_the_sync_worker() {
         .activate_account("account-1", 0, clock.now())
         .await
         .unwrap();
+    repository
+        .set_global_sync_enabled("account-1", false, clock.now())
+        .await
+        .unwrap();
     clear_outbox(&db).await;
     let (trigger, mut receiver) = tokio::sync::mpsc::unbounded_channel();
     let hook = Arc::new(SyncOutboxHook::new(ids, clock, Some(trigger)));
