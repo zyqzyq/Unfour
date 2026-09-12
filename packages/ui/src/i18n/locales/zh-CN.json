@@ -563,6 +563,10 @@
       "emptyRows": "查询完成，未返回数据行（{durationMs} ms）。",
       "activityFailed": "SQL 执行结果已保留，但本地活动日志写入失败。请勿为修复日志而重复执行已完成的写操作。",
       "closeRunning": "请先停止脚本并等待执行结果，再关闭此 SQL 标签页。",
+      "confirmationChanged": "SQL 或连接上下文已变化，请重新点击运行或全部运行。",
+      "confirmationHint": "请核对下方 SQL，然后点击确认运行。这是安全确认，不是执行失败。",
+      "confirmationPending": "等待确认",
+      "confirmationRequired": "需要确认",
       "confirmationSql": "等待确认的脚本",
       "statement": "第 {index} 条 · {status}",
       "success": "成功",
@@ -583,6 +587,13 @@
     }
   },
   "database": {
+    "batch": {
+      "confirmationChanged": "SQL 或连接上下文已变化，请重新点击运行或全部运行。",
+      "confirmationHint": "请核对下方 SQL，然后点击确认运行。这是安全确认，不是执行失败。",
+      "confirmationPending": "等待确认",
+      "confirmationRequired": "需要确认",
+      "confirmationSql": "等待确认的脚本"
+    },
     "actions": {
       "clearHistory": "清空历史",
       "clearSql": "清空 SQL",

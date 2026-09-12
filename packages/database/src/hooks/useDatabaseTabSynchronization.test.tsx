@@ -48,4 +48,22 @@ describe("database tab synchronization", () => {
     expect(result.current.activeTab).toBe(tab);
     expect(tab).toMatchObject({ catalog: "app", schema: "audit", sql: "select 2" });
   });
+
+  it("does not auto-fill schema while confirmation is pending", () => {
+    const tree = buildDatabaseTree([
+      { catalog: "app", schema: "public", name: "users", kind: "table", columns: [] },
+      { catalog: "app", schema: "audit", name: "events", kind: "table", columns: [] },
+    ]);
+    const { result, rerender } = renderHook(({ loaded }) => {
+      const tabs = useDatabaseTabs();
+      useDatabaseQueryContext(tabs.activeTab, loaded ? tree : null, "app", tabs.updateQueryTab);
+      return tabs;
+    }, { initialProps: { loaded: false } });
+    act(() => { result.current.openQueryTab({ connectionId: "conn", catalog: "app", sql: "select 1" }); });
+    act(() => { result.current.updateQueryTab(result.current.activeTab!.id, { pendingConfirmation: true }); });
+    rerender({ loaded: true });
+    expect(result.current.activeTab).toMatchObject({
+      catalog: "app", pendingConfirmation: true, schema: null, sql: "select 1",
+    });
+  });
 });

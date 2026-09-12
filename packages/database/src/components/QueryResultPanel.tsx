@@ -58,7 +58,8 @@ export function QueryResultPanel({
 }) {
   const { t } = useI18n();
   const statement = statements[activeResultIndex];
-  const selectedError = error ?? statement?.error;
+  const selectedError = pendingConfirmation ? null : error ?? statement?.error;
+  const executionError = pendingConfirmation ? null : error;
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const [lastResult, setLastResult] = useState(result);
   if (result !== lastResult) {
@@ -124,7 +125,9 @@ export function QueryResultPanel({
       />
       <Toolbar className="h-8">
         <ToolbarGroup>
-          {selectedError ? (
+          {pendingConfirmation ? (
+            <StatusBadge tone="warning">{t("database.batch.confirmationRequired")}</StatusBadge>
+          ) : selectedError ? (
             <StatusBadge tone="danger">{t("database.result.statusFailed")}</StatusBadge>
           ) : result ? (
             <StatusBadge tone="success">{t("database.result.statusOk")}</StatusBadge>
@@ -132,9 +135,11 @@ export function QueryResultPanel({
           <span className="text-[12px] text-[var(--u-color-text-muted)]">
             {result
               ? t("database.result.rowsInMs", { rows: result.rows.length, durationMs: result.durationMs })
-              : error
-                ? t("database.result.executionFailed")
-                : t("database.result.noExecution")}
+              : pendingConfirmation
+                ? t("database.batch.confirmationPending")
+                : executionError
+                  ? t("database.result.executionFailed")
+                  : t("database.result.noExecution")}
           </span>
           {results.length > 1 ? (
             <span className="text-[12px] text-[var(--u-color-text-soft)]">
@@ -180,8 +185,10 @@ export function QueryResultPanel({
         </ToolbarGroup>
       </Toolbar>
       {executionNotice ? <div role="status" className="px-2 py-1 text-[12px] text-[var(--u-color-text-muted)]">{executionNotice}</div> : null}
-      {pendingConfirmation && confirmationSql ? <pre aria-label={t("database.batch.confirmationSql")} className="max-h-32 shrink-0 overflow-auto p-2 text-[12px]">{confirmationSql}</pre> : null}
-      {activeTab === "results" && statements.length ? (
+      {pendingConfirmation && activeTab !== "history" ? (
+        <ConfirmationPanel sql={confirmationSql ?? ""} t={t} />
+      ) : null}
+      {activeTab === "results" && !pendingConfirmation && statements.length ? (
         <>
           <Tabs
             activeId={`statement-${activeResultIndex}`}
@@ -194,7 +201,7 @@ export function QueryResultPanel({
           <pre className="max-h-24 shrink-0 overflow-auto border-b border-[var(--u-color-border)] p-2 text-[12px]" aria-label={t("database.batch.sql")}>{statement?.sql}</pre>
         </>
       ) : null}
-      {activeTab === "results" && !statements.length && results.length > 1 ? (
+      {activeTab === "results" && !pendingConfirmation && !statements.length && results.length > 1 ? (
         <Tabs
           activeId={`result-${activeResultIndex}`}
           className="h-[28px] border-b border-[var(--u-color-border)]"
@@ -210,11 +217,11 @@ export function QueryResultPanel({
           }))}
         />
       ) : null}
-      {activeTab === "results" && (statement?.status === "skipped"
+      {activeTab === "results" && !pendingConfirmation && (statement?.status === "skipped"
         ? <EmptyState>{t("database.batch.skippedDetail")}</EmptyState>
-        : renderResults({ error: selectedError, isPending, pendingConfirmation, result, t }))}
-      {activeTab === "messages" && (statements.length ? <SqlBatchMessages statements={statements} /> : <Messages results={results} result={result} t={t} />)}
-      {activeTab === "logs" && (statements.length ? <SqlBatchMessages statements={statements} /> : <Logs error={error} isPending={isPending} results={results} result={result} t={t} />)}
+        : renderResults({ error: selectedError, isPending, result, t }))}
+      {activeTab === "messages" && !pendingConfirmation && (statements.length ? <SqlBatchMessages statements={statements} /> : <Messages results={results} result={result} t={t} />)}
+      {activeTab === "logs" && !pendingConfirmation && (statements.length ? <SqlBatchMessages statements={statements} /> : <Logs error={executionError} isPending={isPending} results={results} result={result} t={t} />)}
       {activeTab === "history" && <History entries={history} onSelect={onSelectHistory} />}
     </section>
   );
@@ -246,16 +253,40 @@ function resultSetTitle(
   return t("database.result.setLabelAffected", { index: index + 1, rows: result.affectedRows });
 }
 
+function ConfirmationPanel({
+  sql,
+  t,
+}: {
+  sql: string;
+  t: ReturnType<typeof useI18n>["t"];
+}) {
+  return (
+    <div
+      className="m-2 flex min-h-0 flex-1 flex-col gap-2 rounded-[var(--u-radius-sm)] border border-[color:color-mix(in_srgb,var(--u-color-warning)_34%,var(--u-color-border))] bg-[var(--u-color-warning-soft)] p-3 text-left text-[12px] text-[var(--u-color-text)]"
+      role="status"
+    >
+      <div className="font-semibold">{t("database.batch.confirmationRequired")}</div>
+      <div className="text-[var(--u-color-text-muted)]">{t("database.batch.confirmationHint")}</div>
+      {sql ? (
+        <pre
+          aria-label={t("database.batch.confirmationSql")}
+          className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-surface)] p-2 font-mono text-[12px] text-[var(--u-color-text)]"
+        >
+          {sql}
+        </pre>
+      ) : null}
+    </div>
+  );
+}
+
 function renderResults({
   error,
   isPending,
-  pendingConfirmation,
   result,
   t,
 }: {
   error: unknown;
   isPending: boolean;
-  pendingConfirmation: boolean;
   result: DatabaseQueryResult | null;
   t: ReturnType<typeof useI18n>["t"];
 }) {
@@ -275,7 +306,7 @@ function renderResults({
     }
     return (
       <ErrorState className="m-2 min-h-0 flex-1">
-        <DatabaseErrorDetails confirmation={pendingConfirmation} error={error} />
+        <DatabaseErrorDetails error={error} />
       </ErrorState>
     );
   }

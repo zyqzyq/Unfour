@@ -1,14 +1,13 @@
-import { executeDatabaseScript, type DatabaseScriptInput } from "@unfour/command-client";
-import type { DatabaseQueryWorkspaceTab, RunSqlOptions } from "./types";
+import { executeDatabaseScript } from "@unfour/command-client";
+import type { DatabaseQueryWorkspaceTab, RunSqlOptions, SqlBatchState } from "./types";
 
-export type SqlBatchState = {
-  tabId: string;
-  source: string;
-  input: DatabaseScriptInput;
-};
+export type { SqlBatchState };
 
 /** Preserve source SQL; all dialect parsing and preflight live in Rust. */
 export function createSqlBatch(tab: DatabaseQueryWorkspaceTab, options: RunSqlOptions, workspaceId: string): SqlBatchState {
+  if (options.resume || options.cancelConfirmation) {
+    throw new Error("Confirmation control requests cannot create a new SQL batch");
+  }
   return {
     tabId: tab.id,
     source: tab.sql,
@@ -29,8 +28,8 @@ export function createSqlBatch(tab: DatabaseQueryWorkspaceTab, options: RunSqlOp
 
 export function canConfirmBatch(batch: SqlBatchState, tab: DatabaseQueryWorkspaceTab, workspaceId: string) {
   return batch.tabId === tab.id && batch.source === tab.sql &&
-    batch.input.workspaceId === workspaceId && batch.input.connectionId === tab.connectionId &&
-    batch.input.catalog === tab.catalog && batch.input.schema === tab.schema;
+    batch.input.workspaceId === workspaceId && batch.input.connectionId === (tab.connectionId ?? "") &&
+    sameNullableText(batch.input.catalog, tab.catalog) && sameNullableText(batch.input.schema, tab.schema);
 }
 
 export function executeSqlBatch(batch: SqlBatchState, confirmMutation: boolean) {
@@ -47,4 +46,8 @@ export function sqlAwaitingConfirmation(batch: SqlBatchState, error: unknown): s
     return [batch.input.sql.slice(range.start, range.end)];
   }).join("\n");
   return batch.input.explain ? `EXPLAIN ${sql}` : sql;
+}
+
+function sameNullableText(left: string | null | undefined, right: string | null | undefined) {
+  return (left ?? null) === (right ?? null);
 }

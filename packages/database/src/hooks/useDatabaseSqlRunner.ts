@@ -56,7 +56,7 @@ export function useDatabaseSqlRunner({
     confirmationRef.current = null;
     setSqlRunning(true);
     databaseTabs.updateQueryTab(batch.tabId, {
-      error: null, loading: true, pendingConfirmation: false,
+      error: null, loading: true, pendingConfirmation: false, pendingSqlBatch: null,
       result: null, results: [], statements: [], activeResultIndex: 0, resultTab: "results",
       executionNotice: null,
       executionRunId: batch.input.runId, confirmationSql: null,
@@ -86,7 +86,10 @@ export function useDatabaseSqlRunner({
       const confirmation = !cancelledPreflight && isConfirmationRequired(error);
       confirmationRef.current = confirmation ? batch : null;
       databaseTabs.updateQueryTab(batch.tabId, {
-        error: cancelledPreflight ? null : error, loading: false, pendingConfirmation: confirmation, resultTab: "results",
+        // CONFIRMATION_REQUIRED is a preflight prompt, not an execution failure.
+        error: confirmation || cancelledPreflight ? null : error,
+        loading: false, pendingConfirmation: confirmation, pendingSqlBatch: confirmation ? batch : null,
+        resultTab: "results",
         executionNotice: cancelledPreflight ? t("database.batch.stopped") : null,
         executionRunId: null, confirmationSql: confirmation ? sqlAwaitingConfirmation(batch, error) : null,
       });
@@ -112,31 +115,41 @@ export function useDatabaseSqlRunner({
     browseMutation.reset();
     const request = typeof options === "string" ? { mode: "current" as const, sql: options } : options ?? {};
     if (request.cancelConfirmation) {
-      confirmationRef.current = null;
-      databaseTabs.updateQueryTab(activeQueryTab.id, { error: null, pendingConfirmation: false, confirmationSql: null });
+      discardConfirmation(activeQueryTab.id);
       return;
     }
-    const pending = confirmationRef.current;
-    if (request.resume && pending && canConfirmBatch(pending, activeQueryTab, workspaceId)) {
-      void runSqlBatch(pending, true);
+    if (request.resume) {
+      const pending = confirmationRef.current ?? activeQueryTab.pendingSqlBatch ?? null;
+      if (pending && canConfirmBatch(pending, activeQueryTab, workspaceId)) {
+        void runSqlBatch(pending, true);
+        return;
+      }
+      discardConfirmation(activeQueryTab.id, { executionNotice: t("database.batch.confirmationChanged") });
       return;
     }
     confirmationRef.current = null;
     if (!activeQueryTab.connectionId || !(request.sql ?? activeQueryTab.sql).trim()) {
       databaseTabs.updateQueryTab(activeQueryTab.id, {
         error: { code: "VALIDATION_ERROR", message: t(activeQueryTab.connectionId ? "database.errors.sqlEmpty" : "database.errors.selectBeforeRun") },
-        pendingConfirmation: false, resultTab: "results",
+        pendingConfirmation: false, pendingSqlBatch: null, confirmationSql: null, resultTab: "results",
       });
       return;
     }
     void runSqlBatch(createSqlBatch(activeQueryTab, request, workspaceId), false);
   }
 
+  function discardConfirmation(tabId: string, extra: { executionNotice?: string } = {}) {
+    confirmationRef.current = null;
+    databaseTabs.updateQueryTab(tabId, {
+      error: null, pendingConfirmation: false, pendingSqlBatch: null, confirmationSql: null, ...extra,
+    });
+  }
+
   function clearSql() {
     if (!activeQueryTab || activeRunRef.current || activeQueryTab.loading) return;
     confirmationRef.current = null;
     databaseTabs.updateQueryTab(activeQueryTab.id, {
-      activeResultIndex: 0, error: null, pendingConfirmation: false,
+      activeResultIndex: 0, error: null, pendingConfirmation: false, pendingSqlBatch: null,
       result: null, results: [], statements: [], executionNotice: null, confirmationSql: null, sql: "",
     });
   }

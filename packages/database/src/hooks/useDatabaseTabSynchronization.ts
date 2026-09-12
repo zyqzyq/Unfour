@@ -30,10 +30,13 @@ export function useDatabaseQueryContext(
   const id = query?.id;
   const catalog = query?.catalog ?? null;
   const schema = query?.schema ?? null;
+  const pendingConfirmation = query?.pendingConfirmation ?? false;
   // SQL edits and query results must not drive tree selection or normalization.
+  // Pending confirmation identity includes catalog/schema; auto-fill must not
+  // rewrite them underneath a CONFIRMATION_REQUIRED prompt.
   useEffect(() => {
-    if (!treeModel || !id) return;
+    if (!treeModel || !id || pendingConfirmation) return;
     const next = normalizeQueryContext({ catalog, schema }, treeModel, defaultDatabase);
     if (next.catalog !== catalog || next.schema !== schema) updateQueryTab(id, next);
-  }, [catalog, defaultDatabase, id, schema, treeModel, updateQueryTab]);
+  }, [catalog, defaultDatabase, id, pendingConfirmation, schema, treeModel, updateQueryTab]);
 }

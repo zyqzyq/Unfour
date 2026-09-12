@@ -564,6 +564,10 @@
       "emptyRows": "Query completed with no rows ({durationMs} ms).",
       "activityFailed": "SQL outcomes are shown, but local activity logging failed. Do not rerun completed mutations just to repair the log.",
       "closeRunning": "Stop the running script and wait for its outcome before closing this SQL tab.",
+      "confirmationChanged": "The SQL or connection context changed. Click Run or Run All again.",
+      "confirmationHint": "Review the SQL below, then click Confirm run. This is a safety check, not an execution failure.",
+      "confirmationPending": "Waiting for confirmation",
+      "confirmationRequired": "Confirmation required",
       "confirmationSql": "Script awaiting confirmation",
       "statement": "Statement {index} · {status}",
       "success": "Success",
@@ -584,6 +588,13 @@
     }
   },
   "database": {
+    "batch": {
+      "confirmationChanged": "The SQL or connection context changed. Click Run or Run All again.",
+      "confirmationHint": "Review the SQL below, then click Confirm run. This is a safety check, not an execution failure.",
+      "confirmationPending": "Waiting for confirmation",
+      "confirmationRequired": "Confirmation required",
+      "confirmationSql": "Script awaiting confirmation"
+    },
     "actions": {
       "clearHistory": "Clear History",
       "clearSql": "Clear SQL",

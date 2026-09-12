@@ -2,6 +2,7 @@ import type {
   DatabaseCellValue,
   DatabaseConnection,
   DatabaseQueryResult,
+  DatabaseScriptInput,
   DatabaseStatementResult,
   DatabaseSchema,
   DatabaseTable,
@@ -111,6 +112,12 @@ export type TableSegment = "data" | "structure";
 
 export type DatabaseWorkspaceTabKind = "query" | "table";
 
+export type SqlBatchState = {
+  tabId: string;
+  source: string;
+  input: DatabaseScriptInput;
+};
+
 export type DatabaseQueryWorkspaceTab = {
   activeResultIndex: number;
   catalog: string | null;
@@ -120,6 +127,8 @@ export type DatabaseQueryWorkspaceTab = {
   kind: "query";
   loading?: boolean;
   pendingConfirmation: boolean;
+  /** Original confirmed batch; survives editor remounts and keep-alive. */
+  pendingSqlBatch?: SqlBatchState | null;
   /** Active result set; mirrors `results[activeResultIndex]` when present. */
   result: DatabaseQueryResult | null;
   /** All result sets from the latest Run / Run All (SELECT and non-SELECT). */

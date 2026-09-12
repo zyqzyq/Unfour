@@ -185,6 +185,8 @@ export function useDatabaseQueryWorkspaceActions({
         connectionId,
         error: null,
         pendingConfirmation: false,
+        pendingSqlBatch: null,
+        confirmationSql: null,
         schema: null,
       });
     }
@@ -237,13 +239,20 @@ export function useDatabaseQueryWorkspaceActions({
   }
 
   function updateActiveSql(sql: string) {
-    if (activeQueryTab) {
-      databaseTabs.updateQueryTab(activeQueryTab.id, {
-        error: null,
-        pendingConfirmation: false,
-        sql,
-      });
+    if (!activeQueryTab) {
+      return;
     }
+    // Monaco remounts can re-emit the same value; that is not a user edit.
+    if (sql === activeQueryTab.sql) {
+      return;
+    }
+    databaseTabs.updateQueryTab(activeQueryTab.id, {
+      error: null,
+      pendingConfirmation: false,
+      pendingSqlBatch: null,
+      confirmationSql: null,
+      sql,
+    });
   }
 
 

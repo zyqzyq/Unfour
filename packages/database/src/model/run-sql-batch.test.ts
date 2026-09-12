@@ -28,9 +28,14 @@ describe("SQL script command", () => {
     expect(batch.input.cursorOffset).toBeUndefined();
     expect(createSqlBatch(tab, { cursorOffset: 17 }, "ws").input.cursorOffset).toBe(17);
   });
+  it("rejects confirmation control requests instead of treating them as Run Current", () => {
+    expect(() => createSqlBatch(tab, { resume: true }, "ws")).toThrow(/confirmation control requests/i);
+    expect(() => createSqlBatch(tab, { cancelConfirmation: true }, "ws")).toThrow(/confirmation control requests/i);
+  });
   it("confirms the whole original script and invalidates confirmation after edits or context changes", async () => {
     const batch = createSqlBatch(tab, { mode: "all" }, "ws");
     expect(canConfirmBatch(batch, tab, "ws")).toBe(true);
+    expect(canConfirmBatch({ ...batch, input: { ...batch.input, catalog: undefined, schema: undefined } }, tab, "ws")).toBe(true);
     for (const patch of [{ sql: "DROP TABLE t" }, { connectionId: "db2" }, { schema: "other" }, { catalog: "other" }]) {
       expect(canConfirmBatch(batch, { ...tab, ...patch }, "ws")).toBe(false);
     }

@@ -33,3 +33,38 @@ it("includes failed and skipped SQL in messages and logs", () => {
   rerender(<QueryResultPanel {...props} activeTab="logs" />);
   expect(screen.getByText("SELECT 3;")).toBeInTheDocument();
 });
+it("renders confirmation as a warning prompt instead of an execution failure", () => {
+  const sql = "DROP TABLE t; CREATE TABLE t(n);";
+  render(
+    <QueryResultPanel
+      {...props}
+      confirmationSql={sql}
+      error={{ code: "CONFIRMATION_REQUIRED", message: "This script may modify data", details: { statementCount: 2 } }}
+      pendingConfirmation
+      result={null}
+      results={[]}
+      statements={[]}
+    />,
+  );
+  expect(screen.getAllByText("Confirmation required").length).toBeGreaterThan(0);
+  expect(screen.getByText("Waiting for confirmation")).toBeInTheDocument();
+  expect(screen.getByText(/safety check, not an execution failure/)).toBeInTheDocument();
+  expect(screen.getByLabelText("Script awaiting confirmation")).toHaveTextContent(sql);
+  expect(screen.queryByText("Failed")).not.toBeInTheDocument();
+  expect(screen.queryByText("Execution failed")).not.toBeInTheDocument();
+  expect(screen.queryByText("Technical detail")).not.toBeInTheDocument();
+});
+it("still renders DATABASE_ERROR as a failed execution", () => {
+  render(
+    <QueryResultPanel
+      {...props}
+      error={{ code: "DATABASE_ERROR", message: "syntax error at or near FROM" }}
+      result={null}
+      results={[]}
+      statements={[]}
+    />,
+  );
+  expect(screen.getByText("Failed")).toBeInTheDocument();
+  expect(screen.getByText("Execution failed")).toBeInTheDocument();
+  expect(screen.getByText("syntax error at or near FROM")).toBeInTheDocument();
+});
