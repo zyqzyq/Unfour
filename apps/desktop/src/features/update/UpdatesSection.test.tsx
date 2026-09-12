@@ -36,7 +36,7 @@ function createContext(
   return {
     meta: {
       name: "Unfour",
-      version: "0.9.4",
+      version: "0.9.5",
       distribution,
       channel: "stable",
       commit: null,
@@ -55,7 +55,7 @@ function createContext(
 beforeEach(() => {
   mocks.context = createContext({
     kind: "available",
-    info: { version: "0.9.5", currentVersion: "0.9.4", date: null, body: null },
+    info: { version: "0.9.6", currentVersion: "0.9.5", date: null, body: null },
   });
 });
 
@@ -66,7 +66,7 @@ describe("UpdatesSection", () => {
     renderUpdates();
 
     expect(screen.getByRole("heading", { name: "Updates" })).toBeTruthy();
-    expect(screen.getByText("Version 0.9.5 is available.")).toBeTruthy();
+    expect(screen.getByText("Version 0.9.6 is available.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Check for updates" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Update available" })).toBeEnabled();
     expect(screen.queryByText("Current version")).toBeNull();

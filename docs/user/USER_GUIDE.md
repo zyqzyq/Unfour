@@ -14,9 +14,9 @@ Unfour opens into a single workspace surface:
 
 ## Current Capabilities
 
-This guide documents the current v0.9.4 product capabilities. The published
+This guide documents the current v0.9.5 product capabilities. The published
 v0.9.0 verification record remains the latest completed release evidence until
-the v0.9.4 candidate is verified:
+the v0.9.5 candidate is verified:
 
 - The workspace shell is usable.
 - API, SSH, and Database sidebars keep independent bounded widths and restore
@@ -26,6 +26,10 @@ the v0.9.4 candidate is verified:
   timeouts, multipart text/file form-data, and request scripts with test and
   console results. File selections are transient and must be reselected when
   reopening saved or historical multipart requests.
+- SQL Editor runs a script as one batch on one physical connection, with
+  whole-script confirmation, per-statement results, and Stop that waits for the
+  current statement. Switching modules keeps unsaved editor drafts.
+- The About page includes GitHub Discussions and issue links for feedback.
 - Local MCP is available through the stdio `unfour-mcp` server. It uses the
   same command bus and the same saved API, SSH, and database connections, so
   Codex and Cursor can reproduce issues, inspect logs and database state, and
@@ -60,7 +64,8 @@ Sync; there is no separate client for Pro.
    has the required active entitlement. If it is unavailable, refresh the
    account status or use the account and billing action in `Settings → Account`.
 4. Enable Cloud Sync for a workspace from its workspace actions, then review
-   sync status in `Settings → Cloud Sync`.
+   sync status in `Settings → Cloud Sync`. First account activation on a device
+   turns Global Sync on; an existing Off preference is left unchanged.
 
 The v0.9.0 GitHub browser sign-in, Desktop login,
 `unfour://auth/callback`, and basic account state have been verified in the real
@@ -167,7 +172,9 @@ The database screen can save workspace-scoped database connections.
 6. Select the saved connection and click `Connect`.
 7. Review tables and columns in `Schema`.
 8. Write SQL in `SQL Editor`.
-9. Click `Run`.
+9. Click `Run`. A script runs as one batch on one connection. Mutation SQL
+   still requires confirmation for the whole script, and Stop waits for the
+   current statement.
 10. Review result rows, affected rows, and duration.
 
 SQLite, PostgreSQL, and MySQL workflows are verified for the v0.9.0 release.

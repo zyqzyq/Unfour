@@ -1,26 +1,28 @@
-# v0.9.4 Release Verification
+# v0.9.5 Release Verification
 
-This document tracks v0.9.4 release preparation. The published v0.9.0 results
-remain below as historical evidence; the local `v0.9.3` tag is the comparison
-baseline. A new v0.9.4 candidate needs fresh evidence and must not inherit
+This document tracks v0.9.5 release preparation. The published v0.9.0 results
+remain below as historical evidence; the local `v0.9.4` tag is the comparison
+baseline. A new v0.9.5 candidate needs fresh evidence and must not inherit
 those release results automatically.
 
-## v0.9.4 preparation status
+## v0.9.5 preparation status
 
-- Source version: `0.9.4`; release status: `NOT RELEASED`.
+- Source version: `0.9.5`; release status: `NOT RELEASED`.
 - Version synchronization: `PASS` (`node scripts/sync-version.mjs --check`).
 - Cargo workspace lock/check: `PASS` (`cargo check --workspace --locked`).
 - Release contract suite: `NOT VERIFIED` (run the direct Node test command for
-  the v0.9.4 candidate).
+  the v0.9.5 candidate).
 - Candidate artifact, platform, live-service, and manual gates: `NOT VERIFIED`.
 
-## v0.9.4 candidate scope
+## v0.9.5 candidate scope
 
-The candidate adds multipart text/file form-data requests with transient file
-bindings, streamed uploads, body-kind-aware history, and Cloud Sync Protocol 5
-compatibility hardening. Fresh candidate evidence is required for multipart
-request editing and upload behavior, Cloud Sync incomplete-apply and workspace
-delete recovery, and the existing supported-module regression matrix.
+The candidate adds one-connection SQL script batches with whole-script
+confirmation and per-statement results, Global Sync ON for first account
+activation, preserved unsaved editor drafts, About-page feedback links, and
+safer database credential-reference saves. Fresh candidate evidence is required
+for SQL script execution and confirmation, Cloud Sync defaults for new accounts,
+workbench draft preservation, and the existing supported-module regression
+matrix.
 
 ## Database SQL execution baseline — 2026-09-11
 

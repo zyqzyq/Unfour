@@ -232,7 +232,7 @@ mod unified_runtime_tests {
             "https://offline.example.test",
             false,
             unfour_telemetry::TelemetryConfig::new(
-                "0.9.4", "windows", "x86_64", "test", "standard", None,
+                "0.9.5", "windows", "x86_64", "test", "standard", None,
             )
             .expect("test telemetry config"),
         )

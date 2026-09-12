@@ -20,7 +20,7 @@ function renderAbout(children?: ReactNode, locale: Locale = "en") {
 beforeEach(() => {
   getAppInfo.mockResolvedValue({
     name: "Unfour",
-    version: "0.9.4",
+    version: "0.9.5",
     distribution: "microsoft-store",
     channel: "stable",
     commit: "0123456789abcdef-dirty",
@@ -47,7 +47,7 @@ describe("SettingsAbout", () => {
     expect(screen.getByRole("button", { name: "Copy version info" })).toBeTruthy();
 
     await waitFor(() => {
-      expect(screen.getByText("0.9.4")).toBeTruthy();
+      expect(screen.getByText("0.9.5")).toBeTruthy();
       expect(screen.getByText("Microsoft Store")).toBeTruthy();
       expect(screen.getByText("Stable")).toBeTruthy();
       expect(screen.getByText("0123456789ab-dirty")).toBeTruthy();
@@ -79,7 +79,7 @@ describe("SettingsAbout", () => {
   it("keeps the feedback block available for the standard distribution", async () => {
     getAppInfo.mockResolvedValue({
       name: "Unfour",
-      version: "0.9.4",
+      version: "0.9.5",
       distribution: "standard",
       channel: "test",
       commit: null,

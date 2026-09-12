@@ -6,6 +6,41 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-09-12
+
+Maintenance release following the `v0.9.4` source tag, focused on Database SQL
+script execution, Cloud Sync defaults for new accounts, and workbench
+navigation.
+
+### Added
+
+- **About-page feedback** — Add GitHub Discussions and issue links on the About
+  page so early users can send feedback or report bugs without extra in-app UI.
+
+### Changed
+
+- **Database SQL script execution** — Run a SQL editor script as one command-bus
+  call on one physical connection. Whole-script safety preflight runs first,
+  execution stops at the first error, and each statement keeps its source range
+  and outcome. SQL is no longer rewritten with LIMIT or dispatched by guessing
+  whether it returns rows. Stop prevents later statements and waits for the
+  current statement to finish.
+- **Workbench navigation** — Keep unsaved editor drafts when switching modules
+  or layout, and simplify the workbench chrome around the command palette and
+  module activity bar.
+
+### Fixed
+
+- **Cloud Sync for new accounts** — First account activation on a device turns
+  Global Sync on. Existing preferences, including a previously chosen Off
+  setting, stay unchanged.
+- **SQL confirmation identity** — Run All confirmation stays bound to the
+  confirmed script after remount or schema auto-fill, and confirmation prompts
+  are no longer shown as execution failures.
+- **Database credential references** — Saving a connection after rotating
+  credentials into the current workspace keeps the current credential
+  reference instead of submitting a stale blank-password reference.
+
 ## [0.9.4] - 2026-09-07
 
 Feature release following the `v0.9.3` source tag, focused on multipart API
@@ -598,6 +633,7 @@ First public release.
 - Linux artifacts remain experimental/unverified until real-device smoke checks
   are complete.
 
+[0.9.5]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.5
 [0.9.4]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.4
 [0.9.3]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.3
 [0.9.2]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.2

@@ -217,7 +217,7 @@ Current status:
 
 Release claims remain limited by the current verification matrix.
 
-## v0.9.4 (Current source version)
+## v0.9.4 (Previous source checkpoint)
 
 The follow-up from the `v0.9.3` tag focuses on multipart API requests and Cloud
 Sync Protocol 5 compatibility:
@@ -229,7 +229,28 @@ Sync Protocol 5 compatibility:
 
 Current status:
 
-- source version is `0.9.4`; release status is `NOT RELEASED`;
+- the `v0.9.4` tag is the comparison baseline for the current source;
+- the active release verification record still treats the v0.9.0 publication
+  evidence as historical.
+
+Release claims remain limited by the current verification matrix.
+
+## v0.9.5 (Current source version)
+
+The follow-up from the `v0.9.4` tag focuses on Database SQL script execution,
+Cloud Sync defaults for new accounts, and workbench navigation:
+
+- one-connection SQL script batches with whole-script confirmation, per-statement
+  results, Stop that waits for the current statement, and credential-reference
+  save safety;
+- first account activation on a device turning Global Sync on while preserving
+  existing Off preferences; and
+- preserved unsaved editor drafts, simpler workbench chrome, and About-page
+  feedback links.
+
+Current status:
+
+- source version is `0.9.5`; release status is `NOT RELEASED`;
 - candidate artifact, platform, live-service, and manual verification remain
   to be recorded in the active release matrix.
 
