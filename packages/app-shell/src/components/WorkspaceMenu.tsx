@@ -209,11 +209,12 @@ export function WorkspaceMenuTrigger({
           className,
         )}
         size="sm"
+        title={activeWorkspace?.name ?? t("app.workspace.none")}
         type="button"
         variant="outline"
       >
         <span className="h-4 w-4 shrink-0 rounded-[5px] bg-[linear-gradient(135deg,var(--u-color-primary),var(--u-color-primary-hover))]" />
-        <span className="min-w-0 truncate">
+        <span className="min-w-0 truncate" title={activeWorkspace?.name}>
           {activeWorkspace?.name ?? t("app.workspace.none")}
         </span>
         {activeWorkspace && (
@@ -265,7 +266,9 @@ function WorkspaceMenuItem({
       <Folder className="shrink-0" size={14} />
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="min-w-0 truncate">{workspace.name}</span>
+          <span className="min-w-0 truncate" title={workspace.name}>
+            {workspace.name}
+          </span>
           <Badge
             className="shrink-0 px-1.5 leading-4"
             tone={environmentTone(workspace.environmentType)}

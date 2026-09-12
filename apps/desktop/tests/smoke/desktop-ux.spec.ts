@@ -51,7 +51,7 @@ test("command search, keyboard selection, and focus return work end to end", asy
 
 test("reopening variables preserves a draft and module navigation honors Cancel and Discard", async ({ page }) => {
   await page.goto("/");
-  const environment = page.getByRole("button", { name: "Active environment" });
+  const environment = page.getByRole("button", { name: "Active variable environment" });
   await environment.click();
   await page.getByRole("menuitem", { name: "Manage variables" }).click();
   const name = page.getByRole("textbox", { name: "Name", exact: true });
@@ -65,7 +65,7 @@ test("reopening variables preserves a draft and module navigation honors Cancel 
   const search = page.getByRole("combobox", { name: "Search commands" });
   await search.fill("ssh");
   await search.press("Enter");
-  const confirmation = page.getByRole("dialog", { name: "Discard workspace variable changes?" });
+  const confirmation = page.getByRole("dialog", { name: "Discard variable environment changes?" });
   await expect(confirmation).toBeVisible();
   await confirmation.getByRole("button", { name: "Cancel" }).click();
   await expect(name).toHaveValue("Unsaved environment draft");

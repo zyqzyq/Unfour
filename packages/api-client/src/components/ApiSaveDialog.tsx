@@ -118,6 +118,9 @@ export function ApiSaveDialog({
     (!creatingNew || Boolean(newCollectionName.trim()));
 
   function handleSave() {
+    if (saving) {
+      return;
+    }
     const sub = subfolder.trim();
     const trimmedName = name.trim();
 
@@ -175,8 +178,32 @@ export function ApiSaveDialog({
   const visibleError = error ?? submittedError;
 
   return (
-    <Dialog onOpenChange={(next) => !next && onCancel()} open={open}>
-      <DialogContent title={t("api.save.title")}>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next && !saving) {
+          onCancel();
+        }
+      }}
+      open={open}
+    >
+      <DialogContent
+        onEscapeKeyDown={(event) => {
+          if (saving) {
+            event.preventDefault();
+          }
+        }}
+        onInteractOutside={(event) => {
+          if (saving) {
+            event.preventDefault();
+          }
+        }}
+        onPointerDownOutside={(event) => {
+          if (saving) {
+            event.preventDefault();
+          }
+        }}
+        title={t("api.save.title")}
+      >
         <DialogHeader>
           <DialogTitle>{t("api.save.title")}</DialogTitle>
         </DialogHeader>
@@ -258,7 +285,7 @@ export function ApiSaveDialog({
           ) : null}
         </DialogBody>
         <DialogFooter>
-          <Button onClick={onCancel} type="button" variant="ghost">
+          <Button disabled={saving} onClick={onCancel} type="button" variant="ghost">
             {t("api.save.cancel")}
           </Button>
           <Button disabled={!canSave} type="submit">

@@ -99,6 +99,7 @@ describe("WorkspaceMenu", () => {
     });
     expect(secondTrigger).toBe(firstTrigger);
     expect(secondTrigger).toHaveClass("w-[220px]");
+    expect(secondTrigger).toHaveAttribute("title", "A much longer workspace name");
     expect(secondTrigger.querySelector("svg")).toHaveClass("ml-auto");
   });
 
@@ -190,9 +191,57 @@ describe("WorkspaceMenu", () => {
     expect(environmentSelect.value).toBe("dev");
     fireEvent.change(environmentSelect, { target: { value: "prod" } });
     expect(environmentSelect.value).toBe("prod");
+    expect(screen.getByText("Workspace safety tier")).toBeTruthy();
     expect(
-      screen.getByText("Environment controls the default MCP permission level."),
+      screen.getByText("Safety tier controls the default MCP permission level."),
     ).toBeTruthy();
+  });
+
+  it("shows the full workspace name for truncated trigger and list items", async () => {
+    const longName = "A much longer workspace name that should remain available in full";
+    const active = workspace(longName);
+    const other = workspace("Short");
+    render(
+      <WorkspaceMenu
+        activeWorkspace={active}
+        extensionContext={extensionContext(active)}
+        onActivateWorkspace={vi.fn()}
+        workspaces={[active, other]}
+      />,
+      { wrapper: createWrapper() },
+    );
+
+    const trigger = screen.getByRole("button", { name: new RegExp(longName, "i") });
+    expect(trigger).toHaveAttribute("title", longName);
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+    const menuItem = await screen.findByRole("menuitem", { name: new RegExp(longName, "i") });
+    expect(menuItem.querySelector("[title]")).toHaveAttribute("title", longName);
+  });
+
+  it("explains that deleting a workspace removes API, SSH, and Database resources", async () => {
+    const active = workspace("Backend");
+    const other = workspace("Default Workspace");
+    render(
+      <WorkspaceMenu
+        activeWorkspace={active}
+        extensionContext={extensionContext(active)}
+        onActivateWorkspace={vi.fn()}
+        workspaces={[active, other]}
+      />,
+      { wrapper: createWrapper() },
+    );
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: /backend/i }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByText("Delete current"));
+
+    const dialog = await screen.findByRole("dialog", { name: "Delete workspace" });
+    expect(dialog).toHaveTextContent("API");
+    expect(dialog).toHaveTextContent("SSH");
+    expect(dialog).toHaveTextContent("Database");
+    expect(dialog).toHaveTextContent("disconnects any active SSH or Database connections");
   });
 
 });

@@ -1,7 +1,16 @@
 import { useState } from "react";
 import type { SshSessionSummary } from "@unfour/command-client";
-import { shouldCloseTerminalSessionInBackend } from "../model/terminal-tabs";
+import {
+  shouldCloseTerminalSessionInBackend,
+  terminalBatchCloseTabs,
+  type TerminalBatchCloseKind,
+} from "../model/terminal-tabs";
 import type { TerminalSessionTabState } from "../model/types";
+
+export type TerminalBatchCloseRequest = {
+  labels: string[];
+  sessionIds: string[];
+};
 
 type ConnectMutation = {
   mutate: (connectionId: string) => void;
@@ -30,6 +39,9 @@ export function useTerminalSessionActions({
   sessionTabs: TerminalSessionTabState[];
 }) {
   const [closeConfirmSessionId, setCloseConfirmSessionId] = useState<string | null>(null);
+  const [batchCloseRequest, setBatchCloseRequest] = useState<TerminalBatchCloseRequest | null>(
+    null,
+  );
 
   function closeSessionInBackend(sessionId: string) {
     if (
@@ -65,8 +77,8 @@ export function useTerminalSessionActions({
     ? sessions.find((item) => item.sessionId === closeConfirmSessionId)
     : null;
 
-  // Close a session without the confirmation prompt — used by the batch tab
-  // actions (close others/all/left/right) where a dialog per tab would be noise.
+  // Close a session without the confirmation prompt — used after the user
+  // confirms a batch close, and by Reconnect which should stay one-click.
   function closeSessionNow(sessionId: string) {
     const session = sessions.find((item) => item.sessionId === sessionId);
     if (session) {
@@ -86,30 +98,40 @@ export function useTerminalSessionActions({
     connectMutation.mutate(session.connectionId);
   }
 
+  function requestBatchClose(kind: TerminalBatchCloseKind, sessionId?: string) {
+    const tabs = terminalBatchCloseTabs(sessionTabs, kind, sessionId);
+    if (tabs.length === 0) {
+      return;
+    }
+    setBatchCloseRequest({
+      labels: tabs.map((item) => item.title),
+      sessionIds: tabs.map((item) => item.session.sessionId),
+    });
+  }
+
   function closeOtherSessions(sessionId: string) {
-    sessionTabs
-      .filter((item) => item.session.sessionId !== sessionId)
-      .forEach((item) => closeSessionNow(item.session.sessionId));
+    requestBatchClose("others", sessionId);
   }
 
   function closeAllSessions() {
-    sessionTabs.forEach((item) => closeSessionNow(item.session.sessionId));
+    requestBatchClose("all");
   }
 
   function closeSessionsToLeft(sessionId: string) {
-    const index = sessionTabs.findIndex((item) => item.session.sessionId === sessionId);
-    if (index <= 0) {
-      return;
-    }
-    sessionTabs.slice(0, index).forEach((item) => closeSessionNow(item.session.sessionId));
+    requestBatchClose("left", sessionId);
   }
 
   function closeSessionsToRight(sessionId: string) {
-    const index = sessionTabs.findIndex((item) => item.session.sessionId === sessionId);
-    if (index < 0) {
+    requestBatchClose("right", sessionId);
+  }
+
+  function confirmBatchClose() {
+    if (!batchCloseRequest) {
       return;
     }
-    sessionTabs.slice(index + 1).forEach((item) => closeSessionNow(item.session.sessionId));
+    const sessionIds = batchCloseRequest.sessionIds;
+    setBatchCloseRequest(null);
+    sessionIds.forEach((sessionId) => closeSessionNow(sessionId));
   }
 
   function confirmCloseSession() {
@@ -122,15 +144,18 @@ export function useTerminalSessionActions({
   }
 
   return {
+    batchCloseRequest,
     closeAllSessions,
     closeConfirmSession,
     closeConfirmSessionId,
     closeOtherSessions,
     closeSessionsToLeft,
     closeSessionsToRight,
+    confirmBatchClose,
     confirmCloseSession,
     reconnectSession,
     requestCloseSession,
+    setBatchCloseRequest,
     setCloseConfirmSessionId,
   };
 }

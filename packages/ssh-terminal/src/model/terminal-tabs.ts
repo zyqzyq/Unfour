@@ -31,6 +31,29 @@ export function shouldShowTerminalSessionTab({
   return true;
 }
 
+export type TerminalBatchCloseKind = "all" | "left" | "others" | "right";
+
+export function terminalBatchCloseTabs(
+  sessionTabs: TerminalSessionTabState[],
+  kind: TerminalBatchCloseKind,
+  sessionId?: string,
+): TerminalSessionTabState[] {
+  switch (kind) {
+    case "all":
+      return [...sessionTabs];
+    case "others":
+      return sessionTabs.filter((item) => item.session.sessionId !== sessionId);
+    case "left": {
+      const index = sessionTabs.findIndex((item) => item.session.sessionId === sessionId);
+      return index > 0 ? sessionTabs.slice(0, index) : [];
+    }
+    case "right": {
+      const index = sessionTabs.findIndex((item) => item.session.sessionId === sessionId);
+      return index >= 0 ? sessionTabs.slice(index + 1) : [];
+    }
+  }
+}
+
 export function buildTerminalSessionTabs({
   connections,
   sessions,

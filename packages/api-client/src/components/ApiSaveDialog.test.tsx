@@ -60,4 +60,24 @@ describe("ApiSaveDialog", () => {
     expect(screen.getByDisplayValue("Create user")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   });
+
+  it("blocks submit and cancel while pending without dropping the entered values", () => {
+    const { onCancel, onSave } = renderDialog({
+      defaultName: "Create user",
+      error: "Workspace storage is full",
+      saving: true,
+    });
+
+    expect(screen.getByDisplayValue("Create user")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveTextContent("Workspace storage is full");
+    expect(screen.getByRole("button", { name: "Saving" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+
+    fireEvent.submit(screen.getByRole("button", { name: "Saving" }).closest("form")!);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(onCancel).not.toHaveBeenCalled();
+  });
 });

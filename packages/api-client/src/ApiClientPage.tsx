@@ -55,6 +55,8 @@ export function ApiClientPage({
   const { createFolderMut, folders } = useApiCollectionFolders(workspaceId);
   const [saveDialogTabId, setSaveDialogTabId] = useState<string | null>(null);
   const [saveDialogError, setSaveDialogError] = useState<string | null>(null);
+  const [saveDialogPending, setSaveDialogPending] = useState(false);
+  const saveDialogPendingRef = useRef(false);
   const [closeDialogTabId, setCloseDialogTabId] = useState<string | null>(null);
   const closeAfterSaveRef = useRef<string | null>(null);
   const pendingCloseQueueRef = useRef<string[]>([]);
@@ -243,56 +245,63 @@ export function ApiClientPage({
   }
 
   async function saveWithIdentity(identity: SaveIdentity) {
-    if (!saveDialogTab) {
+    if (!saveDialogTab || saveDialogPendingRef.current) {
       return;
     }
+    saveDialogPendingRef.current = true;
+    setSaveDialogPending(true);
     const originalId = saveDialogTab.id;
     setSaveDialogError(null);
     let collectionId = identity.collectionId;
     let parentFolderId = identity.parentFolderId;
-    if (identity.createCollectionName) {
-      try {
-        const created = await createCollectionMut.mutateAsync(
-          identity.createCollectionName,
-        );
-        collectionId = created.id;
-      } catch (error) {
-        setSaveDialogError(formatError(error));
-        return;
-      }
-    }
-    if (identity.newFolderName) {
-      try {
-        if (!collectionId) {
+    try {
+      if (identity.createCollectionName) {
+        try {
           const created = await createCollectionMut.mutateAsync(
-            t("api.collection.defaultCollection"),
+            identity.createCollectionName,
           );
           collectionId = created.id;
+        } catch (error) {
+          setSaveDialogError(formatError(error));
+          return;
         }
-        const folder = await createFolderMut.mutateAsync({
-          collectionId,
-          name: identity.newFolderName,
-          parentFolderId,
-        });
-        parentFolderId = folder.id;
-      } catch (error) {
-        setSaveDialogError(formatError(error));
-        return;
       }
-    }
-    const savedRequestId = await saveTab(saveDialogTab, {
-      collectionId,
-      name: identity.name,
-      parentFolderId,
-    });
-    if (savedRequestId) {
-      setSaveDialogError(null);
-      setSaveDialogTabId(null);
-      if (closeAfterSaveRef.current === originalId) {
-        closeAfterSaveRef.current = null;
-        closeTab(`saved:${savedRequestId}`);
-        continuePendingCloseQueue();
+      if (identity.newFolderName) {
+        try {
+          if (!collectionId) {
+            const created = await createCollectionMut.mutateAsync(
+              t("api.collection.defaultCollection"),
+            );
+            collectionId = created.id;
+          }
+          const folder = await createFolderMut.mutateAsync({
+            collectionId,
+            name: identity.newFolderName,
+            parentFolderId,
+          });
+          parentFolderId = folder.id;
+        } catch (error) {
+          setSaveDialogError(formatError(error));
+          return;
+        }
       }
+      const savedRequestId = await saveTab(saveDialogTab, {
+        collectionId,
+        name: identity.name,
+        parentFolderId,
+      });
+      if (savedRequestId) {
+        setSaveDialogError(null);
+        setSaveDialogTabId(null);
+        if (closeAfterSaveRef.current === originalId) {
+          closeAfterSaveRef.current = null;
+          closeTab(`saved:${savedRequestId}`);
+          continuePendingCloseQueue();
+        }
+      }
+    } finally {
+      saveDialogPendingRef.current = false;
+      setSaveDialogPending(false);
     }
   }
 
@@ -423,8 +432,17 @@ export function ApiClientPage({
         collections={collections}
         folders={folders}
         onCancelClose={() => { pendingCloseQueueRef.current = []; setCloseDialogTabId(null); }}
-        onCancelSave={() => { closeAfterSaveRef.current = null; pendingCloseQueueRef.current = []; setSaveDialogError(null); setSaveDialogTabId(null); }}
+        onCancelSave={() => {
+          if (saveDialogPendingRef.current) {
+            return;
+          }
+          closeAfterSaveRef.current = null;
+          pendingCloseQueueRef.current = [];
+          setSaveDialogError(null);
+          setSaveDialogTabId(null);
+        }}
         saveDialogError={saveDialogError ?? saveDialogTab?.saveError ?? null}
+        saveDialogPending={saveDialogPending}
         onDiscardClose={() => { if (closeDialogTab) closeTab(closeDialogTab.id); setCloseDialogTabId(null); continuePendingCloseQueue(); }}
         onSaveClose={() => closeDialogTab && void saveThenClose(closeDialogTab)}
         onSaveIdentity={(identity) => void saveWithIdentity(identity)}

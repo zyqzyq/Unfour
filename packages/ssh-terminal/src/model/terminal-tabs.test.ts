@@ -4,6 +4,7 @@ import {
   buildTerminalSessionTabs,
   shouldCloseTerminalSessionInBackend,
   shouldShowTerminalSessionTab,
+  terminalBatchCloseTabs,
 } from "./terminal-tabs";
 
 function connection(overrides: Partial<SshConnection> & { id: string }): SshConnection {
@@ -169,5 +170,42 @@ describe("shouldCloseTerminalSessionInBackend", () => {
         sessionId: "backend-session-1",
       }),
     ).toBe(true);
+  });
+});
+
+describe("terminalBatchCloseTabs", () => {
+  const tabs = buildTerminalSessionTabs({
+    connections: [connection({ id: "c1", name: "Prod DB" })],
+    sessions: [
+      session({ sessionId: "s1", connectionId: "c1" }),
+      session({ sessionId: "s2", connectionId: "c1" }),
+      session({ sessionId: "s3", connectionId: "c1" }),
+    ],
+  });
+
+  it("selects every session for close all", () => {
+    expect(terminalBatchCloseTabs(tabs, "all").map((tab) => tab.session.sessionId)).toEqual([
+      "s1",
+      "s2",
+      "s3",
+    ]);
+  });
+
+  it("selects other sessions, left sessions, and right sessions", () => {
+    expect(terminalBatchCloseTabs(tabs, "others", "s2").map((tab) => tab.session.sessionId)).toEqual([
+      "s1",
+      "s3",
+    ]);
+    expect(terminalBatchCloseTabs(tabs, "left", "s2").map((tab) => tab.session.sessionId)).toEqual([
+      "s1",
+    ]);
+    expect(terminalBatchCloseTabs(tabs, "right", "s1").map((tab) => tab.session.sessionId)).toEqual([
+      "s2",
+      "s3",
+    ]);
+  });
+
+  it("returns no sessions when close left is requested on the first tab", () => {
+    expect(terminalBatchCloseTabs(tabs, "left", "s1")).toEqual([]);
   });
 });

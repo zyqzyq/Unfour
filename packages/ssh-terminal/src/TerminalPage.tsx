@@ -515,15 +515,18 @@ export function SshConnectionsPage({
   }
 
   const {
+    batchCloseRequest,
     closeAllSessions,
     closeConfirmSession,
     closeConfirmSessionId,
     closeOtherSessions,
     closeSessionsToLeft,
     closeSessionsToRight,
+    confirmBatchClose,
     confirmCloseSession,
     reconnectSession,
     requestCloseSession,
+    setBatchCloseRequest,
     setCloseConfirmSessionId,
   } = useTerminalSessionActions({
     closeMutation,
@@ -651,6 +654,22 @@ export function SshConnectionsPage({
         open={closeConfirmSessionId !== null}
         pending={closeMutation.isPending}
         title={t("ssh.session.closeTitle")}
+      />
+      <ConfirmDialog
+        confirmLabel={t("ssh.actions.closeSessions")}
+        description={
+          batchCloseRequest
+            ? t("ssh.confirmCloseMany", {
+                count: batchCloseRequest.sessionIds.length,
+                labels: batchCloseRequest.labels.join(", "),
+              })
+            : ""
+        }
+        onConfirm={confirmBatchClose}
+        onOpenChange={(open) => !open && setBatchCloseRequest(null)}
+        open={batchCloseRequest !== null}
+        pending={closeMutation.isPending}
+        title={t("ssh.session.closeManyTitle")}
       />
       <HostKeyTrustDialog
         existingFingerprint={trustDialogState.fingerprint}

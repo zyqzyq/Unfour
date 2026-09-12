@@ -60,6 +60,9 @@ export function ActiveEnvironmentSelect({
           className="z-50 min-w-56 rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-surface)] p-1 text-[12px] text-[var(--u-color-text)] shadow-xl"
           sideOffset={6}
         >
+          <DropdownMenu.Label className="px-2 py-1.5 text-[11px] font-semibold uppercase text-[var(--u-color-text-soft)]">
+            {t("variables.environmentsGroup")}
+          </DropdownMenu.Label>
           <EnvironmentItem
             active={activeEnvironmentId === null}
             label={t("variables.noEnvironment")}

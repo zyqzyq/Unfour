@@ -238,7 +238,7 @@ describe("AppTitleBar settings entry", () => {
     );
 
     const environmentTrigger = screen.getByRole("button", {
-      name: "Active environment",
+      name: "Active variable environment",
     });
     expect(environmentTrigger).toHaveTextContent("Development");
     expect(environmentTrigger).not.toHaveTextContent("Environment:");
@@ -248,10 +248,11 @@ describe("AppTitleBar settings entry", () => {
       ctrlKey: false,
     });
     expect(onOpenEnvironmentMenu).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("Variable environments")).toBeTruthy();
     fireEvent.click(await screen.findByRole("menuitem", { name: "Test" }));
     expect(onSelectEnvironment).toHaveBeenCalledWith("env-test");
 
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Active environment" }), {
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Active variable environment" }), {
       button: 0,
       ctrlKey: false,
     });

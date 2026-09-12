@@ -136,6 +136,7 @@ describe("WorkspaceEnvironmentsPage", () => {
     expect(
       await screen.findByRole("heading", { name: "Workspace Variables" }),
     ).toBeTruthy();
+    expect(screen.getByText("Variable environments")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Add variable" }));
     fireEvent.change(screen.getByPlaceholderText("Key"), {
       target: { value: "base_url" },

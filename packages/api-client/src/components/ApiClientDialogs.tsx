@@ -19,6 +19,7 @@ export function ApiClientDialogs({
   onSaveIdentity,
   savedRequests,
   saveDialogError,
+  saveDialogPending,
   saveDialogTab,
 }: {
   closeDialogTab: ApiRequestTab | null;
@@ -31,6 +32,7 @@ export function ApiClientDialogs({
   onSaveIdentity: (identity: SaveIdentity) => void;
   savedRequests: ApiSavedRequest[];
   saveDialogError: string | null;
+  saveDialogPending?: boolean;
   saveDialogTab: ApiRequestTab | null;
 }) {
   const { t } = useI18n();
@@ -50,7 +52,7 @@ export function ApiClientDialogs({
           onCancel={onCancelSave}
           onSave={onSaveIdentity}
           open
-          saving={saveDialogTab.saving}
+          saving={Boolean(saveDialogPending) || saveDialogTab.saving}
         />
       )}
       <ApiCloseRequestDialog

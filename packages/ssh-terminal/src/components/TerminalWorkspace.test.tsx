@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nProvider } from "@unfour/ui";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TerminalWorkspace } from "./TerminalWorkspace";
@@ -63,5 +63,31 @@ describe("TerminalWorkspace progressive loading", () => {
       </I18nProvider>,
     );
     expect(screen.getByRole("button", { name: "New Connection" })).toBeTruthy();
+  });
+
+  it("shows the full SSH action error and copies it", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    const longError =
+      "ssh: handshake failed: remote protocol version is not supported\n" +
+      Array.from({ length: 8 }, () => "detail: cipher list rejected by server").join(" ");
+
+    render(
+      <I18nProvider initialLocale="en">
+        <TerminalWorkspace {...workspaceProps({ actionError: new Error(longError) })} />
+      </I18nProvider>,
+    );
+
+    const alert = screen.getByRole("alert");
+    const message = alert.querySelector("p");
+    expect(alert).toHaveTextContent("ssh: handshake failed");
+    expect(alert).toHaveTextContent("cipher list rejected by server");
+    expect(message).toHaveClass("whitespace-pre-wrap");
+    expect(message).not.toHaveClass("truncate");
+    expect(message).toHaveAttribute("title", longError);
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy error" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(longError));
+    vi.unstubAllGlobals();
   });
 });

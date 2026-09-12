@@ -1,7 +1,9 @@
+import { useState } from "react";
 import {
   ChevronsLeft,
   ChevronsRight,
   CircleX,
+  Copy,
   CopyPlus,
   Eraser,
   FilePlus2,
@@ -134,7 +136,10 @@ export function TerminalWorkspace({
           <Unplug size={13} />
           {t("ssh.actions.closeConnection")}
         </ContextMenuItem>
-        <ContextMenuItem onSelect={() => onReconnect(sessionId)}>
+        <ContextMenuItem
+          onSelect={() => onReconnect(sessionId)}
+          title={t("ssh.actions.reconnectHint")}
+        >
           <RefreshCw size={13} />
           {t("ssh.actions.reconnectSession")}
         </ContextMenuItem>
@@ -185,11 +190,7 @@ export function TerminalWorkspace({
           }))}
         />
       ) : null}
-      {Boolean(actionError) && (
-        <div className="shrink-0 truncate border-b border-[var(--u-color-border)] bg-[var(--u-color-danger-soft)] px-3 py-1 text-[12px] text-[var(--u-color-danger)]">
-          {formatTerminalError(actionError, t)}
-        </div>
-      )}
+      {actionError ? <TerminalActionError error={actionError} /> : null}
       <SftpWorkspace session={activeSession}>
         <div className="relative flex min-h-0 min-w-0 flex-1">
           {splitMode !== "single" && (
@@ -246,6 +247,40 @@ export function TerminalWorkspace({
           )}
         </div>
       </SftpWorkspace>
+    </div>
+  );
+}
+
+function TerminalActionError({ error }: { error: unknown }) {
+  const { t } = useI18n();
+  const message = formatTerminalError(error, t);
+  const [copied, setCopied] = useState(false);
+
+  async function copyError() {
+    try {
+      await navigator.clipboard?.writeText(message);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <div
+      className="flex shrink-0 items-start gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-danger-soft)] px-3 py-1.5 text-[12px] text-[var(--u-color-danger)]"
+      role="alert"
+    >
+      <p
+        className="min-w-0 max-h-24 flex-1 overflow-y-auto whitespace-pre-wrap break-words"
+        title={message}
+      >
+        {message}
+      </p>
+      <Button onClick={() => void copyError()} size="sm" type="button" variant="ghost">
+        <Copy size={13} />
+        {copied ? t("ssh.errors.copied") : t("ssh.errors.copy")}
+      </Button>
     </div>
   );
 }
