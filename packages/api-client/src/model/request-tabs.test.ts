@@ -14,6 +14,7 @@ import {
   completeTabSend,
   createNewRequestTab,
   deriveTabResponseState,
+  requestTabNeedsCloseConfirmation,
   emptyApiTabsState,
   failTabSave,
   failTabSend,
@@ -90,6 +91,36 @@ describe("API request tab state", () => {
       token: "{{api_token}}",
     });
     expect(getTabSaveState(state.tabs[0])).toBe("saved");
+  });
+
+  it("closes a blank new request without confirmation", () => {
+    const opened = createNewRequestTab(emptyApiTabsState("ws-1"), "new:1");
+    expect(requestTabNeedsCloseConfirmation(opened.tabs[0])).toBe(false);
+    expect(getTabSaveState(opened.tabs[0])).toBe("unsaved");
+  });
+
+  it("does not treat default method or body mode as a user edit", () => {
+    const opened = createNewRequestTab(emptyApiTabsState("ws-1"), "new:1");
+    const defaultsOnly = updateTabDraft(opened, "new:1", {
+      method: "GET",
+      bodyMode: "none",
+    });
+    expect(requestTabNeedsCloseConfirmation(defaultsOnly.tabs[0])).toBe(false);
+  });
+
+  it("asks to save a new request after the user edits it", () => {
+    const opened = createNewRequestTab(emptyApiTabsState("ws-1"), "new:1");
+    const edited = updateTabDraft(opened, "new:1", { url: "https://api.test" });
+    expect(requestTabNeedsCloseConfirmation(edited.tabs[0])).toBe(true);
+  });
+
+  it("keeps saved-request close confirmation on the baseline", () => {
+    const opened = openSavedRequest(emptyApiTabsState("ws-1"), savedRequest("req-1"));
+    expect(requestTabNeedsCloseConfirmation(opened.tabs[0])).toBe(false);
+    const dirty = updateTabDraft(opened, "saved:req-1", {
+      url: "https://changed.test",
+    });
+    expect(requestTabNeedsCloseConfirmation(dirty.tabs[0])).toBe(true);
   });
 
   it("creates independent new request tabs", () => {

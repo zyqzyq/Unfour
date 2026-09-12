@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { DatabaseConnection } from "@unfour/command-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SqlEditorTab } from "./SqlEditorTab";
@@ -69,16 +69,26 @@ vi.mock("./sql-editor-theme", () => ({
   configureSqlEditorThemes: vi.fn(),
 }));
 
+const savedSqlState = {
+  error: null as unknown,
+  isLoading: false,
+  remove: vi.fn(),
+  removePending: false,
+  save: vi.fn(),
+  saved: [] as Array<{
+    connectionId: string | null;
+    createdAt: string;
+    id: string;
+    name: string;
+    sql: string;
+    updatedAt: string;
+    workspaceId: string;
+  }>,
+  savePending: false,
+};
+
 vi.mock("../hooks/useSavedSql", () => ({
-  useSavedSql: () => ({
-    error: null,
-    isLoading: false,
-    remove: vi.fn(),
-    removePending: false,
-    save: vi.fn(),
-    saved: [],
-    savePending: false,
-  }),
+  useSavedSql: () => savedSqlState,
 }));
 
 afterEach(cleanup);
@@ -87,6 +97,13 @@ beforeEach(() => {
   editorState.cursorOffset = 12;
   editorState.notifySelection = () => undefined;
   editorState.selection = "";
+  savedSqlState.error = null;
+  savedSqlState.isLoading = false;
+  savedSqlState.remove = vi.fn().mockResolvedValue([]);
+  savedSqlState.removePending = false;
+  savedSqlState.save = vi.fn().mockResolvedValue({ id: "sql-1" });
+  savedSqlState.saved = [];
+  savedSqlState.savePending = false;
 });
 
 const connection: DatabaseConnection = {
@@ -114,7 +131,10 @@ const MULTI_SQL = "SELECT 1;\nDELETE FROM t;\nSELECT 2;";
 const SELECTED_SQL = "DELETE FROM t;";
 
 function renderEditor(props: Partial<Parameters<typeof SqlEditorTab>[0]> = {}) {
+  const onOpenSavedSql = vi.fn();
   const onRun = vi.fn();
+  const onSqlChange = vi.fn();
+  const onSqlSaved = vi.fn();
   const onStop = vi.fn();
   const view = render(
     <SqlEditorTab
@@ -124,10 +144,12 @@ function renderEditor(props: Partial<Parameters<typeof SqlEditorTab>[0]> = {}) {
       executePending={false}
       onChangeQueryContext={vi.fn()}
       onClearSql={vi.fn()}
+      onOpenSavedSql={onOpenSavedSql}
       onRun={onRun}
       onSelectConnection={vi.fn()}
       onShowHistory={vi.fn()}
-      onSqlChange={vi.fn()}
+      onSqlChange={onSqlChange}
+      onSqlSaved={onSqlSaved}
       onStop={onStop}
       pendingConfirmation={false}
       queryCatalog={null}
@@ -139,8 +161,18 @@ function renderEditor(props: Partial<Parameters<typeof SqlEditorTab>[0]> = {}) {
       {...props}
     />,
   );
-  return { ...view, onRun, onStop };
+  return { ...view, onOpenSavedSql, onRun, onSqlChange, onSqlSaved, onStop };
 }
+
+const savedSnippet = {
+  connectionId: "conn-1",
+  createdAt: "2026-01-01T00:00:00.000Z",
+  id: "sql-1",
+  name: "List users",
+  sql: "SELECT * FROM users;",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+  workspaceId: "ws-1",
+};
 
 function setSelection(sql: string) {
   editorState.selection = sql;
@@ -268,5 +300,69 @@ describe("SQL editor run actions", () => {
     expect(screen.queryByLabelText("Run options")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Run All" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Run Selected" })).toBeInTheDocument();
+  });
+});
+
+describe("SQL editor saved SQL", () => {
+  it("opens a saved snippet from the list dialog through onOpenSavedSql", async () => {
+    savedSqlState.saved = [savedSnippet];
+    const { onOpenSavedSql, onSqlChange } = renderEditor();
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Saved/ }));
+    fireEvent.click(await screen.findByTitle("SELECT * FROM users;"));
+
+    expect(onOpenSavedSql).toHaveBeenCalledWith(savedSnippet);
+    expect(onSqlChange).not.toHaveBeenCalled();
+  });
+
+  it("asks before deleting saved SQL and keeps it when cancelled", async () => {
+    savedSqlState.saved = [savedSnippet];
+    renderEditor();
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Saved/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete saved SQL List users" }));
+
+    expect(screen.getByRole("dialog", { name: "Delete saved query?" })).toHaveTextContent(
+      'Delete saved query "List users"? This cannot be undone.',
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(savedSqlState.remove).not.toHaveBeenCalled();
+  });
+
+  it("deletes saved SQL only after confirmation", async () => {
+    savedSqlState.saved = [savedSnippet];
+    renderEditor();
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Saved/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete saved SQL List users" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(savedSqlState.remove).toHaveBeenCalledWith("sql-1"));
+  });
+
+  it("updates the current tab baseline after a successful save", async () => {
+    const { onSqlSaved } = renderEditor({ sql: "SELECT 1;" });
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Save SQL" }));
+    fireEvent.submit(screen.getByRole("button", { name: "Save" }).closest("form")!);
+
+    await waitFor(() => expect(savedSqlState.save).toHaveBeenCalled());
+    expect(onSqlSaved).toHaveBeenCalledWith("SELECT 1;");
+  });
+
+  it("does not mark the tab saved when saving SQL fails", async () => {
+    savedSqlState.save = vi.fn().mockRejectedValue(new Error("disk full"));
+    const { onSqlSaved } = renderEditor({ sql: "SELECT 1;" });
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Save SQL" }));
+    fireEvent.submit(screen.getByRole("button", { name: "Save" }).closest("form")!);
+
+    await waitFor(() => expect(savedSqlState.save).toHaveBeenCalled());
+    expect(onSqlSaved).not.toHaveBeenCalled();
   });
 });

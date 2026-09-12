@@ -37,6 +37,27 @@ describe("queryTabHasUnsavedDraft", () => {
     ).toBe(true);
   });
 
+  it("becomes clean after a successful save updates the baseline", () => {
+    expect(
+      queryTabHasUnsavedDraft({
+        sql: "SELECT * FROM users;",
+        sqlBaseline: "",
+      }),
+    ).toBe(true);
+    expect(
+      queryTabHasUnsavedDraft({
+        sql: "SELECT * FROM users;",
+        sqlBaseline: "SELECT * FROM users;",
+      }),
+    ).toBe(false);
+    expect(
+      queryTabHasUnsavedDraft({
+        sql: "SELECT * FROM orders;",
+        sqlBaseline: "SELECT * FROM users;",
+      }),
+    ).toBe(true);
+  });
+
   it("falls back to default SQL when a baseline is missing", () => {
     expect(queryTabHasUnsavedDraft({ sql: defaultSql })).toBe(false);
     expect(queryTabHasUnsavedDraft({ sql: "SELECT 1;" })).toBe(defaultSql.trim() !== "SELECT 1;");

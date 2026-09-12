@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Clock, FolderOpen } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { listApiHistory, type ApiHistoryItem } from "@unfour/command-client";
-import { cn, useI18n } from "@unfour/ui";
+import { Button, cn, EmptyState, ErrorState, LoadingState, useI18n } from "@unfour/ui";
 import type { ApiOpenIntent } from "../model/types";
 import { ApiCollectionTree } from "./ApiCollectionTree";
 import { ApiHistoryTree } from "./ApiHistoryTree";
@@ -78,7 +78,15 @@ export function ApiClientSidebar({
           />
         )}
         {activeTab === "history" && (
-          <HistoryPanel items={historyQuery.data ?? []} onOpenIntent={onOpenIntent} />
+          <HistoryPanel
+            error={historyQuery.error}
+            isLoading={historyQuery.isLoading}
+            items={historyQuery.data}
+            onOpenIntent={onOpenIntent}
+            onRetry={() => {
+              void historyQuery.refetch();
+            }}
+          />
         )}
       </div>
     </div>
@@ -86,23 +94,58 @@ export function ApiClientSidebar({
 }
 
 function HistoryPanel({
+  error,
+  isLoading,
   items,
   onOpenIntent,
+  onRetry,
 }: {
-  items: ApiHistoryItem[];
+  error: unknown;
+  isLoading: boolean;
+  items: ApiHistoryItem[] | undefined;
   onOpenIntent: (intent: ApiOpenIntent) => void;
+  onRetry: () => void;
 }) {
   const { t } = useI18n();
-  if (!items.length) {
+  const loadedItems = items ?? [];
+  const hasItems = loadedItems.length > 0;
+
+  if (isLoading && !hasItems) {
+    return <LoadingState className="m-2 min-h-[120px]" />;
+  }
+
+  if (error && !hasItems) {
     return (
-      <div className="p-3 text-[12px] text-[var(--u-color-text-muted)]">
-        {t("api.sidebar.historyEmpty")}
-      </div>
+      <ErrorState className="m-2 min-h-[120px]">
+        <div className="space-y-2">
+          <div>{t("api.sidebar.historyError")}</div>
+          <Button onClick={onRetry} size="sm" type="button">
+            {t("common.actions.retry")}
+          </Button>
+        </div>
+      </ErrorState>
     );
   }
+
   return (
-    <div className="h-full min-h-0 overflow-y-auto p-2">
-      <ApiHistoryTree items={items} onOpenIntent={onOpenIntent} />
+    <div className="flex h-full min-h-0 flex-col">
+      {error ? (
+        <ErrorState className="m-2 min-h-[48px]">
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <span>{t("api.sidebar.historyError")}</span>
+            <Button onClick={onRetry} size="sm" type="button">
+              {t("common.actions.retry")}
+            </Button>
+          </div>
+        </ErrorState>
+      ) : null}
+      {hasItems ? (
+        <div className="min-h-0 flex-1 overflow-y-auto p-2">
+          <ApiHistoryTree items={loadedItems} onOpenIntent={onOpenIntent} />
+        </div>
+      ) : (
+        <EmptyState className="m-2 min-h-[120px]">{t("api.sidebar.historyEmpty")}</EmptyState>
+      )}
     </div>
   );
 }

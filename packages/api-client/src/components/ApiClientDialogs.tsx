@@ -18,6 +18,7 @@ export function ApiClientDialogs({
   onSaveClose,
   onSaveIdentity,
   savedRequests,
+  saveDialogError,
   saveDialogTab,
 }: {
   closeDialogTab: ApiRequestTab | null;
@@ -29,6 +30,7 @@ export function ApiClientDialogs({
   onSaveClose: () => void;
   onSaveIdentity: (identity: SaveIdentity) => void;
   savedRequests: ApiSavedRequest[];
+  saveDialogError: string | null;
   saveDialogTab: ApiRequestTab | null;
 }) {
   const { t } = useI18n();
@@ -41,6 +43,7 @@ export function ApiClientDialogs({
           defaultCollectionId={saveDialogTab.draft.collectionId}
           defaultParentFolderId={saveDialogTab.draft.parentFolderId}
           defaultName={saveDialogTab.draft.name}
+          error={saveDialogError}
           folders={folders}
           key={saveDialogTab.id}
           savedRequests={savedRequests}

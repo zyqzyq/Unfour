@@ -4,6 +4,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import type { DatabaseConnection, DatabaseSchema, SavedSql } from "@unfour/command-client";
 import {
   Button,
+  ConfirmDialog,
   Dialog,
   DialogBody,
   DialogContent,
@@ -47,10 +48,12 @@ export function SqlEditorTab({
   executePending,
   onChangeQueryContext,
   onClearSql,
+  onOpenSavedSql,
   onRun,
   onSelectConnection,
   onShowHistory,
   onSqlChange,
+  onSqlSaved,
   onStop,
   pendingConfirmation,
   queryCatalog,
@@ -67,10 +70,12 @@ export function SqlEditorTab({
   executePending: boolean;
   onChangeQueryContext: (patch: { catalog?: string | null; schema?: string | null }) => void;
   onClearSql: () => void;
+  onOpenSavedSql: (item: SavedSql) => void;
   onRun: (options?: string | RunSqlOptions) => void;
   onSelectConnection: (connectionId: string) => void;
   onShowHistory: () => void;
   onSqlChange: (sql: string) => void;
+  onSqlSaved: (sql: string) => void;
   onStop: () => void;
   pendingConfirmation: boolean;
   queryCatalog: string | null;
@@ -92,6 +97,7 @@ export function SqlEditorTab({
   const savedSql = useSavedSql(workspaceId, { active });
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [savedDialogOpen, setSavedDialogOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<SavedSql | null>(null);
   const [snippetName, setSnippetName] = useState("");
   const [hasSelection, setHasSelection] = useState(false);
   const selectionDisposable = useRef<{ dispose: () => void } | null>(null);
@@ -181,25 +187,27 @@ export function SqlEditorTab({
     if (!name || !sql.trim()) {
       return;
     }
-    await savedSql.save({
-      connectionId: selectedConnectionId,
-      name,
-      sql,
-      workspaceId,
-    });
+    try {
+      await savedSql.save({
+        connectionId: selectedConnectionId,
+        name,
+        sql,
+        workspaceId,
+      });
+    } catch {
+      return;
+    }
+    onSqlSaved(sql);
     setSaveDialogOpen(false);
   };
 
   const loadSavedSql = (item: SavedSql) => {
-    onSqlChange(item.sql);
-    if (item.connectionId && connections.some((connection) => connection.id === item.connectionId)) {
-      onSelectConnection(item.connectionId);
-    }
+    onOpenSavedSql(item);
     setSavedDialogOpen(false);
   };
 
   const deleteSavedSql = (item: SavedSql) => {
-    void savedSql.remove(item.id);
+    setPendingDelete(item);
   };
 
   const editorActionsRef = useRef({ runAllFromEditor, runSelectedFromEditor });
@@ -513,6 +521,22 @@ export function SqlEditorTab({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog
+        confirmLabel={t("common.actions.delete")}
+        description={
+          pendingDelete ? t("database.tree.deleteSavedSqlBody", { name: pendingDelete.name }) : ""
+        }
+        onConfirm={() => {
+          if (pendingDelete) {
+            void savedSql.remove(pendingDelete.id);
+          }
+          setPendingDelete(null);
+        }}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        open={pendingDelete !== null}
+        pending={savedSql.removePending}
+        title={t("database.tree.deleteSavedSqlTitle")}
+      />
     </div>
   );
 }

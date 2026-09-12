@@ -41,6 +41,19 @@ export function emptyApiTabsState(workspaceId: string): ApiTabsState {
   };
 }
 
+export function requestTabNeedsCloseConfirmation(tab: ApiRequestTab): boolean {
+  if (tab.saving) {
+    return true;
+  }
+  if (tab.baseline !== null) {
+    return normalizeRequestDraft(tab.draft) !== tab.baseline;
+  }
+  if (tab.source === "new") {
+    return normalizeRequestDraft(tab.draft) !== normalizeRequestDraft(emptyDraft());
+  }
+  return true;
+}
+
 export function createNewRequestTab(
   state: ApiTabsState,
   id: string,

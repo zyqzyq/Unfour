@@ -327,6 +327,7 @@ export function DatabasePage({
     loadConnectionRoot,
     loadHistoryEntry,
     loadSqlIntoEditor,
+    markActiveSqlSaved,
     openSavedSql,
     previewSelectedTable,
     refreshActiveSchema,
@@ -605,7 +606,9 @@ export function DatabasePage({
           onSelectTab={selectDatabaseTab}
           onSelectTableSegment={handleSelectTableSegment}
           onShowHistory={showQueryHistory}
+          onOpenSavedSql={openSavedSql}
           onSqlChange={updateActiveSql}
+          onSqlSaved={markActiveSqlSaved}
           onStop={stopQuery}
           onTableFilter={applyTableFilter}
           onTablePageChange={handleTablePageChange}

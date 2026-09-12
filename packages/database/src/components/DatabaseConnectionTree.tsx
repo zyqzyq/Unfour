@@ -1,7 +1,9 @@
 import { Columns3, Database, Eye, FileText, RefreshCw, Table2 } from "lucide-react";
+import { useState } from "react";
 import type { DatabaseConnection, DatabaseSchema, DatabaseTable, SavedSql } from "@unfour/command-client";
 import {
   Badge,
+  ConfirmDialog,
   ConnectionStatus,
   EmptyState,
   IconButton,
@@ -81,6 +83,10 @@ export function DatabaseConnectionTree({
   selectedTableId?: string | null;
 }) {
   const { t } = useI18n();
+  const [pendingDelete, setPendingDelete] = useState<SavedSql | null>(null);
+  const requestDeleteSavedSql = onDeleteSavedSql
+    ? (item: SavedSql) => setPendingDelete(item)
+    : undefined;
 
   if (!connections.length) {
     return <EmptyState className="min-h-[72px]">{t("database.errors.noConnections")}</EmptyState>;
@@ -157,7 +163,7 @@ export function DatabaseConnectionTree({
               failureMessage: session?.message,
               loadErrors,
               loadingKeys,
-              onDeleteSavedSql,
+              onDeleteSavedSql: requestDeleteSavedSql,
               onDesignTable,
               onOpenSavedSql,
               onPreviewTable,
@@ -193,6 +199,7 @@ export function DatabaseConnectionTree({
   const selectedId = selectedTableId ?? selectedConnection?.id ?? null;
 
   return (
+    <>
     <TreeView
       // Remount only when the set of connections changes, so expanding one
       // connection (or database) never collapses the others.
@@ -251,6 +258,22 @@ export function DatabaseConnectionTree({
       }}
       selectedId={selectedId}
     />
+    <ConfirmDialog
+      confirmLabel={t("common.actions.delete")}
+      description={
+        pendingDelete ? t("database.tree.deleteSavedSqlBody", { name: pendingDelete.name }) : ""
+      }
+      onConfirm={() => {
+        if (pendingDelete) {
+          onDeleteSavedSql?.(pendingDelete);
+        }
+        setPendingDelete(null);
+      }}
+      onOpenChange={(open) => !open && setPendingDelete(null)}
+      open={pendingDelete !== null}
+      title={t("database.tree.deleteSavedSqlTitle")}
+    />
+    </>
   );
 }
 

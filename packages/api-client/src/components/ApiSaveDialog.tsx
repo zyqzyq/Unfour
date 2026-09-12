@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
 import { Folder, FolderOpen } from "lucide-react";
 import {
   Button,
@@ -8,6 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  ErrorState,
   Input,
   TreeView,
   useI18n,
@@ -39,6 +40,7 @@ export function ApiSaveDialog({
   defaultCollectionId,
   defaultParentFolderId,
   defaultName,
+  error: submittedError,
   folders,
   onCancel,
   onSave,
@@ -50,6 +52,7 @@ export function ApiSaveDialog({
   defaultCollectionId: string | null;
   defaultParentFolderId: string | null;
   defaultName: string;
+  error?: string | null;
   folders: ApiCollectionFolder[];
   onCancel: () => void;
   onSave: (identity: SaveIdentity) => void;
@@ -119,6 +122,7 @@ export function ApiSaveDialog({
     const trimmedName = name.trim();
 
     if (creatingNew) {
+      setError(null);
       onSave({
         collectionId: null,
         createCollectionName: newCollectionName.trim(),
@@ -160,12 +164,23 @@ export function ApiSaveDialog({
     });
   }
 
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canSave) {
+      return;
+    }
+    handleSave();
+  }
+
+  const visibleError = error ?? submittedError;
+
   return (
     <Dialog onOpenChange={(next) => !next && onCancel()} open={open}>
       <DialogContent title={t("api.save.title")}>
         <DialogHeader>
           <DialogTitle>{t("api.save.title")}</DialogTitle>
         </DialogHeader>
+        <form onSubmit={handleSubmit}>
         <DialogBody className="space-y-3">
           <label className="block space-y-1">
             <span className="text-[12px] font-medium">{t("api.save.name")}</span>
@@ -178,16 +193,18 @@ export function ApiSaveDialog({
               }}
               value={name}
             />
-            {error && (
-              <span className="text-[12px] text-[var(--u-color-danger)]">
-                {error}
-              </span>
-            )}
           </label>
 
           <div className="space-y-1">
             <span className="text-[12px] font-medium">{t("api.save.location")}</span>
-            <div className="max-h-[200px] overflow-y-auto rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-1">
+            <div
+              className="max-h-[200px] overflow-y-auto rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-1"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                }
+              }}
+            >
               <TreeView
                 defaultExpandedIds={collectExpandableIds(items)}
                 items={items}
@@ -236,15 +253,19 @@ export function ApiSaveDialog({
               />
             </label>
           )}
+          {visibleError ? (
+            <ErrorState className="min-h-[48px]">{visibleError}</ErrorState>
+          ) : null}
         </DialogBody>
         <DialogFooter>
           <Button onClick={onCancel} type="button" variant="ghost">
             {t("api.save.cancel")}
           </Button>
-          <Button disabled={!canSave} onClick={handleSave} type="button">
+          <Button disabled={!canSave} type="submit">
             {saving ? t("api.save.saving") : t("api.save.save")}
           </Button>
         </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

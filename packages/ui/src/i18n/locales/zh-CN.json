@@ -281,6 +281,7 @@
       "historyEmptyCompact": "发送请求后会生成历史记录",
       "history": "历史",
       "historyEmpty": "发送请求后会生成历史记录。",
+      "historyError": "加载请求历史失败。",
       "environments": "环境",
       "noSavedRequests": "暂无已保存请求",
       "restClient": "REST 客户端",

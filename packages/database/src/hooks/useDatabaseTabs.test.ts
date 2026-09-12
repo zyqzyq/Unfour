@@ -56,6 +56,33 @@ describe("useDatabaseTabs", () => {
     });
   });
 
+  it("treats the current SQL as clean after the baseline is synced", () => {
+    const { result } = renderHook(() => useDatabaseTabs());
+    const tabId = result.current.activeTabId;
+
+    act(() => {
+      result.current.updateQueryTab(tabId, { sql: "select * from users;" });
+    });
+    act(() => {
+      result.current.updateQueryTab(tabId, { sqlBaseline: "select * from users;" });
+    });
+
+    expect(result.current.activeTab).toMatchObject({
+      kind: "query",
+      sql: "select * from users;",
+      sqlBaseline: "select * from users;",
+    });
+
+    act(() => {
+      result.current.updateQueryTab(tabId, { sql: "select * from orders;" });
+    });
+
+    expect(result.current.activeTab).toMatchObject({
+      sql: "select * from orders;",
+      sqlBaseline: "select * from users;",
+    });
+  });
+
   it("keeps the SQL close baseline when the editor content changes", () => {
     const { result } = renderHook(() => useDatabaseTabs());
     const tabId = result.current.activeTabId;

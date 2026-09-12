@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, EmptyState, useI18n } from "@unfour/ui";
+import { formatError } from "./model/api-request-state";
 import { useApiRequestTabs } from "./hooks/useApiRequestTabs";
 import { useApiCollections } from "./hooks/useApiCollections";
 import { useApiCollectionFolders } from "./hooks/useApiCollectionFolders";
 import {
   getTabSaveState,
+  requestTabNeedsCloseConfirmation,
   type ApiRequestTab,
 } from "./model/request-tabs";
 import type { ApiOpenIntent } from "./model/types";
@@ -52,6 +54,7 @@ export function ApiClientPage({
     useApiCollections(workspaceId);
   const { createFolderMut, folders } = useApiCollectionFolders(workspaceId);
   const [saveDialogTabId, setSaveDialogTabId] = useState<string | null>(null);
+  const [saveDialogError, setSaveDialogError] = useState<string | null>(null);
   const [closeDialogTabId, setCloseDialogTabId] = useState<string | null>(null);
   const closeAfterSaveRef = useRef<string | null>(null);
   const pendingCloseQueueRef = useRef<string[]>([]);
@@ -87,6 +90,7 @@ export function ApiClientPage({
         }
         void saveTab(effectiveTab);
       } else {
+        setSaveDialogError(null);
         setSaveDialogTabId(tab.id);
       }
     },
@@ -194,7 +198,7 @@ export function ApiClientPage({
       if (!tab) {
         continue;
       }
-      if (getTabSaveState(tab) === "saved") {
+      if (!requestTabNeedsCloseConfirmation(tab)) {
         immediateIds.push(tab.id);
         continue;
       }
@@ -243,6 +247,7 @@ export function ApiClientPage({
       return;
     }
     const originalId = saveDialogTab.id;
+    setSaveDialogError(null);
     let collectionId = identity.collectionId;
     let parentFolderId = identity.parentFolderId;
     if (identity.createCollectionName) {
@@ -251,7 +256,8 @@ export function ApiClientPage({
           identity.createCollectionName,
         );
         collectionId = created.id;
-      } catch {
+      } catch (error) {
+        setSaveDialogError(formatError(error));
         return;
       }
     }
@@ -269,7 +275,8 @@ export function ApiClientPage({
           parentFolderId,
         });
         parentFolderId = folder.id;
-      } catch {
+      } catch (error) {
+        setSaveDialogError(formatError(error));
         return;
       }
     }
@@ -279,6 +286,7 @@ export function ApiClientPage({
       parentFolderId,
     });
     if (savedRequestId) {
+      setSaveDialogError(null);
       setSaveDialogTabId(null);
       if (closeAfterSaveRef.current === originalId) {
         closeAfterSaveRef.current = null;
@@ -292,6 +300,7 @@ export function ApiClientPage({
     setCloseDialogTabId(null);
     if (!tab.savedRequestId) {
       closeAfterSaveRef.current = tab.id;
+      setSaveDialogError(null);
       setSaveDialogTabId(tab.id);
       return;
     }
@@ -414,7 +423,8 @@ export function ApiClientPage({
         collections={collections}
         folders={folders}
         onCancelClose={() => { pendingCloseQueueRef.current = []; setCloseDialogTabId(null); }}
-        onCancelSave={() => { closeAfterSaveRef.current = null; pendingCloseQueueRef.current = []; setSaveDialogTabId(null); }}
+        onCancelSave={() => { closeAfterSaveRef.current = null; pendingCloseQueueRef.current = []; setSaveDialogError(null); setSaveDialogTabId(null); }}
+        saveDialogError={saveDialogError ?? saveDialogTab?.saveError ?? null}
         onDiscardClose={() => { if (closeDialogTab) closeTab(closeDialogTab.id); setCloseDialogTabId(null); continuePendingCloseQueue(); }}
         onSaveClose={() => closeDialogTab && void saveThenClose(closeDialogTab)}
         onSaveIdentity={(identity) => void saveWithIdentity(identity)}

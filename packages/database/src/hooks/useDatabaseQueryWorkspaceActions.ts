@@ -255,6 +255,13 @@ export function useDatabaseQueryWorkspaceActions({
     });
   }
 
+  function markActiveSqlSaved(sql: string) {
+    if (!activeQueryTab) {
+      return;
+    }
+    databaseTabs.updateQueryTab(activeQueryTab.id, { sqlBaseline: sql });
+  }
+
 
   return {
     clearQueryHistory,
@@ -266,6 +273,7 @@ export function useDatabaseQueryWorkspaceActions({
     handleTablePageChange,
     loadHistoryEntry,
     loadSqlIntoEditor,
+    markActiveSqlSaved,
     openSavedSql,
     recordFailedHistory,
     recordSuccessfulHistory,

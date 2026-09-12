@@ -3,6 +3,7 @@ import type {
   DatabaseConnection,
   DatabaseSchema,
   DatabaseTableStructure,
+  SavedSql,
 } from "@unfour/command-client";
 import type {
   DatabaseResultTab,
@@ -48,7 +49,9 @@ export function DatabaseWorkspace({
   onSelectTab,
   onSelectTableSegment,
   onShowHistory,
+  onOpenSavedSql,
   onSqlChange,
+  onSqlSaved,
   onStop,
   onTableFilter,
   onTablePageChange,
@@ -88,7 +91,9 @@ export function DatabaseWorkspace({
   onSelectTab: (tabId: DatabaseWorkspaceTabId) => void;
   onSelectTableSegment: (segment: TableSegment) => void;
   onShowHistory: () => void;
+  onOpenSavedSql: (item: SavedSql) => void;
   onSqlChange: (sql: string) => void;
+  onSqlSaved: (sql: string) => void;
   onStop: () => void;
   onTableFilter: (filter: string) => void;
   onTablePageChange: (pageIndex: number, pageSize: number) => void;
@@ -240,10 +245,12 @@ export function DatabaseWorkspace({
                 executePending={executePending || Boolean(renderQuery.loading)}
                 onChangeQueryContext={onChangeQueryContext}
                 onClearSql={onClearSql}
+                onOpenSavedSql={onOpenSavedSql}
                 onRun={onRun}
                 onSelectConnection={onSelectConnection}
                 onShowHistory={onShowHistory}
                 onSqlChange={onSqlChange}
+                onSqlSaved={onSqlSaved}
                 onStop={onStop}
                 pendingConfirmation={renderQuery.pendingConfirmation}
                 queryCatalog={queryCatalog}

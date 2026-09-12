@@ -281,6 +281,7 @@
       "historyEmptyCompact": "Send a request to build history",
       "history": "History",
       "historyEmpty": "Send a request to build history.",
+      "historyError": "Failed to load request history.",
       "environments": "Environments",
       "noSavedRequests": "No saved requests",
       "restClient": "REST Client",

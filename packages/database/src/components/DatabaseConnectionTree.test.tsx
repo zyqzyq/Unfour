@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import type { DatabaseConnection, DatabaseTable } from "@unfour/command-client";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DatabaseConnectionTree } from "./DatabaseConnectionTree";
 
@@ -42,6 +42,15 @@ const usersTable: DatabaseTable = {
     },
   ],
 };
+
+async function expandSavedQueries() {
+  const group = (await screen.findByText("Saved Queries")).closest("[role='treeitem']");
+  expect(group).toBeTruthy();
+  const expand = within(group as HTMLElement).queryByRole("button", { name: "Expand" });
+  if (expand) {
+    fireEvent.click(expand);
+  }
+}
 
 const connectedState = {
   "conn-1": {
@@ -141,5 +150,99 @@ describe("DatabaseConnectionTree", () => {
     fireEvent.click(await screen.findByRole("menuitem", { name: "New Query" }));
 
     expect(onNewQuery).toHaveBeenCalledWith(sqliteConnection);
+  });
+
+  it("opens saved SQL from the sidebar tree without replacing the current editor", async () => {
+    const onOpenSavedSql = vi.fn();
+    const savedSql = {
+      connectionId: "conn-1",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      id: "sql-1",
+      name: "List users",
+      sql: "SELECT * FROM users;",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      workspaceId: "ws-1",
+    };
+    renderTree({
+      connectionStates: connectedState,
+      onOpenSavedSql,
+      savedSqlByConnection: { "conn-1": [savedSql] },
+      schemaCache: {
+        "conn-1::": {
+          connectionId: "conn-1",
+          tables: [usersTable],
+        },
+      },
+    });
+
+    await expandSavedQueries();
+    fireEvent.doubleClick(await screen.findByRole("button", { name: "List users" }));
+    expect(onOpenSavedSql).toHaveBeenCalledWith(savedSql);
+  });
+
+  it("asks before deleting saved SQL from the sidebar and keeps it when cancelled", async () => {
+    const onDeleteSavedSql = vi.fn();
+    const savedSql = {
+      connectionId: "conn-1",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      id: "sql-1",
+      name: "List users",
+      sql: "SELECT * FROM users;",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      workspaceId: "ws-1",
+    };
+    renderTree({
+      connectionStates: connectedState,
+      onDeleteSavedSql,
+      onOpenSavedSql: vi.fn(),
+      savedSqlByConnection: { "conn-1": [savedSql] },
+      schemaCache: {
+        "conn-1::": {
+          connectionId: "conn-1",
+          tables: [usersTable],
+        },
+      },
+    });
+
+    await expandSavedQueries();
+    fireEvent.contextMenu(await screen.findByText("List users"));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
+    expect(onDeleteSavedSql).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toHaveTextContent('Delete saved query "List users"?');
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onDeleteSavedSql).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("deletes saved SQL from the sidebar only after confirmation", async () => {
+    const onDeleteSavedSql = vi.fn();
+    const savedSql = {
+      connectionId: "conn-1",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      id: "sql-1",
+      name: "List users",
+      sql: "SELECT * FROM users;",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      workspaceId: "ws-1",
+    };
+    renderTree({
+      connectionStates: connectedState,
+      onDeleteSavedSql,
+      onOpenSavedSql: vi.fn(),
+      savedSqlByConnection: { "conn-1": [savedSql] },
+      schemaCache: {
+        "conn-1::": {
+          connectionId: "conn-1",
+          tables: [usersTable],
+        },
+      },
+    });
+
+    await expandSavedQueries();
+    fireEvent.contextMenu(await screen.findByText("List users"));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(onDeleteSavedSql).toHaveBeenCalledWith(savedSql);
   });
 });
