@@ -202,6 +202,46 @@ describe("SQL editor run actions", () => {
     expect(screen.queryByRole("button", { name: "Run Current" })).not.toBeInTheDocument();
   });
 
+  it("does not confirm a pending dangerous run from editor shortcuts or Run buttons", () => {
+    const { onRun } = renderEditor({ pendingConfirmation: true });
+    setSelection(SELECTED_SQL);
+
+    expect(screen.queryByRole("button", { name: "Run All" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Run Selected" })).not.toBeInTheDocument();
+
+    const ctrlEnter = editorState.commands.find((command) => command.keybinding === 5);
+    const ctrlShiftEnter = editorState.commands.find((command) => command.keybinding === 7);
+    expect(ctrlEnter).toBeDefined();
+    expect(ctrlShiftEnter).toBeDefined();
+
+    act(() => {
+      ctrlEnter?.handler();
+      ctrlShiftEnter?.handler();
+    });
+
+    expect(onRun).not.toHaveBeenCalled();
+  });
+
+  it("confirms only the stored pending SQL from the dedicated confirm action", () => {
+    const { onRun } = renderEditor({
+      pendingConfirmation: true,
+      sql: "DELETE FROM t; -- edited after the first run",
+    });
+    setSelection("SELECT 99;");
+
+    act(() => {
+      editorState.commands.find((command) => command.keybinding === 5)?.handler();
+      editorState.commands.find((command) => command.keybinding === 7)?.handler();
+    });
+    expect(onRun).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm run" }));
+    expect(onRun).toHaveBeenCalledTimes(1);
+    expect(onRun).toHaveBeenCalledWith({ resume: true });
+    expect(onRun).not.toHaveBeenCalledWith({ mode: "all" });
+    expect(onRun).not.toHaveBeenCalledWith({ sql: "SELECT 99;" });
+  });
+
   it("keeps Explain on current-statement / selection semantics", () => {
     const { onRun } = renderEditor();
     fireEvent.click(screen.getByRole("button", { name: "Explain" }));

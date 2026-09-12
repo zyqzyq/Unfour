@@ -29,6 +29,7 @@ describe("useDatabaseTabs", () => {
     expect(result.current.tabs).toHaveLength(1);
     expect(result.current.activeTab?.kind).toBe("query");
     expect(result.current.activeTab?.title).toBe("Query 1");
+    expect(result.current.activeTab).toMatchObject({ sql: "", sqlBaseline: "" });
   });
 
   it("creates unique query tabs with optional connection and SQL context", () => {
@@ -50,7 +51,23 @@ describe("useDatabaseTabs", () => {
       catalog: "app",
       schema: "public",
       sql: "select * from users;",
+      sqlBaseline: "select * from users;",
       title: "Query 2",
+    });
+  });
+
+  it("keeps the SQL close baseline when the editor content changes", () => {
+    const { result } = renderHook(() => useDatabaseTabs());
+    const tabId = result.current.activeTabId;
+
+    act(() => {
+      result.current.updateQueryTab(tabId, { sql: "select * from users;" });
+    });
+
+    expect(result.current.activeTab).toMatchObject({
+      kind: "query",
+      sql: "select * from users;",
+      sqlBaseline: "",
     });
   });
 

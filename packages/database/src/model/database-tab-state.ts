@@ -80,6 +80,7 @@ function createQueryTab(
   input: QueryTabInput = {},
   formatQueryTitle: (index: number) => string = defaultQueryTitle,
 ): DatabaseQueryWorkspaceTab {
+  const sql = input.sql ?? defaultSql;
   return {
     activeResultIndex: 0,
     catalog: input.catalog ?? null,
@@ -92,7 +93,8 @@ function createQueryTab(
     results: [],
     resultTab: "results",
     schema: input.schema ?? null,
-    sql: input.sql ?? defaultSql,
+    sql,
+    sqlBaseline: sql,
     title: formatQueryTitle(index),
   };
 }

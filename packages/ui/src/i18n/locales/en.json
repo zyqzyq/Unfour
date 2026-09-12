@@ -750,6 +750,10 @@
     },
     "query": {
       "cancelled": "Query stopped",
+      "closeDraftBody": "This query tab has SQL that has not been saved. Closing it will discard the draft.",
+      "closeDraftDiscard": "Discard and close",
+      "closeDraftIndicator": "Unsaved SQL draft",
+      "closeDraftTitle": "SQL draft is not saved",
       "completed": "Query completed in {durationMs}ms",
       "previewLoaded": "Preview loaded: {count} rows",
       "unknownConnection": "Unknown connection"

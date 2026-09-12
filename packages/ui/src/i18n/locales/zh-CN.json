@@ -749,6 +749,10 @@
     },
     "query": {
       "cancelled": "查询已停止",
+      "closeDraftBody": "当前查询标签页的 SQL 尚未保存。关闭后草稿将丢失。",
+      "closeDraftDiscard": "放弃并关闭",
+      "closeDraftIndicator": "未保存的 SQL 草稿",
+      "closeDraftTitle": "SQL 草稿尚未保存",
       "completed": "查询完成，用时 {durationMs}ms",
       "previewLoaded": "预览已加载：{count} 行",
       "unknownConnection": "未知连接"

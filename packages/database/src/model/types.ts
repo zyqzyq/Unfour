@@ -143,6 +143,8 @@ export type DatabaseQueryWorkspaceTab = {
   resultTab: DatabaseResultTab;
   schema: string | null;
   sql: string;
+  /** SQL present when the tab was created or given an explicit initial script. */
+  sqlBaseline?: string;
   title: string;
 };
 

@@ -159,4 +159,79 @@ describe("DatabaseWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));
     await waitFor(() => expect(onCloseTab).toHaveBeenCalledWith("table-1"));
   });
+
+  it("closes an empty query tab without confirmation", () => {
+    const onCloseTab = vi.fn();
+    renderWorkspace({ onCloseTab });
+
+    fireEvent.click(screen.getByRole("button", { name: "Close Query 1" }));
+    expect(onCloseTab).toHaveBeenCalledWith("query-1");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("closes a query tab whose SQL still matches its baseline without confirmation", () => {
+    const onCloseTab = vi.fn();
+    const baselineTabs: DatabaseWorkspaceTab[] = [
+      {
+        ...tabs[0],
+        sql: "SELECT 1;",
+        sqlBaseline: "SELECT 1;",
+      },
+      tabs[1],
+    ];
+    renderWorkspace({ onCloseTab, tabs: baselineTabs });
+
+    fireEvent.click(screen.getByRole("button", { name: "Close Query 1" }));
+    expect(onCloseTab).toHaveBeenCalledWith("query-1");
+    expect(screen.queryByText("SQL draft is not saved")).not.toBeInTheDocument();
+  });
+
+  it("asks before closing a query tab with user-authored SQL", async () => {
+    const onCloseTab = vi.fn();
+    const draftTabs: DatabaseWorkspaceTab[] = [
+      {
+        ...tabs[0],
+        sql: "SELECT * FROM users;",
+        sqlBaseline: "",
+      },
+      tabs[1],
+    ];
+    renderWorkspace({ onCloseTab, tabs: draftTabs });
+
+    fireEvent.click(screen.getByRole("button", { name: "Close Query 1" }));
+    expect(onCloseTab).not.toHaveBeenCalled();
+    const draftDialog = screen.getByRole("dialog");
+    expect(draftDialog).toHaveTextContent("SQL draft is not saved");
+    expect(draftDialog).toHaveTextContent(
+      "This query tab has SQL that has not been saved. Closing it will discard the draft.",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onCloseTab).not.toHaveBeenCalled();
+    expect(screen.getByRole("tab", { name: /Query 1/ })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close Query 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Discard and close" }));
+    await waitFor(() => expect(onCloseTab).toHaveBeenCalledWith("query-1"));
+  });
+
+  it("still blocks closing a running query tab", () => {
+    const onCloseTab = vi.fn();
+    const runningTabs: DatabaseWorkspaceTab[] = [
+      {
+        ...tabs[0],
+        loading: true,
+        sql: "SELECT * FROM users;",
+        sqlBaseline: "",
+      },
+      tabs[1],
+    ];
+    renderWorkspace({ onCloseTab, tabs: runningTabs });
+
+    fireEvent.click(screen.getByRole("button", { name: "Close Query 1" }));
+    expect(onCloseTab).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("database.batch.closeRunning");
+  });
 });

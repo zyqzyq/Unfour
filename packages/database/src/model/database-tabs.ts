@@ -15,6 +15,7 @@ export const defaultDatabaseTabs: DatabaseWorkspaceTab[] = [
     resultTab: "results",
     schema: null,
     sql: defaultSql,
+    sqlBaseline: defaultSql,
     title: "Query Console",
   },
 ];

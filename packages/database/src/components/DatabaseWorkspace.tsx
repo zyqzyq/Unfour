@@ -14,6 +14,7 @@ import type {
   TableEditing,
   TableSegment,
 } from "../model/types";
+import { queryTabHasUnsavedDraft } from "../model/query-tab-draft";
 import { ConfirmDialog, SplitPane, Tabs, useI18n, type WorkspaceTab } from "@unfour/ui";
 import { QueryResultPanel } from "./QueryResultPanel";
 import { SqlEditorTab } from "./SqlEditorTab";
@@ -130,6 +131,10 @@ export function DatabaseWorkspace({
   const showTable = Boolean(activeTable);
   const hasTabs = tabs.length > 0;
 
+  const pendingCloseTab = pendingCloseId
+    ? tabs.find((tab) => tab.id === pendingCloseId)
+    : undefined;
+  const pendingQueryDraft = pendingCloseTab?.kind === "query";
   const workspaceTabs: WorkspaceTab[] = tabs.map((tab) => ({
     id: tab.id,
     loading: Boolean(tab.loading),
@@ -139,8 +144,12 @@ export function DatabaseWorkspace({
           className="h-2 w-2 rounded-full bg-[var(--u-color-warning)]"
           title={t("database.editing.pendingIndicator")}
         />
+      ) : tab.kind === "query" && queryTabHasUnsavedDraft(tab) ? (
+        <span
+          className="h-2 w-2 rounded-full bg-[var(--u-color-primary)]"
+          title={t("database.query.closeDraftIndicator")}
+        />
       ) : null,
-    modified: tab.kind === "query" && tab.sql.trim().length > 0,
     title: tab.title,
   }));
 
@@ -150,12 +159,19 @@ export function DatabaseWorkspace({
         activeId={activeTabId}
         onClose={(tabId) => {
           const tab = tabs.find((candidate) => candidate.id === tabId);
-          if (tab?.kind === "query" && tab.loading) { setBlockedCloseId(tabId); return; }
+          if (tab?.kind === "query" && tab.loading) {
+            setBlockedCloseId(tabId);
+            return;
+          }
+          if (tab?.kind === "query" && queryTabHasUnsavedDraft(tab)) {
+            setPendingCloseId(tabId);
+            return;
+          }
           if (tab?.kind === "table" && (tab.pendingChanges?.length ?? 0) > 0) {
             setPendingCloseId(tabId);
-          } else {
-            onCloseTab(tabId);
+            return;
           }
+          onCloseTab(tabId);
         }}
         onReorder={onReorderTabs}
         onSelect={(tabId) => onSelectTab(tabId as DatabaseWorkspaceTabId)}
@@ -263,16 +279,20 @@ export function DatabaseWorkspace({
         {!hasTabs && <EmptyWorkspace />}
       </div>
       <ConfirmDialog
-        confirmLabel={t("database.editing.discard")}
-        description={t("database.editing.discardBody")}
+        confirmLabel={
+          pendingQueryDraft ? t("database.query.closeDraftDiscard") : t("database.editing.discard")
+        }
+        description={
+          pendingQueryDraft ? t("database.query.closeDraftBody") : t("database.editing.discardBody")
+        }
         onConfirm={() => {
           if (pendingCloseId) onCloseTab(pendingCloseId);
           setPendingCloseId(null);
         }}
         onOpenChange={(open) => !open && setPendingCloseId(null)}
         open={pendingCloseId !== null}
-        pending={Boolean(tableEditing?.pending)}
-        title={t("database.editing.discardTitle")}
+        pending={Boolean(!pendingQueryDraft && tableEditing?.pending)}
+        title={pendingQueryDraft ? t("database.query.closeDraftTitle") : t("database.editing.discardTitle")}
       />
     </div>
   );

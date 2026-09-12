@@ -129,24 +129,19 @@ export function SqlEditorTab({
     onRunRef.current({ resume: true });
   };
 
-  // Run All always executes the full editor script. Confirmation resumes that
-  // same stored batch instead of re-reading cursor or selection.
+  // Run All always executes the full editor script. Pending confirmation is a
+  // separate action: shortcuts and Run buttons must not resume the stored batch.
   const runAllFromEditor = () => {
-    if (pendingConfirmation) {
-      confirmPendingRun();
-      return;
-    }
-    if (!sql.trim()) {
+    if (pendingConfirmation || !sql.trim()) {
       return;
     }
     onRunRef.current({ mode: "all" });
   };
 
   // Run Selected executes only the highlighted text. No selection, current
-  // statement, or full-script fallback.
+  // statement, or full-script fallback. Do not treat this as confirmation.
   const runSelectedFromEditor = () => {
     if (pendingConfirmation) {
-      confirmPendingRun();
       return;
     }
     const selected = editorSelectionSql(editorRef.current);
