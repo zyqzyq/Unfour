@@ -15,20 +15,20 @@ describe("SQL script command", () => {
     const batch = createSqlBatch(tab, { cursorOffset: 15 }, "ws");
     expect(sqlAwaitingConfirmation(batch, { details: { statementRanges: [{ start: 10, end: tab.sql.length }] } })).toBe("DELETE FROM t;");
   });
-  it("sends Run All as a single unmodified script", async () => {
-    const batch = createSqlBatch(tab, { mode: "all" }, "ws");
+  it("sends Run All as a single unmodified script without a cursor", async () => {
+    const batch = createSqlBatch(tab, { mode: "all", sql: "DELETE FROM t;", cursorOffset: 15 }, "ws");
     await executeSqlBatch(batch, false);
     expect(executeDatabaseScript).toHaveBeenCalledTimes(1);
     expect(executeDatabaseScript).toHaveBeenCalledWith(expect.objectContaining({ sql: tab.sql, cursorOffset: undefined, confirmMutation: false }));
   });
-  it("uses selection before cursor and leaves dialect parsing to Rust", () => {
+  it("sends Run Selected SQL without a cursor and leaves dialect parsing to Rust", () => {
     const selected = "DO $$ BEGIN PERFORM ';'; END; $$; SELECT 2;";
     const batch = createSqlBatch(tab, { sql: selected, cursorOffset: 18 }, "ws");
     expect(batch.input.sql).toBe(selected);
     expect(batch.input.cursorOffset).toBeUndefined();
     expect(createSqlBatch(tab, { cursorOffset: 17 }, "ws").input.cursorOffset).toBe(17);
   });
-  it("rejects confirmation control requests instead of treating them as Run Current", () => {
+  it("rejects confirmation control requests instead of treating them as a new run", () => {
     expect(() => createSqlBatch(tab, { resume: true }, "ws")).toThrow(/confirmation control requests/i);
     expect(() => createSqlBatch(tab, { cancelConfirmation: true }, "ws")).toThrow(/confirmation control requests/i);
   });

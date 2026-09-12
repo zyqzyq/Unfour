@@ -563,7 +563,7 @@
       "emptyRows": "查询完成，未返回数据行（{durationMs} ms）。",
       "activityFailed": "SQL 执行结果已保留，但本地活动日志写入失败。请勿为修复日志而重复执行已完成的写操作。",
       "closeRunning": "请先停止脚本并等待执行结果，再关闭此 SQL 标签页。",
-      "confirmationChanged": "SQL 或连接上下文已变化，请重新点击运行或全部运行。",
+      "confirmationChanged": "SQL 或连接上下文已变化，请重新点击全部运行或运行选中。",
       "confirmationHint": "请核对下方 SQL，然后点击确认运行。这是安全确认，不是执行失败。",
       "confirmationPending": "等待确认",
       "confirmationRequired": "需要确认",
@@ -588,7 +588,7 @@
   },
   "database": {
     "batch": {
-      "confirmationChanged": "SQL 或连接上下文已变化，请重新点击运行或全部运行。",
+      "confirmationChanged": "SQL 或连接上下文已变化，请重新点击全部运行或运行选中。",
       "confirmationHint": "请核对下方 SQL，然后点击确认运行。这是安全确认，不是执行失败。",
       "confirmationPending": "等待确认",
       "confirmationRequired": "需要确认",
@@ -609,8 +609,7 @@
       "refreshSchema": "刷新 Schema",
       "run": "运行",
       "runAll": "全部运行",
-      "runCurrent": "运行当前语句",
-      "runMenu": "运行选项",
+      "runSelected": "运行选中",
       "savedSql": "已保存",
       "saveSql": "保存 SQL",
       "stopSql": "停止 SQL 执行"

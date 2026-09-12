@@ -67,6 +67,44 @@ function setup(sql = "SELECT 1; CREATE TABLE t(n); SELECT 3;") {
 }
 
 describe("SQL runner outcomes", () => {
+  it("sends the full editor SQL for Run All without a cursor", async () => {
+    execute.mockResolvedValueOnce({ statements: [entry(1, "success")], stopped: false });
+    const { result } = setup(FOUR_STATEMENT_SQL);
+    act(() => result.current.runner.runSql({ mode: "all" }));
+    await waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
+    expect(execute.mock.calls[0][0]).toEqual(expect.objectContaining({
+      sql: FOUR_STATEMENT_SQL, cursorOffset: undefined, confirmMutation: false,
+    }));
+  });
+
+  it("sends only the selection SQL for Run Selected", async () => {
+    const selected = "DELETE FROM t;";
+    execute.mockResolvedValueOnce({ statements: [entry(1, "success")], stopped: false });
+    const { result } = setup(FOUR_STATEMENT_SQL);
+    act(() => result.current.runner.runSql({ sql: selected }));
+    await waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
+    expect(execute.mock.calls[0][0]).toEqual(expect.objectContaining({
+      sql: selected, cursorOffset: undefined, confirmMutation: false,
+    }));
+  });
+
+  it("does not execute when Run Selected receives empty SQL", () => {
+    const { result } = setup(FOUR_STATEMENT_SQL);
+    act(() => result.current.runner.runSql({ sql: "   " }));
+    expect(execute).not.toHaveBeenCalled();
+    expect(result.current.tab?.error).toEqual(expect.objectContaining({ code: "VALIDATION_ERROR" }));
+  });
+
+  it("still sends the full editor SQL for Run All when a selection payload is supplied", async () => {
+    execute.mockResolvedValueOnce({ statements: [entry(1, "success")], stopped: false });
+    const { result } = setup(FOUR_STATEMENT_SQL);
+    act(() => result.current.runner.runSql({ mode: "all", sql: "DELETE FROM t;", cursorOffset: 15 }));
+    await waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
+    expect(execute.mock.calls[0][0]).toEqual(expect.objectContaining({
+      sql: FOUR_STATEMENT_SQL, cursorOffset: undefined, confirmMutation: false,
+    }));
+  });
+
   it("does not leave a late confirmation prompt after Stop", async () => {
     let reject!: (reason: unknown) => void;
     execute.mockReturnValueOnce(new Promise((_resolve, fail) => { reject = fail; }));
@@ -192,21 +230,40 @@ describe("SQL runner outcomes", () => {
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
-  it("resumes the original selection instead of the current statement", async () => {
+  it("resumes the original Run Selected SQL instead of the editor or current statement", async () => {
     const selected = "INSERT INTO t VALUES (1); DELETE FROM t;";
     execute.mockRejectedValueOnce({ code: "CONFIRMATION_REQUIRED", message: "Confirm script" });
     const { result } = setup("SELECT 1; INSERT INTO t VALUES (1); DELETE FROM t; SELECT 2;");
-    act(() => result.current.runner.runSql({ mode: "all", sql: selected }));
+    act(() => result.current.runner.runSql({ sql: selected }));
     await waitFor(() => expect(result.current.tab?.pendingConfirmation).toBe(true));
     execute.mockResolvedValueOnce({ statements: [entry(1, "success"), entry(2, "success")], stopped: false });
     act(() => result.current.runner.runSql({ resume: true }));
     await waitFor(() => expect(execute).toHaveBeenCalledTimes(2));
+    expect(execute.mock.calls[0][0]).toEqual(expect.objectContaining({
+      sql: selected, cursorOffset: undefined, confirmMutation: false,
+    }));
     expect(execute.mock.calls[1][0]).toEqual(expect.objectContaining({
       sql: selected, cursorOffset: undefined, confirmMutation: true,
     }));
   });
 
-  it("resumes the original current-statement cursor instead of offset 0", async () => {
+  it("does not fallback to another run mode after confirmation is invalidated", async () => {
+    const selected = "DELETE FROM t;";
+    execute.mockRejectedValueOnce({ code: "CONFIRMATION_REQUIRED", message: "Confirm script" });
+    const { result } = setup("SELECT 1; DELETE FROM t; SELECT 2;");
+    act(() => result.current.runner.runSql({ sql: selected }));
+    await waitFor(() => expect(result.current.tab?.pendingConfirmation).toBe(true));
+    act(() => result.current.tabs.updateQueryTab(result.current.tab!.id, { sql: "DROP TABLE t;" }));
+    act(() => result.current.runner.runSql({ resume: true }));
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute.mock.calls[0][0]).toEqual(expect.objectContaining({
+      sql: selected, cursorOffset: undefined, confirmMutation: false,
+    }));
+    expect(result.current.tab?.pendingConfirmation).toBe(false);
+    expect(result.current.tab?.executionNotice).toBe("database.batch.confirmationChanged");
+  });
+
+  it("resumes the original Explain current-statement cursor instead of offset 0", async () => {
     execute.mockRejectedValueOnce({ code: "CONFIRMATION_REQUIRED", message: "Confirm script" });
     const { result } = setup("SELECT 1; DELETE FROM t; SELECT 2;");
     act(() => result.current.runner.runSql({ mode: "current", cursorOffset: 15 }));

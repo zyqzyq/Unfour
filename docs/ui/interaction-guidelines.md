@@ -17,7 +17,7 @@ Unfour is object-first:
 Primary actions:
 
 - API Client: Send.
-- Database: Run SQL or open table data.
+- Database: Run All / Run Selected or open table data.
 - SSH Terminal: Connect or start session.
 
 Each action region should visually emphasize one primary action. Secondary and
@@ -191,8 +191,8 @@ Recommended defaults:
 | Toggle Sidebar | `Ctrl+B` | `Cmd+B` | Global |
 | Toggle Bottom Panel | `Ctrl+J` | `Cmd+J` | Global |
 | Send API Request | `Ctrl+Enter` | `Cmd+Enter` | API Client |
-| Run SQL (current statement) | `Ctrl+Enter` | `Cmd+Enter` | Database |
-| Run All SQL (script) | `Ctrl+Shift+Enter` | `Cmd+Shift+Enter` | Database |
+| Run All SQL | `Ctrl+Enter` | `Cmd+Enter` | Database |
+| Run Selected SQL | `Ctrl+Shift+Enter` | `Cmd+Shift+Enter` | Database |
 | New SSH Session | `` Ctrl+Shift+` `` | `` Cmd+Shift+` `` | SSH Terminal |
 | Clear Terminal | `Ctrl+L` | `Ctrl+L` | SSH Terminal when xterm permits |
 | Open Context Menu | `Shift+F10` | `Shift+F10` | Focused object |

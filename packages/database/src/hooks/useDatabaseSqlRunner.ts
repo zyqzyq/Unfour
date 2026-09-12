@@ -128,7 +128,8 @@ export function useDatabaseSqlRunner({
       return;
     }
     confirmationRef.current = null;
-    if (!activeQueryTab.connectionId || !(request.sql ?? activeQueryTab.sql).trim()) {
+    const sqlToRun = request.mode === "all" ? activeQueryTab.sql : (request.sql ?? activeQueryTab.sql);
+    if (!activeQueryTab.connectionId || !sqlToRun.trim()) {
       databaseTabs.updateQueryTab(activeQueryTab.id, {
         error: { code: "VALIDATION_ERROR", message: t(activeQueryTab.connectionId ? "database.errors.sqlEmpty" : "database.errors.selectBeforeRun") },
         pendingConfirmation: false, pendingSqlBatch: null, confirmationSql: null, resultTab: "results",

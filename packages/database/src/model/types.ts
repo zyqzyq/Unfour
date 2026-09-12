@@ -79,14 +79,17 @@ export type QueryContext = {
 
 export type DatabaseResultTab = "results" | "messages" | "logs" | "history";
 
-/** Options for Run Current / Run All from the SQL editor. */
+/** Options for Run All / Run Selected / Explain from the SQL editor. */
 export type RunSqlOptions = {
   explain?: boolean;
   cancelConfirmation?: boolean;
+  /** Used by Explain (current statement). Ignored for Run All and Run Selected. */
   cursorOffset?: number;
+  /** `all` always executes the full editor script. `current` is Explain-only. */
   mode?: "current" | "all";
   /** Continue a paused batch after CONFIRMATION_REQUIRED. */
   resume?: boolean;
+  /** Run Selected payload. Ignored when `mode` is `all`. */
   sql?: string;
 };
 
@@ -131,7 +134,7 @@ export type DatabaseQueryWorkspaceTab = {
   pendingSqlBatch?: SqlBatchState | null;
   /** Active result set; mirrors `results[activeResultIndex]` when present. */
   result: DatabaseQueryResult | null;
-  /** All result sets from the latest Run / Run All (SELECT and non-SELECT). */
+  /** All result sets from the latest Run All / Run Selected (SELECT and non-SELECT). */
   results: DatabaseQueryResult[];
   statements?: DatabaseStatementResult[];
   executionNotice?: string | null;

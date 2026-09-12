@@ -28,6 +28,10 @@ navigation.
 - **Workbench navigation** — Keep unsaved editor drafts when switching modules
   or layout, and simplify the workbench chrome around the command palette and
   module activity bar.
+- **SQL editor run actions** — Show Run All and Run Selected as adjacent
+  toolbar buttons. Run All always executes the full editor script; Run Selected
+  executes only the current selection and stays disabled when nothing is
+  selected.
 
 ### Fixed
 

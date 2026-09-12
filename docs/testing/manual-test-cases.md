@@ -159,10 +159,12 @@ Use disposable local or test databases only.
     failed statement number and SQL, retained earlier results, and skipped suffix
     in Results, Messages, and Logs. Repeat the script: legitimate duplicate-object
     errors must remain errors, not be swallowed or trigger automatic retry.
-  - Run Current with a multi-statement selection, then without selection at a
-    later statement (include non-ASCII text before the cursor). Verify selection
-    priority and the exact statement shown before confirmation. Edit the SQL or
-    connection context while awaiting confirmation; the old approval must not apply.
+  - Run Selected with a multi-statement selection. Verify only the selected
+    SQL is shown before confirmation, and that Run Selected stays disabled when
+    nothing is selected. Run All with a selection still executes the full
+    editor script. Edit the SQL or connection context while awaiting
+    confirmation; the old approval must not apply and must not fall back to
+    another run mode.
   - Check quoted semicolons/comments, PostgreSQL tagged dollar strings, and a
     SQLite trigger containing CASE/END and several inner statements. MySQL
     DELIMITER and executable-comment scripts are explicitly rejected before any
@@ -172,10 +174,11 @@ Use disposable local or test databases only.
     On MySQL, unsupported RETURNING syntax must remain a statement-specific server
     error. Verify SELECT INTO table / INTO OUTFILE requires confirmation and is
     blocked on a read-only connection, with no SQL LIMIT rewrite.
-  - Stop a script during a slow statement: Run remains disabled until that
-    statement completes or times out; later statements are skipped, and the
-    actual completed result is retained. Stop does not promise immediate server
-    cancellation or undo committed changes. Open transactions end with the session.
+  - Stop a script during a slow statement: Run All and Run Selected remain
+    disabled until that statement completes or times out; later statements are
+    skipped, and the actual completed result is retained. Stop does not promise
+    immediate server cancellation or undo committed changes. Open transactions
+    end with the session.
   - Switch workspace/module while a query is pending. Verify its history remains
     in the original workspace, returning to the SQL tab shows the pending run,
     and a late response cannot overwrite a newer execution.

@@ -172,8 +172,9 @@ The database screen can save workspace-scoped database connections.
 6. Select the saved connection and click `Connect`.
 7. Review tables and columns in `Schema`.
 8. Write SQL in `SQL Editor`.
-9. Click `Run`. A script runs as one batch on one connection. Mutation SQL
-   still requires confirmation for the whole script, and Stop waits for the
+9. Click `Run All`. A script runs as one batch on one connection. Use
+   `Run Selected` to execute only highlighted SQL. Mutation SQL
+   still requires confirmation for the executed script, and Stop waits for the
    current statement.
 10. Review result rows, affected rows, and duration.
 

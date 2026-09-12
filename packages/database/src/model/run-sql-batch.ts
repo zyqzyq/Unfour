@@ -8,6 +8,7 @@ export function createSqlBatch(tab: DatabaseQueryWorkspaceTab, options: RunSqlOp
   if (options.resume || options.cancelConfirmation) {
     throw new Error("Confirmation control requests cannot create a new SQL batch");
   }
+  const runAll = options.mode === "all";
   return {
     tabId: tab.id,
     source: tab.sql,
@@ -16,8 +17,8 @@ export function createSqlBatch(tab: DatabaseQueryWorkspaceTab, options: RunSqlOp
       connectionId: tab.connectionId ?? "",
       catalog: tab.catalog,
       schema: tab.schema,
-      sql: options.sql ?? tab.sql,
-      cursorOffset: options.sql === undefined && options.mode !== "all" ? options.cursorOffset ?? 0 : undefined,
+      sql: runAll ? tab.sql : (options.sql ?? tab.sql),
+      cursorOffset: runAll || options.sql !== undefined ? undefined : options.cursorOffset ?? 0,
       runId: crypto.randomUUID(),
       explain: options.explain,
       limit: 100,

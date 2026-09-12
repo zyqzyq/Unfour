@@ -109,8 +109,8 @@ workspace, environment, risky actions, and final decision.
   transfer remote files over SFTP, and automate multi-step SSH tasks (command,
   upload, download) from the Connections / Files / Tasks sidebar.
 - **Database** - Manage database connections, browse schemas, run SQL with
-  confirmation-aware safety checks (including multi-statement Run Current /
-  Run All), preview and edit table rows, and review query output.
+  confirmation-aware safety checks (including multi-statement Run All /
+  Run Selected), preview and edit table rows, and review query output.
 - **Workspace** - Scope saved requests, shared environments/variables,
   connections, activity, tabs, and layout state to a local workspace, with
   title-bar active-environment switching.
