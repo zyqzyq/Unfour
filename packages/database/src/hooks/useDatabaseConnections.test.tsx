@@ -10,7 +10,12 @@ vi.mock("@unfour/command-client", () => ({
 }));
 
 import { listDatabaseConnections } from "@unfour/command-client";
-import { useDatabaseConnections } from "./useDatabaseConnections";
+import {
+  databaseConnectionsQueryKey,
+  replaceDatabaseConnectionInCache,
+  resolveCachedDatabaseConnection,
+  useDatabaseConnections,
+} from "./useDatabaseConnections";
 
 const listMock = vi.mocked(listDatabaseConnections);
 
@@ -25,6 +30,48 @@ function createWrapper() {
 
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.resetAllMocks());
+
+describe("databaseConnectionsQueryKey", () => {
+  it("scopes the list cache to the workspace", () => {
+    expect(databaseConnectionsQueryKey("ws-1")).toEqual(["database-connections", "ws-1"]);
+  });
+});
+
+describe("replaceDatabaseConnectionInCache", () => {
+  it("replaces the matching connection and appends unknown ids", () => {
+    const current: DatabaseConnection[] = [
+      { id: "db-a", credentialRef: "old-a" } as DatabaseConnection,
+      { id: "db-b", credentialRef: "old-b" } as DatabaseConnection,
+    ];
+    expect(
+      replaceDatabaseConnectionInCache(current, {
+        id: "db-a",
+        credentialRef: "new-a",
+      } as DatabaseConnection),
+    ).toEqual([
+      { id: "db-a", credentialRef: "new-a" },
+      { id: "db-b", credentialRef: "old-b" },
+    ]);
+    expect(
+      replaceDatabaseConnectionInCache(undefined, {
+        id: "db-c",
+        credentialRef: "new-c",
+      } as DatabaseConnection),
+    ).toEqual([{ id: "db-c", credentialRef: "new-c" }]);
+  });
+});
+
+describe("resolveCachedDatabaseConnection", () => {
+  it("prefers the cached connection with the same id when reopening Edit", () => {
+    const passed = { id: "db-a", credentialRef: "old-a" } as DatabaseConnection;
+    const cached = [
+      { id: "db-a", credentialRef: "new-a" } as DatabaseConnection,
+      { id: "db-b", credentialRef: "old-b" } as DatabaseConnection,
+    ];
+    expect(resolveCachedDatabaseConnection(passed, cached).credentialRef).toBe("new-a");
+    expect(resolveCachedDatabaseConnection(passed, undefined)).toBe(passed);
+  });
+});
 
 describe("useDatabaseConnections", () => {
   it("loads connections for the workspace", async () => {

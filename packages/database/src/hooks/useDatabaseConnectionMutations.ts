@@ -16,16 +16,20 @@ import { useI18n } from "@unfour/ui";
 import { useDatabaseTabs } from "./useDatabaseTabs";
 import type { DatabaseConnectionSessionState } from "../model/types";
 import { persistDatabaseConnectionPassword } from "../model/database-credentials";
+import {
+  databaseConnectionsQueryKey,
+  replaceDatabaseConnectionInCache,
+} from "./useDatabaseConnections";
 import { formatDatabaseError } from "../result-utils";
 
 export function useDatabaseConnectionMutations({
   databaseTabs,
+  hydrateFormFromConnection,
   queryClient,
   removeConnection,
   selectedConnectionId,
   setConnectionState,
   setEditorOpen,
-  setPassword,
   setSelectedDatabaseConnection,
   setSelectedTable,
   setTestResult,
@@ -33,6 +37,7 @@ export function useDatabaseConnectionMutations({
   workspaceId,
 }: {
   databaseTabs: ReturnType<typeof useDatabaseTabs>;
+  hydrateFormFromConnection: (connection: DatabaseConnection) => void;
   queryClient: QueryClient;
   removeConnection: (connectionId: string) => void;
   selectedConnectionId: string | null;
@@ -41,7 +46,6 @@ export function useDatabaseConnectionMutations({
     patch: Partial<DatabaseConnectionSessionState>,
   ) => void;
   setEditorOpen: Dispatch<SetStateAction<boolean>>;
-  setPassword: Dispatch<SetStateAction<string>>;
   setSelectedDatabaseConnection: (connectionId: string | null) => void;
   setSelectedTable: Dispatch<SetStateAction<DatabaseTable | null>>;
   setTestResult: Dispatch<SetStateAction<DatabaseTestResult | null>>;
@@ -62,14 +66,18 @@ export function useDatabaseConnectionMutations({
       return saveDatabaseConnection({ ...input, credentialRef });
     },
     onSuccess: (connection) => {
-      setPassword("");
+      const queryKey = databaseConnectionsQueryKey(workspaceId);
+      queryClient.setQueryData<DatabaseConnection[]>(queryKey, (current) =>
+        replaceDatabaseConnectionInCache(current, connection),
+      );
+      hydrateFormFromConnection(connection);
       setSelectedDatabaseConnection(connection.id);
       setEditorOpen(false);
       setConnectionState(connection.id, {
         message: t("database.connection.savedBrowseSchema"),
         status: "disconnected",
       });
-      queryClient.invalidateQueries({ queryKey: ["database-connections", workspaceId] });
+      void queryClient.invalidateQueries({ queryKey });
     },
   });
 
@@ -88,7 +96,7 @@ export function useDatabaseConnectionMutations({
       }
       databaseTabs.removeConnectionTabs(connectionId);
       setDeleteConfirm(null);
-      queryClient.invalidateQueries({ queryKey: ["database-connections", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: databaseConnectionsQueryKey(workspaceId) });
     },
   });
 
@@ -113,7 +121,7 @@ export function useDatabaseConnectionMutations({
       }),
     onSuccess: (created) => {
       setSelectedDatabaseConnection(created.id);
-      queryClient.invalidateQueries({ queryKey: ["database-connections", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: databaseConnectionsQueryKey(workspaceId) });
     },
   });
 

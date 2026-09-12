@@ -101,8 +101,17 @@ export function DatabasePage({
     () => groupSavedSqlByConnection(savedSqlQuery.saved),
     [savedSqlQuery.saved],
   );
-  const { editorOpen, setEditorOpen, testResult, setTestResult, password, setPassword, form, setForm } =
-    useDatabaseConnectionForm(workspaceId, selectedConnectionId, selectedConnection);
+  const {
+    editorOpen,
+    setEditorOpen,
+    testResult,
+    setTestResult,
+    password,
+    setPassword,
+    form,
+    setForm,
+    hydrateFormFromConnection,
+  } = useDatabaseConnectionForm(workspaceId, selectedConnectionId, selectedConnection);
   const activeTab = databaseTabs.activeTab;
   const activeQueryTab = activeTab?.kind === "query" ? activeTab : null;
   const activeTableTab = activeTab?.kind === "table" ? activeTab : null;
@@ -281,12 +290,12 @@ export function DatabasePage({
     testMutation,
   } = useDatabaseConnectionMutations({
     databaseTabs,
+    hydrateFormFromConnection,
     queryClient,
     removeConnection,
     selectedConnectionId,
     setConnectionState,
     setEditorOpen,
-    setPassword,
     setSelectedDatabaseConnection,
     setSelectedTable,
     setTestResult,
@@ -346,6 +355,7 @@ export function DatabasePage({
     connections,
     databaseTabs,
     form,
+    hydrateFormFromConnection,
     maxHistoryEntries: MAX_HISTORY_ENTRIES,
     password,
     queryClient,

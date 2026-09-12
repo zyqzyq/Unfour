@@ -1,6 +1,9 @@
 import { useState } from "react";
 import type { DatabaseConnection, DatabaseConnectionInput, DatabaseTestResult } from "@unfour/command-client";
-import { emptyDatabaseConnectionForm } from "../model/database-credentials";
+import {
+  databaseConnectionToInput,
+  emptyDatabaseConnectionForm,
+} from "../model/database-credentials";
 
 /** Selection changes discard credentials and drafts; query/cache renders do not. */
 export function useDatabaseConnectionForm(
@@ -24,23 +27,25 @@ export function useDatabaseConnectionForm(
     setSelection({ workspaceId, selectedConnectionId });
     setPassword("");
     if (selectedConnection) {
-      setForm({
-        id: selectedConnection.id,
-        workspaceId,
-        name: selectedConnection.name,
-        driver: selectedConnection.driver,
-        host: selectedConnection.host,
-        port: selectedConnection.port,
-        database: selectedConnection.database,
-        username: selectedConnection.username,
-        sslMode: selectedConnection.sslMode,
-        sqlitePath: selectedConnection.sqlitePath,
-        credentialRef: selectedConnection.credentialRef,
-        readOnly: selectedConnection.readOnly,
-      });
+      setForm(databaseConnectionToInput(selectedConnection, workspaceId));
       setTestResult(null);
     }
   }
 
-  return { editorOpen, setEditorOpen, testResult, setTestResult, password, setPassword, form, setForm };
+  function hydrateFormFromConnection(connection: DatabaseConnection) {
+    setPassword("");
+    setForm(databaseConnectionToInput(connection, workspaceId));
+  }
+
+  return {
+    editorOpen,
+    setEditorOpen,
+    testResult,
+    setTestResult,
+    password,
+    setPassword,
+    form,
+    setForm,
+    hydrateFormFromConnection,
+  };
 }

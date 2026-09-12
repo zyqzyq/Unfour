@@ -9,6 +9,10 @@ import type {
 } from "@unfour/command-client";
 import { useI18n } from "@unfour/ui";
 import { emptyDatabaseConnectionForm } from "../model/database-credentials";
+import {
+  databaseConnectionsQueryKey,
+  resolveCachedDatabaseConnection,
+} from "./useDatabaseConnections";
 import { useDatabaseTabs } from "./useDatabaseTabs";
 import { useDatabaseQueryWorkspaceActions } from "./useDatabaseQueryWorkspaceActions";
 import { useDatabaseSchemaTreeActions } from "./useDatabaseSchemaTreeActions";
@@ -45,6 +49,7 @@ type DatabaseWorkspaceControllerOptions = {
   connections: DatabaseConnection[];
   databaseTabs: ReturnType<typeof useDatabaseTabs>;
   form: DatabaseConnectionInput;
+  hydrateFormFromConnection: (connection: DatabaseConnection) => void;
   maxHistoryEntries: number;
   password: string;
   queryClient: QueryClient;
@@ -86,6 +91,7 @@ export function useDatabaseWorkspaceController({
   connections,
   databaseTabs,
   form,
+  hydrateFormFromConnection,
   maxHistoryEntries,
   password,
   queryClient,
@@ -210,6 +216,11 @@ export function useDatabaseWorkspaceController({
     selectConnection(connection.id);
     // Clear a previously failed save so its error doesn't leak into this edit window.
     saveMutation.reset();
+    const latest = resolveCachedDatabaseConnection(
+      connection,
+      queryClient.getQueryData<DatabaseConnection[]>(databaseConnectionsQueryKey(workspaceId)),
+    );
+    hydrateFormFromConnection(latest);
     setEditorOpen(true);
   }
 
@@ -307,7 +318,7 @@ export function useDatabaseWorkspaceController({
   });
 
   function refreshConnectionsAndSchema() {
-    queryClient.invalidateQueries({ queryKey: ["database-connections", workspaceId] });
+    queryClient.invalidateQueries({ queryKey: databaseConnectionsQueryKey(workspaceId) });
     if (selectedConnection && selectedConnectionStatus !== "disconnected") {
       refreshConnectionSchema(selectedConnection);
     }
