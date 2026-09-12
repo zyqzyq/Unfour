@@ -28,19 +28,22 @@ navigation.
 - **Workbench navigation** — Keep unsaved editor drafts when switching modules
   or layout, and simplify the workbench chrome around the command palette and
   module activity bar.
-- **SQL editor run actions** — Show Run All and Run Selected as adjacent
-  toolbar buttons. Run All always executes the full editor script; Run Selected
-  executes only the current selection and stays disabled when nothing is
-  selected.
+- **SQL editor run actions** — Replace the implicit Run / current-statement
+  action with adjacent Run All and Run Selected toolbar buttons. Run All always
+  executes the full editor script, including when text is selected. Run Selected
+  executes only the highlighted SQL and stays disabled when nothing is
+  selected. `Ctrl+Enter` / `Cmd+Enter` now runs All;
+  `Ctrl+Shift+Enter` / `Cmd+Shift+Enter` runs the selection.
 
 ### Fixed
 
 - **Cloud Sync for new accounts** — First account activation on a device turns
   Global Sync on. Existing preferences, including a previously chosen Off
   setting, stay unchanged.
-- **SQL confirmation identity** — Run All confirmation stays bound to the
-  confirmed script after remount or schema auto-fill, and confirmation prompts
-  are no longer shown as execution failures.
+- **SQL confirmation identity** — Run All and Run Selected confirmation stays
+  bound to the confirmed script after remount or schema auto-fill, does not
+  fall back to another run mode, and confirmation prompts are no longer shown
+  as execution failures.
 - **Database credential references** — Saving a connection after rotating
   credentials into the current workspace keeps the current credential
   reference instead of submitting a stale blank-password reference.
