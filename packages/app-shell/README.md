@@ -4,14 +4,9 @@
 
 `@unfour/app-shell` provides the frontend desktop workbench composition root.
 
-## Boundaries
+## Local constraints
 
-- Can own shell slot composition, workspace switcher wiring, module
-  navigation, command palette and diagnostics actions, and module mount
-  surfaces.
-- Can mount API Client, SSH Terminal, and Database modules.
-- Should reuse `@unfour/ui` layout primitives.
-- Should not own API, SSH, Database, or Workspace feature internals.
+See [AGENTS.md](AGENTS.md) for this package's scope and invariants.
 
 ## Key Files
 
@@ -35,6 +30,10 @@
 - Shell layout primitives still live in `packages/ui` during the UI split.
 
 ## Test / Verify
+
+Choose checks for the changed behavior using the
+[verification guide](../../docs/agents/EXECUTION_PROTOCOL.md#choose-verification-by-impact).
+The commands below are examples, not a checklist for every edit.
 
 - `pnpm run build`
 - For visual shell changes, run the app and inspect the first viewport.

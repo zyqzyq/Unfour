@@ -26,24 +26,11 @@ pnpm tauri dev
 
 ## Project Architecture
 
-Unfour is split into clear boundaries — please read these before changing code:
-
-- [`AGENTS.md`](AGENTS.md) — package boundary, backend, and command-bus rules.
-- [`docs/architecture/package-boundaries.md`](docs/architecture/package-boundaries.md) — package boundaries in depth.
-- [`docs/project/PACKAGE_STATUS.md`](docs/project/PACKAGE_STATUS.md) — current status of every package and crate.
-
-Key rules in short:
-
-- Frontend UI lives in React/TypeScript (`packages/*`, `apps/desktop`);
-  execution and security boundaries live in Rust (`crates/*`).
-- Feature business logic stays in its owning package or crate — not in
-  `packages/app-shell` (composition only) or `packages/ui` (shared primitives only).
-- Business actions route through the Rust command bus boundary.
-- Every persisted business record carries a `workspace_id`.
-- Credentials (SSH keys, DB / API passwords) are stored as references in the OS
-  keychain — never as SQLite plaintext.
-- User-visible UI copy uses the shared i18n provider and locale keys, not
-  hardcoded strings.
+[AGENTS.md](AGENTS.md) defines repository-wide architecture and security
+constraints. Consult [the context map](docs/agents/START_HERE.md) when locating
+an unfamiliar owner or domain reference, and the affected package/crate's local
+instructions for its scope. Read the detailed boundary document when changing
+ownership or dependency direction.
 
 ## Making Changes
 
@@ -55,18 +42,11 @@ Key rules in short:
 
 ## Verification
 
-Run the relevant commands from the repository root before pushing:
-
-```bash
-pnpm run build
-pnpm run lint
-pnpm run test
-pnpm run check:rust
-pnpm run check:rust:ssh
-pnpm run test:rust
-```
-
-For UI changes, also run the app locally and inspect the first viewport.
+Choose checks by the change's impact using the
+[verification guide](docs/agents/EXECUTION_PROTOCOL.md#choose-verification-by-impact).
+Documentation edits need diff and reference checks; local implementation changes
+need affected tests/checks. Shared contracts and releases warrant broader coverage.
+Record results and any unavailable verification in the pull request.
 
 ## Commit Convention
 

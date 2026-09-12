@@ -4,14 +4,9 @@
 
 `@unfour/api-client` owns the API Client frontend experience.
 
-## Boundaries
+## Local constraints
 
-- Can own request drafts, request tabs, Send behavior, response display,
-  history, saved requests, collections, and import/export UI.
-- Should call backend behavior through `@unfour/command-client`.
-- Should reuse `@unfour/ui` primitives where possible.
-- Should not own Database, SSH Terminal, app-shell, or global workspace
-  orchestration behavior.
+See [AGENTS.md](AGENTS.md) for this package's scope and invariants.
 
 ## Key Files
 
@@ -46,10 +41,14 @@
 
 ## Test / Verify
 
-- `pnpm test -- packages/api-client/src/request-utils.test.ts packages/api-client/src/model/request-tabs.test.ts`
+Choose checks for the changed behavior using the
+[verification guide](../../docs/agents/EXECUTION_PROTOCOL.md#choose-verification-by-impact).
+The commands below are examples, not a checklist for every edit.
+
+- `pnpm exec vitest run packages/api-client/src/request-utils.test.ts packages/api-client/src/model/request-tabs.test.ts`
 - `pnpm run build`
-- For behavior changes, manually verify opening a request, Send, save, history,
-  and response rendering.
+- Inspect the affected request workflow when interaction changes; use an
+  authorized test endpoint for Send.
 
 ## Multipart V1
 

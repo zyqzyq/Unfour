@@ -14,11 +14,14 @@ tool for dense, object-first workflows.
 - Keyboard friendly.
 - Clear primary action.
 
-## Reading Order
+## Use the relevant design context
 
-1. `design.md`
-2. `docs/ui/design-system.md`
-3. `docs/ui/interaction-guidelines.md`
+These three documents are Unfour's only UI design authorities; the current
+style is fixed. Use this entry for orientation,
+[design-system.md](docs/ui/design-system.md) for visual/component rules, and
+[interaction-guidelines.md](docs/ui/interaction-guidelines.md) for behavior.
+Read the sections affected by the task; a small copy fix does not require a
+full design review. Do not generate a replacement design system from a skill.
 
 Historical UI audit, token, component, layout, and refactor-plan documents live
 under `docs/archive/ui/`. They are preserved for context but are no longer the
@@ -26,7 +29,7 @@ active source of truth.
 
 ## Document Responsibilities
 
-- `design.md`: UI design entry point, reading order, priority, and boundary
+- `design.md`: UI design entry point, context routing, priority, and boundary
   guidance.
 - `docs/ui/design-system.md`: Product style, layout model, tokens, component
   usage rules, and forbidden visual patterns.

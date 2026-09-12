@@ -1,36 +1,10 @@
-# ssh-terminal Agent Rules
+# SSH Terminal Scope
 
-## Scope
+Own connection forms/tree, sessions, terminal panes, split/search/clipboard/log
+UI, host-key trust UI, SFTP, SSH task UI, and terminal-local state.
 
-`packages/ssh-terminal` owns the SSH Terminal frontend: SSH connection forms,
-connection tree, terminal sessions, terminal panes, split/search/log UI,
-host-key trust UI, and terminal-local state.
-
-## Boundaries
-
-- Backend calls must go through `@unfour/command-client`.
-- Shared controls should come from `@unfour/ui` when practical.
-- Workspace selection state may use `@unfour/workspace-core` only as the
-  documented transitional boundary.
-- This package must not own API request, Database SQL, or app-shell behavior.
-
-## Rules
-
-- Do not make unrelated cross-package changes.
-- Prefer existing terminal hooks, stores, models, and components.
-- Do not introduce new dependencies unless the task explicitly requires them.
-- Do not weaken terminal log redaction or host-key trust behavior.
-- Real SSH connection behavior requires explicit manual verification against a
-  reachable SSH server.
-- New user-visible SSH Terminal copy must use shared i18n keys. Do not localize
-  SSH command keys, event names, schema keys, or stable error codes.
-
-## Required Output
-
-After changes here, report:
-
-- Modified files
-- Behavior changed
-- Validation commands run
-- Manual verification needed
-- Follow-up risks
+- Use `@unfour/command-client` for backend actions. Selected connection state
+  may use `@unfour/workspace-core` as the documented transitional boundary.
+- Keep API request, Database SQL, and app-shell behavior out.
+- Preserve terminal log redaction and host-key trust/mismatch handling.
+  Session events and command keys are protocol identifiers, not display copy.

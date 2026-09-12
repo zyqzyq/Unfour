@@ -1,35 +1,14 @@
-# api-client Agent Rules
+# API Client Scope
 
-## Scope
+Own request drafts/tabs, Send, request-script editors/results, response display,
+history, saved requests, collections, and import/export UI.
 
-`packages/api-client` owns the API Client frontend: request editing, Send,
-response display, history, saved requests, collections, and import/export UI.
-
-## Boundaries
-
-- Backend calls must go through `@unfour/command-client`.
-- Shared controls should come from `@unfour/ui` when practical.
-- This package must not own Database, SSH, Workspace shell, or app-level
-  navigation behavior.
-- Keep Send as the primary request action.
-
-## Rules
-
-- Do not make unrelated cross-package changes.
-- Prefer existing request models, hooks, utilities, and UI components.
-- Do not introduce new dependencies unless the task explicitly requires them.
-- Do not break saved-request, history, shared variable resolution, or Send behavior.
-- Keep sensitive headers and auth metadata aligned with backend redaction
-  expectations.
-- New user-visible API Client copy must use shared i18n keys. Do not localize
-  command names, schema keys, request metadata keys, or error codes.
-
-## Required Output
-
-After changes here, report:
-
-- Modified files
-- Behavior changed
-- Validation commands run
-- Manual verification needed
-- Follow-up risks
+- Use `@unfour/command-client` for backend actions. Workspace environment
+  management, persistence, and variable resolution belong to shared workspace
+  contracts and their owning implementations, not this package.
+- Keep Database, SSH, shell navigation, and global workspace orchestration out.
+- Preserve saved-request/history serialization and shared variable resolution
+  semantics across Send, save, and replay.
+- Keep sensitive headers and auth metadata aligned with backend redaction.
+  Multipart file paths are transient draft/send bindings; never include them
+  in saved definitions or history.

@@ -1,167 +1,62 @@
-# AGENTS.md
+# Unfour Repository Instructions
 
 Unfour is a lightweight IDE-style desktop developer tool built on Tauri 2,
-React, TypeScript, and Rust.
+React, TypeScript, and Rust. Its core modules are API Client, SSH Terminal,
+Database, and Workspace.
 
-## Product And Module Scope
+## Architecture and security invariants
 
-- Primary v0.1 modules are API Client, SSH Terminal, Database, and Workspace.
-- `workspace-core` owns shared frontend workspace state.
-- `workspace-local` is the reserved frontend boundary for local workspace
-  lifecycle, persistence, import/export, recent-workspace, and migration
-  behavior.
-- Current release readiness belongs in `docs/release/*` and
-  `docs/testing/*`, not in temporary progress logs.
-
-## Package Boundary Rules
-
-- `packages/app-shell` is limited to global layout composition, sidebar and
-  module mount surfaces, top-level navigation wiring, route assembly, and
-  cross-module container slots.
-- Do not add API request execution, SQL editing/execution, SSH session state,
-  feature mock data, or feature-specific large UI components to
-  `packages/app-shell`.
-- API Client, SSH Terminal, Database, and Workspace business state and business
-  components must live in their owning packages or crates.
-- Shared UI primitives must be reused from or added to `packages/ui`.
-- `packages/ui` must not contain feature-specific business logic.
-- Feature packages must not depend on `packages/app-shell`.
-- Do not make unrelated cross-package changes. If a fix requires crossing a
-  package boundary, explain why in the final report.
-- Do not add new dependencies unless the task explicitly requires them and the
-  reason is documented.
-- Do not delete code with unconfirmed purpose for cosmetic reasons.
-- New user-visible frontend UI copy must use the shared i18n provider/hook and
-  locale keys instead of hardcoded strings. Do not implement parallel i18n
-  systems inside individual packages.
-
-## Backend And Command-Bus Rules
-
+- Feature business state and components belong in their owning packages or
+  crates. `packages/app-shell` owns global layout, navigation, route assembly,
+  and module slots only; no request execution, SQL editing/execution, SSH
+  session state, feature mock data, or large feature components.
+- `packages/ui` owns reusable, feature-neutral primitives; no business logic
+  or feature imports. Feature packages must not depend on app-shell, other
+  feature packages, workspace-local, or a future workspace-sync package.
+- Shared frontend contracts come from `packages/command-client`,
+  `packages/workspace-core`, and `packages/ui`. workspace-core owns shared
+  workspace state; workspace-local reserves local lifecycle, persistence,
+  import/export, recent-workspace, and migration behavior.
 - Frontend interaction lives in React/TypeScript; execution and security
-  boundaries live in Rust.
-- `apps/desktop/src-tauri` is the Tauri adapter and composition layer.
-  Backend capability logic belongs in `crates/*`.
-- Business actions for API, SSH, Database, Workspace, and future MCP/AI
-  surfaces must route through the Rust command bus boundary.
-- Tauri commands and MCP tools are adapters over the command bus, not places
-  for duplicated domain logic.
-- Cloud-bound local mutations must retain durable outbox intent regardless of
-  login, active account, entitlement, pause, offline, or worker state; see
-  [Cloud Sync invariants](docs/architecture/cloud-sync-invariants.md).
-- A local workspace has at most one durable Cloud Sync owner
-  `(account_id, cloud_workspace_id)`; mutations and repair must resolve that
-  owner and must never fan out across historical bindings.
-- MCP tool names, schemas, command names, command keys, and stable error codes
-  must remain English and must not be localized. UI layers may map stable
-  message keys to localized user-facing copy.
-- Every persisted business record must carry `workspace_id` unless it is truly
-  global app configuration.
-- Passwords, private-key passphrases, API tokens, and database passwords must
-  not be stored in SQLite plaintext. Persist only credential references.
-- `authorization`, `cookie`, `proxy-authorization`, `x-api-key`, and
-  `x-auth-token` must be redacted in logs, history, and local activity details.
-- Internal engineering, architecture, and agent documentation does not need
-  multilingual versions unless a task explicitly asks for it.
+  boundaries live in Rust. Frontend backend calls use command-client.
+  Business actions follow `adapter -> CommandBus -> service -> driver`.
+  Tauri and MCP adapters must not duplicate domain logic.
+- `apps/desktop/src-tauri` is the desktop adapter/composition layer; shared
+  Tauri composition lives in `crates/unfour-app`, capabilities in owning crates.
+- Every persisted business record carries `workspace_id`, except truly global
+  app configuration.
+- Persist credential references, never plaintext passwords, private keys,
+  passphrases, or tokens in SQLite. Redact `authorization`, `cookie`,
+  `proxy-authorization`, `x-api-key`, and `x-auth-token` in logs, history,
+  and local activity details.
+- Cloud-bound local mutations retain durable outbox intent in the business
+  transaction regardless of login, active account, entitlement, pause, offline,
+  or worker state. Each local workspace has at most one durable Cloud Sync
+  owner `(account_id, cloud_workspace_id)`; mutations and repair resolve that
+  owner and never fan out across historical bindings.
+- New user-visible frontend copy uses the shared i18n provider/hook and locale
+  keys. Do not create package-local translation systems. MCP tool names,
+  schemas, command names/keys, event names, request metadata keys, and stable
+  error codes stay English; localize only UI-facing messages.
+- Unfour's UI style is fixed. Its only design authorities are
+  [design.md](design.md), [design-system.md](docs/ui/design-system.md), and
+  [interaction-guidelines.md](docs/ui/interaction-guidelines.md).
+  Use relevant sections for UI work; do not generate a competing design system.
+- Add dependencies only when the task requires them and document the reason.
+  Keep changes scoped and preserve uncommitted user work.
+- Current release readiness and verification evidence belong in
+  `docs/release/` and `docs/testing/`; `docs/archive/` is historical context.
+  Internal engineering and agent docs do not need translations unless requested.
 
-## AI Execution Rules
+## Context entry points
 
-Before changing files:
+Apply local `AGENTS.md` instructions in directories you touch; they add scoped
+constraints without repeating these invariants. Use
+[START_HERE](docs/agents/START_HERE.md) when you need an ownership or context
+pointer, and [EXECUTION_PROTOCOL](docs/agents/EXECUTION_PROTOCOL.md) for completion,
+autonomy, or verification guidance. These are references, not a mandatory
+reading sequence; reuse context already available.
 
-1. Read this file.
-2. Read `docs/agents/START_HERE.md` and follow its scoped reading strategy.
-3. Read `docs/architecture/package-boundaries.md` for package or boundary
-   changes.
-4. For UI, layout, component, style, or interaction optimization tasks, read
-   root `design.md`, `docs/ui/design-system.md`, and
-   `docs/ui/interaction-guidelines.md`.
-5. Read the relevant package or crate `AGENTS.md` / `README.md`, if present.
-6. Inspect the current implementation only as needed for the task.
-7. Review `git status --short` and the current diff before editing.
-
-During modification:
-
-- Keep the change set as small as possible.
-- Modify only files within the current task scope.
-- Do not clean up, reformat, or refactor unrelated packages as a side effect.
-- Do not rewrite backend call chains unless the task explicitly requires it.
-- Do not add feature logic to `packages/app-shell`.
-- Do not add business logic to `packages/ui`.
-- Preserve uncommitted user work.
-
-## File Size Discipline
-
-Line count is a quality signal, not an absolute hard limit.
-
-Recommended ranges:
-
-- Small UI components / utilities: 80-250 lines.
-- Page-level React files: 300-600 lines.
-- Rust business modules: 300-700 lines.
-- Adapter / command gateway files: 300-800 lines.
-- Test files: 500-1200 lines.
-- Generated files, schema files, migrations, lock files, snapshots, vendored
-  files, and build output are excluded from these size limits.
-
-Review thresholds (enforced by `scripts/check-large-files.mjs`):
-
-- Over 600 lines: warning; check whether responsibilities are mixed.
-- Over 1000 lines: violation; split, or document why it should remain
-  together. Grandfathered baseline files in
-  `scripts/large-files-baseline.json` remain allowed while their line count
-  does not increase.
-- Over 1500 lines: critical; schedule refactoring unless there is a documented
-  reason to keep the file together.
-
-When modifying a file that crosses a threshold, first look for low-risk
-extractions such as types, constants, mock data, pure utilities, serializers,
-parsers, adapters, hooks, services, or child components. If a file must exceed
-a threshold, explain the reason in the final report or the relevant code review
-context.
-
-Previously approved large files remain grandfathered for now and stay on the
-follow-up refactoring list until explicitly split. Do not change them just to
-satisfy line-count rules.
-
-Do not split files only to satisfy line-count rules. Prefer splitting by
-responsibility, public API boundary, testability, and change frequency.
-Splits must preserve module and package boundaries; feature packages must not
-gain reverse dependencies on `packages/app-shell`.
-
-For implementation-task workflow, verification defaults, commit discipline, and
-final reporting, follow `docs/agents/EXECUTION_PROTOCOL.md`.
-
-## Default Verification
-
-Run relevant commands from the repository root.
-
-For documentation-only changes:
-
-```bash
-git diff --check
-```
-
-For broad implementation work, prefer:
-
-```bash
-pnpm run build
-pnpm run check:rust
-pnpm run check:rust:ssh
-pnpm run test:rust
-```
-
-For release preparation, use the matrix in
-`docs/testing/release-verification.md`.
-
-## Required Reporting
-
-After completion, report:
-
-1. Modified file list.
-2. Purpose of each change.
-3. Whether business logic was modified.
-4. Whether new dependencies were added.
-5. Whether package boundaries changed.
-6. Verification commands executed and their results.
-7. Commands not executed and why.
-8. Unresolved issues or follow-up risks.
-9. Files recommended for human review.
+Repository instructions are defaults under higher-priority system/developer
+instructions and the user's explicit task. Local docs and skills do not expand
+the authorized scope or silently override global architecture/security rules.

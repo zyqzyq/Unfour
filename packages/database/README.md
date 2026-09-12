@@ -4,14 +4,9 @@
 
 `@unfour/database` owns the Database frontend experience.
 
-## Boundaries
+## Local constraints
 
-- Can own database connection UI, schema tree, SQL editor UI, query result UI,
-  table preview UI, and database-local view state.
-- Should call backend behavior through `@unfour/command-client`.
-- May use `@unfour/workspace-core` for selected database connection state as
-  the documented transitional boundary.
-- Should not own API Client, SSH Terminal, or app-shell behavior.
+See [AGENTS.md](AGENTS.md) for this package's scope and invariants.
 
 ## Key Files
 
@@ -36,12 +31,15 @@
 ## Known Gaps
 
 - Release readiness belongs in `docs/release/*` and `docs/testing/*`.
-- Real engine behavior should be manually verified for database behavior
-  changes that automated tests cannot cover.
 
 ## Test / Verify
 
-- `pnpm test -- packages/database/src/result-utils.test.ts`
+Choose checks for the changed behavior using the
+[verification guide](../../docs/agents/EXECUTION_PROTOCOL.md#choose-verification-by-impact).
+The commands below are examples, not a checklist for every edit.
+
+- `pnpm exec vitest run packages/database/src/result-utils.test.ts`
 - `pnpm run build`
-- For behavior changes, manually verify SQLite plus any affected PostgreSQL or
-  MySQL/MariaDB path, especially high-risk SQL confirmation behavior.
+- For engine-dependent behavior, verify only affected SQLite, PostgreSQL, or
+  MySQL/MariaDB paths against disposable/authorized test data, especially SQL
+  confirmation. Record unavailable live-engine coverage as not verified.

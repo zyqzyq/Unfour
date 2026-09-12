@@ -5,14 +5,9 @@
 `unfour-command-bus` is the reusable Rust command entry point for manual UI
 actions and future automated adapters.
 
-## Boundaries
+## Local constraints
 
-- Can orchestrate workspace, API, Database, SSH, credential, system-health, and
-  read-only adapter commands through domain services.
-- Should keep Tauri and MCP layers as thin adapters.
-- Should leave low-level domain behavior in the owning engine crate when
-  practical.
-- Should not depend on frontend UI packages or expose raw secrets.
+See [AGENTS.md](AGENTS.md) for this crate's scope and invariants.
 
 ## Key Files
 
@@ -31,11 +26,14 @@ actions and future automated adapters.
 
 ## Known Gaps
 
-- Current package status is centralized in `docs/project/PACKAGE_STATUS.md`.
-- New dangerous commands need explicit capability and confirmation policy before
-  adapters expose them.
+- Release readiness and current verification evidence live in `docs/release/`
+  and `docs/testing/`.
 
 ## Test / Verify
+
+Choose checks for the changed behavior using the
+[verification guide](../../docs/agents/EXECUTION_PROTOCOL.md#choose-verification-by-impact).
+The commands below are examples, not a checklist for every edit.
 
 - `cargo test -p unfour-command-bus`
 - `cargo check -p unfour-command-bus`

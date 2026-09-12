@@ -1,169 +1,95 @@
-# Execution Protocol
+# Execution and Completion
 
-Default execution workflow for AI coding agents working on implementation or
-documentation tasks in this repository.
+Use this reference to choose verification and finish a scoped change. It
+defines outcomes and decision boundaries, not a required sequence of tool calls.
 
-## 1. Role And Authority
+## Autonomy and scope
 
-Document precedence (highest to lowest):
+Inspect the working-tree status and relevant staged/unstaged diff before
+editing so existing work is preserved. Infer routine implementation choices
+from the task and current patterns. Complete safe, reversible local edits,
+checks, and fixes caused by the change without asking for approval at each step.
+Use disposable fixtures and isolated test data where execution can mutate state;
+do not assume every test or local app instance is isolated from real services.
 
-1. `AGENTS.md` for repository-wide rules and architecture constraints.
-2. Task-specific prompt for current goal, scope, and acceptance criteria.
-3. `docs/agents/START_HERE.md` for context loading strategy.
-4. Domain documentation under `docs/architecture/`, `docs/ui/`, `docs/mcp/`,
-   `docs/testing/`, and `docs/release/`.
-5. Package or crate `AGENTS.md` / `README.md`.
-6. This file for default workflow and reporting conventions.
+Ask only when missing information prevents a safe or correct result, or an
+action needs authorization not already provided: destructive operations on user
+data, production or external side effects, publishing, or a material scope
+expansion. Continue independent authorized work while blocked on that action.
+Product confirmation/capability policies remain in force; coding autonomy does
+not permit bypassing them.
 
-When a task prompt conflicts with `AGENTS.md`, follow `AGENTS.md` and report
-the conflict.
+Keep changes necessary to the requested outcome, including related fixes needed
+to make it work. Preserve public contracts and backend call chains unless the
+task requires changing them. Report unrelated defects instead of repairing them
+as incidental cleanup. Do not suppress errors, weaken safety checks, or add
+unjustified type-check escapes to make verification pass.
 
-## 2. Start-Of-Task Checklist
+## Definition of Done
 
-Before writing code or documentation:
+A task is complete when:
 
-1. Read `AGENTS.md`.
-2. Read `docs/agents/START_HERE.md` and follow its scoped reading order.
-3. Read task-specific files listed in the prompt.
-4. Read relevant domain docs, such as package boundaries for dependency
-   changes or UI docs for interaction changes.
-5. Run `git status --short` to inspect the working tree.
-6. Inspect the current diff before editing.
-7. Confirm the requested scope and identify verification commands.
+- The requested outcome and acceptance criteria are met, including running or
+  inspecting the result when that is part of the task.
+- The diff is scoped, respects applicable invariants, and preserves user work.
+  Update affected documentation/contracts when the change makes them stale.
+- Checks appropriate to the affected behavior have passed; failures caused by
+  the change are fixed and affected checks rerun. Any unavailable verification
+  is stated with its limitation; a missing required gate means partial or
+  blocked completion, not an unconditional success claim.
+- The final response explains the result, changed files or areas and their
+  purposes, verification evidence, and material remaining risks.
 
-Begin execution directly after a short plan unless a critical ambiguity makes
-safe execution impossible. If blocked, state the ambiguity and stop.
+Do not stop at a first implementation when requested validation or repair
+remains. Once these conditions are met, stop rather than expanding the task.
 
-## 3. Scope Discipline
+## Choose verification by impact
 
-- Modify only files necessary for the requested task.
-- Do not perform opportunistic refactors, dependency upgrades, or unrelated
-  formatting.
-- Do not change public contracts, exported types, store shape, or Tauri command
-  behavior unless the task requires it.
-- Record out-of-scope issues in the final report under remaining risks instead
-  of fixing them.
-- Stop and report when a required change would cross an explicitly forbidden
-  boundary.
+Run commands from the repository root. Use actual scripts in
+[package.json](../../package.json) and the relevant Cargo manifest; placeholders
+below must be replaced with the affected file, directory, or crate name.
+`git diff --check` applies to all edits.
 
-## 4. Change Discipline
-
-- Prefer small, reviewable changes over large rewrites.
-- Preserve existing behavior unless the task explicitly requests behavior
-  changes.
-- Keep architecture boundaries intact.
-- Do not add `any`, `@ts-ignore`, or `@ts-expect-error` unless the task
-  explicitly justifies it.
-- Do not introduce silent fallbacks or hide errors to make builds pass.
-- Reuse existing project patterns before adding new abstractions.
-- Do not create new documentation files unless the task requires them.
-
-## 5. Verification Matrix
-
-Run the default verification for every touched area, plus any task-specific
-commands.
-
-| Changed area | Required default verification |
+| Change | Smallest useful verification; expand when indicated |
 | --- | --- |
-| Documentation only | `git diff --check` |
-| Frontend TypeScript / React | `git diff --check`, `pnpm run build` |
-| Frontend tests or lint config | `pnpm run lint` / `pnpm run test` when available |
-| Rust crates | `cargo fmt --check`, `cargo test --workspace` |
-| Rust compile-sensitive feature flags | relevant `cargo check`, such as `cargo check -p unfour --features ssh-native` |
-| Tauri adapter or cross-layer changes | frontend build plus relevant Rust checks |
-| Build configuration | build command and output inspection |
-| Release preparation | `docs/testing/release-verification.md` matrix |
+| Documentation / repository instructions | Check changed links, paths, references, and conflicting guidance. No application build for prose-only changes. |
+| Configuration | Validate syntax and the affected configuration consumer; run its build/test only when behavior depends on the change. |
+| Local TypeScript / React behavior | Affected tests, e.g. `pnpm exec vitest run <test-path>`, and `pnpm exec eslint <changed-files>`. For type-sensitive changes use `pnpm --filter @unfour/desktop exec tsc --noEmit`. |
+| UI styles or interactions | Inspect the affected view/states when possible; test changed interaction behavior. Use `pnpm run check:tokens` for shared-token changes. |
+| Frontend imports, exports, dependencies, or bundling | `pnpm run build` and tests for affected consumers. Broaden for shared contracts. |
+| Rust crate behavior | `cargo fmt -p <crate> --check` and `cargo test -p <crate> <optional-test-filter>`; use `cargo check -p <crate>` for compile-only changes. Include affected dependent crates when contracts change. |
+| Rust features / native SSH | Check the changed feature combination, e.g. `cargo check -p unfour --features ssh-native`, when that integration path is affected. |
+| Tauri / command-client / command-bus contract | Verify both sides and the relevant adapter path; combine affected frontend and Rust checks. |
+| SQLite migrations / persisted data compatibility | `pnpm run check:migrations` and affected storage/migration tests against disposable data. |
+| Broad implementation or release preparation | Broaden to build, workspace Rust checks/tests, frontend suites, and relevant feature checks for cross-cutting impact. For releases, use [release verification](../testing/release-verification.md). |
 
-Rules:
+A copy/style-only edit does not need new tests that merely repeat the source.
+Behavior changes need meaningful coverage of the affected outcome, including
+regression cases where useful. A passing mock test does not establish real
+SSH, database-engine, native UI, or live-service behavior; verify the affected
+path in an authorized test environment or state `NOT VERIFIED`.
 
-- If a command is unavailable, fails for an unrelated baseline reason, or cannot
-  run in the current environment, report it honestly as `NOT RUN` with a reason.
-- Never report an unexecuted manual check as `PASS`. Use `NOT VERIFIED` for UI,
-  platform, network, or live-service behavior that cannot be tested.
-- Do not invent lint or test commands that do not exist in `package.json`.
+Do not default to the aggregate `pnpm run check` or workspace-wide suites for
+small changes. Broaden or repeat passing checks only for new edits, failures,
+shared impact, or unresolved concerns. Report executed failures as `FAIL`
+(including unrelated baseline failures), unavailable commands as `NOT RUN`,
+and checks actually passed as `PASS`.
 
-## 6. Git Discipline
+For changes that grow or restructure large source files, consult
+[scripts/check-large-files.mjs](../../scripts/check-large-files.mjs) and run
+`pnpm run check:large-files` as appropriate. Keep thresholds/exclusions in the
+checker, not duplicated here. Extract by responsibility when it improves
+maintainability; do not split unrelated files just to satisfy line counts.
 
-- Inspect `git status` before editing.
-- Inspect `git diff` and run `git diff --check` before committing.
-- Include only task-related files in the commit.
-- Create one independent commit per task batch unless instructed otherwise.
-- Use a conventional commit-style message, such as `docs(release): update
-  verification checklist` or `fix(api-client): handle request save error`.
-- Never commit generated build output unless explicitly requested.
-- Never include unrelated user changes.
+## Delivery and Git
 
-If the working tree is dirty before the task starts, preserve unrelated changes
-and mention them in the final report.
+Keep the final response proportional to the task. Identify changed files
+(group related files when useful), their purpose, checks and results, important
+checks skipped and why, and any remaining risks or files needing human review.
+Mention changes to business logic, dependencies, or package boundaries; explain
+necessary cross-package changes. Do not enumerate unrelated checks as skipped.
 
-## 7. Final Report Format
-
-Every task must end with a structured report:
-
-```text
-## Result
-- Status: Completed / Partially Completed / Blocked
-- Commit: <hash or N/A>
-- Scope violations: Yes / No
-
-## Modified Files
-- file path - purpose
-
-## Verification
-- command - PASS / FAIL / NOT RUN (reason)
-- manual check - PASS / FAIL / NOT VERIFIED
-
-## Remaining Risks
-- out-of-scope issues found during the task
-- unverified behavior
-- suggested follow-up tasks
-
-## Scope Confirmation
-- unrelated files changed: Yes / No
-- dependencies added: Yes / No
-- public contracts changed: Yes / No
-- backend call chain changed: Yes / No
-```
-
-Additional sections may be appended when the task warrants them.
-
-## 8. Handoff Notes
-
-At the end of a batch, the report must contain enough information for another
-agent or maintainer to understand the new state:
-
-- resulting commit hash, if a commit was requested;
-- modified files and their purposes;
-- verification results;
-- unverified behavior;
-- remaining risks;
-- discovered out-of-scope issues.
-
-Historical checkpoint files under `docs/archive/` must not be refreshed as part
-of normal work. Use the active release and testing documents for current
-release readiness.
-
-## 9. Batch Size Guidance
-
-- Prefer one coherent theme per batch.
-- A batch may include 1-4 closely related sub-tasks.
-- Low-risk cleanup tasks may be grouped together.
-- Do not mix unrelated UI cleanup, transport-layer work, security policy, and
-  architecture restructuring in one batch.
-- Split high-risk cross-layer work into independently verifiable phases.
-
-## 10. Non-Goals
-
-This file does not define:
-
-- package ownership or dependency directions: see
-  `docs/architecture/package-boundaries.md`;
-- repository structure and call chains: see
-  `docs/architecture/project-structure.md`;
-- data storage and workspace scope: see `docs/architecture/data-storage.md`;
-- security policy details: see `docs/architecture/security-model.md`;
-- UI design rules or semantic tokens: see `docs/ui/design-system.md` and
-  `docs/ui/interaction-guidelines.md`;
-- MCP tool behavior: see `docs/mcp/tools.md`;
-- release verification: see `docs/testing/release-verification.md`;
-- task-specific scope: use the current task prompt.
+Commit only when requested; use a Conventional Commit message and include only
+task-related files. Do not commit generated build output unless requested.
+Committing, pushing, and publishing are separate actions; authorization for one
+does not imply the others. Include the commit hash when a commit was made.

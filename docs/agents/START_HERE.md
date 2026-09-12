@@ -1,99 +1,46 @@
-# AI Agent Start Here
+# Context Map
 
-This is the stable repository onboarding entrypoint for AI coding tools working
-in Unfour. Use it to choose the smallest useful context set before touching
-files.
+Use this map when the task's owner or supporting context is unclear. Start
+with the requested files and applicable local `AGENTS.md`; consult the owning
+README for implementation landmarks. Follow a link below only when it answers
+a question needed for the change. Stop loading context once ownership,
+affected behavior, and validation needs are clear.
 
-## Source Priority
+## Find the relevant context
 
-Use these sources in order when documents overlap:
+| Task or question | Context to consult |
+| --- | --- |
+| Package ownership, imports, dependency direction, or moving responsibilities | [Package boundaries](../architecture/package-boundaries.md) |
+| Repository layout or an unfamiliar call chain | [Project structure](../architecture/project-structure.md) |
+| Persisted records, workspace isolation, or schema changes | [Data storage](../architecture/data-storage.md); the affected migration and its consumers |
+| Credentials, redaction, permissions, or execution safety | [Security model](../architecture/security-model.md) |
+| Cloud-bound mutations, binding ownership, outbox capture, or repair | [Cloud Sync invariants](../architecture/cloud-sync-invariants.md) |
+| UI layout, components, styles, or interactions | [Design entry](../../design.md), then the visual or interaction sections it identifies |
+| Command-bus dispatch or adapter contracts | `crates/unfour-command-bus/AGENTS.md`, its README, and the affected adapter |
+| MCP architecture or policy | [MCP overview](../mcp/overview.md) |
+| MCP tool names, schemas, or behavior | [MCP tools](../mcp/tools.md) |
+| Connecting Codex to Unfour MCP | [Codex setup](../mcp/codex-setup.md) |
+| Choosing checks or deciding whether work is complete | [Execution protocol](EXECUTION_PROTOCOL.md) |
+| Release readiness or release claims | [Release verification](../testing/release-verification.md) and [release checklist](../release/release-checklist.md) |
+| Manual coverage for an affected UI, platform, or live service | Relevant cases in [manual tests](../testing/manual-test-cases.md) |
 
-1. Root `AGENTS.md` for global rules, package boundaries, command-bus
-   expectations, verification defaults, and reporting requirements.
-2. The current user task for scope and acceptance criteria.
-3. This file for repository reading order.
-4. `docs/architecture/*` for durable architecture, storage, package boundary,
-   and security model details.
-5. `docs/ui/*` for UI design-system and interaction rules.
-6. `docs/testing/*` and `docs/release/*` for release-readiness and verification
-   expectations.
-7. Package or crate `AGENTS.md` / `README.md` for local ownership rules.
+For example, a documentation typo needs the surrounding text and link checks.
+A database UI fix needs its local constraints and the relevant interaction
+section; add backend or storage context only if the affected path reaches it.
+A shared command contract change needs both its producers and consumers.
 
-Historical checkpoint, progress, task, and audit files live under
-`docs/archive/`. They are useful for archaeology only and must not override the
-active documents above.
+## Keep context useful
 
-## Recommended Reading Order
-
-Read in this order, stopping when the task has enough context:
-
-1. `AGENTS.md`.
-2. `docs/agents/START_HERE.md`.
-3. For package boundaries or dependency direction:
-   `docs/architecture/package-boundaries.md`.
-4. For repository shape or call chains:
-   `docs/architecture/project-structure.md`.
-5. For persistence, credentials, activity, or workspace scope:
-   `docs/architecture/data-storage.md` and
-   `docs/architecture/security-model.md`.
-6. For UI, layout, component, style, or interaction changes:
-   `design.md`, `docs/ui/design-system.md`, and
-   `docs/ui/interaction-guidelines.md`.
-7. For MCP work:
-   `docs/mcp/overview.md`, `docs/mcp/tools.md`, and
-   `docs/mcp/codex-setup.md`.
-8. For release or verification work:
-   `docs/testing/release-verification.md`,
-   `docs/testing/manual-test-cases.md`, and
-   `docs/release/release-checklist.md`.
-9. The relevant package or crate `AGENTS.md` / `README.md`, if present.
-10. Source files, only as needed to understand or change the implementation.
-
-## Scoped Context Rules
-
-- Do not default to scanning the whole repository.
-- Do not default to modifying unrelated packages.
-- For a single-package task, read the root rules, this file, the relevant
-  architecture document, and that package's local `AGENTS.md` / `README.md`.
-- For a cross-module task, also read the relevant app-shell, command-bus, MCP,
-  data-storage, or feature-package context before reading source.
-- For UI changes, read the active UI docs before editing.
-- For package boundary changes, read `docs/architecture/package-boundaries.md`
-  before editing.
-- For release claims, read `docs/testing/release-verification.md` and report
-  only checks that were actually run or are backed by cited repository evidence.
-
-## During Modification
-
-- Modify only files within the current task scope.
-- Do not clean up unrelated code as a side effect.
-- Do not move directories without an explicit task requirement.
-- Do not modify backend call chains unless the task explicitly requires it.
-- Do not add dependencies unless the task explicitly requires it.
-- Do not write feature logic into `packages/app-shell`.
-- Do not write business logic into `packages/ui`.
-- Route new user-visible frontend UI text through the shared i18n helper and
-  locale keys; do not create package-local i18n variants.
-- Keep MCP tool names, command keys, schemas, and stable error codes in English.
-  Localize only UI-facing messages.
-- Keep current status, release gates, and verification evidence in the active
-  testing and release documents, not in temporary progress files.
-
-For the full execution workflow, verification matrix, commit discipline, and
-reporting format, see `docs/agents/EXECUTION_PROTOCOL.md`.
-
-## After Modification
-
-Output the following report:
-
-```text
-1. Modified file list
-2. Primary change in each file
-3. Whether business logic was modified (yes/no)
-4. Whether new dependencies were added (yes/no)
-5. Whether package dependency direction changed (yes/no)
-6. Commands executed and results
-7. Commands not executed and why
-8. Unresolved issues
-9. Files recommended for human review
-```
+- Root instructions hold global invariants; local instructions hold scope,
+  boundaries, and domain invariants. Architecture docs explain their details.
+  READMEs provide implementation landmarks and examples, not extra workflows.
+- When documents disagree with code, inspect the affected implementation and
+  tests. Treat the mismatch as something to resolve or report, not permission
+  to discard a documented security constraint.
+- Use `docs/archive/` only for historical questions. Do not follow archived
+  reading lists or treat old test results as current evidence.
+- `.codex/config.toml` contains repository sandbox settings. It is not a
+  second instruction entry point. Repository skills are optional workflow
+  aids, not prerequisites for ordinary coding or a source of UI design rules.
+- Maintain these pointers as ownership changes. Keep details at their owning
+  source instead of copying them into every instruction file.

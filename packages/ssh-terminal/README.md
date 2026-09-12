@@ -4,14 +4,9 @@
 
 `@unfour/ssh-terminal` owns the SSH Terminal frontend experience.
 
-## Boundaries
+## Local constraints
 
-- Can own SSH connection UI, terminal session UI, host-key trust UI, split and
-  search state, terminal logs, and terminal-local Zustand state.
-- Should call backend behavior through `@unfour/command-client`.
-- May use `@unfour/workspace-core` for selected SSH connection state as the
-  documented transitional boundary.
-- Should not own API Client, Database, or app-shell behavior.
+See [AGENTS.md](AGENTS.md) for this package's scope and invariants.
 
 ## Key Files
 
@@ -44,13 +39,16 @@
 ## Known Gaps
 
 - Release readiness belongs in `docs/release/*` and `docs/testing/*`.
-- Real SSH behavior requires manual verification against a reachable SSH server.
 
 ## Test / Verify
 
-- `pnpm test -- packages/ssh-terminal/src/model/terminal-state.test.ts packages/ssh-terminal/src/model/errors.test.ts packages/ssh-terminal/src/model/sftp-state.test.ts packages/ssh-terminal/src/components/SftpWorkspace.test.tsx`
+Choose checks for the changed behavior using the
+[verification guide](../../docs/agents/EXECUTION_PROTOCOL.md#choose-verification-by-impact).
+The commands below are examples, not a checklist for every edit.
+
+- `pnpm exec vitest run packages/ssh-terminal/src/model/terminal-state.test.ts packages/ssh-terminal/src/model/errors.test.ts packages/ssh-terminal/src/model/sftp-state.test.ts packages/ssh-terminal/src/components/SftpWorkspace.test.tsx`
 - `pnpm run build`
-- For behavior changes, manually verify password/key auth, PTY input/output,
-  resize, search, log export, host-key trust, reconnect, SFTP Home discovery,
-  remote mutations, transfer cancellation, overwrite behavior, and panel
-  isolation against a live SSH server.
+- For connection/transport changes, verify affected auth, PTY, trust, reconnect,
+  or SFTP paths against an authorized test server. Isolate remote mutations and
+  transfers to disposable test data; record unavailable live coverage as not
+  verified. UI-only changes do not require the entire SSH regression matrix.

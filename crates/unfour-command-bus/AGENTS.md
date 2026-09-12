@@ -1,35 +1,12 @@
-# unfour-command-bus Agent Rules
+# Command Bus Scope
 
-## Scope
+Own the reusable Rust command entry point for Workspace, API, Database, SSH,
+credentials, system health, and read-only adapter operations used by Tauri,
+MCP, and future AI/CLI surfaces.
 
-`crates/unfour-command-bus` owns the reusable Rust command entry point for
-workspace, API, Database, SSH, credential, system health, and read-only adapter
-operations used by Tauri, MCP, and future AI/CLI surfaces.
-
-## Boundaries
-
-- Tauri commands and MCP tools should remain adapters over this crate.
-- This crate may orchestrate domain services, but domain-specific capability
-  logic should stay in the owning engine crate when practical.
-- It must not depend on frontend UI packages or Tauri-specific UI concerns.
-- It must not expose raw secrets or bypass credential-reference boundaries.
-
-## Rules
-
-- Do not make unrelated cross-crate or cross-package changes.
-- Prefer existing service interfaces, models, and `AppError` handling.
-- Do not introduce new dependencies unless the task explicitly requires them.
-- Preserve `workspace_id` scoping for persisted business records.
-- Preserve redaction and activity-log safety for API, SSH, DB, credential, MCP,
-  and future AI paths.
-- New dangerous commands need an explicit confirmation/capability policy.
-
-## Required Output
-
-After changes here, report:
-
-- Modified files
-- Behavior changed
-- Validation commands run
-- Manual verification needed
-- Follow-up risks
+- Orchestrate domain services here; capability logic stays in owning engines.
+  Do not depend on frontend packages or Tauri-specific UI concerns.
+- Keep adapter paths consistent in workspace scoping, credential references,
+  redaction, activity-log safety, and `AppError` handling.
+- New dangerous commands need an explicit confirmation/capability policy before
+  adapters expose them. Adapters must not bypass that policy or expose raw secrets.
