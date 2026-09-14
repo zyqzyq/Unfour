@@ -6,6 +6,12 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
+## [0.9.6] - 2026-09-14
+
+Maintenance release following the `v0.9.5` source tag, focused on MCP
+diagnostics and long-running call control, plus Database, API, SSH, and
+Workspace polish.
+
 ### Added
 
 - **MCP diagnostics** — Add workspace-scoped database query history, database
@@ -18,6 +24,26 @@ This file is the user-facing change history for Unfour, following
   tool execution, accept client cancellation, propagate it to execution where
   supported, and enforce a 120-second MCP safety deadline even when an API HTTP
   timeout is disabled. Bound queued calls and shutdown cleanup.
+- **SQL draft close protection** — Closing a Query tab with unsaved user SQL
+  asks for confirmation instead of discarding the draft. Empty or unmodified
+  SQL still closes immediately.
+- **Dangerous SQL confirmation** — Run shortcuts and Run buttons no longer
+  confirm a pending dangerous run. Confirmation happens only from the dedicated
+  Confirm run action.
+- **Saved SQL open and save** — Opening saved SQL from the sidebar does not
+  replace the current editor. Successful saves update the tab baseline; failed
+  saves keep the draft dirty. Deleting saved SQL asks for confirmation.
+- **API save and history feedback** — History shows loading, error, and retry
+  states. The save dialog reports failures in place, keeps the entered name,
+  and only marks a request saved after a successful write.
+- **API save pending** — Repeat submits while creating a collection or folder
+  are ignored, and the dialog stays blocked until the pending save finishes.
+- **SSH batch close** — Close All, Close Others, and close-to-left/right ask
+  once and disconnect only the confirmed sessions. Single-session close stays
+  independent.
+- **Workspace labels** — Truncated workspace names show in full on hover.
+  Workspace safety-tier and variable-environment wording is clearer, and delete
+  now states that local API, SSH, and Database resources are removed.
 
 ## [0.9.5] - 2026-09-12
 
@@ -653,6 +679,7 @@ First public release.
 - Linux artifacts remain experimental/unverified until real-device smoke checks
   are complete.
 
+[0.9.6]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.6
 [0.9.5]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.5
 [0.9.4]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.4
 [0.9.3]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.3

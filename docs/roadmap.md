@@ -235,7 +235,7 @@ Current status:
 
 Release claims remain limited by the current verification matrix.
 
-## v0.9.5 (Current source version)
+## v0.9.5 (Previous source checkpoint)
 
 The follow-up from the `v0.9.4` tag focuses on Database SQL script execution,
 Cloud Sync defaults for new accounts, and workbench navigation:
@@ -250,7 +250,28 @@ Cloud Sync defaults for new accounts, and workbench navigation:
 
 Current status:
 
-- source version is `0.9.5`; release status is `NOT RELEASED`;
+- the `v0.9.5` tag is the comparison baseline for the current source;
+- the active release verification record still treats the v0.9.0 publication
+  evidence as historical.
+
+Release claims remain limited by the current verification matrix.
+
+## v0.9.6 (Current source version)
+
+The follow-up from the `v0.9.5` tag focuses on MCP diagnostics and long-running
+call control, plus Database, API, SSH, and Workspace polish:
+
+- workspace-scoped database query history, database and SSH connection metadata
+  updates and deletes, SSH connection tests, and stored host fingerprint reads;
+- stdio-responsive MCP cancellation, execution propagation where supported, a
+  120-second safety deadline, and bounded queue/shutdown cleanup; and
+- SQL draft close protection, safer dangerous-SQL confirmation, Saved SQL
+  open/save polish, API save/history feedback, SSH batch close, and workspace
+  label polish.
+
+Current status:
+
+- source version is `0.9.6`; release status is `NOT RELEASED`;
 - candidate artifact, platform, live-service, and manual verification remain
   to be recorded in the active release matrix.
 

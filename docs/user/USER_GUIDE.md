@@ -14,9 +14,9 @@ Unfour opens into a single workspace surface:
 
 ## Current Capabilities
 
-This guide documents the current v0.9.5 product capabilities. The published
+This guide documents the current v0.9.6 product capabilities. The published
 v0.9.0 verification record remains the latest completed release evidence until
-the v0.9.5 candidate is verified:
+the v0.9.6 candidate is verified:
 
 - The workspace shell is usable.
 - API, SSH, and Database sidebars keep independent bounded widths and restore
@@ -28,7 +28,17 @@ the v0.9.5 candidate is verified:
   reopening saved or historical multipart requests.
 - SQL Editor runs a script as one batch on one physical connection, with
   whole-script confirmation, per-statement results, and Stop that waits for the
-  current statement. Switching modules keeps unsaved editor drafts.
+  current statement. Switching modules keeps unsaved editor drafts. Closing a
+  Query tab with unsaved user SQL asks for confirmation. Saved SQL opens without
+  replacing the current editor.
+- API save and history show loading, error, retry, and in-dialog save-failure
+  feedback. Repeat save submits stay blocked while a collection or folder create
+  is pending.
+- SSH Close All, Close Others, and close-to-left/right ask once and disconnect
+  only the confirmed sessions.
+- Truncated workspace names show in full on hover. Workspace safety-tier and
+  variable-environment wording is distinct from delete, which now states that
+  local API, SSH, and Database resources are removed.
 - The About page includes GitHub Discussions and issue links for feedback.
 - Local MCP is available through the stdio `unfour-mcp` server. It uses the
   same command bus and the same saved API, SSH, and database connections, so
@@ -37,7 +47,11 @@ the v0.9.5 candidate is verified:
   Codex and Cursor, including server start, initialization, tool discovery,
   tool calls, and access to real Unfour data/tools. MCP also supports per-call
   environment selection, saved-request script replay, and environment-variable
-  set/delete tools subject to policy and confirmation checks.
+  set/delete tools subject to policy and confirmation checks. Diagnostic tools
+  can read database query history, update or delete saved database and SSH
+  connection metadata, test SSH connections, and read stored host fingerprints.
+  Long-running calls stay cancellable, keep stdio controls responsive, and stop
+  at a 120-second safety deadline.
 - Stable Desktop builds show a one-time notice for anonymous active-install
   statistics and expose an opt-out under `Settings -> Privacy`; test/dev builds
   do not send telemetry. See [anonymous usage telemetry](../privacy/telemetry.md).

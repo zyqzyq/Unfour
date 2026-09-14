@@ -1,28 +1,27 @@
-# v0.9.5 Release Verification
+# v0.9.6 Release Verification
 
-This document tracks v0.9.5 release preparation. The published v0.9.0 results
-remain below as historical evidence; the local `v0.9.4` tag is the comparison
-baseline. A new v0.9.5 candidate needs fresh evidence and must not inherit
+This document tracks v0.9.6 release preparation. The published v0.9.0 results
+remain below as historical evidence; the local `v0.9.5` tag is the comparison
+baseline. A new v0.9.6 candidate needs fresh evidence and must not inherit
 those release results automatically.
 
-## v0.9.5 preparation status
+## v0.9.6 preparation status
 
-- Source version: `0.9.5`; release status: `NOT RELEASED`.
+- Source version: `0.9.6`; release status: `NOT RELEASED`.
 - Version synchronization: `PASS` (`node scripts/sync-version.mjs --check`).
 - Cargo workspace lock/check: `PASS` (`cargo check --workspace --locked`).
-- Release contract suite: `NOT VERIFIED` (run the direct Node test command for
-  the v0.9.5 candidate).
+- Release contract suite: `PASS` (`pnpm run test:release-env`; 73 tests).
 - Candidate artifact, platform, live-service, and manual gates: `NOT VERIFIED`.
 
-## v0.9.5 candidate scope
+## v0.9.6 candidate scope
 
-The candidate adds one-connection SQL script batches with whole-script
-confirmation and per-statement results, Global Sync ON for first account
-activation, preserved unsaved editor drafts, About-page feedback links, and
-safer database credential-reference saves. Fresh candidate evidence is required
-for SQL script execution and confirmation, Cloud Sync defaults for new accounts,
-workbench draft preservation, and the existing supported-module regression
-matrix.
+The candidate adds MCP diagnostic tools for database query history, database
+and SSH connection metadata updates and deletes, SSH connection tests, and
+stored host fingerprint reads; long-running MCP call cancellation with a
+120-second safety deadline; and Database, API, SSH, and Workspace editor
+polish. Fresh candidate evidence is required for MCP diagnostics and
+cancellation, SQL draft close and confirmation, API save and history feedback,
+SSH batch close, and the existing supported-module regression matrix.
 
 ## Database SQL execution baseline — 2026-09-11
 
