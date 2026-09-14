@@ -143,9 +143,9 @@ Important limits:
   Because scripts can mutate environment state, scripted saved requests are
   classified as writes even when their HTTP method is read-only.
 - Omitted or null `timeoutMs` uses a 60,000 ms HTTP timeout. `timeoutMs: 0`
-  disables the HTTP timer; positive values are passed unchanged. Independently,
-  MCP applies a 120-second execution safety deadline, including unlimited HTTP
-  calls. See [cancellation and long calls](overview.md#cancellation-and-long-calls).
+  disables the HTTP timeout; positive values are passed through to the HTTP
+  layer. All MCP calls remain subject to the independent 120-second MCP safety
+  deadline. See [cancellation and long calls](overview.md#cancellation-and-long-calls).
 - Without `environmentId`, variables and scripts use the workspace active
   environment as before.
 - Delete operations require the confirmation handshake.

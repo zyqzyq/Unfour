@@ -56,3 +56,27 @@ fn api_tools_have_valid_input_schemas() {
         );
     }
 }
+
+#[test]
+fn send_request_timeout_schema_does_not_claim_unlimited_mcp_execution() {
+    let definitions = api_registry().definitions();
+    let def = definitions
+        .iter()
+        .find(|d| d.name == "unfour.api.send_request")
+        .unwrap();
+    let description = def.input_schema["properties"]["timeoutMs"]["description"]
+        .as_str()
+        .expect("timeoutMs should describe HTTP vs MCP deadlines");
+    assert!(
+        description.contains("0 disables the HTTP timeout"),
+        "timeoutMs should say 0 only disables the HTTP timeout: {description}"
+    );
+    assert!(
+        description.contains("120-second MCP safety deadline"),
+        "timeoutMs should mention the independent MCP safety deadline: {description}"
+    );
+    assert!(
+        !description.contains("unlimited"),
+        "timeoutMs must not claim unlimited MCP execution: {description}"
+    );
+}

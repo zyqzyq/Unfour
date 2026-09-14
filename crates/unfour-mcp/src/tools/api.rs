@@ -225,7 +225,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                         "timeoutMs": {
                             "type": ["integer", "null"],
                             "minimum": 0,
-                            "description": "Optional timeout in milliseconds. Omitted or null defaults to 60000ms; 0 means unlimited; positive values are used exactly."
+                            "description": "Optional timeout in milliseconds. Omitted or null defaults to 60000ms. 0 disables the HTTP timeout; positive values are passed through to the HTTP layer. All MCP calls remain subject to the independent 120-second MCP safety deadline."
                         }
                     },
                     "additionalProperties": false

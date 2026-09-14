@@ -77,8 +77,8 @@ or initialize IDs have no cancellation effect. The server suppresses the
 cancelled call's response and does not respond to the notification itself.
 
 API, database and one-shot SSH execution futures have an independent 120-second
-safety deadline. API `timeoutMs: 0` still disables its HTTP timer, but cannot
-disable the MCP deadline. The stdio watchdog also bounds the time waiting for a
+safety deadline. API `timeoutMs: 0` disables the HTTP timeout; positive values
+are passed through to the HTTP layer. Neither disables the MCP deadline. The stdio watchdog also bounds the time waiting for a
 tool response. On expiration it reports `MCP_CALL_TIMEOUT` and signals cancellation.
 If the adapter's execution deadline wins the race, its normal structured tool
 error is returned instead. A worker retains the single execution slot until it
