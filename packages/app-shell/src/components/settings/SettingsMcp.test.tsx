@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@unfour/ui";
 import { SettingsMcp } from "./SettingsMcp";
@@ -50,6 +50,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.clearAllMocks();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -124,9 +125,14 @@ describe("SettingsMcp", () => {
     expect(screen.getByRole("heading", { name: copy.label })).toBeTruthy();
     const prompt = screen.getByText(copy.start, { exact: false }).textContent;
     expect(writeText).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: copy.copy }));
 
-    expect(await screen.findByRole("button", { name: copy.copied })).toBeTruthy();
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByRole("button", { name: copy.copy }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole("button", { name: copy.copied })).toBeTruthy();
     expect(writeText).toHaveBeenCalledExactlyOnceWith(prompt);
     expect(mocks.configureMcpClient).not.toHaveBeenCalled();
     expect(mocks.getMcpBinaryPath).toHaveBeenCalledTimes(1);
@@ -137,7 +143,10 @@ describe("SettingsMcp", () => {
 
     // Copy command keeps its own content and feedback after copying the prompt.
     fireEvent.click(screen.getByRole("button", { name: copy.command }));
-    await waitFor(() => expect(writeText).toHaveBeenLastCalledWith("D:\\Apps\\Unfour\\unfour-mcp.exe"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(writeText).toHaveBeenLastCalledWith("D:\\Apps\\Unfour\\unfour-mcp.exe");
     expect(screen.getAllByRole("button", { name: copy.copied })).toHaveLength(2);
   });
 
