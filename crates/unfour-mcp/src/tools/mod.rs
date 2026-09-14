@@ -1,6 +1,7 @@
 mod activity;
 mod api;
 mod confirmation;
+mod connection_diagnostics;
 mod database;
 mod policy;
 mod real;
@@ -133,6 +134,7 @@ impl ToolRegistry {
         tools.extend(system::registered_tools());
         tools.extend(activity::registered_tools());
         tools.extend(ssh::registered_tools());
+        tools.extend(connection_diagnostics::registered_tools());
 
         Self { tools, command_bus }
     }
@@ -157,7 +159,14 @@ impl ToolRegistry {
                 return policy_or_execution_error(name, started.elapsed().as_millis(), error);
             }
         };
-        let result = (tool.handler)(self.command_bus.as_ref(), &policy, arguments);
+        let result = if crate::call_control::is_cancelled() {
+            Err(ToolCallError::Execution {
+                code: "MCP_CALL_CANCELLED",
+                message: "The MCP call was cancelled before execution.",
+            })
+        } else {
+            (tool.handler)(self.command_bus.as_ref(), &policy, arguments)
+        };
 
         match result {
             Ok(value) => Ok(structured_tool_result(

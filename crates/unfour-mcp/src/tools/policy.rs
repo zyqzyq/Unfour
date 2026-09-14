@@ -190,6 +190,8 @@ pub(super) fn classify_mcp_action(
         | "unfour.system.health"
         | "unfour.workspace.list_variables"
         | "unfour.ssh.list_history"
+        | "unfour.db.list_history"
+        | "unfour.ssh.get_host_key"
         | "unfour.ssh.list_tasks"
         | "unfour.ssh.get_task"
         | "unfour.ssh.list_task_runs"
@@ -230,7 +232,10 @@ pub(super) fn classify_mcp_action(
         | "unfour.db.list_tables"
         | "unfour.db.describe_table"
         | "unfour.db.test_connection" => (McpCapability::DbSchemaRead, McpRisk::Read),
-        "unfour.db.create_connection" => (McpCapability::DbConnectionMutate, McpRisk::Write),
+        "unfour.db.create_connection" | "unfour.db.update_connection" => {
+            (McpCapability::DbConnectionMutate, McpRisk::Write)
+        }
+        "unfour.db.delete_connection" => (McpCapability::DbConnectionMutate, McpRisk::Destructive),
         "unfour.db.query_readonly" => (McpCapability::DbDataRead, McpRisk::Read),
         "unfour.db.explain" => (McpCapability::DbDataRead, McpRisk::Read),
         "unfour.db.execute" => {
@@ -245,7 +250,11 @@ pub(super) fn classify_mcp_action(
                 (McpCapability::DbDataWrite, McpRisk::Write)
             }
         }
-        "unfour.ssh.create_connection" => (McpCapability::SshConnect, McpRisk::Write),
+        "unfour.ssh.create_connection" | "unfour.ssh.update_connection" => {
+            (McpCapability::SshConnect, McpRisk::Write)
+        }
+        "unfour.ssh.delete_connection" => (McpCapability::SshConnect, McpRisk::Destructive),
+        "unfour.ssh.test_connection" => (McpCapability::SshExec, McpRisk::Read),
         "unfour.ssh.list_connections" => (McpCapability::WorkspaceRead, McpRisk::Read),
         "unfour.ssh.run_diagnostic" | "unfour.ssh.read_file" | "unfour.ssh.list_dir" => {
             (McpCapability::SshExec, McpRisk::Read)

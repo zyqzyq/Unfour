@@ -59,6 +59,52 @@ Implemented method families:
 - `initialize`
 - `tools/list`
 - `tools/call`
+- `ping`
+- `notifications/cancelled`
+
+### Cancellation and Long Calls
+
+The stdio reader remains responsive while a tool executes. One business call
+runs at a time, with at most 16 queued calls; excess calls receive
+`MCP_SERVER_BUSY`. `ping`, `tools/list` and cancellation do not wait for that
+execution slot. Duplicate in-flight IDs are rejected. Tool notifications without
+request IDs do not execute business actions.
+
+Clients may send `notifications/cancelled` with `params.requestId`, following
+the [MCP cancellation schema](https://modelcontextprotocol.io/specification/2025-06-18/schema#cancellednotification).
+Only the matching in-flight or queued call is cancelled. Unknown, completed,
+or initialize IDs have no cancellation effect. The server suppresses the
+cancelled call's response and does not respond to the notification itself.
+
+API, database and one-shot SSH execution futures have an independent 120-second
+safety deadline. API `timeoutMs: 0` still disables its HTTP timer, but cannot
+disable the MCP deadline. The stdio watchdog also bounds the time waiting for a
+tool response. On expiration it reports `MCP_CALL_TIMEOUT` and signals cancellation.
+If the adapter's execution deadline wins the race, its normal structured tool
+error is returned instead. A worker retains the single execution slot until it
+actually finishes; cancelled or timed-out workers are never replaced with an
+unbounded number of detached workers.
+
+Saved API replay cancellation uses the Command Bus execution ID and existing
+API cancellation token, allowing up to two seconds for cleanup. Other API,
+database and one-shot SSH calls drop the awaited execution future, propagating
+cancellation to async I/O where supported. This does not guarantee server-side
+SQL cancellation or termination of an already-started remote SSH process.
+Completed writes and script changes already committed are not rolled back.
+Local metadata transactions already executing are allowed to finish; cancellation
+is checked before invoking the handler. SSH task runs remain asynchronous and
+must be stopped with `unfour.ssh.cancel_task_run` after they have started.
+Inspect state before retrying a cancelled mutation.
+
+On stdin EOF, queued/completing calls have a two-second drain window, then the
+active call is cancelled and the runtime shuts down with its existing bounded
+cleanup. Broken stdout also cancels the active call. Idle timeout only applies
+when no tool is running. An uncooperative worker can keep business calls busy,
+but cannot block ping, tool discovery or process shutdown.
+
+This adds no HTTP transport, interactive SSH, Flow runner, automatic
+troubleshooting workflow, policy-editing tools, raw credential/known_hosts
+access, or lower-priority CRUD/import/export/batch capabilities.
 
 The `initialize` response includes instructions for a diagnose → act → verify flow:
 
@@ -104,7 +150,11 @@ execution. The default `auto` policy maps workspace environments as follows:
 The tool registry is fail-closed: every registered tool must have an explicit
 capability and risk classification, registry completeness is tested, and
 unknown/unclassified tools are denied. API request, collection, environment,
-and environment-variable deletes are classified as destructive.
+environment-variable deletes, and database/SSH connection deletes are classified
+as destructive. Connection deletion confirmations include workspace, connection
+ID and record revision. Metadata updates preserve omitted fields and credentials;
+their results expose only IDs. Database history and stored SSH fingerprints are
+read-only projections, and SSH connection tests use the existing Command Bus path.
 
 Explicit workspace policy can override the default environment mapping. Tools
 also carry MCP behavior hints in `tools/list`:

@@ -1,4 +1,6 @@
 use std::future::Future;
+mod cancellation;
+mod diagnostics;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;

@@ -781,6 +781,26 @@ impl CommandBus {
         timeout_ms_override: Option<u64>,
         environment_id_override: Option<String>,
     ) -> AppResult<RequestExecutionResult> {
+        let execution_id = unfour_core::id::new_id();
+        self.execute_saved_api_request_with_scripts_controlled_in_workspace(
+            &execution_id,
+            workspace_id,
+            request_id,
+            timeout_ms_override,
+            environment_id_override,
+        )
+        .await
+    }
+
+    /// Same saved replay path, with a caller-owned ID for cooperative cancellation.
+    pub async fn execute_saved_api_request_with_scripts_controlled_in_workspace(
+        &self,
+        execution_id: &str,
+        workspace_id: Option<String>,
+        request_id: &str,
+        timeout_ms_override: Option<u64>,
+        environment_id_override: Option<String>,
+    ) -> AppResult<RequestExecutionResult> {
         let saved = self.api_client.get_saved_request(request_id).await?;
 
         if workspace_id
@@ -812,7 +832,11 @@ impl CommandBus {
             temporary_variables: vec![],
         };
 
-        self.send_api_request_with_scripts_in_environment(input, environment_id_override)
-            .await
+        self.send_api_request_with_scripts_controlled_in_environment(
+            execution_id,
+            input,
+            environment_id_override,
+        )
+        .await
     }
 }

@@ -49,7 +49,7 @@ impl CommandBus {
         .await
     }
 
-    async fn send_api_request_with_scripts_controlled_in_environment(
+    pub(crate) async fn send_api_request_with_scripts_controlled_in_environment(
         &self,
         execution_id: &str,
         input: ApiRequestInput,

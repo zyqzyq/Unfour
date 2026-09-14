@@ -6,6 +6,19 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
+### Added
+
+- **MCP diagnostics** — Add workspace-scoped database query history, database
+  and SSH connection metadata updates/deletes, SSH connection tests and stored
+  host fingerprint reads, with safe result schemas and guarded delete confirmation.
+
+### Fixed
+
+- **MCP long-running calls** — Keep stdio control messages responsive during
+  tool execution, accept client cancellation, propagate it to execution where
+  supported, and enforce a 120-second MCP safety deadline even when an API HTTP
+  timeout is disabled. Bound queued calls and shutdown cleanup.
+
 ## [0.9.5] - 2026-09-12
 
 Maintenance release following the `v0.9.4` source tag, focused on Database SQL

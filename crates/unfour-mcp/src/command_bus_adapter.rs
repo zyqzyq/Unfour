@@ -133,12 +133,22 @@ impl LocalCommandBusAdapter {
     /// interior-mutable `Option`, which lets [`LocalCommandBusAdapter::shutdown`]
     /// take ownership of it for a bounded shutdown.
     fn run<F: std::future::Future>(&self, future: F) -> F::Output {
-        self.runtime
+        let handle = self
+            .runtime
             .lock()
             .expect("command-bus runtime lock poisoned")
             .as_ref()
             .expect("command-bus runtime already shut down")
-            .block_on(future)
+            .handle()
+            .clone();
+        handle.block_on(future)
+    }
+
+    fn run_execution<T>(
+        &self,
+        future: impl std::future::Future<Output = unfour_core::AppResult<T>>,
+    ) -> unfour_core::AppResult<T> {
+        self.run(crate::call_control::bounded(future))
     }
 
     /// Cancel all background tokio tasks (SSH supervisors, DB/API pool
@@ -177,6 +187,72 @@ impl Drop for LocalCommandBusAdapter {
 }
 
 impl CommandBusAdapter for LocalCommandBusAdapter {
+    fn list_db_history(
+        &self,
+        workspace_id: &str,
+        limit: i64,
+    ) -> Result<Vec<unfour_core::models::DbQueryHistoryEntry>, CommandBusAdapterError> {
+        self.run(
+            self.bus
+                .list_database_query_history(workspace_id.into(), Some(limit)),
+        )
+        .map_err(|e| CommandBusAdapterError::from_app_error("Database history read failed.", &e))
+    }
+    fn delete_db_connection(
+        &self,
+        workspace_id: &str,
+        connection_id: &str,
+    ) -> Result<(), CommandBusAdapterError> {
+        self.run(
+            self.bus
+                .delete_database_connection(workspace_id.into(), connection_id.into()),
+        )
+        .map(|_| ())
+        .map_err(|e| {
+            CommandBusAdapterError::from_app_error("Database connection deletion failed.", &e)
+        })
+    }
+    fn delete_ssh_connection(
+        &self,
+        workspace_id: &str,
+        connection_id: &str,
+    ) -> Result<(), CommandBusAdapterError> {
+        self.run(
+            self.bus
+                .delete_ssh_connection(workspace_id.into(), connection_id.into()),
+        )
+        .map(|_| ())
+        .map_err(|e| {
+            CommandBusAdapterError::from_ssh_app_error("SSH connection deletion failed.", &e)
+        })
+    }
+    fn test_ssh_connection(
+        &self,
+        input: SshConnectionInput,
+    ) -> Result<unfour_core::models::SshTestResult, CommandBusAdapterError> {
+        #[cfg(not(feature = "ssh-native"))]
+        {
+            let _ = input;
+            Err(CommandBusAdapterError {
+                code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+                message: "Native SSH is unavailable.",
+            })
+        }
+        #[cfg(feature = "ssh-native")]
+        self.run_execution(self.bus.test_ssh_connection(input))
+            .map_err(|e| {
+                CommandBusAdapterError::from_ssh_app_error("SSH connection test failed.", &e)
+            })
+    }
+    fn get_ssh_host_key(
+        &self,
+        input: unfour_core::models::SshHostKeyInput,
+    ) -> Result<Option<unfour_core::models::SshHostFingerprintInfo>, CommandBusAdapterError> {
+        self.run(self.bus.get_ssh_host_fingerprint(input))
+            .map_err(|e| {
+                CommandBusAdapterError::from_ssh_app_error("SSH host fingerprint read failed.", &e)
+            })
+    }
     fn execute_read(
         &self,
         command: ReadCommand,
@@ -191,7 +267,7 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         request_id: &str,
         timeout_ms: Option<u64>,
     ) -> Result<ApiResponse, CommandBusAdapterError> {
-        self.run(self.bus.execute_saved_api_request(request_id, timeout_ms))
+        self.run_execution(self.bus.execute_saved_api_request(request_id, timeout_ms))
             .map_err(|e| {
                 CommandBusAdapterError::from_app_error(
                     "The command-bus API send operation failed.",
@@ -206,7 +282,7 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         request_id: &str,
         timeout_ms: Option<u64>,
     ) -> Result<ApiResponse, CommandBusAdapterError> {
-        self.run(self.bus.execute_saved_api_request_in_workspace(
+        self.run_execution(self.bus.execute_saved_api_request_in_workspace(
             workspace_id.map(str::to_string),
             request_id,
             timeout_ms,
@@ -223,16 +299,19 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         timeout_ms: Option<u64>,
         environment_id: Option<&str>,
     ) -> Result<ApiResponse, CommandBusAdapterError> {
+        let execution_id = unfour_core::id::new_id();
         let result = self
-            .run(
+            .run(crate::call_control::cooperative(
                 self.bus
-                    .execute_saved_api_request_with_scripts_in_workspace(
+                    .execute_saved_api_request_with_scripts_controlled_in_workspace(
+                        &execution_id,
                         workspace_id.map(str::to_string),
                         request_id,
                         timeout_ms,
                         environment_id.map(str::to_string),
                     ),
-            )
+                || self.bus.cancel_api_request(&execution_id),
+            ))
             .map_err(|error| {
                 CommandBusAdapterError::from_app_error(
                     "The command-bus scripted API send operation failed.",
@@ -256,9 +335,13 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         &self,
         input: ApiRequestInput,
     ) -> Result<ApiResponse, CommandBusAdapterError> {
-        self.run(self.bus.send_api_request(input)).map_err(|e| {
-            CommandBusAdapterError::from_app_error("The command-bus API send operation failed.", &e)
-        })
+        self.run_execution(self.bus.send_api_request(input))
+            .map_err(|e| {
+                CommandBusAdapterError::from_app_error(
+                    "The command-bus API send operation failed.",
+                    &e,
+                )
+            })
     }
 
     fn send_api_request_in_environment(
@@ -266,7 +349,7 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         input: ApiRequestInput,
         environment_id: Option<&str>,
     ) -> Result<ApiResponse, CommandBusAdapterError> {
-        self.run(
+        self.run_execution(
             self.bus
                 .send_api_request_in_environment(input, environment_id.map(str::to_string)),
         )
@@ -635,7 +718,7 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         workspace_id: &str,
         connection_id: &str,
     ) -> Result<DatabaseSchema, CommandBusAdapterError> {
-        self.run(self.bus.database_schema(
+        self.run_execution(self.bus.database_schema(
             workspace_id.to_string(),
             connection_id.to_string(),
             None,
@@ -652,7 +735,7 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         &self,
         input: DatabaseQueryInput,
     ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
-        self.run(self.bus.execute_database_query(input))
+        self.run_execution(self.bus.execute_database_query(input))
             .map_err(|e| {
                 CommandBusAdapterError::from_app_error(
                     "The command-bus database query operation failed.",
@@ -666,7 +749,7 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         workspace_id: &str,
         connection_id: &str,
     ) -> Result<DatabaseTestResult, CommandBusAdapterError> {
-        self.run(
+        self.run_execution(
             self.bus
                 .test_database_connection(workspace_id.to_string(), connection_id.to_string()),
         )
@@ -688,9 +771,13 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         &self,
         input: SshDiagnosticInput,
     ) -> Result<SshDiagnosticResult, CommandBusAdapterError> {
-        self.run(self.bus.run_ssh_diagnostic(input)).map_err(|e| {
-            CommandBusAdapterError::from_ssh_app_error("The command-bus SSH diagnostic failed.", &e)
-        })
+        self.run_execution(self.bus.run_ssh_diagnostic(input))
+            .map_err(|e| {
+                CommandBusAdapterError::from_ssh_app_error(
+                    "The command-bus SSH diagnostic failed.",
+                    &e,
+                )
+            })
     }
 
     fn list_ssh_connections(
@@ -735,9 +822,13 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         &self,
         input: SshDiagnosticInput,
     ) -> Result<SshDiagnosticResult, CommandBusAdapterError> {
-        self.run(self.bus.run_ssh_command(input)).map_err(|e| {
-            CommandBusAdapterError::from_ssh_app_error("The command-bus SSH command failed.", &e)
-        })
+        self.run_execution(self.bus.run_ssh_command(input))
+            .map_err(|e| {
+                CommandBusAdapterError::from_ssh_app_error(
+                    "The command-bus SSH command failed.",
+                    &e,
+                )
+            })
     }
 
     fn list_ssh_tasks(&self, workspace_id: &str) -> Result<Vec<SshTask>, CommandBusAdapterError> {

@@ -23,6 +23,7 @@ Tools with `openWorldHint: true`:
 - `unfour.db.explain`
 - `unfour.db.test_connection`
 - `unfour.ssh.run_diagnostic`
+- `unfour.ssh.test_connection`
 - `unfour.ssh.exec`
 - `unfour.ssh.read_file`
 - `unfour.ssh.write_file`
@@ -76,6 +77,9 @@ is advisory call metadata and is not part of `structuredContent`.
 | `unfour.api.delete_environment_variable` | `{ "environmentId": "required", "key": "required", "workspaceId": "optional", "confirm": "optional", "confirmation_text": "optional" }` | Deletes one environment variable by key. Guarded policy requires confirmation; prod/read-only policy blocks deletion. |
 | `unfour.db.create_connection` | `{ "workspaceId": "optional", "name": "required", "driver": "required", "host": "optional", "port": "optional", "database": "optional", "username": "optional", "sslMode": "optional", "sqlitePath": "optional", "credentialRef": "optional", "password": "optional", "credentialLabel": "optional", "readOnly": "optional" }` | Creates a saved database connection. If `password` is supplied, it is written to the OS credential store and only the resulting credential reference is persisted. |
 | `unfour.db.list_connections` | `{ "workspaceId": "optional" }` | Lists saved database connections as safe summaries. |
+| `unfour.db.update_connection` | `{ "connectionId": "required", "workspaceId": "optional", "name": "optional", "driver": "optional", "host": "optional", "port": "optional", "database": "optional", "username": "optional", "sslMode": "optional", "sqlitePath": "optional", "readOnly": "optional" }` | Updates an existing connection through the same Command Bus save path. Omitted fields and stored credentials are preserved; nullable metadata can be cleared with null. Returns only connectionId, workspaceId and source. |
+| `unfour.db.delete_connection` | `{ "connectionId": "required", "workspaceId": "optional", "confirm": "optional", "confirmation_text": "optional" }` | Soft-deletes a saved connection through Command Bus. Guarded policy requires confirmation bound to workspace, connection and current revision; prod/read_only blocks deletion. |
+| `unfour.db.list_history` | `{ "workspaceId": "optional", "limit": "optional integer 1–200" }` | Lists query history for the selected workspace, default limit 50. Returns masked SQL, connectionId/name, status, rowCount, affectedRows, durationMs, executedAt and hasError. No result rows or raw error messages. |
 | `unfour.db.list_tables` | `{ "connectionId": "required", "workspaceId": "optional", "limit": "optional" }` | Lists tables and views for a saved connection. Default limit is 200; max is 500. |
 | `unfour.db.describe_table` | `{ "connectionId": "required", "tableName": "required", "schema": "optional", "workspaceId": "optional" }` | Describes a table's columns without reading table data. |
 | `unfour.db.query_readonly` | `{ "connectionId": "required", "sql": "required", "limit": "optional", "workspaceId": "optional", "catalog": "optional", "schema": "optional", "timeoutMs": "optional" }` | Executes one read-only SQL statement. Default limit is 100; max is 1000. Optional `catalog`/`schema` select the database context, matching `execute` and `explain`. |
@@ -84,6 +88,10 @@ is advisory call metadata and is not part of `structuredContent`.
 | `unfour.db.test_connection` | `{ "connectionId": "required", "workspaceId": "optional" }` | Tests connectivity for a saved database connection and returns server metadata when available. |
 | `unfour.ssh.create_connection` | `{ "workspaceId": "optional", "name": "required", "host": "required", "port": "optional", "username": "required", "authKind": "required", "keyPath": "optional", "credentialRef": "optional", "secret": "optional" }` | Creates a saved SSH connection. If `secret` is supplied for password or private-key auth, it is written to the OS credential store and only the resulting credential reference is persisted. |
 | `unfour.ssh.list_connections` | `{ "workspaceId": "optional" }` | Lists saved SSH connections as safe summaries. |
+| `unfour.ssh.update_connection` | `{ "connectionId": "required", "workspaceId": "optional", "name": "optional", "host": "optional", "port": "optional", "username": "optional", "authKind": "optional", "keyPath": "optional string or null" }` | Updates saved metadata through Command Bus. Omitted fields and stored credentials are preserved. Returns only connectionId, workspaceId and source. |
+| `unfour.ssh.delete_connection` | `{ "connectionId": "required", "workspaceId": "optional", "confirm": "optional", "confirmation_text": "optional" }` | Soft-deletes a saved SSH connection through Command Bus. Guarded confirmation includes workspace, connection and revision; prod/read_only blocks deletion. |
+| `unfour.ssh.test_connection` | `{ "connectionId": "required", "workspaceId": "optional" }` | Tests a saved connection through Command Bus, with the existing SSH host-key checks and cleanup. Requires ssh-native. Returns ok and a safe generic message; does not return engine error text or credentials. |
+| `unfour.ssh.get_host_key` | `{ "connectionId": "required", "workspaceId": "optional" }` | Reads the stored fingerprint for the saved connection's workspace/host/port. Returns known and a nullable fingerprint. Does not contact the host, reset trust or expose raw known_hosts. |
 | `unfour.ssh.list_history` | `{ "workspaceId": "optional", "connectionId": "optional", "query": "optional", "since": "optional RFC 3339", "until": "optional RFC 3339", "limit": "optional" }` | Lists structured SSH command history for the selected workspace. Default limit is 50; max is 200. Sensitive commands are excluded or replaced with `[redacted command]`. Terminal buffers and session logs are never returned. |
 | `unfour.ssh.run_diagnostic` | `{ "connectionId": "required", "command": "required", "workspaceId": "optional", "timeoutMs": "optional" }` | Runs a single allowlisted read-only diagnostic command on a saved SSH connection. Requires an `ssh-native` build. |
 | `unfour.ssh.exec` | `{ "connectionId": "required", "command": "required", "workspaceId": "optional", "cwd": "optional", "env": "optional", "timeoutMs": "optional", "confirm": "optional", "confirmation_text": "optional" }` | Executes one non-interactive SSH command when policy allows. High-risk commands require confirmation. |
@@ -134,9 +142,10 @@ Important limits:
   through the same versioned command-bus script path used by Desktop Send.
   Because scripts can mutate environment state, scripted saved requests are
   classified as writes even when their HTTP method is read-only.
-- Omitted or null `timeoutMs` uses a 60,000 ms safety timeout. `timeoutMs: 0`
-  is explicitly unlimited, and positive values are used exactly without a
-  silent cap.
+- Omitted or null `timeoutMs` uses a 60,000 ms HTTP timeout. `timeoutMs: 0`
+  disables the HTTP timer; positive values are passed unchanged. Independently,
+  MCP applies a 120-second execution safety deadline, including unlimited HTTP
+  calls. See [cancellation and long calls](overview.md#cancellation-and-long-calls).
 - Without `environmentId`, variables and scripts use the workspace active
   environment as before.
 - Delete operations require the confirmation handshake.
@@ -197,6 +206,21 @@ the OS credential store and persists only a credential reference.
 
 Most database tools require saved `connectionId` values. Ad-hoc connection
 strings are not accepted.
+
+Connection updates are partial metadata updates, not upserts: missing, deleted
+or cross-workspace IDs fail. Neither database nor SSH update accepts raw secrets
+or credential references; existing credentials remain attached. Use Desktop for
+credential rotation. Deletes preserve the existing policy distinction:
+guarded requires confirmation, full_access does not, and read_only/disabled deny.
+Changing the connection revision invalidates a previously returned confirmation.
+
+Database history is capped at 200 entries. SQL literals and quoted tokens are
+replaced with `?`; statements containing comments, dollar quoting or sensitive
+markers are withheld entirely. SQL text is capped at 4096 characters and
+`sqlRedacted` identifies masking or truncation. Only `hasError` is returned for
+errors, since database error messages can echo literal values and connection
+strings. This is an intentionally conservative diagnostic projection of the
+existing Desktop history, not a new history recorder.
 
 `unfour.db.query_readonly` and `unfour.db.explain` allow only read-only SQL
 keywords:

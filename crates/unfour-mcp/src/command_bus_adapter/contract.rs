@@ -13,6 +13,54 @@ use unfour_core::models::{
 use super::CommandBusAdapterError;
 
 pub trait CommandBusAdapter: Send + Sync {
+    fn list_db_history(
+        &self,
+        _workspace_id: &str,
+        _limit: i64,
+    ) -> Result<Vec<unfour_core::models::DbQueryHistoryEntry>, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Database history is unavailable.",
+        })
+    }
+    fn delete_db_connection(
+        &self,
+        _workspace_id: &str,
+        _connection_id: &str,
+    ) -> Result<(), CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Database connection deletion is unavailable.",
+        })
+    }
+    fn delete_ssh_connection(
+        &self,
+        _workspace_id: &str,
+        _connection_id: &str,
+    ) -> Result<(), CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "SSH connection deletion is unavailable.",
+        })
+    }
+    fn test_ssh_connection(
+        &self,
+        _input: SshConnectionInput,
+    ) -> Result<unfour_core::models::SshTestResult, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "SSH connection testing is unavailable.",
+        })
+    }
+    fn get_ssh_host_key(
+        &self,
+        _input: unfour_core::models::SshHostKeyInput,
+    ) -> Result<Option<unfour_core::models::SshHostFingerprintInfo>, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "SSH host fingerprints are unavailable.",
+        })
+    }
     fn execute_read(
         &self,
         command: ReadCommand,

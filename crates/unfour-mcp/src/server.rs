@@ -1,4 +1,5 @@
 use std::io::{self, BufRead, Write};
+#[cfg(test)]
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -64,10 +65,15 @@ impl McpServer {
         let Some(method) = object.get("method").and_then(Value::as_str) else {
             return id.map(|_| protocol::error(response_id, -32600, "Invalid Request"));
         };
+        if method == "tools/call" && id.is_none() {
+            return None;
+        }
 
         let result = match method {
             "initialize" => self.initialize(object.get("params")),
             "notifications/initialized" => return None,
+            "notifications/cancelled" => return None,
+            "ping" => Ok(json!({})),
             "tools/list" => Ok(json!({ "tools": self.tools.definitions() })),
             "tools/call" => self.call_tool(object.get("params")),
             _ => Err((-32601, format!("Method not found: {method}"))),
@@ -183,12 +189,12 @@ impl McpServer {
 
 pub fn run_stdio<R, W>(reader: R, mut writer: W) -> io::Result<()>
 where
-    R: BufRead,
+    R: BufRead + Send + 'static,
     W: Write,
 {
     let command_bus = LocalCommandBusAdapter::from_env()
         .map_err(|error| io::Error::other(format!("{}: {}", error.code, error.message)))?;
-    let server = McpServer::new(command_bus.clone());
+    let server = Arc::new(McpServer::new(command_bus.clone()));
     unfour_diag::log_operation_event(
         "mcp_server_started",
         "mcp",
@@ -198,7 +204,7 @@ where
         None,
         json!({ "transport": "stdio" }),
     );
-    let result = run_stdio_with_server(&server, reader, &mut writer);
+    let result = crate::stdio_transport::run(server, reader, &mut writer, None);
     // Bounded graceful shutdown of any background tokio tasks (SSH/DB/API,
     // flush tasks) before the process returns, so a lingering task never blocks
     // exit. Idempotent with the explicit `run_stdio_with_adapter` path.
@@ -214,11 +220,11 @@ pub fn run_stdio_with_adapter<R, W>(
     mut writer: W,
 ) -> io::Result<()>
 where
-    R: BufRead,
+    R: BufRead + Send + 'static,
     W: Write,
 {
-    let server = McpServer::new(adapter.clone());
-    let result = run_stdio_with_server(&server, reader, &mut writer);
+    let server = Arc::new(McpServer::new(adapter.clone()));
+    let result = crate::stdio_transport::run(server, reader, &mut writer, None);
     adapter.shutdown();
     result
 }
@@ -241,31 +247,8 @@ where
     R: BufRead + Send + 'static,
     W: Write,
 {
-    let server = McpServer::new(adapter.clone());
-    let result = match idle_timeout {
-        Some(timeout) => {
-            run_stdio_with_server_and_idle_timeout(&server, reader, &mut writer, timeout).map(
-                |timed_out| {
-                    if timed_out {
-                        unfour_diag::log_operation_event(
-                            "mcp_server_stopped",
-                            "mcp",
-                            "run_stdio",
-                            "ok",
-                            None,
-                            None,
-                            json!({
-                                "transport": "stdio",
-                                "reason": "idle_timeout",
-                                "idle_timeout_ms": timeout.as_millis(),
-                            }),
-                        );
-                    }
-                },
-            )
-        }
-        None => run_stdio_with_server(&server, reader, &mut writer),
-    };
+    let server = Arc::new(McpServer::new(adapter.clone()));
+    let result = crate::stdio_transport::run(server, reader, &mut writer, idle_timeout);
     adapter.shutdown();
     result
 }
@@ -273,6 +256,7 @@ where
 /// Drive the stdio read/write loop with an already-built server. Splitting this
 /// out keeps the transport logic testable without opening the real OS app-data
 /// store (which does not exist in CI).
+#[cfg(test)]
 fn run_stdio_with_server<R, W>(server: &McpServer, reader: R, writer: &mut W) -> io::Result<()>
 where
     R: BufRead,
@@ -291,6 +275,7 @@ where
 /// Read stdin on a dedicated thread so the transport can stop waiting even if
 /// the client keeps the pipe open indefinitely. The process exits after this
 /// returns, so the blocked reader thread is intentionally detached.
+#[cfg(test)]
 fn run_stdio_with_server_and_idle_timeout<R, W>(
     server: &McpServer,
     reader: R,
@@ -328,6 +313,7 @@ where
 
 /// Process one transport line. `false` means stdout was disconnected and the
 /// caller should stop the stdio loop cleanly.
+#[cfg(test)]
 fn handle_stdio_line<W: Write>(server: &McpServer, line: &str, writer: &mut W) -> io::Result<bool> {
     if line.trim().is_empty() {
         return Ok(true);

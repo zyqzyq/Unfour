@@ -1,6 +1,65 @@
 use super::*;
 
 #[tokio::test]
+async fn saved_mcp_execution_id_cancels_http_and_cleans_up_registry() {
+    use std::io::{BufRead, BufReader, Read};
+    let bus = test_bus().await;
+    let workspace_id = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/pending", listener.local_addr().unwrap());
+    let (sent, received) = tokio::sync::oneshot::channel();
+    let server = std::thread::spawn(move || {
+        let (mut socket, _) = listener.accept().unwrap();
+        socket
+            .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+            .unwrap();
+        let mut reader = BufReader::new(socket.try_clone().unwrap());
+        loop {
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            if line == "\r\n" {
+                break;
+            }
+        }
+        sent.send(()).unwrap();
+        let mut byte = [0];
+        assert_eq!(socket.read(&mut byte).unwrap(), 0);
+    });
+    let mut input = api_script_test_input(workspace_id.clone(), url);
+    input.timeout_ms = Some(0);
+    let saved = bus.save_api_request(input).await.unwrap();
+    let execution = bus.execute_saved_api_request_with_scripts_controlled_in_workspace(
+        "mcp-cancel-test",
+        Some(workspace_id.clone()),
+        &saved.id,
+        Some(0),
+        None,
+    );
+    tokio::pin!(execution);
+    tokio::select! {
+        _=received=>{},
+        result=&mut execution=>panic!("request should still be waiting: {result:?}"),
+        _=tokio::time::sleep(std::time::Duration::from_secs(5))=>panic!("request did not reach the isolated HTTP server"),
+    }
+    assert!(bus.cancel_api_request("mcp-cancel-test"));
+    let result = tokio::time::timeout(std::time::Duration::from_secs(2), execution)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(result.response.is_none());
+    assert!(result.http_error.is_some());
+    assert!(!bus.cancel_api_request("mcp-cancel-test"));
+    tokio::task::spawn_blocking(move || server.join().unwrap())
+        .await
+        .unwrap();
+    assert!(bus
+        .list_api_history(workspace_id, Some(10))
+        .await
+        .unwrap()
+        .is_empty());
+}
+
+#[tokio::test]
 async fn failed_post_script_preserves_pre_commit_http_history_and_redacts_secret_output() {
     let bus = test_bus().await;
     let workspace_id = bus.list_workspaces().await.unwrap().active_workspace_id;
