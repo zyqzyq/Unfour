@@ -1,0 +1,156 @@
+# Flow V1
+
+Flow is a local Workspace runbook module alongside API, SSH, and Database.
+It composes existing capabilities; it is not a general workflow platform.
+
+## Ownership and call path
+
+`packages/flow` owns the vertical step editor and run inspector. It imports
+shared command-client and UI contracts, never another feature package.
+App-shell provides navigation, lazy mounting, and a sidebar slot only.
+
+`command-client -> Tauri adapter -> CommandBus -> FlowService -> FlowExecutor`
+is the execution path. `crates/flow-engine` owns validation, expressions,
+serial scheduling, cancellation, and SQLx persistence. Its executor port has
+`prepare` and `execute` methods. CommandBus implements that port using the
+existing API client, SSH task service, and Database query command. No HTTP,
+SSH protocol, credential storage, or database driver was added to Flow.
+The HTTP engine exposes saved-auth materialization for callers without a UI.
+
+## Persisted model
+
+- `flow_definitions`: stable UUID, workspace ID, revision, definition JSON,
+  updated timestamp. Saves use an optimistic revision check.
+- `flow_runs`: stable UUID, workspace ID, originating Flow ID, status,
+  cancellation flag, run JSON, start timestamp, heartbeat timestamp.
+- Run JSON contains its own definition revision, explicit invocation context,
+  prepared resource snapshots, node records, and attempt records. Attempts
+  contain resolved input, structured output, stable error code, and duration.
+
+Deleting a definition leaves its runs and all referenced resources intact.
+Deleting a workspace cascades its Flow records. Every lookup is workspace
+scoped. Editing a definition cannot change an existing Run.
+
+Flow V1 is local-only and is not part of Cloud Sync or workspace import/export.
+It does not emit cloud outbox intent because these records are not cloud-bound.
+
+## Invocation and expressions
+
+`FlowRunInput` explicitly provides `workspaceId`, `flowId`, `environmentId`,
+`inputs`, `initiator` (`human` or `mcp`), and `confirmEffects`. Optional
+`secretInputNames` identifies sensitive top-level inputs with custom names.
+An absent/null environment means workspace variables only, never the UI's
+active environment. Required input names are declared in the definition.
+Environment variables in a saved API resource resolve when the Run prepares.
+
+Use `{"$ref":"/inputs/version"}` to preserve a JSON value's type, or
+`"job=${/steps/start/body/jobId}"` to interpolate text. Paths use JSON Pointer
+semantics, including `~0` and `~1` escaping. Missing paths fail the node.
+Condition predicates have `left`, `op`, and `right`; operators are `eq`, `ne`,
+`gt`, `ge`, `lt`, and `le`. Ordered comparisons require numbers.
+There is no expression evaluator or Script node.
+
+Text interpolation is literal, including SQL and SSH inputs; it does not
+escape or parameterize them. Only trusted values should enter command or SQL
+text. Existing SSH task substitution and Database SQL safety still apply.
+
+## Nodes and execution
+
+The ordered step list runs serially. An omitted `next` proceeds to the next
+step, a forward step ID jumps ahead, and `$end` completes successfully.
+Condition selects exactly one of `ifTrue` / `ifFalse`; skipped nodes are
+recorded. Branch arms should explicitly jump to their common continuation or
+`$end` to avoid falling through into the other arm. Backward jumps are rejected.
+The first error stops subsequent scheduling. There are no implicit retries.
+
+| Node | Reference / arguments | Output |
+| --- | --- | --- |
+| API Request | Saved request ID; optional `url`, `headers`, `query`, `body` overrides | `status`, `headers`, JSON-or-text `body`, `durationMs`, `historyId` |
+| SSH Task | Task ID, explicit connection ID, `inputs` object | `runId`, `status`, timestamps, redacted `log`, `logTruncated` |
+| Database Query | Connection ID; `sql`, optional `catalog`, `schema`, `limit` | Existing Database query result, including columns and rows |
+| Condition | Predicate and forward destinations | `matched` |
+| Poll | Probe action, predicate, interval, attempt limit, total node timeout | Most recent successful matching probe output |
+| Wait | Duration shorter than node timeout | `waitedMs` |
+
+All referenced resources, including unchosen branches, are checked before any
+node executes. Missing references produce a persisted `validationFailed` Run.
+Resource identity is checked again before execution; changes fail explicitly.
+API execution uses its prepared request. SSH and Database retain their owning
+services' resource lookup semantics, with a small check-to-execution race if a
+resource is edited concurrently. Resource locks/versioned execution are future
+work, not a claim of transactional isolation across services.
+
+HTTP status >= 400 fails the node. V1 does not retain the failed response body
+in Flow output. Saved API scripts and multipart requests are rejected rather
+than silently ignored. SSH logs are capped at 64 KiB; they are not a separate
+typed stdout/stderr/exit-code tree.
+
+## Poll
+
+Each attempt performs `probe -> condition -> wait -> probe`. `/probe` is
+replaced with the newly returned output before testing the predicate. A Poll
+never reschedules an earlier start action. For example, POST a job once in an
+API step, then probe its status using the job ID:
+
+```json
+{
+  "id": "poll", "name": "Wait for job", "kind": "poll",
+  "timeoutMs": 30000, "intervalMs": 1000, "maxAttempts": 20,
+  "probe": {
+    "capability": "api", "resourceId": "saved-status-request-id",
+    "arguments": {"url": "https://service/status/${/steps/start/body/jobId}"}
+  },
+  "predicate": {"left": {"$ref": "/probe/body/ready"}, "op": "eq", "right": true}
+}
+```
+
+API probes must use GET/HEAD. Database probes require a read-only connection
+and the existing SQL safety checks. SSH probes are not supported in V1.
+Method/connection restrictions express a read intent; the server remains
+responsible for GET semantics. Probe failures fail fast. Exhaustion records
+`FLOW_MAX_ATTEMPTS`; the timeout covers all probes and waits together.
+
+Definitions allow 1–100 steps; node timeouts are 1–3,600,000 ms, Poll intervals
+10–60,000 ms, and attempt limits 1–1,000. Inputs are limited to 256 KiB,
+prepared snapshots to 2 MiB, each output to 256 KiB, and accumulated node
+history to 4 MiB. Database row limits are capped at 1,000. These are execution
+guards, not a database retention policy.
+
+## Cancellation, recovery, and sensitive values
+
+Cancellation persists intent, stops subsequent scheduling, and signals the
+active executor. HTTP uses the existing cancellation token, SSH uses task
+cancellation, and Database drops the query future. A bounded two-second grace
+allows the active action to observe cancellation/timeout. Remote effects may
+already have occurred and are never described as rolled back.
+
+Running nodes heartbeat every 100 ms. Reads mark a run with a heartbeat older
+than 30 seconds as `interrupted`; unfinished steps become interrupted/skipped.
+There is no automatic replay after process loss, avoiding duplicate effects.
+
+Execution values live in memory; persisted and returned Run views are redacted.
+Known sensitive keys/headers and explicitly named secret inputs are removed,
+including copies in outputs. Inline secrets in recognized sensitive definition
+fields are rejected; references to runtime inputs are allowed. Existing
+credential references remain references. Historical definitions are redacted
+snapshots, not credential backups or automatically replayable payloads.
+Arbitrary secrets embedded under innocuous names cannot be inferred reliably;
+use `secretInputNames` and existing credential storage. Underlying capabilities
+retain their own history/redaction policies.
+
+## Future callers and current limits
+
+CommandBus already exposes `list_flows`, `get_flow`, `save_flow`, `delete_flow`,
+`run_flow`, `list_flow_runs`, `get_flow_run`, and `cancel_flow_run`. A future MCP
+adapter can invoke these same methods and provide `initiator: mcp`; this change
+does not register any Flow MCP tools. Initiator is provenance, not permission.
+
+The UI polls only the selected active Run. History currently returns the most
+recent 100 runs per Flow, with no pagination, pruning, or deleted-Flow history
+browser. Retained runs remain accessible by ID through the service. Definition
+drafts survive module switching but are not persisted across workspace changes
+or application restarts. Browser preview supports authoring only; execution
+requires the desktop backend and is never simulated as success.
+
+Parallelism, Sub-flow, arbitrary loops, Script, Scheduler, Webhook, LLM/Agent,
+Plugin, Team/RBAC, automatic resume, and Flow Cloud Sync are outside V1.

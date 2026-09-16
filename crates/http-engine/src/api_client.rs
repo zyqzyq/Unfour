@@ -13,6 +13,7 @@ use unfour_local_storage::LocalDb;
 mod helpers;
 use helpers::{build_url, normalize_entity_id, parse_method, validate_workspace_id, CollectionRow};
 
+mod auth;
 mod collections;
 mod domain;
 mod execution;

@@ -43,6 +43,7 @@ mod core_commands;
 mod credential_commands;
 mod database_commands;
 mod domain_commands;
+mod flow_commands;
 mod ssh_commands;
 mod workspace_variable_commands;
 

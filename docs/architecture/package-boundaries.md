@@ -12,7 +12,7 @@ progress log.
 - Provide global shell composition, workspace switcher wiring, module
   navigation, layout slots, command palette actions, diagnostics actions, and
   module mount points.
-- Mount the API Client, SSH Terminal, and Database modules while keeping their
+- Mount the API Client, SSH Terminal, Database, and Flow modules while keeping their
   internal state and business components in the owning feature packages.
 - Own shell-level behavior only when it is not feature-specific.
 
@@ -26,6 +26,17 @@ progress log.
 
 `packages/app-shell` may compose feature modules and pass shell props, but
 feature behavior belongs in the owning package or crate.
+
+## packages/flow and crates/flow-engine
+
+`packages/flow` owns Flow definitions, the vertical Step Editor, invocation
+inputs, and the run inspector. It consumes shared command-client/UI contracts
+and must not import API, SSH, or Database frontend packages.
+
+`crates/flow-engine` owns runbook validation, scheduling, expressions, and local
+run persistence. Its executor port is implemented by CommandBus using existing
+capability services. Adapters must not reproduce execution logic. See
+[Flow V1](flow-v1.md) for the model, execution contract, and limits.
 
 ## packages/ui
 

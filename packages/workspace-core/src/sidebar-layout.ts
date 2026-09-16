@@ -22,6 +22,7 @@ export const MODULE_SIDEBAR_CONFIG = {
     minWidth: 220,
     maxWidth: 420,
   },
+  flow: { defaultWidth: 280, minWidth: 220, maxWidth: 520 },
   database: {
     defaultWidth: 280,
     minWidth: 220,
@@ -30,6 +31,7 @@ export const MODULE_SIDEBAR_CONFIG = {
 } as const satisfies Record<ModuleSidebarKind, ModuleSidebarConfig>;
 
 export const DEFAULT_SIDEBAR_WIDTHS: WorkspaceSidebarWidths = {
+  flow: MODULE_SIDEBAR_CONFIG.flow.defaultWidth,
   api: MODULE_SIDEBAR_CONFIG.api.defaultWidth,
   ssh: MODULE_SIDEBAR_CONFIG.ssh.defaultWidth,
   database: MODULE_SIDEBAR_CONFIG.database.defaultWidth,
@@ -55,6 +57,7 @@ export function normalizeSidebarWidths(
   const source = widthRecord ? undefined : legacyWidth;
 
   return {
+    flow: normalizeModuleSidebarWidth("flow", widthRecord?.flow),
     api: normalizeModuleSidebarWidth(
       "api",
       widthRecord ? widthRecord.api : source,

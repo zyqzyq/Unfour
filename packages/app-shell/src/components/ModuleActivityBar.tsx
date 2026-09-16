@@ -1,4 +1,4 @@
-import { Database, Globe2, Search, TerminalSquare } from "lucide-react";
+import { ListTree, Database, Globe2, Search, TerminalSquare } from "lucide-react";
 import { ActivityBar, cn, useI18n } from "@unfour/ui";
 import {
   getModuleSwitcherItems,
@@ -78,6 +78,7 @@ export function ModuleActivityBar({
 }
 
 function ModuleIcon({ kind }: { kind: ModuleSwitcherItem["kind"] }) {
+  if (kind === "flow") return <ListTree size={16} />;
   if (kind === "api") return <Globe2 size={16} />;
   if (kind === "ssh") return <TerminalSquare size={16} />;
   return <Database size={16} />;

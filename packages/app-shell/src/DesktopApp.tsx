@@ -26,7 +26,7 @@ import { useWorkspaceStore } from "@unfour/workspace-core";
 import { AppTitleBar } from "./components/AppTitleBar";
 import { DesktopCommandPalette } from "./components/DesktopCommandPalette";
 import {
-  ApiClientModule, DatabaseModule, SshTerminalLogPanel, SshTerminalModule,
+  ApiClientModule, DatabaseModule, FlowModule, SshTerminalLogPanel, SshTerminalModule,
   SshTerminalStatusBar, WorkspaceEnvironmentsModule,
   WorkspaceEnvironmentsModuleStatusBar,
 } from "./components/LazyFeatureModules";
@@ -53,6 +53,7 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
   const [bottomPanelCollapsed, setBottomPanelCollapsed] = useState(true);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [apiSidebarContent, setApiSidebarContent] = useState<ReactNode>(null);
+  const [flowSidebarContent, setFlowSidebarContent] = useState<ReactNode>(null);
   const [sshSidebarContent, setSshSidebarContent] = useState<ReactNode>(null);
   const [databaseSidebarContent, setDatabaseSidebarContent] = useState<ReactNode>(null);
   const [databaseStatusBarContent, setDatabaseStatusBarContent] = useState<ReactNode>(null);
@@ -81,7 +82,7 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
     tabs,
   } = useWorkspaceStore();
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
-  const { setActiveTab, shouldMountApi, shouldMountDatabase, shouldMountSsh } =
+  const { setActiveTab, shouldMountApi, shouldMountDatabase, shouldMountSsh, shouldMountFlow } =
     usePersistentFeatureMounts({
       activeTabId,
       setActiveTab: setActiveTabInStore,
@@ -360,6 +361,7 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
           <ModuleSidebar
             activeTab={activeTab}
             apiSidebarContent={apiSidebarContent}
+            flowSidebarContent={flowSidebarContent}
             collapsed={sidebarCollapsed || variableManagerOpen}
             databaseSidebarContent={databaseSidebarContent}
             onModuleWidthChange={setModuleSidebarWidth}
@@ -429,6 +431,9 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
                 {t("app.workspace.createToStart")}
               </EmptyState>
             ))}
+            {activeWorkspace && shouldMountFlow && <div className={activeTab.kind === "flow" && !variableManagerOpen ? "h-full" : "hidden"}>
+              <FlowModule key={activeWorkspace.id} workspaceId={activeWorkspace.id} onSidebarContentChange={setFlowSidebarContent} />
+            </div>}
             {activeWorkspace && shouldMountApi && (
               <div
                 className={

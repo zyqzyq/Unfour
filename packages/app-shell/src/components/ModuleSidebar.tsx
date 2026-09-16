@@ -13,6 +13,7 @@ import {
 export function ModuleSidebar({
   activeTab,
   apiSidebarContent,
+  flowSidebarContent,
   collapsed,
   databaseSidebarContent,
   onModuleWidthChange,
@@ -21,6 +22,7 @@ export function ModuleSidebar({
 }: {
   activeTab: WorkspaceTab;
   apiSidebarContent?: ReactNode;
+  flowSidebarContent?: ReactNode;
   collapsed: boolean;
   databaseSidebarContent?: ReactNode;
   onModuleWidthChange: (kind: ModuleSidebarKind, width: number) => void;
@@ -44,6 +46,7 @@ export function ModuleSidebar({
       resizable
       width={width}
     >
+      {activeTab.kind === "flow" && flowSidebarContent}
       {activeTab.kind === "api" && apiSidebarContent}
       {activeTab.kind === "ssh" && sshSidebarContent}
       {activeTab.kind === "database" && databaseSidebarContent}

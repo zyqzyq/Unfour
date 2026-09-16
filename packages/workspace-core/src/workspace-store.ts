@@ -42,6 +42,7 @@ const initialTabs: WorkspaceTab[] = [
   { id: "api-main", title: "API Client", kind: "api" },
   { id: "ssh-main", title: "SSH Terminal", kind: "ssh" },
   { id: "database-main", title: "Database", kind: "database" },
+  { id: "flow-main", title: "Flow", kind: "flow" },
 ];
 
 const DEFAULT_BOTTOM_PANEL_HEIGHT = 220;
@@ -71,7 +72,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       ),
       bottomPanelHeight: layout.bottomPanelHeight ?? DEFAULT_BOTTOM_PANEL_HEIGHT,
       rightInspectorWidth: layout.rightInspectorWidth ?? DEFAULT_RIGHT_INSPECTOR_WIDTH,
-      tabs: layout.tabs.length ? layout.tabs : initialTabs,
+      tabs: layout.tabs.length ? [...layout.tabs, ...initialTabs.filter(tab => tab.kind === "flow" && !layout.tabs.some(existing => existing.id === tab.id))] : initialTabs,
     }),
   openTab: (tab) =>
     set((state) => ({

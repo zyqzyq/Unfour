@@ -157,6 +157,12 @@ pub struct WorkspaceSidebarWidths {
     pub api: i32,
     pub ssh: i32,
     pub database: i32,
+    #[serde(default = "default_flow_sidebar_width")]
+    pub flow: i32,
+}
+
+fn default_flow_sidebar_width() -> i32 {
+    280
 }
 
 impl Default for WorkspaceSidebarWidths {
@@ -165,6 +171,7 @@ impl Default for WorkspaceSidebarWidths {
             api: 320,
             ssh: 248,
             database: 280,
+            flow: 280,
         }
     }
 }

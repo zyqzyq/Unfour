@@ -3,6 +3,7 @@ import { lazy, Suspense, type ComponentProps, type ReactNode } from "react";
 import {
   loadApiClientModule,
   loadDatabaseModule,
+  loadFlowModule,
   loadSshTerminalModule,
   loadWorkspaceEnvironmentsModule,
 } from "./featureModuleLoaders";
@@ -14,6 +15,14 @@ const LazyApiClientPage = lazy(() =>
 const LazyDatabasePage = lazy(() =>
   loadDatabaseModule().then((module) => ({ default: module.DatabasePage })),
 );
+
+const LazyFlowPage = lazy(() =>
+  loadFlowModule().then((module) => ({ default: module.FlowPage })),
+);
+
+export function FlowModule(props: ComponentProps<typeof LazyFlowPage>) {
+  return <Suspense fallback={<FeatureModuleLoadingState />}><LazyFlowPage {...props} /></Suspense>;
+}
 
 const LazyTerminalLogPanel = lazy(() =>
   loadSshTerminalModule().then((module) => ({ default: module.TerminalLogPanel })),

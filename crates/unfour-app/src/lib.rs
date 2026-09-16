@@ -345,6 +345,15 @@ mod identity_tests {
 macro_rules! generate_handlers {
     ( $( $handler:path ),* $(,)? ) => {
         tauri::generate_handler![
+            unfour_app::commands::flow_list,
+            unfour_app::commands::flow_get,
+            unfour_app::commands::flow_save,
+            unfour_app::commands::flow_delete,
+            unfour_app::commands::flow_run,
+            unfour_app::commands::flow_runs_list,
+            unfour_app::commands::flow_run_get,
+            unfour_app::commands::flow_run_cancel,
+
             unfour_app::commands::export_diagnostics_bundle,
             unfour_app::commands::frontend_log,
             unfour_app::commands::get_app_info,

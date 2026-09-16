@@ -9,6 +9,7 @@
     "./styles.css": "./src/styles/index.css"
   },
   "dependencies": {
+    "@unfour/flow": "workspace:*",
     "@unfour/api-client": "workspace:*",
     "@unfour/command-client": "workspace:*",
     "@unfour/database": "workspace:*",

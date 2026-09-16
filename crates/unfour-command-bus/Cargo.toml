@@ -11,6 +11,7 @@ sqlx = { version = "0.8", default-features = false, features = ["chrono", "json"
 tokio = { version = "1", features = ["macros", "sync"] }
 tokio-util = "0.7"
 unfour-core = { path = "../unfour-core" }
+unfour-flow-engine = { path = "../flow-engine" }
 unfour-database-engine = { path = "../database-engine" }
 unfour-diag = { path = "../unfour-diag" }
 unfour-http-engine = { path = "../http-engine" }
@@ -21,6 +22,8 @@ unfour-ssh-engine = { path = "../ssh-engine" }
 unfour-workspace-engine = { path = "../workspace-engine" }
 
 [dev-dependencies]
+russh = { version = "0.61", default-features = false, features = ["flate2", "ring", "rsa"] }
+rand = "0.10"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
 
 [features]

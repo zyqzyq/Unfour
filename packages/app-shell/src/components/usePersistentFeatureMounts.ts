@@ -6,7 +6,7 @@ type PersistentFeatureKind = WorkspaceTab["kind"];
 function isPersistentFeatureKind(
   kind: WorkspaceTab["kind"],
 ): kind is PersistentFeatureKind {
-  return kind === "api" || kind === "database" || kind === "ssh";
+  return kind === "api" || kind === "database" || kind === "ssh" || kind === "flow";
 }
 
 export function usePersistentFeatureMounts({
@@ -45,6 +45,7 @@ export function usePersistentFeatureMounts({
     shouldMountDatabase:
       activeKind === "database" || mountedFeatures.has("database"),
     shouldMountSsh: activeKind === "ssh" || mountedFeatures.has("ssh"),
+    shouldMountFlow: activeKind === "flow" || mountedFeatures.has("flow"),
   };
 }
 

@@ -7,11 +7,13 @@ describe("module switcher items", () => {
       "api-main",
       "ssh-main",
       "database-main",
+      "flow-main",
     ]);
     expect(getModuleSwitcherItems().map((item) => item.label)).toEqual([
       "API Client",
       "SSH Terminal",
       "Database",
+      "Flow",
     ]);
   });
 });

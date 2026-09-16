@@ -1,0 +1,14 @@
+{
+  "name": "@unfour/flow",
+  "private": true,
+  "version": "0.9.6",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@unfour/command-client": "workspace:*",
+    "@unfour/ui": "workspace:*",
+    "@tanstack/react-query": "^5.100.14",
+    "react": "^19.1.0"
+  }
+}

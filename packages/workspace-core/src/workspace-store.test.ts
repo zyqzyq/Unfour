@@ -28,7 +28,7 @@ describe("workspace store initial state", () => {
     expect(state.selectedDatabaseConnectionId).toBeNull();
     expect(state.selectedSshConnectionId).toBeNull();
     expect(state.sidebarCollapsed).toBe(false);
-    expect(state.sidebarWidths).toEqual({ api: 320, ssh: 248, database: 280 });
+    expect(state.sidebarWidths).toEqual({ api: 320, ssh: 248, flow: 280, database: 280 });
     expect(state.tabs).toHaveLength(3);
   });
 });
@@ -63,21 +63,21 @@ describe("setModuleSidebarWidth", () => {
     expect(useWorkspaceStore.getState().sidebarWidths).toEqual({
       api: 500,
       ssh: 248,
-      database: 280,
+      flow: 280, database: 280,
     });
 
     useWorkspaceStore.getState().setModuleSidebarWidth("ssh", 360);
     expect(useWorkspaceStore.getState().sidebarWidths).toEqual({
       api: 500,
       ssh: 360,
-      database: 280,
+      flow: 280, database: 280,
     });
 
     useWorkspaceStore.getState().setModuleSidebarWidth("database", 400);
     expect(useWorkspaceStore.getState().sidebarWidths).toEqual({
       api: 500,
       ssh: 360,
-      database: 400,
+      flow: 280, database: 400,
     });
   });
 
@@ -89,7 +89,7 @@ describe("setModuleSidebarWidth", () => {
     expect(useWorkspaceStore.getState().sidebarWidths).toEqual({
       api: 560,
       ssh: 220,
-      database: 280,
+      flow: 280, database: 280,
     });
   });
 });
@@ -150,8 +150,8 @@ describe("hydrateLayout", () => {
     expect(state.layoutWorkspaceId).toBe("ws-hydrated");
     expect(state.selectedApiRequestId).toBe("req-h");
     expect(state.selectedDatabaseConnectionId).toBe("db-h");
-    expect(state.sidebarWidths).toEqual({ api: 500, ssh: 420, database: 500 });
-    expect(state.tabs).toHaveLength(1);
+    expect(state.sidebarWidths).toEqual({ api: 500, ssh: 420, flow: 280, database: 500 });
+    expect(state.tabs).toHaveLength(2);
   });
 
   it("falls back to module defaults and clamps invalid new widths", () => {
@@ -174,7 +174,7 @@ describe("hydrateLayout", () => {
     expect(useWorkspaceStore.getState().sidebarWidths).toEqual({
       api: 560,
       ssh: 220,
-      database: 280,
+      flow: 280, database: 280,
     });
   });
 
@@ -192,19 +192,19 @@ describe("hydrateLayout", () => {
     useWorkspaceStore.getState().hydrateLayout({
       ...layout,
       workspaceId: "ws-api",
-      sidebarWidths: { api: 500, ssh: 250, database: 360 },
+      sidebarWidths: { api: 500, ssh: 250, flow: 280, database: 360 },
     });
     useWorkspaceStore.getState().hydrateLayout({
       ...layout,
       workspaceId: "ws-ssh",
-      sidebarWidths: { api: 320, ssh: 300, database: 280 },
+      sidebarWidths: { api: 320, ssh: 300, flow: 280, database: 280 },
     });
 
     expect(useWorkspaceStore.getState().layoutWorkspaceId).toBe("ws-ssh");
     expect(useWorkspaceStore.getState().sidebarWidths).toEqual({
       api: 320,
       ssh: 300,
-      database: 280,
+      flow: 280, database: 280,
     });
   });
 
@@ -219,7 +219,7 @@ describe("hydrateLayout", () => {
       selectedSshConnectionId: null,
       updatedAt: "2026-01-01T00:00:00Z",
     });
-    expect(useWorkspaceStore.getState().tabs).toHaveLength(3);
+    expect(useWorkspaceStore.getState().tabs).toHaveLength(4);
   });
 });
 
@@ -242,7 +242,7 @@ describe("snapshotLayout", () => {
     expect(snapshot.sidebarCollapsed).toBe(true);
     expect(snapshot.selectedApiRequestId).toBe("req-snap");
     expect(snapshot.selectedSshConnectionId).toBe("ssh-conn-1");
-    expect(snapshot.sidebarWidths).toEqual({ api: 320, ssh: 248, database: 280 });
+    expect(snapshot.sidebarWidths).toEqual({ api: 320, ssh: 248, flow: 280, database: 280 });
     expect("sidebarWidth" in snapshot).toBe(false);
     expect(snapshot.tabs).toHaveLength(2);
     expect(snapshot.updatedAt).toBeDefined();

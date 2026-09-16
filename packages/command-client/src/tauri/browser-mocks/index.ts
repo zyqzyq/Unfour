@@ -1,4 +1,5 @@
 import { handleApiMock } from "./api";
+import { handleFlowMock } from "./flow";
 import { handleAppMock } from "./app";
 import { handleDatabaseMock } from "./database";
 import { handleDiagnosticsMock } from "./diagnostics";
@@ -12,6 +13,7 @@ import { handleWorkspaceMock } from "./workspace";
 import { UNHANDLED, type MockCommandHandler } from "./types";
 
 const mockHandlers: MockCommandHandler[] = [
+  handleFlowMock,
   handleDiagnosticsMock,
   handleWorkspaceMock,
   handleApiMock,

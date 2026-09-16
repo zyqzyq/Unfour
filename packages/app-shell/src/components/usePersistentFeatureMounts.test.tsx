@@ -62,6 +62,7 @@ describe("usePersistentFeatureMounts", () => {
     rerender({ activeTabId: "ssh-main" });
     expect(result.current).toEqual({
       setActiveTab: expect.any(Function),
+      shouldMountFlow: false,
       shouldMountApi: true,
       shouldMountDatabase: true,
       shouldMountSsh: true,

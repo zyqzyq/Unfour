@@ -64,13 +64,14 @@ export type WorkspaceEnvironment = {
 export type WorkspaceTab = {
   id: string;
   title: string;
-  kind: "api" | "ssh" | "database";
+  kind: "api" | "ssh" | "database" | "flow";
 };
 
 export type WorkspaceSidebarWidths = {
   api: number;
   ssh: number;
   database: number;
+  flow?: number;
 };
 
 export type WorkspaceLayout = {

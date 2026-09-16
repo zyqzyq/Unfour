@@ -16,6 +16,7 @@ function cachedLoader<T>(load: () => Promise<T>) {
 
 export const loadApiClientModule = cachedLoader(() => import("@unfour/api-client"));
 export const loadDatabaseModule = cachedLoader(() => import("@unfour/database"));
+export const loadFlowModule = cachedLoader(() => import("@unfour/flow"));
 export const loadSshTerminalModule = cachedLoader(() => import("@unfour/ssh-terminal"));
 export const loadWorkspaceEnvironmentsModule = cachedLoader(
   () => import("@unfour/workspace-environments"),
@@ -30,6 +31,7 @@ export async function preloadFeatureModule(
   kind: WorkspaceTab["kind"],
   context?: FeatureModulePreloadContext,
 ): Promise<unknown> {
+  if (kind === "flow") return loadFlowModule();
   if (kind === "api") return loadApiClientModule();
   if (kind === "database") return loadDatabaseModule();
   const module = await loadSshTerminalModule();

@@ -3,7 +3,7 @@ import type { WorkspaceTab } from "@unfour/command-client";
 type Translate = (key: string, fallback?: string) => string;
 
 export type ModuleSwitcherItem = {
-  id: "api-main" | "ssh-main" | "database-main";
+  id: "api-main" | "ssh-main" | "database-main" | "flow-main";
   kind: WorkspaceTab["kind"];
   label: string;
   shortLabel: string;
@@ -29,10 +29,12 @@ export function getModuleSwitcherItems(t?: Translate): ModuleSwitcherItem[] {
       label: translate(t, "app.nav.database", "Database"),
       shortLabel: translate(t, "app.nav.databaseShort", "DB"),
     },
+    { id: "flow-main", kind: "flow", label: translate(t, "flow.title", "Flow"), shortLabel: translate(t, "flow.title", "Flow") },
   ];
 }
 
 export function moduleLabel(tab: WorkspaceTab, t?: Translate) {
+  if (tab.kind === "flow") return translate(t, "flow.title", "Flow");
   if (tab.kind === "api") {
     return translate(t, "app.nav.apiClientShort", "API");
   }

@@ -1,3 +1,7 @@
+#[path = "lib_tests/flow.rs"]
+mod flow;
+#[path = "lib_tests/flow_safety.rs"]
+mod flow_safety;
 #[path = "lib_tests/multipart.rs"]
 mod multipart;
 use super::*;

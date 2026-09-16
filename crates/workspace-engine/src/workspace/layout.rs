@@ -121,6 +121,7 @@ fn parse_sidebar_widths(
             api: parse_width(widths.get("api")).unwrap_or(defaults.api),
             ssh: parse_width(widths.get("ssh")).unwrap_or(defaults.ssh),
             database: parse_width(widths.get("database")).unwrap_or(defaults.database),
+            flow: parse_width(widths.get("flow")).unwrap_or(defaults.flow),
         };
     }
 
@@ -129,6 +130,7 @@ fn parse_sidebar_widths(
             api: legacy_width,
             ssh: legacy_width,
             database: legacy_width,
+            flow: defaults.flow,
         };
     }
 
@@ -141,6 +143,7 @@ fn migrate_legacy_sidebar_width(width: Option<i32>) -> WorkspaceSidebarWidths {
         api: width,
         ssh: width,
         database: width,
+        flow: WorkspaceSidebarWidths::default().flow,
     }
 }
 
@@ -168,7 +171,7 @@ fn validate_layout_tabs(active_tab_id: &str, tabs: &[WorkspaceLayoutTab]) -> App
                 "layout tabs must have non-empty id and title".to_string(),
             ));
         }
-        if !matches!(tab.kind.as_str(), "api" | "ssh" | "database") {
+        if !matches!(tab.kind.as_str(), "api" | "ssh" | "database" | "flow") {
             return Err(AppError::Validation(format!(
                 "unsupported layout tab kind: {}",
                 tab.kind
