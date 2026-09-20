@@ -134,10 +134,10 @@ async fn flow_real_api_condition_native_ssh_database() {
     ]))).await.unwrap();
     let run = bus.run_flow(request(&workspace, &flow.id)).await.unwrap();
     let result = finished(&bus, &run).await;
-    assert_eq!(result.status, "succeeded", "{:?}", result);
+    assert_eq!(result.status, FlowRunStatus::Succeeded, "{:?}", result);
     assert_eq!(commands.lock().unwrap().as_slice(), ["echo 42"]);
     assert!(received.recv_timeout(Duration::from_secs(1)).is_ok());
-    assert_eq!(result.steps[3].status, "succeeded");
+    assert_eq!(result.steps[3].status, FlowStepRunStatus::Succeeded);
     assert!(result.steps[2].attempts[0].output.as_ref().unwrap()["log"]
         .as_str()
         .unwrap()

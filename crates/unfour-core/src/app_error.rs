@@ -11,6 +11,8 @@ pub enum AppError {
     Database(#[from] sqlx::Error),
     #[error("http error: {0}")]
     Http(#[from] reqwest::Error),
+    #[error("HTTP response status: {0}")]
+    HttpStatus(u16),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
     #[error("not found: {0}")]
@@ -52,6 +54,7 @@ impl AppError {
             AppError::Config(_) => "CONFIG_ERROR",
             AppError::Database(_) => "DATABASE_ERROR",
             AppError::Http(_) => "HTTP_ERROR",
+            AppError::HttpStatus(_) => "HTTP_STATUS_FAILED",
             AppError::Io(_) => "IO_ERROR",
             AppError::NotFound(_) => "NOT_FOUND",
             AppError::Serialization(_) => "SERIALIZATION_ERROR",

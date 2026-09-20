@@ -1,4 +1,4 @@
-import { emptyAction } from "./model";
+import { emptyAction, type Resources } from "./model";
 import type {
   FlowAction,
   FlowCapability,
@@ -6,51 +6,10 @@ import type {
   FlowStep,
 } from "@unfour/command-client";
 import { Button, Input, Select, useI18n } from "@unfour/ui";
-import { useState } from "react";
+import { JsonField } from "./JsonField";
 
-export type Resources = Record<
-  FlowCapability,
-  { id: string; name: string }[]
-> & { connections: { id: string; name: string }[] };
-export function JsonField({
-  label,
-  value,
-  onChange,
-  onValidity,
-}: {
-  label: string;
-  value: unknown;
-  onChange: (value: unknown) => void | boolean;
-  onValidity?: (valid: boolean) => void;
-}) {
-  const { t } = useI18n();
-  const [text, setText] = useState(JSON.stringify(value, null, 2));
-  const [error, setError] = useState(false);
-  return (
-    <label className="grid gap-1 text-xs">
-      {label}
-      <textarea
-        aria-label={label}
-        aria-invalid={error}
-        className="min-h-20 w-full resize-y rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-surface)] p-2 font-mono text-xs focus:outline-[var(--u-color-focus)]"
-        value={text}
-        onChange={(event) => {
-          setText(event.target.value);
-          try {
-            const parsed: unknown = JSON.parse(event.target.value);
-            const valid = onChange(parsed) !== false;
-            setError(!valid);
-            onValidity?.(valid);
-          } catch {
-            setError(true);
-            onValidity?.(false);
-          }
-        }}
-      />
-      {error && <span role="alert">{t("flow.invalidJson")}</span>}
-    </label>
-  );
-}
+export type { Resources } from "./model";
+export { JsonField } from "./JsonField";
 export function StepEditor({
   step,
   after,
@@ -152,6 +111,7 @@ export function StepEditor({
           {t("flow.remove")}
         </Button>
       </div>
+      {(step.kind === "poll" || step.kind === "waitUntil") && <strong className="text-xs">{t("flow.waitUntil")}</strong>}
       <div className="grid grid-cols-2 gap-2">
         <label className="grid gap-1 text-xs">
           {t("flow.timeout")}
@@ -180,7 +140,7 @@ export function StepEditor({
       </div>
       {step.kind === "action" &&
         editAction(step.action, (action) => onChange({ ...step, action }))}
-      {step.kind === "poll" && (
+      {(step.kind === "poll" || step.kind === "waitUntil") && (
         <>
           <p className="text-xs text-[var(--u-color-text-muted)]">
             {t("flow.probeHelp")}
@@ -196,42 +156,49 @@ export function StepEditor({
               <Input
                 type="number"
                 min={10}
+                max={60000}
                 value={step.intervalMs}
                 onChange={(e) =>
                   onChange({ ...step, intervalMs: Number(e.target.value) })
                 }
               />
             </label>
+            <details>
+              <summary>{t("flow.advanced")}</summary>
             <label>
               {t("flow.maxAttempts")}
               <Input
                 type="number"
                 min={1}
                 max={1000}
-                value={step.maxAttempts}
+                value={step.maxAttempts ?? ""}
+                placeholder={t("flow.timeoutOnly")}
                 onChange={(e) =>
-                  onChange({ ...step, maxAttempts: Number(e.target.value) })
+                  onChange(step.kind === "poll" ? { ...step, maxAttempts: Number(e.target.value) } : { ...step, maxAttempts: e.target.value ? Number(e.target.value) : null })
                 }
               />
-            </label>
+              </label>
+            </details>
           </div>
         </>
       )}
+      {step.kind === "waitUntil" && <>
+        <JsonField label={t("flow.successWhen")} value={step.successWhen} onValidity={(valid) => onValidity("successWhen", valid)} onChange={(value) => {
+          if (isPredicate(value)) onChange({ ...step, successWhen: value }); else return false;
+        }} />
+        <JsonField label={t("flow.failureWhen")} value={step.failureWhen ?? null} onValidity={(valid) => onValidity("failureWhen", valid)} onChange={(value) => {
+          if (value === null || isPredicate(value)) onChange({ ...step, failureWhen: value }); else return false;
+        }} />
+        <label>{t("flow.probeErrorPolicy")}<Select value={step.probeErrorPolicy} options={[{ value: "failImmediately", label: t("flow.failImmediately") }, { value: "retryTransientErrors", label: t("flow.retryTransientErrors") }]} onChange={(e) => onChange({ ...step, probeErrorPolicy: e.target.value as "failImmediately" | "retryTransientErrors" })} /></label>
+      </>}
       {(step.kind === "condition" || step.kind === "poll") && (
         <JsonField
           label={t("flow.predicate")}
           value={step.predicate}
           onValidity={(valid) => onValidity("predicate", valid)}
           onChange={(value) => {
-            if (
-              value &&
-              typeof value === "object" &&
-              "left" in value &&
-              "right" in value &&
-              "op" in value &&
-              ["eq", "ne", "gt", "ge", "lt", "le"].includes(String(value.op))
-            )
-              onChange({ ...step, predicate: value as FlowPredicate });
+            if (isPredicate(value))
+              onChange({ ...step, predicate: value });
             else return false;
           }}
         />
@@ -271,4 +238,8 @@ export function StepEditor({
       )}
     </section>
   );
+}
+
+function isPredicate(value: unknown): value is FlowPredicate {
+  return Boolean(value && typeof value === "object" && "left" in value && "right" in value && "op" in value && ["eq", "ne", "gt", "ge", "lt", "le", "in"].includes(String(value.op)));
 }

@@ -60,6 +60,10 @@ pub fn predicate(predicate: &FlowPredicate, context: &Value) -> AppResult<bool> 
     Ok(match predicate.op {
         FlowOperator::Eq => left == right,
         FlowOperator::Ne => left != right,
+        FlowOperator::In => right
+            .as_array()
+            .ok_or_else(|| invalid("FLOW_EXPECTED_ARRAY"))?
+            .contains(&left),
         op => {
             let a = left
                 .as_f64()
@@ -86,7 +90,18 @@ pub fn redact(value: &mut Value) {
     redact_inner(value, false);
 }
 pub(crate) fn redact_definition(value: &mut Value) {
+    // Names, descriptions and secret flags describe inputs; only their default
+    // payloads contain values. Avoid treating e.g. "Deployment password" as a secret.
+    let mut inputs = value["inputs"].take();
     redact_inner(value, true);
+    if let Some(inputs) = inputs.as_array_mut() {
+        for input in inputs {
+            if let Some(default) = input.get_mut("default") {
+                redact_inner(default, true);
+            }
+        }
+    }
+    value["inputs"] = inputs;
 }
 fn redact_inner(value: &mut Value, preserve_refs: bool) {
     if preserve_refs && is_reference(value) {
@@ -131,7 +146,7 @@ fn redact_inner(value: &mut Value, preserve_refs: bool) {
         _ => {}
     }
 }
-fn sensitive(key: &str) -> bool {
+pub(crate) fn sensitive(key: &str) -> bool {
     unfour_core::redaction::is_sensitive_key(key)
         || matches!(
             key.to_ascii_lowercase().as_str(),

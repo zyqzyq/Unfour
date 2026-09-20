@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   cleanup,
@@ -6,6 +7,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -32,7 +34,7 @@ const flow: commands.FlowDefinition = {
   workspaceId: "ws",
   name: "Release",
   revision: 3,
-  inputs: ["version"],
+  inputs: [{ name: "version", type: "number", required: true, secret: false }],
   steps: [
     {
       id: "wait",
@@ -101,12 +103,36 @@ beforeEach(() => {
     vi.mocked(command).mockResolvedValue([]);
 });
 afterEach(cleanup);
-function Harness() {
+
+it("clears stale run-field validity after changing its schema type", async () => {
+  vi.mocked(commands.listFlows).mockResolvedValue([{ ...flow, inputs: [{ name: "payload", type: "json", required: false, secret: false }] }]);
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.change(screen.getByLabelText("payload"), { target: { value: "{" } });
+  expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("Type"), { target: { value: "string" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Run" })).toBeEnabled());
+});
+
+it("requires discarding an invalid input-default draft before switching", async () => {
+  vi.mocked(commands.listFlows).mockResolvedValue([
+    { ...flow, inputs: [{ name: "payload", type: "json", required: false, secret: false, default: {} }] },
+    { ...flow, id: "other", name: "Other" },
+  ]);
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.change(screen.getByLabelText("Default (optional)"), { target: { value: "{" } });
+  fireEvent.click(screen.getByText("Other"));
+  expect(screen.getByRole("dialog")).toBeInTheDocument();
+  expect(screen.getByLabelText("Flow name")).toHaveValue("Release");
+});
+function Harness({ workspaceId = "ws" }: { workspaceId?: string }) {
   const [sidebar, setSidebar] = useState<ReactNode>(null);
   return (
     <>
       {sidebar}
-      <FlowPage workspaceId="ws" onSidebarContentChange={setSidebar} />
+      <FlowPage workspaceId={workspaceId} onSidebarContentChange={setSidebar} />
     </>
   );
 }
@@ -130,7 +156,7 @@ it("sends explicit context only after run confirmation and supports cancellation
   fireEvent.change(screen.getByLabelText("Run inputs (JSON object)"), {
     target: { value: '{"version":42}' },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Run", exact: true }));
+  fireEvent.click(screen.getByRole("button", { name: "Run" }));
   expect(commands.runFlow).not.toHaveBeenCalled();
   const dialog = await screen.findByRole("dialog");
   fireEvent.click(dialog.querySelector("button:last-child")!);
@@ -156,26 +182,127 @@ it("blocks invalid JSON instead of saving the last valid value", async () => {
   mount();
   fireEvent.click(await screen.findByText("Release"));
   fireEvent.change(screen.getByLabelText("Add step"), {
-    target: { value: "poll" },
+    target: { value: "waitUntil" },
   });
   fireEvent.change(screen.getByLabelText("Arguments (JSON)"), {
     target: { value: '{"url":' },
   });
-  fireEvent.change(screen.getByLabelText("Predicate (left / op / right)"), {
+  fireEvent.change(screen.getByLabelText("Success when (left / op / right)"), {
     target: { value: '{"left":true,"op":"eq","right":true}' },
   });
   expect(
-    screen.getByRole("button", { name: "Save", exact: true }),
+    screen.getByRole("button", { name: "Save" }),
   ).toBeDisabled();
   expect(
-    screen.getByRole("button", { name: "Run", exact: true }),
+    screen.getByRole("button", { name: "Run" }),
   ).toBeDisabled();
   fireEvent.change(screen.getByLabelText("Arguments (JSON)"), {
     target: { value: "{}" },
   });
   expect(
-    screen.getByRole("button", { name: "Save", exact: true }),
+    screen.getByRole("button", { name: "Save" }),
   ).toBeEnabled();
+});
+
+it("resets inputs, secrets and explicit environment on selection and discard to a new Flow", async () => {
+  vi.mocked(commands.listFlows).mockResolvedValue([flow, { ...flow, id: "other", name: "Other", inputs: [] }]);
+  vi.mocked(commands.listWorkspaceEnvironments).mockResolvedValue([{ id: "prod", name: "Production" }] as Awaited<ReturnType<typeof commands.listWorkspaceEnvironments>>);
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.change(screen.getByLabelText("Run inputs (JSON object)"), { target: { value: '{"version":42}' } });
+  fireEvent.change(screen.getByLabelText("Secret input names (comma separated)"), { target: { value: "version" } });
+  fireEvent.change(screen.getByLabelText("Environment"), { target: { value: "prod" } });
+  fireEvent.click(screen.getByText("Other"));
+  expect(screen.getByLabelText("Run inputs (JSON object)")).toHaveValue("{}");
+  expect(screen.getByLabelText("Secret input names (comma separated)")).toHaveValue("");
+  expect(screen.getByLabelText("Environment")).toHaveValue("");
+  fireEvent.change(screen.getByLabelText("Run inputs (JSON object)"), { target: { value: '{"private":"x"}' } });
+  fireEvent.change(screen.getByLabelText("Flow name"), { target: { value: "Unsaved" } });
+  fireEvent.click(screen.getByRole("button", { name: "New Flow" }));
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Discard" }));
+  expect(screen.getByLabelText("Run inputs (JSON object)")).toHaveValue("{}");
+  expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+});
+
+it("remounts all context when workspace changes", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = (workspaceId: string) => <QueryClientProvider client={client}><I18nProvider initialLocale="en"><Harness workspaceId={workspaceId} /></I18nProvider></QueryClientProvider>;
+  const mounted = render(view("ws"));
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.change(screen.getByLabelText("Run inputs (JSON object)"), { target: { value: '{"version":42}' } });
+  mounted.rerender(view("next"));
+  expect(screen.queryByLabelText("Flow name")).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByText("Release"));
+  expect(screen.getByLabelText("Run inputs (JSON object)")).toHaveValue("{}");
+});
+
+it("generates typed fields, checks required inputs and masks confirmation context", async () => {
+  vi.mocked(commands.listFlows).mockResolvedValue([{ ...flow, inputs: [
+    ...flow.inputs,
+    { name: "enabled", type: "boolean", required: true, secret: false, default: false },
+    { name: "credential", type: "string", required: true, secret: true },
+  ] }]);
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("version", { exact: true }), { target: { value: "42" } });
+  const secret = screen.getByLabelText("credential", { exact: true });
+  expect(secret).toHaveAttribute("type", "password");
+  fireEvent.change(secret, { target: { value: "never-show" } });
+  fireEvent.click(screen.getByRole("button", { name: "Run" }));
+  const dialog = await screen.findByRole("dialog");
+  expect(dialog).toHaveTextContent("Release");
+  expect(dialog).toHaveTextContent("ws");
+  expect(dialog).toHaveTextContent("Workspace variables only");
+  expect(dialog).toHaveTextContent("42");
+  expect(dialog).toHaveTextContent("false");
+  expect(dialog).not.toHaveTextContent("never-show");
+});
+
+it("blocks running broken resources while preserving Save", async () => {
+  const broken: commands.FlowDefinition = { ...flow, inputs: [], steps: [{ id: "api", name: "Fetch", kind: "action", timeoutMs: 1000, next: null, action: { capability: "api", resourceId: "deleted", connectionId: null, arguments: {} } }] };
+  vi.mocked(commands.listFlows).mockResolvedValue([broken]);
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  expect(await screen.findByText(/Referenced resource is missing/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+});
+
+it("blocks Save and Run for blank or duplicate input definitions", async () => {
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.click(screen.getByRole("button", { name: "Add input" }));
+  expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  fireEvent.change(screen.getAllByLabelText("Input name")[1], { target: { value: "version" } });
+  expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  fireEvent.change(screen.getAllByLabelText("Input name")[1], { target: { value: "other" } });
+  expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+});
+
+it("cannot switch definitions while a save is pending", async () => {
+  let finishSave!: (flow: commands.FlowDefinition) => void;
+  vi.mocked(commands.listFlows).mockResolvedValue([flow, { ...flow, id: "other", name: "Other" }]);
+  vi.mocked(commands.saveFlow).mockImplementation(() => new Promise((resolve) => { finishSave = resolve; }));
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  fireEvent.click(screen.getByText("Other"));
+  expect(screen.getByLabelText("Flow name")).toHaveValue("Release");
+  finishSave(flow);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeEnabled());
+});
+
+it("shows persisted latest result, error, attempts and next check", async () => {
+  vi.mocked(commands.getFlowRun).mockResolvedValue({ ...run, steps: [{ ...run.steps[0], startedAt: "2026-09-14T00:00:00Z", nextCheckAt: "2026-09-14T00:00:02Z", output: { ready: false }, attempts: [{ ...run.steps[0].attempts[0], output: { ready: false }, error: "Transient connection failure" }] }] });
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  await screen.findByRole("option", { name: /2026-09-14T00:00:00Z/ });
+  fireEvent.change(screen.getByLabelText("Run history"), { target: { value: "run-1" } });
+  expect(await screen.findByText(/Next check/)).toHaveTextContent("2026-09-14T00:00:02Z");
+  expect(screen.getByText("Latest result")).toBeInTheDocument();
+  expect(screen.getByText(/Latest error/)).toBeInTheDocument();
+  expect(screen.getByText(/1 attempts/)).toBeInTheDocument();
 });
 
 it("requires a deliberate discard when switching a dirty definition", async () => {

@@ -7,8 +7,17 @@ export type FlowAction = {
 };
 export type FlowPredicate = {
   left: unknown;
-  op: "eq" | "ne" | "gt" | "ge" | "lt" | "le";
+  op: FlowOperator;
   right: unknown;
+};
+export type FlowOperator = "eq" | "ne" | "gt" | "ge" | "lt" | "le" | "in";
+export type FlowInputDefinition = {
+  name: string;
+  type: "string" | "number" | "boolean" | "json";
+  required: boolean;
+  default?: unknown;
+  secret: boolean;
+  description?: string;
 };
 export type FlowStep = {
   id: string;
@@ -31,13 +40,23 @@ export type FlowStep = {
       maxAttempts: number;
     }
   | { kind: "wait"; durationMs: number }
+  | {
+      kind: "waitUntil";
+      probe: FlowAction;
+      successWhen: FlowPredicate;
+      failureWhen?: FlowPredicate | null;
+      intervalMs: number;
+      maxAttempts?: number | null;
+      probeErrorPolicy: "failImmediately" | "retryTransientErrors";
+      intervalStrategy: "fixed";
+    }
 );
 export type FlowDefinition = {
   id: string;
   workspaceId: string;
   name: string;
   revision: number;
-  inputs: string[];
+  inputs: FlowInputDefinition[];
   steps: FlowStep[];
 };
 export type FlowRunInput = {
@@ -58,11 +77,16 @@ export type FlowAttempt = {
 };
 export type FlowStepRun = {
   stepId: string;
-  status: string;
+  status: FlowStepRunStatus;
+  startedAt?: string | null;
+  nextCheckAt?: string | null;
+  output?: unknown | null;
   durationMs: number;
   attempts: FlowAttempt[];
   error: string | null;
 };
+export type FlowRunStatus = "running" | "succeeded" | "failed" | "timedOut" | "cancelled" | "interrupted" | "validationFailed";
+export type FlowStepRunStatus = "pending" | "running" | "succeeded" | "failed" | "timedOut" | "cancelled" | "interrupted" | "skipped";
 export type FlowRun = {
   id: string;
   workspaceId: string;
@@ -70,7 +94,7 @@ export type FlowRun = {
   definition: FlowDefinition;
   context: FlowRunInput;
   resources: unknown;
-  status: string;
+  status: FlowRunStatus;
   error: string | null;
   startedAt: string;
   finishedAt: string | null;

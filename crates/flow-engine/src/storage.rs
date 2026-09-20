@@ -86,11 +86,11 @@ impl FlowService {
         Ok(())
     }
     pub(crate) async fn insert_run(&self, run: &FlowRun) -> AppResult<()> {
-        sqlx::query("INSERT INTO flow_runs (id, workspace_id, flow_id, status, run_json, started_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(&run.id).bind(&run.workspace_id).bind(&run.flow_id).bind(&run.status).bind(safe_run(run)?).bind(&run.started_at).bind(&run.started_at).execute(self.db.pool()).await?;
+        sqlx::query("INSERT INTO flow_runs (id, workspace_id, flow_id, status, run_json, started_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(&run.id).bind(&run.workspace_id).bind(&run.flow_id).bind(run.status.as_str()).bind(safe_run(run)?).bind(&run.started_at).bind(&run.started_at).execute(self.db.pool()).await?;
         Ok(())
     }
     pub(crate) async fn persist_run(&self, run: &FlowRun) -> AppResult<()> {
-        let result = sqlx::query("UPDATE flow_runs SET status = ?, run_json = ?, updated_at = ? WHERE workspace_id = ? AND id = ? AND status = 'running'").bind(&run.status).bind(safe_run(run)?).bind(chrono::Utc::now().to_rfc3339()).bind(&run.workspace_id).bind(&run.id).execute(self.db.pool()).await?;
+        let result = sqlx::query("UPDATE flow_runs SET status = ?, run_json = ?, updated_at = ? WHERE workspace_id = ? AND id = ? AND status = 'running'").bind(run.status.as_str()).bind(safe_run(run)?).bind(chrono::Utc::now().to_rfc3339()).bind(&run.workspace_id).bind(&run.id).execute(self.db.pool()).await?;
         if result.rows_affected() == 0 {
             return Err(invalid("FLOW_RUN_LEASE_LOST"));
         }
@@ -99,13 +99,14 @@ impl FlowService {
 }
 fn decode_run(row: &str) -> AppResult<FlowRun> {
     let mut run: FlowRun = serde_json::from_str(row)?;
-    if run.status == "interrupted" {
+    if run.status == FlowRunStatus::Interrupted {
         for step in &mut run.steps {
-            if step.status == "running" {
-                step.status = "interrupted".into();
+            if step.status == FlowStepRunStatus::Running {
+                step.status = FlowStepRunStatus::Interrupted;
+                step.next_check_at = None;
                 step.error = Some("FLOW_INTERRUPTED".into());
-            } else if step.status == "pending" {
-                step.status = "skipped".into();
+            } else if step.status == FlowStepRunStatus::Pending {
+                step.status = FlowStepRunStatus::Skipped;
             }
         }
     }
@@ -113,19 +114,30 @@ fn decode_run(row: &str) -> AppResult<FlowRun> {
 }
 fn safe_run(run: &FlowRun) -> AppResult<String> {
     let mut value: Value = serde_json::to_value(run)?;
+    // Invalid invocation payloads have no reliable field boundaries for secret
+    // names. Retain only the validation error, never their raw contents.
+    if !run.context.inputs.is_object() {
+        value["context"]["inputs"] = Value::String("<redacted>".into());
+    }
     let mut secrets = Vec::new();
-    collect_secrets(&value, &mut secrets);
+    // Schema flags such as inputs[].secret are metadata, not runtime secrets.
+    for key in ["context", "resources", "steps"] {
+        collect_secrets(&value[key], &mut secrets);
+    }
     for key in &run.context.secret_input_names {
         if let Some(secret) = run.context.inputs.get(key) {
             collect_secret_leaves(secret, &mut secrets);
             value["context"]["inputs"][key] = Value::String("<redacted>".into());
         }
     }
+    let input_schema = value["definition"]["inputs"].take();
     redact(&mut value);
+    value["definition"]["inputs"] = input_schema;
     scrub_values(&mut value["context"]["inputs"], &secrets);
     scrub_values(&mut value["resources"], &secrets);
     if let Some(steps) = value["steps"].as_array_mut() {
         for step in steps {
+            scrub_values(&mut step["output"], &secrets);
             if let Some(attempts) = step["attempts"].as_array_mut() {
                 for attempt in attempts {
                     scrub_values(&mut attempt["input"], &secrets);
@@ -144,16 +156,14 @@ fn collect_secrets(value: &Value, secrets: &mut Vec<String>) {
                 || map
                     .get("key")
                     .and_then(Value::as_str)
-                    .is_some_and(unfour_core::redaction::is_sensitive_key)
+                    .is_some_and(crate::expression::sensitive)
             {
                 if let Some(value) = map.get("value") {
                     collect_secret_leaves(value, secrets);
                 }
             }
             for (key, value) in map {
-                if unfour_core::redaction::is_sensitive_key(key)
-                    || matches!(key.as_str(), "passphrase" | "privateKey")
-                {
+                if crate::expression::sensitive(key) {
                     collect_secret_leaves(value, secrets);
                 } else {
                     collect_secrets(value, secrets);

@@ -10,6 +10,8 @@ use unfour_flow_engine::{FlowExecutor, FlowFuture, FlowService};
 #[cfg(feature = "ssh-native")]
 #[path = "flow_native.rs"]
 mod native;
+#[path = "flow_wait_until.rs"]
+mod wait_until;
 
 pub(super) fn definition(workspace: &str, steps: Value) -> FlowDefinition {
     serde_json::from_value(json!({"id":"", "workspaceId":workspace, "name":"test", "revision":0,"inputs":["value"],"steps":steps})).unwrap()
@@ -31,7 +33,7 @@ pub(super) async fn finished(bus: &CommandBus, run: &FlowRun) -> FlowRun {
                 .get_flow_run(run.workspace_id.clone(), run.id.clone())
                 .await
                 .unwrap();
-            if current.status != "running" {
+            if current.status != FlowRunStatus::Running {
                 return current;
             }
             tokio::time::sleep(Duration::from_millis(20)).await;
@@ -91,19 +93,24 @@ async fn flow_serial_references_exclusive_branch_history_and_revision() {
     service.save(flow.clone()).await.unwrap();
     assert!(service.save(flow.clone()).await.is_err());
     let result = finished(&bus, &run).await;
-    assert_eq!(result.status, "succeeded", "{:?}", result.error);
+    assert_eq!(
+        result.status,
+        FlowRunStatus::Succeeded,
+        "{:?}",
+        result.error
+    );
     assert_eq!(result.definition.name, "test");
     assert_eq!(result.definition.revision, 1);
-    assert_eq!(result.steps[4].status, "skipped");
+    assert_eq!(result.steps[4].status, FlowStepRunStatus::Skipped);
     assert_eq!(driver.calls.lock().unwrap()[2]["value"], "value=42");
     let mut false_input = request(&workspace, &flow.id);
     false_input.inputs = json!({"value":43});
     let false_run = service.run(false_input, driver.clone()).await.unwrap();
     let false_result = finished(&bus, &false_run).await;
-    assert_eq!(false_result.status, "failed");
-    assert_eq!(false_result.steps[2].status, "skipped");
-    assert_eq!(false_result.steps[3].status, "skipped");
-    assert_eq!(false_result.steps[4].status, "failed");
+    assert_eq!(false_result.status, FlowRunStatus::Failed);
+    assert_eq!(false_result.steps[2].status, FlowStepRunStatus::Skipped);
+    assert_eq!(false_result.steps[3].status, FlowStepRunStatus::Skipped);
+    assert_eq!(false_result.steps[4].status, FlowStepRunStatus::Failed);
     service.delete(&workspace, &flow.id).await.unwrap();
     assert_eq!(
         service.list_runs(&workspace, &flow.id).await.unwrap().len(),
@@ -134,8 +141,8 @@ async fn flow_fail_fast_missing_variable_and_backward_branch() {
             .await
             .unwrap();
         let result = finished(&bus, &run).await;
-        assert_eq!(result.status, "failed");
-        assert_eq!(result.steps[1].status, "skipped");
+        assert_eq!(result.status, FlowRunStatus::Failed);
+        assert_eq!(result.steps[1].status, FlowStepRunStatus::Skipped);
         assert!(driver.calls.lock().unwrap().len() <= 1);
     }
     let backward = definition(
@@ -166,8 +173,8 @@ async fn flow_poll_latest_attempts_timeout_and_cancel() {
             service.cancel(&workspace, &run.id).await.unwrap();
         }
         let result = finished(&bus, &run).await;
-        assert_eq!(result.status, expected, "{:?}", result.error);
-        assert_eq!(result.steps[1].status, "skipped");
+        assert_eq!(result.status.as_str(), expected, "{:?}", result.error);
+        assert_eq!(result.steps[1].status, FlowStepRunStatus::Skipped);
         if attempts == 3 {
             assert_eq!(result.steps[0].attempts.len(), 3);
             assert_eq!(result.error.as_deref(), Some("FLOW_MAX_ATTEMPTS"));
@@ -244,7 +251,12 @@ async fn flow_real_http_start_poll_and_database() {
     ]))).await.unwrap();
     let run = bus.run_flow(request(&workspace, &flow.id)).await.unwrap();
     let result = finished(&bus, &run).await;
-    assert_eq!(result.status, "succeeded", "{:?}", result.error);
+    assert_eq!(
+        result.status,
+        FlowRunStatus::Succeeded,
+        "{:?}",
+        result.error
+    );
     assert_eq!(result.steps[1].attempts.len(), 3);
     assert_eq!(
         result.steps[1].attempts[0].output.as_ref().unwrap()["body"]["ready"],
@@ -270,9 +282,9 @@ async fn flow_real_http_start_poll_and_database() {
         .await
         .unwrap();
     let invalid = bus.run_flow(request(&workspace, &flow.id)).await.unwrap();
-    assert_eq!(invalid.status, "validationFailed");
+    assert_eq!(invalid.status, FlowRunStatus::ValidationFailed);
     assert_eq!(
         bus.get_flow_run(workspace, run.id).await.unwrap().status,
-        "succeeded"
+        FlowRunStatus::Succeeded
     );
 }

@@ -12,6 +12,7 @@ use unfour_core::{models::*, AppError, AppResult};
 
 pub(crate) fn error_code(error: &AppError) -> String {
     match error {
+        AppError::HttpStatus(status) => format!("FLOW_HTTP_STATUS_{status}"),
         AppError::Validation(code) if code.starts_with("FLOW_") => code.clone(),
         _ => error.code().into(),
     }
@@ -26,31 +27,34 @@ impl FlowService {
         let mut index = 0;
         while index < run.definition.steps.len() {
             if self.heartbeat(run).await? {
-                run.status = "cancelled".into();
+                run.status = FlowRunStatus::Cancelled;
                 return Ok(());
             }
             let step = run.definition.steps[index].clone();
-            run.steps[index].status = "running".into();
+            run.steps[index].status = FlowStepRunStatus::Running;
+            run.steps[index].started_at = Some(chrono::Utc::now().to_rfc3339());
             self.persist_run(run).await?;
             let lease = run.clone();
             let token = CancellationToken::new();
             let started = Instant::now();
-            // Poll both SQL futures concurrently: awaiting a heartbeat inside a
-            // select branch can deadlock a single-connection pool held by work.
-            let heartbeat = async {
-                loop {
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-                    match self.heartbeat(&lease).await {
-                        Ok(false) => {}
-                        result => return result.err().unwrap_or_else(|| invalid("FLOW_CANCELLED")),
-                    }
-                }
-            };
-            tokio::pin!(heartbeat);
-            let timeout = tokio::time::sleep(Duration::from_millis(step.timeout_ms));
-            tokio::pin!(timeout);
             let outcome;
             {
+                // Poll both SQL futures concurrently: awaiting a heartbeat inside a
+                // select branch can deadlock a single-connection pool held by work.
+                let heartbeat = async {
+                    loop {
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                        match self.heartbeat(&lease).await {
+                            Ok(false) => {}
+                            result => {
+                                return result.err().unwrap_or_else(|| invalid("FLOW_CANCELLED"))
+                            }
+                        }
+                    }
+                };
+                tokio::pin!(heartbeat);
+                let timeout = tokio::time::sleep(Duration::from_millis(step.timeout_ms));
+                tokio::pin!(timeout);
                 let work = self.execute_step(
                     run,
                     index,
@@ -77,10 +81,21 @@ impl FlowService {
                     }
                 };
             }
+            // Drop the heartbeat future before the next write. An in-flight
+            // heartbeat may otherwise retain the single available connection.
             run.steps[index].duration_ms = started.elapsed().as_millis() as u64;
+            run.steps[index].next_check_at = None;
+            let outcome = outcome.and_then(|(output, next)| {
+                run.steps[index].output = Some(output.clone());
+                if serde_json::to_vec(&run.steps)?.len() > 4_194_304 {
+                    run.steps[index].output = None;
+                    return Err(invalid("FLOW_HISTORY_LIMIT"));
+                }
+                Ok((output, next))
+            });
             match outcome {
                 Ok((output, next)) => {
-                    run.steps[index].status = "succeeded".into();
+                    run.steps[index].status = FlowStepRunStatus::Succeeded;
                     context["steps"][&step.id] = output;
                     self.persist_run(run).await?;
                     let target = next.or(step.next);
@@ -95,18 +110,20 @@ impl FlowService {
                         None => index + 1,
                     };
                     for skipped in &mut run.steps[index + 1..next_index] {
-                        skipped.status = "skipped".into();
+                        skipped.status = FlowStepRunStatus::Skipped;
                     }
                     index = next_index;
                 }
                 Err(error) => {
                     let code = error_code(&error);
-                    let status = match code.as_str() {
-                        "FLOW_CANCELLED" => "cancelled",
-                        "FLOW_TIMEOUT" => "timedOut",
-                        _ => "failed",
+                    let (status, run_status) = match code.as_str() {
+                        "FLOW_CANCELLED" => {
+                            (FlowStepRunStatus::Cancelled, FlowRunStatus::Cancelled)
+                        }
+                        "FLOW_TIMEOUT" => (FlowStepRunStatus::TimedOut, FlowRunStatus::TimedOut),
+                        _ => (FlowStepRunStatus::Failed, FlowRunStatus::Failed),
                     };
-                    run.steps[index].status = status.into();
+                    run.steps[index].status = status;
                     run.steps[index].error = Some(code.clone());
                     if let Some(attempt) = run.steps[index].attempts.last_mut() {
                         if attempt.output.is_none() && attempt.error.is_none() {
@@ -114,13 +131,13 @@ impl FlowService {
                             attempt.duration_ms = started.elapsed().as_millis() as u64;
                         }
                     }
-                    run.status = status.into();
+                    run.status = run_status;
                     run.error = Some(code);
                     return Ok(());
                 }
             }
         }
-        run.status = "succeeded".into();
+        run.status = FlowRunStatus::Succeeded;
         Ok(())
     }
 
@@ -170,7 +187,7 @@ impl FlowService {
             }
             FlowNode::Action { action } => Ok((
                 self.attempt(run, index, action, context, executor, cancel)
-                    .await?,
+                    .await??,
                 None,
             )),
             FlowNode::Poll {
@@ -185,7 +202,7 @@ impl FlowService {
                     }
                     let output = self
                         .attempt(run, index, probe, context, executor, cancel.clone())
-                        .await?;
+                        .await??;
                     // This value is replaced only AFTER a fresh probe completes.
                     let mut probe_context = context.clone();
                     probe_context["probe"] = output.clone();
@@ -199,9 +216,13 @@ impl FlowService {
                 }
                 unreachable!()
             }
+            FlowNode::WaitUntil { .. } => {
+                self.wait_until(run, index, step, context, executor, cancel)
+                    .await
+            }
         }
     }
-    async fn attempt(
+    pub(crate) async fn attempt(
         &self,
         run: &mut FlowRun,
         index: usize,
@@ -209,7 +230,7 @@ impl FlowService {
         context: &Value,
         executor: &dyn FlowExecutor,
         cancel: CancellationToken,
-    ) -> AppResult<Value> {
+    ) -> AppResult<AppResult<Value>> {
         let mut resolved = action.clone();
         resolved.arguments = resolve(&action.arguments, context)?;
         let number = run.steps[index].attempts.len() as u32 + 1;
@@ -256,6 +277,8 @@ impl FlowService {
             return Err(invalid("FLOW_HISTORY_LIMIT"));
         }
         self.persist_run(run).await?;
-        output
+        // Keep executor failures separate from local persistence/limit errors:
+        // only the former are eligible for a probe retry.
+        Ok(output)
     }
 }

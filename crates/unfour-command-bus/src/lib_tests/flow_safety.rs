@@ -1,6 +1,7 @@
 use super::flow::*;
 use super::*;
 use serde_json::json;
+use unfour_core::models::{FlowRunStatus, FlowStepRunStatus};
 
 #[tokio::test]
 async fn flow_saved_auth_is_materialized_without_a_ui_and_explicit_headers_win() {
@@ -66,7 +67,7 @@ async fn flow_sensitive_inputs_are_usable_but_never_persisted() {
     let driver = std::sync::Arc::new(Driver::default());
     let run = service.run(input, driver.clone()).await.unwrap();
     let result = finished(&bus, &run).await;
-    assert_eq!(result.status, "succeeded");
+    assert_eq!(result.status, FlowRunStatus::Succeeded);
     assert_eq!(
         driver.calls.lock().unwrap()[1]["echo"],
         "fixture-password-never-store"
@@ -145,8 +146,8 @@ async fn flow_cancel_reaches_active_http_and_never_schedules_later_steps() {
         .await
         .unwrap();
     let result = finished(&bus, &run).await;
-    assert_eq!(result.status, "cancelled");
-    assert_eq!(result.steps[1].status, "skipped");
+    assert_eq!(result.status, FlowRunStatus::Cancelled);
+    assert_eq!(result.steps[1].status, FlowStepRunStatus::Skipped);
     server.join().unwrap();
 }
 
@@ -173,11 +174,79 @@ async fn flow_stale_run_recovers_as_interrupted_without_replaying() {
         .get_flow_run(workspace.clone(), run.id.clone())
         .await
         .unwrap();
-    assert_eq!(result.status, "interrupted");
-    assert_eq!(result.steps[0].status, "interrupted");
+    assert_eq!(result.status, FlowRunStatus::Interrupted);
+    assert_eq!(result.steps[0].status, FlowStepRunStatus::Interrupted);
     tokio::time::sleep(std::time::Duration::from_millis(150)).await;
     assert_eq!(
         bus.get_flow_run(workspace, run.id).await.unwrap().status,
-        "interrupted"
+        FlowRunStatus::Interrupted
     );
+}
+
+#[tokio::test]
+async fn flow_legacy_storage_reads_without_rewriting_historical_snapshots() {
+    let bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let service = unfour_flow_engine::FlowService::new(bus.db.clone());
+    let flow = service
+        .save(definition(
+            &workspace,
+            json!([action(
+                "echo",
+                "api",
+                "echo",
+                json!({"value":{"$ref":"/inputs/value"}})
+            )]),
+        ))
+        .await
+        .unwrap();
+    let run = service
+        .run(
+            request(&workspace, &flow.id),
+            std::sync::Arc::new(Driver::default()),
+        )
+        .await
+        .unwrap();
+    let result = finished(&bus, &run).await;
+    let mut legacy = serde_json::to_value(result).unwrap();
+    legacy["definition"]["inputs"] = json!(["value"]);
+    for step in legacy["steps"].as_array_mut().unwrap() {
+        let step = step.as_object_mut().unwrap();
+        for key in ["startedAt", "nextCheckAt", "output"] {
+            step.remove(key);
+        }
+    }
+    let legacy_json = serde_json::to_string(&legacy).unwrap();
+    sqlx::query("UPDATE flow_runs SET run_json = ? WHERE id = ?")
+        .bind(&legacy_json)
+        .bind(&run.id)
+        .execute(bus.db.pool())
+        .await
+        .unwrap();
+    let mut legacy_definition = serde_json::to_value(&flow).unwrap();
+    legacy_definition["inputs"] = json!(["value"]);
+    sqlx::query("UPDATE flow_definitions SET definition_json = ? WHERE id = ?")
+        .bind(legacy_definition.to_string())
+        .bind(&flow.id)
+        .execute(bus.db.pool())
+        .await
+        .unwrap();
+    let mut loaded = service.get(&workspace, &flow.id).await.unwrap();
+    assert_eq!(
+        loaded.inputs[0].input_type,
+        unfour_core::models::FlowInputType::Json
+    );
+    loaded.name = "new revision".into();
+    service.save(loaded).await.unwrap();
+    let history = service.get_run(&workspace, &run.id).await.unwrap();
+    assert_eq!(history.definition.revision, 1);
+    assert_eq!(history.definition.name, "test");
+    assert_eq!(history.status, FlowRunStatus::Succeeded);
+    assert!(history.steps[0].output.is_none());
+    let unchanged: String = sqlx::query_scalar("SELECT run_json FROM flow_runs WHERE id = ?")
+        .bind(&run.id)
+        .fetch_one(bus.db.pool())
+        .await
+        .unwrap();
+    assert_eq!(unchanged, legacy_json);
 }

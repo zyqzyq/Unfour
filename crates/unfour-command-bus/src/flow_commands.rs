@@ -219,7 +219,7 @@ impl FlowExecutor for CommandBus {
                     let body = serde_json::from_str::<Value>(&response.body)
                         .unwrap_or(Value::String(response.body));
                     if response.status >= 400 {
-                        return Err(invalid("FLOW_HTTP_STATUS_FAILED"));
+                        return Err(unfour_core::AppError::HttpStatus(response.status));
                     }
                     Ok(
                         json!({"status": response.status, "headers": response.headers, "body": body, "durationMs": response.duration_ms, "historyId": response.history_id}),

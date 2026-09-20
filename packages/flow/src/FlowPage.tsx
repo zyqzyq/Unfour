@@ -1,4 +1,6 @@
-import { newStep } from "./model";
+import { inputDefaults, inputDefinitionErrors, inputErrors, maskInputs, newStep, normalizeInputs, resourceErrors } from "./model";
+import { InputEditor, RunInputs } from "./InputEditor";
+import { RunView } from "./RunView";
 import {
   useCallback,
   useEffect,
@@ -34,17 +36,19 @@ import {
 } from "@unfour/ui";
 import { JsonField, StepEditor, type Resources } from "./StepEditor";
 
-export function FlowPage({
+type FlowPageProps = { workspaceId: string; onSidebarContentChange: (node: ReactNode) => void };
+export function FlowPage(props: FlowPageProps) {
+  return <WorkspaceFlowPage key={props.workspaceId} {...props} />;
+}
+function WorkspaceFlowPage({
   workspaceId,
   onSidebarContentChange,
-}: {
-  workspaceId: string;
-  onSidebarContentChange: (node: ReactNode) => void;
-}) {
+}: FlowPageProps) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<FlowDefinition | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [contextRevision, setContextRevision] = useState(0);
   const [inputs, setInputs] = useState<Record<string, unknown>>({});
   const [invalid, setInvalid] = useState<Record<string, boolean>>({});
   const [secretInputNames, setSecretInputNames] = useState("");
@@ -104,19 +108,29 @@ export function FlowPage({
     database: [],
     connections: [],
   };
+  const resetSelection = useCallback((flow: FlowDefinition) => {
+    const normalized = { ...flow, inputs: normalizeInputs(flow.inputs) };
+    setDraft(normalized);
+    setDirty(!flow.id);
+    setInputs(inputDefaults(normalized.inputs));
+    setSecretInputNames("");
+    setEnvironmentId("");
+    setInvalid({});
+    setSelectedRun(null);
+    setConfirm(null);
+    setError("");
+    setContextRevision((revision) => revision + 1);
+  }, []);
   const select = useCallback(
     (flow: FlowDefinition) => {
+      if (busy) return;
       if (dirty) {
         setPendingSelection(flow);
         return;
       }
-      setDraft(flow);
-      setDirty(!flow.id);
-      setInvalid({});
-      setSelectedRun(null);
-      setError("");
+      resetSelection(flow);
     },
-    [dirty],
+    [busy, dirty, resetSelection],
   );
   const sidebar = useMemo(
     () => (
@@ -194,7 +208,14 @@ export function FlowPage({
         {t("flow.selectFlow")}
       </div>
     );
-  const invalidEditor = Object.values(invalid).some(Boolean);
+  const schemaProblems = inputDefinitionErrors(draft.inputs);
+  const invalidEditor = schemaProblems.length > 0 || Object.entries(invalid).some(([key, value]) => !key.startsWith("run:") && value);
+  const resolvedInputs = { ...inputDefaults(draft.inputs), ...inputs };
+  const inputProblems = inputErrors(draft.inputs, resolvedInputs);
+  const resourceProblems = resourcesQuery.data ? resourceErrors(draft, resources) : [];
+  const manualSecrets = secretInputNames.split(",").map((name) => name.trim()).filter(Boolean);
+  const secrets = [...new Set([...manualSecrets, ...draft.inputs.filter((field) => field.secret).map((field) => field.name)])];
+  const invalidRun = invalidEditor || inputProblems.length > 0 || resourceProblems.length > 0 || Object.values(invalid).some(Boolean) || !resourcesQuery.data || resourcesQuery.isError || environments.isError || (Boolean(environmentId) && !environments.data?.some((environment) => environment.id === environmentId));
   return (
     <div className="flex h-full min-h-0 flex-col text-[13px]">
       <div className="flex shrink-0 items-center gap-2 border-b border-[var(--u-color-border)] p-2">
@@ -223,7 +244,7 @@ export function FlowPage({
           {t("flow.save")}
         </Button>
         <Button
-          disabled={busy || dirty || !draft.id || invalidEditor}
+          disabled={busy || dirty || !draft.id || invalidRun}
           onClick={() => setConfirm("run")}
         >
           {t("flow.run")}
@@ -249,24 +270,19 @@ export function FlowPage({
           <p className="mb-2 text-xs text-[var(--u-color-text-muted)]">
             {t("flow.referenceHelp")}
           </p>
-          <label>
-            {t("flow.requiredInputs")}
-            <Input
-              value={draft.inputs.join(", ")}
-              onChange={(e) =>
-                update({
-                  ...draft,
-                  inputs: e.target.value
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter(Boolean),
-                })
-              }
-            />
-          </label>
+          <InputEditor key={contextRevision} definitions={draft.inputs} onChange={(definitions) => {
+            const validRunKeys = new Set(definitions.filter((field) => draft.inputs.some((previous) => previous.name === field.name && previous.type === field.type && previous.secret === field.secret)).map((field) => "run:" + field.name));
+            setInvalid((state) => Object.fromEntries(Object.entries(state).filter(([key]) => !key.startsWith("run:") || key === "run:json" || validRunKeys.has(key))));
+            update({ ...draft, inputs: definitions });
+          }} onValidity={(key, valid) => {
+            if (!valid) setDirty(true);
+            setInvalid((state) => ({ ...state, [`schema:${key}`]: !valid }));
+          }} />
+          {schemaProblems.map((problem, index) => <p key={index} role="alert" className="py-1 text-xs text-[var(--u-color-danger)]">{problem.name}: {t(problem.key)}</p>)}
+          {resourceProblems.map((problem, index) => <p key={index} role="alert" className="py-1 text-xs text-[var(--u-color-danger)]">{problem.name}: {t(problem.key)}</p>)}
           {draft.steps.map((step, index) => (
             <StepEditor
-              key={`${draft.id}:${step.id}`}
+              key={`${contextRevision}:${step.id}`}
               step={step}
               after={draft.steps.slice(index + 1)}
               resources={resources}
@@ -304,7 +320,7 @@ export function FlowPage({
             value=""
             options={[
               { value: "", label: t("flow.addStep") },
-              ...["api", "ssh", "database", "condition", "poll", "wait"].map(
+              ...["api", "ssh", "database", "condition", "waitUntil", "wait"].map(
                 (value) => ({ value, label: t(`flow.${value}`) }),
               ),
             ]}
@@ -335,18 +351,21 @@ export function FlowPage({
               ]}
             />
           </label>
-          <JsonField
+          <RunInputs key={`fields:${contextRevision}`} definitions={draft.inputs} values={resolvedInputs} onChange={setInputs} onValidity={(key, valid) => setInvalid((state) => ({ ...state, [`run:${key}`]: !valid }))} />
+          {inputProblems.map((problem, index) => <p key={index} role="alert" className="text-xs text-[var(--u-color-danger)]">{problem.name}: {t(problem.key)}</p>)}
+          <details><summary>{t("flow.jsonInputsHelp")}</summary><JsonField
+            key={`json:${contextRevision}`}
             label={t("flow.runInputs")}
-            value={inputs}
+            value={resolvedInputs}
             onValidity={(valid) =>
-              setInvalid((s) => ({ ...s, runInputs: !valid }))
+              setInvalid((s) => ({ ...s, "run:json": !valid }))
             }
             onChange={(value) => {
               if (value && typeof value === "object" && !Array.isArray(value))
                 setInputs(value as Record<string, unknown>);
               else return false;
             }}
-          />
+          /></details>
           <label>
             {t("flow.secretInputs")}
             <Input
@@ -388,9 +407,14 @@ export function FlowPage({
           if (!open) setConfirm(null);
         }}
         title={t(confirm === "delete" ? "flow.delete" : "flow.run")}
-        description={t(
-          confirm === "delete" ? "flow.deleteHelp" : "flow.effectsHelp",
-        )}
+        description={confirm === "delete" ? t("flow.deleteHelp") : <span className="grid gap-2">
+          <span>{t("flow.effectsHelp")}</span>
+          <span>{t("flow.name")}: {draft.name}</span>
+          <span>{t("flow.workspace")}: {workspaceId}</span>
+          <span>{t("flow.environment")}: {environments.data?.find((environment) => environment.id === environmentId)?.name ?? t("flow.workspaceOnly")}{environmentId ? ` (${environmentId})` : ""}</span>
+          <span>{t("flow.inputValues")}</span>
+          <code className="max-h-60 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(maskInputs(resolvedInputs, draft.inputs, manualSecrets), null, 2)}</code>
+        </span>}
         confirmLabel={t(confirm === "delete" ? "flow.delete" : "flow.run")}
         pending={busy}
         onConfirm={() =>
@@ -401,15 +425,13 @@ export function FlowPage({
               setDirty(false);
               await flows.refetch();
             } else {
+              if (invalidRun) return;
               const run = await runFlow({
                 workspaceId,
                 flowId: draft.id,
                 environmentId: environmentId || null,
-                inputs,
-                secretInputNames: secretInputNames
-                  .split(",")
-                  .map((s) => s.trim())
-                  .filter(Boolean),
+                inputs: resolvedInputs,
+                secretInputNames: secrets,
                 initiator: "human",
                 confirmEffects: true,
               });
@@ -429,72 +451,10 @@ export function FlowPage({
         description={t("flow.discardHelp")}
         confirmLabel={t("flow.discard")}
         onConfirm={() => {
-          setDraft(pendingSelection);
-          setDirty(false);
-          setInvalid({});
-          setSelectedRun(null);
+          if (pendingSelection) resetSelection(pendingSelection);
           setPendingSelection(null);
         }}
       />
     </div>
-  );
-}
-
-function RunView({ run, cancel }: { run: FlowRun; cancel: () => void }) {
-  const { t } = useI18n();
-  return (
-    <section className="space-y-2">
-      <div className="flex items-center gap-2">
-        <strong>{t(`flow.status.${run.status}`)}</strong>
-        <code>r{run.definition.revision}</code>
-        {run.status === "running" && (
-          <Button variant="secondary" onClick={cancel}>
-            {t("flow.cancel")}
-          </Button>
-        )}
-      </div>
-      <code className="break-all text-xs">{run.id}</code>
-      {run.error && <p role="alert">{run.error}</p>}
-      {run.steps.map((step) => (
-        <details
-          key={step.stepId}
-          className="border-b border-[var(--u-color-border)] py-2"
-          open={
-            step.status === "running" ||
-            step.status === "failed" ||
-            step.status === "timedOut"
-          }
-        >
-          <summary className="cursor-pointer">
-            {run.definition.steps.find((s) => s.id === step.stepId)?.name} ·{" "}
-            {t(`flow.status.${step.status}`)} · {step.durationMs} ms ·{" "}
-            {step.attempts.length} {t("flow.attempts")}
-          </summary>
-          {step.error && <p role="alert">{step.error}</p>}
-          {step.attempts.map((attempt) => (
-            <pre
-              key={attempt.number}
-              className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-all text-xs"
-            >
-              {JSON.stringify(attempt, null, 2)}
-            </pre>
-          ))}
-        </details>
-      ))}
-      <details>
-        <summary>{t("flow.snapshot")}</summary>
-        <pre className="overflow-auto whitespace-pre-wrap break-all text-xs">
-          {JSON.stringify(
-            {
-              definition: run.definition,
-              context: run.context,
-              resources: run.resources,
-            },
-            null,
-            2,
-          )}
-        </pre>
-      </details>
-    </section>
   );
 }

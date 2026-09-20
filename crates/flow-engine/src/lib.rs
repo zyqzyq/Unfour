@@ -2,6 +2,7 @@ pub mod expression;
 mod runner;
 mod storage;
 mod validation;
+mod wait_until;
 
 use serde_json::Value;
 use std::{future::Future, pin::Pin, sync::Arc};
@@ -63,47 +64,45 @@ impl FlowService {
                 .iter()
                 .map(|s| FlowStepRun {
                     step_id: s.id.clone(),
-                    status: "pending".into(),
+                    status: FlowStepRunStatus::Pending,
                     duration_ms: 0,
                     attempts: vec![],
                     error: None,
+                    started_at: None,
+                    next_check_at: None,
+                    output: None,
                 })
                 .collect(),
             definition,
             context: input,
             resources: serde_json::json!({}),
-            status: "running".into(),
+            status: FlowRunStatus::Running,
             error: None,
             started_at: now,
             finished_at: None,
         };
+        // Register declared secrets before validation so even rejected runs are safe.
+        for field in &run.definition.inputs {
+            if field.secret && !run.context.secret_input_names.contains(&field.name) {
+                run.context.secret_input_names.push(field.name.clone());
+            }
+        }
         let prepared = async {
+            validation::resolve_inputs(&run.definition, &mut run.context.inputs)?;
             let inputs = run
                 .context
                 .inputs
                 .as_object()
                 .ok_or_else(|| expression::invalid("FLOW_INPUTS_OBJECT_REQUIRED"))?;
-            if run
-                .definition
-                .inputs
-                .iter()
-                .any(|key| !inputs.contains_key(key))
-            {
-                return Err(expression::invalid("FLOW_REQUIRED_INPUT_MISSING"));
-            }
-            if serde_json::to_vec(inputs)?.len() > 262_144
-                || run
-                    .context
-                    .secret_input_names
-                    .iter()
-                    .any(|name| !inputs.contains_key(name))
-            {
+            if serde_json::to_vec(inputs)?.len() > 262_144 {
                 return Err(expression::invalid("FLOW_INVALID_INPUTS"));
             }
             for step in &run.definition.steps {
                 let (action, probe) = match &step.node {
                     FlowNode::Action { action } => (action, false),
-                    FlowNode::Poll { probe, .. } => (probe, true),
+                    FlowNode::Poll { probe, .. } | FlowNode::WaitUntil { probe, .. } => {
+                        (probe, true)
+                    }
                     _ => continue,
                 };
                 run.resources[&step.id] = executor.prepare(action, &run.context, probe).await?;
@@ -116,25 +115,25 @@ impl FlowService {
         .await;
         if let Err(error) = prepared {
             for step in &mut run.steps {
-                step.status = "skipped".into();
+                step.status = FlowStepRunStatus::Skipped;
             }
-            run.status = "validationFailed".into();
+            run.status = FlowRunStatus::ValidationFailed;
             run.error = Some(runner::error_code(&error));
             run.finished_at = Some(chrono::Utc::now().to_rfc3339());
         }
         self.insert_run(&run).await?;
         let response = self.get_run(&run.workspace_id, &run.id).await?;
-        if run.status == "running" {
+        if run.status == FlowRunStatus::Running {
             let service = self.clone();
             tokio::spawn(async move {
                 let outcome = service.execute_run(&mut run, executor).await;
                 if let Err(error) = outcome {
-                    run.status = "failed".into();
+                    run.status = FlowRunStatus::Failed;
                     run.error = Some(runner::error_code(&error));
                 }
                 for step in &mut run.steps {
-                    if step.status == "pending" {
-                        step.status = "skipped".into();
+                    if step.status == FlowStepRunStatus::Pending {
+                        step.status = FlowStepRunStatus::Skipped;
                     }
                 }
                 run.finished_at = Some(chrono::Utc::now().to_rfc3339());

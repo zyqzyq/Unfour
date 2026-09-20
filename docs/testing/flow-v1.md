@@ -1,5 +1,7 @@
 # Flow V1 verification
 
+Follow-up: [Wait Until and structured inputs verification](flow-wait-until.md).
+
 Verified on Windows on 2026-09-16, based on the repository's existing `main`.
 This is implementation evidence, not a production-service certification.
 
