@@ -1,3 +1,6 @@
+import { ArgumentFields, PredicateFields } from "./StructuredFields";
+import { variablesFor } from "./variables";
+import type { FlowInputDefinition } from "@unfour/command-client";
 import { emptyAction, type Resources } from "./model";
 import type {
   FlowAction,
@@ -12,6 +15,9 @@ export type { Resources } from "./model";
 export { JsonField } from "./JsonField";
 export function StepEditor({
   step,
+  removeDisabled = false,
+  inputs = [],
+  before = [],
   after,
   resources,
   onChange,
@@ -19,6 +25,9 @@ export function StepEditor({
   onValidity,
 }: {
   step: FlowStep;
+  removeDisabled?: boolean;
+  inputs?: FlowInputDefinition[];
+  before?: FlowStep[];
   after: FlowStep[];
   resources: Resources;
   onChange: (step: FlowStep) => void;
@@ -26,6 +35,8 @@ export function StepEditor({
   onValidity: (field: string, valid: boolean) => void;
 }) {
   const { t } = useI18n();
+  const variables = variablesFor(inputs, before);
+  const predicateVariables = variablesFor(inputs, before, step);
   const branches = [
     { value: "$end", label: t("flow.end") },
     ...after.map((s) => ({ value: s.id, label: s.name })),
@@ -43,6 +54,7 @@ export function StepEditor({
             value={action.capability}
             onChange={(e) => {
               onValidity("arguments", true);
+              onValidity("argument", true);
               update(emptyAction(e.target.value as FlowCapability));
             }}
             options={(probe
@@ -79,7 +91,8 @@ export function StepEditor({
             ]}
           />
         )}
-        <JsonField
+        <ArgumentFields action={action} variables={variables} onChange={update} onValidity={(field, valid) => onValidity(`argument:${field}`, valid)} />
+        <details><summary>{t("flow.advanced")}</summary><JsonField
           key={`${step.id}-${action.capability}`}
           label={t("flow.arguments")}
           value={action.arguments}
@@ -92,7 +105,7 @@ export function StepEditor({
               });
             else return false;
           }}
-        />
+        /></details>
       </div>
     );
   }
@@ -104,10 +117,8 @@ export function StepEditor({
           value={step.name}
           onChange={(e) => onChange({ ...step, name: e.target.value })}
         />
-        <code className="text-xs text-[var(--u-color-text-muted)]">
-          {step.id}
-        </code>
-        <Button size="sm" variant="ghost" onClick={onRemove}>
+        <details><summary>{t("flow.advanced")}</summary><code className="text-xs">{step.id}</code></details>
+        <Button size="sm" variant="ghost" disabled={removeDisabled} onClick={onRemove}>
           {t("flow.remove")}
         </Button>
       </div>
@@ -183,16 +194,21 @@ export function StepEditor({
         </>
       )}
       {step.kind === "waitUntil" && <>
-        <JsonField label={t("flow.successWhen")} value={step.successWhen} onValidity={(valid) => onValidity("successWhen", valid)} onChange={(value) => {
+        <PredicateFields label={t("flow.successCondition")} value={step.successWhen} variables={predicateVariables} onChange={(value) => { if (value) onChange({ ...step, successWhen: value }); }} onValidity={(field, valid) => onValidity(`successWhen:${field}`, valid)} />
+        <PredicateFields label={t("flow.failureCondition")} value={step.failureWhen ?? null} variables={predicateVariables} onChange={(value) => onChange({ ...step, failureWhen: value })} onValidity={(field, valid) => onValidity(`failureWhen:${field}`, valid)} />
+        {step.failureWhen && <Button variant="ghost" size="sm" onClick={() => { onChange({ ...step, failureWhen: null }); onValidity("failureWhen", true); }}>{t("flow.disablePredicate")}</Button>}
+        <details><summary>{t("flow.advanced")}</summary><JsonField label={t("flow.successWhen")} value={step.successWhen} onValidity={(valid) => onValidity("successWhen", valid)} onChange={(value) => {
           if (isPredicate(value)) onChange({ ...step, successWhen: value }); else return false;
         }} />
         <JsonField label={t("flow.failureWhen")} value={step.failureWhen ?? null} onValidity={(valid) => onValidity("failureWhen", valid)} onChange={(value) => {
           if (value === null || isPredicate(value)) onChange({ ...step, failureWhen: value }); else return false;
         }} />
-        <label>{t("flow.probeErrorPolicy")}<Select value={step.probeErrorPolicy} options={[{ value: "failImmediately", label: t("flow.failImmediately") }, { value: "retryTransientErrors", label: t("flow.retryTransientErrors") }]} onChange={(e) => onChange({ ...step, probeErrorPolicy: e.target.value as "failImmediately" | "retryTransientErrors" })} /></label>
+        </details><label>{t("flow.probeErrorPolicy")}<Select value={step.probeErrorPolicy} options={[{ value: "failImmediately", label: t("flow.failImmediately") }, { value: "retryTransientErrors", label: t("flow.retryTransientErrors") }]} onChange={(e) => onChange({ ...step, probeErrorPolicy: e.target.value as "failImmediately" | "retryTransientErrors" })} /></label>
       </>}
       {(step.kind === "condition" || step.kind === "poll") && (
-        <JsonField
+        <>
+        <PredicateFields label={t("flow.condition")} value={step.predicate} variables={predicateVariables} onChange={(value) => { if (value) onChange({ ...step, predicate: value }); }} onValidity={(field, valid) => onValidity(`predicate:${field}`, valid)} />
+        <details><summary>{t("flow.advanced")}</summary><JsonField
           label={t("flow.predicate")}
           value={step.predicate}
           onValidity={(valid) => onValidity("predicate", valid)}
@@ -201,7 +217,7 @@ export function StepEditor({
               onChange({ ...step, predicate: value });
             else return false;
           }}
-        />
+        /></details></>
       )}
       {step.kind === "condition" && (
         <div className="grid grid-cols-2 gap-2">

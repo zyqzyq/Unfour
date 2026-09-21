@@ -130,7 +130,7 @@ impl FlowExecutor for CommandBus {
                         .post_response_script
                         .as_deref()
                         .is_some_and(|s| !s.trim().is_empty())
-                    || saved.body_kind == "multipart"
+                    || saved.body_kind == MULTIPART_BODY_KIND
                 {
                     return Err(invalid("FLOW_API_SCRIPT_OR_MULTIPART_UNSUPPORTED"));
                 }

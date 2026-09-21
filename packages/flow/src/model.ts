@@ -107,7 +107,7 @@ export function resourceErrors(definition: FlowDefinition, resources: Resources)
     if (action.capability === "api") {
       const request = resources.api.find((r) => r.id === action.resourceId)!;
       if (request.preRequestScript?.trim() || request.postResponseScript?.trim()) add("flow.apiScriptsUnsupported");
-      if (["multipart", "form-data"].includes(request.bodyKind ?? "")) add("flow.apiMultipartUnsupported");
+      if (request.bodyKind === "multipart-form-data") add("flow.apiMultipartUnsupported");
       if (probe && !["GET", "HEAD"].includes(request.method?.toUpperCase() ?? "")) add("flow.probeMethodError");
     }
     if (probe && action.capability === "database" && !resources.database.find((r) => r.id === action.resourceId)?.readOnly) add("flow.probeReadOnlyError");

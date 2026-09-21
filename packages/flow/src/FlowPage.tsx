@@ -1,3 +1,4 @@
+import { START, END, removalImpact, removeCanvasStep } from "./canvasGraph";
 import { inputDefaults, inputDefinitionErrors, inputErrors, maskInputs, newStep, normalizeInputs, resourceErrors } from "./model";
 import { InputEditor, RunInputs } from "./InputEditor";
 import { RunView } from "./RunView";
@@ -49,7 +50,8 @@ function WorkspaceFlowPage({
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<FlowDefinition | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [showCanvas, setShowCanvas] = useState(false);
+  const [selectedNode, setSelectedNode] = useState<string | null>(START);
+  const [removingNode, setRemovingNode] = useState<string | null>(null);
   const [contextRevision, setContextRevision] = useState(0);
   const [inputs, setInputs] = useState<Record<string, unknown>>({});
   const [invalid, setInvalid] = useState<Record<string, boolean>>({});
@@ -113,6 +115,8 @@ function WorkspaceFlowPage({
   const resetSelection = useCallback((flow: FlowDefinition) => {
     const normalized = { ...flow, inputs: normalizeInputs(flow.inputs) };
     setDraft(normalized);
+    setSelectedNode(START);
+    setRemovingNode(null);
     setDirty(!flow.id);
     setInputs(inputDefaults(normalized.inputs));
     setSecretInputNames("");
@@ -216,22 +220,21 @@ function WorkspaceFlowPage({
   const inputProblems = inputErrors(draft.inputs, resolvedInputs);
   const resourceProblems = resourcesQuery.data ? resourceErrors(draft, resources) : [];
   const manualSecrets = secretInputNames.split(",").map((name) => name.trim()).filter(Boolean);
-  const secrets = [...new Set([...manualSecrets, ...draft.inputs.filter((field) => field.secret).map((field) => field.name)])];
-  const invalidRun = invalidEditor || inputProblems.length > 0 || resourceProblems.length > 0 || Object.values(invalid).some(Boolean) || !resourcesQuery.data || resourcesQuery.isError || environments.isError || (Boolean(environmentId) && !environments.data?.some((environment) => environment.id === environmentId));
+  const manualSecretErrors = manualSecrets.filter((name) => !Object.prototype.hasOwnProperty.call(resolvedInputs, name));
+  const impact = removingNode ? removalImpact(draft, removingNode) : null;
+  const invalidRun = manualSecretErrors.length > 0 || invalidEditor || inputProblems.length > 0 || resourceProblems.length > 0 || Object.values(invalid).some(Boolean) || !resourcesQuery.data || resourcesQuery.isError || environments.isError || (Boolean(environmentId) && !environments.data?.some((environment) => environment.id === environmentId));
   return (
     <div className="flex h-full min-h-0 flex-col text-[13px]">
       <div className="flex shrink-0 items-center gap-2 border-b border-[var(--u-color-border)] p-2">
         <Input
           aria-label={t("flow.name")}
+          disabled={busy}
           value={draft.name}
           onChange={(e) => update({ ...draft, name: e.target.value })}
         />
         <span className="shrink-0 whitespace-nowrap">
           {dirty ? t("flow.unsaved") : `r${draft.revision}`}
         </span>
-        <Button variant="secondary" aria-pressed={showCanvas} onClick={() => setShowCanvas((value) => !value)}>
-          {t("flow.canvas.title")}
-        </Button>
         <Button
           variant="secondary"
           disabled={busy || invalidEditor}
@@ -270,15 +273,12 @@ function WorkspaceFlowPage({
           {error || t("flow.loadFailed")}
         </p>
       )}
-      {showCanvas && <FlowCanvas key={contextRevision} definition={draft} disabled={busy} onChange={(value) => {
-        update(value);
-        setInvalid((state) => Object.fromEntries(Object.entries(state).filter(([key]) => !draft.steps.some((step) => !value.steps.some((next) => next.id === step.id) && key.startsWith(`${step.id}:`)))));
-      }} />}
-      <div className="grid min-h-0 flex-1 grid-cols-2 overflow-hidden">
-        <div className="overflow-auto border-r border-[var(--u-color-border)] p-3">
-          <p className="mb-2 text-xs text-[var(--u-color-text-muted)]">
-            {t("flow.referenceHelp")}
-          </p>
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <FlowCanvas key={contextRevision} definition={draft} disabled={busy} selected={selectedNode} onSelect={setSelectedNode} onRemove={setRemovingNode} run={!dirty && currentRun?.definition.revision === draft.revision ? currentRun : undefined} onChange={update} />
+        <aside aria-label={t("flow.inspector")} hidden={!selectedNode} className="w-[360px] shrink-0 overflow-auto border-l border-[var(--u-color-border)] p-3">
+          <fieldset disabled={busy}>
+          <div className="flex items-center justify-between"><strong>{t("flow.inspector")}</strong><Button variant="ghost" size="sm" onClick={() => setSelectedNode(null)}>{t("flow.closeInspector")}</Button></div>
+          <div hidden={selectedNode !== START}>
           <InputEditor key={contextRevision} definitions={draft.inputs} onChange={(definitions) => {
             const validRunKeys = new Set(definitions.filter((field) => draft.inputs.some((previous) => previous.name === field.name && previous.type === field.type && previous.secret === field.secret)).map((field) => "run:" + field.name));
             setInvalid((state) => Object.fromEntries(Object.entries(state).filter(([key]) => !key.startsWith("run:") || key === "run:json" || validRunKeys.has(key))));
@@ -287,10 +287,14 @@ function WorkspaceFlowPage({
             if (!valid) setDirty(true);
             setInvalid((state) => ({ ...state, [`schema:${key}`]: !valid }));
           }} />
+          </div>
           {schemaProblems.map((problem, index) => <p key={index} role="alert" className="py-1 text-xs text-[var(--u-color-danger)]">{problem.name}: {t(problem.key)}</p>)}
           {resourceProblems.map((problem, index) => <p key={index} role="alert" className="py-1 text-xs text-[var(--u-color-danger)]">{problem.name}: {t(problem.key)}</p>)}
           {draft.steps.map((step, index) => (
-            <StepEditor
+            <div key={`${contextRevision}:${step.id}`} hidden={selectedNode !== step.id}><StepEditor
+              removeDisabled={draft.steps.length <= 1}
+              inputs={draft.inputs}
+              before={draft.steps.slice(0, index)}
               key={`${contextRevision}:${step.id}`}
               step={step}
               after={draft.steps.slice(index + 1)}
@@ -298,53 +302,26 @@ function WorkspaceFlowPage({
               onValidity={(field, valid) => {
                 if (!valid) setDirty(true);
                 setInvalid((state) => ({
-                  ...state,
+                  ...Object.fromEntries(Object.entries(state).filter(([key]) => !valid || !key.startsWith(`${step.id}:${field}:`))),
                   [`${step.id}:${field}`]: !valid,
                 }));
               }}
-              onRemove={() => {
-                update({
-                  ...draft,
-                  steps: draft.steps.filter((s) => s.id !== step.id),
-                });
-                setInvalid((state) =>
-                  Object.fromEntries(
-                    Object.entries(state).filter(
-                      ([key]) => !key.startsWith(`${step.id}:`),
-                    ),
-                  ),
-                );
-              }}
+              onRemove={() => setRemovingNode(step.id)}
               onChange={(value) =>
                 update({
                   ...draft,
                   steps: draft.steps.map((s) => (s.id === step.id ? value : s)),
                 })
               }
-            />
+            /></div>
           ))}
-          <Select
-            className="mt-2"
-            aria-label={t("flow.addStep")}
-            value=""
-            options={[
-              { value: "", label: t("flow.addStep") },
-              ...["api", "ssh", "database", "condition", "waitUntil", "wait"].map(
-                (value) => ({ value, label: t(`flow.${value}`) }),
-              ),
-            ]}
-            onChange={(e) => {
-              if (e.target.value)
-                update({
-                  ...draft,
-                  steps: [
-                    ...draft.steps,
-                    newStep(e.target.value, t(`flow.${e.target.value}`)),
-                  ],
-                });
-            }}
-          />
-        </div>
+          {selectedNode === END && <p>{t("flow.endHelp")}</p>}
+          {!selectedNode && <p>{t("flow.selectNode")}</p>}
+          </fieldset>
+        </aside>
+      </div>
+      <details open className="max-h-[35%] shrink-0 overflow-auto border-t border-[var(--u-color-border)]">
+        <summary className="cursor-pointer p-2">{t("flow.runPanel")}</summary>
         <div className="space-y-3 overflow-auto p-3">
           <label>
             {t("flow.environment")}
@@ -375,13 +352,16 @@ function WorkspaceFlowPage({
               else return false;
             }}
           /></details>
-          <label>
+          <details><summary>{t("flow.advanced")}</summary><label>
             {t("flow.secretInputs")}
             <Input
+              aria-label={t("flow.secretInputs")}
               value={secretInputNames}
               onChange={(e) => setSecretInputNames(e.target.value)}
             />
           </label>
+          </details>
+          {manualSecretErrors.length > 0 && <p role="alert">{t("flow.unknownSecretInput")}: {manualSecretErrors.join(", ")}</p>}
           <label>
             {t("flow.history")}
             <Select
@@ -409,7 +389,7 @@ function WorkspaceFlowPage({
             />
           )}
         </div>
-      </div>
+      </details>
       <ConfirmDialog
         open={confirm !== null}
         onOpenChange={(open) => {
@@ -440,7 +420,7 @@ function WorkspaceFlowPage({
                 flowId: draft.id,
                 environmentId: environmentId || null,
                 inputs: resolvedInputs,
-                secretInputNames: secrets,
+                secretInputNames: manualSecrets,
                 initiator: "human",
                 confirmEffects: true,
               });
@@ -451,6 +431,13 @@ function WorkspaceFlowPage({
           })
         }
       />
+      <ConfirmDialog open={removingNode !== null} onOpenChange={(open) => { if (!open) setRemovingNode(null); }} title={t("flow.canvas.remove")} description={<span className="grid gap-2"><span>{t("flow.canvas.removeHelp")}</span><span>{t("flow.canvas.incoming")}: {impact?.incoming.map((name) => name === START ? t("flow.canvas.start") : name).join(", ") || t("flow.none")}</span>{Boolean(impact?.references.length) && <span role="alert">{t("flow.canvas.referenced")}: {impact?.references.join(", ")}</span>}</span>} confirmLabel={t(impact?.references.length ? "flow.closeInspector" : "flow.remove")} onConfirm={() => {
+        if (impact?.references.length) { setRemovingNode(null); return; }
+        if (!removingNode || draft.steps.length <= 1) return;
+        update(removeCanvasStep(draft, removingNode));
+        setInvalid((state) => Object.fromEntries(Object.entries(state).filter(([key]) => !key.startsWith(removingNode + ":"))));
+        setSelectedNode(START); setRemovingNode(null);
+      }} />
       <ConfirmDialog
         open={pendingSelection !== null}
         onOpenChange={(open) => {

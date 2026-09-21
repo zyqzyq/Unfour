@@ -187,6 +187,8 @@
       "noneAvailable": "暂无工作区",
       "renameCurrent": "重命名当前工作区"
     },
+    "successCondition": "成功条件",
+    "failureCondition": "失败条件",
     "inspector": {
       "collapse": "收起检查器",
       "description": "{module} 的详情和属性会显示在这里。",
@@ -1310,20 +1312,24 @@
   },
   "flow": {
     "canvas": {
-      "title": "Canvas 概念验证",
+      "title": "Flow 画布",
       "start": "开始",
       "end": "结束",
       "true": "真",
       "false": "假",
-      "add": "新增画布节点",
+      "add": "插入节点",
       "remove": "删除选中节点",
       "disconnect": "将选中连线指向结束",
       "zoomIn": "放大",
       "zoomOut": "缩小",
       "fit": "适应画布",
       "selected": "已选中",
-      "invalid": "当前草稿含有非法连线，请先在下方编辑器修正跳转目标。",
-      "help": "从输出端连接后续步骤或结束节点，新连线替换该输出。虚线表示按步骤顺序执行；拖动仅改变临时布局。删除节点将入线指向结束。节点参数仍在下方编辑器配置。"
+      "invalid": "连线无效，请选择后续步骤或 End。",
+      "help": "选择节点配置参数，选择连线插入节点。拖动仅改变临时布局；虚线按执行顺序连接。",
+      "insertOn": "插入到连线",
+      "removeHelp": "删除会将进入此节点的路径改为 End。删除首节点会以后一节点作为入口。请先修改引用此节点的变量。",
+      "incoming": "受影响的路径",
+      "referenced": "请先修改以下步骤中的引用"
     },
     "title": "Flow",
     "new": "新建 Flow",
@@ -1435,6 +1441,56 @@
     "nextCheck": "下次检查",
     "latestResult": "最新结果",
     "latestError": "最新错误",
-    "attemptHistory": "尝试记录"
+    "attemptHistory": "尝试记录",
+    "inspector": "节点配置",
+    "closeInspector": "关闭配置",
+    "selectNode": "选择节点以配置参数。",
+    "endHelp": "当前路径在此结束，不执行额外操作。",
+    "runPanel": "运行输入与历史",
+    "unknownSecretInput": "手工标记的敏感输入名称必须存在于运行输入中",
+    "none": "无",
+    "variable": "变量",
+    "chooseVariable": "选择变量",
+    "variablePath": "嵌套字段（可选，用点分隔）",
+    "variableHelp": "仅列出前序步骤。分支可能跳过步骤，请选择当前路径可用的输出。含点的字段名可在高级 JSON 中编辑。",
+    "probeResult": "最新探测结果",
+    "outputs": "步骤输出",
+    "fieldName": "字段名称",
+    "addField": "添加字段",
+    "addArgument": "添加参数",
+    "left": "值",
+    "right": "比较值",
+    "operator": "比较方式",
+    "enablePredicate": "添加条件",
+    "disablePredicate": "移除失败条件",
+    "value": {
+      "string": "文本",
+      "number": "数字",
+      "boolean": "布尔值",
+      "null": "空值",
+      "json": "对象 / 数组",
+      "variable": "变量"
+    },
+    "argument": {
+      "url": "URL",
+      "body": "请求体",
+      "headers": "请求头",
+      "query": "查询参数",
+      "inputs": "任务输入",
+      "sql": "SQL",
+      "catalog": "目录",
+      "schema": "模式",
+      "limit": "行数限制"
+    },
+    "operatorLabels": {
+      "eq": "等于",
+      "ne": "不等于",
+      "gt": "大于",
+      "ge": "大于等于",
+      "lt": "小于",
+      "le": "小于等于",
+      "in": "包含于"
+    },
+    "enabled": "启用"
   }
 }

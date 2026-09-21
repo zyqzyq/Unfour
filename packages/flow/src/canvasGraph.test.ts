@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FlowDefinition, FlowStep } from "@unfour/command-client";
-import { definitionToGraph, END, graphToDefinition, isCanvasConnectionValid, removeCanvasStep, START } from "./canvasGraph";
+import { definitionToGraph, END, graphToDefinition, insertCanvasStep, isCanvasConnectionValid, removalImpact, removeCanvasStep, START } from "./canvasGraph";
 import { newStep } from "./model";
 
 function fixture(): FlowDefinition {
@@ -12,6 +12,40 @@ function fixture(): FlowDefinition {
 }
 
 describe("Flow Canvas adapter", () => {
+  it.each(["s0:next", "s1:true", "s1:false", "s2:next", "$start:next", "s6:next"])("inserts on %s without redirecting any other port", (port) => {
+    const original = fixture();
+    const oldEdges = definitionToGraph(original).edges;
+    const oldTarget = oldEdges.find((edge) => edge.id === port)!.target;
+    const result = insertCanvasStep(original, port, { ...newStep("wait", "Inserted"), id: "inserted" });
+    const edges = definitionToGraph(result).edges;
+    expect(edges.find((edge) => edge.id === port)?.target).toBe("inserted");
+    expect(edges.find((edge) => edge.source === "inserted")?.target).toBe(oldTarget);
+    for (const edge of oldEdges.filter((edge) => edge.id !== port)) expect(edges.find((next) => next.id === edge.id)?.target).toBe(edge.target);
+    expect(graphToDefinition(result, definitionToGraph(result))).toEqual(result);
+    expect(result.steps.filter((step) => step.id !== "inserted").map((step) => step.id)).toEqual(original.steps.map((step) => step.id));
+  });
+  it("inserts Condition with both branches continuing to the original destination", () => {
+    const result = insertCanvasStep(fixture(), "s0:next", { ...newStep("condition", "Check"), id: "check" });
+    expect(result.steps[1]).toMatchObject({ id: "check", ifTrue: "s1", ifFalse: "s1" });
+    expect(definitionToGraph(result).edges.find((edge) => edge.source === "s1" && edge.sourceHandle === "false")?.target).toBe(END);
+  });
+  it("preserves absent legacy next properties and unknown extension fields on round trip", () => {
+    const original = JSON.parse(JSON.stringify(fixture()));
+    delete original.steps[0].next;
+    delete original.steps[1].next;
+    original.steps[6].legacyMetadata = { unchanged: true };
+    const result = graphToDefinition(original, definitionToGraph(original));
+    expect(JSON.stringify(result)).toBe(JSON.stringify(original));
+  });
+  it("reports references recursively and blocks deletion rather than leaving dangling references", () => {
+    const original = fixture();
+    const last = original.steps[6];
+    if (last.kind !== "poll") throw new Error("fixture");
+    last.probe.arguments = { nested: [{ $ref: "/steps/s2/rows/0" }], message: "${/steps/s2/rows}" };
+    expect(removalImpact(original, "s2")).toEqual({ incoming: ["condition"], references: ["poll"] });
+    expect(() => removeCanvasStep(original, "s2")).toThrow("REFERENCED_STEP");
+    expect(removalImpact(original, "s0").references).toEqual([]);
+  });
   it("round trips all node kinds, implicit/explicit next, branches, typed inputs and revision without layout", () => {
     const original = fixture();
     const graph = definitionToGraph(original, { s0: { x: 91, y: -42 } });

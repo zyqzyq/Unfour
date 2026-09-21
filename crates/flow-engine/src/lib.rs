@@ -81,22 +81,30 @@ impl FlowService {
             started_at: now,
             finished_at: None,
         };
-        // Register declared secrets before validation so even rejected runs are safe.
-        for field in &run.definition.inputs {
-            if field.secret && !run.context.secret_input_names.contains(&field.name) {
-                run.context.secret_input_names.push(field.name.clone());
-            }
-        }
-        let prepared = async {
+        let manual_secrets = run.context.secret_input_names.clone();
+        let validated_inputs = (|| -> AppResult<()> {
             validation::resolve_inputs(&run.definition, &mut run.context.inputs)?;
             let inputs = run
                 .context
                 .inputs
                 .as_object()
                 .ok_or_else(|| expression::invalid("FLOW_INPUTS_OBJECT_REQUIRED"))?;
+            if manual_secrets.iter().any(|name| !inputs.contains_key(name)) {
+                return Err(expression::invalid("FLOW_UNKNOWN_SECRET_INPUT"));
+            }
             if serde_json::to_vec(inputs)?.len() > 262_144 {
                 return Err(expression::invalid("FLOW_INVALID_INPUTS"));
             }
+            Ok(())
+        })();
+        // Validate manual names separately, but redact schema secrets even in rejected runs.
+        for field in &run.definition.inputs {
+            if field.secret && !run.context.secret_input_names.contains(&field.name) {
+                run.context.secret_input_names.push(field.name.clone());
+            }
+        }
+        let prepared = async {
+            validated_inputs?;
             for step in &run.definition.steps {
                 let (action, probe) = match &step.node {
                     FlowNode::Action { action } => (action, false),

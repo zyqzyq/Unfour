@@ -8,7 +8,54 @@ import { StepEditor } from "./StepEditor";
 import { InputEditor, RunInputs } from "./InputEditor";
 import { newStep } from "./model";
 import type { FlowInputDefinition, FlowStep } from "@unfour/command-client";
+import { ValueEditor } from "./ValueEditor";
 afterEach(cleanup);
+
+it("Variable Picker writes existing refs for inputs and nested upstream outputs", () => {
+  const changed = vi.fn();
+  function Field() {
+    const [value, setValue] = useState<unknown>("");
+    return <ValueEditor label="URL" value={value} variables={[{ label: "endpoint", path: ["inputs", "endpoint/url"] }, { label: "Fetch · body", path: ["steps", "fetch", "body"] }]} onValidity={() => {}} onChange={(next) => { setValue(next); changed(next); }} />;
+  }
+  render(<I18nProvider initialLocale="en"><Field /></I18nProvider>);
+  fireEvent.change(screen.getByLabelText("URL · Type"), { target: { value: "variable" } });
+  fireEvent.change(screen.getByLabelText("URL · Variable"), { target: { value: "/inputs/endpoint~1url" } });
+  expect(changed).toHaveBeenLastCalledWith({ $ref: "/inputs/endpoint~1url" });
+  fireEvent.change(screen.getByLabelText("URL · Variable"), { target: { value: "/steps/fetch/body" } });
+  fireEvent.change(screen.getByLabelText("Nested field (optional, dot separated)"), { target: { value: "items.0.url" } });
+  expect(changed).toHaveBeenLastCalledWith({ $ref: "/steps/fetch/body/items/0/url" });
+});
+
+it("structured API headers preserve the engine key/value/enabled array format", () => {
+  const changed = vi.fn();
+  render(<I18nProvider initialLocale="en"><Editor initial={newStep("api", "API")} changed={changed} /></I18nProvider>);
+  fireEvent.change(screen.getByLabelText("Add parameter"), { target: { value: "headers" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add field" }));
+  fireEvent.change(screen.getByLabelText("Headers 1 · Field name"), { target: { value: "X-Version" } });
+  fireEvent.change(screen.getByLabelText("Headers 1", { exact: true }), { target: { value: "v2" } });
+  expect(changed.mock.lastCall?.[0]).toMatchObject({ action: { arguments: { headers: [{ key: "X-Version", value: "v2", enabled: true }] } } });
+});
+
+it("keeps variable source identity when the available input list changes", () => {
+  const changed = vi.fn();
+  const variables = [{ label: "Fetch", path: ["steps", "fetch"] }, { label: "Fetch · body", path: ["steps", "fetch", "body"] }];
+  const view = (prepend: boolean) => <I18nProvider initialLocale="en"><ValueEditor label="Test" value={{ $ref: "/steps/fetch/body" }} variables={prepend ? [{ label: "new", path: ["inputs", "new"] }, ...variables] : variables} onValidity={() => {}} onChange={changed} /></I18nProvider>;
+  const mounted = render(view(false));
+  fireEvent.change(screen.getByLabelText("Test · Variable"), { target: { value: "/steps/fetch" } });
+  mounted.rerender(view(true));
+  fireEvent.change(screen.getByLabelText("Nested field (optional, dot separated)"), { target: { value: "body.ready" } });
+  expect(changed).toHaveBeenLastCalledWith({ $ref: "/steps/fetch/body/ready" });
+});
+
+it("retains an incomplete numeric value and does not save its previous value silently", () => {
+  const validity = vi.fn();
+  const changed = vi.fn();
+  render(<I18nProvider initialLocale="en"><ValueEditor label="Limit" value={100} variables={[]} onValidity={validity} onChange={changed} /></I18nProvider>);
+  fireEvent.change(screen.getByLabelText("Limit", { exact: true }), { target: { value: "" } });
+  expect(screen.getByLabelText("Limit", { exact: true })).toHaveValue(null);
+  expect(validity).toHaveBeenLastCalledWith(false);
+  expect(changed).not.toHaveBeenCalled();
+});
 
 function Editor({ initial, changed }: { initial: FlowStep; changed: (step: FlowStep) => void }) {
   const [step, setStep] = useState(initial);

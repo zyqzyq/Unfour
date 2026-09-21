@@ -19,6 +19,10 @@
   font-size: 13px;
 }
 .flow-canvas-node.is-selected { border-color: var(--u-color-primary); }
+.flow-canvas-node[data-status="running"] { border-color: var(--u-color-primary); }
+.flow-canvas-node[data-status="failed"],
+.flow-canvas-node[data-status="timedOut"],
+.flow-canvas-node[data-status="interrupted"] { border-color: var(--u-color-danger); }
 .flow-canvas-port { position: absolute; right: 8px; font-size: 10px; color: var(--u-color-text-muted); }
 .flow-canvas-true { top: 20%; }
 .flow-canvas-false { top: 60%; }

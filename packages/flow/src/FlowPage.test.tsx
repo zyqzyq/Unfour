@@ -84,6 +84,7 @@ const run: commands.FlowRun = {
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   vi.mocked(commands.listFlows).mockResolvedValue([structuredClone(flow)]);
   vi.mocked(commands.listFlowRuns).mockResolvedValue([structuredClone(run)]);
   vi.mocked(commands.getFlowRun).mockResolvedValue(structuredClone(run));
@@ -316,4 +317,40 @@ it("requires a deliberate discard when switching a dirty definition", async () =
     "Discard unsaved changes",
   );
   expect(screen.getByLabelText("Flow name")).toHaveValue("Changed");
+});
+
+it("loads and saves an existing definition without Canvas normalization or payload loss", async () => {
+  const original = { ...flow, steps: [...flow.steps, { id: "legacy", name: "Legacy", kind: "poll" as const, timeoutMs: 500, intervalMs: 10, maxAttempts: 5, next: "$end", probe: { capability: "api" as const, resourceId: "old", connectionId: null, arguments: { url: { $ref: "/inputs/version" } } }, predicate: { left: true, op: "eq" as const, right: true } }] };
+  vi.mocked(commands.listFlows).mockResolvedValue([original]);
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  expect(screen.getByLabelText("Flow Canvas")).toBeInTheDocument();
+  expect(screen.getByLabelText("Input name")).toBeVisible();
+  expect(screen.getAllByLabelText("Step name")[0]).not.toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(commands.saveFlow).toHaveBeenCalledWith(original));
+});
+
+it("validates manual secret names against runtime inputs without sending optional declared secrets as manual names", async () => {
+  vi.mocked(commands.listFlows).mockResolvedValue([{ ...flow, inputs: [...flow.inputs, { name: "optionalSecret", type: "string", required: false, secret: true }] }]);
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.change(screen.getByLabelText("version", { exact: true }), { target: { value: "42" } });
+  fireEvent.change(screen.getByLabelText("Secret input names (comma separated)"), { target: { value: "optionalSecret" } });
+  expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
+  expect(screen.getByRole("alert")).toHaveTextContent("must exist");
+  fireEvent.change(screen.getByLabelText("Secret input names (comma separated)"), { target: { value: "version" } });
+  fireEvent.click(screen.getByRole("button", { name: "Run" }));
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Run" }));
+  await waitFor(() => expect(commands.runFlow).toHaveBeenCalledWith(expect.objectContaining({ secretInputNames: ["version"] })));
+});
+
+it("projects matching run status onto nodes and hides it after editing", async () => {
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  await screen.findByRole("option", { name: /2026-09-14T00:00:00Z/ });
+  fireEvent.change(screen.getByLabelText("Run history"), { target: { value: "run-1" } });
+  await waitFor(() => expect(document.querySelector('.flow-canvas-node[data-status="running"]')).not.toBeNull());
+  fireEvent.change(screen.getByLabelText("Flow name"), { target: { value: "Edited" } });
+  expect(document.querySelector('.flow-canvas-node[data-status="running"]')).toBeNull();
 });

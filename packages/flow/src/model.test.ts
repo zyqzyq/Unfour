@@ -26,7 +26,7 @@ it("preflights metadata for probes, API scripts and missing resources", () => {
   const step = newStep("waitUntil", "Ready");
   if (step.kind !== "waitUntil") throw new Error("Expected waitUntil");
   const flow: FlowDefinition = { id: "f", workspaceId: "w", name: "f", revision: 1, inputs: [], steps: [{ ...step, probe: { ...step.probe, resourceId: "api" } }] };
-  const resources = { api: [{ id: "api", name: "API", method: "POST", bodyKind: "multipart", preRequestScript: "script" }], database: [], ssh: [], connections: [] };
+  const resources = { api: [{ id: "api", name: "API", method: "POST", bodyKind: "multipart-form-data", preRequestScript: "script" }], database: [], ssh: [], connections: [] };
   expect(resourceErrors(flow, resources).map((e) => e.key)).toEqual(["flow.apiScriptsUnsupported", "flow.apiMultipartUnsupported", "flow.probeMethodError"]);
   expect(resourceErrors(flow, { ...resources, api: [] }).map((e) => e.key)).toEqual(["flow.missingResource"]);
   flow.steps = [{ ...step, probe: { capability: "database", resourceId: "db", connectionId: null, arguments: {} } }];

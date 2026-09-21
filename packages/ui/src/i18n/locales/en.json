@@ -187,6 +187,8 @@
       "noneAvailable": "No workspaces",
       "renameCurrent": "Rename current"
     },
+    "successCondition": "Success condition",
+    "failureCondition": "Failure condition",
     "inspector": {
       "collapse": "Collapse inspector",
       "description": "{module} details and properties will use this space.",
@@ -1312,20 +1314,24 @@
   },
   "flow": {
     "canvas": {
-      "title": "Canvas PoC",
+      "title": "Flow Canvas",
       "start": "Start",
       "end": "End",
       "true": "True",
       "false": "False",
-      "add": "Add canvas node",
+      "add": "Insert node",
       "remove": "Delete selected node",
       "disconnect": "Route selected edge to End",
       "zoomIn": "Zoom in",
       "zoomOut": "Zoom out",
       "fit": "Fit view",
       "selected": "Selected",
-      "invalid": "This draft contains invalid connections. Fix the destinations in the editor below first.",
-      "help": "Connect an output to a later step or End; a new link replaces that output. Dashed edges follow step order. Dragging only changes temporary layout. Deleting a node routes incoming links to End. Configure nodes in the editor below."
+      "invalid": "This connection is invalid. Select a later step or End.",
+      "help": "Select a node to configure it. Choose a connection before inserting. Dragging changes temporary layout only; dashed edges follow execution order.",
+      "insertOn": "Insert on connection",
+      "removeHelp": "Deleting redirects incoming paths to End. Deleting the first node makes the next node the entry point. References must be updated before deletion.",
+      "incoming": "Affected paths",
+      "referenced": "Update these referencing steps before deleting"
     },
     "title": "Flow",
     "new": "New Flow",
@@ -1437,6 +1443,56 @@
     "nextCheck": "Next check",
     "latestResult": "Latest result",
     "latestError": "Latest error",
-    "attemptHistory": "Attempt history"
+    "attemptHistory": "Attempt history",
+    "inspector": "Inspector",
+    "closeInspector": "Close inspector",
+    "selectNode": "Select a node to configure it.",
+    "endHelp": "The selected path ends here. No additional action is executed.",
+    "runPanel": "Run inputs & history",
+    "unknownSecretInput": "Secret input names must exist in the runtime inputs",
+    "none": "None",
+    "variable": "Variable",
+    "chooseVariable": "Choose variable",
+    "variablePath": "Nested field (optional, dot separated)",
+    "variableHelp": "Only earlier steps are offered. A branch may skip a step; choose an output available on this path. Nested field names containing dots can be edited in Advanced JSON.",
+    "probeResult": "Latest probe",
+    "outputs": "Step outputs",
+    "fieldName": "Field name",
+    "addField": "Add field",
+    "addArgument": "Add parameter",
+    "left": "Value",
+    "right": "Compare with",
+    "operator": "Operator",
+    "enablePredicate": "Add condition",
+    "disablePredicate": "Remove failure condition",
+    "value": {
+      "string": "Text",
+      "number": "Number",
+      "boolean": "Boolean",
+      "null": "Null",
+      "json": "Object / array",
+      "variable": "Variable"
+    },
+    "argument": {
+      "url": "URL",
+      "body": "Body",
+      "headers": "Headers",
+      "query": "Query parameters",
+      "inputs": "Task inputs",
+      "sql": "SQL",
+      "catalog": "Catalog",
+      "schema": "Schema",
+      "limit": "Row limit"
+    },
+    "operatorLabels": {
+      "eq": "Equals",
+      "ne": "Does not equal",
+      "gt": "Greater than",
+      "ge": "Greater than or equal",
+      "lt": "Less than",
+      "le": "Less than or equal",
+      "in": "Is in"
+    },
+    "enabled": "Enabled"
   }
 }

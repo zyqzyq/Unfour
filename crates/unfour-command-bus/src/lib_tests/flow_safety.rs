@@ -4,6 +4,78 @@ use serde_json::json;
 use unfour_core::models::{FlowRunStatus, FlowStepRunStatus};
 
 #[tokio::test]
+async fn flow_canonical_multipart_is_rejected_before_execution() {
+    let bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let mut input = api_script_test_input(workspace.clone(), "http://127.0.0.1:1/never".into());
+    input.body_kind = unfour_core::models::MULTIPART_BODY_KIND.into();
+    input.body = Some("[]".into());
+    let api = bus.save_api_request(input).await.unwrap();
+    for probe in [false, true] {
+        let node = if probe {
+            json!({"id":"probe","name":"probe","kind":"poll","timeoutMs":1000,"intervalMs":10,"maxAttempts":1,
+                "probe":{"capability":"api","resourceId":api.id,"arguments":{}},
+                "predicate":{"left":true,"op":"eq","right":true}})
+        } else {
+            action("request", "api", &api.id, json!({}))
+        };
+        let flow = bus
+            .save_flow(definition(&workspace, json!([node])))
+            .await
+            .unwrap();
+        let result = bus.run_flow(request(&workspace, &flow.id)).await.unwrap();
+        assert_eq!(result.status, FlowRunStatus::ValidationFailed);
+        assert_eq!(
+            result.error.as_deref(),
+            Some("FLOW_API_SCRIPT_OR_MULTIPART_UNSUPPORTED")
+        );
+        assert!(result.steps.iter().all(|step| step.attempts.is_empty()));
+    }
+}
+
+#[tokio::test]
+async fn flow_manual_secrets_validate_runtime_names_before_declared_secret_union() {
+    let bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let service = unfour_flow_engine::FlowService::new(bus.db.clone());
+    let mut flow = definition(
+        &workspace,
+        json!([action("echo", "api", "echo", json!({}))]),
+    );
+    flow.inputs = serde_json::from_value(json!([
+        {"name":"declared","type":"string","secret":true},
+        {"name":"optional","type":"string","secret":true},
+        {"name":"defaulted","type":"number","default":5}
+    ]))
+    .unwrap();
+    let flow = service.save(flow).await.unwrap();
+    for names in [vec!["extra", "defaulted"], vec!["typo"], vec!["optional"]] {
+        let mut input = request(&workspace, &flow.id);
+        input.inputs =
+            json!({"declared":"fixture-declared-secret", "extra":"fixture-extra-secret"});
+        input.secret_input_names = names.iter().map(|name| (*name).into()).collect();
+        let driver = std::sync::Arc::new(Driver::default());
+        let run = service.run(input, driver.clone()).await.unwrap();
+        let result = finished(&bus, &run).await;
+        if names[0] == "extra" {
+            assert_eq!(result.status, FlowRunStatus::Succeeded);
+            for name in ["extra", "defaulted", "declared", "optional"] {
+                assert!(result.context.secret_input_names.contains(&name.into()));
+            }
+        } else {
+            assert_eq!(result.status, FlowRunStatus::ValidationFailed);
+            assert_eq!(result.error.as_deref(), Some("FLOW_UNKNOWN_SECRET_INPUT"));
+            assert!(driver.calls.lock().unwrap().is_empty());
+        }
+        let stored = serde_json::to_string(&result).unwrap();
+        assert!(!stored.contains("fixture-declared-secret"));
+        if names[0] == "extra" {
+            assert!(!stored.contains("fixture-extra-secret"));
+        }
+    }
+}
+
+#[tokio::test]
 async fn flow_saved_auth_is_materialized_without_a_ui_and_explicit_headers_win() {
     let bus = test_bus().await;
     let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
