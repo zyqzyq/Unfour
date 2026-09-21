@@ -109,8 +109,10 @@ it("clears stale run-field validity after changing its schema type", async () =>
   vi.mocked(commands.listFlows).mockResolvedValue([{ ...flow, inputs: [{ name: "payload", type: "json", required: false, secret: false }] }]);
   mount();
   fireEvent.click(await screen.findByText("Release"));
+  openRun();
   fireEvent.change(screen.getByLabelText("payload"), { target: { value: "{" } });
   expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
+  await closeRun();
   fireEvent.change(screen.getByLabelText("Type"), { target: { value: "string" } });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() => expect(screen.getByRole("button", { name: "Run" })).toBeEnabled());
@@ -128,6 +130,17 @@ it("requires discarding an invalid input-default draft before switching", async 
   expect(screen.getByRole("dialog")).toBeInTheDocument();
   expect(screen.getByLabelText("Flow name")).toHaveValue("Release");
 });
+function openRun() {
+  fireEvent.click(screen.getByRole("button", { name: "Run", exact: true }));
+}
+async function closeRun() {
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel", exact: true }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Run", exact: true })).toHaveFocus());
+}
+async function selectHistory() {
+  fireEvent.click(screen.getByRole("button", { name: "Run history" }));
+  fireEvent.click(await screen.findByRole("button", { name: /2026-09-14T00:00:00Z/ }));
+}
 function Harness({ workspaceId = "ws" }: { workspaceId?: string }) {
   const [sidebar, setSidebar] = useState<ReactNode>(null);
   return (
@@ -154,10 +167,10 @@ function mount(locale: "en" | "zh-CN" = "en") {
 it("sends explicit context only after run confirmation and supports cancellation", async () => {
   mount();
   fireEvent.click(await screen.findByText("Release"));
+  openRun();
   fireEvent.change(screen.getByLabelText("Run inputs (JSON object)"), {
     target: { value: '{"version":42}' },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Run" }));
   expect(commands.runFlow).not.toHaveBeenCalled();
   const dialog = await screen.findByRole("dialog");
   fireEvent.click(dialog.querySelector("button:last-child")!);
@@ -210,19 +223,26 @@ it("resets inputs, secrets and explicit environment on selection and discard to 
   vi.mocked(commands.listWorkspaceEnvironments).mockResolvedValue([{ id: "prod", name: "Production" }] as Awaited<ReturnType<typeof commands.listWorkspaceEnvironments>>);
   mount();
   fireEvent.click(await screen.findByText("Release"));
+  openRun();
   fireEvent.change(screen.getByLabelText("Run inputs (JSON object)"), { target: { value: '{"version":42}' } });
   fireEvent.change(screen.getByLabelText("Secret input names (comma separated)"), { target: { value: "version" } });
   fireEvent.change(screen.getByLabelText("Environment"), { target: { value: "prod" } });
+  await closeRun();
   fireEvent.click(screen.getByText("Other"));
+  openRun();
   expect(screen.getByLabelText("Run inputs (JSON object)")).toHaveValue("{}");
   expect(screen.getByLabelText("Secret input names (comma separated)")).toHaveValue("");
   expect(screen.getByLabelText("Environment")).toHaveValue("");
   fireEvent.change(screen.getByLabelText("Run inputs (JSON object)"), { target: { value: '{"private":"x"}' } });
+  await closeRun();
   fireEvent.change(screen.getByLabelText("Flow name"), { target: { value: "Unsaved" } });
   fireEvent.click(screen.getByRole("button", { name: "New Flow" }));
   fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Discard" }));
+  vi.mocked(commands.saveFlow).mockResolvedValue({ ...flow, id: "new", inputs: [] });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Run" })).toBeEnabled());
+  openRun();
   expect(screen.getByLabelText("Run inputs (JSON object)")).toHaveValue("{}");
-  expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
 });
 
 it("remounts all context when workspace changes", async () => {
@@ -230,10 +250,12 @@ it("remounts all context when workspace changes", async () => {
   const view = (workspaceId: string) => <QueryClientProvider client={client}><I18nProvider initialLocale="en"><Harness workspaceId={workspaceId} /></I18nProvider></QueryClientProvider>;
   const mounted = render(view("ws"));
   fireEvent.click(await screen.findByText("Release"));
+  openRun();
   fireEvent.change(screen.getByLabelText("Run inputs (JSON object)"), { target: { value: '{"version":42}' } });
   mounted.rerender(view("next"));
   expect(screen.queryByLabelText("Flow name")).not.toBeInTheDocument();
   fireEvent.click(await screen.findByText("Release"));
+  openRun();
   expect(screen.getByLabelText("Run inputs (JSON object)")).toHaveValue("{}");
 });
 
@@ -245,19 +267,19 @@ it("generates typed fields, checks required inputs and masks confirmation contex
   ] }]);
   mount();
   fireEvent.click(await screen.findByText("Release"));
+  openRun();
   expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
   fireEvent.change(screen.getByLabelText("version", { exact: true }), { target: { value: "42" } });
   const secret = screen.getByLabelText("credential", { exact: true });
   expect(secret).toHaveAttribute("type", "password");
   fireEvent.change(secret, { target: { value: "never-show" } });
-  fireEvent.click(screen.getByRole("button", { name: "Run" }));
   const dialog = await screen.findByRole("dialog");
   expect(dialog).toHaveTextContent("Release");
   expect(dialog).toHaveTextContent("ws");
   expect(dialog).toHaveTextContent("Workspace variables only");
   expect(dialog).toHaveTextContent("42");
   expect(dialog).toHaveTextContent("false");
-  expect(dialog).not.toHaveTextContent("never-show");
+  expect(within(dialog).getByLabelText("Input preview (masked)")).not.toHaveTextContent("never-show");
 });
 
 it("blocks running broken resources while preserving Save", async () => {
@@ -298,8 +320,8 @@ it("shows persisted latest result, error, attempts and next check", async () => 
   vi.mocked(commands.getFlowRun).mockResolvedValue({ ...run, steps: [{ ...run.steps[0], startedAt: "2026-09-14T00:00:00Z", nextCheckAt: "2026-09-14T00:00:02Z", output: { ready: false }, attempts: [{ ...run.steps[0].attempts[0], output: { ready: false }, error: "Transient connection failure" }] }] });
   mount();
   fireEvent.click(await screen.findByText("Release"));
-  await screen.findByRole("option", { name: /2026-09-14T00:00:00Z/ });
-  fireEvent.change(screen.getByLabelText("Run history"), { target: { value: "run-1" } });
+  await selectHistory();
+  fireEvent.click(screen.getByText("Wait", { selector: ".truncate" }));
   expect(await screen.findByText(/Next check/)).toHaveTextContent("2026-09-14T00:00:02Z");
   expect(screen.getByText("Latest result")).toBeInTheDocument();
   expect(screen.getByText(/Latest error/)).toBeInTheDocument();
@@ -335,12 +357,12 @@ it("validates manual secret names against runtime inputs without sending optiona
   vi.mocked(commands.listFlows).mockResolvedValue([{ ...flow, inputs: [...flow.inputs, { name: "optionalSecret", type: "string", required: false, secret: true }] }]);
   mount();
   fireEvent.click(await screen.findByText("Release"));
+  openRun();
   fireEvent.change(screen.getByLabelText("version", { exact: true }), { target: { value: "42" } });
   fireEvent.change(screen.getByLabelText("Secret input names (comma separated)"), { target: { value: "optionalSecret" } });
   expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
   expect(screen.getByRole("alert")).toHaveTextContent("must exist");
   fireEvent.change(screen.getByLabelText("Secret input names (comma separated)"), { target: { value: "version" } });
-  fireEvent.click(screen.getByRole("button", { name: "Run" }));
   fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Run" }));
   await waitFor(() => expect(commands.runFlow).toHaveBeenCalledWith(expect.objectContaining({ secretInputNames: ["version"] })));
 });
@@ -348,10 +370,12 @@ it("validates manual secret names against runtime inputs without sending optiona
 it("projects matching run status onto nodes and hides it after editing", async () => {
   mount();
   fireEvent.click(await screen.findByText("Release"));
-  await screen.findByRole("option", { name: /2026-09-14T00:00:00Z/ });
-  fireEvent.change(screen.getByLabelText("Run history"), { target: { value: "run-1" } });
+  await selectHistory();
   await waitFor(() => expect(document.querySelector('.flow-canvas-node[data-status="running"]')).not.toBeNull());
+  expect(screen.getByLabelText("Flow name")).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Back to editor" }));
   fireEvent.change(screen.getByLabelText("Flow name"), { target: { value: "Edited" } });
+  await selectHistory();
   expect(document.querySelector('.flow-canvas-node[data-status="running"]')).toBeNull();
 });
 
@@ -386,8 +410,7 @@ it("keeps selected and failed states together on the same node", async () => {
   vi.mocked(commands.getFlowRun).mockResolvedValue({ ...run, status: "failed", steps: [{ ...run.steps[0], status: "failed" }] });
   mount();
   fireEvent.click(await screen.findByText("Release"));
-  await screen.findByRole("option", { name: /2026-09-14T00:00:00Z/ });
-  fireEvent.change(screen.getByLabelText("Run history"), { target: { value: "run-1" } });
+  await selectHistory();
   await waitFor(() => expect(document.querySelector('.flow-canvas-node[data-status="failed"]')).not.toBeNull());
   fireEvent.click(document.querySelector('.flow-canvas-node[data-status="failed"]')!);
   expect(document.querySelector('.flow-canvas-node[data-status="failed"]')).toHaveClass("is-selected");
@@ -451,4 +474,107 @@ it("loads and saves a legacy in operand whose right value is a $ref array", asyn
   expect(screen.getByLabelText("Failure condition · Compare with · Type")).toHaveValue("variable");
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() => expect(commands.saveFlow).toHaveBeenCalledWith(original));
+});
+
+
+it("keeps runtime fields in the dialog and restores the editor after inspecting a run", async () => {
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  expect(screen.queryByText("Run inputs & history")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("version", { exact: true })).not.toBeInTheDocument();
+  openRun();
+  expect(within(screen.getByRole("dialog")).getByLabelText("Environment")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("version", { exact: true }), { target: { value: "42" } });
+  await closeRun();
+  expect(commands.runFlow).not.toHaveBeenCalled();
+  await selectHistory();
+  expect(screen.getByText("Viewing run")).toBeVisible();
+  expect(screen.getByLabelText("Flow name")).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  expect(screen.queryByLabelText("Add step")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText("Wait", { selector: ".truncate" }));
+  const inspector = screen.getByRole("complementary", { name: "Run detail" });
+  expect(within(inspector).getByText("Run input values").nextElementSibling).toHaveTextContent('"version": 42');
+  expect(within(inspector).getByText("Latest result")).toBeVisible();
+  expect(screen.getByLabelText("Step name")).not.toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Back to editor" }));
+  expect(screen.queryByText("Viewing run")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Step name")).toBeVisible();
+  expect(screen.getByLabelText("Flow name")).toBeEnabled();
+  expect(document.querySelector(".flow-canvas-node[data-status]")).toBeNull();
+  openRun();
+  expect(screen.getByLabelText("version", { exact: true })).toHaveValue(42);
+});
+
+it("does not project a different revision and shows recorded details explicitly", async () => {
+  const previous = { ...run, definition: { ...flow, revision: 2 } };
+  vi.mocked(commands.listFlowRuns).mockResolvedValue([previous]);
+  vi.mocked(commands.getFlowRun).mockResolvedValue(previous);
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  await selectHistory();
+  expect(await screen.findByText(/Node status is hidden/)).toBeVisible();
+  expect(document.querySelector(".flow-canvas-node[data-status]")).toBeNull();
+  fireEvent.click(screen.getByText("Wait", { selector: ".truncate" }));
+  expect(screen.getByRole("complementary", { name: "Run detail" })).toHaveTextContent("r2");
+  expect(screen.getByText(/1 attempts/)).toBeVisible();
+});
+
+it("lists history status, time and duration with an empty state", async () => {
+  vi.mocked(commands.listFlowRuns).mockResolvedValue([{ ...run, status: "succeeded", finishedAt: "2026-09-14T00:00:02Z" }]);
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.click(screen.getByRole("button", { name: "Run history" }));
+  const entry = await screen.findByRole("button", { name: /2026-09-14T00:00:00Z/ });
+  expect(entry).toHaveTextContent("Succeeded");
+  expect(entry).toHaveTextContent("2000 ms");
+  fireEvent.click(entry);
+  expect(screen.queryByRole("dialog", { name: "Run history" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Back to editor" }));
+  vi.mocked(commands.listFlowRuns).mockResolvedValue([]);
+  fireEvent.click(screen.getByRole("button", { name: "Run history" }));
+  expect(await screen.findByText("No runs yet.")).toBeVisible();
+});
+
+it("submits the selected environment only after effects confirmation", async () => {
+  vi.mocked(commands.listWorkspaceEnvironments).mockResolvedValue([{ id: "prod", name: "Production" }] as Awaited<ReturnType<typeof commands.listWorkspaceEnvironments>>);
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  openRun();
+  fireEvent.change(screen.getByLabelText("Environment"), { target: { value: "prod" } });
+  fireEvent.change(screen.getByLabelText("version", { exact: true }), { target: { value: "42" } });
+  expect(screen.getByRole("dialog")).toHaveTextContent("Production");
+  expect(commands.runFlow).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Run", exact: true }));
+  await waitFor(() => expect(commands.runFlow).toHaveBeenCalledWith(expect.objectContaining({ environmentId: "prod", confirmEffects: true })));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(screen.getByText("Viewing run")).toBeVisible();
+});
+
+it("blocks invalid runtime JSON inside the dialog and allows correcting it", async () => {
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  openRun();
+  fireEvent.change(screen.getByLabelText("Run inputs (JSON object)"), { target: { value: "{" } });
+  expect(screen.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+  expect(commands.runFlow).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText("Run inputs (JSON object)"), { target: { value: '{"version":42}' } });
+  expect(screen.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+});
+
+
+it("keeps removed historical nodes inspectable without projecting them onto the current Canvas", async () => {
+  const previous = { ...run, definition: { ...flow, revision: 2, steps: [{ ...flow.steps[0], id: "removed", name: "Old wait" }] }, steps: [{ ...run.steps[0], stepId: "removed" }] };
+  vi.mocked(commands.listFlowRuns).mockResolvedValue([previous]);
+  vi.mocked(commands.getFlowRun).mockResolvedValue(previous);
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  await selectHistory();
+  fireEvent.change(await screen.findByLabelText("Recorded node"), { target: { value: "removed" } });
+  expect(screen.getByRole("complementary", { name: "Run detail" })).toHaveTextContent("Old wait");
+  expect(screen.getByText(/1 attempts/)).toBeVisible();
+  expect(document.querySelector(".flow-canvas-node[data-status]")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Back to editor" }));
+  expect(screen.getByLabelText("Flow name")).toBeEnabled();
 });

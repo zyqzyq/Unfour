@@ -6,8 +6,9 @@ Updated 2026-09-21. The former opt-in PoC is now the default authoring surface.
 
 - Canvas is the main editor; Start configures typed inputs, and selecting an
   action, Condition, Wait Until, legacy Poll or Wait opens the shared StepEditor
-  in the right Inspector. End explains path termination. Inspector and the
-  bottom run-input/history panel can be collapsed.
+  in the right Inspector. End explains path termination. Inspector can be
+  collapsed. Run inputs use a dialog and History uses a header popover; see
+  [Run and history experience](flow-run-experience.md).
 - API URL/body and key/value header/query rows, DB parameters, SSH task inputs,
   and predicate operands use structured controls. Advanced JSON remains available
   for existing/custom values. Switching nodes retains incomplete editor drafts.
@@ -33,8 +34,9 @@ Updated 2026-09-21. The former opt-in PoC is now the default authoring surface.
   Condition's unused next, legacy Poll shape and opaque extension data. Loading
   and saving does not convert old steps to new kinds or add layout fields.
 - Matching saved-run revisions project the existing RunView step statuses onto
-  nodes. Editing hides stale statuses. RunView remains the source of detailed
-  attempts, output, errors and cancellation.
+  nodes in read-only run viewing mode. Dirty or mismatched revisions hide
+  statuses. RunView supplies selected-node details in the same right Inspector;
+  cancellation and Back to editor remain visible above the Canvas.
 - Manual secret names live in Advanced and are checked against resolved runtime
   inputs (including defaults). Only manual names are sent by the frontend; Rust
   validates them separately and merges schema secrets before persistence, including

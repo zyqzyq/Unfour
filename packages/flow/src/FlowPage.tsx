@@ -1,12 +1,14 @@
 import { START, END, removalImpact, removeCanvasStep } from "./canvasGraph";
 import { inputDefaults, inputDefinitionErrors, inputErrors, maskInputs, newStep, normalizeInputs, resourceErrors } from "./model";
 import { InputEditor, RunInputs } from "./InputEditor";
+import { RunHistory } from "./RunHistory";
 import { RunView } from "./RunView";
 import { FlowCanvas } from "./FlowCanvas";
 import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -30,6 +32,7 @@ import {
 import {
   Button,
   ConfirmDialog,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, DialogDescription,
   Input,
   Select,
   SidebarHeader,
@@ -59,7 +62,10 @@ function WorkspaceFlowPage({
   const [environmentId, setEnvironmentId] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [confirm, setConfirm] = useState<"run" | "delete" | null>(null);
+  const [confirm, setConfirm] = useState<"delete" | null>(null);
+  const runTrigger = useRef<HTMLButtonElement>(null);
+  const backToEditor = useRef<HTMLButtonElement>(null);
+  const [runDialog, setRunDialog] = useState(false);
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [pendingSelection, setPendingSelection] =
     useState<FlowDefinition | null>(null);
@@ -123,6 +129,7 @@ function WorkspaceFlowPage({
     setEnvironmentId("");
     setInvalid({});
     setSelectedRun(null);
+    setRunDialog(false);
     setConfirm(null);
     setError("");
     setContextRevision((revision) => revision + 1);
@@ -223,12 +230,14 @@ function WorkspaceFlowPage({
   const manualSecretErrors = manualSecrets.filter((name) => !Object.prototype.hasOwnProperty.call(resolvedInputs, name));
   const impact = removingNode ? removalImpact(draft, removingNode) : null;
   const invalidRun = manualSecretErrors.length > 0 || invalidEditor || inputProblems.length > 0 || resourceProblems.length > 0 || Object.values(invalid).some(Boolean) || !resourcesQuery.data || resourcesQuery.isError || environments.isError || (Boolean(environmentId) && !environments.data?.some((environment) => environment.id === environmentId));
+  const viewingRun = selectedRun !== null;
+  const projection = !dirty && currentRun?.flowId === draft.id && currentRun.definition.revision === draft.revision ? currentRun : undefined;
   return (
     <div className="flex h-full min-h-0 flex-col text-[13px]">
       <div className="flex shrink-0 items-center gap-2 border-b border-[var(--u-color-border)] p-2">
         <Input
           aria-label={t("flow.name")}
-          disabled={busy}
+          disabled={busy || viewingRun}
           value={draft.name}
           onChange={(e) => update({ ...draft, name: e.target.value })}
         />
@@ -237,7 +246,7 @@ function WorkspaceFlowPage({
         </span>
         <Button
           variant="secondary"
-          disabled={busy || invalidEditor}
+          disabled={busy || viewingRun || invalidEditor}
           onClick={() =>
             void perform(async () => {
               const saved = await saveFlow(draft);
@@ -252,14 +261,19 @@ function WorkspaceFlowPage({
           {t("flow.save")}
         </Button>
         <Button
-          disabled={busy || dirty || !draft.id || invalidRun}
-          onClick={() => setConfirm("run")}
+          ref={runTrigger}
+          disabled={busy || viewingRun || dirty || !draft.id || invalidEditor || resourceProblems.length > 0}
+          onClick={() => {
+            setInvalid((state) => Object.fromEntries(Object.entries(state).filter(([key]) => !key.startsWith("run:"))));
+            setRunDialog(true);
+          }}
         >
           {t("flow.run")}
         </Button>
+        <RunHistory runs={runs.data ?? []} loading={runs.isPending} failed={runs.isError} disabled={busy || !draft.id} selected={selectedRun} onSelect={(id) => { setSelectedRun(id); setSelectedNode(START); }} onRefresh={() => { void runs.refetch(); }} />
         <Button
           variant="ghost"
-          disabled={busy || !draft.id}
+          disabled={busy || viewingRun || !draft.id}
           onClick={() => setConfirm("delete")}
         >
           {t("flow.delete")}
@@ -273,15 +287,26 @@ function WorkspaceFlowPage({
           {error || t("flow.loadFailed")}
         </p>
       )}
-      {invalidEditor && <div role="alert" className="px-2 py-1 text-xs text-[var(--u-color-danger)]">
+      {invalidEditor && !viewingRun && <div role="alert" className="px-2 py-1 text-xs text-[var(--u-color-danger)]">
         {t("flow.invalidEditors")}
         {(schemaProblems.length > 0 || Object.entries(invalid).some(([key, value]) => value && key.startsWith("schema:"))) && <Button size="sm" variant="ghost" onClick={() => setSelectedNode(START)}>{t("flow.canvas.start")}</Button>}
         {draft.steps.filter((step) => Object.entries(invalid).some(([key, value]) => value && key.startsWith(step.id + ":"))).map((step) => <Button key={step.id} size="sm" variant="ghost" onClick={() => setSelectedNode(step.id)}>{step.name}</Button>)}
       </div>}
+      {viewingRun && <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-3 py-2">
+        <strong>{t("flow.viewingRun")}</strong>
+        <span>{currentRun ? `${currentRun.startedAt} · ${t(`flow.status.${currentRun.status}`)} · r${currentRun.definition.revision}` : t("flow.loading")}</span>
+        <Button ref={backToEditor} variant="secondary" size="sm" onClick={() => { setSelectedRun(null); if (selectedNode !== END && !draft.steps.some((step) => step.id === selectedNode)) setSelectedNode(START); }}>{t("flow.backToEditor")}</Button>
+        {currentRun?.status === "running" && <Button variant="secondary" size="sm" disabled={busy} onClick={() => void perform(async () => { await cancelFlowRun(workspaceId, currentRun.id); await runDetail.refetch(); await runs.refetch(); })}>{t("flow.cancel")}</Button>}
+        {currentRun && !projection && <p className="w-full text-xs text-[var(--u-color-text-muted)]">{t("flow.runProjectionUnavailable")}</p>}
+      </div>}
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <FlowCanvas key={contextRevision} definition={draft} disabled={busy} selected={selectedNode} onSelect={setSelectedNode} onRemove={setRemovingNode} run={!dirty && currentRun?.definition.revision === draft.revision ? currentRun : undefined} onChange={update} />
-        <aside aria-label={t("flow.inspector")} hidden={!selectedNode} className="w-[360px] shrink-0 overflow-auto border-l border-[var(--u-color-border)] p-3">
-          <fieldset disabled={busy}>
+        <FlowCanvas key={contextRevision} definition={draft} disabled={busy} readOnly={viewingRun} selected={selectedNode} onSelect={setSelectedNode} onRemove={setRemovingNode} run={viewingRun ? projection : undefined} onChange={update} />
+        <aside aria-label={t(viewingRun ? "flow.runDetail" : "flow.inspector")} hidden={!selectedNode} className="w-[360px] shrink-0 overflow-auto border-l border-[var(--u-color-border)] p-3">
+          {viewingRun && <>
+            <div className="flex items-center justify-between"><strong>{t("flow.runDetail")}</strong><Button variant="ghost" size="sm" onClick={() => setSelectedNode(null)}>{t("flow.closeInspector")}</Button></div>
+            {currentRun ? <RunView key={`${currentRun.id}:${selectedNode}`} run={currentRun} selectedStep={selectedNode} onSelectStep={!projection ? setSelectedNode : undefined} /> : <p>{t("flow.loading")}</p>}
+          </>}
+          <fieldset disabled={busy || viewingRun} hidden={viewingRun}>
           <div className="flex items-center justify-between"><strong>{t("flow.inspector")}</strong><Button variant="ghost" size="sm" onClick={() => setSelectedNode(null)}>{t("flow.closeInspector")}</Button></div>
           <div hidden={selectedNode !== START}>
           <InputEditor key={contextRevision} definitions={draft.inputs} onChange={(definitions) => {
@@ -324,9 +349,10 @@ function WorkspaceFlowPage({
           </fieldset>
         </aside>
       </div>
-      <details open className="max-h-[35%] shrink-0 overflow-auto border-t border-[var(--u-color-border)]">
-        <summary className="cursor-pointer p-2">{t("flow.runPanel")}</summary>
-        <div className="space-y-3 overflow-auto p-3">
+      <Dialog open={runDialog} onOpenChange={(open) => { if (!busy) setRunDialog(open); }}>
+        <DialogContent aria-describedby={undefined} onCloseAutoFocus={(event) => { event.preventDefault(); (viewingRun ? backToEditor.current : runTrigger.current)?.focus(); }}>
+          <DialogHeader><DialogTitle>{t("flow.run")}</DialogTitle></DialogHeader>
+          <DialogBody><fieldset disabled={busy} className="space-y-3">
           <label>
             {t("flow.environment")}
             <Select
@@ -366,74 +392,45 @@ function WorkspaceFlowPage({
           </label>
           </details>
           {manualSecretErrors.length > 0 && <p role="alert">{t("flow.unknownSecretInput")}: {manualSecretErrors.join(", ")}</p>}
-          <label>
-            {t("flow.history")}
-            <Select
-              aria-label={t("flow.history")}
-              value={selectedRun ?? ""}
-              onChange={(e) => setSelectedRun(e.target.value || null)}
-              options={[
-                { value: "", label: t("flow.selectRun") },
-                ...(runs.data ?? []).map((run) => ({
-                  value: run.id,
-                  label: `${run.startedAt} · ${t(`flow.status.${run.status}`)}`,
-                })),
-              ]}
-            />
-          </label>
-          {currentRun && (
-            <RunView
-              run={currentRun}
-              cancel={() =>
-                void perform(async () => {
-                  await cancelFlowRun(workspaceId, currentRun.id);
-                  await runs.refetch();
-                })
-              }
-            />
-          )}
-        </div>
-      </details>
+          {resourceProblems.map((problem, index) => <p key={index} role="alert">{problem.name}: {t(problem.key)}</p>)}
+          {(resourcesQuery.isPending || environments.isPending) && <p>{t("flow.loading")}</p>}
+          {(resourcesQuery.isError || environments.isError) && <p role="alert">{t("flow.loadFailed")}</p>}
+          <DialogDescription>{t("flow.effectsHelp")}</DialogDescription>
+          <p>{t("flow.name")}: {draft.name} · {t("flow.workspace")}: {workspaceId}</p>
+          <p>{t("flow.environment")}: {environments.data?.find((environment) => environment.id === environmentId)?.name ?? t("flow.workspaceOnly")}{environmentId ? ` (${environmentId})` : ""}</p>
+          <pre aria-label={t("flow.inputPreview")} className="max-h-40 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(maskInputs(resolvedInputs, draft.inputs, manualSecrets), null, 2)}</pre>
+          {error && <p role="alert">{error}</p>}
+          </fieldset></DialogBody>
+          <DialogFooter>
+            <Button variant="ghost" disabled={busy} onClick={() => setRunDialog(false)}>{t("common.confirm.cancel")}</Button>
+            <Button disabled={busy || invalidRun || environments.isPending} onClick={() => void perform(async () => {
+              if (invalidRun || dirty) return;
+              const run = await runFlow({ workspaceId, flowId: draft.id, environmentId: environmentId || null, inputs: resolvedInputs, secretInputNames: manualSecrets, initiator: "human", confirmEffects: true });
+              queryClient.setQueryData(["flow-run", workspaceId, run.id], run);
+              setSelectedRun(run.id);
+              setSelectedNode(START);
+              setRunDialog(false);
+              await runs.refetch();
+            })}>{t("flow.run")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <ConfirmDialog
         open={confirm !== null}
         onOpenChange={(open) => {
           if (!open) setConfirm(null);
         }}
-        title={t(confirm === "delete" ? "flow.delete" : "flow.run")}
-        description={confirm === "delete" ? t("flow.deleteHelp") : <span className="grid gap-2">
-          <span>{t("flow.effectsHelp")}</span>
-          <span>{t("flow.name")}: {draft.name}</span>
-          <span>{t("flow.workspace")}: {workspaceId}</span>
-          <span>{t("flow.environment")}: {environments.data?.find((environment) => environment.id === environmentId)?.name ?? t("flow.workspaceOnly")}{environmentId ? ` (${environmentId})` : ""}</span>
-          <span>{t("flow.inputValues")}</span>
-          <code className="max-h-60 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(maskInputs(resolvedInputs, draft.inputs, manualSecrets), null, 2)}</code>
-        </span>}
-        confirmLabel={t(confirm === "delete" ? "flow.delete" : "flow.run")}
+        title={t("flow.delete")}
+        description={t("flow.deleteHelp")}
+        confirmLabel={t("flow.delete")}
         pending={busy}
-        onConfirm={() =>
-          void perform(async () => {
-            if (confirm === "delete") {
-              await deleteFlow(workspaceId, draft.id);
-              setDraft(null);
-              setDirty(false);
-              await flows.refetch();
-            } else {
-              if (invalidRun) return;
-              const run = await runFlow({
-                workspaceId,
-                flowId: draft.id,
-                environmentId: environmentId || null,
-                inputs: resolvedInputs,
-                secretInputNames: manualSecrets,
-                initiator: "human",
-                confirmEffects: true,
-              });
-              setSelectedRun(run.id);
-              await runs.refetch();
-            }
-            setConfirm(null);
-          })
-        }
+        onConfirm={() => void perform(async () => {
+          await deleteFlow(workspaceId, draft.id);
+          setDraft(null);
+          setDirty(false);
+          setConfirm(null);
+          await flows.refetch();
+        })}
       />
       <ConfirmDialog open={removingNode !== null} onOpenChange={(open) => { if (!open) setRemovingNode(null); }} title={t("flow.canvas.remove")} description={<span className="grid gap-2"><span>{t("flow.canvas.removeHelp")}</span><span>{t("flow.canvas.incoming")}: {impact?.incoming.map((name) => name === START ? t("flow.canvas.start") : name).join(", ") || t("flow.none")}</span>{Boolean(impact?.references.length) && <span role="alert">{t("flow.canvas.referenced")}: {impact?.references.join(", ")}</span>}</span>} confirmLabel={t(impact?.references.length ? "flow.acknowledge" : "flow.remove")} onConfirm={() => {
         if (impact?.references.length) { setRemovingNode(null); return; }
