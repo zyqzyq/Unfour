@@ -231,8 +231,15 @@ CommandBus already exposes `list_flows`, `get_flow`, `save_flow`, `delete_flow`,
 adapter can invoke these same methods and provide `initiator: mcp`; this change
 does not register any Flow MCP tools. Initiator is provenance, not permission.
 
-The UI polls only the selected active Run. History currently returns the most
-recent 100 runs per Flow, with no pagination, pruning, or deleted-Flow history
+The UI polls the selected active Run and, while History is open, summaries
+containing running Runs. `flow_runs_list` / `listFlowRuns` return at most 100
+`FlowRunSummary` records (id, flowId, status, startedAt, finishedAt), read from
+independent columns without loading or decoding `run_json`. History loads on
+open; selecting an entry loads its full snapshot with `getFlowRun`. Completion
+invalidates History for its next open or active refresh. The summary migration
+adds `finished_at`, backfilled once from snapshots; writes and stale-run recovery
+keep it equal to snapshot finishedAt. Snapshot semantics are unchanged. There is
+no pagination, pruning, or deleted-Flow history
 browser. Retained runs remain accessible by ID through the service. Definition
 drafts survive module switching but are not persisted across workspace changes
 or application restarts. Browser preview supports authoring only; execution

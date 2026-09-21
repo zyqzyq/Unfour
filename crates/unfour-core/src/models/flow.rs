@@ -124,6 +124,16 @@ pub enum FlowInitiator {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct FlowRunSummary {
+    pub id: String,
+    pub flow_id: String,
+    pub status: FlowRunStatus,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FlowRun {
     pub id: String,
     pub workspace_id: String,

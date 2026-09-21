@@ -152,3 +152,16 @@ it("uses localized Condition branch labels while retaining ifTrue/ifFalse fields
   expect(changed).toHaveBeenLastCalledWith(expect.objectContaining({ ifTrue: "$end", ifFalse: "$end" }));
   expect(screen.getAllByRole("option", { name: "结束", exact: true }).length).toBeGreaterThan(0);
 });
+
+
+it("rejects extra fields in reference operands entered as JSON", () => {
+  const changed = vi.fn();
+  const validity = vi.fn();
+  render(<I18nProvider initialLocale="en"><ValueEditor label="Operand" value={{}} variables={[]} onChange={changed} onValidity={validity} /></I18nProvider>);
+  fireEvent.change(screen.getByLabelText("Operand"), { target: { value: '{"$ref":"/inputs/value","extra":1}' } });
+  expect(changed).not.toHaveBeenCalled();
+  expect(validity).toHaveBeenLastCalledWith(false);
+  fireEvent.change(screen.getByLabelText("Operand"), { target: { value: '{"$ref":"/inputs/value"}' } });
+  expect(changed).toHaveBeenCalledWith({ $ref: "/inputs/value" });
+  expect(validity).toHaveBeenLastCalledWith(true);
+});

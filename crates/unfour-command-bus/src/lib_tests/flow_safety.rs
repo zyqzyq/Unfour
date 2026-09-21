@@ -256,6 +256,12 @@ async fn flow_stale_run_recovers_as_interrupted_without_replaying() {
         .await
         .unwrap();
     assert_eq!(result.status, FlowRunStatus::Interrupted);
+    let summary = bus
+        .list_flow_runs(workspace.clone(), flow.id.clone())
+        .await
+        .unwrap();
+    assert_eq!(summary[0].status, result.status);
+    assert_eq!(summary[0].finished_at, result.finished_at);
     assert_eq!(result.steps[0].status, FlowStepRunStatus::Interrupted);
     tokio::time::sleep(std::time::Duration::from_millis(150)).await;
     assert_eq!(

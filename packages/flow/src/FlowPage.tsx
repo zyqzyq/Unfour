@@ -27,7 +27,6 @@ import {
   runFlow,
   saveFlow,
   type FlowDefinition,
-  type FlowRun,
 } from "@unfour/command-client";
 import {
   Button,
@@ -66,6 +65,7 @@ function WorkspaceFlowPage({
   const runTrigger = useRef<HTMLButtonElement>(null);
   const backToEditor = useRef<HTMLButtonElement>(null);
   const [runDialog, setRunDialog] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [pendingSelection, setPendingSelection] =
     useState<FlowDefinition | null>(null);
@@ -92,7 +92,8 @@ function WorkspaceFlowPage({
   const runs = useQuery({
     queryKey: ["flow-runs", workspaceId, draft?.id],
     queryFn: () => listFlowRuns(workspaceId, draft!.id),
-    enabled: Boolean(draft?.id),
+    enabled: Boolean(draft?.id) && historyOpen,
+    refetchInterval: (query) => query.state.data?.some((run) => run.status === "running") ? 500 : false,
   });
   const runDetail = useQuery({
     queryKey: ["flow-run", workspaceId, selectedRun],
@@ -101,16 +102,11 @@ function WorkspaceFlowPage({
     refetchInterval: (query) =>
       query.state.data?.status === "running" ? 500 : false,
   });
-  const currentRun =
-    runDetail.data ?? runs.data?.find((run) => run.id === selectedRun);
+  const currentRun = runDetail.data;
   useEffect(() => {
-    if (!runDetail.data) return;
-    const updated = runDetail.data;
-    queryClient.setQueryData<FlowRun[]>(
-      ["flow-runs", workspaceId, updated.flowId],
-      (history) =>
-        history?.map((run) => (run.id === updated.id ? updated : run)),
-    );
+    if (runDetail.data && runDetail.data.status !== "running") {
+      void queryClient.invalidateQueries({ queryKey: ["flow-runs", workspaceId, runDetail.data.flowId] });
+    }
   }, [runDetail.data, queryClient, workspaceId]);
   const resources = resourcesQuery.data ?? {
     api: [],
@@ -128,6 +124,7 @@ function WorkspaceFlowPage({
     setSecretInputNames("");
     setEnvironmentId("");
     setInvalid({});
+    setHistoryOpen(false);
     setSelectedRun(null);
     setRunDialog(false);
     setConfirm(null);
@@ -270,7 +267,7 @@ function WorkspaceFlowPage({
         >
           {t("flow.run")}
         </Button>
-        <RunHistory runs={runs.data ?? []} loading={runs.isPending} failed={runs.isError} disabled={busy || !draft.id} selected={selectedRun} onSelect={(id) => { setSelectedRun(id); setSelectedNode(START); }} onRefresh={() => { void runs.refetch(); }} />
+        <RunHistory key={contextRevision} runs={runs.data ?? []} loading={runs.isPending} failed={runs.isError} disabled={busy || !draft.id} selected={selectedRun} onSelect={(id) => { setSelectedRun(id); setSelectedNode(START); }} onOpenChange={setHistoryOpen} />
         <Button
           variant="ghost"
           disabled={busy || viewingRun || !draft.id}
@@ -296,7 +293,7 @@ function WorkspaceFlowPage({
         <strong>{t("flow.viewingRun")}</strong>
         <span>{currentRun ? `${currentRun.startedAt} · ${t(`flow.status.${currentRun.status}`)} · r${currentRun.definition.revision}` : t("flow.loading")}</span>
         <Button ref={backToEditor} variant="secondary" size="sm" onClick={() => { setSelectedRun(null); if (selectedNode !== END && !draft.steps.some((step) => step.id === selectedNode)) setSelectedNode(START); }}>{t("flow.backToEditor")}</Button>
-        {currentRun?.status === "running" && <Button variant="secondary" size="sm" disabled={busy} onClick={() => void perform(async () => { await cancelFlowRun(workspaceId, currentRun.id); await runDetail.refetch(); await runs.refetch(); })}>{t("flow.cancel")}</Button>}
+        {currentRun?.status === "running" && <Button variant="secondary" size="sm" disabled={busy} onClick={() => void perform(async () => { await cancelFlowRun(workspaceId, currentRun.id); await runDetail.refetch(); await queryClient.invalidateQueries({ queryKey: ["flow-runs", workspaceId, draft.id] }); })}>{t("flow.cancel")}</Button>}
         {currentRun && !projection && <p className="w-full text-xs text-[var(--u-color-text-muted)]">{t("flow.runProjectionUnavailable")}</p>}
       </div>}
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -410,7 +407,7 @@ function WorkspaceFlowPage({
               setSelectedRun(run.id);
               setSelectedNode(START);
               setRunDialog(false);
-              await runs.refetch();
+              await queryClient.invalidateQueries({ queryKey: ["flow-runs", workspaceId, draft.id] });
             })}>{t("flow.run")}</Button>
           </DialogFooter>
         </DialogContent>

@@ -33,7 +33,7 @@ pub async fn flow_runs_list(
     workspace_id: String,
     flow_id: String,
     state: State<'_, AppState>,
-) -> AppResult<Vec<FlowRun>> {
+) -> AppResult<Vec<FlowRunSummary>> {
     state
         .command_bus
         .list_flow_runs(workspace_id, flow_id)

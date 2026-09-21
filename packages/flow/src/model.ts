@@ -88,7 +88,13 @@ export function sensitiveKey(key: string) {
 }
 
 function isReferenceOperand(value: unknown): value is { $ref: string } {
-  return Boolean(value && typeof value === "object" && "$ref" in value && typeof value.$ref === "string");
+  return Boolean(value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 1 && "$ref" in value && typeof value.$ref === "string");
+}
+
+export function validReferences(value: unknown): boolean {
+  if (!value || typeof value !== "object") return true;
+  if ("$ref" in value) return isReferenceOperand(value) && value.$ref.startsWith("/");
+  return Object.values(value).every(validReferences);
 }
 
 /** Authoring-time `in` right operand: a literal array or a configured `$ref`. Engine resolves the ref before requiring an array. */
@@ -103,6 +109,7 @@ export function isPredicate(value: unknown): value is FlowPredicate {
       "left" in value &&
       "right" in value &&
       "op" in value &&
+      validReferences(value.left) && validReferences(value.right) &&
       ["eq", "ne", "gt", "ge", "lt", "le", "in"].includes(String(value.op)) &&
       (value.op !== "in" || isInRightOperand(value.right)),
   );

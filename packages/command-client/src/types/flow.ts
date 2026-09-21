@@ -87,6 +87,8 @@ export type FlowStepRun = {
 };
 export type FlowRunStatus = "running" | "succeeded" | "failed" | "timedOut" | "cancelled" | "interrupted" | "validationFailed";
 export type FlowStepRunStatus = "pending" | "running" | "succeeded" | "failed" | "timedOut" | "cancelled" | "interrupted" | "skipped";
+export type FlowRunSummary = Pick<FlowRun, "id" | "flowId" | "status" | "startedAt" | "finishedAt">;
+
 export type FlowRun = {
   id: string;
   workspaceId: string;

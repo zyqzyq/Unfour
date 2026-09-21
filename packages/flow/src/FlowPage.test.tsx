@@ -46,6 +46,7 @@ const flow: commands.FlowDefinition = {
     },
   ],
 };
+const summary = ({ id, flowId, status, startedAt, finishedAt }: commands.FlowRun): commands.FlowRunSummary => ({ id, flowId, status, startedAt, finishedAt });
 const run: commands.FlowRun = {
   id: "run-1",
   workspaceId: "ws",
@@ -86,7 +87,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   vi.mocked(commands.listFlows).mockResolvedValue([structuredClone(flow)]);
-  vi.mocked(commands.listFlowRuns).mockResolvedValue([structuredClone(run)]);
+  vi.mocked(commands.listFlowRuns).mockResolvedValue([summary(run)]);
   vi.mocked(commands.getFlowRun).mockResolvedValue(structuredClone(run));
   vi.mocked(commands.runFlow).mockResolvedValue(run);
   vi.mocked(commands.saveFlow).mockImplementation(async (input) => ({
@@ -495,7 +496,7 @@ it("keeps runtime fields in the dialog and restores the editor after inspecting 
   expect(screen.queryByLabelText("Add step")).not.toBeInTheDocument();
   fireEvent.click(screen.getByText("Wait", { selector: ".truncate" }));
   const inspector = screen.getByRole("complementary", { name: "Run detail" });
-  expect(within(inspector).getByText("Run input values").nextElementSibling).toHaveTextContent('"version": 42');
+  expect((await within(inspector).findByText("Run input values")).nextElementSibling).toHaveTextContent('"version": 42');
   expect(within(inspector).getByText("Latest result")).toBeVisible();
   expect(screen.getByLabelText("Step name")).not.toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Back to editor" }));
@@ -509,7 +510,7 @@ it("keeps runtime fields in the dialog and restores the editor after inspecting 
 
 it("does not project a different revision and shows recorded details explicitly", async () => {
   const previous = { ...run, definition: { ...flow, revision: 2 } };
-  vi.mocked(commands.listFlowRuns).mockResolvedValue([previous]);
+  vi.mocked(commands.listFlowRuns).mockResolvedValue([summary(previous)]);
   vi.mocked(commands.getFlowRun).mockResolvedValue(previous);
   mount();
   fireEvent.click(await screen.findByText("Release"));
@@ -522,7 +523,7 @@ it("does not project a different revision and shows recorded details explicitly"
 });
 
 it("lists history status, time and duration with an empty state", async () => {
-  vi.mocked(commands.listFlowRuns).mockResolvedValue([{ ...run, status: "succeeded", finishedAt: "2026-09-14T00:00:02Z" }]);
+  vi.mocked(commands.listFlowRuns).mockResolvedValue([summary({ ...run, status: "succeeded", finishedAt: "2026-09-14T00:00:02Z" })]);
   mount();
   fireEvent.click(await screen.findByText("Release"));
   fireEvent.click(screen.getByRole("button", { name: "Run history" }));
@@ -566,7 +567,7 @@ it("blocks invalid runtime JSON inside the dialog and allows correcting it", asy
 
 it("keeps removed historical nodes inspectable without projecting them onto the current Canvas", async () => {
   const previous = { ...run, definition: { ...flow, revision: 2, steps: [{ ...flow.steps[0], id: "removed", name: "Old wait" }] }, steps: [{ ...run.steps[0], stepId: "removed" }] };
-  vi.mocked(commands.listFlowRuns).mockResolvedValue([previous]);
+  vi.mocked(commands.listFlowRuns).mockResolvedValue([summary(previous)]);
   vi.mocked(commands.getFlowRun).mockResolvedValue(previous);
   mount();
   fireEvent.click(await screen.findByText("Release"));
@@ -577,4 +578,50 @@ it("keeps removed historical nodes inspectable without projecting them onto the 
   expect(document.querySelector(".flow-canvas-node[data-status]")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Back to editor" }));
   expect(screen.getByLabelText("Flow name")).toBeEnabled();
+});
+
+
+it("loads summaries on opening history and snapshots only after selection", async () => {
+  let resolveDetail!: (value: commands.FlowRun) => void;
+  vi.mocked(commands.getFlowRun).mockImplementation(() => new Promise((resolve) => { resolveDetail = resolve; }));
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  expect(commands.listFlowRuns).not.toHaveBeenCalled();
+  expect(commands.getFlowRun).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Run history" }));
+  const entry = await screen.findByRole("button", { name: /2026-09-14T00:00:00Z/ });
+  expect(commands.listFlowRuns).toHaveBeenCalledTimes(1);
+  expect(commands.getFlowRun).not.toHaveBeenCalled();
+  fireEvent.click(entry);
+  await waitFor(() => expect(commands.getFlowRun).toHaveBeenCalledWith("ws", "run-1"));
+  expect(document.querySelector(".flow-canvas-node[data-status]")).toBeNull();
+  resolveDetail(run);
+  await waitFor(() => expect(document.querySelector('.flow-canvas-node[data-status="running"]')).not.toBeNull());
+});
+
+it("refreshes open running summaries to completed without fetching detail", async () => {
+  vi.mocked(commands.listFlowRuns).mockResolvedValueOnce([summary(run)]).mockResolvedValue([summary({ ...run, status: "succeeded", finishedAt: "2026-09-14T00:00:02Z" })]);
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.click(screen.getByRole("button", { name: "Run history" }));
+  expect(await screen.findByRole("button", { name: /Running.*2026-09-14/ })).toBeVisible();
+  expect(await screen.findByRole("button", { name: /Succeeded.*2000 ms/ })).toBeVisible();
+  expect(commands.getFlowRun).not.toHaveBeenCalled();
+});
+
+
+it("refreshes a newly completed run in history and stops showing cancellation", async () => {
+  const done: commands.FlowRun = { ...run, status: "succeeded", finishedAt: "2026-09-14T00:00:02Z", steps: [{ ...run.steps[0], status: "succeeded" }] };
+  vi.mocked(commands.getFlowRun).mockResolvedValueOnce(run).mockResolvedValue(done);
+  vi.mocked(commands.listFlowRuns).mockResolvedValue([summary(done)]);
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  openRun();
+  fireEvent.change(screen.getByLabelText("version", { exact: true }), { target: { value: "42" } });
+  fireEvent.click(screen.getByRole("button", { name: "Run", exact: true }));
+  expect(await screen.findByRole("button", { name: "Cancel run" })).toBeVisible();
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Cancel run" })).not.toBeInTheDocument());
+  expect(commands.listFlowRuns).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Run history" }));
+  expect(await screen.findByRole("button", { name: /Succeeded.*2000 ms/ })).toBeVisible();
 });

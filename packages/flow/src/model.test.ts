@@ -46,3 +46,13 @@ it("preflights metadata for probes, API scripts and missing resources", () => {
   flow.steps = [{ ...newStep("ssh", "Deploy"), kind: "action", action: { capability: "ssh", resourceId: "task", connectionId: "deleted", arguments: {} } }];
   expect(resourceErrors(flow, { ...resources, ssh: [{ id: "task", name: "Task" }] }).map((e) => e.key)).toEqual(["flow.missingConnection"]);
 });
+
+
+it("rejects reference objects with extra fields on either predicate operand", () => {
+  expect(isInRightOperand({ $ref: "/inputs/list", extra: 1 })).toBe(false);
+  for (const op of ["eq", "in"]) {
+    expect(isPredicate({ left: { $ref: "/inputs/value", extra: 1 }, op, right: [] })).toBe(false);
+    expect(isPredicate({ left: true, op, right: { $ref: "/inputs/list", extra: 1 } })).toBe(false);
+  }
+  expect(isPredicate({ left: [{ $ref: "/inputs/value", extra: 1 }], op: "eq", right: [] })).toBe(false);
+});

@@ -41,7 +41,7 @@ impl CommandBus {
         &self,
         workspace_id: String,
         flow_id: String,
-    ) -> AppResult<Vec<FlowRun>> {
+    ) -> AppResult<Vec<FlowRunSummary>> {
         self.flow_service().list_runs(&workspace_id, &flow_id).await
     }
     pub async fn cancel_flow_run(

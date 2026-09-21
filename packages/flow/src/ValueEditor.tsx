@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Input, Select, useI18n } from "@unfour/ui";
+import { validReferences } from "./model";
 import { JsonField } from "./JsonField";
 import { variableReference, type Variable } from "./variables";
 
@@ -21,7 +22,7 @@ export function ValueEditor({ label, value, variables, onChange, onValidity, typ
   const path = source && ref ? ref.slice(sourceRef.length + 1).split("/").map((part) => part.replace(/~1/g, "/").replace(/~0/g, "~")).join(".") : "";
   const validity = useRef(onValidity);
   useEffect(() => { validity.current = onValidity; }, [onValidity]);
-  useEffect(() => { validity.current(true); }, [value]);
+  useEffect(() => { validity.current(validReferences(value)); }, [value]);
   // Hidden inspectors stay mounted. Only removed/replaced fields clear their draft errors.
   useEffect(() => () => validity.current(true), []);
   return <div className="grid gap-1">
@@ -46,7 +47,7 @@ export function ValueEditor({ label, value, variables, onChange, onValidity, typ
     </> : kind === "string" ? <Input aria-label={label} value={String(value)} onChange={(event) => onChange(event.target.value)} />
       : kind === "number" ? <NumberValue label={label} value={Number(value)} onChange={onChange} onValidity={onValidity} />
       : kind === "boolean" ? <Select aria-label={label} value={String(value)} options={[{ value: "true", label: t("flow.true") }, { value: "false", label: t("flow.false") }]} onChange={(event) => onChange(event.target.value === "true")} />
-      : kind === "json" ? <JsonField label={label} value={value} onChange={onChange} onValidity={onValidity} /> : null}
+      : kind === "json" ? <JsonField label={label} value={value} onChange={(next) => { if (!validReferences(next)) return false; onChange(next); }} onValidity={onValidity} /> : null}
   </div>;
 }
 

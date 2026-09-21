@@ -7,6 +7,8 @@ use std::{
 use tokio_util::sync::CancellationToken;
 use unfour_core::models::*;
 use unfour_flow_engine::{FlowExecutor, FlowFuture, FlowService};
+#[path = "flow_history.rs"]
+mod history;
 #[cfg(feature = "ssh-native")]
 #[path = "flow_native.rs"]
 mod native;

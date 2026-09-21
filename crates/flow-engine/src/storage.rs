@@ -3,6 +3,7 @@ use crate::{
     validation, FlowService,
 };
 use serde_json::Value;
+use sqlx::Row;
 use unfour_core::{models::*, AppError, AppResult};
 
 impl FlowService {
@@ -55,10 +56,20 @@ impl FlowService {
             .await?;
         Ok(())
     }
-    pub async fn list_runs(&self, workspace: &str, flow: &str) -> AppResult<Vec<FlowRun>> {
+    pub async fn list_runs(&self, workspace: &str, flow: &str) -> AppResult<Vec<FlowRunSummary>> {
         self.recover_stale(workspace).await?;
-        let rows: Vec<String> = sqlx::query_scalar("SELECT run_json FROM flow_runs WHERE workspace_id = ? AND flow_id = ? ORDER BY started_at DESC LIMIT 100").bind(workspace).bind(flow).fetch_all(self.db.pool()).await?;
-        rows.iter().map(|row| decode_run(row)).collect()
+        let rows = sqlx::query("SELECT id, flow_id, status, started_at, finished_at FROM flow_runs WHERE workspace_id = ? AND flow_id = ? ORDER BY started_at DESC LIMIT 100").bind(workspace).bind(flow).fetch_all(self.db.pool()).await?;
+        rows.iter()
+            .map(|row| {
+                Ok(FlowRunSummary {
+                    id: row.try_get("id")?,
+                    flow_id: row.try_get("flow_id")?,
+                    status: serde_json::from_value(Value::String(row.try_get("status")?))?,
+                    started_at: row.try_get("started_at")?,
+                    finished_at: row.try_get("finished_at")?,
+                })
+            })
+            .collect()
     }
     pub async fn get_run(&self, workspace: &str, id: &str) -> AppResult<FlowRun> {
         self.recover_stale(workspace).await?;
@@ -82,15 +93,16 @@ impl FlowService {
     async fn recover_stale(&self, workspace: &str) -> AppResult<()> {
         // A per-run heartbeat is safe across desktop and future satellite processes.
         let cutoff = (chrono::Utc::now() - chrono::Duration::seconds(30)).to_rfc3339();
-        sqlx::query("UPDATE flow_runs SET status = 'interrupted', run_json = json_set(run_json, '$.status', 'interrupted', '$.error', 'FLOW_INTERRUPTED', '$.finishedAt', ?) WHERE workspace_id = ? AND status = 'running' AND updated_at < ?").bind(chrono::Utc::now().to_rfc3339()).bind(workspace).bind(cutoff).execute(self.db.pool()).await?;
+        let finished_at = chrono::Utc::now().to_rfc3339();
+        sqlx::query("UPDATE flow_runs SET finished_at = ?, status = 'interrupted', run_json = json_set(run_json, '$.status', 'interrupted', '$.error', 'FLOW_INTERRUPTED', '$.finishedAt', ?) WHERE workspace_id = ? AND status = 'running' AND updated_at < ?").bind(&finished_at).bind(&finished_at).bind(workspace).bind(cutoff).execute(self.db.pool()).await?;
         Ok(())
     }
     pub(crate) async fn insert_run(&self, run: &FlowRun) -> AppResult<()> {
-        sqlx::query("INSERT INTO flow_runs (id, workspace_id, flow_id, status, run_json, started_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(&run.id).bind(&run.workspace_id).bind(&run.flow_id).bind(run.status.as_str()).bind(safe_run(run)?).bind(&run.started_at).bind(&run.started_at).execute(self.db.pool()).await?;
+        sqlx::query("INSERT INTO flow_runs (id, workspace_id, flow_id, status, run_json, started_at, updated_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(&run.id).bind(&run.workspace_id).bind(&run.flow_id).bind(run.status.as_str()).bind(safe_run(run)?).bind(&run.started_at).bind(&run.started_at).bind(&run.finished_at).execute(self.db.pool()).await?;
         Ok(())
     }
     pub(crate) async fn persist_run(&self, run: &FlowRun) -> AppResult<()> {
-        let result = sqlx::query("UPDATE flow_runs SET status = ?, run_json = ?, updated_at = ? WHERE workspace_id = ? AND id = ? AND status = 'running'").bind(run.status.as_str()).bind(safe_run(run)?).bind(chrono::Utc::now().to_rfc3339()).bind(&run.workspace_id).bind(&run.id).execute(self.db.pool()).await?;
+        let result = sqlx::query("UPDATE flow_runs SET status = ?, run_json = ?, finished_at = ?, updated_at = ? WHERE workspace_id = ? AND id = ? AND status = 'running'").bind(run.status.as_str()).bind(safe_run(run)?).bind(&run.finished_at).bind(chrono::Utc::now().to_rfc3339()).bind(&run.workspace_id).bind(&run.id).execute(self.db.pool()).await?;
         if result.rows_affected() == 0 {
             return Err(invalid("FLOW_RUN_LEASE_LOST"));
         }
