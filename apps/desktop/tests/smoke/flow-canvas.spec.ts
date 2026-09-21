@@ -1,5 +1,44 @@
 import { expect, test } from "@playwright/test";
 
+test("edge insertion menu escapes Canvas clipping near its right edge", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("navigation", { name: "Modules" }).getByRole("button", { name: "Flow" }).click();
+  await page.getByRole("button", { name: "New Flow", exact: true }).click();
+  const canvas = page.getByLabel("Flow Canvas", { exact: true });
+  const trigger = page.getByRole("button", { name: "Insert node · Start → API Request", exact: true });
+  await expect(trigger).toBeVisible();
+  const bounds = (await canvas.boundingBox())!;
+  const button = (await trigger.boundingBox())!;
+  // Pan the actual viewport, leaving the insertion control just inside its edge.
+  const pane = (await page.locator(".react-flow__pane").boundingBox())!;
+  const start = { x: pane.x + 30, y: pane.y + pane.height - 30 };
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + bounds.x + bounds.width - 24 - (button.x + button.width / 2), start.y, { steps: 12 });
+  await page.mouse.up();
+  await trigger.click();
+  const menu = page.getByRole("menu");
+  await expect(menu).toBeVisible();
+  await expect(canvas.getByRole("menu")).toHaveCount(0);
+  await expect(menu).toHaveCount(1);
+  await expect.poll(async () => menu.evaluate((element) => {
+    const canvas = document.querySelector('[aria-label="Flow Canvas"]')!;
+    const rect = element.getBoundingClientRect();
+    return rect.right > canvas.getBoundingClientRect().right;
+  })).toBe(true);
+  // Hit-testing every item checks actual paint/occlusion, including outside Canvas.
+  for (const item of await menu.getByRole("menuitem").all()) {
+    await expect(item).toBeVisible();
+    expect(await item.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return element.contains(document.elementFromPoint(rect.right - 4, rect.top + rect.height / 2));
+    })).toBe(true);
+  }
+  await page.screenshot({ path: "test-results/flow-edge-menu-portal.png" });
+  await page.keyboard.press("Escape");
+  await expect(trigger).toBeFocused();
+});
+
 test("default Flow Canvas supports Inspector inputs, refs, insertion, deletion and save", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));

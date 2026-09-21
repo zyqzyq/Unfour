@@ -91,6 +91,30 @@ remote shell process termination guarantees were not established.
   parses method/path and verifies one POST followed by GET probes. No existing
   HTTP behavior was changed to satisfy the test.
 
+## Scoped UI closeout (2026-09-21)
+
+- PASS: `pnpm exec vitest run packages/ui packages/flow packages/ssh-terminal packages/api-client packages/database`
+  (103 files, 635 tests). Shared DropdownMenu coverage checks rendering outside
+  an overflow-hidden parent, visibility, alignment/classes, selection and focus
+  return. Flow coverage keeps summary failures in History, removes the alert
+  on close, and retains main-page alerts for selected snapshot failures.
+- PASS: `pnpm test:e2e` (10 Chromium smoke tests). The edge-menu regression
+  pans the real Canvas until its insertion control is near the right edge,
+  opens the menu, checks that it is outside the Canvas DOM subtree and extends
+  beyond its bounds, then hit-tests every item to detect clipping/occlusion.
+  The captured `test-results/flow-edge-menu-portal.png` was visually inspected.
+- PASS: `pnpm run build` (TypeScript check and production build; bundle-size
+  warning), `pnpm run lint` (0 errors, 45 warnings), and `git diff --check`.
+- Initial sandboxed frontend/smoke launches failed with `spawn EPERM`; reruns
+  with permission to launch local test processes passed as recorded above.
+- Reviewed SSH task/connection menus, API request actions and DB tree/editor/
+  export callers. Existing public props, styles and React event propagation
+  remain intact; their frontend suites passed without caller patches.
+- Architecture documentation now matches the existing `finished_at` migration
+  and column-only History summary query. No engine, execution, graph or History
+  model changes were made. Packaged native execution was not reverified by this
+  UI-only closeout; the native limitations documented above still apply.
+
 ## Dependencies and follow-up
 
 The new engine uses dependencies already present in the workspace. Command-bus

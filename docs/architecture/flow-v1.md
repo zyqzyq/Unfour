@@ -22,7 +22,8 @@ The HTTP engine exposes saved-auth materialization for callers without a UI.
 - `flow_definitions`: stable UUID, workspace ID, revision, definition JSON,
   updated timestamp. Saves use an optimistic revision check.
 - `flow_runs`: stable UUID, workspace ID, originating Flow ID, status,
-  cancellation flag, run JSON, start timestamp, heartbeat timestamp.
+  cancellation flag, run JSON, start timestamp, heartbeat timestamp, and
+  nullable finish timestamp (`finished_at`).
 - Run JSON contains its own definition revision, explicit invocation context,
   prepared resource snapshots, node records, and attempt records. Attempts
   contain resolved input, structured output, stable error code, and duration.
@@ -198,7 +199,11 @@ retain their own history/redaction policies.
 
 ## Data compatibility and UI context
 
-No SQLite schema migration is needed: definitions and runs retain JSON storage.
+Definitions and full run snapshots retain JSON storage. The
+`20260921000000_core_flow_run_summary.sql` SQLite migration adds
+`flow_runs.finished_at` and backfills it from each old snapshot's `finishedAt`
+without rewriting `run_json`. History summaries read independent columns,
+including `finished_at`, without reading or decoding `run_json`.
 Reading legacy `inputs: ["value"]` normalizes each name to a required JSON
 input, preserving historically accepted number/boolean/object values. Saving a
 definition writes the structured form under the existing revision check.

@@ -278,7 +278,6 @@ function WorkspaceFlowPage({
       </div>
       {(error ||
         resourcesQuery.isError ||
-        runs.isError ||
         runDetail.isError) && (
         <p role="alert" className="p-2 text-[var(--u-color-danger)]">
           {error || t("flow.loadFailed")}

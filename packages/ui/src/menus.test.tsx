@@ -44,6 +44,31 @@ describe("ContextMenu", () => {
 });
 
 describe("DropdownMenu", () => {
+  it("portals outside clipped parents and preserves selection and focus return", async () => {
+    const onSelect = vi.fn();
+    const { container } = render(
+      <div style={{ overflow: "hidden", height: 24 }}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild><button>Actions</button></DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="custom-menu">
+            <DropdownMenuItem onSelect={onSelect}>Open</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>,
+    );
+    const trigger = screen.getByRole("button", { name: "Actions" });
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    const menu = await screen.findByRole("menu");
+    expect(container).not.toContainElement(menu);
+    expect(document.body).toContainElement(menu);
+    expect(menu).toBeVisible();
+    expect(menu).toHaveClass("custom-menu");
+    expect(menu).toHaveAttribute("data-align", "end");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Open" }));
+    expect(onSelect).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(trigger).toHaveFocus());
+  });
+
   it("keeps menu item weight normal when opened from a bold tree row", async () => {
     render(
       <div className="font-semibold">

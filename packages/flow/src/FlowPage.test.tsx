@@ -581,6 +581,30 @@ it("keeps removed historical nodes inspectable without projecting them onto the 
 });
 
 
+it("keeps summary failures inside History and clears the alert when closed", async () => {
+  vi.mocked(commands.listFlowRuns).mockRejectedValue(new Error("History unavailable"));
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  expect(commands.listFlowRuns).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Run history" }));
+  const history = await screen.findByRole("dialog", { name: "Run history" });
+  await within(history).findByRole("alert");
+  expect(screen.getAllByRole("alert")).toHaveLength(1);
+  fireEvent.keyDown(history, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(commands.getFlowRun).not.toHaveBeenCalled();
+});
+
+it("still shows selected run detail failures on the main page", async () => {
+  vi.mocked(commands.getFlowRun).mockRejectedValue(new Error("Detail unavailable"));
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  await selectHistory();
+  expect(await screen.findByRole("alert")).toBeVisible();
+  expect(screen.queryByRole("dialog", { name: "Run history" })).not.toBeInTheDocument();
+});
+
 it("loads summaries on opening history and snapshots only after selection", async () => {
   let resolveDetail!: (value: commands.FlowRun) => void;
   vi.mocked(commands.getFlowRun).mockImplementation(() => new Promise((resolve) => { resolveDetail = resolve; }));

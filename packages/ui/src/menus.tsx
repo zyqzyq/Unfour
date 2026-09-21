@@ -12,7 +12,11 @@ export function DropdownMenuContent({
   className,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
-  return <DropdownMenuPrimitive.Content className={cn(menuContent, className)} sideOffset={4} {...props} />;
+  return (
+    <DropdownMenuPrimitive.Portal>
+      <DropdownMenuPrimitive.Content className={cn(menuContent, className)} sideOffset={4} collisionPadding={8} {...props} />
+    </DropdownMenuPrimitive.Portal>
+  );
 }
 
 export function DropdownMenuItem({
