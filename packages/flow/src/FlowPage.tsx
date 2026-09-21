@@ -1,6 +1,7 @@
 import { inputDefaults, inputDefinitionErrors, inputErrors, maskInputs, newStep, normalizeInputs, resourceErrors } from "./model";
 import { InputEditor, RunInputs } from "./InputEditor";
 import { RunView } from "./RunView";
+import { FlowCanvas } from "./FlowCanvas";
 import {
   useCallback,
   useEffect,
@@ -48,6 +49,7 @@ function WorkspaceFlowPage({
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<FlowDefinition | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [showCanvas, setShowCanvas] = useState(false);
   const [contextRevision, setContextRevision] = useState(0);
   const [inputs, setInputs] = useState<Record<string, unknown>>({});
   const [invalid, setInvalid] = useState<Record<string, boolean>>({});
@@ -227,6 +229,9 @@ function WorkspaceFlowPage({
         <span className="shrink-0 whitespace-nowrap">
           {dirty ? t("flow.unsaved") : `r${draft.revision}`}
         </span>
+        <Button variant="secondary" aria-pressed={showCanvas} onClick={() => setShowCanvas((value) => !value)}>
+          {t("flow.canvas.title")}
+        </Button>
         <Button
           variant="secondary"
           disabled={busy || invalidEditor}
@@ -265,6 +270,10 @@ function WorkspaceFlowPage({
           {error || t("flow.loadFailed")}
         </p>
       )}
+      {showCanvas && <FlowCanvas key={contextRevision} definition={draft} disabled={busy} onChange={(value) => {
+        update(value);
+        setInvalid((state) => Object.fromEntries(Object.entries(state).filter(([key]) => !draft.steps.some((step) => !value.steps.some((next) => next.id === step.id) && key.startsWith(`${step.id}:`)))));
+      }} />}
       <div className="grid min-h-0 flex-1 grid-cols-2 overflow-hidden">
         <div className="overflow-auto border-r border-[var(--u-color-border)] p-3">
           <p className="mb-2 text-xs text-[var(--u-color-text-muted)]">

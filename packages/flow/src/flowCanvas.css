@@ -1,0 +1,25 @@
+.flow-canvas {
+  --xy-background-color: var(--u-color-bg);
+  --xy-edge-stroke: var(--u-color-text-muted);
+  --xy-edge-stroke-selected: var(--u-color-primary);
+  --xy-edge-label-background-color: var(--u-color-surface);
+  --xy-edge-label-color: var(--u-color-text);
+  --xy-handle-background-color: var(--u-color-primary);
+  --xy-handle-border-color: var(--u-color-surface);
+}
+.flow-canvas-node {
+  position: relative;
+  width: 184px;
+  min-height: 64px;
+  padding: 8px 34px 8px 12px;
+  border: 1px solid var(--u-color-border);
+  border-radius: var(--u-radius-sm);
+  background: var(--u-color-surface);
+  color: var(--u-color-text);
+  font-size: 13px;
+}
+.flow-canvas-node.is-selected { border-color: var(--u-color-primary); }
+.flow-canvas-port { position: absolute; right: 8px; font-size: 10px; color: var(--u-color-text-muted); }
+.flow-canvas-true { top: 20%; }
+.flow-canvas-false { top: 60%; }
+.flow-canvas .react-flow__handle { width: 10px; height: 10px; }

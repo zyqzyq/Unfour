@@ -4,11 +4,14 @@
   "version": "0.9.6",
   "license": "Apache-2.0",
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "dependencies": {
+    "@tanstack/react-query": "^5.100.14",
     "@unfour/command-client": "workspace:*",
     "@unfour/ui": "workspace:*",
-    "@tanstack/react-query": "^5.100.14",
+    "@xyflow/react": "^12.11.6",
     "react": "^19.1.0"
   }
 }
