@@ -8,7 +8,7 @@ export function ValueEditor({ label, value, variables, onChange, onValidity, typ
 }) {
   const { t } = useI18n();
   const ref = value && typeof value === "object" && "$ref" in value && typeof value.$ref === "string" ? value.$ref : null;
-  const kind = ref ? "variable" : value === null ? "null" : typeof value === "object" ? "json" : typeof value;
+  const kind = ref !== null ? "variable" : value === null ? "null" : typeof value === "object" ? "json" : typeof value;
   const [picking, setPicking] = useState(false);
   const [chosenSource, setChosenSource] = useState("");
   const candidates = [...variables].sort((a, b) => b.path.length - a.path.length);
@@ -33,7 +33,7 @@ export function ValueEditor({ label, value, variables, onChange, onValidity, typ
         if (type !== "variable") { onChange(type === "string" ? "" : type === "number" ? 0 : type === "boolean" ? false : type === "json" ? {} : null); onValidity(true); }
       }} />
     </div>
-    {(picking || ref) ? <>
+    {(picking || ref !== null) ? <>
       {ref && <span className="break-all text-xs">{variables.find((item) => variableReference(item.path).$ref === ref)?.label ?? ref.split("/").slice(1).map((part) => part.replace(/~1/g, "/").replace(/~0/g, "~")).join(" · ")}</span>}
       <Select aria-label={`${label} · ${t("flow.variable")}`} value={sourceRef} options={[{ value: "", label: t("flow.chooseVariable") }, ...variables.map((item) => ({ value: variableReference(item.path).$ref, label: `${t(item.path[0] === "inputs" ? "flow.canvas.start" : item.path[0] === "probe" ? "flow.probeResult" : "flow.outputs")} · ${item.label}` }))]} onChange={(event) => {
         const variable = variables.find((item) => variableReference(item.path).$ref === event.target.value);

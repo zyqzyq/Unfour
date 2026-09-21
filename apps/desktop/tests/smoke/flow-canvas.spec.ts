@@ -17,8 +17,8 @@ test("default Flow Canvas supports Inspector inputs, refs, insertion, deletion a
   await inspector.getByLabel("URL · Type").selectOption("variable");
   await inspector.getByLabel("URL · Variable").selectOption({ label: "Start · endpoint" });
   await expect(inspector.getByText("endpoint", { exact: true })).toBeVisible();
-  await page.getByLabel("Insert on connection").selectOption({ label: "Start → API Request" });
-  await page.getByLabel("Add step", { exact: true }).selectOption("condition");
+  await page.getByRole("button", { name: "Insert node · Start → API Request", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Condition", exact: true }).click();
   await expect(inspector.getByRole("combobox", { name: "If true", exact: true })).toHaveValue(await inspector.getByRole("combobox", { name: "If false", exact: true }).inputValue());
   await inspector.getByRole("textbox", { name: "Step name", exact: true }).fill("Choose path");
   await page.getByRole("button", { name: "Fit view" }).click();
@@ -52,4 +52,26 @@ test("default Flow Canvas supports Inspector inputs, refs, insertion, deletion a
   await page.mouse.up();
   await expect(page.getByText("r2", { exact: true })).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test("edge plus inserts independently on ordinary and Condition branch connections", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("navigation", { name: "Modules" }).getByRole("button", { name: "Flow" }).click();
+  await page.getByRole("button", { name: "New Flow", exact: true }).click();
+  const inspector = page.getByRole("complementary", { name: "Inspector" });
+  await page.getByRole("button", { name: "Insert node · API Request → End", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Condition", exact: true }).click();
+  await page.getByRole("button", { name: "Fit view" }).click();
+  await page.getByRole("button", { name: "Insert node · Condition True → End", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Wait", exact: true }).click();
+  await inspector.getByRole("textbox", { name: "Step name", exact: true }).fill("True wait");
+  await page.getByRole("button", { name: "Fit view" }).click();
+  await page.getByRole("button", { name: "Insert node · Condition False → End", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Wait", exact: true }).click();
+  await inspector.getByRole("textbox", { name: "Step name", exact: true }).fill("False wait");
+  await page.getByRole("button", { name: "Fit view" }).click();
+  await page.locator('.react-flow__node').filter({ hasText: "Condition" }).click();
+  await expect(inspector.getByLabel("If true").locator("option:checked")).toHaveText("True wait");
+  await expect(inspector.getByLabel("If false").locator("option:checked")).toHaveText("False wait");
+  await page.screenshot({ path: "test-results/flow-canvas-branches.png" });
 });

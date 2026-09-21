@@ -187,8 +187,6 @@
       "noneAvailable": "No workspaces",
       "renameCurrent": "Rename current"
     },
-    "successCondition": "Success condition",
-    "failureCondition": "Failure condition",
     "inspector": {
       "collapse": "Collapse inspector",
       "description": "{module} details and properties will use this space.",
@@ -1313,6 +1311,11 @@
     "title": "SSH Terminal"
   },
   "flow": {
+    "successCondition": "Success condition",
+    "failureCondition": "Failure condition",
+    "acknowledge": "OK",
+    "invalidEditors": "Incomplete or invalid configuration. Check these nodes:",
+    "arrayRequired": "The right operand must be a JSON array.",
     "canvas": {
       "title": "Flow Canvas",
       "start": "Start",
@@ -1327,7 +1330,7 @@
       "fit": "Fit view",
       "selected": "Selected",
       "invalid": "This connection is invalid. Select a later step or End.",
-      "help": "Select a node to configure it. Choose a connection before inserting. Dragging changes temporary layout only; dashed edges follow execution order.",
+      "help": "Select a node to configure it. Click + on a connection to insert. Dragging changes temporary layout only; dashed edges follow execution order.",
       "insertOn": "Insert on connection",
       "removeHelp": "Deleting redirects incoming paths to End. Deleting the first node makes the next node the entry point. References must be updated before deletion.",
       "incoming": "Affected paths",
@@ -1446,7 +1449,6 @@
     "attemptHistory": "Attempt history",
     "inspector": "Inspector",
     "closeInspector": "Close inspector",
-    "selectNode": "Select a node to configure it.",
     "endHelp": "The selected path ends here. No additional action is executed.",
     "runPanel": "Run inputs & history",
     "unknownSecretInput": "Secret input names must exist in the runtime inputs",

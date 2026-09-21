@@ -117,3 +117,14 @@ it("preserves an invalid JSON default when a different input is removed", () => 
   expect(screen.getByLabelText("Default (optional)")).toHaveValue("{");
   expect(validity.mock.calls.filter(([key]) => key === invalidKey).at(-1)).toEqual([invalidKey, false]);
 });
+
+it("uses localized Condition branch labels while retaining ifTrue/ifFalse fields", () => {
+  const changed = vi.fn();
+  const initial = { ...newStep("condition", "分支"), ifTrue: "later", ifFalse: "$end" } as FlowStep;
+  render(<I18nProvider initialLocale="zh-CN"><StepEditor step={initial} after={[{ ...newStep("wait", "后续"), id: "later" }]} resources={{ api: [], database: [], ssh: [], connections: [] }} onRemove={() => {}} onValidity={() => {}} onChange={changed} /></I18nProvider>);
+  expect(screen.getByLabelText("满足时")).toHaveValue("later");
+  expect(screen.getByLabelText("不满足时")).toHaveValue("$end");
+  fireEvent.change(screen.getByLabelText("满足时"), { target: { value: "$end" } });
+  expect(changed).toHaveBeenLastCalledWith(expect.objectContaining({ ifTrue: "$end", ifFalse: "$end" }));
+  expect(screen.getAllByRole("option", { name: "结束", exact: true }).length).toBeGreaterThan(0);
+});

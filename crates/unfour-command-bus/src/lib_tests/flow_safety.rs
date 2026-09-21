@@ -49,10 +49,14 @@ async fn flow_manual_secrets_validate_runtime_names_before_declared_secret_union
     ]))
     .unwrap();
     let flow = service.save(flow).await.unwrap();
-    for names in [vec!["extra", "defaulted"], vec!["typo"], vec!["optional"]] {
+    for names in [
+        vec!["extra", "defaulted"],
+        vec!["typo"],
+        vec!["optional"],
+        vec!["clientRfe"],
+    ] {
         let mut input = request(&workspace, &flow.id);
-        input.inputs =
-            json!({"declared":"fixture-declared-secret", "extra":"fixture-extra-secret"});
+        input.inputs = json!({"declared":"fixture-declared-secret", "extra":"fixture-extra-secret", "clientRef":"innocuous-private-value"});
         input.secret_input_names = names.iter().map(|name| (*name).into()).collect();
         let driver = std::sync::Arc::new(Driver::default());
         let run = service.run(input, driver.clone()).await.unwrap();
@@ -66,6 +70,11 @@ async fn flow_manual_secrets_validate_runtime_names_before_declared_secret_union
             assert_eq!(result.status, FlowRunStatus::ValidationFailed);
             assert_eq!(result.error.as_deref(), Some("FLOW_UNKNOWN_SECRET_INPUT"));
             assert!(driver.calls.lock().unwrap().is_empty());
+            assert_eq!(result.context.inputs, json!({}));
+            let persisted = service.get_run(&workspace, &result.id).await.unwrap();
+            assert!(!serde_json::to_string(&persisted)
+                .unwrap()
+                .contains("innocuous-private-value"));
         }
         let stored = serde_json::to_string(&result).unwrap();
         assert!(!stored.contains("fixture-declared-secret"));

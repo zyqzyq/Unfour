@@ -273,6 +273,11 @@ function WorkspaceFlowPage({
           {error || t("flow.loadFailed")}
         </p>
       )}
+      {invalidEditor && <div role="alert" className="px-2 py-1 text-xs text-[var(--u-color-danger)]">
+        {t("flow.invalidEditors")}
+        {(schemaProblems.length > 0 || Object.entries(invalid).some(([key, value]) => value && key.startsWith("schema:"))) && <Button size="sm" variant="ghost" onClick={() => setSelectedNode(START)}>{t("flow.canvas.start")}</Button>}
+        {draft.steps.filter((step) => Object.entries(invalid).some(([key, value]) => value && key.startsWith(step.id + ":"))).map((step) => <Button key={step.id} size="sm" variant="ghost" onClick={() => setSelectedNode(step.id)}>{step.name}</Button>)}
+      </div>}
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <FlowCanvas key={contextRevision} definition={draft} disabled={busy} selected={selectedNode} onSelect={setSelectedNode} onRemove={setRemovingNode} run={!dirty && currentRun?.definition.revision === draft.revision ? currentRun : undefined} onChange={update} />
         <aside aria-label={t("flow.inspector")} hidden={!selectedNode} className="w-[360px] shrink-0 overflow-auto border-l border-[var(--u-color-border)] p-3">
@@ -316,7 +321,6 @@ function WorkspaceFlowPage({
             /></div>
           ))}
           {selectedNode === END && <p>{t("flow.endHelp")}</p>}
-          {!selectedNode && <p>{t("flow.selectNode")}</p>}
           </fieldset>
         </aside>
       </div>
@@ -431,7 +435,7 @@ function WorkspaceFlowPage({
           })
         }
       />
-      <ConfirmDialog open={removingNode !== null} onOpenChange={(open) => { if (!open) setRemovingNode(null); }} title={t("flow.canvas.remove")} description={<span className="grid gap-2"><span>{t("flow.canvas.removeHelp")}</span><span>{t("flow.canvas.incoming")}: {impact?.incoming.map((name) => name === START ? t("flow.canvas.start") : name).join(", ") || t("flow.none")}</span>{Boolean(impact?.references.length) && <span role="alert">{t("flow.canvas.referenced")}: {impact?.references.join(", ")}</span>}</span>} confirmLabel={t(impact?.references.length ? "flow.closeInspector" : "flow.remove")} onConfirm={() => {
+      <ConfirmDialog open={removingNode !== null} onOpenChange={(open) => { if (!open) setRemovingNode(null); }} title={t("flow.canvas.remove")} description={<span className="grid gap-2"><span>{t("flow.canvas.removeHelp")}</span><span>{t("flow.canvas.incoming")}: {impact?.incoming.map((name) => name === START ? t("flow.canvas.start") : name).join(", ") || t("flow.none")}</span>{Boolean(impact?.references.length) && <span role="alert">{t("flow.canvas.referenced")}: {impact?.references.join(", ")}</span>}</span>} confirmLabel={t(impact?.references.length ? "flow.acknowledge" : "flow.remove")} onConfirm={() => {
         if (impact?.references.length) { setRemovingNode(null); return; }
         if (!removingNode || draft.steps.length <= 1) return;
         update(removeCanvasStep(draft, removingNode));

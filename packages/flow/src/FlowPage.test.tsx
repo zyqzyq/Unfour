@@ -137,14 +137,14 @@ function Harness({ workspaceId = "ws" }: { workspaceId?: string }) {
     </>
   );
 }
-function mount() {
+function mount(locale: "en" | "zh-CN" = "en") {
   return render(
     <QueryClientProvider
       client={
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
-      <I18nProvider initialLocale="en">
+      <I18nProvider initialLocale={locale}>
         <Harness />
       </I18nProvider>
     </QueryClientProvider>,
@@ -353,4 +353,59 @@ it("projects matching run status onto nodes and hides it after editing", async (
   await waitFor(() => expect(document.querySelector('.flow-canvas-node[data-status="running"]')).not.toBeNull());
   fireEvent.change(screen.getByLabelText("Flow name"), { target: { value: "Edited" } });
   expect(document.querySelector('.flow-canvas-node[data-status="running"]')).toBeNull();
+});
+
+it("keeps incomplete failure conditions invalid and exposes hidden editor errors", async () => {
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.change(screen.getByLabelText("Add step"), { target: { value: "waitUntil" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add condition" }));
+  expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
+  expect(screen.getByLabelText("Failure when (left / op / right, or null)")).not.toHaveValue('{"left":true,"op":"eq","right":true}');
+  fireEvent.click(screen.getByRole("button", { name: "Close inspector" }));
+  expect(screen.getByText("Incomplete or invalid configuration. Check these nodes:")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Wait Until", exact: true }));
+  fireEvent.change(screen.getByLabelText("Failure condition · Value · Variable"), { target: { value: "/probe/status" } });
+  expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+  fireEvent.change(screen.getByLabelText("Failure condition · Operator"), { target: { value: "in" } });
+  expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  expect(screen.getByText("The right operand must be a JSON array.")).toBeVisible();
+  fireEvent.change(screen.getByLabelText("Failure condition · Compare with · Type"), { target: { value: "json" } });
+  fireEvent.change(screen.getByLabelText("Failure condition · Compare with", { exact: true }), { target: { value: "[400,404]" } });
+  expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+});
+
+it("keeps selected and failed states together on the same node", async () => {
+  vi.mocked(commands.getFlowRun).mockResolvedValue({ ...run, status: "failed", steps: [{ ...run.steps[0], status: "failed" }] });
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  await screen.findByRole("option", { name: /2026-09-14T00:00:00Z/ });
+  fireEvent.change(screen.getByLabelText("Run history"), { target: { value: "run-1" } });
+  await waitFor(() => expect(document.querySelector('.flow-canvas-node[data-status="failed"]')).not.toBeNull());
+  fireEvent.click(document.querySelector('.flow-canvas-node[data-status="failed"]')!);
+  expect(document.querySelector('.flow-canvas-node[data-status="failed"]')).toHaveClass("is-selected");
+});
+
+it("renders Chinese Condition ports separately from Inspector branch labels", async () => {
+  vi.mocked(commands.listFlows).mockResolvedValue([{ ...flow, inputs: [], steps: [{ id: "condition", name: "分支", kind: "condition", timeoutMs: 1000, predicate: { left: 1, op: "eq", right: 1 }, ifTrue: "$end", ifFalse: "$end" }] }]);
+  mount("zh-CN");
+  fireEvent.click(await screen.findByText("Release"));
+  expect(screen.getByText("满足", { selector: ".flow-canvas-port" })).toBeInTheDocument();
+  expect(screen.getByText("不满足", { selector: ".flow-canvas-port" })).toBeInTheDocument();
+  fireEvent.click(screen.getByText("分支", { selector: ".truncate" }));
+  expect(screen.getByLabelText("满足时")).toBeVisible();
+  expect(screen.getByLabelText("不满足时")).toBeVisible();
+});
+
+it("rejects non-array in operands in Advanced JSON before saving", async () => {
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.change(screen.getByLabelText("Add step"), { target: { value: "waitUntil" } });
+  const field = screen.getByLabelText("Failure when (left / op / right, or null)");
+  fireEvent.change(field, { target: { value: '{"left":400,"op":"in","right":"400"}' } });
+  expect(field).toHaveAttribute("aria-invalid", "true");
+  expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  fireEvent.change(field, { target: { value: '{"left":400,"op":"in","right":[400,404]}' } });
+  expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
 });

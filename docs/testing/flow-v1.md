@@ -101,3 +101,5 @@ these packages already existed in the lockfile. Frontend adds only the local
 See [Flow architecture](../architecture/flow-v1.md) for known limits: literal
 SQL/shell interpolation, best-effort cancellation, local-only persistence,
 resource edit races, bounded outputs, and history pagination/retention work.
+
+Canvas authoring and regression coverage: [Flow Canvas](flow-canvas.md).

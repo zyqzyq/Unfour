@@ -97,6 +97,11 @@ impl FlowService {
             }
             Ok(())
         })();
+        // Rejected input validation cannot establish which values a misspelled
+        // manual secret name intended to protect. Persist no raw runtime inputs.
+        if validated_inputs.is_err() {
+            run.context.inputs = serde_json::json!({});
+        }
         // Validate manual names separately, but redact schema secrets even in rejected runs.
         for field in &run.definition.inputs {
             if field.secret && !run.context.secret_input_names.contains(&field.name) {

@@ -197,10 +197,10 @@ export function StepEditor({
         <PredicateFields label={t("flow.successCondition")} value={step.successWhen} variables={predicateVariables} onChange={(value) => { if (value) onChange({ ...step, successWhen: value }); }} onValidity={(field, valid) => onValidity(`successWhen:${field}`, valid)} />
         <PredicateFields label={t("flow.failureCondition")} value={step.failureWhen ?? null} variables={predicateVariables} onChange={(value) => onChange({ ...step, failureWhen: value })} onValidity={(field, valid) => onValidity(`failureWhen:${field}`, valid)} />
         {step.failureWhen && <Button variant="ghost" size="sm" onClick={() => { onChange({ ...step, failureWhen: null }); onValidity("failureWhen", true); }}>{t("flow.disablePredicate")}</Button>}
-        <details><summary>{t("flow.advanced")}</summary><JsonField label={t("flow.successWhen")} value={step.successWhen} onValidity={(valid) => onValidity("successWhen", valid)} onChange={(value) => {
+        <details><summary>{t("flow.advanced")}</summary><JsonField label={t("flow.successWhen")} value={step.successWhen} onValidity={(valid) => onValidity("successWhenJson", valid)} onChange={(value) => {
           if (isPredicate(value)) onChange({ ...step, successWhen: value }); else return false;
         }} />
-        <JsonField label={t("flow.failureWhen")} value={step.failureWhen ?? null} onValidity={(valid) => onValidity("failureWhen", valid)} onChange={(value) => {
+        <JsonField label={t("flow.failureWhen")} value={step.failureWhen ?? null} onValidity={(valid) => onValidity("failureWhenJson", valid)} onChange={(value) => {
           if (value === null || isPredicate(value)) onChange({ ...step, failureWhen: value }); else return false;
         }} />
         </details><label>{t("flow.probeErrorPolicy")}<Select value={step.probeErrorPolicy} options={[{ value: "failImmediately", label: t("flow.failImmediately") }, { value: "retryTransientErrors", label: t("flow.retryTransientErrors") }]} onChange={(e) => onChange({ ...step, probeErrorPolicy: e.target.value as "failImmediately" | "retryTransientErrors" })} /></label>
@@ -211,7 +211,7 @@ export function StepEditor({
         <details><summary>{t("flow.advanced")}</summary><JsonField
           label={t("flow.predicate")}
           value={step.predicate}
-          onValidity={(valid) => onValidity("predicate", valid)}
+          onValidity={(valid) => onValidity("predicateJson", valid)}
           onChange={(value) => {
             if (isPredicate(value))
               onChange({ ...step, predicate: value });
@@ -257,5 +257,5 @@ export function StepEditor({
 }
 
 function isPredicate(value: unknown): value is FlowPredicate {
-  return Boolean(value && typeof value === "object" && "left" in value && "right" in value && "op" in value && ["eq", "ne", "gt", "ge", "lt", "le", "in"].includes(String(value.op)));
+  return Boolean(value && typeof value === "object" && "left" in value && "right" in value && "op" in value && ["eq", "ne", "gt", "ge", "lt", "le", "in"].includes(String(value.op)) && (value.op !== "in" || Array.isArray(value.right)));
 }
