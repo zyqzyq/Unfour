@@ -1,11 +1,10 @@
 import { ArgumentFields, PredicateFields } from "./StructuredFields";
 import { variablesFor } from "./variables";
 import type { FlowInputDefinition } from "@unfour/command-client";
-import { emptyAction, type Resources } from "./model";
+import { emptyAction, isPredicate, type Resources } from "./model";
 import type {
   FlowAction,
   FlowCapability,
-  FlowPredicate,
   FlowStep,
 } from "@unfour/command-client";
 import { Button, Input, Select, useI18n } from "@unfour/ui";
@@ -254,8 +253,4 @@ export function StepEditor({
       )}
     </section>
   );
-}
-
-function isPredicate(value: unknown): value is FlowPredicate {
-  return Boolean(value && typeof value === "object" && "left" in value && "right" in value && "op" in value && ["eq", "ne", "gt", "ge", "lt", "le", "in"].includes(String(value.op)) && (value.op !== "in" || Array.isArray(value.right)));
 }

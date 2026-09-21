@@ -1313,7 +1313,7 @@
     "failureCondition": "失败条件",
     "acknowledge": "知道了",
     "invalidEditors": "有未完成或无效的配置，请检查以下节点：",
-    "arrayRequired": "右值必须为 JSON 数组。",
+    "arrayRequired": "右值必须为 JSON 数组或变量。",
     "canvas": {
       "title": "Flow 画布",
       "start": "开始",

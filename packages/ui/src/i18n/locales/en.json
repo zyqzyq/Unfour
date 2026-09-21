@@ -1315,7 +1315,7 @@
     "failureCondition": "Failure condition",
     "acknowledge": "OK",
     "invalidEditors": "Incomplete or invalid configuration. Check these nodes:",
-    "arrayRequired": "The right operand must be a JSON array.",
+    "arrayRequired": "The right operand must be a JSON array or a variable.",
     "canvas": {
       "title": "Flow Canvas",
       "start": "Start",

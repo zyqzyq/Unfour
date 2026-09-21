@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { inputDefaults, inputErrors, maskInputs, newStep, resourceErrors } from "./model";
+import { inputDefaults, inputErrors, isInRightOperand, isPredicate, maskInputs, newStep, resourceErrors } from "./model";
 import type { FlowDefinition, FlowInputDefinition } from "@unfour/command-client";
 
 const definitions: FlowInputDefinition[] = [
@@ -21,6 +21,18 @@ it("masks declared, manual and sensitive nested keys without hiding safe context
 });
 it("creates timeout-bounded Wait Until with no attempt cap", () => {
   expect(newStep("waitUntil", "Ready")).toMatchObject({ kind: "waitUntil", maxAttempts: null, intervalMs: 1000, probeErrorPolicy: "failImmediately", intervalStrategy: "fixed", successWhen: { left: { $ref: "/probe/body/ready" } } });
+});
+it("treats in right operands as literal arrays or configured $ref values", () => {
+  expect(isInRightOperand([400, 404])).toBe(true);
+  expect(isInRightOperand({ $ref: "/inputs/allowedStatuses" })).toBe(true);
+  expect(isInRightOperand({ $ref: "" })).toBe(false);
+  expect(isInRightOperand("400")).toBe(false);
+  expect(isInRightOperand(400)).toBe(false);
+  expect(isInRightOperand(true)).toBe(false);
+  expect(isPredicate({ left: 400, op: "in", right: [400, 404] })).toBe(true);
+  expect(isPredicate({ left: { $ref: "/probe/status" }, op: "in", right: { $ref: "/inputs/allowedStatuses" } })).toBe(true);
+  expect(isPredicate({ left: 400, op: "in", right: { $ref: "" } })).toBe(false);
+  expect(isPredicate({ left: 400, op: "in", right: "400" })).toBe(false);
 });
 it("preflights metadata for probes, API scripts and missing resources", () => {
   const step = newStep("waitUntil", "Ready");

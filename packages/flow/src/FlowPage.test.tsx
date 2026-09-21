@@ -370,9 +370,15 @@ it("keeps incomplete failure conditions invalid and exposes hidden editor errors
   expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   fireEvent.change(screen.getByLabelText("Failure condition · Operator"), { target: { value: "in" } });
   expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
-  expect(screen.getByText("The right operand must be a JSON array.")).toBeVisible();
-  fireEvent.change(screen.getByLabelText("Failure condition · Compare with · Type"), { target: { value: "json" } });
+  expect(screen.getByText("The right operand must be a JSON array or a variable.")).toBeVisible();
+  const rightType = screen.getByLabelText("Failure condition · Compare with · Type");
+  expect(within(rightType).getByRole("option", { name: "Object / array" })).toBeInTheDocument();
+  expect(within(rightType).getByRole("option", { name: "Variable" })).toBeInTheDocument();
+  fireEvent.change(rightType, { target: { value: "json" } });
   fireEvent.change(screen.getByLabelText("Failure condition · Compare with", { exact: true }), { target: { value: "[400,404]" } });
+  expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+  fireEvent.change(rightType, { target: { value: "variable" } });
+  fireEvent.change(screen.getByLabelText("Failure condition · Compare with · Variable"), { target: { value: "/inputs/version" } });
   expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
 });
 
@@ -406,6 +412,43 @@ it("rejects non-array in operands in Advanced JSON before saving", async () => {
   fireEvent.change(field, { target: { value: '{"left":400,"op":"in","right":"400"}' } });
   expect(field).toHaveAttribute("aria-invalid", "true");
   expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  fireEvent.change(field, { target: { value: '{"left":400,"op":"in","right":400}' } });
+  expect(field).toHaveAttribute("aria-invalid", "true");
+  fireEvent.change(field, { target: { value: '{"left":400,"op":"in","right":true}' } });
+  expect(field).toHaveAttribute("aria-invalid", "true");
+  fireEvent.change(field, { target: { value: '{"left":400,"op":"in","right":{"$ref":""}}' } });
+  expect(field).toHaveAttribute("aria-invalid", "true");
+  fireEvent.change(field, { target: { value: '{"left":400,"op":"in","right":{"$ref":"/inputs/allowedStatuses"}}' } });
+  expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   fireEvent.change(field, { target: { value: '{"left":400,"op":"in","right":[400,404]}' } });
   expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+});
+
+it("loads and saves a legacy in operand whose right value is a $ref array", async () => {
+  const original: commands.FlowDefinition = {
+    ...flow,
+    inputs: [...flow.inputs, { name: "allowedStatuses", type: "json", required: true, secret: false }],
+    steps: [{
+      id: "ready",
+      name: "Ready",
+      kind: "waitUntil",
+      timeoutMs: 1000,
+      intervalMs: 1000,
+      maxAttempts: null,
+      next: null,
+      probe: { capability: "api", resourceId: "probe", connectionId: null, arguments: {} },
+      probeErrorPolicy: "failImmediately",
+      intervalStrategy: "fixed",
+      successWhen: { left: { $ref: "/probe/status" }, op: "eq", right: 200 },
+      failureWhen: { left: { $ref: "/probe/status" }, op: "in", right: { $ref: "/inputs/allowedStatuses" } },
+    }],
+  };
+  vi.mocked(commands.listFlows).mockResolvedValue([original]);
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+  fireEvent.click(screen.getByText("Ready", { selector: ".truncate" }));
+  expect(screen.getByLabelText("Failure condition · Compare with · Type")).toHaveValue("variable");
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(commands.saveFlow).toHaveBeenCalledWith(original));
 });

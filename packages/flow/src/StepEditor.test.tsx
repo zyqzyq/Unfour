@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { I18nProvider } from "@unfour/ui";
 import { StepEditor } from "./StepEditor";
@@ -57,9 +57,9 @@ it("retains an incomplete numeric value and does not save its previous value sil
   expect(changed).not.toHaveBeenCalled();
 });
 
-function Editor({ initial, changed }: { initial: FlowStep; changed: (step: FlowStep) => void }) {
+function Editor({ initial, changed, onValidity = () => {} }: { initial: FlowStep; changed: (step: FlowStep) => void; onValidity?: (field: string, valid: boolean) => void }) {
   const [step, setStep] = useState(initial);
-  return <StepEditor step={step} after={[]} resources={{ api: [], database: [], ssh: [], connections: [] }} onRemove={() => {}} onValidity={() => {}} onChange={(value) => { setStep(value); changed(value); }} />;
+  return <StepEditor step={step} after={[]} resources={{ api: [], database: [], ssh: [], connections: [] }} onRemove={() => {}} onValidity={onValidity} onChange={(value) => { setStep(value); changed(value); }} />;
 }
 it("edits canonical Wait Until policies and predicates with no mandatory attempt cap", () => {
   const changed = vi.fn();
@@ -70,6 +70,30 @@ it("edits canonical Wait Until policies and predicates with no mandatory attempt
   fireEvent.change(screen.getByLabelText("Failure when (left / op / right, or null)"), { target: { value: '{"left":{"$ref":"/probe/status"},"op":"in","right":[400,404]}' } });
   fireEvent.change(screen.getByLabelText("Probe errors"), { target: { value: "retryTransientErrors" } });
   expect(changed.mock.lastCall?.[0]).toMatchObject({ kind: "waitUntil", maxAttempts: null, probeErrorPolicy: "retryTransientErrors", failureWhen: { op: "in", right: [400,404] } });
+});
+it("accepts in right operands that are literal arrays or configured $ref values", () => {
+  const changed = vi.fn();
+  const validity = vi.fn();
+  const initial = { ...newStep("waitUntil", "Ready"), failureWhen: { left: { $ref: "/probe/status" }, op: "in" as const, right: { $ref: "/inputs/allowedStatuses" } } };
+  render(<I18nProvider initialLocale="en"><Editor initial={initial} changed={changed} onValidity={validity} /></I18nProvider>);
+  expect(screen.getByLabelText("Failure condition · Compare with · Type")).toHaveValue("variable");
+  expect(within(screen.getByLabelText("Failure condition · Compare with · Type")).getByRole("option", { name: "Object / array" })).toBeInTheDocument();
+  expect(validity.mock.calls.filter(([field]) => field === "failureWhen:configuration").at(-1)?.[1]).toBe(true);
+  const field = screen.getByLabelText("Failure when (left / op / right, or null)");
+  fireEvent.change(field, { target: { value: '{"left":{"$ref":"/probe/status"},"op":"in","right":{"$ref":""}}' } });
+  expect(field).toHaveAttribute("aria-invalid", "true");
+  fireEvent.change(field, { target: { value: '{"left":{"$ref":"/probe/status"},"op":"in","right":"400"}' } });
+  expect(field).toHaveAttribute("aria-invalid", "true");
+  fireEvent.change(field, { target: { value: '{"left":{"$ref":"/probe/status"},"op":"in","right":[400,404]}' } });
+  expect(changed.mock.lastCall?.[0]).toMatchObject({ failureWhen: { op: "in", right: [400, 404] } });
+  fireEvent.change(field, { target: { value: '{"left":{"$ref":"/probe/status"},"op":"in","right":{"$ref":"/inputs/allowedStatuses"}}' } });
+  expect(changed.mock.lastCall?.[0]).toMatchObject({ failureWhen: { op: "in", right: { $ref: "/inputs/allowedStatuses" } } });
+});
+it("keeps an empty in $ref invalid in the structured editor", () => {
+  const validity = vi.fn();
+  render(<I18nProvider initialLocale="en"><Editor initial={{ ...newStep("waitUntil", "Ready"), failureWhen: { left: { $ref: "/probe/status" }, op: "in", right: { $ref: "" } } }} changed={() => {}} onValidity={validity} /></I18nProvider>);
+  expect(screen.getByRole("alert")).toHaveTextContent("Choose variable");
+  expect(validity.mock.calls.filter(([field]) => field === "failureWhen:configuration").at(-1)).toEqual(["failureWhen:configuration", false]);
 });
 it("shows legacy Poll as Wait Until while retaining its node shape and attempt bound", () => {
   const changed = vi.fn();

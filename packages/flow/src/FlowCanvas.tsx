@@ -63,19 +63,15 @@ export function FlowCanvas({ definition, onChange, disabled = false, selected, o
     const edges = graph.edges.filter((edge) => edge.source !== connection.source || edge.sourceHandle !== connection.sourceHandle);
     editGraph(() => graphToDefinition(definition, { ...graph, edges: [...edges, { ...connection, id: `${connection.source}:${connection.sourceHandle}` }] }));
   }
+  function insertOn(edgeId: string, kind: string) {
+    if (disabled || !kind) return;
+    const step = newStep(kind, t(`flow.${kind}`));
+    if (editGraph(() => insertCanvasStep(definition, edgeId, step))) {
+      setSelected(step.id); setSelectedEdge(null);
+    }
+  }
   return <section className="flow-canvas flex min-h-0 min-w-0 flex-1 flex-col border-b border-[var(--u-color-border)]" aria-label={t("flow.canvas.title")}>
     <div className="flex flex-wrap items-center gap-2 p-2">
-      <Select className="!w-40" aria-label={t("flow.addStep")} value="" disabled={disabled || definition.steps.length >= 100} options={[
-        { value: "", label: t("flow.canvas.add") },
-        ...["api", "database", "ssh", "condition", "waitUntil", "wait"].map((value) => ({ value, label: t(`flow.${value}`) })),
-      ]} onChange={(event) => {
-        if (event.target.value) {
-          const step = newStep(event.target.value, t(`flow.${event.target.value}`));
-          if (editGraph(() => insertCanvasStep(definition, insertionEdge.id, step))) {
-            setSelected(step.id); setSelectedEdge(null);
-          }
-        }
-      }} />
       <Button variant="ghost" size="sm" disabled={disabled || !selectedStep || definition.steps.length <= 1} onClick={() => {
         if (selectedStep) onRemove(selectedStep.id);
       }}>{t("flow.canvas.remove")}</Button>
@@ -87,15 +83,15 @@ export function FlowCanvas({ definition, onChange, disabled = false, selected, o
       <Button variant="ghost" size="sm" onClick={() => void instance?.zoomOut()}>{t("flow.canvas.zoomOut")}</Button>
       <Button variant="ghost" size="sm" onClick={() => void instance?.fitView()}>{t("flow.canvas.fit")}</Button>
     </div>
-    <details className="px-2"><summary className="text-xs">{t("flow.advanced")}</summary><label className="flex items-center gap-2 pb-2 text-xs"><span className="shrink-0">{t("flow.canvas.insertOn")}</span><Select aria-label={t("flow.canvas.insertOn")} value={insertionEdge.id} options={graph.edges.map((edge) => ({ value: edge.id, label: `${nodes.find((node) => node.id === edge.source)?.ariaLabel} ${edge.sourceHandle === "true" || edge.sourceHandle === "false" ? t(`flow.canvas.${edge.sourceHandle}`) : ""} → ${nodes.find((node) => node.id === edge.target)?.ariaLabel ?? edge.target}` }))} onChange={(event) => setSelectedEdge(event.target.value)} /></label></details>
+    <details className="px-2"><summary className="text-xs">{t("flow.advanced")}</summary><label className="flex items-center gap-2 pb-2 text-xs"><span className="shrink-0">{t("flow.canvas.insertOn")}</span><Select aria-label={t("flow.canvas.insertOn")} value={insertionEdge.id} options={graph.edges.map((edge) => ({ value: edge.id, label: `${nodes.find((node) => node.id === edge.source)?.ariaLabel} ${edge.sourceHandle === "true" || edge.sourceHandle === "false" ? t(`flow.canvas.${edge.sourceHandle}`) : ""} → ${nodes.find((node) => node.id === edge.target)?.ariaLabel ?? edge.target}` }))} onChange={(event) => setSelectedEdge(event.target.value)} /></label>
+      <Select className="mb-2 !w-40" aria-label={t("flow.addStep")} value="" disabled={disabled || definition.steps.length >= 100} options={[
+        { value: "", label: t("flow.canvas.add") },
+        ...["api", "database", "ssh", "condition", "waitUntil", "wait"].map((value) => ({ value, label: t(`flow.${value}`) })),
+      ]} onChange={(event) => insertOn(insertionEdge.id, event.target.value)} /></details>
     <p className="px-2 pb-2 text-xs text-[var(--u-color-text-muted)]">{t("flow.canvas.help")}</p>
     {invalid && <p role="alert" className="px-2 text-xs text-[var(--u-color-danger)]">{t("flow.canvas.invalid")}</p>}
     <div className="min-h-64 flex-1">
-      <CanvasInsertion.Provider value={{ disabled: disabled || definition.steps.length >= 100, insert: (edgeId, kind) => {
-        if (disabled) return;
-        const step = newStep(kind, t('flow.' + kind));
-        if (editGraph(() => insertCanvasStep(definition, edgeId, step))) { setSelected(step.id); setSelectedEdge(null); }
-      } }}>
+      <CanvasInsertion.Provider value={{ disabled: disabled || definition.steps.length >= 100, insert: insertOn }}>
       <ReactFlow<CanvasNode, Edge> nodes={nodes}
         edges={graph.edges.map((edge) => ({ ...edge, type: "insert", data: { description: [nodes.find((node) => node.id === edge.source)?.ariaLabel, edge.sourceHandle === "true" || edge.sourceHandle === "false" ? t("flow.canvas." + edge.sourceHandle) : "", "→", nodes.find((node) => node.id === edge.target)?.ariaLabel].filter(Boolean).join(" ") }, selected: edge.id === selectedEdge, markerEnd: { type: MarkerType.ArrowClosed }, ariaLabel: `${nodes.find((node) => node.id === edge.source)?.ariaLabel} → ${nodes.find((node) => node.id === edge.target)?.ariaLabel}`, label: edge.sourceHandle === "true" || edge.sourceHandle === "false" ? t(`flow.canvas.${edge.sourceHandle}`) : undefined }))}
         nodeTypes={nodeTypes} edgeTypes={edgeTypes} onInit={setInstance} fitView minZoom={0.15} maxZoom={2}

@@ -20,7 +20,8 @@ Updated 2026-09-21. The former opt-in PoC is now the default authoring surface.
 - Click the lightweight + on a connection and choose API / DB / SSH / Condition /
   Wait Until / Wait. Start-to-first-step supports insertion too. Condition ports
   have separate controls near their source, including when both target End.
-  The connection selector remains in Advanced as a fallback. Only that output is redirected through
+  There is no toolbar Add step; the connection selector plus step type remain in
+  Advanced as a fallback. Only that output is redirected through
   the inserted node. All other ports retain their old destinations, including
   implicit fallthrough. A new Condition sends both branches to the original
   destination until configured otherwise.
@@ -45,9 +46,11 @@ Updated 2026-09-21. The former opt-in PoC is now the default authoring surface.
   were added.
 
 - New failure conditions start with an unconfigured operand and cannot be saved
-  or run until completed (or removed). The in operator requires a JSON array
-  right operand in both structured and Advanced editors. Page-level errors link
-  to invalid editors even while their Inspector is hidden.
+  or run until completed (or removed). The in operator accepts a literal JSON
+  array or a configured `$ref` (the engine resolves the ref, then requires an
+  array). Empty `$ref` values and non-array literals stay invalid in structured
+  and Advanced editors. Page-level errors link to invalid editors even while
+  their Inspector is hidden.
 - Chinese Condition ports read 满足 / 不满足; Inspector branches read 满足时 /
   不满足时. Selected failed nodes retain a selection outline and failure border.
 

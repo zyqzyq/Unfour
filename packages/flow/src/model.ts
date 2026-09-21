@@ -86,6 +86,27 @@ export function inputErrors(definitions: FlowInputDefinition[], values: Record<s
 export function sensitiveKey(key: string) {
   return /authorization|cookie|password|passwd|secret|token|api.?key|private.?key|passphrase|credential/i.test(key);
 }
+
+function isReferenceOperand(value: unknown): value is { $ref: string } {
+  return Boolean(value && typeof value === "object" && "$ref" in value && typeof value.$ref === "string");
+}
+
+/** Authoring-time `in` right operand: a literal array or a configured `$ref`. Engine resolves the ref before requiring an array. */
+export function isInRightOperand(value: unknown): boolean {
+  return Array.isArray(value) || (isReferenceOperand(value) && Boolean(value.$ref));
+}
+
+export function isPredicate(value: unknown): value is FlowPredicate {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "left" in value &&
+      "right" in value &&
+      "op" in value &&
+      ["eq", "ne", "gt", "ge", "lt", "le", "in"].includes(String(value.op)) &&
+      (value.op !== "in" || isInRightOperand(value.right)),
+  );
+}
 export function maskInputs(values: unknown, definitions: FlowInputDefinition[], manual: string[]): unknown {
   const secret = new Set([...manual, ...definitions.filter((f) => f.secret).map((f) => f.name)].map((name) => name.toLowerCase()));
   const mask = (value: unknown): unknown => {

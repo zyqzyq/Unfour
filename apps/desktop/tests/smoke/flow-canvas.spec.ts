@@ -32,7 +32,8 @@ test("default Flow Canvas supports Inspector inputs, refs, insertion, deletion a
   await dialog.getByRole("button", { name: "Remove", exact: true }).click();
   await expect(page.locator(".react-flow__node")).toHaveCount(3);
   await expect(inspector.getByLabel("Input name")).toHaveValue("endpoint");
-  await page.getByLabel("Add step", { exact: true }).selectOption("condition");
+  await page.getByRole("button", { name: "Insert node · API Request → End", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Condition", exact: true }).click();
   await inspector.getByLabel("Condition · Value · Variable").selectOption({ label: "Step outputs · API Request · body" });
   await page.getByRole("button", { name: "Fit view" }).click();
   await page.locator(".react-flow__node").filter({ hasText: "API Request" }).click();
