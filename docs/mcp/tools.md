@@ -31,6 +31,8 @@ Tools with `openWorldHint: true`:
 - `unfour.ssh.list_dir`
 - `unfour.ssh.run_task`
 - `unfour.ssh.cancel_task_run`
+- `unfour.flow.run`
+- `unfour.flow.cancel_run`
 
 Write-capable tools are also checked by workspace policy at call time. The
 default `auto` mapping is dev = full access, test = guarded, prod = read-only.
@@ -373,3 +375,56 @@ body fields, activity details, connection summaries, SSH task configuration,
 and SSH command history. SSH history additionally omits persisted redacted
 rows and replaces any remaining credential-marker commands with
 `[redacted command]`.
+
+## Flow V1
+
+All Flow tools accept optional `workspaceId` (otherwise the active workspace).
+The MCP server and Desktop use the same CommandBus/FlowService and local history.
+
+| Tool | Additional input | Successful structuredContent |
+| --- | --- | --- |
+| `unfour.flow.list` | None | `{ "flows": FlowDefinition[] }` |
+| `unfour.flow.get` | `flowId` | `{ "flow": FlowDefinition }` |
+| `unfour.flow.save` | `definition: FlowDefinition` | `{ "flow": FlowDefinition }` |
+| `unfour.flow.run` | `flowId`; optional `environmentId`, `inputs` object, `secretInputNames` string array, `confirm`, `confirmation_text` (or `confirmationText`) | `{ "run": FlowRun }` |
+| `unfour.flow.cancel_run` | `runId` | `{ "run": FlowRun }` |
+| `unfour.flow.list_runs` | `flowId` | `{ "runs": FlowRunSummary[] }` |
+| `unfour.flow.get_run` | `runId` | `{ "run": FlowRun }` |
+
+Save accepts the existing FlowDefinition unchanged: `id`, `workspaceId`,
+`name`, `revision`, `inputs`, `steps`. Use an empty id to create;
+updates supply the last returned revision. Stale saves return
+`FLOW_REVISION_CONFLICT`; reload before editing again. The nested workspaceId
+must match the explicit/active workspace used for policy evaluation. Validation
+and inline-secret rejection are performed by the existing FlowService.
+
+Run uses the existing FlowRunInput with server-owned `initiator=mcp` and
+`confirmEffects`. Omitted inputs default to an empty object; omitted/null
+environmentId means workspace-only variables, never the active Desktop
+environment. First call returns `CONFIRMATION_REQUIRED` without creating a run.
+Repeat the same call with `confirm: true` and the returned confirmation_text.
+The fingerprint binds the saved definition/revision and invocation inputs;
+confirmation content never echoes raw inputs. Only successful confirmation sets
+confirmEffects=true. Flow requires this consent even under full_access because
+it can combine remote side effects. Run returns the initial run snapshot;
+use get_run to observe completion. Cancellation is cooperative and cannot undo
+completed effects.
+
+Policy is checked before confirmation: auto dev/full_access and test/guarded
+permit confirmed execution; auto prod/read_only and disabled block execution.
+Explicit policies retain their normal override behavior. All flows are treated
+as execution, including flows containing only read/probe/wait nodes. Save is a
+local write; cancel_run is execution; list/get/list_runs/get_run are local reads.
+A supplied confirmation cannot override a policy denial.
+
+History lists use at most 100 lightweight summaries with exactly id, flowId,
+status, startedAt and finishedAt, without reading run_json. get_run loads the
+full redacted snapshot, including definition, context, resources and step
+attempts. Human and MCP runs appear in the same history. Schema/manual secret
+inputs and sensitive headers retain Flow's existing redaction. Successful
+content text equals structuredContent and matches outputSchema; confirmation,
+policy and execution errors omit success structuredContent.
+
+Keep the MCP process alive while runs execute. Existing concurrent-edit and
+process interruption limits are documented in [Flow architecture](../architecture/flow-v1.md).
+No scheduler, webhook, subflow or new Canvas/persistence model is introduced.

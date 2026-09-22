@@ -183,6 +183,14 @@ pub(super) fn classify_mcp_action(
     api_method: Option<&str>,
 ) -> Option<(McpCapability, McpRisk)> {
     Some(match tool_name {
+        "unfour.flow.list"
+        | "unfour.flow.get"
+        | "unfour.flow.list_runs"
+        | "unfour.flow.get_run" => (McpCapability::WorkspaceRead, McpRisk::Read),
+        "unfour.flow.save" => (McpCapability::WorkspaceMutate, McpRisk::Write),
+        "unfour.flow.run" | "unfour.flow.cancel_run" => {
+            (McpCapability::DestructiveRun, McpRisk::Execute)
+        }
         "unfour.workspace.current"
         | "unfour.workspace.list"
         | "unfour.connection.list"

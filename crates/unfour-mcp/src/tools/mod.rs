@@ -3,6 +3,7 @@ mod api;
 mod confirmation;
 mod connection_diagnostics;
 mod database;
+mod flow;
 mod policy;
 mod real;
 mod ssh;
@@ -133,6 +134,7 @@ impl ToolRegistry {
         tools.extend(database::registered_tools());
         tools.extend(system::registered_tools());
         tools.extend(activity::registered_tools());
+        tools.extend(flow::registered_tools());
         tools.extend(ssh::registered_tools());
         tools.extend(connection_diagnostics::registered_tools());
 

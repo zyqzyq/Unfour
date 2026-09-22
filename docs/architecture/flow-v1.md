@@ -229,12 +229,42 @@ inputs. The editor preflights listed resource metadata for missing resources,
 API scripts/multipart, GET/HEAD probes and read-only DB connections; Rust still
 enforces the authoritative execution checks.
 
-## Future callers and current limits
+## MCP callers and current limits
 
 CommandBus already exposes `list_flows`, `get_flow`, `save_flow`, `delete_flow`,
-`run_flow`, `list_flow_runs`, `get_flow_run`, and `cancel_flow_run`. A future MCP
-adapter can invoke these same methods and provide `initiator: mcp`; this change
-does not register any Flow MCP tools. Initiator is provenance, not permission.
+`run_flow`, `list_flow_runs`, `get_flow_run`, and `cancel_flow_run`.
+MCP V1 registers `unfour.flow.list/get/save/run/cancel_run/list_runs/get_run`
+through `MCP -> CommandBusAdapter -> CommandBus -> FlowService`. Desktop and
+MCP use the same FlowDefinition, validation/revision semantics, engine, SQLite
+records and redacted history. MCP definitions open directly in Canvas; no
+adapter-specific execution or persistence model exists. Initiator is provenance,
+not permission: MCP sets `initiator: mcp` itself.
+
+Flow runs are conservatively classified as execution regardless of their nodes.
+Workspace policy is checked before the handler: auto dev allows execution,
+auto test is guarded, auto prod/read_only blocks it, and disabled blocks all
+Flow tools. Explicit policy overrides retain the existing MCP semantics.
+Both guarded and full_access require Flow's per-run side-effect consent via
+existing MCP payload-bound confirmation. The fingerprint includes the current
+saved definition/revision, workspace, environment, inputs and secret names;
+changing these before retry requires a new confirmation. Only after verification
+does the adapter set `confirmEffects=true`. Callers cannot supply that field or
+spoof initiator. Save requires its nested workspaceId to match the workspace
+whose policy was evaluated. Cancellation is also policy-checked execution and
+does not undo effects. The existing engine still owns resource validation,
+secret redaction, cancellation and interruption recovery.
+
+Tool input/output schemas describe the wire contracts; successful structuredContent
+contains exactly `{flows}`, `{flow}`, `{runs}` or `{run}`. Confirmation and
+policy errors use the existing MCP error content without success structuredContent.
+See [MCP tools](../mcp/tools.md) for arguments and confirmation usage.
+
+Existing concurrency limits still apply: confirmation checks the definition at
+retry time, but the engine reloads it when starting the run; these reads are not
+an atomic revision-pinned execution transaction. Referenced resources likewise
+have the existing concurrent-edit limitations described above. MCP process exit
+stops its background runs; stale leases become interrupted through shared history.
+Keep the MCP connection alive while a run is active.
 
 The UI polls the selected active Run and, while History is open, summaries
 containing running Runs. `flow_runs_list` / `listFlowRuns` return at most 100

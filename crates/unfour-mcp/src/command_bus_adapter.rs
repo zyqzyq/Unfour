@@ -1,3 +1,4 @@
+use unfour_core::models::{FlowDefinition, FlowRun, FlowRunInput, FlowRunSummary};
 mod contract;
 mod unified_runtime;
 
@@ -187,6 +188,65 @@ impl Drop for LocalCommandBusAdapter {
 }
 
 impl CommandBusAdapter for LocalCommandBusAdapter {
+    fn list_flows(
+        &self,
+        workspace_id: &str,
+    ) -> Result<Vec<FlowDefinition>, CommandBusAdapterError> {
+        self.run(self.bus.list_flows(workspace_id.to_string()))
+            .map_err(|e| CommandBusAdapterError::from_flow_error(&e))
+    }
+    fn get_flow(
+        &self,
+        workspace_id: &str,
+        flow_id: &str,
+    ) -> Result<FlowDefinition, CommandBusAdapterError> {
+        self.run(
+            self.bus
+                .get_flow(workspace_id.to_string(), flow_id.to_string()),
+        )
+        .map_err(|e| CommandBusAdapterError::from_flow_error(&e))
+    }
+    fn save_flow(&self, input: FlowDefinition) -> Result<FlowDefinition, CommandBusAdapterError> {
+        self.run(self.bus.save_flow(input))
+            .map_err(|e| CommandBusAdapterError::from_flow_error(&e))
+    }
+    fn run_flow(&self, input: FlowRunInput) -> Result<FlowRun, CommandBusAdapterError> {
+        self.run(self.bus.run_flow(input))
+            .map_err(|e| CommandBusAdapterError::from_flow_error(&e))
+    }
+    fn cancel_flow_run(
+        &self,
+        workspace_id: &str,
+        run_id: &str,
+    ) -> Result<FlowRun, CommandBusAdapterError> {
+        self.run(
+            self.bus
+                .cancel_flow_run(workspace_id.to_string(), run_id.to_string()),
+        )
+        .map_err(|e| CommandBusAdapterError::from_flow_error(&e))
+    }
+    fn list_flow_runs(
+        &self,
+        workspace_id: &str,
+        flow_id: &str,
+    ) -> Result<Vec<FlowRunSummary>, CommandBusAdapterError> {
+        self.run(
+            self.bus
+                .list_flow_runs(workspace_id.to_string(), flow_id.to_string()),
+        )
+        .map_err(|e| CommandBusAdapterError::from_flow_error(&e))
+    }
+    fn get_flow_run(
+        &self,
+        workspace_id: &str,
+        run_id: &str,
+    ) -> Result<FlowRun, CommandBusAdapterError> {
+        self.run(
+            self.bus
+                .get_flow_run(workspace_id.to_string(), run_id.to_string()),
+        )
+        .map_err(|e| CommandBusAdapterError::from_flow_error(&e))
+    }
     fn list_db_history(
         &self,
         workspace_id: &str,
@@ -985,6 +1045,16 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
 }
 
 impl CommandBusAdapterError {
+    fn from_flow_error(error: &AppError) -> Self {
+        if matches!(error, AppError::Validation(reason) if reason == "FLOW_REVISION_CONFLICT") {
+            return Self {
+                code: "FLOW_REVISION_CONFLICT",
+                message: "The Flow revision changed; reload before saving.",
+            };
+        }
+        Self::from_app_error("The command-bus Flow operation failed.", error)
+    }
+
     /// Build an adapter error that surfaces the underlying `AppError`'s stable
     /// classification code (e.g. `NOT_FOUND`, `DATABASE_ERROR`,
     /// `UNSUPPORTED_OPERATION`) alongside a safe, operation-specific message.

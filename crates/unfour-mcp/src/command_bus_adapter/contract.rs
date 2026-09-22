@@ -9,10 +9,72 @@ use unfour_core::models::{
     SshTasksReorderInput, SystemHealth, WorkspaceEnvironment, WorkspaceEnvironmentVariable,
     WorkspaceVariable, WorkspaceVariableInput,
 };
+use unfour_core::models::{FlowDefinition, FlowRun, FlowRunInput, FlowRunSummary};
 
 use super::CommandBusAdapterError;
 
 pub trait CommandBusAdapter: Send + Sync {
+    fn list_flows(
+        &self,
+        _workspace_id: &str,
+    ) -> Result<Vec<FlowDefinition>, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Flow operation is unavailable.",
+        })
+    }
+    fn get_flow(
+        &self,
+        _workspace_id: &str,
+        _flow_id: &str,
+    ) -> Result<FlowDefinition, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Flow operation is unavailable.",
+        })
+    }
+    fn save_flow(&self, _input: FlowDefinition) -> Result<FlowDefinition, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Flow operation is unavailable.",
+        })
+    }
+    fn run_flow(&self, _input: FlowRunInput) -> Result<FlowRun, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Flow operation is unavailable.",
+        })
+    }
+    fn cancel_flow_run(
+        &self,
+        _workspace_id: &str,
+        _run_id: &str,
+    ) -> Result<FlowRun, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Flow operation is unavailable.",
+        })
+    }
+    fn list_flow_runs(
+        &self,
+        _workspace_id: &str,
+        _flow_id: &str,
+    ) -> Result<Vec<FlowRunSummary>, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Flow operation is unavailable.",
+        })
+    }
+    fn get_flow_run(
+        &self,
+        _workspace_id: &str,
+        _run_id: &str,
+    ) -> Result<FlowRun, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Flow operation is unavailable.",
+        })
+    }
     fn list_db_history(
         &self,
         _workspace_id: &str,
