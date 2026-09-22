@@ -15,6 +15,9 @@ impl CommandBus {
     pub async fn list_flows(&self, workspace_id: String) -> AppResult<Vec<FlowDefinition>> {
         self.flow_service().list(&workspace_id).await
     }
+    pub async fn list_flow_summaries(&self, workspace_id: String) -> AppResult<Vec<FlowSummary>> {
+        self.flow_service().list_summaries(&workspace_id).await
+    }
     pub async fn get_flow(
         &self,
         workspace_id: String,
@@ -29,10 +32,19 @@ impl CommandBus {
         self.flow_service().delete(&workspace_id, &flow_id).await
     }
     pub async fn run_flow(&self, input: FlowRunInput) -> AppResult<FlowRun> {
+        self.run_flow_at_revision(input, None).await
+    }
+    pub async fn run_flow_at_revision(
+        &self,
+        input: FlowRunInput,
+        expected_revision: Option<i64>,
+    ) -> AppResult<FlowRun> {
         self.workspace
             .resolve_variables(&input.workspace_id, input.environment_id.as_deref(), "")
             .await?;
-        self.flow_service().run(input, Arc::new(self.clone())).await
+        self.flow_service()
+            .run_at_revision(input, Arc::new(self.clone()), expected_revision)
+            .await
     }
     pub async fn get_flow_run(&self, workspace_id: String, run_id: String) -> AppResult<FlowRun> {
         self.flow_service().get_run(&workspace_id, &run_id).await

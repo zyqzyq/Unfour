@@ -12,7 +12,7 @@ use crate::command_bus_adapter::{CommandBusAdapter, CommandBusAdapterError};
 
 pub(super) fn registered_tools() -> Vec<RegisteredTool> {
     let entries: [(&str, &str, ToolHandler, ToolAnnotations); 7] = [
-        ("list", "List saved Flow definitions.", list, ToolAnnotations::local_read()),
+        ("list", "List saved Flow summaries; use get for the complete definition.", list, ToolAnnotations::local_read()),
         ("get", "Read a saved Flow definition for use in Desktop Canvas or MCP.", get, ToolAnnotations::local_read()),
         ("save", "Save a FlowDefinition using existing validation and revision checks. Empty id creates; updates require the current revision.", save, ToolAnnotations::local_write()),
         ("run", "Start a Flow with initiator=mcp. Requires payload-bound confirmation even with full_access. Read-only/disabled policy blocks execution. Cancellation does not undo effects.", run, ToolAnnotations::remote_action()),
@@ -168,7 +168,7 @@ fn run(
     )?;
     input.initiator = FlowInitiator::Mcp;
     input.confirm_effects = true;
-    Ok(json!({"run": encode(b.run_flow(input).map_err(error)?)?}))
+    Ok(json!({"run": encode(b.run_flow(input, definition.revision).map_err(error)?)?}))
 }
 fn list_runs(
     b: &dyn CommandBusAdapter,

@@ -41,6 +41,26 @@ cover the structuredContent contract implicated in Cursor -32602 errors.
 Canvas compatibility is established through shared FlowDefinition round-trips;
 no Canvas implementation or persistence changes were made.
 
-Existing engine limits remain: confirmation and execution do not atomically pin
-the definition revision, and a running Flow depends on its originating process
-remaining alive. See [Flow architecture](../architecture/flow-v1.md).
+A running Flow still depends on its originating process remaining alive.
+Referenced-resource concurrent edits retain existing engine semantics.
+See [Flow architecture](../architecture/flow-v1.md).
+
+## Revision pinning and lightweight list follow-up
+
+- Regression coverage rejects an old confirmation after a save and injects a
+  deterministic save after MCP confirmation passes but before service execution.
+  The latter returns FLOW_CONFIRMATION_STALE with a reconfirmation instruction,
+  and neither path creates a Run.
+- CommandBus/FlowService coverage proves stale revisions create no history and
+  invoke no remote executor; a matching revision executes successfully.
+- FlowSummary outputSchema permits exactly id, workspaceId, name, revision.
+  Malformed typed steps/inputs remain listable through metadata projection while
+  Desktop's unchanged definition decoder rejects them.
+- No snapshot, Canvas, scheduler, or persistence schema changes.
+
+- PASS: follow-up aggregate MCP / Flow Engine / CommandBus tests, including
+  199 MCP library tests, four MCP binary tests, and two MCP integration tests.
+- PASS: cargo check for MCP, Flow Engine, and CommandBus; cargo fmt --check
+  for those crates plus unfour-core; git diff --check.
+- PASS: large-file checker (zero blocking files).
+- PASS: `cargo test -p unfour-mcp output_schema --quiet` (10 verifier tests); Flow-specific successes also validate against their outputSchema in the aggregate suite.

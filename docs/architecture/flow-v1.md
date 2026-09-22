@@ -259,10 +259,14 @@ contains exactly `{flows}`, `{flow}`, `{runs}` or `{run}`. Confirmation and
 policy errors use the existing MCP error content without success structuredContent.
 See [MCP tools](../mcp/tools.md) for arguments and confirmation usage.
 
-Existing concurrency limits still apply: confirmation checks the definition at
-retry time, but the engine reloads it when starting the run; these reads are not
-an atomic revision-pinned execution transaction. Referenced resources likewise
-have the existing concurrent-edit limitations described above. MCP process exit
+MCP passes its confirmed revision through CommandBus to FlowService. The service
+checks the revision on the same owned definition subsequently used for execution,
+before resource preparation or Run creation. A mismatch returns
+FLOW_CONFIRMATION_STALE and requires a new confirmation; later edits cannot
+replace the pinned definition. Desktop run behavior remains unpinned and unchanged.
+MCP flow.list uses FlowSummary (id, workspaceId, name, revision), projecting
+metadata without deserializing steps/inputs; Desktop list still returns definitions.
+Referenced resources retain the concurrent-edit limitations described above. MCP process exit
 stops its background runs; stale leases become interrupted through shared history.
 Keep the MCP connection alive while a run is active.
 

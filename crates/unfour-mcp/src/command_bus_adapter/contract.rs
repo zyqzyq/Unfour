@@ -9,15 +9,12 @@ use unfour_core::models::{
     SshTasksReorderInput, SystemHealth, WorkspaceEnvironment, WorkspaceEnvironmentVariable,
     WorkspaceVariable, WorkspaceVariableInput,
 };
-use unfour_core::models::{FlowDefinition, FlowRun, FlowRunInput, FlowRunSummary};
+use unfour_core::models::{FlowDefinition, FlowRun, FlowRunInput, FlowRunSummary, FlowSummary};
 
 use super::CommandBusAdapterError;
 
 pub trait CommandBusAdapter: Send + Sync {
-    fn list_flows(
-        &self,
-        _workspace_id: &str,
-    ) -> Result<Vec<FlowDefinition>, CommandBusAdapterError> {
+    fn list_flows(&self, _workspace_id: &str) -> Result<Vec<FlowSummary>, CommandBusAdapterError> {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "Flow operation is unavailable.",
@@ -39,7 +36,11 @@ pub trait CommandBusAdapter: Send + Sync {
             message: "Flow operation is unavailable.",
         })
     }
-    fn run_flow(&self, _input: FlowRunInput) -> Result<FlowRun, CommandBusAdapterError> {
+    fn run_flow(
+        &self,
+        _input: FlowRunInput,
+        _expected_revision: i64,
+    ) -> Result<FlowRun, CommandBusAdapterError> {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "Flow operation is unavailable.",

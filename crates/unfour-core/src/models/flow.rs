@@ -3,6 +3,15 @@ use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FlowSummary {
+    pub id: String,
+    pub workspace_id: String,
+    pub name: String,
+    pub revision: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FlowDefinition {
     pub id: String,
     pub workspace_id: String,

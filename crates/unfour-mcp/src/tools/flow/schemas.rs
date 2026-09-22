@@ -150,8 +150,15 @@ pub(super) fn input(name: &str) -> Value {
     schema
 }
 pub(super) fn output(name: &str) -> Value {
+    if name == "unfour.flow.list" {
+        let mut schema = object(json!({"flows":array(reference("FlowSummary"))}), &["flows"]);
+        schema["$defs"] = json!({"FlowSummary": object(
+            json!({"id":string(),"workspaceId":string(),"name":string(),"revision":{"type":"integer"}}),
+            &["id", "workspaceId", "name", "revision"],
+        )});
+        return schema;
+    }
     let (key, value) = match name {
-        "unfour.flow.list" => ("flows", array(reference("definition"))),
         "unfour.flow.get" | "unfour.flow.save" => ("flow", reference("definition")),
         "unfour.flow.list_runs" => ("runs", array(reference("summary"))),
         _ => ("run", reference("run")),

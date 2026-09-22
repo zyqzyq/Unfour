@@ -45,6 +45,16 @@ impl FlowService {
         input: FlowRunInput,
         executor: Arc<dyn FlowExecutor>,
     ) -> AppResult<FlowRun> {
+        self.run_at_revision(input, executor, None).await
+    }
+
+    /// Check and execute the same owned definition, without a later reload.
+    pub async fn run_at_revision(
+        &self,
+        input: FlowRunInput,
+        executor: Arc<dyn FlowExecutor>,
+        expected_revision: Option<i64>,
+    ) -> AppResult<FlowRun> {
         if !input.confirm_effects {
             return Err(unfour_core::AppError::ConfirmationRequired {
                 message: "Flow may perform remote side effects; cancellation does not undo them"
@@ -53,6 +63,9 @@ impl FlowService {
             });
         }
         let definition = self.get(&input.workspace_id, &input.flow_id).await?;
+        if expected_revision.is_some_and(|revision| revision != definition.revision) {
+            return Err(expression::invalid("FLOW_CONFIRMATION_STALE"));
+        }
         validation::validate(&definition)?;
         let now = chrono::Utc::now().to_rfc3339();
         let mut run = FlowRun {

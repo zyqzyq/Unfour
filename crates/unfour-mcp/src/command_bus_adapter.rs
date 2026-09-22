@@ -1,4 +1,4 @@
-use unfour_core::models::{FlowDefinition, FlowRun, FlowRunInput, FlowRunSummary};
+use unfour_core::models::{FlowDefinition, FlowRun, FlowRunInput, FlowRunSummary, FlowSummary};
 mod contract;
 mod unified_runtime;
 
@@ -188,11 +188,8 @@ impl Drop for LocalCommandBusAdapter {
 }
 
 impl CommandBusAdapter for LocalCommandBusAdapter {
-    fn list_flows(
-        &self,
-        workspace_id: &str,
-    ) -> Result<Vec<FlowDefinition>, CommandBusAdapterError> {
-        self.run(self.bus.list_flows(workspace_id.to_string()))
+    fn list_flows(&self, workspace_id: &str) -> Result<Vec<FlowSummary>, CommandBusAdapterError> {
+        self.run(self.bus.list_flow_summaries(workspace_id.to_string()))
             .map_err(|e| CommandBusAdapterError::from_flow_error(&e))
     }
     fn get_flow(
@@ -210,9 +207,16 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         self.run(self.bus.save_flow(input))
             .map_err(|e| CommandBusAdapterError::from_flow_error(&e))
     }
-    fn run_flow(&self, input: FlowRunInput) -> Result<FlowRun, CommandBusAdapterError> {
-        self.run(self.bus.run_flow(input))
-            .map_err(|e| CommandBusAdapterError::from_flow_error(&e))
+    fn run_flow(
+        &self,
+        input: FlowRunInput,
+        expected_revision: i64,
+    ) -> Result<FlowRun, CommandBusAdapterError> {
+        self.run(
+            self.bus
+                .run_flow_at_revision(input, Some(expected_revision)),
+        )
+        .map_err(|e| CommandBusAdapterError::from_flow_error(&e))
     }
     fn cancel_flow_run(
         &self,
@@ -1046,6 +1050,9 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
 
 impl CommandBusAdapterError {
     fn from_flow_error(error: &AppError) -> Self {
+        if matches!(error, AppError::Validation(reason) if reason == "FLOW_CONFIRMATION_STALE") {
+            return Self { code: "FLOW_CONFIRMATION_STALE", message: "Flow changed after confirmation. Read the Flow and request a new confirmation before retrying." };
+        }
         if matches!(error, AppError::Validation(reason) if reason == "FLOW_REVISION_CONFLICT") {
             return Self {
                 code: "FLOW_REVISION_CONFLICT",

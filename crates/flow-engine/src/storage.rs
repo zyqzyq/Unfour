@@ -7,6 +7,22 @@ use sqlx::Row;
 use unfour_core::{models::*, AppError, AppResult};
 
 impl FlowService {
+    pub async fn list_summaries(&self, workspace: &str) -> AppResult<Vec<FlowSummary>> {
+        // Project metadata without deserializing steps or inputs.
+        let rows = sqlx::query("SELECT id, workspace_id, revision, json_extract(definition_json, '$.name') AS name FROM flow_definitions WHERE workspace_id = ? ORDER BY updated_at DESC")
+            .bind(workspace).fetch_all(self.db.pool()).await?;
+        rows.iter()
+            .map(|row| {
+                Ok(FlowSummary {
+                    id: row.try_get("id")?,
+                    workspace_id: row.try_get("workspace_id")?,
+                    name: row.try_get("name")?,
+                    revision: row.try_get("revision")?,
+                })
+            })
+            .collect()
+    }
+
     pub async fn list(&self, workspace: &str) -> AppResult<Vec<FlowDefinition>> {
         let rows: Vec<String> = sqlx::query_scalar("SELECT definition_json FROM flow_definitions WHERE workspace_id = ? ORDER BY updated_at DESC").bind(workspace).fetch_all(self.db.pool()).await?;
         rows.iter()

@@ -320,7 +320,17 @@ fn flow_mcp_summary_does_not_decode_run_json() {
         sqlx::query("INSERT INTO flow_runs (id, workspace_id, flow_id, status, run_json, started_at, updated_at, finished_at) VALUES ('broken', ?, 'flow', 'succeeded', 'invalid snapshot', 'start', 'heartbeat', 'finish')")
             .bind(&ws).execute(db.pool()).await.unwrap();
     });
+    adapter.run(async {
+        sqlx::query("INSERT INTO flow_definitions (id, workspace_id, revision, definition_json, updated_at) VALUES ('summary-only', ?, 7, ?, 'now')")
+            .bind(&ws).bind(r#"{"name":"Metadata","steps":"not valid steps","inputs":{"not":"valid inputs"}}"#)
+            .execute(db.pool()).await.unwrap();
+    });
     let registry = ToolRegistry::with_command_bus(adapter.clone());
+    assert_eq!(
+        success(&registry, "list", json!({"workspaceId":ws}))["flows"],
+        json!([{"id":"summary-only","workspaceId":ws,"name":"Metadata","revision":7}])
+    );
+    assert!(adapter.run(adapter.bus.list_flows(ws.clone())).is_err());
     let summaries = success(
         &registry,
         "list_runs",
@@ -342,4 +352,91 @@ fn flow_mcp_summary_does_not_decode_run_json() {
     adapter.shutdown();
     drop(adapter);
     std::fs::remove_dir_all(storage_dir).unwrap();
+}
+
+#[test]
+fn flow_old_confirmation_and_post_confirmation_revision_race_create_no_run() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use unfour_command_bus::{ReadCommand, ReadCommandResult};
+    use unfour_core::models::*;
+
+    struct RacingAdapter {
+        inner: Arc<LocalCommandBusAdapter>,
+        mutate_on_run: AtomicBool,
+    }
+    impl CommandBusAdapter for RacingAdapter {
+        fn execute_read(
+            &self,
+            command: ReadCommand,
+        ) -> Result<ReadCommandResult, CommandBusAdapterError> {
+            self.inner.execute_read(command)
+        }
+        fn execute_saved_api_request(
+            &self,
+            id: &str,
+            timeout: Option<u64>,
+        ) -> Result<ApiResponse, CommandBusAdapterError> {
+            self.inner.execute_saved_api_request(id, timeout)
+        }
+        fn list_db_connections(
+            &self,
+            ws: &str,
+        ) -> Result<Vec<DatabaseConnection>, CommandBusAdapterError> {
+            self.inner.list_db_connections(ws)
+        }
+        fn get_db_schema(
+            &self,
+            ws: &str,
+            id: &str,
+        ) -> Result<DatabaseSchema, CommandBusAdapterError> {
+            self.inner.get_db_schema(ws, id)
+        }
+        fn execute_db_query(
+            &self,
+            input: DatabaseQueryInput,
+        ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
+            self.inner.execute_db_query(input)
+        }
+        fn get_flow(&self, ws: &str, id: &str) -> Result<FlowDefinition, CommandBusAdapterError> {
+            self.inner.get_flow(ws, id)
+        }
+        fn run_flow(
+            &self,
+            input: FlowRunInput,
+            revision: i64,
+        ) -> Result<FlowRun, CommandBusAdapterError> {
+            // Deterministic concurrent-writer interleaving: confirmation has passed,
+            // but the service has not loaded its execution definition yet.
+            if self.mutate_on_run.swap(false, Ordering::SeqCst) {
+                let flow = self.inner.get_flow(&input.workspace_id, &input.flow_id)?;
+                self.inner.save_flow(flow)?;
+            }
+            self.inner.run_flow(input, revision)
+        }
+    }
+    let (adapter, registry, ws) = setup();
+    let saved = adapter.save_flow(definition(&ws)).unwrap();
+    let mut args = json!({"flowId":saved.id});
+    let old = confirmation(&registry, args.clone());
+    adapter.save_flow(saved.clone()).unwrap();
+    args["confirm"] = json!(true);
+    args["confirmationText"] = json!(old);
+    assert_ne!(confirmation(&registry, args.clone()), old);
+    assert!(adapter.list_flow_runs(&ws, &saved.id).unwrap().is_empty());
+
+    let racing = ToolRegistry::with_command_bus(Arc::new(RacingAdapter {
+        inner: adapter.clone(),
+        mutate_on_run: AtomicBool::new(true),
+    }));
+    args["confirmationText"] = json!(confirmation(&racing, args.clone()));
+    let rejected = racing.call("unfour.flow.run", args).unwrap();
+    assert_eq!(
+        content_json(&rejected)["error"]["code"],
+        "FLOW_CONFIRMATION_STALE"
+    );
+    assert!(content_json(&rejected)["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("new confirmation"));
+    assert!(adapter.list_flow_runs(&ws, &saved.id).unwrap().is_empty());
 }

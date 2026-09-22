@@ -380,10 +380,14 @@ rows and replaces any remaining credential-marker commands with
 
 All Flow tools accept optional `workspaceId` (otherwise the active workspace).
 The MCP server and Desktop use the same CommandBus/FlowService and local history.
+MCP FlowSummary has exactly `id`, `workspaceId`, `name`, and `revision`.
+The list query projects metadata only (name from the existing JSON column);
+it does not deserialize or return steps/inputs. Use flow.get for the complete
+definition. Desktop list/get contracts are unchanged.
 
 | Tool | Additional input | Successful structuredContent |
 | --- | --- | --- |
-| `unfour.flow.list` | None | `{ "flows": FlowDefinition[] }` |
+| `unfour.flow.list` | None | `{ "flows": FlowSummary[] }` |
 | `unfour.flow.get` | `flowId` | `{ "flow": FlowDefinition }` |
 | `unfour.flow.save` | `definition: FlowDefinition` | `{ "flow": FlowDefinition }` |
 | `unfour.flow.run` | `flowId`; optional `environmentId`, `inputs` object, `secretInputNames` string array, `confirm`, `confirmation_text` (or `confirmationText`) | `{ "run": FlowRun }` |
@@ -405,7 +409,14 @@ environment. First call returns `CONFIRMATION_REQUIRED` without creating a run.
 Repeat the same call with `confirm: true` and the returned confirmation_text.
 The fingerprint binds the saved definition/revision and invocation inputs;
 confirmation content never echoes raw inputs. Only successful confirmation sets
-confirmEffects=true. Flow requires this consent even under full_access because
+confirmEffects=true. The adapter passes the confirmed revision to FlowService,
+which checks it against the same definition it will execute, before resource
+preparation or Run creation. A revision changed before confirmation verification
+returns CONFIRMATION_REQUIRED with a fresh token; a change after verification
+but before the service reads the definition returns FLOW_CONFIRMATION_STALE,
+requiring a new confirmation. Neither creates a Run or executes remote effects.
+Once pinned, later edits cannot replace that Run's definition.
+Flow requires this consent even under full_access because
 it can combine remote side effects. Run returns the initial run snapshot;
 use get_run to observe completion. Cancellation is cooperative and cannot undo
 completed effects.

@@ -290,3 +290,48 @@ async fn flow_real_http_start_poll_and_database() {
         FlowRunStatus::Succeeded
     );
 }
+
+#[tokio::test]
+async fn flow_revision_pin_rejects_before_remote_execution_or_history() {
+    let bus = test_bus().await;
+    let ws = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let service = FlowService::new(bus.db.clone());
+    let driver = Arc::new(Driver::default());
+    let saved = service
+        .save(definition(
+            &ws,
+            json!([action("effect", "api", "api", json!({"effect":true}))]),
+        ))
+        .await
+        .unwrap();
+    let changed = service.save(saved.clone()).await.unwrap();
+    let error = service
+        .run_at_revision(
+            request(&ws, &saved.id),
+            driver.clone(),
+            Some(saved.revision),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, AppError::Validation(ref code) if code == "FLOW_CONFIRMATION_STALE"));
+    assert!(driver.calls.lock().unwrap().is_empty());
+    assert!(service.list_runs(&ws, &saved.id).await.unwrap().is_empty());
+    let error = bus
+        .run_flow_at_revision(request(&ws, &saved.id), Some(saved.revision))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, AppError::Validation(ref code) if code == "FLOW_CONFIRMATION_STALE"));
+    assert!(service.list_runs(&ws, &saved.id).await.unwrap().is_empty());
+    let run = service
+        .run_at_revision(
+            request(&ws, &saved.id),
+            driver.clone(),
+            Some(changed.revision),
+        )
+        .await
+        .unwrap();
+    let result = finished(&bus, &run).await;
+    assert_eq!(result.definition.revision, changed.revision);
+    assert_eq!(result.status, FlowRunStatus::Succeeded);
+    assert_eq!(driver.calls.lock().unwrap().len(), 1);
+}
