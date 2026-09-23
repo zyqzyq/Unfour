@@ -1,7 +1,8 @@
-import { ChevronLeft, ChevronRight, Code2, Database, Plus, RefreshCw, RotateCcw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Code2, Database, Download, Plus, RefreshCw, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import type {
   DatabaseCellValue,
+  DatabaseConnection,
   DatabaseQueryResult,
   DatabaseTable,
   DatabaseTableColumn,
@@ -28,8 +29,10 @@ import type { DatabaseTableViewState, TableEditing } from "../model/types";
 import { buildPreviewSql } from "../result-utils";
 import { DatabaseErrorDetails } from "./DatabaseErrorDetails";
 import { TableDataGrid } from "./TableDataGrid";
+import { TableExportDialog } from "./TableExportDialog";
 
 export function TableDataTab({
+  connection,
   editing,
   error,
   executePending,
@@ -45,6 +48,7 @@ export function TableDataTab({
   tableSort,
   tableView,
 }: {
+  connection?: DatabaseConnection | null;
   editing?: TableEditing | null;
   error?: unknown;
   executePending: boolean;
@@ -101,6 +105,7 @@ export function TableDataTab({
           ) : null}
         </ToolbarGroup>
         <ToolbarGroup>
+          <TableExportAction connection={connection} table={tableMeta} />
           {onSwitchToStructure ? (
             <button
               className="inline-flex h-[22px] items-center rounded-[5px] px-2 text-[12px] font-medium text-[var(--u-color-text-muted)] transition-colors duration-150 hover:text-[var(--u-color-text)]"
@@ -248,6 +253,16 @@ export function TableDataTab({
       ) : null}
     </div>
   );
+}
+
+function TableExportAction({ connection, table }: { connection?: DatabaseConnection | null; table: DatabaseTable | null }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  if (!connection || !table || table.kind !== "table") return null;
+  return <>
+    <Button onClick={() => setOpen(true)} size="sm" type="button" variant="outline"><Download size={13} />{t("database.export.export")}</Button>
+    {open ? <TableExportDialog connection={connection} onOpenChange={setOpen} table={table} /> : null}
+  </>;
 }
 
 function buildLoadingResult(tableMeta: DatabaseTable | null): DatabaseQueryResult {

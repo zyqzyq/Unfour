@@ -20,6 +20,7 @@ import {
   SavedSqlContextMenu,
   TableContextMenu,
 } from "./database-tree-menus";
+import { TableExportDialog } from "./TableExportDialog";
 
 
 export function DatabaseConnectionTree({
@@ -84,6 +85,7 @@ export function DatabaseConnectionTree({
 }) {
   const { t } = useI18n();
   const [pendingDelete, setPendingDelete] = useState<SavedSql | null>(null);
+  const [exportTarget, setExportTarget] = useState<{ connection: DatabaseConnection; table: DatabaseTable } | null>(null);
   const requestDeleteSavedSql = onDeleteSavedSql
     ? (item: SavedSql) => setPendingDelete(item)
     : undefined;
@@ -165,6 +167,7 @@ export function DatabaseConnectionTree({
               loadingKeys,
               onDeleteSavedSql: requestDeleteSavedSql,
               onDesignTable,
+              onExportTable: (connection, table) => setExportTarget({ connection, table }),
               onOpenSavedSql,
               onPreviewTable,
               onRefreshSchema,
@@ -273,6 +276,7 @@ export function DatabaseConnectionTree({
       open={pendingDelete !== null}
       title={t("database.tree.deleteSavedSqlTitle")}
     />
+    {exportTarget ? <TableExportDialog connection={exportTarget.connection} onOpenChange={(open) => !open && setExportTarget(null)} table={exportTarget.table} /> : null}
     </>
   );
 }
@@ -287,6 +291,7 @@ function buildConnectionChildren({
   loadingKeys,
   onDeleteSavedSql,
   onDesignTable,
+  onExportTable,
   onOpenSavedSql,
   onPreviewTable,
   onRefreshSchema,
@@ -308,6 +313,7 @@ function buildConnectionChildren({
   loadingKeys?: string[];
   onDeleteSavedSql?: (item: SavedSql) => void;
   onDesignTable?: (connectionId: string, table: DatabaseTable) => void;
+  onExportTable?: (connection: DatabaseConnection, table: DatabaseTable) => void;
   onOpenSavedSql?: (item: SavedSql) => void;
   onPreviewTable?: (connectionId: string, table: DatabaseTable) => void;
   onRefreshSchema?: (connection: DatabaseConnection) => void;
@@ -366,6 +372,7 @@ function buildConnectionChildren({
         connection,
         defaultExpandedIds,
         onDesignTable,
+        onExportTable,
         onPreviewTable,
         onRefreshSchema,
         onUseSql,
@@ -408,6 +415,7 @@ function buildConnectionChildren({
         connection,
         defaultExpandedIds,
         onDesignTable,
+        onExportTable,
         onPreviewTable,
         onRefreshSchema,
         onUseSql,
@@ -526,6 +534,7 @@ function renderCatalogContents({
   connection,
   defaultExpandedIds,
   onDesignTable,
+  onExportTable,
   onPreviewTable,
   onRefreshSchema,
   onUseSql,
@@ -537,6 +546,7 @@ function renderCatalogContents({
   connection: DatabaseConnection;
   defaultExpandedIds: Set<string>;
   onDesignTable?: (connectionId: string, table: DatabaseTable) => void;
+  onExportTable?: (connection: DatabaseConnection, table: DatabaseTable) => void;
   onPreviewTable?: (connectionId: string, table: DatabaseTable) => void;
   onRefreshSchema?: (connection: DatabaseConnection) => void;
   onUseSql?: (connectionId: string, sql: string, table?: DatabaseTable) => void;
@@ -561,6 +571,7 @@ function renderCatalogContents({
       connection,
       defaultExpandedIds,
       onDesignTable,
+      onExportTable,
       onPreviewTable,
       onUseSql,
       parentId,
@@ -583,6 +594,7 @@ function renderCatalogContents({
         connection,
         defaultExpandedIds,
         onDesignTable,
+        onExportTable,
         onPreviewTable,
         onUseSql,
         parentId: schemaNodeId,
@@ -606,6 +618,7 @@ function buildTableGroups({
   connection,
   defaultExpandedIds,
   onDesignTable,
+  onExportTable,
   onPreviewTable,
   onUseSql,
   parentId,
@@ -616,6 +629,7 @@ function buildTableGroups({
   connection: DatabaseConnection;
   defaultExpandedIds: Set<string>;
   onDesignTable?: (connectionId: string, table: DatabaseTable) => void;
+  onExportTable?: (connection: DatabaseConnection, table: DatabaseTable) => void;
   onPreviewTable?: (connectionId: string, table: DatabaseTable) => void;
   onUseSql?: (connectionId: string, sql: string, table?: DatabaseTable) => void;
   parentId: string;
@@ -632,7 +646,7 @@ function buildTableGroups({
     defaultExpandedIds.add(groupId);
     groups.push({
       children: baseTables.map((table) =>
-        tableItem({ connection, onDesignTable, onPreviewTable, onUseSql, t, table, tableLookup }),
+        tableItem({ connection, onDesignTable, onExportTable, onPreviewTable, onUseSql, t, table, tableLookup }),
       ),
       icon: <Table2 size={13} />,
       id: groupId,
@@ -645,7 +659,7 @@ function buildTableGroups({
     const groupId = `${parentId}:views`;
     groups.push({
       children: views.map((table) =>
-        tableItem({ connection, onDesignTable, onPreviewTable, onUseSql, t, table, tableLookup }),
+        tableItem({ connection, onDesignTable, onExportTable, onPreviewTable, onUseSql, t, table, tableLookup }),
       ),
       icon: <Eye size={13} />,
       id: groupId,
@@ -664,6 +678,7 @@ function isViewKind(kind: string) {
 function tableItem({
   connection,
   onDesignTable,
+  onExportTable,
   onPreviewTable,
   onUseSql,
   t,
@@ -672,6 +687,7 @@ function tableItem({
 }: {
   connection: DatabaseConnection;
   onDesignTable?: (connectionId: string, table: DatabaseTable) => void;
+  onExportTable?: (connection: DatabaseConnection, table: DatabaseTable) => void;
   onPreviewTable?: (connectionId: string, table: DatabaseTable) => void;
   onUseSql?: (connectionId: string, sql: string, table?: DatabaseTable) => void;
   t: ReturnType<typeof useI18n>["t"];
@@ -685,6 +701,7 @@ function tableItem({
       <TableContextMenu
         connection={connection}
         onDesignTable={onDesignTable}
+        onExportTable={onExportTable}
         onPreviewTable={onPreviewTable}
         onUseSql={onUseSql}
         t={t}

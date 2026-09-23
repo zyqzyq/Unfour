@@ -213,7 +213,7 @@ pub(super) async fn mysql_ddl(
     let row = sqlx::query(&sql).fetch_one(pool).await?;
     // SHOW CREATE TABLE returns (Table, Create Table); read the DDL positionally
     // so the result is not tied to the server's column-name casing.
-    Ok(row.try_get::<String, _>(1).ok())
+    Ok(Some(row.try_get::<String, _>(1)?))
 }
 
 pub(super) async fn ensure_mysql_table_exists(

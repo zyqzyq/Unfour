@@ -201,6 +201,19 @@ export type DatabaseQueryResult = {
   safety: DatabaseQuerySafety;
 };
 
+export type DatabaseExportTableInput = DatabaseTableStructureInput & {
+  content: "structure" | "data" | "structure-and-data";
+  format: "sql" | "csv" | "json";
+  destinationPath: string;
+};
+
+export type DatabaseExportTableResult = {
+  path: string;
+  rowCount: number;
+  bytesWritten: number;
+  format: "sql" | "csv" | "json";
+};
+
 export type DatabaseScriptInput = DatabaseQueryInput & {
   runId: string;
   cursorOffset?: number;

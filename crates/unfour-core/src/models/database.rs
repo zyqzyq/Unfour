@@ -244,6 +244,45 @@ pub struct DatabaseQueryInput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DatabaseExportContent {
+    Structure,
+    Data,
+    StructureAndData,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DatabaseExportFormat {
+    Sql,
+    Csv,
+    Json,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseExportTableInput {
+    pub workspace_id: String,
+    pub connection_id: String,
+    #[serde(default)]
+    pub catalog: Option<String>,
+    pub schema: Option<String>,
+    pub table_name: String,
+    pub content: DatabaseExportContent,
+    pub format: DatabaseExportFormat,
+    pub destination_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseExportTableResult {
+    pub path: String,
+    pub row_count: u64,
+    pub bytes_written: u64,
+    pub format: DatabaseExportFormat,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DatabaseScriptInput {
     #[serde(flatten)]

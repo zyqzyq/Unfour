@@ -1,5 +1,5 @@
 import { Copy, CopyPlus, MoreVertical, Pencil, Play, PlusCircle, RefreshCw, Square, Trash2 } from "lucide-react";
-import type { DatabaseConnection, DatabaseTable, SavedSql } from "@unfour/command-client";
+import { getDatabaseTableStructure, type DatabaseConnection, type DatabaseTable, type SavedSql } from "@unfour/command-client";
 import {
   ContextMenuItem,
   DropdownMenu,
@@ -60,6 +60,7 @@ export function SavedSqlContextMenu({
 
 export function TableContextMenu({
   connection,
+  onExportTable,
   onDesignTable,
   onPreviewTable,
   onUseSql,
@@ -67,6 +68,7 @@ export function TableContextMenu({
   table,
 }: {
   connection: DatabaseConnection;
+  onExportTable?: (connection: DatabaseConnection, table: DatabaseTable) => void;
   onDesignTable?: (connectionId: string, table: DatabaseTable) => void;
   onPreviewTable?: (connectionId: string, table: DatabaseTable) => void;
   onUseSql?: (connectionId: string, sql: string, table?: DatabaseTable) => void;
@@ -86,6 +88,13 @@ export function TableContextMenu({
           {t("database.tree.designTable")}
         </ContextMenuItem>
       )}
+      <ContextMenuItem onSelect={() => void getDatabaseTableStructure({ workspaceId: connection.workspaceId, connectionId: connection.id, catalog: table.catalog, schema: table.schema, tableName: table.name }).then((structure) => {
+        if (structure.ddl) return copyToClipboard(structure.ddl, handleError);
+        throw new Error("DDL is unavailable");
+      }).catch(handleError)}>
+        <Copy size={13} />{t("database.export.copyDdl")}
+      </ContextMenuItem>
+      {onExportTable && table.kind === "table" ? <ContextMenuItem onSelect={() => onExportTable(connection, table)}>{t("database.export.exportTable")}</ContextMenuItem> : null}
       {onUseSql && (
         <ContextMenuItem onSelect={() => onUseSql(connection.id, generateSelectSql(connection.driver, table), table)}>
           {t("database.tree.generateSelect")}

@@ -2,6 +2,213 @@ use super::super::*;
 use super::support::{service_with_workspace, sqlite_fixture, sqlite_input};
 use std::fs;
 use unfour_core::models::DatabaseCellValueMode;
+use unfour_core::models::{DatabaseExportContent, DatabaseExportFormat, DatabaseExportTableInput};
+
+#[tokio::test]
+async fn sqlite_large_table_export_writes_all_rows_to_disk() {
+    let (service, workspace_id) = service_with_workspace().await;
+    let path = sqlite_fixture().await;
+    let connection = service
+        .save_connection(sqlite_input(&workspace_id, &path))
+        .await
+        .unwrap();
+    let pool = sqlite_pool(&connection).await.unwrap();
+    sqlx::query("WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM numbers WHERE n < 20000) INSERT INTO deploys (service, version) SELECT 'service-' || n, 'v1' FROM numbers")
+        .execute(&pool).await.unwrap();
+    let destination =
+        std::env::temp_dir().join(format!("unfour-large-export-{}.csv", uuid::Uuid::new_v4()));
+    let result = service
+        .export_table(DatabaseExportTableInput {
+            workspace_id,
+            connection_id: connection.id,
+            catalog: None,
+            schema: None,
+            table_name: "deploys".into(),
+            content: DatabaseExportContent::Data,
+            format: DatabaseExportFormat::Csv,
+            destination_path: destination.to_string_lossy().into_owned(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(result.row_count, 20_002);
+    assert!(result.bytes_written > 100_000);
+    assert_eq!(
+        fs::read_to_string(&destination).unwrap().lines().count(),
+        20_003
+    );
+    let _ = fs::remove_file(destination);
+    pool.close().await;
+    let _ = fs::remove_file(path);
+}
+
+#[tokio::test]
+async fn sqlite_export_streams_whole_table_and_empty_table() {
+    let (service, workspace_id) = service_with_workspace().await;
+    let path = sqlite_fixture().await;
+    let connection = service
+        .save_connection(sqlite_input(&workspace_id, &path))
+        .await
+        .unwrap();
+    let source_target = service
+        .export_table(DatabaseExportTableInput {
+            workspace_id: workspace_id.clone(),
+            connection_id: connection.id.clone(),
+            catalog: None,
+            schema: None,
+            table_name: "deploys".into(),
+            content: DatabaseExportContent::Data,
+            format: DatabaseExportFormat::Sql,
+            destination_path: path.to_string_lossy().into_owned(),
+        })
+        .await;
+    assert!(matches!(source_target, Err(AppError::Validation(_))));
+    let pool = sqlite_pool(&connection).await.unwrap();
+    sqlx::query("CREATE TABLE export_values (id INTEGER PRIMARY KEY, payload BLOB, metadata TEXT)")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("CREATE INDEX export_values_metadata_idx ON export_values(metadata)")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO export_values (id, payload, metadata) VALUES (1, ?1, ?2)")
+        .bind(vec![0_u8, 255_u8, 10_u8])
+        .bind("{\"quote\":\"O'Brien\"}")
+        .execute(&pool)
+        .await
+        .unwrap();
+    for i in 0..250 {
+        sqlx::query("INSERT INTO deploys (service, version) VALUES (?1, ?2)")
+            .bind(format!("service {i}"))
+            .bind("a'b,\nline")
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    let mut destination = std::env::temp_dir();
+    destination.push(format!("unfour-table-export-{}.sql", uuid::Uuid::new_v4()));
+    let invalid = service
+        .export_table(DatabaseExportTableInput {
+            workspace_id: workspace_id.clone(),
+            connection_id: connection.id.clone(),
+            catalog: None,
+            schema: None,
+            table_name: "deploys".into(),
+            content: DatabaseExportContent::Structure,
+            format: DatabaseExportFormat::Csv,
+            destination_path: destination.to_string_lossy().into_owned(),
+        })
+        .await;
+    assert!(matches!(invalid, Err(AppError::Validation(_))));
+    assert!(!destination.exists());
+    let input = DatabaseExportTableInput {
+        workspace_id: workspace_id.clone(),
+        connection_id: connection.id.clone(),
+        catalog: None,
+        schema: None,
+        table_name: "deploys".into(),
+        content: DatabaseExportContent::StructureAndData,
+        format: DatabaseExportFormat::Sql,
+        destination_path: destination.to_string_lossy().into_owned(),
+    };
+    let result = service.export_table(input).await.unwrap();
+    assert_eq!(result.row_count, 252);
+    assert_eq!(
+        result.bytes_written,
+        fs::metadata(&destination).unwrap().len()
+    );
+    let sql = fs::read_to_string(&destination).unwrap();
+    assert!(sql.starts_with("CREATE TABLE"));
+    assert_eq!(sql.matches("INSERT INTO").count(), 3);
+    assert!(sql.contains("a''b"));
+    let restored = std::env::temp_dir().join(format!(
+        "unfour-restored-export-{}.sqlite",
+        uuid::Uuid::new_v4()
+    ));
+    let restore_pool = sqlx::SqlitePool::connect_with(
+        sqlx::sqlite::SqliteConnectOptions::new()
+            .filename(&restored)
+            .create_if_missing(true),
+    )
+    .await
+    .unwrap();
+    sqlx::raw_sql(&sql).execute(&restore_pool).await.unwrap();
+    let restored_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM deploys")
+        .fetch_one(&restore_pool)
+        .await
+        .unwrap();
+    assert_eq!(restored_count.0, 252);
+    restore_pool.close().await;
+    drop(restore_pool);
+    let _ = fs::remove_file(restored);
+    fs::remove_file(&destination).unwrap();
+
+    destination.set_extension("sql");
+    service
+        .export_table(DatabaseExportTableInput {
+            workspace_id: workspace_id.clone(),
+            connection_id: connection.id.clone(),
+            catalog: None,
+            schema: None,
+            table_name: "export_values".into(),
+            content: DatabaseExportContent::StructureAndData,
+            format: DatabaseExportFormat::Sql,
+            destination_path: destination.to_string_lossy().into_owned(),
+        })
+        .await
+        .unwrap();
+    let script = fs::read_to_string(&destination).unwrap();
+    assert!(script.contains("X'00ff0a'"));
+    assert!(script.contains("O''Brien"));
+    assert!(script.contains("CREATE INDEX export_values_metadata_idx"));
+    fs::remove_file(&destination).unwrap();
+
+    destination.set_extension("csv");
+    let result = service
+        .export_table(DatabaseExportTableInput {
+            workspace_id: workspace_id.clone(),
+            connection_id: connection.id.clone(),
+            catalog: None,
+            schema: None,
+            table_name: "empty_deploys".into(),
+            content: DatabaseExportContent::Data,
+            format: DatabaseExportFormat::Csv,
+            destination_path: destination.to_string_lossy().into_owned(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(result.row_count, 0);
+    assert!(fs::read_to_string(&destination)
+        .unwrap()
+        .starts_with("id,service"));
+    fs::remove_file(&destination).unwrap();
+
+    destination.set_extension("json");
+    let result = service
+        .export_table(DatabaseExportTableInput {
+            workspace_id,
+            connection_id: connection.id,
+            catalog: None,
+            schema: None,
+            table_name: "deploys".into(),
+            content: DatabaseExportContent::Data,
+            format: DatabaseExportFormat::Json,
+            destination_path: destination.to_string_lossy().into_owned(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(result.row_count, 252);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&fs::read_to_string(&destination).unwrap())
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .len(),
+        252
+    );
+    fs::remove_file(&destination).unwrap();
+    let _ = fs::remove_file(path);
+}
 
 #[tokio::test]
 async fn sqlite_schema_query_and_safe_browse_work() {

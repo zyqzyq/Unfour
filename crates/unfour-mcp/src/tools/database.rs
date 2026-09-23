@@ -1,6 +1,9 @@
 use serde_json::{json, Map, Value};
 use unfour_command_bus::{ReadCommand, ReadCommandResult};
-use unfour_core::models::{DatabaseConnection, DatabaseQueryInput};
+use unfour_core::models::{
+    DatabaseConnection, DatabaseExportContent, DatabaseExportFormat, DatabaseExportTableInput,
+    DatabaseQueryInput, DatabaseTableStructureInput,
+};
 
 use crate::command_bus_adapter::CommandBusAdapter;
 
@@ -23,6 +26,29 @@ use database_sql::*;
 
 pub(super) fn registered_tools() -> Vec<RegisteredTool> {
     vec![
+        RegisteredTool {
+            definition: ToolDefinition {
+                name: "unfour.db.export_table",
+                title: "Export Database Table",
+                description: "Exports one complete table to a file in Unfour's managed exports directory. Returns file metadata; no destination path is accepted.",
+                input_schema: json!({
+                    "type": "object", "properties": {
+                        "connectionId": {"type": "string"}, "tableName": {"type": "string"},
+                        "workspaceId": {"type": "string"}, "catalog": {"type": "string"}, "schema": {"type": "string"},
+                        "content": {"type": "string", "enum": ["structure", "data", "structure-and-data"]},
+                        "format": {"type": "string", "enum": ["sql", "csv", "json"]}
+                    }, "required": ["connectionId", "tableName", "content", "format"], "additionalProperties": false
+                }),
+                output_schema: json!({
+                    "type": "object", "properties": {
+                        "path": {"type": "string"}, "rowCount": {"type": "integer", "minimum": 0},
+                        "bytesWritten": {"type": "integer", "minimum": 0}, "format": {"type": "string", "enum": ["sql", "csv", "json"]}
+                    }, "required": ["path", "rowCount", "bytesWritten", "format"], "additionalProperties": false
+                }),
+                annotations: ToolAnnotations::remote_action(),
+            },
+            handler: db_export_table,
+        },
         database_create::registered_tool(),
         RegisteredTool {
             definition: ToolDefinition {
@@ -131,7 +157,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                 name: "unfour.db.describe_table",
                 title: "Describe Database Table",
                 description:
-                    "Describes a table's structure (columns, types, nullability, primary keys) for a saved database connection through the Unfour command bus. Does not read table data.",
+                    "Describes a table's complete structure (columns, indexes, foreign keys, DDL) for a saved database connection through the Unfour command bus. Does not read table data.",
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -147,6 +173,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                             "type": "string",
                             "description": "Optional schema name filter (e.g. 'public')."
                         },
+                        "catalog": { "type": "string", "description": "Optional database catalog." },
                         "workspaceId": {
                             "type": "string",
                             "description": "Optional workspace ID. Uses the active workspace if omitted."
@@ -155,41 +182,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["connectionId", "tableName"],
                     "additionalProperties": false
                 }),
-                output_schema: json!({
-                    "type": "object",
-                    "properties": {
-                        "connectionId": { "type": "string" },
-                        "table": {
-                            "type": "object",
-                            "properties": {
-                                "name": { "type": "string" },
-                                "catalog": { "type": ["string", "null"] },
-                                "schema": { "type": ["string", "null"] },
-                                "kind": { "type": "string" },
-                                "columns": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "object",
-                                        "properties": {
-                                            "name": { "type": "string" },
-                                            "dataType": { "type": "string" },
-                                            "nullable": { "type": "boolean" },
-                                            "primaryKey": { "type": "boolean" }
-                                        },
-                                        "required": ["name", "dataType", "nullable", "primaryKey"],
-                                        "additionalProperties": false
-                                    }
-                                },
-                                "columnCount": { "type": "integer", "minimum": 0 }
-                            },
-                            "required": ["name", "kind", "columns", "columnCount"],
-                            "additionalProperties": false
-                        },
-                        "source": { "type": "string", "const": "command-bus" }
-                    },
-                    "required": ["connectionId", "table", "source"],
-                    "additionalProperties": false
-                }),
+                output_schema: describe_table_output_schema(),
                 annotations: ToolAnnotations::remote_read(),
             },
             handler: db_describe_table,
@@ -472,66 +465,155 @@ fn db_describe_table(
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
         arguments,
-        &["connectionId", "tableName", "schema", "workspaceId"],
+        &[
+            "connectionId",
+            "tableName",
+            "catalog",
+            "schema",
+            "workspaceId",
+        ],
     )?;
     let connection_id =
         parse_required_string(&arguments, "connectionId", "unfour.db.describe_table")?;
     let table_name = parse_required_string(&arguments, "tableName", "unfour.db.describe_table")?;
-    let schema_filter = parse_optional_string(&arguments, "schema")?;
+    let catalog = parse_optional_string(&arguments, "catalog")?;
+    let schema = parse_optional_string(&arguments, "schema")?;
     let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
-
-    let schema = command_bus
-        .get_db_schema(&workspace_id, &connection_id)
+    let table = command_bus
+        .get_db_table_structure(DatabaseTableStructureInput {
+            workspace_id,
+            connection_id: connection_id.clone(),
+            catalog,
+            schema,
+            table_name,
+        })
         .map_err(|e| ToolCallError::Execution {
             code: e.code,
             message: e.message,
         })?;
+    let mut table = serde_json::to_value(table).map_err(|_| ToolCallError::Execution {
+        code: "SERIALIZATION_ERROR",
+        message: "Could not serialize table structure.",
+    })?;
+    table["columnCount"] = json!(table["columns"].as_array().map_or(0, Vec::len));
+    Ok(json!({ "connectionId": connection_id, "table": table, "source": "command-bus" }))
+}
 
-    let table = schema.tables.iter().find(|t| {
-        t.name == table_name
-            && match &schema_filter {
-                // Match the schema (PostgreSQL) or the catalog (MySQL database),
-                // since MySQL exposes its database at the catalog level.
-                Some(s) => {
-                    t.schema.as_deref() == Some(s.as_str())
-                        || t.catalog.as_deref() == Some(s.as_str())
-                }
-                None => true,
-            }
-    });
+fn describe_table_output_schema() -> Value {
+    json!({
+        "type": "object", "properties": {
+            "connectionId": {"type": "string"}, "source": {"type": "string", "const": "command-bus"},
+            "table": {"type": "object", "properties": {
+                "catalog": {"type": ["string", "null"]}, "schema": {"type": ["string", "null"]},
+                "name": {"type": "string"}, "kind": {"type": "string"}, "ddl": {"type": ["string", "null"]},
+                "columnCount": {"type": "integer", "minimum": 0},
+                "columns": {"type": "array", "items": {"type": "object", "properties": {
+                    "name": {"type": "string"}, "dataType": {"type": "string"},
+                    "nullable": {"type": "boolean"}, "primaryKey": {"type": "boolean"},
+                    "defaultValue": {"type": ["string", "null"]}, "generated": {"type": "boolean"}, "autoIncrement": {"type": "boolean"}
+                }, "required": ["name", "dataType", "nullable", "primaryKey", "defaultValue", "generated", "autoIncrement"], "additionalProperties": false}},
+                "indexes": {"type": "array", "items": {"type": "object", "properties": {
+                    "name": {"type": "string"}, "columns": {"type": "array", "items": {"type": "string"}},
+                    "unique": {"type": "boolean"}, "primary": {"type": "boolean"}
+                }, "required": ["name", "columns", "unique", "primary"], "additionalProperties": false}},
+                "foreignKeys": {"type": "array", "items": {"type": "object", "properties": {
+                    "name": {"type": "string"}, "columns": {"type": "array", "items": {"type": "string"}},
+                    "referencedTable": {"type": "string"}, "referencedColumns": {"type": "array", "items": {"type": "string"}}
+                }, "required": ["name", "columns", "referencedTable", "referencedColumns"], "additionalProperties": false}}
+            }, "required": ["catalog", "schema", "name", "kind", "ddl", "columnCount", "columns", "indexes", "foreignKeys"], "additionalProperties": false}
+        }, "required": ["connectionId", "table", "source"], "additionalProperties": false
+    })
+}
 
-    let Some(table) = table else {
-        return Err(ToolCallError::Execution {
-            code: "TABLE_NOT_FOUND",
-            message: "The requested table was not found in the database schema.",
-        });
-    };
-
-    let columns: Vec<Value> = table
-        .columns
-        .iter()
-        .map(|c| {
-            json!({
-                "name": c.name,
-                "dataType": c.data_type,
-                "nullable": c.nullable,
-                "primaryKey": c.primary_key
-            })
-        })
+fn db_export_table(
+    command_bus: &dyn CommandBusAdapter,
+    _evaluation: &ToolPolicyEvaluation,
+    arguments: Value,
+) -> Result<Value, ToolCallError> {
+    let arguments = object_with_allowed_keys(
+        arguments,
+        &[
+            "connectionId",
+            "tableName",
+            "catalog",
+            "schema",
+            "workspaceId",
+            "content",
+            "format",
+        ],
+    )?;
+    let connection_id =
+        parse_required_string(&arguments, "connectionId", "unfour.db.export_table")?;
+    let table_name = parse_required_string(&arguments, "tableName", "unfour.db.export_table")?;
+    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let catalog = parse_optional_string(&arguments, "catalog")?;
+    let schema = parse_optional_string(&arguments, "schema")?;
+    let content: DatabaseExportContent = serde_json::from_value(json!(parse_required_string(
+        &arguments,
+        "content",
+        "unfour.db.export_table"
+    )?))
+    .map_err(|_| ToolCallError::InvalidArguments("Invalid export content".into()))?;
+    let format: DatabaseExportFormat = serde_json::from_value(json!(parse_required_string(
+        &arguments,
+        "format",
+        "unfour.db.export_table"
+    )?))
+    .map_err(|_| ToolCallError::InvalidArguments("Invalid export format".into()))?;
+    let root = unfour_paths::resolve_unfour_paths()
+        .map_err(|_| ToolCallError::Execution {
+            code: "IO_ERROR",
+            message: "Could not resolve exports directory.",
+        })?
+        .product_data_dir
+        .join("exports");
+    std::fs::create_dir_all(&root).map_err(|_| ToolCallError::Execution {
+        code: "IO_ERROR",
+        message: "Could not create exports directory.",
+    })?;
+    let safe_name: String = table_name
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '_' || *ch == '-')
+        .take(60)
         .collect();
-
-    Ok(json!({
-        "connectionId": connection_id,
-        "table": {
-            "name": table.name,
-            "catalog": table.catalog,
-            "schema": table.schema,
-            "kind": table.kind,
-            "columns": columns,
-            "columnCount": columns.len()
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
+    let extension = match format {
+        DatabaseExportFormat::Sql => "sql",
+        DatabaseExportFormat::Csv => "csv",
+        DatabaseExportFormat::Json => "json",
+    };
+    let path = root.join(format!(
+        "{}-{}-{}.{}",
+        if safe_name.is_empty() {
+            "table"
+        } else {
+            &safe_name
         },
-        "source": "command-bus"
-    }))
+        std::process::id(),
+        unique,
+        extension
+    ));
+    let result = command_bus
+        .export_db_table(DatabaseExportTableInput {
+            workspace_id,
+            connection_id,
+            catalog,
+            schema,
+            table_name,
+            content,
+            format,
+            destination_path: path.to_string_lossy().into_owned(),
+        })
+        .map_err(|e| ToolCallError::Execution {
+            code: e.code,
+            message: e.message,
+        })?;
+    serde_json::to_value(result).map_err(|_| ToolCallError::Execution {
+        code: "SERIALIZATION_ERROR",
+        message: "Could not serialize export result.",
+    })
 }
 
 fn db_query_readonly(

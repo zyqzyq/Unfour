@@ -1,4 +1,26 @@
 {
+  "exchange": {
+    "collectionActions": "集合“{name}”的操作",
+    "format": "格式", "encoding": "OpenAPI 编码", "preview": "导入预览", "import": "导入", "export": "导出", "variables": "变量", "none": "无", "secret": "敏感", "disabled": "已禁用", "failed": "导入或导出失败", "imported": "已导入 {name}", "exported": "已导出", "conflict": "已存在同名环境，将创建副本。",
+    "counts": "{folders} 个文件夹 · {requests} 个请求 · {scripts} 个脚本",
+    "collection": { "unfour": "Unfour Collection", "postman": "Postman Collection 2.1", "openapi": "OpenAPI 3.1" },
+    "environment": { "unfour": "Unfour Environment", "postman": "Postman Environment" },
+    "warnings": {
+      "unsupportedScriptApi": "脚本引用了现有运行时不支持的 API（如 pm.sendRequest、collectionVariables、globals、cookies 或 require）。源码已保留，这些调用需要调整。",
+      "secretExport": "敏感值将被移除，变量引用会保留。分享前请检查脚本及自由文本中的明文凭据。",
+      "reselectFiles": "文件上传需要重新选择本机文件，导出不包含本机路径。",
+      "variablesNotImported": "Collection 变量仅列出供参考，不会添加或覆盖 Workspace Variables。",
+      "environmentsSeparate": "不会导入内嵌环境，请在 Environment Manager 中单独导入。",
+      "scriptCompatibility": "脚本会保留并复用 Unfour 现有运行时。仅部分支持 Postman Sandbox API，运行前请检查脚本。",
+      "inheritedSettingsFlattened": "继承的文件夹脚本和认证会复制到请求，不保留继承关系。",
+      "postmanUnsupported": "Postman 示例、描述、URL 变量、协议设置、禁用的事件及不支持的元数据可能被省略。导入不会启用已禁用的脚本。",
+      "unsupportedAuth": "不支持的 Postman 认证已省略，请在导入后重新配置认证。",
+      "unsupportedBody": "不支持的请求体模式已省略，请在导入后重新配置。",
+      "openapiProjection": "OpenAPI 为请求的映射格式，schema、引用、示例及不支持的文档元数据可能无法往返保留。需要完整保存请求定义时请选择 Unfour Collection。",
+      "postmanExport": "Postman 使用不同的脚本运行时。请求设置通过 Unfour 扩展保留，文件绑定不会导出。",
+      "environmentCopy": "导入会创建新环境，不会覆盖已有环境或 Workspace Variables。"
+    }
+  },
   "app": {
     "commandPalette": {
       "open": "打开命令面板",
@@ -249,7 +271,7 @@
       "deleteFolderConfirm": "删除该目录、子目录及其中的已保存请求？此操作无法撤销。",
       "export": "导出",
       "exportTitle": "导出集合",
-      "exportDescription": "将“{name}”导出为 OpenAPI 3.1 文档。选择格式后，再选择保存位置。",
+      "exportDescription": "导出“{name}”。选择 Collection 格式后，再选择保存位置。",
       "exportJson": "OpenAPI 3.1 JSON",
       "exportYaml": "OpenAPI 3.1 YAML",
       "exportSuccess": "已导出 OpenAPI 3.1 {format}",
@@ -802,6 +824,11 @@
     },
     "sidebar": {
       "connections": "连接"
+    },
+    "export": {
+      "title": "导出表", "content": "内容", "structure": "结构", "data": "数据", "both": "结构和数据",
+      "format": "格式", "location": "保存位置", "choose": "选择…", "noLocation": "选择文件",
+      "export": "导出", "done": "已导出 {rows} 行（{bytes} 字节）。", "copyDdl": "复制 DDL", "exportTable": "导出表…"
     },
     "structure": {
       "colDefault": "默认值",

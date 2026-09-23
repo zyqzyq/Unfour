@@ -13,8 +13,9 @@ use unfour_command_bus::{CommandBus, CommandBusExtensions, ReadCommand, ReadComm
 use unfour_core::models::{
     ApiCollection, ApiEnvironment, ApiRequestInput, ApiResponse, ApiSavedRequest,
     CredentialCreateInput, CredentialMetadata, DatabaseConnection, DatabaseConnectionInput,
-    DatabaseQueryInput, DatabaseQueryResult, DatabaseSchema, DatabaseTestResult, KeyValue,
-    SshCommandHistoryEntry, SshCommandHistoryQuery, SshConnection, SshConnectionInput,
+    DatabaseExportTableInput, DatabaseExportTableResult, DatabaseQueryInput, DatabaseQueryResult,
+    DatabaseSchema, DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult,
+    KeyValue, SshCommandHistoryEntry, SshCommandHistoryQuery, SshConnection, SshConnectionInput,
     SshDiagnosticInput, SshDiagnosticResult, SshTask, SshTaskCancelInput, SshTaskCleanupInput,
     SshTaskCleanupResult, SshTaskDetail, SshTaskRun, SshTaskRunInput, SshTaskSaveInput,
     SshTasksReorderInput, SystemHealth, WorkspaceEnvironment, WorkspaceEnvironmentVariable,
@@ -188,6 +189,25 @@ impl Drop for LocalCommandBusAdapter {
 }
 
 impl CommandBusAdapter for LocalCommandBusAdapter {
+    fn get_db_table_structure(
+        &self,
+        input: DatabaseTableStructureInput,
+    ) -> Result<DatabaseTableStructure, CommandBusAdapterError> {
+        self.run_execution(self.bus.database_table_structure(input))
+            .map_err(|e| {
+                CommandBusAdapterError::from_app_error("The table structure operation failed.", &e)
+            })
+    }
+
+    fn export_db_table(
+        &self,
+        input: DatabaseExportTableInput,
+    ) -> Result<DatabaseExportTableResult, CommandBusAdapterError> {
+        self.run_execution(self.bus.database_export_table(input))
+            .map_err(|e| {
+                CommandBusAdapterError::from_app_error("The table export operation failed.", &e)
+            })
+    }
     fn list_flows(&self, workspace_id: &str) -> Result<Vec<FlowSummary>, CommandBusAdapterError> {
         self.run(self.bus.list_flow_summaries(workspace_id.to_string()))
             .map_err(|e| CommandBusAdapterError::from_flow_error(&e))

@@ -89,12 +89,42 @@ fn describe_table_returns_columns() {
     assert_eq!(table["schema"], "public");
     assert_eq!(table["kind"], "table");
     assert_eq!(table["columnCount"], 3);
+    assert!(table["ddl"].as_str().unwrap().contains("CREATE TABLE"));
+    assert_eq!(table["indexes"][0]["name"], "users_pkey");
+    assert_eq!(table["foreignKeys"][0]["name"], "users_ref");
 
     let id_col = &table["columns"][0];
     assert_eq!(id_col["name"], "id");
     assert_eq!(id_col["dataType"], "integer");
     assert_eq!(id_col["nullable"], false);
     assert_eq!(id_col["primaryKey"], true);
+}
+
+#[test]
+fn export_table_returns_only_managed_file_metadata() {
+    let registry = registry();
+    let result = registry
+        .call(
+            "unfour.db.export_table",
+            json!({
+                "connectionId": "conn-1", "tableName": "users", "content": "data", "format": "csv"
+            }),
+        )
+        .expect("export should succeed");
+    crate::output_schema::assert_success_matches_output_schema(
+        &registry,
+        "unfour.db.export_table",
+        &result,
+    );
+    let content = &result["structuredContent"];
+    assert!(content["path"].as_str().unwrap().contains("exports"));
+    assert_eq!(content["rowCount"], 3);
+    assert_eq!(content["bytesWritten"], 42);
+    assert_eq!(content["format"], "csv");
+    assert_eq!(content.as_object().unwrap().len(), 4);
+    assert!(registry.call("unfour.db.export_table", json!({
+        "connectionId": "conn-1", "tableName": "users", "content": "data", "format": "csv", "destinationPath": "C:\\outside.csv"
+    })).is_err());
 }
 
 #[test]

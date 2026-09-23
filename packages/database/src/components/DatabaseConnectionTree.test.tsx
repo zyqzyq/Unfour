@@ -139,6 +139,16 @@ describe("DatabaseConnectionTree", () => {
     expect(onPreviewTable).toHaveBeenCalledWith("conn-1", usersTable);
   });
 
+  it("offers Copy DDL and Export Table in the table context menu", async () => {
+    renderTree({ connectionStates: connectedState, schemaCache: {
+      "conn-1::": { connectionId: "conn-1", tables: [usersTable] },
+    } });
+    fireEvent.contextMenu(await screen.findByRole("button", { name: "users" }));
+    expect(await screen.findByRole("menuitem", { name: "Copy DDL" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Export Table…" }));
+    expect(await screen.findByRole("dialog", { name: "Export Table" })).toBeInTheDocument();
+  });
+
   it("passes connection context when New Query is selected from the connection context menu", async () => {
     const onNewQuery = vi.fn();
     renderTree({

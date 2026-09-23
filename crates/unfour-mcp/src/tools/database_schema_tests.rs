@@ -29,6 +29,9 @@ fn db_tools_are_registered() {
         .any(|d| d.name == "unfour.db.describe_table"));
     assert!(definitions
         .iter()
+        .any(|d| d.name == "unfour.db.export_table"));
+    assert!(definitions
+        .iter()
         .any(|d| d.name == "unfour.db.query_readonly"));
     assert!(definitions.iter().any(|d| d.name == "unfour.db.execute"));
     assert!(definitions.iter().any(|d| d.name == "unfour.db.explain"));
@@ -127,6 +130,24 @@ fn db_describe_table_output_schema_includes_catalog() {
     let table_properties = &tool.output_schema["properties"]["table"]["properties"];
     assert!(table_properties["catalog"].is_object());
     assert!(table_properties["schema"].is_object());
+    assert!(table_properties["indexes"].is_object());
+    assert!(table_properties["foreignKeys"].is_object());
+    assert!(table_properties["ddl"].is_object());
+}
+
+#[test]
+fn db_export_table_schema_rejects_destination_path() {
+    let definitions = definitions();
+    let tool = definitions
+        .iter()
+        .find(|d| d.name == "unfour.db.export_table")
+        .unwrap();
+    assert!(tool.input_schema["properties"]
+        .get("destinationPath")
+        .is_none());
+    assert_eq!(tool.input_schema["additionalProperties"], false);
+    assert_eq!(tool.output_schema["additionalProperties"], false);
+    assert_eq!(tool.output_schema["required"].as_array().unwrap().len(), 4);
 }
 
 #[test]

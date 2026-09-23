@@ -352,6 +352,9 @@ impl DatabaseService {
                 let kind = postgres_table_kind(&pool, schema, table_name)
                     .await
                     .map_err(sanitize_pg_app_error)?;
+                let ddl = postgres_ddl(&pool, schema, table_name, &kind)
+                    .await
+                    .map_err(sanitize_pg_app_error)?;
                 Ok(DatabaseTableStructure {
                     catalog: connection.database.clone(),
                     schema: Some(schema.to_string()),
@@ -360,7 +363,7 @@ impl DatabaseService {
                     columns,
                     indexes,
                     foreign_keys,
-                    ddl: None,
+                    ddl: Some(ddl),
                 })
             }
             "mysql" => {

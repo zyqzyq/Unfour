@@ -3,10 +3,10 @@ use tauri::State;
 use unfour_core::{
     models::{
         DatabaseBrowseInput, DatabaseBrowseResult, DatabaseConnection, DatabaseConnectionInput,
-        DatabaseQueryInput, DatabaseQueryResult, DatabaseRowMutationInput,
-        DatabaseRowMutationResult, DatabaseSchema, DatabaseTableStructure,
-        DatabaseTableStructureInput, DatabaseTestResult, DbQueryHistoryEntry,
-        DbQueryHistoryRecordInput, SavedSql, SavedSqlInput,
+        DatabaseExportTableInput, DatabaseExportTableResult, DatabaseQueryInput,
+        DatabaseQueryResult, DatabaseRowMutationInput, DatabaseRowMutationResult, DatabaseSchema,
+        DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult,
+        DbQueryHistoryEntry, DbQueryHistoryRecordInput, SavedSql, SavedSqlInput,
     },
     AppResult,
 };
@@ -202,6 +202,14 @@ pub async fn database_table_structure(
     state: State<'_, AppState>,
 ) -> AppResult<DatabaseTableStructure> {
     state.command_bus.database_table_structure(input).await
+}
+
+#[tauri::command]
+pub async fn database_export_table(
+    input: DatabaseExportTableInput,
+    state: tauri::State<'_, crate::AppState>,
+) -> AppResult<DatabaseExportTableResult> {
+    state.command_bus.database_export_table(input).await
 }
 
 #[tauri::command]

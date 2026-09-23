@@ -1,4 +1,4 @@
-import { Play, RefreshCw } from "lucide-react";
+import { Copy, Play, RefreshCw } from "lucide-react";
 import type { DatabaseTable, DatabaseTableStructure } from "@unfour/command-client";
 import {
   Button,
@@ -11,6 +11,7 @@ import {
   Toolbar,
   ToolbarGroup,
   useI18n,
+  useFeedbackErrorHandler,
 } from "@unfour/ui";
 import { DatabaseErrorDetails } from "./DatabaseErrorDetails";
 
@@ -42,6 +43,14 @@ export function TableInspector({
   table: DatabaseTable | null;
 }) {
   const { t } = useI18n();
+  const handleError = useFeedbackErrorHandler();
+
+  async function copyDdl() {
+    try {
+      if (!navigator.clipboard) throw new Error("Clipboard API is unavailable in this context");
+      await navigator.clipboard.writeText(structure?.ddl ?? "");
+    } catch (error) { handleError(error); }
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -53,6 +62,7 @@ export function TableInspector({
           {table ? <StatusBadge>{table.kind}</StatusBadge> : null}
         </ToolbarGroup>
         <ToolbarGroup>
+          {activeTab === "ddl" && structure?.ddl ? <Button onClick={() => void copyDdl()} size="sm" type="button" variant="ghost"><Copy size={13} />{t("database.export.copyDdl")}</Button> : null}
           {onSwitchToData ? (
             <button
               className="inline-flex h-[22px] items-center rounded-[5px] px-2 text-[12px] font-medium text-[var(--u-color-text-muted)] transition-colors duration-150 hover:text-[var(--u-color-text)]"

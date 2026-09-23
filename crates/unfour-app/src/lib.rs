@@ -445,6 +445,7 @@ macro_rules! generate_handlers {
             unfour_app::commands::database_schema_get,
             unfour_app::commands::database_table_browse,
             unfour_app::commands::database_table_structure,
+            unfour_app::commands::database_export_table,
             unfour_app::commands::ssh_connection_delete,
             unfour_app::commands::ssh_connection_save,
             unfour_app::commands::ssh_connection_test,

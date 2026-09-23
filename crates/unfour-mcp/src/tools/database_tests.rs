@@ -7,8 +7,10 @@ use unfour_command_bus::{
 };
 use unfour_core::models::{
     ApiResponse, CredentialCreateInput, CredentialMetadata, DatabaseConnection,
-    DatabaseConnectionInput, DatabaseQueryInput, DatabaseQueryResult, DatabaseQuerySafety,
-    DatabaseResultColumn, DatabaseSchema, DatabaseTable, DatabaseTableColumn, DatabaseTestResult,
+    DatabaseConnectionInput, DatabaseExportTableInput, DatabaseExportTableResult,
+    DatabaseForeignKey, DatabaseIndex, DatabaseQueryInput, DatabaseQueryResult,
+    DatabaseQuerySafety, DatabaseResultColumn, DatabaseSchema, DatabaseTable, DatabaseTableColumn,
+    DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult,
 };
 
 use crate::command_bus_adapter::{CommandBusAdapter, CommandBusAdapterError};
@@ -19,6 +21,58 @@ use crate::tools::ToolRegistry;
 struct DbStubCommandBus;
 
 impl CommandBusAdapter for DbStubCommandBus {
+    fn get_db_table_structure(
+        &self,
+        input: DatabaseTableStructureInput,
+    ) -> Result<DatabaseTableStructure, CommandBusAdapterError> {
+        let schema = self.get_db_schema(&input.workspace_id, &input.connection_id)?;
+        let table = schema
+            .tables
+            .into_iter()
+            .find(|table| {
+                table.name == input.table_name
+                    && input
+                        .schema
+                        .as_deref()
+                        .is_none_or(|filter| table.schema.as_deref() == Some(filter))
+            })
+            .ok_or(CommandBusAdapterError {
+                code: "TABLE_NOT_FOUND",
+                message: "Table not found.",
+            })?;
+        Ok(DatabaseTableStructure {
+            catalog: table.catalog,
+            schema: table.schema,
+            name: table.name,
+            kind: table.kind,
+            columns: table.columns,
+            indexes: vec![DatabaseIndex {
+                name: "users_pkey".into(),
+                columns: vec!["id".into()],
+                unique: true,
+                primary: true,
+            }],
+            foreign_keys: vec![DatabaseForeignKey {
+                name: "users_ref".into(),
+                columns: vec!["id".into()],
+                referenced_table: "parent".into(),
+                referenced_columns: vec!["id".into()],
+            }],
+            ddl: Some("CREATE TABLE users (id integer PRIMARY KEY);".into()),
+        })
+    }
+
+    fn export_db_table(
+        &self,
+        input: DatabaseExportTableInput,
+    ) -> Result<DatabaseExportTableResult, CommandBusAdapterError> {
+        Ok(DatabaseExportTableResult {
+            path: input.destination_path,
+            row_count: 3,
+            bytes_written: 42,
+            format: input.format,
+        })
+    }
     fn execute_read(
         &self,
         command: ReadCommand,

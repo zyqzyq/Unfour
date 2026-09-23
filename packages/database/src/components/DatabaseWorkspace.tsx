@@ -190,6 +190,7 @@ export function DatabaseWorkspace({
             <>
               {renderTable.segment === "data" ? (
                 <TableDataTab
+                  connection={connections.find((candidate) => candidate.id === renderTable.connectionId) ?? null}
                   editing={tableEditing}
                   error={renderTable.error}
                   executePending={executePending}

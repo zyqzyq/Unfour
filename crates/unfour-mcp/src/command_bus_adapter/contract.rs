@@ -2,8 +2,9 @@ use unfour_command_bus::{ReadCommand, ReadCommandResult};
 use unfour_core::models::{
     ApiCollection, ApiEnvironment, ApiRequestInput, ApiResponse, ApiSavedRequest,
     CredentialCreateInput, CredentialMetadata, DatabaseConnection, DatabaseConnectionInput,
-    DatabaseQueryInput, DatabaseQueryResult, DatabaseSchema, DatabaseTestResult, KeyValue,
-    SshCommandHistoryEntry, SshCommandHistoryQuery, SshConnection, SshConnectionInput,
+    DatabaseExportTableInput, DatabaseExportTableResult, DatabaseQueryInput, DatabaseQueryResult,
+    DatabaseSchema, DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult,
+    KeyValue, SshCommandHistoryEntry, SshCommandHistoryQuery, SshConnection, SshConnectionInput,
     SshDiagnosticInput, SshDiagnosticResult, SshTask, SshTaskCancelInput, SshTaskCleanupInput,
     SshTaskCleanupResult, SshTaskDetail, SshTaskRun, SshTaskRunInput, SshTaskSaveInput,
     SshTasksReorderInput, SystemHealth, WorkspaceEnvironment, WorkspaceEnvironmentVariable,
@@ -418,6 +419,26 @@ pub trait CommandBusAdapter: Send + Sync {
         workspace_id: &str,
         connection_id: &str,
     ) -> Result<DatabaseSchema, CommandBusAdapterError>;
+
+    fn get_db_table_structure(
+        &self,
+        _input: DatabaseTableStructureInput,
+    ) -> Result<DatabaseTableStructure, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Table structure is unavailable.",
+        })
+    }
+
+    fn export_db_table(
+        &self,
+        _input: DatabaseExportTableInput,
+    ) -> Result<DatabaseExportTableResult, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Table export is unavailable.",
+        })
+    }
 
     fn execute_db_query(
         &self,

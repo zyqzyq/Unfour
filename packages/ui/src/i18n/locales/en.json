@@ -1,4 +1,26 @@
 {
+  "exchange": {
+    "collectionActions": "Collection actions for {name}",
+    "format": "Format", "encoding": "OpenAPI encoding", "preview": "Import preview", "import": "Import", "export": "Export", "variables": "Variables", "none": "None", "secret": "Secret", "disabled": "Disabled", "failed": "Import or export failed", "imported": "Imported {name}", "exported": "Exported", "conflict": "An environment with this name exists. A copy will be created.",
+    "counts": "{folders} folders · {requests} requests · {scripts} scripts",
+    "collection": { "unfour": "Unfour Collection", "postman": "Postman Collection 2.1", "openapi": "OpenAPI 3.1" },
+    "environment": { "unfour": "Unfour Environment", "postman": "Postman Environment" },
+    "warnings": {
+      "unsupportedScriptApi": "A script references APIs outside the supported runtime (for example pm.sendRequest, collectionVariables, globals, cookies, or require). Source is preserved; these calls need adaptation.",
+      "secretExport": "Secret values are omitted. Variable references are preserved. Review literal credentials in scripts and free-form content before sharing.",
+      "reselectFiles": "File uploads require selecting local files again; local paths are not included.",
+      "variablesNotImported": "Collection variables are listed for reference and will not be added to Workspace Variables.",
+      "environmentsSeparate": "Embedded environments are not imported. Use Environment Manager to import environments separately.",
+      "scriptCompatibility": "Scripts are preserved and use Unfour's existing runtime. Postman Sandbox APIs are only partially supported; review scripts before running.",
+      "inheritedSettingsFlattened": "Inherited folder scripts and authentication are copied into requests; inheritance is not retained.",
+      "postmanUnsupported": "Postman examples, descriptions, URL variables, protocol settings, disabled events, and unsupported metadata may be omitted. Disabled scripts are not enabled by import.",
+      "unsupportedAuth": "Unsupported Postman authentication is omitted. Configure authentication after import.",
+      "unsupportedBody": "Unsupported body mode is omitted. Configure the body after import.",
+      "openapiProjection": "OpenAPI is a projection of requests: schemas, references, examples, and unsupported document metadata may not round-trip. Use Unfour Collection for portable request definitions.",
+      "postmanExport": "Postman uses a different script runtime. Request settings use an Unfour extension; file bindings are omitted.",
+      "environmentCopy": "Import creates a new environment. Existing environments and Workspace Variables remain unchanged."
+    }
+  },
   "app": {
     "commandPalette": {
       "open": "Open command palette",
@@ -249,7 +271,7 @@
       "deleteFolderConfirm": "Delete this folder, its subfolders, and saved requests inside them? This cannot be undone.",
       "export": "Export",
       "exportTitle": "Export collection",
-      "exportDescription": "Export \"{name}\" as an OpenAPI 3.1 document. Choose a format, then select where to save it.",
+      "exportDescription": "Export \"{name}\". Choose a collection format, then select where to save it.",
       "exportJson": "OpenAPI 3.1 JSON",
       "exportYaml": "OpenAPI 3.1 YAML",
       "exportSuccess": "OpenAPI 3.1 {format} exported",
@@ -803,6 +825,11 @@
     },
     "sidebar": {
       "connections": "Connections"
+    },
+    "export": {
+      "title": "Export Table", "content": "Content", "structure": "Structure", "data": "Data", "both": "Structure and data",
+      "format": "Format", "location": "Save location", "choose": "Choose…", "noLocation": "Choose a file",
+      "export": "Export", "done": "Exported {rows} rows ({bytes} bytes).", "copyDdl": "Copy DDL", "exportTable": "Export Table…"
     },
     "structure": {
       "colDefault": "Default",

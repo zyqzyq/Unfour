@@ -2,6 +2,8 @@ import { call } from "./invoke";
 import type {
   DatabaseBrowseInput,
   DatabaseBrowseResult,
+  DatabaseExportTableInput,
+  DatabaseExportTableResult,
   DatabaseConnection,
   DatabaseConnectionInput,
   DatabaseQueryInput,
@@ -109,6 +111,10 @@ export function browseDatabaseTable(input: DatabaseBrowseInput) {
 
 export function getDatabaseTableStructure(input: DatabaseTableStructureInput) {
   return call<DatabaseTableStructure>("database_table_structure", { input });
+}
+
+export function exportDatabaseTable(input: DatabaseExportTableInput) {
+  return call<DatabaseExportTableResult>("database_export_table", { input });
 }
 
 export function mutateDatabaseRow(input: DatabaseRowMutationInput) {

@@ -143,13 +143,13 @@ pub(super) async fn postgres_indexes(
         SELECT i.relname AS index_name,
                ix.indisunique AS is_unique,
                ix.indisprimary AS is_primary,
-               a.attname AS column_name,
-               array_position(ix.indkey::int2[], a.attnum) AS ord
+               pg_get_indexdef(ix.indexrelid, k.ord::integer, true) AS column_name,
+               k.ord
         FROM pg_class t
         JOIN pg_namespace n ON n.oid = t.relnamespace
         JOIN pg_index ix ON ix.indrelid = t.oid
         JOIN pg_class i ON i.oid = ix.indexrelid
-        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey::int2[])
+        JOIN LATERAL generate_series(1, ix.indnatts) AS k(ord) ON true
         WHERE n.nspname = $1 AND t.relname = $2
         ORDER BY index_name, ord
         "#,
@@ -287,6 +287,214 @@ pub(super) async fn postgres_table_kind(
             }
         })
         .unwrap_or_else(|| "table".to_string()))
+}
+
+pub(super) async fn postgres_ddl(
+    pool: &sqlx::PgPool,
+    schema: &str,
+    table_name: &str,
+    kind: &str,
+) -> AppResult<String> {
+    let qualified = quote_qualified_identifier(schema, table_name);
+    if kind == "view" {
+        let definition: String = sqlx::query_scalar(
+            "SELECT pg_get_viewdef(c.oid, true) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = $1 AND c.relname = $2",
+        )
+        .bind(schema)
+        .bind(table_name)
+        .fetch_one(pool)
+        .await?;
+        return Ok(format!(
+            "CREATE VIEW {qualified} AS\n{};",
+            definition.trim_end_matches(';')
+        ));
+    }
+
+    let rows = sqlx::query(
+        r#"SELECT a.attname AS name, format_type(a.atttypid, a.atttypmod) AS data_type,
+                  a.attnotnull AS not_null, pg_get_expr(d.adbin, d.adrelid) AS default_value,
+                  a.attidentity::text AS identity, a.attgenerated::text AS generated
+           FROM pg_attribute a
+           JOIN pg_class c ON c.oid = a.attrelid
+           JOIN pg_namespace n ON n.oid = c.relnamespace
+           LEFT JOIN pg_attrdef d ON d.adrelid = c.oid AND d.adnum = a.attnum
+           WHERE n.nspname = $1 AND c.relname = $2 AND a.attnum > 0 AND NOT a.attisdropped
+           ORDER BY a.attnum"#,
+    )
+    .bind(schema)
+    .bind(table_name)
+    .fetch_all(pool)
+    .await?;
+    let mut clauses = Vec::with_capacity(rows.len());
+    for row in rows {
+        let name: String = row.try_get("name")?;
+        let data_type: String = row.try_get("data_type")?;
+        let not_null: bool = row.try_get("not_null")?;
+        let default_value: Option<String> = row.try_get("default_value")?;
+        let identity: String = row.try_get("identity")?;
+        let generated: String = row.try_get("generated")?;
+        clauses.push(postgres_column_ddl(
+            &name,
+            &data_type,
+            not_null,
+            default_value.as_deref(),
+            &identity,
+            &generated,
+        ));
+    }
+    let constraints = sqlx::query(
+        r#"SELECT con.conname, pg_get_constraintdef(con.oid, true) AS definition
+           FROM pg_constraint con JOIN pg_class c ON c.oid = con.conrelid
+           JOIN pg_namespace n ON n.oid = c.relnamespace
+           WHERE n.nspname = $1 AND c.relname = $2 AND con.contype IN ('p','f','u','c','x')
+           ORDER BY CASE con.contype WHEN 'p' THEN 0 WHEN 'u' THEN 1 WHEN 'c' THEN 2 WHEN 'f' THEN 3 ELSE 4 END, con.conname"#,
+    )
+    .bind(schema)
+    .bind(table_name)
+    .fetch_all(pool)
+    .await?;
+    for row in constraints {
+        let name: String = row.try_get("conname")?;
+        let definition: String = row.try_get("definition")?;
+        clauses.push(postgres_constraint_ddl(&name, &definition));
+    }
+    // Constraint-backed indexes are created by the table constraints above.
+    let indexes: Vec<(String,)> = sqlx::query_as(
+        r#"SELECT pg_get_indexdef(i.indexrelid)
+           FROM pg_index i JOIN pg_class c ON c.oid = i.indrelid
+           JOIN pg_namespace n ON n.oid = c.relnamespace
+           LEFT JOIN pg_constraint con ON con.conindid = i.indexrelid
+           WHERE n.nspname = $1 AND c.relname = $2 AND con.oid IS NULL
+           ORDER BY i.indexrelid"#,
+    )
+    .bind(schema)
+    .bind(table_name)
+    .fetch_all(pool)
+    .await?;
+    Ok(assemble_postgres_ddl(
+        &qualified,
+        &clauses,
+        indexes.into_iter().map(|(ddl,)| ddl),
+    ))
+}
+
+fn postgres_constraint_ddl(name: &str, definition: &str) -> String {
+    format!("CONSTRAINT {} {definition}", quote_identifier(name))
+}
+
+fn assemble_postgres_ddl(
+    qualified: &str,
+    clauses: &[String],
+    indexes: impl IntoIterator<Item = String>,
+) -> String {
+    let mut ddl = format!(
+        "CREATE TABLE {qualified} (\n    {}\n);",
+        clauses.join(",\n    ")
+    );
+    for index in indexes {
+        ddl.push_str("\n");
+        ddl.push_str(index.trim_end_matches(';'));
+        ddl.push(';');
+    }
+    ddl
+}
+
+fn postgres_column_ddl(
+    name: &str,
+    data_type: &str,
+    not_null: bool,
+    default_value: Option<&str>,
+    identity: &str,
+    generated: &str,
+) -> String {
+    let mut sql = format!("{} {}", quote_identifier(name), data_type);
+    if generated == "s" || generated == "v" {
+        if let Some(expr) = default_value {
+            sql.push_str(&format!(
+                " GENERATED ALWAYS AS ({expr}) {}",
+                if generated == "s" {
+                    "STORED"
+                } else {
+                    "VIRTUAL"
+                }
+            ));
+        }
+    } else if identity == "a" || identity == "d" {
+        sql.push_str(if identity == "a" {
+            " GENERATED ALWAYS AS IDENTITY"
+        } else {
+            " GENERATED BY DEFAULT AS IDENTITY"
+        });
+    } else if default_value.is_some_and(|value| value.starts_with("nextval("))
+        && matches!(data_type, "smallint" | "integer" | "bigint")
+    {
+        // A SERIAL column's nextval default names a separate sequence. An
+        // identity column recreates that dependency in a standalone export.
+        sql.push_str(" GENERATED BY DEFAULT AS IDENTITY");
+    } else if let Some(default_value) = default_value {
+        sql.push_str(&format!(" DEFAULT {default_value}"));
+    }
+    if not_null {
+        sql.push_str(" NOT NULL");
+    }
+    sql
+}
+
+#[cfg(test)]
+mod ddl_tests {
+    use super::{assemble_postgres_ddl, postgres_column_ddl, postgres_constraint_ddl};
+
+    #[test]
+    fn postgres_column_ddl_handles_types_defaults_identity_and_generated() {
+        assert_eq!(
+            postgres_column_ddl("user\"id", "bigint", true, Some("42"), "", ""),
+            "\"user\"\"id\" bigint DEFAULT 42 NOT NULL"
+        );
+        assert_eq!(
+            postgres_column_ddl("id", "integer", true, None, "a", ""),
+            "\"id\" integer GENERATED ALWAYS AS IDENTITY NOT NULL"
+        );
+        assert_eq!(
+            postgres_column_ddl("slug", "text", false, Some("lower(name)"), "", "s"),
+            "\"slug\" text GENERATED ALWAYS AS (lower(name)) STORED"
+        );
+        assert_eq!(
+            postgres_column_ddl(
+                "id",
+                "bigint",
+                true,
+                Some("nextval('items_id_seq'::regclass)"),
+                "",
+                ""
+            ),
+            "\"id\" bigint GENERATED BY DEFAULT AS IDENTITY NOT NULL"
+        );
+    }
+
+    #[test]
+    fn postgres_table_ddl_includes_primary_key_foreign_key_and_index() {
+        let clauses = vec![
+            postgres_column_ddl("id", "integer", true, None, "", ""),
+            postgres_constraint_ddl("orders_pkey", "PRIMARY KEY (id)"),
+            postgres_constraint_ddl(
+                "orders_customer_fk",
+                "FOREIGN KEY (customer_id) REFERENCES customers(id)",
+            ),
+        ];
+        let ddl = assemble_postgres_ddl(
+            "\"public\".\"orders\"",
+            &clauses,
+            [
+                "CREATE INDEX orders_created_idx ON public.orders USING btree (created_at)"
+                    .to_string(),
+            ],
+        );
+        assert!(ddl.contains("CONSTRAINT \"orders_pkey\" PRIMARY KEY (id)"));
+        assert!(ddl.contains("CONSTRAINT \"orders_customer_fk\" FOREIGN KEY"));
+        assert!(ddl.contains(
+            "CREATE INDEX orders_created_idx ON public.orders USING btree (created_at);"
+        ));
+    }
 }
 
 pub(super) async fn postgres_table_row_count(

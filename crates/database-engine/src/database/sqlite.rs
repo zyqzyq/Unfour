@@ -53,7 +53,24 @@ pub(super) async fn sqlite_ddl(
             .bind(table_name)
             .fetch_optional(pool)
             .await?;
-    Ok(row.and_then(|value| value.0))
+    let Some(mut ddl) = row.and_then(|value| value.0) else {
+        return Ok(None);
+    };
+    if !ddl.trim_end().ends_with(';') {
+        ddl.push(';');
+    }
+    let indexes: Vec<(String,)> = sqlx::query_as(
+        "SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = ?1 AND sql IS NOT NULL ORDER BY name",
+    )
+    .bind(table_name)
+    .fetch_all(pool)
+    .await?;
+    for (index,) in indexes {
+        ddl.push('\n');
+        ddl.push_str(index.trim_end_matches(';'));
+        ddl.push(';');
+    }
+    Ok(Some(ddl))
 }
 
 pub(super) async fn sqlite_indexes(

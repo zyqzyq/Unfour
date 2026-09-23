@@ -3,6 +3,12 @@ use crate::transaction::CommandActivity;
 use unfour_core::domain::CommandContext;
 
 impl CommandBus {
+    pub async fn database_export_table(
+        &self,
+        input: unfour_core::models::DatabaseExportTableInput,
+    ) -> AppResult<unfour_core::models::DatabaseExportTableResult> {
+        self.database.export_table(input).await
+    }
     pub async fn execute_database_script(
         &self,
         input: unfour_core::models::DatabaseScriptInput,
