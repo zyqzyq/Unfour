@@ -96,10 +96,10 @@ describe("AccountPlanSummary", () => {
     render(<AccountPlanSummary profile={profile([{
       code: "cloud_sync",
       status: "active",
-      validUntil: "2026-09-23T00:00:00.000Z",
+      validUntil: "2099-06-15T12:00:00.000Z",
     }])} />);
     expect(screen.getByText("Unfour Pro")).toBeInTheDocument();
-    expect(screen.getByText("Active until Sep 23, 2026")).toBeInTheDocument();
+    expect(screen.getByText("Active until Jun 15, 2099")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Account & Billing" }));
     expect(mocks.openWebAccount).toHaveBeenCalledWith();
   });
