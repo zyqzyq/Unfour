@@ -32,6 +32,7 @@ impl CommandBusAdapter for SshStubCommandBus {
             _ => Err(CommandBusAdapterError {
                 code: "UNEXPECTED",
                 message: "unexpected command",
+                details: serde_json::json!({}),
             }),
         }
     }
@@ -58,6 +59,7 @@ impl CommandBusAdapter for SshStubCommandBus {
             return Err(CommandBusAdapterError {
                 code: "VALIDATION_ERROR",
                 message: "control characters detected",
+                details: serde_json::json!({}),
             });
         }
 

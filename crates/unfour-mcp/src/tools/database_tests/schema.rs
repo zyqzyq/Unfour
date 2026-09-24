@@ -50,6 +50,35 @@ fn list_tables_requires_connection_id() {
 }
 
 #[test]
+fn list_tables_without_catalog_keeps_the_default_schema() {
+    let result = registry()
+        .call("unfour.db.list_tables", json!({ "connectionId": "conn-1" }))
+        .expect("should succeed");
+    assert_eq!(result["structuredContent"]["count"], 5);
+    assert!(result["structuredContent"]["tables"][0]["catalog"].is_null());
+}
+
+#[test]
+fn list_tables_passes_catalog_to_the_command_bus() {
+    let registry = registry();
+    let result = registry
+        .call(
+            "unfour.db.list_tables",
+            json!({ "connectionId": "conn-1", "catalog": "billing" }),
+        )
+        .expect("should succeed");
+    crate::output_schema::assert_success_matches_output_schema(
+        &registry,
+        "unfour.db.list_tables",
+        &result,
+    );
+    let content = &result["structuredContent"];
+    assert_eq!(content["count"], 1);
+    assert_eq!(content["tables"][0]["name"], "users");
+    assert_eq!(content["tables"][0]["catalog"], "billing");
+}
+
+#[test]
 fn list_tables_clamps_limit_to_500() {
     let result = registry()
         .call(
@@ -125,6 +154,90 @@ fn export_table_returns_only_managed_file_metadata() {
     assert!(registry.call("unfour.db.export_table", json!({
         "connectionId": "conn-1", "tableName": "users", "content": "data", "format": "csv", "destinationPath": "C:\\outside.csv"
     })).is_err());
+}
+
+#[test]
+fn export_table_accepts_columns_filters_and_limit() {
+    let registry = registry();
+    let columns = registry
+        .call(
+            "unfour.db.export_table",
+            json!({
+                "connectionId": "conn-1",
+                "tableName": "users",
+                "content": "data",
+                "format": "csv",
+                "columns": ["email"]
+            }),
+        )
+        .expect("column export");
+    assert_eq!(columns["structuredContent"]["rowCount"], 1);
+
+    let filtered = registry
+        .call(
+            "unfour.db.export_table",
+            json!({
+                "connectionId": "conn-1",
+                "tableName": "users",
+                "content": "data",
+                "format": "json",
+                "filters": [{ "column": "data_id", "op": "in", "values": [2, 3] }]
+            }),
+        )
+        .expect("filtered export");
+    assert_eq!(filtered["structuredContent"]["rowCount"], 2);
+
+    let limited = registry
+        .call(
+            "unfour.db.export_table",
+            json!({
+                "connectionId": "conn-1",
+                "tableName": "users",
+                "content": "structure-and-data",
+                "format": "sql",
+                "columns": ["email"],
+                "filters": [{ "column": "data_id", "op": "eq", "values": ["2"] }],
+                "limit": 2
+            }),
+        )
+        .expect("limited export");
+    assert_eq!(limited["structuredContent"]["rowCount"], 2);
+    assert!(registry
+        .call(
+            "unfour.db.export_table",
+            json!({
+                "connectionId": "conn-1",
+                "tableName": "users",
+                "content": "data",
+                "format": "csv",
+                "where": "data_id IN (1)"
+            }),
+        )
+        .is_err());
+}
+
+#[test]
+fn database_execution_error_includes_sqlstate_and_logs_as_error() {
+    let result = registry()
+        .call(
+            "unfour.db.query_readonly",
+            json!({ "connectionId": "conn-1", "sql": "SELECT __db_error__" }),
+        )
+        .expect("structured error");
+    assert_eq!(result["isError"], true);
+    assert_eq!(crate::server::tool_result_log_status(&result), "error");
+    let payload = crate::response::error_json(&result);
+    assert_eq!(payload["error"]["code"], "DATABASE_ERROR");
+    assert_eq!(
+        payload["error"]["message"],
+        "The command-bus database query operation failed."
+    );
+    assert_eq!(payload["error"]["details"]["sqlState"], "42P01");
+    assert_eq!(
+        payload["error"]["details"]["databaseMessage"],
+        "relation \"missing\" does not exist"
+    );
+    assert!(!payload.to_string().contains("super-secret"));
 }
 
 #[test]

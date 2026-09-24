@@ -19,6 +19,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "Flow operation is unavailable.",
+            details: serde_json::json!({}),
         })
     }
     fn get_flow(
@@ -29,12 +30,14 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "Flow operation is unavailable.",
+            details: serde_json::json!({}),
         })
     }
     fn save_flow(&self, _input: FlowDefinition) -> Result<FlowDefinition, CommandBusAdapterError> {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "Flow operation is unavailable.",
+            details: serde_json::json!({}),
         })
     }
     fn run_flow(
@@ -45,6 +48,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "Flow operation is unavailable.",
+            details: serde_json::json!({}),
         })
     }
     fn cancel_flow_run(
@@ -55,6 +59,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "Flow operation is unavailable.",
+            details: serde_json::json!({}),
         })
     }
     fn list_flow_runs(
@@ -65,6 +70,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "Flow operation is unavailable.",
+            details: serde_json::json!({}),
         })
     }
     fn get_flow_run(
@@ -75,6 +81,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "Flow operation is unavailable.",
+            details: serde_json::json!({}),
         })
     }
     fn list_db_history(
@@ -85,6 +92,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "Database history is unavailable.",
+            details: serde_json::json!({}),
         })
     }
     fn delete_db_connection(
@@ -95,6 +103,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "Database connection deletion is unavailable.",
+            details: serde_json::json!({}),
         })
     }
     fn delete_ssh_connection(
@@ -105,6 +114,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "SSH connection deletion is unavailable.",
+            details: serde_json::json!({}),
         })
     }
     fn test_ssh_connection(
@@ -114,6 +124,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "SSH connection testing is unavailable.",
+            details: serde_json::json!({}),
         })
     }
     fn get_ssh_host_key(
@@ -123,6 +134,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "SSH host fingerprints are unavailable.",
+            details: serde_json::json!({}),
         })
     }
     fn execute_read(
@@ -156,6 +168,7 @@ pub trait CommandBusAdapter: Send + Sync {
             return Err(CommandBusAdapterError {
                 code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
                 message: "This command-bus adapter does not support per-call API environments.",
+                details: serde_json::json!({}),
             });
         }
         self.execute_saved_api_request_in_workspace(workspace_id, request_id, timeout_ms)
@@ -168,6 +181,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support ad-hoc API sends.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -180,6 +194,7 @@ pub trait CommandBusAdapter: Send + Sync {
             return Err(CommandBusAdapterError {
                 code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
                 message: "This command-bus adapter does not support per-call API environments.",
+                details: serde_json::json!({}),
             });
         }
         self.send_api_request(input)
@@ -192,6 +207,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support API request saves.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -204,6 +220,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support API request updates.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -215,6 +232,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support API request deletion.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -226,6 +244,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support API collection creation.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -238,6 +257,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support API collection updates.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -249,6 +269,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support API collection deletion.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -260,6 +281,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support API environment creation.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -273,6 +295,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support API environment updates.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -284,6 +307,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support API environment deletion.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -294,6 +318,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support workspace environment reads.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -306,6 +331,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support API environment variable creation.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -319,6 +345,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support API environment variable updates.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -331,6 +358,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support API environment variable deletion.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -341,6 +369,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support workspace variable reads.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -352,6 +381,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support workspace variable replacement.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -363,6 +393,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support workspace variable creation.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -375,6 +406,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support workspace variable updates.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -386,6 +418,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support workspace variable deletion.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -401,6 +434,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support database connection saves.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -411,6 +445,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support credential creation.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -420,6 +455,19 @@ pub trait CommandBusAdapter: Send + Sync {
         connection_id: &str,
     ) -> Result<DatabaseSchema, CommandBusAdapterError>;
 
+    /// List tables in an optional catalog. The default ignores `catalog` and
+    /// uses [`Self::get_db_schema`]. The local adapter passes `catalog` through
+    /// to the database engine.
+    fn get_db_schema_for_catalog(
+        &self,
+        workspace_id: &str,
+        connection_id: &str,
+        catalog: Option<&str>,
+    ) -> Result<DatabaseSchema, CommandBusAdapterError> {
+        let _ = catalog;
+        self.get_db_schema(workspace_id, connection_id)
+    }
+
     fn get_db_table_structure(
         &self,
         _input: DatabaseTableStructureInput,
@@ -427,6 +475,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "Table structure is unavailable.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -437,6 +486,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "Table export is unavailable.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -456,6 +506,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support connection testing.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -464,6 +515,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support system health reads.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -478,6 +530,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support SSH diagnostics.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -488,6 +541,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support SSH connection listing.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -498,6 +552,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support SSH command history reads.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -508,6 +563,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support SSH connection saves.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -518,6 +574,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support SSH command execution.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -525,6 +582,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support SSH task reads.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -535,6 +593,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support SSH task reordering.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -546,6 +605,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support SSH task detail reads.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -556,6 +616,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support SSH task saves.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -567,6 +628,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support SSH task duplication.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -578,6 +640,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support SSH task deletion.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -585,6 +648,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support SSH task execution.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -595,6 +659,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support SSH task cancellation.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -606,6 +671,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support SSH task run reads.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -617,6 +683,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support SSH task log reads.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -627,6 +694,7 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support SSH task run cleanup.",
+            details: serde_json::json!({}),
         })
     }
 }

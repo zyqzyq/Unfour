@@ -2,7 +2,10 @@ use super::super::*;
 use super::support::{service_with_workspace, sqlite_fixture, sqlite_input};
 use std::fs;
 use unfour_core::models::DatabaseCellValueMode;
-use unfour_core::models::{DatabaseExportContent, DatabaseExportFormat, DatabaseExportTableInput};
+use unfour_core::models::{
+    DatabaseExportContent, DatabaseExportFilter, DatabaseExportFilterOp, DatabaseExportFormat,
+    DatabaseExportTableInput,
+};
 
 #[tokio::test]
 async fn sqlite_large_table_export_writes_all_rows_to_disk() {
@@ -27,6 +30,9 @@ async fn sqlite_large_table_export_writes_all_rows_to_disk() {
             content: DatabaseExportContent::Data,
             format: DatabaseExportFormat::Csv,
             destination_path: destination.to_string_lossy().into_owned(),
+            columns: None,
+            filters: Vec::new(),
+            limit: None,
         })
         .await
         .unwrap();
@@ -59,6 +65,9 @@ async fn sqlite_export_streams_whole_table_and_empty_table() {
             content: DatabaseExportContent::Data,
             format: DatabaseExportFormat::Sql,
             destination_path: path.to_string_lossy().into_owned(),
+            columns: None,
+            filters: Vec::new(),
+            limit: None,
         })
         .await;
     assert!(matches!(source_target, Err(AppError::Validation(_))));
@@ -97,6 +106,9 @@ async fn sqlite_export_streams_whole_table_and_empty_table() {
             content: DatabaseExportContent::Structure,
             format: DatabaseExportFormat::Csv,
             destination_path: destination.to_string_lossy().into_owned(),
+            columns: None,
+            filters: Vec::new(),
+            limit: None,
         })
         .await;
     assert!(matches!(invalid, Err(AppError::Validation(_))));
@@ -110,6 +122,9 @@ async fn sqlite_export_streams_whole_table_and_empty_table() {
         content: DatabaseExportContent::StructureAndData,
         format: DatabaseExportFormat::Sql,
         destination_path: destination.to_string_lossy().into_owned(),
+        columns: None,
+        filters: Vec::new(),
+        limit: None,
     };
     let result = service.export_table(input).await.unwrap();
     assert_eq!(result.row_count, 252);
@@ -154,6 +169,9 @@ async fn sqlite_export_streams_whole_table_and_empty_table() {
             content: DatabaseExportContent::StructureAndData,
             format: DatabaseExportFormat::Sql,
             destination_path: destination.to_string_lossy().into_owned(),
+            columns: None,
+            filters: Vec::new(),
+            limit: None,
         })
         .await
         .unwrap();
@@ -174,6 +192,9 @@ async fn sqlite_export_streams_whole_table_and_empty_table() {
             content: DatabaseExportContent::Data,
             format: DatabaseExportFormat::Csv,
             destination_path: destination.to_string_lossy().into_owned(),
+            columns: None,
+            filters: Vec::new(),
+            limit: None,
         })
         .await
         .unwrap();
@@ -194,6 +215,9 @@ async fn sqlite_export_streams_whole_table_and_empty_table() {
             content: DatabaseExportContent::Data,
             format: DatabaseExportFormat::Json,
             destination_path: destination.to_string_lossy().into_owned(),
+            columns: None,
+            filters: Vec::new(),
+            limit: None,
         })
         .await
         .unwrap();
@@ -688,5 +712,110 @@ async fn mutating_sql_requires_confirmation_and_rejects_multiple_statements() {
         })
         .await;
     assert!(matches!(multiple, Err(AppError::Validation(_))));
+    let _ = fs::remove_file(path);
+}
+
+#[tokio::test]
+async fn sqlite_export_selects_columns_filters_in_and_applies_limit() {
+    let (service, workspace_id) = service_with_workspace().await;
+    let path = sqlite_fixture().await;
+    let connection = service
+        .save_connection(sqlite_input(&workspace_id, &path))
+        .await
+        .unwrap();
+    let pool = sqlite_pool(&connection).await.unwrap();
+    sqlx::query("CREATE TABLE rows (data_id INTEGER, name TEXT)")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO rows (data_id, name) VALUES (1, 'a'), (2, 'b'), (3, 'c'), (2, 'd')")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let destination = std::env::temp_dir().join(format!(
+        "unfour-filtered-export-{}.csv",
+        uuid::Uuid::new_v4()
+    ));
+    let filtered = service
+        .export_table(DatabaseExportTableInput {
+            workspace_id: workspace_id.clone(),
+            connection_id: connection.id.clone(),
+            catalog: None,
+            schema: None,
+            table_name: "rows".into(),
+            content: DatabaseExportContent::Data,
+            format: DatabaseExportFormat::Csv,
+            destination_path: destination.to_string_lossy().into_owned(),
+            columns: Some(vec!["name".into()]),
+            filters: vec![DatabaseExportFilter {
+                column: "data_id".into(),
+                op: DatabaseExportFilterOp::In,
+                values: vec![Some("2".into()), Some("3".into())],
+            }],
+            limit: Some(2),
+        })
+        .await
+        .unwrap();
+    assert_eq!(filtered.row_count, 2);
+    let csv = fs::read_to_string(&destination).unwrap();
+    assert!(csv.starts_with("name\r\n"));
+    assert!(!csv.contains("data_id"));
+    assert_eq!(csv.lines().count(), 3);
+    fs::remove_file(&destination).unwrap();
+
+    let whole =
+        std::env::temp_dir().join(format!("unfour-whole-export-{}.csv", uuid::Uuid::new_v4()));
+    let whole_result = service
+        .export_table(DatabaseExportTableInput {
+            workspace_id,
+            connection_id: connection.id,
+            catalog: None,
+            schema: None,
+            table_name: "rows".into(),
+            content: DatabaseExportContent::Data,
+            format: DatabaseExportFormat::Csv,
+            destination_path: whole.to_string_lossy().into_owned(),
+            columns: None,
+            filters: Vec::new(),
+            limit: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(whole_result.row_count, 4);
+    assert!(fs::read_to_string(&whole)
+        .unwrap()
+        .starts_with("data_id,name"));
+    fs::remove_file(&whole).unwrap();
+    pool.close().await;
+    let _ = fs::remove_file(path);
+}
+
+#[tokio::test]
+async fn sqlite_database_error_details_keep_message_and_omit_sqlstate() {
+    let (service, workspace_id) = service_with_workspace().await;
+    let path = sqlite_fixture().await;
+    let connection = service
+        .save_connection(sqlite_input(&workspace_id, &path))
+        .await
+        .unwrap();
+    let error = service
+        .execute_query(unfour_core::models::DatabaseQueryInput {
+            workspace_id,
+            connection_id: connection.id,
+            sql: "SELECT * FROM missing_export_table".into(),
+            limit: Some(10),
+            confirm_mutation: None,
+            catalog: None,
+            schema: None,
+            timeout_ms: None,
+        })
+        .await
+        .expect_err("missing table");
+    let details = error.database_error_details().expect("database details");
+    assert!(details["sqlState"].is_null());
+    let message = details["databaseMessage"].as_str().expect("message");
+    assert!(message.contains("missing_export_table"));
+    assert!(!message.contains("://"));
+    assert!(!error.to_string().contains("sqlState"));
     let _ = fs::remove_file(path);
 }

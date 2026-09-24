@@ -39,6 +39,7 @@ impl CommandBusAdapter for DbStubCommandBus {
             .ok_or(CommandBusAdapterError {
                 code: "TABLE_NOT_FOUND",
                 message: "Table not found.",
+                details: serde_json::json!({}),
             })?;
         Ok(DatabaseTableStructure {
             catalog: table.catalog,
@@ -66,9 +67,26 @@ impl CommandBusAdapter for DbStubCommandBus {
         &self,
         input: DatabaseExportTableInput,
     ) -> Result<DatabaseExportTableResult, CommandBusAdapterError> {
+        let row_count = if let Some(limit) = input.limit {
+            u64::from(limit)
+        } else if !input.filters.is_empty() {
+            input
+                .filters
+                .iter()
+                .map(|filter| filter.values.len() as u64)
+                .sum()
+        } else if input
+            .columns
+            .as_ref()
+            .is_some_and(|columns| columns.len() == 1)
+        {
+            1
+        } else {
+            3
+        };
         Ok(DatabaseExportTableResult {
             path: input.destination_path,
-            row_count: 3,
+            row_count,
             bytes_written: 42,
             format: input.format,
         })
@@ -284,10 +302,36 @@ impl CommandBusAdapter for DbStubCommandBus {
         })
     }
 
+    fn get_db_schema_for_catalog(
+        &self,
+        workspace_id: &str,
+        connection_id: &str,
+        catalog: Option<&str>,
+    ) -> Result<DatabaseSchema, CommandBusAdapterError> {
+        let mut schema = self.get_db_schema(workspace_id, connection_id)?;
+        if let Some(catalog) = catalog {
+            schema.tables.retain(|table| table.name == "users");
+            for table in &mut schema.tables {
+                table.catalog = Some(catalog.to_string());
+            }
+        }
+        Ok(schema)
+    }
+
     fn execute_db_query(
         &self,
         input: DatabaseQueryInput,
     ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
+        if input.sql.contains("__db_error__") {
+            return Err(CommandBusAdapterError {
+                code: "DATABASE_ERROR",
+                message: "The command-bus database query operation failed.",
+                details: json!({
+                    "sqlState": "42P01",
+                    "databaseMessage": "relation \"missing\" does not exist"
+                }),
+            });
+        }
         let keyword = input
             .sql
             .split_whitespace()
@@ -378,6 +422,7 @@ impl CommandBusAdapter for DbFailingCommandBus {
             _ => Err(CommandBusAdapterError {
                 code: "COMMAND_BUS_READ_FAILED",
                 message: "The command-bus read operation failed.",
+                details: serde_json::json!({}),
             }),
         }
     }
@@ -390,6 +435,7 @@ impl CommandBusAdapter for DbFailingCommandBus {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_API_SEND_FAILED",
             message: "The command-bus API send operation failed.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -400,6 +446,7 @@ impl CommandBusAdapter for DbFailingCommandBus {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_DB_LIST_FAILED",
             message: "The command-bus database list operation failed.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -411,6 +458,7 @@ impl CommandBusAdapter for DbFailingCommandBus {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_DB_SCHEMA_FAILED",
             message: "The command-bus database schema operation failed.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -421,6 +469,7 @@ impl CommandBusAdapter for DbFailingCommandBus {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_DB_QUERY_FAILED",
             message: "The command-bus database query operation failed.",
+            details: serde_json::json!({}),
         })
     }
 }

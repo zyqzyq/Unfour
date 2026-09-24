@@ -242,6 +242,7 @@ impl CommandBusAdapter for FailingCommandBus {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_READ_FAILED",
             message: "The command-bus read operation failed.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -253,6 +254,7 @@ impl CommandBusAdapter for FailingCommandBus {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_API_SEND_FAILED",
             message: "The command-bus API send operation failed.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -263,6 +265,7 @@ impl CommandBusAdapter for FailingCommandBus {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_DB_LIST_FAILED",
             message: "The command-bus database list operation failed.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -274,6 +277,7 @@ impl CommandBusAdapter for FailingCommandBus {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_DB_SCHEMA_FAILED",
             message: "The command-bus database schema operation failed.",
+            details: serde_json::json!({}),
         })
     }
 
@@ -284,6 +288,7 @@ impl CommandBusAdapter for FailingCommandBus {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_DB_QUERY_FAILED",
             message: "The command-bus database query operation failed.",
+            details: serde_json::json!({}),
         })
     }
 }

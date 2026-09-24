@@ -259,6 +259,23 @@ pub enum DatabaseExportFormat {
     Json,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum DatabaseExportFilterOp {
+    Eq,
+    In,
+}
+
+/// One column predicate for a table export. Values are bound parameters.
+/// `None` is SQL NULL and is valid only for `eq`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseExportFilter {
+    pub column: String,
+    pub op: DatabaseExportFilterOp,
+    pub values: Vec<Option<String>>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DatabaseExportTableInput {
@@ -271,6 +288,15 @@ pub struct DatabaseExportTableInput {
     pub content: DatabaseExportContent,
     pub format: DatabaseExportFormat,
     pub destination_path: String,
+    /// Columns to include in the data portion. `None` exports every column.
+    #[serde(default)]
+    pub columns: Option<Vec<String>>,
+    /// Structured row predicates combined with AND. Empty exports every row.
+    #[serde(default)]
+    pub filters: Vec<DatabaseExportFilter>,
+    /// Maximum data rows. `None` exports the matching rows without a limit.
+    #[serde(default)]
+    pub limit: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

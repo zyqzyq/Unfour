@@ -30,13 +30,20 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
             definition: ToolDefinition {
                 name: "unfour.db.export_table",
                 title: "Export Database Table",
-                description: "Exports one complete table to a file in Unfour's managed exports directory. Returns file metadata; no destination path is accepted.",
+                description: "Exports one table to a file in Unfour's managed exports directory. Optional columns, structured filters, and limit apply to the data portion. Omitted selectors export the whole table. Returns file metadata; no destination path is accepted.",
                 input_schema: json!({
                     "type": "object", "properties": {
                         "connectionId": {"type": "string"}, "tableName": {"type": "string"},
                         "workspaceId": {"type": "string"}, "catalog": {"type": "string"}, "schema": {"type": "string"},
                         "content": {"type": "string", "enum": ["structure", "data", "structure-and-data"]},
-                        "format": {"type": "string", "enum": ["sql", "csv", "json"]}
+                        "format": {"type": "string", "enum": ["sql", "csv", "json"]},
+                        "columns": {"type": "array", "items": {"type": "string"}, "description": "Optional columns to include in the data portion. Omit to export every column."},
+                        "filters": {"type": "array", "description": "Optional structured row predicates combined with AND. Values are bound; this is not a raw WHERE clause.", "items": {"type": "object", "properties": {
+                            "column": {"type": "string"},
+                            "op": {"type": "string", "enum": ["eq", "in"]},
+                            "values": {"type": "array", "items": {"type": ["string", "number", "boolean", "null"]}}
+                        }, "required": ["column", "op", "values"], "additionalProperties": false}},
+                        "limit": {"type": "integer", "minimum": 1, "description": "Optional maximum number of data rows."}
                     }, "required": ["connectionId", "tableName", "content", "format"], "additionalProperties": false
                 }),
                 output_schema: json!({
@@ -101,7 +108,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                 name: "unfour.db.list_tables",
                 title: "List Database Tables",
                 description:
-                    "Lists tables and views for a saved database connection through the Unfour command bus. Requires a saved connectionId; does not accept ad-hoc connection strings.",
+                    "Lists tables and views for a saved database connection through the Unfour command bus. Optional catalog selects a database other than the connection default. Requires a saved connectionId; does not accept ad-hoc connection strings.",
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -116,6 +123,10 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                         "limit": {
                             "type": "integer",
                             "description": "Maximum number of tables to return (default 200, max 500)."
+                        },
+                        "catalog": {
+                            "type": "string",
+                            "description": "Optional database catalog. Omit to use the connection's default database."
                         }
                     },
                     "required": ["connectionId"],
@@ -399,10 +410,7 @@ fn db_list_connections(
 
     let connections = command_bus
         .list_db_connections(&workspace_id)
-        .map_err(|e| ToolCallError::Execution {
-            code: e.code,
-            message: e.message,
-        })?;
+        .map_err(adapter_execution)?;
 
     let safe_connections: Vec<Value> = connections.iter().map(safe_connection_summary).collect();
 
@@ -418,17 +426,18 @@ fn db_list_tables(
     _evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
-    let arguments = object_with_allowed_keys(arguments, &["connectionId", "workspaceId", "limit"])?;
+    let arguments = object_with_allowed_keys(
+        arguments,
+        &["connectionId", "workspaceId", "limit", "catalog"],
+    )?;
     let connection_id = parse_required_string(&arguments, "connectionId", "unfour.db.list_tables")?;
     let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
     let limit = parse_optional_limit(&arguments, "limit", DEFAULT_TABLE_LIMIT, MAX_TABLE_LIMIT)?;
+    let catalog = parse_optional_string(&arguments, "catalog")?;
 
     let schema = command_bus
-        .get_db_schema(&workspace_id, &connection_id)
-        .map_err(|e| ToolCallError::Execution {
-            code: e.code,
-            message: e.message,
-        })?;
+        .get_db_schema_for_catalog(&workspace_id, &connection_id, catalog.as_deref())
+        .map_err(adapter_execution)?;
 
     let total = schema.tables.len();
     let tables: Vec<Value> = schema
@@ -487,10 +496,7 @@ fn db_describe_table(
             schema,
             table_name,
         })
-        .map_err(|e| ToolCallError::Execution {
-            code: e.code,
-            message: e.message,
-        })?;
+        .map_err(adapter_execution)?;
     let mut table = serde_json::to_value(table).map_err(|_| ToolCallError::Execution {
         code: "SERIALIZATION_ERROR",
         message: "Could not serialize table structure.",
@@ -540,6 +546,9 @@ fn db_export_table(
             "workspaceId",
             "content",
             "format",
+            "columns",
+            "filters",
+            "limit",
         ],
     )?;
     let connection_id =
@@ -548,6 +557,16 @@ fn db_export_table(
     let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
     let catalog = parse_optional_string(&arguments, "catalog")?;
     let schema = parse_optional_string(&arguments, "schema")?;
+    let columns = parse_export_columns(&arguments)?;
+    let filters = parse_export_filters(&arguments)?;
+    let limit = match parse_optional_u32(&arguments, "limit")? {
+        Some(0) => {
+            return Err(ToolCallError::InvalidArguments(
+                "argument `limit` must be greater than zero".into(),
+            ))
+        }
+        other => other,
+    };
     let content: DatabaseExportContent = serde_json::from_value(json!(parse_required_string(
         &arguments,
         "content",
@@ -605,11 +624,11 @@ fn db_export_table(
             content,
             format,
             destination_path: path.to_string_lossy().into_owned(),
+            columns,
+            filters,
+            limit,
         })
-        .map_err(|e| ToolCallError::Execution {
-            code: e.code,
-            message: e.message,
-        })?;
+        .map_err(adapter_execution)?;
     serde_json::to_value(result).map_err(|_| ToolCallError::Execution {
         code: "SERIALIZATION_ERROR",
         message: "Could not serialize export result.",
@@ -683,10 +702,7 @@ fn db_query_readonly(
                 "source": "command-bus"
             }))
         }
-        Err(error) => Err(ToolCallError::Execution {
-            code: error.code,
-            message: error.message,
-        }),
+        Err(error) => Err(adapter_execution(error)),
     }
 }
 
@@ -800,10 +816,7 @@ fn db_execute(
                 "source": "command-bus"
             }))
         }
-        Err(error) => Err(ToolCallError::Execution {
-            code: error.code,
-            message: error.message,
-        }),
+        Err(error) => Err(adapter_execution(error)),
     }
 }
 
@@ -866,10 +879,7 @@ fn db_explain(
                 "source": "command-bus"
             }))
         }
-        Err(error) => Err(ToolCallError::Execution {
-            code: error.code,
-            message: error.message,
-        }),
+        Err(error) => Err(adapter_execution(error)),
     }
 }
 
@@ -891,10 +901,7 @@ fn db_test_connection(
             "serverVersion": result.server_version,
             "source": "command-bus"
         })),
-        Err(error) => Err(ToolCallError::Execution {
-            code: error.code,
-            message: error.message,
-        }),
+        Err(error) => Err(adapter_execution(error)),
     }
 }
 

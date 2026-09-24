@@ -65,6 +65,7 @@ impl CommandBusAdapter for HistoryStub {
             _ => Err(CommandBusAdapterError {
                 code: "UNEXPECTED",
                 message: "unexpected command",
+                details: serde_json::json!({}),
             }),
         }
     }

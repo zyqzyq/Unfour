@@ -16,7 +16,8 @@ does not accept a destination path.
   empty CSV; JSON row count; SQLite SQL restore round trip.
 - `cargo test -p unfour-mcp --offline --lib tools::database`: complete describe
   table output and output schema validation; export schema, managed path, and
-  rejection of caller-supplied destination paths.
+  rejection of caller-supplied destination paths. Column selection, `eq`/`in`
+  filters, and `limit` are optional and omitted calls still export the whole table.
 - Vitest for `TableExportDialog`, `TableDataTab`, and `DatabaseConnectionTree`:
   whole-table request parameters and existing table UI behavior.
 

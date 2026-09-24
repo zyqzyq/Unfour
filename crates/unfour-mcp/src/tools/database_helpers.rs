@@ -1,4 +1,5 @@
 use super::*;
+use crate::command_bus_adapter::CommandBusAdapterError;
 
 pub(super) const DEFAULT_QUERY_LIMIT: u32 = 100;
 pub(super) const MAX_QUERY_LIMIT: u32 = 1000;
@@ -184,6 +185,126 @@ pub(super) fn parse_optional_limit(
     match parse_optional_u32(arguments, key)? {
         None => Ok(default),
         Some(val) => Ok(val.clamp(1, max)),
+    }
+}
+
+pub(super) fn adapter_execution(error: CommandBusAdapterError) -> ToolCallError {
+    if error
+        .details
+        .as_object()
+        .is_some_and(|details| !details.is_empty())
+    {
+        ToolCallError::ExecutionWithDetails {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+        }
+    } else {
+        ToolCallError::Execution {
+            code: error.code,
+            message: error.message,
+        }
+    }
+}
+
+pub(super) fn parse_export_columns(
+    arguments: &Map<String, Value>,
+) -> Result<Option<Vec<String>>, ToolCallError> {
+    match arguments.get("columns") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Array(items)) => items
+            .iter()
+            .map(|item| {
+                item.as_str()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string)
+                    .ok_or_else(|| {
+                        ToolCallError::InvalidArguments(
+                            "argument `columns` must be an array of column names".into(),
+                        )
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(Some),
+        Some(_) => Err(ToolCallError::InvalidArguments(
+            "argument `columns` must be an array of column names".into(),
+        )),
+    }
+}
+
+pub(super) fn parse_export_filters(
+    arguments: &Map<String, Value>,
+) -> Result<Vec<unfour_core::models::DatabaseExportFilter>, ToolCallError> {
+    let Some(value) = arguments.get("filters") else {
+        return Ok(Vec::new());
+    };
+    let Value::Array(items) = value else {
+        return Err(ToolCallError::InvalidArguments(
+            "argument `filters` must be an array".into(),
+        ));
+    };
+    items
+        .iter()
+        .map(|item| {
+            let Some(object) = item.as_object() else {
+                return Err(ToolCallError::InvalidArguments(
+                    "each export filter must be an object".into(),
+                ));
+            };
+            if object
+                .keys()
+                .any(|key| !matches!(key.as_str(), "column" | "op" | "values"))
+            {
+                return Err(ToolCallError::InvalidArguments(
+                    "unexpected export filter field".into(),
+                ));
+            }
+            let column = object
+                .get("column")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    ToolCallError::InvalidArguments(
+                        "export filter `column` must be a non-empty string".into(),
+                    )
+                })?
+                .to_string();
+            let op = match object.get("op").and_then(Value::as_str) {
+                Some("eq") => unfour_core::models::DatabaseExportFilterOp::Eq,
+                Some("in") => unfour_core::models::DatabaseExportFilterOp::In,
+                _ => {
+                    return Err(ToolCallError::InvalidArguments(
+                        "export filter `op` must be eq or in".into(),
+                    ))
+                }
+            };
+            let values = object
+                .get("values")
+                .and_then(Value::as_array)
+                .ok_or_else(|| {
+                    ToolCallError::InvalidArguments(
+                        "export filter `values` must be an array".into(),
+                    )
+                })?
+                .iter()
+                .map(export_filter_value)
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(unfour_core::models::DatabaseExportFilter { column, op, values })
+        })
+        .collect()
+}
+
+fn export_filter_value(value: &Value) -> Result<Option<String>, ToolCallError> {
+    match value {
+        Value::Null => Ok(None),
+        Value::String(text) => Ok(Some(text.clone())),
+        Value::Number(number) => Ok(Some(number.to_string())),
+        Value::Bool(flag) => Ok(Some(flag.to_string())),
+        _ => Err(ToolCallError::InvalidArguments(
+            "export filter values must be strings, numbers, booleans, or null".into(),
+        )),
     }
 }
 

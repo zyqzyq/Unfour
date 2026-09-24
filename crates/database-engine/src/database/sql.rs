@@ -141,6 +141,160 @@ pub(super) fn postgres_filter_where(columns: &[String]) -> String {
     format!("({})", parts.join(" OR "))
 }
 
+const MAX_EXPORT_FILTERS: usize = 32;
+const MAX_EXPORT_IN_VALUES: usize = 1_000;
+
+pub(super) struct ExportSelect {
+    pub sql: String,
+    pub binds: Vec<String>,
+    pub columns: Vec<DatabaseTableColumn>,
+}
+
+/// Build a parameterized data SELECT for table export.
+///
+/// Identifiers are quoted only after they match a real column. Values are
+/// returned as binds. Callers must not interpolate `filters` into SQL.
+pub(super) fn build_export_select(
+    driver: &str,
+    qualified_table: &str,
+    table_columns: &[DatabaseTableColumn],
+    columns: Option<&[String]>,
+    filters: &[DatabaseExportFilter],
+    limit: Option<u32>,
+) -> AppResult<ExportSelect> {
+    if filters.len() > MAX_EXPORT_FILTERS {
+        return Err(AppError::Validation("too many export filters".into()));
+    }
+    let quote: fn(&str) -> String = if driver == "mysql" {
+        quote_mysql_identifier
+    } else {
+        quote_identifier
+    };
+    let selected = match columns {
+        None => table_columns.to_vec(),
+        Some(requested) => {
+            if requested.is_empty() {
+                return Err(AppError::Validation(
+                    "export columns cannot be empty".into(),
+                ));
+            }
+            let mut selected = Vec::with_capacity(requested.len());
+            for name in requested {
+                let column = name.trim();
+                if column.is_empty() {
+                    return Err(AppError::Validation(
+                        "export column name cannot be empty".into(),
+                    ));
+                }
+                if selected
+                    .iter()
+                    .any(|item: &DatabaseTableColumn| item.name == column)
+                {
+                    return Err(AppError::Validation(format!(
+                        "duplicate export column: {column}"
+                    )));
+                }
+                let Some(found) = table_columns.iter().find(|item| item.name == column) else {
+                    return Err(AppError::Validation(format!(
+                        "unknown export column: {column}"
+                    )));
+                };
+                selected.push(found.clone());
+            }
+            selected
+        }
+    };
+    let select_list = if columns.is_none() {
+        "*".to_string()
+    } else {
+        selected
+            .iter()
+            .map(|column| quote(&column.name))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let mut binds = Vec::new();
+    let mut predicates = Vec::new();
+    for filter in filters {
+        let column = filter.column.trim();
+        if !table_columns.iter().any(|item| item.name == column) {
+            return Err(AppError::Validation(format!(
+                "unknown export filter column: {column}"
+            )));
+        }
+        let quoted = quote(column);
+        let cast = if driver == "mysql" {
+            format!("CAST({quoted} AS CHAR)")
+        } else {
+            format!("CAST({quoted} AS TEXT)")
+        };
+        match filter.op {
+            DatabaseExportFilterOp::Eq => {
+                if filter.values.len() != 1 {
+                    return Err(AppError::Validation(
+                        "eq export filter requires exactly one value".into(),
+                    ));
+                }
+                match &filter.values[0] {
+                    None => predicates.push(format!("{quoted} IS NULL")),
+                    Some(value) => {
+                        binds.push(value.clone());
+                        predicates.push(format!(
+                            "{cast} = {}",
+                            export_placeholder(driver, binds.len())
+                        ));
+                    }
+                }
+            }
+            DatabaseExportFilterOp::In => {
+                if filter.values.is_empty() || filter.values.len() > MAX_EXPORT_IN_VALUES {
+                    return Err(AppError::Validation(
+                        "in export filter requires between 1 and 1000 values".into(),
+                    ));
+                }
+                if filter.values.iter().any(Option::is_none) {
+                    return Err(AppError::Validation(
+                        "in export filter cannot include null".into(),
+                    ));
+                }
+                let mut placeholders = Vec::with_capacity(filter.values.len());
+                for value in filter.values.iter().flatten() {
+                    binds.push(value.clone());
+                    placeholders.push(export_placeholder(driver, binds.len()));
+                }
+                predicates.push(format!("{cast} IN ({})", placeholders.join(", ")));
+            }
+        }
+    }
+    let where_sql = if predicates.is_empty() {
+        String::new()
+    } else {
+        format!(" WHERE {}", predicates.join(" AND "))
+    };
+    let limit_sql = match limit {
+        None => String::new(),
+        Some(0) => {
+            return Err(AppError::Validation(
+                "export limit must be greater than zero".into(),
+            ))
+        }
+        Some(limit) => format!(" LIMIT {limit}"),
+    };
+    Ok(ExportSelect {
+        sql: format!("SELECT {select_list} FROM {qualified_table}{where_sql}{limit_sql}"),
+        binds,
+        columns: selected,
+    })
+}
+
+fn export_placeholder(driver: &str, index: usize) -> String {
+    if driver == "postgres" {
+        format!("${index}")
+    } else {
+        "?".to_string()
+    }
+}
+
 /// `(CAST(col AS CHAR) LIKE ? OR ...)` for MySQL. One placeholder per column.
 pub(super) fn mysql_filter_where(columns: &[String]) -> String {
     let parts = columns

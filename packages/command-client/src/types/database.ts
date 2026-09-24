@@ -201,10 +201,19 @@ export type DatabaseQueryResult = {
   safety: DatabaseQuerySafety;
 };
 
+export type DatabaseExportFilter = {
+  column: string;
+  op: "eq" | "in";
+  values: Array<string | null>;
+};
+
 export type DatabaseExportTableInput = DatabaseTableStructureInput & {
   content: "structure" | "data" | "structure-and-data";
   format: "sql" | "csv" | "json";
   destinationPath: string;
+  columns?: string[] | null;
+  filters?: DatabaseExportFilter[];
+  limit?: number | null;
 };
 
 export type DatabaseExportTableResult = {

@@ -82,7 +82,8 @@ is advisory call metadata and is not part of `structuredContent`.
 | `unfour.db.update_connection` | `{ "connectionId": "required", "workspaceId": "optional", "name": "optional", "driver": "optional", "host": "optional", "port": "optional", "database": "optional", "username": "optional", "sslMode": "optional", "sqlitePath": "optional", "readOnly": "optional" }` | Updates an existing connection through the same Command Bus save path. Omitted fields and stored credentials are preserved; nullable metadata can be cleared with null. Returns only connectionId, workspaceId and source. |
 | `unfour.db.delete_connection` | `{ "connectionId": "required", "workspaceId": "optional", "confirm": "optional", "confirmation_text": "optional" }` | Soft-deletes a saved connection through Command Bus. Guarded policy requires confirmation bound to workspace, connection and current revision; prod/read_only blocks deletion. |
 | `unfour.db.list_history` | `{ "workspaceId": "optional", "limit": "optional integer 1–200" }` | Lists query history for the selected workspace, default limit 50. Returns masked SQL, connectionId/name, status, rowCount, affectedRows, durationMs, executedAt and hasError. No result rows or raw error messages. |
-| `unfour.db.list_tables` | `{ "connectionId": "required", "workspaceId": "optional", "limit": "optional" }` | Lists tables and views for a saved connection. Default limit is 200; max is 500. |
+| `unfour.db.list_tables` | `{ "connectionId": "required", "workspaceId": "optional", "catalog": "optional", "limit": "optional" }` | Lists tables and views for a saved connection. Optional `catalog` selects a database other than the connection default; omitted catalog keeps the default database. Default limit is 200; max is 500. |
+| `unfour.db.export_table` | `{ "connectionId": "required", "tableName": "required", "content": "required", "format": "required", "workspaceId": "optional", "catalog": "optional", "schema": "optional", "columns": "optional string[]", "filters": "optional array of { column, op: eq|in, values }", "limit": "optional" }` | Exports one table into the managed exports directory and returns file metadata. No destination path is accepted. Omitted `columns`, `filters`, and `limit` export the whole table. Filters are structured predicates with bound values, not a raw WHERE string. `columns`, `filters`, and `limit` apply to the data portion; structure export still writes the table DDL. |
 | `unfour.db.describe_table` | `{ "connectionId": "required", "tableName": "required", "schema": "optional", "workspaceId": "optional" }` | Describes a table's columns without reading table data. |
 | `unfour.db.query_readonly` | `{ "connectionId": "required", "sql": "required", "limit": "optional", "workspaceId": "optional", "catalog": "optional", "schema": "optional", "timeoutMs": "optional" }` | Executes one read-only SQL statement. Default limit is 100; max is 1000. Optional `catalog`/`schema` select the database context, matching `execute` and `explain`. |
 | `unfour.db.execute` | `{ "connectionId": "required", "sql": "required", "workspaceId": "optional", "limit": "optional", "catalog": "optional", "schema": "optional", "timeoutMs": "optional", "dryRun": "optional", "transaction": "optional", "confirm": "optional", "confirmationText": "optional", "confirmation_text": "optional" }` | Executes one SQL statement when policy allows. High-risk writes such as `DELETE` without `WHERE` require confirmation. |
@@ -208,6 +209,12 @@ the OS credential store and persists only a credential reference.
 
 Most database tools require saved `connectionId` values. Ad-hoc connection
 strings are not accepted.
+
+Database execution failures keep the fixed safe `error.message`. When the
+driver provides them, `error.details.sqlState` and
+`error.details.databaseMessage` carry the SQLSTATE and server message.
+Missing values are null. Passwords, tokens, secrets, and full DSNs are not
+included. A tool result with `isError: true` is logged as `status=error`.
 
 Connection updates are partial metadata updates, not upserts: missing, deleted
 or cross-workspace IDs fail. Neither database nor SSH update accepts raw secrets

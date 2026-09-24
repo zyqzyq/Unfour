@@ -441,3 +441,22 @@ fn ssh_validation_error_mentions_control_characters() {
         "SSH command validation failed: control characters/newlines are not allowed."
     );
 }
+
+#[test]
+fn database_adapter_error_keeps_sqlstate_without_the_full_display_string() {
+    let error = CommandBusAdapterError::from_app_error(
+        "The command-bus database query operation failed.",
+        &AppError::Database(sqlx::Error::Protocol(
+            "postgres://app:super-secret@db.internal:5432/app".into(),
+        )),
+    );
+    assert_eq!(error.code, "DATABASE_ERROR");
+    assert_eq!(
+        error.message,
+        "The command-bus database query operation failed."
+    );
+    assert!(error.details["sqlState"].is_null());
+    assert!(error.details["databaseMessage"].is_null());
+    assert!(!error.details.to_string().contains("super-secret"));
+    assert!(!error.message.contains("super-secret"));
+}

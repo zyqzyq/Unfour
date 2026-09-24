@@ -95,12 +95,28 @@ impl DatabaseService {
             path: staging.clone(),
             committed: false,
         };
+        let data_query = if matches!(input.content, DatabaseExportContent::Structure) {
+            None
+        } else {
+            Some(build_export_select(
+                connection.driver.as_str(),
+                &qualified,
+                &structure.columns,
+                input.columns.as_deref(),
+                &input.filters,
+                input.limit,
+            )?)
+        };
+        let export_columns = data_query
+            .as_ref()
+            .map(|query| query.columns.clone())
+            .unwrap_or_else(|| structure.columns.clone());
         let mut writer = ExportWriter::new(
             BufWriter::new(file),
             input.format.clone(),
             connection.driver.as_str(),
             qualified,
-            &structure.columns,
+            &export_columns,
         )?;
         if !matches!(input.content, DatabaseExportContent::Data) {
             let ddl = structure.ddl.as_deref().ok_or_else(|| {
@@ -108,12 +124,17 @@ impl DatabaseService {
             })?;
             writer.write_ddl(ddl)?;
         }
-        if !matches!(input.content, DatabaseExportContent::Structure) {
-            let sql = format!("SELECT * FROM {}", writer.table);
+        if let Some(data_query) = data_query {
+            let sql = data_query.sql;
+            let binds = data_query.binds;
             match connection.driver.as_str() {
                 "sqlite" => {
                     let pool = sqlite_pool(&connection).await?;
-                    let mut rows = sqlx::query(&sql).fetch(&pool);
+                    let mut query = sqlx::query(&sql);
+                    for value in &binds {
+                        query = query.bind(value);
+                    }
+                    let mut rows = query.fetch(&pool);
                     while let Some(row) = rows.try_next().await? {
                         writer.write_row(sqlite_export_values(&row)?)?;
                     }
@@ -122,7 +143,11 @@ impl DatabaseService {
                     let effective =
                         Self::effective_connection(&connection, input.catalog.as_deref());
                     let pool = self.postgres_pool(&effective).await?;
-                    let mut rows = sqlx::query(&sql).fetch(&pool);
+                    let mut query = sqlx::query(&sql);
+                    for value in &binds {
+                        query = query.bind(value);
+                    }
+                    let mut rows = query.fetch(&pool);
                     while let Some(row) = rows.try_next().await.map_err(sanitize_pg_error)? {
                         writer.write_row(postgres_export_values(&row)?)?;
                     }
@@ -131,7 +156,11 @@ impl DatabaseService {
                     let effective =
                         Self::effective_connection(&connection, input.catalog.as_deref());
                     let pool = self.mysql_pool(&effective).await?;
-                    let mut rows = sqlx::query(&sql).fetch(&pool);
+                    let mut query = sqlx::query(&sql);
+                    for value in &binds {
+                        query = query.bind(value);
+                    }
+                    let mut rows = query.fetch(&pool);
                     while let Some(row) = rows.try_next().await.map_err(sanitize_mysql_error)? {
                         writer.write_row(mysql_export_values(&row)?)?;
                     }
@@ -676,5 +705,91 @@ mod tests {
         assert_eq!(fs::read_to_string(&destination).unwrap(), "new export");
         assert!(!staging.exists());
         let _ = fs::remove_file(destination);
+    }
+
+    #[test]
+    fn export_select_quotes_columns_binds_in_filters_and_limit() {
+        let columns = vec![column("data_id"), column("name")];
+        let filters = vec![DatabaseExportFilter {
+            column: "data_id".into(),
+            op: DatabaseExportFilterOp::In,
+            values: vec![Some("10".into()), Some("20".into())],
+        }];
+        let sqlite = build_export_select(
+            "sqlite",
+            "\"items\"",
+            &columns,
+            Some(&["name".into()]),
+            &filters,
+            Some(5),
+        )
+        .unwrap();
+        assert_eq!(
+            sqlite.sql,
+            "SELECT \"name\" FROM \"items\" WHERE CAST(\"data_id\" AS TEXT) IN (?, ?) LIMIT 5"
+        );
+        assert_eq!(sqlite.binds, vec!["10".to_string(), "20".to_string()]);
+        assert_eq!(sqlite.columns.len(), 1);
+
+        let postgres = build_export_select(
+            "postgres",
+            "\"public\".\"items\"",
+            &columns,
+            None,
+            &[DatabaseExportFilter {
+                column: "name".into(),
+                op: DatabaseExportFilterOp::Eq,
+                values: vec![Some("api".into())],
+            }],
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            postgres.sql,
+            "SELECT * FROM \"public\".\"items\" WHERE CAST(\"name\" AS TEXT) = $1"
+        );
+        assert_eq!(postgres.columns.len(), 2);
+
+        let mysql = build_export_select(
+            "mysql",
+            "`app`.`items`",
+            &columns,
+            None,
+            &[DatabaseExportFilter {
+                column: "data_id".into(),
+                op: DatabaseExportFilterOp::Eq,
+                values: vec![None],
+            }],
+            Some(1),
+        )
+        .unwrap();
+        assert_eq!(
+            mysql.sql,
+            "SELECT * FROM `app`.`items` WHERE `data_id` IS NULL LIMIT 1"
+        );
+        assert!(mysql.binds.is_empty());
+
+        assert!(build_export_select(
+            "sqlite",
+            "\"items\"",
+            &columns,
+            Some(&["missing".into()]),
+            &[],
+            None,
+        )
+        .is_err());
+        assert!(build_export_select(
+            "sqlite",
+            "\"items\"",
+            &columns,
+            None,
+            &[DatabaseExportFilter {
+                column: "data_id".into(),
+                op: DatabaseExportFilterOp::In,
+                values: vec![None],
+            }],
+            None,
+        )
+        .is_err());
     }
 }

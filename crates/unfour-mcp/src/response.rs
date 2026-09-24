@@ -42,6 +42,31 @@ pub fn structured_tool_error(
     code: &str,
     message: &str,
 ) -> Value {
+    structured_tool_error_with_details(
+        tool,
+        environment,
+        risk_level,
+        duration_ms,
+        code,
+        message,
+        json!({}),
+    )
+}
+
+pub fn structured_tool_error_with_details(
+    tool: &str,
+    environment: &str,
+    risk_level: &str,
+    duration_ms: u128,
+    code: &str,
+    message: &str,
+    details: Value,
+) -> Value {
+    let details = if details.is_object() {
+        details
+    } else {
+        json!({})
+    };
     error_tool_result(
         tool,
         environment,
@@ -51,7 +76,7 @@ pub fn structured_tool_error(
             "error": {
                 "code": code,
                 "message": message,
-                "details": {}
+                "details": details
             }
         }),
     )

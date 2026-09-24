@@ -8,8 +8,8 @@ use super::super::{
     object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition,
 };
 use super::{
-    parse_optional_bool, parse_optional_string, parse_required_string, resolve_workspace_id,
-    safe_connection_summary,
+    adapter_execution, parse_optional_bool, parse_optional_string, parse_required_string,
+    resolve_workspace_id, safe_connection_summary,
 };
 
 pub(super) fn registered_tool() -> RegisteredTool {
@@ -101,10 +101,7 @@ fn db_create_connection(
                 label,
                 secret,
             })
-            .map_err(|error| ToolCallError::Execution {
-                code: error.code,
-                message: error.message,
-            })?;
+            .map_err(adapter_execution)?;
         Some(credential.credential_ref)
     } else {
         supplied_credential_ref
@@ -125,10 +122,7 @@ fn db_create_connection(
             credential_ref,
             read_only: parse_optional_bool(&arguments, "readOnly")?.unwrap_or(false),
         })
-        .map_err(|error| ToolCallError::Execution {
-            code: error.code,
-            message: error.message,
-        })?;
+        .map_err(adapter_execution)?;
 
     Ok(json!({
         "connection": safe_connection_summary(&connection),

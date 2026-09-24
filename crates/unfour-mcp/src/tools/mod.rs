@@ -19,7 +19,7 @@ use serde_json::{Map, Value};
 use crate::command_bus_adapter::CommandBusAdapter;
 use crate::response::{
     structured_confirmation_required, structured_policy_error, structured_tool_error,
-    structured_tool_result,
+    structured_tool_error_with_details, structured_tool_result,
 };
 
 use self::confirmation::ConfirmationRequired;
@@ -124,6 +124,11 @@ pub(crate) enum ToolCallError {
         code: &'static str,
         message: &'static str,
     },
+    ExecutionWithDetails {
+        code: &'static str,
+        message: &'static str,
+        details: Value,
+    },
 }
 
 impl ToolRegistry {
@@ -208,6 +213,19 @@ impl ToolRegistry {
                 code,
                 message,
             )),
+            Err(ToolCallError::ExecutionWithDetails {
+                code,
+                message,
+                details,
+            }) => Ok(structured_tool_error_with_details(
+                name,
+                &policy.workspace.environment_type,
+                policy.risk.risk_level(),
+                started.elapsed().as_millis(),
+                code,
+                message,
+                details,
+            )),
             Err(error) => Err(error),
         }
     }
@@ -236,6 +254,19 @@ fn policy_or_execution_error(
             duration_ms,
             code,
             message,
+        )),
+        ToolCallError::ExecutionWithDetails {
+            code,
+            message,
+            details,
+        } => Ok(structured_tool_error_with_details(
+            tool_name,
+            "unknown",
+            "medium",
+            duration_ms,
+            code,
+            message,
+            details,
         )),
         other => Err(other),
     }

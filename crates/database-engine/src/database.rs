@@ -7,12 +7,13 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 use unfour_core::models::{
     DatabaseBrowseInput, DatabaseBrowseResult, DatabaseCellValue, DatabaseConnection,
-    DatabaseConnectionConfig, DatabaseConnectionInput, DatabaseExportContent, DatabaseExportFormat,
-    DatabaseExportTableInput, DatabaseExportTableResult, DatabaseForeignKey, DatabaseIndex,
-    DatabaseQueryInput, DatabaseQueryResult, DatabaseQuerySafety, DatabaseResultColumn,
-    DatabaseRowMutationInput, DatabaseRowMutationResult, DatabaseSchema, DatabaseTable,
-    DatabaseTableColumn, DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult,
-    DbQueryHistoryEntry, DbQueryHistoryRecordInput, SavedSql, SavedSqlInput,
+    DatabaseConnectionConfig, DatabaseConnectionInput, DatabaseExportContent, DatabaseExportFilter,
+    DatabaseExportFilterOp, DatabaseExportFormat, DatabaseExportTableInput,
+    DatabaseExportTableResult, DatabaseForeignKey, DatabaseIndex, DatabaseQueryInput,
+    DatabaseQueryResult, DatabaseQuerySafety, DatabaseResultColumn, DatabaseRowMutationInput,
+    DatabaseRowMutationResult, DatabaseSchema, DatabaseTable, DatabaseTableColumn,
+    DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult, DbQueryHistoryEntry,
+    DbQueryHistoryRecordInput, SavedSql, SavedSqlInput,
 };
 use unfour_core::redaction::redact_connection_string;
 use unfour_core::{AppError, AppResult};

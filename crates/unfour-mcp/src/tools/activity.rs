@@ -216,6 +216,7 @@ mod tests {
                 _ => Err(CommandBusAdapterError {
                     code: "UNEXPECTED",
                     message: "unexpected command",
+                    details: serde_json::json!({}),
                 }),
             }
         }
@@ -275,6 +276,7 @@ mod tests {
             Err(CommandBusAdapterError {
                 code: "COMMAND_BUS_READ_FAILED",
                 message: "The command-bus read operation failed.",
+                details: serde_json::json!({}),
             })
         }
 

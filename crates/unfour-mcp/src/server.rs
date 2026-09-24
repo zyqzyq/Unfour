@@ -140,13 +140,23 @@ impl McpServer {
         let result = self.tools.call(name, arguments);
         match result {
             Ok(value) => {
+                let failed = tool_result_is_error(&value);
+                let error_code = if failed {
+                    tool_result_error_code(&value)
+                } else {
+                    None
+                };
                 unfour_diag::log_operation_event(
-                    "tool_call_completed",
+                    if failed {
+                        "tool_call_failed"
+                    } else {
+                        "tool_call_completed"
+                    },
                     "mcp",
                     "tools_call",
-                    "ok",
+                    tool_result_log_status(&value),
                     Some(started.elapsed().as_millis()),
-                    None,
+                    error_code.as_deref(),
                     json!({ "request_id": request_id.as_str(), "tool_name": name }),
                 );
                 Ok(value)
@@ -157,7 +167,8 @@ impl McpServer {
                     ToolCallError::InvalidArguments(_) => "INVALID_ARGUMENTS",
                     ToolCallError::ConfirmationRequired(_) => "CONFIRMATION_REQUIRED",
                     ToolCallError::PolicyBlocked(_) => "POLICY_BLOCKED",
-                    ToolCallError::Execution { code, .. } => *code,
+                    ToolCallError::Execution { code, .. }
+                    | ToolCallError::ExecutionWithDetails { code, .. } => *code,
                 };
                 unfour_diag::log_operation_event(
                     "tool_call_failed",
@@ -178,13 +189,41 @@ impl McpServer {
                     ToolCallError::PolicyBlocked(denial) => {
                         (-32000, format!("{}: {}", denial.error.code, denial.reason))
                     }
-                    ToolCallError::Execution { code, message } => {
+                    ToolCallError::Execution { code, message }
+                    | ToolCallError::ExecutionWithDetails { code, message, .. } => {
                         (-32000, format!("{code}: {message}"))
                     }
                 })
             }
         }
     }
+}
+
+pub(crate) fn tool_result_is_error(value: &Value) -> bool {
+    value.get("isError").and_then(Value::as_bool) == Some(true)
+}
+
+pub(crate) fn tool_result_log_status(value: &Value) -> &'static str {
+    if tool_result_is_error(value) {
+        "error"
+    } else {
+        "ok"
+    }
+}
+
+fn tool_result_error_code(value: &Value) -> Option<String> {
+    let text = value
+        .get("content")
+        .and_then(Value::as_array)
+        .and_then(|content| content.first())
+        .and_then(|item| item.get("text"))
+        .and_then(Value::as_str)?;
+    let payload: Value = serde_json::from_str(text).ok()?;
+    payload
+        .get("error")
+        .and_then(|error| error.get("code"))
+        .and_then(Value::as_str)
+        .map(str::to_string)
 }
 
 pub fn run_stdio<R, W>(reader: R, mut writer: W) -> io::Result<()>

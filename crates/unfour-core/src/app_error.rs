@@ -47,6 +47,28 @@ pub enum AppError {
 }
 
 impl AppError {
+    /// Safe diagnostics for a database-engine failure.
+    ///
+    /// `sqlState` and `databaseMessage` are null when the driver does not
+    /// provide them. This never returns `Display`/`to_string()`, which can
+    /// embed DSNs and other connection material.
+    pub fn database_error_details(&self) -> Option<serde_json::Value> {
+        let AppError::Database(error) = self else {
+            return None;
+        };
+        let (sql_state, database_message) = match error.as_database_error() {
+            Some(database_error) => (
+                sql_state_of(database_error),
+                sanitize_database_message(database_error.message()),
+            ),
+            None => (None, None),
+        };
+        Some(serde_json::json!({
+            "sqlState": sql_state,
+            "databaseMessage": database_message,
+        }))
+    }
+
     /// Stable, safe error classification code. Contains no dynamic detail, so it
     /// is safe to surface to external consumers (e.g. the MCP/LLM boundary).
     pub fn code(&self) -> &'static str {
@@ -84,5 +106,133 @@ impl serde::Serialize for AppError {
             state.serialize_field("details", details)?;
         }
         state.end()
+    }
+}
+
+fn sql_state_of(error: &dyn sqlx::error::DatabaseError) -> Option<String> {
+    if let Some(postgres) = error.try_downcast_ref::<sqlx::postgres::PgDatabaseError>() {
+        return sql_state_token(postgres.code());
+    }
+    if let Some(mysql) = error.try_downcast_ref::<sqlx::mysql::MySqlDatabaseError>() {
+        return mysql.code().and_then(sql_state_token);
+    }
+    None
+}
+
+fn sql_state_token(code: &str) -> Option<String> {
+    let valid = code.len() == 5
+        && code.chars().next().is_some_and(|ch| ch.is_ascii_digit())
+        && code
+            .chars()
+            .all(|ch| ch.is_ascii_digit() || ch.is_ascii_uppercase());
+    valid.then(|| code.to_string())
+}
+
+fn sanitize_database_message(message: &str) -> Option<String> {
+    let trimmed = message.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let redacted = redact_sensitive_assignments(&redact_urls(
+        &crate::redaction::redact_connection_string(trimmed),
+    ));
+    let redacted = redacted.trim();
+    if redacted.is_empty() {
+        None
+    } else {
+        Some(truncate_chars(redacted, 500))
+    }
+}
+
+fn redact_urls(value: &str) -> String {
+    value
+        .split_inclusive(char::is_whitespace)
+        .map(|token| {
+            let trimmed = token.trim();
+            if trimmed.contains("://") {
+                token.replace(trimmed, crate::redaction::REDACTED_VALUE)
+            } else {
+                token.to_string()
+            }
+        })
+        .collect()
+}
+
+fn redact_sensitive_assignments(value: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut rest = value;
+    while let Some(index) = rest.find('=') {
+        let key_start = rest[..index]
+            .rfind(|ch: char| ch.is_whitespace() || ch == ';' || ch == ',' || ch == '&')
+            .map(|found| found + 1)
+            .unwrap_or(0);
+        let key = rest[key_start..index].trim();
+        output.push_str(&rest[..key_start]);
+        if crate::redaction::is_sensitive_key(key) {
+            output.push_str(key);
+            output.push('=');
+            output.push_str(crate::redaction::REDACTED_VALUE);
+            let after = &rest[index + 1..];
+            let value_end = after
+                .find(|ch: char| ch.is_whitespace() || ch == ';' || ch == ',' || ch == '&')
+                .unwrap_or(after.len());
+            rest = &after[value_end..];
+        } else {
+            output.push_str(&rest[key_start..=index]);
+            rest = &rest[index + 1..];
+        }
+    }
+    output.push_str(rest);
+    output
+}
+
+fn truncate_chars(value: &str, max_chars: usize) -> String {
+    if value.chars().count() <= max_chars {
+        return value.to_string();
+    }
+    value.chars().take(max_chars).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn non_database_errors_have_no_database_details() {
+        assert!(AppError::Validation("table name cannot be empty".into())
+            .database_error_details()
+            .is_none());
+    }
+
+    #[test]
+    fn protocol_database_errors_leave_sqlstate_and_message_empty() {
+        let error = AppError::Database(sqlx::Error::Protocol(
+            "postgres://app:super-secret@db.internal:5432/app".into(),
+        ));
+        let details = error.database_error_details().expect("database error");
+        assert!(details["sqlState"].is_null());
+        assert!(details["databaseMessage"].is_null());
+        assert!(!error.to_string().is_empty());
+        assert_eq!(details["sqlState"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn database_messages_drop_urls_and_secret_assignments() {
+        let message = sanitize_database_message(
+            "failed postgres://app:super-secret@db.internal/app password=hunter2 token=abc",
+        )
+        .expect("message");
+        assert!(!message.contains("super-secret"));
+        assert!(!message.contains("db.internal"));
+        assert!(!message.contains("hunter2"));
+        assert!(!message.contains("abc"));
+        assert!(message.contains("failed"));
+        assert!(message.contains("<redacted>"));
+        assert!(sanitize_database_message("   ").is_none());
+        assert_eq!(sql_state_token("42P01").as_deref(), Some("42P01"));
+        assert_eq!(sql_state_token("23000").as_deref(), Some("23000"));
+        assert!(sql_state_token("1").is_none());
+        assert!(sql_state_token("2067").is_none());
+        assert!(sql_state_token("nope!").is_none());
     }
 }

@@ -27,10 +27,11 @@ use unified_runtime::unified_command_bus;
 
 pub use contract::CommandBusAdapter;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CommandBusAdapterError {
     pub code: &'static str,
     pub message: &'static str,
+    pub details: serde_json::Value,
 }
 
 pub struct LocalCommandBusAdapter {
@@ -320,6 +321,7 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
             Err(CommandBusAdapterError {
                 code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
                 message: "Native SSH is unavailable.",
+                details: serde_json::json!({}),
             })
         }
         #[cfg(feature = "ssh-native")]
@@ -407,10 +409,12 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
             None if result.http_error.is_some() => Err(CommandBusAdapterError {
                 code: "HTTP_ERROR",
                 message: "The command-bus API send operation failed.",
+                details: serde_json::json!({}),
             }),
             None => Err(CommandBusAdapterError {
                 code: "API_SCRIPT_EXECUTION_FAILED",
                 message: "The saved API request pre-request script failed before sending.",
+                details: serde_json::json!({}),
             }),
         }
     }
@@ -802,10 +806,19 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         workspace_id: &str,
         connection_id: &str,
     ) -> Result<DatabaseSchema, CommandBusAdapterError> {
+        self.get_db_schema_for_catalog(workspace_id, connection_id, None)
+    }
+
+    fn get_db_schema_for_catalog(
+        &self,
+        workspace_id: &str,
+        connection_id: &str,
+        catalog: Option<&str>,
+    ) -> Result<DatabaseSchema, CommandBusAdapterError> {
         self.run_execution(self.bus.database_schema(
             workspace_id.to_string(),
             connection_id.to_string(),
-            None,
+            catalog.map(str::to_string),
         ))
         .map_err(|e| {
             CommandBusAdapterError::from_app_error(
@@ -1071,12 +1084,17 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
 impl CommandBusAdapterError {
     fn from_flow_error(error: &AppError) -> Self {
         if matches!(error, AppError::Validation(reason) if reason == "FLOW_CONFIRMATION_STALE") {
-            return Self { code: "FLOW_CONFIRMATION_STALE", message: "Flow changed after confirmation. Read the Flow and request a new confirmation before retrying." };
+            return Self {
+                code: "FLOW_CONFIRMATION_STALE",
+                message: "Flow changed after confirmation. Read the Flow and request a new confirmation before retrying.",
+                details: serde_json::json!({}),
+            };
         }
         if matches!(error, AppError::Validation(reason) if reason == "FLOW_REVISION_CONFLICT") {
             return Self {
                 code: "FLOW_REVISION_CONFLICT",
                 message: "The Flow revision changed; reload before saving.",
+                details: serde_json::json!({}),
             };
         }
         Self::from_app_error("The command-bus Flow operation failed.", error)
@@ -1086,11 +1104,16 @@ impl CommandBusAdapterError {
     /// classification code (e.g. `NOT_FOUND`, `DATABASE_ERROR`,
     /// `UNSUPPORTED_OPERATION`) alongside a safe, operation-specific message.
     /// The `AppError` `Display` text is intentionally not propagated because it
-    /// may embed hosts, DSNs, or other sensitive detail.
+    /// may embed hosts, DSNs, or other sensitive detail. Database execution
+    /// errors attach `sqlState` and `databaseMessage` when the driver provides
+    /// them.
     fn from_app_error(message: &'static str, error: &AppError) -> Self {
         Self {
             code: error.code(),
             message,
+            details: error
+                .database_error_details()
+                .unwrap_or_else(|| serde_json::json!({})),
         }
     }
 
@@ -1111,6 +1134,7 @@ impl CommandBusAdapterError {
         Self {
             code: error.code(),
             message,
+            details: serde_json::json!({}),
         }
     }
 
@@ -1118,6 +1142,7 @@ impl CommandBusAdapterError {
         Self {
             code: "COMMAND_BUS_INITIALIZATION_FAILED",
             message: "The command-bus adapter could not be initialized.",
+            details: serde_json::json!({}),
         }
     }
 }
