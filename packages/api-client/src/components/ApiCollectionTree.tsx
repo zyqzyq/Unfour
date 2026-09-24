@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  IconButton,
   SidebarRow,
   SidebarSection,
   TreeView,
@@ -182,9 +183,11 @@ export function ApiCollectionTree({
     collectionId: string,
     parentFolderId: string | null,
   ) => (
-    <button
-      aria-label={t("api.collection.addFolder")}
-      className="grid h-4 w-4 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] opacity-0 hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)] group-hover:opacity-100"
+    <IconButton
+      label={t("api.collection.addFolder")}
+      size="compact"
+      className="h-6 w-6"
+      disableTooltip
       onClick={(event) => {
         event.stopPropagation();
         openFolderDialog(collectionId, parentFolderId);
@@ -192,8 +195,8 @@ export function ApiCollectionTree({
       title={t("api.collection.addFolder")}
       type="button"
     >
-      <FolderPlus size={11} />
-    </button>
+      <FolderPlus size={14} />
+    </IconButton>
   );
 
   function folderToTreeItem(
@@ -252,7 +255,7 @@ export function ApiCollectionTree({
         {collectTreeRequests(group.tree).length}
       </span>
     ),
-    actions: <>{addFolderAction(group.collection.id, null)}{collectionMenu(group.collection)}</>,
+    actions: <div className="flex shrink-0 items-center gap-1">{addFolderAction(group.collection.id, null)}{collectionMenu(group.collection)}</div>,
     contextMenu: (
       collectionMenu(group.collection, true)
     ),

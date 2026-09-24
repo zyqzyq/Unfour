@@ -204,3 +204,36 @@ async fn preview_rejects_cycles_and_unknown_versions_before_writing() {
         .unwrap()
         .is_empty());
 }
+
+#[tokio::test]
+async fn exchange_export_filenames_use_sanitized_collection_names() {
+    let service = service().await;
+    for (name, expected) in [
+        ("User Accounts", "User-Accounts"),
+        ("客户 / API: v2?", "客户-API-v2"),
+        ("CON", "collection"),
+    ] {
+        let mut value = native();
+        value["collection"]["name"] = json!(name);
+        let id = service
+            .import_collection_openapi("workspace-a".into(), value.to_string())
+            .await
+            .unwrap()
+            .collection
+            .unwrap()
+            .id;
+        for (format, suffix) in [
+            (ApiCollectionExportFormat::Unfour, "unfour"),
+            (ApiCollectionExportFormat::Postman, "postman_collection"),
+        ] {
+            let artifact = service
+                .export_collection_exchange("workspace-a".into(), id.clone(), format)
+                .await
+                .unwrap();
+            assert_eq!(
+                artifact.suggested_file_name,
+                format!("{expected}.{suffix}.json")
+            );
+        }
+    }
+}

@@ -192,14 +192,19 @@ afterEach(() => {
 });
 
 describe("ApiCollectionTree", () => {
-  it("exports Native Collection from the collection row menu by default", async () => {
+  it.each([
+    ["Unfour Collection", "unfour"],
+    ["Postman Collection 2.1", "postman"],
+    ["OpenAPI 3.1 JSON", "json"],
+    ["OpenAPI 3.1 YAML", "yaml"],
+  ])("exports %s directly from a format button", async (label, format) => {
     renderTree();
     fireEvent.pointerDown(await screen.findByRole("button", {name:"Collection actions for Users"}));
     fireEvent.click(await screen.findByRole("menuitem", {name:"Export", exact:true}));
-    expect(await screen.findByRole("combobox", {name:"Format"})).toHaveValue("unfour");
-    expect(screen.queryByRole("combobox", {name:"OpenAPI encoding"})).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", {name:"Export", exact:true}));
-    await waitFor(() => expect(exportMock).toHaveBeenCalledWith("ws-1", "col-1", "unfour"));
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(exportMock).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole("button", { name: label, exact: true }));
+    await waitFor(() => expect(exportMock).toHaveBeenCalledWith("ws-1", "col-1", format));
   });
 
   it("imports an Unfour collection export from the collections toolbar", async () => {
@@ -221,9 +226,7 @@ describe("ApiCollectionTree", () => {
     expect(collectionRow).not.toBeNull();
     fireEvent.contextMenu(collectionRow as HTMLElement, { clientX: 24, clientY: 24 });
     fireEvent.click(await screen.findByRole("menuitem", { name: "Export" }));
-    fireEvent.change(await screen.findByRole("combobox", {name:"Format"}), {target:{value:"json"}});
-    fireEvent.change(screen.getByRole("combobox", {name:"OpenAPI encoding"}), {target:{value:"yaml"}});
-    fireEvent.click(screen.getByRole("button", {name:"Export", exact:true}));
+    fireEvent.click(await screen.findByRole("button", { name: "OpenAPI 3.1 YAML" }));
 
     await waitFor(() =>
       expect(exportMock).toHaveBeenCalledWith("ws-1", "col-1", "yaml"),

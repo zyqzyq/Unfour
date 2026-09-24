@@ -259,7 +259,7 @@ pub(super) fn serialize_document(
     }
 }
 
-pub(super) fn sanitize_file_name(value: &str) -> String {
+pub(in crate::api_client) fn sanitize_file_name(value: &str) -> String {
     let mut output = String::new();
     let mut last_was_separator = false;
     for ch in value.trim().chars() {

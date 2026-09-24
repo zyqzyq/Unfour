@@ -8,7 +8,8 @@ mod convert;
 mod model;
 mod source;
 
-use convert::{build_document, sanitize_file_name, serialize_document};
+pub(super) use convert::sanitize_file_name;
+use convert::{build_document, serialize_document};
 use model::OpenApiExportSource;
 
 impl ApiClientService {

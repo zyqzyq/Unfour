@@ -1,5 +1,5 @@
 import { MoreHorizontal } from "lucide-react";
-import { ContextMenuItem, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, useI18n } from "@unfour/ui";
+import { IconButton, ContextMenuItem, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, useI18n } from "@unfour/ui";
 
 export function ApiCollectionMenu({ context = false, name, onRename, onAddFolder, onExport, onDelete }: {
   context?: boolean;
@@ -21,7 +21,7 @@ export function ApiCollectionMenu({ context = false, name, onRename, onAddFolder
   if (context) return <>{items}</>;
   return <DropdownMenu>
     <DropdownMenuTrigger asChild>
-      <button type="button" aria-label={t("exchange.collectionActions",{name})} className="grid h-5 w-5 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] hover:bg-[var(--u-color-surface-hover)]"><MoreHorizontal size={13}/></button>
+      <IconButton label={t("exchange.collectionActions", { name })} size="compact" className="h-6 w-6" disableTooltip><MoreHorizontal size={14} /></IconButton>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end">{items}</DropdownMenuContent>
   </DropdownMenu>;

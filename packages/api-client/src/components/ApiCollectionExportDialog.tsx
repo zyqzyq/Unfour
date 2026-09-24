@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { Download, LoaderCircle } from "lucide-react";
 import {
   exportApiCollection,
   type ApiCollection,
@@ -7,7 +7,6 @@ import {
 } from "@unfour/command-client";
 import {
   Button,
-  Select,
   Dialog,
   DialogBody,
   DialogContent,
@@ -30,7 +29,6 @@ export function ApiCollectionExportDialog({
   workspaceId: string;
 }) {
   const { t } = useI18n();
-  const [format, setFormat] = useState<ApiCollectionExportFormat>("unfour");
   const feedback = useFeedback();
   const handleError = useFeedbackErrorHandler();
   const exportMutation = useMutation({
@@ -67,28 +65,32 @@ export function ApiCollectionExportDialog({
           <DialogDescription>
             {t("api.collection.exportDescription", { name: collection?.name ?? "" })}
           </DialogDescription>
-          <Select
-            aria-label={t("exchange.format")}
-            value={format === "yaml" ? "json" : format}
-            onChange={(event) => {
-              const value = event.target.value;
-              if (value === "unfour" || value === "postman" || value === "json") setFormat(value);
-            }}
-            options={[
-              { value: "unfour", label: t("exchange.collection.unfour") },
-              { value: "postman", label: t("exchange.collection.postman") },
-              { value: "json", label: t("exchange.collection.openapi") },
-            ]}
-          />
-          {(format === "json" || format === "yaml") && <Select
-            aria-label={t("exchange.encoding")}
-            value={format}
-            onChange={(event) => setFormat(event.target.value === "yaml" ? "yaml" : "json")}
-            options={[{ value: "json", label: t("api.collection.exportJson") }, { value: "yaml", label: t("api.collection.exportYaml") }]}
-          />}
+          <div className="my-3 grid grid-cols-2 gap-2" aria-busy={exportMutation.isPending}>
+            {([
+              ["unfour", "exchange.collection.unfour"],
+              ["postman", "exchange.collection.postman"],
+              ["json", "api.collection.exportJson"],
+              ["yaml", "api.collection.exportYaml"],
+            ] as const).map(([format, label]) => (
+              <Button
+                key={format}
+                className="h-auto min-h-10 justify-start whitespace-normal py-2 text-left"
+                disabled={exportMutation.isPending || !collection}
+                onClick={() => exportAs(format)}
+                type="button"
+                variant={format === "unfour" ? "default" : "outline"}
+              >
+                {exportMutation.isPending && exportMutation.variables === format
+                  ? <LoaderCircle aria-hidden="true" className="shrink-0 animate-spin" size={14} />
+                  : <Download aria-hidden="true" className="shrink-0" size={14} />}
+                {t(label)}
+              </Button>
+            ))}
+          </div>
           <p className="text-[12px] text-[var(--u-color-text-muted)]">{t("exchange.warnings.secretExport")}</p>
           <p className="text-[12px] text-[var(--u-color-text-muted)]">{t("exchange.warnings.reselectFiles")}</p>
-          {format !== "unfour" && <p className="text-[12px] text-[var(--u-color-text-muted)]">{t(`exchange.warnings.${format === "postman" ? "postmanExport" : "openapiProjection"}`)}</p>}
+          <p className="mt-2 text-[12px] text-[var(--u-color-text-muted)]">{t("exchange.warnings.postmanExport")}</p>
+          <p className="mt-2 text-[12px] text-[var(--u-color-text-muted)]">{t("exchange.warnings.openapiProjection")}</p>
         </DialogBody>
         <DialogFooter>
           <Button
@@ -98,14 +100,6 @@ export function ApiCollectionExportDialog({
             variant="ghost"
           >
             {t("api.save.cancel")}
-          </Button>
-          <Button
-            disabled={exportMutation.isPending || !collection}
-            onClick={() => exportAs(format)}
-            type="button"
-
-          >
-            {t("exchange.export")}
           </Button>
         </DialogFooter>
       </DialogContent>

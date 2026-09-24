@@ -265,6 +265,7 @@ impl ApiClientService {
             .filter(|r| r.collection_id == collection_id)
             .map(safe_request)
             .collect::<AppResult<Vec<_>>>()?;
+        let base_name = super::super::openapi_export::sanitize_file_name(&collection.name);
         let parsed = NormalizedCollection {
             name: collection.name,
             description: collection.description,
@@ -290,7 +291,7 @@ impl ApiClientService {
         Ok(ApiCollectionExportArtifact {
             content: serde_json::to_string_pretty(&document)?,
             media_type: "application/json".into(),
-            suggested_file_name: format!("collection.{suffix}.json"),
+            suggested_file_name: format!("{base_name}.{suffix}.json"),
         })
     }
 }
