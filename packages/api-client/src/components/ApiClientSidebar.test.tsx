@@ -6,7 +6,8 @@ import { I18nProvider } from "@unfour/ui";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiClientSidebar } from "./ApiClientSidebar";
 
-vi.mock("@unfour/command-client", () => ({
+vi.mock("@unfour/command-client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@unfour/command-client")>()),
   createApiCollection: vi.fn(),
   createApiCollectionFolder: vi.fn(),
   deleteApiCollection: vi.fn(),
