@@ -1,9 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
-use unfour_core::models::{
-    ApiCollection, ApiCollectionFolder, ApiEnvironment, ApiHistoryDetail, ApiSavedRequest,
-};
+use unfour_core::models::{ApiCollection, ApiCollectionFolder, ApiHistoryDetail, ApiSavedRequest};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,13 +14,54 @@ pub(super) struct OpenApiExportSource {
     #[serde(default)]
     pub(super) collection_version: Option<String>,
     #[serde(default)]
-    pub(super) environments: Vec<ApiEnvironment>,
+    pub(super) environments: Vec<ExportEnvironment>,
     #[serde(default)]
     pub(super) folders: Vec<ApiCollectionFolder>,
     #[serde(default)]
     pub(super) histories: Vec<ApiHistoryDetail>,
     #[serde(default)]
     pub(super) requests: Vec<ApiSavedRequest>,
+}
+
+// Export reads workspace metadata directly. The legacy API environment contract
+// cannot represent secret flags and must never be used at this boundary.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct ExportEnvironment {
+    pub id: String,
+    pub name: String,
+    pub is_active: bool,
+    pub variables: Vec<ExportVariable>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct ExportVariable {
+    pub key: String,
+    pub value: String,
+    pub enabled: bool,
+    #[serde(default)]
+    pub is_secret: bool,
+}
+
+impl From<unfour_core::models::WorkspaceEnvironment> for ExportEnvironment {
+    fn from(environment: unfour_core::models::WorkspaceEnvironment) -> Self {
+        Self {
+            id: environment.id,
+            name: environment.name,
+            is_active: environment.is_active,
+            variables: environment
+                .variables
+                .into_iter()
+                .map(|variable| ExportVariable {
+                    key: variable.key,
+                    value: variable.value,
+                    enabled: variable.is_enabled,
+                    is_secret: variable.is_secret,
+                })
+                .collect(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

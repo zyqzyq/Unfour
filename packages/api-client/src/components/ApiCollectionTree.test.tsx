@@ -16,6 +16,7 @@ vi.mock("@unfour/command-client", () => ({
   duplicateApiRequest: vi.fn(),
   exportApiCollection: vi.fn(),
   importApiCollection: vi.fn(),
+  previewApiCollectionImport: vi.fn(),
   listApiCollections: vi.fn(),
   listApiCollectionFolders: vi.fn(),
   listApiHistory: vi.fn(),
@@ -33,6 +34,7 @@ import {
   duplicateApiRequest,
   exportApiCollection,
   importApiCollection,
+  previewApiCollectionImport,
   listApiCollections,
   listApiCollectionFolders,
   listApiHistory,
@@ -190,12 +192,26 @@ afterEach(() => {
 });
 
 describe("ApiCollectionTree", () => {
+  it("exports Native Collection from the collection row menu by default", async () => {
+    renderTree();
+    fireEvent.pointerDown(await screen.findByRole("button", {name:"Collection actions for Users"}));
+    fireEvent.click(await screen.findByRole("menuitem", {name:"Export", exact:true}));
+    expect(await screen.findByRole("combobox", {name:"Format"})).toHaveValue("unfour");
+    expect(screen.queryByRole("combobox", {name:"OpenAPI encoding"})).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", {name:"Export", exact:true}));
+    await waitFor(() => expect(exportMock).toHaveBeenCalledWith("ws-1", "col-1", "unfour"));
+  });
+
   it("imports an Unfour collection export from the collections toolbar", async () => {
+    vi.mocked(previewApiCollectionImport).mockResolvedValue({content:"collection-content", preview:{format:"unfour",name:"Imported",folderCount:1,requestCount:2,scriptCount:1,variables:[],warnings:[]}});
     renderTree();
 
     fireEvent.click(await screen.findByRole("button", { name: "Import collection" }));
 
-    await waitFor(() => expect(importMock).toHaveBeenCalledWith("ws-1"));
+    await screen.findByRole("dialog");
+    expect(importMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", {name:"Import", exact:true}));
+    await waitFor(() => expect(importMock).toHaveBeenCalledWith("ws-1", "collection-content"));
   });
 
   it("exports a collection as OpenAPI YAML from the collection context menu", async () => {
@@ -205,9 +221,9 @@ describe("ApiCollectionTree", () => {
     expect(collectionRow).not.toBeNull();
     fireEvent.contextMenu(collectionRow as HTMLElement, { clientX: 24, clientY: 24 });
     fireEvent.click(await screen.findByRole("menuitem", { name: "Export" }));
-    fireEvent.click(
-      await screen.findByRole("button", { name: "OpenAPI 3.1 YAML" }),
-    );
+    fireEvent.change(await screen.findByRole("combobox", {name:"Format"}), {target:{value:"json"}});
+    fireEvent.change(screen.getByRole("combobox", {name:"OpenAPI encoding"}), {target:{value:"yaml"}});
+    fireEvent.click(screen.getByRole("button", {name:"Export", exact:true}));
 
     await waitFor(() =>
       expect(exportMock).toHaveBeenCalledWith("ws-1", "col-1", "yaml"),

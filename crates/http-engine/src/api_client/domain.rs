@@ -15,6 +15,14 @@ use unfour_core::{AppError, AppResult};
 
 use super::ApiClientService;
 
+pub(super) fn export_url(value: &str) -> String {
+    secrets::snapshot_url(value)
+}
+
+pub(super) fn export_body(value: Option<&str>, kind: &str) -> Option<String> {
+    secrets::snapshot_body(value, kind)
+}
+
 #[derive(Debug, Clone, FromRow)]
 struct ApiCollectionDomainRow {
     id: String,

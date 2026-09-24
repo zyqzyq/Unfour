@@ -13,6 +13,9 @@ import { WorkspaceEnvironmentsPage } from "./WorkspaceEnvironmentsPage";
 
 vi.mock("@unfour/command-client", () => ({
   createWorkspaceEnvironment: vi.fn(),
+  previewEnvironmentImport: vi.fn(),
+  importEnvironment: vi.fn(),
+  exportEnvironment: vi.fn(),
   deleteWorkspaceEnvironment: vi.fn(),
   listWorkspaceEnvironments: vi.fn(),
   listWorkspaceVariables: vi.fn(),
@@ -23,6 +26,9 @@ vi.mock("@unfour/command-client", () => ({
 
 import {
   createWorkspaceEnvironment,
+  previewEnvironmentImport,
+  importEnvironment,
+  exportEnvironment,
   listWorkspaceEnvironments,
   listWorkspaceVariables,
   replaceWorkspaceVariables,
@@ -130,6 +136,29 @@ afterEach(() => {
 });
 
 describe("WorkspaceEnvironmentsPage", () => {
+  it("previews a same-name environment and imports only after confirmation", async () => {
+    vi.mocked(previewEnvironmentImport).mockResolvedValue({content:"environment-content",preview:{format:"postman",name:"Local",variables:[{key:"credential",isSecret:true,isEnabled:false}],conflict:true,warnings:["environmentCopy"]}});
+    vi.mocked(importEnvironment).mockResolvedValue(environment({id:"copy",name:"Local (Copy 1)"}));
+    renderPage();
+    fireEvent.click(await screen.findByRole("button",{name:"Import",exact:true}));
+    await screen.findByText("An environment with this name exists. A copy will be created.");
+    expect(importEnvironment).not.toHaveBeenCalled();
+    fireEvent.click(screen.getAllByRole("button",{name:"Import",exact:true}).at(-1)!);
+    await waitFor(() => expect(importEnvironment).toHaveBeenCalledWith("ws-1","environment-content"));
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(replaceMock).not.toHaveBeenCalled();
+  });
+
+  it("exports an environment from its menu with a format choice", async () => {
+    vi.mocked(exportEnvironment).mockResolvedValue({saved:true});
+    renderPage();
+    fireEvent.pointerDown(await screen.findByRole("button",{name:"Variable environment actions for Local"}));
+    fireEvent.click(await screen.findByRole("menuitem",{name:"Export",exact:true}));
+    fireEvent.change(await screen.findByRole("combobox",{name:"Format"}),{target:{value:"postman"}});
+    fireEvent.click(screen.getByRole("button",{name:"Export",exact:true}));
+    await waitFor(() => expect(exportEnvironment).toHaveBeenCalledWith("ws-1","env-1","postman"));
+  });
+
   it("edits the fixed workspace variable collection", async () => {
     renderPage(null);
 

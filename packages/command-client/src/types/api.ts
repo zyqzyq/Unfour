@@ -23,7 +23,17 @@ export type ApiCollection = {
   updatedAt: string;
 };
 
-export type ApiCollectionExportFormat = "json" | "yaml";
+export type ApiCollectionExportFormat = "json" | "yaml" | "unfour" | "postman";
+
+export type CollectionImportPreview = {
+  format: "unfour" | "postman" | "openapi";
+  name: string;
+  folderCount: number;
+  requestCount: number;
+  scriptCount: number;
+  variables: string[];
+  warnings: string[];
+};
 
 export type ApiCollectionExportResult = {
   saved: boolean;

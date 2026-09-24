@@ -3,8 +3,8 @@ use reqwest::header::{HeaderName, HeaderValue, CONTENT_TYPE};
 use reqwest::{Client, Method};
 use std::time::{Duration, Instant};
 use unfour_core::models::{
-    ApiCollection, ApiCollectionFolder, ApiEnvironment, ApiHistoryDetail, ApiHistoryItem,
-    ApiRequestInput, ApiResponse, ApiSavedRequest, KeyValue,
+    ApiCollection, ApiCollectionFolder, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput,
+    ApiResponse, ApiSavedRequest, KeyValue,
 };
 use unfour_core::{AppError, AppResult};
 use unfour_local_storage::LocalDb;

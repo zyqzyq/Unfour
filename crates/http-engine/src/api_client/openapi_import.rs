@@ -9,6 +9,7 @@ use unfour_core::models::{
     ApiCollectionImportResult, ApiRequestSettings, KeyValue, MAX_API_TIMEOUT_MS,
 };
 
+mod exchange;
 mod value_parser;
 use value_parser::{parse_auth_json, parse_parameters, parse_request_body};
 
@@ -21,24 +22,27 @@ const HTTP_METHODS: [&str; 8] = [
     "delete", "get", "head", "options", "patch", "post", "put", "trace",
 ];
 
-#[derive(Debug)]
-struct ParsedImport {
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct NormalizedCollection {
     name: String,
     description: Option<String>,
-    folders: Vec<ParsedFolder>,
-    requests: Vec<ParsedRequest>,
+    folders: Vec<NormalizedFolder>,
+    requests: Vec<NormalizedRequest>,
 }
 
-#[derive(Debug)]
-struct ParsedFolder {
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct NormalizedFolder {
     source_id: String,
     parent_source_id: Option<String>,
     name: String,
     sort_order: i64,
 }
 
-#[derive(Debug)]
-struct ParsedRequest {
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct NormalizedRequest {
     parent_source_id: Option<String>,
     name: String,
     method: String,
@@ -63,6 +67,14 @@ struct FolderTag {
 }
 
 impl ApiClientService {
+    pub fn preview_collection_import(
+        &self,
+        content: &str,
+    ) -> AppResult<unfour_core::models::CollectionImportPreview> {
+        let (_, preview) = exchange::decode(content)?;
+        Ok(preview)
+    }
+
     #[cfg(test)]
     pub(crate) async fn import_collection_openapi(
         &self,
@@ -72,13 +84,13 @@ impl ApiClientService {
         let context = CommandContext::local("api.collection.import");
         let mut transaction = self.db.pool().begin().await?;
         let outcome = self
-            .import_collection_openapi_on(&mut transaction, &context, workspace_id, content)
+            .import_collection_on(&mut transaction, &context, workspace_id, content)
             .await?;
         transaction.commit().await?;
         Ok(outcome.value)
     }
 
-    pub async fn import_collection_openapi_on(
+    pub async fn import_collection_on(
         &self,
         connection: &mut SqliteConnection,
         context: &CommandContext,
@@ -89,7 +101,7 @@ impl ApiClientService {
         if content.len() > MAX_IMPORT_BYTES {
             return Err(import_validation("collection import file is too large"));
         }
-        let parsed = parse_import(&content)?;
+        let (parsed, _) = exchange::decode(&content)?;
         let now = Utc::now().to_rfc3339();
         let collection_id = unfour_core::id::new_id();
         let workspace_exists: Option<(String,)> =
@@ -262,7 +274,7 @@ impl ApiClientService {
     }
 }
 
-fn parse_import(content: &str) -> AppResult<ParsedImport> {
+fn parse_import(content: &str) -> AppResult<NormalizedCollection> {
     let document = serde_json::from_str::<Value>(content)
         .or_else(|_| serde_yaml_ng::from_str::<Value>(content))
         .map_err(|_| import_validation("collection import must be valid JSON or YAML"))?;
@@ -289,7 +301,7 @@ fn parse_import(content: &str) -> AppResult<ParsedImport> {
             "collection import contains too many items",
         ));
     }
-    Ok(ParsedImport {
+    Ok(NormalizedCollection {
         name,
         description,
         folders,
@@ -299,7 +311,7 @@ fn parse_import(content: &str) -> AppResult<ParsedImport> {
 
 fn parse_folders(
     root: &Map<String, Value>,
-) -> AppResult<(Vec<ParsedFolder>, HashMap<String, String>)> {
+) -> AppResult<(Vec<NormalizedFolder>, HashMap<String, String>)> {
     let tags = match root.get("tags") {
         None => &[][..],
         Some(Value::Array(tags)) => tags,
@@ -375,7 +387,7 @@ fn parse_folders(
                     .and_then(|parent| folder.path.strip_prefix(&format!("{} / ", parent.path)))
                     .unwrap_or(&folder.path),
             );
-            ParsedFolder {
+            NormalizedFolder {
                 source_id: folder.source_id.clone(),
                 parent_source_id: parent.map(|parent| parent.source_id.clone()),
                 name,
@@ -421,7 +433,7 @@ fn parse_requests(
     root: &Map<String, Value>,
     folder_ids: &HashSet<&str>,
     tag_folder_ids: &HashMap<String, String>,
-) -> AppResult<Vec<ParsedRequest>> {
+) -> AppResult<Vec<NormalizedRequest>> {
     let paths = object_field(root, "paths")?;
     let mut requests = Vec::new();
     let mut seen_request_ids = HashSet::new();
@@ -485,7 +497,7 @@ fn push_operation(
     folder_ids: &HashSet<&str>,
     tag_folder_ids: &HashMap<String, String>,
     seen_request_ids: &mut HashSet<String>,
-    requests: &mut Vec<ParsedRequest>,
+    requests: &mut Vec<NormalizedRequest>,
 ) -> AppResult<()> {
     let operation = operation
         .as_object()
@@ -547,7 +559,7 @@ fn push_operation(
         post_response_script.as_deref(),
         script_schema_version,
     )?;
-    requests.push(ParsedRequest {
+    requests.push(NormalizedRequest {
         parent_source_id,
         name,
         method: method.to_ascii_uppercase(),

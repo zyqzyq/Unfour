@@ -43,6 +43,7 @@ import { useApiCollections } from "../hooks/useApiCollections";
 import { ApiHistoryTree } from "./ApiHistoryTree";
 import { ApiCollectionExportDialog } from "./ApiCollectionExportDialog";
 import { ApiCollectionToolbarActions } from "./ApiCollectionToolbarActions";
+import { ApiCollectionMenu } from "./ApiCollectionMenu";
 import type { RequestTreeActionContext } from "./ApiRequestTreeActions";
 import { createApiCollectionDropController } from "./api-collection-dnd";
 import {
@@ -71,6 +72,7 @@ export function ApiCollectionTree({
 }) {
   const { t } = useI18n();
   const [search, setSearch] = useState("");
+  const [importedId, setImportedId] = useState<string | null>(null);
   const [nameTarget, setNameTarget] = useState<NameTarget | null>(null);
   const [nameValue, setNameValue] = useState("");
   const [renameTarget, setRenameTarget] = useState<ApiCollection | null>(null);
@@ -250,36 +252,9 @@ export function ApiCollectionTree({
         {collectTreeRequests(group.tree).length}
       </span>
     ),
-    actions: addFolderAction(group.collection.id, null),
+    actions: <>{addFolderAction(group.collection.id, null)}{collectionMenu(group.collection)}</>,
     contextMenu: (
-      <>
-        <ContextMenuItem
-          onSelect={() => {
-            setRenameTarget(group.collection);
-            setRenameValue(group.collection?.name ?? "");
-          }}
-        >
-          {t("api.collection.rename")}
-        </ContextMenuItem>
-        <ContextMenuItem
-          onSelect={() =>
-            group.collection && openFolderDialog(group.collection.id, null)
-          }
-        >
-          {t("api.collection.addFolder")}
-        </ContextMenuItem>
-        <ContextMenuItem
-          onSelect={() => setExportTarget(group.collection)}
-        >
-          {t("api.collection.export")}
-        </ContextMenuItem>
-        <ContextMenuItem
-          className="text-[var(--u-color-danger)]"
-          onSelect={() => setDeleteTarget(group.collection)}
-        >
-          {t("api.collection.delete")}
-        </ContextMenuItem>
-      </>
+      collectionMenu(group.collection, true)
     ),
     children: [
       ...group.tree.folders.map((folder) => folderToTreeItem(folder, group.id)),
@@ -292,6 +267,14 @@ export function ApiCollectionTree({
   // and folders auto-expand (TreeView only reads defaultExpandedIds on mount).
   // Manual collapse of an unchanged structure is preserved (same key).
   const expandableIds = collectExpandableIds(collectionItems);
+
+  function collectionMenu(collection: ApiCollection, context = false) {
+    return <ApiCollectionMenu context={context} name={collection.name}
+      onRename={() => { setRenameTarget(collection); setRenameValue(collection.name); }}
+      onAddFolder={() => openFolderDialog(collection.id, null)}
+      onExport={() => setExportTarget(collection)}
+      onDelete={() => setDeleteTarget(collection)} />;
+  }
 
   if (collapsed) {
     return (
@@ -320,6 +303,8 @@ export function ApiCollectionTree({
           {t("api.sidebar.collections")}
         </span>
         <ApiCollectionToolbarActions
+          key={workspaceId}
+          onImported={(id) => { setSearch(""); setImportedId(`collection:${id}`); }}
           createPending={createMut.isPending}
           onCreate={() => {
             setNameValue("");
@@ -342,6 +327,7 @@ export function ApiCollectionTree({
               moveDroppedTreeItem(source, target, position)
             }
             onSelect={(item) => {
+              setImportedId(null);
               if (item.id.startsWith("request:")) {
                 onOpenIntent({
                   kind: "saved",
@@ -350,7 +336,7 @@ export function ApiCollectionTree({
                 });
               }
             }}
-            selectedId={selectedId ? `request:${selectedId}` : null}
+            selectedId={importedId ?? (selectedId ? `request:${selectedId}` : null)}
           />
         ) : (
           <SidebarEmpty>{t("api.collection.none")}</SidebarEmpty>

@@ -4,10 +4,12 @@ pub mod api;
 pub mod app;
 pub mod database;
 pub mod diagnostics;
+pub mod environment_exchange;
 pub mod mcp;
 pub mod secret_store;
 pub mod ssh;
 pub mod workspace;
+pub use environment_exchange::*;
 
 pub use api::*;
 pub use app::*;

@@ -1,6 +1,7 @@
 import { call } from "./invoke";
 import type {
   ApiCollection,
+  CollectionImportPreview,
   ApiClientPreferences,
   ApiCollectionExportFormat,
   ApiCollectionExportResult,
@@ -70,8 +71,12 @@ export function exportApiCollection(
   });
 }
 
-export function importApiCollection(workspaceId: string) {
-  return call<ApiCollectionImportResult>("api_collection_import", { workspaceId });
+export function previewApiCollectionImport() {
+  return call<{ content: string; preview: CollectionImportPreview } | null>("api_collection_import_preview");
+}
+
+export function importApiCollection(workspaceId: string, content: string) {
+  return call<ApiCollectionImportResult>("api_collection_import", { workspaceId, content });
 }
 
 export function createApiCollection(workspaceId: string, name: string) {

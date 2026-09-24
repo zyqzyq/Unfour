@@ -7,6 +7,8 @@ mod multipart;
 use super::*;
 #[path = "lib_tests/api_environment_override.rs"]
 mod api_environment_override;
+#[path = "lib_tests/exchange.rs"]
+mod exchange;
 #[path = "lib_tests/script_rollback.rs"]
 mod script_rollback;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};

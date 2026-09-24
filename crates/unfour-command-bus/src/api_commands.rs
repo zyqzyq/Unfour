@@ -103,10 +103,19 @@ impl CommandBus {
         collection_id: String,
         format: ApiCollectionExportFormat,
     ) -> AppResult<ApiCollectionExportArtifact> {
-        let environments = self.api_environments_list(workspace_id.clone()).await?;
+        let environments = self
+            .workspace_environments_list(workspace_id.clone())
+            .await?;
         self.api_client
             .export_collection_openapi(workspace_id, collection_id, format, environments)
             .await
+    }
+
+    pub fn api_collection_import_preview(
+        &self,
+        content: &str,
+    ) -> AppResult<unfour_core::models::CollectionImportPreview> {
+        self.api_client.preview_collection_import(content)
     }
 
     pub async fn api_collection_import(
@@ -137,12 +146,7 @@ impl CommandBus {
             move |connection| {
                 Box::pin(async move {
                     service
-                        .import_collection_openapi_on(
-                            connection,
-                            &executor_context,
-                            workspace_id,
-                            content,
-                        )
+                        .import_collection_on(connection, &executor_context, workspace_id, content)
                         .await
                 })
             },

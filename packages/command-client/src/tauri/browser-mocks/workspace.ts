@@ -15,6 +15,8 @@ export function handleWorkspaceMock<T>(
   command: string,
   args?: Record<string, unknown>,
 ): MockResult<T> {
+  if (command === "workspace_environment_import_preview") return null as T;
+  if (command === "workspace_environment_export") return { saved: false } as T;
   if (command === "workspace_list") {
     return mockState as T;
   }

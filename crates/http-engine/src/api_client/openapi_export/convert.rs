@@ -255,6 +255,7 @@ pub(super) fn serialize_document(
             .map_err(|error| {
                 AppError::Config(format!("OpenAPI YAML serialization failed: {error}"))
             }),
+        _ => Err(AppError::Validation("expected OpenAPI format".into())),
     }
 }
 

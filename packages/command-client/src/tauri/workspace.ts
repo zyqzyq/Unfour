@@ -1,4 +1,24 @@
 import { call } from "./invoke";
+
+export type EnvironmentImportPreview = {
+  format: "unfour" | "postman";
+  name: string;
+  variables: { key: string; isSecret: boolean; isEnabled: boolean }[];
+  conflict: boolean;
+  warnings: string[];
+};
+
+export function previewEnvironmentImport(workspaceId: string) {
+  return call<{content: string; preview: EnvironmentImportPreview} | null>("workspace_environment_import_preview", {workspaceId});
+}
+
+export function importEnvironment(workspaceId: string, content: string) {
+  return call<WorkspaceEnvironment>("workspace_environment_import", {workspaceId, content});
+}
+
+export function exportEnvironment(workspaceId: string, environmentId: string, format: "unfour" | "postman") {
+  return call<{saved: boolean}>("workspace_environment_export", {workspaceId, environmentId, format});
+}
 import type {
   Workspace,
   WorkspaceEnvironment,

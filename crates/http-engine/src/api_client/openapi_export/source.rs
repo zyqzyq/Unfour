@@ -1,6 +1,6 @@
 use super::model::*;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use unfour_core::models::{ApiEnvironment, ApiSavedRequest};
+use unfour_core::models::ApiSavedRequest;
 use unfour_core::redaction::{is_sensitive_key, REDACTED_VALUE};
 
 pub(super) fn export_sensitive_key(value: &str) -> bool {
@@ -313,14 +313,16 @@ pub(super) fn document_security(
 }
 
 pub(super) fn active_environment_variables(
-    environments: &[ApiEnvironment],
+    environments: &[ExportEnvironment],
 ) -> HashMap<String, String> {
     environments
         .iter()
         .find(|environment| environment.is_active)
         .into_iter()
         .flat_map(|environment| environment.variables.iter())
-        .filter(|variable| variable.enabled && !export_sensitive_key(&variable.key))
+        .filter(|variable| {
+            variable.enabled && !variable.is_secret && !export_sensitive_key(&variable.key)
+        })
         .map(|variable| (variable.key.clone(), variable.value.clone()))
         .collect()
 }
@@ -352,7 +354,7 @@ pub(super) fn build_server(raw: &str, active_variables: &HashMap<String, String>
     }
 }
 
-pub(super) fn environment_extension(environments: &[ApiEnvironment]) -> serde_json::Value {
+pub(super) fn environment_extension(environments: &[ExportEnvironment]) -> serde_json::Value {
     serde_json::Value::Array(
         environments
             .iter()
@@ -362,11 +364,12 @@ pub(super) fn environment_extension(environments: &[ApiEnvironment]) -> serde_js
                     "name": environment.name,
                     "isActive": environment.is_active,
                     "variables": environment.variables.iter().map(|variable| {
-                        let redacted = export_sensitive_key(&variable.key);
+                        let redacted = variable.is_secret || export_sensitive_key(&variable.key);
                         serde_json::json!({
                             "key": variable.key,
                             "value": if redacted { REDACTED_VALUE } else { variable.value.as_str() },
                             "enabled": variable.enabled,
+                            "isSecret": variable.is_secret,
                             "redacted": redacted,
                         })
                     }).collect::<Vec<_>>(),

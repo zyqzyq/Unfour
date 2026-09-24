@@ -41,6 +41,8 @@ export function handleApiCollectionMock<T>(
     } as T;
   }
 
+  if (command === "api_collection_import_preview") return null as T;
+
   if (command === "api_collection_create") {
     const workspaceId = String(args?.workspaceId ?? mockState.activeWorkspaceId);
     const now = new Date().toISOString();

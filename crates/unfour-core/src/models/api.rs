@@ -270,6 +270,20 @@ fn default_request_settings_json() -> String {
 pub enum ApiCollectionExportFormat {
     Json,
     Yaml,
+    Unfour,
+    Postman,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionImportPreview {
+    pub format: String,
+    pub name: String,
+    pub folder_count: usize,
+    pub request_count: usize,
+    pub script_count: usize,
+    pub variables: Vec<String>,
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

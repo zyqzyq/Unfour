@@ -92,14 +92,16 @@ pub async fn api_collection_export(
         .api_collection_export(workspace_id, collection_id, format)
         .await?;
     let extension = match format {
-        ApiCollectionExportFormat::Json => "json",
+        ApiCollectionExportFormat::Json
+        | ApiCollectionExportFormat::Unfour
+        | ApiCollectionExportFormat::Postman => "json",
         ApiCollectionExportFormat::Yaml => "yaml",
     };
     let Some(file_path) = app
         .dialog()
         .file()
         .set_file_name(&artifact.suggested_file_name)
-        .add_filter("OpenAPI 3.1", &[extension])
+        .add_filter("Collection", &[extension])
         .blocking_save_file()
     else {
         return Ok(ApiCollectionExportResult { saved: false });
@@ -114,30 +116,41 @@ pub async fn api_collection_export(
 #[tauri::command]
 pub async fn api_collection_import(
     workspace_id: String,
-    app: AppHandle,
+    content: String,
     state: State<'_, AppState>,
 ) -> AppResult<ApiCollectionImportResult> {
-    let Some(file_path) = app
-        .dialog()
-        .file()
-        .add_filter("OpenAPI 3.x", &["json", "yaml", "yml"])
-        .blocking_pick_file()
-    else {
-        return Ok(ApiCollectionImportResult {
-            imported: false,
-            collection: None,
-            folder_count: 0,
-            request_count: 0,
-        });
-    };
-    let path = file_path.into_path().map_err(|error| {
-        AppError::Config(format!("selected import path is not readable: {error}"))
-    })?;
-    let content = std::fs::read_to_string(path)?;
     state
         .command_bus
         .api_collection_import(workspace_id, content)
         .await
+}
+
+#[tauri::command]
+pub async fn api_collection_import_preview(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<Option<serde_json::Value>> {
+    let Some(file_path) = app
+        .dialog()
+        .file()
+        .add_filter("Collection", &["json", "yaml", "yml"])
+        .blocking_pick_file()
+    else {
+        return Ok(None);
+    };
+    let path = file_path.into_path().map_err(|error| {
+        AppError::Config(format!("selected import path is not readable: {error}"))
+    })?;
+    if std::fs::metadata(&path)?.len() > 10 * 1024 * 1024 {
+        return Err(AppError::Validation(
+            "collection import file is too large".into(),
+        ));
+    }
+    let content = std::fs::read_to_string(path)?;
+    let preview = state.command_bus.api_collection_import_preview(&content)?;
+    Ok(Some(
+        serde_json::json!({"content": content, "preview": preview}),
+    ))
 }
 
 #[tauri::command]

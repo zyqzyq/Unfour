@@ -24,6 +24,7 @@ import {
 import { nextEnvironmentName } from "./environment-utils";
 import { useWorkspaceEnvironments } from "./hooks/useWorkspaceEnvironments";
 import { useWorkspaceVariables } from "./hooks/useWorkspaceVariables";
+import { EnvironmentExchange } from "./EnvironmentExchange";
 
 type ManagerSelection =
   | { kind: "workspace" }
@@ -67,6 +68,7 @@ export function WorkspaceEnvironmentsPage({
   );
   const [modeRevision, setModeRevision] = useState(1);
   const [dirty, setDirty] = useState(false);
+  const [exportTarget, setExportTarget] = useState<WorkspaceEnvironment | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
 
   useEffect(() => {
@@ -119,12 +121,16 @@ export function WorkspaceEnvironmentsPage({
             {t("variables.managerTitle")}
           </h1>
         </div>
+        <div className="flex items-center gap-1">
+        <EnvironmentExchange key={workspaceId} workspaceId={workspaceId} exportTarget={exportTarget} onCloseExport={() => setExportTarget(null)} onImported={(environmentId) => requestSelection({kind:"environment", environmentId})} />
         <IconButton label={t("variables.closeManager")} onClick={requestClose}>
           <X size={14} />
         </IconButton>
+        </div>
       </header>
       <div className="flex min-h-0 flex-1">
         <EnvironmentList
+          onExport={setExportTarget}
           creating={createMut.isPending || updateMut.isPending}
           deleting={deleteMut.isPending}
           environments={environments}
@@ -193,6 +199,7 @@ export function WorkspaceEnvironmentsPage({
 }
 
 function EnvironmentList({
+  onExport,
   creating,
   deleting,
   environments,
@@ -204,6 +211,7 @@ function EnvironmentList({
   onSelectWorkspace,
   selection,
 }: {
+  onExport: (environment: WorkspaceEnvironment) => void;
   creating: boolean;
   deleting: boolean;
   environments: WorkspaceEnvironment[];
@@ -267,6 +275,7 @@ function EnvironmentList({
           <div className="space-y-1">
             {environments.map((environment) => (
               <EnvironmentRow
+                onExport={() => onExport(environment)}
                 environment={environment}
                 key={environment.id}
                 onDelete={() => setDeleteTarget(environment)}
@@ -308,12 +317,14 @@ function EnvironmentList({
 }
 
 function EnvironmentRow({
+  onExport,
   environment,
   onDelete,
   onDuplicate,
   onSelect,
   selected,
 }: {
+  onExport: () => void;
   environment: WorkspaceEnvironment;
   onDelete: () => void;
   onDuplicate: () => void;
@@ -359,6 +370,7 @@ function EnvironmentRow({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={onExport}>{t("exchange.export")}</DropdownMenuItem>
           <DropdownMenuItem onSelect={onDuplicate}>
             {t("variables.duplicate")}
           </DropdownMenuItem>

@@ -1,8 +1,8 @@
 use super::convert::{build_document, sanitize_file_name, serialize_document};
-use super::model::OpenApiExportSource;
+use super::model::{ExportEnvironment, ExportVariable, OpenApiExportSource};
 use unfour_core::models::{
-    ApiCollection, ApiCollectionExportFormat, ApiCollectionFolder, ApiEnvironment,
-    ApiHistoryDetail, ApiSavedRequest, KeyValue,
+    ApiCollection, ApiCollectionExportFormat, ApiCollectionFolder, ApiHistoryDetail,
+    ApiSavedRequest, KeyValue,
 };
 
 fn source(requests: Vec<ApiSavedRequest>) -> OpenApiExportSource {
@@ -341,25 +341,24 @@ fn illegal_file_name_characters_and_reserved_names_are_sanitized() {
 fn environment_placeholders_are_preserved_with_unfour_extensions() {
     let item = request("request-1", "GET", "{{base_url}}/users/{{user_id}}");
     let mut exported = source(vec![item]);
-    exported.environments = vec![ApiEnvironment {
+    exported.environments = vec![ExportEnvironment {
         id: "environment-1".to_string(),
-        workspace_id: "workspace-1".to_string(),
         name: "Development".to_string(),
         variables: vec![
-            KeyValue {
+            ExportVariable {
                 key: "base_url".to_string(),
                 value: "https://dev.example.test".to_string(),
                 enabled: true,
+                is_secret: false,
             },
-            KeyValue {
+            ExportVariable {
                 key: "token".to_string(),
                 value: "secret".to_string(),
                 enabled: true,
+                is_secret: false,
             },
         ],
         is_active: true,
-        created_at: "2026-07-17T00:00:00Z".to_string(),
-        updated_at: "2026-07-17T00:00:00Z".to_string(),
     }];
     let value = document_json(&exported);
     assert_eq!(value["servers"][0]["url"], "{base_url}");

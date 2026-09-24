@@ -3,6 +3,59 @@ use crate::transaction::CommandActivity;
 use unfour_core::domain::CommandContext;
 
 impl CommandBus {
+    pub async fn workspace_environment_import_preview(
+        &self,
+        workspace_id: String,
+        content: &str,
+    ) -> AppResult<serde_json::Value> {
+        self.workspace
+            .preview_environment_import(workspace_id, content)
+            .await
+    }
+
+    pub async fn workspace_environment_export(
+        &self,
+        workspace_id: String,
+        environment_id: String,
+        format: String,
+    ) -> AppResult<ApiCollectionExportArtifact> {
+        self.workspace
+            .export_environment(workspace_id, environment_id, format)
+            .await
+    }
+
+    pub async fn workspace_environment_import(
+        &self,
+        workspace_id: String,
+        content: String,
+    ) -> AppResult<WorkspaceEnvironment> {
+        let context = CommandContext::local("workspace.environment.import");
+        let executor_context = context.clone();
+        let service = self.workspace.clone();
+        self.execute_domain_command(
+            context,
+            Some(CommandActivity {
+                workspace_id: Some(workspace_id.clone()),
+                action: "workspace.environment.import",
+                target: None,
+                details: serde_json::json!({"contentBytes":content.len()}),
+            }),
+            move |connection| {
+                Box::pin(async move {
+                    service
+                        .import_environment_on(
+                            connection,
+                            &executor_context,
+                            workspace_id,
+                            &content,
+                        )
+                        .await
+                })
+            },
+        )
+        .await
+    }
+
     pub async fn workspace_variables_list(
         &self,
         workspace_id: String,

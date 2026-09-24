@@ -17,8 +17,16 @@ impl ApiClientService {
         workspace_id: String,
         collection_id: String,
         format: ApiCollectionExportFormat,
-        environments: Vec<ApiEnvironment>,
+        environments: Vec<unfour_core::models::WorkspaceEnvironment>,
     ) -> AppResult<ApiCollectionExportArtifact> {
+        if matches!(
+            format,
+            ApiCollectionExportFormat::Unfour | ApiCollectionExportFormat::Postman
+        ) {
+            return self
+                .export_collection_exchange(workspace_id, collection_id, format)
+                .await;
+        }
         validate_workspace_id(&workspace_id)?;
         if collection_id.trim().is_empty() {
             return Err(AppError::Validation(
@@ -44,7 +52,7 @@ impl ApiClientService {
             collection_auth_json: None,
             collection_base_url: None,
             collection_version: None,
-            environments,
+            environments: environments.into_iter().map(Into::into).collect(),
             folders,
             histories,
             requests,
@@ -55,6 +63,7 @@ impl ApiClientService {
         let (extension, media_type) = match format {
             ApiCollectionExportFormat::Json => ("json", "application/json"),
             ApiCollectionExportFormat::Yaml => ("yaml", "application/yaml"),
+            _ => unreachable!("exchange formats dispatched above"),
         };
 
         Ok(ApiCollectionExportArtifact {
