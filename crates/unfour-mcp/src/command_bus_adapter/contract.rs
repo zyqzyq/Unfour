@@ -455,16 +455,26 @@ pub trait CommandBusAdapter: Send + Sync {
         connection_id: &str,
     ) -> Result<DatabaseSchema, CommandBusAdapterError>;
 
-    /// List tables in an optional catalog. The default ignores `catalog` and
-    /// uses [`Self::get_db_schema`]. The local adapter passes `catalog` through
-    /// to the database engine.
+    /// List tables in an optional catalog.
+    ///
+    /// `catalog == None` falls back to [`Self::get_db_schema`]. An explicit
+    /// catalog returns an unsupported error unless the adapter overrides this
+    /// method. `LocalCommandBusAdapter` passes `catalog` through to the
+    /// database engine.
     fn get_db_schema_for_catalog(
         &self,
         workspace_id: &str,
         connection_id: &str,
         catalog: Option<&str>,
     ) -> Result<DatabaseSchema, CommandBusAdapterError> {
-        let _ = catalog;
+        if catalog.is_some() {
+            return Err(CommandBusAdapterError {
+                code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+                message:
+                    "This command-bus adapter does not support catalog-aware database schema reads.",
+                details: serde_json::json!({}),
+            });
+        }
         self.get_db_schema(workspace_id, connection_id)
     }
 

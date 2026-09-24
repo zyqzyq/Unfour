@@ -1,3 +1,5 @@
+use serde_json::json;
+
 use super::*;
 
 // --- SQL validation unit tests ---
@@ -51,6 +53,39 @@ fn validate_readonly_sql_rejects_writes_behind_explain_and_with() {
         validate_readonly_sql("WITH d AS (DELETE FROM users RETURNING *) SELECT * FROM d").is_err()
     );
     assert!(validate_readonly_sql("EXPLAIN DROP TABLE users").is_err());
+}
+
+#[test]
+fn export_filter_values_accept_string_number_and_null_only() {
+    let arguments = json!({
+        "filters": [
+            { "column": "code", "op": "eq", "values": ["42P01"] },
+            { "column": "count", "op": "eq", "values": [23000] },
+            { "column": "deleted_at", "op": "eq", "values": [null] },
+            { "column": "status", "op": "in", "values": ["open", 2] }
+        ]
+    });
+    let filters = parse_export_filters(arguments.as_object().unwrap()).expect("valid filters");
+    assert_eq!(filters[0].values, vec![Some("42P01".to_string())]);
+    assert_eq!(filters[1].values, vec![Some("23000".to_string())]);
+    assert_eq!(filters[2].values, vec![None]);
+    assert_eq!(
+        filters[3].values,
+        vec![Some("open".to_string()), Some("2".to_string())]
+    );
+
+    for values in [json!([true]), json!([false]), json!([{"nested": 1}])] {
+        let rejected = json!({
+            "filters": [{ "column": "active", "op": "eq", "values": values }]
+        });
+        let error = parse_export_filters(rejected.as_object().unwrap())
+            .expect_err("unsupported filter value");
+        assert!(matches!(
+            error,
+            ToolCallError::InvalidArguments(message)
+                if message == "export filter values must be strings, numbers, or null"
+        ));
+    }
 }
 
 // --- Truncation unit tests ---

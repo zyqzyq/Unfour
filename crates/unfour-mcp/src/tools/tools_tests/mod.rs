@@ -513,5 +513,22 @@ fn command_bus_failure_returns_structured_tool_error() {
     );
 }
 
+#[test]
+fn default_schema_for_catalog_falls_back_only_when_catalog_is_omitted() {
+    let bus = StubCommandBus;
+    let schema = bus
+        .get_db_schema_for_catalog("workspace-1", "conn-1", None)
+        .expect("omitted catalog uses get_db_schema");
+    assert!(schema.tables.is_empty());
+
+    let error = bus
+        .get_db_schema_for_catalog("workspace-1", "conn-1", Some("billing"))
+        .expect_err("explicit catalog requires a catalog-aware adapter");
+    assert_eq!(error.code, "COMMAND_BUS_OPERATION_UNSUPPORTED");
+    assert!(error
+        .message
+        .contains("catalog-aware database schema reads"));
+}
+
 #[path = "output_schema.rs"]
 mod output_schema;

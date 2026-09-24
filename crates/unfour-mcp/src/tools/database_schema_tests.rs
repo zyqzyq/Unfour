@@ -95,6 +95,8 @@ fn db_describe_table_input_schema() {
     let required = tool.input_schema["required"].as_array().unwrap();
     assert!(required.contains(&json!("connectionId")));
     assert!(required.contains(&json!("tableName")));
+    assert!(tool.input_schema["properties"]["catalog"].is_object());
+    assert!(tool.input_schema["properties"]["schema"].is_object());
 }
 
 #[test]
@@ -149,6 +151,13 @@ fn db_export_table_schema_rejects_destination_path() {
         .is_none());
     assert!(tool.input_schema["properties"]["columns"].is_object());
     assert!(tool.input_schema["properties"]["filters"].is_object());
+    assert_eq!(
+        tool.input_schema["properties"]["filters"]["items"]["properties"]["values"]["items"]
+            ["type"]
+            .as_array()
+            .unwrap(),
+        &vec![json!("string"), json!("number"), json!("null")]
+    );
     assert!(tool.input_schema["properties"]["limit"].is_object());
     assert!(tool.input_schema["properties"].get("where").is_none());
     assert_eq!(tool.input_schema["additionalProperties"], false);

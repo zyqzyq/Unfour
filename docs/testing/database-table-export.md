@@ -18,6 +18,8 @@ does not accept a destination path.
   table output and output schema validation; export schema, managed path, and
   rejection of caller-supplied destination paths. Column selection, `eq`/`in`
   filters, and `limit` are optional and omitted calls still export the whole table.
+  Filter values are strings, numbers, or null. `eq` null stays `IS NULL`; `in`
+  rejects null; boolean values are rejected.
 - Vitest for `TableExportDialog`, `TableDataTab`, and `DatabaseConnectionTree`:
   whole-table request parameters and existing table UI behavior.
 

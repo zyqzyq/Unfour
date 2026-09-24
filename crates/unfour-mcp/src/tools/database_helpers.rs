@@ -301,9 +301,8 @@ fn export_filter_value(value: &Value) -> Result<Option<String>, ToolCallError> {
         Value::Null => Ok(None),
         Value::String(text) => Ok(Some(text.clone())),
         Value::Number(number) => Ok(Some(number.to_string())),
-        Value::Bool(flag) => Ok(Some(flag.to_string())),
         _ => Err(ToolCallError::InvalidArguments(
-            "export filter values must be strings, numbers, booleans, or null".into(),
+            "export filter values must be strings, numbers, or null".into(),
         )),
     }
 }

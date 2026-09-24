@@ -121,10 +121,9 @@ fn sql_state_of(error: &dyn sqlx::error::DatabaseError) -> Option<String> {
 
 fn sql_state_token(code: &str) -> Option<String> {
     let valid = code.len() == 5
-        && code.chars().next().is_some_and(|ch| ch.is_ascii_digit())
         && code
-            .chars()
-            .all(|ch| ch.is_ascii_digit() || ch.is_ascii_uppercase());
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || byte.is_ascii_uppercase());
     valid.then(|| code.to_string())
 }
 
@@ -229,10 +228,20 @@ mod tests {
         assert!(message.contains("failed"));
         assert!(message.contains("<redacted>"));
         assert!(sanitize_database_message("   ").is_none());
+    }
+
+    #[test]
+    fn sql_state_token_keeps_five_character_ascii_codes() {
         assert_eq!(sql_state_token("42P01").as_deref(), Some("42P01"));
         assert_eq!(sql_state_token("23000").as_deref(), Some("23000"));
+        assert_eq!(sql_state_token("P0001").as_deref(), Some("P0001"));
+        assert_eq!(sql_state_token("XX000").as_deref(), Some("XX000"));
         assert!(sql_state_token("1").is_none());
         assert!(sql_state_token("2067").is_none());
+        assert!(sql_state_token("42P011").is_none());
+        assert!(sql_state_token("").is_none());
         assert!(sql_state_token("nope!").is_none());
+        assert!(sql_state_token("42p01").is_none());
+        assert!(sql_state_token("P000!").is_none());
     }
 }

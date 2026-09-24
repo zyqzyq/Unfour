@@ -38,10 +38,10 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                         "content": {"type": "string", "enum": ["structure", "data", "structure-and-data"]},
                         "format": {"type": "string", "enum": ["sql", "csv", "json"]},
                         "columns": {"type": "array", "items": {"type": "string"}, "description": "Optional columns to include in the data portion. Omit to export every column."},
-                        "filters": {"type": "array", "description": "Optional structured row predicates combined with AND. Values are bound; this is not a raw WHERE clause.", "items": {"type": "object", "properties": {
+                        "filters": {"type": "array", "description": "Optional structured row predicates combined with AND. Each value is a string, number, or null and is bound; this is not a raw WHERE clause.", "items": {"type": "object", "properties": {
                             "column": {"type": "string"},
                             "op": {"type": "string", "enum": ["eq", "in"]},
-                            "values": {"type": "array", "items": {"type": ["string", "number", "boolean", "null"]}}
+                            "values": {"type": "array", "items": {"type": ["string", "number", "null"]}}
                         }, "required": ["column", "op", "values"], "additionalProperties": false}},
                         "limit": {"type": "integer", "minimum": 1, "description": "Optional maximum number of data rows."}
                     }, "required": ["connectionId", "tableName", "content", "format"], "additionalProperties": false
