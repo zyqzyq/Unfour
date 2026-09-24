@@ -67,22 +67,23 @@ impl DatabaseService {
         if structure.kind != "table" {
             return Err(AppError::Unsupported("Only tables can be exported".into()));
         }
-        let qualified = match connection.driver.as_str() {
-            "postgres" => quote_qualified_identifier(
+        let dialect = DatabaseDialect::for_driver(&connection.driver);
+        let qualified = match dialect {
+            DatabaseDialect::Postgres => quote_qualified_identifier(
                 structure.schema.as_deref().unwrap_or("public"),
                 table_name,
             ),
-            "mysql" => quote_mysql_qualified_identifier(
+            DatabaseDialect::Mysql => quote_mysql_qualified_identifier(
                 structure
                     .catalog
                     .as_deref()
                     .ok_or_else(|| AppError::Validation("MySQL catalog is required".into()))?,
                 table_name,
             ),
-            "sqlite" => quote_identifier(table_name),
+            DatabaseDialect::Sqlite => quote_identifier(table_name),
             other => {
                 return Err(AppError::Unsupported(format!(
-                    "{other} table export is not supported"
+                    "{other:?} table export is not supported"
                 )))
             }
         };
@@ -99,7 +100,7 @@ impl DatabaseService {
             None
         } else {
             Some(build_export_select(
-                connection.driver.as_str(),
+                dialect,
                 &qualified,
                 &structure.columns,
                 input.columns.as_deref(),
@@ -114,7 +115,7 @@ impl DatabaseService {
         let mut writer = ExportWriter::new(
             BufWriter::new(file),
             input.format.clone(),
-            connection.driver.as_str(),
+            dialect,
             qualified,
             &export_columns,
         )?;
@@ -130,11 +131,12 @@ impl DatabaseService {
             match connection.driver.as_str() {
                 "sqlite" => {
                     let pool = sqlite_pool(&connection).await?;
+                    require_capability(pool.profile.capabilities.export, "table export")?;
                     let mut query = sqlx::query(&sql);
                     for value in &binds {
                         query = query.bind(value);
                     }
-                    let mut rows = query.fetch(&pool);
+                    let mut rows = query.fetch(&*pool);
                     while let Some(row) = rows.try_next().await? {
                         writer.write_row(sqlite_export_values(&row)?)?;
                     }
@@ -143,11 +145,12 @@ impl DatabaseService {
                     let effective =
                         Self::effective_connection(&connection, input.catalog.as_deref());
                     let pool = self.postgres_pool(&effective).await?;
+                    require_capability(pool.profile.capabilities.export, "table export")?;
                     let mut query = sqlx::query(&sql);
                     for value in &binds {
                         query = query.bind(value);
                     }
-                    let mut rows = query.fetch(&pool);
+                    let mut rows = query.fetch(&*pool);
                     while let Some(row) = rows.try_next().await.map_err(sanitize_pg_error)? {
                         writer.write_row(postgres_export_values(&row)?)?;
                     }
@@ -156,11 +159,12 @@ impl DatabaseService {
                     let effective =
                         Self::effective_connection(&connection, input.catalog.as_deref());
                     let pool = self.mysql_pool(&effective).await?;
+                    require_capability(pool.profile.capabilities.export, "table export")?;
                     let mut query = sqlx::query(&sql);
                     for value in &binds {
                         query = query.bind(value);
                     }
-                    let mut rows = query.fetch(&pool);
+                    let mut rows = query.fetch(&*pool);
                     while let Some(row) = rows.try_next().await.map_err(sanitize_mysql_error)? {
                         writer.write_row(mysql_export_values(&row)?)?;
                     }
@@ -221,7 +225,7 @@ impl Drop for PartialExport {
 struct ExportWriter<W: Write> {
     out: W,
     format: DatabaseExportFormat,
-    driver: String,
+    dialect: DatabaseDialect,
     table: String,
     columns: Vec<DatabaseTableColumn>,
     insert_columns: Vec<usize>,
@@ -233,14 +237,14 @@ impl<W: Write> ExportWriter<W> {
     fn new(
         out: W,
         format: DatabaseExportFormat,
-        driver: &str,
+        dialect: DatabaseDialect,
         table: String,
         columns: &[DatabaseTableColumn],
     ) -> AppResult<Self> {
         let mut this = Self {
             out,
             format,
-            driver: driver.into(),
+            dialect,
             table,
             columns: columns.to_vec(),
             insert_columns: columns
@@ -302,7 +306,7 @@ impl<W: Write> ExportWriter<W> {
                     let tuple = self
                         .insert_columns
                         .iter()
-                        .map(|i| sql_literal(&values[*i], &self.driver))
+                        .map(|i| sql_literal(&values[*i], self.dialect))
                         .collect::<Vec<_>>()
                         .join(", ");
                     self.insert_batch.push(format!("({tuple})"));
@@ -341,7 +345,7 @@ impl<W: Write> ExportWriter<W> {
             return Ok(());
         }
         let quote = |s: &str| {
-            if self.driver == "mysql" {
+            if self.dialect == DatabaseDialect::Mysql {
                 quote_mysql_identifier(s)
             } else {
                 quote_identifier(s)
@@ -353,7 +357,7 @@ impl<W: Write> ExportWriter<W> {
             .map(|i| quote(&self.columns[*i].name))
             .collect::<Vec<_>>()
             .join(", ");
-        let override_identity = if self.driver == "postgres"
+        let override_identity = if self.dialect == DatabaseDialect::Postgres
             && self
                 .insert_columns
                 .iter()
@@ -408,12 +412,12 @@ fn cell_json(cell: &ExportCell) -> serde_json::Value {
     }
 }
 
-fn sql_literal(cell: &ExportCell, driver: &str) -> String {
+fn sql_literal(cell: &ExportCell, dialect: DatabaseDialect) -> String {
     match cell {
         ExportCell::Null => "NULL".into(),
         ExportCell::Number(value) => value.clone(),
-        ExportCell::Bool(value) => match driver {
-            "postgres" => value.to_string().to_uppercase(),
+        ExportCell::Bool(value) => match dialect {
+            DatabaseDialect::Postgres => value.to_string().to_uppercase(),
             _ => {
                 if *value {
                     "1".into()
@@ -422,28 +426,28 @@ fn sql_literal(cell: &ExportCell, driver: &str) -> String {
                 }
             }
         },
-        ExportCell::Binary(bytes) => match driver {
-            "postgres" => format!("decode('{}', 'hex')", hex(bytes)),
+        ExportCell::Binary(bytes) => match dialect {
+            DatabaseDialect::Postgres => format!("decode('{}', 'hex')", hex(bytes)),
             _ => format!("X'{}'", hex(bytes)),
         },
-        ExportCell::Text(value) => quote_sql_text(value, driver),
-        ExportCell::Json(value) => quote_sql_text(&value.to_string(), driver),
+        ExportCell::Text(value) => quote_sql_text(value, dialect),
+        ExportCell::Json(value) => quote_sql_text(&value.to_string(), dialect),
     }
 }
 
-fn quote_sql_text(value: &str, driver: &str) -> String {
-    if driver == "sqlite" && value.contains('\0') {
+fn quote_sql_text(value: &str, dialect: DatabaseDialect) -> String {
+    if dialect == DatabaseDialect::Sqlite && value.contains('\0') {
         return format!("CAST(X'{}' AS TEXT)", hex(value.as_bytes()));
     }
-    if driver == "mysql" && value.chars().any(|ch| ch == '\\' || ch.is_control()) {
+    if dialect == DatabaseDialect::Mysql && value.chars().any(|ch| ch == '\\' || ch.is_control()) {
         // Hex conversion is independent of NO_BACKSLASH_ESCAPES and preserves
         // newlines and NUL bytes without relying on the target session mode.
         return format!("CONVERT(X'{}' USING utf8mb4)", hex(value.as_bytes()));
     }
     let quoted = value.replace('\'', "''");
-    match driver {
-        "postgres" => format!("E'{}'", quoted.replace('\\', "\\\\")),
-        "mysql" => format!("'{quoted}'"),
+    match dialect {
+        DatabaseDialect::Postgres => format!("E'{}'", quoted.replace('\\', "\\\\")),
+        DatabaseDialect::Mysql => format!("'{quoted}'"),
         _ => format!("'{quoted}'"),
     }
 }
@@ -602,7 +606,7 @@ mod tests {
         let mut writer = ExportWriter::new(
             &mut csv,
             DatabaseExportFormat::Csv,
-            "sqlite",
+            DatabaseDialect::Sqlite,
             "\"items\"".into(),
             &columns,
         )
@@ -618,7 +622,7 @@ mod tests {
         let writer = ExportWriter::new(
             &mut json,
             DatabaseExportFormat::Json,
-            "sqlite",
+            DatabaseDialect::Sqlite,
             "\"items\"".into(),
             &columns,
         )
@@ -630,7 +634,7 @@ mod tests {
         let mut writer = ExportWriter::new(
             &mut sql,
             DatabaseExportFormat::Sql,
-            "sqlite",
+            DatabaseDialect::Sqlite,
             "\"items\"".into(),
             &columns,
         )
@@ -645,12 +649,18 @@ mod tests {
         assert!(String::from_utf8(sql)
             .unwrap()
             .contains("('O''Brien', X'00ff')"));
-        assert_eq!(sql_literal(&ExportCell::Bool(true), "postgres"), "TRUE");
         assert_eq!(
-            sql_literal(&ExportCell::Number("12.50".into()), "mysql"),
+            sql_literal(&ExportCell::Bool(true), DatabaseDialect::Postgres),
+            "TRUE"
+        );
+        assert_eq!(
+            sql_literal(&ExportCell::Number("12.50".into()), DatabaseDialect::Mysql),
             "12.50"
         );
-        assert_eq!(sql_literal(&ExportCell::Null, "sqlite"), "NULL");
+        assert_eq!(
+            sql_literal(&ExportCell::Null, DatabaseDialect::Sqlite),
+            "NULL"
+        );
         assert_eq!(
             cell_json(&ExportCell::Number(
                 "12345678901234567890.1234567890".into()
@@ -659,13 +669,22 @@ mod tests {
             "12345678901234567890.1234567890"
         );
         assert_eq!(
-            sql_literal(&ExportCell::Json(serde_json::json!({"a":"b"})), "sqlite"),
+            sql_literal(
+                &ExportCell::Json(serde_json::json!({"a":"b"})),
+                DatabaseDialect::Sqlite
+            ),
             "'{\"a\":\"b\"}'"
         );
-        assert_eq!(quote_sql_text("a\\b'c", "postgres"), "E'a\\\\b''c'");
-        assert_eq!(quote_sql_text("a\0b", "sqlite"), "CAST(X'610062' AS TEXT)");
         assert_eq!(
-            quote_sql_text("a\\b", "mysql"),
+            quote_sql_text("a\\b'c", DatabaseDialect::Postgres),
+            "E'a\\\\b''c'"
+        );
+        assert_eq!(
+            quote_sql_text("a\0b", DatabaseDialect::Sqlite),
+            "CAST(X'610062' AS TEXT)"
+        );
+        assert_eq!(
+            quote_sql_text("a\\b", DatabaseDialect::Mysql),
             "CONVERT(X'615c62' USING utf8mb4)"
         );
     }
@@ -676,7 +695,7 @@ mod tests {
         let mut writer = ExportWriter::new(
             &mut output,
             DatabaseExportFormat::Sql,
-            "sqlite",
+            DatabaseDialect::Sqlite,
             "\"items\"".into(),
             &[column("id")],
         )
@@ -716,7 +735,7 @@ mod tests {
             values: vec![Some("10".into()), Some("20".into())],
         }];
         let sqlite = build_export_select(
-            "sqlite",
+            DatabaseDialect::Sqlite,
             "\"items\"",
             &columns,
             Some(&["name".into()]),
@@ -732,7 +751,7 @@ mod tests {
         assert_eq!(sqlite.columns.len(), 1);
 
         let postgres = build_export_select(
-            "postgres",
+            DatabaseDialect::Postgres,
             "\"public\".\"items\"",
             &columns,
             None,
@@ -751,7 +770,7 @@ mod tests {
         assert_eq!(postgres.columns.len(), 2);
 
         let mysql = build_export_select(
-            "mysql",
+            DatabaseDialect::Mysql,
             "`app`.`items`",
             &columns,
             None,
@@ -770,7 +789,7 @@ mod tests {
         assert!(mysql.binds.is_empty());
 
         assert!(build_export_select(
-            "sqlite",
+            DatabaseDialect::Sqlite,
             "\"items\"",
             &columns,
             Some(&["missing".into()]),
@@ -779,7 +798,7 @@ mod tests {
         )
         .is_err());
         assert!(build_export_select(
-            "sqlite",
+            DatabaseDialect::Sqlite,
             "\"items\"",
             &columns,
             None,

@@ -28,6 +28,7 @@ mod pools;
 mod postgres;
 mod queries;
 mod row_mutations;
+mod runtime_profile;
 mod schema;
 mod script_connection;
 mod script_parser;
@@ -40,6 +41,10 @@ pub use connection_domain::DatabaseConnectionCleanup;
 use connections::*;
 use mysql::*;
 use postgres::*;
+use runtime_profile::{require_capability, RuntimePool};
+pub use runtime_profile::{
+    DatabaseCapabilities, DatabaseDialect, DetectedServerType, RuntimeDatabaseProfile,
+};
 use sql::*;
 use sqlite::*;
 

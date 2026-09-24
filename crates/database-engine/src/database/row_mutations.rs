@@ -41,6 +41,7 @@ impl DatabaseService {
         match connection.driver.as_str() {
             "sqlite" => {
                 let pool = sqlite_pool(&connection).await?;
+                require_capability(pool.profile.capabilities.row_mutation, "row mutation")?;
                 ensure_sqlite_table_exists(&pool, table_name).await?;
                 let columns = sqlite_columns(&pool, table_name).await?;
                 validate_mutation(&operation, &input, &columns)?;
@@ -49,6 +50,7 @@ impl DatabaseService {
             "postgres" => {
                 let effective = Self::effective_connection(&connection, input.catalog.as_deref());
                 let pool = self.postgres_pool(&effective).await?;
+                require_capability(pool.profile.capabilities.row_mutation, "row mutation")?;
                 let schema = input
                     .schema
                     .as_deref()
@@ -76,6 +78,7 @@ impl DatabaseService {
             "mysql" => {
                 let effective = Self::effective_connection(&connection, input.catalog.as_deref());
                 let pool = self.mysql_pool(&effective).await?;
+                require_capability(pool.profile.capabilities.row_mutation, "row mutation")?;
                 let schema = input
                     .catalog
                     .as_deref()

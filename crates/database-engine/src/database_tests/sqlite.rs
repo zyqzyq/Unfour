@@ -17,7 +17,7 @@ async fn sqlite_large_table_export_writes_all_rows_to_disk() {
         .unwrap();
     let pool = sqlite_pool(&connection).await.unwrap();
     sqlx::query("WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM numbers WHERE n < 20000) INSERT INTO deploys (service, version) SELECT 'service-' || n, 'v1' FROM numbers")
-        .execute(&pool).await.unwrap();
+        .execute(&*pool).await.unwrap();
     let destination =
         std::env::temp_dir().join(format!("unfour-large-export-{}.csv", uuid::Uuid::new_v4()));
     let result = service
@@ -73,24 +73,24 @@ async fn sqlite_export_streams_whole_table_and_empty_table() {
     assert!(matches!(source_target, Err(AppError::Validation(_))));
     let pool = sqlite_pool(&connection).await.unwrap();
     sqlx::query("CREATE TABLE export_values (id INTEGER PRIMARY KEY, payload BLOB, metadata TEXT)")
-        .execute(&pool)
+        .execute(&*pool)
         .await
         .unwrap();
     sqlx::query("CREATE INDEX export_values_metadata_idx ON export_values(metadata)")
-        .execute(&pool)
+        .execute(&*pool)
         .await
         .unwrap();
     sqlx::query("INSERT INTO export_values (id, payload, metadata) VALUES (1, ?1, ?2)")
         .bind(vec![0_u8, 255_u8, 10_u8])
         .bind("{\"quote\":\"O'Brien\"}")
-        .execute(&pool)
+        .execute(&*pool)
         .await
         .unwrap();
     for i in 0..250 {
         sqlx::query("INSERT INTO deploys (service, version) VALUES (?1, ?2)")
             .bind(format!("service {i}"))
             .bind("a'b,\nline")
-            .execute(&pool)
+            .execute(&*pool)
             .await
             .unwrap();
     }
@@ -725,11 +725,11 @@ async fn sqlite_export_selects_columns_filters_in_and_applies_limit() {
         .unwrap();
     let pool = sqlite_pool(&connection).await.unwrap();
     sqlx::query("CREATE TABLE rows (data_id INTEGER, name TEXT)")
-        .execute(&pool)
+        .execute(&*pool)
         .await
         .unwrap();
     sqlx::query("INSERT INTO rows (data_id, name) VALUES (1, 'a'), (2, 'b'), (3, 'c'), (2, 'd')")
-        .execute(&pool)
+        .execute(&*pool)
         .await
         .unwrap();
     let destination = std::env::temp_dir().join(format!(

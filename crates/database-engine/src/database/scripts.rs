@@ -22,10 +22,10 @@ impl Drop for RunGuard {
 
 fn select_statements(
     source: &str,
-    driver: &str,
+    dialect: DatabaseDialect,
     cursor: Option<usize>,
 ) -> AppResult<Vec<ScriptStatement>> {
-    let mut statements = split_script(source, driver)?;
+    let mut statements = split_script(source, dialect)?;
     if let Some(cursor) = cursor {
         let index = statements
             .iter()
@@ -82,8 +82,8 @@ impl DatabaseService {
         let connection = self
             .get_connection(&input.query.workspace_id, &input.query.connection_id)
             .await?;
-        let mut statements =
-            select_statements(&input.query.sql, &connection.driver, input.cursor_offset)?;
+        let dialect = DatabaseDialect::for_driver(&connection.driver);
+        let mut statements = select_statements(&input.query.sql, dialect, input.cursor_offset)?;
         if input.explain {
             if statements.len() != 1 {
                 return Err(AppError::Validation(
@@ -94,7 +94,7 @@ impl DatabaseService {
         }
         let safeties = statements
             .iter()
-            .map(|s| classify_query_for_driver(&s.sql, &connection.driver))
+            .map(|s| classify_query_for_dialect(&s.sql, dialect))
             .collect::<Vec<_>>();
         let mut output = DatabaseScriptResult {
             statements: statements
@@ -148,6 +148,9 @@ impl DatabaseService {
             tokio::time::timeout(timeout, self.script_connection(&connection, &input.query))
                 .await
                 .map_err(|_| AppError::Timeout("database connection setup timed out".into()))??;
+        if input.explain {
+            require_capability(conn.profile.capabilities.explain, "explain")?;
+        }
         for (entry, mut safety) in output.statements.iter_mut().zip(safeties) {
             if stopped.load(Ordering::SeqCst) {
                 break;

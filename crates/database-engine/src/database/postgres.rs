@@ -1,5 +1,27 @@
 use super::*;
 
+// Conservative, standard metadata for an unidentified wire-compatible server.
+// No pg_catalog layout, identity/generated-column, or DDL assumptions. Add
+// product-specific overrides at this boundary when that product is supported.
+const UNKNOWN_POSTGRES_COLUMNS: &str = r#"
+    SELECT c.column_name, c.data_type, c.is_nullable, c.column_default,
+           'NEVER' AS is_generated, CAST(NULL AS VARCHAR) AS identity_generation,
+           EXISTS (
+               SELECT 1 FROM information_schema.table_constraints t
+               JOIN information_schema.key_column_usage k
+                 ON k.constraint_catalog = t.constraint_catalog
+                AND k.constraint_schema = t.constraint_schema
+                AND k.constraint_name = t.constraint_name
+                AND k.table_schema = t.table_schema AND k.table_name = t.table_name
+               WHERE t.constraint_type = 'PRIMARY KEY'
+                 AND t.table_schema = c.table_schema AND t.table_name = c.table_name
+                 AND k.column_name = c.column_name
+           ) AS primary_key
+    FROM information_schema.columns c
+    WHERE c.table_schema = $1 AND c.table_name = $2
+    ORDER BY c.ordinal_position
+"#;
+
 pub(super) async fn pg_connect_options(
     connection: &DatabaseConnection,
     secret_store: Option<&SecretStore>,
@@ -72,12 +94,10 @@ pub(super) async fn resolve_database_password(
     }
 }
 
-pub(super) async fn postgres_columns(
-    pool: &sqlx::PgPool,
-    schema: &str,
-    table_name: &str,
-) -> Result<Vec<DatabaseTableColumn>, AppError> {
-    let rows = sqlx::query(
+pub(super) fn postgres_columns_sql(profile: &RuntimeDatabaseProfile) -> &'static str {
+    if profile.detected_server_type != DetectedServerType::PostgreSql {
+        UNKNOWN_POSTGRES_COLUMNS
+    } else {
         r#"
         SELECT c.column_name,
                pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type,
@@ -98,12 +118,21 @@ pub(super) async fn postgres_columns(
         JOIN pg_catalog.pg_attribute a ON a.attrelid = cls.oid AND a.attname = c.column_name
         WHERE c.table_schema = $1 AND c.table_name = $2
         ORDER BY c.ordinal_position
-        "#,
-    )
-    .bind(schema)
-    .bind(table_name)
-    .fetch_all(pool)
-    .await?;
+        "#
+    }
+}
+
+pub(super) async fn postgres_columns(
+    pool: &RuntimePool<sqlx::Postgres>,
+    schema: &str,
+    table_name: &str,
+) -> Result<Vec<DatabaseTableColumn>, AppError> {
+    let sql = postgres_columns_sql(&pool.profile);
+    let rows = sqlx::query(sql)
+        .bind(schema)
+        .bind(table_name)
+        .fetch_all(&pool.pool)
+        .await?;
 
     rows.into_iter()
         .map(|row| {
@@ -512,7 +541,7 @@ pub(super) async fn postgres_table_row_count(
 }
 
 pub(super) async fn postgres_table_result_columns(
-    pool: &sqlx::PgPool,
+    pool: &RuntimePool<sqlx::Postgres>,
     schema: &str,
     table_name: &str,
 ) -> Result<Vec<DatabaseResultColumn>, AppError> {

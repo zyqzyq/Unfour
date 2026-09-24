@@ -61,7 +61,7 @@ impl DatabaseService {
                         for _ in &column_names {
                             count = count.bind(format!("%{}%", needle));
                         }
-                        let row = count.fetch_one(&pool).await?;
+                        let row = count.fetch_one(&*pool).await?;
                         row.try_get::<i64, _>("total_rows")?.max(0) as u64
                     } else {
                         sqlite_table_row_count(&pool, table_name).await?
@@ -78,7 +78,7 @@ impl DatabaseService {
                             query = query.bind(format!("%{}%", needle));
                         }
                     }
-                    let rows = query.fetch_all(&pool).await?;
+                    let rows = query.fetch_all(&*pool).await?;
                     let columns = if let Some(row) = rows.first() {
                         sqlite_result_columns(row)
                     } else {
@@ -136,7 +136,7 @@ impl DatabaseService {
                         );
                         let row = sqlx::query(&count_sql)
                             .bind(format!("%{}%", needle))
-                            .fetch_one(&pool)
+                            .fetch_one(&*pool)
                             .await
                             .map_err(sanitize_pg_error)?;
                         row.try_get::<i64, _>("total_rows")
@@ -156,7 +156,7 @@ impl DatabaseService {
                     if let Some(needle) = active_filter {
                         query = query.bind(format!("%{}%", needle));
                     }
-                    let rows = query.fetch_all(&pool).await.map_err(sanitize_pg_error)?;
+                    let rows = query.fetch_all(&*pool).await.map_err(sanitize_pg_error)?;
                     let columns = if let Some(row) = rows.first() {
                         postgres_result_columns(row)
                     } else {
@@ -234,7 +234,10 @@ impl DatabaseService {
                         for _ in &column_names {
                             count = count.bind(format!("%{}%", needle));
                         }
-                        let row = count.fetch_one(&pool).await.map_err(sanitize_mysql_error)?;
+                        let row = count
+                            .fetch_one(&*pool)
+                            .await
+                            .map_err(sanitize_mysql_error)?;
                         row.try_get::<i64, _>("total_rows")
                             .map_err(sanitize_mysql_error)?
                             .max(0) as u64
@@ -253,7 +256,10 @@ impl DatabaseService {
                             query = query.bind(format!("%{}%", needle));
                         }
                     }
-                    let rows = query.fetch_all(&pool).await.map_err(sanitize_mysql_error)?;
+                    let rows = query
+                        .fetch_all(&*pool)
+                        .await
+                        .map_err(sanitize_mysql_error)?;
                     let columns = if let Some(row) = rows.first() {
                         mysql_result_columns(row)
                     } else {
@@ -340,21 +346,35 @@ impl DatabaseService {
                 let columns = postgres_columns(&pool, schema, table_name)
                     .await
                     .map_err(sanitize_pg_app_error)?;
-                let indexes = postgres_indexes(&pool, schema, table_name)
-                    .await
-                    .map_err(sanitize_pg_app_error)?;
-                let foreign_keys = postgres_foreign_keys(&pool, schema, table_name)
-                    .await
-                    .map_err(sanitize_pg_app_error)?;
+                let indexes = if pool.profile.capabilities.indexes {
+                    postgres_indexes(&pool, schema, table_name)
+                        .await
+                        .map_err(sanitize_pg_app_error)?
+                } else {
+                    Vec::new()
+                };
+                let foreign_keys = if pool.profile.capabilities.foreign_keys {
+                    postgres_foreign_keys(&pool, schema, table_name)
+                        .await
+                        .map_err(sanitize_pg_app_error)?
+                } else {
+                    Vec::new()
+                };
                 // Resolve the actual object kind (table vs view) from
                 // information_schema so views report as "view" instead of the
                 // hard-coded "table" the previous implementation returned.
                 let kind = postgres_table_kind(&pool, schema, table_name)
                     .await
                     .map_err(sanitize_pg_app_error)?;
-                let ddl = postgres_ddl(&pool, schema, table_name, &kind)
-                    .await
-                    .map_err(sanitize_pg_app_error)?;
+                let ddl = if pool.profile.capabilities.ddl {
+                    Some(
+                        postgres_ddl(&pool, schema, table_name, &kind)
+                            .await
+                            .map_err(sanitize_pg_app_error)?,
+                    )
+                } else {
+                    None
+                };
                 Ok(DatabaseTableStructure {
                     catalog: connection.database.clone(),
                     schema: Some(schema.to_string()),
@@ -363,7 +383,7 @@ impl DatabaseService {
                     columns,
                     indexes,
                     foreign_keys,
-                    ddl: Some(ddl),
+                    ddl,
                 })
             }
             "mysql" => {

@@ -124,6 +124,14 @@ fn connection_snapshots_use_a_strict_device_local_safe_allowlist() {
         "syncStatus",
         "remoteId",
         "revision",
+        "runtimeProfile",
+        "detectedServerType",
+        "serverType",
+        "serverTypeHint",
+        "serverVersion",
+        "dialect",
+        "capabilities",
+        "flavor",
     ] {
         assert!(!serialized.contains(forbidden), "leaked {forbidden}");
     }

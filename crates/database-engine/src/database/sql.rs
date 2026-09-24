@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) fn quote_identifier(value: &str) -> String {
-    format!("\"{}\"", value.replace('"', "\"\""))
+    DatabaseDialect::Postgres.quote_identifier(value)
 }
 
 /// Trim and validate an optional database/schema identifier used as a
@@ -22,7 +22,7 @@ pub(super) fn clean_identifier(value: Option<&str>) -> AppResult<Option<&str>> {
 }
 
 pub(super) fn quote_mysql_identifier(value: &str) -> String {
-    format!("`{}`", value.replace('`', "``"))
+    DatabaseDialect::Mysql.quote_identifier(value)
 }
 
 pub(super) fn quote_qualified_identifier(schema: &str, table_name: &str) -> String {
@@ -155,7 +155,7 @@ pub(super) struct ExportSelect {
 /// Identifiers are quoted only after they match a real column. Values are
 /// returned as binds. Callers must not interpolate `filters` into SQL.
 pub(super) fn build_export_select(
-    driver: &str,
+    dialect: DatabaseDialect,
     qualified_table: &str,
     table_columns: &[DatabaseTableColumn],
     columns: Option<&[String]>,
@@ -165,7 +165,7 @@ pub(super) fn build_export_select(
     if filters.len() > MAX_EXPORT_FILTERS {
         return Err(AppError::Validation("too many export filters".into()));
     }
-    let quote: fn(&str) -> String = if driver == "mysql" {
+    let quote: fn(&str) -> String = if dialect == DatabaseDialect::Mysql {
         quote_mysql_identifier
     } else {
         quote_identifier
@@ -223,7 +223,7 @@ pub(super) fn build_export_select(
             )));
         }
         let quoted = quote(column);
-        let cast = if driver == "mysql" {
+        let cast = if dialect == DatabaseDialect::Mysql {
             format!("CAST({quoted} AS CHAR)")
         } else {
             format!("CAST({quoted} AS TEXT)")
@@ -241,7 +241,7 @@ pub(super) fn build_export_select(
                         binds.push(value.clone());
                         predicates.push(format!(
                             "{cast} = {}",
-                            export_placeholder(driver, binds.len())
+                            export_placeholder(dialect, binds.len())
                         ));
                     }
                 }
@@ -260,7 +260,7 @@ pub(super) fn build_export_select(
                 let mut placeholders = Vec::with_capacity(filter.values.len());
                 for value in filter.values.iter().flatten() {
                     binds.push(value.clone());
-                    placeholders.push(export_placeholder(driver, binds.len()));
+                    placeholders.push(export_placeholder(dialect, binds.len()));
                 }
                 predicates.push(format!("{cast} IN ({})", placeholders.join(", ")));
             }
@@ -287,8 +287,8 @@ pub(super) fn build_export_select(
     })
 }
 
-fn export_placeholder(driver: &str, index: usize) -> String {
-    if driver == "postgres" {
+fn export_placeholder(dialect: DatabaseDialect, index: usize) -> String {
+    if dialect == DatabaseDialect::Postgres {
         format!("${index}")
     } else {
         "?".to_string()
@@ -474,11 +474,14 @@ pub(super) fn read_safety() -> DatabaseQuerySafety {
 
 #[cfg(test)]
 pub(super) fn classify_query(sql: &str) -> DatabaseQuerySafety {
-    classify_query_for_driver(sql, "generic")
+    classify_query_for_dialect(sql, DatabaseDialect::Generic)
 }
 
-pub(super) fn classify_query_for_driver(sql: &str, driver: &str) -> DatabaseQuerySafety {
-    let words = super::script_parser::safety_words(sql, driver).unwrap_or_default();
+pub(super) fn classify_query_for_dialect(
+    sql: &str,
+    dialect: DatabaseDialect,
+) -> DatabaseQuerySafety {
+    let words = super::script_parser::safety_words(sql, dialect).unwrap_or_default();
     classify_words(&words)
 }
 

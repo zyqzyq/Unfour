@@ -36,10 +36,15 @@ pub(super) fn log_query_outcome(
 
 /// One checked-out physical connection for the entire script. Never return
 /// arbitrary editor session state or an open user transaction to a pool.
-pub(super) enum ScriptConnection {
+enum ScriptDriverConnection {
     Sqlite(sqlx::pool::PoolConnection<sqlx::Sqlite>),
     Postgres(sqlx::pool::PoolConnection<sqlx::Postgres>),
     Mysql(sqlx::pool::PoolConnection<sqlx::MySql>),
+}
+
+pub(super) struct ScriptConnection {
+    driver: ScriptDriverConnection,
+    pub profile: RuntimeDatabaseProfile,
 }
 
 impl DatabaseService {
@@ -53,37 +58,44 @@ impl DatabaseService {
         let schema = clean_identifier(input.schema.as_deref())?;
         match connection.driver.as_str() {
             "sqlite" => {
-                let mut conn = sqlite_pool(&effective).await?.acquire().await?;
+                let pool = sqlite_pool(&effective).await?;
+                let mut conn = pool.acquire().await?;
                 conn.close_on_drop();
-                Ok(ScriptConnection::Sqlite(conn))
+                Ok(ScriptConnection {
+                    driver: ScriptDriverConnection::Sqlite(conn),
+                    profile: pool.profile,
+                })
             }
             "postgres" => {
-                let mut conn = self
-                    .postgres_pool(&effective)
-                    .await?
-                    .acquire()
-                    .await
-                    .map_err(sanitize_pg_error)?;
+                let pool = self.postgres_pool(&effective).await?;
+                let mut conn = pool.acquire().await.map_err(sanitize_pg_error)?;
                 conn.close_on_drop();
                 if let Some(schema) = schema {
+                    require_capability(pool.profile.capabilities.schemas, "schemas")?;
                     conn.as_mut()
                         .execute(
-                            format!("SET search_path TO {}", quote_identifier(schema)).as_str(),
+                            format!(
+                                "SET search_path TO {}",
+                                pool.profile.dialect.quote_identifier(schema)
+                            )
+                            .as_str(),
                         )
                         .await
                         .map_err(sanitize_pg_error)?;
                 }
-                Ok(ScriptConnection::Postgres(conn))
+                Ok(ScriptConnection {
+                    driver: ScriptDriverConnection::Postgres(conn),
+                    profile: pool.profile,
+                })
             }
             "mysql" => {
-                let mut conn = self
-                    .mysql_pool(&effective)
-                    .await?
-                    .acquire()
-                    .await
-                    .map_err(sanitize_mysql_error)?;
+                let pool = self.mysql_pool(&effective).await?;
+                let mut conn = pool.acquire().await.map_err(sanitize_mysql_error)?;
                 conn.close_on_drop();
-                Ok(ScriptConnection::Mysql(conn))
+                Ok(ScriptConnection {
+                    driver: ScriptDriverConnection::Mysql(conn),
+                    profile: pool.profile,
+                })
             }
             _ => Err(AppError::Unsupported("unsupported database driver".into())),
         }
@@ -97,6 +109,12 @@ impl ScriptConnection {
         limit: u32,
         safety: DatabaseQuerySafety,
     ) -> AppResult<(DatabaseQueryResult, bool)> {
+        let runtime_safety = classify_query_for_dialect(sql, self.profile.dialect);
+        if runtime_safety.classification != safety.classification {
+            return Err(AppError::Unsupported(
+                "runtime SQL dialect differs from preflight".into(),
+            ));
+        }
         let started = Instant::now();
         let mut result = DatabaseQueryResult {
             columns: Vec::new(),
@@ -139,20 +157,20 @@ impl ScriptConnection {
                 }
             }};
         }
-        match self {
-            Self::Sqlite(conn) => drain!(
+        match &mut self.driver {
+            ScriptDriverConnection::Sqlite(conn) => drain!(
                 conn,
                 sqlite_result_columns,
                 sqlite_row_values,
                 AppError::from
             ),
-            Self::Postgres(conn) => drain!(
+            ScriptDriverConnection::Postgres(conn) => drain!(
                 conn,
                 postgres_result_columns,
                 postgres_row_values,
                 sanitize_pg_error
             ),
-            Self::Mysql(conn) => drain!(
+            ScriptDriverConnection::Mysql(conn) => drain!(
                 conn,
                 mysql_result_columns,
                 mysql_row_values,

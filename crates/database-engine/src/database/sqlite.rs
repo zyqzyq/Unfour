@@ -236,7 +236,9 @@ pub(super) fn sqlite_row_values(row: &sqlx::sqlite::SqliteRow) -> AppResult<Vec<
         .collect()
 }
 
-pub(super) async fn sqlite_pool(connection: &DatabaseConnection) -> AppResult<sqlx::SqlitePool> {
+pub(super) async fn sqlite_pool(
+    connection: &DatabaseConnection,
+) -> AppResult<RuntimePool<sqlx::Sqlite>> {
     let path = connection
         .sqlite_path
         .as_deref()
@@ -256,9 +258,16 @@ pub(super) async fn sqlite_pool(connection: &DatabaseConnection) -> AppResult<sq
         .create_if_missing(false)
         .foreign_keys(true);
 
-    SqlitePoolOptions::new()
+    let pool = SqlitePoolOptions::new()
         .max_connections(4)
         .connect_with(options)
         .await
-        .map_err(AppError::from)
+        .map_err(AppError::from)?;
+    let version: String = sqlx::query_scalar("SELECT sqlite_version()")
+        .fetch_one(&pool)
+        .await?;
+    Ok(RuntimePool {
+        pool,
+        profile: RuntimeDatabaseProfile::resolve(DetectedServerType::Sqlite, version),
+    })
 }

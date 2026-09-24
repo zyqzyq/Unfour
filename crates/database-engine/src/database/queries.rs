@@ -3,7 +3,8 @@ use super::*;
 impl DatabaseService {
     /// Validate without opening a database connection or executing SQL.
     pub fn validate_single_statement(sql: &str, driver: &str) -> AppResult<()> {
-        if super::script_parser::split_script(sql, driver)?.len() != 1 {
+        if super::script_parser::split_script(sql, DatabaseDialect::for_driver(driver))?.len() != 1
+        {
             return Err(AppError::Validation(
                 "FLOW_SQL_SINGLE_STATEMENT_REQUIRED".into(),
             ));
@@ -17,13 +18,14 @@ impl DatabaseService {
         let connection = self
             .get_connection(&input.workspace_id, &input.connection_id)
             .await?;
-        let statements = super::script_parser::split_script(&input.sql, &connection.driver)?;
+        let dialect = DatabaseDialect::for_driver(&connection.driver);
+        let statements = super::script_parser::split_script(&input.sql, dialect)?;
         if statements.len() != 1 {
             return Err(AppError::Validation(
                 "exactly one SQL statement is required".into(),
             ));
         }
-        let mut safety = classify_query_for_driver(&input.sql, &connection.driver);
+        let mut safety = classify_query_for_dialect(&input.sql, dialect);
         if connection.read_only && safety.classification != "read" {
             return Err(AppError::ReadOnly(format!(
                 "this connection is read-only; {} statements are not allowed",

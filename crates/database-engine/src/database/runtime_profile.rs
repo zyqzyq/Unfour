@@ -1,0 +1,158 @@
+//! Runtime facts, never connection configuration or Cloud Sync data.
+//! Add product detection and metadata overrides here/at the metadata boundary,
+//! not another transport driver. Intentionally no serde or persistence traits.
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DatabaseDialect {
+    Sqlite,
+    Postgres,
+    Mysql,
+    Generic,
+}
+
+impl DatabaseDialect {
+    pub fn quote_identifier(self, value: &str) -> String {
+        let quote = if self == Self::Mysql { '`' } else { '"' };
+        format!(
+            "{quote}{}{quote}",
+            value.replace(quote, &format!("{quote}{quote}"))
+        )
+    }
+
+    /// Offline preflight (Flow/editor) cannot detect a server. Use the protocol's
+    /// baseline grammar; connected operations use the runtime profile.
+    pub fn for_driver(driver: &str) -> Self {
+        match driver {
+            "sqlite" => Self::Sqlite,
+            "postgres" => Self::Postgres,
+            "mysql" => Self::Mysql,
+            _ => Self::Generic,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DetectedServerType {
+    Sqlite,
+    PostgreSql,
+    Mysql,
+    UnknownPostgresCompatible,
+}
+
+/// Supported engine operations, not authorization, object permissions, or a
+/// promise that every SQL statement will work. Existing safety gates still apply.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DatabaseCapabilities {
+    /// Can discover server catalogs beyond the configured connection target.
+    pub catalogs: bool,
+    pub schemas: bool,
+    pub indexes: bool,
+    pub foreign_keys: bool,
+    pub ddl: bool,
+    pub generated_columns: bool,
+    pub row_mutation: bool,
+    pub export: bool,
+    pub explain: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeDatabaseProfile {
+    pub detected_server_type: DetectedServerType,
+    /// Original server-reported version/banner, retained only in memory.
+    pub server_version: String,
+    pub dialect: DatabaseDialect,
+    pub capabilities: DatabaseCapabilities,
+}
+
+impl RuntimeDatabaseProfile {
+    pub(super) fn postgres(version: String) -> Self {
+        Self::resolve(detect_postgres_server(&version), version)
+    }
+
+    pub(super) fn resolve(server: DetectedServerType, version: String) -> Self {
+        use DetectedServerType::*;
+        // Adding a detected product requires an explicit compatibility policy.
+        let (dialect, catalogs, schemas, known) = match server {
+            Sqlite => (DatabaseDialect::Sqlite, false, false, true),
+            Mysql => (DatabaseDialect::Mysql, true, false, true),
+            PostgreSql => (DatabaseDialect::Postgres, true, true, true),
+            UnknownPostgresCompatible => (DatabaseDialect::Postgres, false, true, false),
+        };
+        Self {
+            detected_server_type: server,
+            server_version: version,
+            dialect,
+            capabilities: DatabaseCapabilities {
+                catalogs,
+                schemas,
+                indexes: known,
+                foreign_keys: known,
+                ddl: known,
+                generated_columns: known,
+                row_mutation: known,
+                export: known,
+                explain: true,
+            },
+        }
+    }
+}
+
+/// Recognize PostgreSQL's leading product token and numeric release, never a
+/// substring such as "compatible with PostgreSQL". Fork markers take priority:
+/// several products embed the upstream banner. A banner is evidence, not proof
+/// of identity; future products can add stronger probes before this fallback.
+pub(super) fn detect_postgres_server(version: &str) -> DetectedServerType {
+    let lower = version.trim().to_ascii_lowercase();
+    let fork = [
+        "opengauss",
+        "gaussdb",
+        "cockroach",
+        "yugabyte",
+        "redshift",
+        "greenplum",
+    ]
+    .iter()
+    .any(|marker| lower.contains(marker));
+    let release = lower
+        .strip_prefix("postgresql ")
+        .and_then(|s| s.split_whitespace().next());
+    if !fork
+        && release.is_some_and(|v| {
+            let mut parts = v.split('.');
+            parts
+                .next()
+                .is_some_and(|major| !major.is_empty() && major.bytes().all(|b| b.is_ascii_digit()))
+                && parts
+                    .next()
+                    .is_some_and(|minor| minor.starts_with(|c: char| c.is_ascii_digit()))
+        })
+    {
+        DetectedServerType::PostgreSql
+    } else {
+        DetectedServerType::UnknownPostgresCompatible
+    }
+}
+
+/// An operation-scoped pool and facts detected on that pool. No cache keyed by
+/// saved connection id: edits, catalog changes and reconnects detect anew.
+pub(super) struct RuntimePool<DB: sqlx::Database> {
+    pub pool: sqlx::Pool<DB>,
+    pub profile: RuntimeDatabaseProfile,
+}
+
+impl<DB: sqlx::Database> std::ops::Deref for RuntimePool<DB> {
+    type Target = sqlx::Pool<DB>;
+    fn deref(&self) -> &Self::Target {
+        &self.pool
+    }
+}
+
+pub(super) fn require_capability(supported: bool, operation: &str) -> unfour_core::AppResult<()> {
+    if supported {
+        Ok(())
+    } else {
+        Err(unfour_core::AppError::Unsupported(format!(
+            "runtime database does not support {operation}"
+        )))
+    }
+}

@@ -1,12 +1,33 @@
 use super::*;
 
 impl DatabaseService {
+    /// Fresh runtime facts for the requested target, never a saved connection
+    /// field. This engine API does not change UI, MCP, Flow or sync contracts.
+    pub async fn runtime_profile(
+        &self,
+        workspace_id: String,
+        connection_id: String,
+        catalog: Option<String>,
+    ) -> AppResult<RuntimeDatabaseProfile> {
+        let connection = self.get_connection(&workspace_id, &connection_id).await?;
+        let effective =
+            Self::effective_connection(&connection, clean_identifier(catalog.as_deref())?);
+        match connection.driver.as_str() {
+            "sqlite" => Ok(sqlite_pool(&effective).await?.profile),
+            "postgres" => Ok(self.postgres_pool(&effective).await?.profile),
+            "mysql" => Ok(self.mysql_pool(&effective).await?.profile),
+            driver => Err(AppError::Unsupported(format!(
+                "unsupported database driver: {driver}"
+            ))),
+        }
+    }
+
     /// Create a PostgreSQL connection pool, loading the password from SecretStore
     /// if a credential reference is present on the connection.
     pub(super) async fn postgres_pool(
         &self,
         connection: &DatabaseConnection,
-    ) -> AppResult<sqlx::PgPool> {
+    ) -> AppResult<RuntimePool<sqlx::Postgres>> {
         self.postgres_pool_with_secret(connection, None).await
     }
 
@@ -18,14 +39,22 @@ impl DatabaseService {
         &self,
         connection: &DatabaseConnection,
         password_override: Option<&str>,
-    ) -> AppResult<sqlx::PgPool> {
+    ) -> AppResult<RuntimePool<sqlx::Postgres>> {
         let options =
             pg_connect_options(connection, self.secret_store.as_ref(), password_override).await?;
-        PgPoolOptions::new()
+        let pool = PgPoolOptions::new()
             .max_connections(4)
             .connect_with(options)
             .await
-            .map_err(|e| sanitize_pg_error(e))
+            .map_err(sanitize_pg_error)?;
+        let version: String = sqlx::query_scalar("SELECT version()")
+            .fetch_one(&pool)
+            .await
+            .map_err(sanitize_pg_error)?;
+        Ok(RuntimePool {
+            pool,
+            profile: RuntimeDatabaseProfile::postgres(version),
+        })
     }
 
     /// Create a MySQL connection pool, loading the password from SecretStore
@@ -33,7 +62,7 @@ impl DatabaseService {
     pub(super) async fn mysql_pool(
         &self,
         connection: &DatabaseConnection,
-    ) -> AppResult<sqlx::MySqlPool> {
+    ) -> AppResult<RuntimePool<sqlx::MySql>> {
         self.mysql_pool_with_secret(connection, None).await
     }
 
@@ -45,16 +74,24 @@ impl DatabaseService {
         &self,
         connection: &DatabaseConnection,
         password_override: Option<&str>,
-    ) -> AppResult<sqlx::MySqlPool> {
+    ) -> AppResult<RuntimePool<sqlx::MySql>> {
         let options =
             mysql_connect_options(connection, self.secret_store.as_ref(), password_override)
                 .await?;
-        MySqlPoolOptions::new()
+        let pool = MySqlPoolOptions::new()
             .max_connections(4)
             .acquire_timeout(Duration::from_secs(5))
             .connect_with(options)
             .await
-            .map_err(sanitize_mysql_error)
+            .map_err(sanitize_mysql_error)?;
+        let version: String = sqlx::query_scalar("SELECT VERSION()")
+            .fetch_one(&pool)
+            .await
+            .map_err(sanitize_mysql_error)?;
+        Ok(RuntimePool {
+            pool,
+            profile: RuntimeDatabaseProfile::resolve(DetectedServerType::Mysql, version),
+        })
     }
 
     /// Return a connection clone with `database` overridden to the given

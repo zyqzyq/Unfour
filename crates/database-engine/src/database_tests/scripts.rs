@@ -23,10 +23,14 @@ fn input(workspace: &str, connection: &str, sql: &str) -> DatabaseScriptInput {
 
 #[test]
 fn dialect_boundaries_preserve_source_and_skip_comments() {
-    for driver in ["postgres", "mysql", "sqlite"] {
+    for driver in [
+        DatabaseDialect::Postgres,
+        DatabaseDialect::Mysql,
+        DatabaseDialect::Sqlite,
+    ] {
         let sql = "-- ; comment\r\nSELECT '中😀;it''s'; /* ; */ SELECT 2; -- end";
         let parts = split_script(sql, driver).unwrap();
-        assert_eq!(parts.len(), 2, "{driver}");
+        assert_eq!(parts.len(), 2, "{driver:?}");
         assert_eq!(parts[0].sql, "SELECT '中😀;it''s';");
         assert_eq!(parts[1].sql, "SELECT 2;");
         assert_eq!(
@@ -44,38 +48,46 @@ fn dialect_boundaries_preserve_source_and_skip_comments() {
     assert_eq!(
         split_script(
             "DO $body$ BEGIN PERFORM ';'; END; $body$; SELECT $$a;b$$;",
-            "postgres"
+            DatabaseDialect::Postgres
         )
         .unwrap()
         .len(),
         2
     );
     assert_eq!(
-        split_script("SELECT 'a\\';b'; SELECT 2;", "mysql")
+        split_script("SELECT 'a\\';b'; SELECT 2;", DatabaseDialect::Mysql)
             .unwrap()
             .len(),
         2
     );
-    assert_eq!(split_script("CREATE TRIGGER tr AFTER INSERT ON t BEGIN UPDATE t SET n=CASE WHEN n=1 THEN 2 ELSE 3 END; INSERT INTO t VALUES(4); END; SELECT 1;", "sqlite").unwrap().len(), 2);
+    assert_eq!(split_script("CREATE TRIGGER tr AFTER INSERT ON t BEGIN UPDATE t SET n=CASE WHEN n=1 THEN 2 ELSE 3 END; INSERT INTO t VALUES(4); END; SELECT 1;", DatabaseDialect::Sqlite).unwrap().len(), 2);
     assert!(split_script(
         "DELIMITER //\nCREATE PROCEDURE p() BEGIN SELECT 1; END//",
-        "mysql"
+        DatabaseDialect::Mysql
     )
     .is_err());
-    assert!(split_script("SELECT 1 /*! INTO OUTFILE '/tmp/x' */", "mysql").is_err());
+    assert!(split_script(
+        "SELECT 1 /*! INTO OUTFILE '/tmp/x' */",
+        DatabaseDialect::Mysql
+    )
+    .is_err());
 }
 
 #[test]
 fn safety_ignores_quoted_words_and_catches_wrapped_writes() {
-    for driver in ["postgres", "mysql", "sqlite"] {
+    for driver in [
+        DatabaseDialect::Postgres,
+        DatabaseDialect::Mysql,
+        DatabaseDialect::Sqlite,
+    ] {
         for sql in [
             "-- hi\nSELECT 'into update delete'",
             "WITH t AS (SELECT 'delete') SELECT * FROM t",
         ] {
             assert_eq!(
-                classify_query_for_driver(sql, driver).classification,
+                classify_query_for_dialect(sql, driver).classification,
                 "read",
-                "{driver}: {sql}"
+                "{driver:?}: {sql}"
             );
         }
         for sql in [
@@ -86,12 +98,15 @@ fn safety_ignores_quoted_words_and_catches_wrapped_writes() {
             "SELECT * INTO copy FROM users",
         ] {
             assert!(
-                classify_query_for_driver(sql, driver).requires_confirmation,
-                "{driver}: {sql}"
+                classify_query_for_dialect(sql, driver).requires_confirmation,
+                "{driver:?}: {sql}"
             );
         }
     }
-    assert!(classify_query_for_driver("PRAGMA writable_schema=ON", "sqlite").requires_confirmation);
+    assert!(
+        classify_query_for_dialect("PRAGMA writable_schema=ON", DatabaseDialect::Sqlite)
+            .requires_confirmation
+    );
 }
 
 #[tokio::test]

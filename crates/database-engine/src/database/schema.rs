@@ -67,44 +67,30 @@ impl DatabaseService {
         let result = match connection.driver.as_str() {
             "sqlite" => {
                 let pool = sqlite_pool(&connection).await?;
-                let version: (String,) = sqlx::query_as("SELECT sqlite_version()")
-                    .fetch_one(&pool)
-                    .await?;
-
                 Ok(DatabaseTestResult {
                     ok: true,
                     message: "SQLite connection OK".to_string(),
-                    server_version: Some(version.0),
+                    server_version: Some(pool.profile.server_version.clone()),
                 })
             }
             "postgres" => {
                 let pool = self
                     .postgres_pool_with_secret(&connection, password_override)
                     .await?;
-                let row: (String,) = sqlx::query_as("SELECT version()")
-                    .fetch_one(&pool)
-                    .await
-                    .map_err(sanitize_pg_error)?;
-
                 Ok(DatabaseTestResult {
                     ok: true,
                     message: "PostgreSQL connection OK".to_string(),
-                    server_version: Some(row.0),
+                    server_version: Some(pool.profile.server_version.clone()),
                 })
             }
             "mysql" => {
                 let pool = self
                     .mysql_pool_with_secret(&connection, password_override)
                     .await?;
-                let row: (String,) = sqlx::query_as("SELECT VERSION()")
-                    .fetch_one(&pool)
-                    .await
-                    .map_err(sanitize_mysql_error)?;
-
                 Ok(DatabaseTestResult {
                     ok: true,
                     message: "MySQL connection OK".to_string(),
-                    server_version: Some(row.0),
+                    server_version: Some(pool.profile.server_version.clone()),
                 })
             }
             driver => Err(AppError::Unsupported(format!(
@@ -156,7 +142,7 @@ impl DatabaseService {
                     ORDER BY type, name
                     "#,
                 )
-                .fetch_all(&pool)
+                .fetch_all(&*pool)
                 .await?;
 
                 let mut tables = Vec::with_capacity(table_rows.len());
@@ -193,7 +179,7 @@ impl DatabaseService {
                     ORDER BY table_schema, table_name
                     "#,
                 )
-                .fetch_all(&pool)
+                .fetch_all(&*pool)
                 .await
                 .map_err(sanitize_pg_error)?;
 
@@ -248,7 +234,10 @@ impl DatabaseService {
                 if let Some(cat) = catalog.as_deref() {
                     query = query.bind(cat);
                 }
-                let table_rows = query.fetch_all(&pool).await.map_err(sanitize_mysql_error)?;
+                let table_rows = query
+                    .fetch_all(&*pool)
+                    .await
+                    .map_err(sanitize_mysql_error)?;
 
                 let mut tables = Vec::with_capacity(table_rows.len());
                 for row in table_rows {
@@ -294,6 +283,11 @@ impl DatabaseService {
             "sqlite" => Ok(Vec::new()),
             "postgres" => {
                 let pool = self.postgres_pool(&connection).await?;
+                if !pool.profile.capabilities.catalogs {
+                    // The connected target remains browsable even when server
+                    // catalog discovery is unavailable. UI needs no product branch.
+                    return Ok(connection.database.clone().into_iter().collect());
+                }
                 let rows = sqlx::query(
                     r#"
                     SELECT datname
@@ -302,7 +296,7 @@ impl DatabaseService {
                     ORDER BY datname
                     "#,
                 )
-                .fetch_all(&pool)
+                .fetch_all(&*pool)
                 .await
                 .map_err(sanitize_pg_error)?;
                 rows.into_iter()
@@ -314,6 +308,9 @@ impl DatabaseService {
                 // List every schema, including the system databases
                 // (information_schema, mysql, performance_schema, sys), so they
                 // are browsable from the tree like any other database.
+                if !pool.profile.capabilities.catalogs {
+                    return Ok(Vec::new());
+                }
                 let rows = sqlx::query(
                     r#"
                     SELECT schema_name
@@ -321,7 +318,7 @@ impl DatabaseService {
                     ORDER BY schema_name
                     "#,
                 )
-                .fetch_all(&pool)
+                .fetch_all(&*pool)
                 .await
                 .map_err(sanitize_mysql_error)?;
                 rows.iter()

@@ -1,0 +1,96 @@
+# Database runtime compatibility
+
+Database connection configuration continues to store only the transport driver:
+`sqlite`, `postgres`, or `mysql`. There is no persisted product hint, flavor,
+runtime profile, dialect, or capability set. Existing connection rows, advanced
+configuration JSON, domain snapshots and Cloud Sync payloads require no migration.
+
+## Runtime model and lifecycle
+
+`database-engine::database::RuntimeDatabaseProfile` contains:
+
+- `detected_server_type`: `Sqlite`, `PostgreSql`, `Mysql`, or
+  `UnknownPostgresCompatible`.
+- `server_version`: the unmodified server version/banner.
+- `dialect`: the SQL grammar (`Sqlite`, `Postgres`, or `Mysql`). `Generic` is
+  reserved for existing offline validation fallbacks.
+- `capabilities`: catalog discovery, schemas, indexes, foreign keys, DDL,
+  generated-column metadata, row mutation, export and explain.
+
+These types intentionally have no serde or storage traits. `RuntimePool<DB>`
+couples the existing SQLx pool to its detected profile. Pools are scoped to an
+operation, as before; no connection-ID cache is introduced. Each new pool,
+including a pool for a different catalog or an edited connection, probes anew.
+`ScriptConnection` retains the profile with its checked-out physical connection
+through the script, including user transactions. Runtime reads do not update
+connection revisions, domain mutations, outbox intent, or sync snapshots.
+
+`DatabaseService::runtime_profile` is an engine-only API for fresh facts about a
+target. Existing Tauri, command-client, UI, MCP and Flow schemas are unchanged.
+`test_connection` reuses the pool's version and preserves its existing result shape.
+
+PostgreSQL pools run `SELECT version()`. Detection checks the leading PostgreSQL
+product/release, not a substring; known fork markers override an embedded upstream
+banner. Unrecognized banners resolve to `UnknownPostgresCompatible`. Probe SQL or
+connection errors remain errors, never successful PostgreSQL/unknown profiles.
+SQLite and MySQL use `sqlite_version()` and `VERSION()` respectively.
+
+V1 detection is a banner heuristic, not a proof of product identity. Additional
+probes can be added here if a product reports an indistinguishable upstream banner.
+Capabilities describe Unfour's supported operation set for the detected family;
+they do not replace read-only settings, SQL confirmation, permissions, or server
+errors. The existing three families retain their supported feature baseline.
+
+## Dependency boundaries
+
+| Concern | Dependency and owner |
+| --- | --- |
+| Connection options, pools, SQLx query/execute, transaction transport, result decoding | `driver`; `pools.rs`, `sqlite.rs`, `script_connection.rs`, existing driver helpers |
+| Tokenization, splitting, safety classification, identifiers, export placeholders/literals | Typed `DatabaseDialect`; `script_parser.rs`, `sql.rs`, `export.rs` |
+| Offline Flow/editor preflight | Driver maps once to a baseline dialect; validation still precedes connecting or executing |
+| Connected SQL execution | Safety is checked against the runtime dialect before sending user SQL |
+| PostgreSQL column/type metadata | Detected product selects SQL at `postgres_columns_sql` in `postgres.rs` |
+| Catalog discovery, optional structure metadata, row mutation, export, explain | Runtime capabilities at engine operation boundaries |
+| UI/MCP/Flow | Existing generic engine results and contracts; no compatible-product branches |
+| Persistence and Cloud Sync | Existing connection types and snapshots, containing driver only |
+
+Unknown PostgreSQL-compatible servers retain the PostgreSQL grammar and query
+transport. Table/column browsing uses standard `information_schema` metadata,
+without assuming `pg_catalog` layouts or identity/generated-column fields. The
+configured catalog remains in the tree even when server catalog discovery is
+unsupported. Indexes/foreign keys are empty and DDL is absent; confirmed row
+editing and table export return Unsupported. Arbitrary SQL still uses the
+existing safety/confirmation gates. These fallbacks do not certify an unknown
+product as supported.
+
+## Adding openGauss later
+
+1. Add a detected product variant and detection fixtures, prioritizing its
+   signature before generic PostgreSQL recognition.
+2. Explicitly resolve its dialect and capabilities in `runtime_profile.rs`.
+   Keep its persisted driver `postgres`.
+3. Add only necessary metadata/type/DDL overrides at the PostgreSQL metadata
+   boundary. Enable capabilities after verifying their implementations against
+   supported openGauss versions.
+4. Add real-server integration coverage for metadata, queries, transactions,
+   safety and enabled operations. Reuse UI/MCP/Flow contracts and transport.
+
+No openGauss-specific metadata SQL or plugin/provider framework is part of V1.
+
+## Changed files
+
+Paths below are relative to `crates/database-engine/src/` unless qualified.
+
+| Files | Change |
+| --- | --- |
+| `database.rs`, `database/runtime_profile.rs` | Model, resolution, detection, capability checks, runtime pool |
+| `database/pools.rs`, `database/sqlite.rs`, `database/schema.rs` | Probes and runtime lifecycle; version reuse and catalog fallback |
+| `database/postgres.rs`, `database/tables.rs` | Native/standard metadata selection and optional structure capabilities |
+| `database/script_parser.rs`, `database/sql.rs`, `database/queries.rs`, `database/scripts.rs`, `database/script_connection.rs` | Explicit dialect grammar/safety/quoting and script runtime profile |
+| `database/row_mutations.rs`, `database/export.rs` | Capability enforcement and dialect-based export SQL |
+| `database_tests/mod.rs`, `database_tests/runtime_profile.rs`, `database_tests/profile_server.rs` | Detection, protocol fixture, runtime lifecycle, standard metadata, storage/snapshot regression coverage |
+| `database_tests/scripts.rs`, `database_tests/sqlite.rs` | Existing tests adapted to typed dialect/runtime pools |
+| `crates/unfour-cloud-sync/src/canonical/tests.rs` | Runtime field exclusion assertions |
+| `docs/architecture/database-runtime-profile.md`, `docs/testing/database-runtime-profile.md` | Design, extension guidance and verification evidence |
+
+See [verification evidence](../testing/database-runtime-profile.md).

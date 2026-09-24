@@ -9,25 +9,25 @@ pub(super) struct ScriptStatement {
     pub end: usize,
 }
 
-fn dialect(driver: &str) -> Box<dyn Dialect> {
-    match driver {
-        "postgres" => Box::new(PostgreSqlDialect {}),
-        "mysql" => Box::new(MySqlDialect {}),
-        "sqlite" => Box::new(SQLiteDialect {}),
+fn parser_dialect(dialect: DatabaseDialect) -> Box<dyn Dialect> {
+    match dialect {
+        DatabaseDialect::Postgres => Box::new(PostgreSqlDialect {}),
+        DatabaseDialect::Mysql => Box::new(MySqlDialect {}),
+        DatabaseDialect::Sqlite => Box::new(SQLiteDialect {}),
         _ => Box::new(GenericDialect {}),
     }
 }
 
-pub(super) fn tokens(sql: &str, driver: &str) -> AppResult<Vec<TokenWithSpan>> {
-    Tokenizer::new(dialect(driver).as_ref(), sql)
+pub(super) fn tokens(sql: &str, dialect: DatabaseDialect) -> AppResult<Vec<TokenWithSpan>> {
+    Tokenizer::new(parser_dialect(dialect).as_ref(), sql)
         .tokenize_with_location()
         .map_err(|error| AppError::Validation(format!("SQL lexical error: {error}")))
 }
 
 /// Words outside quoted strings/identifiers/comments, for conservative safety
 /// classification only. Execution never serializes or rewrites these tokens.
-pub(super) fn safety_words(sql: &str, driver: &str) -> AppResult<String> {
-    Ok(tokens(sql, driver)?
+pub(super) fn safety_words(sql: &str, dialect: DatabaseDialect) -> AppResult<String> {
+    Ok(tokens(sql, dialect)?
         .into_iter()
         .filter_map(|item| match item.token {
             Token::Word(word) if word.quote_style.is_none() => Some(word.value),
@@ -47,17 +47,21 @@ fn byte_offset(source: &str, lines: &[Vec<usize>], location: Location) -> usize 
         .unwrap_or(source.len())
 }
 
-pub(super) fn split_script(source: &str, driver: &str) -> AppResult<Vec<ScriptStatement>> {
+pub(super) fn split_script(
+    source: &str,
+    dialect: DatabaseDialect,
+) -> AppResult<Vec<ScriptStatement>> {
     if source.len() > 1_000_000 {
         return Err(AppError::Validation("SQL script exceeds 1 MB".into()));
     }
-    if driver == "mysql" && (source.contains("/*!") || source.to_ascii_uppercase().contains("/*M!"))
+    if dialect == DatabaseDialect::Mysql
+        && (source.contains("/*!") || source.to_ascii_uppercase().contains("/*M!"))
     {
         return Err(AppError::Unsupported(
             "MySQL executable comments require expansion into explicit SQL before execution".into(),
         ));
     }
-    let items = tokens(source, driver)?;
+    let items = tokens(source, dialect)?;
     // Index character positions once: repeatedly scanning a long line for
     // every token would make large INSERT statements quadratic.
     let mut lines = vec![Vec::new()];
@@ -92,7 +96,7 @@ pub(super) fn split_script(source: &str, driver: &str) -> AppResult<Vec<ScriptSt
         }
         end = token_end;
         if matches!(item.token, Token::SemiColon) {
-            if driver == "sqlite" {
+            if dialect == DatabaseDialect::Sqlite {
                 let fragment = std::ffi::CString::new(&source[statement_start..end])
                     .map_err(|_| AppError::Validation("SQL contains NUL".into()))?;
                 // SQLite's own grammar-aware completeness check recognizes trigger
