@@ -329,6 +329,8 @@ pub(crate) fn validate_variables(variables: &[WorkspaceVariableInput]) -> AppRes
     Ok(())
 }
 
+pub(crate) const MAX_ENVIRONMENT_NAME_CHARS: usize = 80;
+
 pub(crate) fn normalize_environment_name(name: String) -> AppResult<String> {
     let name = name.trim();
     if name.is_empty() {
@@ -336,10 +338,10 @@ pub(crate) fn normalize_environment_name(name: String) -> AppResult<String> {
             "environment name cannot be empty".to_string(),
         ));
     }
-    if name.chars().count() > 80 {
-        return Err(AppError::Validation(
-            "environment name must be 80 characters or fewer".to_string(),
-        ));
+    if name.chars().count() > MAX_ENVIRONMENT_NAME_CHARS {
+        return Err(AppError::Validation(format!(
+            "environment name must be {MAX_ENVIRONMENT_NAME_CHARS} characters or fewer"
+        )));
     }
     Ok(name.to_string())
 }
