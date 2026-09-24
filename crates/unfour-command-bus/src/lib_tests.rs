@@ -555,7 +555,7 @@ async fn collection_openapi_export_uses_command_bus_and_persisted_requests() {
     assert_eq!(imported.request_count, 1);
     assert_eq!(
         imported.collection.expect("imported collection").name,
-        "Users API"
+        "Users API (Copy 1)"
     );
     assert_eq!(
         bus.api_collection_list(workspace_id)

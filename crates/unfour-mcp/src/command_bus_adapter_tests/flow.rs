@@ -262,11 +262,25 @@ fn flow_workspace_policy_cannot_be_bypassed_by_confirmation_or_nested_workspace(
 #[test]
 fn flow_all_node_schemas_and_sensitive_inputs_keep_wire_contracts() {
     let (adapter, registry, ws) = setup();
+    let connection = adapter
+        .run(
+            adapter.bus.save_database_connection(
+                serde_json::from_value(json!({
+                    "workspaceId": ws,
+                    "name": "Flow validation fixture",
+                    "driver": "sqlite",
+                    "sqlitePath": ":memory:",
+                    "readOnly": true
+                }))
+                .unwrap(),
+            ),
+        )
+        .unwrap();
     let mut value = serde_json::to_value(definition(&ws)).unwrap();
     value["steps"] = json!([
         {"id":"action","name":"Action","kind":"action","timeoutMs":1000,"action":{"capability":"api","resourceId":"missing","arguments":{}}},
         {"id":"condition","name":"Condition","kind":"condition","timeoutMs":1000,"predicate":{"left":true,"op":"eq","right":true},"ifTrue":"poll","ifFalse":"$end"},
-        {"id":"poll","name":"Poll","kind":"poll","timeoutMs":1000,"probe":{"capability":"database","resourceId":"missing","arguments":{"sql":"select 1"}},"predicate":{"left":true,"op":"eq","right":true},"intervalMs":10,"maxAttempts":2},
+        {"id":"poll","name":"Poll","kind":"poll","timeoutMs":1000,"probe":{"capability":"database","resourceId":connection.id,"arguments":{"sql":"select 1"}},"predicate":{"left":true,"op":"eq","right":true},"intervalMs":10,"maxAttempts":2},
         {"id":"until","name":"Until","kind":"waitUntil","timeoutMs":1000,"probe":{"capability":"api","resourceId":"missing","arguments":{}},"successWhen":{"left":true,"op":"eq","right":true},"intervalMs":10},
         {"id":"wait","name":"Wait","kind":"wait","timeoutMs":1000,"durationMs":1}
     ]);
