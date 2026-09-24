@@ -71,8 +71,8 @@ export function exportApiCollection(
   });
 }
 
-export function previewApiCollectionImport() {
-  return call<{ content: string; preview: CollectionImportPreview } | null>("api_collection_import_preview");
+export function previewApiCollectionImport(workspaceId: string) {
+  return call<{ content: string; preview: CollectionImportPreview } | null>("api_collection_import_preview", { workspaceId });
 }
 
 export function importApiCollection(workspaceId: string, content: string) {

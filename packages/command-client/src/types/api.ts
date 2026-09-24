@@ -26,6 +26,8 @@ export type ApiCollection = {
 export type ApiCollectionExportFormat = "json" | "yaml" | "unfour" | "postman";
 
 export type CollectionImportPreview = {
+  conflict: boolean;
+  targetName: string;
   format: "unfour" | "postman" | "openapi";
   name: string;
   folderCount: number;

@@ -10,6 +10,24 @@ the same decode/validation as import, without writing. CommandBus executes
 mutation/outbox processing. Source folder IDs only reconstruct relationships;
 the transaction generates new entity IDs.
 
+Collection create/rename reject ASCII case-insensitive name conflicts among live
+collections in the same workspace with a domain Validation error. Rename excludes
+the current ID; an unchanged name remains a no-op even for historical duplicates.
+Existing duplicates are not migrated. Folder/request display names may repeat.
+No database uniqueness constraint is added; IDs remain the identity.
+
+Collection Preview requires `workspaceId` and returns `conflict` and `targetName`
+alongside `name`. Both names are the trimmed collection name: `name` is the
+normalized source, and `targetName` is the name import will try to store. The
+confirmation dialog displays the copy target on conflict. Import trims with
+`normalize_collection_name`, allocates with `import_copy_name`, then runs
+`validate_collection_name_on` on that final name inside the import transaction.
+A name occupied after Preview advances the Copy suffix. `import_copy_name`
+rejects a base longer than its character limit before looking for conflicts.
+Collection and Environment imports share it: `Name (Copy 1)`, `Name (Copy 2)`,
+etc., truncating the stem by character count to fit the collection's
+120-character or environment's 80-character limit.
+
 Environment exchange belongs to workspace-engine. Import calls existing
 environment create/update services inside one CommandBus transaction. It always
 creates a new environment, choosing `Name (Copy N)` on a name conflict and
@@ -81,6 +99,29 @@ portable request definitions. Literal secrets in arbitrary script/free-form
 source cannot be classified exhaustively; the export dialog calls for review.
 
 ## Verification (2026-09-22–23)
+
+### Collection name conflicts (2026-09-24)
+
+- PASS: HTTP engine suite (75 tests), including workspace-scoped create/rename
+  conflicts, case-only rename, historical duplicates, soft-deleted name reuse,
+  Preview races, consecutive Copy suffixes, multibyte 120-character names,
+  and duplicate folder/request display names inside imported content.
+- PASS: import trims the collection name before the case-insensitive conflict
+  check, then rejects the final name if it is still taken. `import_copy_name`
+  rejects a base longer than its limit with no existing names (unfour-core).
+- PASS: CommandBus exchange tests (6), including Collection validation/import
+  and Environment copy-name/length/rollback regressions; workspace environment
+  tests (7).
+- PASS: Collection tree component tests (17), desktop TypeScript, affected
+  ESLint, production Vite build, Tauri/MCP compile checks, Rust formatting,
+  diff whitespace checks, and large-file checker (no blocking findings).
+- Initial pnpm verification launch failed on local store permissions; direct
+  invocation of the installed tools passed. An initial Vite invocation from the
+  repository root could not find `index.html`; rerunning in `apps/desktop` passed.
+- NOT VERIFIED: native file-dialog/desktop visual interaction; conflict target
+  rendering and confirmation are covered by the component test.
+
+### Previous exchange verification
 
 - PASS: HTTP engine library suite, including native/Postman round trips, existing
   OpenAPI JSON/YAML, folder hierarchy, scripts, auth, disabled headers/query/body,

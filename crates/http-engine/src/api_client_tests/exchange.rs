@@ -23,7 +23,10 @@ fn native() -> Value {
 async fn native_and_postman_round_trip_hierarchy_scripts_auth_disabled_values() {
     let service = service().await;
     let content = native().to_string();
-    let preview = service.preview_collection_import(&content).unwrap();
+    let preview = service
+        .preview_collection_import("workspace-a".into(), &content)
+        .await
+        .unwrap();
     assert_eq!(
         (
             preview.folder_count,
@@ -105,6 +108,122 @@ async fn native_and_postman_round_trip_hierarchy_scripts_auth_disabled_values() 
 }
 
 #[tokio::test]
+async fn collection_import_allocates_copies_and_preview_rechecks_at_import() {
+    let service = service().await;
+    let mut document = native();
+    document["collection"]["folders"][1]["name"] = json!("Parent");
+    let request = document["collection"]["requests"][0].clone();
+    document["collection"]["requests"]
+        .as_array_mut()
+        .unwrap()
+        .push(request);
+    let content = document.to_string();
+    let preview = service
+        .preview_collection_import("workspace-a".into(), &content)
+        .await
+        .unwrap();
+    assert!(!preview.conflict);
+    assert_eq!(preview.target_name, "Portable");
+    let original = service
+        .create_collection("workspace-a".into(), "PORTABLE".into())
+        .await
+        .unwrap();
+    service
+        .create_collection("workspace-a".into(), "portable (copy 1)".into())
+        .await
+        .unwrap();
+    let preview = service
+        .preview_collection_import("workspace-a".into(), &content)
+        .await
+        .unwrap();
+    assert!(preview.conflict);
+    assert_eq!(preview.target_name, "Portable (Copy 2)");
+    service
+        .create_collection("workspace-a".into(), preview.target_name)
+        .await
+        .unwrap();
+    for index in 3..=4 {
+        let result = service
+            .import_collection_openapi("workspace-a".into(), content.clone())
+            .await
+            .unwrap();
+        let collection = result.collection.unwrap();
+        assert_ne!(collection.id, original.id);
+        assert_eq!(collection.name, format!("Portable (Copy {index})"));
+        assert_eq!((result.folder_count, result.request_count), (2, 2));
+    }
+    assert_eq!(
+        service
+            .get_collection("workspace-a", &original.id)
+            .await
+            .unwrap()
+            .name,
+        "PORTABLE"
+    );
+    assert!(
+        !service
+            .preview_collection_import("workspace-b".into(), &content)
+            .await
+            .unwrap()
+            .conflict
+    );
+}
+
+#[tokio::test]
+async fn collection_import_trims_before_conflict_check() {
+    let service = service().await;
+    service
+        .create_collection("workspace-a".into(), "Foo".into())
+        .await
+        .unwrap();
+    let mut document = native();
+    document["collection"]["name"] = json!("  foo  ");
+    let content = document.to_string();
+    let preview = service
+        .preview_collection_import("workspace-a".into(), &content)
+        .await
+        .unwrap();
+    assert!(preview.conflict);
+    assert_eq!(preview.name, "foo");
+    assert_eq!(preview.target_name, "foo (Copy 1)");
+    let imported = service
+        .import_collection_openapi("workspace-a".into(), content)
+        .await
+        .unwrap()
+        .collection
+        .unwrap();
+    assert_eq!(imported.name, "foo (Copy 1)");
+}
+
+#[tokio::test]
+async fn collection_import_copy_names_preserve_character_limit() {
+    let service = service().await;
+    let mut document = native();
+    let base = "界".repeat(120);
+    document["collection"]["name"] = json!(base);
+    service
+        .create_collection("workspace-a".into(), base)
+        .await
+        .unwrap();
+    for index in 1..=11 {
+        let content = document.to_string();
+        let preview = service
+            .preview_collection_import("workspace-a".into(), &content)
+            .await
+            .unwrap();
+        let imported = service
+            .import_collection_openapi("workspace-a".into(), content)
+            .await
+            .unwrap()
+            .collection
+            .unwrap();
+        assert_eq!(preview.target_name, imported.name);
+        assert_eq!(imported.name.chars().count(), 120);
+        assert!(imported.name.ends_with(&format!(" (Copy {index})")));
+    }
+}
+
+#[tokio::test]
 async fn export_redacts_credentials_from_auth_headers_url_and_body() {
     let service = service().await;
     let mut value = native();
@@ -160,7 +279,8 @@ async fn postman_preview_warns_and_file_paths_are_not_imported() {
     let service = service().await;
     let document = json!({"info":{"name":"Files","schema":"https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},"variable":[{"key":"base","value":"https://example.test"}],"item":[{"name":"Upload","event":[{"listen":"prerequest","script":{"exec":["pm.sendRequest('https://example.test');"]}}],"request":{"method":"POST","url":"{{base}}/upload","body":{"mode":"formdata","formdata":[{"key":"file","type":"file","src":"C:\\private\\document.pdf"}]}}}]});
     let preview = service
-        .preview_collection_import(&document.to_string())
+        .preview_collection_import("workspace-a".into(), &document.to_string())
+        .await
         .unwrap();
     for warning in [
         "reselectFiles",
@@ -192,11 +312,13 @@ async fn preview_rejects_cycles_and_unknown_versions_before_writing() {
     let mut value = native();
     value["collection"]["folders"][0]["parentSourceId"] = json!("old-child");
     assert!(service
-        .preview_collection_import(&value.to_string())
+        .preview_collection_import("workspace-a".into(), &value.to_string())
+        .await
         .is_err());
     value["version"] = json!(2);
     assert!(service
-        .preview_collection_import(&value.to_string())
+        .preview_collection_import("workspace-a".into(), &value.to_string())
+        .await
         .is_err());
     assert!(service
         .list_collections("workspace-a".into())

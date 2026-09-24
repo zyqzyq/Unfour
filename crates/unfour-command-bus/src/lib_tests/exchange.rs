@@ -2,6 +2,45 @@ use super::*;
 use serde_json::{json, Value};
 
 #[tokio::test]
+async fn exchange_collection_names_validate_and_import_as_copies() {
+    let bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let first = bus
+        .api_collection_create(workspace.clone(), "Example".into())
+        .await
+        .unwrap();
+    assert!(matches!(
+        bus.api_collection_create(workspace.clone(), "EXAMPLE".into())
+            .await,
+        Err(AppError::Validation(_))
+    ));
+    let other = bus
+        .api_collection_create(workspace.clone(), "Other".into())
+        .await
+        .unwrap();
+    assert!(matches!(
+        bus.api_collection_rename(workspace.clone(), other.id, "example".into())
+            .await,
+        Err(AppError::Validation(_))
+    ));
+    let doc = json!({"format":"unfour.collection","version":1,"collection":{"name":"example","description":null,"folders":[],"requests":[]}}).to_string();
+    let preview = bus
+        .api_collection_import_preview(workspace.clone(), &doc)
+        .await
+        .unwrap();
+    assert!(preview.conflict);
+    assert_eq!(preview.target_name, "example (Copy 1)");
+    let imported = bus
+        .api_collection_import(workspace, doc)
+        .await
+        .unwrap()
+        .collection
+        .unwrap();
+    assert_eq!(imported.name, preview.target_name);
+    assert_ne!(imported.id, first.id);
+}
+
+#[tokio::test]
 async fn exchange_environment_copy_preserves_metadata_and_redacts_secrets() {
     let bus = test_bus().await;
     let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;

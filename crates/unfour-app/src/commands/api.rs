@@ -127,6 +127,7 @@ pub async fn api_collection_import(
 
 #[tauri::command]
 pub async fn api_collection_import_preview(
+    workspace_id: String,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> AppResult<Option<serde_json::Value>> {
@@ -147,7 +148,10 @@ pub async fn api_collection_import_preview(
         ));
     }
     let content = std::fs::read_to_string(path)?;
-    let preview = state.command_bus.api_collection_import_preview(&content)?;
+    let preview = state
+        .command_bus
+        .api_collection_import_preview(workspace_id, &content)
+        .await?;
     Ok(Some(
         serde_json::json!({"content": content, "preview": preview}),
     ))

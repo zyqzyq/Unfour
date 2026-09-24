@@ -26,7 +26,7 @@ export function ApiCollectionToolbarActions({
   const queryClient = useQueryClient();
   const [pending, setPending] = useState<Awaited<ReturnType<typeof previewApiCollectionImport>>>(null);
   const previewMutation = useMutation({
-    mutationFn: previewApiCollectionImport,
+    mutationFn: () => previewApiCollectionImport(workspaceId),
     onSuccess: setPending,
     onError: (error) => handleError(error, { key: "feedback.api.collectionImportFailed" }),
   });
@@ -72,6 +72,7 @@ export function ApiCollectionToolbarActions({
           <DialogHeader><DialogTitle>{t("exchange.preview")}</DialogTitle></DialogHeader>
           <DialogBody>
             <p>{t(`exchange.collection.${pending?.preview.format ?? "unfour"}`)} · {pending?.preview.name}</p>
+            {pending?.preview.conflict && <p>{t("exchange.collectionTargetName", { name: pending.preview.targetName })}</p>}
             <p>{t("exchange.counts", { folders: pending?.preview.folderCount ?? 0, requests: pending?.preview.requestCount ?? 0, scripts: pending?.preview.scriptCount ?? 0 })}</p>
             <p>{t("exchange.variables")}: {pending?.preview.variables.join(", ") || t("exchange.none")}</p>
             <ul className="max-h-48 overflow-auto text-[12px] text-[var(--u-color-text-muted)]">

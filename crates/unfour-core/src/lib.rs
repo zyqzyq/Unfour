@@ -3,6 +3,7 @@ pub mod app_error;
 pub mod domain;
 pub mod id;
 pub mod models;
+pub mod naming;
 pub mod redaction;
 pub mod time;
 

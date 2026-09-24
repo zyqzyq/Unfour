@@ -2,6 +2,76 @@ use super::super::*;
 use super::support::{save_in_collection, service};
 
 #[tokio::test]
+async fn collection_names_are_workspace_scoped_case_insensitive_and_id_based() {
+    let service = service().await;
+    let first = service
+        .create_collection("workspace-a".into(), " APIs ".into())
+        .await
+        .unwrap();
+    for name in ["APIs", "apis", " APIS "] {
+        let error = service
+            .create_collection("workspace-a".into(), name.into())
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(error, AppError::Validation(message) if message.contains("already exists"))
+        );
+    }
+    service
+        .create_collection("workspace-b".into(), "apis".into())
+        .await
+        .unwrap();
+    let second = service
+        .create_collection("workspace-a".into(), "Other".into())
+        .await
+        .unwrap();
+    assert!(matches!(
+        service
+            .rename_collection("workspace-a".into(), second.id.clone(), "apis".into())
+            .await,
+        Err(AppError::Validation(_))
+    ));
+    let renamed = service
+        .rename_collection("workspace-a".into(), first.id.clone(), "apis".into())
+        .await
+        .unwrap();
+    assert_eq!(renamed.id, first.id);
+    // Simulate a historical duplicate without changing schema or migrating data.
+    sqlx::query("UPDATE api_collections SET name = 'apis' WHERE id = ?1")
+        .bind(&second.id)
+        .execute(service.db.pool())
+        .await
+        .unwrap();
+    let unchanged = service
+        .rename_collection("workspace-a".into(), first.id.clone(), "apis".into())
+        .await
+        .unwrap();
+    assert_eq!(unchanged.id, first.id);
+    assert_eq!(
+        service
+            .list_collections("workspace-a".into())
+            .await
+            .unwrap()
+            .iter()
+            .filter(|c| c.name == "apis")
+            .count(),
+        2
+    );
+    service
+        .rename_collection("workspace-a".into(), second.id.clone(), "Other".into())
+        .await
+        .unwrap();
+    service
+        .delete_collection("workspace-a".into(), first.id)
+        .await
+        .unwrap();
+    service
+        .create_collection("workspace-a".into(), "APIs".into())
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
 async fn collection_lifecycle_create_rename_delete_cascades_requests() {
     let service = service().await;
     let collection_a = service

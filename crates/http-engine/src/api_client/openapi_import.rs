@@ -67,11 +67,23 @@ struct FolderTag {
 }
 
 impl ApiClientService {
-    pub fn preview_collection_import(
+    pub async fn preview_collection_import(
         &self,
+        workspace_id: String,
         content: &str,
     ) -> AppResult<unfour_core::models::CollectionImportPreview> {
-        let (_, preview) = exchange::decode(content)?;
+        let (_, mut preview) = exchange::decode(content)?;
+        let mut connection = self.db.pool().acquire().await?;
+        let (name, target_name) = super::domain::resolve_collection_import_name_on(
+            &mut connection,
+            &workspace_id,
+            preview.name,
+            MAX_IMPORT_NAME_CHARS,
+        )
+        .await?;
+        preview.name = name;
+        preview.target_name = target_name;
+        preview.conflict = preview.target_name != preview.name;
         Ok(preview)
     }
 
@@ -101,7 +113,15 @@ impl ApiClientService {
         if content.len() > MAX_IMPORT_BYTES {
             return Err(import_validation("collection import file is too large"));
         }
-        let (parsed, _) = exchange::decode(&content)?;
+        let (mut parsed, _) = exchange::decode(&content)?;
+        let (_, target_name) = super::domain::resolve_collection_import_name_on(
+            connection,
+            &workspace_id,
+            parsed.name,
+            MAX_IMPORT_NAME_CHARS,
+        )
+        .await?;
+        parsed.name = target_name;
         let now = Utc::now().to_rfc3339();
         let collection_id = unfour_core::id::new_id();
         let workspace_exists: Option<(String,)> =

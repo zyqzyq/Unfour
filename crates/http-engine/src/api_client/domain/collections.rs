@@ -40,6 +40,7 @@ impl ApiClientService {
     ) -> AppResult<DomainCommandResult<ApiCollection>> {
         validate_workspace_on(connection, &workspace_id).await?;
         let name = normalize_collection_name(name)?;
+        validate_collection_name_on(connection, &workspace_id, &name, None).await?;
         let id = unfour_core::id::new_id();
         let now = Utc::now().to_rfc3339();
         sqlx::query(
@@ -84,6 +85,7 @@ impl ApiClientService {
         if current.name == name {
             return Ok(DomainCommandResult::unchanged(ApiCollection::from(current)));
         }
+        validate_collection_name_on(connection, &workspace_id, &name, Some(&collection_id)).await?;
         let revision: i64 = sqlx::query_scalar(
             r#"
             UPDATE api_collections
@@ -732,6 +734,40 @@ async fn folder_contains_descendant_on(
     .bind(candidate_descendant_id)
     .fetch_one(&mut *connection)
     .await?)
+}
+
+pub(crate) async fn resolve_collection_import_name_on(
+    connection: &mut SqliteConnection,
+    workspace_id: &str,
+    raw_name: String,
+    max_chars: usize,
+) -> AppResult<(String, String)> {
+    let name = normalize_collection_name(raw_name)?;
+    let existing = list_collections_on(connection, workspace_id).await?;
+    let target = unfour_core::naming::import_copy_name(
+        &name,
+        existing.iter().map(|collection| collection.name.as_str()),
+        max_chars,
+    )?;
+    validate_collection_name_on(connection, workspace_id, &target, None).await?;
+    Ok((name, target))
+}
+
+async fn validate_collection_name_on(
+    connection: &mut SqliteConnection,
+    workspace_id: &str,
+    name: &str,
+    exclude_id: Option<&str>,
+) -> AppResult<()> {
+    let existing = list_collections_on(connection, workspace_id).await?;
+    if existing.iter().any(|collection| {
+        Some(collection.id.as_str()) != exclude_id && collection.name.eq_ignore_ascii_case(name)
+    }) {
+        return Err(AppError::Validation(format!(
+            "collection name '{name}' already exists in this workspace"
+        )));
+    }
+    Ok(())
 }
 
 fn validate_reorder_ids<'a>(

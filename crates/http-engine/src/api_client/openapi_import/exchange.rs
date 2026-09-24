@@ -48,6 +48,8 @@ pub(super) fn decode(content: &str) -> AppResult<(NormalizedCollection, Collecti
     warnings.sort();
     warnings.dedup();
     let preview = CollectionImportPreview {
+        conflict: false,
+        target_name: parsed.name.clone(),
         format: format.into(),
         name: parsed.name.clone(),
         folder_count: parsed.folders.len(),

@@ -277,6 +277,8 @@ pub enum ApiCollectionExportFormat {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CollectionImportPreview {
+    pub conflict: bool,
+    pub target_name: String,
     pub format: String,
     pub name: String,
     pub folder_count: usize,

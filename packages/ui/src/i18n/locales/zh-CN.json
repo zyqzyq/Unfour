@@ -1,5 +1,6 @@
 {
   "exchange": {
+    "collectionTargetName": "已有同名 Collection，将导入为：{name}",
     "collectionActions": "集合“{name}”的操作",
     "format": "格式", "encoding": "OpenAPI 编码", "preview": "导入预览", "import": "导入", "export": "导出", "variables": "变量", "none": "无", "secret": "敏感", "disabled": "已禁用", "failed": "导入或导出失败", "imported": "已导入 {name}", "exported": "已导出", "conflict": "已存在同名环境，将创建副本。",
     "counts": "{folders} 个文件夹 · {requests} 个请求 · {scripts} 个脚本",

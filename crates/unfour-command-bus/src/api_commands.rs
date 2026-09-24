@@ -111,11 +111,14 @@ impl CommandBus {
             .await
     }
 
-    pub fn api_collection_import_preview(
+    pub async fn api_collection_import_preview(
         &self,
+        workspace_id: String,
         content: &str,
     ) -> AppResult<unfour_core::models::CollectionImportPreview> {
-        self.api_client.preview_collection_import(content)
+        self.api_client
+            .preview_collection_import(workspace_id, content)
+            .await
     }
 
     pub async fn api_collection_import(

@@ -208,12 +208,14 @@ describe("ApiCollectionTree", () => {
   });
 
   it("imports an Unfour collection export from the collections toolbar", async () => {
-    vi.mocked(previewApiCollectionImport).mockResolvedValue({content:"collection-content", preview:{format:"unfour",name:"Imported",folderCount:1,requestCount:2,scriptCount:1,variables:[],warnings:[]}});
+    vi.mocked(previewApiCollectionImport).mockResolvedValue({content:"collection-content", preview:{format:"unfour",name:"Imported",conflict:true,targetName:"Imported (Copy 2)",folderCount:1,requestCount:2,scriptCount:1,variables:[],warnings:[]}});
     renderTree();
 
     fireEvent.click(await screen.findByRole("button", { name: "Import collection" }));
 
     await screen.findByRole("dialog");
+    expect(previewApiCollectionImport).toHaveBeenCalledWith("ws-1");
+    expect(screen.getByText("A collection with this name already exists. Import as: Imported (Copy 2)")).toBeInTheDocument();
     expect(importMock).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", {name:"Import", exact:true}));
     await waitFor(() => expect(importMock).toHaveBeenCalledWith("ws-1", "collection-content"));

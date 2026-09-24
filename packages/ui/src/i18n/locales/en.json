@@ -1,5 +1,6 @@
 {
   "exchange": {
+    "collectionTargetName": "A collection with this name already exists. Import as: {name}",
     "collectionActions": "Collection actions for {name}",
     "format": "Format", "encoding": "OpenAPI encoding", "preview": "Import preview", "import": "Import", "export": "Export", "variables": "Variables", "none": "None", "secret": "Secret", "disabled": "Disabled", "failed": "Import or export failed", "imported": "Imported {name}", "exported": "Exported", "conflict": "An environment with this name exists. A copy will be created.",
     "counts": "{folders} folders · {requests} requests · {scripts} scripts",

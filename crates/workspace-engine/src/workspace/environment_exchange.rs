@@ -90,19 +90,6 @@ fn decode(content: &str) -> AppResult<(String, String, Vec<WorkspaceVariableInpu
     Ok((format.into(), name, variables))
 }
 
-fn environment_copy_name(base: &str, index: usize) -> AppResult<String> {
-    let suffix = format!(" (Copy {index})");
-    let max = super::variables::MAX_ENVIRONMENT_NAME_CHARS;
-    let suffix_chars = suffix.chars().count();
-    if suffix_chars > max {
-        return Err(AppError::Validation(format!(
-            "environment name must be {max} characters or fewer"
-        )));
-    }
-    let stem: String = base.chars().take(max - suffix_chars).collect();
-    super::variables::normalize_environment_name(format!("{stem}{suffix}"))
-}
-
 impl WorkspaceService {
     pub async fn preview_environment_import(
         &self,
@@ -125,12 +112,11 @@ impl WorkspaceService {
     ) -> AppResult<DomainCommandResult<WorkspaceEnvironment>> {
         let (_, base, variables) = decode(content)?;
         let existing = super::variables::list_environments_on(connection, &workspace_id).await?;
-        let mut name = base.clone();
-        let mut index = 1;
-        while existing.iter().any(|e| e.name.eq_ignore_ascii_case(&name)) {
-            name = environment_copy_name(&base, index)?;
-            index += 1;
-        }
+        let name = unfour_core::naming::import_copy_name(
+            &base,
+            existing.iter().map(|e| e.name.as_str()),
+            super::variables::MAX_ENVIRONMENT_NAME_CHARS,
+        )?;
         let created = self
             .create_environment_on(connection, context, workspace_id.clone(), name.clone())
             .await?;
