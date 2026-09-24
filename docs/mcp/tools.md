@@ -2,6 +2,15 @@
 
 This is the active tool reference for the local `unfour-mcp` server.
 
+## Tool names
+
+Canonical tool names stay dotted, for example `unfour.system.health`.
+`tools/list` returns only those names. `tools/call` also accepts the stable
+underscore alias formed by replacing each `.` with `_`
+(`unfour_system_health`). The alias is resolved to the canonical name before
+policy, capability, confirmation, and result metadata. Unknown names stay
+unknown; underscores are not rewritten by guessing.
+
 ## Tool Safety Annotations
 
 Every tool in `tools/list` carries MCP behavior hints:

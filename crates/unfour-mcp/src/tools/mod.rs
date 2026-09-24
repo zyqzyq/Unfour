@@ -11,6 +11,7 @@ mod ssh_risk;
 mod system;
 mod workspace;
 
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use serde::Serialize;
@@ -111,6 +112,9 @@ struct RegisteredTool {
 
 pub struct ToolRegistry {
     tools: Vec<RegisteredTool>,
+    /// Underscore alias to canonical dotted name. Built once at registration.
+    /// Canonical names are never inserted as keys.
+    aliases: HashMap<String, &'static str>,
     command_bus: Arc<dyn CommandBusAdapter>,
 }
 
@@ -142,8 +146,14 @@ impl ToolRegistry {
         tools.extend(flow::registered_tools());
         tools.extend(ssh::registered_tools());
         tools.extend(connection_diagnostics::registered_tools());
+        let aliases = build_tool_alias_index(tools.iter().map(|tool| tool.definition.name))
+            .unwrap_or_else(|error| panic!("MCP tool registry rejected: {error}"));
 
-        Self { tools, command_bus }
+        Self {
+            tools,
+            aliases,
+            command_bus,
+        }
     }
 
     pub fn definitions(&self) -> Vec<ToolDefinition> {
@@ -153,8 +163,30 @@ impl ToolRegistry {
             .collect()
     }
 
+    /// Resolve a requested tool name to its canonical dotted name.
+    ///
+    /// Canonical names match first. Underscore aliases match only the map built
+    /// at registration. Any other string is `UNKNOWN_TOOL`.
+    pub(crate) fn resolve_tool_name<'a>(
+        &'a self,
+        requested: &'a str,
+    ) -> Result<&'a str, ToolCallError> {
+        if self
+            .tools
+            .iter()
+            .any(|tool| tool.definition.name == requested)
+        {
+            return Ok(requested);
+        }
+        self.aliases
+            .get(requested)
+            .copied()
+            .ok_or_else(|| ToolCallError::UnknownTool(requested.to_string()))
+    }
+
     pub(crate) fn call(&self, name: &str, arguments: Value) -> Result<Value, ToolCallError> {
         let started = std::time::Instant::now();
+        let name = self.resolve_tool_name(name)?;
         let tool = self
             .tools
             .iter()
@@ -229,6 +261,84 @@ impl ToolRegistry {
             Err(error) => Err(error),
         }
     }
+}
+
+/// Stable underscore alias for a dotted canonical tool name.
+/// `unfour.system.health` becomes `unfour_system_health`.
+pub(super) fn underscore_tool_alias(canonical: &str) -> String {
+    canonical.replace('.', "_")
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum ToolNameIndexError {
+    DuplicateCanonical {
+        name: String,
+    },
+    AliasCollision {
+        alias: String,
+        existing: String,
+        incoming: String,
+    },
+}
+
+impl std::fmt::Display for ToolNameIndexError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DuplicateCanonical { name } => {
+                write!(formatter, "duplicate canonical MCP tool name `{name}`")
+            }
+            Self::AliasCollision {
+                alias,
+                existing,
+                incoming,
+            } => write!(
+                formatter,
+                "MCP tool alias `{alias}` collides between `{existing}` and `{incoming}`"
+            ),
+        }
+    }
+}
+
+/// Build `alias -> canonical` from registered canonical names.
+///
+/// Duplicate canonical names and any alias that matches another canonical name
+/// or another alias fail here. Names without a dot do not get a separate alias.
+pub(super) fn build_tool_alias_index<'a>(
+    names: impl IntoIterator<Item = &'a str>,
+) -> Result<HashMap<String, &'a str>, ToolNameIndexError> {
+    let names = names.into_iter().collect::<Vec<_>>();
+    let mut canonical = HashSet::with_capacity(names.len());
+    for name in &names {
+        if !canonical.insert(*name) {
+            return Err(ToolNameIndexError::DuplicateCanonical {
+                name: (*name).to_string(),
+            });
+        }
+    }
+
+    let mut aliases: HashMap<String, &'a str> = HashMap::new();
+    for name in names {
+        let alias = underscore_tool_alias(name);
+        if alias == name {
+            continue;
+        }
+        if canonical.contains(alias.as_str()) {
+            return Err(ToolNameIndexError::AliasCollision {
+                existing: alias.clone(),
+                incoming: name.to_string(),
+                alias,
+            });
+        }
+        if let Some(existing) = aliases.get(&alias) {
+            return Err(ToolNameIndexError::AliasCollision {
+                alias,
+                existing: (*existing).to_string(),
+                incoming: name.to_string(),
+            });
+        }
+        aliases.insert(alias, name);
+    }
+    Ok(aliases)
 }
 
 fn policy_or_execution_error(

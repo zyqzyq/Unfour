@@ -530,5 +530,242 @@ fn default_schema_for_catalog_falls_back_only_when_catalog_is_omitted() {
         .contains("catalog-aware database schema reads"));
 }
 
+struct PolicyBus {
+    environment_type: &'static str,
+    mcp_policy: &'static str,
+}
+
+impl CommandBusAdapter for PolicyBus {
+    fn execute_read(
+        &self,
+        command: ReadCommand,
+    ) -> Result<ReadCommandResult, CommandBusAdapterError> {
+        match command {
+            ReadCommand::CurrentWorkspace => Ok(ReadCommandResult::CurrentWorkspace(
+                CurrentWorkspaceResult {
+                    workspace_id: "workspace-1".to_string(),
+                    workspace_name: "Policy Workspace".to_string(),
+                    environment_type: self.environment_type.to_string(),
+                    mcp_policy: self.mcp_policy.to_string(),
+                    workspace_root: None,
+                    mode: "local".to_string(),
+                    source: "command-bus".to_string(),
+                },
+            )),
+            _ => Err(CommandBusAdapterError {
+                code: "UNEXPECTED",
+                message: "unexpected command",
+                details: json!({}),
+            }),
+        }
+    }
+
+    fn execute_saved_api_request(
+        &self,
+        _request_id: &str,
+        _timeout_ms: Option<u64>,
+    ) -> Result<ApiResponse, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "UNEXPECTED",
+            message: "unexpected command",
+            details: json!({}),
+        })
+    }
+
+    fn list_db_connections(
+        &self,
+        _workspace_id: &str,
+    ) -> Result<Vec<DatabaseConnection>, CommandBusAdapterError> {
+        Ok(vec![])
+    }
+
+    fn get_db_schema(
+        &self,
+        _workspace_id: &str,
+        _connection_id: &str,
+    ) -> Result<DatabaseSchema, CommandBusAdapterError> {
+        Ok(DatabaseSchema {
+            connection_id: String::new(),
+            tables: vec![],
+        })
+    }
+
+    fn execute_db_query(
+        &self,
+        _input: DatabaseQueryInput,
+    ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
+        Ok(DatabaseQueryResult {
+            columns: vec![],
+            rows: vec![],
+            affected_rows: 0,
+            duration_ms: 0,
+            safety: DatabaseQuerySafety {
+                classification: "read".to_string(),
+                requires_confirmation: false,
+                confirmed: true,
+                message: None,
+            },
+        })
+    }
+
+    fn system_health(&self) -> Result<unfour_core::models::SystemHealth, CommandBusAdapterError> {
+        Ok(unfour_core::models::SystemHealth {
+            app_name: "Unfour".to_string(),
+            storage_ready: true,
+            command_bus_ready: true,
+            ai_reserved_capabilities: vec![],
+        })
+    }
+}
+
+fn without_duration(mut value: serde_json::Value) -> serde_json::Value {
+    if let Some(meta) = value.get_mut("_meta").and_then(|meta| meta.as_object_mut()) {
+        meta.remove("durationMs");
+    }
+    value
+}
+
+fn assert_alias_matches_canonical(
+    registry: &ToolRegistry,
+    canonical: &str,
+    arguments: serde_json::Value,
+) {
+    let alias = super::underscore_tool_alias(canonical);
+    let canonical_result = registry
+        .call(canonical, arguments.clone())
+        .unwrap_or_else(|error| panic!("{canonical} failed: {error:?}"));
+    let alias_result = registry
+        .call(&alias, arguments)
+        .unwrap_or_else(|error| panic!("{alias} failed: {error:?}"));
+
+    assert_eq!(alias_result["_meta"]["tool"], canonical);
+    assert_eq!(
+        without_duration(alias_result),
+        without_duration(canonical_result)
+    );
+}
+
+#[test]
+fn underscore_alias_calls_match_canonical_read_tool() {
+    let registry = ToolRegistry::with_command_bus(Arc::new(StubCommandBus));
+    assert_alias_matches_canonical(&registry, "unfour.system.health", json!({}));
+    let alias = registry
+        .call("unfour_system_health", json!({}))
+        .expect("alias should resolve");
+    assert_eq!(alias["_meta"]["tool"], "unfour.system.health");
+    assert_eq!(alias["isError"], false);
+}
+
+#[test]
+fn tools_list_exposes_canonical_names_only() {
+    let definitions = ToolRegistry::with_command_bus(Arc::new(StubCommandBus)).definitions();
+    let names = definitions
+        .iter()
+        .map(|definition| definition.name)
+        .collect::<Vec<_>>();
+    assert!(names.contains(&"unfour.system.health"));
+    assert!(names.contains(&"unfour.ssh.exec"));
+    assert!(!names.contains(&"unfour_system_health"));
+    assert!(!names.contains(&"unfour_ssh_exec"));
+    assert!(names.iter().all(|name| name.contains('.')));
+}
+
+#[test]
+fn unknown_tool_name_stays_unknown() {
+    let registry = ToolRegistry::with_command_bus(Arc::new(StubCommandBus));
+    let error = registry
+        .call("unfour.system_health", json!({}))
+        .expect_err("partial underscore rewrite is not an alias");
+    assert_eq!(
+        error,
+        super::ToolCallError::UnknownTool("unfour.system_health".to_string())
+    );
+    let error = registry
+        .call("not.a.tool", json!({}))
+        .expect_err("unknown names stay unknown");
+    assert_eq!(
+        error,
+        super::ToolCallError::UnknownTool("not.a.tool".to_string())
+    );
+}
+
+#[test]
+fn alias_index_rejects_duplicate_canonical_names_and_alias_collisions() {
+    let duplicate = super::build_tool_alias_index(["unfour.system.health", "unfour.system.health"]);
+    assert_eq!(
+        duplicate,
+        Err(super::ToolNameIndexError::DuplicateCanonical {
+            name: "unfour.system.health".to_string(),
+        })
+    );
+
+    let collision = super::build_tool_alias_index(["unfour.system.health", "unfour_system_health"]);
+    assert_eq!(
+        collision,
+        Err(super::ToolNameIndexError::AliasCollision {
+            alias: "unfour_system_health".to_string(),
+            existing: "unfour_system_health".to_string(),
+            incoming: "unfour.system.health".to_string(),
+        })
+    );
+
+    let shared_alias = super::build_tool_alias_index(["a.b_c", "a_b.c"]);
+    assert_eq!(
+        shared_alias,
+        Err(super::ToolNameIndexError::AliasCollision {
+            alias: "a_b_c".to_string(),
+            existing: "a.b_c".to_string(),
+            incoming: "a_b.c".to_string(),
+        })
+    );
+}
+
+#[test]
+fn alias_uses_the_same_policy_as_canonical_for_read_and_execute_tools() {
+    let prod = ToolRegistry::with_command_bus(Arc::new(PolicyBus {
+        environment_type: "prod",
+        mcp_policy: "auto",
+    }));
+    assert_alias_matches_canonical(&prod, "unfour.system.health", json!({}));
+    let exec_args = json!({ "connectionId": "ssh-1", "command": "rm -rf /tmp/app" });
+    assert_alias_matches_canonical(&prod, "unfour.ssh.exec", exec_args.clone());
+    let blocked = crate::response::error_json(
+        &prod
+            .call("unfour_ssh_exec", exec_args.clone())
+            .expect("policy denial is a tool result"),
+    );
+    assert_eq!(blocked["error"]["code"], "WORKSPACE_POLICY_BLOCKED");
+    assert_eq!(blocked["resolvedPolicy"], "read_only");
+    assert_eq!(blocked["capability"], "ssh:exec");
+    assert_eq!(blocked["risk"], "execute");
+
+    let read_only = ToolRegistry::with_command_bus(Arc::new(PolicyBus {
+        environment_type: "test",
+        mcp_policy: "read_only",
+    }));
+    assert_alias_matches_canonical(&read_only, "unfour.system.health", json!({}));
+    assert_alias_matches_canonical(&read_only, "unfour.ssh.exec", exec_args.clone());
+
+    let guarded = ToolRegistry::with_command_bus(Arc::new(PolicyBus {
+        environment_type: "test",
+        mcp_policy: "guarded",
+    }));
+    assert_alias_matches_canonical(&guarded, "unfour.system.health", json!({}));
+    assert_alias_matches_canonical(&guarded, "unfour.ssh.exec", exec_args);
+    let confirmation = crate::response::error_json(
+        &guarded
+            .call(
+                "unfour_ssh_exec",
+                json!({ "connectionId": "ssh-1", "command": "rm -rf /tmp/app" }),
+            )
+            .expect("guarded execute asks for confirmation"),
+    );
+    assert_eq!(confirmation["requires_confirmation"], true);
+    assert_ne!(
+        confirmation["error"]["code"],
+        "MCP_TOOL_POLICY_UNCLASSIFIED"
+    );
+}
+
 #[path = "output_schema.rs"]
 mod output_schema;

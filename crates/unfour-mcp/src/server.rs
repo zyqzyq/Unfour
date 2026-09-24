@@ -128,6 +128,7 @@ impl McpServer {
 
         let request_id = unfour_diag::new_request_id();
         let started = Instant::now();
+        let resolved = self.tools.resolve_tool_name(name).ok();
         unfour_diag::log_operation_event(
             "tool_call_started",
             "mcp",
@@ -135,7 +136,12 @@ impl McpServer {
             "started",
             None,
             None,
-            json!({ "request_id": request_id.as_str(), "tool_name": name }),
+            json!({
+                "request_id": request_id.as_str(),
+                "tool_name": resolved.unwrap_or(name),
+                "requested_tool_name": name,
+                "resolved_tool_name": resolved,
+            }),
         );
         let result = self.tools.call(name, arguments);
         match result {
@@ -157,7 +163,12 @@ impl McpServer {
                     tool_result_log_status(&value),
                     Some(started.elapsed().as_millis()),
                     error_code.as_deref(),
-                    json!({ "request_id": request_id.as_str(), "tool_name": name }),
+                    json!({
+                        "request_id": request_id.as_str(),
+                        "tool_name": resolved.unwrap_or(name),
+                        "requested_tool_name": name,
+                        "resolved_tool_name": resolved,
+                    }),
                 );
                 Ok(value)
             }
@@ -177,7 +188,12 @@ impl McpServer {
                     "error",
                     Some(started.elapsed().as_millis()),
                     Some(error_kind),
-                    json!({ "request_id": request_id.as_str(), "tool_name": name }),
+                    json!({
+                        "request_id": request_id.as_str(),
+                        "tool_name": resolved.unwrap_or(name),
+                        "requested_tool_name": name,
+                        "resolved_tool_name": resolved,
+                    }),
                 );
                 Err(match error {
                     ToolCallError::UnknownTool(name) => (-32602, format!("Unknown tool: {name}")),

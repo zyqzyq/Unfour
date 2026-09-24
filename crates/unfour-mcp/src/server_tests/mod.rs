@@ -351,6 +351,56 @@ fn stdio_round_trip_lists_and_calls_tools() {
 }
 
 #[test]
+fn tools_call_resolves_underscore_alias_and_list_hides_it() {
+    let server = McpServer::new(Arc::new(StubCommandBus));
+    let listed = server
+        .handle_message(&json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/list"
+        }))
+        .expect("tools/list returns a response");
+    let tools = listed["result"]["tools"].as_array().expect("tools array");
+    assert!(tools
+        .iter()
+        .any(|tool| tool["name"] == "unfour.workspace.current"));
+    assert!(tools
+        .iter()
+        .all(|tool| tool["name"] != "unfour_workspace_current"));
+
+    let alias = server
+        .handle_message(&json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "unfour_workspace_current",
+                "arguments": {}
+            }
+        }))
+        .expect("alias call returns a response");
+    assert_eq!(alias["result"]["isError"], false);
+    assert_eq!(alias["result"]["_meta"]["tool"], "unfour.workspace.current");
+
+    let unknown = server
+        .handle_message(&json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "unfour_not_a_tool",
+                "arguments": {}
+            }
+        }))
+        .expect("unknown tool returns an error response");
+    assert_eq!(unknown["error"]["code"], -32602);
+    assert_eq!(
+        unknown["error"]["message"],
+        "Unknown tool: unfour_not_a_tool"
+    );
+}
+
+#[test]
 fn stdio_idle_timeout_returns_while_input_remains_open() {
     let command_bus =
         LocalCommandBusAdapter::ephemeral().expect("ephemeral command bus should initialize");
