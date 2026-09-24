@@ -47,14 +47,23 @@ impl DatabaseService {
             .connect_with(options)
             .await
             .map_err(sanitize_pg_error)?;
-        let version: String = sqlx::query_scalar("SELECT version()")
+        let version = match sqlx::query_scalar("SELECT version()")
             .fetch_one(&pool)
             .await
-            .map_err(sanitize_pg_error)?;
-        Ok(RuntimePool {
-            pool,
-            profile: RuntimeDatabaseProfile::postgres(version),
-        })
+        {
+            Ok(version) => Some(version),
+            Err(error) => {
+                record_version_probe_failure("postgres", error);
+                None
+            }
+        };
+        let profile = match version {
+            Some(version) => RuntimeDatabaseProfile::postgres(version),
+            None => {
+                RuntimeDatabaseProfile::resolve(DetectedServerType::UnknownPostgresCompatible, None)
+            }
+        };
+        Ok(RuntimePool { pool, profile })
     }
 
     /// Create a MySQL connection pool, loading the password from SecretStore
@@ -84,10 +93,16 @@ impl DatabaseService {
             .connect_with(options)
             .await
             .map_err(sanitize_mysql_error)?;
-        let version: String = sqlx::query_scalar("SELECT VERSION()")
+        let version = match sqlx::query_scalar("SELECT VERSION()")
             .fetch_one(&pool)
             .await
-            .map_err(sanitize_mysql_error)?;
+        {
+            Ok(version) => Some(version),
+            Err(error) => {
+                record_version_probe_failure("mysql", error);
+                None
+            }
+        };
         Ok(RuntimePool {
             pool,
             profile: RuntimeDatabaseProfile::resolve(DetectedServerType::Mysql, version),
@@ -112,4 +127,21 @@ impl DatabaseService {
             _ => connection.clone(),
         }
     }
+}
+
+/// A failed version probe is degraded detection, not a connect failure.
+fn record_version_probe_failure(driver: &str, error: sqlx::Error) {
+    let sanitized = match driver {
+        "mysql" => sanitize_mysql_error(error),
+        _ => sanitize_pg_error(error),
+    };
+    unfour_diag::log_operation_event(
+        "database_server_detection_degraded",
+        "database",
+        "detect_server_version",
+        "degraded",
+        None,
+        Some(unfour_diag::app_error_kind(&sanitized)),
+        serde_json::json!({ "driver": driver }),
+    );
 }

@@ -1,4 +1,5 @@
 mod mysql;
+mod mysql_profile_server;
 mod postgres;
 mod profile_server;
 mod runtime_profile;

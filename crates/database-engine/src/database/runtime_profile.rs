@@ -59,17 +59,19 @@ pub struct DatabaseCapabilities {
 pub struct RuntimeDatabaseProfile {
     pub detected_server_type: DetectedServerType,
     /// Original server-reported version/banner, retained only in memory.
-    pub server_version: String,
+    /// `None` means the version probe failed or was unavailable. Absence is not
+    /// a placeholder string, and it is not a connection failure.
+    pub server_version: Option<String>,
     pub dialect: DatabaseDialect,
     pub capabilities: DatabaseCapabilities,
 }
 
 impl RuntimeDatabaseProfile {
     pub(super) fn postgres(version: String) -> Self {
-        Self::resolve(detect_postgres_server(&version), version)
+        Self::resolve(detect_postgres_server(&version), Some(version))
     }
 
-    pub(super) fn resolve(server: DetectedServerType, version: String) -> Self {
+    pub(super) fn resolve(server: DetectedServerType, version: Option<String>) -> Self {
         use DetectedServerType::*;
         // Adding a detected product requires an explicit compatibility policy.
         let (dialect, catalogs, schemas, known) = match server {

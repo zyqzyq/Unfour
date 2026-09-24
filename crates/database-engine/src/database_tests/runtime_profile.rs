@@ -1,6 +1,10 @@
 use super::super::*;
+use super::mysql_profile_server::MysqlProfileServer;
 use super::profile_server::ProfileServer;
-use super::support::{postgres_input, service_with_workspace, sqlite_fixture, sqlite_input};
+use super::support::{
+    mysql_input, postgres_input, service_with_workspace, sqlite_fixture, sqlite_input,
+    RejectingServer,
+};
 use unfour_core::domain::connection_entity_key;
 
 #[test]
@@ -50,9 +54,9 @@ fn profiles_resolve_dialects_and_conservative_capabilities() {
             true,
         ),
     ] {
-        let profile = RuntimeDatabaseProfile::resolve(server, "test-version".into());
+        let profile = RuntimeDatabaseProfile::resolve(server, Some("test-version".into()));
         assert_eq!(profile.detected_server_type, server);
-        assert_eq!(profile.server_version, "test-version");
+        assert_eq!(profile.server_version.as_deref(), Some("test-version"));
         assert_eq!(profile.dialect, dialect);
         assert_eq!(profile.capabilities.catalogs, catalogs);
         assert_eq!(profile.capabilities.schemas, schemas);
@@ -89,6 +93,10 @@ async fn postgres_connect_detects_again_without_persisting_or_syncing_profile() 
     .unwrap()
     .unwrap();
     assert_eq!(profile.detected_server_type, DetectedServerType::PostgreSql);
+    assert_eq!(
+        profile.server_version.as_deref(),
+        Some("PostgreSQL 16.4 on fixture")
+    );
     *server.version.lock().unwrap() = "Acme PostgreSQL-compatible 1.0".into();
     let next = service
         .runtime_profile(
@@ -101,6 +109,10 @@ async fn postgres_connect_detects_again_without_persisting_or_syncing_profile() 
     assert_eq!(
         next.detected_server_type,
         DetectedServerType::UnknownPostgresCompatible
+    );
+    assert_eq!(
+        next.server_version.as_deref(),
+        Some("Acme PostgreSQL-compatible 1.0")
     );
     assert!(!next.capabilities.ddl);
     assert_eq!(
@@ -136,13 +148,86 @@ async fn postgres_connect_detects_again_without_persisting_or_syncing_profile() 
             .unwrap();
     assert_eq!(config, "{}");
     *server.version.lock().unwrap() = "probe-error".into();
-    assert!(
-        service
-            .runtime_profile(workspace, saved.id, None)
-            .await
-            .is_err(),
-        "probe failures are not successful unknown profiles"
+    let degraded = service
+        .runtime_profile(workspace.clone(), saved.id.clone(), None)
+        .await
+        .expect("version probe failure must not fail the pool");
+    assert_eq!(
+        degraded.detected_server_type,
+        DetectedServerType::UnknownPostgresCompatible
     );
+    assert_eq!(degraded.server_version, None);
+    assert_eq!(degraded.dialect, DatabaseDialect::Postgres);
+    assert!(!degraded.capabilities.catalogs);
+    assert!(degraded.capabilities.schemas);
+    assert!(!degraded.capabilities.ddl);
+    let tested = service
+        .test_connection(workspace, saved.id)
+        .await
+        .expect("version probe failure must not fail test_connection");
+    assert!(tested.ok);
+    assert_eq!(tested.server_version, None);
+}
+
+#[tokio::test]
+async fn mysql_version_probe_failure_keeps_pool_and_baseline_profile() {
+    let server = MysqlProfileServer::start().await;
+    let (service, workspace) = service_with_workspace().await;
+    let mut input = mysql_input(&workspace, None);
+    input.port = Some(server.port);
+    let saved = service.save_connection(input).await.unwrap();
+    let profile = tokio::time::timeout(
+        Duration::from_secs(5),
+        service.runtime_profile(workspace.clone(), saved.id.clone(), None),
+    )
+    .await
+    .expect("mysql probe fallback timed out")
+    .expect("version probe failure must not fail the mysql pool");
+    assert_eq!(profile.detected_server_type, DetectedServerType::Mysql);
+    assert_eq!(profile.server_version, None);
+    assert_eq!(profile.dialect, DatabaseDialect::Mysql);
+    assert!(profile.capabilities.catalogs);
+    assert!(!profile.capabilities.schemas);
+    assert!(profile.capabilities.ddl);
+    assert!(profile.capabilities.row_mutation);
+    let tested = service
+        .test_connection(workspace, saved.id)
+        .await
+        .expect("version probe failure must not fail test_connection");
+    assert!(tested.ok);
+    assert_eq!(tested.server_version, None);
+    assert!(server
+        .queries
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|sql| sql.trim().eq_ignore_ascii_case("SELECT VERSION()")));
+}
+
+#[tokio::test]
+async fn transport_failure_is_still_a_connection_error() {
+    let server = RejectingServer::start().await;
+    let (service, workspace) = service_with_workspace().await;
+    let mut postgres = postgres_input(&workspace);
+    postgres.port = Some(server.port);
+    let saved = service.save_connection(postgres).await.unwrap();
+    assert!(service
+        .runtime_profile(workspace.clone(), saved.id.clone(), None)
+        .await
+        .is_err());
+    assert!(service
+        .test_connection(workspace.clone(), saved.id)
+        .await
+        .is_err());
+
+    let mut mysql = mysql_input(&workspace, None);
+    mysql.port = Some(server.port);
+    let saved = service.save_connection(mysql).await.unwrap();
+    assert!(service
+        .runtime_profile(workspace.clone(), saved.id.clone(), None)
+        .await
+        .is_err());
+    assert!(service.test_connection(workspace, saved.id).await.is_err());
 }
 
 #[tokio::test]
@@ -162,7 +247,7 @@ async fn existing_sqlite_connection_needs_no_new_fields_or_migration() {
         .await
         .unwrap();
     assert_eq!(profile.detected_server_type, DetectedServerType::Sqlite);
-    assert_eq!(Some(profile.server_version), tested.server_version);
+    assert_eq!(profile.server_version, tested.server_version);
     assert!(profile.capabilities.row_mutation);
     let columns: Vec<String> =
         sqlx::query_scalar("SELECT name FROM pragma_table_info('database_connections')")

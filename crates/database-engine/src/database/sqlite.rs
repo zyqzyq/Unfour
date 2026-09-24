@@ -268,6 +268,6 @@ pub(super) async fn sqlite_pool(
         .await?;
     Ok(RuntimePool {
         pool,
-        profile: RuntimeDatabaseProfile::resolve(DetectedServerType::Sqlite, version),
+        profile: RuntimeDatabaseProfile::resolve(DetectedServerType::Sqlite, Some(version)),
     })
 }

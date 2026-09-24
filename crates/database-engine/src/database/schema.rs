@@ -70,7 +70,7 @@ impl DatabaseService {
                 Ok(DatabaseTestResult {
                     ok: true,
                     message: "SQLite connection OK".to_string(),
-                    server_version: Some(pool.profile.server_version.clone()),
+                    server_version: pool.profile.server_version.clone(),
                 })
             }
             "postgres" => {
@@ -80,7 +80,7 @@ impl DatabaseService {
                 Ok(DatabaseTestResult {
                     ok: true,
                     message: "PostgreSQL connection OK".to_string(),
-                    server_version: Some(pool.profile.server_version.clone()),
+                    server_version: pool.profile.server_version.clone(),
                 })
             }
             "mysql" => {
@@ -90,7 +90,7 @@ impl DatabaseService {
                 Ok(DatabaseTestResult {
                     ok: true,
                     message: "MySQL connection OK".to_string(),
-                    server_version: Some(pool.profile.server_version.clone()),
+                    server_version: pool.profile.server_version.clone(),
                 })
             }
             driver => Err(AppError::Unsupported(format!(
