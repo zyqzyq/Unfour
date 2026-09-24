@@ -140,6 +140,7 @@ fn detail() -> SshTaskDetail {
             created_at: String::new(),
             updated_at: String::new(),
         }),
+        detected_inputs: vec!["token".to_string()],
     }
 }
 

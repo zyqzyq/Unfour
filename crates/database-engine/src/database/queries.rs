@@ -1,6 +1,16 @@
 use super::*;
 
 impl DatabaseService {
+    /// Validate without opening a database connection or executing SQL.
+    pub fn validate_single_statement(sql: &str, driver: &str) -> AppResult<()> {
+        if super::script_parser::split_script(sql, driver)?.len() != 1 {
+            return Err(AppError::Validation(
+                "FLOW_SQL_SINGLE_STATEMENT_REQUIRED".into(),
+            ));
+        }
+        Ok(())
+    }
+
     pub async fn execute_query(&self, input: DatabaseQueryInput) -> AppResult<DatabaseQueryResult> {
         validate_workspace_id(&input.workspace_id)?;
         validate_connection_id(&input.connection_id)?;

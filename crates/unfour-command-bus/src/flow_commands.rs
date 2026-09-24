@@ -1,12 +1,10 @@
+use crate::flow_authoring::{apply_api_arguments, ssh_inputs, validate_sql_argument};
 use crate::CommandBus;
 use serde_json::{json, Value};
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tokio_util::sync::CancellationToken;
 use unfour_core::{models::*, AppResult};
-use unfour_flow_engine::{
-    expression::{invalid, text_value},
-    FlowExecutor, FlowFuture, FlowService,
-};
+use unfour_flow_engine::{expression::invalid, FlowExecutor, FlowFuture, FlowService};
 
 impl CommandBus {
     fn flow_service(&self) -> FlowService {
@@ -26,6 +24,41 @@ impl CommandBus {
         self.flow_service().get(&workspace_id, &flow_id).await
     }
     pub async fn save_flow(&self, input: FlowDefinition) -> AppResult<FlowDefinition> {
+        for step in &input.steps {
+            let action = match &step.node {
+                FlowNode::Action { action } => action,
+                FlowNode::Poll { probe, .. } | FlowNode::WaitUntil { probe, .. } => probe,
+                _ => continue,
+            };
+            if action.capability == FlowCapability::Database {
+                let connection = self
+                    .list_database_connections(input.workspace_id.clone())
+                    .await?
+                    .into_iter()
+                    .find(|c| c.id == action.resource_id)
+                    .ok_or_else(|| invalid("FLOW_RESOURCE_MISSING"))?;
+                validate_sql_argument(&action.arguments, &connection.driver)?;
+            }
+            if action.capability == FlowCapability::Ssh {
+                if action
+                    .connection_id
+                    .as_deref()
+                    .is_none_or(|id| id.trim().is_empty())
+                {
+                    return Err(invalid("FLOW_RESOURCE_MISSING"));
+                }
+                let detail = self
+                    .ssh
+                    .get_task(&input.workspace_id, &action.resource_id)
+                    .await?;
+                let names = unfour_ssh_engine::SshService::detected_task_inputs(&detail.steps)?;
+                // Environment is selected at run time; explicit legacy inputs can
+                // already be checked without inventing an environment at save time.
+                if action.arguments.get("workspaceDefaults") != Some(&json!(true)) {
+                    ssh_inputs(&action.arguments, &names, &Default::default(), true)?;
+                }
+            }
+        }
         self.flow_service().save(input).await
     }
     pub async fn delete_flow(&self, workspace_id: String, flow_id: String) -> AppResult<()> {
@@ -124,12 +157,32 @@ impl FlowExecutor for CommandBus {
                 .as_object()
                 .ok_or_else(|| invalid("FLOW_ARGUMENTS_OBJECT_REQUIRED"))?;
             let allowed: &[&str] = match action.capability {
-                FlowCapability::Api => &["url", "body", "headers", "query"],
-                FlowCapability::Ssh => &["inputs"],
+                FlowCapability::Api => &[
+                    "url",
+                    "body",
+                    "headers",
+                    "query",
+                    "headersPatch",
+                    "queryPatch",
+                ],
+                FlowCapability::Ssh => &["inputs", "workspaceDefaults"],
                 FlowCapability::Database => &["sql", "catalog", "schema", "limit"],
             };
             if arguments.keys().any(|key| !allowed.contains(&key.as_str())) {
                 return Err(invalid("FLOW_UNKNOWN_ARGUMENT"));
+            }
+            if action.capability == FlowCapability::Database {
+                validate_sql_argument(
+                    &action.arguments,
+                    resource["driver"].as_str().unwrap_or(""),
+                )?;
+            }
+            if action.capability == FlowCapability::Api {
+                for (key, patch) in [("headers", "headersPatch"), ("query", "queryPatch")] {
+                    if arguments.contains_key(key) && arguments.contains_key(patch) {
+                        return Err(invalid("FLOW_API_REPLACE_PATCH_CONFLICT"));
+                    }
+                }
             }
             let mut snapshot = json!({"resource": resource, "probe": probe});
             if action.capability == FlowCapability::Api {
@@ -181,6 +234,11 @@ impl FlowExecutor for CommandBus {
                 return Err(invalid("FLOW_SSH_PROBE_UNSUPPORTED"));
             }
             if action.capability == FlowCapability::Ssh {
+                let steps: Vec<SshTaskStep> =
+                    serde_json::from_value(snapshot["resource"]["steps"].clone())?;
+                let names = unfour_ssh_engine::SshService::detected_task_inputs(&steps)?;
+                let defaults = self.flow_ssh_defaults(action, input).await?;
+                ssh_inputs(&action.arguments, &names, &defaults, true)?;
                 for guard in self.extensions.ssh_task_execution_guards() {
                     guard
                         .validate(&input.workspace_id, &action.resource_id)
@@ -219,13 +277,7 @@ impl FlowExecutor for CommandBus {
             match action.capability {
                 FlowCapability::Api => {
                     let mut request = snapshot["request"].clone();
-                    for (key, value) in action
-                        .arguments
-                        .as_object()
-                        .ok_or_else(|| invalid("FLOW_ARGUMENTS_OBJECT_REQUIRED"))?
-                    {
-                        request[key] = value.clone();
-                    }
+                    apply_api_arguments(&mut request, &action.arguments)?;
                     let request: ApiRequestInput = serde_json::from_value(request)?;
                     let response = self.api_client.send_cancellable(request, cancel).await?;
                     let body = serde_json::from_str::<Value>(&response.body)
@@ -255,13 +307,11 @@ impl FlowExecutor for CommandBus {
                     tokio::select! { _ = cancel.cancelled() => Err(invalid("FLOW_CANCELLED")), result = self.execute_database_query(query) => Ok(serde_json::to_value(result?)?) }
                 }
                 FlowCapability::Ssh => {
-                    let values = action.arguments.get("inputs").cloned().unwrap_or(json!({}));
-                    let inputs: BTreeMap<String, String> = values
-                        .as_object()
-                        .ok_or_else(|| invalid("FLOW_INPUTS_OBJECT_REQUIRED"))?
-                        .iter()
-                        .map(|(k, v)| (k.clone(), text_value(v)))
-                        .collect();
+                    let steps: Vec<SshTaskStep> =
+                        serde_json::from_value(snapshot["resource"]["steps"].clone())?;
+                    let names = unfour_ssh_engine::SshService::detected_task_inputs(&steps)?;
+                    let defaults = self.flow_ssh_defaults(action, input).await?;
+                    let inputs = ssh_inputs(&action.arguments, &names, &defaults, false)?;
                     let secret_input_names = inputs.keys().cloned().collect();
                     let run = self
                         .run_ssh_task(SshTaskRunInput {

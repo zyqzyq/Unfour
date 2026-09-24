@@ -335,6 +335,8 @@ export type SshTaskDetail = {
   task: SshTask;
   steps: SshTaskStep[];
   localBinding: SshTaskLocalBinding | null;
+  /** Enabled template inputs from the task engine scanner. */
+  detectedInputs: string[];
 };
 
 export type SshTaskStepInput = {

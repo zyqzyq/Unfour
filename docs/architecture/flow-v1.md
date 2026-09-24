@@ -77,8 +77,8 @@ The first error stops subsequent scheduling. There are no implicit retries.
 
 | Node | Reference / arguments | Output |
 | --- | --- | --- |
-| API Request | Saved request ID; optional `url`, `headers`, `query`, `body` overrides | `status`, `headers`, JSON-or-text `body`, `durationMs`, `historyId` |
-| SSH Task | Task ID, explicit connection ID, `inputs` object | `runId`, `status`, timestamps, redacted `log`, `logTruncated` |
+| API Request | Saved request ID; optional `url`, `body`, legacy `headers`/`query` replacements or `headersPatch`/`queryPatch` | `status`, `headers`, JSON-or-text `body`, `durationMs`, `historyId` |
+| SSH Task | Task ID, explicit connection ID, `inputs` object, opt-in `workspaceDefaults` | `runId`, `status`, timestamps, redacted `log`, `logTruncated` |
 | Database Query | Connection ID; `sql`, optional `catalog`, `schema`, `limit` | Existing Database query result, including columns and rows |
 | Condition | Predicate and forward destinations | `matched` |
 | Wait Until | Probe, success/failure predicates, fixed interval, total timeout, optional attempt limit and probe error policy | `result`, `attempts`, `elapsedMs` |
@@ -98,6 +98,44 @@ fail immediately; Wait Until applies its probe error policy. V1 does not retain 
 in Flow output. Saved API scripts and multipart requests are rejected rather
 than silently ignored. SSH logs are capped at 64 KiB; they are not a separate
 typed stdout/stderr/exit-code tree.
+
+### Action authoring compatibility
+
+The dedicated API, SSH and Database inspectors keep the existing `FlowAction`
+and engine expression model. Text fields insert `${/inputs/...}` or
+`${/steps/...}` at the cursor; full `$ref` objects, complex values and raw
+arguments remain in Advanced. Opening an existing definition does not migrate it.
+
+API `headers` and `query` retain whole-group replacement, including empty arrays.
+New edits use optional `headersPatch` and `queryPatch` arrays of
+`{key, value, enabled}`. Each patch replaces every matching inherited key;
+headers match case-insensitively, query keys case-sensitively. Enabled rows append
+their new value; disabled rows remove the matching key. Patches apply in order
+after saved request environment/auth preparation and Flow interpolation. Unmatched
+inherited rows remain unchanged. A group cannot specify both replacement and
+patch. Removing a patch row restores inheritance; disabling it suppresses that
+key. The body remains a string using the saved body kind; JSON formatting is
+explicit, and form bodies retain URL-encoded text. Interpolation stays literal
+and does not add URL/SQL/shell escaping. Multipart remains unsupported in V1.
+
+SSH input names come from `detectedInputs` on the task detail, filled by the owning
+engine's scanner over enabled template fields. The Flow editor does not scan
+templates itself. On first Task selection, the UI copies only `defaultConnectionId` into
+the action if no connection was chosen. It never uses `lastUsedConnectionId`.
+Existing selections are not rebound. New selections opt into
+`arguments.workspaceDefaults: true`; legacy definitions without this flag keep
+explicit-input-only behavior. Defaults match names case-insensitively, with the
+Flow Run's explicitly selected environment overriding enabled workspace values.
+Explicit `inputs` win, including an explicitly empty value (which fails required
+input validation). Default values are not copied into definitions or resource
+snapshots. Missing literal inputs fail preflight before any action executes;
+dynamic references are checked again after resolution.
+
+Database SQL is a required multiline field. CommandBus validates required SQL
+and a single statement on save and run preflight with the owning database
+engine's dialect-aware splitter. The engine checks resolved SQL again before
+execution. Dynamic `$ref` SQL cannot be fully checked until it resolves. Flow
+does not bind execution to Saved SQL IDs.
 
 ## Wait Until
 

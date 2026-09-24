@@ -1,4 +1,7 @@
-import { ArgumentFields, PredicateFields } from "./StructuredFields";
+import { PredicateFields } from "./StructuredFields";
+import { ApiActionEditor } from "./ApiActionEditor";
+import { SshActionEditor } from "./SshActionEditor";
+import { DatabaseActionEditor } from "./DatabaseActionEditor";
 import { variablesFor } from "./variables";
 import type { FlowInputDefinition } from "@unfour/command-client";
 import { emptyAction, isPredicate, type Resources } from "./model";
@@ -62,9 +65,12 @@ export function StepEditor({
             ).map((value) => ({ value, label: t(`flow.${value}`) }))}
           />
           <Select
-            aria-label={t("flow.resource")}
+            aria-label={t(action.capability === "database" ? "flow.connection" : "flow.resource")}
             value={action.resourceId}
-            onChange={(e) => update({ ...action, resourceId: e.target.value })}
+            onChange={(e) => {
+              const detail = resources.ssh.find((task) => task.id === e.target.value)?.detail;
+              update({ ...action, resourceId: e.target.value, ...(action.capability === "ssh" && !action.resourceId ? { connectionId: action.connectionId ?? detail?.localBinding?.defaultConnectionId ?? null, arguments: { ...action.arguments, workspaceDefaults: true } } : {}) });
+            }}
             options={[
               { value: "", label: t("flow.selectResource") },
               ...resources[action.capability].map((r) => ({
@@ -74,23 +80,10 @@ export function StepEditor({
             ]}
           />
         </div>
-        {action.capability === "ssh" && (
-          <Select
-            aria-label={t("flow.connection")}
-            value={action.connectionId ?? ""}
-            onChange={(e) =>
-              update({ ...action, connectionId: e.target.value })
-            }
-            options={[
-              { value: "", label: t("flow.selectConnection") },
-              ...resources.connections.map((r) => ({
-                value: r.id,
-                label: r.name,
-              })),
-            ]}
-          />
-        )}
-        <ArgumentFields action={action} variables={variables} onChange={update} onValidity={(field, valid) => onValidity(`argument:${field}`, valid)} />
+        {(() => {
+          const Editor = action.capability === "api" ? ApiActionEditor : action.capability === "ssh" ? SshActionEditor : DatabaseActionEditor;
+          return <Editor action={action} resources={resources} variables={variables} onChange={update} onValidity={(field, valid) => onValidity(`argument:${field}`, valid)} />;
+        })()}
         <details><summary>{t("flow.advanced")}</summary><JsonField
           key={`${step.id}-${action.capability}`}
           label={t("flow.arguments")}

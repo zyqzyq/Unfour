@@ -48,6 +48,9 @@ pub struct SshTaskDetail {
     pub task: SshTask,
     pub steps: Vec<SshTaskStep>,
     pub local_binding: Option<SshTaskLocalBinding>,
+    /// Enabled template inputs from the task engine scanner.
+    #[serde(default)]
+    pub detected_inputs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

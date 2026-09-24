@@ -918,3 +918,6 @@ async fn api_request_resolution_prefers_temporary_variables() {
     assert_eq!(resolved.headers[0].key, "X-users");
     assert_eq!(resolved.headers[0].value, "temporary.example");
 }
+
+#[path = "lib_tests/flow_authoring.rs"]
+mod flow_authoring;

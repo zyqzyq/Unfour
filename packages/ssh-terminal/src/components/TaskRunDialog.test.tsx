@@ -88,5 +88,6 @@ function task(): SshTaskDetail {
     },
     steps: [],
     localBinding: null,
+    detectedInputs: [],
   };
 }

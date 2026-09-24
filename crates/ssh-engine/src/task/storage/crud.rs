@@ -92,10 +92,12 @@ impl SshService {
         .fetch_optional(&mut *connection)
         .await?
         .map(binding_from_row);
+        let detected_inputs = Self::detected_task_inputs(&steps)?;
         Ok(SshTaskDetail {
             task,
             steps,
             local_binding,
+            detected_inputs,
         })
     }
 

@@ -40,6 +40,17 @@ pub(super) struct TaskRunRuntime {
 }
 
 impl SshService {
+    /// The same enabled template fields used by task execution, for preflight.
+    pub fn detected_task_inputs(steps: &[SshTaskStep]) -> AppResult<Vec<String>> {
+        detected_inputs(
+            &steps
+                .iter()
+                .filter(|step| step.enabled)
+                .cloned()
+                .collect::<Vec<_>>(),
+        )
+    }
+
     pub async fn run_task(&self, input: SshTaskRunInput) -> AppResult<SshTaskRun> {
         validate_workspace_id(&input.workspace_id)?;
         let detail = self.get_task(&input.workspace_id, &input.task_id).await?;

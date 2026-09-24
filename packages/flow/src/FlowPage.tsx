@@ -1,5 +1,5 @@
 import { START, END, removalImpact, removeCanvasStep } from "./canvasGraph";
-import { inputDefaults, inputDefinitionErrors, inputErrors, maskInputs, newStep, normalizeInputs, resourceErrors } from "./model";
+import { environmentInputErrors, inputDefaults, inputDefinitionErrors, inputErrors, maskInputs, newStep, normalizeInputs, resourceErrors } from "./model";
 import { InputEditor, RunInputs } from "./InputEditor";
 import { RunHistory } from "./RunHistory";
 import { RunView } from "./RunView";
@@ -23,6 +23,8 @@ import {
   listSavedApiRequests,
   listSshConnections,
   listSshTasks,
+  getSshTask,
+  listWorkspaceVariables,
   listWorkspaceEnvironments,
   runFlow,
   saveFlow,
@@ -82,13 +84,15 @@ function WorkspaceFlowPage({
         listDatabaseConnections(workspaceId),
         listSshConnections(workspaceId),
       ]);
-      return { api, ssh, database, connections };
+      const detailedTasks = await Promise.all(ssh.map(async (task) => ({ ...task, detail: await getSshTask(workspaceId, task.id) })));
+      return { api, ssh: detailedTasks, database, connections };
     },
   });
   const environments = useQuery({
     queryKey: ["workspace-environments", workspaceId],
     queryFn: () => listWorkspaceEnvironments(workspaceId),
   });
+  const workspaceVariables = useQuery({ queryKey: ["flow-workspace-variables", workspaceId], queryFn: () => listWorkspaceVariables(workspaceId) });
   const runs = useQuery({
     queryKey: ["flow-runs", workspaceId, draft?.id],
     queryFn: () => listFlowRuns(workspaceId, draft!.id),
@@ -219,14 +223,21 @@ function WorkspaceFlowPage({
       </div>
     );
   const schemaProblems = inputDefinitionErrors(draft.inputs);
-  const invalidEditor = schemaProblems.length > 0 || Object.entries(invalid).some(([key, value]) => !key.startsWith("run:") && value);
+  const invalidEditor = (resourcesQuery.data ? resourceErrors(draft, resources).some((problem) => ["flow.sqlRequired", "flow.sqlSingleStatement", "flow.sshMissingInputs", "flow.inputTypeError"].includes(problem.key)) : false) || schemaProblems.length > 0 || Object.entries(invalid).some(([key, value]) => !key.startsWith("run:") && value);
   const resolvedInputs = { ...inputDefaults(draft.inputs), ...inputs };
   const inputProblems = inputErrors(draft.inputs, resolvedInputs);
   const resourceProblems = resourcesQuery.data ? resourceErrors(draft, resources) : [];
+  const needsWorkspaceDefaults = draft.steps.some((step) => {
+    const action = step.kind === "action" ? step.action : step.kind === "poll" || step.kind === "waitUntil" ? step.probe : null;
+    return action?.capability === "ssh" && action.arguments.workspaceDefaults === true;
+  });
+  const defaultsReady = workspaceVariables.isSuccess && !environments.isPending;
+  const defaults = new Map([...(workspaceVariables.data ?? []), ...(environments.data?.find((env) => env.id === environmentId)?.variables ?? [])].filter((v) => v.isEnabled && !v.deletedAt).map((v) => [v.key.trim().toLowerCase(), v.value]));
+  const environmentInputProblems = resourcesQuery.data && defaultsReady ? environmentInputErrors(draft, resources, defaults) : [];
   const manualSecrets = secretInputNames.split(",").map((name) => name.trim()).filter(Boolean);
   const manualSecretErrors = manualSecrets.filter((name) => !Object.prototype.hasOwnProperty.call(resolvedInputs, name));
   const impact = removingNode ? removalImpact(draft, removingNode) : null;
-  const invalidRun = manualSecretErrors.length > 0 || invalidEditor || inputProblems.length > 0 || resourceProblems.length > 0 || Object.values(invalid).some(Boolean) || !resourcesQuery.data || resourcesQuery.isError || environments.isError || (Boolean(environmentId) && !environments.data?.some((environment) => environment.id === environmentId));
+  const invalidRun = (needsWorkspaceDefaults && !defaultsReady) || environmentInputProblems.length > 0 || manualSecretErrors.length > 0 || invalidEditor || inputProblems.length > 0 || resourceProblems.length > 0 || Object.values(invalid).some(Boolean) || !resourcesQuery.data || resourcesQuery.isError || environments.isError || (Boolean(environmentId) && !environments.data?.some((environment) => environment.id === environmentId));
   const viewingRun = selectedRun !== null;
   const projection = !dirty && currentRun?.flowId === draft.id && currentRun.definition.revision === draft.revision ? currentRun : undefined;
   return (
@@ -389,8 +400,10 @@ function WorkspaceFlowPage({
           </details>
           {manualSecretErrors.length > 0 && <p role="alert">{t("flow.unknownSecretInput")}: {manualSecretErrors.join(", ")}</p>}
           {resourceProblems.map((problem, index) => <p key={index} role="alert">{problem.name}: {t(problem.key)}</p>)}
-          {(resourcesQuery.isPending || environments.isPending) && <p>{t("flow.loading")}</p>}
+          {environmentInputProblems.map((problem) => <p key={`${problem.name}:${problem.key}`} role="alert">{problem.name}: {t(problem.key)}</p>)}
+          {(resourcesQuery.isPending || environments.isPending || (needsWorkspaceDefaults && workspaceVariables.isPending)) && <p>{t("flow.loading")}</p>}
           {(resourcesQuery.isError || environments.isError) && <p role="alert">{t("flow.loadFailed")}</p>}
+          {needsWorkspaceDefaults && workspaceVariables.isError && <p role="alert">{t("flow.variablesLoadFailed")}</p>}
           <DialogDescription>{t("flow.effectsHelp")}</DialogDescription>
           <p>{t("flow.name")}: {draft.name} · {t("flow.workspace")}: {workspaceId}</p>
           <p>{t("flow.environment")}: {environments.data?.find((environment) => environment.id === environmentId)?.name ?? t("flow.workspaceOnly")}{environmentId ? ` (${environmentId})` : ""}</p>

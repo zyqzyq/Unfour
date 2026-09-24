@@ -28,6 +28,8 @@ vi.mock("@unfour/command-client", async (importOriginal) => ({
   listDatabaseConnections: vi.fn(),
   listSshConnections: vi.fn(),
   listWorkspaceEnvironments: vi.fn(),
+  listWorkspaceVariables: vi.fn(),
+  getSshTask: vi.fn(),
 }));
 const flow: commands.FlowDefinition = {
   id: "flow-1",
@@ -101,6 +103,7 @@ beforeEach(() => {
     commands.listDatabaseConnections,
     commands.listSshConnections,
     commands.listWorkspaceEnvironments,
+    commands.listWorkspaceVariables,
   ])
     vi.mocked(command).mockResolvedValue([]);
 });

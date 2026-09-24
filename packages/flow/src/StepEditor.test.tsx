@@ -26,14 +26,13 @@ it("Variable Picker writes existing refs for inputs and nested upstream outputs"
   expect(changed).toHaveBeenLastCalledWith({ $ref: "/steps/fetch/body/items/0/url" });
 });
 
-it("structured API headers preserve the engine key/value/enabled array format", () => {
+it("new API headers write patches instead of replacing the saved group", () => {
   const changed = vi.fn();
   render(<I18nProvider initialLocale="en"><Editor initial={newStep("api", "API")} changed={changed} /></I18nProvider>);
-  fireEvent.change(screen.getByLabelText("Add parameter"), { target: { value: "headers" } });
-  fireEvent.click(screen.getByRole("button", { name: "Add field" }));
+  fireEvent.click(within(screen.getByRole("group", { name: "Headers" })).getByRole("button", { name: "Add override" }));
   fireEvent.change(screen.getByLabelText("Headers 1 · Field name"), { target: { value: "X-Version" } });
   fireEvent.change(screen.getByLabelText("Headers 1", { exact: true }), { target: { value: "v2" } });
-  expect(changed.mock.lastCall?.[0]).toMatchObject({ action: { arguments: { headers: [{ key: "X-Version", value: "v2", enabled: true }] } } });
+  expect(changed.mock.lastCall?.[0]).toMatchObject({ action: { arguments: { headersPatch: [{ key: "X-Version", value: "v2", enabled: true }] } } });
 });
 
 it("keeps variable source identity when the available input list changes", () => {

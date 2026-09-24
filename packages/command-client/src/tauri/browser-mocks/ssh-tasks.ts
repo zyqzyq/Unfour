@@ -241,6 +241,27 @@ function handleTaskRunsClearMock<T>(
   return { deletedRuns, deletedLogs: deletedRuns } as T;
 }
 
+function detectedTaskInputs(steps: SshTaskDetail["steps"]): string[] {
+  const fields: Record<string, string[]> = {
+    command: ["command", "workingDirectory"],
+    upload: ["localPath", "remotePath"],
+    download: ["remotePath", "localPath"],
+  };
+  const names: string[] = [];
+  for (const step of steps ?? []) {
+    if (!step.enabled) continue;
+    const config = step.configJson as unknown as Record<string, unknown>;
+    for (const field of fields[step.stepType] ?? []) {
+      const value = config?.[field];
+      if (typeof value !== "string") continue;
+      for (const match of value.matchAll(/\{\{([A-Za-z_][A-Za-z0-9_]*)\}\}/g)) {
+        if (!names.includes(match[1])) names.push(match[1]);
+      }
+    }
+  }
+  return names;
+}
+
 function activeTask(workspaceId: string, taskId: string): SshTaskDetail {
   const detail = mockStore.sshTasks.find(
     (item) =>
@@ -249,7 +270,7 @@ function activeTask(workspaceId: string, taskId: string): SshTaskDetail {
       item.task.deletedAt === null,
   );
   if (!detail) throw new Error("SSH task not found");
-  return detail;
+  return { ...detail, detectedInputs: detail.detectedInputs ?? detectedTaskInputs(detail.steps) };
 }
 
 function preferredConnectionId(
@@ -311,6 +332,7 @@ function saveTask(input: SshTaskSaveInput): SshTaskDetail {
         deletedAt: null,
       })),
     localBinding,
+    detectedInputs: detectedTaskInputs(input.steps as SshTaskDetail["steps"]),
   };
   mockStore.sshTasks = [
     detail,

@@ -52,10 +52,11 @@ test("default Flow Canvas supports Inspector inputs, refs, insertion, deletion a
   await inspector.getByRole("combobox", { name: "Type", exact: true }).selectOption("string");
   await page.locator('.react-flow__node').filter({ hasText: "API Request" }).click();
   await expect(inspector.getByRole("textbox", { name: "Step name", exact: true })).toBeVisible();
-  await inspector.getByLabel("Add parameter").selectOption("url");
-  await inspector.getByLabel("URL · Type").selectOption("variable");
-  await inspector.getByLabel("URL · Variable").selectOption({ label: "Start · endpoint" });
-  await expect(inspector.getByText("endpoint", { exact: true })).toBeVisible();
+  await inspector.getByRole("button", { name: "Override", exact: true }).first().click();
+  await inspector.locator("summary").filter({ hasText: /^Insert variable$/ }).click();
+  await inspector.getByLabel("URL · Variable").selectOption({ label: "endpoint" });
+  await inspector.getByRole("button", { name: "Insert variable", exact: true }).click();
+  await expect(inspector.getByLabel("URL", { exact: true })).toHaveValue("${/inputs/endpoint}");
   await page.getByRole("button", { name: "Insert node · Start → API Request", exact: true }).click();
   await page.getByRole("menuitem", { name: "Condition", exact: true }).click();
   await expect(inspector.getByRole("combobox", { name: "If true", exact: true })).toHaveValue(await inspector.getByRole("combobox", { name: "If false", exact: true }).inputValue());

@@ -42,7 +42,7 @@ it("preflights metadata for probes, API scripts and missing resources", () => {
   expect(resourceErrors(flow, resources).map((e) => e.key)).toEqual(["flow.apiScriptsUnsupported", "flow.apiMultipartUnsupported", "flow.probeMethodError"]);
   expect(resourceErrors(flow, { ...resources, api: [] }).map((e) => e.key)).toEqual(["flow.missingResource"]);
   flow.steps = [{ ...step, probe: { capability: "database", resourceId: "db", connectionId: null, arguments: {} } }];
-  expect(resourceErrors(flow, { ...resources, database: [{ id: "db", name: "DB", readOnly: false }] }).map((e) => e.key)).toEqual(["flow.probeReadOnlyError"]);
+  expect(resourceErrors(flow, { ...resources, database: [{ id: "db", name: "DB", readOnly: false }] }).map((e) => e.key)).toEqual(["flow.sqlRequired", "flow.probeReadOnlyError"]);
   flow.steps = [{ ...newStep("ssh", "Deploy"), kind: "action", action: { capability: "ssh", resourceId: "task", connectionId: "deleted", arguments: {} } }];
   expect(resourceErrors(flow, { ...resources, ssh: [{ id: "task", name: "Task" }] }).map((e) => e.key)).toEqual(["flow.missingConnection"]);
 });
