@@ -43,8 +43,11 @@ Coverage:
 - Case-insensitive openGauss detection and mixed PostgreSQL/openGauss banners.
 - Unchanged PostgreSQL detection, unknown/GaussDB behavior, probe error/timeout.
 - OpenGauss profile and three-way metadata dispatch.
-- Catalog discovery, schema/table/column mapping, primary keys, serial defaults,
-  generated columns and table structure with optional metadata unavailable.
+- Catalog discovery, schema/table/column mapping, primary keys, openGauss
+  `adsrc = 'AUTO_INCREMENT'` auto-increment columns, generated columns, and
+  table structure with optional metadata unavailable. PostgreSQL `nextval` /
+  identity recognition is unchanged. The MySQL driver label stays
+  `MySQL / MariaDB`.
 - Catalog override across metadata, query, execute, row insert/update/delete and
   data-only export; connection domain snapshot remains unchanged.
 - CSV export selecting `content`, filtering `id`, and `LIMIT 1`; PostgreSQL

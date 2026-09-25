@@ -24,7 +24,7 @@ it("saves the openGauss preset as postgres and reopens from the saved driver", (
     </>;
   }
   render(<Editor />);
-  expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["PostgreSQL", "openGauss", "MySQL", "SQLite"]);
+  expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["PostgreSQL", "openGauss", "MySQL / MariaDB", "SQLite"]);
   fireEvent.change(screen.getByRole("combobox"), { target: { value: "opengauss" } });
   expect(screen.getByRole("combobox")).toHaveValue("opengauss");
   fireEvent.click(screen.getByRole("button", { name: "Save" }));

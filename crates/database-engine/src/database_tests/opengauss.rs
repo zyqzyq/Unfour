@@ -43,6 +43,16 @@ fn opengauss_detection_profile_and_metadata_dispatch() {
             sql,
             postgres_columns_sql(&RuntimeDatabaseProfile::postgres("unknown".into()))
         );
+        assert!(postgres_column_auto_increment(
+            DetectedServerType::OpenGauss,
+            Some("AUTO_INCREMENT"),
+            None,
+        ));
+        assert!(!postgres_column_auto_increment(
+            DetectedServerType::OpenGauss,
+            Some("id + 1"),
+            None,
+        ));
     }
 }
 
@@ -93,8 +103,16 @@ async fn opengauss_catalog_schema_describe_and_data_export_use_postgres_transpor
         .unwrap();
     assert_eq!(structure.catalog.as_deref(), Some("qingqi_config"));
     assert_eq!(structure.columns.len(), 3);
-    assert!(structure.columns[0].primary_key && structure.columns[0].auto_increment);
+    assert!(structure.columns[0].primary_key);
+    assert!(structure.columns[0].auto_increment);
+    assert!(!structure.columns[0].generated);
+    assert_eq!(
+        structure.columns[0].default_value.as_deref(),
+        Some("AUTO_INCREMENT")
+    );
+    assert!(!structure.columns[1].auto_increment && !structure.columns[1].generated);
     assert!(structure.columns[2].generated);
+    assert!(!structure.columns[2].auto_increment);
     assert!(
         structure.indexes.is_empty()
             && structure.foreign_keys.is_empty()

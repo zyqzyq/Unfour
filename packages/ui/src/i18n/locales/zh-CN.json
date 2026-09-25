@@ -714,7 +714,7 @@
       "testing": "测试中…"
     },
     "driver": {
-      "mysql": "MySQL",
+      "mysql": "MySQL / MariaDB",
       "postgres": "PostgreSQL",
       "opengauss": "openGauss",
       "sqlite": "SQLite"

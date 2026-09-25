@@ -22,7 +22,11 @@ pub(super) fn response(sql: &str, version: &str) -> Response {
                     text("id"),
                     text("integer"),
                     text("NO"),
-                    text("nextval('config_id_seq'::regclass)"),
+                    text(if version.to_ascii_lowercase().contains("opengauss") {
+                        "AUTO_INCREMENT"
+                    } else {
+                        "nextval('config_id_seq'::regclass)"
+                    }),
                     text("NEVER"),
                     None,
                     Some(vec![1]),

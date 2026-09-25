@@ -32,6 +32,35 @@ fn postgres_config_maps_host_port_database_username() {
 }
 
 #[test]
+fn postgres_serial_and_identity_auto_increment_is_unchanged() {
+    assert!(postgres_column_auto_increment(
+        DetectedServerType::PostgreSql,
+        Some("nextval('items_id_seq'::regclass)"),
+        None,
+    ));
+    assert!(postgres_column_auto_increment(
+        DetectedServerType::PostgreSql,
+        None,
+        Some("ALWAYS"),
+    ));
+    assert!(postgres_column_auto_increment(
+        DetectedServerType::PostgreSql,
+        None,
+        Some("BY DEFAULT"),
+    ));
+    assert!(!postgres_column_auto_increment(
+        DetectedServerType::PostgreSql,
+        Some("42"),
+        None,
+    ));
+    assert!(!postgres_column_auto_increment(
+        DetectedServerType::PostgreSql,
+        Some("AUTO_INCREMENT"),
+        None,
+    ));
+}
+
+#[test]
 fn postgres_table_browse_sql_is_schema_qualified_and_escaped() {
     assert_eq!(
         postgres_browse_sql("app\"data", "user\"events", "", "", 50, 100),

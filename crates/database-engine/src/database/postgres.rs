@@ -118,6 +118,21 @@ pub(super) async fn resolve_database_password(
     }
 }
 
+/// openGauss stores auto-increment as `pg_attrdef.adsrc = 'AUTO_INCREMENT'`.
+/// PostgreSQL serial/identity stays on `nextval(...)` and `identity_generation`.
+pub(super) fn postgres_column_auto_increment(
+    server: DetectedServerType,
+    column_default: Option<&str>,
+    identity_generation: Option<&str>,
+) -> bool {
+    let nextval = column_default.is_some_and(|value| value.starts_with("nextval("));
+    if server == DetectedServerType::OpenGauss {
+        nextval || column_default == Some("AUTO_INCREMENT")
+    } else {
+        identity_generation.is_some() || nextval
+    }
+}
+
 pub(super) fn postgres_columns_sql(profile: &RuntimeDatabaseProfile) -> &'static str {
     if profile.detected_server_type == DetectedServerType::OpenGauss {
         OPENGAUSS_COLUMNS
@@ -169,10 +184,11 @@ pub(super) async fn postgres_columns(
             let is_generated: String = row.try_get("is_generated")?;
             let identity_generation: Option<String> = row.try_get("identity_generation")?;
             let primary_key: bool = row.try_get("primary_key")?;
-            let auto_increment = identity_generation.is_some()
-                || column_default
-                    .as_deref()
-                    .is_some_and(|value| value.starts_with("nextval("));
+            let auto_increment = postgres_column_auto_increment(
+                pool.profile.detected_server_type,
+                column_default.as_deref(),
+                identity_generation.as_deref(),
+            );
 
             Ok(DatabaseTableColumn {
                 name,
