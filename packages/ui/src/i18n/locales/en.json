@@ -729,7 +729,7 @@
     "fields": {
       "credentialRef": "Credential Ref",
       "database": "Database",
-      "driver": "Driver",
+      "driver": "Database type",
       "host": "Host",
       "name": "Name",
       "password": "Password",

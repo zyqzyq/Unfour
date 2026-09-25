@@ -728,7 +728,7 @@
     "fields": {
       "credentialRef": "凭据引用",
       "database": "数据库",
-      "driver": "驱动",
+      "driver": "数据库类型",
       "host": "主机",
       "name": "名称",
       "password": "密码",
