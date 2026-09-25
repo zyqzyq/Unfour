@@ -50,6 +50,13 @@ export function DatabaseTestResultDialog({
           <p className="max-h-[40vh] overflow-auto whitespace-pre-wrap break-words text-[12.5px] leading-relaxed text-[var(--u-color-text)]">
             {result?.message}
           </p>
+          {result?.ok && (
+            <div className="mt-2 space-y-1 break-words text-[12px] text-[var(--u-color-text-soft)]">
+              {result.protocol && <p>{t("database.connection.protocol")}: {t(`database.driver.${result.protocol}`)}</p>}
+              {result.detectedServer && <p>{t("database.connection.detectedServer")}: {result.detectedServer === "UnknownPostgresCompatible" ? t("database.connection.unknownServer") : result.detectedServer}</p>}
+              {result.serverVersion && <p>{result.serverVersion}</p>}
+            </div>
+          )}
         </DialogBody>
         <DialogFooter>
           <DialogClose asChild>

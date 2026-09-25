@@ -9,7 +9,7 @@ configuration JSON, domain snapshots and Cloud Sync payloads require no migratio
 
 `database-engine::database::RuntimeDatabaseProfile` contains:
 
-- `detected_server_type`: `Sqlite`, `PostgreSql`, `Mysql`, or
+- `detected_server_type`: `Sqlite`, `PostgreSql`, `OpenGauss`, `Mysql`, or
   `UnknownPostgresCompatible`.
 - `server_version`: the unmodified server version/banner.
 - `dialect`: the SQL grammar (`Sqlite`, `Postgres`, or `Mysql`). `Generic` is
@@ -26,8 +26,10 @@ through the script, including user transactions. Runtime reads do not update
 connection revisions, domain mutations, outbox intent, or sync snapshots.
 
 `DatabaseService::runtime_profile` is an engine-only API for fresh facts about a
-target. Existing Tauri, command-client, UI, MCP and Flow schemas are unchanged.
-`test_connection` reuses the pool's version and preserves its existing result shape.
+target. Connection input, MCP and Flow invocation schemas are unchanged.
+`test_connection` reuses the pool's version and adds optional transient `protocol`
+and `detectedServer` result fields for UI display; these never enter saved
+connections, domain snapshots, or Cloud Sync.
 
 PostgreSQL pools run `SELECT version()`. Detection checks the leading PostgreSQL
 product/release, not a substring; known fork markers override an embedded upstream
@@ -78,19 +80,42 @@ editing and table export return Unsupported. Arbitrary SQL still uses the
 existing safety/confirmation gates. These fallbacks do not certify an unknown
 product as supported.
 
-## Adding openGauss later
+## openGauss support
 
-1. Add a detected product variant and detection fixtures, prioritizing its
-   signature before generic PostgreSQL recognition.
-2. Explicitly resolve its dialect and capabilities in `runtime_profile.rs`.
-   Keep its persisted driver `postgres`.
-3. Add only necessary metadata/type/DDL overrides at the PostgreSQL metadata
-   boundary. Enable capabilities after verifying their implementations against
-   supported openGauss versions.
-4. Add real-server integration coverage for metadata, queries, transactions,
-   safety and enabled operations. Reuse UI/MCP/Flow contracts and transport.
+An `openGauss` marker (case insensitive) wins over an embedded PostgreSQL banner.
+GaussDB remains unidentified; no product-family preset or special transport is
+introduced. Probe failures/timeouts still use the unknown-compatible fallback.
 
-No openGauss-specific metadata SQL or plugin/provider framework is part of V1.
+| Capability | OpenGauss policy |
+| --- | --- |
+| Dialect / persisted driver | `postgres` / `postgres` |
+| Catalogs, schemas, columns | Enabled using the existing catalog-scoped pools |
+| Query/execute, row mutation, data export | Existing PostgreSQL transport and safety gates |
+| Generated columns | `pg_attrdef.adgencol` metadata |
+| Indexes, foreign keys, DDL | Disabled; empty lists / absent DDL in table structure |
+
+`postgres_columns_sql` keeps three strategies at the PostgreSQL metadata boundary:
+PostgreSQL's original SQL, openGauss catalog SQL, and the conservative standard
+information-schema query for unknown products. The openGauss query uses
+`pg_attribute`, `pg_class`, `pg_namespace`, `format_type`, `pg_constraint` primary
+keys, and `pg_attrdef.adsrc/adgencol`. It does not reference `attidentity`,
+`attgenerated`, information-schema identity/generated fields, `pg_get_expr`,
+`pg_index`, or `pg_get_indexdef`. The existing PostgreSQL optional index/FK/DDL
+implementations remain unchanged and are not invoked for openGauss.
+
+Data-only export requests basic table metadata (existence, kind and columns),
+skipping optional metadata for all drivers. Structure export still requires DDL.
+Catalog overrides are honored both by the pool and returned table structure.
+
+The connection editor offers PostgreSQL, openGauss, MySQL, SQLite. openGauss is
+local editor state mapped to `driver=postgres`, discarded when the dialog closes.
+Editing begins from the persisted driver; no product selection is reconstructed.
+Connection results show protocol, backend-detected product and original banner.
+MCP/Flow continue resolving connections by connection ID without product branches.
+
+This implementation has protocol-fixture/unit coverage, not real openGauss
+integration certification. See [openGauss verification](../testing/database-opengauss.md)
+for evidence and real-server work still required.
 
 ## Changed files
 

@@ -56,13 +56,16 @@ impl DatabaseService {
             ));
         }
         let structure = self
-            .table_structure(DatabaseTableStructureInput {
-                workspace_id: input.workspace_id.clone(),
-                connection_id: input.connection_id.clone(),
-                catalog: input.catalog.clone(),
-                schema: input.schema.clone(),
-                table_name: table_name.into(),
-            })
+            .table_structure_metadata(
+                DatabaseTableStructureInput {
+                    workspace_id: input.workspace_id.clone(),
+                    connection_id: input.connection_id.clone(),
+                    catalog: input.catalog.clone(),
+                    schema: input.schema.clone(),
+                    table_name: table_name.into(),
+                },
+                !matches!(input.content, DatabaseExportContent::Data),
+            )
             .await?;
         if structure.kind != "table" {
             return Err(AppError::Unsupported("Only tables can be exported".into()));

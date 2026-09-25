@@ -88,6 +88,11 @@ pub struct DatabaseTestResult {
     pub ok: bool,
     pub message: String,
     pub server_version: Option<String>,
+    /// Transient runtime facts; never part of connection configuration or sync.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub protocol: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detected_server: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

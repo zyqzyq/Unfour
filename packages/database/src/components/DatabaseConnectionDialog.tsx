@@ -1,5 +1,5 @@
 import { Plug, Save } from "lucide-react";
-import { type FormEvent, type ReactNode } from "react";
+import { type FormEvent, type ReactNode, useState } from "react";
 import type { DatabaseConnectionInput } from "@unfour/command-client";
 import {
   Button,
@@ -59,22 +59,7 @@ export function DatabaseConnectionDialog({
               <Input onChange={(event) => onUpdate({ name: event.target.value })} value={form.name} />
             </Field>
             <Field title={t("database.fields.driver")}>
-              <Select
-                onChange={(event) =>
-                  onUpdate({
-                    driver: event.target.value as DatabaseConnectionInput["driver"],
-                    sqlitePath: event.target.value === "sqlite" ? form.sqlitePath : null,
-                    sslMode: event.target.value === "sqlite" ? null : form.sslMode,
-                    credentialRef: event.target.value === "sqlite" ? null : form.credentialRef,
-                  })
-                }
-                options={[
-                  { label: t("database.driver.sqlite"), value: "sqlite" },
-                  { label: t("database.driver.postgres"), value: "postgres" },
-                  { label: t("database.driver.mysql"), value: "mysql" },
-                ]}
-                value={form.driver}
-              />
+              {open && <ConnectionPresetSelect key={`${form.workspaceId}:${form.id ?? "new"}`} form={form} onUpdate={onUpdate} />}
             </Field>
             {form.driver === "sqlite" ? (
               <Field title={t("database.fields.sqlitePath")}>
@@ -169,4 +154,32 @@ function Field({
   );
 }
 
-
+// A preset is transient editor state; only the existing transport fields leave
+// this component. Reopening an existing connection starts from its driver.
+function ConnectionPresetSelect({ form, onUpdate }: {
+  form: DatabaseConnectionInput;
+  onUpdate: (patch: Partial<DatabaseConnectionInput>) => void;
+}) {
+  const { t } = useI18n();
+  const [preset, setPreset] = useState<string>(form.driver);
+  return <Select
+    value={preset}
+    options={[
+      { label: t("database.driver.postgres"), value: "postgres" },
+      { label: t("database.driver.opengauss"), value: "opengauss" },
+      { label: t("database.driver.mysql"), value: "mysql" },
+      { label: t("database.driver.sqlite"), value: "sqlite" },
+    ]}
+    onChange={(event) => {
+      const value = event.target.value;
+      const driver = value === "opengauss" ? "postgres" : value as DatabaseConnectionInput["driver"];
+      setPreset(value);
+      onUpdate({
+        driver,
+        sqlitePath: driver === "sqlite" ? form.sqlitePath : null,
+        sslMode: driver === "sqlite" ? null : form.sslMode,
+        credentialRef: driver === "sqlite" ? null : form.credentialRef,
+      });
+    }}
+  />;
+}

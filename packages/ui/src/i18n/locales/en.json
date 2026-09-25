@@ -706,14 +706,18 @@
       "settings": "Connection Settings",
       "tableCountLoaded": "{count} tables loaded",
       "test": "Test connection",
+      "protocol": "Protocol",
+      "unknownServer": "Unknown PostgreSQL-compatible server",
+      "detectedServer": "Detected server",
       "testClose": "Close",
       "testFailed": "Connection failed",
       "testSuccess": "Connection succeeded",
       "testing": "Testing…"
     },
     "driver": {
-      "mysql": "MySQL / MariaDB",
+      "mysql": "MySQL",
       "postgres": "PostgreSQL",
+      "opengauss": "openGauss",
       "sqlite": "SQLite"
     },
     "errors": {

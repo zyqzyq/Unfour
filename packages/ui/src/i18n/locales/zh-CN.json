@@ -705,14 +705,18 @@
       "settings": "连接设置",
       "tableCountLoaded": "已加载 {count} 张表",
       "test": "测试连接",
+      "protocol": "协议",
+      "unknownServer": "未知 PostgreSQL 兼容服务器",
+      "detectedServer": "检测到的服务器",
       "testClose": "关闭",
       "testFailed": "连接失败",
       "testSuccess": "连接成功",
       "testing": "测试中…"
     },
     "driver": {
-      "mysql": "MySQL / MariaDB",
+      "mysql": "MySQL",
       "postgres": "PostgreSQL",
+      "opengauss": "openGauss",
       "sqlite": "SQLite"
     },
     "errors": {

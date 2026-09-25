@@ -22,6 +22,30 @@ const UNKNOWN_POSTGRES_COLUMNS: &str = r#"
     ORDER BY c.ordinal_position
 "#;
 
+// openGauss stores generated-column facts in pg_attrdef.adgencol, not
+// pg_attribute.attgenerated/attidentity. Keep PostgreSQL's newer information_schema
+// fields out of this query. Optional index/FK/DDL SQL is capability-disabled.
+const OPENGAUSS_COLUMNS: &str = r#"
+    SELECT a.attname AS column_name,
+           pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type,
+           CASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END AS is_nullable,
+           d.adsrc AS column_default,
+           CASE WHEN d.adgencol = 's' THEN 'ALWAYS' ELSE 'NEVER' END AS is_generated,
+           CAST(NULL AS VARCHAR) AS identity_generation,
+           EXISTS (
+               SELECT 1 FROM pg_catalog.pg_constraint con
+               WHERE con.conrelid = cls.oid AND con.contype = 'p'
+                 AND a.attnum = ANY(con.conkey)
+           ) AS primary_key
+    FROM pg_catalog.pg_attribute a
+    JOIN pg_catalog.pg_class cls ON cls.oid = a.attrelid
+    JOIN pg_catalog.pg_namespace n ON n.oid = cls.relnamespace
+    LEFT JOIN pg_catalog.pg_attrdef d ON d.adrelid = cls.oid AND d.adnum = a.attnum
+    WHERE n.nspname = $1 AND cls.relname = $2
+      AND a.attnum > 0 AND NOT a.attisdropped
+    ORDER BY a.attnum
+"#;
+
 pub(super) async fn pg_connect_options(
     connection: &DatabaseConnection,
     secret_store: Option<&SecretStore>,
@@ -95,7 +119,9 @@ pub(super) async fn resolve_database_password(
 }
 
 pub(super) fn postgres_columns_sql(profile: &RuntimeDatabaseProfile) -> &'static str {
-    if profile.detected_server_type != DetectedServerType::PostgreSql {
+    if profile.detected_server_type == DetectedServerType::OpenGauss {
+        OPENGAUSS_COLUMNS
+    } else if profile.detected_server_type != DetectedServerType::PostgreSql {
         UNKNOWN_POSTGRES_COLUMNS
     } else {
         r#"

@@ -298,6 +298,14 @@ impl DatabaseService {
         &self,
         input: DatabaseTableStructureInput,
     ) -> AppResult<DatabaseTableStructure> {
+        self.table_structure_metadata(input, true).await
+    }
+
+    pub(super) async fn table_structure_metadata(
+        &self,
+        input: DatabaseTableStructureInput,
+        include_optional: bool,
+    ) -> AppResult<DatabaseTableStructure> {
         validate_workspace_id(&input.workspace_id)?;
         validate_connection_id(&input.connection_id)?;
         let table_name = input.table_name.trim();
@@ -316,10 +324,22 @@ impl DatabaseService {
                 let pool = sqlite_pool(&connection).await?;
                 ensure_sqlite_table_exists(&pool, table_name).await?;
                 let columns = sqlite_columns(&pool, table_name).await?;
-                let indexes = sqlite_indexes(&pool, table_name).await?;
-                let foreign_keys = sqlite_foreign_keys(&pool, table_name).await?;
+                let indexes = if include_optional {
+                    sqlite_indexes(&pool, table_name).await?
+                } else {
+                    Vec::new()
+                };
+                let foreign_keys = if include_optional {
+                    sqlite_foreign_keys(&pool, table_name).await?
+                } else {
+                    Vec::new()
+                };
                 let kind = sqlite_table_kind(&pool, table_name).await?;
-                let ddl = sqlite_ddl(&pool, table_name).await?;
+                let ddl = if include_optional {
+                    sqlite_ddl(&pool, table_name).await?
+                } else {
+                    None
+                };
                 Ok(DatabaseTableStructure {
                     catalog: None,
                     schema: None,
@@ -346,14 +366,14 @@ impl DatabaseService {
                 let columns = postgres_columns(&pool, schema, table_name)
                     .await
                     .map_err(sanitize_pg_app_error)?;
-                let indexes = if pool.profile.capabilities.indexes {
+                let indexes = if include_optional && pool.profile.capabilities.indexes {
                     postgres_indexes(&pool, schema, table_name)
                         .await
                         .map_err(sanitize_pg_app_error)?
                 } else {
                     Vec::new()
                 };
-                let foreign_keys = if pool.profile.capabilities.foreign_keys {
+                let foreign_keys = if include_optional && pool.profile.capabilities.foreign_keys {
                     postgres_foreign_keys(&pool, schema, table_name)
                         .await
                         .map_err(sanitize_pg_app_error)?
@@ -366,7 +386,7 @@ impl DatabaseService {
                 let kind = postgres_table_kind(&pool, schema, table_name)
                     .await
                     .map_err(sanitize_pg_app_error)?;
-                let ddl = if pool.profile.capabilities.ddl {
+                let ddl = if include_optional && pool.profile.capabilities.ddl {
                     Some(
                         postgres_ddl(&pool, schema, table_name, &kind)
                             .await
@@ -376,7 +396,7 @@ impl DatabaseService {
                     None
                 };
                 Ok(DatabaseTableStructure {
-                    catalog: connection.database.clone(),
+                    catalog: effective.database.clone(),
                     schema: Some(schema.to_string()),
                     name: table_name.to_string(),
                     kind,
@@ -414,15 +434,27 @@ impl DatabaseService {
                 let columns = mysql_columns(&pool, schema, table_name)
                     .await
                     .map_err(sanitize_mysql_app_error)?;
-                let indexes = mysql_indexes(&pool, schema, table_name)
-                    .await
-                    .map_err(sanitize_mysql_app_error)?;
-                let foreign_keys = mysql_foreign_keys(&pool, schema, table_name)
-                    .await
-                    .map_err(sanitize_mysql_app_error)?;
-                let ddl = mysql_ddl(&pool, schema, table_name)
-                    .await
-                    .map_err(sanitize_mysql_app_error)?;
+                let indexes = if include_optional {
+                    mysql_indexes(&pool, schema, table_name)
+                        .await
+                        .map_err(sanitize_mysql_app_error)?
+                } else {
+                    Vec::new()
+                };
+                let foreign_keys = if include_optional {
+                    mysql_foreign_keys(&pool, schema, table_name)
+                        .await
+                        .map_err(sanitize_mysql_app_error)?
+                } else {
+                    Vec::new()
+                };
+                let ddl = if include_optional {
+                    mysql_ddl(&pool, schema, table_name)
+                        .await
+                        .map_err(sanitize_mysql_app_error)?
+                } else {
+                    None
+                };
                 // Resolve the actual object kind (table vs view) from
                 // information_schema so views report as "view" instead of the
                 // hard-coded "table" the previous implementation returned.

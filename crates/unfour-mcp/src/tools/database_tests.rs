@@ -379,6 +379,8 @@ impl CommandBusAdapter for DbStubCommandBus {
         _connection_id: &str,
     ) -> Result<DatabaseTestResult, CommandBusAdapterError> {
         Ok(DatabaseTestResult {
+            protocol: None,
+            detected_server: None,
             ok: true,
             message: "Connection successful".to_string(),
             server_version: Some("PostgreSQL 16.1".to_string()),

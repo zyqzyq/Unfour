@@ -35,6 +35,7 @@ impl DatabaseDialect {
 pub enum DetectedServerType {
     Sqlite,
     PostgreSql,
+    OpenGauss,
     Mysql,
     UnknownPostgresCompatible,
 }
@@ -67,6 +68,16 @@ pub struct RuntimeDatabaseProfile {
 }
 
 impl RuntimeDatabaseProfile {
+    pub(super) fn server_name(&self) -> &'static str {
+        match self.detected_server_type {
+            DetectedServerType::Sqlite => "SQLite",
+            DetectedServerType::PostgreSql => "PostgreSQL",
+            DetectedServerType::OpenGauss => "openGauss",
+            DetectedServerType::Mysql => "MySQL",
+            DetectedServerType::UnknownPostgresCompatible => "UnknownPostgresCompatible",
+        }
+    }
+
     pub(super) fn postgres(version: String) -> Self {
         Self::resolve(detect_postgres_server(&version), Some(version))
     }
@@ -74,12 +85,15 @@ impl RuntimeDatabaseProfile {
     pub(super) fn resolve(server: DetectedServerType, version: Option<String>) -> Self {
         use DetectedServerType::*;
         // Adding a detected product requires an explicit compatibility policy.
-        let (dialect, catalogs, schemas, known) = match server {
+        let (dialect, catalogs, schemas, full_metadata) = match server {
             Sqlite => (DatabaseDialect::Sqlite, false, false, true),
             Mysql => (DatabaseDialect::Mysql, true, false, true),
+            OpenGauss => (DatabaseDialect::Postgres, true, true, false),
             PostgreSql => (DatabaseDialect::Postgres, true, true, true),
             UnknownPostgresCompatible => (DatabaseDialect::Postgres, false, true, false),
         };
+        // openGauss core metadata has a dedicated strategy. Optional PostgreSQL
+        // index/FK/DDL queries are not certified for it and remain disabled.
         Self {
             detected_server_type: server,
             server_version: version,
@@ -87,12 +101,12 @@ impl RuntimeDatabaseProfile {
             capabilities: DatabaseCapabilities {
                 catalogs,
                 schemas,
-                indexes: known,
-                foreign_keys: known,
-                ddl: known,
-                generated_columns: known,
-                row_mutation: known,
-                export: known,
+                indexes: full_metadata,
+                foreign_keys: full_metadata,
+                ddl: full_metadata,
+                generated_columns: full_metadata || server == OpenGauss,
+                row_mutation: full_metadata || server == OpenGauss,
+                export: full_metadata || server == OpenGauss,
                 explain: true,
             },
         }
@@ -105,16 +119,12 @@ impl RuntimeDatabaseProfile {
 /// of identity; future products can add stronger probes before this fallback.
 pub(super) fn detect_postgres_server(version: &str) -> DetectedServerType {
     let lower = version.trim().to_ascii_lowercase();
-    let fork = [
-        "opengauss",
-        "gaussdb",
-        "cockroach",
-        "yugabyte",
-        "redshift",
-        "greenplum",
-    ]
-    .iter()
-    .any(|marker| lower.contains(marker));
+    if lower.contains("opengauss") {
+        return DetectedServerType::OpenGauss;
+    }
+    let fork = ["gaussdb", "cockroach", "yugabyte", "redshift", "greenplum"]
+        .iter()
+        .any(|marker| lower.contains(marker));
     let release = lower
         .strip_prefix("postgresql ")
         .and_then(|s| s.split_whitespace().next());

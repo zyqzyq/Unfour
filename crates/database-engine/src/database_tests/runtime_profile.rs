@@ -26,10 +26,9 @@ fn postgres_detection_requires_a_product_banner_and_rejects_known_fork_markers()
         "PostgreSQL",
         "PostgreSQL compatible",
         "not PostgreSQL 16.4",
-        "openGauss 6.0.0",
-        "PostgreSQL 9.2.4 (openGauss 5.0.0)",
         "PostgreSQL 8.0.2 (Redshift 1.0)",
         "CockroachDB v24.1",
+        "PostgreSQL 9.2.4 (GaussDB 5.0)",
         "Acme compatible with PostgreSQL 16.4",
     ] {
         assert_eq!(

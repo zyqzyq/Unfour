@@ -38,6 +38,8 @@ export type DatabaseTestResult = {
   ok: boolean;
   message: string;
   serverVersion: string | null;
+  protocol?: DatabaseConnectionInput["driver"];
+  detectedServer?: string;
 };
 
 export type DatabaseSchema = {
