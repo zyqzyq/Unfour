@@ -47,16 +47,11 @@ impl DatabaseService {
             .connect_with(options)
             .await
             .map_err(sanitize_pg_error)?;
-        let version = match sqlx::query_scalar("SELECT version()")
-            .fetch_one(&pool)
-            .await
-        {
-            Ok(version) => Some(version),
-            Err(error) => {
-                record_version_probe_failure("postgres", error);
-                None
-            }
-        };
+        let version = probe_server_version(
+            "postgres",
+            sqlx::query_scalar("SELECT version()").fetch_one(&pool),
+        )
+        .await;
         let profile = match version {
             Some(version) => RuntimeDatabaseProfile::postgres(version),
             None => {
@@ -93,16 +88,11 @@ impl DatabaseService {
             .connect_with(options)
             .await
             .map_err(sanitize_mysql_error)?;
-        let version = match sqlx::query_scalar("SELECT VERSION()")
-            .fetch_one(&pool)
-            .await
-        {
-            Ok(version) => Some(version),
-            Err(error) => {
-                record_version_probe_failure("mysql", error);
-                None
-            }
-        };
+        let version = probe_server_version(
+            "mysql",
+            sqlx::query_scalar("SELECT VERSION()").fetch_one(&pool),
+        )
+        .await;
         Ok(RuntimePool {
             pool,
             profile: RuntimeDatabaseProfile::resolve(DetectedServerType::Mysql, version),
@@ -129,6 +119,29 @@ impl DatabaseService {
     }
 }
 
+/// Post-connect version probe only. Connect acquisition stays on the pool
+/// timeout; a probe that never returns is degraded detection, not a failed
+/// connection, and is not retried.
+const SERVER_VERSION_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// Run one version query. SQL errors and probe timeouts both yield `None`.
+async fn probe_server_version<F>(driver: &str, probe: F) -> Option<String>
+where
+    F: std::future::Future<Output = Result<String, sqlx::Error>>,
+{
+    match tokio::time::timeout(SERVER_VERSION_PROBE_TIMEOUT, probe).await {
+        Ok(Ok(version)) => Some(version),
+        Ok(Err(error)) => {
+            record_version_probe_failure(driver, error);
+            None
+        }
+        Err(_) => {
+            record_version_probe_timeout(driver);
+            None
+        }
+    }
+}
+
 /// A failed version probe is degraded detection, not a connect failure.
 fn record_version_probe_failure(driver: &str, error: sqlx::Error) {
     let sanitized = match driver {
@@ -143,5 +156,19 @@ fn record_version_probe_failure(driver: &str, error: sqlx::Error) {
         None,
         Some(unfour_diag::app_error_kind(&sanitized)),
         serde_json::json!({ "driver": driver }),
+    );
+}
+
+/// Probe deadline elapsed. Log only the driver and a stable reason — never the
+/// connection target, DSN, or credential.
+fn record_version_probe_timeout(driver: &str) {
+    unfour_diag::log_operation_event(
+        "database_server_detection_degraded",
+        "database",
+        "detect_server_version",
+        "degraded",
+        None,
+        Some("timeout"),
+        serde_json::json!({ "driver": driver, "reason": "timeout" }),
     );
 }

@@ -12,6 +12,15 @@ pub(super) struct MysqlProfileServer {
 
 impl MysqlProfileServer {
     pub async fn start() -> Self {
+        Self::start_with(false).await
+    }
+
+    /// Handshake succeeds, then `SELECT VERSION()` is accepted and never answered.
+    pub async fn start_hanging_probe() -> Self {
+        Self::start_with(true).await
+    }
+
+    async fn start_with(hang_version_probe: bool) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         let queries = Arc::new(Mutex::new(Vec::new()));
@@ -22,7 +31,7 @@ impl MysqlProfileServer {
                 let (stream, _) = listener.accept().await.unwrap();
                 let queries = recorded.clone();
                 clients.spawn(async move {
-                    let _ = serve(stream, queries).await;
+                    let _ = serve(stream, queries, hang_version_probe).await;
                 });
             }
         });
@@ -40,7 +49,11 @@ impl Drop for MysqlProfileServer {
     }
 }
 
-async fn serve(mut stream: TcpStream, queries: Arc<Mutex<Vec<String>>>) -> std::io::Result<()> {
+async fn serve(
+    mut stream: TcpStream,
+    queries: Arc<Mutex<Vec<String>>>,
+    hang_version_probe: bool,
+) -> std::io::Result<()> {
     send_packet(&mut stream, 0, &handshake()).await?;
     let _client_handshake = read_packet(&mut stream).await?;
     send_packet(&mut stream, 2, &ok_packet()).await?;
@@ -56,7 +69,9 @@ async fn serve(mut stream: TcpStream, queries: Arc<Mutex<Vec<String>>>) -> std::
                 let sql = String::from_utf8_lossy(&packet[1..]).into_owned();
                 let version_probe = sql.trim().eq_ignore_ascii_case("SELECT VERSION()");
                 queries.lock().unwrap().push(sql);
-                if version_probe {
+                if version_probe && hang_version_probe {
+                    std::future::pending::<()>().await;
+                } else if version_probe {
                     send_packet(&mut stream, 1, &err_packet("probe denied")).await?;
                 } else {
                     send_packet(&mut stream, 1, &ok_packet()).await?;

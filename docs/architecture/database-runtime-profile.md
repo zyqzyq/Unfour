@@ -31,9 +31,24 @@ target. Existing Tauri, command-client, UI, MCP and Flow schemas are unchanged.
 
 PostgreSQL pools run `SELECT version()`. Detection checks the leading PostgreSQL
 product/release, not a substring; known fork markers override an embedded upstream
-banner. Unrecognized banners resolve to `UnknownPostgresCompatible`. Probe SQL or
-connection errors remain errors, never successful PostgreSQL/unknown profiles.
-SQLite and MySQL use `sqlite_version()` and `VERSION()` respectively.
+banner. Unrecognized banners resolve to `UnknownPostgresCompatible`. SQLite and
+MySQL use `sqlite_version()` and `VERSION()` respectively.
+
+Connection failure is an error: the pool is not created and no profile is
+returned. After connect succeeds, the version probe is a separate, bounded
+query (`SERVER_VERSION_PROBE_TIMEOUT` in `pools.rs`). It is not retried.
+
+- Detection SQL error: degraded fallback. Diagnostics record
+  `database_server_detection_degraded`.
+- Detection timeout: the same degraded fallback. The timeout is not a
+  connection failure.
+- `server_version = None` means the probe was unavailable or failed. It does
+  not mean the connection failed.
+
+PostgreSQL probe failure or timeout resolves to `UnknownPostgresCompatible`
+with conservative capabilities. MySQL probe failure or timeout stays `Mysql`
+with the MySQL baseline capabilities. Diagnostic fields carry the driver and
+a stable reason only; they do not include passwords, DSNs, or secrets.
 
 V1 detection is a banner heuristic, not a proof of product identity. Additional
 probes can be added here if a product reports an indistinguishable upstream banner.

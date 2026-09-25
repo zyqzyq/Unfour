@@ -1,7 +1,17 @@
 # Database runtime profile verification
 
-Date: 2026-09-24. Windows local workspace; all database fixtures are disposable.
+Date: 2026-09-24, with probe-timeout coverage rechecked on 2026-09-25.
+Windows local workspace; all database fixtures are disposable.
 Design and changed-file inventory: [runtime compatibility](../architecture/database-runtime-profile.md).
+
+Probe timeout recheck on 2026-09-25:
+
+| Check | Result |
+| --- | --- |
+| `cargo test -p unfour-database-engine --lib runtime_profile -- --test-threads=2` | PASS: 10 tests |
+| `cargo fmt -p unfour-database-engine` | PASS |
+
+The 2026-09-24 matrix below was not re-run for this timeout change.
 
 | Check | Result |
 | --- | --- |
@@ -33,7 +43,15 @@ final full engine suite passes.
   the next connection/catalog target resolves a fresh profile.
 - Unknown catalog discovery avoids `pg_database` while returning the configured
   catalog, preserving the existing UI tree contract.
-- Probe failure remains an error. No profile is returned as a successful fallback.
+- Connection failure, including a handshake that never completes, remains an
+  error. `runtime_profile` and `test_connection` both return `Err`.
+- Detection SQL error is a degraded fallback, not a connection failure.
+  PostgreSQL becomes `UnknownPostgresCompatible` with `server_version = None`
+  and conservative capabilities. MySQL stays `Mysql` with `server_version = None`
+  and MySQL baseline capabilities. `test_connection` stays `ok=true`.
+- Detection timeout uses the same degraded fallback. A loopback fixture accepts
+  the version query and never answers. `server_version = None` means the probe
+  was unavailable, not that connect failed.
 - Standard column/primary-key fallback SQL executes against an isolated minimal
   `information_schema` fixture without PostgreSQL catalogs or generated fields.
 - Connection serialization, revisions, advanced JSON and domain sync snapshots

@@ -99,7 +99,9 @@ async fn serve(
             b'B' => send(&mut stream, b'2', &[]).await?,
             b'E' => {
                 let value = version.lock().unwrap().clone();
-                if value == "probe-error" {
+                if value == "probe-hang" {
+                    std::future::pending::<()>().await;
+                } else if value == "probe-error" {
                     send(
                         &mut stream,
                         b'E',

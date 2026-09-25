@@ -30,6 +30,37 @@ impl Drop for RejectingServer {
     }
 }
 
+/// Accepts TCP and never completes a database handshake. Connect acquisition
+/// must time out as a connection error, not a version-probe fallback.
+pub(super) struct SilentServer {
+    pub port: u16,
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl SilentServer {
+    pub async fn start() -> Self {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let task = tokio::spawn(async move {
+            let mut clients = tokio::task::JoinSet::new();
+            loop {
+                let (stream, _) = listener.accept().await.unwrap();
+                clients.spawn(async move {
+                    let _ = stream;
+                    std::future::pending::<()>().await;
+                });
+            }
+        });
+        Self { port, task }
+    }
+}
+
+impl Drop for SilentServer {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+
 pub(super) async fn service_with_workspace() -> (DatabaseService, String) {
     let options = SqliteConnectOptions::new()
         .filename(":memory:")

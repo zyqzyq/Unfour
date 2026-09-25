@@ -3,7 +3,7 @@ use super::mysql_profile_server::MysqlProfileServer;
 use super::profile_server::ProfileServer;
 use super::support::{
     mysql_input, postgres_input, service_with_workspace, sqlite_fixture, sqlite_input,
-    RejectingServer,
+    RejectingServer, SilentServer,
 };
 use unfour_core::domain::connection_entity_key;
 
@@ -205,8 +205,106 @@ async fn mysql_version_probe_failure_keeps_pool_and_baseline_profile() {
 }
 
 #[tokio::test]
+async fn postgres_version_probe_timeout_keeps_conservative_fallback() {
+    let server = ProfileServer::start("probe-hang").await;
+    let (service, workspace) = service_with_workspace().await;
+    let mut input = postgres_input(&workspace);
+    input.port = Some(server.port);
+    let saved = service.save_connection(input).await.unwrap();
+    let profile = service
+        .runtime_profile(workspace.clone(), saved.id.clone(), None)
+        .await
+        .expect("version probe timeout must not fail the pool");
+    assert_eq!(
+        profile.detected_server_type,
+        DetectedServerType::UnknownPostgresCompatible
+    );
+    assert_eq!(profile.server_version, None);
+    assert_eq!(profile.dialect, DatabaseDialect::Postgres);
+    assert!(!profile.capabilities.catalogs);
+    assert!(profile.capabilities.schemas);
+    assert!(!profile.capabilities.indexes);
+    assert!(!profile.capabilities.foreign_keys);
+    assert!(!profile.capabilities.ddl);
+    assert!(!profile.capabilities.generated_columns);
+    assert!(!profile.capabilities.row_mutation);
+    assert!(!profile.capabilities.export);
+    assert!(profile.capabilities.explain);
+    let tested = service
+        .test_connection(workspace, saved.id)
+        .await
+        .expect("version probe timeout must not fail test_connection");
+    assert!(tested.ok);
+    assert_eq!(tested.server_version, None);
+    assert!(server
+        .queries
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|sql| sql == "SELECT version()"));
+}
+
+#[tokio::test]
+async fn mysql_version_probe_timeout_keeps_baseline_profile() {
+    let server = MysqlProfileServer::start_hanging_probe().await;
+    let (service, workspace) = service_with_workspace().await;
+    let mut input = mysql_input(&workspace, None);
+    input.port = Some(server.port);
+    let saved = service.save_connection(input).await.unwrap();
+    let profile = service
+        .runtime_profile(workspace.clone(), saved.id.clone(), None)
+        .await
+        .expect("version probe timeout must not fail the mysql pool");
+    assert_eq!(profile.detected_server_type, DetectedServerType::Mysql);
+    assert_eq!(profile.server_version, None);
+    assert_eq!(profile.dialect, DatabaseDialect::Mysql);
+    assert!(profile.capabilities.catalogs);
+    assert!(!profile.capabilities.schemas);
+    assert!(profile.capabilities.ddl);
+    assert!(profile.capabilities.row_mutation);
+    let tested = service
+        .test_connection(workspace, saved.id)
+        .await
+        .expect("version probe timeout must not fail test_connection");
+    assert!(tested.ok);
+    assert_eq!(tested.server_version, None);
+    assert!(server
+        .queries
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|sql| sql.trim().eq_ignore_ascii_case("SELECT VERSION()")));
+}
+
+#[tokio::test]
 async fn transport_failure_is_still_a_connection_error() {
     let server = RejectingServer::start().await;
+    let (service, workspace) = service_with_workspace().await;
+    let mut postgres = postgres_input(&workspace);
+    postgres.port = Some(server.port);
+    let saved = service.save_connection(postgres).await.unwrap();
+    assert!(service
+        .runtime_profile(workspace.clone(), saved.id.clone(), None)
+        .await
+        .is_err());
+    assert!(service
+        .test_connection(workspace.clone(), saved.id)
+        .await
+        .is_err());
+
+    let mut mysql = mysql_input(&workspace, None);
+    mysql.port = Some(server.port);
+    let saved = service.save_connection(mysql).await.unwrap();
+    assert!(service
+        .runtime_profile(workspace.clone(), saved.id.clone(), None)
+        .await
+        .is_err());
+    assert!(service.test_connection(workspace, saved.id).await.is_err());
+}
+
+#[tokio::test]
+async fn connect_timeout_is_still_a_connection_error() {
+    let server = SilentServer::start().await;
     let (service, workspace) = service_with_workspace().await;
     let mut postgres = postgres_input(&workspace);
     postgres.port = Some(server.port);
