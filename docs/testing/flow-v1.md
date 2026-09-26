@@ -152,3 +152,26 @@ and classifying the typed source error; existing Wait Until tests passed again.
 All remote protocol fixtures use disposable localhost servers. Packaged desktop
 UI was not rerun for this backend-only change. No dependencies or persisted Flow
 schema changed.
+
+## 2026-09-26 secret provenance and duplicate query regression
+
+- API diagnostics extract resolved Bearer tokens, Basic passwords/credentials,
+  and API-key values from auth configuration. Loopback HTTP tests echo custom
+  header/query credentials in both failure body and headers, including auth
+  resolved from an ordinary non-secret workspace variable.
+- SSH preflight retains unresolved bindings. Sensitive referenced fields mark
+  the corresponding resolved input secret; step IDs alone do not. Native
+  loopback SSH tests verify upstream `body.token` is scrubbed in Flow output and
+  persisted SSH logs while `body.version` stays visible, alongside existing
+  Workspace, Environment and Flow secrets.
+- Query patch `occurrence` is zero-based among same-key original rows. UI tests
+  cover selecting either duplicate, simultaneous overrides, disabling either,
+  and independently restoring inheritance (including legacy sequential patches).
+  Backend tests cover serialized patches and saved Flow execution over real HTTP
+  for overriding/removing either occurrence of `tag=a&tag=b`.
+- PASS: Command Bus suite with `ssh-native`; Flow/Core/HTTP/SSH/MCP suites;
+  Flow and command-client frontend tests (135); TypeScript; Rust formatting;
+  ESLint (existing model complexity warning only); diff whitespace checks.
+- Tests use disposable local fixtures. No production endpoint or credential is
+  used. Native desktop visual inspection was not performed; UI verification is
+  through React interaction tests.

@@ -147,11 +147,7 @@ fn redact_inner(value: &mut Value, preserve_refs: bool) {
     }
 }
 pub(crate) fn sensitive(key: &str) -> bool {
-    unfour_core::redaction::is_sensitive_key(key)
-        || matches!(
-            key.to_ascii_lowercase().as_str(),
-            "passphrase" | "privatekey" | "set-cookie"
-        )
+    unfour_core::redaction::is_sensitive_flow_name(key)
 }
 
 // A definition can refer to a secret supplied at run time without storing it.

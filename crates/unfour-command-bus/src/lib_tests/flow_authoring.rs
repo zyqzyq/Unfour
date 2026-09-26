@@ -552,3 +552,192 @@ async fn flow_ssh_secret_metadata_respects_selected_environment_and_explicit_inp
     assert!(serde_json::to_vec(&details).unwrap().len() < 262144);
     assert_eq!(details["logTruncated"], true);
 }
+
+#[test]
+fn query_explicit_occurrences_round_trip() {
+    let pair = |key: &str, value: &str, enabled| json!({"key":key,"value":value,"enabled":enabled});
+    for (first, second) in [(true, true), (false, true), (true, false), (false, false)] {
+        let patches = json!({"queryPatch":[
+            {"key":"tag","value":"B","enabled":second,"occurrence":1},
+            {"key":"tag","value":"A","enabled":first,"occurrence":0}
+        ]});
+        let wire = serde_json::to_string(&patches).unwrap();
+        let mut request = json!({"query":[pair("tag","a",true),pair("tag","b",true)]});
+        apply_api_arguments(&mut request, &serde_json::from_str(&wire).unwrap()).unwrap();
+        let expected: Vec<_> = [(first, "A"), (second, "B")]
+            .into_iter()
+            .filter(|(enabled, _)| *enabled)
+            .map(|(_, v)| pair("tag", v, true))
+            .collect();
+        assert_eq!(request["query"], json!(expected));
+    }
+    let mut request = json!({"query":[pair("tag","a",true),pair("tag","b",true)]});
+    apply_api_arguments(
+        &mut request,
+        &json!({"queryPatch":[{"key":"tag","value":"B","enabled":true,"occurrence":1}]}),
+    )
+    .unwrap();
+    assert_eq!(
+        request["query"],
+        json!([pair("tag", "a", true), pair("tag", "B", true)])
+    );
+    for occurrence in [json!(-1), json!(1.5), json!("1"), serde_json::Value::Null] {
+        assert!(validate_api_arguments(&json!({"queryPatch":[{"key":"tag","value":"x","enabled":true,"occurrence":occurrence}]}),true).is_err());
+    }
+}
+
+#[tokio::test]
+async fn ssh_unresolved_sensitive_output_provenance() {
+    let bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let action: FlowAction = serde_json::from_value(json!({"capability":"ssh","resourceId":"task","arguments":{"inputs":{
+        "DEPLOY":"${/steps/login/body/token}","ALIAS":{"$ref":"/steps/login/body/privateKey"},"VISIBLE":"${/steps/build/body/version}"
+    }}})).unwrap();
+    let inputs = BTreeMap::from([
+        ("DEPLOY".into(), "hidden-one".into()),
+        ("ALIAS".into(), "hidden-two".into()),
+        ("VISIBLE".into(), "v1".into()),
+        ("DEPLOY_TOKEN".into(), "hidden-three".into()),
+        ("DB_PASSWORD".into(), "hidden-four".into()),
+    ]);
+    assert_eq!(
+        bus.flow_ssh_secret_names(
+            &action,
+            &super::flow::request(&workspace, "unused"),
+            &inputs
+        )
+        .await
+        .unwrap(),
+        vec!["ALIAS", "DB_PASSWORD", "DEPLOY", "DEPLOY_TOKEN"]
+    );
+}
+
+#[tokio::test]
+async fn flow_auth_echo_diagnostics_use_resolved_auth_values() {
+    use std::io::{Read, Write};
+    for mut auth in [
+        json!({"type":"api-key","key":"X-Company-Key","value":"custom-private","addTo":"header"}),
+        json!({"type":"api-key","key":"company","value":"custom-private","addTo":"query"}),
+        json!({"type":"bearer","token":"custom-private"}),
+        json!({"type":"basic","username":"user","password":"custom-private"}),
+    ] {
+        let bus = test_bus().await;
+        let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+        // Non-secret metadata and an ordinary variable name ensure auth provenance
+        // itself is what protects this resolved credential.
+        bus.workspace_variables_replace(
+            workspace.clone(),
+            vec![serde_json::from_value(
+                json!({"key":"VALUE","value":"custom-private","isSecret":false}),
+            )
+            .unwrap()],
+        )
+        .await
+        .unwrap();
+        let field = match auth["type"].as_str().unwrap() {
+            "bearer" => "token",
+            "basic" => "password",
+            _ => "value",
+        };
+        auth[field] = json!("{{VALUE}}");
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+                .unwrap();
+            let mut bytes = [0; 8192];
+            let n = socket.read(&mut bytes).unwrap();
+            let wire = String::from_utf8_lossy(&bytes[..n]);
+            let credential = wire
+                .lines()
+                .find_map(|line| line.strip_prefix("authorization: "))
+                .unwrap_or("custom-private");
+            let body = format!("echo custom-private {credential} safe-context");
+            write!(socket,"HTTP/1.1 401 Failed\r\nX-Echo: custom-private {credential}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
+        });
+        let mut api = api_script_test_input(workspace.clone(), url);
+        api.auth_json = Some(auth.to_string());
+        let api = bus.save_api_request(api).await.unwrap();
+        let flow = bus
+            .save_flow(super::flow::definition(
+                &workspace,
+                json!([super::flow::action("api", "api", &api.id, json!({}))]),
+            ))
+            .await
+            .unwrap();
+        let run = bus
+            .run_flow(super::flow::request(&workspace, &flow.id))
+            .await
+            .unwrap();
+        let result = super::flow::finished(&bus, &run).await;
+        let output = result.steps[0].output.as_ref().unwrap().to_string();
+        assert!(output.contains("safe-context"), "{output}");
+        assert!(!output.contains("custom-private"), "{output}");
+        assert!(!output.contains("dXNlcjpj"), "{output}");
+        server.join().unwrap();
+    }
+}
+
+#[tokio::test]
+async fn flow_query_occurrences_survive_save_load_and_http_execution() {
+    use std::io::{Read, Write};
+    let bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    for (first, second) in [(true, true), (false, true), (true, false), (false, false)] {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+                .unwrap();
+            let mut bytes = [0; 8192];
+            let n = socket.read(&mut bytes).unwrap();
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}"
+            )
+            .unwrap();
+            String::from_utf8_lossy(&bytes[..n])
+                .lines()
+                .next()
+                .unwrap()
+                .to_owned()
+        });
+        let mut api = api_script_test_input(workspace.clone(), url);
+        api.query = serde_json::from_value(json!([{"key":"tag","value":"a","enabled":true},{"key":"tag","value":"b","enabled":true}])).unwrap();
+        let api = bus.save_api_request(api).await.unwrap();
+        let args = json!({"queryPatch":[{"key":"tag","value":"B","enabled":second,"occurrence":1},{"key":"tag","value":"A","enabled":first,"occurrence":0}]});
+        let flow = bus
+            .save_flow(super::flow::definition(
+                &workspace,
+                json!([super::flow::action("api", "api", &api.id, args)]),
+            ))
+            .await
+            .unwrap();
+        let run = bus
+            .run_flow(super::flow::request(&workspace, &flow.id))
+            .await
+            .unwrap();
+        let result = super::flow::finished(&bus, &run).await;
+        assert_eq!(
+            result.status,
+            unfour_core::models::FlowRunStatus::Succeeded,
+            "{result:?}"
+        );
+        let query = [(first, "tag=A"), (second, "tag=B")]
+            .into_iter()
+            .filter(|(enabled, _)| *enabled)
+            .map(|(_, value)| value)
+            .collect::<Vec<_>>()
+            .join("&");
+        let path = if query.is_empty() {
+            "/?".to_owned()
+        } else {
+            format!("/?{query}")
+        };
+        assert_eq!(server.join().unwrap(), format!("GET {path} HTTP/1.1"));
+    }
+}

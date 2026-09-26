@@ -147,6 +147,8 @@ fn safe_run(run: &FlowRun) -> AppResult<String> {
     if !run.context.inputs.is_object() {
         value["context"]["inputs"] = Value::String("<redacted>".into());
     }
+    // This list contains input names, not secret values. Keep it out of generic redaction.
+    let secret_input_names = value["context"]["secretInputNames"].take();
     let mut secrets = Vec::new();
     // Schema flags such as inputs[].secret are metadata, not runtime secrets.
     for key in ["context", "resources", "steps"] {
@@ -161,6 +163,7 @@ fn safe_run(run: &FlowRun) -> AppResult<String> {
     let input_schema = value["definition"]["inputs"].take();
     redact(&mut value);
     value["definition"]["inputs"] = input_schema;
+    value["context"]["secretInputNames"] = secret_input_names;
     scrub_values(&mut value["context"]["inputs"], &secrets);
     scrub_values(&mut value["resources"], &secrets);
     if let Some(steps) = value["steps"].as_array_mut() {

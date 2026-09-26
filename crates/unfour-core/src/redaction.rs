@@ -1,3 +1,27 @@
+/// Flow input/output names; keep aligned with packages/flow/src/model.ts.
+pub fn is_sensitive_flow_name(value: &str) -> bool {
+    let normalized: String = value
+        .to_ascii_lowercase()
+        .chars()
+        .filter(|c| !matches!(c, '_' | '-' | ' '))
+        .collect();
+    [
+        "authorization",
+        "cookie",
+        "password",
+        "passwd",
+        "secret",
+        "token",
+        "apikey",
+        "privatekey",
+        "passphrase",
+        "credential",
+        "licensekey",
+    ]
+    .iter()
+    .any(|marker| normalized.contains(marker))
+}
+
 pub const REDACTED_VALUE: &str = "<redacted>";
 
 pub fn is_sensitive_key(value: &str) -> bool {
@@ -444,5 +468,26 @@ mod tests {
         );
         assert!(!redacted.contains("abc"));
         assert!(!redacted.contains("secret"));
+    }
+}
+
+#[cfg(test)]
+mod flow_name_tests {
+    #[test]
+    fn flow_names_match_frontend_rules() {
+        for key in [
+            "DEPLOY_TOKEN",
+            "DB_PASSWORD",
+            "apiKey",
+            "privateKey",
+            "passphrase",
+            "credential",
+            "license_key",
+        ] {
+            assert!(super::is_sensitive_flow_name(key), "{key}");
+        }
+        for key in ["DEPLOY", "VERSION", "buildId"] {
+            assert!(!super::is_sensitive_flow_name(key), "{key}");
+        }
     }
 }

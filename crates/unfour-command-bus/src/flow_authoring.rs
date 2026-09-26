@@ -53,11 +53,17 @@ pub(super) fn validate_api_arguments(arguments: &Value, preflight: bool) -> AppR
                         .as_object()
                         .ok_or_else(|| invalid("FLOW_API_PAIRS_REQUIRED"))?;
                     if field == patch
-                        && object
-                            .keys()
-                            .any(|key| !["key", "value", "enabled"].contains(&key.as_str()))
+                        && object.keys().any(|key| {
+                            !["key", "value", "enabled"].contains(&key.as_str())
+                                && !(field == "queryPatch" && key == "occurrence")
+                        })
                     {
                         return Err(invalid("FLOW_API_PAIRS_REQUIRED"));
+                    }
+                    if let Some(occurrence) = object.get("occurrence") {
+                        if field == "queryPatch" && occurrence.as_u64().is_none() {
+                            return Err(invalid("FLOW_API_PAIRS_REQUIRED"));
+                        }
                     }
                     for name in ["key", "value", "enabled"] {
                         let value = object
@@ -107,18 +113,30 @@ pub(super) fn apply_api_arguments(request: &mut Value, arguments: &Value) -> App
             // original occurrence; untouched duplicates retain their position.
             let mut consumed = std::collections::HashSet::new();
             let mut removed = Vec::new();
-            for item in patches {
+            let original = rows.clone();
+            for (patch_index, item) in patches.into_iter().enumerate() {
                 if key == "query" {
-                    let index = rows
-                        .iter()
-                        .enumerate()
-                        .find(|(i, row)| {
-                            !consumed.contains(i) && row["key"].as_str() == Some(&item.key)
-                        })
-                        .map(|(i, _)| i);
+                    let explicit = value[patch_index].get("occurrence").and_then(Value::as_u64);
+                    let index = if let Some(occurrence) = explicit {
+                        original
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, row)| row["key"].as_str() == Some(&item.key))
+                            .nth(occurrence as usize)
+                            .map(|(i, _)| i)
+                    } else {
+                        original
+                            .iter()
+                            .enumerate()
+                            .find(|(i, row)| {
+                                !consumed.contains(i) && row["key"].as_str() == Some(&item.key)
+                            })
+                            .map(|(i, _)| i)
+                    };
                     if let Some(index) = index {
                         consumed.insert(index);
                         if item.enabled {
+                            removed.retain(|removed_index| *removed_index != index);
                             rows[index] = serde_json::to_value(item)?;
                         } else {
                             removed.push(index);
@@ -146,6 +164,7 @@ pub(super) fn apply_api_arguments(request: &mut Value, arguments: &Value) -> App
                 }
             }
             removed.sort_unstable();
+            removed.dedup();
             for index in removed.into_iter().rev() {
                 rows.remove(index);
             }
@@ -287,6 +306,15 @@ impl CommandBus {
             .iter()
             .filter(|(name, value)| {
                 flow_sensitive(name)
+                    || action
+                        .arguments
+                        .get("inputs")
+                        .is_some_and(sensitive_binding)
+                    || action
+                        .arguments
+                        .get("inputs")
+                        .and_then(|v| v.get(name.as_str()))
+                        .is_some_and(sensitive_binding)
                     || (action.arguments.get("workspaceDefaults") == Some(&json!(true))
                         && action
                             .arguments
@@ -382,11 +410,7 @@ pub(super) fn scrub_diagnostics(value: &mut Value, secrets: &[String]) {
 }
 
 fn flow_sensitive(key: &str) -> bool {
-    unfour_core::redaction::is_sensitive_key(key)
-        || matches!(
-            key.to_ascii_lowercase().as_str(),
-            "passphrase" | "privatekey" | "set-cookie"
-        )
+    unfour_core::redaction::is_sensitive_flow_name(key)
 }
 
 fn api_reference(value: &Value) -> AppResult<bool> {
@@ -401,4 +425,70 @@ fn api_reference(value: &Value) -> AppResult<bool> {
         return Ok(true);
     }
     Ok(false)
+}
+
+// Examine only reference paths, not arbitrary literal input text.
+fn sensitive_binding(value: &Value) -> bool {
+    let sensitive_path = |path: &str| {
+        path.split('/')
+            .skip(if path.starts_with("/steps/") { 3 } else { 2 })
+            .any(|part| flow_sensitive(&part.replace("~1", "/").replace("~0", "~")))
+    };
+    match value {
+        Value::Object(object) => object
+            .get("$ref")
+            .and_then(Value::as_str)
+            .is_some_and(sensitive_path),
+        Value::String(text) => text
+            .split("${")
+            .skip(1)
+            .filter_map(|part| part.split_once('}'))
+            .any(|(path, _)| sensitive_path(path)),
+        _ => false,
+    }
+}
+
+pub(super) fn auth_secrets(request: &ApiRequestInput) -> AppResult<Vec<String>> {
+    let auth: Value = serde_json::from_str(request.auth_json.as_deref().unwrap_or("{}"))?;
+    let field = match auth["type"].as_str() {
+        Some("bearer") => "token",
+        Some("basic") => "password",
+        Some("api-key") => "value",
+        _ => return Ok(vec![]),
+    };
+    let mut secrets: Vec<String> = auth[field]
+        .as_str()
+        .map(str::to_owned)
+        .into_iter()
+        .collect();
+    // Auth configuration identifies the credential slot, including custom names
+    // and explicit entries that took precedence during materialization.
+    let api_key = auth["type"] == "api-key";
+    let key = if api_key {
+        auth["key"].as_str().unwrap_or("")
+    } else {
+        "Authorization"
+    };
+    let query = api_key && auth["addTo"] == "query";
+    let rows = if query {
+        &request.query
+    } else {
+        &request.headers
+    };
+    for row in rows.iter().filter(|row| {
+        row.enabled
+            && if query {
+                row.key == key
+            } else {
+                row.key.eq_ignore_ascii_case(key)
+            }
+    }) {
+        secrets.push(row.value.clone());
+        if !api_key {
+            if let Some((_, credential)) = row.value.split_once(' ') {
+                secrets.push(credential.to_owned());
+            }
+        }
+    }
+    Ok(secrets)
 }

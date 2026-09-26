@@ -228,6 +228,7 @@ impl FlowExecutor for CommandBus {
                 return Err(invalid("FLOW_SSH_PROBE_UNSUPPORTED"));
             }
             if action.capability == FlowCapability::Ssh {
+                snapshot["unresolvedAction"] = serde_json::to_value(action)?;
                 let steps: Vec<SshTaskStep> =
                     serde_json::from_value(snapshot["resource"]["steps"].clone())?;
                 let names = unfour_ssh_engine::SshService::detected_task_inputs(&steps)?;
@@ -280,7 +281,7 @@ impl FlowExecutor for CommandBus {
                         )
                         .await?;
                     let request = self.api_client.materialize_auth(request)?;
-                    let mut request_secrets = Vec::new();
+                    let mut request_secrets = crate::flow_authoring::auth_secrets(&request)?;
                     for row in request.headers.iter().chain(request.query.iter()) {
                         if row.enabled && unfour_core::redaction::is_sensitive_key(&row.key) {
                             request_secrets.push(row.value.clone());
@@ -329,8 +330,13 @@ impl FlowExecutor for CommandBus {
                     let names = unfour_ssh_engine::SshService::detected_task_inputs(&steps)?;
                     let defaults = self.flow_ssh_defaults(action, input).await?;
                     let inputs = ssh_inputs(&action.arguments, &names, &defaults, false)?;
-                    let secret_input_names =
-                        self.flow_ssh_secret_names(action, input, &inputs).await?;
+                    let secret_input_names = self
+                        .flow_ssh_secret_names(
+                            &serde_json::from_value(snapshot["unresolvedAction"].clone())?,
+                            input,
+                            &inputs,
+                        )
+                        .await?;
                     let run = self
                         .run_ssh_task(SshTaskRunInput {
                             workspace_id: input.workspace_id.clone(),

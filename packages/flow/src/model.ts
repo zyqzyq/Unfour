@@ -86,7 +86,7 @@ export function inputErrors(definitions: FlowInputDefinition[], values: Record<s
   });
 }
 export function sensitiveKey(key: string) {
-  return /authorization|cookie|password|passwd|secret|token|api.?key|private.?key|passphrase|credential/i.test(key);
+  return /authorization|cookie|password|passwd|secret|token|apikey|privatekey|passphrase|credential|licensekey/i.test(key.replace(/[_ -]/g, ""));
 }
 
 function isReferenceOperand(value: unknown): value is { $ref: string } {

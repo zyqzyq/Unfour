@@ -11,11 +11,24 @@ export function sqlProblem(value: unknown): string | null {
   return statements.length === 0 ? "flow.sqlRequired" : statements.length > 1 ? "flow.sqlSingleStatement" : null;
 }
 
-export type Pair = { key: string; value: unknown; enabled: boolean };
+export type Pair = { key: string; value: unknown; enabled: boolean; occurrence?: number };
 export function pairs(value: unknown): Pair[] | null {
   if (!Array.isArray(value)) return null;
   return value.every((item) => item && typeof item.key === "string" && "value" in item) ? value : null;
 }
 export function inheritedPairs(value?: string): Pair[] {
   try { return pairs(JSON.parse(value ?? "[]")) ?? []; } catch { return []; }
+}
+
+// Freeze legacy sequential targets before editing/removing individual overrides.
+export function queryOccurrences(rows: Pair[]): Pair[] {
+  const consumed = new Map<string, Set<number>>();
+  return rows.map((row) => {
+    const used = consumed.get(row.key) ?? new Set<number>();
+    let occurrence = row.occurrence ?? 0;
+    if (row.occurrence === undefined) while (used.has(occurrence)) occurrence++;
+    used.add(occurrence);
+    consumed.set(row.key, used);
+    return { ...row, occurrence };
+  });
 }

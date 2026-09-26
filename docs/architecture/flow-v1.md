@@ -114,7 +114,12 @@ Query patches match case-sensitively and consume original occurrences in order:
 patching `tag=c` over `tag=a&tag=b` produces `tag=c&tag=b`. A disabled patch removes
 one occurrence, further same-key patches consume subsequent occurrences, and
 extra enabled patches append. Unmatched rows and duplicate values retain their
-order. Legacy whole-group replacements are unchanged.
+order. Query patches optionally carry `occurrence`, a nonnegative zero-based
+index among original rows with the same exact key. This targets a duplicate
+independently (including when earlier patches are removed). Patches without it
+retain sequential consumption semantics; the editor freezes those targets when
+editing. Header patches do not accept occurrence. Legacy whole-group replacements
+are unchanged.
 
 After Flow interpolation, overrides/patches merge into the saved request, then
 URL, headers, query, body and auth resolve against the selected Flow environment,
@@ -343,3 +348,11 @@ requires the desktop backend and is never simulated as success.
 
 Parallelism, Sub-flow, arbitrary loops, Script, Scheduler, Webhook, LLM/Agent,
 Plugin, Team/RBAC, automatic resume, and Flow Cloud Sync are outside V1.
+
+Flow diagnostics use resolved auth configuration as credential provenance,
+including custom API-key names in headers/query and Basic credentials. SSH
+preflight retains unresolved bindings so sensitive input reference fields
+remain secret after expression resolution. Frontend and backend Flow name
+checks normalize separators and recognize common secret-bearing names such as
+`DEPLOY_TOKEN`, `DB_PASSWORD`, `apiKey`, and `privateKey`. Ordinary bindings
+remain visible; this is not blanket masking of SSH inputs.

@@ -199,7 +199,7 @@ async fn flow_native_ssh_secret_inputs_and_failed_history() {
                 position: 0,
                 enabled: true,
                 config_version: Some(1),
-                config_json: json!({"command":"{{MODE}} {{VERSION}} {{DEPLOY}} {{CONFIG}} {{WORKSPACE}}", "timeoutSeconds":5}),
+                config_json: json!({"command":"{{MODE}} {{VERSION}} {{DEPLOY}} {{CONFIG}} {{WORKSPACE}} {{UPSTREAM}} {{PUBLIC}}", "timeoutSeconds":5}),
             }],
         })
         .await
@@ -234,10 +234,32 @@ async fn flow_native_ssh_secret_inputs_and_failed_history() {
     .await
     .unwrap();
     for mode in ["echo", "fail"] {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let http = std::thread::spawn(move || {
+            use std::io::{Read, Write};
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut bytes = [0; 8192];
+            socket.read(&mut bytes).unwrap();
+            let body = r#"{"token":"upstream-private","version":"upstream-visible"}"#;
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+            .unwrap();
+        });
+        let api = bus
+            .save_api_request(api_script_test_input(workspace.clone(), url))
+            .await
+            .unwrap();
         let mut definition = definition(
             &workspace,
             json!([
-                {"id":"ssh","name":"ssh","kind":"action","timeoutMs":10000,"action":{"capability":"ssh","resourceId":ssh.task.id,"connectionId":connection.id,"arguments":{"workspaceDefaults":true,"inputs":{"MODE":mode,"DEPLOY":{"$ref":"/inputs/value"}}}}},
+                {"id":"ssh","name":"ssh","kind":"action","timeoutMs":10000,"action":{"capability":"ssh","resourceId":ssh.task.id,"connectionId":connection.id,"arguments":{"workspaceDefaults":true,"inputs":{"MODE":mode,"DEPLOY":{"$ref":"/inputs/value"},"UPSTREAM":"${/steps/login/body/token}","PUBLIC":{"$ref":"/steps/login/body/version"}}}}},
                 action("later","ssh",&ssh.task.id,json!({}))
             ]),
         );
@@ -249,6 +271,10 @@ async fn flow_native_ssh_secret_inputs_and_failed_history() {
         definition.inputs =
             serde_json::from_value(json!([{"name":"value","type":"string","secret":true}]))
                 .unwrap();
+        definition.steps.insert(
+            0,
+            serde_json::from_value(action("login", "api", &api.id, json!({}))).unwrap(),
+        );
         let flow = bus.save_flow(definition).await.unwrap();
         let mut input = request(&workspace, &flow.id);
         input.inputs = json!({"value":"flow-private"});
@@ -264,10 +290,15 @@ async fn flow_native_ssh_secret_inputs_and_failed_history() {
             },
             "{result:?}"
         );
-        let output = result.steps[0].output.as_ref().unwrap();
+        let output = result.steps[1].output.as_ref().unwrap();
         let log = output["log"].as_str().unwrap();
         assert!(log.contains("v1.2.3"), "{log}");
-        for secret in ["flow-private", "environment-private", "workspace-private"] {
+        for secret in [
+            "flow-private",
+            "environment-private",
+            "workspace-private",
+            "upstream-private",
+        ] {
             assert!(!log.contains(secret), "{log}");
         }
         let persisted_log = bus
@@ -275,15 +306,23 @@ async fn flow_native_ssh_secret_inputs_and_failed_history() {
             .await
             .unwrap();
         assert!(persisted_log.contains("v1.2.3"));
-        for secret in ["flow-private", "environment-private", "workspace-private"] {
+        assert!(persisted_log.contains("upstream-visible"));
+        assert!(log.contains("upstream-visible"));
+        http.join().unwrap();
+        for secret in [
+            "flow-private",
+            "environment-private",
+            "workspace-private",
+            "upstream-private",
+        ] {
             assert!(!persisted_log.contains(secret), "{persisted_log}");
         }
         if mode == "fail" {
             assert_eq!(result.error.as_deref(), Some("FLOW_SSH_FAILED"));
             assert!(output["errorMessage"].is_string());
             assert!(output["logTruncated"].is_boolean());
-            assert_eq!(result.steps[1].status, FlowStepRunStatus::Skipped);
-            assert_eq!(result.steps[0].attempts[0].output.as_ref(), Some(output));
+            assert_eq!(result.steps[2].status, FlowStepRunStatus::Skipped);
+            assert_eq!(result.steps[1].attempts[0].output.as_ref(), Some(output));
         }
     }
     task.abort();
