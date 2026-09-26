@@ -114,11 +114,11 @@ impl FlowService {
         Ok(())
     }
     pub(crate) async fn insert_run(&self, run: &FlowRun) -> AppResult<()> {
-        sqlx::query("INSERT INTO flow_runs (id, workspace_id, flow_id, status, run_json, started_at, updated_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(&run.id).bind(&run.workspace_id).bind(&run.flow_id).bind(run.status.as_str()).bind(safe_run(run)?).bind(&run.started_at).bind(&run.started_at).bind(&run.finished_at).execute(self.db.pool()).await?;
+        sqlx::query("INSERT INTO flow_runs (id, workspace_id, flow_id, status, run_json, started_at, updated_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(&run.id).bind(&run.workspace_id).bind(&run.flow_id).bind(run.status.as_str()).bind(safe_run(run, &self.snapshot_secrets)?).bind(&run.started_at).bind(&run.started_at).bind(&run.finished_at).execute(self.db.pool()).await?;
         Ok(())
     }
     pub(crate) async fn persist_run(&self, run: &FlowRun) -> AppResult<()> {
-        let result = sqlx::query("UPDATE flow_runs SET status = ?, run_json = ?, finished_at = ?, updated_at = ? WHERE workspace_id = ? AND id = ? AND status = 'running'").bind(run.status.as_str()).bind(safe_run(run)?).bind(&run.finished_at).bind(chrono::Utc::now().to_rfc3339()).bind(&run.workspace_id).bind(&run.id).execute(self.db.pool()).await?;
+        let result = sqlx::query("UPDATE flow_runs SET status = ?, run_json = ?, finished_at = ?, updated_at = ? WHERE workspace_id = ? AND id = ? AND status = 'running'").bind(run.status.as_str()).bind(safe_run(run, &self.snapshot_secrets)?).bind(&run.finished_at).bind(chrono::Utc::now().to_rfc3339()).bind(&run.workspace_id).bind(&run.id).execute(self.db.pool()).await?;
         if result.rows_affected() == 0 {
             return Err(invalid("FLOW_RUN_LEASE_LOST"));
         }
@@ -140,7 +140,7 @@ fn decode_run(row: &str) -> AppResult<FlowRun> {
     }
     Ok(run)
 }
-fn safe_run(run: &FlowRun) -> AppResult<String> {
+fn safe_run(run: &FlowRun, snapshot_secrets: &[String]) -> AppResult<String> {
     let mut value: Value = serde_json::to_value(run)?;
     // Invalid invocation payloads have no reliable field boundaries for secret
     // names. Retain only the validation error, never their raw contents.
@@ -149,7 +149,7 @@ fn safe_run(run: &FlowRun) -> AppResult<String> {
     }
     // This list contains input names, not secret values. Keep it out of generic redaction.
     let secret_input_names = value["context"]["secretInputNames"].take();
-    let mut secrets = Vec::new();
+    let mut secrets = snapshot_secrets.to_vec();
     // Schema flags such as inputs[].secret are metadata, not runtime secrets.
     for key in ["context", "resources", "steps"] {
         collect_secrets(&value[key], &mut secrets);
@@ -161,6 +161,8 @@ fn safe_run(run: &FlowRun) -> AppResult<String> {
         }
     }
     let input_schema = value["definition"]["inputs"].take();
+    secrets.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
+    secrets.dedup();
     redact(&mut value);
     value["definition"]["inputs"] = input_schema;
     value["context"]["secretInputNames"] = secret_input_names;

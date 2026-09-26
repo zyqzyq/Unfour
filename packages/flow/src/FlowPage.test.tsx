@@ -542,6 +542,9 @@ it("lists history status, time and duration with an empty state", async () => {
 });
 
 it("submits the selected environment only after effects confirmation", async () => {
+  // Invocation happens before the async result and React's dialog update.
+  let finishRun!: (value: commands.FlowRun) => void;
+  vi.mocked(commands.runFlow).mockImplementationOnce(() => new Promise((resolve) => { finishRun = resolve; }));
   vi.mocked(commands.listWorkspaceEnvironments).mockResolvedValue([{ id: "prod", name: "Production" }] as Awaited<ReturnType<typeof commands.listWorkspaceEnvironments>>);
   mount();
   fireEvent.click(await screen.findByText("Release"));
@@ -552,8 +555,11 @@ it("submits the selected environment only after effects confirmation", async () 
   expect(commands.runFlow).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Run", exact: true }));
   await waitFor(() => expect(commands.runFlow).toHaveBeenCalledWith(expect.objectContaining({ environmentId: "prod", confirmEffects: true })));
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  expect(screen.getByText("Viewing run")).toBeVisible();
+  expect(screen.getByRole("dialog")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+  finishRun(run);
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  expect(await screen.findByText("Viewing run")).toBeVisible();
 });
 
 it("blocks invalid runtime JSON inside the dialog and allows correcting it", async () => {

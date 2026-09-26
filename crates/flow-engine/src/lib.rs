@@ -15,6 +15,11 @@ pub type FlowFuture<'a, T> = Pin<Box<dyn Future<Output = AppResult<T>> + Send + 
 /// The command bus implements this port using existing capability services.
 /// No UI, Tauri, MCP or capability-engine dependencies are needed here.
 pub trait FlowExecutor: Send + Sync {
+    /// Capability-owned provenance for the persisted snapshot view only.
+    /// Values stay in memory and never become part of the Flow schema.
+    fn snapshot_secret_values(&self, _snapshot: &Value) -> AppResult<Vec<String>> {
+        Ok(Vec::new())
+    }
     fn prepare<'a>(
         &'a self,
         action: &'a FlowAction,
@@ -33,11 +38,15 @@ pub trait FlowExecutor: Send + Sync {
 #[derive(Clone)]
 pub struct FlowService {
     db: LocalDb,
+    snapshot_secrets: Vec<String>,
 }
 
 impl FlowService {
     pub fn new(db: LocalDb) -> Self {
-        Self { db }
+        Self {
+            db,
+            snapshot_secrets: Vec::new(),
+        }
     }
 
     pub async fn run(
@@ -121,6 +130,7 @@ impl FlowService {
                 run.context.secret_input_names.push(field.name.clone());
             }
         }
+        let mut service = self.clone();
         let prepared = async {
             validated_inputs?;
             for step in &run.definition.steps {
@@ -131,7 +141,11 @@ impl FlowService {
                     }
                     _ => continue,
                 };
-                run.resources[&step.id] = executor.prepare(action, &run.context, probe).await?;
+                let snapshot = executor.prepare(action, &run.context, probe).await?;
+                service
+                    .snapshot_secrets
+                    .extend(executor.snapshot_secret_values(&snapshot)?);
+                run.resources[&step.id] = snapshot;
                 if serde_json::to_vec(&run.resources)?.len() > 2_097_152 {
                     return Err(expression::invalid("FLOW_RESOURCE_SNAPSHOT_TOO_LARGE"));
                 }
@@ -147,10 +161,9 @@ impl FlowService {
             run.error = Some(runner::error_code(&error));
             run.finished_at = Some(chrono::Utc::now().to_rfc3339());
         }
-        self.insert_run(&run).await?;
+        service.insert_run(&run).await?;
         let response = self.get_run(&run.workspace_id, &run.id).await?;
         if run.status == FlowRunStatus::Running {
-            let service = self.clone();
             tokio::spawn(async move {
                 let outcome = service.execute_run(&mut run, executor).await;
                 if let Err(error) = outcome {

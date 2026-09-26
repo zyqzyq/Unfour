@@ -10,6 +10,9 @@ use unfour_core::{AppError, AppResult};
 
 use super::super::DEFAULT_AUTH_JSON;
 
+mod runtime;
+pub use runtime::runtime_request_secret_values;
+
 /// Percent-encoded form of [`REDACTED_VALUE`] used inside URL-encoded
 /// components (query strings and raw form bodies).
 const ENCODED_REDACTED_VALUE: &str = "%3Credacted%3E";

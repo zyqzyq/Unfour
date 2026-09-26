@@ -4,6 +4,7 @@ mod external_apply;
 mod multipart_secrets;
 mod requests;
 mod secrets;
+pub use secrets::runtime_request_secret_values;
 mod snapshot;
 mod workspace_cascade;
 

@@ -145,6 +145,15 @@ impl CommandBus {
 }
 
 impl FlowExecutor for CommandBus {
+    fn snapshot_secret_values(&self, snapshot: &Value) -> AppResult<Vec<String>> {
+        match snapshot.get("request") {
+            Some(request) => {
+                let request: ApiRequestInput = serde_json::from_value(request.clone())?;
+                unfour_http_engine::runtime_request_secret_values(&request)
+            }
+            None => Ok(Vec::new()),
+        }
+    }
     fn prepare<'a>(
         &'a self,
         action: &'a FlowAction,
@@ -281,17 +290,8 @@ impl FlowExecutor for CommandBus {
                         )
                         .await?;
                     let request = self.api_client.materialize_auth(request)?;
-                    let mut request_secrets = crate::flow_authoring::auth_secrets(&request)?;
-                    for row in request.headers.iter().chain(request.query.iter()) {
-                        if row.enabled && unfour_core::redaction::is_sensitive_key(&row.key) {
-                            request_secrets.push(row.value.clone());
-                            if row.key.eq_ignore_ascii_case("authorization") {
-                                if let Some((_, value)) = row.value.split_once(' ') {
-                                    request_secrets.push(value.to_owned());
-                                }
-                            }
-                        }
-                    }
+                    let request_secrets =
+                        unfour_http_engine::runtime_request_secret_values(&request)?;
                     let response = self.api_client.send_cancellable(request, cancel).await?;
                     let body = serde_json::from_str::<Value>(&response.body)
                         .unwrap_or(Value::String(response.body));

@@ -16,6 +16,7 @@ use helpers::{build_url, normalize_entity_id, parse_method, validate_workspace_i
 mod auth;
 mod collections;
 mod domain;
+pub use domain::runtime_request_secret_values;
 mod execution;
 mod history;
 mod multipart;

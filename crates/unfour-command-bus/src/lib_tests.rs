@@ -921,3 +921,6 @@ async fn api_request_resolution_prefers_temporary_variables() {
 
 #[path = "lib_tests/flow_authoring.rs"]
 mod flow_authoring;
+
+#[path = "lib_tests/flow_http_secrets.rs"]
+mod flow_http_secrets;
