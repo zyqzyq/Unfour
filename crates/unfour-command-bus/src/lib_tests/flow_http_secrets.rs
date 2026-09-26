@@ -115,3 +115,133 @@ async fn flow_http_failure_scrubs_saved_request_secrets_from_persisted_history()
         assert_eq!(result.steps[0].attempts[0].output.as_ref(), Some(output));
     }
 }
+
+#[tokio::test]
+async fn flow_http_success_persists_runtime_secrets_without_redacting_execution() {
+    for mode in ["environment", "override", "previous-step"] {
+        let bus = test_bus().await;
+        let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+        let env = bus
+            .workspace_environment_create(workspace.clone(), "selected".into())
+            .await
+            .unwrap();
+        bus.workspace_environment_update(
+            workspace.clone(),
+            env.id.clone(),
+            env.name,
+            vec![serde_json::from_value(
+                json!({"key":"API_TOKEN","value":"real-secret","isSecret":true}),
+            )
+            .unwrap()],
+        )
+        .await
+        .unwrap();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            for number in 0..2 {
+                let (mut socket, _) = listener.accept().unwrap();
+                socket
+                    .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+                    .unwrap();
+                let mut request = Vec::new();
+                let body = loop {
+                    let mut chunk = [0; 4096];
+                    let n = socket.read(&mut chunk).unwrap();
+                    assert!(n > 0);
+                    request.extend_from_slice(&chunk[..n]);
+                    if let Some(end) = request.windows(4).position(|w| w == b"\r\n\r\n") {
+                        let headers = String::from_utf8_lossy(&request[..end]);
+                        let length: usize = headers
+                            .lines()
+                            .find_map(|line| {
+                                line.to_ascii_lowercase()
+                                    .strip_prefix("content-length: ")
+                                    .map(str::to_owned)
+                            })
+                            .unwrap()
+                            .parse()
+                            .unwrap();
+                        if request.len() >= end + 4 + length {
+                            break serde_json::from_slice::<serde_json::Value>(
+                                &request[end + 4..end + 4 + length],
+                            )
+                            .unwrap();
+                        }
+                    }
+                };
+                // The second request proves the downstream step receives the real
+                // first output, even after the first attempt and step were persisted.
+                let key = if number == 0 || mode == "previous-step" {
+                    "token"
+                } else {
+                    "echo"
+                };
+                assert_eq!(body[key], "real-secret", "{mode}: {body}");
+                let response = r#"{"echo":"real-secret","safe":"visible"}"#;
+                write!(socket, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{response}", response.len()).unwrap();
+            }
+        });
+        let mut api = api_script_test_input(workspace.clone(), url);
+        api.method = "POST".into();
+        api.body_kind = "json".into();
+        api.body = Some(
+            if mode == "override" {
+                r#"{"safe":"saved"}"#
+            } else {
+                r#"{"token":"{{API_TOKEN}}"}"#
+            }
+            .into(),
+        );
+        let api = bus.save_api_request(api).await.unwrap();
+        let first = if mode == "override" {
+            json!({"body":{"$ref":"/inputs/value"}})
+        } else {
+            json!({})
+        };
+        let second = if mode == "previous-step" {
+            json!({"body":"{\"token\":\"${/steps/first/body/echo}\"}"})
+        } else {
+            json!({"body":"{\"echo\":\"${/steps/first/body/echo}\"}"})
+        };
+        let flow = bus
+            .save_flow(super::flow::definition(
+                &workspace,
+                json!([
+                    super::flow::action("first", "api", &api.id, first),
+                    super::flow::action("second", "api", &api.id, second),
+                    {"id":"later","name":"later","kind":"wait","timeoutMs":2000,"durationMs":1}
+                ]),
+            ))
+            .await
+            .unwrap();
+        let mut input = super::flow::request(&workspace, &flow.id);
+        input.environment_id = Some(env.id);
+        // Resolve only during execute; the persisted input still contains a template.
+        input.inputs = json!({"value":r#"{"token":"{{API_TOKEN}}"}"#});
+        let run = bus.run_flow(input).await.unwrap();
+        let result = super::flow::finished(&bus, &run).await;
+        assert_eq!(
+            result.status,
+            FlowRunStatus::Succeeded,
+            "{mode}: {:?}",
+            result.error
+        );
+        server.join().unwrap();
+        let stored: String = sqlx::query_scalar("SELECT run_json FROM flow_runs WHERE id = ?")
+            .bind(&run.id)
+            .fetch_one(bus.db.pool())
+            .await
+            .unwrap();
+        assert!(!stored.contains("real-secret"), "{mode}: {stored}");
+        for step in &result.steps[..2] {
+            for output in [
+                step.output.as_ref().unwrap(),
+                step.attempts[0].output.as_ref().unwrap(),
+            ] {
+                assert_eq!(output["body"]["echo"], "<redacted>");
+                assert_eq!(output["body"]["safe"], "visible");
+            }
+        }
+    }
+}

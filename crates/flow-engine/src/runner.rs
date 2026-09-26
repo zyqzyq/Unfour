@@ -263,6 +263,7 @@ impl FlowService {
                 &run.resources[&run.steps[index].step_id],
                 &run.context,
                 cancel,
+                &self.persistence,
             )
             .await;
         let record = run.steps[index]

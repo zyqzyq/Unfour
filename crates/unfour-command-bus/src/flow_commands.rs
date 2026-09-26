@@ -266,6 +266,7 @@ impl FlowExecutor for CommandBus {
         snapshot: &'a Value,
         input: &'a FlowRunInput,
         cancel: CancellationToken,
+        persistence: &'a unfour_flow_engine::FlowPersistenceContext,
     ) -> FlowFuture<'a, Value> {
         Box::pin(async move {
             if cancel.is_cancelled() {
@@ -292,6 +293,7 @@ impl FlowExecutor for CommandBus {
                     let request = self.api_client.materialize_auth(request)?;
                     let request_secrets =
                         unfour_http_engine::runtime_request_secret_values(&request)?;
+                    persistence.extend(request_secrets.iter().cloned());
                     let response = self.api_client.send_cancellable(request, cancel).await?;
                     let body = serde_json::from_str::<Value>(&response.body)
                         .unwrap_or(Value::String(response.body));

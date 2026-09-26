@@ -63,9 +63,13 @@ impl FlowExecutor for Driver {
         _: &'a Value,
         _: &'a FlowRunInput,
         _: CancellationToken,
+        persistence: &'a unfour_flow_engine::FlowPersistenceContext,
     ) -> FlowFuture<'a, Value> {
         Box::pin(async move {
             self.calls.lock().unwrap().push(action.arguments.clone());
+            if action.resource_id == "runtime-secret" {
+                persistence.extend(["run-local-value".to_owned()]);
+            }
             if action.resource_id == "fail" {
                 return Err(AppError::Validation("FLOW_TEST_FAILURE".into()));
             }
@@ -334,4 +338,54 @@ async fn flow_revision_pin_rejects_before_remote_execution_or_history() {
     assert_eq!(result.definition.revision, changed.revision);
     assert_eq!(result.status, FlowRunStatus::Succeeded);
     assert_eq!(driver.calls.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn flow_runtime_persistence_secrets_are_isolated_across_cloned_concurrent_runs() {
+    let bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let service = FlowService::new(bus.db.clone());
+    let clone = service.clone();
+    let driver = Arc::new(Driver::default());
+    let mut definitions = Vec::new();
+    for resource in ["runtime-secret", "ordinary"] {
+        definitions.push(
+            service
+                .save(definition(
+                    &workspace,
+                    json!([
+                        action("first", "api", resource, json!({"echo":"run-local-value"})),
+                        action(
+                            "later",
+                            "api",
+                            "ordinary",
+                            json!({"echo":{"$ref":"/steps/first/echo"}})
+                        )
+                    ]),
+                ))
+                .await
+                .unwrap(),
+        );
+    }
+    let (secret, ordinary) = tokio::join!(
+        service.run(request(&workspace, &definitions[0].id), driver.clone()),
+        clone.run(request(&workspace, &definitions[1].id), driver.clone())
+    );
+    for (run, expected) in [
+        (secret.unwrap(), "<redacted>"),
+        (ordinary.unwrap(), "run-local-value"),
+    ] {
+        let result = finished(&bus, &run).await;
+        assert_eq!(result.status, FlowRunStatus::Succeeded);
+        for step in result.steps {
+            assert_eq!(step.output.unwrap()["echo"], expected);
+            assert_eq!(step.attempts[0].output.as_ref().unwrap()["echo"], expected);
+        }
+    }
+    assert!(driver
+        .calls
+        .lock()
+        .unwrap()
+        .iter()
+        .all(|value| value["echo"] == "run-local-value"));
 }

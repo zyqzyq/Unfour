@@ -20,6 +20,7 @@ impl FlowExecutor for ProbeDriver {
         _: &'a Value,
         _: &'a FlowRunInput,
         _: CancellationToken,
+        _: &'a unfour_flow_engine::FlowPersistenceContext,
     ) -> FlowFuture<'a, Value> {
         Box::pin(async move {
             self.calls.lock().unwrap().push(action.resource_id.clone());

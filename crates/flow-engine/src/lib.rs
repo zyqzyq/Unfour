@@ -5,12 +5,40 @@ mod validation;
 mod wait_until;
 
 use serde_json::Value;
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::{Arc, Mutex},
+};
 use tokio_util::sync::CancellationToken;
 use unfour_core::{models::*, AppResult};
 use unfour_local_storage::LocalDb;
 
 pub type FlowFuture<'a, T> = Pin<Box<dyn Future<Output = AppResult<T>> + Send + 'a>>;
+
+/// Transient capability provenance used only when serializing this run.
+/// Never serialized. Clones share provenance within a run; each invocation
+/// allocates a fresh context even when started through a cloned service.
+#[derive(Clone, Default)]
+pub struct FlowPersistenceContext {
+    secrets: Arc<Mutex<Vec<String>>>,
+}
+impl FlowPersistenceContext {
+    pub fn extend(&self, values: impl IntoIterator<Item = String>) {
+        let mut secrets = self.secrets.lock().expect("persistence secrets lock");
+        for value in values {
+            if !value.is_empty() && !secrets.contains(&value) {
+                secrets.push(value);
+            }
+        }
+    }
+    pub(crate) fn values(&self) -> Vec<String> {
+        self.secrets
+            .lock()
+            .expect("persistence secrets lock")
+            .clone()
+    }
+}
 
 /// The command bus implements this port using existing capability services.
 /// No UI, Tauri, MCP or capability-engine dependencies are needed here.
@@ -32,20 +60,21 @@ pub trait FlowExecutor: Send + Sync {
         snapshot: &'a Value,
         context: &'a FlowRunInput,
         cancel: CancellationToken,
+        persistence: &'a FlowPersistenceContext,
     ) -> FlowFuture<'a, Value>;
 }
 
 #[derive(Clone)]
 pub struct FlowService {
     db: LocalDb,
-    snapshot_secrets: Vec<String>,
+    persistence: FlowPersistenceContext,
 }
 
 impl FlowService {
     pub fn new(db: LocalDb) -> Self {
         Self {
             db,
-            snapshot_secrets: Vec::new(),
+            persistence: FlowPersistenceContext::default(),
         }
     }
 
@@ -130,7 +159,8 @@ impl FlowService {
                 run.context.secret_input_names.push(field.name.clone());
             }
         }
-        let mut service = self.clone();
+        // Never inherit transient provenance from another invocation.
+        let service = Self::new(self.db.clone());
         let prepared = async {
             validated_inputs?;
             for step in &run.definition.steps {
@@ -143,7 +173,7 @@ impl FlowService {
                 };
                 let snapshot = executor.prepare(action, &run.context, probe).await?;
                 service
-                    .snapshot_secrets
+                    .persistence
                     .extend(executor.snapshot_secret_values(&snapshot)?);
                 run.resources[&step.id] = snapshot;
                 if serde_json::to_vec(&run.resources)?.len() > 2_097_152 {
