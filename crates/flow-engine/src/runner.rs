@@ -12,6 +12,7 @@ use unfour_core::{models::*, AppError, AppResult};
 
 pub(crate) fn error_code(error: &AppError) -> String {
     match error {
+        AppError::FlowActionFailed { source, .. } => error_code(source),
         AppError::HttpStatus(status) => format!("FLOW_HTTP_STATUS_{status}"),
         AppError::Validation(code) if code.starts_with("FLOW_") => code.clone(),
         _ => error.code().into(),
@@ -125,6 +126,16 @@ impl FlowService {
                     };
                     run.steps[index].status = status;
                     run.steps[index].error = Some(code.clone());
+                    if let Some(details) = run.steps[index]
+                        .attempts
+                        .last()
+                        .and_then(|a| a.output.clone())
+                    {
+                        run.steps[index].output = Some(details);
+                        if serde_json::to_vec(&run.steps)?.len() > 4_194_304 {
+                            run.steps[index].output = None;
+                        }
+                    }
                     if let Some(attempt) = run.steps[index].attempts.last_mut() {
                         if attempt.output.is_none() && attempt.error.is_none() {
                             attempt.error = Some(code.clone());
@@ -266,7 +277,14 @@ impl FlowService {
                 }
                 record.output = Some(value.clone());
             }
-            Err(error) => record.error = Some(error_code(error)),
+            Err(error) => {
+                record.error = Some(error_code(error));
+                if let AppError::FlowActionFailed { details, .. } = error {
+                    if serde_json::to_vec(details)?.len() <= 262_144 {
+                        record.output = Some(details.clone());
+                    }
+                }
+            }
         }
         if serde_json::to_vec(&run.steps)?.len() > 4_194_304 {
             run.steps[index]

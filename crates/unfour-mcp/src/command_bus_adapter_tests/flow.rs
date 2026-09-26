@@ -454,3 +454,26 @@ fn flow_old_confirmation_and_post_confirmation_revision_race_create_no_run() {
         .contains("new confirmation"));
     assert!(adapter.list_flow_runs(&ws, &saved.id).unwrap().is_empty());
 }
+
+#[test]
+fn flow_save_rejects_invalid_api_patches_through_shared_command_bus() {
+    let (adapter, registry, ws) = setup();
+    for arguments in [
+        json!({"headers":[],"headersPatch":[]}),
+        json!({"queryPatch":[{"key":" ","value":"x","enabled":true}]}),
+        json!({"headersPatch":{}}),
+    ] {
+        let mut flow = definition(&ws);
+        flow.steps = serde_json::from_value(json!([{"id":"api","name":"API","kind":"action","timeoutMs":1000,"action":{"capability":"api","resourceId":"saved-request","arguments":arguments}}])).unwrap();
+        assert!(adapter.run(adapter.bus.save_flow(flow.clone())).is_err());
+        let result = registry
+            .call(
+                "unfour.flow.save",
+                json!({"workspaceId":ws,"definition":flow}),
+            )
+            .unwrap();
+        assert_eq!(result["isError"], true);
+        assert_eq!(content_json(&result)["error"]["code"], "VALIDATION_ERROR");
+    }
+    assert!(adapter.run(adapter.bus.list_flows(ws)).unwrap().is_empty());
+}

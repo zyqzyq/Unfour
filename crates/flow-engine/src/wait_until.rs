@@ -10,6 +10,7 @@ use unfour_core::{models::*, AppError, AppResult};
 /// Classify typed errors, never their user-facing diagnostic text.
 fn transient(error: &AppError) -> bool {
     match error {
+        AppError::FlowActionFailed { source, .. } => transient(source),
         AppError::ApiNetwork(_) | AppError::ApiTimeout(_) | AppError::Timeout(_) => true,
         AppError::HttpStatus(status) => matches!(*status, 408 | 429 | 500..=599),
         AppError::Http(error) => error.is_timeout() || error.is_connect() || error.is_body(),

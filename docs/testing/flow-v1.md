@@ -127,3 +127,28 @@ SQL/shell interpolation, best-effort cancellation, local-only persistence,
 resource edit races, bounded outputs, and history pagination/retention work.
 
 Canvas authoring and regression coverage: [Flow Canvas](flow-canvas.md).
+
+
+## 2026-09-26 authoring execution closeout
+
+- PASS: `cargo test -p unfour-command-bus --features ssh-native` (128 tests,
+  including 73 library tests and 55 integration tests).
+- PASS: `cargo test -p unfour-flow-engine -p unfour-http-engine -p unfour-ssh-engine --features unfour-ssh-engine/ssh-native`
+  (2 Flow, 76 HTTP, 88 SSH tests; doc tests passed).
+- PASS: `cargo test -p unfour-mcp flow` (7 Flow adapter tests).
+- PASS: formatting checks for changed Rust crates, `git diff --check`, and
+  `pnpm run check:large-files` (no blocking files).
+
+Regression fixtures verify inherited and overridden URL/headers/query/body on
+real localhost HTTP requests using an explicitly selected environment that
+is different from the active environment; legacy replacements; ordered duplicate
+query patches; save/preflight rejection of malformed patches; Desktop/MCP save
+parity; ordinary versus secret SSH inputs in actual native SSH logs; and failed
+HTTP/SSH actions retaining redacted bounded diagnostics while skipping later
+steps. UTF-8 and escaped control-character payload limits are covered. The initial
+HTTP retry regression introduced by diagnostic wrapping was fixed by preserving
+and classifying the typed source error; existing Wait Until tests passed again.
+
+All remote protocol fixtures use disposable localhost servers. Packaged desktop
+UI was not rerun for this backend-only change. No dependencies or persisted Flow
+schema changed.

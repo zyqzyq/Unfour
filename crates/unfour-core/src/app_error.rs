@@ -13,6 +13,11 @@ pub enum AppError {
     Http(#[from] reqwest::Error),
     #[error("HTTP response status: {0}")]
     HttpStatus(u16),
+    #[error("{source}")]
+    FlowActionFailed {
+        source: Box<AppError>,
+        details: serde_json::Value,
+    },
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
     #[error("not found: {0}")]
@@ -76,6 +81,7 @@ impl AppError {
             AppError::Config(_) => "CONFIG_ERROR",
             AppError::Database(_) => "DATABASE_ERROR",
             AppError::Http(_) => "HTTP_ERROR",
+            AppError::FlowActionFailed { .. } => "FLOW_ACTION_FAILED",
             AppError::HttpStatus(_) => "HTTP_STATUS_FAILED",
             AppError::Io(_) => "IO_ERROR",
             AppError::NotFound(_) => "NOT_FOUND",

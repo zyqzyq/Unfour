@@ -108,13 +108,20 @@ arguments remain in Advanced. Opening an existing definition does not migrate it
 
 API `headers` and `query` retain whole-group replacement, including empty arrays.
 New edits use optional `headersPatch` and `queryPatch` arrays of
-`{key, value, enabled}`. Each patch replaces every matching inherited key;
-headers match case-insensitively, query keys case-sensitively. Enabled rows append
-their new value; disabled rows remove the matching key. Patches apply in order
-after saved request environment/auth preparation and Flow interpolation. Unmatched
-inherited rows remain unchanged. A group cannot specify both replacement and
-patch. Removing a patch row restores inheritance; disabling it suppresses that
-key. The body remains a string using the saved body kind; JSON formatting is
+`{key, value, enabled}`. Header patches match case-insensitively, replace all
+matching rows, and append enabled values; disabled patches remove matching rows.
+Query patches match case-sensitively and consume original occurrences in order:
+patching `tag=c` over `tag=a&tag=b` produces `tag=c&tag=b`. A disabled patch removes
+one occurrence, further same-key patches consume subsequent occurrences, and
+extra enabled patches append. Unmatched rows and duplicate values retain their
+order. Legacy whole-group replacements are unchanged.
+
+After Flow interpolation, overrides/patches merge into the saved request, then
+URL, headers, query, body and auth resolve against the selected Flow environment,
+then auth is materialized and the request is sent. Save and run preflight share
+patch structure, empty-key and replacement/patch conflict validation; dynamic
+references are revalidated after resolution. Removing a patch restores inheritance.
+The body remains a string using the saved body kind; JSON formatting is
 explicit, and form bodies retain URL-encoded text. Interpolation stays literal
 and does not add URL/SQL/shell escaping. Multipart remains unsupported in V1.
 
@@ -130,6 +137,18 @@ Explicit `inputs` win, including an explicitly empty value (which fails required
 input validation). Default values are not copied into definitions or resource
 snapshots. Missing literal inputs fail preflight before any action executes;
 dynamic references are checked again after resolution.
+SSH secret flags follow the effective Workspace/Environment `isSecret` metadata,
+Flow secret input values and sensitive input names. Ordinary version/service/path
+inputs remain visible in logs. Explicit inputs override default values and their
+metadata; values derived from Flow secrets remain secret even under another name.
+
+Failed SSH actions retain `runId`, `errorMessage`, `log` and `logTruncated`;
+HTTP failures retain status, body, headers, duration and history ID in attempt and
+step output. Diagnostics are redacted before truncation, with each large payload
+field limited to 32 KiB serialized and `diagnosticsTruncated` indicating clipping.
+Existing 256 KiB attempt and 4 MiB history limits still apply. Failures stop normal
+actions; Wait Until retains its existing typed transient-error retry policy.
+
 
 Database SQL is a required multiline field. CommandBus validates required SQL
 and a single statement on save and run preflight with the owning database

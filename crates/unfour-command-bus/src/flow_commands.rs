@@ -1,4 +1,6 @@
-use crate::flow_authoring::{apply_api_arguments, ssh_inputs, validate_sql_argument};
+use crate::flow_authoring::{
+    apply_api_arguments, ssh_inputs, validate_api_arguments, validate_sql_argument,
+};
 use crate::CommandBus;
 use serde_json::{json, Value};
 use std::{sync::Arc, time::Duration};
@@ -30,6 +32,9 @@ impl CommandBus {
                 FlowNode::Poll { probe, .. } | FlowNode::WaitUntil { probe, .. } => probe,
                 _ => continue,
             };
+            if action.capability == FlowCapability::Api {
+                validate_api_arguments(&action.arguments, true)?;
+            }
             if action.capability == FlowCapability::Database {
                 let connection = self
                     .list_database_connections(input.workspace_id.clone())
@@ -178,11 +183,7 @@ impl FlowExecutor for CommandBus {
                 )?;
             }
             if action.capability == FlowCapability::Api {
-                for (key, patch) in [("headers", "headersPatch"), ("query", "queryPatch")] {
-                    if arguments.contains_key(key) && arguments.contains_key(patch) {
-                        return Err(invalid("FLOW_API_REPLACE_PATCH_CONFLICT"));
-                    }
-                }
+                validate_api_arguments(&action.arguments, true)?;
             }
             let mut snapshot = json!({"resource": resource, "probe": probe});
             if action.capability == FlowCapability::Api {
@@ -221,14 +222,7 @@ impl FlowExecutor for CommandBus {
                     temporary_variables: vec![],
                     multipart_parts: vec![],
                 };
-                let resolved = self
-                    .resolve_api_request_input_for_environment(
-                        request,
-                        input.environment_id.as_deref(),
-                    )
-                    .await?;
-                snapshot["request"] =
-                    serde_json::to_value(self.api_client.materialize_auth(resolved)?)?;
+                snapshot["request"] = serde_json::to_value(request)?;
             }
             if probe && action.capability == FlowCapability::Ssh {
                 return Err(invalid("FLOW_SSH_PROBE_UNSUPPORTED"));
@@ -279,11 +273,34 @@ impl FlowExecutor for CommandBus {
                     let mut request = snapshot["request"].clone();
                     apply_api_arguments(&mut request, &action.arguments)?;
                     let request: ApiRequestInput = serde_json::from_value(request)?;
+                    let request = self
+                        .resolve_api_request_input_for_environment(
+                            request,
+                            input.environment_id.as_deref(),
+                        )
+                        .await?;
+                    let request = self.api_client.materialize_auth(request)?;
+                    let mut request_secrets = Vec::new();
+                    for row in request.headers.iter().chain(request.query.iter()) {
+                        if row.enabled && unfour_core::redaction::is_sensitive_key(&row.key) {
+                            request_secrets.push(row.value.clone());
+                            if row.key.eq_ignore_ascii_case("authorization") {
+                                if let Some((_, value)) = row.value.split_once(' ') {
+                                    request_secrets.push(value.to_owned());
+                                }
+                            }
+                        }
+                    }
                     let response = self.api_client.send_cancellable(request, cancel).await?;
                     let body = serde_json::from_str::<Value>(&response.body)
                         .unwrap_or(Value::String(response.body));
                     if response.status >= 400 {
-                        return Err(unfour_core::AppError::HttpStatus(response.status));
+                        let mut details = json!({"status": response.status, "headers": response.headers, "body": body, "durationMs": response.duration_ms, "historyId": response.history_id});
+                        crate::flow_authoring::scrub_diagnostics(&mut details, &request_secrets);
+                        return Err(unfour_core::AppError::FlowActionFailed {
+                            source: Box::new(unfour_core::AppError::HttpStatus(response.status)),
+                            details: self.flow_diagnostics(details, input).await?,
+                        });
                     }
                     Ok(
                         json!({"status": response.status, "headers": response.headers, "body": body, "durationMs": response.duration_ms, "historyId": response.history_id}),
@@ -312,7 +329,8 @@ impl FlowExecutor for CommandBus {
                     let names = unfour_ssh_engine::SshService::detected_task_inputs(&steps)?;
                     let defaults = self.flow_ssh_defaults(action, input).await?;
                     let inputs = ssh_inputs(&action.arguments, &names, &defaults, false)?;
-                    let secret_input_names = inputs.keys().cloned().collect();
+                    let secret_input_names =
+                        self.flow_ssh_secret_names(action, input, &inputs).await?;
                     let run = self
                         .run_ssh_task(SshTaskRunInput {
                             workspace_id: input.workspace_id.clone(),
@@ -339,9 +357,6 @@ impl FlowExecutor for CommandBus {
                         if current.status == "running" {
                             continue;
                         }
-                        if current.status != "success" && current.status != "succeeded" {
-                            return Err(invalid("FLOW_SSH_FAILED"));
-                        }
                         let mut log = self
                             .read_ssh_task_run_log(input.workspace_id.clone(), current.id.clone())
                             .await?;
@@ -352,6 +367,13 @@ impl FlowExecutor for CommandBus {
                                 end -= 1;
                             }
                             log.truncate(end);
+                        }
+                        if current.status != "success" && current.status != "succeeded" {
+                            let details = json!({"runId":current.id,"status":current.status,"errorMessage":current.error_message,"log":log,"logTruncated":log_truncated});
+                            return Err(unfour_core::AppError::FlowActionFailed {
+                                source: Box::new(invalid("FLOW_SSH_FAILED")),
+                                details: self.flow_diagnostics(details, input).await?,
+                            });
                         }
                         return Ok(
                             json!({"runId": current.id, "status": current.status, "startedAt": current.started_at, "finishedAt": current.finished_at, "log": log, "logTruncated": log_truncated}),
