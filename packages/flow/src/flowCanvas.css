@@ -27,3 +27,11 @@
 .flow-canvas-true { top: 20%; }
 .flow-canvas-false { top: 60%; }
 .flow-canvas .react-flow__handle { width: 10px; height: 10px; }
+
+.flow-page { container-type: inline-size; }
+.flow-inspector { overflow-wrap: anywhere; }
+@container (max-width: 680px) {
+  .flow-workbench { flex-direction: column; overflow: auto; }
+  .flow-workbench > .flow-canvas { min-height: 300px; flex-shrink: 0; }
+  .flow-inspector { width: 100%; max-height: 50%; border-left: 0; border-top: 1px solid var(--u-color-border); }
+}

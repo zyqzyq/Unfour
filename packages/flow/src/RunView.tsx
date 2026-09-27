@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { FlowRun, FlowStepRun } from "@unfour/command-client";
 import { Button, Select, useI18n } from "@unfour/ui";
 
-export function RunView({ run, cancel, selectedStep, onSelectStep }: { run: FlowRun; cancel?: () => void; selectedStep?: string | null; onSelectStep?: (id: string) => void }) {
+export function RunView({ run, cancel, selectedStep, onSelectStep, onEditStep, editableStepIds = [] }: { run: FlowRun; cancel?: () => void; selectedStep?: string | null; onSelectStep?: (id: string) => void; onEditStep?: (id: string) => void; editableStepIds?: string[] }) {
   const { t } = useI18n();
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -15,7 +15,7 @@ export function RunView({ run, cancel, selectedStep, onSelectStep }: { run: Flow
     const start = Date.parse(step.startedAt);
     return Number.isFinite(start) ? Math.max(step.durationMs, now - start, 0) : step.durationMs;
   }
-  return <section className="space-y-2">
+  return <section className="space-y-2 break-words">
     <div className="flex items-center gap-2">
       <strong>{t(`flow.status.${run.status}`)}</strong>
       <code>r{run.definition.revision}</code>
@@ -28,7 +28,7 @@ export function RunView({ run, cancel, selectedStep, onSelectStep }: { run: Flow
     {onSelectStep && <label className="grid gap-1 text-xs">{t("flow.recordedNode")}
       <Select value={run.steps.some((step) => step.stepId === selectedStep) ? selectedStep ?? "" : ""} onChange={(event) => { if (event.target.value) onSelectStep(event.target.value); }} options={[
         { value: "", label: t("flow.selectRecordedNode") },
-        ...run.steps.map((step) => ({ value: step.stepId, label: run.definition.steps.find((definition) => definition.id === step.stepId)?.name ?? step.stepId })),
+        ...run.steps.map((step) => ({ value: step.stepId, label: `${run.definition.steps.find((definition) => definition.id === step.stepId)?.name ?? step.stepId} · ${t(`flow.status.${step.status}`)}` })),
       ]} />
     </label>}
     {selectedStep !== undefined && !run.steps.some((step) => step.stepId === selectedStep) && <p className="text-xs text-[var(--u-color-text-muted)]">{t("flow.selectRunNode")}</p>}
@@ -39,11 +39,14 @@ export function RunView({ run, cancel, selectedStep, onSelectStep }: { run: Flow
         <summary className="cursor-pointer">
           {run.definition.steps.find((s) => s.id === step.stepId)?.name} · {t(`flow.status.${step.status}`)} · {t("flow.elapsed")}: {elapsed(step)} ms · {step.attempts.length} {t("flow.attempts")}
         </summary>
+        {onEditStep && (editableStepIds.includes(step.stepId)
+          ? <Button size="sm" variant="secondary" onClick={() => onEditStep(step.stepId)}>{t("flow.editStep")}</Button>
+          : <p className="text-xs text-[var(--u-color-text-muted)]">{t("flow.stepRemoved")}</p>)}
+        {step.error && <p role="alert" className="text-[var(--u-color-danger)]">{step.error}</p>}
         {step.startedAt && <p className="text-xs">{t("flow.startedAt")}: {step.startedAt}</p>}
         <p className="mt-2 text-xs text-[var(--u-color-text-muted)]">{t("flow.inputValues")}</p>
         <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(step.attempts[step.attempts.length - 1]?.input ?? null, null, 2)}</pre>
         {step.nextCheckAt && step.status === "running" && <p className="text-xs">{t("flow.nextCheck")}: {step.nextCheckAt}</p>}
-        {step.error && <p role="alert">{step.error}</p>}
         <p className="mt-2 text-xs text-[var(--u-color-text-muted)]">{t("flow.latestResult")}</p>
         <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(step.output ?? latest?.output ?? null, null, 2)}</pre>
         {latestError && <><p className="text-xs text-[var(--u-color-text-muted)]">{t("flow.latestError")} · #{latestError.number}</p><p role="alert">{latestError.error}</p></>}

@@ -2,6 +2,10 @@
 
 Date: 2026-09-21. Frontend-only follow-up to [Flow Canvas](flow-canvas.md).
 
+The [2026-09-27 final UX review](flow-final-ux-review.md) records subsequent
+error recovery, run navigation/restart, narrow layout changes and current
+verification evidence.
+
 ## Interaction contract
 
 - Save / Run / Run history remain in the Flow header. Run opens a shared dialog

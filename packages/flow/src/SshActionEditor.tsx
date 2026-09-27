@@ -13,7 +13,7 @@ export function SshActionEditor({ action, resources, variables, onChange, onVali
     {detail && object ? (detail.detectedInputs ?? []).map((name) => <div key={name} className="grid gap-1">
       <ActionTextField label={name} value={object[name] ?? ""} placeholder={action.arguments.workspaceDefaults === true && !(name in object) ? t("flow.workspaceDefault") : undefined} variables={variables} onChange={(value) => onChange({ ...action, arguments: { ...action.arguments, inputs: { ...object, [name]: value } } })} onValidity={(valid) => onValidity(name, valid)} />
       {action.arguments.workspaceDefaults === true && name in object && <Button size="sm" variant="ghost" onClick={() => { const next = { ...object }; delete next[name]; onChange({ ...action, arguments: { ...action.arguments, inputs: next } }); }}>{t("flow.workspaceDefault")}</Button>}
-    </div>) : <p>{t(detail ? "flow.editAdvanced" : "flow.loading")}</p>}
+    </div>) : <p>{t(detail ? "flow.editAdvanced" : "flow.selectSshTaskHelp")}</p>}
     {action.arguments.workspaceDefaults !== true && <Button size="sm" variant="secondary" onClick={() => onChange({ ...action, arguments: { ...action.arguments, workspaceDefaults: true } })}>{t("flow.enableWorkspaceDefaults")}</Button>}
   </div>;
 }

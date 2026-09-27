@@ -1,6 +1,6 @@
 import { CanvasInsertEdge } from "./CanvasInsertEdge";
 import { CanvasInsertion } from "./canvasInsertion";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { applyNodeChanges, Background, Handle, MarkerType, Position, ReactFlow, type Connection, type Edge, type NodeProps, type ReactFlowInstance } from "@xyflow/react";
 import { Button, Select, useI18n } from "@unfour/ui";
 import type { FlowDefinition, FlowRun } from "@unfour/command-client";
@@ -43,6 +43,11 @@ export function FlowCanvas({ definition, onChange, disabled = false, readOnly = 
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
   const [invalid, setInvalid] = useState(false);
   const [instance, setInstance] = useState<ReactFlowInstance<CanvasNode, Edge> | null>(null);
+  useEffect(() => {
+    if (readOnly && selected && instance?.getNode(selected)) {
+      void instance.fitView({ nodes: [{ id: selected }], maxZoom: 1, padding: 0.5, duration: 200 });
+    }
+  }, [instance, readOnly, selected]);
   const graph = definitionToGraph(definition, layout);
   const insertionEdge = graph.edges.find((edge) => edge.id === selectedEdge) ?? graph.edges[graph.edges.length - 1];
   const nodes = graph.nodes.map((node) => {

@@ -25,7 +25,7 @@ test("Flow uses saved API overrides, detected SSH inputs and a required SQL edit
   await expect(headers.getByLabel("Headers 1 · Type")).toHaveCount(0);
   await page.screenshot({ path: "test-results/flow-authoring-api.png" });
   await inspector.getByLabel("Capability").selectOption("database");
-  await inspector.getByLabel("Connection").selectOption("flow-db");
+  await inspector.getByLabel("Database connection").selectOption("flow-db");
   await expect(inspector.getByLabel("SQL", { exact: true })).toHaveJSProperty("tagName", "TEXTAREA");
   await inspector.getByLabel("SQL", { exact: true }).fill("SELECT 1; SELECT 2;");
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();

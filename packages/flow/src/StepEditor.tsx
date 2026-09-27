@@ -68,7 +68,7 @@ export function StepEditor({
             ).map((value) => ({ value, label: t(`flow.${value}`) }))}
           />
           <Select
-            aria-label={t(action.capability === "database" ? "flow.connection" : "flow.resource")}
+            aria-label={t(action.capability === "database" ? "flow.databaseConnection" : "flow.resource")}
             value={action.resourceId}
             onChange={(e) => {
               const detail = resources.ssh.find((task) => task.id === e.target.value)?.detail;

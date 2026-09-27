@@ -2,9 +2,10 @@ import { useState } from "react";
 import type { FlowRunSummary } from "@unfour/command-client";
 import { Button, Popover, PopoverContent, PopoverTrigger, useI18n } from "@unfour/ui";
 
-export function RunHistory({ runs, loading, failed, disabled, selected, onSelect, onOpenChange }: {
+export function RunHistory({ runs, loading, failed, disabled, selected, onSelect, onOpenChange, onRetry }: {
   runs: FlowRunSummary[]; loading: boolean; failed: boolean; disabled: boolean;
   selected: string | null; onSelect: (id: string) => void; onOpenChange: (open: boolean) => void;
+  onRetry: () => void;
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -13,7 +14,7 @@ export function RunHistory({ runs, loading, failed, disabled, selected, onSelect
     <PopoverContent align="end" aria-label={t("flow.history")} className="max-h-80 w-80 overflow-y-auto p-2">
       <strong>{t("flow.history")}</strong>
       {loading && <p className="py-2">{t("flow.loading")}</p>}
-      {failed && <p role="alert">{t("flow.loadFailed")}</p>}
+      {failed && <div role="alert">{t("flow.loadFailed")} <Button size="sm" variant="secondary" onClick={onRetry}>{t("flow.retry")}</Button></div>}
       {!loading && !failed && !runs.length && <p className="py-2">{t("flow.noRuns")}</p>}
       {[...runs].sort((a, b) => b.startedAt.localeCompare(a.startedAt)).map((run) => {
         const duration = run.finishedAt ? Date.parse(run.finishedAt) - Date.parse(run.startedAt) : null;

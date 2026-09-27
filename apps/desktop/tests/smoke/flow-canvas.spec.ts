@@ -50,7 +50,7 @@ test("default Flow Canvas supports Inspector inputs, refs, insertion, deletion a
   await inspector.getByRole("button", { name: "Add input", exact: true }).click();
   await inspector.getByLabel("Input name", { exact: true }).fill("endpoint");
   await inspector.getByRole("combobox", { name: "Type", exact: true }).selectOption("string");
-  await page.locator('.react-flow__node').filter({ hasText: "API Request" }).click();
+  await page.getByRole("group", { name: "API Request", exact: true }).click();
   await expect(inspector.getByRole("textbox", { name: "Step name", exact: true })).toBeVisible();
   await inspector.getByRole("button", { name: "Override", exact: true }).first().click();
   await inspector.locator("summary").filter({ hasText: /^Insert variable$/ }).click();
@@ -74,9 +74,9 @@ test("default Flow Canvas supports Inspector inputs, refs, insertion, deletion a
   await expect(inspector.getByLabel("Input name")).toHaveValue("endpoint");
   await page.getByRole("button", { name: "Insert node · API Request → End", exact: true }).click();
   await page.getByRole("menuitem", { name: "Condition", exact: true }).click();
-  await inspector.getByLabel("Condition · Value · Variable").selectOption({ label: "Step outputs · API Request · body" });
+  await inspector.getByLabel("Condition · Value · Variable").selectOption({ label: "API Request · body" });
   await page.getByRole("button", { name: "Fit view" }).click();
-  await page.locator(".react-flow__node").filter({ hasText: "API Request" }).click();
+  await page.getByRole("group", { name: "API Request", exact: true }).click();
   await inspector.getByRole("button", { name: "Remove", exact: true }).first().click();
   await expect(dialog).toContainText("Update these referencing steps before deleting");
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -84,7 +84,7 @@ test("default Flow Canvas supports Inspector inputs, refs, insertion, deletion a
   await expect(page.locator(".react-flow__node")).toHaveCount(4);
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("r2", { exact: true })).toBeVisible();
-  const node = page.locator(".react-flow__node").filter({ hasText: "API Request" });
+  const node = page.getByRole("group", { name: "API Request", exact: true });
   const box = await node.boundingBox();
   if (!box) throw new Error("Node has no layout");
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);

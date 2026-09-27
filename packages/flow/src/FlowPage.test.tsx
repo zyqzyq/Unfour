@@ -22,6 +22,7 @@ vi.mock("@unfour/command-client", async (importOriginal) => ({
   listFlowRuns: vi.fn(),
   getFlowRun: vi.fn(),
   saveFlow: vi.fn(),
+  getFlow: vi.fn(),
   runFlow: vi.fn(),
   cancelFlowRun: vi.fn(),
   listSavedApiRequests: vi.fn(),
@@ -394,7 +395,7 @@ it("keeps incomplete failure conditions invalid and exposes hidden editor errors
   expect(screen.getByLabelText("Failure when (left / op / right, or null)")).not.toHaveValue('{"left":true,"op":"eq","right":true}');
   fireEvent.click(screen.getByRole("button", { name: "Close inspector" }));
   expect(screen.getByText("Incomplete or invalid configuration. Check these nodes:")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Wait Until", exact: true }));
+  fireEvent.click(screen.getAllByRole("button", { name: "Wait Until", exact: true })[0]);
   fireEvent.change(screen.getByLabelText("Failure condition · Value · Variable"), { target: { value: "/probe/status" } });
   expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   fireEvent.change(screen.getByLabelText("Failure condition · Operator"), { target: { value: "contains" } });
@@ -737,4 +738,75 @@ it("shows invalid reference feedback for Advanced JSON and prevents saving", asy
   fireEvent.change(screen.getByLabelText("Arguments (JSON)"), { target: { value: JSON.stringify({ body: { $ref: "/inputs/body", extra: true } }) } });
   expect(screen.getByText(/Invalid reference\. Use a JSON pointer/)).toBeVisible();
   expect(screen.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+});
+
+
+it("keeps resource errors visible and navigable after closing the inspector", async () => {
+  vi.mocked(commands.listFlows).mockResolvedValue([{ ...flow, steps: [{ id: "api", name: "Fetch", kind: "action", timeoutMs: 1000, action: { capability: "api", resourceId: "missing", arguments: {} } }] }]);
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.click(screen.getByRole("button", { name: "Close inspector" }));
+  expect(await screen.findByText(/Referenced resource is missing/)).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Fetch", exact: true }));
+  expect(screen.getByLabelText("Step name")).toBeVisible();
+});
+
+it("explains invalid timing before save and keeps the error reachable", async () => {
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.click(screen.getByText("Wait", { selector: ".truncate" }));
+  fireEvent.change(screen.getByLabelText("Wait (ms)"), { target: { value: "1000" } });
+  expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Close inspector" }));
+  expect(screen.getByText(/Wait duration must/)).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Wait", exact: true }));
+  fireEvent.change(screen.getByLabelText("Wait (ms)"), { target: { value: "999" } });
+  expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+});
+
+it("preserves edits on a revision conflict until latest-version discard is confirmed", async () => {
+  vi.mocked(commands.saveFlow).mockRejectedValue({ code: "VALIDATION_ERROR", message: "FLOW_REVISION_CONFLICT" });
+  vi.mocked(commands.getFlow).mockResolvedValue({ ...flow, name: "Latest release", revision: 4 });
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.change(screen.getByLabelText("Flow name"), { target: { value: "My edits" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Load latest version" }));
+  const dialog = await screen.findByRole("dialog");
+  expect(screen.getByLabelText("Flow name")).toHaveValue("My edits");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  expect(screen.getByLabelText("Flow name")).toHaveValue("My edits");
+  fireEvent.click(screen.getByRole("button", { name: "Load latest version" }));
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Discard" }));
+  expect(screen.getByLabelText("Flow name")).toHaveValue("Latest release");
+  expect(commands.getFlow).toHaveBeenCalledWith("ws", "flow-1");
+});
+
+it("retries failed run detail without leaving a misleading loading state", async () => {
+  vi.mocked(commands.getFlowRun).mockRejectedValueOnce(new Error("Unavailable"));
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  await selectHistory();
+  const inspector = within(screen.getByRole("complementary", { name: "Run detail" }));
+  await screen.findByRole("button", { name: "Retry" });
+  expect(inspector.queryByText("Loading…")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  await inspector.findByLabelText("Recorded node");
+  expect(commands.getFlowRun).toHaveBeenCalledTimes(2);
+});
+
+it("locates the failed step, edits it, and reconfirms Run again without replaying history inputs", async () => {
+  vi.mocked(commands.getFlowRun).mockResolvedValue({ ...run, status: "failed", steps: [{ ...run.steps[0], status: "failed", error: "Connection refused" }] });
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  await selectHistory();
+  fireEvent.click(await screen.findByRole("button", { name: "Locate: Wait · Failed" }));
+  expect(screen.getByText("Connection refused")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Edit this step" }));
+  expect(screen.getByLabelText("Step name")).toBeVisible();
+  await selectHistory();
+  fireEvent.click(await screen.findByRole("button", { name: "Run again" }));
+  expect(screen.getByLabelText("version", { exact: true })).toHaveValue(null);
+  expect(screen.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+  expect(commands.runFlow).not.toHaveBeenCalled();
 });

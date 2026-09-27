@@ -1,3 +1,4 @@
+import { authoringProblems } from "./authoringValidation";
 import { apiEnvironmentErrors } from "./apiEnvironmentValidation";
 import { guaranteedUpstream, unsafeReferences } from "./referenceGraph";
 import { START, END, removalImpact, removeCanvasStep } from "./canvasGraph";
@@ -18,6 +19,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   cancelFlowRun,
   deleteFlow,
+  getFlow,
   listFlows,
   listFlowRuns,
   getFlowRun,
@@ -63,6 +65,7 @@ function WorkspaceFlowPage({
   const [invalid, setInvalid] = useState<Record<string, boolean>>({});
   const [secretInputNames, setSecretInputNames] = useState("");
   const [environmentId, setEnvironmentId] = useState("");
+  const [revisionConflict, setRevisionConflict] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<"delete" | null>(null);
@@ -135,6 +138,7 @@ function WorkspaceFlowPage({
     setRunDialog(false);
     setConfirm(null);
     setError("");
+    setRevisionConflict(false);
     setContextRevision((revision) => revision + 1);
   }, []);
   const select = useCallback(
@@ -148,6 +152,7 @@ function WorkspaceFlowPage({
     },
     [busy, dirty, resetSelection],
   );
+  const retryFlows = flows.refetch;
   const sidebar = useMemo(
     () => (
       <>
@@ -172,7 +177,7 @@ function WorkspaceFlowPage({
         {flows.isPending && <p className="p-2 text-xs">{t("flow.loading")}</p>}
         {flows.isError && (
           <p role="alert" className="p-2">
-            {t("flow.loadFailed")}
+            {t("flow.loadFailed")} <Button size="sm" variant="secondary" onClick={() => void retryFlows()}>{t("flow.retry")}</Button>
           </p>
         )}
         {flows.data?.map((flow) => (
@@ -192,6 +197,7 @@ function WorkspaceFlowPage({
       flows.data,
       flows.isPending,
       flows.isError,
+      retryFlows,
       draft?.id,
       select,
     ],
@@ -211,6 +217,7 @@ function WorkspaceFlowPage({
       await action();
     } catch (cause) {
       const detail = cause as { code?: string; message?: string };
+      if (`${detail.code ?? ""} ${detail.message ?? String(cause)}`.includes("FLOW_REVISION_CONFLICT")) setRevisionConflict(true);
       setError(
         `${t("flow.operationFailed")} ${detail.code ?? ""} ${detail.message ?? String(cause)}`,
       );
@@ -228,7 +235,8 @@ function WorkspaceFlowPage({
   const referenceProblems = unsafeReferences(draft.steps);
   const upstream = guaranteedUpstream(draft.steps);
   const environmentKeys = [...new Set([...(workspaceVariables.data ?? []), ...(environments.data ?? []).flatMap((env) => env.variables ?? [])].filter((v) => v.isEnabled && !v.deletedAt).map((v) => v.key))];
-  const invalidEditor = referenceProblems.length > 0 || (resourcesQuery.data ? resourceErrors(draft, resources).some((problem) => ["flow.sqlRequired", "flow.sqlSingleStatement", "flow.sshMissingInputs", "flow.inputTypeError"].includes(problem.key)) : false) || schemaProblems.length > 0 || Object.entries(invalid).some(([key, value]) => !key.startsWith("run:") && value);
+  const boundsProblems = authoringProblems(draft);
+  const invalidEditor = boundsProblems.length > 0 || referenceProblems.length > 0 || (resourcesQuery.data ? resourceErrors(draft, resources).some((problem) => ["flow.sqlRequired", "flow.sqlSingleStatement", "flow.sshMissingInputs", "flow.inputTypeError"].includes(problem.key)) : false) || schemaProblems.length > 0 || Object.entries(invalid).some(([key, value]) => !key.startsWith("run:") && value);
   const resolvedInputs = { ...inputDefaults(draft.inputs), ...inputs };
   const inputProblems = inputErrors(draft.inputs, resolvedInputs);
   const resourceProblems = resourcesQuery.data ? resourceErrors(draft, resources) : [];
@@ -247,11 +255,14 @@ function WorkspaceFlowPage({
   const impact = removingNode ? removalImpact(draft, removingNode) : null;
   const invalidRun = (hasApi && !defaultsReady) || apiProblems.length > 0 || (needsWorkspaceDefaults && !defaultsReady) || environmentInputProblems.length > 0 || manualSecretErrors.length > 0 || invalidEditor || inputProblems.length > 0 || resourceProblems.length > 0 || Object.values(invalid).some(Boolean) || !resourcesQuery.data || resourcesQuery.isError || environments.isError || (Boolean(environmentId) && !environments.data?.some((environment) => environment.id === environmentId));
   const viewingRun = selectedRun !== null;
+  const runBlockedReason = busy ? t("flow.operationPending") : viewingRun ? t("flow.backToEditor") : dirty || !draft.id ? t("flow.saveBeforeRun") : invalidEditor || resourceProblems.length > 0 ? t("flow.invalidEditors") : "";
+  const attentionStep = currentRun?.steps.find((step) => ["running", "failed", "timedOut", "interrupted"].includes(step.status));
   const projection = !dirty && currentRun?.flowId === draft.id && currentRun.definition.revision === draft.revision ? currentRun : undefined;
   return (
-    <div className="flex h-full min-h-0 flex-col text-[13px]">
-      <div className="flex shrink-0 items-center gap-2 border-b border-[var(--u-color-border)] p-2">
+    <div className="flow-page flex h-full min-h-0 min-w-0 flex-col text-[13px]">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--u-color-border)] p-2">
         <Input
+          className="min-w-32 flex-1"
           aria-label={t("flow.name")}
           disabled={busy || viewingRun}
           value={draft.name}
@@ -268,6 +279,7 @@ function WorkspaceFlowPage({
               const saved = await saveFlow(draft);
               setDraft(saved);
               setDirty(false);
+              setRevisionConflict(false);
               await queryClient.invalidateQueries({
                 queryKey: ["flows", workspaceId],
               });
@@ -278,6 +290,7 @@ function WorkspaceFlowPage({
         </Button>
         <Button
           ref={runTrigger}
+          title={runBlockedReason || undefined}
           disabled={busy || viewingRun || dirty || !draft.id || invalidEditor || resourceProblems.length > 0}
           onClick={() => {
             setInvalid((state) => Object.fromEntries(Object.entries(state).filter(([key]) => !key.startsWith("run:"))));
@@ -286,7 +299,7 @@ function WorkspaceFlowPage({
         >
           {t("flow.run")}
         </Button>
-        <RunHistory key={contextRevision} runs={runs.data ?? []} loading={runs.isPending} failed={runs.isError} disabled={busy || !draft.id} selected={selectedRun} onSelect={(id) => { setSelectedRun(id); setSelectedNode(START); }} onOpenChange={setHistoryOpen} />
+        <RunHistory key={contextRevision} runs={runs.data ?? []} loading={runs.isPending} failed={runs.isError} disabled={busy || !draft.id} onRetry={() => void runs.refetch()} selected={selectedRun} onSelect={(id) => { setSelectedRun(id); setSelectedNode(START); }} onOpenChange={setHistoryOpen} />
         <Button
           variant="ghost"
           disabled={busy || viewingRun || !draft.id}
@@ -295,33 +308,45 @@ function WorkspaceFlowPage({
           {t("flow.delete")}
         </Button>
       </div>
+      {!viewingRun && runBlockedReason && <p className="px-2 py-1 text-xs text-[var(--u-color-text-muted)]">{runBlockedReason}</p>}
       <p className="px-2 py-1 text-xs text-[var(--u-color-text-muted)]">{t("flow.environmentScope")}</p>
+      <div className="max-h-40 shrink-0 overflow-auto break-words">
       {!viewingRun && referenceProblems.map((problem) => <p key={`${problem.stepId}:${problem.key}:${problem.pointer}`} role="alert" className="px-2 text-xs text-[var(--u-color-danger)]"><Button size="sm" variant="ghost" onClick={() => setSelectedNode(problem.stepId)}>{problem.name}</Button>{t(problem.key)} · {problem.pointer.split("/").slice(1).map((part, index) => index === 1 ? draft.steps.find((step) => step.id === part)?.name ?? part : part).join(" · ")}</p>)}
-      {(error ||
-        resourcesQuery.isError ||
-        runDetail.isError) && (
-        <p role="alert" className="p-2 text-[var(--u-color-danger)]">
-          {error || t("flow.loadFailed")}
-        </p>
-      )}
+      {error && <p role="alert" className="break-words p-2 text-[var(--u-color-danger)]">{error}</p>}
+      {revisionConflict && <div role="alert" className="px-2 py-1">
+        <p>{t("flow.revisionConflict")}</p>
+        <Button size="sm" variant="secondary" disabled={busy} onClick={() => void perform(async () => {
+          const latest = await getFlow(workspaceId, draft.id);
+          setPendingSelection(latest);
+        })}>{t("flow.reloadLatest")}</Button>
+      </div>}
+      {resourcesQuery.isError && <div role="alert" className="p-2">{t("flow.loadFailed")} <Button size="sm" variant="secondary" onClick={() => void resourcesQuery.refetch()}>{t("flow.retry")}</Button></div>}
+      {!viewingRun && [...boundsProblems, ...resourceProblems].map((problem, index) => <p key={index} role="alert" className="px-2 py-1 text-xs text-[var(--u-color-danger)]">
+        {problem.stepId && <Button size="sm" variant="ghost" className="max-w-full whitespace-normal break-all text-left" onClick={() => setSelectedNode(problem.stepId!)}>{draft.steps.find((step) => step.id === problem.stepId)?.name}</Button>}{t(problem.key)}
+      </p>)}
       {invalidEditor && !viewingRun && <div role="alert" className="px-2 py-1 text-xs text-[var(--u-color-danger)]">
         {t("flow.invalidEditors")}
         {(schemaProblems.length > 0 || Object.entries(invalid).some(([key, value]) => value && key.startsWith("schema:"))) && <Button size="sm" variant="ghost" onClick={() => setSelectedNode(START)}>{t("flow.canvas.start")}</Button>}
-        {draft.steps.filter((step) => !referenceProblems.some((problem) => problem.stepId === step.id) && Object.entries(invalid).some(([key, value]) => value && key.startsWith(step.id + ":"))).map((step) => <Button key={step.id} size="sm" variant="ghost" onClick={() => setSelectedNode(step.id)}>{step.name}</Button>)}
+        {draft.steps.filter((step) => !referenceProblems.some((problem) => problem.stepId === step.id) && !resourceProblems.some((problem) => problem.stepId === step.id) && !boundsProblems.some((problem) => problem.stepId === step.id) && Object.entries(invalid).some(([key, value]) => value && key.startsWith(step.id + ":"))).map((step) => <Button key={step.id} size="sm" variant="ghost" onClick={() => setSelectedNode(step.id)}>{step.name}</Button>)}
       </div>}
+      </div>
       {viewingRun && <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-3 py-2">
         <strong>{t("flow.viewingRun")}</strong>
-        <span>{currentRun ? `${currentRun.startedAt} · ${t(`flow.status.${currentRun.status}`)} · r${currentRun.definition.revision}` : t("flow.loading")}</span>
+        <span>{currentRun ? `${currentRun.startedAt} · ${t(`flow.status.${currentRun.status}`)} · r${currentRun.definition.revision}` : t(runDetail.isError ? "flow.loadFailed" : "flow.loading")}</span>
+        {runDetail.isError && <div role="alert">{t("flow.loadFailed")} <Button size="sm" variant="secondary" onClick={() => void runDetail.refetch()}>{t("flow.retry")}</Button></div>}
         <Button ref={backToEditor} variant="secondary" size="sm" onClick={() => { setSelectedRun(null); if (selectedNode !== END && !draft.steps.some((step) => step.id === selectedNode)) setSelectedNode(START); }}>{t("flow.backToEditor")}</Button>
+        {attentionStep && <Button className="max-w-full whitespace-normal break-all text-left" variant="secondary" size="sm" onClick={() => setSelectedNode(attentionStep.stepId)}>{t("flow.locateStep", { name: currentRun?.definition.steps.find((step) => step.id === attentionStep.stepId)?.name ?? attentionStep.stepId })} · {t(`flow.status.${attentionStep.status}`)}</Button>}
+        {currentRun && currentRun.status !== "running" && <Button variant="secondary" size="sm" disabled={busy || dirty || invalidEditor || resourceProblems.length > 0} title={dirty ? t("flow.saveBeforeRun") : t("flow.runAgainHelp")} onClick={() => { setSelectedRun(null); setSelectedNode(START); setInvalid((state) => Object.fromEntries(Object.entries(state).filter(([key]) => !key.startsWith("run:")))); setRunDialog(true); }}>{t("flow.runAgain")}</Button>}
         {currentRun?.status === "running" && <Button variant="secondary" size="sm" disabled={busy} onClick={() => void perform(async () => { await cancelFlowRun(workspaceId, currentRun.id); await runDetail.refetch(); await queryClient.invalidateQueries({ queryKey: ["flow-runs", workspaceId, draft.id] }); })}>{t("flow.cancel")}</Button>}
         {currentRun && !projection && <p className="w-full text-xs text-[var(--u-color-text-muted)]">{t("flow.runProjectionUnavailable")}</p>}
+        {currentRun && currentRun.status !== "running" && (dirty || invalidEditor || resourceProblems.length > 0) && <p className="w-full text-xs">{t("flow.runAgainBlocked")}</p>}
       </div>}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="flow-workbench flex min-h-0 flex-1 overflow-hidden">
         <FlowCanvas resources={resources} key={contextRevision} definition={draft} disabled={busy} readOnly={viewingRun} selected={selectedNode} onSelect={setSelectedNode} onRemove={setRemovingNode} run={viewingRun ? projection : undefined} onChange={update} />
-        <aside aria-label={t(viewingRun ? "flow.runDetail" : "flow.inspector")} hidden={!selectedNode} className="w-[360px] shrink-0 overflow-auto border-l border-[var(--u-color-border)] p-3">
+        <aside aria-label={t(viewingRun ? "flow.runDetail" : "flow.inspector")} hidden={!selectedNode} className="flow-inspector w-[360px] min-w-0 shrink-0 overflow-auto border-l border-[var(--u-color-border)] p-3">
           {viewingRun && <>
             <div className="flex items-center justify-between"><strong>{t("flow.runDetail")}</strong><Button variant="ghost" size="sm" onClick={() => setSelectedNode(null)}>{t("flow.closeInspector")}</Button></div>
-            {currentRun ? <RunView key={`${currentRun.id}:${selectedNode}`} run={currentRun} selectedStep={selectedNode} onSelectStep={!projection ? setSelectedNode : undefined} /> : <p>{t("flow.loading")}</p>}
+            {currentRun ? <RunView key={`${currentRun.id}:${selectedNode}`} run={currentRun} selectedStep={selectedNode} onSelectStep={setSelectedNode} onEditStep={(id) => { setSelectedRun(null); setSelectedNode(id); }} editableStepIds={draft.steps.map((step) => step.id)} /> : !runDetail.isError && <p>{t("flow.loading")}</p>}
           </>}
           <fieldset disabled={busy || viewingRun} hidden={viewingRun}>
           <div className="flex items-center justify-between"><strong>{t("flow.inspector")}</strong><Button variant="ghost" size="sm" onClick={() => setSelectedNode(null)}>{t("flow.closeInspector")}</Button></div>
@@ -336,7 +361,6 @@ function WorkspaceFlowPage({
           }} />
           </div>
           {schemaProblems.map((problem, index) => <p key={index} role="alert" className="py-1 text-xs text-[var(--u-color-danger)]">{problem.name}: {t(problem.key)}</p>)}
-          {resourceProblems.map((problem, index) => <p key={index} role="alert" className="py-1 text-xs text-[var(--u-color-danger)]">{problem.name}: {t(problem.key)}</p>)}
           {draft.steps.map((step, index) => (
             <div key={`${contextRevision}:${step.id}`} hidden={selectedNode !== step.id}><StepEditor
               removeDisabled={draft.steps.length <= 1}
@@ -413,8 +437,10 @@ function WorkspaceFlowPage({
           {resourceProblems.map((problem, index) => <p key={index} role="alert">{problem.name}: {t(problem.key)}</p>)}
           {environmentInputProblems.map((problem) => <p key={`${problem.name}:${problem.key}`} role="alert">{problem.name}: {t(problem.key)}</p>)}
           {(resourcesQuery.isPending || environments.isPending || ((needsWorkspaceDefaults || hasApi) && workspaceVariables.isPending)) && <p>{t("flow.loading")}</p>}
-          {(resourcesQuery.isError || environments.isError) && <p role="alert">{t("flow.loadFailed")}</p>}
-          {(needsWorkspaceDefaults || hasApi) && workspaceVariables.isError && <p role="alert">{t("flow.variablesLoadFailed")}</p>}
+          {(resourcesQuery.isError || environments.isError) && <div role="alert">{t("flow.loadFailed")} <Button size="sm" variant="secondary" onClick={() => { void resourcesQuery.refetch(); void environments.refetch(); void workspaceVariables.refetch(); }}>{t("flow.retry")}</Button></div>}
+          {environmentId && environments.isSuccess && !environments.data.some((environment) => environment.id === environmentId) && <p role="alert">{t("flow.environmentMissing")}</p>}
+          {(needsWorkspaceDefaults || hasApi) && workspaceVariables.isError && <div role="alert">{t("flow.variablesLoadFailed")} <Button size="sm" variant="secondary" onClick={() => void workspaceVariables.refetch()}>{t("flow.retry")}</Button></div>}
+          <p className="text-xs text-[var(--u-color-text-muted)]">{t("flow.runAgainHelp")}</p>
           <DialogDescription>{t("flow.effectsHelp")}</DialogDescription>
           <p>{t("flow.name")}: {draft.name} · {t("flow.workspace")}: {workspaceId}</p>
           <p>{t("flow.environment")}: {environments.data?.find((environment) => environment.id === environmentId)?.name ?? t("flow.workspaceOnly")}{environmentId ? ` (${environmentId})` : ""}</p>

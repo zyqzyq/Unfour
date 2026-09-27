@@ -72,7 +72,7 @@ it("validates SSH defaults per selected environment while preserving explicit an
   const action: FlowAction = { ...emptyAction("ssh"), resourceId: "task", connectionId: "default", arguments: { inputs: { directory: "/tmp", file: "${/inputs/file}" }, workspaceDefaults: true } };
   const flow: FlowDefinition = { id: "flow", name: "Flow", workspaceId: "ws", revision: 1, inputs: [], steps: [{ id: "ssh", name: "SSH", kind: "action", timeoutMs: 1000, next: null, action }] };
   expect(resourceErrors(flow, resources)).toEqual([]);
-  expect(environmentInputErrors(flow, resources, new Map())).toContainEqual({ name: "SSH", key: "flow.sshMissingInputs" });
+  expect(environmentInputErrors(flow, resources, new Map())).toContainEqual(expect.objectContaining({ name: "SSH", key: "flow.sshMissingInputs" }));
   expect(environmentInputErrors(flow, resources, new Map([["version", "v1"]]))).toEqual([]);
   action.arguments.workspaceDefaults = false;
   expect(resourceErrors(flow, resources)).toHaveLength(1);

@@ -153,8 +153,8 @@ export function resourceErrors(definition: FlowDefinition, resources: Resources,
     const probe = step.kind === "poll" || step.kind === "waitUntil";
     const action = step.kind === "action" ? step.action : probe ? step.probe : null;
     if (!action) return [];
-    const errors: { name: string; key: string }[] = [];
-    const add = (key: string) => errors.push({ name: step.name, key });
+    const errors: { stepId: string; name: string; key: string }[] = [];
+    const add = (key: string) => errors.push({ stepId: step.id, name: step.name, key });
     if (!resources[action.capability].some((r) => r.id === action.resourceId)) { add("flow.missingResource"); return errors; }
     if (action.capability === "ssh" && !resources.connections.some((c) => c.id === action.connectionId)) add("flow.missingConnection");
     if (action.capability === "api") {
