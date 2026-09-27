@@ -1,3 +1,5 @@
+use super::connection_storage::ConnectionSubtype;
+use super::saved_sql::clear_saved_sql_connection_on;
 use super::*;
 use sqlx::SqliteConnection;
 use unfour_core::domain::{CommandContext, DomainCommandResult, MutationOperation};
@@ -37,18 +39,6 @@ struct CurrentDatabaseConnectionSave {
     username: Option<String>,
     ssl_mode: Option<String>,
     read_only: bool,
-}
-
-#[derive(Debug)]
-pub(super) struct DatabaseConnectionStorageInput {
-    pub(super) driver: String,
-    pub(super) host: Option<String>,
-    pub(super) port: Option<u16>,
-    pub(super) database_name: Option<String>,
-    pub(super) username: Option<String>,
-    pub(super) ssl_mode: Option<String>,
-    pub(super) read_only: bool,
-    pub(super) config: DatabaseConnectionConfig,
 }
 
 impl DatabaseService {
@@ -189,22 +179,15 @@ impl DatabaseService {
             };
 
             let subtype = if shared_changed {
-                sqlx::query(
-                    r#"
-                    UPDATE database_connections
-                    SET driver = ?1, database_name = ?2, username = ?3,
-                        ssl_mode = ?4, read_only = ?5, config_json = ?6
-                    WHERE connection_id = ?7
-                    "#,
-                )
-                .bind(&storage.driver)
-                .bind(&database_name)
-                .bind(&username)
-                .bind(&ssl_mode)
-                .bind(storage.read_only)
-                .bind(&config_json)
-                .bind(id)
-                .execute(&mut *connection)
+                ConnectionSubtype {
+                    driver: &storage.driver,
+                    database_name: database_name.as_deref(),
+                    username: username.as_deref(),
+                    ssl_mode: ssl_mode.as_deref(),
+                    read_only: storage.read_only,
+                    config_json: &config_json,
+                }
+                .update_on(connection, id)
                 .await?
             } else {
                 sqlx::query(
@@ -246,22 +229,15 @@ impl DatabaseService {
             .execute(&mut *connection)
             .await?;
 
-            sqlx::query(
-                r#"
-            INSERT INTO database_connections (
-              connection_id, driver, database_name, username, ssl_mode, read_only, config_json
-            )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-            "#,
-            )
-            .bind(&id)
-            .bind(&storage.driver)
-            .bind(storage.database_name)
-            .bind(storage.username)
-            .bind(storage.ssl_mode)
-            .bind(storage.read_only)
-            .bind(&config_json)
-            .execute(&mut *connection)
+            ConnectionSubtype {
+                driver: &storage.driver,
+                database_name: storage.database_name.as_deref(),
+                username: storage.username.as_deref(),
+                ssl_mode: storage.ssl_mode.as_deref(),
+                read_only: storage.read_only,
+                config_json: &config_json,
+            }
+            .insert_on(connection, &id)
             .await?;
             (id, 1, true)
         };
@@ -339,19 +315,7 @@ impl DatabaseService {
         .fetch_one(&mut *connection)
         .await?;
 
-        sqlx::query(
-            r#"
-            UPDATE saved_sql
-            SET connection_id = NULL, updated_at = ?1,
-                revision = revision + 1, sync_status = 'pending'
-            WHERE workspace_id = ?2 AND connection_id = ?3 AND deleted_at IS NULL
-            "#,
-        )
-        .bind(&now)
-        .bind(&workspace_id)
-        .bind(&connection_id)
-        .execute(&mut *connection)
-        .await?;
+        clear_saved_sql_connection_on(connection, &workspace_id, &connection_id, &now).await?;
         let remaining = self.list_connections_on(connection, &workspace_id).await?;
         let cleanup = DatabaseConnectionCleanup::new(workspace_id.clone(), credential_ref);
         Ok(DomainCommandResult::new(
@@ -432,168 +396,4 @@ fn stored_to_database_connection(row: StoredDatabaseConnection) -> AppResult<Dat
         sync_status: row.sync_status,
         remote_id: row.remote_id,
     })
-}
-
-pub(super) fn input_to_storage(
-    input: &DatabaseConnectionInput,
-) -> AppResult<DatabaseConnectionStorageInput> {
-    let driver = input.driver.trim().to_ascii_lowercase();
-    if !matches!(driver.as_str(), "sqlite" | "postgres" | "mysql") {
-        return Err(AppError::Validation(format!(
-            "unsupported database driver: {}",
-            input.driver
-        )));
-    }
-
-    if driver == "sqlite" {
-        let sqlite_path = input
-            .sqlite_path
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| AppError::Validation("SQLite path is required".to_string()))?;
-
-        return Ok(DatabaseConnectionStorageInput {
-            driver,
-            host: None,
-            port: None,
-            database_name: None,
-            username: None,
-            read_only: input.read_only,
-            ssl_mode: None,
-            config: DatabaseConnectionConfig {
-                sqlite_path: Some(sqlite_path.to_string()),
-                connect_timeout_ms: None,
-                statement_timeout_ms: None,
-                default_schema: None,
-            },
-        });
-    }
-
-    Ok(DatabaseConnectionStorageInput {
-        driver,
-        host: empty_to_none(input.host.clone()),
-        port: input.port,
-        database_name: empty_to_none(input.database.clone()),
-        username: empty_to_none(input.username.clone()),
-        read_only: input.read_only,
-        ssl_mode: normalize_ssl_mode(input.ssl_mode.clone())?,
-        config: DatabaseConnectionConfig {
-            sqlite_path: None,
-            connect_timeout_ms: None,
-            statement_timeout_ms: None,
-            default_schema: None,
-        },
-    })
-}
-
-pub(super) fn database_config_to_json(config: &DatabaseConnectionConfig) -> AppResult<String> {
-    serde_json::to_string(config).map_err(AppError::from)
-}
-
-pub(super) fn parse_database_config(
-    connection_id: &str,
-    config_json: &str,
-) -> AppResult<DatabaseConnectionConfig> {
-    serde_json::from_str::<DatabaseConnectionConfig>(config_json).map_err(|error| {
-        AppError::Config(format!(
-            "invalid database_connections.config_json for connection {connection_id}: {error}"
-        ))
-    })
-}
-
-pub(super) fn normalize_ssl_mode(value: Option<String>) -> AppResult<Option<String>> {
-    let Some(value) = empty_to_none(value) else {
-        return Ok(None);
-    };
-    let normalized = value.to_ascii_lowercase();
-    if matches!(
-        normalized.as_str(),
-        "disable" | "prefer" | "require" | "verify-ca" | "verify-full"
-    ) {
-        Ok(Some(normalized))
-    } else {
-        Err(AppError::Validation(format!(
-            "unsupported database ssl mode: {value}"
-        )))
-    }
-}
-
-pub(super) fn decode_port(value: Option<i64>, label: &str) -> AppResult<Option<u16>> {
-    match value {
-        None => Ok(None),
-        Some(port) if (1..=u16::MAX as i64).contains(&port) => Ok(Some(port as u16)),
-        Some(port) => Err(AppError::Config(format!("{label} out of range: {port}"))),
-    }
-}
-
-pub(super) fn normalize_name(name: &str) -> AppResult<String> {
-    let trimmed = name.trim();
-    if trimmed.is_empty() {
-        return Err(AppError::Validation(
-            "database connection name cannot be empty".to_string(),
-        ));
-    }
-    if trimmed.chars().count() > 80 {
-        return Err(AppError::Validation(
-            "database connection name must be 80 characters or fewer".to_string(),
-        ));
-    }
-    Ok(trimmed.to_string())
-}
-
-pub(super) fn empty_to_none(value: Option<String>) -> Option<String> {
-    value
-        .map(|item| item.trim().to_string())
-        .filter(|item| !item.is_empty())
-}
-
-/// Format: `<service>:<workspace_id>:<kind>:<record_id>`.
-pub(super) fn validate_credential_ref_for_workspace(
-    credential_ref: Option<&str>,
-    workspace_id: &str,
-) -> AppResult<()> {
-    let Some(credential_ref) = credential_ref else {
-        return Ok(());
-    };
-    let parsed_workspace = parse_credential_ref_workspace(credential_ref)?;
-    if parsed_workspace != workspace_id {
-        return Err(AppError::Validation(
-            "credential reference does not belong to the workspace".to_string(),
-        ));
-    }
-    Ok(())
-}
-
-fn parse_credential_ref_workspace(credential_ref: &str) -> AppResult<&str> {
-    let mut parts = credential_ref.splitn(4, ':');
-    let service_name = parts.next().unwrap_or_default();
-    let workspace_id = parts.next().unwrap_or_default();
-    let kind = parts.next().unwrap_or_default();
-    let record_id = parts.next().unwrap_or_default();
-    if service_name.is_empty() || workspace_id.is_empty() || kind.is_empty() || record_id.is_empty()
-    {
-        return Err(AppError::Validation(
-            "credential reference is invalid".to_string(),
-        ));
-    }
-    Ok(workspace_id)
-}
-
-pub(super) fn validate_workspace_id(workspace_id: &str) -> AppResult<()> {
-    if workspace_id.trim().is_empty() {
-        return Err(AppError::Validation(
-            "workspace id cannot be empty".to_string(),
-        ));
-    }
-    Ok(())
-}
-
-pub(super) fn validate_connection_id(connection_id: &str) -> AppResult<()> {
-    if connection_id.trim().is_empty() {
-        return Err(AppError::Validation(
-            "database connection id cannot be empty".to_string(),
-        ));
-    }
-    Ok(())
 }

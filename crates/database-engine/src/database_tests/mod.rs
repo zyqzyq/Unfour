@@ -1,3 +1,4 @@
+mod connection_persistence;
 mod mysql;
 mod mysql_profile_server;
 mod opengauss;

@@ -7,10 +7,9 @@ use unfour_core::domain::{
     ExternalDelete, MutationOperation, MutationOrigin, TombstoneSnapshot,
 };
 
+use super::connection_storage::ConnectionSubtype;
+use super::saved_sql::clear_saved_sql_connection_on;
 use super::*;
-
-mod support;
-use support::*;
 
 pub struct DatabaseConnectionCleanup {
     workspace_id: String,
@@ -295,22 +294,15 @@ impl DatabaseService {
             .bind(&record.workspace_id)
             .fetch_one(&mut *connection)
             .await?;
-            sqlx::query(
-                r#"
-                UPDATE database_connections
-                SET driver = ?1, database_name = ?2, username = ?3,
-                    ssl_mode = ?4, read_only = ?5, config_json = ?6
-                WHERE connection_id = ?7
-                "#,
-            )
-            .bind(driver)
-            .bind(database_name)
-            .bind(username)
-            .bind(ssl_mode)
-            .bind(read_only)
-            .bind(next_config_json)
-            .bind(&record.id)
-            .execute(&mut *connection)
+            ConnectionSubtype {
+                driver: &driver,
+                database_name: database_name.as_deref(),
+                username: username.as_deref(),
+                ssl_mode: ssl_mode.as_deref(),
+                read_only,
+                config_json: &next_config_json,
+            }
+            .update_on(connection, &record.id)
             .await?;
             return Ok(DomainCommandResult::new(
                 cleanup,
@@ -342,21 +334,15 @@ impl DatabaseService {
         .bind(&record.updated_at)
         .execute(&mut *connection)
         .await?;
-        sqlx::query(
-            r#"
-            INSERT INTO database_connections (
-              connection_id, driver, database_name, username, ssl_mode, read_only, config_json
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-            "#,
-        )
-        .bind(&record.id)
-        .bind(driver)
-        .bind(database_name)
-        .bind(username)
-        .bind(ssl_mode)
-        .bind(read_only)
-        .bind(empty_config)
-        .execute(&mut *connection)
+        ConnectionSubtype {
+            driver: &driver,
+            database_name: database_name.as_deref(),
+            username: username.as_deref(),
+            ssl_mode: ssl_mode.as_deref(),
+            read_only,
+            config_json: &empty_config,
+        }
+        .insert_on(connection, &record.id)
         .await?;
         Ok(DomainCommandResult::new(
             None,
@@ -533,4 +519,20 @@ async fn already_tombstoned_connection_keys(
         .into_iter()
         .map(|id| connection_entity_key(workspace_id, id))
         .collect())
+}
+
+async fn validate_live_workspace_on(
+    connection: &mut SqliteConnection,
+    workspace_id: &str,
+) -> AppResult<()> {
+    let exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM workspaces WHERE id = ?1 AND deleted_at IS NULL)",
+    )
+    .bind(workspace_id)
+    .fetch_one(&mut *connection)
+    .await?;
+    if !exists {
+        return Err(AppError::NotFound("workspace".to_string()));
+    }
+    Ok(())
 }
