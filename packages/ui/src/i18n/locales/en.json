@@ -1349,6 +1349,7 @@
     "retry": "Retry",
     "operationPending": "Operation in progress…",
     "saveBeforeRun": "Save changes before running.",
+    "confirmationStale": "This Flow has changed. Load the latest version and confirm again before running.",
     "revisionConflict": "This Flow changed elsewhere. Your edits are kept. Load the latest version, then confirm before discarding your edits.",
     "reloadLatest": "Load latest version",
     "locateStep": "Locate: {name}",

@@ -70,6 +70,13 @@ pub async fn flow_save(
 }
 
 #[tauri::command]
-pub async fn flow_run(input: FlowRunInput, state: State<'_, AppState>) -> AppResult<FlowRun> {
-    state.command_bus.run_flow(input).await
+pub async fn flow_run(
+    input: FlowRunInput,
+    expected_revision: i64,
+    state: State<'_, AppState>,
+) -> AppResult<FlowRun> {
+    state
+        .command_bus
+        .run_flow_at_revision(input, Some(expected_revision))
+        .await
 }

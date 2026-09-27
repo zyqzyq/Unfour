@@ -306,11 +306,19 @@ async fn flow_revision_pin_rejects_before_remote_execution_or_history() {
     let saved = service
         .save(definition(
             &ws,
-            json!([action("effect", "api", "api", json!({"effect":true}))]),
+            json!([
+                next(action("api", "api", "api", json!({"effect":true})), "ssh"),
+                next(action("ssh", "ssh", "ssh", json!({"effect":true})), "db"),
+                action("db", "database", "db", json!({"effect":true}))
+            ]),
         ))
         .await
         .unwrap();
+    let saved = service.save(saved).await.unwrap();
+    let saved = service.save(saved).await.unwrap();
+    assert_eq!(saved.revision, 3);
     let changed = service.save(saved.clone()).await.unwrap();
+    assert_eq!(changed.revision, 4);
     let error = service
         .run_at_revision(
             request(&ws, &saved.id),
@@ -339,7 +347,7 @@ async fn flow_revision_pin_rejects_before_remote_execution_or_history() {
     let result = finished(&bus, &run).await;
     assert_eq!(result.definition.revision, changed.revision);
     assert_eq!(result.status, FlowRunStatus::Succeeded);
-    assert_eq!(driver.calls.lock().unwrap().len(), 1);
+    assert_eq!(driver.calls.lock().unwrap().len(), 3);
 }
 
 #[tokio::test]

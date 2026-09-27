@@ -189,7 +189,7 @@ it("sends explicit context only after run confirmation and supports cancellation
       secretInputNames: [],
       initiator: "human",
       confirmEffects: true,
-    }),
+    }, 3),
   );
   fireEvent.click(await screen.findByRole("button", { name: "Cancel run" }));
   await waitFor(() =>
@@ -370,7 +370,7 @@ it("validates manual secret names against runtime inputs without sending optiona
   expect(screen.getByRole("alert")).toHaveTextContent("must exist");
   fireEvent.change(screen.getByLabelText("Secret input names (comma separated)"), { target: { value: "version" } });
   fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Run" }));
-  await waitFor(() => expect(commands.runFlow).toHaveBeenCalledWith(expect.objectContaining({ secretInputNames: ["version"] })));
+  await waitFor(() => expect(commands.runFlow).toHaveBeenCalledWith(expect.objectContaining({ secretInputNames: ["version"] }), 3));
 });
 
 it("projects matching run status onto nodes and hides it after editing", async () => {
@@ -556,7 +556,7 @@ it("submits the selected environment only after effects confirmation", async () 
   expect(screen.getByRole("dialog")).toHaveTextContent("Production");
   expect(commands.runFlow).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Run", exact: true }));
-  await waitFor(() => expect(commands.runFlow).toHaveBeenCalledWith(expect.objectContaining({ environmentId: "prod", confirmEffects: true })));
+  await waitFor(() => expect(commands.runFlow).toHaveBeenCalledWith(expect.objectContaining({ environmentId: "prod", confirmEffects: true }), 3));
   expect(screen.getByRole("dialog")).toBeVisible();
   expect(screen.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
   finishRun(run);
@@ -776,10 +776,15 @@ it("preserves edits on a revision conflict until latest-version discard is confi
   expect(screen.getByLabelText("Flow name")).toHaveValue("My edits");
   fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
   expect(screen.getByLabelText("Flow name")).toHaveValue("My edits");
+  expect(screen.getByText("Release")).toBeInTheDocument();
+  expect(screen.queryByText("Latest release")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Load latest version" }));
   fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Discard" }));
   expect(screen.getByLabelText("Flow name")).toHaveValue("Latest release");
   expect(commands.getFlow).toHaveBeenCalledWith("ws", "flow-1");
+  fireEvent.click(screen.getByText("Latest release"));
+  expect(screen.getByLabelText("Flow name")).toHaveValue("Latest release");
+  expect(screen.getByText("r4")).toBeInTheDocument();
 });
 
 it("retries failed run detail without leaving a misleading loading state", async () => {
@@ -809,4 +814,39 @@ it("locates the failed step, edits it, and reconfirms Run again without replayin
   expect(screen.getByLabelText("version", { exact: true })).toHaveValue(null);
   expect(screen.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
   expect(commands.runFlow).not.toHaveBeenCalled();
+});
+
+
+it("rejects stale Desktop confirmation and requires loading and reconfirming latest", async () => {
+  vi.mocked(commands.runFlow).mockRejectedValueOnce({ code: "VALIDATION_ERROR", message: "FLOW_CONFIRMATION_STALE" });
+  vi.mocked(commands.getFlow).mockResolvedValue({ ...flow, revision: 4 });
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  openRun();
+  fireEvent.change(screen.getByLabelText("version", { exact: true }), { target: { value: "42" } });
+  fireEvent.click(screen.getByRole("button", { name: "Run", exact: true }));
+  await screen.findByText("This Flow has changed. Load the latest version and confirm again before running.");
+  expect(commands.runFlow).toHaveBeenCalledWith(expect.objectContaining({ flowId: flow.id }), 3);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(commands.getFlowRun).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Load latest version" }));
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Discard" }));
+  expect(screen.getByText("r4")).toBeInTheDocument();
+  expect(commands.runFlow).toHaveBeenCalledTimes(1);
+  openRun();
+  fireEvent.change(screen.getByLabelText("version", { exact: true }), { target: { value: "43" } });
+  fireEvent.click(screen.getByRole("button", { name: "Run", exact: true }));
+  await waitFor(() => expect(commands.runFlow).toHaveBeenLastCalledWith(expect.objectContaining({ inputs: { version: 43 } }), 4));
+});
+
+it("pins Run again to the current draft rather than the historical revision", async () => {
+  vi.mocked(commands.listFlows).mockResolvedValue([{ ...flow, revision: 4 }]);
+  vi.mocked(commands.getFlowRun).mockResolvedValue({ ...run, status: "succeeded" });
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  await selectHistory();
+  fireEvent.click(await screen.findByRole("button", { name: "Run again" }));
+  fireEvent.change(screen.getByLabelText("version", { exact: true }), { target: { value: "43" } });
+  fireEvent.click(screen.getByRole("button", { name: "Run", exact: true }));
+  await waitFor(() => expect(commands.runFlow).toHaveBeenCalledWith(expect.objectContaining({ flowId: flow.id }), 4));
 });

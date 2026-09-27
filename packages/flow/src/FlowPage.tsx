@@ -75,7 +75,7 @@ function WorkspaceFlowPage({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [pendingSelection, setPendingSelection] =
-    useState<FlowDefinition | null>(null);
+    useState<{ flow: FlowDefinition; latest?: boolean } | null>(null);
   const flows = useQuery({
     queryKey: ["flows", workspaceId],
     queryFn: () => listFlows(workspaceId),
@@ -145,7 +145,7 @@ function WorkspaceFlowPage({
     (flow: FlowDefinition) => {
       if (busy) return;
       if (dirty) {
-        setPendingSelection(flow);
+        setPendingSelection({ flow });
         return;
       }
       resetSelection(flow);
@@ -217,6 +217,12 @@ function WorkspaceFlowPage({
       await action();
     } catch (cause) {
       const detail = cause as { code?: string; message?: string };
+      if (`${detail.code ?? ""} ${detail.message ?? String(cause)}`.includes("FLOW_CONFIRMATION_STALE")) {
+        setRevisionConflict(true);
+        setRunDialog(false);
+        setError(t("flow.confirmationStale"));
+        return;
+      }
       if (`${detail.code ?? ""} ${detail.message ?? String(cause)}`.includes("FLOW_REVISION_CONFLICT")) setRevisionConflict(true);
       setError(
         `${t("flow.operationFailed")} ${detail.code ?? ""} ${detail.message ?? String(cause)}`,
@@ -317,7 +323,7 @@ function WorkspaceFlowPage({
         <p>{t("flow.revisionConflict")}</p>
         <Button size="sm" variant="secondary" disabled={busy} onClick={() => void perform(async () => {
           const latest = await getFlow(workspaceId, draft.id);
-          setPendingSelection(latest);
+          setPendingSelection({ flow: latest, latest: true });
         })}>{t("flow.reloadLatest")}</Button>
       </div>}
       {resourcesQuery.isError && <div role="alert" className="p-2">{t("flow.loadFailed")} <Button size="sm" variant="secondary" onClick={() => void resourcesQuery.refetch()}>{t("flow.retry")}</Button></div>}
@@ -452,7 +458,7 @@ function WorkspaceFlowPage({
             <Button variant="ghost" disabled={busy} onClick={() => setRunDialog(false)}>{t("common.confirm.cancel")}</Button>
             <Button disabled={busy || invalidRun || environments.isPending} onClick={() => void perform(async () => {
               if (invalidRun || dirty) return;
-              const run = await runFlow({ workspaceId, flowId: draft.id, environmentId: environmentId || null, inputs: resolvedInputs, secretInputNames: manualSecrets, initiator: "human", confirmEffects: true });
+              const run = await runFlow({ workspaceId, flowId: draft.id, environmentId: environmentId || null, inputs: resolvedInputs, secretInputNames: manualSecrets, initiator: "human", confirmEffects: true }, draft.revision);
               queryClient.setQueryData(["flow-run", workspaceId, run.id], run);
               setSelectedRun(run.id);
               setSelectedNode(START);
@@ -495,7 +501,13 @@ function WorkspaceFlowPage({
         description={t("flow.discardHelp")}
         confirmLabel={t("flow.discard")}
         onConfirm={() => {
-          if (pendingSelection) resetSelection(pendingSelection);
+          if (pendingSelection) {
+            if (pendingSelection.latest) {
+              queryClient.setQueryData<FlowDefinition[]>(["flows", workspaceId], (cached) =>
+                cached?.map((flow) => flow.id === pendingSelection.flow.id ? pendingSelection.flow : flow));
+            }
+            resetSelection(pendingSelection.flow);
+          }
           setPendingSelection(null);
         }}
       />

@@ -1347,6 +1347,7 @@
     "retry": "重试",
     "operationPending": "操作进行中…",
     "saveBeforeRun": "请先保存更改，再运行。",
+    "confirmationStale": "此 Flow 已变化。请加载最新版本并重新确认后再运行。",
     "revisionConflict": "此 Flow 已在其他位置更新。当前修改仍保留；加载最新版本后，需确认才会丢弃当前修改。",
     "reloadLatest": "加载最新版本",
     "locateStep": "定位：{name}",
