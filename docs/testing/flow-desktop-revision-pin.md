@@ -33,6 +33,27 @@ unchanged.
   that restriction worked. An initial test assertion syntax failure was fixed;
   the final suite passes.
 
+## Stable revision error codes closeout
+
+Date: 2026-09-27. Base: `c9b20b5`.
+
+`AppError::code()` and serialization now preserve `FLOW_CONFIRMATION_STALE`
+and `FLOW_REVISION_CONFLICT`, alongside the existing reference error codes.
+Other validation reasons remain `VALIDATION_ERROR`. Desktop checks exact codes;
+there is no message fallback. Native and frontend must both include this update.
+The two Desktop fixtures use messages without code tokens and verify stale
+dialog closure, explicit reconfirmation, and conflict draft preservation.
+Revision pinning, Run Again, cache, runtime, and persisted schema are unchanged.
+
+- PASS: `cargo test -p unfour-core` (37 tests), including code/serialization.
+- PASS: `pnpm exec vitest run packages/flow/src/FlowPage.test.tsx` (43 tests).
+  Initial sandbox startup failed with `spawn EPERM`; the unrestricted rerun passed.
+- PASS: `cargo fmt -p unfour-core --check`, affected ESLint (zero errors,
+  two existing function-size/complexity warnings), and `git diff --check`.
+
+Code-level UX changes stop here. The following real Tauri checks remain manual
+and NOT VERIFIED; automated coverage is not evidence of native execution.
+
 ## Native manual testing: NOT VERIFIED
 
 Stop code-level UX polishing here. In a disposable workspace in real Tauri:

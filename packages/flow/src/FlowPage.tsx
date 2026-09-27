@@ -217,13 +217,13 @@ function WorkspaceFlowPage({
       await action();
     } catch (cause) {
       const detail = cause as { code?: string; message?: string };
-      if (`${detail.code ?? ""} ${detail.message ?? String(cause)}`.includes("FLOW_CONFIRMATION_STALE")) {
+      if (detail.code === "FLOW_CONFIRMATION_STALE") {
         setRevisionConflict(true);
         setRunDialog(false);
         setError(t("flow.confirmationStale"));
         return;
       }
-      if (`${detail.code ?? ""} ${detail.message ?? String(cause)}`.includes("FLOW_REVISION_CONFLICT")) setRevisionConflict(true);
+      if (detail.code === "FLOW_REVISION_CONFLICT") setRevisionConflict(true);
       setError(
         `${t("flow.operationFailed")} ${detail.code ?? ""} ${detail.message ?? String(cause)}`,
       );

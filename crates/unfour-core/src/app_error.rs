@@ -93,6 +93,12 @@ impl AppError {
             AppError::Validation(reason) if reason == "FLOW_UNSAFE_REFERENCE" => {
                 "FLOW_UNSAFE_REFERENCE"
             }
+            AppError::Validation(reason) if reason == "FLOW_CONFIRMATION_STALE" => {
+                "FLOW_CONFIRMATION_STALE"
+            }
+            AppError::Validation(reason) if reason == "FLOW_REVISION_CONFLICT" => {
+                "FLOW_REVISION_CONFLICT"
+            }
             AppError::Validation(_) => "VALIDATION_ERROR",
             AppError::ReadOnly(_) => "READ_ONLY_CONNECTION",
             AppError::Timeout(_) => "QUERY_TIMEOUT",
@@ -207,6 +213,24 @@ fn truncate_chars(value: &str, max_chars: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn validation_codes_are_stable_and_serialized() {
+        for (reason, expected) in [
+            ("FLOW_CONFIRMATION_STALE", "FLOW_CONFIRMATION_STALE"),
+            ("FLOW_REVISION_CONFLICT", "FLOW_REVISION_CONFLICT"),
+            ("FLOW_INVALID_REFERENCE", "FLOW_INVALID_REFERENCE"),
+            ("FLOW_UNSAFE_REFERENCE", "FLOW_UNSAFE_REFERENCE"),
+            ("invalid input", "VALIDATION_ERROR"),
+            ("FLOW_REVISION_CONFLICT extra detail", "VALIDATION_ERROR"),
+        ] {
+            let error = AppError::Validation(reason.into());
+            assert_eq!(error.code(), expected);
+            let serialized = serde_json::to_value(&error).expect("serialize validation error");
+            assert_eq!(serialized["code"], expected);
+            assert_eq!(serialized["message"], format!("validation error: {reason}"));
+        }
+    }
 
     #[test]
     fn non_database_errors_have_no_database_details() {

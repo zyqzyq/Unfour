@@ -765,7 +765,7 @@ it("explains invalid timing before save and keeps the error reachable", async ()
 });
 
 it("preserves edits on a revision conflict until latest-version discard is confirmed", async () => {
-  vi.mocked(commands.saveFlow).mockRejectedValue({ code: "VALIDATION_ERROR", message: "FLOW_REVISION_CONFLICT" });
+  vi.mocked(commands.saveFlow).mockRejectedValue({ code: "FLOW_REVISION_CONFLICT", message: "The saved version has changed." });
   vi.mocked(commands.getFlow).mockResolvedValue({ ...flow, name: "Latest release", revision: 4 });
   mount();
   fireEvent.click(await screen.findByText("Release"));
@@ -818,7 +818,7 @@ it("locates the failed step, edits it, and reconfirms Run again without replayin
 
 
 it("rejects stale Desktop confirmation and requires loading and reconfirming latest", async () => {
-  vi.mocked(commands.runFlow).mockRejectedValueOnce({ code: "VALIDATION_ERROR", message: "FLOW_CONFIRMATION_STALE" });
+  vi.mocked(commands.runFlow).mockRejectedValueOnce({ code: "FLOW_CONFIRMATION_STALE", message: "The confirmed version has changed." });
   vi.mocked(commands.getFlow).mockResolvedValue({ ...flow, revision: 4 });
   mount();
   fireEvent.click(await screen.findByText("Release"));
