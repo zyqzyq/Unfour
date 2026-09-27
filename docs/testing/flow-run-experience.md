@@ -48,3 +48,18 @@ Native Tauri execution and live API/SSH/database effects were NOT VERIFIED in
 this frontend-only change. Existing graph layout/undo and variable-picker limits
 remain as documented in Flow Canvas; no new blocking issue was found in the
 tested Run/History interactions.
+
+## Flow UX phase two closeout — 2026-09-27
+
+Based on `62b1cfd`, the final scoped UX fix shows workspace-variable loading
+and failure feedback whenever API preflight or SSH defaults depend on those
+variables. Shared English/Chinese failure copy now describes run prerequisites.
+Validation and runtime behavior are unchanged; Flow UX phase two is closed.
+
+- PASS: `pnpm exec vitest run packages/flow/src/FlowPage.test.tsx packages/ui/src/i18n.test.ts`
+  (2 files, 40 tests). The new API-only React test covers pending then rejected
+  workspace-variable loading, visible dialog feedback and disabled Run submission.
+- Initial verification hit sandbox `spawn EPERM`; the permitted rerun succeeded
+  after correcting the new test's resource-selector setup.
+- PASS: changed React files ESLint (no errors; existing function-size and
+  complexity warnings) and `git diff --check`.

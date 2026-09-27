@@ -2,6 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -705,6 +706,26 @@ it.each([false, true])("blocks dev-only API variables in Production unless works
     fireEvent.change(screen.getByLabelText("Environment"), { target: { value: "dev" } });
     await waitFor(() => expect(button).toBeEnabled());
   }
+});
+
+it("explains pending and failed workspace variables in an API-only Run dialog", async () => {
+  let rejectVariables!: (reason: Error) => void;
+  vi.mocked(commands.listWorkspaceVariables).mockImplementation(() => new Promise((_, reject) => { rejectVariables = reject; }));
+  vi.mocked(commands.listFlows).mockResolvedValue([{ ...flow, inputs: [], steps: [{ id: "api", name: "Deploy API", kind: "action", timeoutMs: 1000, next: null, action: { capability: "api", resourceId: "api", connectionId: null, arguments: {} } }] }]);
+  vi.mocked(commands.listSavedApiRequests).mockResolvedValue([{ id: "api", name: "Deploy", url: "https://example.test" }] as Awaited<ReturnType<typeof commands.listSavedApiRequests>>);
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.click(screen.getByText("Deploy API", { selector: ".truncate" }));
+  await screen.findByRole("option", { name: "Deploy" });
+  openRun();
+  const dialog = within(screen.getByRole("dialog"));
+  expect(dialog.getByText("Loading…")).toBeVisible();
+  expect(dialog.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+  await act(async () => { rejectVariables(new Error("Variables unavailable")); });
+  expect(await dialog.findByRole("alert")).toHaveTextContent("Unable to load workspace variables");
+  expect(dialog.queryByText("Loading…")).not.toBeInTheDocument();
+  expect(dialog.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+  expect(commands.runFlow).not.toHaveBeenCalled();
 });
 
 it("shows invalid reference feedback for Advanced JSON and prevents saving", async () => {

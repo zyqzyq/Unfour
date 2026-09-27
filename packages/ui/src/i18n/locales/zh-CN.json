@@ -1358,7 +1358,7 @@
     "workspaceDefault": "使用工作区 / 运行环境默认值",
     "enableWorkspaceDefaults": "启用工作区 / 环境默认绑定",
     "sshMissingInputs": "请绑定所有 SSH Task 必填输入，或提供同名工作区 / 环境变量。",
-    "variablesLoadFailed": "无法加载工作区变量，因此无法检查 SSH 默认输入。",
+    "variablesLoadFailed": "无法加载工作区变量，因此无法检查运行前置条件。",
     "successCondition": "成功条件",
     "failureCondition": "失败条件",
     "acknowledge": "知道了",

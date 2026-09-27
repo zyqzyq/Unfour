@@ -412,9 +412,9 @@ function WorkspaceFlowPage({
           {manualSecretErrors.length > 0 && <p role="alert">{t("flow.unknownSecretInput")}: {manualSecretErrors.join(", ")}</p>}
           {resourceProblems.map((problem, index) => <p key={index} role="alert">{problem.name}: {t(problem.key)}</p>)}
           {environmentInputProblems.map((problem) => <p key={`${problem.name}:${problem.key}`} role="alert">{problem.name}: {t(problem.key)}</p>)}
-          {(resourcesQuery.isPending || environments.isPending || (needsWorkspaceDefaults && workspaceVariables.isPending)) && <p>{t("flow.loading")}</p>}
+          {(resourcesQuery.isPending || environments.isPending || ((needsWorkspaceDefaults || hasApi) && workspaceVariables.isPending)) && <p>{t("flow.loading")}</p>}
           {(resourcesQuery.isError || environments.isError) && <p role="alert">{t("flow.loadFailed")}</p>}
-          {needsWorkspaceDefaults && workspaceVariables.isError && <p role="alert">{t("flow.variablesLoadFailed")}</p>}
+          {(needsWorkspaceDefaults || hasApi) && workspaceVariables.isError && <p role="alert">{t("flow.variablesLoadFailed")}</p>}
           <DialogDescription>{t("flow.effectsHelp")}</DialogDescription>
           <p>{t("flow.name")}: {draft.name} · {t("flow.workspace")}: {workspaceId}</p>
           <p>{t("flow.environment")}: {environments.data?.find((environment) => environment.id === environmentId)?.name ?? t("flow.workspaceOnly")}{environmentId ? ` (${environmentId})` : ""}</p>
