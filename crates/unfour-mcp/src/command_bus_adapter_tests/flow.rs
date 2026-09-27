@@ -117,6 +117,39 @@ fn flow_tools_list_exposes_valid_schemas_and_shared_crud_revision() {
 }
 
 #[test]
+fn flow_branch_unsafe_references_have_the_same_error_in_desktop_and_mcp() {
+    let (adapter, registry, ws) = setup();
+    let mut value = serde_json::to_value(definition(&ws)).unwrap();
+    value["steps"] = json!([
+        {"id":"split","name":"Split","kind":"condition","timeoutMs":1000,"predicate":{"left":true,"op":"eq","right":true},"ifTrue":"branch","ifFalse":"join"},
+        {"id":"branch","name":"Branch","kind":"wait","timeoutMs":1000,"durationMs":0},
+        {"id":"join","name":"Join","kind":"condition","timeoutMs":1000,"predicate":{"left":{"$ref":"/steps/branch/waitedMs"},"op":"eq","right":0},"ifTrue":"$end","ifFalse":"$end"}
+    ]);
+    let error = adapter
+        .run(
+            adapter
+                .bus
+                .save_flow(serde_json::from_value(value.clone()).unwrap()),
+        )
+        .unwrap_err();
+    assert!(error.to_string().contains("FLOW_UNSAFE_REFERENCE"));
+    let result = registry
+        .call("unfour.flow.save", json!({"definition":value}))
+        .unwrap();
+    assert_eq!(
+        content_json(&result)["error"]["code"],
+        "FLOW_UNSAFE_REFERENCE"
+    );
+    value["steps"][0]["ifFalse"] = json!("branch");
+    let saved = success(&registry, "save", json!({"definition":value}));
+    let normalized: FlowDefinition = serde_json::from_value(value).unwrap();
+    assert_eq!(
+        saved["flow"]["steps"],
+        serde_json::to_value(normalized).unwrap()["steps"]
+    );
+}
+
+#[test]
 fn flow_confirmation_initiator_redaction_summary_detail_and_cancel_share_desktop_history() {
     let (adapter, registry, ws) = setup();
     let saved = adapter.run(adapter.bus.save_flow(definition(&ws))).unwrap();

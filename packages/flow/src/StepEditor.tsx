@@ -20,6 +20,7 @@ export function StepEditor({
   removeDisabled = false,
   inputs = [],
   before = [],
+  environmentKeys = [],
   after,
   resources,
   onChange,
@@ -30,6 +31,7 @@ export function StepEditor({
   removeDisabled?: boolean;
   inputs?: FlowInputDefinition[];
   before?: FlowStep[];
+  environmentKeys?: string[];
   after: FlowStep[];
   resources: Resources;
   onChange: (step: FlowStep) => void;
@@ -50,6 +52,7 @@ export function StepEditor({
   ) {
     return (
       <div className="grid gap-2">
+        {(action.capability === "api" || (action.capability === "ssh" && action.arguments.workspaceDefaults === true)) && <p className="text-xs text-[var(--u-color-text-muted)]">{t("flow.usesEnvironment")}</p>}
         <div className="grid grid-cols-2 gap-2">
           <Select
             aria-label={t("flow.capability")}
@@ -82,7 +85,8 @@ export function StepEditor({
         </div>
         {(() => {
           const Editor = action.capability === "api" ? ApiActionEditor : action.capability === "ssh" ? SshActionEditor : DatabaseActionEditor;
-          return <Editor action={action} resources={resources} variables={variables} onChange={update} onValidity={(field, valid) => onValidity(`argument:${field}`, valid)} />;
+          const fields = <Editor action={action} resources={resources} variables={action.capability === "api" ? [...variables, ...environmentKeys.map((key) => ({ label: key, path: ["environment", key] }))] : variables} onChange={update} onValidity={(field, valid) => onValidity(`argument:${field}`, valid)} />;
+          return probe ? <details><summary className="text-xs">{t("flow.probeOverrides")}</summary>{fields}</details> : fields;
         })()}
         <details><summary>{t("flow.advanced")}</summary><JsonField
           key={`${step.id}-${action.capability}`}
@@ -146,7 +150,7 @@ export function StepEditor({
       {(step.kind === "poll" || step.kind === "waitUntil") && (
         <>
           <p className="text-xs text-[var(--u-color-text-muted)]">
-            {t("flow.probeHelp")}
+            <strong>{t("flow.probe")}</strong> · {t("flow.probeHelp")}
           </p>
           {editAction(
             step.probe,
@@ -185,6 +189,7 @@ export function StepEditor({
           </div>
         </>
       )}
+      {(step.kind === "waitUntil" || step.kind === "poll") && <strong className="text-xs">{t("flow.until")}</strong>}
       {step.kind === "waitUntil" && <>
         <PredicateFields label={t("flow.successCondition")} value={step.successWhen} variables={predicateVariables} onChange={(value) => { if (value) onChange({ ...step, successWhen: value }); }} onValidity={(field, valid) => onValidity(`successWhen:${field}`, valid)} />
         <PredicateFields label={t("flow.failureCondition")} value={step.failureWhen ?? null} variables={predicateVariables} onChange={(value) => onChange({ ...step, failureWhen: value })} onValidity={(field, valid) => onValidity(`failureWhen:${field}`, valid)} />

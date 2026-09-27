@@ -10,9 +10,12 @@ export function variablesFor(inputs: FlowInputDefinition[], before: FlowStep[], 
     if (step.kind === "wait") return ["waitedMs"];
     return step.action.capability === "api" ? ["status", "headers", "body", "durationMs"] : step.action.capability === "database" ? ["columns", "rows", "affectedRows", "durationMs"] : ["runId", "status", "log"];
   };
+  const outputPaths = (step: FlowStep): string[][] => [[], ...outputFields(step).map((field) => [field]),
+    ...(step.kind === "waitUntil" ? outputFields({ ...step, kind: "action", action: step.probe }).map((field) => ["result", field]) : []),
+  ];
   return [
     ...inputs.map((input) => ({ label: input.name, path: ["inputs", input.name] })),
-    ...before.flatMap((step) => [[], ...outputFields(step).map((field) => [field])].map((suffix) => ({ label: [step.name, ...suffix].join(" · "), path: ["steps", step.id, ...suffix] }))),
-    ...(probe && (probe.kind === "poll" || probe.kind === "waitUntil") ? [[], ...outputFields({ ...probe, kind: "action", action: probe.probe }).map((field) => [field])].map((suffix) => ({ label: suffix.join(" · "), path: ["probe", ...suffix] })) : []),
+    ...before.flatMap((step) => outputPaths(step).map((suffix) => ({ label: [step.name, suffix.join(".")].filter(Boolean).join(" · "), path: ["steps", step.id, ...suffix] }))),
+    ...(probe && (probe.kind === "poll" || probe.kind === "waitUntil") ? outputPaths({ ...probe, kind: "action", action: probe.probe }).map((suffix) => ({ label: [probe.name, suffix.join(".")].filter(Boolean).join(" · "), path: ["probe", ...suffix] })) : []),
   ];
 }

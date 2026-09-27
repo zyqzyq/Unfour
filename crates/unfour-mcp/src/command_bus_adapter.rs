@@ -1083,6 +1083,13 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
 
 impl CommandBusAdapterError {
     fn from_flow_error(error: &AppError) -> Self {
+        if matches!(error, AppError::Validation(reason) if reason == "FLOW_UNSAFE_REFERENCE") {
+            return Self {
+                code: "FLOW_UNSAFE_REFERENCE",
+                message: "A referenced output is not guaranteed on every path to this step. Use a common upstream output or move the consumer into the matching branch.",
+                details: serde_json::json!({}),
+            };
+        }
         if matches!(error, AppError::Validation(reason) if reason == "FLOW_CONFIRMATION_STALE") {
             return Self {
                 code: "FLOW_CONFIRMATION_STALE",

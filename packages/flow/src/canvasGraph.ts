@@ -3,7 +3,7 @@ import type { Connection, Edge, Node, XYPosition } from "@xyflow/react";
 
 export const START = "$start";
 export const END = "$end";
-export type CanvasNode = Node<{ step?: FlowStep; virtual?: "start" | "end"; order: number; status?: string }, "flowStep">;
+export type CanvasNode = Node<{ step?: FlowStep; virtual?: "start" | "end"; order: number; status?: string; summary?: string }, "flowStep">;
 export type CanvasGraph = { nodes: CanvasNode[]; edges: Edge[] };
 export type CanvasLayout = Record<string, XYPosition>;
 

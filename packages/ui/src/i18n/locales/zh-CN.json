@@ -1363,7 +1363,7 @@
     "failureCondition": "失败条件",
     "acknowledge": "知道了",
     "invalidEditors": "有未完成或无效的配置，请检查以下节点：",
-    "arrayRequired": "右值必须为 JSON 数组或变量。",
+    "arrayRequired": "包含判断的左值必须是数组或数组变量。",
     "canvas": {
       "title": "Flow 画布",
       "start": "开始",
@@ -1429,7 +1429,7 @@
     "connection": "SSH 连接",
     "selectConnection": "选择 SSH 连接",
     "arguments": "参数（JSON）",
-    "probeHelp": "每次尝试都会重新执行 GET/HEAD API 请求，或通过只读数据库连接执行查询。使用 /probe 判断最新结果。",
+    "probeHelp": "每次探测重新执行 GET/HEAD API 请求或只读数据库查询。在直到条件中选择最新探测结果。",
     "interval": "检查间隔（毫秒）",
     "maxAttempts": "最大尝试次数",
     "predicate": "条件（left / op / right）",
@@ -1515,7 +1515,7 @@
     "variable": "变量",
     "chooseVariable": "选择变量",
     "variablePath": "嵌套字段（可选，用点分隔）",
-    "variableHelp": "仅列出前序步骤。分支可能跳过步骤，请选择当前路径可用的输出。含点的字段名可在高级 JSON 中编辑。",
+    "variableHelp": "仅提供所有路径上必然已执行的步骤结果。字段路径可填写 body.status 或 rows.0.id。含点号的字段名可在高级 JSON 中编辑。",
     "probeResult": "最新探测结果",
     "outputs": "步骤输出",
     "fieldName": "字段名称",
@@ -1552,8 +1552,30 @@
       "ge": "大于等于",
       "lt": "小于",
       "le": "小于等于",
-      "in": "包含于"
+      "in": "包含于",
+      "contains": "包含",
+      "true": "为真",
+      "false": "为假",
+      "exists": "存在（不支持）",
+      "notExists": "不存在（不支持）"
     },
-    "enabled": "启用"
+    "enabled": "启用",
+    "variablePathHelp": "字段路径说明",
+    "operatorHelp": "运算符兼容性",
+    "probeOverrides": "探测参数",
+    "unavailableVariable": "该变量在此处不可用，请选择可用的来源。",
+    "variableGroups": {
+      "inputs": "Flow 输入",
+      "environment": "工作区 / 环境",
+      "steps": "上游步骤",
+      "probe": "Poll / Wait Until 探测结果"
+    },
+    "environmentScope": "Environment 在运行时选择，整个 Flow 共用。",
+    "usesEnvironment": "使用 Flow 运行环境",
+    "unsafeReference": "并非所有到达此步骤的路径都会生成该结果。请选择共同上游的结果，或将此步骤移到对应分支中。",
+    "predicateCompatibility": "包含判断用于数组成员。当前引擎将缺失字段视为错误，因此不支持存在 / 不存在判断。",
+    "probe": "探测",
+    "every": "每隔",
+    "until": "直到"
   }
 }

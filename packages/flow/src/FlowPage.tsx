@@ -1,3 +1,4 @@
+import { guaranteedUpstream, unsafeReferences } from "./referenceGraph";
 import { START, END, removalImpact, removeCanvasStep } from "./canvasGraph";
 import { environmentInputErrors, inputDefaults, inputDefinitionErrors, inputErrors, maskInputs, newStep, normalizeInputs, resourceErrors } from "./model";
 import { InputEditor, RunInputs } from "./InputEditor";
@@ -223,7 +224,10 @@ function WorkspaceFlowPage({
       </div>
     );
   const schemaProblems = inputDefinitionErrors(draft.inputs);
-  const invalidEditor = (resourcesQuery.data ? resourceErrors(draft, resources).some((problem) => ["flow.sqlRequired", "flow.sqlSingleStatement", "flow.sshMissingInputs", "flow.inputTypeError"].includes(problem.key)) : false) || schemaProblems.length > 0 || Object.entries(invalid).some(([key, value]) => !key.startsWith("run:") && value);
+  const referenceProblems = unsafeReferences(draft.steps);
+  const upstream = guaranteedUpstream(draft.steps);
+  const environmentKeys = [...new Set([...(workspaceVariables.data ?? []), ...(environments.data ?? []).flatMap((env) => env.variables ?? [])].filter((v) => v.isEnabled && !v.deletedAt).map((v) => v.key))];
+  const invalidEditor = referenceProblems.length > 0 || (resourcesQuery.data ? resourceErrors(draft, resources).some((problem) => ["flow.sqlRequired", "flow.sqlSingleStatement", "flow.sshMissingInputs", "flow.inputTypeError"].includes(problem.key)) : false) || schemaProblems.length > 0 || Object.entries(invalid).some(([key, value]) => !key.startsWith("run:") && value);
   const resolvedInputs = { ...inputDefaults(draft.inputs), ...inputs };
   const inputProblems = inputErrors(draft.inputs, resolvedInputs);
   const resourceProblems = resourcesQuery.data ? resourceErrors(draft, resources) : [];
@@ -287,6 +291,8 @@ function WorkspaceFlowPage({
           {t("flow.delete")}
         </Button>
       </div>
+      <p className="px-2 py-1 text-xs text-[var(--u-color-text-muted)]">{t("flow.environmentScope")}</p>
+      {!viewingRun && referenceProblems.map((problem) => <p key={`${problem.stepId}:${problem.pointer}`} role="alert" className="px-2 text-xs text-[var(--u-color-danger)]"><Button size="sm" variant="ghost" onClick={() => setSelectedNode(problem.stepId)}>{problem.name}</Button>{t("flow.unsafeReference")} · {problem.pointer.split("/").slice(1).map((part, index) => index === 1 ? draft.steps.find((step) => step.id === part)?.name ?? part : part).join(" · ")}</p>)}
       {(error ||
         resourcesQuery.isError ||
         runDetail.isError) && (
@@ -307,7 +313,7 @@ function WorkspaceFlowPage({
         {currentRun && !projection && <p className="w-full text-xs text-[var(--u-color-text-muted)]">{t("flow.runProjectionUnavailable")}</p>}
       </div>}
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <FlowCanvas key={contextRevision} definition={draft} disabled={busy} readOnly={viewingRun} selected={selectedNode} onSelect={setSelectedNode} onRemove={setRemovingNode} run={viewingRun ? projection : undefined} onChange={update} />
+        <FlowCanvas resources={resources} key={contextRevision} definition={draft} disabled={busy} readOnly={viewingRun} selected={selectedNode} onSelect={setSelectedNode} onRemove={setRemovingNode} run={viewingRun ? projection : undefined} onChange={update} />
         <aside aria-label={t(viewingRun ? "flow.runDetail" : "flow.inspector")} hidden={!selectedNode} className="w-[360px] shrink-0 overflow-auto border-l border-[var(--u-color-border)] p-3">
           {viewingRun && <>
             <div className="flex items-center justify-between"><strong>{t("flow.runDetail")}</strong><Button variant="ghost" size="sm" onClick={() => setSelectedNode(null)}>{t("flow.closeInspector")}</Button></div>
@@ -331,7 +337,8 @@ function WorkspaceFlowPage({
             <div key={`${contextRevision}:${step.id}`} hidden={selectedNode !== step.id}><StepEditor
               removeDisabled={draft.steps.length <= 1}
               inputs={draft.inputs}
-              before={draft.steps.slice(0, index)}
+              before={draft.steps.filter((candidate) => upstream.get(step.id)?.has(candidate.id))}
+              environmentKeys={environmentKeys}
               key={`${contextRevision}:${step.id}`}
               step={step}
               after={draft.steps.slice(index + 1)}

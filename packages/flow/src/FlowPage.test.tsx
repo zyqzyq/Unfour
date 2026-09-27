@@ -396,17 +396,17 @@ it("keeps incomplete failure conditions invalid and exposes hidden editor errors
   fireEvent.click(screen.getByRole("button", { name: "Wait Until", exact: true }));
   fireEvent.change(screen.getByLabelText("Failure condition · Value · Variable"), { target: { value: "/probe/status" } });
   expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
-  fireEvent.change(screen.getByLabelText("Failure condition · Operator"), { target: { value: "in" } });
+  fireEvent.change(screen.getByLabelText("Failure condition · Operator"), { target: { value: "contains" } });
+  const leftType = screen.getByLabelText("Failure condition · Value · Type");
+  expect(within(leftType).getByRole("option", { name: "Object / array" })).toBeInTheDocument();
+  expect(within(leftType).getByRole("option", { name: "Variable" })).toBeInTheDocument();
+  fireEvent.change(leftType, { target: { value: "json" } });
   expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
-  expect(screen.getByText("The right operand must be a JSON array or a variable.")).toBeVisible();
-  const rightType = screen.getByLabelText("Failure condition · Compare with · Type");
-  expect(within(rightType).getByRole("option", { name: "Object / array" })).toBeInTheDocument();
-  expect(within(rightType).getByRole("option", { name: "Variable" })).toBeInTheDocument();
-  fireEvent.change(rightType, { target: { value: "json" } });
-  fireEvent.change(screen.getByLabelText("Failure condition · Compare with", { exact: true }), { target: { value: "[400,404]" } });
+  expect(screen.getByText("Contains requires an array or an array variable on the left.")).toBeVisible();
+  fireEvent.change(screen.getByLabelText("Failure condition · Value", { exact: true }), { target: { value: "[400,404]" } });
   expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
-  fireEvent.change(rightType, { target: { value: "variable" } });
-  fireEvent.change(screen.getByLabelText("Failure condition · Compare with · Variable"), { target: { value: "/inputs/version" } });
+  fireEvent.change(leftType, { target: { value: "variable" } });
+  fireEvent.change(screen.getByLabelText("Failure condition · Value · Variable"), { target: { value: "/inputs/version" } });
   expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
 });
 
@@ -657,4 +657,29 @@ it("refreshes a newly completed run in history and stops showing cancellation", 
   expect(commands.listFlowRuns).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Run history" }));
   expect(await screen.findByRole("button", { name: /Succeeded.*2000 ms/ })).toBeVisible();
+});
+
+
+it("blocks legacy branch-unsafe references and recomputes picker availability after routing changes", async () => {
+  const split: commands.FlowStep = { id: "split", name: "Split", kind: "condition", timeoutMs: 1000, next: null, predicate: { left: true, op: "eq", right: true }, ifTrue: "branch", ifFalse: "join" };
+  const branch: commands.FlowStep = { ...flow.steps[0], id: "branch", name: "Only true", next: "join" };
+  const join: commands.FlowStep = { ...split, id: "join", name: "Joined", predicate: { left: { $ref: "/steps/branch/waitedMs" }, op: "eq", right: 10 }, ifTrue: "$end", ifFalse: "$end" };
+  vi.mocked(commands.listFlows).mockResolvedValue([{ ...flow, steps: [split, branch, join] }]);
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+  expect(screen.getByText(/This output is not guaranteed/)).toBeVisible();
+  fireEvent.click(screen.getByText("Joined", { selector: ".truncate" }));
+  const picker = screen.getAllByLabelText("Condition · Value · Variable").find((field) => field.closest('[hidden]') === null)!;
+  expect(within(picker).queryByRole("option", { name: /Only true/ })).not.toBeInTheDocument();
+  expect(within(picker).getByRole("option", { name: "Split · matched" })).toBeInTheDocument();
+  fireEvent.click(screen.getByText("Split", { selector: ".truncate" }));
+  fireEvent.change(screen.getAllByLabelText("If false")[0], { target: { value: "branch" } });
+  expect(screen.queryByText(/This output is not guaranteed/)).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+  fireEvent.click(screen.getByText("Joined", { selector: ".truncate" }));
+  expect(within(picker).getByRole("option", { name: "Only true · waitedMs" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(commands.saveFlow).toHaveBeenCalledWith(expect.objectContaining({ steps: [expect.objectContaining({ ifFalse: "branch" }), branch, join] })));
 });

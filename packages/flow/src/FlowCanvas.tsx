@@ -5,7 +5,8 @@ import { applyNodeChanges, Background, Handle, MarkerType, Position, ReactFlow, 
 import { Button, Select, useI18n } from "@unfour/ui";
 import type { FlowDefinition, FlowRun } from "@unfour/command-client";
 import { definitionToGraph, graphToDefinition, isCanvasConnectionValid, insertCanvasStep, type CanvasLayout, type CanvasNode } from "./canvasGraph";
-import { newStep } from "./model";
+import { newStep, type Resources } from "./model";
+import { nodeSummary } from "./nodeSummary";
 import "@xyflow/react/dist/style.css";
 import "./flowCanvas.css";
 
@@ -18,6 +19,7 @@ function StepNode({ data, selected }: NodeProps<CanvasNode>) {
     <div className="text-xs text-[var(--u-color-text-muted)]">{step ? `${data.order + 1} · ${t(`flow.${kind}`)}` : t(`flow.canvas.${data.virtual}`)}</div>
     {data.status && <div className="text-xs" role="status">{t(`flow.status.${data.status}`)}</div>}
     {step && <div className="truncate" title={step.name}>{step.name}</div>}
+    {data.summary && <div className="line-clamp-2 text-xs text-[var(--u-color-text-muted)]" title={data.summary}>{data.summary}</div>}
     {data.virtual !== "end" && (step?.kind === "condition" ? <>
       <span className="flow-canvas-port flow-canvas-true">{t("flow.canvas.true")}</span>
       <Handle id="true" type="source" position={Position.Right} style={{ top: "35%" }} />
@@ -29,8 +31,8 @@ function StepNode({ data, selected }: NodeProps<CanvasNode>) {
 const edgeTypes = { insert: CanvasInsertEdge };
 const nodeTypes = { flowStep: StepNode };
 
-export function FlowCanvas({ definition, onChange, disabled = false, readOnly = false, selected, onSelect, onRemove, run }: {
-  selected: string | null; onSelect: (id: string | null) => void; onRemove: (id: string) => void; run?: FlowRun;
+export function FlowCanvas({ definition, onChange, disabled = false, readOnly = false, selected, onSelect, onRemove, run, resources }: {
+  resources?: Resources; selected: string | null; onSelect: (id: string | null) => void; onRemove: (id: string) => void; run?: FlowRun;
   definition: FlowDefinition; onChange: (definition: FlowDefinition) => void; disabled?: boolean; readOnly?: boolean;
 }) {
   const { t } = useI18n();
@@ -45,7 +47,7 @@ export function FlowCanvas({ definition, onChange, disabled = false, readOnly = 
   const insertionEdge = graph.edges.find((edge) => edge.id === selectedEdge) ?? graph.edges[graph.edges.length - 1];
   const nodes = graph.nodes.map((node) => {
     const previous = presentation.find((item) => item.id === node.id);
-    return { ...node, data: { ...node.data, status: run?.steps.find((step) => step.stepId === node.id)?.status }, measured: previous?.measured, selected: node.id === selected, ariaLabel: node.data.step?.name ?? t(`flow.canvas.${node.data.virtual}`) };
+    return { ...node, data: { ...node.data, summary: node.data.step ? nodeSummary(node.data.step, definition.steps, resources, t) : undefined, status: run?.steps.find((step) => step.stepId === node.id)?.status }, measured: previous?.measured, selected: node.id === selected, ariaLabel: node.data.step?.name ?? t(`flow.canvas.${node.data.virtual}`) };
   });
   const selectedStep = definition.steps.find((step) => step.id === selected);
   function editGraph(action: () => FlowDefinition) {

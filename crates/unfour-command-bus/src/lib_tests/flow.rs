@@ -12,6 +12,8 @@ mod history;
 #[cfg(feature = "ssh-native")]
 #[path = "flow_native.rs"]
 mod native;
+#[path = "flow_reference_safety.rs"]
+mod reference_safety;
 #[path = "flow_wait_until.rs"]
 mod wait_until;
 
@@ -130,7 +132,7 @@ async fn flow_fail_fast_missing_variable_and_backward_branch() {
     let bus = test_bus().await;
     let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
     let service = FlowService::new(bus.db.clone());
-    for arguments in [json!({}), json!({"x":{"$ref":"/steps/missing/value"}})] {
+    for arguments in [json!({}), json!({"x":{"$ref":"/inputs/missing"}})] {
         let driver = Arc::new(Driver::default());
         let flow = service
             .save(definition(

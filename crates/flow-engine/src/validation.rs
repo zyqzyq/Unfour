@@ -92,7 +92,7 @@ pub fn validate(definition: &FlowDefinition) -> AppResult<()> {
             _ => {}
         }
     }
-    Ok(())
+    crate::reference_graph::validate_references(&definition.steps)
 }
 
 fn matches_type(kind: FlowInputType, value: &serde_json::Value) -> bool {

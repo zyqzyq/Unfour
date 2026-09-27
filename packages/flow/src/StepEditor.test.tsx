@@ -75,8 +75,8 @@ it("accepts in right operands that are literal arrays or configured $ref values"
   const validity = vi.fn();
   const initial = { ...newStep("waitUntil", "Ready"), failureWhen: { left: { $ref: "/probe/status" }, op: "in" as const, right: { $ref: "/inputs/allowedStatuses" } } };
   render(<I18nProvider initialLocale="en"><Editor initial={initial} changed={changed} onValidity={validity} /></I18nProvider>);
-  expect(screen.getByLabelText("Failure condition · Compare with · Type")).toHaveValue("variable");
-  expect(within(screen.getByLabelText("Failure condition · Compare with · Type")).getByRole("option", { name: "Object / array" })).toBeInTheDocument();
+  expect(screen.getByLabelText("Failure condition · Value · Type")).toHaveValue("variable");
+  expect(within(screen.getByLabelText("Failure condition · Value · Type")).getByRole("option", { name: "Object / array" })).toBeInTheDocument();
   expect(validity.mock.calls.filter(([field]) => field === "failureWhen:configuration").at(-1)?.[1]).toBe(true);
   const field = screen.getByLabelText("Failure when (left / op / right, or null)");
   fireEvent.change(field, { target: { value: '{"left":{"$ref":"/probe/status"},"op":"in","right":{"$ref":""}}' } });
