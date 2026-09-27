@@ -683,3 +683,37 @@ it("blocks legacy branch-unsafe references and recomputes picker availability af
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() => expect(commands.saveFlow).toHaveBeenCalledWith(expect.objectContaining({ steps: [expect.objectContaining({ ifFalse: "branch" }), branch, join] })));
 });
+
+it.each([false, true])("blocks dev-only API variables in Production unless workspace fallback exists (%s)", async (fallback) => {
+  vi.mocked(commands.listFlows).mockResolvedValue([{ ...flow, inputs: [], steps: [{ id: "api", name: "Deploy API", kind: "action", timeoutMs: 1000, next: null, action: { capability: "api", resourceId: "api", connectionId: null, arguments: {} } }] }]);
+  vi.mocked(commands.listSavedApiRequests).mockResolvedValue([{ id: "api", name: "Deploy", url: "https://example.test/{{DEV_TOKEN}}" }] as Awaited<ReturnType<typeof commands.listSavedApiRequests>>);
+  vi.mocked(commands.listWorkspaceEnvironments).mockResolvedValue([{ id: "dev", name: "Development", variables: [{ key: "DEV_TOKEN", value: "dev", isEnabled: true }] }, { id: "prod", name: "Production", variables: [] }] as unknown as Awaited<ReturnType<typeof commands.listWorkspaceEnvironments>>);
+  vi.mocked(commands.listWorkspaceVariables).mockResolvedValue((fallback ? [{ key: "DEV_TOKEN", value: "fallback", isEnabled: true }] : []) as Awaited<ReturnType<typeof commands.listWorkspaceVariables>>);
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  openRun();
+  fireEvent.change(screen.getByLabelText("Environment"), { target: { value: "prod" } });
+  const button = screen.getByRole("button", { name: "Run", exact: true });
+  if (fallback) {
+    await waitFor(() => expect(button).toBeEnabled());
+    expect(screen.queryByText("Deploy API: DEV_TOKEN is unavailable in Production")).not.toBeInTheDocument();
+  } else {
+    expect(await screen.findByText("Deploy API: DEV_TOKEN is unavailable in Production")).toBeVisible();
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(commands.runFlow).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("Environment"), { target: { value: "dev" } });
+    await waitFor(() => expect(button).toBeEnabled());
+  }
+});
+
+it("shows invalid reference feedback for Advanced JSON and prevents saving", async () => {
+  vi.mocked(commands.listFlows).mockResolvedValue([{ ...flow, inputs: [], steps: [{ id: "api", name: "Deploy API", kind: "action", timeoutMs: 1000, next: null, action: { capability: "api", resourceId: "api", connectionId: null, arguments: {} } }] }]);
+  vi.mocked(commands.listSavedApiRequests).mockResolvedValue([{ id: "api", name: "Deploy", url: "https://example.test" }] as Awaited<ReturnType<typeof commands.listSavedApiRequests>>);
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.click(screen.getByText("Deploy API", { selector: ".truncate" }));
+  fireEvent.change(screen.getByLabelText("Arguments (JSON)"), { target: { value: JSON.stringify({ body: { $ref: "/inputs/body", extra: true } }) } });
+  expect(screen.getByText(/Invalid reference\. Use a JSON pointer/)).toBeVisible();
+  expect(screen.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+});

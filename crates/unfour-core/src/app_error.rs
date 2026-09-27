@@ -87,6 +87,12 @@ impl AppError {
             AppError::NotFound(_) => "NOT_FOUND",
             AppError::Serialization(_) => "SERIALIZATION_ERROR",
             AppError::Unsupported(_) => "UNSUPPORTED_OPERATION",
+            AppError::Validation(reason) if reason == "FLOW_INVALID_REFERENCE" => {
+                "FLOW_INVALID_REFERENCE"
+            }
+            AppError::Validation(reason) if reason == "FLOW_UNSAFE_REFERENCE" => {
+                "FLOW_UNSAFE_REFERENCE"
+            }
             AppError::Validation(_) => "VALIDATION_ERROR",
             AppError::ReadOnly(_) => "READ_ONLY_CONNECTION",
             AppError::Timeout(_) => "QUERY_TIMEOUT",

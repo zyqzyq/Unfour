@@ -253,6 +253,10 @@ async fn flow_api_patch_validation_at_save_and_preflight() {
             json!([super::flow::action("api", "api", &api.id, arguments)]),
         );
         assert!(bus.save_flow(definition.clone()).await.is_err());
+        if let Err(error) = unfour_flow_engine::validate_definition(&definition) {
+            assert_eq!(error.code(), "FLOW_INVALID_REFERENCE");
+            continue;
+        }
         let stored = unfour_flow_engine::FlowService::new(bus.db.clone())
             .save(definition)
             .await

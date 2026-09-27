@@ -49,9 +49,21 @@ pub(crate) fn guaranteed_upstream(steps: &[FlowStep]) -> Vec<HashSet<String>> {
 }
 
 fn check_pointer(pointer: &str, safe: &HashSet<String>, probe: bool) -> AppResult<()> {
-    let mut parts = pointer.strip_prefix('/').unwrap_or("").split('/');
+    let path = pointer
+        .strip_prefix('/')
+        .ok_or_else(|| invalid("FLOW_INVALID_REFERENCE"))?;
+    let mut chars = path.chars();
+    while let Some(ch) = chars.next() {
+        if ch == '~' && !matches!(chars.next(), Some('0' | '1')) {
+            return Err(invalid("FLOW_INVALID_REFERENCE"));
+        }
+    }
+    let mut parts = path.split('/');
     let decode = |part: &str| part.replace("~1", "/").replace("~0", "~");
     let root = decode(parts.next().unwrap_or(""));
+    if !matches!(root.as_str(), "inputs" | "steps" | "probe") {
+        return Err(invalid("FLOW_INVALID_REFERENCE"));
+    }
     if (root == "steps" && !parts.next().is_some_and(|id| safe.contains(&decode(id))))
         || (root == "probe" && !probe)
     {
@@ -63,7 +75,13 @@ fn check_pointer(pointer: &str, safe: &HashSet<String>, probe: bool) -> AppResul
 fn check(value: &Value, safe: &HashSet<String>, probe: bool) -> AppResult<()> {
     match value {
         Value::Object(map) => {
-            if let Some(pointer) = map.get("$ref").and_then(Value::as_str) {
+            if let Some(value) = map.get("$ref") {
+                if map.len() != 1 {
+                    return Err(invalid("FLOW_INVALID_REFERENCE"));
+                }
+                let pointer = value
+                    .as_str()
+                    .ok_or_else(|| invalid("FLOW_INVALID_REFERENCE"))?;
                 check_pointer(pointer, safe, probe)?;
             } else {
                 for child in map.values() {
@@ -80,7 +98,9 @@ fn check(value: &Value, safe: &HashSet<String>, probe: bool) -> AppResult<()> {
             let mut rest = text.as_str();
             while let Some(start) = rest.find("${") {
                 rest = &rest[start + 2..];
-                let Some(end) = rest.find('}') else { break };
+                let end = rest
+                    .find('}')
+                    .ok_or_else(|| invalid("FLOW_INVALID_REFERENCE"))?;
                 check_pointer(&rest[..end], safe, probe)?;
                 rest = &rest[end + 1..];
             }

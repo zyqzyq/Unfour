@@ -132,7 +132,10 @@ fn flow_branch_unsafe_references_have_the_same_error_in_desktop_and_mcp() {
                 .save_flow(serde_json::from_value(value.clone()).unwrap()),
         )
         .unwrap_err();
-    assert!(error.to_string().contains("FLOW_UNSAFE_REFERENCE"));
+    assert_eq!(
+        serde_json::to_value(&error).unwrap()["code"],
+        "FLOW_UNSAFE_REFERENCE"
+    );
     let result = registry
         .call("unfour.flow.save", json!({"definition":value}))
         .unwrap();
@@ -509,4 +512,76 @@ fn flow_save_rejects_invalid_api_patches_through_shared_command_bus() {
         assert_eq!(content_json(&result)["error"]["code"], "VALIDATION_ERROR");
     }
     assert!(adapter.run(adapter.bus.list_flows(ws)).unwrap().is_empty());
+}
+
+#[test]
+fn flow_invalid_reference_errors_match_desktop_and_mcp_save_and_run() {
+    let storage_dir = test_storage_dir("flow-invalid-reference");
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let db = runtime.block_on(async {
+        let db = LocalDb::connect_path(storage_dir.join(unfour_command_bus::DEFAULT_DATABASE_FILE))
+            .await
+            .unwrap();
+        db.migrate().await.unwrap();
+        db
+    });
+    let adapter =
+        LocalCommandBusAdapter::from_command_bus_future(CommandBus::from_db(db.clone())).unwrap();
+    let ws = adapter
+        .run(adapter.bus.list_workspaces())
+        .unwrap()
+        .active_workspace_id;
+    let registry = ToolRegistry::with_command_bus(adapter.clone());
+    let mut flow = serde_json::to_value(definition(&ws)).unwrap();
+    flow["steps"] = json!([{"id":"check","name":"Check","kind":"condition","timeoutMs":1000,"predicate":{"left":true,"op":"eq","right":true},"ifTrue":"$end","ifFalse":"$end"}]);
+    let saved = adapter
+        .save_flow(serde_json::from_value(flow).unwrap())
+        .unwrap();
+    for operand in [
+        json!({"$ref":42}),
+        json!({"$ref":"/inputs/value","extra":true}),
+        json!("${/inputs/value} ${bad}"),
+        json!("${/inputs/value"),
+    ] {
+        let mut value = serde_json::to_value(&saved).unwrap();
+        value["steps"][0]["predicate"]["left"] = operand;
+        let error = adapter
+            .run(
+                adapter
+                    .bus
+                    .save_flow(serde_json::from_value(value.clone()).unwrap()),
+            )
+            .unwrap_err();
+        assert_eq!(
+            serde_json::to_value(&error).unwrap()["code"],
+            "FLOW_INVALID_REFERENCE"
+        );
+        let result = registry
+            .call("unfour.flow.save", json!({"definition":value}))
+            .unwrap();
+        assert_eq!(
+            content_json(&result)["error"]["code"],
+            "FLOW_INVALID_REFERENCE"
+        );
+        adapter
+            .run(async {
+                sqlx::query("UPDATE flow_definitions SET definition_json = ? WHERE id = ?")
+                    .bind(value.to_string())
+                    .bind(&saved.id)
+                    .execute(db.pool())
+                    .await
+                    .unwrap();
+                Ok::<(), AppError>(())
+            })
+            .unwrap();
+        let mut args = json!({"flowId":saved.id});
+        args["confirmationText"] = json!(confirmation(&registry, args.clone()));
+        args["confirm"] = json!(true);
+        let result = registry.call("unfour.flow.run", args).unwrap();
+        assert_eq!(
+            content_json(&result)["error"]["code"],
+            "FLOW_INVALID_REFERENCE"
+        );
+        assert!(adapter.list_flow_runs(&ws, &saved.id).unwrap().is_empty());
+    }
 }

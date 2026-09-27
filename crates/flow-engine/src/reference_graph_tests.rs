@@ -1,6 +1,37 @@
 use super::*;
 use serde_json::json;
 
+#[test]
+fn malformed_references_are_invalid_and_escaped_multiple_references_are_valid() {
+    for value in [
+        json!({"$ref": null}),
+        json!({"$ref": 1}),
+        json!({"$ref": "/inputs/a", "extra": true}),
+        json!({"$ref": "inputs/a"}),
+        json!({"$ref": "/unknown/a"}),
+        json!({"$ref": "/inputs/a~2b"}),
+        json!({"$ref": "/inputs/a~"}),
+        json!("${}"),
+        json!("${inputs/a}"),
+        json!("${/inputs/a"),
+        json!("${/inputs/a} ${/unknown/b}"),
+    ] {
+        assert!(
+            check(&value, &ids(&[]), false)
+                .unwrap_err()
+                .to_string()
+                .contains("FLOW_INVALID_REFERENCE"),
+            "{value}"
+        );
+    }
+    let value = json!("${/inputs/a~1b} ${/inputs/c~0d} ${/inputs}");
+    check(&value, &ids(&[]), false).unwrap();
+    assert_eq!(
+        crate::expression::resolve(&value, &json!({"inputs":{"a/b":"A","c~d":"B"}})).unwrap(),
+        json!("A B {\"a/b\":\"A\",\"c~d\":\"B\"}")
+    );
+}
+
 fn wait(id: &str, next: Option<&str>) -> Value {
     json!({"id":id,"name":id,"timeoutMs":1000,"kind":"wait","durationMs":0,"next":next})
 }

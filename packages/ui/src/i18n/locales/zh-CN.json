@@ -1572,6 +1572,8 @@
     },
     "environmentScope": "Environment 在运行时选择，整个 Flow 共用。",
     "usesEnvironment": "使用 Flow 运行环境",
+    "invalidReference": "引用格式无效。请使用以 inputs、steps 或 probe 为根的 JSON pointer；$ref 对象只能包含字符串类型的 $ref。",
+    "apiVariableUnavailable": "{step}：{variable} 在 {environment} 中不可用",
     "unsafeReference": "并非所有到达此步骤的路径都会生成该结果。请选择共同上游的结果，或将此步骤移到对应分支中。",
     "predicateCompatibility": "包含判断用于数组成员。当前引擎将缺失字段视为错误，因此不支持存在 / 不存在判断。",
     "probe": "探测",

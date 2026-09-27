@@ -6,6 +6,19 @@ import { newStep } from "./model";
 const wait = (id: string, next: string | null = null): FlowStep => ({ ...newStep("wait", id), id, next });
 const branch = (id: string, ifTrue: string, ifFalse: string): FlowStep => ({ ...newStep("condition", id), id, kind: "condition", predicate: { left: true, op: "eq", right: true }, ifTrue, ifFalse, next: null });
 
+it("distinguishes malformed objects and interpolations from unsafe paths", () => {
+  for (const value of [{ $ref: 2 }, { $ref: "/inputs/a", extra: true }, { $ref: "/inputs/a~2" }, "${}", "${inputs/a}", "${/inputs/a", "${/inputs/a} ${/other/b}"]) {
+    const step = branch("check", "$end", "$end");
+    if (step.kind !== "condition") throw new Error("fixture");
+    step.predicate.left = value;
+    expect(unsafeReferences([step]).map((p) => p.key)).toContain("flow.invalidReference");
+    step.predicate.left = "${/inputs/a~1b} ${/inputs/c~0d}";
+    expect(unsafeReferences([step])).toEqual([]);
+    step.predicate.left = { $ref: "/steps/missing" };
+    expect(unsafeReferences([step])[0].key).toBe("flow.unsafeReference");
+  }
+});
+
 it("intersects both branches at a join, and keeps branch-local dominators", () => {
   const steps = [wait("start"), branch("split", "a", "b"), wait("a", "a2"), wait("a2", "join"), wait("b", "join"), wait("join"), wait("end")];
   const safe = guaranteedUpstream(steps);

@@ -1,3 +1,4 @@
+import { apiEnvironmentErrors } from "./apiEnvironmentValidation";
 import { guaranteedUpstream, unsafeReferences } from "./referenceGraph";
 import { START, END, removalImpact, removeCanvasStep } from "./canvasGraph";
 import { environmentInputErrors, inputDefaults, inputDefinitionErrors, inputErrors, maskInputs, newStep, normalizeInputs, resourceErrors } from "./model";
@@ -238,10 +239,13 @@ function WorkspaceFlowPage({
   const defaultsReady = workspaceVariables.isSuccess && !environments.isPending;
   const defaults = new Map([...(workspaceVariables.data ?? []), ...(environments.data?.find((env) => env.id === environmentId)?.variables ?? [])].filter((v) => v.isEnabled && !v.deletedAt).map((v) => [v.key.trim().toLowerCase(), v.value]));
   const environmentInputProblems = resourcesQuery.data && defaultsReady ? environmentInputErrors(draft, resources, defaults) : [];
+  const hasApi = draft.steps.some((step) => (step.kind === "action" ? step.action : step.kind === "poll" || step.kind === "waitUntil" ? step.probe : null)?.capability === "api");
+  const effectiveApiKeys = new Set([...(workspaceVariables.data ?? []), ...(environments.data?.find((env) => env.id === environmentId)?.variables ?? [])].filter((v) => v.isEnabled && !v.deletedAt).map((v) => v.key));
+  const apiProblems = resourcesQuery.data && defaultsReady ? apiEnvironmentErrors(draft, resources, effectiveApiKeys) : [];
   const manualSecrets = secretInputNames.split(",").map((name) => name.trim()).filter(Boolean);
   const manualSecretErrors = manualSecrets.filter((name) => !Object.prototype.hasOwnProperty.call(resolvedInputs, name));
   const impact = removingNode ? removalImpact(draft, removingNode) : null;
-  const invalidRun = (needsWorkspaceDefaults && !defaultsReady) || environmentInputProblems.length > 0 || manualSecretErrors.length > 0 || invalidEditor || inputProblems.length > 0 || resourceProblems.length > 0 || Object.values(invalid).some(Boolean) || !resourcesQuery.data || resourcesQuery.isError || environments.isError || (Boolean(environmentId) && !environments.data?.some((environment) => environment.id === environmentId));
+  const invalidRun = (hasApi && !defaultsReady) || apiProblems.length > 0 || (needsWorkspaceDefaults && !defaultsReady) || environmentInputProblems.length > 0 || manualSecretErrors.length > 0 || invalidEditor || inputProblems.length > 0 || resourceProblems.length > 0 || Object.values(invalid).some(Boolean) || !resourcesQuery.data || resourcesQuery.isError || environments.isError || (Boolean(environmentId) && !environments.data?.some((environment) => environment.id === environmentId));
   const viewingRun = selectedRun !== null;
   const projection = !dirty && currentRun?.flowId === draft.id && currentRun.definition.revision === draft.revision ? currentRun : undefined;
   return (
@@ -292,7 +296,7 @@ function WorkspaceFlowPage({
         </Button>
       </div>
       <p className="px-2 py-1 text-xs text-[var(--u-color-text-muted)]">{t("flow.environmentScope")}</p>
-      {!viewingRun && referenceProblems.map((problem) => <p key={`${problem.stepId}:${problem.pointer}`} role="alert" className="px-2 text-xs text-[var(--u-color-danger)]"><Button size="sm" variant="ghost" onClick={() => setSelectedNode(problem.stepId)}>{problem.name}</Button>{t("flow.unsafeReference")} · {problem.pointer.split("/").slice(1).map((part, index) => index === 1 ? draft.steps.find((step) => step.id === part)?.name ?? part : part).join(" · ")}</p>)}
+      {!viewingRun && referenceProblems.map((problem) => <p key={`${problem.stepId}:${problem.key}:${problem.pointer}`} role="alert" className="px-2 text-xs text-[var(--u-color-danger)]"><Button size="sm" variant="ghost" onClick={() => setSelectedNode(problem.stepId)}>{problem.name}</Button>{t(problem.key)} · {problem.pointer.split("/").slice(1).map((part, index) => index === 1 ? draft.steps.find((step) => step.id === part)?.name ?? part : part).join(" · ")}</p>)}
       {(error ||
         resourcesQuery.isError ||
         runDetail.isError) && (
@@ -303,7 +307,7 @@ function WorkspaceFlowPage({
       {invalidEditor && !viewingRun && <div role="alert" className="px-2 py-1 text-xs text-[var(--u-color-danger)]">
         {t("flow.invalidEditors")}
         {(schemaProblems.length > 0 || Object.entries(invalid).some(([key, value]) => value && key.startsWith("schema:"))) && <Button size="sm" variant="ghost" onClick={() => setSelectedNode(START)}>{t("flow.canvas.start")}</Button>}
-        {draft.steps.filter((step) => Object.entries(invalid).some(([key, value]) => value && key.startsWith(step.id + ":"))).map((step) => <Button key={step.id} size="sm" variant="ghost" onClick={() => setSelectedNode(step.id)}>{step.name}</Button>)}
+        {draft.steps.filter((step) => !referenceProblems.some((problem) => problem.stepId === step.id) && Object.entries(invalid).some(([key, value]) => value && key.startsWith(step.id + ":"))).map((step) => <Button key={step.id} size="sm" variant="ghost" onClick={() => setSelectedNode(step.id)}>{step.name}</Button>)}
       </div>}
       {viewingRun && <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-3 py-2">
         <strong>{t("flow.viewingRun")}</strong>
@@ -414,6 +418,7 @@ function WorkspaceFlowPage({
           <DialogDescription>{t("flow.effectsHelp")}</DialogDescription>
           <p>{t("flow.name")}: {draft.name} · {t("flow.workspace")}: {workspaceId}</p>
           <p>{t("flow.environment")}: {environments.data?.find((environment) => environment.id === environmentId)?.name ?? t("flow.workspaceOnly")}{environmentId ? ` (${environmentId})` : ""}</p>
+          {apiProblems.map((problem) => <p role="alert" key={`${problem.stepId}:${problem.variable}`}>{t("flow.apiVariableUnavailable", { step: problem.name, variable: problem.variable, environment: environments.data?.find((env) => env.id === environmentId)?.name ?? t("flow.workspaceOnly") })}</p>)}
           <pre aria-label={t("flow.inputPreview")} className="max-h-40 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(maskInputs(resolvedInputs, draft.inputs, manualSecrets), null, 2)}</pre>
           {error && <p role="alert">{error}</p>}
           </fieldset></DialogBody>

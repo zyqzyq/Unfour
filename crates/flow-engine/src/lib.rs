@@ -3,6 +3,7 @@ mod reference_graph;
 mod runner;
 mod storage;
 mod validation;
+pub use validation::validate as validate_definition;
 mod wait_until;
 
 use serde_json::Value;

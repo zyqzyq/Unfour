@@ -9,7 +9,7 @@ import type {
 import { sqlProblem } from "./actionAuthoring";
 import type { SshTaskDetail } from "@unfour/command-client";
 export type Resources = {
-  api: { id: string; name: string; url?: string; headersJson?: string; queryJson?: string; body?: string | null; method?: string; bodyKind?: string; preRequestScript?: string | null; postResponseScript?: string | null }[];
+  api: { id: string; name: string; url?: string; authJson?: string; headersJson?: string; queryJson?: string; body?: string | null; method?: string; bodyKind?: string; preRequestScript?: string | null; postResponseScript?: string | null }[];
   database: { id: string; name: string; readOnly?: boolean }[];
   ssh: { id: string; name: string; detail?: SshTaskDetail }[];
   connections: { id: string; name: string }[];

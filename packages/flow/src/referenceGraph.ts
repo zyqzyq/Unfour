@@ -21,17 +21,25 @@ export function guaranteedUpstream(steps: FlowStep[]): Map<string, Set<string>> 
   return result;
 }
 
-export function referencesIn(value: unknown): string[] {
-  if (typeof value === "string") return [...value.matchAll(/\$\{([^}]+)\}/g)].map((match) => match[1]);
+type Reference = { pointer: string; invalid: boolean };
+export function validPointer(pointer: string): boolean {
+  return pointer.startsWith("/") && !/~(?![01])/.test(pointer) && ["inputs", "steps", "probe"].includes(pointer.split("/")[1]);
+}
+function referenceValues(value: unknown): Reference[] {
+  if (typeof value === "string") return [...value.matchAll(/\$\{([^}]*)(\}|$)/g)].map((match) => ({ pointer: match[1], invalid: !match[2] || !validPointer(match[1]) }));
   if (!value || typeof value !== "object") return [];
-  if ("$ref" in value) return typeof value.$ref === "string" ? [value.$ref] : [];
-  return Object.values(value).flatMap(referencesIn);
+  if ("$ref" in value) return [{ pointer: String(value.$ref), invalid: Object.keys(value).length !== 1 || typeof value.$ref !== "string" || !validPointer(value.$ref) }];
+  return Object.values(value).flatMap(referenceValues);
+}
+export function referencesIn(value: unknown): string[] {
+  return referenceValues(value).map((ref) => ref.pointer);
 }
 
 export function unsafeReferences(steps: FlowStep[]) {
   const upstream = guaranteedUpstream(steps);
   return steps.flatMap((step) => {
-    const check = (value: unknown, probe: boolean) => referencesIn(value).filter((pointer) => {
+    const check = (value: unknown, probe: boolean) => referenceValues(value).filter(({ pointer, invalid }) => {
+      if (invalid) return true;
       const [root, id] = pointer.slice(1).split("/").map((part) => part.replace(/~1/g, "/").replace(/~0/g, "~"));
       return root === "steps" ? !id || !upstream.get(step.id)?.has(id) : root === "probe" && !probe;
     });
@@ -39,6 +47,6 @@ export function unsafeReferences(steps: FlowStep[]) {
       : step.kind === "condition" ? check(step.predicate, false)
       : step.kind === "poll" ? [...check(step.probe.arguments, false), ...check(step.predicate, true)]
       : step.kind === "waitUntil" ? [...check(step.probe.arguments, false), ...check(step.successWhen, true), ...check(step.failureWhen, true)] : [];
-    return [...new Set(pointers)].map((pointer) => ({ stepId: step.id, name: step.name, pointer }));
+    return pointers.filter((ref, index) => pointers.findIndex((other) => other.pointer === ref.pointer && other.invalid === ref.invalid) === index).map(({ pointer, invalid }) => ({ stepId: step.id, name: step.name, pointer, key: invalid ? "flow.invalidReference" : "flow.unsafeReference" }));
   });
 }

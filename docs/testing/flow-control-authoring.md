@@ -72,3 +72,43 @@ wire shape, including legacy Poll, implicit next and escaped pointers.
 Browser verification covers authoring only; it does not claim live remote
 API/SSH/database service verification. Runtime coverage above uses the existing
 Flow engine and command-bus regression fixtures.
+
+
+## Phase 2 closeout (2026-09-27, base a0d64da)
+
+Scope is limited to complete reference validation and API environment preflight.
+No persisted schema, runtime `{{...}}` resolution, Run History or Run Again changes.
+
+- Save/run validate reference structure before capability execution: `$ref`
+  objects contain exactly one string field; pointers start with `/`, use valid
+  `~0`/`~1` escapes and have an `inputs`, `steps` or `probe` root. Every
+  interpolation is checked, including multiple and unterminated interpolations.
+- Malformed references report `FLOW_INVALID_REFERENCE`. Dominance and probe
+  scope violations retain `FLOW_UNSAFE_REFERENCE`. Desktop serialized errors
+  and MCP errors expose the same codes; loading legacy definitions remains allowed.
+- Advanced JSON reports invalid versus unsafe references and blocks Save/Run.
+- Run confirmation checks static API templates against enabled workspace keys
+  plus the selected environment's enabled keys, preserving exact key case and
+  workspace fallback. The authoring picker still uses the union of all environments.
+- Checks cover saved URL, headers, query, body and auth, literal replacements,
+  header patches and duplicate query occurrences. Replaced/removed templates
+  are excluded. Dynamic references, template keys and uncertain patch targets
+  are deferred to runtime. Condition/DB and SSH workspaceDefaults are unchanged.
+- Missing keys display step + variable + selected environment and disable Run.
+
+Verification for this closeout:
+
+- PASS: Flow + locale frontend tests, 136 tests across 15 files (the final
+  FlowPage selector correction was rerun separately: 35/35).
+- PASS: Flow engine 8/8; CommandBus Flow tests 46/46; MCP Flow tests 9/9;
+  core error tests 4/4. Fixtures cover malformed save/run rejection before run
+  creation, Desktop/MCP code parity, escaped pointers, multiple interpolation,
+  extra `$ref` fields, legacy safe definitions and existing API resolution.
+- PASS: production build (chunk-size warning only), TypeScript, ESLint (three
+  size/complexity warnings, zero errors), Rust formatting, `git diff --check`
+  and large-file check (zero blocking files).
+- Initial test failures were repaired: a legacy test expected malformed refs to
+  bypass service save validation; UI tests needed to account for the new error
+  links and use the existing canvas node selector.
+- Native desktop/live remote services were not exercised in this closeout;
+  interaction validation uses React/jsdom and disposable Rust fixtures.

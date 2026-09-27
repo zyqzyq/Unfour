@@ -1574,6 +1574,8 @@
     },
     "environmentScope": "Environment is selected at run time and shared by the entire Flow.",
     "usesEnvironment": "Uses Flow environment",
+    "invalidReference": "Invalid reference. Use a JSON pointer rooted at inputs, steps or probe; a $ref object must contain only a string $ref.",
+    "apiVariableUnavailable": "{step}: {variable} is unavailable in {environment}",
     "unsafeReference": "This output is not guaranteed to exist on every path to this step. Choose a shared upstream output or move this step into the matching branch.",
     "predicateCompatibility": "Contains checks array membership. Exists / not exists are unavailable: the current engine treats missing fields as errors.",
     "probe": "Poll",

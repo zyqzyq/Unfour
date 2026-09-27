@@ -1083,6 +1083,13 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
 
 impl CommandBusAdapterError {
     fn from_flow_error(error: &AppError) -> Self {
+        if matches!(error, AppError::Validation(reason) if reason == "FLOW_INVALID_REFERENCE") {
+            return Self {
+                code: "FLOW_INVALID_REFERENCE",
+                message: "Invalid Flow reference. Use a JSON pointer rooted at inputs, steps or probe and an object containing only a string $ref.",
+                details: serde_json::json!({}),
+            };
+        }
         if matches!(error, AppError::Validation(reason) if reason == "FLOW_UNSAFE_REFERENCE") {
             return Self {
                 code: "FLOW_UNSAFE_REFERENCE",

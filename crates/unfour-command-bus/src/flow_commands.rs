@@ -26,6 +26,7 @@ impl CommandBus {
         self.flow_service().get(&workspace_id, &flow_id).await
     }
     pub async fn save_flow(&self, input: FlowDefinition) -> AppResult<FlowDefinition> {
+        unfour_flow_engine::validate_definition(&input)?;
         for step in &input.steps {
             let action = match &step.node {
                 FlowNode::Action { action } => action,
