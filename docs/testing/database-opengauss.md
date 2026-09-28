@@ -22,9 +22,12 @@ connection type changed.
 - Internal PostgreSQL `"char"` values decode at the shared row boundary for
   query and export results. The connection-test success message uses the
   runtime detected server name while protocol remains PostgreSQL.
-- MCP database adapter errors expose a sanitized `details.reason` only for
-  Unfour `Unsupported`, `Validation`, and `ReadOnly` errors. Database driver
-  errors retain the SQLSTATE/databaseMessage sanitizer.
+- MCP database adapter errors may expose a sanitized `details.reason` for
+  Unfour `Unsupported` and `ReadOnly` errors. `Validation` errors expose it
+  only for explicitly allowlisted safe reasons (currently
+  `structure export requires SQL format`). Database driver errors
+  continue through the SQLSTATE/`databaseMessage` sanitizer; arbitrary
+  `Display`/`to_string` text is not returned.
 
 OpenGauss catalog references: [PG_INDEX](https://docs.opengauss.org/zh/docs/6.0.0/docs/DatabaseReference/PG_INDEX.html),
 [PG_INDEXES](https://docs.opengauss.org/zh/docs/6.0.0/docs/DatabaseReference/PG_INDEXES.html),
@@ -77,6 +80,37 @@ operations, verify row mutation on the production database, or export business
 rows. Foreign-key metadata remains unsupported by the openGauss runtime profile.
 The running MCP process and the local Cargo test build were checked separately;
 this record does not assert their binaries are identical.
+
+### Additional live MCP check on openGauss 6.0.3 (2026-09-28)
+
+The later live check used the saved production connection with:
+
+```yaml
+catalog: qingqi_config
+schema: public
+```
+
+The connection test returned `openGauss connection OK`. The observations below
+cover reads and managed exports; no production write operation was run.
+
+- `unfour.db.list_tables` returned 13 public user tables, with `config_info`
+  first, in about 0.3 seconds.
+- `unfour.db.describe_table` returned DDL for `public.config_info` and indexes
+  including `config_info_pkey` and `uk_configinfo_datagrouptenant`.
+- Structure-only export contained `CREATE TABLE`, comments, the primary key,
+  and the unique index. Structure-and-data export included the DDL followed by
+  an `INSERT INTO` for one row, selecting only `id`, `data_id`, and `group_id`.
+- Filtered data export was verified for five public configuration keys:
+  `application-dev.yml`, `auth`, `gateway`, `kb`, and `upms`.
+- A `pg_class.relkind` query decoded PostgreSQL's internal `"char"` as `r`.
+  `EXPLAIN` for `id = 1` reported an `Index Only Scan` using
+  `config_info_pkey`.
+
+These results establish the listed operations on this server, not complete
+openGauss 6.0.3 certification. Expression indexes, composite primary keys,
+cross-schema behavior, foreign keys, all data types, and all permission
+configurations were not covered. Production row mutation remains unverified.
+Foreign-key metadata remains unsupported (`capability=false`).
 
 Date: 2026-09-25. Scope: existing PostgreSQL transport and runtime profile;
 no new persisted driver, product hint, migration, Cloud Sync field, dependency,
@@ -153,7 +187,7 @@ connection per pool, and a UI assertion found the old MySQL/MariaDB label. Final
 runs pass. The first sandboxed Vitest launch failed with esbuild `spawn EPERM`;
 the authorized unsandboxed retry passed.
 
-## Not verified against a real service as of 2026-09-25
+## Initial live-service status (2026-09-25; superseded by checks above)
 
 This section records the initial state before the live 2026-09-28 check above.
 No real openGauss endpoint was configured or used then. Real authentication/TLS,
