@@ -5,16 +5,19 @@ use serde_json::{json, Map, Value};
 use unfour_core::models::{FlowDefinition, FlowInitiator, FlowRunInput};
 
 use super::{
-    confirmation::ensure_confirmed, object_with_allowed_keys, policy::ToolPolicyEvaluation,
+    confirmation::{ensure_confirmed, ensure_confirmed_if_guarded},
+    object_with_allowed_keys,
+    policy::ToolPolicyEvaluation,
     RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition, ToolHandler,
 };
 use crate::command_bus_adapter::{CommandBusAdapter, CommandBusAdapterError};
 
 pub(super) fn registered_tools() -> Vec<RegisteredTool> {
-    let entries: [(&str, &str, ToolHandler, ToolAnnotations); 7] = [
+    let entries: [(&str, &str, ToolHandler, ToolAnnotations); 8] = [
         ("list", "List saved Flow summaries; use get for the complete definition.", list, ToolAnnotations::local_read()),
         ("get", "Read a saved Flow definition for use in Desktop Canvas or MCP.", get, ToolAnnotations::local_read()),
         ("save", "Save a FlowDefinition using existing validation and revision checks. Empty id creates; updates require the current revision.", save, ToolAnnotations::local_write()),
+        ("delete", "Delete a saved Flow definition while retaining its run history. Guarded workspaces require confirmation bound to the current revision.", delete, ToolAnnotations::local_write_destructive()),
         ("run", "Start a Flow with initiator=mcp. Requires payload-bound confirmation even with full_access. Read-only/disabled policy blocks execution. Cancellation does not undo effects.", run, ToolAnnotations::remote_action()),
         ("cancel_run", "Request cancellation of a running Flow; remote effects are not rolled back.", cancel, ToolAnnotations::remote_action()),
         ("list_runs", "Read lightweight FlowRunSummary history without loading run details.", list_runs, ToolAnnotations::local_read()),
@@ -27,6 +30,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                 "list" => "unfour.flow.list",
                 "get" => "unfour.flow.get",
                 "save" => "unfour.flow.save",
+                "delete" => "unfour.flow.delete",
                 "run" => "unfour.flow.run",
                 "cancel_run" => "unfour.flow.cancel_run",
                 "list_runs" => "unfour.flow.list_runs",
@@ -116,6 +120,47 @@ fn save(
     }
     Ok(json!({"flow": encode(b.save_flow(definition).map_err(error)?)?}))
 }
+fn delete(
+    b: &dyn CommandBusAdapter,
+    p: &ToolPolicyEvaluation,
+    v: Value,
+) -> Result<Value, ToolCallError> {
+    let a = args(
+        v,
+        &[
+            "workspaceId",
+            "flowId",
+            "confirm",
+            "confirmationText",
+            "confirmation_text",
+        ],
+    )?;
+    for key in ["confirmationText", "confirmation_text"] {
+        if a.get(key).is_some_and(|value| !value.is_string()) {
+            return Err(ToolCallError::InvalidArguments(format!(
+                "{key} must be a string"
+            )));
+        }
+    }
+    if a.get("confirm").is_some_and(|value| !value.is_boolean()) {
+        return Err(ToolCallError::InvalidArguments(
+            "confirm must be boolean".into(),
+        ));
+    }
+    let workspace_id = workspace(&a, p)?;
+    let flow_id = id(&a, "flowId")?;
+    let definition = b.get_flow(&workspace_id, &flow_id).map_err(error)?;
+    ensure_confirmed_if_guarded(
+        p,
+        &a,
+        "FLOW_DELETE",
+        "Deleting a Flow removes its definition but retains run history.",
+        json!({"workspaceId": workspace_id, "flowId": flow_id, "revision": definition.revision}),
+    )?;
+    b.delete_flow(&workspace_id, &flow_id, definition.revision)
+        .map_err(error)?;
+    Ok(json!({"deleted": true, "flowId": flow_id}))
+}
 fn run(
     b: &dyn CommandBusAdapter,
     p: &ToolPolicyEvaluation,
@@ -175,9 +220,29 @@ fn list_runs(
     p: &ToolPolicyEvaluation,
     v: Value,
 ) -> Result<Value, ToolCallError> {
-    let a = args(v, &["workspaceId", "flowId"])?;
-    Ok(
-        json!({"runs": encode(b.list_flow_runs(&workspace(&a,p)?, &id(&a,"flowId")?).map_err(error)?)?}),
+    let a = args(v, &["workspaceId", "flowId", "limit", "cursor"])?;
+    let limit = match a.get("limit") {
+        None => 100,
+        Some(value) => value
+            .as_u64()
+            .filter(|value| (1..=100).contains(value))
+            .map(|value| value as u32)
+            .ok_or_else(|| {
+                ToolCallError::InvalidArguments("limit must be an integer from 1 to 100".into())
+            })?,
+    };
+    let cursor = a
+        .contains_key("cursor")
+        .then(|| id(&a, "cursor"))
+        .transpose()?;
+    encode(
+        b.list_flow_runs_page(
+            &workspace(&a, p)?,
+            &id(&a, "flowId")?,
+            limit,
+            cursor.as_deref(),
+        )
+        .map_err(error)?,
     )
 }
 fn get_run(

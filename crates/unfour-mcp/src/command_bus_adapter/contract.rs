@@ -10,7 +10,9 @@ use unfour_core::models::{
     SshTaskSaveInput, SshTasksReorderInput, SystemHealth, WorkspaceEnvironment,
     WorkspaceEnvironmentVariable, WorkspaceVariable, WorkspaceVariableInput,
 };
-use unfour_core::models::{FlowDefinition, FlowRun, FlowRunInput, FlowRunSummary, FlowSummary};
+use unfour_core::models::{
+    FlowDefinition, FlowRun, FlowRunInput, FlowRunPage, FlowRunSummary, FlowSummary,
+};
 
 use super::CommandBusAdapterError;
 
@@ -34,6 +36,18 @@ pub trait CommandBusAdapter: Send + Sync {
         })
     }
     fn save_flow(&self, _input: FlowDefinition) -> Result<FlowDefinition, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Flow operation is unavailable.",
+            details: serde_json::json!({}),
+        })
+    }
+    fn delete_flow(
+        &self,
+        _workspace_id: &str,
+        _flow_id: &str,
+        _expected_revision: i64,
+    ) -> Result<(), CommandBusAdapterError> {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "Flow operation is unavailable.",
@@ -67,6 +81,19 @@ pub trait CommandBusAdapter: Send + Sync {
         _workspace_id: &str,
         _flow_id: &str,
     ) -> Result<Vec<FlowRunSummary>, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Flow operation is unavailable.",
+            details: serde_json::json!({}),
+        })
+    }
+    fn list_flow_runs_page(
+        &self,
+        _workspace_id: &str,
+        _flow_id: &str,
+        _limit: u32,
+        _cursor: Option<&str>,
+    ) -> Result<FlowRunPage, CommandBusAdapterError> {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "Flow operation is unavailable.",

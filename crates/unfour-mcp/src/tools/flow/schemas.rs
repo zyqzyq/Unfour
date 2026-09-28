@@ -126,7 +126,7 @@ pub(super) fn input(name: &str) -> Value {
         json!({"workspaceId":{"type":"string","minLength":1,"pattern":"^\\S(?:.*\\S)?$"}});
     let mut required = vec![];
     match name {
-        "unfour.flow.get" | "unfour.flow.list_runs" | "unfour.flow.run" => {
+        "unfour.flow.get" | "unfour.flow.delete" | "unfour.flow.list_runs" | "unfour.flow.run" => {
             properties["flowId"] =
                 json!({"type":"string","minLength":1,"pattern":"^\\S(?:.*\\S)?$"});
             required.push("flowId");
@@ -145,6 +145,12 @@ pub(super) fn input(name: &str) -> Value {
     if name == "unfour.flow.run" {
         properties.as_object_mut().unwrap().extend(json!({"environmentId":nullable_string(),"inputs":{"type":"object"},"secretInputNames":array(string()),"confirm":{"type":"boolean"},"confirmationText":string(),"confirmation_text":string()}).as_object().unwrap().clone());
     }
+    if name == "unfour.flow.delete" {
+        properties.as_object_mut().unwrap().extend(json!({"confirm":{"type":"boolean"},"confirmationText":string(),"confirmation_text":string()}).as_object().unwrap().clone());
+    }
+    if name == "unfour.flow.list_runs" {
+        properties.as_object_mut().unwrap().extend(json!({"limit":{"type":"integer","minimum":1,"maximum":100},"cursor":{"type":"string","minLength":1,"pattern":"^\\S(?:.*\\S)?$"}}).as_object().unwrap().clone());
+    }
     let mut schema = object(properties, &required);
     schema["$defs"] = definitions();
     schema
@@ -158,9 +164,22 @@ pub(super) fn output(name: &str) -> Value {
         )});
         return schema;
     }
+    if name == "unfour.flow.delete" {
+        return object(
+            json!({"deleted":{"type":"boolean","const":true},"flowId":string()}),
+            &["deleted", "flowId"],
+        );
+    }
+    if name == "unfour.flow.list_runs" {
+        let mut schema = object(
+            json!({"runs":array(reference("summary")),"nextCursor":nullable_string()}),
+            &["runs", "nextCursor"],
+        );
+        schema["$defs"] = definitions();
+        return schema;
+    }
     let (key, value) = match name {
         "unfour.flow.get" | "unfour.flow.save" => ("flow", reference("definition")),
-        "unfour.flow.list_runs" => ("runs", array(reference("summary"))),
         _ => ("run", reference("run")),
     };
     let mut schema = object(json!({key:value}), &[key]);

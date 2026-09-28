@@ -70,6 +70,16 @@ impl CommandBus {
     pub async fn delete_flow(&self, workspace_id: String, flow_id: String) -> AppResult<()> {
         self.flow_service().delete(&workspace_id, &flow_id).await
     }
+    pub async fn delete_flow_at_revision(
+        &self,
+        workspace_id: String,
+        flow_id: String,
+        revision: i64,
+    ) -> AppResult<()> {
+        self.flow_service()
+            .delete_at_revision(&workspace_id, &flow_id, revision)
+            .await
+    }
     pub async fn run_flow(&self, input: FlowRunInput) -> AppResult<FlowRun> {
         self.run_flow_at_revision(input, None).await
     }
@@ -94,6 +104,17 @@ impl CommandBus {
         flow_id: String,
     ) -> AppResult<Vec<FlowRunSummary>> {
         self.flow_service().list_runs(&workspace_id, &flow_id).await
+    }
+    pub async fn list_flow_runs_page(
+        &self,
+        workspace_id: String,
+        flow_id: String,
+        limit: u32,
+        cursor: Option<String>,
+    ) -> AppResult<FlowRunPage> {
+        self.flow_service()
+            .list_runs_page(&workspace_id, &flow_id, limit, cursor.as_deref())
+            .await
     }
     pub async fn cancel_flow_run(
         &self,

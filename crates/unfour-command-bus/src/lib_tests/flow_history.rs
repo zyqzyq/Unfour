@@ -15,6 +15,50 @@ async fn flow_history_reads_columns_without_decoding_snapshots_and_limits_scope(
     assert_eq!(summaries.len(), 100);
     assert_eq!(summaries[0].id, "run-101");
     assert_eq!(summaries[99].id, "run-002");
+    let first_page = bus
+        .list_flow_runs_page(workspace.clone(), "deleted-flow".into(), 100, None)
+        .await
+        .unwrap();
+    assert_eq!(first_page.runs.len(), 100);
+    assert_eq!(first_page.next_cursor.as_deref(), Some("run-002"));
+    sqlx::query("INSERT INTO flow_runs (id, workspace_id, flow_id, status, run_json, started_at, updated_at) VALUES ('new-run', ?, 'deleted-flow', 'succeeded', 'invalid snapshot', '2026-09-21T02:00:00Z', 'heartbeat')")
+        .bind(&workspace).execute(bus.db.pool()).await.unwrap();
+    let second_page = bus
+        .list_flow_runs_page(
+            workspace.clone(),
+            "deleted-flow".into(),
+            100,
+            first_page.next_cursor,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        second_page
+            .runs
+            .iter()
+            .map(|run| run.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["run-001", "run-000"]
+    );
+    assert_eq!(second_page.next_cursor, None);
+    assert!(bus
+        .list_flow_runs_page(
+            workspace.clone(),
+            "deleted-flow".into(),
+            100,
+            Some("missing".into())
+        )
+        .await
+        .is_err());
+    assert!(bus
+        .list_flow_runs_page(
+            "other".into(),
+            "deleted-flow".into(),
+            100,
+            Some("run-002".into())
+        )
+        .await
+        .is_err());
     let value = serde_json::to_value(&summaries[0]).unwrap();
     assert_eq!(value.as_object().unwrap().len(), 5);
     assert_eq!(value["status"], "succeeded");
@@ -33,6 +77,26 @@ async fn flow_history_reads_columns_without_decoding_snapshots_and_limits_scope(
         .await
         .unwrap()
         .is_empty());
+}
+
+#[tokio::test]
+async fn flow_history_pagination_breaks_equal_timestamps_by_id() {
+    let bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    for id in ["a", "b", "c"] {
+        sqlx::query("INSERT INTO flow_runs (id, workspace_id, flow_id, status, run_json, started_at, updated_at) VALUES (?, ?, 'flow', 'succeeded', 'invalid snapshot', '2026-09-21T00:00:00Z', 'heartbeat')")
+            .bind(id).bind(&workspace).execute(bus.db.pool()).await.unwrap();
+    }
+    let mut cursor = None;
+    for expected in ["c", "b", "a"] {
+        let page = bus
+            .list_flow_runs_page(workspace.clone(), "flow".into(), 1, cursor)
+            .await
+            .unwrap();
+        assert_eq!(page.runs[0].id, expected);
+        cursor = page.next_cursor;
+    }
+    assert_eq!(cursor, None);
 }
 
 #[tokio::test]

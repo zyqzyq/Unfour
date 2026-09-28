@@ -324,7 +324,7 @@ fn tool_annotations_classify_side_effects() {
 fn tool_schemas_are_available() {
     let definitions = ToolRegistry::with_command_bus(Arc::new(StubCommandBus)).definitions();
 
-    assert_eq!(definitions.len(), 71);
+    assert_eq!(definitions.len(), 72);
     assert!(definitions
         .iter()
         .any(|definition| definition.name == "unfour.db.export_table"));

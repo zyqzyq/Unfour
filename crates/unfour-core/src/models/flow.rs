@@ -143,6 +143,13 @@ pub struct FlowRunSummary {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct FlowRunPage {
+    pub runs: Vec<FlowRunSummary>,
+    pub next_cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FlowRun {
     pub id: String,
     pub workspace_id: String,

@@ -96,3 +96,31 @@ to avoid waiting 30 seconds.
   `git diff --check`, and direct Node invocation of `check-large-files.mjs`
   (zero blocking files). The pnpm wrapper could not open its cache database in
   this sandbox; the direct script invocation passed.
+
+## 2026-09-28 delete and history pagination
+
+MCP now exposes eight Flow tools. `flow.delete` uses CommandBus and a
+revision-checked delete; guarded workspaces require confirmation bound to that
+revision. Existing run history remains readable after deleting the definition.
+`flow.list_runs` accepts a page size up to 100 and a run-ID cursor, returns
+`nextCursor`, and orders equal start times by ID. The query continues to read
+only summary columns and scopes the cursor to the selected workspace and Flow.
+
+- PASS: Flow MCP tests (12), including delete policy, stale confirmation,
+  retained history, pagination, and schema contracts.
+- PASS: CommandBus history tests (5), including more than 100 runs, an insert
+  between page requests, equal timestamps, and cross-workspace cursor denial.
+- PASS: full MCP suite (226 library, four binary, two integration tests),
+  CommandBus suite (83 library plus integration tests), and Flow Engine (8).
+- PASS: CommandBus Flow tests with `ssh-native` (47), Rust format check,
+  `git diff --check`, and large-file check (zero blocking files).
+- PASS: a freshly built MCP stdio binary in `ephemeral` mode: tools/list exposes
+  eight Flow tools; two completed runs paginate without duplication; deleting
+  the definition leaves their history readable.
+- PASS: the Windows EOF recovery fixture explicitly closes its reopened SQLite
+  pool before removing the temporary directory; the focused case passed three
+  consecutive reruns after an intermittent file-lock cleanup failure.
+
+The already-connected MCP process was not replaced during this test. The
+new tool and response shape were verified through the freshly built isolated
+binary, not through the user's persistent workspace.

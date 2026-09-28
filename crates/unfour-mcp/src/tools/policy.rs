@@ -188,6 +188,7 @@ pub(super) fn classify_mcp_action(
         | "unfour.flow.list_runs"
         | "unfour.flow.get_run" => (McpCapability::WorkspaceRead, McpRisk::Read),
         "unfour.flow.save" => (McpCapability::WorkspaceMutate, McpRisk::Write),
+        "unfour.flow.delete" => (McpCapability::WorkspaceMutate, McpRisk::Destructive),
         "unfour.flow.run" | "unfour.flow.cancel_run" => {
             (McpCapability::DestructiveRun, McpRisk::Execute)
         }

@@ -171,9 +171,14 @@ fn flow_mcp_sidecar_eof_leaves_run_for_shared_interruption_recovery() {
             .unwrap();
         db.pool().close().await;
     });
-    drop(runtime);
-
-    let reopened = LocalCommandBusAdapter::from_storage_dir(&storage_dir).unwrap();
+    let reopened_db = runtime.block_on(async {
+        LocalDb::connect_path(storage_dir.join(unfour_command_bus::DEFAULT_DATABASE_FILE))
+            .await
+            .unwrap()
+    });
+    let reopened =
+        LocalCommandBusAdapter::from_command_bus_future(CommandBus::from_db(reopened_db.clone()))
+            .unwrap();
     let registry = ToolRegistry::with_command_bus(reopened.clone());
     let recovered = success(
         &registry,
@@ -193,8 +198,10 @@ fn flow_mcp_sidecar_eof_leaves_run_for_shared_interruption_recovery() {
     assert_eq!(summary["runs"][0]["status"], "interrupted");
     assert_eq!(summary["runs"][0]["finishedAt"], recovered["finishedAt"]);
     drop(registry);
+    runtime.block_on(reopened_db.pool().close());
     reopened.shutdown();
     drop(reopened);
+    drop(runtime);
     std::fs::remove_dir_all(storage_dir).unwrap();
 }
 
@@ -211,7 +218,7 @@ fn flow_tools_list_exposes_valid_schemas_and_shared_crud_revision() {
         .iter()
         .filter(|d| d["name"].as_str().unwrap().starts_with("unfour.flow."))
         .collect();
-    assert_eq!(tools.len(), 7);
+    assert_eq!(tools.len(), 8);
     for tool in tools {
         jsonschema::validator_for(&tool["inputSchema"]).unwrap();
         jsonschema::validator_for(&tool["outputSchema"]).unwrap();
@@ -259,6 +266,86 @@ fn flow_tools_list_exposes_valid_schemas_and_shared_crud_revision() {
             .call("unfour.flow.save", json!({"definition":invalid}))
             .unwrap()["isError"],
         true
+    );
+    let flow_id = created["id"].as_str().unwrap();
+    assert!(registry
+        .call(
+            "unfour.flow.delete",
+            json!({"flowId":flow_id,"confirm":"yes"})
+        )
+        .is_err());
+    assert!(adapter.get_flow(&ws, flow_id).is_ok());
+    assert_eq!(
+        success(&registry, "delete", json!({"flowId":flow_id})),
+        json!({"deleted":true,"flowId":flow_id})
+    );
+    assert!(adapter.get_flow(&ws, flow_id).is_err());
+}
+
+#[test]
+fn flow_delete_requires_guarded_confirmation_and_preserves_history() {
+    let (adapter, registry, ws) = setup();
+    let mut flow = definition(&ws);
+    flow.steps = serde_json::from_value(
+        json!([{"id":"wait","name":"Wait","kind":"wait","timeoutMs":1000,"durationMs":1}]),
+    )
+    .unwrap();
+    let saved = adapter.save_flow(flow).unwrap();
+    let run = confirmed_run(&registry, &saved.id);
+    let completed = finished_run(&registry, run["id"].as_str().unwrap());
+    assert_eq!(completed["status"], "succeeded");
+    adapter
+        .run(
+            adapter
+                .bus
+                .update_workspace_environment(ws.clone(), "test".into()),
+        )
+        .unwrap();
+    let args = json!({"flowId":saved.id});
+    let initial = registry.call("unfour.flow.delete", args.clone()).unwrap();
+    assert_eq!(
+        content_json(&initial)["error"]["code"],
+        "CONFIRMATION_REQUIRED"
+    );
+    let old_token = content_json(&initial)["confirmation_text"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(adapter.get_flow(&ws, &saved.id).is_ok());
+    let revised = adapter.save_flow(saved.clone()).unwrap();
+    assert_eq!(
+        adapter
+            .delete_flow(&ws, &saved.id, saved.revision)
+            .unwrap_err()
+            .code,
+        "FLOW_REVISION_CONFLICT"
+    );
+    let stale = registry
+        .call(
+            "unfour.flow.delete",
+            json!({"flowId":saved.id,"confirm":true,"confirmationText":old_token}),
+        )
+        .unwrap();
+    assert_eq!(
+        content_json(&stale)["error"]["code"],
+        "CONFIRMATION_REQUIRED"
+    );
+    assert!(adapter.get_flow(&ws, &saved.id).is_ok());
+    let stale_payload = content_json(&stale);
+    let new_token = stale_payload["confirmation_text"].as_str().unwrap();
+    assert_eq!(
+        success(
+            &registry,
+            "delete",
+            json!({"flowId":saved.id,"confirm":true,"confirmationText":new_token})
+        ),
+        json!({"deleted":true,"flowId":saved.id})
+    );
+    assert!(adapter.get_flow(&ws, &saved.id).is_err());
+    assert_eq!(adapter.list_flow_runs(&ws, &revised.id).unwrap().len(), 1);
+    assert_eq!(
+        success(&registry, "get_run", json!({"runId":run["id"]}))["run"]["status"],
+        "succeeded"
     );
 }
 
@@ -421,6 +508,16 @@ fn flow_workspace_policy_cannot_be_bypassed_by_confirmation_or_nested_workspace(
                 content_json(&denied)["error"]["code"],
                 "WORKSPACE_POLICY_BLOCKED"
             );
+            let denied = registry
+                .call(
+                    "unfour.flow.delete",
+                    json!({"workspaceId":ws,"flowId":saved.id}),
+                )
+                .unwrap();
+            assert_eq!(
+                content_json(&denied)["error"]["code"],
+                "WORKSPACE_POLICY_BLOCKED"
+            );
         }
     }
     assert!(adapter.list_flow_runs(&ws, &saved.id).unwrap().is_empty());
@@ -513,7 +610,7 @@ fn flow_mcp_summary_does_not_decode_run_json() {
         .unwrap()
         .active_workspace_id;
     adapter.run(async {
-        sqlx::query("INSERT INTO flow_runs (id, workspace_id, flow_id, status, run_json, started_at, updated_at, finished_at) VALUES ('broken', ?, 'flow', 'succeeded', 'invalid snapshot', 'start', 'heartbeat', 'finish')")
+        sqlx::query("INSERT INTO flow_runs (id, workspace_id, flow_id, status, run_json, started_at, updated_at, finished_at) VALUES ('broken', ?, 'flow', 'succeeded', 'invalid snapshot', '2026-09-21T00:00:01Z', 'heartbeat', 'finish')")
             .bind(&ws).execute(db.pool()).await.unwrap();
     });
     adapter.run(async {
@@ -534,8 +631,45 @@ fn flow_mcp_summary_does_not_decode_run_json() {
     );
     assert_eq!(
         summaries["runs"],
-        json!([{"id":"broken","flowId":"flow","status":"succeeded","startedAt":"start","finishedAt":"finish"}])
+        json!([{"id":"broken","flowId":"flow","status":"succeeded","startedAt":"2026-09-21T00:00:01Z","finishedAt":"finish"}])
     );
+    assert_eq!(summaries["nextCursor"], Value::Null);
+    adapter.run(async {
+        for (id, started) in [
+            ("older", "2026-09-21T00:00:00Z"),
+            ("newer", "2026-09-21T00:00:02Z"),
+        ] {
+            sqlx::query("INSERT INTO flow_runs (id, workspace_id, flow_id, status, run_json, started_at, updated_at, finished_at) VALUES (?, ?, 'flow', 'succeeded', 'invalid snapshot', ?, 'heartbeat', 'finish')")
+                .bind(id).bind(&ws).bind(started).execute(db.pool()).await.unwrap();
+        }
+    });
+    let first = success(&registry, "list_runs", json!({"flowId":"flow","limit":1}));
+    assert_eq!(first["runs"][0]["id"], "newer");
+    assert_eq!(first["nextCursor"], "newer");
+    let second = success(
+        &registry,
+        "list_runs",
+        json!({"flowId":"flow","limit":1,"cursor":first["nextCursor"]}),
+    );
+    assert_eq!(second["runs"][0]["id"], "broken");
+    assert_eq!(second["nextCursor"], "broken");
+    let third = success(
+        &registry,
+        "list_runs",
+        json!({"flowId":"flow","limit":1,"cursor":second["nextCursor"]}),
+    );
+    assert_eq!(third["runs"][0]["id"], "older");
+    assert_eq!(third["nextCursor"], Value::Null);
+    assert!(registry
+        .call("unfour.flow.list_runs", json!({"flowId":"flow","limit":0}))
+        .is_err());
+    let foreign_cursor = registry
+        .call(
+            "unfour.flow.list_runs",
+            json!({"flowId":"other","cursor":"newer"}),
+        )
+        .unwrap();
+    assert_eq!(content_json(&foreign_cursor)["error"]["code"], "NOT_FOUND");
     let detail = registry
         .call(
             "unfour.flow.get_run",

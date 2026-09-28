@@ -72,10 +72,55 @@ impl FlowService {
             .await?;
         Ok(())
     }
+    pub async fn delete_at_revision(
+        &self,
+        workspace: &str,
+        id: &str,
+        revision: i64,
+    ) -> AppResult<()> {
+        let result = sqlx::query(
+            "DELETE FROM flow_definitions WHERE workspace_id = ? AND id = ? AND revision = ?",
+        )
+        .bind(workspace)
+        .bind(id)
+        .bind(revision)
+        .execute(self.db.pool())
+        .await?;
+        if result.rows_affected() != 1 {
+            return Err(invalid("FLOW_REVISION_CONFLICT"));
+        }
+        Ok(())
+    }
     pub async fn list_runs(&self, workspace: &str, flow: &str) -> AppResult<Vec<FlowRunSummary>> {
+        Ok(self.list_runs_page(workspace, flow, 100, None).await?.runs)
+    }
+    pub async fn list_runs_page(
+        &self,
+        workspace: &str,
+        flow: &str,
+        limit: u32,
+        cursor: Option<&str>,
+    ) -> AppResult<FlowRunPage> {
+        if !(1..=100).contains(&limit) {
+            return Err(invalid("FLOW_INVALID_PAGE_LIMIT"));
+        }
         self.recover_stale(workspace).await?;
-        let rows = sqlx::query("SELECT id, flow_id, status, started_at, finished_at FROM flow_runs WHERE workspace_id = ? AND flow_id = ? ORDER BY started_at DESC LIMIT 100").bind(workspace).bind(flow).fetch_all(self.db.pool()).await?;
-        rows.iter()
+        // Resolve the cursor within the selected workspace and flow. The ordering
+        // remains stable when newer runs are inserted between page requests.
+        let cursor_start: Option<String> = match cursor {
+            Some(id) => Some(sqlx::query_scalar("SELECT started_at FROM flow_runs WHERE workspace_id = ? AND flow_id = ? AND id = ?")
+                .bind(workspace).bind(flow).bind(id).fetch_optional(self.db.pool()).await?
+                .ok_or_else(|| AppError::NotFound("flow run cursor".into()))?),
+            None => None,
+        };
+        let rows = sqlx::query("SELECT id, flow_id, status, started_at, finished_at FROM flow_runs WHERE workspace_id = ? AND flow_id = ? AND (? IS NULL OR started_at < ? OR (started_at = ? AND id < ?)) ORDER BY started_at DESC, id DESC LIMIT ?")
+            .bind(workspace).bind(flow)
+            .bind(cursor_start.as_deref()).bind(cursor_start.as_deref())
+            .bind(cursor_start.as_deref()).bind(cursor)
+            .bind(i64::from(limit) + 1)
+            .fetch_all(self.db.pool()).await?;
+        let mut runs: Vec<FlowRunSummary> = rows
+            .iter()
             .map(|row| {
                 Ok(FlowRunSummary {
                     id: row.try_get("id")?,
@@ -85,7 +130,11 @@ impl FlowService {
                     finished_at: row.try_get("finished_at")?,
                 })
             })
-            .collect()
+            .collect::<AppResult<_>>()?;
+        let has_more = runs.len() > limit as usize;
+        runs.truncate(limit as usize);
+        let next_cursor = has_more.then(|| runs.last().unwrap().id.clone());
+        Ok(FlowRunPage { runs, next_cursor })
     }
     pub async fn get_run(&self, workspace: &str, id: &str) -> AppResult<FlowRun> {
         self.recover_stale(workspace).await?;

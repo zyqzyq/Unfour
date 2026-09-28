@@ -1,5 +1,8 @@
-use unfour_core::models::{FlowDefinition, FlowRun, FlowRunInput, FlowRunSummary, FlowSummary};
+use unfour_core::models::{
+    FlowDefinition, FlowRun, FlowRunInput, FlowRunPage, FlowRunSummary, FlowSummary,
+};
 mod contract;
+mod error;
 mod unified_runtime;
 
 use std::path::Path;
@@ -21,7 +24,6 @@ use unfour_core::models::{
     SshTaskSaveInput, SshTasksReorderInput, SystemHealth, WorkspaceEnvironment,
     WorkspaceEnvironmentVariable, WorkspaceVariable, WorkspaceVariableInput,
 };
-use unfour_core::AppError;
 
 use unified_runtime::unified_command_bus;
 
@@ -234,6 +236,19 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         self.run(self.bus.save_flow(input))
             .map_err(|e| CommandBusAdapterError::from_flow_error(&e))
     }
+    fn delete_flow(
+        &self,
+        workspace_id: &str,
+        flow_id: &str,
+        expected_revision: i64,
+    ) -> Result<(), CommandBusAdapterError> {
+        self.run(self.bus.delete_flow_at_revision(
+            workspace_id.to_string(),
+            flow_id.to_string(),
+            expected_revision,
+        ))
+        .map_err(|e| CommandBusAdapterError::from_flow_error(&e))
+    }
     fn run_flow(
         &self,
         input: FlowRunInput,
@@ -265,6 +280,21 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
             self.bus
                 .list_flow_runs(workspace_id.to_string(), flow_id.to_string()),
         )
+        .map_err(|e| CommandBusAdapterError::from_flow_error(&e))
+    }
+    fn list_flow_runs_page(
+        &self,
+        workspace_id: &str,
+        flow_id: &str,
+        limit: u32,
+        cursor: Option<&str>,
+    ) -> Result<FlowRunPage, CommandBusAdapterError> {
+        self.run(self.bus.list_flow_runs_page(
+            workspace_id.to_string(),
+            flow_id.to_string(),
+            limit,
+            cursor.map(str::to_owned),
+        ))
         .map_err(|e| CommandBusAdapterError::from_flow_error(&e))
     }
     fn get_flow_run(
@@ -1112,102 +1142,6 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
                 &e,
             )
         })
-    }
-}
-
-impl CommandBusAdapterError {
-    fn from_flow_error(error: &AppError) -> Self {
-        if matches!(error, AppError::Validation(reason) if reason == "FLOW_INVALID_REFERENCE") {
-            return Self {
-                code: "FLOW_INVALID_REFERENCE",
-                message: "Invalid Flow reference. Use a JSON pointer rooted at inputs, steps or probe and an object containing only a string $ref.",
-                details: serde_json::json!({}),
-            };
-        }
-        if matches!(error, AppError::Validation(reason) if reason == "FLOW_UNSAFE_REFERENCE") {
-            return Self {
-                code: "FLOW_UNSAFE_REFERENCE",
-                message: "A referenced output is not guaranteed on every path to this step. Use a common upstream output or move the consumer into the matching branch.",
-                details: serde_json::json!({}),
-            };
-        }
-        if matches!(error, AppError::Validation(reason) if reason == "FLOW_CONFIRMATION_STALE") {
-            return Self {
-                code: "FLOW_CONFIRMATION_STALE",
-                message: "Flow changed after confirmation. Read the Flow and request a new confirmation before retrying.",
-                details: serde_json::json!({}),
-            };
-        }
-        if matches!(error, AppError::Validation(reason) if reason == "FLOW_REVISION_CONFLICT") {
-            return Self {
-                code: "FLOW_REVISION_CONFLICT",
-                message: "The Flow revision changed; reload before saving.",
-                details: serde_json::json!({}),
-            };
-        }
-        Self::from_app_error("The command-bus Flow operation failed.", error)
-    }
-
-    /// Build an adapter error that surfaces the underlying `AppError`'s stable
-    /// classification code (e.g. `NOT_FOUND`, `DATABASE_ERROR`,
-    /// `UNSUPPORTED_OPERATION`) alongside a safe, operation-specific message.
-    /// The `AppError` `Display` text is intentionally not propagated because it
-    /// may embed hosts, DSNs, or other sensitive detail. Database execution
-    /// errors attach `sqlState` and `databaseMessage` when the driver provides
-    /// them.
-    fn from_app_error(message: &'static str, error: &AppError) -> Self {
-        Self {
-            code: error.code(),
-            message,
-            details: error
-                .database_error_details()
-                .unwrap_or_else(|| serde_json::json!({})),
-        }
-    }
-
-    fn from_database_app_error(message: &'static str, error: &AppError) -> Self {
-        let mut result = Self::from_app_error(message, error);
-        // Validation text can contain local paths or credentials; allow only fixed database text.
-        let safe_reason = match error {
-            AppError::Unsupported(_) | AppError::ReadOnly(_) => error.safe_reason(),
-            AppError::Validation(reason) if reason == "structure export requires SQL format" => {
-                error.safe_reason()
-            }
-            _ => None,
-        };
-        if let Some(reason) = safe_reason {
-            result.details = serde_json::json!({ "reason": reason });
-        }
-        result
-    }
-
-    fn from_ssh_app_error(message: &'static str, error: &AppError) -> Self {
-        let message = match error {
-            AppError::SshTaskIncompleteRemoteState => {
-                "The SSH task cannot run because its latest remote state requires a newer compatible client."
-            }
-            AppError::Validation(reason) if reason.contains("control characters") => {
-                "SSH command validation failed: control characters/newlines are not allowed."
-            }
-            AppError::Validation(reason) if reason.contains("4096") => {
-                "SSH command validation failed: command exceeds 4096 characters."
-            }
-            AppError::Validation(_) => "SSH command validation failed before execution.",
-            _ => message,
-        };
-        Self {
-            code: error.code(),
-            message,
-            details: serde_json::json!({}),
-        }
-    }
-
-    fn initialization_failed() -> Self {
-        Self {
-            code: "COMMAND_BUS_INITIALIZATION_FAILED",
-            message: "The command-bus adapter could not be initialized.",
-            details: serde_json::json!({}),
-        }
     }
 }
 

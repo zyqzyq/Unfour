@@ -407,9 +407,10 @@ definition. Desktop list/get contracts are unchanged.
 | `unfour.flow.list` | None | `{ "flows": FlowSummary[] }` |
 | `unfour.flow.get` | `flowId` | `{ "flow": FlowDefinition }` |
 | `unfour.flow.save` | `definition: FlowDefinition` | `{ "flow": FlowDefinition }` |
+| `unfour.flow.delete` | `flowId`; optional `confirm`, `confirmation_text` (or `confirmationText`) | `{ "deleted": true, "flowId": string }` |
 | `unfour.flow.run` | `flowId`; optional `environmentId`, `inputs` object, `secretInputNames` string array, `confirm`, `confirmation_text` (or `confirmationText`) | `{ "run": FlowRun }` |
 | `unfour.flow.cancel_run` | `runId` | `{ "run": FlowRun }` |
-| `unfour.flow.list_runs` | `flowId` | `{ "runs": FlowRunSummary[] }` |
+| `unfour.flow.list_runs` | `flowId`; optional `limit` (1–100, default 100), `cursor` | `{ "runs": FlowRunSummary[], "nextCursor": string \| null }` |
 | `unfour.flow.get_run` | `runId` | `{ "run": FlowRun }` |
 
 Save accepts the existing FlowDefinition unchanged: `id`, `workspaceId`,
@@ -418,6 +419,12 @@ updates supply the last returned revision. Stale saves return
 `FLOW_REVISION_CONFLICT`; reload before editing again. The nested workspaceId
 must match the explicit/active workspace used for policy evaluation. Validation
 and inline-secret rejection are performed by the existing FlowService.
+
+Delete removes the saved definition through CommandBus but retains run history.
+It is blocked by read-only/disabled policies. Guarded policy requires a
+payload-bound confirmation tied to the current revision; a changed revision
+requires a new confirmation, and a concurrent change after confirmation
+returns `FLOW_REVISION_CONFLICT` without deleting the newer definition.
 
 Run uses the existing FlowRunInput with server-owned `initiator=mcp` and
 `confirmEffects`. Omitted inputs default to an empty object; omitted/null
@@ -442,13 +449,18 @@ Policy is checked before confirmation: auto dev/full_access and test/guarded
 permit confirmed execution; auto prod/read_only and disabled block execution.
 Explicit policies retain their normal override behavior. All flows are treated
 as execution, including flows containing only read/probe/wait nodes. Save is a
-local write; cancel_run is execution; list/get/list_runs/get_run are local reads.
+local write; delete is destructive; cancel_run is execution;
+list/get/list_runs/get_run are local reads.
 A supplied confirmation cannot override a policy denial.
 
-History lists use at most 100 lightweight summaries with exactly id, flowId,
-status, startedAt and finishedAt, without reading run_json. get_run loads the
-full redacted snapshot, including definition, context, resources and step
-attempts. Human and MCP runs appear in the same history. Schema/manual secret
+Each history page uses at most 100 lightweight summaries with exactly id, flowId,
+status, startedAt and finishedAt, without reading run_json. Results are ordered
+by startedAt descending, then id descending. Pass `nextCursor` as the next
+request's `cursor` until it is null; cursors are run IDs scoped to the selected
+workspace and Flow. Newer runs inserted between page requests do not shift
+older pages. get_run loads the full redacted snapshot, including definition,
+context, resources and step attempts. Human and MCP runs appear in the same
+history. Schema/manual secret
 inputs and sensitive headers retain Flow's existing redaction. Successful
 content text equals structuredContent and matches outputSchema; confirmation,
 policy and execution errors omit success structuredContent.
