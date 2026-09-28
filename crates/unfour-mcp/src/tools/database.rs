@@ -130,7 +130,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                         },
                         "schema": {
                             "type": "string",
-                            "description": "Optional schema name. Explicit system schemas remain browsable."
+                            "description": "Optional schema name. pg_catalog and information_schema are excluded even when specified."
                         }
                     },
                     "required": ["connectionId"],

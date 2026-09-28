@@ -1167,7 +1167,15 @@ impl CommandBusAdapterError {
 
     fn from_database_app_error(message: &'static str, error: &AppError) -> Self {
         let mut result = Self::from_app_error(message, error);
-        if let Some(reason) = error.safe_reason() {
+        // Validation text can contain local paths or credentials; allow only fixed database text.
+        let safe_reason = match error {
+            AppError::Unsupported(_) | AppError::ReadOnly(_) => error.safe_reason(),
+            AppError::Validation(reason) if reason == "structure export requires SQL format" => {
+                error.safe_reason()
+            }
+            _ => None,
+        };
+        if let Some(reason) = safe_reason {
             result.details = serde_json::json!({ "reason": reason });
         }
         result

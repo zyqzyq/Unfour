@@ -55,16 +55,38 @@ fn database_owned_errors_expose_only_safe_reasons() {
         assert_eq!(mapped.message, "The table export operation failed.");
         assert_eq!(mapped.details["reason"], reason);
     }
+    for reason in [
+        "SQLite file does not exist: /Users/reid/private.db",
+        "invalid postgres://user:secret@host/db password=hunter2",
+        "structure export requires SQL format: /Users/reid/private.db",
+    ] {
+        let mapped = CommandBusAdapterError::from_database_app_error(
+            "The table export operation failed.",
+            &AppError::Validation(reason.into()),
+        );
+        assert_eq!(mapped.code, "VALIDATION_ERROR");
+        assert_eq!(mapped.details, serde_json::json!({}));
+    }
+    let unsupported = CommandBusAdapterError::from_database_app_error(
+        "The table export operation failed.",
+        &AppError::Unsupported("failed postgres://user:secret@host/db password=hunter2".into()),
+    );
+    assert!(unsupported.details.get("reason").is_some());
+    assert!(!unsupported.details.to_string().contains("secret"));
+    assert!(!unsupported.details.to_string().contains("hunter2"));
     let database = AppError::Database(sqlx::Error::Protocol(
-        "postgres://user:secret@host/db".into(),
+        "postgres://user:secret@host/db password=hunter2".into(),
     ));
     let mapped = CommandBusAdapterError::from_database_app_error(
         "The table export operation failed.",
         &database,
     );
-    assert!(mapped.details.get("reason").is_none());
-    assert!(mapped.details.get("sqlState").is_some());
+    assert_eq!(
+        mapped.details,
+        serde_json::json!({ "sqlState": null, "databaseMessage": null })
+    );
     assert!(!mapped.details.to_string().contains("secret"));
+    assert!(!mapped.details.to_string().contains("hunter2"));
 }
 
 struct EnvironmentSqlHook {
