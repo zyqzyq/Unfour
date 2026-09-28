@@ -4,6 +4,7 @@ import type { DatabaseConnection, DatabaseSchema, DatabaseTable, SavedSql } from
 import {
   Badge,
   ConfirmDialog,
+  ContextMenuItem,
   ConnectionStatus,
   EmptyState,
   IconButton,
@@ -65,7 +66,7 @@ export function DatabaseConnectionTree({
   onDisconnect?: (connection: DatabaseConnection) => void;
   onDuplicateConnection?: (connection: DatabaseConnection) => void;
   onEditConnection?: (connection: DatabaseConnection) => void;
-  onNewQuery?: (connection?: DatabaseConnection) => void;
+  onNewQuery?: (connection?: DatabaseConnection, catalog?: string) => void;
   onOpenSavedSql?: (item: SavedSql) => void;
   onPreviewTable?: (connectionId: string, table: DatabaseTable) => void;
   onRefreshSchema?: (connection: DatabaseConnection) => void;
@@ -169,6 +170,7 @@ export function DatabaseConnectionTree({
               onDesignTable,
               onExportTable: (connection, table) => setExportTarget({ connection, table }),
               onOpenSavedSql,
+              onNewQuery,
               onPreviewTable,
               onRefreshSchema,
               onUseSql,
@@ -293,6 +295,7 @@ function buildConnectionChildren({
   onDesignTable,
   onExportTable,
   onOpenSavedSql,
+  onNewQuery,
   onPreviewTable,
   onRefreshSchema,
   onUseSql,
@@ -314,6 +317,7 @@ function buildConnectionChildren({
   onDeleteSavedSql?: (item: SavedSql) => void;
   onDesignTable?: (connectionId: string, table: DatabaseTable) => void;
   onExportTable?: (connection: DatabaseConnection, table: DatabaseTable) => void;
+  onNewQuery?: (connection?: DatabaseConnection, catalog?: string) => void;
   onOpenSavedSql?: (item: SavedSql) => void;
   onPreviewTable?: (connectionId: string, table: DatabaseTable) => void;
   onRefreshSchema?: (connection: DatabaseConnection) => void;
@@ -350,16 +354,11 @@ function buildConnectionChildren({
   const isLoading = (key: string) => loadingKeys?.includes(key) ?? false;
   const errorOf = (key: string) => loadErrors?.[key];
 
-  // Saved SQL snippets are a connection-level asset (not per-catalog), so the
-  // group sits beside the catalog list / schema contents. Built once and
-  // appended to whichever children array the driver path produces.
-  const savedSqlGroup = buildSavedSqlGroup({
-    connection,
-    onDeleteSavedSql,
-    onOpenSavedSql,
-    savedSql,
-    savedSqlLookup,
-    t,
+  // Unresolved legacy snippets remain accessible in the Saved SQL dialog.
+  const savedGroup = (catalog: string | null, parentId: string) => buildSavedSqlGroup({
+    connection, parentId, onDeleteSavedSql, onOpenSavedSql,
+    savedSql: catalog === null ? savedSql : savedSql?.filter((item) => item.catalog === catalog),
+    savedSqlLookup, t,
   });
 
   // SQLite: a single file with no catalog level. Its objects load under the
@@ -381,6 +380,7 @@ function buildConnectionChildren({
         tableLookup,
         tables: schema.tables,
       });
+      const savedSqlGroup = savedGroup(null, connection.id);
       return savedSqlGroup ? [...contents, savedSqlGroup] : contents;
     }
     return [statusChild(key, isLoading(key), errorOf(key), t)];
@@ -433,8 +433,11 @@ function buildConnectionChildren({
       children = [statusChild(key, isLoading(key), errorOf(key), t)];
     }
 
+    const group = savedGroup(name, catalogNodeId);
+    if (group) children.push(group);
     return {
       children,
+      contextMenu: onNewQuery ? <ContextMenuItem onSelect={() => onNewQuery(connection, name)}>{t("database.actions.newQuery")}</ContextMenuItem> : undefined,
       icon: <Database size={13} />,
       id: catalogNodeId,
       label: name,
@@ -443,14 +446,15 @@ function buildConnectionChildren({
     };
   });
 
-  return savedSqlGroup ? [...catalogNodes, savedSqlGroup] : catalogNodes;
+  return catalogNodes;
 }
 
-// Build the "Saved Queries" group node shown beside the catalog/schema tree.
+// Build Saved Queries inside a database node (or the SQLite file node).
 // Returns null when no callback is wired (the host page does not support
 // opening saved SQL) so the tree simply omits the group instead of showing a
 // dead branch.
 function buildSavedSqlGroup({
+  parentId,
   connection,
   onDeleteSavedSql,
   onOpenSavedSql,
@@ -464,12 +468,13 @@ function buildSavedSqlGroup({
   savedSql?: SavedSql[];
   savedSqlLookup: Map<string, SavedSql>;
   t: ReturnType<typeof useI18n>["t"];
+  parentId: string;
 }): TreeViewItem | null {
   if (!onOpenSavedSql && !onDeleteSavedSql) {
     return null;
   }
   const items = savedSql ?? [];
-  const groupId = `${connection.id}:saved-sql`;
+  const groupId = `${parentId}:saved-sql`;
   const children = items.length
     ? items.map((item) => {
         const id = `${connection.id}:saved-sql:${item.id}`;

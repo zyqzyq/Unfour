@@ -100,6 +100,7 @@ impl DatabaseService {
             statements: statements
                 .iter()
                 .map(|s| DatabaseStatementResult {
+                    catalog: None,
                     index: s.index,
                     start: s.start,
                     end: s.end,
@@ -151,10 +152,18 @@ impl DatabaseService {
         if input.explain {
             require_capability(conn.profile.capabilities.explain, "explain")?;
         }
+        let mut catalog = if connection.driver == "sqlite" {
+            None
+        } else {
+            clean_identifier(input.query.catalog.as_deref())?
+                .or(clean_identifier(connection.database.as_deref())?)
+                .map(str::to_string)
+        };
         for (entry, mut safety) in output.statements.iter_mut().zip(safeties) {
             if stopped.load(Ordering::SeqCst) {
                 break;
             }
+            entry.catalog = catalog.clone();
             safety.confirmed =
                 !safety.requires_confirmation || input.query.confirm_mutation == Some(true);
             let started = Instant::now();
@@ -185,6 +194,11 @@ impl DatabaseService {
             super::script_connection::log_query_outcome(&connection.driver, started, &result);
             match result {
                 Ok(result) => {
+                    if dialect == DatabaseDialect::Mysql {
+                        if let Some(next) = super::script_parser::mysql_use_catalog(&entry.sql) {
+                            catalog = Some(next);
+                        }
+                    }
                     entry.status = "success".into();
                     entry.result = Some(result);
                 }

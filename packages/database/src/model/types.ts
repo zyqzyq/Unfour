@@ -55,6 +55,8 @@ export type DatabaseConnectionSessionState = {
 };
 
 export type SqlHistoryEntry = {
+  catalog?: string | null;
+  schema?: string | null;
   affectedRows?: number;
   classification?: string;
   connectionId: string | null;
@@ -69,8 +71,8 @@ export type SqlHistoryEntry = {
 };
 
 // Explicit execution context for a query window. `connectionId` identifies the
-// datasource; `catalog`/`schema` scope where unqualified names resolve and which
-// database the statement runs against (applied server-side before execution).
+// datasource; `catalog`/`schema` define the initial default namespace applied
+// server-side. SQL can still use qualified references or change session state.
 export type QueryContext = {
   connectionId: string | null;
   catalog: string | null;

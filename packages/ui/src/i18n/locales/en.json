@@ -648,6 +648,7 @@
       "noConnectionSelected": "No connection selected",
       "queryConsole": "Query Console",
       "queryTitle": "Query {index}",
+      "schemaDefault": "Server default search path",
       "schemaAria": "Query schema",
       "sqlEditor": "SQL Editor",
       "structureView": "Structure",

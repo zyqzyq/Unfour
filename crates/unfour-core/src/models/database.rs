@@ -260,8 +260,8 @@ pub struct DatabaseQueryInput {
     pub sql: String,
     pub limit: Option<u32>,
     pub confirm_mutation: Option<bool>,
-    /// Optional query context: the catalog (PostgreSQL/MySQL database) the
-    /// statement should run against. Applied before execution.
+    /// Default execution database (PostgreSQL/openGauss/MySQL), applied before
+    /// execution. Does not restrict qualified references or SQL session changes.
     #[serde(default)]
     pub catalog: Option<String>,
     /// Optional query context: the schema (PostgreSQL) the statement should
@@ -354,6 +354,9 @@ pub struct DatabaseScriptInput {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DatabaseStatementResult {
+    /// Default database before this statement, including prior successful USE.
+    #[serde(default)]
+    pub catalog: Option<String>,
     pub index: usize,
     pub start: usize,
     pub end: usize,
@@ -378,6 +381,11 @@ pub struct DbQueryHistoryEntry {
     pub id: String,
     pub workspace_id: String,
     pub connection_id: Option<String>,
+    /// Default execution namespace; does not restrict qualified SQL references.
+    #[serde(default)]
+    pub catalog: Option<String>,
+    #[serde(default)]
+    pub schema: Option<String>,
     pub connection_name: String,
     pub sql: String,
     pub status: String,
@@ -395,6 +403,11 @@ pub struct DbQueryHistoryRecordInput {
     pub id: String,
     pub workspace_id: String,
     pub connection_id: Option<String>,
+    /// Default execution namespace; does not restrict qualified SQL references.
+    #[serde(default)]
+    pub catalog: Option<String>,
+    #[serde(default)]
+    pub schema: Option<String>,
     pub connection_name: String,
     pub sql: String,
     pub status: String,
@@ -412,6 +425,11 @@ pub struct SavedSql {
     pub id: String,
     pub workspace_id: String,
     pub connection_id: Option<String>,
+    /// Default execution namespace; does not restrict qualified SQL references.
+    #[serde(default)]
+    pub catalog: Option<String>,
+    #[serde(default)]
+    pub schema: Option<String>,
     pub name: String,
     pub sql: String,
     pub created_at: String,
@@ -429,6 +447,11 @@ pub struct SavedSqlInput {
     pub id: Option<String>,
     pub workspace_id: String,
     pub connection_id: Option<String>,
+    /// Default execution namespace; does not restrict qualified SQL references.
+    #[serde(default)]
+    pub catalog: Option<String>,
+    #[serde(default)]
+    pub schema: Option<String>,
     pub name: String,
     pub sql: String,
 }

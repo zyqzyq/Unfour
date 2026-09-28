@@ -267,6 +267,8 @@ export function handleDatabaseMock<T>(
       id: id || crypto.randomUUID(),
       workspaceId,
       connectionId: input.connectionId ?? null,
+      catalog: input.catalog?.trim() || null,
+      schema: input.schema?.trim() || null,
       name,
       sql,
       createdAt: existingIndex >= 0 ? mockStore.savedSql[existingIndex].createdAt : now,

@@ -30,6 +30,8 @@ async fn query_history_is_workspace_scoped_ordered_limited_and_clearable() {
 
     service
         .record_query_history(DbQueryHistoryRecordInput {
+            catalog: None,
+            schema: None,
             id: "history-old".to_string(),
             workspace_id: workspace_id.clone(),
             connection_id: Some(connection.id.clone()),
@@ -47,6 +49,8 @@ async fn query_history_is_workspace_scoped_ordered_limited_and_clearable() {
         .expect("record old history");
     service
         .record_query_history(DbQueryHistoryRecordInput {
+            catalog: None,
+            schema: None,
             id: "history-new".to_string(),
             workspace_id: workspace_id.clone(),
             connection_id: Some(connection.id.clone()),
@@ -64,6 +68,8 @@ async fn query_history_is_workspace_scoped_ordered_limited_and_clearable() {
         .expect("record new history");
     service
         .record_query_history(DbQueryHistoryRecordInput {
+            catalog: None,
+            schema: None,
             id: "history-other".to_string(),
             workspace_id: other_workspace_id.clone(),
             connection_id: None,
@@ -126,6 +132,8 @@ async fn saved_sql_crud_is_workspace_scoped_and_validated() {
 
     let created = service
         .save_sql(SavedSqlInput {
+            catalog: None,
+            schema: None,
             id: None,
             workspace_id: workspace_id.clone(),
             connection_id: Some(connection.id.clone()),
@@ -142,6 +150,8 @@ async fn saved_sql_crud_is_workspace_scoped_and_validated() {
 
     let updated = service
         .save_sql(SavedSqlInput {
+            catalog: None,
+            schema: None,
             id: Some(created.id.clone()),
             workspace_id: workspace_id.clone(),
             connection_id: None,
@@ -164,6 +174,8 @@ async fn saved_sql_crud_is_workspace_scoped_and_validated() {
     assert!(matches!(
         service
             .save_sql(SavedSqlInput {
+                catalog: None,
+                schema: None,
                 id: None,
                 workspace_id: workspace_id.clone(),
                 connection_id: None,
@@ -219,6 +231,8 @@ async fn connection_crud_is_workspace_scoped_and_soft_deletes() {
 
     let saved_sql = service
         .save_sql(SavedSqlInput {
+            catalog: None,
+            schema: None,
             id: None,
             workspace_id: workspace_id.clone(),
             connection_id: Some(created.id.clone()),

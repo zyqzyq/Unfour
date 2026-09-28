@@ -647,6 +647,7 @@
       "noConnectionSelected": "未选择连接",
       "queryConsole": "查询控制台",
       "queryTitle": "查询 {index}",
+      "schemaDefault": "服务器默认搜索路径",
       "schemaAria": "查询模式",
       "sqlEditor": "SQL 编辑器",
       "structureView": "结构",

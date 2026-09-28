@@ -55,7 +55,7 @@ export function DatabaseSidebar({
   onDuplicateConnection?: (connection: DatabaseConnection) => void;
   onEditConnection: (connection: DatabaseConnection) => void;
   onNewConnection: () => void;
-  onNewQuery: (connection?: DatabaseConnection) => void;
+  onNewQuery: (connection?: DatabaseConnection, catalog?: string) => void;
   onOpenSavedSql?: (item: SavedSql) => void;
   onPreviewTable: (connectionId: string, table: DatabaseTable) => void;
   onRefresh: () => void;

@@ -175,6 +175,8 @@ fn database_history_masks_literals_and_limits_workspace_results() {
                 adapter
                     .bus
                     .record_database_query_history(DbQueryHistoryRecordInput {
+                        catalog: None,
+                        schema: None,
                         id: format!("history-{index}"),
                         workspace_id: scope.clone(),
                         connection_id: None,

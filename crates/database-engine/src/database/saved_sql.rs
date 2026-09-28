@@ -2,11 +2,34 @@ use super::*;
 use sqlx::SqliteConnection;
 
 impl DatabaseService {
+    // Legacy clients may omit context. Only an explicitly configured server
+    // database is safe to infer; SQLite paths are not catalogs.
+    pub(super) async fn resolve_saved_catalog(
+        &self,
+        workspace_id: &str,
+        connection_id: Option<&str>,
+        catalog: Option<String>,
+    ) -> AppResult<Option<String>> {
+        if let Some(catalog) = empty_to_none(catalog) {
+            return Ok(Some(catalog));
+        }
+        let Some(id) = connection_id.map(str::trim).filter(|id| !id.is_empty()) else {
+            return Ok(None);
+        };
+        match self.get_connection(workspace_id, id).await {
+            Ok(connection) if connection.driver != "sqlite" => {
+                Ok(empty_to_none(connection.database))
+            }
+            Ok(_) | Err(AppError::NotFound(_)) => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+
     pub async fn list_saved_sql(&self, workspace_id: String) -> AppResult<Vec<SavedSql>> {
         validate_workspace_id(&workspace_id)?;
         let rows = sqlx::query_as::<_, SavedSql>(
             r#"
-            SELECT id, workspace_id, connection_id, name, sql, created_at, updated_at,
+            SELECT id, workspace_id, connection_id, catalog, schema, name, sql, created_at, updated_at,
                    deleted_at, revision, sync_status, remote_id
             FROM saved_sql
             WHERE workspace_id = ?1 AND deleted_at IS NULL
@@ -43,6 +66,10 @@ impl DatabaseService {
             self.get_connection(&input.workspace_id, connection_id)
                 .await?;
         }
+        let catalog = self
+            .resolve_saved_catalog(&input.workspace_id, connection_id.as_deref(), input.catalog)
+            .await?;
+        let schema = empty_to_none(input.schema);
         let now = Utc::now().to_rfc3339();
 
         if let Some(id) = input
@@ -55,7 +82,7 @@ impl DatabaseService {
                 r#"
                 UPDATE saved_sql
                 SET name = ?1, sql = ?2, connection_id = ?3, updated_at = ?4,
-                    revision = revision + 1, sync_status = 'pending'
+                    revision = revision + 1, sync_status = 'pending', catalog = ?7, schema = ?8
                 WHERE id = ?5 AND workspace_id = ?6 AND deleted_at IS NULL
                 "#,
             )
@@ -65,6 +92,8 @@ impl DatabaseService {
             .bind(&now)
             .bind(id)
             .bind(&input.workspace_id)
+            .bind(&catalog)
+            .bind(&schema)
             .execute(self.db.pool())
             .await?;
             if result.rows_affected() == 0 {
@@ -77,10 +106,10 @@ impl DatabaseService {
         sqlx::query(
             r#"
             INSERT INTO saved_sql (
-              id, workspace_id, connection_id, name, sql, created_at, updated_at,
+              id, workspace_id, connection_id, catalog, schema, name, sql, created_at, updated_at,
               revision, sync_status
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6, 1, 'local')
+            VALUES (?1, ?2, ?3, ?7, ?8, ?4, ?5, ?6, ?6, 1, 'local')
             "#,
         )
         .bind(&id)
@@ -89,6 +118,8 @@ impl DatabaseService {
         .bind(&name)
         .bind(&sql)
         .bind(&now)
+        .bind(&catalog)
+        .bind(&schema)
         .execute(self.db.pool())
         .await?;
         self.get_saved_sql(&input.workspace_id, &id).await
@@ -129,7 +160,7 @@ impl DatabaseService {
     async fn get_saved_sql(&self, workspace_id: &str, id: &str) -> AppResult<SavedSql> {
         let row = sqlx::query_as::<_, SavedSql>(
             r#"
-            SELECT id, workspace_id, connection_id, name, sql, created_at, updated_at,
+            SELECT id, workspace_id, connection_id, catalog, schema, name, sql, created_at, updated_at,
                    deleted_at, revision, sync_status, remote_id
             FROM saved_sql
             WHERE id = ?1 AND workspace_id = ?2 AND deleted_at IS NULL

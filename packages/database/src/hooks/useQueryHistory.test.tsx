@@ -87,7 +87,7 @@ describe("useQueryHistory", () => {
 
   it("maps nullable persisted fields into optional entry fields", async () => {
     listMock.mockResolvedValue([
-      persisted({ rowCount: null, durationMs: 12, error: null }),
+      persisted({ rowCount: null, durationMs: 12, error: null, catalog: "analytics", schema: "audit" }),
     ]);
     const { Wrapper } = createWrapper();
 
@@ -97,6 +97,9 @@ describe("useQueryHistory", () => {
 
     await waitFor(() => expect(result.current.entries).toHaveLength(1));
     const entry = result.current.entries[0];
+    expect(entry).toMatchObject({ catalog: "analytics", schema: "audit" });
+    result.current.record(entry);
+    await waitFor(() => expect(recordMock).toHaveBeenCalledWith(expect.objectContaining({ catalog: "analytics", schema: "audit" })));
     expect(entry.rowCount).toBeUndefined();
     expect(entry.error).toBeUndefined();
     expect(entry.durationMs).toBe(12);

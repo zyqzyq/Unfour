@@ -344,13 +344,14 @@ describe("SQL editor saved SQL", () => {
   });
 
   it("updates the current tab baseline after a successful save", async () => {
-    const { onSqlSaved } = renderEditor({ sql: "SELECT 1;" });
+    const { onSqlSaved } = renderEditor({ sql: "SELECT 1;", queryCatalog: "analytics", querySchema: "audit" });
 
     fireEvent.pointerDown(screen.getByRole("button", { name: "More actions" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Save SQL" }));
     fireEvent.submit(screen.getByRole("button", { name: "Save" }).closest("form")!);
 
     await waitFor(() => expect(savedSqlState.save).toHaveBeenCalled());
+    expect(savedSqlState.save).toHaveBeenCalledWith(expect.objectContaining({ connectionId: "conn-1", catalog: "analytics", schema: "audit" }));
     expect(onSqlSaved).toHaveBeenCalledWith("SELECT 1;");
   });
 
@@ -365,4 +366,16 @@ describe("SQL editor saved SQL", () => {
     await waitFor(() => expect(savedSqlState.save).toHaveBeenCalled());
     expect(onSqlSaved).not.toHaveBeenCalled();
   });
+});
+
+
+it("displays a restored context even before catalog/schema discovery completes", () => {
+  renderEditor({ queryCatalog: "analytics", querySchema: "audit", catalogOptions: ["app"], schemaOptions: ["public"] });
+  expect(screen.getByRole("combobox", { name: "Query database" })).toHaveValue("analytics");
+  expect(screen.getByRole("combobox", { name: "Query schema" })).toHaveValue("audit");
+});
+it("shows default search path instead of displaying an unselected first schema", () => {
+  renderEditor({ queryCatalog: "app", querySchema: null, catalogOptions: ["app"], schemaOptions: ["public", "audit"] });
+  expect(screen.getByRole("combobox", { name: "Query schema" })).toHaveValue("");
+  expect(screen.getByRole("option", { name: "Server default search path" })).toBeInTheDocument();
 });

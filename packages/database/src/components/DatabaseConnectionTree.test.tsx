@@ -256,3 +256,29 @@ describe("DatabaseConnectionTree", () => {
     expect(onDeleteSavedSql).toHaveBeenCalledWith(savedSql);
   });
 });
+
+
+it("places saved queries under their database and starts queries with that catalog", async () => {
+  const server = { ...sqliteConnection, driver: "postgres", database: "analytics", name: "Server" };
+  const onNewQuery = vi.fn();
+  const onOpenSavedSql = vi.fn();
+  const saved = { id: "saved", connectionId: "conn-1", workspaceId: "ws-1", catalog: "analytics", name: "Analytics SQL", sql: "select 1", createdAt: "now", updatedAt: "now" };
+  renderTree({ connections: [server], connectionStates: connectedState,
+    catalogNamesByConnection: { "conn-1": ["app", "analytics"] },
+    schemaCache: { "conn-1::analytics": { connectionId: "conn-1", tables: [] } },
+    onNewQuery, onOpenSavedSql,
+    savedSqlByConnection: { "conn-1": [saved, { ...saved, id: "legacy", name: "Unresolved legacy", catalog: null }] },
+  });
+  const database = (await screen.findByRole("button", { name: "analytics" })).closest("[role='treeitem']")!;
+  expect(screen.getByText("Saved Queries").closest("[role=treeitem]")).toHaveAttribute("data-tree-id", "conn-1:catalog:analytics:saved-sql");
+  fireEvent.click(within(database as HTMLElement).getByRole("button", { name: "Collapse" }));
+  expect(screen.queryByText("Saved Queries")).not.toBeInTheDocument();
+  fireEvent.click(within(database as HTMLElement).getByRole("button", { name: "Expand" }));
+  await expandSavedQueries();
+  fireEvent.doubleClick(await screen.findByRole("button", { name: "Analytics SQL" }));
+  expect(onOpenSavedSql).toHaveBeenCalledWith(saved);
+  expect(screen.queryByText("Unresolved legacy")).not.toBeInTheDocument();
+  fireEvent.contextMenu(screen.getByRole("button", { name: "analytics" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "New Query" }));
+  expect(onNewQuery).toHaveBeenCalledWith(server, "analytics");
+});

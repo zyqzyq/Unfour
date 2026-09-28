@@ -95,8 +95,7 @@ export function DatabasePage({
     () => connections.find((item) => item.id === selectedConnectionId) ?? null,
     [connections, selectedConnectionId],
   );
-  // Group saved SQL by its owning connection id so the sidebar tree can render
-  // each connection's snippets under a dedicated "Saved Queries" branch.
+  // Partition by connection first; the tree places each snippet under its catalog.
   const savedSqlByConnection = useMemo(
     () => groupSavedSqlByConnection(savedSqlQuery.saved),
     [savedSqlQuery.saved],
@@ -278,7 +277,7 @@ export function DatabasePage({
     });
   }, [selectedConnectionId, selectedSchemaData]);
 
-  useDatabaseQueryContext(activeTab, treeModel, activeQueryConnection?.database, databaseTabs.updateQueryTab);
+  useDatabaseQueryContext(activeTab, treeModel, activeQueryConnection?.driver === "sqlite" ? null : activeQueryConnection?.database, databaseTabs.updateQueryTab);
 
   const {
     deleteConfirm,
@@ -419,7 +418,7 @@ export function DatabasePage({
       duplicate: (connection) => duplicateMutation.mutate(connection),
       edit: handleEditConnection,
       newConnection: handleNewConnection,
-      newQuery: (connection) => startNewQuery(connection?.id),
+      newQuery: (connection, catalog) => startNewQuery(connection?.id, catalog),
       openSavedSql,
       previewTable: (connectionId, table) =>
         browseTablePage(connectionId, table, 0, DEFAULT_PREVIEW_PAGE_SIZE),
@@ -444,7 +443,7 @@ export function DatabasePage({
     onDisconnect: (connection: DatabaseConnection) => sidebarActionsRef.current?.disconnect(connection),
       onEditConnection: (connection: DatabaseConnection) => sidebarActionsRef.current?.edit(connection),
       onNewConnection: () => sidebarActionsRef.current?.newConnection(),
-      onNewQuery: (connection?: DatabaseConnection) => sidebarActionsRef.current?.newQuery(connection),
+      onNewQuery: (connection?: DatabaseConnection, catalog?: string) => sidebarActionsRef.current?.newQuery(connection, catalog),
       onOpenSavedSql: (item: SavedSql) => sidebarActionsRef.current?.openSavedSql(item),
       onPreviewTable: (connectionId: string, table: DatabaseTable) =>
         sidebarActionsRef.current?.previewTable(connectionId, table),

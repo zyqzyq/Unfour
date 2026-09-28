@@ -35,8 +35,8 @@ export function useDatabaseQueryContext(
   // Pending confirmation identity includes catalog/schema; auto-fill must not
   // rewrite them underneath a CONFIRMATION_REQUIRED prompt.
   useEffect(() => {
-    if (!treeModel || !id || pendingConfirmation) return;
-    const next = normalizeQueryContext({ catalog, schema }, treeModel, defaultDatabase);
+    if (!id || pendingConfirmation) return;
+    const next = normalizeQueryContext({ catalog, schema }, treeModel ?? { catalogs: [] }, defaultDatabase);
     if (next.catalog !== catalog || next.schema !== schema) updateQueryTab(id, next);
   }, [catalog, defaultDatabase, id, pendingConfirmation, schema, treeModel, updateQueryTab]);
 }

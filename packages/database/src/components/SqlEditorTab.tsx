@@ -190,6 +190,8 @@ export function SqlEditorTab({
     try {
       await savedSql.save({
         connectionId: selectedConnectionId,
+        catalog: queryCatalog,
+        schema: querySchema,
         name,
         sql,
         workspaceId,
@@ -369,29 +371,29 @@ export function SqlEditorTab({
             {!selectedConnectionId && <option value="">{t("database.connection.select")}</option>}
             {!connections.length && <option value="">{t("database.connection.none")}</option>}
           </Select>
-          {catalogOptions.length > 0 && (
+          {(catalogOptions.length > 0 || queryCatalog) && (
             <Select
               aria-label={t("database.editor.catalogAria")}
               className="max-w-[160px]"
               onChange={(event) => onChangeQueryContext({ catalog: event.target.value || null })}
               options={[
                 { label: t("database.editor.catalogDefault"), value: "" },
-                ...catalogOptions.map((catalog) => ({ label: catalog, value: catalog })),
+                ...[...new Set([...catalogOptions, ...(queryCatalog ? [queryCatalog] : [])])].map((catalog) => ({ label: catalog, value: catalog })),
               ]}
               value={queryCatalog ?? ""}
             />
           )}
-          {schemaOptions.length > 0 && (
+          {(schemaOptions.length > 0 || querySchema) && (
             <Select
               aria-label={t("database.editor.schemaAria")}
               className="max-w-[160px]"
               onChange={(event) => onChangeQueryContext({ schema: event.target.value || null })}
-              options={schemaOptions.map((schema) => ({ label: schema, value: schema }))}
+              options={[{ label: t("database.editor.schemaDefault"), value: "" }, ...[...new Set([...schemaOptions, ...(querySchema ? [querySchema] : [])])].map((schema) => ({ label: schema, value: schema }))]}
               value={querySchema ?? ""}
             />
           )}
           <span className="hidden min-w-0 truncate text-[12px] text-[var(--u-color-text-soft)] lg:inline">
-            {selectedConnection ? connectionContext(selectedConnection) : t("database.editor.noConnectionSelected")}
+            {selectedConnection ? connectionContext(selectedConnection, queryCatalog) : t("database.editor.noConnectionSelected")}
           </span>
         </ToolbarGroup>
       </Toolbar>
@@ -553,8 +555,8 @@ function editorCursorOffset(editor: MonacoEditor | null) {
   return model && position ? model.getOffsetAt(position) : 0;
 }
 
-function connectionContext(connection: DatabaseConnection) {
-  const database = connection.database ?? connection.sqlitePath ?? "default";
+function connectionContext(connection: DatabaseConnection, catalog: string | null) {
+  const database = catalog ?? connection.database ?? connection.sqlitePath ?? "default";
   return `${connection.driver} / ${database}`;
 }
 
@@ -579,7 +581,8 @@ function savedSqlConnectionLabel(
   if (!item.connectionId) {
     return allConnections;
   }
-  return connections.find((connection) => connection.id === item.connectionId)?.name ?? missingConnection;
+  const name = connections.find((connection) => connection.id === item.connectionId)?.name ?? missingConnection;
+  return [name, item.catalog, item.schema].filter(Boolean).join(" / ");
 }
 
 function formatSavedSqlTime(value: string) {

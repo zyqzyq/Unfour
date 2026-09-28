@@ -294,3 +294,28 @@ describe("SQL runner outcomes", () => {
     }));
   });
 });
+
+
+it("records the execution snapshot when the user switches tabs while SQL is running", async () => {
+  let finish!: (value: DatabaseScriptResult) => void;
+  execute.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+  const { result, success, failure } = setup();
+  act(() => result.current.tabs.updateQueryTab(result.current.tab!.id, { catalog: "analytics", schema: "audit" }));
+  act(() => result.current.runner.runSql({ mode: "all" }));
+  expect(execute).toHaveBeenCalledWith(expect.objectContaining({ connectionId: "db", catalog: "analytics", schema: "audit" }));
+  act(() => result.current.tabs.openQueryTab({ connectionId: "other", catalog: "wrong" }));
+  await act(async () => finish({ statements: [entry(1, "success"), entry(2, "failed")], stopped: false }));
+  expect(success).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ connectionId: "db", catalog: "analytics", schema: "audit" }));
+  expect(failure).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ connectionId: "db", catalog: "analytics", schema: "audit" }));
+});
+
+it("records a server-reported default after USE rather than the initial tab catalog", async () => {
+  execute.mockResolvedValueOnce({ statements: [{ ...entry(1, "success"), catalog: "initial" }, { ...entry(2, "success"), catalog: "other_db" }], stopped: false });
+  const { result, success } = setup("USE other_db; SELECT * FROM users;");
+  act(() => result.current.tabs.updateQueryTab(result.current.tab!.id, { catalog: "initial" }));
+  act(() => result.current.runner.runSql({ mode: "all" }));
+  await waitFor(() => expect(success).toHaveBeenCalledTimes(2));
+  expect(success.mock.calls[0][1]).toMatchObject({ catalog: "initial" });
+  expect(success.mock.calls[1][1]).toMatchObject({ catalog: "other_db" });
+  expect(result.current.tab?.catalog).toBe("initial");
+});

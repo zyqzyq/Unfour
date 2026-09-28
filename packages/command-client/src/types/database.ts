@@ -143,6 +143,8 @@ export type DbQueryHistoryEntry = {
   id: string;
   workspaceId: string;
   connectionId: string | null;
+  catalog?: string | null;
+  schema?: string | null;
   connectionName: string;
   sql: string;
   status: "success" | "failed";
@@ -158,6 +160,8 @@ export type SavedSql = {
   id: string;
   workspaceId: string;
   connectionId: string | null;
+  catalog?: string | null;
+  schema?: string | null;
   name: string;
   sql: string;
   createdAt: string;
@@ -168,6 +172,8 @@ export type SavedSqlInput = {
   id?: string | null;
   workspaceId: string;
   connectionId?: string | null;
+  catalog?: string | null;
+  schema?: string | null;
   name: string;
   sql: string;
 };
@@ -233,6 +239,8 @@ export type DatabaseScriptInput = DatabaseQueryInput & {
 };
 
 export type DatabaseStatementResult = {
+  /** Default database before this statement, including prior successful USE. */
+  catalog?: string | null;
   index: number;
   start: number;
   end: number;

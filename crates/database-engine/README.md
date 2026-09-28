@@ -41,6 +41,18 @@ execution. `query_history.rs` owns local query-history records. `saved_sql.rs`
 owns saved SQL CRUD and its connection-detachment primitive, called by normal,
 external, and workspace connection deletion inside the existing transaction.
 
+Saved SQL persists the Query Tab execution catalog and optional schema alongside
+the connection. Local history keeps the execution snapshot; script statement
+results include the default catalog, updated after a successful MySQL `USE`, so
+a later history entry reopens against that database. Catalog means the default execution
+database, not a restriction on SQL references: MySQL can use qualified references
+to other databases, while PostgreSQL/openGauss connect to the selected database.
+Missing fields remain accepted for older command clients. The SQL-context
+migration backfills only a nonblank configured database on the owning connection
+in the same workspace; unresolved records and SQLite records remain nullable.
+No SQL-text or server-tree inference is used. Query UI preserves explicit context
+when discovery is unavailable and never chooses the first discovered schema.
+
 Runtime pools/profiles, schema/table inspection, row mutations, export, and
 PostgreSQL/MySQL/SQLite drivers retain their existing modules. openGauss remains
 a PostgreSQL-compatible runtime profile, with no new driver or persisted fields.

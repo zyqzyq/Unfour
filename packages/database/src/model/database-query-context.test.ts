@@ -15,15 +15,15 @@ describe("normalizeQueryContext", () => {
     });
   });
 
-  it("uses the connection default only to resolve PostgreSQL schemas", () => {
+  it("freezes the configured database without guessing the server search path", () => {
     const tree = buildDatabaseTree([
       { catalog: "app", schema: "public", name: "users", kind: "table", columns: [] },
       { catalog: "app", schema: "audit", name: "events", kind: "table", columns: [] },
     ]);
 
     expect(normalizeQueryContext({ catalog: null, schema: null }, tree, "app")).toEqual({
-      catalog: null,
-      schema: "public",
+      catalog: "app",
+      schema: null,
     });
   });
 
@@ -38,4 +38,9 @@ describe("normalizeQueryContext", () => {
       schema: null,
     });
   });
+});
+
+it("retains explicit unavailable catalog/schema without guessing from the tree", () => {
+  expect(normalizeQueryContext({ catalog: "archived", schema: "private" }, { catalogs: [] }, "default"))
+    .toEqual({ catalog: "archived", schema: "private" });
 });

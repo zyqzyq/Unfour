@@ -161,6 +161,8 @@ async fn saved_sql_detach_is_scoped_live_only_and_transactional() {
     for name in ["live", "deleted"] {
         let sql = service
             .save_sql(SavedSqlInput {
+                catalog: None,
+                schema: None,
                 id: None,
                 workspace_id: workspace.clone(),
                 connection_id: Some(saved.id.clone()),

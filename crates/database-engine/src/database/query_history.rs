@@ -3,6 +3,14 @@ use super::*;
 impl DatabaseService {
     pub async fn record_query_history(&self, input: DbQueryHistoryRecordInput) -> AppResult<()> {
         validate_workspace_id(&input.workspace_id)?;
+        let catalog = self
+            .resolve_saved_catalog(
+                &input.workspace_id,
+                input.connection_id.as_deref(),
+                input.catalog,
+            )
+            .await?;
+        let schema = empty_to_none(input.schema);
         let workspace_id = input.workspace_id;
         let id = input.id.trim().to_string();
         if id.is_empty() {
@@ -43,9 +51,9 @@ impl DatabaseService {
             r#"
             INSERT INTO db_query_history (
               id, workspace_id, connection_id, connection_name, sql, status,
-              classification, row_count, affected_rows, duration_ms, error, created_at
+              classification, row_count, affected_rows, duration_ms, error, created_at, catalog, schema
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
             "#,
         )
         .bind(id)
@@ -60,6 +68,8 @@ impl DatabaseService {
         .bind(input.duration_ms)
         .bind(empty_to_none(input.error))
         .bind(executed_at)
+        .bind(catalog)
+        .bind(schema)
         .execute(self.db.pool())
         .await?;
 
@@ -79,7 +89,7 @@ impl DatabaseService {
             SELECT
               id, workspace_id, connection_id, connection_name, sql, status,
               classification, row_count, affected_rows, duration_ms, error,
-              created_at AS executed_at
+              created_at AS executed_at, catalog, schema
             FROM db_query_history
             WHERE workspace_id = ?1
             ORDER BY created_at DESC

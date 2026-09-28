@@ -31,11 +31,11 @@ export function useDatabaseSqlRunner({
   databaseTabs: ReturnType<typeof useDatabaseTabs>;
   recordFailedHistory: (
     error: unknown,
-    execution: { connectionId: string | null; sql: string } | null,
+    execution: { connectionId: string | null; catalog?: string | null; schema?: string | null; sql: string } | null,
   ) => void;
   recordSuccessfulHistory: (
     result: DatabaseQueryResult,
-    execution: { connectionId: string | null; sql: string } | null,
+    execution: { connectionId: string | null; catalog?: string | null; schema?: string | null; sql: string } | null,
   ) => void;
   setConnectionState: (
     connectionId: string,
@@ -74,7 +74,7 @@ export function useDatabaseSqlRunner({
         executionRunId: null,
       });
       for (const entry of output.statements) {
-        const execution = { connectionId: batch.input.connectionId, sql: entry.sql };
+        const execution = { connectionId: batch.input.connectionId, catalog: entry.catalog === undefined ? batch.input.catalog : entry.catalog, schema: batch.input.schema, sql: entry.sql };
         if (entry.result) recordSuccessfulHistory(entry.result, execution);
         if (entry.status === "failed") recordFailedHistory(entry.error, execution);
       }

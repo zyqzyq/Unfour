@@ -134,3 +134,23 @@ pub(super) fn split_script(
     }
     Ok(statements)
 }
+
+/// A successful MySQL USE changes the default for subsequent statements.
+/// Match the complete token sequence, preserving quoted identifiers. This is
+/// bookkeeping after server success, never SQL validation or rewriting.
+pub(super) fn mysql_use_catalog(sql: &str) -> Option<String> {
+    let tokens = tokens(sql, DatabaseDialect::Mysql).ok()?;
+    let tokens: Vec<_> = tokens
+        .into_iter()
+        .map(|item| item.token)
+        .filter(|token| !matches!(token, Token::Whitespace(_) | Token::SemiColon))
+        .collect();
+    match tokens.as_slice() {
+        [Token::Word(keyword), Token::Word(name)]
+            if keyword.quote_style.is_none() && keyword.value.eq_ignore_ascii_case("use") =>
+        {
+            Some(name.value.clone())
+        }
+        _ => None,
+    }
+}

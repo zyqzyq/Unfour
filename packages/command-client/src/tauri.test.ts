@@ -334,10 +334,14 @@ describe("Database saved SQL browser mock", () => {
     const saved = await saveSavedSql({
       workspaceId,
       connectionId: "conn-1",
+      catalog: "analytics",
+      schema: "audit",
       name: " Recent users ",
       sql: " SELECT * FROM users ",
     });
 
+    expect(saved.catalog).toBe("analytics");
+    expect(saved.schema).toBe("audit");
     expect(saved.name).toBe("Recent users");
     expect(saved.sql).toBe("SELECT * FROM users");
     await expect(listSavedSql(workspaceId)).resolves.toEqual([saved]);
@@ -353,6 +357,8 @@ describe("Database saved SQL browser mock", () => {
 
     expect(updated.id).toBe(saved.id);
     expect(updated.connectionId).toBeNull();
+    expect(updated.catalog).toBeNull();
+    expect(updated.schema).toBeNull();
     expect(updated.createdAt).toBe(saved.createdAt);
     expect(updated.updatedAt >= saved.updatedAt).toBe(true);
     await expect(

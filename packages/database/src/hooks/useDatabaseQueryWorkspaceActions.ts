@@ -56,8 +56,15 @@ export function useDatabaseQueryWorkspaceActions({
   useEffect(() => { currentHistoryWorkspace.current = queryHistoryQuery.workspaceId; }, [queryHistoryQuery.workspaceId]);
   function startNewQuery(
     connectionId = selectedConnectionId ?? activeQueryTab?.connectionId ?? activeTableTab?.connectionId ?? null,
+    catalog?: string,
   ) {
-    const tabId = databaseTabs.openQueryTab({ connectionId });
+    const context = activeQueryTab?.connectionId === connectionId ? activeQueryTab
+      : activeTableTab?.connectionId === connectionId ? activeTableTab.table : null;
+    const connection = connections.find((item) => item.id === connectionId);
+    const tabId = databaseTabs.openQueryTab({ connectionId,
+      catalog: catalog ?? context?.catalog ?? (connection?.driver !== "sqlite" ? connection?.database?.trim() || null : null),
+      schema: catalog === undefined ? context?.schema ?? null : null,
+    });
     if (connectionId) {
       setSelectedDatabaseConnection(connectionId);
     }
@@ -72,12 +79,14 @@ export function useDatabaseQueryWorkspaceActions({
 
   function recordSuccessfulHistory(
     result: DatabaseQueryResult,
-    execution: { connectionId: string | null; sql: string } | null,
+    execution: { connectionId: string | null; catalog?: string | null; schema?: string | null; sql: string } | null,
   ) {
     appendHistory({
       affectedRows: result.affectedRows,
       classification: result.safety.classification,
       connectionId: execution?.connectionId ?? null,
+      catalog: execution?.catalog ?? null,
+      schema: execution?.schema ?? null,
       connectionName: connectionNameForHistory(execution?.connectionId),
       durationMs: result.durationMs,
       rowCount: result.rows.length,
@@ -86,9 +95,11 @@ export function useDatabaseQueryWorkspaceActions({
     });
   }
 
-  function recordFailedHistory(error: unknown, execution: { connectionId: string | null; sql: string } | null) {
+  function recordFailedHistory(error: unknown, execution: { connectionId: string | null; catalog?: string | null; schema?: string | null; sql: string } | null) {
     appendHistory({
       connectionId: execution?.connectionId ?? null,
+      catalog: execution?.catalog ?? null,
+      schema: execution?.schema ?? null,
       connectionName: connectionNameForHistory(execution?.connectionId),
       error: formatDatabaseError(error),
       sql: execution?.sql ?? "",
@@ -124,6 +135,8 @@ export function useDatabaseQueryWorkspaceActions({
       : null;
     databaseTabs.openQueryTab({
       connectionId,
+      catalog: entry.catalog ?? null,
+      schema: entry.schema ?? null,
       sql: entry.sql,
     });
     if (connectionId) {
@@ -142,6 +155,8 @@ export function useDatabaseQueryWorkspaceActions({
         : null;
     databaseTabs.openQueryTab({
       connectionId,
+      catalog: item.catalog ?? null,
+      schema: item.schema ?? null,
       sql: item.sql,
     });
     if (connectionId) {
@@ -181,7 +196,7 @@ export function useDatabaseQueryWorkspaceActions({
     setSelectedTable(null);
     if (activeQueryTab) {
       databaseTabs.updateQueryTab(activeQueryTab.id, {
-        catalog: null,
+        catalog: connections.find((item) => item.id === connectionId && item.driver !== "sqlite")?.database?.trim() || null,
         connectionId,
         error: null,
         pendingConfirmation: false,

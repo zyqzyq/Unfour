@@ -101,9 +101,8 @@ impl DatabaseService {
 
     /// Return a connection clone with `database` overridden to the given
     /// catalog when the catalog differs from the connection's current database.
-    /// This is required for PostgreSQL (and MySQL) because they cannot
-    /// cross-database query; the pool must target the database that owns the
-    /// table being browsed, inspected, or mutated.
+    /// PostgreSQL/openGauss connect to this database; MySQL uses it as the
+    /// default namespace and may still reference other databases in SQL.
     pub(super) fn effective_connection(
         connection: &DatabaseConnection,
         catalog: Option<&str>,

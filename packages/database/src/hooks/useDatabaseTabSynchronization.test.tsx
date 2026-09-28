@@ -41,7 +41,7 @@ describe("database tab synchronization", () => {
     }, { initialProps: { loaded: false } });
     act(() => { result.current.openQueryTab({ connectionId: "conn", catalog: "app", sql: "select 1" }); });
     rerender({ loaded: true });
-    expect(result.current.activeTab).toMatchObject({ catalog: "app", schema: "public", sql: "select 1" });
+    expect(result.current.activeTab).toMatchObject({ catalog: "app", schema: null, sql: "select 1" });
     act(() => { result.current.updateQueryTab(result.current.activeTab!.id, { schema: "audit", sql: "select 2" }); });
     const tab = result.current.activeTab;
     rerender({ loaded: true });

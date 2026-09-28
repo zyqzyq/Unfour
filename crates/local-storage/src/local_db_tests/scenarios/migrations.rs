@@ -434,3 +434,60 @@ async fn migrate_rewrites_crlf_checksums_to_the_embedded_line_ending() {
             .expect("read restored checksum");
     assert_eq!(restored, original);
 }
+
+#[tokio::test]
+async fn sql_context_migration_preserves_legacy_records_and_only_infers_owned_defaults() {
+    let db = test_db().await;
+    sqlx::raw_sql(include_str!(
+        "../../../migrations/20260708221117_core_initial_schema.sql"
+    ))
+    .execute(db.pool())
+    .await
+    .unwrap();
+    sqlx::raw_sql(r#"
+        INSERT INTO workspaces (id, name, is_default, created_at, updated_at)
+        VALUES ('a', 'A', 1, 'now', 'now'), ('b', 'B', 0, 'now', 'now');
+        INSERT INTO connections (id, workspace_id, connection_type, name, created_at, updated_at)
+        VALUES ('pg', 'a', 'database', 'PG', 'now', 'now'),
+               ('mysql', 'a', 'database', 'MySQL', 'now', 'now'),
+               ('blank', 'a', 'database', 'Blank', 'now', 'now'),
+               ('sqlite', 'a', 'database', 'SQLite', 'now', 'now');
+        INSERT INTO database_connections (connection_id, driver, database_name)
+        VALUES ('pg', 'postgres', ' app '), ('mysql', 'mysql', 'analytics'),
+               ('blank', 'mysql', '  '), ('sqlite', 'sqlite', 'file.db');
+        INSERT INTO saved_sql (id, workspace_id, connection_id, name, sql, created_at, updated_at)
+        VALUES ('pg', 'a', 'pg', 'PG', 'select 1', 'now', 'now'),
+               ('mysql', 'a', 'mysql', 'MySQL', 'select 2', 'now', 'now'),
+               ('blank', 'a', 'blank', 'Blank', 'select 3', 'now', 'now'),
+               ('sqlite', 'a', 'sqlite', 'SQLite', 'select 4', 'now', 'now'),
+               ('unbound', 'a', NULL, 'Unbound', 'select 5', 'now', 'now'),
+               ('foreign', 'b', NULL, 'Foreign', 'select 6', 'now', 'now');
+        INSERT INTO db_query_history (id, workspace_id, connection_id, connection_name, sql, status, created_at)
+        SELECT id, workspace_id, connection_id, name, sql, 'success', created_at FROM saved_sql;
+    "#).execute(db.pool()).await.unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../../migrations/20260927000000_core_sql_execution_context.sql"
+    ))
+    .execute(db.pool())
+    .await
+    .unwrap();
+    for table in ["saved_sql", "db_query_history"] {
+        let rows: Vec<(String, Option<String>, Option<String>, String)> = sqlx::query_as(&format!(
+            "SELECT id, catalog, schema, sql FROM {table} ORDER BY id"
+        ))
+        .fetch_all(db.pool())
+        .await
+        .unwrap();
+        assert_eq!(rows.len(), 6);
+        for (id, catalog, schema, sql) in rows {
+            let expected = match id.as_str() {
+                "pg" => Some("app"),
+                "mysql" => Some("analytics"),
+                _ => None,
+            };
+            assert_eq!(catalog.as_deref(), expected, "{table}/{id}");
+            assert!(schema.is_none());
+            assert!(sql.starts_with("select "));
+        }
+    }
+}
