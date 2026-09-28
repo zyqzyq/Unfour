@@ -20,7 +20,8 @@ fn opengauss_detection_profile_and_metadata_dispatch() {
                 && caps.export
                 && caps.generated_columns
         );
-        assert!(!caps.indexes && !caps.foreign_keys && !caps.ddl);
+        assert!(caps.indexes && caps.ddl);
+        assert!(!caps.foreign_keys);
         let sql = postgres_columns_sql(&profile);
         assert!(sql.contains("d.adgencol"));
         assert!(sql.contains("pg_catalog.pg_constraint"));
@@ -76,6 +77,7 @@ async fn opengauss_catalog_schema_describe_and_data_export_use_postgres_transpor
         connection_test.detected_server.as_deref(),
         Some("openGauss")
     );
+    assert_eq!(connection_test.message, "openGauss connection OK");
     let catalogs = service
         .list_catalogs(workspace.clone(), saved.id.clone())
         .await
@@ -113,11 +115,20 @@ async fn opengauss_catalog_schema_describe_and_data_export_use_postgres_transpor
     assert!(!structure.columns[1].auto_increment && !structure.columns[1].generated);
     assert!(structure.columns[2].generated);
     assert!(!structure.columns[2].auto_increment);
-    assert!(
-        structure.indexes.is_empty()
-            && structure.foreign_keys.is_empty()
-            && structure.ddl.is_none()
-    );
+    assert_eq!(structure.indexes.len(), 2);
+    assert_eq!(structure.indexes[0].name, "config_info_pkey");
+    assert_eq!(structure.indexes[0].columns, ["id"]);
+    assert!(structure.indexes[0].primary && structure.indexes[0].unique);
+    assert_eq!(structure.indexes[1].name, "uk_configinfo_datagrouptenant");
+    assert_eq!(structure.indexes[1].columns, ["content", "computed"]);
+    assert!(structure.indexes[1].unique && !structure.indexes[1].primary);
+    assert!(structure.foreign_keys.is_empty());
+    assert!(structure
+        .ddl
+        .as_deref()
+        .unwrap()
+        .contains("CREATE UNIQUE INDEX"));
+    export_structure(&service, &workspace, &saved.id).await;
     export_selected(&service, &workspace, &saved.id).await;
     query_and_mutate(&service, &workspace, &saved.id).await;
     assert_eq!(
@@ -139,9 +150,142 @@ async fn opengauss_catalog_schema_describe_and_data_export_use_postgres_transpor
         .starts_with("SELECT \"content\" FROM \"public\".\"config_info\" WHERE")
         && sql.contains("$1")
         && sql.ends_with("LIMIT 1")));
-    assert!(!queries.iter().any(|sql| sql.contains("pg_index")
-        || sql.contains("attidentity")
-        || sql.contains("WITH ORDINALITY")));
+    assert!(!queries
+        .iter()
+        .any(|sql| sql.contains("attidentity") || sql.contains("WITH ORDINALITY")));
+}
+
+async fn export_structure(service: &DatabaseService, workspace: &str, connection: &str) {
+    for content in [
+        DatabaseExportContent::Structure,
+        DatabaseExportContent::StructureAndData,
+    ] {
+        let path =
+            std::env::temp_dir().join(format!("unfour-opengauss-{}.sql", uuid::Uuid::new_v4()));
+        let result = service
+            .export_table(DatabaseExportTableInput {
+                workspace_id: workspace.into(),
+                connection_id: connection.into(),
+                catalog: Some("qingqi_config".into()),
+                schema: Some("public".into()),
+                table_name: "config_info".into(),
+                content: content.clone(),
+                format: DatabaseExportFormat::Sql,
+                destination_path: path.to_string_lossy().into_owned(),
+                columns: Some(vec!["content".into()]),
+                filters: vec![],
+                limit: Some(1),
+            })
+            .await
+            .unwrap();
+        let sql = std::fs::read_to_string(&path).unwrap();
+        assert!(sql.contains("CREATE TABLE config_info"));
+        assert!(sql.contains("CREATE UNIQUE INDEX uk_configinfo_datagrouptenant"));
+        if matches!(content, DatabaseExportContent::Structure) {
+            assert_eq!(result.row_count, 0);
+            assert!(!sql.contains("INSERT INTO"));
+        } else {
+            assert_eq!(result.row_count, 1);
+            assert!(sql.contains("INSERT INTO \"public\".\"config_info\""));
+        }
+        std::fs::remove_file(path).unwrap();
+    }
+}
+
+#[tokio::test]
+async fn opengauss_list_tables_pushes_schema_limit_and_avoids_column_lookups() {
+    let server = ProfileServer::start("PostgreSQL 9.2.4 (openGauss 6.0.3; metadata fixture)").await;
+    let (service, workspace) = service_with_workspace().await;
+    let mut input = postgres_input(&workspace);
+    input.port = Some(server.port);
+    let saved = service.save_connection(input).await.unwrap();
+
+    let listing = service
+        .list_tables(workspace.clone(), saved.id.clone(), None, None, 2)
+        .await
+        .unwrap();
+    assert_eq!(listing.total_tables, 1);
+    assert_eq!(listing.tables[0].column_count, 3);
+    let queries = server.queries.lock().unwrap().clone();
+    assert_eq!(
+        queries
+            .iter()
+            .filter(|sql| sql.contains("information_schema.columns"))
+            .count(),
+        1
+    );
+    assert!(!queries.iter().any(|sql| sql.contains("AS primary_key")));
+    assert!(queries
+        .iter()
+        .any(|sql| sql.contains("WITH selected AS") && sql.contains("LIMIT $1")));
+    assert!(queries
+        .iter()
+        .any(|sql| sql.contains("table_schema = current_schema()")));
+    assert!(queries
+        .iter()
+        .any(|sql| sql.contains("'dbe_perf', 'snapshot'")));
+
+    server.queries.lock().unwrap().clear();
+    let _ = service
+        .list_tables(
+            workspace.clone(),
+            saved.id.clone(),
+            None,
+            Some("dbe_perf".into()),
+            1,
+        )
+        .await
+        .unwrap();
+    let queries = server.queries.lock().unwrap();
+    assert!(queries
+        .iter()
+        .any(|sql| sql.contains("table_schema = $1") && sql.contains("LIMIT $2")));
+    assert!(!queries
+        .iter()
+        .any(|sql| sql.contains("'dbe_perf', 'snapshot'")));
+}
+
+#[tokio::test]
+async fn postgres_list_tables_keeps_regular_schemas() {
+    let server = ProfileServer::start("PostgreSQL 16.4 (metadata fixture)").await;
+    let (service, workspace) = service_with_workspace().await;
+    let mut input = postgres_input(&workspace);
+    input.port = Some(server.port);
+    let saved = service.save_connection(input).await.unwrap();
+    let listing = service
+        .list_tables(workspace, saved.id, None, None, 50)
+        .await
+        .unwrap();
+    assert_eq!(listing.tables[0].name, "config_info");
+    assert!(server
+        .queries
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|sql| sql.contains("WITH selected AS") && !sql.contains("'dbe_perf', 'snapshot'")));
+}
+
+#[tokio::test]
+async fn postgres_internal_char_decodes_at_result_boundary() {
+    let server = ProfileServer::start("PostgreSQL 9.2.4 (openGauss 6.0.3; metadata fixture)").await;
+    let (service, workspace) = service_with_workspace().await;
+    let mut input = postgres_input(&workspace);
+    input.port = Some(server.port);
+    let saved = service.save_connection(input).await.unwrap();
+    let result = service
+        .execute_query(DatabaseQueryInput {
+            workspace_id: workspace,
+            connection_id: saved.id,
+            sql: "SELECT relkind FROM pg_class".into(),
+            limit: Some(1),
+            confirm_mutation: None,
+            catalog: None,
+            schema: None,
+            timeout_ms: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(result.rows[0][0].as_deref(), Some("r"));
 }
 
 async fn query_and_mutate(service: &DatabaseService, workspace: &str, connection: &str) {

@@ -81,7 +81,7 @@ impl DatabaseService {
                     .await?;
                 Ok(DatabaseTestResult {
                     ok: true,
-                    message: "PostgreSQL connection OK".to_string(),
+                    message: format!("{} connection OK", pool.profile.server_name()),
                     server_version: pool.profile.server_version.clone(),
                     protocol: Some(connection.driver.clone()),
                     detected_server: Some(pool.profile.server_name().into()),
@@ -272,6 +272,130 @@ impl DatabaseService {
                 display_driver(driver)
             ))),
         }
+    }
+
+    /// A bounded metadata path for MCP listings. The tree's full `schema`
+    /// operation remains available to callers that need column definitions.
+    pub async fn list_tables(
+        &self,
+        workspace_id: String,
+        connection_id: String,
+        catalog: Option<String>,
+        schema: Option<String>,
+        limit: u32,
+    ) -> AppResult<DatabaseTableList> {
+        validate_workspace_id(&workspace_id)?;
+        validate_connection_id(&connection_id)?;
+        let schema = clean_identifier(schema.as_deref())?.map(str::to_string);
+        let connection = self.get_connection(&workspace_id, &connection_id).await?;
+        if connection.driver != "postgres" {
+            let full = self.schema(workspace_id, connection_id, catalog).await?;
+            let tables: Vec<_> = full
+                .tables
+                .into_iter()
+                .filter(|table| {
+                    schema
+                        .as_deref()
+                        .is_none_or(|requested| table.schema.as_deref() == Some(requested))
+                })
+                .collect();
+            let total_tables = tables.len() as u64;
+            return Ok(DatabaseTableList {
+                tables: tables
+                    .into_iter()
+                    .take(limit as usize)
+                    .map(|table| DatabaseTableSummary {
+                        catalog: table.catalog,
+                        schema: table.schema,
+                        name: table.name,
+                        kind: table.kind,
+                        column_count: table.columns.len() as u64,
+                    })
+                    .collect(),
+                total_tables,
+            });
+        }
+
+        let catalog = clean_identifier(catalog.as_deref())?;
+        let effective = Self::effective_connection(&connection, catalog);
+        let pool = self.postgres_pool(&effective).await?;
+        let open_gauss = pool.profile.detected_server_type == DetectedServerType::OpenGauss;
+        let where_clause = if open_gauss && schema.is_none() {
+            "table_schema NOT IN ('pg_catalog', 'information_schema', 'dbe_perf', 'snapshot', 'pg_toast', 'cstore', 'db4ai', 'blockchain', 'dbe_pldebugger', 'dbe_pldeveloper', 'pkg_service', 'sqladvisor', 'dbe_sql_util')"
+        } else {
+            "table_schema NOT IN ('pg_catalog', 'information_schema')"
+        };
+        let filter = if schema.is_some() {
+            " AND table_schema = $1"
+        } else {
+            ""
+        };
+        let count_sql = format!(
+            "SELECT COUNT(*)::bigint FROM information_schema.tables WHERE {where_clause}{filter}"
+        );
+        let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
+        if let Some(schema) = schema.as_deref() {
+            count_query = count_query.bind(schema);
+        }
+        let total_tables = count_query
+            .fetch_one(&*pool)
+            .await
+            .map_err(sanitize_pg_error)? as u64;
+
+        let order = "CASE WHEN table_schema = current_schema() THEN 0 WHEN table_schema = 'public' THEN 1 ELSE 2 END, table_schema, table_name";
+        let limit_placeholder = if schema.is_some() { "$2" } else { "$1" };
+        let sql = format!(
+            r#"
+            WITH selected AS (
+                SELECT table_schema, table_name, table_type,
+                       CASE WHEN table_schema = current_schema() THEN 0 WHEN table_schema = 'public' THEN 1 ELSE 2 END AS schema_rank
+                FROM information_schema.tables
+                WHERE {where_clause}{filter}
+                ORDER BY {order}
+                LIMIT {limit_placeholder}
+            )
+            SELECT t.table_schema, t.table_name, t.table_type,
+                   COUNT(c.column_name)::bigint AS column_count
+            FROM selected t
+            LEFT JOIN information_schema.columns c
+              ON c.table_schema = t.table_schema AND c.table_name = t.table_name
+            GROUP BY t.schema_rank, t.table_schema, t.table_name, t.table_type
+            ORDER BY t.schema_rank, t.table_schema, t.table_name
+        "#
+        );
+        let mut query = sqlx::query(&sql);
+        if let Some(schema) = schema.as_deref() {
+            query = query.bind(schema);
+        }
+        let rows = query
+            .bind(i64::from(limit))
+            .fetch_all(&*pool)
+            .await
+            .map_err(sanitize_pg_error)?;
+        let tables = rows
+            .into_iter()
+            .map(|row| -> AppResult<_> {
+                let table_type: String = row.try_get("table_type").map_err(sanitize_pg_error)?;
+                Ok(DatabaseTableSummary {
+                    catalog: effective.database.clone(),
+                    schema: Some(row.try_get("table_schema").map_err(sanitize_pg_error)?),
+                    name: row.try_get("table_name").map_err(sanitize_pg_error)?,
+                    kind: if table_type == "VIEW" {
+                        "view"
+                    } else {
+                        "table"
+                    }
+                    .into(),
+                    column_count: row
+                        .try_get::<i64, _>("column_count")
+                        .map_err(sanitize_pg_error)? as u64,
+                })
+            })
+            .collect::<AppResult<Vec<_>>>()?;
+        Ok(DatabaseTableList {
+            tables,
+            total_tables,
+        })
     }
 
     /// List the catalogs (databases) the connection can see. SQLite returns an

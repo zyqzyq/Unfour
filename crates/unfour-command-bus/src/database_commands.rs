@@ -137,6 +137,19 @@ impl CommandBus {
             .await
     }
 
+    pub async fn database_list_tables(
+        &self,
+        workspace_id: String,
+        connection_id: String,
+        catalog: Option<String>,
+        schema: Option<String>,
+        limit: u32,
+    ) -> AppResult<DatabaseTableList> {
+        self.database
+            .list_tables(workspace_id, connection_id, catalog, schema, limit)
+            .await
+    }
+
     pub async fn database_catalogs(
         &self,
         workspace_id: String,

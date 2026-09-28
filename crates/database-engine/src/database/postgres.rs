@@ -24,7 +24,7 @@ const UNKNOWN_POSTGRES_COLUMNS: &str = r#"
 
 // openGauss stores generated-column facts in pg_attrdef.adgencol, not
 // pg_attribute.attgenerated/attidentity. Keep PostgreSQL's newer information_schema
-// fields out of this query. Optional index/FK/DDL SQL is capability-disabled.
+// fields out of this query. Index and DDL use separate openGauss metadata SQL.
 const OPENGAUSS_COLUMNS: &str = r#"
     SELECT a.attname AS column_name,
            pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type,
@@ -205,11 +205,29 @@ pub(super) async fn postgres_columns(
 }
 
 pub(super) async fn postgres_indexes(
-    pool: &sqlx::PgPool,
+    pool: &RuntimePool<sqlx::Postgres>,
     schema: &str,
     table_name: &str,
 ) -> Result<Vec<DatabaseIndex>, AppError> {
-    let rows = sqlx::query(
+    let sql = if pool.profile.detected_server_type == DetectedServerType::OpenGauss {
+        // openGauss 6.0 documents pg_index.indnatts, index pg_attribute
+        // positions and the three-argument pg_get_indexdef. Avoid PostgreSQL's
+        // LATERAL generate_series catalog query here.
+        r#"
+        SELECT i.relname AS index_name, ix.indisunique AS is_unique,
+               ix.indisprimary AS is_primary,
+               pg_catalog.pg_get_indexdef(ix.indexrelid, a.attnum::integer, false) AS column_name,
+               a.attnum AS ord
+        FROM pg_catalog.pg_class t
+        JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
+        JOIN pg_catalog.pg_index ix ON ix.indrelid = t.oid
+        JOIN pg_catalog.pg_class i ON i.oid = ix.indexrelid
+        JOIN pg_catalog.pg_attribute a ON a.attrelid = i.oid
+             AND a.attnum > 0 AND a.attnum <= ix.indnatts AND NOT a.attisdropped
+        WHERE n.nspname = $1 AND t.relname = $2
+        ORDER BY index_name, a.attnum
+        "#
+    } else {
         r#"
         SELECT i.relname AS index_name,
                ix.indisunique AS is_unique,
@@ -223,12 +241,13 @@ pub(super) async fn postgres_indexes(
         JOIN LATERAL generate_series(1, ix.indnatts) AS k(ord) ON true
         WHERE n.nspname = $1 AND t.relname = $2
         ORDER BY index_name, ord
-        "#,
-    )
-    .bind(schema)
-    .bind(table_name)
-    .fetch_all(pool)
-    .await?;
+        "#
+    };
+    let rows = sqlx::query(sql)
+        .bind(schema)
+        .bind(table_name)
+        .fetch_all(&pool.pool)
+        .await?;
 
     let mut indexes: Vec<DatabaseIndex> = Vec::new();
     for row in rows {
@@ -361,7 +380,7 @@ pub(super) async fn postgres_table_kind(
 }
 
 pub(super) async fn postgres_ddl(
-    pool: &sqlx::PgPool,
+    pool: &RuntimePool<sqlx::Postgres>,
     schema: &str,
     table_name: &str,
     kind: &str,
@@ -373,12 +392,28 @@ pub(super) async fn postgres_ddl(
         )
         .bind(schema)
         .bind(table_name)
-        .fetch_one(pool)
+        .fetch_one(&pool.pool)
         .await?;
         return Ok(format!(
             "CREATE VIEW {qualified} AS\n{};",
             definition.trim_end_matches(';')
         ));
+    }
+
+    if pool.profile.detected_server_type == DetectedServerType::OpenGauss {
+        // Server-native reconstruction includes table options, constraints,
+        // indexes and comments that a PostgreSQL column assembly would miss.
+        let ddl: Option<String> = sqlx::query_scalar(
+            "SELECT pg_catalog.pg_get_tabledef(c.oid) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = $1 AND c.relname = $2",
+        )
+        .bind(schema)
+        .bind(table_name)
+        .fetch_optional(&pool.pool)
+        .await?
+        .flatten();
+        return ddl
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| AppError::Unsupported("DDL is not available for this table".into()));
     }
 
     let rows = sqlx::query(
@@ -394,7 +429,7 @@ pub(super) async fn postgres_ddl(
     )
     .bind(schema)
     .bind(table_name)
-    .fetch_all(pool)
+    .fetch_all(&pool.pool)
     .await?;
     let mut clauses = Vec::with_capacity(rows.len());
     for row in rows {
@@ -422,7 +457,7 @@ pub(super) async fn postgres_ddl(
     )
     .bind(schema)
     .bind(table_name)
-    .fetch_all(pool)
+    .fetch_all(&pool.pool)
     .await?;
     for row in constraints {
         let name: String = row.try_get("conname")?;
@@ -440,7 +475,7 @@ pub(super) async fn postgres_ddl(
     )
     .bind(schema)
     .bind(table_name)
-    .fetch_all(pool)
+    .fetch_all(&pool.pool)
     .await?;
     Ok(assemble_postgres_ddl(
         &qualified,
@@ -631,6 +666,10 @@ pub(super) fn postgres_row_values(row: &sqlx::postgres::PgRow) -> AppResult<Vec<
                 return Ok(None);
             }
 
+            if let Some(value) = postgres_internal_char_value(row, index)? {
+                return Ok(Some(value));
+            }
+
             if let Ok(value) = row.try_get::<String, _>(index) {
                 return Ok(Some(value));
             }
@@ -680,6 +719,31 @@ pub(super) fn postgres_row_values(row: &sqlx::postgres::PgRow) -> AppResult<Vec<
             Ok(Some("<unsupported>".to_string()))
         })
         .collect()
+}
+
+fn is_postgres_internal_char(type_name: &str) -> bool {
+    type_name.trim_matches('"').eq_ignore_ascii_case("char")
+}
+
+pub(super) fn postgres_internal_char_value(
+    row: &sqlx::postgres::PgRow,
+    index: usize,
+) -> AppResult<Option<String>> {
+    if !is_postgres_internal_char(row.columns()[index].type_info().name()) {
+        return Ok(None);
+    }
+    let raw = row.try_get_raw(index)?;
+    let bytes = raw
+        .as_bytes()
+        .map_err(|_| AppError::Unsupported("invalid internal char value".into()))?;
+    Ok(Some(decode_postgres_internal_char(bytes)?))
+}
+
+fn decode_postgres_internal_char(bytes: &[u8]) -> AppResult<String> {
+    match bytes {
+        [value] => Ok(char::from(*value).to_string()),
+        _ => Err(AppError::Unsupported("invalid internal char value".into())),
+    }
 }
 
 /// Sanitize a sqlx::Error into an AppError.

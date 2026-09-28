@@ -488,6 +488,9 @@ fn postgres_export_values(row: &sqlx::postgres::PgRow) -> AppResult<Vec<ExportCe
             if row.try_get_raw(i)?.is_null() {
                 return Ok(ExportCell::Null);
             }
+            if let Some(value) = postgres_internal_char_value(row, i)? {
+                return Ok(ExportCell::Text(value));
+            }
             let kind = row.columns()[i].type_info().name().to_ascii_uppercase();
             if kind == "BYTEA" {
                 return Ok(ExportCell::Binary(row.try_get(i)?));

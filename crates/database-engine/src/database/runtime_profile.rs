@@ -92,8 +92,8 @@ impl RuntimeDatabaseProfile {
             PostgreSql => (DatabaseDialect::Postgres, true, true, true),
             UnknownPostgresCompatible => (DatabaseDialect::Postgres, false, true, false),
         };
-        // openGauss core metadata has a dedicated strategy. Optional PostgreSQL
-        // index/FK/DDL queries are not certified for it and remain disabled.
+        // openGauss indexes and DDL use their own metadata queries. Foreign
+        // keys remain disabled until their mapping is verified.
         Self {
             detected_server_type: server,
             server_version: version,
@@ -101,9 +101,9 @@ impl RuntimeDatabaseProfile {
             capabilities: DatabaseCapabilities {
                 catalogs,
                 schemas,
-                indexes: full_metadata,
+                indexes: full_metadata || server == OpenGauss,
                 foreign_keys: full_metadata,
-                ddl: full_metadata,
+                ddl: full_metadata || server == OpenGauss,
                 generated_columns: full_metadata || server == OpenGauss,
                 row_mutation: full_metadata || server == OpenGauss,
                 export: full_metadata || server == OpenGauss,

@@ -108,7 +108,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                 name: "unfour.db.list_tables",
                 title: "List Database Tables",
                 description:
-                    "Lists tables and views for a saved database connection through the Unfour command bus. Optional catalog selects a database other than the connection default. Requires a saved connectionId; does not accept ad-hoc connection strings.",
+                    "Lists tables and views for a saved database connection through the Unfour command bus. Optional catalog and schema scope the listing. Requires a saved connectionId; does not accept ad-hoc connection strings.",
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -127,6 +127,10 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                         "catalog": {
                             "type": "string",
                             "description": "Optional database catalog. Omit to use the connection's default database."
+                        },
+                        "schema": {
+                            "type": "string",
+                            "description": "Optional schema name. Explicit system schemas remain browsable."
                         }
                     },
                     "required": ["connectionId"],
@@ -428,34 +432,40 @@ fn db_list_tables(
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
         arguments,
-        &["connectionId", "workspaceId", "limit", "catalog"],
+        &["connectionId", "workspaceId", "limit", "catalog", "schema"],
     )?;
     let connection_id = parse_required_string(&arguments, "connectionId", "unfour.db.list_tables")?;
     let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
     let limit = parse_optional_limit(&arguments, "limit", DEFAULT_TABLE_LIMIT, MAX_TABLE_LIMIT)?;
     let catalog = parse_optional_string(&arguments, "catalog")?;
+    let schema = parse_optional_string(&arguments, "schema")?;
 
-    let schema = command_bus
-        .get_db_schema_for_catalog(&workspace_id, &connection_id, catalog.as_deref())
+    let listing = command_bus
+        .list_db_tables(
+            &workspace_id,
+            &connection_id,
+            catalog.as_deref(),
+            schema.as_deref(),
+            limit,
+        )
         .map_err(adapter_execution)?;
 
-    let total = schema.tables.len();
-    let tables: Vec<Value> = schema
+    let total = listing.total_tables;
+    let tables: Vec<Value> = listing
         .tables
         .iter()
-        .take(limit as usize)
         .map(|t| {
             json!({
                 "name": t.name,
                 "catalog": t.catalog,
                 "schema": t.schema,
                 "kind": t.kind,
-                "columnCount": t.columns.len()
+                "columnCount": t.column_count
             })
         })
         .collect();
 
-    let truncated = total > tables.len();
+    let truncated = total > tables.len() as u64;
 
     Ok(json!({
         "connectionId": connection_id,

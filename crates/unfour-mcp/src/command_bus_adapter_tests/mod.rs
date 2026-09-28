@@ -28,6 +28,45 @@ fn incomplete_remote_task_error_keeps_its_stable_code_at_the_mcp_boundary() {
     assert!(mapped.message.contains("newer compatible client"));
 }
 
+#[test]
+fn database_owned_errors_expose_only_safe_reasons() {
+    for (error, code, reason) in [
+        (
+            AppError::Unsupported("DDL is not available for this table".into()),
+            "UNSUPPORTED_OPERATION",
+            "DDL is not available for this table",
+        ),
+        (
+            AppError::Validation("structure export requires SQL format".into()),
+            "VALIDATION_ERROR",
+            "structure export requires SQL format",
+        ),
+        (
+            AppError::ReadOnly("connection is read-only".into()),
+            "READ_ONLY_CONNECTION",
+            "connection is read-only",
+        ),
+    ] {
+        let mapped = CommandBusAdapterError::from_database_app_error(
+            "The table export operation failed.",
+            &error,
+        );
+        assert_eq!(mapped.code, code);
+        assert_eq!(mapped.message, "The table export operation failed.");
+        assert_eq!(mapped.details["reason"], reason);
+    }
+    let database = AppError::Database(sqlx::Error::Protocol(
+        "postgres://user:secret@host/db".into(),
+    ));
+    let mapped = CommandBusAdapterError::from_database_app_error(
+        "The table export operation failed.",
+        &database,
+    );
+    assert!(mapped.details.get("reason").is_none());
+    assert!(mapped.details.get("sqlState").is_some());
+    assert!(!mapped.details.to_string().contains("secret"));
+}
+
 struct EnvironmentSqlHook {
     fail_on: Option<&'static str>,
 }

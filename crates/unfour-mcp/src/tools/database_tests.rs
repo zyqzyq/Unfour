@@ -10,7 +10,7 @@ use unfour_core::models::{
     DatabaseConnectionInput, DatabaseExportTableInput, DatabaseExportTableResult,
     DatabaseForeignKey, DatabaseIndex, DatabaseQueryInput, DatabaseQueryResult,
     DatabaseQuerySafety, DatabaseResultColumn, DatabaseSchema, DatabaseTable, DatabaseTableColumn,
-    DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult,
+    DatabaseTableList, DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult,
 };
 
 use crate::command_bus_adapter::{CommandBusAdapter, CommandBusAdapterError};
@@ -21,6 +21,38 @@ use crate::tools::ToolRegistry;
 struct DbStubCommandBus;
 
 impl CommandBusAdapter for DbStubCommandBus {
+    fn list_db_tables(
+        &self,
+        workspace_id: &str,
+        connection_id: &str,
+        catalog: Option<&str>,
+        schema: Option<&str>,
+        limit: u32,
+    ) -> Result<DatabaseTableList, CommandBusAdapterError> {
+        let full = self.get_db_schema_for_catalog(workspace_id, connection_id, catalog)?;
+        let tables: Vec<_> = full
+            .tables
+            .into_iter()
+            .filter(|table| {
+                schema.is_none_or(|requested| table.schema.as_deref() == Some(requested))
+            })
+            .collect();
+        let total_tables = tables.len() as u64;
+        Ok(DatabaseTableList {
+            tables: tables
+                .into_iter()
+                .take(limit as usize)
+                .map(|table| unfour_core::models::DatabaseTableSummary {
+                    catalog: table.catalog,
+                    schema: table.schema,
+                    name: table.name,
+                    kind: table.kind,
+                    column_count: table.columns.len() as u64,
+                })
+                .collect(),
+            total_tables,
+        })
+    }
     fn get_db_table_structure(
         &self,
         input: DatabaseTableStructureInput,
@@ -67,6 +99,13 @@ impl CommandBusAdapter for DbStubCommandBus {
         &self,
         input: DatabaseExportTableInput,
     ) -> Result<DatabaseExportTableResult, CommandBusAdapterError> {
+        if input.table_name == "missing_ddl" {
+            return Err(CommandBusAdapterError {
+                code: "UNSUPPORTED_OPERATION",
+                message: "The table export operation failed.",
+                details: json!({ "reason": "DDL is not available for this table" }),
+            });
+        }
         let row_count = if let Some(limit) = input.limit {
             u64::from(limit)
         } else if !input.filters.is_empty() {

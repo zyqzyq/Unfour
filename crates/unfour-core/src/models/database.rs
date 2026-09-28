@@ -104,6 +104,23 @@ pub struct DatabaseSchema {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DatabaseTableList {
+    pub tables: Vec<DatabaseTableSummary>,
+    pub total_tables: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseTableSummary {
+    pub catalog: Option<String>,
+    pub schema: Option<String>,
+    pub name: String,
+    pub kind: String,
+    pub column_count: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DatabaseTable {
     /// Top-level container the object lives in: PostgreSQL/MySQL database, or
     /// `None` for SQLite (single-file). Distinct from `schema`, which only

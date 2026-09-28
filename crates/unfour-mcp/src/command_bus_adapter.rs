@@ -14,12 +14,12 @@ use unfour_core::models::{
     ApiCollection, ApiEnvironment, ApiRequestInput, ApiResponse, ApiSavedRequest,
     CredentialCreateInput, CredentialMetadata, DatabaseConnection, DatabaseConnectionInput,
     DatabaseExportTableInput, DatabaseExportTableResult, DatabaseQueryInput, DatabaseQueryResult,
-    DatabaseSchema, DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult,
-    KeyValue, SshCommandHistoryEntry, SshCommandHistoryQuery, SshConnection, SshConnectionInput,
-    SshDiagnosticInput, SshDiagnosticResult, SshTask, SshTaskCancelInput, SshTaskCleanupInput,
-    SshTaskCleanupResult, SshTaskDetail, SshTaskRun, SshTaskRunInput, SshTaskSaveInput,
-    SshTasksReorderInput, SystemHealth, WorkspaceEnvironment, WorkspaceEnvironmentVariable,
-    WorkspaceVariable, WorkspaceVariableInput,
+    DatabaseSchema, DatabaseTableList, DatabaseTableStructure, DatabaseTableStructureInput,
+    DatabaseTestResult, KeyValue, SshCommandHistoryEntry, SshCommandHistoryQuery, SshConnection,
+    SshConnectionInput, SshDiagnosticInput, SshDiagnosticResult, SshTask, SshTaskCancelInput,
+    SshTaskCleanupInput, SshTaskCleanupResult, SshTaskDetail, SshTaskRun, SshTaskRunInput,
+    SshTaskSaveInput, SshTasksReorderInput, SystemHealth, WorkspaceEnvironment,
+    WorkspaceEnvironmentVariable, WorkspaceVariable, WorkspaceVariableInput,
 };
 use unfour_core::AppError;
 
@@ -196,7 +196,10 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
     ) -> Result<DatabaseTableStructure, CommandBusAdapterError> {
         self.run_execution(self.bus.database_table_structure(input))
             .map_err(|e| {
-                CommandBusAdapterError::from_app_error("The table structure operation failed.", &e)
+                CommandBusAdapterError::from_database_app_error(
+                    "The table structure operation failed.",
+                    &e,
+                )
             })
     }
 
@@ -206,7 +209,10 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
     ) -> Result<DatabaseExportTableResult, CommandBusAdapterError> {
         self.run_execution(self.bus.database_export_table(input))
             .map_err(|e| {
-                CommandBusAdapterError::from_app_error("The table export operation failed.", &e)
+                CommandBusAdapterError::from_database_app_error(
+                    "The table export operation failed.",
+                    &e,
+                )
             })
     }
     fn list_flows(&self, workspace_id: &str) -> Result<Vec<FlowSummary>, CommandBusAdapterError> {
@@ -281,7 +287,9 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
             self.bus
                 .list_database_query_history(workspace_id.into(), Some(limit)),
         )
-        .map_err(|e| CommandBusAdapterError::from_app_error("Database history read failed.", &e))
+        .map_err(|e| {
+            CommandBusAdapterError::from_database_app_error("Database history read failed.", &e)
+        })
     }
     fn delete_db_connection(
         &self,
@@ -294,7 +302,10 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         )
         .map(|_| ())
         .map_err(|e| {
-            CommandBusAdapterError::from_app_error("Database connection deletion failed.", &e)
+            CommandBusAdapterError::from_database_app_error(
+                "Database connection deletion failed.",
+                &e,
+            )
         })
     }
     fn delete_ssh_connection(
@@ -686,7 +697,7 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
     ) -> Result<Vec<DatabaseConnection>, CommandBusAdapterError> {
         self.run(self.bus.list_database_connections(workspace_id.to_string()))
             .map_err(|e| {
-                CommandBusAdapterError::from_app_error(
+                CommandBusAdapterError::from_database_app_error(
                     "The command-bus database list operation failed.",
                     &e,
                 )
@@ -782,7 +793,7 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
     ) -> Result<DatabaseConnection, CommandBusAdapterError> {
         self.run(self.bus.save_database_connection(input))
             .map_err(|e| {
-                CommandBusAdapterError::from_app_error(
+                CommandBusAdapterError::from_database_app_error(
                     "The command-bus database connection save failed.",
                     &e,
                 )
@@ -821,9 +832,32 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
             catalog.map(str::to_string),
         ))
         .map_err(|e| {
-            CommandBusAdapterError::from_app_error(
+            CommandBusAdapterError::from_database_app_error(
                 "The command-bus database schema operation failed.",
                 &e,
+            )
+        })
+    }
+
+    fn list_db_tables(
+        &self,
+        workspace_id: &str,
+        connection_id: &str,
+        catalog: Option<&str>,
+        schema: Option<&str>,
+        limit: u32,
+    ) -> Result<DatabaseTableList, CommandBusAdapterError> {
+        self.run_execution(self.bus.database_list_tables(
+            workspace_id.to_string(),
+            connection_id.to_string(),
+            catalog.map(str::to_string),
+            schema.map(str::to_string),
+            limit,
+        ))
+        .map_err(|error| {
+            CommandBusAdapterError::from_database_app_error(
+                "The table listing operation failed.",
+                &error,
             )
         })
     }
@@ -834,7 +868,7 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
     ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
         self.run_execution(self.bus.execute_database_query(input))
             .map_err(|e| {
-                CommandBusAdapterError::from_app_error(
+                CommandBusAdapterError::from_database_app_error(
                     "The command-bus database query operation failed.",
                     &e,
                 )
@@ -851,7 +885,7 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
                 .test_database_connection(workspace_id.to_string(), connection_id.to_string()),
         )
         .map_err(|e| {
-            CommandBusAdapterError::from_app_error(
+            CommandBusAdapterError::from_database_app_error(
                 "The command-bus database connection test failed.",
                 &e,
             )
@@ -1129,6 +1163,14 @@ impl CommandBusAdapterError {
                 .database_error_details()
                 .unwrap_or_else(|| serde_json::json!({})),
         }
+    }
+
+    fn from_database_app_error(message: &'static str, error: &AppError) -> Self {
+        let mut result = Self::from_app_error(message, error);
+        if let Some(reason) = error.safe_reason() {
+            result.details = serde_json::json!({ "reason": reason });
+        }
+        result
     }
 
     fn from_ssh_app_error(message: &'static str, error: &AppError) -> Self {

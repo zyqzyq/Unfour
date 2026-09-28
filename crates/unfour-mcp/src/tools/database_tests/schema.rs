@@ -44,6 +44,22 @@ fn list_tables_respects_limit() {
 }
 
 #[test]
+fn list_tables_filters_schema_in_adapter_contract() {
+    let result = registry()
+        .call(
+            "unfour.db.list_tables",
+            json!({
+                "connectionId": "conn-1", "schema": "analytics", "limit": 1
+            }),
+        )
+        .unwrap();
+    let content = &result["structuredContent"];
+    assert_eq!(content["count"], 1);
+    assert_eq!(content["totalTables"], 2);
+    assert_eq!(content["tables"][0]["schema"], "analytics");
+}
+
+#[test]
 fn list_tables_requires_connection_id() {
     let result = registry().call("unfour.db.list_tables", json!({}));
     assert!(result.is_err(), "should fail without connectionId");
@@ -238,6 +254,29 @@ fn database_execution_error_includes_sqlstate_and_logs_as_error() {
         "relation \"missing\" does not exist"
     );
     assert!(!payload.to_string().contains("super-secret"));
+}
+
+#[test]
+fn export_error_returns_safe_reason_in_mcp_payload() {
+    let result = registry()
+        .call(
+            "unfour.db.export_table",
+            json!({
+                "connectionId": "conn-1", "tableName": "missing_ddl",
+                "content": "structure", "format": "sql"
+            }),
+        )
+        .unwrap();
+    let payload = crate::response::error_json(&result);
+    assert_eq!(payload["error"]["code"], "UNSUPPORTED_OPERATION");
+    assert_eq!(
+        payload["error"]["message"],
+        "The table export operation failed."
+    );
+    assert_eq!(
+        payload["error"]["details"]["reason"],
+        "DDL is not available for this table"
+    );
 }
 
 #[test]

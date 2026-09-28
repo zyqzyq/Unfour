@@ -12,8 +12,8 @@ use unfour_core::models::{
     DatabaseExportTableResult, DatabaseForeignKey, DatabaseIndex, DatabaseQueryInput,
     DatabaseQueryResult, DatabaseQuerySafety, DatabaseResultColumn, DatabaseRowMutationInput,
     DatabaseRowMutationResult, DatabaseSchema, DatabaseTable, DatabaseTableColumn,
-    DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult, DbQueryHistoryEntry,
-    DbQueryHistoryRecordInput, SavedSql, SavedSqlInput,
+    DatabaseTableList, DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTableSummary,
+    DatabaseTestResult, DbQueryHistoryEntry, DbQueryHistoryRecordInput, SavedSql, SavedSqlInput,
 };
 use unfour_core::redaction::redact_connection_string;
 use unfour_core::{AppError, AppResult};

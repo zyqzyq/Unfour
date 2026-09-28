@@ -35,8 +35,9 @@ it("saves the openGauss preset as postgres and reopens from the saved driver", (
 });
 
 it("shows runtime detection separately from the protocol and raw banner", () => {
-  render(<DatabaseTestResultDialog onOpenChange={() => {}} result={{ ok: true, message: "PostgreSQL connection OK", protocol: "postgres", detectedServer: "openGauss", serverVersion: "PostgreSQL 9.2.4 (openGauss 5.0.0)" }} />);
+  render(<DatabaseTestResultDialog onOpenChange={() => {}} result={{ ok: true, message: "openGauss connection OK", protocol: "postgres", detectedServer: "openGauss", serverVersion: "PostgreSQL 9.2.4 (openGauss 6.0.3)" }} />);
+  expect(screen.getByText("openGauss connection OK")).toBeInTheDocument();
   expect(screen.getByText("Protocol: PostgreSQL")).toBeInTheDocument();
   expect(screen.getByText("Detected server: openGauss")).toBeInTheDocument();
-  expect(screen.getByText("PostgreSQL 9.2.4 (openGauss 5.0.0)")).toBeInTheDocument();
+  expect(screen.getByText("PostgreSQL 9.2.4 (openGauss 6.0.3)")).toBeInTheDocument();
 });

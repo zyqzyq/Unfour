@@ -81,6 +81,7 @@ fn db_list_tables_input_schema() {
         &vec![json!("connectionId")]
     );
     assert!(tool.input_schema["properties"]["catalog"].is_object());
+    assert!(tool.input_schema["properties"]["schema"].is_object());
     assert!(tool.input_schema["properties"]["limit"].is_object());
 }
 

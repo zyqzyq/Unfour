@@ -3,12 +3,12 @@ use unfour_core::models::{
     ApiCollection, ApiEnvironment, ApiRequestInput, ApiResponse, ApiSavedRequest,
     CredentialCreateInput, CredentialMetadata, DatabaseConnection, DatabaseConnectionInput,
     DatabaseExportTableInput, DatabaseExportTableResult, DatabaseQueryInput, DatabaseQueryResult,
-    DatabaseSchema, DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult,
-    KeyValue, SshCommandHistoryEntry, SshCommandHistoryQuery, SshConnection, SshConnectionInput,
-    SshDiagnosticInput, SshDiagnosticResult, SshTask, SshTaskCancelInput, SshTaskCleanupInput,
-    SshTaskCleanupResult, SshTaskDetail, SshTaskRun, SshTaskRunInput, SshTaskSaveInput,
-    SshTasksReorderInput, SystemHealth, WorkspaceEnvironment, WorkspaceEnvironmentVariable,
-    WorkspaceVariable, WorkspaceVariableInput,
+    DatabaseSchema, DatabaseTableList, DatabaseTableStructure, DatabaseTableStructureInput,
+    DatabaseTestResult, KeyValue, SshCommandHistoryEntry, SshCommandHistoryQuery, SshConnection,
+    SshConnectionInput, SshDiagnosticInput, SshDiagnosticResult, SshTask, SshTaskCancelInput,
+    SshTaskCleanupInput, SshTaskCleanupResult, SshTaskDetail, SshTaskRun, SshTaskRunInput,
+    SshTaskSaveInput, SshTasksReorderInput, SystemHealth, WorkspaceEnvironment,
+    WorkspaceEnvironmentVariable, WorkspaceVariable, WorkspaceVariableInput,
 };
 use unfour_core::models::{FlowDefinition, FlowRun, FlowRunInput, FlowRunSummary, FlowSummary};
 
@@ -476,6 +476,21 @@ pub trait CommandBusAdapter: Send + Sync {
             });
         }
         self.get_db_schema(workspace_id, connection_id)
+    }
+
+    fn list_db_tables(
+        &self,
+        _workspace_id: &str,
+        _connection_id: &str,
+        _catalog: Option<&str>,
+        _schema: Option<&str>,
+        _limit: u32,
+    ) -> Result<DatabaseTableList, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Table listing is unavailable.",
+            details: serde_json::json!({}),
+        })
     }
 
     fn get_db_table_structure(

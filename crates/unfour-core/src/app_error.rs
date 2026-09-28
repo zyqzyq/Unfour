@@ -52,6 +52,17 @@ pub enum AppError {
 }
 
 impl AppError {
+    /// Only locally constructed safety failures may expose a reason at adapter
+    /// boundaries. Scrub embedded URLs and credential assignments first.
+    pub fn safe_reason(&self) -> Option<String> {
+        match self {
+            AppError::Unsupported(reason)
+            | AppError::Validation(reason)
+            | AppError::ReadOnly(reason) => sanitize_database_message(reason),
+            _ => None,
+        }
+    }
+
     /// Safe diagnostics for a database-engine failure.
     ///
     /// `sqlState` and `databaseMessage` are null when the driver does not
@@ -236,6 +247,19 @@ mod tests {
     fn non_database_errors_have_no_database_details() {
         assert!(AppError::Validation("table name cannot be empty".into())
             .database_error_details()
+            .is_none());
+    }
+
+    #[test]
+    fn safe_reasons_are_limited_to_owned_error_variants_and_redacted() {
+        let error =
+            AppError::Validation("invalid password=hunter2 postgres://user:secret@host/db".into());
+        let reason = error.safe_reason().unwrap();
+        assert!(reason.contains("invalid"));
+        assert!(!reason.contains("hunter2"));
+        assert!(!reason.contains("secret"));
+        assert!(AppError::Database(sqlx::Error::Protocol("private".into()))
+            .safe_reason()
             .is_none());
     }
 
