@@ -393,6 +393,9 @@ async fn sqlite_table_structure_exposes_columns_indexes_and_ddl() {
         .expect("table structure");
 
     assert_eq!(structure.name, "deploys");
+    assert!(structure.capabilities.indexes);
+    assert!(structure.capabilities.foreign_keys);
+    assert!(structure.capabilities.ddl);
     assert!(structure
         .columns
         .iter()

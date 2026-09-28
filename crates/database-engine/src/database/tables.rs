@@ -349,6 +349,7 @@ impl DatabaseService {
                     indexes,
                     foreign_keys,
                     ddl,
+                    capabilities: pool.profile.metadata_capabilities(),
                 })
             }
             "postgres" => {
@@ -404,6 +405,7 @@ impl DatabaseService {
                     indexes,
                     foreign_keys,
                     ddl,
+                    capabilities: pool.profile.metadata_capabilities(),
                 })
             }
             "mysql" => {
@@ -470,6 +472,7 @@ impl DatabaseService {
                     indexes,
                     foreign_keys,
                     ddl,
+                    capabilities: pool.profile.metadata_capabilities(),
                 })
             }
             driver => Err(AppError::Unsupported(format!(

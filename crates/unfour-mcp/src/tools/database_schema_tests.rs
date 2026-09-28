@@ -138,6 +138,12 @@ fn db_describe_table_output_schema_includes_catalog() {
     assert!(table_properties["indexes"].is_object());
     assert!(table_properties["foreignKeys"].is_object());
     assert!(table_properties["ddl"].is_object());
+    let capabilities = &table_properties["capabilities"];
+    assert_eq!(
+        capabilities["required"],
+        json!(["indexes", "foreignKeys", "ddl"])
+    );
+    assert!(capabilities["properties"]["foreignKeys"].is_object());
 }
 
 #[test]
@@ -160,6 +166,8 @@ fn db_export_table_schema_rejects_destination_path() {
         &vec![json!("string"), json!("number"), json!("null")]
     );
     assert!(tool.input_schema["properties"]["limit"].is_object());
+    assert!(tool.input_schema["properties"]["confirm"].is_object());
+    assert!(tool.input_schema["properties"]["confirmation_text"].is_object());
     assert!(tool.input_schema["properties"].get("where").is_none());
     assert_eq!(tool.input_schema["additionalProperties"], false);
     assert_eq!(tool.output_schema["additionalProperties"], false);

@@ -231,6 +231,14 @@ pub struct DatabaseRowMutationResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DatabaseMetadataCapabilities {
+    pub indexes: bool,
+    pub foreign_keys: bool,
+    pub ddl: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DatabaseTableStructure {
     #[serde(default)]
     pub catalog: Option<String>,
@@ -241,6 +249,7 @@ pub struct DatabaseTableStructure {
     pub indexes: Vec<DatabaseIndex>,
     pub foreign_keys: Vec<DatabaseForeignKey>,
     pub ddl: Option<String>,
+    pub capabilities: DatabaseMetadataCapabilities,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

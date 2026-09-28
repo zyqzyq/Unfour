@@ -420,6 +420,7 @@ export function handleDatabaseMock<T>(
       ],
       indexes: [{ name: "PRIMARY", columns: ["id"], unique: true, primary: true }],
       foreignKeys: [],
+      capabilities: { indexes: true, foreignKeys: true, ddl: true },
       ddl: `CREATE TABLE ${input.tableName} (\n  id TEXT PRIMARY KEY,\n  name TEXT NOT NULL,\n  sync_status TEXT DEFAULT 'local'\n);`,
     } satisfies DatabaseTableStructure) as T;
   }

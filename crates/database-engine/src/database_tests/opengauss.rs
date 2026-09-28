@@ -123,6 +123,9 @@ async fn opengauss_catalog_schema_describe_and_data_export_use_postgres_transpor
     assert_eq!(structure.indexes[1].columns, ["content", "computed"]);
     assert!(structure.indexes[1].unique && !structure.indexes[1].primary);
     assert!(structure.foreign_keys.is_empty());
+    assert!(structure.capabilities.indexes);
+    assert!(!structure.capabilities.foreign_keys);
+    assert!(structure.capabilities.ddl);
     assert!(structure
         .ddl
         .as_deref()

@@ -17,7 +17,8 @@ does not accept a destination path.
 - `cargo test -p unfour-mcp --offline --lib tools::database`: complete describe
   table output and output schema validation; export schema, managed path, and
   rejection of caller-supplied destination paths. Column selection, `eq`/`in`
-  filters, and `limit` are optional and omitted calls still export the whole table.
+  filters, and `limit` are optional. Current MCP calls that include data and omit
+  `limit` export all matching rows only after content-bound confirmation.
   Filter values are strings, numbers, or null. `eq` null stays `IS NULL`; `in`
   rejects null; boolean values are rejected.
 - Vitest for `TableExportDialog`, `TableDataTab`, and `DatabaseConnectionTree`:
@@ -35,3 +36,5 @@ CSV and JSON encode binary values as lowercase hexadecimal strings; CSV has no
 distinct representation for `NULL` versus an empty string. The MCP adapter's
 existing 120-second execution deadline also applies to exports; a timed-out
 export removes its staging file.
+Completed MCP export files remain in the managed exports directory until
+removed by the caller; there is no automatic retention cleanup.

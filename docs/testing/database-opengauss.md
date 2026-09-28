@@ -39,26 +39,63 @@ The loopback fixture covers index names/flags/order,
 native DDL return, both structure export modes, bound list SQL, explicit
 `schema=dbe_perf`, PostgreSQL listing behavior, `"char"` decoding, and the
 connection message. It does not execute the new catalog SQL inside openGauss.
-The request reports real openGauss 6.0.3 validation of connection test,
-read-only query, EXPLAIN, catalog switching, SQL/JSON/CSV data export,
-columns/filters/limit and column/PK metadata. Indexes, native DDL and the two
-structure export modes still need live 6.0.3 validation after this code change.
+The earlier request reported real openGauss 6.0.3 validation of connection
+test, read-only query, EXPLAIN, catalog switching, SQL/JSON/CSV data export,
+columns/filters/limit and column/PK metadata. The live MCP check below adds
+index, native DDL and both structure export modes for one table.
+
+### Live MCP check on openGauss 6.0.3 (2026-09-28)
+
+The running Unfour MCP server connected through a saved PostgreSQL-protocol
+connection. `unfour.system.health` reported ready command bus and storage, and
+`unfour.db.test_connection` identified openGauss 6.0.3. The saved connection
+was labeled production, so this check used reads and managed exports only.
+
+- `unfour.db.list_tables` returned 5 of 23 tables with `limit=5` in about
+  0.3 seconds; an explicit `schema=public` listing returned 3 of the same 23
+  with `limit=3`.
+- `unfour.db.query_readonly` returned the current catalog/schema and completed
+  a real table `count(*)`. `unfour.db.execute` completed a read-classified
+  `SELECT 1` without confirmation. `unfour.db.explain` completed for the table
+  query. A `pg_class.relkind` query decoded openGauss's internal `"char"` value
+  as `r`.
+- `unfour.db.describe_table` returned eight columns, a unique primary-key
+  index and native DDL for `public.app_application_category_relation`. A second
+  table's DDL included `SET search_path` followed by `CREATE TABLE`.
+- SQL structure-only export and SQL structure-and-data export both completed.
+  The latter used `id IS NULL` on a non-null primary key with `limit=1`, so
+  no business rows were exported. Both files contained `CREATE TABLE`, no
+  `INSERT INTO`, and reported `rowCount=0`; the generated files were removed
+  after inspection.
+- Fresh `cargo test -p unfour-database-engine -p unfour-mcp --lib` passed:
+  78 database-engine and 222 MCP tests. The checkout remained clean before
+  this evidence update.
+
+This live check covers the observed primary-key index and table DDL, not every
+openGauss index form or permission configuration. It did not execute MCP write
+operations, verify row mutation on the production database, or export business
+rows. Foreign-key metadata remains unsupported by the openGauss runtime profile.
+The running MCP process and the local Cargo test build were checked separately;
+this record does not assert their binaries are identical.
 
 Date: 2026-09-25. Scope: existing PostgreSQL transport and runtime profile;
 no new persisted driver, product hint, migration, Cloud Sync field, dependency,
 MCP/Flow product branch, or provider framework.
 
-## Implementation and compatibility policy
+## Initial implementation and compatibility policy (2026-09-25)
 
 - Detect `openGauss` before the PostgreSQL leading banner. PostgreSQL and unknown
   detection keep their prior behavior, including probe error/timeout fallback.
-- Enable catalogs, schemas, column metadata, generated-column detection, row
-  mutation and data export. Keep indexes, FK metadata and DDL disabled. Disabled
-  optional metadata is not requested by `table_structure` / MCP `describe_table`.
+- The initial profile enabled catalogs, schemas, column metadata,
+  generated-column detection, row mutation and data export. Indexes, FK metadata
+  and DDL were disabled at that stage; the 2026-09-28 closeout above supersedes
+  the index and DDL status. Disabled optional metadata was not requested by
+  `table_structure` / MCP `describe_table`.
 - Use the openGauss `pg_attrdef.adgencol` generated marker and `adsrc` expression,
   basic `pg_attribute` fields, `format_type`, and `pg_constraint` primary keys.
-  Do not use PostgreSQL `attidentity`, `attgenerated`, information-schema
-  identity/generated fields, `pg_get_expr`, `pg_index`, or `pg_get_indexdef`.
+  The initial column metadata query avoided PostgreSQL `attidentity`,
+  `attgenerated`, information-schema identity/generated fields, `pg_get_expr`,
+  `pg_index`, and `pg_get_indexdef`. The later index query uses the last two.
 - Data-only export skips all optional structure metadata for every driver.
   Structure export still fails explicitly if DDL is unavailable.
 - Catalog-scoped pools and returned table structure both use the requested
@@ -116,16 +153,19 @@ connection per pool, and a UI assertion found the old MySQL/MariaDB label. Final
 runs pass. The first sandboxed Vitest launch failed with esbuild `spawn EPERM`;
 the authorized unsandboxed retry passed.
 
-## Not verified against a real service
+## Not verified against a real service as of 2026-09-25
 
-No real openGauss endpoint was configured or used. Real authentication/TLS,
+This section records the initial state before the live 2026-09-28 check above.
+No real openGauss endpoint was configured or used then. Real authentication/TLS,
 catalog SQL and permissions, generated/serial columns, query/transaction behavior,
-row mutations, exports and SQLx type decoding remain **NOT VERIFIED** against
-openGauss (including 5.x). The desktop view was verified by rendered component
-tests and production build, not a running native desktop session.
+row mutations, exports and SQLx type decoding were **NOT VERIFIED** against
+openGauss (including 5.x) at that point. The desktop view was verified by
+rendered component tests and production build, not a running native desktop
+session.
 
 Before certifying a server version, use a disposable database and cover multiple
 catalogs/schemas, quoted identifiers, composite primary keys, serial/generated
 columns, read-only/confirmation gates, NULL and numeric/text/date/binary values,
-CSV/JSON/SQL data exports and parameterized filtering. Index/FK/DDL capabilities
-must remain off until dedicated implementations are validated for that version.
+CSV/JSON/SQL data exports and parameterized filtering. The current openGauss
+profile enables indexes and DDL after the later validation; FK metadata is
+still disabled.

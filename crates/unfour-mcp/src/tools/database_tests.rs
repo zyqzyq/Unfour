@@ -8,9 +8,10 @@ use unfour_command_bus::{
 use unfour_core::models::{
     ApiResponse, CredentialCreateInput, CredentialMetadata, DatabaseConnection,
     DatabaseConnectionInput, DatabaseExportTableInput, DatabaseExportTableResult,
-    DatabaseForeignKey, DatabaseIndex, DatabaseQueryInput, DatabaseQueryResult,
-    DatabaseQuerySafety, DatabaseResultColumn, DatabaseSchema, DatabaseTable, DatabaseTableColumn,
-    DatabaseTableList, DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult,
+    DatabaseForeignKey, DatabaseIndex, DatabaseMetadataCapabilities, DatabaseQueryInput,
+    DatabaseQueryResult, DatabaseQuerySafety, DatabaseResultColumn, DatabaseSchema, DatabaseTable,
+    DatabaseTableColumn, DatabaseTableList, DatabaseTableStructure, DatabaseTableStructureInput,
+    DatabaseTestResult,
 };
 
 use crate::command_bus_adapter::{CommandBusAdapter, CommandBusAdapterError};
@@ -92,6 +93,11 @@ impl CommandBusAdapter for DbStubCommandBus {
                 referenced_columns: vec!["id".into()],
             }],
             ddl: Some("CREATE TABLE users (id integer PRIMARY KEY);".into()),
+            capabilities: DatabaseMetadataCapabilities {
+                indexes: true,
+                foreign_keys: true,
+                ddl: true,
+            },
         })
     }
 

@@ -9,8 +9,8 @@ use crate::command_bus_adapter::CommandBusAdapter;
 
 use super::policy::ToolPolicyEvaluation;
 use super::{
-    confirmation::ensure_confirmed_if_guarded, object_with_allowed_keys, RegisteredTool,
-    ToolAnnotations, ToolCallError, ToolDefinition,
+    confirmation::{ensure_confirmed, ensure_confirmed_if_guarded},
+    object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition,
 };
 
 #[path = "database_create.rs"]
@@ -30,7 +30,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
             definition: ToolDefinition {
                 name: "unfour.db.export_table",
                 title: "Export Database Table",
-                description: "Exports one table to a file in Unfour's managed exports directory. Optional columns, structured filters, and limit apply to the data portion. Omitted selectors export the whole table. Returns file metadata; no destination path is accepted.",
+                description: "Exports one table to a file in Unfour's managed exports directory. Optional columns, structured filters, and limit apply to the data portion. Data exports without limit require content-bound confirmation; omitted limit still means all matching rows. Returns file metadata; no destination path is accepted.",
                 input_schema: json!({
                     "type": "object", "properties": {
                         "connectionId": {"type": "string"}, "tableName": {"type": "string"},
@@ -43,7 +43,10 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                             "op": {"type": "string", "enum": ["eq", "in"]},
                             "values": {"type": "array", "items": {"type": ["string", "number", "null"]}}
                         }, "required": ["column", "op", "values"], "additionalProperties": false}},
-                        "limit": {"type": "integer", "minimum": 1, "description": "Optional maximum number of data rows."}
+                        "limit": {"type": "integer", "minimum": 1, "description": "Optional maximum number of data rows. Omit for all matching rows, which requires confirmation when content includes data."},
+                        "confirm": {"type": "boolean"},
+                        "confirmationText": {"type": "string"},
+                        "confirmation_text": {"type": "string"}
                     }, "required": ["connectionId", "tableName", "content", "format"], "additionalProperties": false
                 }),
                 output_schema: json!({
@@ -172,7 +175,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                 name: "unfour.db.describe_table",
                 title: "Describe Database Table",
                 description:
-                    "Describes a table's complete structure (columns, indexes, foreign keys, DDL) for a saved database connection through the Unfour command bus. Does not read table data.",
+                    "Describes a table's columns, available indexes, foreign keys and DDL, with runtime metadata capabilities, through the Unfour command bus. Does not read table data.",
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -523,6 +526,9 @@ fn describe_table_output_schema() -> Value {
                 "catalog": {"type": ["string", "null"]}, "schema": {"type": ["string", "null"]},
                 "name": {"type": "string"}, "kind": {"type": "string"}, "ddl": {"type": ["string", "null"]},
                 "columnCount": {"type": "integer", "minimum": 0},
+                "capabilities": {"type": "object", "properties": {
+                    "indexes": {"type": "boolean"}, "foreignKeys": {"type": "boolean"}, "ddl": {"type": "boolean"}
+                }, "required": ["indexes", "foreignKeys", "ddl"], "additionalProperties": false},
                 "columns": {"type": "array", "items": {"type": "object", "properties": {
                     "name": {"type": "string"}, "dataType": {"type": "string"},
                     "nullable": {"type": "boolean"}, "primaryKey": {"type": "boolean"},
@@ -536,7 +542,7 @@ fn describe_table_output_schema() -> Value {
                     "name": {"type": "string"}, "columns": {"type": "array", "items": {"type": "string"}},
                     "referencedTable": {"type": "string"}, "referencedColumns": {"type": "array", "items": {"type": "string"}}
                 }, "required": ["name", "columns", "referencedTable", "referencedColumns"], "additionalProperties": false}}
-            }, "required": ["catalog", "schema", "name", "kind", "ddl", "columnCount", "columns", "indexes", "foreignKeys"], "additionalProperties": false}
+            }, "required": ["catalog", "schema", "name", "kind", "ddl", "columnCount", "columns", "indexes", "foreignKeys", "capabilities"], "additionalProperties": false}
         }, "required": ["connectionId", "table", "source"], "additionalProperties": false
     })
 }
@@ -559,6 +565,9 @@ fn db_export_table(
             "columns",
             "filters",
             "limit",
+            "confirm",
+            "confirmationText",
+            "confirmation_text",
         ],
     )?;
     let connection_id =
@@ -589,6 +598,27 @@ fn db_export_table(
         "unfour.db.export_table"
     )?))
     .map_err(|_| ToolCallError::InvalidArguments("Invalid export format".into()))?;
+    if !matches!(content, DatabaseExportContent::Structure) && limit.is_none() {
+        ensure_confirmed(
+            &arguments,
+            "DB_EXPORT_UNBOUNDED_DATA",
+            "Exporting all matching data rows can consume substantial resources and leave a persistent local file.",
+            json!({
+                "workspaceId": workspace_id,
+                "connectionId": connection_id,
+                "catalog": catalog,
+                "schema": schema,
+                "tableName": table_name,
+                "content": content,
+                "format": format,
+                "columns": columns,
+                "filters": filters,
+                "limit": limit,
+            }),
+        )?;
+    }
+    // Completed files remain in the managed exports directory; the engine
+    // removes only staging files left by failed exports.
     let root = unfour_paths::resolve_unfour_paths()
         .map_err(|_| ToolCallError::Execution {
             code: "IO_ERROR",

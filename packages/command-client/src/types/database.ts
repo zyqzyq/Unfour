@@ -98,6 +98,7 @@ export type DatabaseTableStructure = {
   indexes: DatabaseIndex[];
   foreignKeys: DatabaseForeignKey[];
   ddl?: string | null;
+  capabilities: { indexes: boolean; foreignKeys: boolean; ddl: boolean };
 };
 
 export type DatabaseCellValue = {

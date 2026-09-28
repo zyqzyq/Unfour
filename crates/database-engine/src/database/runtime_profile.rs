@@ -2,6 +2,8 @@
 //! Add product detection and metadata overrides here/at the metadata boundary,
 //! not another transport driver. Intentionally no serde or persistence traits.
 
+use unfour_core::models::DatabaseMetadataCapabilities;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DatabaseDialect {
     Sqlite,
@@ -68,6 +70,14 @@ pub struct RuntimeDatabaseProfile {
 }
 
 impl RuntimeDatabaseProfile {
+    pub(super) fn metadata_capabilities(&self) -> DatabaseMetadataCapabilities {
+        DatabaseMetadataCapabilities {
+            indexes: self.capabilities.indexes,
+            foreign_keys: self.capabilities.foreign_keys,
+            ddl: self.capabilities.ddl,
+        }
+    }
+
     pub(super) fn server_name(&self) -> &'static str {
         match self.detected_server_type {
             DetectedServerType::Sqlite => "SQLite",

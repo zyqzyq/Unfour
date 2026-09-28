@@ -63,6 +63,10 @@ fn profiles_resolve_dialects_and_conservative_capabilities() {
         assert_eq!(profile.capabilities.indexes, known);
         assert_eq!(profile.capabilities.foreign_keys, known);
         assert_eq!(profile.capabilities.ddl, known);
+        let metadata = profile.metadata_capabilities();
+        assert_eq!(metadata.indexes, known);
+        assert_eq!(metadata.foreign_keys, known);
+        assert_eq!(metadata.ddl, known);
         assert_eq!(profile.capabilities.generated_columns, known);
         assert_eq!(profile.capabilities.row_mutation, known);
         assert_eq!(profile.capabilities.export, known);

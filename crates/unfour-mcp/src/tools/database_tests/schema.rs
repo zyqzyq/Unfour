@@ -137,6 +137,12 @@ fn describe_table_returns_columns() {
     assert!(table["ddl"].as_str().unwrap().contains("CREATE TABLE"));
     assert_eq!(table["indexes"][0]["name"], "users_pkey");
     assert_eq!(table["foreignKeys"][0]["name"], "users_ref");
+    assert_eq!(
+        table["capabilities"],
+        json!({
+            "indexes": true, "foreignKeys": true, "ddl": true
+        })
+    );
 
     let id_col = &table["columns"][0];
     assert_eq!(id_col["name"], "id");
@@ -148,14 +154,23 @@ fn describe_table_returns_columns() {
 #[test]
 fn export_table_returns_only_managed_file_metadata() {
     let registry = registry();
+    let arguments = json!({
+        "connectionId": "conn-1", "tableName": "users", "content": "data", "format": "csv"
+    });
+    let first = registry
+        .call("unfour.db.export_table", arguments.clone())
+        .unwrap();
+    assert_eq!(first["isError"], true);
+    let confirmation = crate::response::error_json(&first)["confirmation_text"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let mut confirmed = arguments;
+    confirmed["confirm"] = json!(true);
+    confirmed["confirmation_text"] = json!(confirmation);
     let result = registry
-        .call(
-            "unfour.db.export_table",
-            json!({
-                "connectionId": "conn-1", "tableName": "users", "content": "data", "format": "csv"
-            }),
-        )
-        .expect("export should succeed");
+        .call("unfour.db.export_table", confirmed)
+        .expect("confirmed export");
     crate::output_schema::assert_success_matches_output_schema(
         &registry,
         "unfour.db.export_table",
@@ -173,6 +188,68 @@ fn export_table_returns_only_managed_file_metadata() {
 }
 
 #[test]
+fn unbounded_data_export_requires_confirmation_bound_to_request() {
+    let registry = registry();
+    let arguments = json!({
+        "connectionId": "conn-1", "tableName": "users", "content": "structure-and-data",
+        "format": "sql", "columns": ["email"],
+        "filters": [{ "column": "id", "op": "eq", "values": [1] }]
+    });
+    let first = registry
+        .call("unfour.db.export_table", arguments.clone())
+        .unwrap();
+    let prompt = crate::response::error_json(&first);
+    assert_eq!(prompt["error"]["code"], "CONFIRMATION_REQUIRED");
+    assert_eq!(first["_meta"]["riskLevel"], "high");
+    let confirmation = prompt["confirmation_text"].as_str().unwrap();
+
+    let mut altered = arguments.clone();
+    altered["filters"][0]["values"] = json!([2]);
+    altered["confirm"] = json!(true);
+    altered["confirmationText"] = json!(confirmation);
+    let second = registry.call("unfour.db.export_table", altered).unwrap();
+    assert_eq!(
+        crate::response::error_json(&second)["error"]["code"],
+        "CONFIRMATION_REQUIRED"
+    );
+
+    let mut confirmed = arguments;
+    confirmed["confirm"] = json!(true);
+    confirmed["confirmationText"] = json!(confirmation);
+    let result = registry.call("unfour.db.export_table", confirmed).unwrap();
+    assert_eq!(result["isError"], false);
+}
+
+#[test]
+fn unbounded_data_export_requires_confirmation_in_full_access_and_read_only() {
+    for registry in [
+        ToolRegistry::with_command_bus(Arc::new(DbFailingCommandBus)),
+        ToolRegistry::with_command_bus(Arc::new(ProdDbStubCommandBus)),
+    ] {
+        let result = registry.call("unfour.db.export_table", json!({
+            "connectionId": "conn-1", "tableName": "users", "content": "data", "format": "csv"
+        })).unwrap();
+        assert_eq!(
+            crate::response::error_json(&result)["error"]["code"],
+            "CONFIRMATION_REQUIRED"
+        );
+    }
+}
+
+#[test]
+fn structure_only_and_bounded_data_exports_do_not_require_confirmation() {
+    let registry = registry();
+    for arguments in [
+        json!({ "connectionId": "conn-1", "tableName": "users", "content": "structure", "format": "sql" }),
+        json!({ "connectionId": "conn-1", "tableName": "users", "content": "data", "format": "csv", "limit": 1 }),
+        json!({ "connectionId": "conn-1", "tableName": "users", "content": "structure-and-data", "format": "sql", "limit": 1 }),
+    ] {
+        let result = registry.call("unfour.db.export_table", arguments).unwrap();
+        assert_eq!(result["isError"], false);
+    }
+}
+
+#[test]
 fn export_table_accepts_columns_filters_and_limit() {
     let registry = registry();
     let columns = registry
@@ -183,7 +260,8 @@ fn export_table_accepts_columns_filters_and_limit() {
                 "tableName": "users",
                 "content": "data",
                 "format": "csv",
-                "columns": ["email"]
+                "columns": ["email"],
+                "limit": 1
             }),
         )
         .expect("column export");
@@ -197,7 +275,8 @@ fn export_table_accepts_columns_filters_and_limit() {
                 "tableName": "users",
                 "content": "data",
                 "format": "json",
-                "filters": [{ "column": "data_id", "op": "in", "values": [2, 3] }]
+                "filters": [{ "column": "data_id", "op": "in", "values": [2, 3] }],
+                "limit": 2
             }),
         )
         .expect("filtered export");
