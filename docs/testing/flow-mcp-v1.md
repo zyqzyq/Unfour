@@ -64,3 +64,35 @@ See [Flow architecture](../architecture/flow-v1.md).
   for those crates plus unfour-core; git diff --check.
 - PASS: large-file checker (zero blocking files).
 - PASS: `cargo test -p unfour-mcp output_schema --quiet` (10 verifier tests); Flow-specific successes also validate against their outputSchema in the aggregate suite.
+
+## 2026-09-28 audit and terminal-state follow-up
+
+The current MCP registry already exposes `flow.list/get/save/run/cancel_run/list_runs/get_run`.
+The run handler pins the confirmed definition revision, sets `initiator=mcp`,
+and calls CommandBus; CommandBus delegates execution to the existing FlowService
+and API/SSH/Database capability paths. No second runtime, persisted-schema
+change, or Desktop Flow behavior change was needed.
+
+Added adapter-level regressions that start Runs through MCP and read the shared
+history until success, runtime failure, and step timeout. They validate each
+terminal status, step status, stable error, finish timestamp, MCP initiator,
+summary/detail agreement, and successful outputSchema. A separate persisted
+fixture starts a long Run through MCP, closes stdio through the production EOF
+path, reopens the same storage, and verifies that stale-lease recovery reports
+`interrupted` without replaying the Run. The test ages the heartbeat explicitly
+to avoid waiting 30 seconds.
+
+- PASS: `cargo test -p unfour-mcp -p unfour-flow-engine` (219 MCP library tests,
+  four MCP binary tests, two MCP registry integration tests, eight Flow Engine
+  tests).
+- PASS: `cargo test -p unfour-command-bus` after increasing the shared test
+  poller's deadline to 30 seconds. The large-history Wait Until case allows a
+  20-second step timeout, but its former test poller stopped after ten seconds;
+  it passed in isolation and the full suite passed with the corrected poller.
+- PASS: `cargo test -p unfour-command-bus --features ssh-native` (82 library
+  tests, including the API/SSH/Database Flow execution fixture, plus integration
+  tests).
+- PASS: `cargo fmt -p unfour-mcp -p unfour-command-bus -p unfour-flow-engine --check`,
+  `git diff --check`, and direct Node invocation of `check-large-files.mjs`
+  (zero blocking files). The pnpm wrapper could not open its cache database in
+  this sandbox; the direct script invocation passed.

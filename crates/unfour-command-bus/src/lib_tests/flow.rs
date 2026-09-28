@@ -31,7 +31,8 @@ fn next(mut action: Value, target: &str) -> Value {
     action
 }
 pub(super) async fn finished(bus: &CommandBus, run: &FlowRun) -> FlowRun {
-    tokio::time::timeout(Duration::from_secs(10), async {
+    // Wait Until history-limit coverage allows a 20-second step deadline.
+    tokio::time::timeout(Duration::from_secs(30), async {
         loop {
             let current = bus
                 .get_flow_run(run.workspace_id.clone(), run.id.clone())

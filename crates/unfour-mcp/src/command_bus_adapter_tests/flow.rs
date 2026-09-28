@@ -52,6 +52,152 @@ fn confirmation(registry: &ToolRegistry, args: Value) -> String {
     payload["confirmation_text"].as_str().unwrap().into()
 }
 
+fn confirmed_run(registry: &ToolRegistry, flow_id: &str) -> Value {
+    let mut args = json!({"flowId":flow_id});
+    args["confirmationText"] = json!(confirmation(registry, args.clone()));
+    args["confirm"] = json!(true);
+    success(registry, "run", args)["run"].clone()
+}
+
+fn finished_run(registry: &ToolRegistry, run_id: &str) -> Value {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        let run = success(registry, "get_run", json!({"runId":run_id}))["run"].clone();
+        if run["status"] != "running" {
+            return run;
+        }
+        assert!(std::time::Instant::now() < deadline, "Flow did not finish");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
+#[test]
+fn flow_mcp_run_reports_success_failure_and_timeout_from_shared_engine() {
+    let (adapter, registry, ws) = setup();
+    let database = adapter
+        .run(
+            adapter.bus.save_database_connection(
+                serde_json::from_value(json!({
+                    "workspaceId":ws,
+                    "name":"Flow MCP probe fixture",
+                    "driver":"sqlite",
+                    "sqlitePath":":memory:",
+                    "readOnly":true
+                }))
+                .unwrap(),
+            ),
+        )
+        .unwrap();
+    let cases = [
+        (
+            json!([{"id":"wait","name":"Wait","kind":"wait","timeoutMs":1000,"durationMs":1}]),
+            "succeeded",
+            "succeeded",
+            Value::Null,
+        ),
+        (
+            json!([{"id":"condition","name":"Condition","kind":"condition","timeoutMs":1000,"predicate":{"left":{"$ref":"/inputs/value/missing"},"op":"eq","right":true},"ifTrue":"$end","ifFalse":"$end"}]),
+            "failed",
+            "failed",
+            json!("FLOW_MISSING_REFERENCE"),
+        ),
+        (
+            json!([{"id":"poll","name":"Poll","kind":"waitUntil","timeoutMs":100,"probe":{"capability":"database","resourceId":database.id,"arguments":{"sql":"SELECT 1 AS ready"}},"successWhen":{"left":true,"op":"eq","right":false},"intervalMs":10}]),
+            "timedOut",
+            "timedOut",
+            json!("FLOW_TIMEOUT"),
+        ),
+    ];
+    for (steps, expected_run, expected_step, expected_error) in cases {
+        let mut flow = serde_json::to_value(definition(&ws)).unwrap();
+        flow["steps"] = steps;
+        let saved = adapter
+            .save_flow(serde_json::from_value(flow).unwrap())
+            .unwrap();
+        let started = confirmed_run(&registry, &saved.id);
+        assert_eq!(started["context"]["initiator"], "mcp");
+        let completed = finished_run(&registry, started["id"].as_str().unwrap());
+        assert_eq!(completed["status"], expected_run, "{completed:?}");
+        assert_eq!(completed["steps"][0]["status"], expected_step);
+        assert_eq!(completed["error"], expected_error);
+        assert!(completed["finishedAt"].is_string());
+        assert_eq!(completed["context"]["initiator"], "mcp");
+        let summaries = success(&registry, "list_runs", json!({"flowId":saved.id}));
+        assert_eq!(summaries["runs"][0]["status"], expected_run);
+        assert_eq!(summaries["runs"][0]["finishedAt"], completed["finishedAt"]);
+    }
+}
+
+#[test]
+fn flow_mcp_sidecar_eof_leaves_run_for_shared_interruption_recovery() {
+    let storage_dir = test_storage_dir("flow-sidecar-eof");
+    let ws = initialize_storage_dir(&storage_dir);
+    let adapter = LocalCommandBusAdapter::from_storage_dir(&storage_dir).unwrap();
+    adapter
+        .run(
+            adapter
+                .bus
+                .update_workspace_environment(ws.clone(), "dev".into()),
+        )
+        .unwrap();
+    let registry = ToolRegistry::with_command_bus(adapter.clone());
+    let saved = adapter.save_flow(definition(&ws)).unwrap();
+    let started = confirmed_run(&registry, &saved.id);
+    assert_eq!(started["status"], "running");
+    let run_id = started["id"].as_str().unwrap().to_owned();
+
+    // The real stdio EOF path stops the adapter runtime and its background run.
+    crate::run_stdio_with_adapter(
+        adapter.clone(),
+        std::io::Cursor::new(Vec::<u8>::new()),
+        Vec::new(),
+    )
+    .unwrap();
+    drop(registry);
+    drop(adapter);
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let db = LocalDb::connect_path(storage_dir.join(unfour_command_bus::DEFAULT_DATABASE_FILE))
+            .await
+            .unwrap();
+        sqlx::query("UPDATE flow_runs SET updated_at = '2000-01-01T00:00:00+00:00' WHERE id = ?")
+            .bind(&run_id)
+            .execute(db.pool())
+            .await
+            .unwrap();
+        db.pool().close().await;
+    });
+    drop(runtime);
+
+    let reopened = LocalCommandBusAdapter::from_storage_dir(&storage_dir).unwrap();
+    let registry = ToolRegistry::with_command_bus(reopened.clone());
+    let recovered = success(
+        &registry,
+        "get_run",
+        json!({"workspaceId":ws,"runId":run_id}),
+    )["run"]
+        .clone();
+    assert_eq!(recovered["status"], "interrupted");
+    assert_eq!(recovered["error"], "FLOW_INTERRUPTED");
+    assert_eq!(recovered["context"]["initiator"], "mcp");
+    assert!(recovered["finishedAt"].is_string());
+    let summary = success(
+        &registry,
+        "list_runs",
+        json!({"workspaceId":ws,"flowId":saved.id}),
+    );
+    assert_eq!(summary["runs"][0]["status"], "interrupted");
+    assert_eq!(summary["runs"][0]["finishedAt"], recovered["finishedAt"]);
+    drop(registry);
+    reopened.shutdown();
+    drop(reopened);
+    std::fs::remove_dir_all(storage_dir).unwrap();
+}
+
 #[test]
 fn flow_tools_list_exposes_valid_schemas_and_shared_crud_revision() {
     let (adapter, registry, ws) = setup();
