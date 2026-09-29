@@ -107,6 +107,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Install MCP system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libdbus-1-dev
+
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
