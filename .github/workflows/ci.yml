@@ -12,8 +12,12 @@ concurrency:
 
 jobs:
   frontend:
-    name: Frontend (build, lint, test)
+    name: Frontend ${{ matrix.task }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [lint, build, test]
     steps:
       - uses: actions/checkout@v5
 
@@ -27,14 +31,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        run: pnpm run lint
-
-      - name: Build
-        run: pnpm run build
-
-      - name: Unit tests
-        run: pnpm run test
+      - run: pnpm run ${{ matrix.task }}
 
   release-contracts:
     name: Release contracts
@@ -62,8 +59,12 @@ jobs:
         run: pnpm run check:migrations
 
   rust:
-    name: Rust (check, test)
+    name: Rust ${{ matrix.task }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [check, test]
     steps:
       - uses: actions/checkout@v5
 
@@ -82,15 +83,35 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.task }}
 
       - name: Prepare Tauri sidecars
         run: node scripts/prepare-tauri-sidecars.mjs
 
       - name: cargo check (workspace)
+        if: matrix.task == 'check'
         run: cargo check --workspace
 
       - name: cargo check (ssh-native)
+        if: matrix.task == 'check'
         run: cargo check -p unfour --features ssh-native
 
-      - name: cargo test (workspace)
-        run: cargo test --workspace
+      - name: cargo test (workspace except MCP)
+        if: matrix.task == 'test'
+        run: cargo test --workspace --exclude unfour-mcp
+
+  mcp-contracts:
+    name: MCP contracts and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: mcp-contracts
+
+      - name: MCP crate tests (including binary protocol contracts)
+        run: cargo test -p unfour-mcp
