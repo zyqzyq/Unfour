@@ -1,4 +1,4 @@
-import type { FlowDefinition } from "@unfour/command-client";
+import type { FlowDefinition, WorkspaceEnvironment, WorkspaceVariable } from "@unfour/command-client";
 import { authoringProblems } from "./authoringValidation";
 import { apiEnvironmentErrors } from "./apiEnvironmentValidation";
 import { guaranteedUpstream, unsafeReferences } from "./referenceGraph";
@@ -20,21 +20,40 @@ function editorValidation(draft: FlowDefinition, invalid: FlowEditor["invalid"],
   return { schemaProblems, referenceProblems, upstream, boundsProblems, resourceProblems, invalidEditor };
 }
 
-function environmentValidation(draft: FlowDefinition, environmentId: string, data: FlowWorkspaceData) {
-  const { workspaceVariables, environments, resourcesQuery, resources } = data;
-  const workspace = workspaceVariables.data ?? [];
-  const selected = environments.data?.find((env) => env.id === environmentId)?.variables ?? [];
+function environmentVariables(workspace: WorkspaceVariable[], environments: WorkspaceEnvironment[], environmentId: string) {
+  const selected = environments.find((env) => env.id === environmentId)?.variables ?? [];
   const enabled = [...workspace, ...selected].filter((variable) => variable.isEnabled && !variable.deletedAt);
-  const environmentKeys = [...new Set([...workspace, ...(environments.data ?? []).flatMap((env) => env.variables ?? [])]
+  const environmentKeys = [...new Set([...workspace, ...environments.flatMap((env) => env.variables ?? [])]
     .filter((variable) => variable.isEnabled && !variable.deletedAt).map((variable) => variable.key))];
+  // SSH defaults normalize keys and let the selected environment win. API
+  // templates and reference suggestions retain the original key spelling.
+  const defaults = new Map(enabled.map((variable) => [variable.key.trim().toLowerCase(), variable.value]));
+  const effectiveApiKeys = new Set(enabled.map((variable) => variable.key));
+  return { environmentKeys, defaults, effectiveApiKeys };
+}
+
+function environmentRequirements(draft: FlowDefinition) {
   const actions = draft.steps.map((step) => step.kind === "action" ? step.action : step.kind === "poll" || step.kind === "waitUntil" ? step.probe : null);
   const needsWorkspaceDefaults = actions.some((action) => action?.capability === "ssh" && action.arguments.workspaceDefaults === true);
   const hasApi = actions.some((action) => action?.capability === "api");
+  return { needsWorkspaceDefaults, hasApi };
+}
+
+function environmentResourceProblems(draft: FlowDefinition, resources: FlowWorkspaceData["resources"], variables: ReturnType<typeof environmentVariables>, ready: boolean) {
+  if (!ready) return { environmentInputProblems: [], apiProblems: [] };
+  return {
+    environmentInputProblems: environmentInputErrors(draft, resources, variables.defaults),
+    apiProblems: apiEnvironmentErrors(draft, resources, variables.effectiveApiKeys),
+  };
+}
+
+function environmentValidation(draft: FlowDefinition, environmentId: string, data: FlowWorkspaceData) {
+  const { workspaceVariables, environments, resourcesQuery, resources } = data;
+  const variables = environmentVariables(workspaceVariables.data ?? [], environments.data ?? [], environmentId);
+  const { environmentKeys } = variables;
+  const { needsWorkspaceDefaults, hasApi } = environmentRequirements(draft);
   const defaultsReady = workspaceVariables.isSuccess && !environments.isPending;
-  const defaults = new Map(enabled.map((variable) => [variable.key.trim().toLowerCase(), variable.value]));
-  const environmentInputProblems = resourcesQuery.data && defaultsReady ? environmentInputErrors(draft, resources, defaults) : [];
-  const effectiveApiKeys = new Set(enabled.map((variable) => variable.key));
-  const apiProblems = resourcesQuery.data && defaultsReady ? apiEnvironmentErrors(draft, resources, effectiveApiKeys) : [];
+  const { environmentInputProblems, apiProblems } = environmentResourceProblems(draft, resources, variables, Boolean(resourcesQuery.data && defaultsReady));
   const environmentMissing = Boolean(environmentId) && !environments.data?.some((item) => item.id === environmentId);
   const invalidEnvironment = ((hasApi || needsWorkspaceDefaults) && !defaultsReady)
     || apiProblems.length > 0 || environmentInputProblems.length > 0 || environments.isError || environmentMissing;

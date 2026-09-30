@@ -16,6 +16,7 @@ const queryMocks = vi.hoisted(() => ({
   refetch: vi.fn(),
   workspaceFailure: false,
   workspacePending: false,
+  activeTabId: "api-main",
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -79,11 +80,11 @@ vi.mock("@unfour/command-client", () => ({
   setActiveWorkspace: vi.fn(),
 }));
 
-const setActiveTab = vi.fn();
+const setActiveTab = vi.fn((tabId: string) => { queryMocks.activeTabId = tabId; });
 
 vi.mock("@unfour/workspace-core", () => ({
   useWorkspaceStore: () => ({
-    activeTabId: "api-main",
+    activeTabId: queryMocks.activeTabId,
     activeWorkspaceId: "ws-default",
     bottomPanelHeight: 240,
     rightInspectorWidth: 320,
@@ -95,7 +96,12 @@ vi.mock("@unfour/workspace-core", () => ({
     setModuleSidebarWidth: vi.fn(),
     sidebarCollapsed: false,
     sidebarWidths: { api: 320, ssh: 248, database: 280 },
-    tabs: [{ id: "api-main", kind: "api", title: "API Client" }],
+    tabs: [
+      { id: "api-main", kind: "api", title: "API Client" },
+      { id: "database-main", kind: "database", title: "Database" },
+      { id: "ssh-main", kind: "ssh", title: "SSH Terminal" },
+      { id: "flow-main", kind: "flow", title: "Flow" },
+    ],
     toggleSidebar: vi.fn(),
   }),
 }));
@@ -170,10 +176,11 @@ vi.mock("@unfour/workspace-environments", () => ({
 }));
 
 vi.mock("./components/LazyFeatureModules", () => ({
-  ApiClientModule: () => null,
-  DatabaseModule: () => null,
+  ApiClientModule: () => <input aria-label="API draft" defaultValue="" />,
+  DatabaseModule: () => <input aria-label="SQL draft" defaultValue="" />,
+  FlowModule: () => <input aria-label="Flow draft" defaultValue="" />,
   SshTerminalLogPanel: () => null,
-  SshTerminalModule: () => null,
+  SshTerminalModule: () => <input aria-label="SSH draft" defaultValue="" />,
   SshTerminalStatusBar: ({ rightAccessory }: { rightAccessory?: ReactNode }) => (
     <>{rightAccessory}</>
   ),
@@ -283,6 +290,9 @@ vi.mock("./components/ModuleActivityBar", () => ({
       <button onClick={() => onSelect("ssh-main")} type="button">
         Open SSH Terminal
       </button>
+      <button onClick={() => onSelect("api-main")} type="button">Open API Client</button>
+      <button onClick={() => onSelect("database-main")} type="button">Open Database</button>
+      <button onClick={() => onSelect("flow-main")} type="button">Open Flow</button>
       <button onClick={onToggleSidebar} type="button">
         Toggle module sidebar
       </button>
@@ -303,9 +313,35 @@ afterEach(() => {
   cleanup();
   queryMocks.workspaceFailure = false;
   queryMocks.workspacePending = false;
+  queryMocks.activeTabId = "api-main";
 });
 
 describe("DesktopApp extensions", () => {
+  it("retains visited module drafts while switching modules and opening variable management", () => {
+    render(<DesktopApp />);
+    const apiDraft = screen.getByRole("textbox", { name: "API draft" });
+    fireEvent.change(apiDraft, { target: { value: "unsaved request" } });
+    fireEvent.click(screen.getByRole("button", { name: "Open Database" }));
+    const sqlDraft = screen.getByRole("textbox", { name: "SQL draft" });
+    fireEvent.change(sqlDraft, { target: { value: "SELECT draft" } });
+    expect(apiDraft.parentElement).toHaveClass("hidden");
+    fireEvent.click(screen.getByRole("button", { name: "Open SSH Terminal" }));
+    const sshDraft = screen.getByRole("textbox", { name: "SSH draft" });
+    fireEvent.change(sshDraft, { target: { value: "terminal draft" } });
+    fireEvent.click(screen.getByRole("button", { name: "Open Flow" }));
+    const flowDraft = screen.getByRole("textbox", { name: "Flow draft" });
+    fireEvent.change(flowDraft, { target: { value: "flow draft" } });
+    fireEvent.click(screen.getByRole("button", { name: "Manage variables" }));
+    expect(flowDraft.parentElement).toHaveClass("hidden");
+    fireEvent.click(screen.getByRole("button", { name: "Open API Client" }));
+    expect(screen.getByRole("textbox", { name: "API draft" })).toBe(apiDraft);
+    expect(apiDraft).toHaveValue("unsaved request");
+    expect(sqlDraft).toHaveValue("SELECT draft");
+    expect(sshDraft).toHaveValue("terminal draft");
+    expect(flowDraft).toHaveValue("flow draft");
+    expect(apiDraft.parentElement).toHaveClass("h-full");
+  });
+
   it("shows a recoverable startup error instead of an empty workbench", () => {
     queryMocks.workspaceFailure = true;
     render(<DesktopApp />);

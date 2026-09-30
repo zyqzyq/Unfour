@@ -7,31 +7,22 @@ mod multipart;
 use super::*;
 #[path = "lib_tests/api_environment_override.rs"]
 mod api_environment_override;
+#[path = "lib_tests/ephemeral_lifecycle.rs"]
+mod ephemeral_lifecycle;
 #[path = "lib_tests/exchange.rs"]
 mod exchange;
 #[path = "lib_tests/script_rollback.rs"]
 mod script_rollback;
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use unfour_core::models::{
     ApiClientPreferences, ApiCollectionExportFormat, ApiRequestInput, DatabaseConnectionInput,
     ScriptExecutionStatus, SshConnectionInput, WorkspaceVariableInput,
 };
 use unfour_core::AppError;
-use unfour_local_storage::LocalDb;
 
 async fn test_bus() -> CommandBus {
-    let options = SqliteConnectOptions::new()
-        .filename(":memory:")
-        .create_if_missing(true)
-        .foreign_keys(true);
-    let pool = SqlitePoolOptions::new()
-        .max_connections(1)
-        .connect_with(options)
+    CommandBus::ephemeral()
         .await
-        .expect("connect in-memory sqlite");
-    let db = LocalDb::from_pool(pool);
-    db.migrate().await.expect("run migrations");
-    CommandBus::from_db(db).await.expect("build command bus")
+        .expect("build test command bus")
 }
 
 fn api_script_test_input(workspace_id: String, url: String) -> ApiRequestInput {
