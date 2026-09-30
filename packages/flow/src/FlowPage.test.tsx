@@ -156,12 +156,10 @@ function Harness({ workspaceId = "ws" }: { workspaceId?: string }) {
     </>
   );
 }
-function mount(locale: "en" | "zh-CN" = "en") {
+function mount(locale: "en" | "zh-CN" = "en", client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   return render(
     <QueryClientProvider
-      client={
-        new QueryClient({ defaultOptions: { queries: { retry: false } } })
-      }
+      client={client}
     >
       <I18nProvider initialLocale={locale}>
         <Harness />
@@ -849,4 +847,139 @@ it("pins Run again to the current draft rather than the historical revision", as
   fireEvent.change(screen.getByLabelText("version", { exact: true }), { target: { value: "43" } });
   fireEvent.click(screen.getByRole("button", { name: "Run", exact: true }));
   await waitFor(() => expect(commands.runFlow).toHaveBeenCalledWith(expect.objectContaining({ flowId: flow.id }), 4));
+});
+
+it("retains an incomplete hidden editor draft when the Flow list refreshes", async () => {
+  const definition: commands.FlowDefinition = { ...flow, steps: [{ id: "api", name: "Fetch", kind: "action", timeoutMs: 1000, action: { capability: "api", resourceId: "saved", arguments: {} } }] };
+  vi.mocked(commands.listFlows).mockResolvedValue([definition]);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  mount("en", client);
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.click(screen.getByText("Fetch", { selector: ".truncate" }));
+  fireEvent.change(screen.getByLabelText("Arguments (JSON)"), { target: { value: "{" } });
+  fireEvent.click(screen.getByRole("button", { name: "Close inspector" }));
+  await act(async () => {
+    client.setQueryData(["flows", "ws"], [{ ...definition, name: "Remote release", revision: 4 }]);
+  });
+  expect(screen.getByLabelText("Flow name")).toHaveValue("Release");
+  expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  fireEvent.click(screen.getAllByRole("button", { name: "Fetch", exact: true })[0]);
+  expect(screen.getByLabelText("Arguments (JSON)")).toHaveValue("{");
+  fireEvent.click(screen.getByText("Remote release"));
+  expect(screen.getByRole("dialog")).toHaveTextContent("Discard unsaved changes");
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+  expect(screen.getByLabelText("Arguments (JSON)")).toHaveValue("{");
+});
+
+it("keeps the saved revision and runtime inputs when invalidation refreshes an older list", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const invalidate = vi.spyOn(client, "invalidateQueries");
+  mount("en", client);
+  fireEvent.click(await screen.findByText("Release"));
+  openRun();
+  fireEvent.change(screen.getByLabelText("version", { exact: true }), { target: { value: "42" } });
+  await closeRun();
+  fireEvent.change(screen.getByLabelText("Flow name"), { target: { value: "Saved release" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Run" })).toBeEnabled());
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ["flows", "ws"] });
+  expect(screen.getByLabelText("Flow name")).toHaveValue("Saved release");
+  expect(screen.getByText("r4")).toBeVisible();
+  openRun();
+  expect(screen.getByLabelText("version", { exact: true })).toHaveValue(42);
+  fireEvent.click(screen.getByRole("button", { name: "Run", exact: true }));
+  await waitFor(() => expect(commands.runFlow).toHaveBeenCalledWith(expect.objectContaining({ inputs: { version: 42 } }), 4));
+  expect(client.getQueryData(["flow-run", "ws", "run-1"])).toEqual(run);
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ["flow-runs", "ws", "flow-1"] });
+});
+
+it("cannot switch Flow or dismiss confirmation while run submission is pending", async () => {
+  let finishRun!: (value: commands.FlowRun) => void;
+  vi.mocked(commands.listFlows).mockResolvedValue([flow, { ...flow, id: "other", name: "Other" }]);
+  vi.mocked(commands.runFlow).mockImplementationOnce(() => new Promise((resolve) => { finishRun = resolve; }));
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  openRun();
+  fireEvent.change(screen.getByLabelText("version", { exact: true }), { target: { value: "42" } });
+  fireEvent.click(screen.getByRole("button", { name: "Run", exact: true }));
+  fireEvent.click(screen.getByText("Other"));
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+  expect(screen.getByLabelText("Flow name")).toHaveValue("Release");
+  expect(screen.getByRole("dialog")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+  await act(async () => { finishRun(run); });
+  expect(await screen.findByText("Viewing run")).toBeVisible();
+  expect(commands.runFlow).toHaveBeenCalledTimes(1);
+});
+
+it("holds selection during cancellation and refreshes detail and history when it finishes", async () => {
+  let finishCancel!: () => void;
+  const cancelled: commands.FlowRun = { ...run, status: "interrupted", finishedAt: "2026-09-14T00:00:02Z", steps: [{ ...run.steps[0], status: "interrupted" }] };
+  vi.mocked(commands.listFlows).mockResolvedValue([flow, { ...flow, id: "other", name: "Other" }]);
+  vi.mocked(commands.cancelFlowRun).mockImplementationOnce(() => new Promise((resolve) => { finishCancel = resolve; }));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const invalidate = vi.spyOn(client, "invalidateQueries");
+  mount("en", client);
+  fireEvent.click(await screen.findByText("Release"));
+  await selectHistory();
+  fireEvent.click(await screen.findByRole("button", { name: "Cancel run" }));
+  fireEvent.click(screen.getByText("Other"));
+  expect(screen.getByLabelText("Flow name")).toHaveValue("Release");
+  expect(screen.getByRole("button", { name: "Cancel run" })).toBeDisabled();
+  vi.mocked(commands.getFlowRun).mockResolvedValue(cancelled);
+  vi.mocked(commands.listFlowRuns).mockResolvedValue([summary(cancelled)]);
+  await act(async () => { finishCancel(); });
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Cancel run" })).not.toBeInTheDocument());
+  expect(commands.cancelFlowRun).toHaveBeenCalledWith("ws", "run-1");
+  expect(client.getQueryData(["flow-run", "ws", "run-1"])).toEqual(cancelled);
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ["flow-runs", "ws", "flow-1"] });
+  fireEvent.click(screen.getByRole("button", { name: "Run history" }));
+  expect(await screen.findByRole("button", { name: /Interrupted.*2000 ms/ })).toBeVisible();
+});
+
+it("does not restore an old run when its detail resolves after switching Flow", async () => {
+  let finishDetail!: (value: commands.FlowRun) => void;
+  vi.mocked(commands.listFlows).mockResolvedValue([flow, { ...flow, id: "other", name: "Other", inputs: [] }]);
+  vi.mocked(commands.getFlowRun).mockImplementationOnce(() => new Promise((resolve) => { finishDetail = resolve; }));
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  await selectHistory();
+  await waitFor(() => expect(commands.getFlowRun).toHaveBeenCalledWith("ws", "run-1"));
+  fireEvent.click(screen.getByText("Other"));
+  expect(screen.queryByText("Viewing run")).not.toBeInTheDocument();
+  await act(async () => { finishDetail(run); });
+  expect(screen.getByLabelText("Flow name")).toHaveValue("Other");
+  expect(document.querySelector(".flow-canvas-node[data-status]")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Cancel run" })).not.toBeInTheDocument();
+  vi.mocked(commands.listFlowRuns).mockResolvedValue([]);
+  fireEvent.click(screen.getByRole("button", { name: "Run history" }));
+  expect(await screen.findByText("No runs yet.")).toBeVisible();
+  expect(commands.listFlowRuns).toHaveBeenLastCalledWith("ws", "other");
+});
+
+it("resets confirmation context only after accepting the latest revision", async () => {
+  vi.mocked(commands.saveFlow).mockRejectedValue({ code: "FLOW_REVISION_CONFLICT", message: "Changed" });
+  vi.mocked(commands.getFlow).mockResolvedValue({ ...flow, revision: 4, inputs: [{ ...flow.inputs[0], default: 7 }] });
+  vi.mocked(commands.listWorkspaceEnvironments).mockResolvedValue([{ id: "prod", name: "Production" }] as Awaited<ReturnType<typeof commands.listWorkspaceEnvironments>>);
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  openRun();
+  fireEvent.change(screen.getByLabelText("version", { exact: true }), { target: { value: "42" } });
+  fireEvent.change(screen.getByLabelText("Environment"), { target: { value: "prod" } });
+  fireEvent.change(screen.getByLabelText("Secret input names (comma separated)"), { target: { value: "version" } });
+  await closeRun();
+  fireEvent.change(screen.getByLabelText("Flow name"), { target: { value: "My edits" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Load latest version" }));
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Cancel" }));
+  expect(screen.getByLabelText("Flow name")).toHaveValue("My edits");
+  fireEvent.click(screen.getByRole("button", { name: "Load latest version" }));
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Discard" }));
+  openRun();
+  expect(screen.getByLabelText("version", { exact: true })).toHaveValue(7);
+  expect(screen.getByLabelText("Environment")).toHaveValue("");
+  expect(screen.getByLabelText("Secret input names (comma separated)")).toHaveValue("");
+  expect(screen.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: "Run", exact: true }));
+  await waitFor(() => expect(commands.runFlow).toHaveBeenCalledWith(expect.objectContaining({ inputs: { version: 7 }, environmentId: null, secretInputNames: [] }), 4));
 });
