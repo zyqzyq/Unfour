@@ -31,8 +31,9 @@ the original MCP test itself did not fail in the local pre-fix repetitions.
 describes this single-connection in-memory cancellation hazard and the
 `test_before_acquire(false)` remedy.
 
-The fix applies that option only to the ephemeral command bus. Command-bus unit
-fixtures now use the same constructor. File-backed pools, Flow execution,
+The initial fix in `0c39c226766867fb4ee6d2b960b3a109da183bad` applies that option
+to the ephemeral command bus. Command-bus unit fixtures use the same constructor.
+The follow-up below also covers the unified mutable MCP constructor. File-backed pools, Flow execution,
 heartbeat timing, cancellation, timeout results, and MCP assertions are
 unchanged. The lifecycle regression polls acquisition once and drops it at a
 pending boundary; it uses connection-idle state and cooperative yielding,
@@ -83,10 +84,12 @@ states, API probes, optimistic workspace activation and rollback, duplicate
 activation prevention, dirty draft navigation, and preservation of visited
 API/Database/SSH/Flow drafts while switching modules/opening variable management.
 
-## Verification
+## Initial refactor verification
 
-Local checks use Windows; the GitHub Ubuntu runner has not been rerun with
-this change. Native desktop visual/live-service behavior was not
+Local checks used Windows. [Ubuntu CI run 36711917872](https://github.com/zyqzyq/Unfour/actions/runs/36711917872)
+passed for `0c39c226766867fb4ee6d2b960b3a109da183bad`, with all seven jobs
+successful: frontend lint/test/build, Release contracts, Rust check/test, and
+MCP contracts and tests. Native desktop visual/live-service behavior was not
 manually exercised.
 
 | Check | Result |
@@ -108,6 +111,85 @@ The first sandboxed Vitest launch could not spawn esbuild (`EPERM`); the same
 checks passed after approved execution outside that process sandbox. Rust
 retains existing release-channel/default and feature-dependent dead-code
 warnings.
+
+## Unified ephemeral SQLite follow-up
+
+Base: `main` at `0c39c226766867fb4ee6d2b960b3a109da183bad`. The supported
+mutable MCP `StorageMode::Ephemeral` constructor still created a separate
+single-connection `:memory:` pool with SQLx's default acquisition health check.
+Its new regression passed once before the fix, then failed on repetition 9
+with `SqliteError { code: 1, message: "no such table: workspaces" }`. This
+reproduces the same cancellation race on the unified runtime, independently
+of the deprecated test constructor.
+
+`unfour_local_storage::LocalDb::connect_ephemeral()` now owns the shared pool
+configuration: private `:memory:`, one connection, foreign keys enabled,
+`create_if_missing(true)`, and `test_before_acquire(false)`. Both
+`CommandBus::ephemeral()` and unified `StorageMode::Ephemeral` call it. The
+helper does not migrate or seed; each caller retains its existing migration,
+seed, and extension installation sequence. The existing MCP execution-guard
+fixture also uses this helper. Default/file-backed configuration and Flow
+timeout, heartbeat, MCP contracts, and error semantics are unchanged.
+
+Coverage includes both construction paths:
+
+- `ephemeral_database_survives_cancelled_connection_acquisition` exercises
+  `CommandBus::ephemeral()` and checks schema/records after dropped acquisition.
+- `mutable_mcp_ephemeral_survives_cancelled_workspace_reads` constructs
+  `LocalCommandBusAdapter::from_storage_mode(StorageMode::Ephemeral)`, including
+  unified migrations and extensions. It drops workspace reads at their first
+  pending boundary, checks active workspace and retained records after each
+  cancellation, and verifies a later workspace write succeeds. It requires
+  at least one pending read to have been cancelled; no sleep, error retry, or
+  relaxed assertion is used.
+
+Post-fix stability checks passed 100/100 mutable MCP regression repetitions
+(64 first-poll boundaries per run) and 10/10 complete MCP library runs at 32
+threads (227 tests per run).
+
+The following checks verify this follow-up locally on Windows. The linked
+Ubuntu CI evidence above belongs to the committed base revision.
+
+| Check | Result |
+| --- | --- |
+| `cargo test -p unfour-mcp` | PASS, 227 library + 4 binary + 3 integration tests |
+| `cargo test --workspace --exclude unfour-mcp` | PASS, including command-bus cancellation regression and local-storage tests |
+| `cargo check --workspace` | PASS |
+| `cargo check -p unfour --features ssh-native` | PASS |
+| `cargo fmt -p unfour-local-storage -p unfour-command-bus -p unfour-mcp --check` | PASS |
+| `pnpm run test:release-env` | PASS, 73 tests |
+| `pnpm run check:secrets` | PASS, 1,302 publishable files scanned |
+| `pnpm run check:migrations` | PASS, 30 migrations |
+| `git diff --check` | PASS |
+
+The sandboxed secret audit initially could not spawn Git (`EPERM`); the same
+audit passed with approved execution outside that process sandbox. Existing
+Rust release-channel/default and feature-dependent dead-code warnings remain.
+
+### Other private in-memory SQLite constructors
+
+The repository audit found 20 remaining direct single-connection in-memory
+constructors with the default acquisition health check. All are test fixtures;
+they can have the same hazard if acquisition is cancelled, but this follow-up
+does not establish that every fixture currently flakes. They remain unchanged
+to keep this fix scoped.
+
+| Crate | Test fixture paths relative to that crate |
+| --- | --- |
+| `local-storage` | `src/local_db_tests/mod.rs`, `src/terminal_history_tests/mod.rs`, `src/ssh_command_history_tests.rs`, `src/activity_log.rs` (test module) |
+| `workspace-engine` | `src/workspace_tests/mod.rs` |
+| `http-engine` | `src/api_client_tests/support.rs` |
+| `ssh-engine` | `src/task_tests/support.rs`, `src/ssh_tests/support.rs`, `src/host_key_tests/mod.rs` |
+| `database-engine` | `src/database_tests/support.rs`, `src/database_tests/runtime_profile.rs` |
+| `unfour-cloud-sync` | `tests/worker/support/mod.rs`, `tests/ownership.rs`, `tests/outbox.rs` |
+| `unfour-cloud-sync-storage` | `src/lib.rs` (test module) |
+| `unfour-command-bus` | `tests/workspace_domain.rs`, `tests/ssh_task_domain.rs`, `tests/api_domain.rs`, `tests/connection_domain/support.rs`, `tests/database_script.rs` |
+
+No other hard-coded production single-connection private `:memory:` storage
+constructor was found. The command-bus Flow history migration fixture uses
+`SqlitePool::connect("sqlite::memory:")` with the default connection limit;
+the database-engine SQLite driver accepts `:memory:` with four connections.
+Those are different configurations and are not covered by this regression.
 
 ## Further refactor candidates
 

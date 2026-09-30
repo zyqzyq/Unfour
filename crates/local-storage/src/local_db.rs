@@ -18,6 +18,23 @@ pub struct LocalDb {
 }
 
 impl LocalDb {
+    /// Open an isolated private in-memory database without running migrations.
+    /// The sole connection owns its schema and records, so acquisition must not
+    /// suspend in a health check that can discard it when cancelled.
+    pub async fn connect_ephemeral() -> AppResult<Self> {
+        let options = SqliteConnectOptions::new()
+            .filename(":memory:")
+            .create_if_missing(true)
+            .foreign_keys(true);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            // See SQLx Pool::acquire's cancellation notes for in-memory SQLite.
+            .test_before_acquire(false)
+            .connect_with(options)
+            .await?;
+        Ok(Self { pool })
+    }
+
     /// Connect using Unfour's stable product data directory.
     ///
     /// Path resolution deliberately lives in `unfour-paths`, not in Tauri path

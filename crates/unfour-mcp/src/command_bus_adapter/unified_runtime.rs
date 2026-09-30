@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use unfour_cloud_sync::{CloudSyncSshTaskExecutionGuard, SyncDependencies, SyncOutboxHook};
 use unfour_command_bus::{CommandBus, CommandBusExtensions};
 use unfour_local_storage::LocalDb;
@@ -10,17 +9,7 @@ use crate::StorageMode;
 pub(super) async fn unified_command_bus(mode: StorageMode) -> unfour_core::AppResult<CommandBus> {
     let db = match mode {
         StorageMode::Default => LocalDb::connect_existing_default().await?,
-        StorageMode::Ephemeral => {
-            let options = SqliteConnectOptions::new()
-                .filename(":memory:")
-                .create_if_missing(true)
-                .foreign_keys(true);
-            let pool = SqlitePoolOptions::new()
-                .max_connections(1)
-                .connect_with(options)
-                .await?;
-            LocalDb::from_pool(pool)
-        }
+        StorageMode::Ephemeral => LocalDb::connect_ephemeral().await?,
     };
 
     unified_command_bus_with_db(db, mode).await
@@ -55,20 +44,75 @@ async fn unified_command_bus_with_db(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::command_bus_adapter::LocalCommandBusAdapter;
+    use std::{future::Future, task::Poll};
     use unfour_core::models::SshTaskRunInput;
+
+    #[test]
+    fn mutable_mcp_ephemeral_survives_cancelled_workspace_reads() {
+        // Exercise the supported mutable MCP constructor, including unified
+        // migrations and extensions, rather than the deprecated test bus.
+        let adapter = LocalCommandBusAdapter::from_storage_mode(StorageMode::Ephemeral).unwrap();
+        adapter.run(async {
+            let retained = adapter
+                .bus
+                .create_workspace("Retained MCP workspace".into())
+                .await
+                .unwrap();
+            let original = adapter.bus.list_workspaces().await.unwrap();
+            let mut cancelled = 0;
+            for _ in 0..64 {
+                tokio::task::yield_now().await;
+                {
+                    let read = adapter.bus.list_workspaces();
+                    tokio::pin!(read);
+                    // Drop an actual command at its first Pending boundary,
+                    // as a timeout/cancellation can do during pool acquisition.
+                    let first_poll =
+                        std::future::poll_fn(|cx| Poll::Ready(read.as_mut().poll(cx))).await;
+                    match first_poll {
+                        Poll::Pending => cancelled += 1,
+                        Poll::Ready(result) => {
+                            result.unwrap();
+                        }
+                    }
+                }
+                let current = adapter
+                    .bus
+                    .list_workspaces()
+                    .await
+                    .expect("cancelled mutable MCP reads must retain the schema and records");
+                assert_eq!(current.active_workspace_id, original.active_workspace_id);
+                assert_eq!(current.workspaces.len(), original.workspaces.len());
+                assert!(current.workspaces.iter().any(
+                    |workspace| workspace.id == retained.id && workspace.name == retained.name
+                ));
+            }
+            assert!(
+                cancelled > 0,
+                "the regression must cancel an in-flight read"
+            );
+            // Writes still traverse the unified extensions and their schema.
+            let created = adapter
+                .bus
+                .create_workspace("After cancellation".into())
+                .await
+                .unwrap();
+            assert!(adapter
+                .bus
+                .list_workspaces()
+                .await
+                .unwrap()
+                .workspaces
+                .iter()
+                .any(|workspace| workspace.id == created.id));
+        });
+        adapter.shutdown();
+    }
 
     #[tokio::test]
     async fn mutable_mcp_runtime_installs_cloud_sync_task_execution_guard() {
-        let options = SqliteConnectOptions::new()
-            .filename(":memory:")
-            .create_if_missing(true)
-            .foreign_keys(true);
-        let pool = SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect_with(options)
-            .await
-            .unwrap();
-        let db = LocalDb::from_pool(pool);
+        let db = LocalDb::connect_ephemeral().await.unwrap();
         let bus = unified_command_bus_with_db(db.clone(), StorageMode::Ephemeral)
             .await
             .unwrap();

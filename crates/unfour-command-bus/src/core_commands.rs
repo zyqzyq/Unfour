@@ -2,21 +2,7 @@ use super::*;
 
 impl CommandBus {
     pub async fn ephemeral() -> AppResult<Self> {
-        use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-
-        let options = SqliteConnectOptions::new()
-            .filename(":memory:")
-            .create_if_missing(true)
-            .foreign_keys(true);
-        let pool = SqlitePoolOptions::new()
-            .max_connections(1)
-            // A cancelled acquire during SQLx's health-check ping drops the
-            // connection, destroying this private in-memory database. Avoid
-            // that await boundary for the ephemeral bus (Pool::acquire docs).
-            .test_before_acquire(false)
-            .connect_with(options)
-            .await?;
-        let db = LocalDb::from_pool(pool);
+        let db = LocalDb::connect_ephemeral().await?;
         db.migrate().await?;
 
         Self::from_db(db).await
