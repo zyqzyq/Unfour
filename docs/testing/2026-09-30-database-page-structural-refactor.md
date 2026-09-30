@@ -107,6 +107,47 @@ regression harness as a boundary check.
 
 An existing wiring issue was observed: the injected sidebar element receives
 `onDesignTable`, but `DatabaseSidebar` does not consume/forward that prop to
-`DatabaseConnectionTree`. This was already present on the baseline and is
-preserved here. Fixing that action would be a separate behavior change, not
-additional structural splitting.
+`DatabaseConnectionTree`. This was already present on the baseline and was
+preserved by the structural refactor. The separate wiring repair below fixes
+the action without further structural splitting.
+
+## Design Table wiring follow-up
+
+Baseline: `main`, `826382df2a24487b1dbcb95e2925e7e107354ebd`.
+
+`DatabaseSidebar` now declares and destructures the optional
+`onDesignTable?: (connectionId: string, table: DatabaseTable) => void` prop and
+passes it unchanged to `DatabaseConnectionTree`. These are the only three
+production lines added. `DatabasePage`, `useDatabaseShellIntegration`,
+`designTable`, the tree/menu implementations and their view/read-only display
+rules are unchanged.
+
+The existing shell integration suite adds one parameterized DOM regression
+test with three scenarios: ordinary table, read-only table, and read-only view.
+It renders the actual injected sidebar, opens the object context menu and
+clicks Design Table. The path covered is
+`useDatabaseShellIntegration -> DatabaseSidebar -> DatabaseConnectionTree ->
+TableContextMenu -> stable shell handler -> sidebarActions.designTable`.
+The callback must run exactly once with the same connection ID and original
+table object. INSERT generation and table export remain visible for tables
+and hidden for views under the existing rules.
+
+Before the repair, all three scenarios failed because Design Table was absent
+from the rendered menu. After the repair, the six shell integration cases and
+the following checks passed:
+
+| Check | Result |
+| --- | --- |
+| `pnpm exec vitest run packages/database` | PASS: 34 files, 212 tests |
+| `pnpm run test` | PASS: 163 files, 972 tests |
+| `pnpm run lint` | PASS: 0 errors, 41 existing warnings |
+| `pnpm run build` | PASS; Vite reports chunks larger than 500 kB |
+| TypeScript program including the updated shell regression test | PASS |
+| `git diff --check` | PASS |
+
+A read-only TypeScript audit checked 76 Database component JSX usages,
+including spread callback props, and 29 functions receiving callback props.
+There were no other undeclared callback props, missing callback bindings or
+unused callback bindings. The main Sidebar/Tree/Menu and workspace forwarding
+paths were also inspected; no other obvious forwarding gap was found. This
+is a scoped wiring review, not proof of every dynamic callback path.

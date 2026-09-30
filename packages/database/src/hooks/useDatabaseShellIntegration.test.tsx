@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { ComponentProps, ReactElement } from "react";
-import { cleanup, renderHook } from "@testing-library/react";
+import { cleanup, fireEvent, render, renderHook, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DatabaseSidebar } from "../components/DatabaseSidebar";
 import { DatabaseStatusBar } from "../components/DatabaseStatusBar";
@@ -37,18 +37,38 @@ function options() {
   };
 }
 
-type InjectedSidebarProps = ComponentProps<typeof DatabaseSidebar> & {
-  onDesignTable: DatabaseSidebarActions["designTable"];
-};
-
 function latestSidebar(initialOptions: ReturnType<typeof options>) {
-  return initialOptions.onShellSidebarChange.mock.lastCall![0] as ReactElement<InjectedSidebarProps>;
+  return initialOptions.onShellSidebarChange.mock.lastCall![0] as ReactElement<ComponentProps<typeof DatabaseSidebar>>;
 }
 function latestStatus(initialOptions: ReturnType<typeof options>) {
   return initialOptions.onShellStatusBarChange.mock.lastCall![0] as ReactElement<ComponentProps<typeof DatabaseStatusBar>>;
 }
 
 describe("database shell integration", () => {
+  it.each([
+    { kind: "table", readOnly: false },
+    { kind: "table", readOnly: true },
+    { kind: "view", readOnly: true },
+  ])("forwards Design Table from the sidebar menu for $kind (readOnly=$readOnly)", async ({ kind, readOnly }) => {
+    const target = { ...users, kind };
+    const initial = {
+      ...options(), connections: [{ ...pg, readOnly }], treeSchemaCache: { "pg::app": schema("pg", target) },
+    };
+    renderHook(useDatabaseShellIntegration, { initialProps: initial });
+    render(latestSidebar(initial));
+    if (kind === "view") {
+      const group = screen.getByRole("button", { name: "Views" }).closest("[role='treeitem']")!;
+      fireEvent.click(within(group as HTMLElement).getByRole("button", { name: "Expand" }));
+    }
+    fireEvent.contextMenu(screen.getByRole("button", { name: "users" }));
+    const menu = within(await screen.findByRole("menu"));
+    expect(Boolean(menu.queryByRole("menuitem", { name: "Generate INSERT Statement" }))).toBe(kind === "table");
+    expect(Boolean(menu.queryByRole("menuitem", { name: "Export Table…" }))).toBe(kind === "table");
+    fireEvent.click(menu.getByRole("menuitem", { name: "Design Table" }));
+    expect(initial.sidebarActions.designTable).toHaveBeenCalledExactlyOnceWith("pg", target);
+    expect(initial.sidebarActions.designTable.mock.lastCall![1]).toBe(target);
+  });
+
   it("injects tree/status data and keeps every handler stable while committing the latest actions", () => {
     const initial = options();
     const { rerender } = renderHook(useDatabaseShellIntegration, { initialProps: initial });

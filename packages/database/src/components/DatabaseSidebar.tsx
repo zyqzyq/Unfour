@@ -24,6 +24,7 @@ export function DatabaseSidebar({
   onConnect,
   onDeleteConnection,
   onDeleteSavedSql,
+  onDesignTable,
   onDisconnect,
   onDuplicateConnection,
   onEditConnection,
@@ -51,6 +52,7 @@ export function DatabaseSidebar({
   onConnect: (connection: DatabaseConnection) => void;
   onDeleteConnection: (connection: DatabaseConnection) => void;
   onDeleteSavedSql?: (item: SavedSql) => void;
+  onDesignTable?: (connectionId: string, table: DatabaseTable) => void;
   onDisconnect: (connection: DatabaseConnection) => void;
   onDuplicateConnection?: (connection: DatabaseConnection) => void;
   onEditConnection: (connection: DatabaseConnection) => void;
@@ -99,6 +101,7 @@ export function DatabaseSidebar({
           onConnect={onConnect}
           onDeleteConnection={onDeleteConnection}
           onDeleteSavedSql={onDeleteSavedSql}
+          onDesignTable={onDesignTable}
           onDisconnect={onDisconnect}
           onDuplicateConnection={onDuplicateConnection}
           onEditConnection={onEditConnection}
