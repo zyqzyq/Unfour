@@ -6,7 +6,7 @@
 
 **A unified, local-first developer workspace for tracing backend failures from API requests through server logs and database state to verified fixes.**
 
-Unfour brings API testing, SSH, database tools, and MCP-assisted troubleshooting into one desktop application.
+Unfour brings API testing, SSH, database tools, local Flow runbooks, and MCP-assisted troubleshooting into one desktop application.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![CI](https://github.com/zyqzyq/Unfour/actions/workflows/ci.yml/badge.svg)](https://github.com/zyqzyq/Unfour/actions/workflows/ci.yml)
@@ -18,7 +18,7 @@ Unfour brings API testing, SSH, database tools, and MCP-assisted troubleshooting
 </div>
 
 > [!WARNING]
-> This source tree targets Unfour v0.9.6. Windows NSIS
+> This source tree targets Unfour v0.10.0 (release preparation). Windows NSIS
 > installers are unsigned and may trigger SmartScreen or other operating-system
 > security warnings. Use `SHA256SUMS.txt` from the GitHub Release to verify
 > downloaded files.
@@ -30,9 +30,9 @@ from GitHub Releases.
 
 - Windows is the primary distribution path: NSIS `.exe` installer. It is
   unsigned and may trigger SmartScreen.
-- macOS has Apple Silicon and Intel packages that have been verified on real
-  devices, but they are not Apple-signed or notarized; Gatekeeper may block
-  them.
+- macOS has Apple Silicon and Intel packages; real-device install/run
+  verification was recorded for v0.9.0. They are not Apple-signed or notarized;
+  Gatekeeper may block them.
 - Linux publishes an x86_64 (x64) AppImage only. It is Experimental and currently
   targets Ubuntu 22.04+; Ubuntu 20.04 is not supported. The published v0.9.0
   AppImage predates this build baseline; new-artifact runtime verification is
@@ -49,15 +49,19 @@ database state, identify the cause, and make and verify a fix.
 
 A unified, local-first workspace keeps requests, connections, local activity,
 and layout together throughout the investigation. API testing, SSH terminals,
-and database tools provide the capabilities for each step in that loop.
+and database tools provide the capabilities for each step in that loop. Flow
+combines those capabilities into local runbooks for repeatable checks and tasks.
+Flow V1 is local-only: its definitions and run history are not included in Cloud
+Sync. It is a runbook tool for this workspace, not a general workflow platform.
 
 MCP is an optional assisted layer: Codex and Cursor can use the local stdio
 MCP server to work with the same saved API, SSH, and database connections as
 the desktop app. Its workspace-scoped tools run through the shared command
 bus, subject to MCP policy and high-risk action confirmation checks.
-Troubleshooting remains user-directed. Unfour does not automatically correlate
-requests, logs, and database state or detect root causes, and it does not ship
-an automatic troubleshooting playbook or workflow runner.
+MCP can also start and cancel Flow runs and inspect their history.
+Troubleshooting remains user-directed: you author and start runbooks, while
+Unfour does not automatically correlate requests, logs, and database state or
+detect root causes.
 
 Unfour is one application and one product. Its core desktop features are free
 and open source under Apache-2.0. An active Pro subscription unlocks Cloud Sync
@@ -102,7 +106,8 @@ workspace, environment, risky actions, and final decision.
 - **API Client** - Compose and send HTTP requests, organize saved requests into
   collections and folders, resolve shared workspace variables, inspect response
   body/headers/cookies/timing, run saved pre-request and post-response scripts,
-  review script tests and console output, and keep redacted history.
+  review script tests and console output, keep redacted history, and import or
+  export collections and environments.
 - **SSH Terminal** - Manage SSH connections and terminal sessions (split panes,
   search, clipboard context menu, persistent redacted command history and
   typing suggestions, host-key trust, redacted logs), browse and
@@ -110,16 +115,20 @@ workspace, environment, risky actions, and final decision.
   upload, download) from the Connections / Files / Tasks sidebar.
 - **Database** - Manage database connections, browse schemas, run SQL with
   confirmation-aware safety checks (including multi-statement Run All /
-  Run Selected), preview and edit table rows, and review query output.
+  Run Selected), preview and edit table rows, review query output, and export
+  table structure as SQL and data as SQL, CSV, or JSON.
+- **Flow** - Compose saved API requests, SSH tasks, and Database queries into
+  local runbooks with Condition branches and Wait Until checks. Author them on
+  the Canvas and inspect step results and run history. Flow V1 is local-only
+  and does not support Cloud Sync.
 - **Workspace** - Scope saved requests, shared environments/variables,
   connections, activity, tabs, and layout state to a local workspace, with
   title-bar active-environment switching.
 - **MCP integration for Codex and Cursor** - Expose safe local stdio diagnostic
   tools through the same command bus used by the desktop app. Codex and Cursor
   can use the same saved API, SSH, and database connections to reproduce
-  issues, inspect logs and database state, and verify a fix. The user and Codex
-  or Cursor work through the steps together; Unfour does not ship an automatic
-  troubleshooting playbook or workflow runner.
+  issues, inspect logs and database state, verify a fix, and manage or run local
+  Flow runbooks with the same safety checks and shared run history.
 
 > [Connect Codex and Cursor to Unfour MCP →](docs/mcp/client-setup.md)
 
@@ -193,6 +202,7 @@ with `UNFOUR_RELEASE_CHANNEL=stable` and an exact `UNFOUR_BUILD_COMMIT`.
 | `packages/api-client` | API Client frontend module. |
 | `packages/ssh-terminal` | SSH Terminal frontend module. |
 | `packages/database` | Database frontend module. |
+| `packages/flow` | Local Flow runbook editor, Canvas, and run history. |
 | `packages/workspace-core` | Shared frontend workspace state. |
 | `packages/workspace-environments` | Workspace environments and variables management UI. |
 | `packages/workspace-local` | Reserved local workspace lifecycle boundary. |
@@ -205,8 +215,11 @@ map.
 
 ## Release Status
 
-This source tree targets Unfour v0.9.6. Release
-verification evidence is documented in:
+This source tree targets Unfour v0.10.0 and is preparing for a new Standard
+Release Candidate. Candidate artifacts, platform checks, live-service checks,
+and manual verification remain `NOT VERIFIED` until fresh evidence is recorded.
+The v0.9.0 and v0.9.6 records are historical and do not verify this candidate.
+Release verification evidence is documented in:
 
 - `docs/testing/release-verification.md`
 - `docs/testing/manual-test-cases.md`
@@ -216,8 +229,9 @@ verification evidence is documented in:
 
 Windows is the primary distribution path and ships an unsigned NSIS `.exe`
 installer that may trigger SmartScreen. macOS has Apple Silicon and Intel
-packages verified on real devices, but they are not Apple-signed or notarized
-and Gatekeeper may block them. Linux publishes an x86_64 (x64) AppImage only,
+packages, with real-device verification recorded for v0.9.0, but they are not
+Apple-signed or notarized and Gatekeeper may block them. Linux publishes an
+x86_64 (x64) AppImage only,
 remains Experimental, and uses Ubuntu 22.04+ as its current runtime/test baseline.
 Ubuntu 20.04 is not supported; compatibility with other distributions is not
 guaranteed solely by their glibc version. `.deb` and `.rpm` packages are not

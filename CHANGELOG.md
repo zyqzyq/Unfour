@@ -6,6 +6,46 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
+## [0.10.0] - Unreleased
+
+Next release after `v0.9.6`, adding local runbooks and easier exchange of API
+and database resources.
+
+### Added
+
+- **Flow V1** — Build local runbooks that combine saved API requests, SSH
+  tasks, and Database queries with Condition branches and Wait Until checks.
+  Use the Canvas editor, pass typed inputs and step results, and inspect run
+  history with step outcomes and polling attempts. Flow V1 is local-only;
+  definitions and run history are not included in Cloud Sync.
+- **Flow through MCP** — Let Codex and Cursor manage and run the same local
+  runbooks, cancel runs, and read paginated run history. Execution follows
+  workspace safety rules and required confirmations.
+- **API Collection and Environment import/export** — Exchange collections
+  in Unfour, Postman, and OpenAPI formats, and environments in Unfour and
+  Postman formats. Preview imports before applying them, keep imported names
+  distinct, and download exports directly. Environment secret values are left
+  empty; review arbitrary scripts and free-form content before sharing exports.
+- **Database table export** — Export one table's structure, data, or both;
+  use SQL for structure and SQL, CSV, or JSON for data. MCP exports also
+  support selected columns, filters, and row limits, with confirmation before
+  exporting data without a limit.
+
+### Fixed
+
+- **openGauss support** — Improve server detection, catalog and table
+  browsing, auto-increment column recognition, index metadata, native table
+  DDL, and structure/data exports through PostgreSQL-protocol connections.
+- **SQL execution context** — Keep the selected database and schema when
+  opening queries, running scripts, and reopening history. Schema discovery
+  no longer silently changes the execution context.
+- **Saved SQL context** — Save and restore the query's database and schema,
+  and group saved queries under the appropriate database in the sidebar.
+- **Flow run safety and feedback** — Validate resource and variable references
+  before execution, run the confirmed definition revision, and keep secrets
+  redacted in persisted outputs and diagnostics. Show clearer validation,
+  failure, cancellation, and history feedback.
+
 ## [0.9.6] - 2026-09-14
 
 Maintenance release following the `v0.9.5` source tag, focused on MCP
@@ -679,6 +719,7 @@ First public release.
 - Linux artifacts remain experimental/unverified until real-device smoke checks
   are complete.
 
+[0.10.0]: https://github.com/zyqzyq/Unfour/compare/v0.9.6...main
 [0.9.6]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.6
 [0.9.5]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.5
 [0.9.4]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.4

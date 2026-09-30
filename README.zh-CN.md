@@ -6,7 +6,7 @@
 
 **一个统一、本地优先的开发者工作区，用于从 API 请求一路追踪后端故障到服务器日志、数据库状态和修复验证。**
 
-Unfour 在一个桌面应用中提供 API 测试、SSH、数据库工具和 MCP 辅助排障能力。
+Unfour 在一个桌面应用中提供 API 测试、SSH、数据库工具、本地 Flow runbook 和 MCP 辅助排障能力。
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![CI](https://github.com/zyqzyq/Unfour/actions/workflows/ci.yml/badge.svg)](https://github.com/zyqzyq/Unfour/actions/workflows/ci.yml)
@@ -18,7 +18,7 @@ Unfour 在一个桌面应用中提供 API 测试、SSH、数据库工具和 MCP 
 </div>
 
 > [!WARNING]
-> 当前源码版本目标为 Unfour v0.9.6。产品统一为 Unfour。
+> 当前源码版本目标为 Unfour v0.10.0，正在进行发版准备。产品统一为 Unfour。
 > Windows NSIS 安装包尚未签名，可能触发 SmartScreen 或其他操作系统安全警告。
 > 请使用 GitHub Release 中的 `SHA256SUMS.txt` 校验下载文件。
 
@@ -28,7 +28,7 @@ Unfour 在一个桌面应用中提供 API 测试、SSH、数据库工具和 MCP 
 
 - Windows 是主分发路径：NSIS `.exe` 安装包。该安装包尚未签名，可能触发
   SmartScreen。
-- macOS 提供 Apple Silicon 与 Intel 包，均已在真机验证，但未 Apple 签名、未公证；
+- macOS 提供 Apple Silicon 与 Intel 包；v0.9.0 已记录真机安装运行验证，但未 Apple 签名、未公证；
   Gatekeeper 可能拦截。
 - Linux 目前只发布 x86_64（x64）AppImage，定位为 Experimental（实验性），
   当前面向 Ubuntu 22.04+，不支持 Ubuntu 20.04。已发布的 v0.9.0 AppImage
@@ -42,12 +42,15 @@ Unfour 帮助后端开发者排查涉及 API、服务器及其数据库的故障
 通过 API 请求复现问题，经由 SSH 检查服务器日志，查看数据库状态，定位原因，再进行修复并验证。
 
 统一、本地优先的工作区让请求、连接、本地活动和布局贯穿整个排查过程。
-API 测试、SSH 终端与数据库工具为这条链路中的各个步骤提供能力。
+API 测试、SSH 终端与数据库工具为这条链路中的各个步骤提供能力。Flow 将这些能力组合成
+本地 runbook，用于重复执行检查与任务。Flow V1 当前为 local-only，定义与运行历史均不支持
+Cloud Sync；它定位于工作区内的 runbook，不是通用工作流平台。
 
 MCP 是可选的辅助层：Codex 与 Cursor 可以通过本地 stdio MCP 服务，使用与桌面应用相同的
 已保存 API、SSH 和数据库连接。工具限定在工作区范围内，经由共享命令总线执行，并遵循
-MCP 策略和高风险操作确认检查。排障仍由用户主导。Unfour 不会自动关联请求、日志与数据库状态，
-不会自动检测根因，也不内置自动运行的排障剧本或 workflow runner。
+MCP 策略和高风险操作确认检查。MCP 也可以启动、取消 Flow 运行并查看运行历史。
+排障仍由用户主导：用户编写并启动 runbook，Unfour 不会自动关联请求、日志与数据库状态，
+也不会自动检测根因。
 
 Unfour 是一个统一的应用和产品。核心桌面功能免费并以 Apache-2.0 协议开源。
 用户可通过有效的 Pro 订阅在同一个应用中解锁 Cloud Sync。Pro 是 Unfour 内的订阅权益，
@@ -85,18 +88,22 @@ Unfour 本身不修改代码仓库：代码变更由 Coding 客户端负责，Un
 
 - **API Client（API 客户端）** - 编写并发送 HTTP 请求，将已保存的请求整理为集合与
   文件夹，解析共享工作区变量，检查响应体 / 请求头 / Cookie / 耗时，运行已保存的请求前与
-  响应后脚本，查看脚本测试和控制台输出，并保留经过脱敏的历史记录。
+  响应后脚本，查看脚本测试和控制台输出，保留经过脱敏的历史记录，并导入导出集合与环境。
 - **SSH Terminal（SSH 终端）** - 管理 SSH 连接与终端会话（分屏、搜索、主机密钥信任、
   剪贴板右键菜单、持久化的脱敏命令历史与输入建议、脱敏日志），通过 SFTP 浏览与传输
   远程文件，并在 Connections / Files / Tasks 侧栏中编排多步骤 SSH 任务（命令、上传、下载）。
 - **Database（数据库）** - 管理数据库连接，浏览 Schema，在带确认的安全检查下运行
-  SQL（支持多语句全部运行 / 运行选中），预览与编辑表数据，并查看查询结果。
+  SQL（支持多语句全部运行 / 运行选中），预览与编辑表数据，查看查询结果，并导出表结构与数据：
+  结构使用 SQL，数据支持 SQL、CSV 与 JSON。
+- **Flow** - 将已保存的 API 请求、SSH 任务与 Database 查询组合成本地 runbook，支持
+  Condition 分支与 Wait Until 检查。通过 Canvas 编排步骤，查看步骤结果与运行历史。
+  Flow V1 当前为 local-only，不支持 Cloud Sync。
 - **Workspace（工作区）** - 将已保存的请求、共享环境变量、连接、活动、标签页与布局状态
   限定在某个本地工作区之内，并支持标题栏切换当前环境。
 - **MCP integration（面向 Codex 与 Cursor）** - 通过桌面应用所用的同一命令总线，
   以本地 stdio 方式提供安全的诊断工具。Codex 与 Cursor 可以使用同一套已保存的 API、
-  SSH 与数据库连接来复现问题、查日志、查数据库状态并验证修复。使用者与 Codex 或 Cursor
-  一起推进步骤；Unfour 不内置自动运行的排障剧本或 workflow runner。
+  SSH 与数据库连接来复现问题、查日志、查数据库状态并验证修复，也能管理和运行本地 Flow
+  runbook，沿用相同的安全检查并共享运行历史。
 
 > [连接 Codex 与 Cursor 到 Unfour MCP →](docs/mcp/client-setup.md)
 
@@ -167,6 +174,7 @@ pnpm run test:rust      # cargo test --workspace
 | `packages/api-client` | API Client 前端模块。 |
 | `packages/ssh-terminal` | SSH Terminal 前端模块。 |
 | `packages/database` | Database 前端模块。 |
+| `packages/flow` | 本地 Flow runbook 编辑器、Canvas 与运行历史。 |
 | `packages/workspace-core` | 共享前端工作区状态。 |
 | `packages/workspace-environments` | 工作区环境与变量管理 UI。 |
 | `packages/workspace-local` | 预留的本地工作区生命周期边界。 |
@@ -178,7 +186,9 @@ pnpm run test:rust      # cargo test --workspace
 
 ## 发布状态
 
-当前源码版本目标为 Unfour v0.9.6。产品统一为 Unfour。
+当前源码版本目标为 Unfour v0.10.0，正在准备新的 Standard Release Candidate。
+候选产物、各平台、真实服务与人工验证在取得本次证据前继续保持 `NOT VERIFIED`。
+v0.9.0 与 v0.9.6 记录属于历史证据，不代表本次候选版本已通过验证。产品统一为 Unfour。
 发布验证证据见：
 
 - `docs/testing/release-verification.md`
@@ -188,7 +198,7 @@ pnpm run test:rust      # cargo test --workspace
 - `docs/release/signing.md`
 
 Windows 是主分发路径，提供尚未签名的 NSIS `.exe` 安装包，可能触发 SmartScreen。
-macOS 提供已在 Apple Silicon 与 Intel 真机验证过的包，但未 Apple 签名、未公证，
+macOS 提供 Apple Silicon 与 Intel 包，v0.9.0 已记录真机验证，但未 Apple 签名、未公证，
 Gatekeeper 可能拦截。Linux 目前只发布 x86_64（x64）AppImage，定位为 Experimental
 （实验性），当前运行与测试基线为 Ubuntu 22.04+，不支持 Ubuntu 20.04；不能仅凭
 glibc 版本就保证其他发行版兼容。`.deb` 和 `.rpm` 暂不正式支持，也不会公开发布。

@@ -1,11 +1,86 @@
-# v0.9.6 Release Verification
+# v0.10.0 Release Verification
 
-This document tracks v0.9.6 release preparation. The published v0.9.0 results
-remain below as historical evidence; the local `v0.9.5` tag is the comparison
-baseline. A new v0.9.6 candidate needs fresh evidence and must not inherit
-those release results automatically.
+This document tracks v0.10.0 release preparation from `main`, compared with
+`v0.9.6` (`87bea5d6f337cc6d1d10055972bce2f3ee24aaee`). The v0.9.6 preparation
+checks and published v0.9.0 results remain below as historical evidence.
+A new v0.10.0 candidate needs fresh evidence and must not inherit those
+results automatically.
 
-## v0.9.6 preparation status
+## v0.10.0 preparation status
+
+- Source version: `0.10.0`; release status: `NOT RELEASED`.
+- Local automated verification date: 2026-09-30, Windows.
+- Evidence applies to the local release-preparation diff on `main` base
+  `e3912f53949436c6108a0e63a2410c6bd3a0d03d`; the eventual candidate must record
+  its own committed source SHA and workflow run.
+
+| Command | Current result |
+| --- | --- |
+| `pnpm run check:version` | PASS: all package/Tauri consumers match `0.10.0` |
+| `pnpm run check` | PASS: secret audit, frontend build, Rust workspace check, migrations, large-file guard, shared tokens |
+| `pnpm run test` | PASS: 157 files, 924 tests |
+| `pnpm run test:rust` | PASS: 1,042 passed, 1 ignored, no failures |
+| `pnpm run test:e2e` | PASS: 13 Chromium browser smoke tests |
+| `pnpm run test:release-env` | PASS: 73 tests |
+
+The initial sandboxed synchronization attempt stopped at a denied package
+write, and the first version-check wrapper could not open pnpm's local cache.
+Approved retries completed synchronization and the requested checks outside
+the sandbox. The frontend build retains its non-blocking bundle-size warning;
+Cargo uses the default Test release channel for these local checks.
+Rust also reports an existing non-blocking unused-method warning. The ignored
+OS keychain release smoke requires platform credential-store access and remains
+`NOT VERIFIED`; it was not manually enabled during this run. Documentation
+links/anchors and `git diff --check` pass. Cargo regenerated the lockfile with
+only the 18 workspace package version changes; no dependencies changed.
+
+Local preparation is ready for another **Standard Release Candidate** after
+reviewing and committing this diff. Run it against that exact source commit
+(or `main` once it contains the commit), record the resolved SHA and workflow
+result, and collect fresh native/manual evidence from its artifacts. No RC
+workflow, tag, or publication was performed during this local preparation.
+
+Candidate artifacts, native platform installation/update, live-service
+regressions, and manual gates remain `NOT VERIFIED`. Local automated checks
+do not establish a successful Standard Release Candidate or formal release.
+
+## v0.10.0 candidate scope
+
+- **Flow V1:** Canvas authoring, typed inputs, API/SSH/Database actions,
+  Condition branches, Wait Until attempts/timeouts, validation, confirmation,
+  cancellation, and run-history detail. Repeat the lifecycle through MCP,
+  including history pagination and retained history after definition deletion.
+  Flow definitions and history are local-only and do not support Cloud Sync.
+- **API Collection/Environment exchange:** preview and apply imports; export
+  and re-import supported Unfour/Postman/OpenAPI collections and Unfour/Postman
+  environments; check distinct import names, credential redaction, and empty
+  environment secret values. Review scripts/free-form content before sharing.
+- **Database table export:** structure-only, data-only, and combined SQL;
+  CSV/JSON data; MCP column/filter/limit options and confirmation for data
+  export without a limit. Check the supported engines on disposable data.
+- **openGauss:** connection detection, catalog/schema/table browsing, columns,
+  primary keys, indexes, native DDL, queries, and structure/data exports.
+  Preserve the scoped 2026-09-28 openGauss 6.0.3 live record; it is not a new
+  candidate-wide certification or evidence for untested server versions.
+- **SQL and Saved SQL context:** selected database/schema on New Query,
+  execution, saved queries, reopened history, and MySQL scripts containing
+  `USE`; schema discovery must not silently change the query context.
+- Retain the existing API, SSH, Database, MCP policy, account, updater,
+  migration, and supported Cloud Sync regression gates. Flow is excluded
+  from Cloud Sync; no Flow Cloud Sync gate or capability is being added.
+
+Scoped implementation evidence and its limitations:
+[Flow V1](flow-v1.md), [Flow MCP](flow-mcp-v1.md),
+[Collection/Environment exchange](collection-environment-exchange.md),
+[table export](database-table-export.md), [openGauss](database-opengauss.md),
+and [SQL execution context](database-sql-execution-context.md).
+Fresh native/manual candidate coverage of these changes remains `NOT VERIFIED`.
+
+## Historical v0.9.6 preparation status
+
+The following checks were recorded during v0.9.6 preparation against the
+`v0.9.5` comparison tag. They are retained as history, not rerun results or
+the current publication status of v0.9.6.
 
 - Source version: `0.9.6`; release status: `NOT RELEASED`.
 - Version synchronization: `PASS` (`node scripts/sync-version.mjs --check`).
@@ -13,7 +88,7 @@ those release results automatically.
 - Release contract suite: `PASS` (`pnpm run test:release-env`; 73 tests).
 - Candidate artifact, platform, live-service, and manual gates: `NOT VERIFIED`.
 
-## v0.9.6 candidate scope
+### Historical v0.9.6 candidate scope
 
 The candidate adds MCP diagnostic tools for database query history, database
 and SSH connection metadata updates and deletes, SSH connection tests, and

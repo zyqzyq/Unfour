@@ -4,8 +4,14 @@ These manual cases supplement automated tests for release candidates. Record
 `PASS`, `FAIL`, `NOT RUN`, or `NOT VERIFIED` for each relevant platform.
 
 > The recorded status below is for the published `v0.9.0` release. The current
-> source version is `v0.9.6`; rerun the applicable cases for its candidate and
+> source version is `v0.10.0`; rerun the applicable cases for its candidate and
 > do not inherit v0.9.0 results automatically.
+
+The v0.10.0 candidate's new Flow, Collection/Environment exchange, table export,
+openGauss, and SQL/Saved SQL context gates are listed in
+[release verification](release-verification.md#v0100-candidate-scope).
+Their fresh native/manual candidate results remain `NOT VERIFIED`; the scoped
+implementation reports and historical v0.9.6 checks do not replace this run.
 
 ## v0.9.0 recorded manual status
 

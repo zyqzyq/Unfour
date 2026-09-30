@@ -1,15 +1,17 @@
-# v0.9.6 release checklist
+# v0.10.0 release checklist
 
-## v0.9.6 preparation status
+## v0.10.0 preparation status
 
-- Source version: `0.9.6`; comparison tag: `v0.9.5`
-  (`8585f604ad02902520d99127f979a4ecb7b7af14`). The active verification record
-  still lists `v0.9.0` as the latest completed published release.
-- Version synchronization: `PASS` (`node scripts/sync-version.mjs --check`).
-- Cargo workspace lock/check: `PASS` (`cargo check --workspace --locked`).
-- Release contract suite: `PASS` (`pnpm run test:release-env`; 73 tests).
+- Source version: `0.10.0`; comparison tag: `v0.9.6`
+  (`87bea5d6f337cc6d1d10055972bce2f3ee24aaee`); release status: `NOT RELEASED`.
+- Current automated check results are recorded in
+  [v0.10.0 release verification](../testing/release-verification.md#v0100-preparation-status).
+- Scope: Flow V1 and MCP Flow execution, API Collection/Environment exchange,
+  Database table export, openGauss support, and SQL/Saved SQL context fixes.
+  Flow V1 is local-only and does not support Cloud Sync.
 - Candidate artifact, platform, live-service, and manual checks: `NOT VERIFIED`;
-  they require fresh evidence for the v0.9.6 candidate.
+  they require fresh evidence for the v0.10.0 candidate. Historical v0.9.0
+  release outcomes and v0.9.6 preparation checks do not verify this candidate.
 
 ## Previous v0.9.0 recorded release outcomes
 
@@ -38,10 +40,10 @@ The completed real Codex and Cursor checks supersede a separate basic MCP
 manual-smoke release gate. Keep the protocol smoke procedure for diagnostics
 and future regression use.
 
-The sections below preserve the reusable release procedure for v0.9.6. Their
-imperative steps are not additional v0.9.6 `PASS` claims; the v0.9.0 table above
-and `docs/testing/release-verification.md` are historical outcome records until
-new v0.9.6 evidence is recorded.
+The sections below are the reusable release procedure for v0.10.0. Their
+imperative steps are not v0.10.0 `PASS` claims. The v0.9.0 table above and the
+v0.9.6 preparation section in `docs/testing/release-verification.md` remain
+historical records.
 
 ## Shared gate
 
@@ -52,8 +54,14 @@ new v0.9.6 evidence is recorded.
 - Historical `pro_*` SQL migration files pass their immutable checksum guard.
 - Historical Community DB, historical Pro DB, and clean DB migrations have
   current test evidence.
-- API, SSH, Database, MCP, Account, Cloud, and multi-device manual results are
+- API, SSH, Database, Flow, MCP, Account, Cloud, and multi-device manual results are
   recorded; unavailable live services remain `NOT VERIFIED`.
+- Exercise Flow Canvas authoring, API/SSH/Database actions, Condition branches,
+  Wait Until, cancellation and run history through both Desktop and MCP.
+  Confirm Flow definitions/history remain local-only with Cloud Sync enabled.
+  Use the [v0.10.0 candidate scope](../testing/release-verification.md#v0100-candidate-scope)
+  for the new-feature regression gates; existing Flow implementation reports
+  do not establish candidate-level native/manual verification.
 
 ## Release Candidate
 
@@ -78,7 +86,7 @@ new v0.9.6 evidence is recorded.
 - Record install, launch, upgrade, updater, signature rejection, OS trust, and
   uninstall results from the downloaded candidate artifacts.
 - For Linux Experimental (x86_64 AppImage only), record Ubuntu 22.04 executable
-  permission, launch, first-window rendering, API/SSH/Database module opening,
+  permission, launch, first-window rendering, API/SSH/Database/Flow module opening,
   and quit/relaunch, plus an Ubuntu 24.04 launch smoke with the same artifact.
   Retain Linux updater smoke and signature-rejection checks; unrun items remain
   `NOT VERIFIED`. Follow `docs/testing/manual-test-cases.md`. Do not rebuild or
