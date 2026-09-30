@@ -1,12 +1,159 @@
 # v0.10.0 Release Verification
 
-This document tracks v0.10.0 release preparation from `main`, compared with
-`v0.9.6` (`87bea5d6f337cc6d1d10055972bce2f3ee24aaee`). The v0.9.6 preparation
-checks and published v0.9.0 results remain below as historical evidence.
-A new v0.10.0 candidate needs fresh evidence and must not inherit those
-results automatically.
+This document records the published v0.10.0 release, compared with
+`v0.9.6` (`87bea5d6f337cc6d1d10055972bce2f3ee24aaee`). The local v0.10.0
+preparation checks, v0.9.6 preparation checks, and published v0.9.0 results
+remain below as historical evidence. They do not establish new manual coverage.
 
-## v0.10.0 preparation status
+## v0.10.0 Final Release Verification Record
+
+Evidence checked on 2026-09-30 through GitHub tag, workflow, job, artifact, and
+Release APIs, plus public checksum and manifest HTTP reads.
+
+### Status distinctions
+
+| Term | Meaning | v0.10.0 record |
+| --- | --- | --- |
+| Implemented | Behavior exists in the tagged product source | Flow V1/MCP, Collection/Environment exchange, table export, openGauss, and SQL/Saved SQL context changes are included; scoped implementation reports are linked below |
+| Automated verified | The stated automated check completed successfully on the recorded SHA or published files | CI, RC/Release verification and four-platform builds, publication, R2 checksum verification, and manifest reads: PASS |
+| Manually verified | Installed behavior or a real-service journey was actually exercised in the stated environment | Release-level native/manual/live-service regressions without fresh evidence: NOT VERIFIED; earlier scoped and v0.9.x records retain their original limits |
+| Released | The tagged build is formally published | RELEASED as Standard stable; this status does not imply manual verification |
+
+### Source and workflow evidence
+
+- Status: `RELEASED`; version `0.10.0`, tag `v0.10.0`.
+- Exact tag/release commit:
+  [`96f0022ec344fd643b567a54fe6f3686c2272dc0`](https://github.com/zyqzyq/Unfour/commit/96f0022ec344fd643b567a54fe6f3686c2272dc0).
+  The GitHub tag ref and local tag agree. Local and GitHub `main` resolved
+  to the same commit at the start of this documentation follow-up.
+- [GitHub Release](https://github.com/zyqzyq/Unfour/releases/tag/v0.10.0):
+  `Unfour v0.10.0`, Release ID `399805354`, `draft=false`,
+  `prerelease=false`, published `2026-09-30T07:24:24Z`
+  (2026-09-30 15:24:24 Asia/Shanghai).
+- Release-operator working-tree cleanliness at publication: `NOT RECORDED`;
+  the clean tree observed during this documentation follow-up does not
+  establish the operator's earlier state.
+
+All three runs below resolved to the exact tag commit, completed with
+`conclusion=success`, and used attempt 1:
+
+| Workflow | Run | Trigger | Automated result |
+| --- | --- | --- | --- |
+| CI | [36676317345](https://github.com/zyqzyq/Unfour/actions/runs/36676317345) | `push`, `main` | PASS: frontend lint/build/tests, release contracts, secret audit, migration integrity, Rust checks/tests, MCP contracts/tests |
+| Standard Release Candidate | [36676343771](https://github.com/zyqzyq/Unfour/actions/runs/36676343771) | `workflow_dispatch`, `main` | PASS: source identity, reusable verification, and exactly four signed Standard native builds; four Actions artifacts, no publish job |
+| Standard Release | [36681185573](https://github.com/zyqzyq/Unfour/actions/runs/36681185573) | `push`, `v0.10.0` | PASS: source identity, reusable verification, four signed Standard builds, and publication |
+
+The RC and Release verify jobs both passed `pnpm run lint`, `pnpm run test`,
+`pnpm run test:release-env`, `pnpm run check`, `pnpm run check:rust:ssh`,
+`pnpm run test:rust`, and `pnpm run test:e2e`. These are workflow results,
+not commands rerun during this documentation-only follow-up. Both Linux build
+jobs used `ubuntu-22.04`; runner/build success does not verify installed
+Ubuntu 22.04/24.04 runtime behavior.
+
+### Actions artifacts
+
+The API lists the following artifacts, all `expired=false` at the evidence
+check. RC artifacts use `release-candidate-`; formal build artifacts use
+`release-assets-`. The formal workflow rebuilt the same source SHA; RC and
+Release artifact ZIPs are separate builds, without a byte-equality claim.
+
+| Target suffix | RC artifact ID | Release artifact ID |
+| --- | --- | --- |
+| `x86_64-pc-windows-msvc` | `11080319728` | `11082627057` |
+| `aarch64-apple-darwin` | `11080454267` | `11081764712` |
+| `x86_64-apple-darwin` | `11080519299` | `11082144589` |
+| `x86_64-unknown-linux-gnu` | `11079648849` | `11082487720` |
+
+### Published assets, checksums, and manifests
+
+GitHub lists 13 assets, all `state=uploaded`: six installer/updater payloads,
+four updater `.sig` files, `SHA256SUMS.txt`, `latest.json`, and
+`downloads.json`. Sizes and SHA-256 digests below come from the Release API.
+The ten payload/signature digests agree with the downloaded checksum entries.
+No MSIX, `.deb`, `.rpm`, or Linux ARM64 asset was published by this workflow.
+
+| Published asset | Bytes | SHA-256 |
+| --- | --- | --- |
+| [`downloads.json`](https://github.com/zyqzyq/Unfour/releases/download/v0.10.0/downloads.json) | 504 | `576b889ae527d7660d76ba43afff4ca6ffce46e615309e492219cee5c3ea12e1` |
+| [`latest.json`](https://github.com/zyqzyq/Unfour/releases/download/v0.10.0/latest.json) | 2,362 | `4ee56c43aee534f026dfce5a3cb89b4aacf443c64ceb77bf2b7c7a1efde9edca` |
+| [`SHA256SUMS.txt`](https://github.com/zyqzyq/Unfour/releases/download/v0.10.0/SHA256SUMS.txt) | 1,004 | `e8e0162e617ab3949c6b07d1b48b27bae190fc9c7a84c2ebf73c2e9ea139874c` |
+| [`Unfour_0.10.0_linux_x64.AppImage`](https://github.com/zyqzyq/Unfour/releases/download/v0.10.0/Unfour_0.10.0_linux_x64.AppImage) | 111,036,920 | `b1bc430aecc6671cad217f14c6cb4a52c532c84945916979608995c211acb8d1` |
+| [`Unfour_0.10.0_linux_x64.AppImage.sig`](https://github.com/zyqzyq/Unfour/releases/download/v0.10.0/Unfour_0.10.0_linux_x64.AppImage.sig) | 420 | `651f7f3394465791c7d37250863bf77e46d340e3115cf1f5d785afa350b63f45` |
+| [`Unfour_0.10.0_macos_arm64.app.tar.gz`](https://github.com/zyqzyq/Unfour/releases/download/v0.10.0/Unfour_0.10.0_macos_arm64.app.tar.gz) | 33,488,159 | `1fa1fd8df2c31c58823978f0816f3d36d9965d86d8082cde65977cfa6e69ed71` |
+| [`Unfour_0.10.0_macos_arm64.app.tar.gz.sig`](https://github.com/zyqzyq/Unfour/releases/download/v0.10.0/Unfour_0.10.0_macos_arm64.app.tar.gz.sig) | 404 | `54ae1f23030e27b690f1ae22a53286a627abe4982a9dc829a1441822b44a7005` |
+| [`Unfour_0.10.0_macos_arm64.dmg`](https://github.com/zyqzyq/Unfour/releases/download/v0.10.0/Unfour_0.10.0_macos_arm64.dmg) | 34,062,338 | `96762b945ac98939cec0766f170fa9607e5a7a4f06c113634ff8f346886d3aa8` |
+| [`Unfour_0.10.0_macos_x64.app.tar.gz`](https://github.com/zyqzyq/Unfour/releases/download/v0.10.0/Unfour_0.10.0_macos_x64.app.tar.gz) | 36,050,897 | `06b50c440ee1e6b6e80a7de87f0efd8719c0a4cb8d05a6685540eb691bf8272e` |
+| [`Unfour_0.10.0_macos_x64.app.tar.gz.sig`](https://github.com/zyqzyq/Unfour/releases/download/v0.10.0/Unfour_0.10.0_macos_x64.app.tar.gz.sig) | 404 | `3d856521e7dbe604196fea68f98573759a25ce4f2594464f1dba38081749ac71` |
+| [`Unfour_0.10.0_macos_x64.dmg`](https://github.com/zyqzyq/Unfour/releases/download/v0.10.0/Unfour_0.10.0_macos_x64.dmg) | 36,956,905 | `fb084c7ab334d1fc7756359298e83f94c34d2861f4d7b17ee7498f0d64c5a441` |
+| [`Unfour_0.10.0_windows_x64.exe`](https://github.com/zyqzyq/Unfour/releases/download/v0.10.0/Unfour_0.10.0_windows_x64.exe) | 20,919,321 | `ba6ecc94844f1c69d8addeac42264d3098b9c13556ddda7fe3fb7c13e01ca3f8` |
+| [`Unfour_0.10.0_windows_x64.exe.sig`](https://github.com/zyqzyq/Unfour/releases/download/v0.10.0/Unfour_0.10.0_windows_x64.exe.sig) | 416 | `7cba841f6c9cfdf0bcb0ca5e715a4b0f40e762c4ff2b541dbdef1336e34ccd50` |
+
+The [publish job 109783752704](https://github.com/zyqzyq/Unfour/actions/runs/36681185573/job/109783752704)
+passed manifest finalization, immutable R2 upload/re-download, GitHub Release
+creation, and ordered stable-manifest promotion. Its log records all ten
+`sha256sum -c` entries as `OK`, allows promotion from updater `0.9.6` to
+`0.10.0`, uploads `downloads.json` first, then `latest.json` last.
+
+Direct public reads during this follow-up returned HTTP 200:
+
+- [R2 versioned checksums](https://releases.unfour.dev/stable/0.10.0/SHA256SUMS.txt)
+  and the GitHub checksum asset are byte-identical. The checksum file contains
+  exactly ten payload/signature entries, excluding itself and both manifests.
+- [Stable updater manifest](https://releases.unfour.dev/stable/latest.json):
+  version `0.10.0`; exactly `windows-x86_64`, `darwin-aarch64`,
+  `darwin-x86_64`, and `linux-x86_64`, each with a non-empty signature.
+  macOS updater URLs use `.app.tar.gz`.
+- [Stable download manifest](https://releases.unfour.dev/stable/downloads.json):
+  version `0.10.0`; exactly `windows-x64`, `macos-arm64`, `macos-x64`,
+  and `linux-x64`, using NSIS, DMG, DMG, and AppImage respectively.
+- Both live manifests are byte-identical to their GitHub assets and return
+  `Content-Type: application/json` and `Cache-Control: no-cache`. All eight
+  payload URLs point into `https://releases.unfour.dev/stable/0.10.0/`.
+
+Full payload byte verification is evidenced by the workflow's R2 re-download
+and checksum log, not a new local download/install of all packages. Manifest
+signature presence does not establish cryptographic rejection or a successful
+in-app update journey.
+
+### Remaining v0.10.0 manual and live-service limits
+
+| Gate | Release-level result |
+| --- | --- |
+| Windows NSIS install, installed launch, upgrade, MCP sidecar replacement, uninstall, and SmartScreen/trust behavior | NOT VERIFIED |
+| macOS arm64/x64 install/run and Gatekeeper/trust behavior | NOT VERIFIED; Apple signing/notarization is not enabled |
+| Linux AppImage Ubuntu 22.04/24.04 launch, rendering, module opening, quit/relaunch, desktop integration, and updater | NOT VERIFIED; Linux remains Experimental |
+| Previous-Stable-to-v0.10.0 in-app update and manual invalid-signature rejection | NOT VERIFIED |
+| Native Desktop/MCP Flow lifecycle, API exchange, table export, openGauss, and SQL/Saved SQL context regression on released artifacts | NOT VERIFIED; scoped implementation records retain their narrower evidence |
+| Real API, SSH/SFTP/Tasks, supported database-engine, and real Codex/Cursor MCP-client regressions | NOT VERIFIED |
+| Account/OAuth/callback, Creem Test/Production billing, and Cloud Sync single/multi-device regressions | NOT VERIFIED |
+| MCP prod read-only, blocked-write, confirmation binding, and confirmed retry | NOT VERIFIED |
+| Platform OS-keychain release smoke | NOT VERIFIED; the ignored smoke has no new manual evidence |
+| Manual MSIX build/install, Store submission/servicing, callback, alias, and NSIS coexistence | NOT VERIFIED; separate from Standard publication |
+
+Historical v0.9.x live/manual outcomes and the scoped 2026-09-28 openGauss
+record are preserved below and in their owning reports. They are not promoted
+to final v0.10.0 manual `PASS` results.
+
+### Documentation follow-up validation
+
+- Version check: `PASS` via
+  `pnpm --config.verify-deps-before-run=false run check:version`; the existing
+  version script confirms all tracked consumers match `0.10.0`. The default
+  invocation failed before that script because pnpm's automatic dependency
+  installation could not open its local cache database in the sandbox. The
+  temporary CLI setting skips that installation; repository settings and
+  dependencies were not changed.
+- `git diff --check`: `PASS`.
+- Local Markdown links/anchors: `PASS` across 98 tracked Markdown files,
+  99 local links, and 18 anchors, including links into the new final record.
+- Historical v0.9.x release evidence and v0.10.0 release-note content:
+  unchanged. Only documentation files are modified by this follow-up.
+
+## Historical v0.10.0 preparation status
+
+This is the original local preparation record, before the RC, tag, and formal
+publication recorded above. Its `NOT RELEASED` and `NOT VERIFIED` statements
+describe that preparation checkpoint, not the current publication state.
 
 - Source version: `0.10.0`; release status: `NOT RELEASED`.
 - Local automated verification date: 2026-09-30, Windows.
@@ -14,7 +161,7 @@ results automatically.
   `e3912f53949436c6108a0e63a2410c6bd3a0d03d`; the eventual candidate must record
   its own committed source SHA and workflow run.
 
-| Command | Current result |
+| Command | Recorded local preparation result |
 | --- | --- |
 | `pnpm run check:version` | PASS: all package/Tauri consumers match `0.10.0` |
 | `pnpm run check` | PASS: secret audit, frontend build, Rust workspace check, migrations, large-file guard, shared tokens |
@@ -74,7 +221,8 @@ Scoped implementation evidence and its limitations:
 [Collection/Environment exchange](collection-environment-exchange.md),
 [table export](database-table-export.md), [openGauss](database-opengauss.md),
 and [SQL execution context](database-sql-execution-context.md).
-Fresh native/manual candidate coverage of these changes remains `NOT VERIFIED`.
+Release-level native/manual coverage of these changes remains `NOT VERIFIED`,
+including after formal publication.
 
 ## Historical v0.9.6 preparation status
 

@@ -1,17 +1,45 @@
 # v0.10.0 release checklist
 
-## v0.10.0 preparation status
+## v0.10.0 released status
 
-- Source version: `0.10.0`; comparison tag: `v0.9.6`
-  (`87bea5d6f337cc6d1d10055972bce2f3ee24aaee`); release status: `NOT RELEASED`.
-- Current automated check results are recorded in
-  [v0.10.0 release verification](../testing/release-verification.md#v0100-preparation-status).
+- Status: `RELEASED` as Standard stable on 2026-09-30
+  (`2026-09-30T07:24:24Z`); source version `0.10.0`, formal tag `v0.10.0`.
+- Tag/release commit: `96f0022ec344fd643b567a54fe6f3686c2272dc0`;
+  comparison tag: `v0.9.6` (`87bea5d6f337cc6d1d10055972bce2f3ee24aaee`).
+- [GitHub Release](https://github.com/zyqzyq/Unfour/releases/tag/v0.10.0):
+  published, non-draft, non-prerelease, Release ID `399805354`.
+- Evidence checked on 2026-09-30. Exact workflow, artifact, checksum, and
+  manifest evidence is recorded in the
+  [v0.10.0 final verification record](../testing/release-verification.md#v0100-final-release-verification-record).
 - Scope: Flow V1 and MCP Flow execution, API Collection/Environment exchange,
   Database table export, openGauss support, and SQL/Saved SQL context fixes.
   Flow V1 is local-only and does not support Cloud Sync.
-- Candidate artifact, platform, live-service, and manual checks: `NOT VERIFIED`;
-  they require fresh evidence for the v0.10.0 candidate. Historical v0.9.0
-  release outcomes and v0.9.6 preparation checks do not verify this candidate.
+- Native platform, live-service, and manual regressions without v0.10.0
+  evidence remain `NOT VERIFIED`. Historical v0.9.0 release outcomes and
+  v0.9.6 preparation checks do not verify the released v0.10.0 artifacts.
+
+| Gate | v0.10.0 status and evidence |
+| --- | --- |
+| Formal tag and release commit | VERIFIED: local/GitHub tag agree on the SHA above |
+| CI on release commit | PASS: [run 36676317345](https://github.com/zyqzyq/Unfour/actions/runs/36676317345) |
+| Standard Release Candidate on release commit | PASS: [run 36676343771](https://github.com/zyqzyq/Unfour/actions/runs/36676343771); verify job and four signed native builds |
+| Standard Release on formal tag | PASS: [run 36681185573](https://github.com/zyqzyq/Unfour/actions/runs/36681185573); verify/build/publish jobs |
+| Automated version, secret, migration, frontend/Rust/MCP, SSH-native, release-contract, and browser-smoke checks | PASS: the recorded CI and reusable RC/Release verification jobs; browser smoke is not native manual coverage |
+| Windows x64, macOS arm64/x64, Linux x64 canonical build/staging | PASS: four RC and four Release Actions artifacts; Linux builds used `ubuntu-22.04` |
+| GitHub Release assets | VERIFIED: 13 uploaded assets, including payloads, updater signatures, checksums, and both manifests |
+| Checksums and immutable R2 bytes | PASS: publish job re-download reports ten checksum entries as OK; direct GitHub/R2 checksum-file reads agree |
+| Updater/download manifests and promotion order | PASS: publish log uploads downloads first, updater last; live HTTP 200 reads show `0.10.0`, expected platform keys, and bytes matching GitHub assets |
+| Changelog publication date and pinned comparison | COMPLETE: `2026-09-30`, `v0.9.6...v0.10.0`; synchronized in this post-release documentation follow-up |
+| Release-operator tree review/cleanliness at publication | NOT RECORDED; cannot be inferred from successful workflows |
+| Native install, launch, upgrade, uninstall, MCP sidecar replacement, and OS trust checks | NOT VERIFIED |
+| Previous-Stable update, manual invalid-signature rejection, and Linux 22.04/24.04 runtime/updater | NOT VERIFIED |
+| Desktop/MCP Flow and new API/Database regression on released artifacts | NOT VERIFIED; existing scoped implementation evidence is retained |
+| Real API/SSH/database/MCP-client, Account/OAuth/billing, Cloud Sync, multi-device, and MCP prod-policy regressions | NOT VERIFIED |
+| OS-keychain release smoke and manual MSIX/Store journey | NOT VERIFIED; Store publication is separate |
+
+Implemented, automated verified, manually verified, and released are separate
+states. Standard publication completes the release gates evidenced above; it
+does not turn unrun manual or live-service checks into `PASS`.
 
 ## Previous v0.9.0 recorded release outcomes
 
@@ -40,9 +68,10 @@ The completed real Codex and Cursor checks supersede a separate basic MCP
 manual-smoke release gate. Keep the protocol smoke procedure for diagnostics
 and future regression use.
 
-The sections below are the reusable release procedure for v0.10.0. Their
-imperative steps are not v0.10.0 `PASS` claims. The v0.9.0 table above and the
-v0.9.6 preparation section in `docs/testing/release-verification.md` remain
+The sections below retain the reusable release procedure. Actual v0.10.0
+outcomes are recorded above; imperative steps alone are not `PASS` claims.
+The v0.9.0 table above and the v0.9.6 preparation section in
+`docs/testing/release-verification.md` remain
 historical records.
 
 ## Shared gate
@@ -74,7 +103,7 @@ historical records.
   shared build rather than produce unsigned updater artifacts.
 - Confirm the reusable workflow completes the full verify job and exactly four
   native builds: Windows x64, macOS arm64, macOS x64, and Linux x64.
-- For the next candidate, confirm the actual Linux build uses `ubuntu-22.04`
+- For any candidate, confirm the actual Linux build uses `ubuntu-22.04`
   with a runner-specific Rust cache key. The independent verify job may use
   `ubuntu-latest`; it must not supply packaged native artifacts.
 - Download all four `release-candidate-*` Actions artifacts. Verify canonical
@@ -97,12 +126,10 @@ historical records.
 
 ## Standard
 
-- Before the final v0.10.0 release commit and tag, replace `Unreleased` in
-  [CHANGELOG.md](../../CHANGELOG.md) with the actual publication date
-  (`YYYY-MM-DD`) and pin its `[0.10.0]` comparison link to
+- v0.10.0 documentation follow-up: `COMPLETE`.
+  [CHANGELOG.md](../../CHANGELOG.md) records the actual publication date
+  `2026-09-30` and pins `[0.10.0]` to
   `https://github.com/zyqzyq/Unfour/compare/v0.9.6...v0.10.0`.
-  RC preparation may retain `0.10.0 - Unreleased` and the comparison to `main`;
-  do not invent a publication date during preparation.
 - Proceed only from the reviewed commit represented by the Release Candidate;
   create the immutable `vX.Y.Z` tag according to the release procedure.
 - CI exports `UNFOUR_DISTRIBUTION=standard` and `stable`.

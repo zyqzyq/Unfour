@@ -6,9 +6,9 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
-## [0.10.0] - Unreleased
+## [0.10.0] - 2026-09-30
 
-Next release after `v0.9.6`, adding local runbooks and easier exchange of API
+Release after `v0.9.6`, adding local runbooks and easier exchange of API
 and database resources.
 
 ### Added
@@ -719,7 +719,7 @@ First public release.
 - Linux artifacts remain experimental/unverified until real-device smoke checks
   are complete.
 
-[0.10.0]: https://github.com/zyqzyq/Unfour/compare/v0.9.6...main
+[0.10.0]: https://github.com/zyqzyq/Unfour/compare/v0.9.6...v0.10.0
 [0.9.6]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.6
 [0.9.5]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.5
 [0.9.4]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.4

@@ -4,9 +4,11 @@ This roadmap is a product-direction summary. It is not release evidence. Use
 `docs/testing/release-verification.md` and `docs/release/release-checklist.md`
 for release readiness.
 
-Current source version: `0.10.0` (release preparation). The previous published
-release / source checkpoint is `v0.9.6`; its verification records are historical
-and do not establish v0.10.0 candidate readiness.
+Current source version: `0.10.0`. The latest published release is
+[v0.10.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.10.0), published on
+2026-09-30. Current development on `main` continues from v0.10.0; no next
+version or feature scope has been assigned. Earlier verification records
+remain historical and do not establish v0.10.0 manual coverage.
 
 ## v0.1 (First Public Release)
 
@@ -282,9 +284,9 @@ Historical checkpoint status:
 
 Release claims remain limited by the current verification matrix.
 
-## v0.10.0 (Current release preparation)
+## v0.10.0 (Published)
 
-The follow-up from `v0.9.6` prepares the next formal release with:
+The published follow-up from `v0.9.6` includes:
 
 - Flow V1 local runbooks combining saved API requests, SSH tasks, and Database
   queries, with Condition, Wait Until, Canvas authoring, and run history;
@@ -299,11 +301,15 @@ Sync or workspace import/export.
 
 Current status:
 
-- source version is `0.10.0`; release status is `NOT RELEASED`;
-- local automated preparation results are recorded in
-  [release verification](testing/release-verification.md#v0100-preparation-status);
-- the next Standard Release Candidate needs fresh artifact, platform,
-  live-service, and manual evidence; unrun gates remain `NOT VERIFIED`.
+- `v0.10.0` was released on 2026-09-30 from commit
+  `96f0022ec344fd643b567a54fe6f3686c2272dc0`;
+- CI, Standard Release Candidate, Standard Release, artifacts, checksums, and
+  manifest evidence are recorded in the
+  [final verification record](testing/release-verification.md#v0100-final-release-verification-record);
+- unrecorded native platform, live-service, and manual checks remain
+  `NOT VERIFIED`; publication does not establish manual coverage;
+- current `main` continues development from v0.10.0 without an assigned next
+  version or feature scope.
 
 Release claims remain limited by the current verification matrix.
 

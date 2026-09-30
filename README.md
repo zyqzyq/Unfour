@@ -18,7 +18,7 @@ Unfour brings API testing, SSH, database tools, local Flow runbooks, and MCP-ass
 </div>
 
 > [!WARNING]
-> This source tree targets Unfour v0.10.0 (release preparation). Windows NSIS
+> Unfour v0.10.0 was released on 2026-09-30. Windows NSIS
 > installers are unsigned and may trigger SmartScreen or other operating-system
 > security warnings. Use `SHA256SUMS.txt` from the GitHub Release to verify
 > downloaded files.
@@ -215,10 +215,12 @@ map.
 
 ## Release Status
 
-This source tree targets Unfour v0.10.0 and is preparing for a new Standard
-Release Candidate. Candidate artifacts, platform checks, live-service checks,
-and manual verification remain `NOT VERIFIED` until fresh evidence is recorded.
-The v0.9.0 and v0.9.6 records are historical and do not verify this candidate.
+[Unfour v0.10.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.10.0) was
+published as a Standard stable release on 2026-09-30. CI, Standard Release
+Candidate, Standard Release, published assets, checksums, and live updater/download
+manifests are verified. Native platform, live-service, and manual regressions
+without v0.10.0 evidence remain `NOT VERIFIED`. The v0.9.0 and v0.9.6 records
+remain historical; current `main` continues development from v0.10.0.
 Release verification evidence is documented in:
 
 - `docs/testing/release-verification.md`
@@ -241,9 +243,9 @@ successfully for the target platform or is backed by current repository evidence
 
 The published v0.9.0 Linux AppImage built successfully but failed to launch on
 Ubuntu 20.04 because it requires Ubuntu 24.04-era GLIBC/GLIBCXX symbols. The
-Ubuntu 22.04 build-baseline fix applies to future artifacts, not the immutable
-v0.9.0 download. Ubuntu 22.04/24.04 runtime regression remains `NOT VERIFIED`
-until a new artifact is built and tested; see
+v0.10.0 AppImage was built on Ubuntu 22.04; the immutable v0.9.0 download
+remains unchanged. v0.10.0 Ubuntu 22.04/24.04 runtime regression remains
+`NOT VERIFIED` until installed-artifact testing is recorded; see
 [release verification](docs/testing/release-verification.md#linux-appimage-compatibility).
 
 Recorded v0.9.0 real-environment verification includes Windows install, launch,
