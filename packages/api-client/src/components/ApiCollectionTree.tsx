@@ -1,60 +1,19 @@
-import { SidebarEmpty } from "./ApiTreeLabels";
 import { useState } from "react";
-import { Folder, FolderOpen, FolderPlus, Search, Send } from "lucide-react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Button,
-  ContextMenuItem,
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  Input,
-  IconButton,
-  SidebarRow,
-  SidebarSection,
-  TreeView,
-  type TreeViewDropPosition,
-  useI18n,
-  type TreeViewItem,
-} from "@unfour/ui";
-import { useFeedbackErrorHandler } from "@unfour/ui";
-import {
-  deleteApiRequest,
-  duplicateApiRequest,
-  listApiHistory,
-  listSavedApiRequests,
-  updateApiRequest,
-  type ApiCollection,
-  type ApiSavedRequest,
-} from "@unfour/command-client";
-import {
-  buildApiCollectionTree,
-  collectTreeRequests,
-  findDuplicateRequestName,
-  savedRequestToInput,
-  type FolderNode,
-} from "../request-utils";
+import { Search, Send } from "lucide-react";
+import { SidebarRow, TreeView, useI18n } from "@unfour/ui";
+import { buildApiCollectionTree } from "../request-utils";
 import type { ApiOpenIntent } from "../model/types";
 import { useApiCollectionFolders } from "../hooks/useApiCollectionFolders";
 import { useApiCollections } from "../hooks/useApiCollections";
-import { ApiHistoryTree } from "./ApiHistoryTree";
-import { ApiCollectionExportDialog } from "./ApiCollectionExportDialog";
+import { useApiCollectionRequestActions } from "../hooks/useApiCollectionRequestActions";
+import { useApiCollectionTreeData } from "../hooks/useApiCollectionTreeData";
+import { useApiCollectionTreeDialogs } from "../hooks/useApiCollectionTreeDialogs";
+import { useApiCollectionTreeDrop } from "../hooks/useApiCollectionTreeDrop";
 import { ApiCollectionToolbarActions } from "./ApiCollectionToolbarActions";
-import { ApiCollectionMenu } from "./ApiCollectionMenu";
-import type { RequestTreeActionContext } from "./ApiRequestTreeActions";
-import { createApiCollectionDropController } from "./api-collection-dnd";
-import {
-  collectExpandableIds,
-  requestTreeItem,
-} from "./api-collection-tree-helpers";
-
-type NameTarget =
-  | { kind: "collection" }
-  | { kind: "folder"; collectionId: string; parentFolderId: string | null };
+import { ApiCollectionTreeDialogs } from "./ApiCollectionTreeDialogs";
+import { ApiCollectionHistorySection } from "./ApiCollectionHistorySection";
+import { SidebarEmpty } from "./ApiTreeLabels";
+import { collectExpandableIds, collectionTreeItems } from "./api-collection-tree-helpers";
 
 export function ApiCollectionTree({
   active,
@@ -74,210 +33,40 @@ export function ApiCollectionTree({
   const { t } = useI18n();
   const [search, setSearch] = useState("");
   const [importedId, setImportedId] = useState<string | null>(null);
-  const [nameTarget, setNameTarget] = useState<NameTarget | null>(null);
-  const [nameValue, setNameValue] = useState("");
-  const [renameTarget, setRenameTarget] = useState<ApiCollection | null>(null);
-  const [renameValue, setRenameValue] = useState("");
-  const [renameFolderTarget, setRenameFolderTarget] = useState<FolderNode | null>(null);
-  const [renameFolderValue, setRenameFolderValue] = useState("");
-  const [renameRequestTarget, setRenameRequestTarget] = useState<ApiSavedRequest | null>(null);
-  const [renameRequestValue, setRenameRequestValue] = useState("");
-  const [deleteTarget, setDeleteTarget] = useState<ApiCollection | null>(null);
-  const [exportTarget, setExportTarget] = useState<ApiCollection | null>(null);
-  const [deleteFolderTarget, setDeleteFolderTarget] = useState<FolderNode | null>(null);
-  const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
-  const queryClient = useQueryClient();
-  const handleError = useFeedbackErrorHandler();
-  const { collections, createMut, deleteMut, renameMut } =
-    useApiCollections(workspaceId);
-  const {
-    createFolderMut,
-    deleteFolderMut,
-    folders,
-    moveFolderMut,
-    moveRequestMut,
-    renameFolderMut,
-    reorderFoldersMut,
-    reorderRequestsMut,
-  } = useApiCollectionFolders(workspaceId);
-  const savedQuery = useQuery({
-    enabled: Boolean(workspaceId),
-    queryKey: ["api-saved", workspaceId],
-    queryFn: () => listSavedApiRequests(workspaceId),
-  });
-  const historyQuery = useQuery({
-    enabled: Boolean(workspaceId),
-    queryKey: ["api-history", workspaceId],
-    queryFn: () => listApiHistory(workspaceId),
-  });
-  const duplicateMutation = useMutation({
-    mutationFn: (requestId: string) => duplicateApiRequest(workspaceId, requestId),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["api-saved", workspaceId] }),
-    onError: (error) => handleError(error, { key: "feedback.api.requestDuplicateFailed" }),
-  });
-  const deleteMutation = useMutation({
-    mutationFn: (requestId: string) => deleteApiRequest(workspaceId, requestId),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["api-saved", workspaceId] }),
-    onError: (error) => handleError(error, { key: "feedback.api.requestDeleteFailed" }),
-  });
-  const updateRequestMutation = useMutation({
-    mutationFn: ({
-      name,
-      request,
-    }: {
-      name: string;
-      request: ApiSavedRequest;
-    }) =>
-      updateApiRequest(workspaceId, request.id, {
-        ...savedRequestToInput(request, workspaceId),
-        name,
-      }),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["api-saved", workspaceId] }),
-    onError: (error) => handleError(error, { key: "feedback.api.requestRenameFailed" }),
-  });
-
-  const folderNameById = new Map(folders.map((folder) => [folder.id, folder.name]));
-  const searchText = search.trim().toLowerCase();
-  const savedRequests = (savedQuery.data ?? []).filter((request) =>
-    searchText
-      ? [
-          request.name,
-          request.url,
-          request.method,
-          request.parentFolderId
-            ? (folderNameById.get(request.parentFolderId) ?? "")
-            : "",
-        ].some((value) => value.toLowerCase().includes(searchText))
-      : true,
+  const collections = useApiCollections(workspaceId);
+  const folderActions = useApiCollectionFolders(workspaceId);
+  const requestActions = useApiCollectionRequestActions(workspaceId);
+  const { requests, visibleRequests, historyItems } = useApiCollectionTreeData(
+    workspaceId, search, folderActions.folders,
   );
-  const historyItems = (historyQuery.data ?? []).filter((item) =>
-    searchText
-      ? [item.name ?? "", item.url, item.method, String(item.status ?? "")]
-          .some((value) => value.toLowerCase().includes(searchText))
-      : true,
-  );
-
-  const menuContext: RequestTreeActionContext = {
-    duplicate: duplicateMutation.mutate,
-    onOpenIntent,
-    remove: deleteMutation.mutate,
-    rename: (request) => {
-      setRenameRequestTarget(request);
-      setRenameRequestValue(request.name);
-    },
-    t,
-  };
-
-  const openFolderDialog = (
-    collectionId: string,
-    parentFolderId: string | null,
-  ) => {
-    setNameValue("");
-    setNameTarget({ kind: "folder", collectionId, parentFolderId });
-  };
-
-  const addFolderAction = (
-    collectionId: string,
-    parentFolderId: string | null,
-  ) => (
-    <IconButton
-      label={t("api.collection.addFolder")}
-      size="compact"
-      className="h-6 w-6"
-      disableTooltip
-      onClick={(event) => {
-        event.stopPropagation();
-        openFolderDialog(collectionId, parentFolderId);
-      }}
-      title={t("api.collection.addFolder")}
-      type="button"
-    >
-      <FolderPlus size={14} />
-    </IconButton>
-  );
-
-  function folderToTreeItem(
-    node: FolderNode,
-    collectionId: string,
-  ): TreeViewItem {
-    return {
-      id: `folder:${node.id}`,
-      icon: <Folder size={13} />,
-      label: node.name,
-      actions: addFolderAction(collectionId, node.id),
-      contextMenu: (
-        <>
-          <ContextMenuItem onSelect={() => openFolderDialog(collectionId, node.id)}>
-            {t("api.collection.addFolder")}
-          </ContextMenuItem>
-          <ContextMenuItem
-            onSelect={() => {
-              setRenameFolderTarget(node);
-              setRenameFolderValue(node.name);
-            }}
-          >
-            {t("api.collection.renameFolder")}
-          </ContextMenuItem>
-          <ContextMenuItem
-            className="text-[var(--u-color-danger)]"
-            onSelect={() => setDeleteFolderTarget(node)}
-          >
-            {t("api.collection.deleteFolder")}
-          </ContextMenuItem>
-        </>
-      ),
-      children: [
-        ...node.folders.map((child) => folderToTreeItem(child, collectionId)),
-        ...node.requests.map((request) => requestTreeItem(request, menuContext)),
-      ],
-    };
-  }
-
+  const dialogs = useApiCollectionTreeDialogs({
+    collections, folders: folderActions, requestActions, requests,
+  });
   const collectionGroups = buildApiCollectionTree(
-    collections,
-    folders,
-    savedRequests,
+    collections.collections, folderActions.folders, visibleRequests,
   );
-  const dropController = createApiCollectionDropController(
-    collectionGroups,
-    folders,
-    savedRequests,
-  );
-  const collectionItems: TreeViewItem[] = collectionGroups.map((group) => ({
-    id: `collection:${group.id}`,
-    icon: <FolderOpen size={13} />,
-    label: group.name,
-    meta: (
-      <span className="text-[10px] tabular-nums text-[var(--u-color-text-soft)]">
-        {collectTreeRequests(group.tree).length}
-      </span>
-    ),
-    actions: <div className="flex shrink-0 items-center gap-1">{addFolderAction(group.collection.id, null)}{collectionMenu(group.collection)}</div>,
-    contextMenu: (
-      collectionMenu(group.collection, true)
-    ),
-    children: [
-      ...group.tree.folders.map((folder) => folderToTreeItem(folder, group.id)),
-      ...group.tree.rootRequests.map((request) =>
-        requestTreeItem(request, menuContext),
-      ),
-    ],
-  }));
+  const drop = useApiCollectionTreeDrop({
+    collectionGroups, folderActions, requests, visibleRequests, onError: dialogs.showError,
+  });
+  const items = collectionTreeItems(collectionGroups, {
+    duplicate: requestActions.duplicateMutation.mutate,
+    onOpenIntent,
+    remove: requestActions.deleteMutation.mutate,
+    rename: dialogs.renameRequestItem,
+    t,
+  }, {
+    addFolder: dialogs.openFolder,
+    renameCollection: dialogs.renameCollection,
+    deleteCollection: dialogs.deleteCollectionItem,
+    exportCollection: dialogs.exportCollectionItem,
+    renameFolder: dialogs.renameFolderItem,
+    deleteFolder: dialogs.deleteFolderItem,
+    t,
+  });
   // Re-key the tree on its expandable structure so newly created collections
   // and folders auto-expand (TreeView only reads defaultExpandedIds on mount).
   // Manual collapse of an unchanged structure is preserved (same key).
-  const expandableIds = collectExpandableIds(collectionItems);
-
-  function collectionMenu(collection: ApiCollection, context = false) {
-    return <ApiCollectionMenu context={context} name={collection.name}
-      onRename={() => { setRenameTarget(collection); setRenameValue(collection.name); }}
-      onAddFolder={() => openFolderDialog(collection.id, null)}
-      onExport={() => setExportTarget(collection)}
-      onDelete={() => setDeleteTarget(collection)} />;
-  }
+  const expandableIds = collectExpandableIds(items);
 
   if (collapsed) {
     return (
@@ -308,27 +97,20 @@ export function ApiCollectionTree({
         <ApiCollectionToolbarActions
           key={workspaceId}
           onImported={(id) => { setSearch(""); setImportedId(`collection:${id}`); }}
-          createPending={createMut.isPending}
-          onCreate={() => {
-            setNameValue("");
-            setNameTarget({ kind: "collection" });
-          }}
+          createPending={collections.createMut.isPending}
+          onCreate={dialogs.openCollection}
           workspaceId={workspaceId}
         />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-        {collectionItems.length ? (
+        {items.length ? (
           <TreeView
-            canDrag={(item) =>
-              item.id.startsWith("request:") || item.id.startsWith("folder:")
-            }
-            canDrop={dropController.canDrop}
+            canDrag={(item) => item.id.startsWith("request:") || item.id.startsWith("folder:")}
+            canDrop={drop.canDrop}
             defaultExpandedIds={expandableIds}
-            items={collectionItems}
+            items={items}
             key={expandableIds.join("|")}
-            onDrop={({ position, source, target }) =>
-              moveDroppedTreeItem(source, target, position)
-            }
+            onDrop={drop.onDrop}
             onSelect={(item) => {
               setImportedId(null);
               if (item.id.startsWith("request:")) {
@@ -345,400 +127,8 @@ export function ApiCollectionTree({
           <SidebarEmpty>{t("api.collection.none")}</SidebarEmpty>
         )}
       </div>
-      <SidebarSection
-        className="max-h-[220px] shrink-0 overflow-y-auto border-t border-[var(--u-color-border)] px-2 pb-2 pt-2"
-        title={t("api.sidebar.history")}
-      >
-        {historyItems.length > 0 ? (
-          <ApiHistoryTree
-            items={historyItems}
-            onOpenIntent={onOpenIntent}
-          />
-        ) : (
-          <SidebarEmpty>{t("api.sidebar.historyEmptyCompact")}</SidebarEmpty>
-        )}
-      </SidebarSection>
-
-      <Dialog
-        onOpenChange={(next) => !next && setNameTarget(null)}
-        open={Boolean(nameTarget)}
-      >
-        <DialogContent
-          title={
-            nameTarget?.kind === "folder"
-              ? t("api.collection.newFolder")
-              : t("api.collection.newCollection")
-          }
-        >
-          <DialogHeader>
-            <DialogTitle>
-              {nameTarget?.kind === "folder"
-                ? t("api.collection.newFolder")
-                : t("api.collection.newCollection")}
-            </DialogTitle>
-          </DialogHeader>
-          <DialogBody>
-            <Input
-              autoFocus
-              onChange={(event) => setNameValue(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  confirmName();
-                }
-              }}
-              placeholder={t("api.collection.namePlaceholder")}
-              value={nameValue}
-            />
-          </DialogBody>
-          <DialogFooter>
-            <Button onClick={() => setNameTarget(null)} type="button" variant="ghost">
-              {t("api.save.cancel")}
-            </Button>
-            <Button
-              disabled={
-                !nameValue.trim() || createMut.isPending || createFolderMut.isPending
-              }
-              onClick={confirmName}
-              type="button"
-            >
-              {t("api.save.save")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        onOpenChange={(next) => !next && setRenameTarget(null)}
-        open={Boolean(renameTarget)}
-      >
-        <DialogContent title={t("api.collection.rename")}>
-          <DialogHeader>
-            <DialogTitle>{t("api.collection.rename")}</DialogTitle>
-          </DialogHeader>
-          <DialogBody>
-            <Input
-              autoFocus
-              onChange={(event) => setRenameValue(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  confirmRename();
-                }
-              }}
-              value={renameValue}
-            />
-          </DialogBody>
-          <DialogFooter>
-            <Button onClick={() => setRenameTarget(null)} type="button" variant="ghost">
-              {t("api.save.cancel")}
-            </Button>
-            <Button
-              disabled={!renameValue.trim() || renameMut.isPending}
-              onClick={confirmRename}
-              type="button"
-            >
-              {t("api.save.save")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        onOpenChange={(next) => !next && setRenameFolderTarget(null)}
-        open={Boolean(renameFolderTarget)}
-      >
-        <DialogContent title={t("api.collection.renameFolder")}>
-          <DialogHeader>
-            <DialogTitle>{t("api.collection.renameFolder")}</DialogTitle>
-          </DialogHeader>
-          <DialogBody>
-            <Input
-              autoFocus
-              onChange={(event) => setRenameFolderValue(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  confirmFolderRename();
-                }
-              }}
-              value={renameFolderValue}
-            />
-          </DialogBody>
-          <DialogFooter>
-            <Button
-              onClick={() => setRenameFolderTarget(null)}
-              type="button"
-              variant="ghost"
-            >
-              {t("api.save.cancel")}
-            </Button>
-            <Button
-              disabled={!renameFolderValue.trim() || renameFolderMut.isPending}
-              onClick={confirmFolderRename}
-              type="button"
-            >
-              {t("api.save.save")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        onOpenChange={(next) => !next && setRenameRequestTarget(null)}
-        open={Boolean(renameRequestTarget)}
-      >
-        <DialogContent title={t("api.request.renameTitle")}>
-          <DialogHeader>
-            <DialogTitle>{t("api.request.renameTitle")}</DialogTitle>
-          </DialogHeader>
-          <DialogBody>
-            <Input
-              autoFocus
-              maxLength={120}
-              onChange={(event) => setRenameRequestValue(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  confirmRequestRename();
-                }
-              }}
-              value={renameRequestValue}
-            />
-          </DialogBody>
-          <DialogFooter>
-            <Button onClick={() => setRenameRequestTarget(null)} type="button" variant="ghost">
-              {t("api.save.cancel")}
-            </Button>
-            <Button
-              disabled={!renameRequestValue.trim() || updateRequestMutation.isPending}
-              onClick={confirmRequestRename}
-              type="button"
-            >
-              {t("api.save.save")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <ApiCollectionExportDialog
-        collection={exportTarget}
-        onClose={() => setExportTarget(null)}
-        workspaceId={workspaceId}
-      />
-
-      <Dialog
-        onOpenChange={(next) => !next && setDeleteTarget(null)}
-        open={Boolean(deleteTarget)}
-      >
-        <DialogContent title={t("api.collection.delete")}>
-          <DialogHeader>
-            <DialogTitle>{t("api.collection.delete")}</DialogTitle>
-          </DialogHeader>
-          <DialogBody>
-            <DialogDescription>
-              {t("api.collection.deleteConfirm")}
-            </DialogDescription>
-          </DialogBody>
-          <DialogFooter>
-            <Button onClick={() => setDeleteTarget(null)} type="button" variant="ghost">
-              {t("api.save.cancel")}
-            </Button>
-            <Button
-              className="bg-[var(--u-color-danger)]"
-              disabled={deleteMut.isPending}
-              onClick={confirmDelete}
-              type="button"
-            >
-              {t("api.collection.delete")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        onOpenChange={(next) => !next && setDeleteFolderTarget(null)}
-        open={Boolean(deleteFolderTarget)}
-      >
-        <DialogContent title={t("api.collection.deleteFolder")}>
-          <DialogHeader>
-            <DialogTitle>{t("api.collection.deleteFolder")}</DialogTitle>
-          </DialogHeader>
-          <DialogBody>
-            <DialogDescription>
-              {t("api.collection.deleteFolderConfirm")}
-            </DialogDescription>
-          </DialogBody>
-          <DialogFooter>
-            <Button
-              onClick={() => setDeleteFolderTarget(null)}
-              type="button"
-              variant="ghost"
-            >
-              {t("api.save.cancel")}
-            </Button>
-            <Button
-              className="bg-[var(--u-color-danger)]"
-              disabled={deleteFolderMut.isPending}
-              onClick={confirmFolderDelete}
-              type="button"
-            >
-              {t("api.collection.deleteFolder")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        onOpenChange={(next) => !next && setErrorDialogMessage(null)}
-        open={errorDialogMessage !== null}
-      >
-        <DialogContent title={t("api.save.title")}>
-          <DialogHeader>
-            <DialogTitle>{t("api.save.saveFailed")}</DialogTitle>
-          </DialogHeader>
-          <DialogBody>
-            <DialogDescription>{errorDialogMessage}</DialogDescription>
-          </DialogBody>
-          <DialogFooter>
-            <Button onClick={() => setErrorDialogMessage(null)} type="button">
-              {t("api.save.cancel")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ApiCollectionHistorySection items={historyItems} onOpenIntent={onOpenIntent} />
+      <ApiCollectionTreeDialogs dialogs={dialogs} workspaceId={workspaceId} />
     </div>
   );
-
-  function confirmName() {
-    const name = nameValue.trim();
-    if (!nameTarget || !name) {
-      return;
-    }
-    if (nameTarget.kind === "collection") {
-      createMut.mutate(name, { onSuccess: () => setNameTarget(null) });
-      return;
-    }
-    createFolderMut.mutate(
-      {
-        collectionId: nameTarget.collectionId,
-        name,
-        parentFolderId: nameTarget.parentFolderId,
-      },
-      { onSuccess: () => setNameTarget(null) },
-    );
-  }
-
-  function moveDroppedTreeItem(
-    source: TreeViewItem,
-    target: TreeViewItem,
-    position: TreeViewDropPosition,
-  ) {
-    const action = dropController.dropAction(source, target, position);
-    if (!action) {
-      return;
-    }
-    switch (action.kind) {
-      case "move-folder":
-        moveFolderMut.mutate({
-          folderId: action.folderId,
-          targetParentFolderId: action.targetParentFolderId,
-        });
-        break;
-      case "move-request": {
-        const request = savedRequests.find((r) => r.id === action.requestId);
-        if (request) {
-          const duplicate = findDuplicateRequestName(
-            savedQuery.data ?? [],
-            request.name,
-            action.collectionId,
-            action.parentFolderId,
-            action.requestId,
-          );
-          if (duplicate) {
-            setErrorDialogMessage(
-              t("api.collection.moveDuplicateName", { name: request.name }),
-            );
-            return;
-          }
-        }
-        moveRequestMut.mutate({
-          collectionId: action.collectionId,
-          parentFolderId: action.parentFolderId,
-          requestId: action.requestId,
-        });
-        break;
-      }
-      case "reorder-folders":
-        reorderFoldersMut.mutate({
-          collectionId: action.collectionId,
-          folderIds: action.folderIds,
-          parentFolderId: action.parentFolderId,
-        });
-        break;
-      case "reorder-requests":
-        reorderRequestsMut.mutate({
-          collectionId: action.collectionId,
-          parentFolderId: action.parentFolderId,
-          requestIds: action.requestIds,
-        });
-        break;
-    }
-  }
-
-  function confirmRename() {
-    const name = renameValue.trim();
-    if (!renameTarget || !name) {
-      return;
-    }
-    renameMut.mutate(
-      { id: renameTarget.id, name },
-      { onSuccess: () => setRenameTarget(null) },
-    );
-  }
-
-  function confirmFolderRename() {
-    const name = renameFolderValue.trim();
-    if (!renameFolderTarget || !name) {
-      return;
-    }
-    renameFolderMut.mutate(
-      { folderId: renameFolderTarget.id, name },
-      { onSuccess: () => setRenameFolderTarget(null) },
-    );
-  }
-
-  function confirmRequestRename() {
-    const name = renameRequestValue.trim();
-    if (!renameRequestTarget || !name) {
-      return;
-    }
-    const duplicate = findDuplicateRequestName(
-      savedQuery.data ?? [],
-      name,
-      renameRequestTarget.collectionId,
-      renameRequestTarget.parentFolderId,
-      renameRequestTarget.id,
-    );
-    if (duplicate) {
-      setErrorDialogMessage(t("api.save.duplicateName", { name }));
-      return;
-    }
-    updateRequestMutation.mutate(
-      { name, request: renameRequestTarget },
-      { onSuccess: () => setRenameRequestTarget(null) },
-    );
-  }
-
-  function confirmDelete() {
-    if (!deleteTarget) {
-      return;
-    }
-    deleteMut.mutate(deleteTarget.id, { onSuccess: () => setDeleteTarget(null) });
-  }
-
-  function confirmFolderDelete() {
-    if (!deleteFolderTarget) {
-      return;
-    }
-    deleteFolderMut.mutate(deleteFolderTarget.id, {
-      onSuccess: () => setDeleteFolderTarget(null),
-    });
-  }
 }

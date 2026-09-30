@@ -3,9 +3,12 @@ import type { ReactNode } from "react";
 import type { ApiCollection, ApiCollectionFolder, ApiSavedRequest } from "@unfour/command-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { I18nProvider } from "@unfour/ui";
 import { ApiCollectionTree } from "./ApiCollectionTree";
+import { resetApiRequestTabStore, useApiRequestTabStore } from "../model/api-request-tab-state";
+import { requestTabNeedsCloseConfirmation } from "../model/request-tabs";
+import { savedRequestToInput } from "../request-utils";
 
 vi.mock("@unfour/command-client", () => ({
   createApiCollection: vi.fn(),
@@ -31,6 +34,11 @@ vi.mock("@unfour/command-client", () => ({
 }));
 
 import {
+  createApiCollection,
+  createApiCollectionFolder,
+  deleteApiCollection,
+  deleteApiCollectionFolder,
+  deleteApiRequest,
   duplicateApiRequest,
   exportApiCollection,
   importApiCollection,
@@ -41,6 +49,8 @@ import {
   listSavedApiRequests,
   moveApiCollectionFolder,
   moveApiRequest,
+  renameApiCollection,
+  renameApiCollectionFolder,
   reorderApiCollectionFolders,
   reorderApiRequests,
   updateApiRequest,
@@ -142,31 +152,53 @@ function createWrapper() {
   const client = new QueryClient({
     defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
   });
-  return function Wrapper({ children }: { children: ReactNode }) {
+  function Wrapper({ children }: { children: ReactNode }) {
     return (
       <I18nProvider initialLocale="en">
         <QueryClientProvider client={client}>{children}</QueryClientProvider>
       </I18nProvider>
     );
   };
+  return { client, Wrapper };
 }
 
-function renderTree() {
-  return render(
-    <ApiCollectionTree
-      active
-      collapsed={false}
-      onOpenClient={vi.fn()}
-      onOpenIntent={vi.fn()}
-      selectedId={null}
-      workspaceId="ws-1"
-    />,
-    { wrapper: createWrapper() },
-  );
+function renderTree(overrides: Partial<Parameters<typeof ApiCollectionTree>[0]> = {}) {
+  const props = {
+    active: true,
+    collapsed: false,
+    onOpenClient: vi.fn(),
+    onOpenIntent: vi.fn(),
+    selectedId: null,
+    workspaceId: "ws-1",
+    ...overrides,
+  };
+  const { client, Wrapper } = createWrapper();
+  return { ...render(<ApiCollectionTree {...props} />, { wrapper: Wrapper }), props, client };
+}
+
+async function treeRow(label: string) {
+  const row = (await screen.findByText(label)).closest<HTMLElement>("[role='treeitem']");
+  if (!row) throw new Error(`Missing tree row: ${label}`);
+  return row;
+}
+
+async function contextAction(label: string, action: string) {
+  fireEvent.contextMenu(await treeRow(label), { clientX: 24, clientY: 24 });
+  fireEvent.click(await screen.findByRole("menuitem", { name: action, exact: true }));
+}
+
+async function dragOnto(source: string, target: string) {
+  const sourceRow = await treeRow(source);
+  const targetRow = await treeRow(target);
+  const transfer = dataTransfer();
+  fireEvent.dragStart(sourceRow, { dataTransfer: transfer });
+  fireEvent.dragOver(targetRow, { dataTransfer: transfer });
+  fireEvent.drop(targetRow, { dataTransfer: transfer });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetApiRequestTabStore();
   listCollectionsMock.mockResolvedValue([collection()]);
   listFoldersMock.mockResolvedValue([]);
   listSavedMock.mockResolvedValue([savedRequest()]);
@@ -184,10 +216,18 @@ beforeEach(() => {
   reorderFoldersMock.mockResolvedValue([folder()]);
   reorderRequestsMock.mockResolvedValue([savedRequest()]);
   updateMock.mockResolvedValue(savedRequest({ name: "List Users" }));
+  vi.mocked(createApiCollection).mockResolvedValue(collection());
+  vi.mocked(createApiCollectionFolder).mockResolvedValue(folder());
+  vi.mocked(renameApiCollection).mockResolvedValue(collection({ name: "Accounts" }));
+  vi.mocked(renameApiCollectionFolder).mockResolvedValue(folder({ name: "Tokens" }));
+  vi.mocked(deleteApiCollection).mockResolvedValue(undefined);
+  vi.mocked(deleteApiCollectionFolder).mockResolvedValue(undefined);
+  vi.mocked(deleteApiRequest).mockResolvedValue(undefined);
 });
 
 afterEach(() => {
   cleanup();
+  resetApiRequestTabStore();
   vi.resetAllMocks();
 });
 
@@ -543,5 +583,268 @@ describe("ApiCollectionTree drag and drop", () => {
         value: originalElementFromPoint,
       });
     }
+  });
+});
+
+describe("ApiCollectionTree state and action regressions", () => {
+  it("creates a collection and a nested folder with trimmed names", async () => {
+    listFoldersMock.mockResolvedValue([folder()]);
+    const { props } = renderTree({ selectedId: "req-1" });
+    await treeRow("Get Users");
+    fireEvent.click(screen.getByRole("button", { name: "New collection", exact: true }));
+    fireEvent.change(screen.getByPlaceholderText("Name"), { target: { value: "  Accounts  " } });
+    fireEvent.keyDown(screen.getByPlaceholderText("Name"), { key: "Enter" });
+    await waitFor(() => expect(createApiCollection).toHaveBeenCalledWith("ws-1", "Accounts"));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    await contextAction("Auth", "Add folder");
+    const input = within(screen.getByRole("dialog")).getByRole("textbox");
+    expect(input).toHaveValue("");
+    fireEvent.change(input, { target: { value: "  Tokens  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Save", exact: true }));
+    await waitFor(() => expect(createApiCollectionFolder).toHaveBeenCalledWith("ws-1", "col-1", "folder-1", "Tokens"));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(await treeRow("Get Users")).toHaveAttribute("aria-selected", "true");
+    expect(props.onOpenIntent).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["collection", "Users", "Rename collection", "Accounts"],
+    ["folder", "Auth", "Rename folder", "Tokens"],
+  ])("renames a %s without resetting manual collapse or selected request", async (kind, label, action, nextName) => {
+    listFoldersMock.mockResolvedValue([folder()]);
+    const { client, props } = renderTree({ selectedId: "req-1" });
+    const collectionRow = await treeRow("Users");
+    await treeRow("Get Users");
+    fireEvent.click(within(collectionRow).getByRole("button", { name: "Collapse", exact: true }));
+    expect(collectionRow).toHaveAttribute("aria-expanded", "false");
+    if (kind === "folder") {
+      fireEvent.click(within(collectionRow).getByRole("button", { name: "Expand", exact: true }));
+    }
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    await contextAction(label, action);
+    const input = screen.getByDisplayValue(label);
+    fireEvent.change(input, { target: { value: `  ${nextName}  ` } });
+    if (kind === "collection") listCollectionsMock.mockResolvedValue([collection({ name: nextName })]);
+    else listFoldersMock.mockResolvedValue([folder({ name: nextName })]);
+    fireEvent.keyDown(input, { key: "Enter" });
+    const mutation = kind === "collection" ? renameApiCollection : renameApiCollectionFolder;
+    await waitFor(() => expect(mutation).toHaveBeenCalledWith("ws-1", kind === "collection" ? "col-1" : "folder-1", nextName));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [kind === "collection" ? "api-collections" : "api-collection-folders", "ws-1"] });
+    expect(await treeRow(nextName)).toHaveAttribute("data-tree-id", kind === "collection" ? "collection:col-1" : "folder:folder-1");
+    if (kind === "collection") {
+      expect(await treeRow(nextName)).toHaveAttribute("aria-expanded", "false");
+      fireEvent.click(within(await treeRow(nextName)).getByRole("button", { name: "Expand", exact: true }));
+    }
+    expect(await treeRow("Get Users")).toHaveAttribute("aria-selected", "true");
+    expect(props.onOpenIntent).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["collection", "Users", "Delete collection", ["api-collections", "api-collection-folders", "api-saved"]],
+    ["folder", "Auth", "Delete folder", ["api-collection-folders", "api-saved"]],
+  ])("confirms %s deletion and invalidates the existing cascade queries", async (kind, label, action, keys) => {
+    listFoldersMock.mockResolvedValue([folder()]);
+    const { client, props } = renderTree();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    await contextAction(label, action);
+    const mutation = kind === "collection" ? deleteApiCollection : deleteApiCollectionFolder;
+    expect(mutation).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    expect(mutation).not.toHaveBeenCalled();
+    await contextAction(label, action);
+    if (kind === "collection") listCollectionsMock.mockResolvedValue([]);
+    else listFoldersMock.mockResolvedValue([]);
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: action, exact: true }));
+    await waitFor(() => expect(mutation).toHaveBeenCalledWith("ws-1", kind === "collection" ? "col-1" : "folder-1"));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(label)).not.toBeInTheDocument());
+    for (const key of keys) expect(invalidate).toHaveBeenCalledWith({ queryKey: [key, "ws-1"] });
+    expect(props.onOpenIntent).not.toHaveBeenCalled();
+  });
+
+  it("validates request rename against hidden requests and keeps the rename form on conflict", async () => {
+    listSavedMock.mockResolvedValue([savedRequest(), savedRequest({ id: "req-2", name: "List Users" })]);
+    const { props } = renderTree({ selectedId: "req-1" });
+    await treeRow("Get Users");
+    fireEvent.change(screen.getByRole("textbox", { name: "Search API requests" }), { target: { value: "Get Users" } });
+    expect(screen.queryByText("List Users")).not.toBeInTheDocument();
+    await contextAction("Get Users", "Rename request");
+    const input = within(screen.getByRole("dialog")).getByRole("textbox");
+    expect(input).toHaveAttribute("maxlength", "120");
+    fireEvent.change(input, { target: { value: "  LIST USERS  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Save", exact: true }));
+    expect(await screen.findByText('A request named "LIST USERS" already exists in this location.')).toBeInTheDocument();
+    expect(updateMock).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Save request" })).getByRole("button", { name: "Cancel" }));
+    expect(input).toHaveValue("  LIST USERS  ");
+    fireEvent.change(input, { target: { value: "  Get Users  " } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(updateMock).toHaveBeenCalledWith("ws-1", "req-1", savedRequestToInput(savedRequest(), "ws-1")));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(await treeRow("Get Users")).toHaveAttribute("aria-selected", "true");
+    expect(props.onOpenIntent).not.toHaveBeenCalled();
+  });
+
+  it("allows the same request name in a different folder and preserves its saved definition", async () => {
+    const original = savedRequest({
+      method: "POST", body: '{"persisted":true}', bodyKind: "json",
+      headersJson: '[{"enabled":true,"key":"X-Test","value":"value"}]',
+      queryJson: '[{"enabled":true,"key":"page","value":"2"}]',
+      settingsJson: '{"timeoutMs":1000}', authJson: '{"type":"none"}',
+      preRequestScript: "console.log('before')", postResponseScript: "console.log('after')", scriptSchemaVersion: 1,
+    });
+    listFoldersMock.mockResolvedValue([folder()]);
+    listSavedMock.mockResolvedValue([original, savedRequest({ id: "req-2", name: "List Users", parentFolderId: "folder-1" })]);
+    const { client } = renderTree();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    await contextAction("Get Users", "Rename request");
+    fireEvent.change(screen.getByDisplayValue("Get Users"), { target: { value: "  List Users  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Save", exact: true }));
+    await waitFor(() => expect(updateMock).toHaveBeenCalledWith("ws-1", "req-1", {
+      ...savedRequestToInput(original, "ws-1"), name: "List Users",
+    }));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["api-saved", "ws-1"] });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("keeps a rename dialog and value when its mutation fails", async () => {
+    updateMock.mockRejectedValueOnce(new Error("offline"));
+    renderTree();
+    await contextAction("Get Users", "Rename request");
+    fireEvent.change(screen.getByDisplayValue("Get Users"), { target: { value: "List Users" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save", exact: true }));
+    await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save", exact: true })).not.toBeDisabled());
+    expect(screen.getByDisplayValue("List Users")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("clears search, expands and selects an imported collection until the next tree selection", async () => {
+    const imported = collection({ id: "col-imported", name: "Imported Users" });
+    const importedRequest = savedRequest({ id: "req-imported", collectionId: imported.id, name: "Imported request" });
+    vi.mocked(previewApiCollectionImport).mockResolvedValue({
+      content: "collection-content",
+      preview: { format: "unfour", name: imported.name, conflict: false, targetName: imported.name, folderCount: 0, requestCount: 1, scriptCount: 0, variables: [], warnings: [] },
+    });
+    const view = renderTree({ selectedId: "req-1" });
+    const originalCollection = await treeRow("Users");
+    await treeRow("Get Users");
+    fireEvent.click(within(originalCollection).getByRole("button", { name: "Collapse", exact: true }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Search API requests" }), { target: { value: "no matches" } });
+    fireEvent.click(screen.getByRole("button", { name: "Import collection" }));
+    await screen.findByRole("dialog");
+    listCollectionsMock.mockResolvedValue([collection(), imported]);
+    listSavedMock.mockResolvedValue([savedRequest(), importedRequest]);
+    fireEvent.click(screen.getByRole("button", { name: "Import", exact: true }));
+    expect(await treeRow("Imported Users")).toHaveAttribute("aria-selected", "true");
+    expect(await treeRow("Imported Users")).toHaveAttribute("aria-expanded", "true");
+    expect(await treeRow("Imported request")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Search API requests" })).toHaveValue("");
+    expect(view.props.onOpenIntent).not.toHaveBeenCalled();
+    view.rerender(<ApiCollectionTree {...view.props} />);
+    expect(await treeRow("Imported Users")).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByText("Get Users").closest("button")!);
+    expect(view.props.onOpenIntent).toHaveBeenCalledWith({ kind: "saved", nonce: expect.any(Number), requestId: "req-1" });
+    expect(await treeRow("Get Users")).toHaveAttribute("aria-selected", "true");
+    expect(await treeRow("Imported Users")).not.toHaveAttribute("aria-selected");
+  });
+
+  it("filters history by status and keeps the existing history open intent", async () => {
+    listHistoryMock.mockResolvedValue([{
+      id: "history-1", workspaceId: "ws-1", name: "Past request", method: "POST", url: "https://history.test",
+      status: 201, durationMs: 12, createdAt: "2026-09-30T00:00:00Z", updatedAt: "2026-09-30T00:00:00Z",
+      deletedAt: null, remoteId: null, revision: 1, syncStatus: "local",
+    }]);
+    const { props } = renderTree();
+    await treeRow("Past request");
+    fireEvent.change(screen.getByRole("textbox", { name: "Search API requests" }), { target: { value: " 201 " } });
+    expect(await treeRow("Past request")).toBeInTheDocument();
+    expect(screen.queryByText("Get Users")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Past request").closest("button")!);
+    expect(props.onOpenIntent).toHaveBeenCalledWith({ historyId: "history-1", kind: "history", nonce: expect.any(Number) });
+    fireEvent.change(screen.getByRole("textbox", { name: "Search API requests" }), { target: { value: "absent" } });
+    expect(screen.getByText("Send a request to build history")).toBeInTheDocument();
+  });
+
+  it.each(["rename", "delete", "move"])("preserves dirty draft, tab panels and active selection after request %s", async (action) => {
+    const original = savedRequest();
+    let records = [original];
+    listSavedMock.mockImplementation(async () => records);
+    listFoldersMock.mockResolvedValue([folder()]);
+    const store = useApiRequestTabStore.getState();
+    store.openSaved("ws-1", original);
+    store.updateTabDraft("ws-1", "saved:req-1", { url: "https://unsaved.test", body: "unsaved body" });
+    store.setRequestPanel("ws-1", "saved:req-1", "body");
+    store.setResponsePanel("ws-1", "saved:req-1", "headers");
+    store.setApiSplitDirection("ws-1", "horizontal");
+    const before = useApiRequestTabStore.getState().byWorkspace["ws-1"];
+    expect(requestTabNeedsCloseConfirmation(before.tabs.find((tab) => tab.id === "saved:req-1")!)).toBe(true);
+    const onOpenIntent = vi.fn();
+    function Harness() {
+      const state = useApiRequestTabStore((s) => s.byWorkspace["ws-1"]);
+      const selectedId = state.tabs.find((tab) => tab.id === state.activeTabId)?.savedRequestId ?? null;
+      return <ApiCollectionTree active collapsed={false} onOpenClient={vi.fn()} onOpenIntent={onOpenIntent} selectedId={selectedId} workspaceId="ws-1" />;
+    }
+    const { client, Wrapper } = createWrapper();
+    render(<Harness />, { wrapper: Wrapper });
+    expect(await treeRow("Get Users")).toHaveAttribute("aria-selected", "true");
+    if (action === "rename") {
+      records = [savedRequest({ name: "List Users" })];
+      await contextAction("Get Users", "Rename request");
+      fireEvent.change(screen.getByDisplayValue("Get Users"), { target: { value: "List Users" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save", exact: true }));
+      expect(await treeRow("List Users")).toHaveAttribute("aria-selected", "true");
+    } else if (action === "delete") {
+      records = [];
+      await contextAction("Get Users", "Delete request");
+      await waitFor(() => expect(deleteApiRequest).toHaveBeenCalledWith("ws-1", "req-1"));
+      await waitFor(() => expect(screen.queryByText("Get Users")).not.toBeInTheDocument());
+    } else {
+      records = [savedRequest({ parentFolderId: "folder-1" })];
+      await dragOnto("Get Users", "Auth");
+      await waitFor(() => expect(moveMock).toHaveBeenCalledWith("ws-1", "req-1", "col-1", "folder-1"));
+      await waitFor(() => expect(screen.getByText("Auth").closest("[role='treeitem']")).toHaveAttribute("aria-expanded", "true"));
+      expect(await treeRow("Get Users")).toHaveAttribute("aria-selected", "true");
+    }
+    await waitFor(() => expect(client.getQueryData(["api-saved", "ws-1"])).toEqual(records));
+    expect(useApiRequestTabStore.getState().byWorkspace["ws-1"]).toBe(before);
+    expect(onOpenIntent).not.toHaveBeenCalled();
+    if (action === "rename") {
+      // Reopening the refreshed request still uses the existing dirty tab.
+      act(() => store.openSaved("ws-1", records[0]));
+      const reopened = useApiRequestTabStore.getState().byWorkspace["ws-1"];
+      expect(reopened.activeTabId).toBe("saved:req-1");
+      expect(reopened.tabs).toBe(before.tabs);
+    }
+  });
+
+  it("rejects moving onto a same-name request hidden by search", async () => {
+    listFoldersMock.mockResolvedValue([folder()]);
+    listSavedMock.mockResolvedValue([
+      savedRequest({ url: "https://api.test/visible-source" }),
+      savedRequest({ id: "req-2", name: " get users ", parentFolderId: "folder-1", url: "https://api.test/hidden-target" }),
+    ]);
+    const { props } = renderTree({ selectedId: "req-1" });
+    await treeRow("Get Users");
+    fireEvent.change(screen.getByRole("textbox", { name: "Search API requests" }), { target: { value: "visible-source" } });
+    expect(screen.queryByText("get users")).not.toBeInTheDocument();
+    await dragOnto("Get Users", "Auth");
+    expect(await screen.findByText('A request named "Get Users" already exists in the target folder.')).toBeInTheDocument();
+    expect(moveMock).not.toHaveBeenCalled();
+    expect(reorderRequestsMock).not.toHaveBeenCalled();
+    expect(await treeRow("Get Users")).toHaveAttribute("aria-selected", "true");
+    expect(props.onOpenIntent).not.toHaveBeenCalled();
+  });
+
+  it("moves a request across collections but keeps folder moves within their collection", async () => {
+    listCollectionsMock.mockResolvedValue([collection(), collection({ id: "col-2", name: "Accounts" })]);
+    listFoldersMock.mockResolvedValue([folder()]);
+    renderTree();
+    await dragOnto("Auth", "Accounts");
+    expect(moveFolderMock).not.toHaveBeenCalled();
+    await dragOnto("Get Users", "Accounts");
+    await waitFor(() => expect(moveMock).toHaveBeenCalledWith("ws-1", "req-1", "col-2", null));
   });
 });
