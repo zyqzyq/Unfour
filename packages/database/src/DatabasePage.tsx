@@ -1,20 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type {
-  DatabaseConnection,
-  DatabaseSchema,
-  DatabaseTable,
-  SavedSql,
-} from "@unfour/command-client";
+import type { DatabaseTable } from "@unfour/command-client";
 import { useWorkspaceStore } from "@unfour/workspace-core";
 import {
   ConfirmDialog,
   useI18n,
 } from "@unfour/ui";
-import { DatabaseSidebar } from "./components/DatabaseSidebar";
 import { DatabaseTestResultDialog } from "./components/DatabaseTestResultDialog";
 import { DatabaseModuleToolbar } from "./components/DatabaseModuleToolbar";
-import { DatabaseStatusBar } from "./components/DatabaseStatusBar";
 import { DatabaseConnectionErrorBanner } from "./components/DatabaseConnectionErrorBanner";
 import { DatabaseConnectionDialog } from "./components/DatabaseConnectionDialog";
 import { DatabaseWorkspace } from "./components/DatabaseWorkspace";
@@ -22,24 +15,20 @@ import { useDatabaseConnections } from "./hooks/useDatabaseConnections";
 import { useDatabaseConnectionMutations } from "./hooks/useDatabaseConnectionMutations";
 import { useDatabaseWorkspaceController } from "./hooks/useDatabaseWorkspaceController";
 import { useDatabaseTabs } from "./hooks/useDatabaseTabs";
-import { useDatabaseCatalogs } from "./hooks/useDatabaseCatalogs";
 import { useQueryHistory } from "./hooks/useQueryHistory";
 import { useSavedSql } from "./hooks/useSavedSql";
-import { useSchemaTree } from "./hooks/useSchemaTree";
 import { useTableStructure } from "./hooks/useTableStructure";
-import { buildDatabaseTree, databaseTableTreeId } from "./model/database-tree";
 import { useDatabaseQueryContext, useDatabaseTabSelection } from "./hooks/useDatabaseTabSynchronization";
-import { groupSavedSqlByConnection, type DatabasePageProps, type DatabaseSidebarActions } from "./model/database-page";
-import { canLoadDatabaseSchema, EMPTY_CONNECTION_STATES, useDatabaseConnectionStore } from "./model/database-connection-state";
-import { createTableEditing } from "./model/table-editing";
+import { EMPTY_CONNECTION_STATES, useDatabaseConnectionStore } from "./model/database-connection-state";
 import type {
   DatabaseConnectionSessionState,
-  DatabaseConnectionStatus,
   SqlHistoryEntry,
-  TableEditing,
 } from "./model/types";
 import { useDatabaseConnectionForm } from "./hooks/useDatabaseConnectionForm";
-import { formatDatabaseError } from "./result-utils";
+import type { DatabasePageProps } from "./model/database-page";
+import { useDatabaseActiveContext, useDatabaseActiveTableEditing, useDatabaseContextOptions } from "./hooks/useDatabaseActiveContext";
+import { useDatabaseShellIntegration } from "./hooks/useDatabaseShellIntegration";
+import { useDatabaseTreeController, useDatabaseTreeRootLoading, useDatabaseTreeSynchronization } from "./hooks/useDatabaseTreeController";
 
 const DEFAULT_PREVIEW_PAGE_SIZE = 100;
 const MAX_HISTORY_ENTRIES = 25;
@@ -78,28 +67,20 @@ export function DatabasePage({
   const removeConnection = (connectionId: string) => removeConnectionAction(workspaceId, connectionId);
   const [queryHistory, setQueryHistory] = useState<SqlHistoryEntry[]>([]);
   const [selectedTable, setSelectedTable] = useState<DatabaseTable | null>(null);
-  // Per-connection tree data so multiple connections can be browsed at once.
-  // catalogNamesByConn: connectionId -> database names (PostgreSQL/MySQL).
-  // treeSchemaCache: `${connectionId}::${catalog}` -> that database's schema
-  // ("" catalog for SQLite). Both are populated lazily as nodes are expanded;
-  // the selected connection's data is fed in from its own queries.
-  const [catalogNamesByConn, setCatalogNamesByConn] = useState<Record<string, string[]>>({});
-  const [treeSchemaCache, setTreeSchemaCache] = useState<Record<string, DatabaseSchema>>({});
-  const [treeLoadingKeys, setTreeLoadingKeys] = useState<string[]>([]);
-  const [treeErrors, setTreeErrors] = useState<Record<string, string>>({});
   const connectionsQuery = useDatabaseConnections(workspaceId, { active });
   const queryHistoryQuery = useQueryHistory(workspaceId, MAX_HISTORY_ENTRIES, { active });
   const savedSqlQuery = useSavedSql(workspaceId, { active });
   const connections = useMemo(() => connectionsQuery.data ?? [], [connectionsQuery.data]);
-  const selectedConnection = useMemo(
-    () => connections.find((item) => item.id === selectedConnectionId) ?? null,
-    [connections, selectedConnectionId],
-  );
-  // Partition by connection first; the tree places each snippet under its catalog.
-  const savedSqlByConnection = useMemo(
-    () => groupSavedSqlByConnection(savedSqlQuery.saved),
-    [savedSqlQuery.saved],
-  );
+  const activeTab = databaseTabs.activeTab;
+  const context = useDatabaseActiveContext({
+    active,
+    activeTab,
+    connections,
+    connectionStates,
+    selectedConnectionId,
+    selectedTable,
+  });
+  const { activeQueryTab, activeTableTab, selectedConnection, selectedConnectionStatus } = context;
   const {
     editorOpen,
     setEditorOpen,
@@ -111,84 +92,24 @@ export function DatabasePage({
     setForm,
     hydrateFormFromConnection,
   } = useDatabaseConnectionForm(workspaceId, selectedConnectionId, selectedConnection);
-  const activeTab = databaseTabs.activeTab;
-  const activeQueryTab = activeTab?.kind === "query" ? activeTab : null;
-  const activeTableTab = activeTab?.kind === "table" ? activeTab : null;
-  const selectedSession = selectedConnectionId ? connectionStates[selectedConnectionId] : undefined;
-  const selectedConnectionStatus: DatabaseConnectionStatus = selectedSession?.status ?? "disconnected";
-  const schemaEnabled = Boolean(
-    active &&
-      selectedConnection &&
-      canLoadDatabaseSchema(selectedConnectionStatus),
-  );
-  // The initial schema load fetches the connected database (PostgreSQL) or every
-  // database (MySQL, which can list them in one call). Other PostgreSQL databases
-  // are fetched lazily on expand and cached in schemasByCatalog.
-  const schemaQuery = useSchemaTree({
-    connection: selectedConnection,
-    connectionId: selectedConnectionId,
-    enabled: schemaEnabled,
+  const tree = useDatabaseTreeController({
+    schemaEnabled: context.schemaEnabled,
+    selectedConnection,
+    selectedConnectionId,
     workspaceId,
   });
-  const catalogsQuery = useDatabaseCatalogs({
-    connection: selectedConnection,
-    connectionId: selectedConnectionId,
-    enabled: schemaEnabled,
-    workspaceId,
+  const { catalogOptions, schemaOptions } = useDatabaseContextOptions({
+    activeQueryConnection: context.activeQueryConnection,
+    activeQueryTab,
+    catalogNames: tree.catalogsQuery.data,
+    treeModel: tree.treeModel,
   });
-  const visibleSchema = schemaEnabled ? schemaQuery.data : undefined;
-  const treeModel = useMemo(
-    () => (visibleSchema ? buildDatabaseTree(visibleSchema.tables) : null),
-    [visibleSchema],
-  );
-  // Catalog (database) choices for the query context: the server's database
-  // list (so PostgreSQL can browse beyond the loaded one) merged with any
-  // catalogs present in the loaded schema. Empty for SQLite.
-  const catalogOptions = useMemo(() => {
-    const merged = new Set<string>();
-    for (const name of catalogsQuery.data ?? []) {
-      if (name) {
-        merged.add(name);
-      }
-    }
-    for (const catalog of treeModel?.catalogs ?? []) {
-      if (catalog.key) {
-        merged.add(catalog.key);
-      }
-    }
-    return [...merged];
-  }, [catalogsQuery.data, treeModel]);
-  const activeQueryConnection = connections.find(
-    (connection) => connection.id === activeQueryTab?.connectionId,
-  );
-  // Schema choices for the active catalog. Empty unless the catalog nests
-  // schemas (PostgreSQL).
-  const schemaOptions = useMemo(() => {
-    if (!treeModel) {
-      return [];
-    }
-    const activeCatalogKey = activeQueryTab?.catalog ?? activeQueryConnection?.database ?? null;
-    const activeCatalog = treeModel.catalogs.find((catalog) => catalog.key === activeCatalogKey);
-    if (!activeCatalog?.hasSchemaLevel) {
-      return [];
-    }
-    return activeCatalog.schemas.map((schema) => schema.key).filter((key) => key !== "");
-  }, [activeQueryConnection?.database, activeQueryTab?.catalog, treeModel]);
-  const structureEnabled = Boolean(
-    active &&
-      activeTableTab &&
-      activeTableTab.segment === "structure" &&
-      canLoadDatabaseSchema(connectionStates[activeTableTab.connectionId]?.status),
-  );
   const structureQuery = useTableStructure({
     connectionId: activeTableTab?.connectionId ?? null,
-    enabled: structureEnabled,
+    enabled: context.structureEnabled,
     table: activeTableTab?.table ?? null,
     workspaceId,
   });
-  const selectedTableId =
-    selectedConnectionId && selectedTable ? databaseTableTreeId(selectedConnectionId, selectedTable) : null;
-
   useDatabaseTabSelection(activeTab, setSelectedDatabaseConnection, setSelectedTable);
 
   useEffect(() => {
@@ -213,71 +134,12 @@ export function DatabasePage({
     setQueryHistory(queryHistoryQuery.entries.slice(0, MAX_HISTORY_ENTRIES));
   }, [queryHistoryQuery.entries]);
 
-  useEffect(() => {
-    if (!selectedConnectionId || !schemaEnabled || !schemaQuery.data) {
-      return;
-    }
-
-    setConnectionState(selectedConnectionId, {
-      message: t("database.connection.tableCountLoaded", {
-        count: schemaQuery.data.tables.length,
-      }),
-      status: "connected",
-    });
-  }, [schemaEnabled, schemaQuery.data, selectedConnectionId, setConnectionState, t]);
-
-  useEffect(() => {
-    if (!selectedConnectionId || !schemaEnabled || !schemaQuery.error) {
-      return;
-    }
-
-    setConnectionState(selectedConnectionId, {
-      message: formatDatabaseError(schemaQuery.error),
-      status: "failed",
-    });
-  }, [schemaEnabled, schemaQuery.error, selectedConnectionId, setConnectionState]);
-
-  // Feed the selected connection's database list into the per-connection cache
-  // so its tree renders without a manual expand.
-  useEffect(() => {
-    if (!selectedConnectionId || !catalogsQuery.data) {
-      return;
-    }
-    const names = catalogsQuery.data;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mirroring the selected connection's loaded catalogs into the shared cache
-    setCatalogNamesByConn((prev) => ({ ...prev, [selectedConnectionId]: names }));
-  }, [selectedConnectionId, catalogsQuery.data]);
-
-  // Feed the selected connection's loaded schema into the cache, grouped by
-  // catalog (the connected database for PostgreSQL, every database for MySQL,
-  // the file for SQLite under the "" catalog key).
-  const selectedSchemaData = schemaQuery.data;
-  useEffect(() => {
-    if (!selectedConnectionId || !selectedSchemaData) {
-      return;
-    }
-    const grouped = new Map<string, DatabaseTable[]>();
-    for (const table of selectedSchemaData.tables) {
-      const key = table.catalog ?? "";
-      grouped.set(key, [...(grouped.get(key) ?? []), table]);
-    }
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mirroring the selected connection's loaded schema into the shared cache
-    setTreeSchemaCache((prev) => {
-      const next = { ...prev };
-      if (grouped.size === 0) {
-        next[`${selectedConnectionId}::`] = selectedSchemaData;
-      }
-      for (const [catalog, tables] of grouped) {
-        next[`${selectedConnectionId}::${catalog}`] = {
-          connectionId: selectedConnectionId,
-          tables,
-        };
-      }
-      return next;
-    });
-  }, [selectedConnectionId, selectedSchemaData]);
-
-  useDatabaseQueryContext(activeTab, treeModel, activeQueryConnection?.driver === "sqlite" ? null : activeQueryConnection?.database, databaseTabs.updateQueryTab);
+  useDatabaseTreeSynchronization(tree, {
+    schemaEnabled: context.schemaEnabled,
+    selectedConnectionId,
+    setConnectionState,
+  });
+  useDatabaseQueryContext(activeTab, tree.treeModel, context.activeQueryConnection?.driver === "sqlite" ? null : context.activeQueryConnection?.database, databaseTabs.updateQueryTab);
 
   const {
     deleteConfirm,
@@ -350,7 +212,7 @@ export function DatabasePage({
   } = useDatabaseWorkspaceController({
     activeQueryTab,
     activeTableTab,
-    catalogNamesByConn,
+    catalogNamesByConn: tree.catalogNamesByConn,
     connectionStates,
     connections,
     databaseTabs,
@@ -366,7 +228,7 @@ export function DatabasePage({
     selectedConnectionId,
     selectedConnectionStatus,
     selectedTable,
-    setCatalogNamesByConn,
+    setCatalogNamesByConn: tree.setCatalogNamesByConn,
     setConnectionState,
     setEditorOpen,
     setForm,
@@ -375,41 +237,31 @@ export function DatabasePage({
     setSelectedDatabaseConnection,
     setSelectedTable,
     setTestResult,
-    setTreeErrors,
-    setTreeLoadingKeys,
-    setTreeSchemaCache,
+    setTreeErrors: tree.setTreeErrors,
+    setTreeLoadingKeys: tree.setTreeLoadingKeys,
+    setTreeSchemaCache: tree.setTreeSchemaCache,
     t,
     testInputMutation,
     testMutation,
-    treeLoadingKeys,
-    treeSchemaCache,
+    treeLoadingKeys: tree.treeLoadingKeys,
+    treeSchemaCache: tree.treeSchemaCache,
     workspaceId,
   });
 
-  // Read committed loader/cache state without making cache writes re-trigger loads.
-  const loadConnectionRootRef = useRef(loadConnectionRoot);
-  useLayoutEffect(() => { loadConnectionRootRef.current = loadConnectionRoot; });
-
-  // Eagerly load the first tree level (database list for PostgreSQL/MySQL, file
-  // schema for SQLite) for every connected connection. Only the active
-  // connection loads through its own queries; without this a second connected
-  // connection would sit empty until manually expanded.
-  useEffect(() => {
-    if (!active) {
-      return;
-    }
-    for (const connection of connections) {
-      const status = connectionStates[connection.id]?.status;
-      if (canLoadDatabaseSchema(status)) {
-        loadConnectionRootRef.current(connection);
-      }
-    }
-  }, [active, connections, connectionStates]);
-
-  // stable callback identities and only re-render on data changes.
-  const sidebarActionsRef = useRef<DatabaseSidebarActions | null>(null);
-  useLayoutEffect(() => {
-    sidebarActionsRef.current = {
+  useDatabaseTreeRootLoading({ active, connections, connectionStates, loadConnectionRoot });
+  const executePending = sqlRunning || browseMutation.isPending || rowMutation.isPending;
+  useDatabaseShellIntegration({
+    active,
+    catalogNamesByConn: tree.catalogNamesByConn,
+    connections,
+    connectionStates,
+    executePending,
+    onShellSidebarChange,
+    onShellStatusBarChange,
+    savedSql: savedSqlQuery.saved,
+    selectedConnectionId,
+    selectedTableId: context.selectedTableId,
+    sidebarActions: {
       connect: connectConnection,
       delete: setDeleteConfirm,
       deleteSavedSql,
@@ -429,151 +281,37 @@ export function DatabasePage({
       toggleCatalog: loadCatalogSchema,
       toggleConnection: loadConnectionRoot,
       useSql: loadSqlIntoEditor,
-    };
+    },
+    statusBarRightAccessory,
+    toolbarConnection: context.toolbarConnection,
+    toolbarSession: context.toolbarSession,
+    treeErrors: tree.treeErrors,
+    treeLoadingKeys: tree.treeLoadingKeys,
+    treeSchemaCache: tree.treeSchemaCache,
+    workspaceId,
+    workspaceName,
   });
-
-  const sidebarHandlers = useMemo(
-    () => ({
-      onConnect: (connection: DatabaseConnection) => sidebarActionsRef.current?.connect(connection),
-    onDesignTable: (connectionId: string, table: DatabaseTable) =>
-      sidebarActionsRef.current?.designTable(connectionId, table),
-    onDeleteConnection: (connection: DatabaseConnection) => sidebarActionsRef.current?.delete(connection),
-    onDeleteSavedSql: (item: SavedSql) => sidebarActionsRef.current?.deleteSavedSql(item),
-    onDuplicateConnection: (connection: DatabaseConnection) => sidebarActionsRef.current?.duplicate(connection),
-    onDisconnect: (connection: DatabaseConnection) => sidebarActionsRef.current?.disconnect(connection),
-      onEditConnection: (connection: DatabaseConnection) => sidebarActionsRef.current?.edit(connection),
-      onNewConnection: () => sidebarActionsRef.current?.newConnection(),
-      onNewQuery: (connection?: DatabaseConnection, catalog?: string) => sidebarActionsRef.current?.newQuery(connection, catalog),
-      onOpenSavedSql: (item: SavedSql) => sidebarActionsRef.current?.openSavedSql(item),
-      onPreviewTable: (connectionId: string, table: DatabaseTable) =>
-        sidebarActionsRef.current?.previewTable(connectionId, table),
-      onRefresh: () => sidebarActionsRef.current?.refresh(),
-      onRefreshSchema: (connection: DatabaseConnection) => sidebarActionsRef.current?.refreshSchema(connection),
-      onSelectConnection: (connection: DatabaseConnection) => sidebarActionsRef.current?.selectConnection(connection),
-      onSelectTable: (connectionId: string, table: DatabaseTable) =>
-        sidebarActionsRef.current?.selectTable(connectionId, table),
-      onToggleCatalog: (connectionId: string, catalog: string) =>
-        sidebarActionsRef.current?.toggleCatalog(connectionId, catalog),
-      onToggleConnection: (connection: DatabaseConnection) =>
-        sidebarActionsRef.current?.toggleConnection(connection),
-      onUseSql: (connectionId: string, sql: string, table?: DatabaseTable) =>
-        sidebarActionsRef.current?.useSql(connectionId, sql, table),
-    }),
-    [],
-  );
-
-  const shellSidebar = useMemo(
-    () => (
-      <DatabaseSidebar
-        catalogNamesByConnection={catalogNamesByConn}
-        connectionStates={connectionStates}
-        connections={connections}
-        loadErrors={treeErrors}
-        loadingKeys={treeLoadingKeys}
-        savedSqlByConnection={savedSqlByConnection}
-        schemaCache={treeSchemaCache}
-        selectedConnectionId={selectedConnectionId}
-        selectedTableId={selectedTableId}
-        {...sidebarHandlers}
-      />
-    ),
-    [
-      catalogNamesByConn,
-      connectionStates,
-      connections,
-      savedSqlByConnection,
-      selectedConnectionId,
-      selectedTableId,
-      sidebarHandlers,
-      treeErrors,
-      treeLoadingKeys,
-      treeSchemaCache,
-    ],
-  );
-
-  useEffect(() => {
-    if (!active || !onShellSidebarChange) {
-      return;
-    }
-    onShellSidebarChange(shellSidebar);
-    return () => onShellSidebarChange(null);
-  }, [active, onShellSidebarChange, shellSidebar]);
-
-  const toolbarConnectionId = activeQueryTab
-    ? activeQueryTab.connectionId
-    : activeTableTab?.connectionId ?? selectedConnectionId;
-  const toolbarConnection = connections.find((item) => item.id === toolbarConnectionId) ?? null;
-  const toolbarSession = toolbarConnectionId ? connectionStates[toolbarConnectionId] : undefined;
-  const toolbarConnectionStatus: DatabaseConnectionStatus = toolbarSession?.status ?? "disconnected";
-  const executePending = sqlRunning || browseMutation.isPending || rowMutation.isPending;
-  const shellStatusBar = useMemo(
-    () => (
-      <DatabaseStatusBar
-        connection={toolbarConnection}
-        executing={executePending}
-        rightAccessory={statusBarRightAccessory}
-        session={toolbarSession}
-        workspaceName={workspaceName ?? workspaceId}
-      />
-    ),
-    [
-      executePending,
-      toolbarConnection,
-      toolbarSession,
-      statusBarRightAccessory,
-      workspaceId,
-      workspaceName,
-    ],
-  );
-
-  useEffect(() => {
-    if (!active || !onShellStatusBarChange) {
-      return;
-    }
-    onShellStatusBarChange(shellStatusBar);
-    return () => onShellStatusBarChange(null);
-  }, [active, onShellStatusBarChange, shellStatusBar]);
-
-  // Inline editing is available when a real table with a primary key is being
-  // browsed on a connected session; the primary key locates rows for the
-  // update/delete row commands.
-  const activeTableConnection = activeTableTab
-    ? connections.find((connection) => connection.id === activeTableTab.connectionId) ?? null
-    : null;
-  const activeTableStatus = activeTableTab
-    ? connectionStates[activeTableTab.connectionId]?.status ?? "disconnected"
-    : "disconnected";
-  const tableEditing: TableEditing | null = useMemo(
-    () => createTableEditing({
-      applyPendingChanges: applyPendingTableChanges,
-      connection: activeTableConnection,
-      connected: activeTableStatus === "connected",
-      mutationPending: rowMutation.isPending,
-      tab: activeTableTab,
-      updateTableTab: databaseTabs.updateTableTab,
-    }),
-    [
-      activeTableConnection,
-      activeTableStatus,
-      activeTableTab,
-      applyPendingTableChanges,
-      databaseTabs.updateTableTab,
-      rowMutation.isPending,
-    ],
-  );
+  const tableEditing = useDatabaseActiveTableEditing({
+    applyPendingChanges: applyPendingTableChanges,
+    connection: context.activeTableConnection,
+    connected: context.activeTableStatus === "connected",
+    mutationPending: rowMutation.isPending,
+    tab: activeTableTab,
+    updateTableTab: databaseTabs.updateTableTab,
+  });
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col bg-[var(--u-color-surface)]">
       <DatabaseModuleToolbar
-        connectionStatus={toolbarConnectionStatus}
+        connectionStatus={context.toolbarConnectionStatus}
         onNewQuery={startNewQuery}
-        selectedConnectionName={toolbarConnection?.name ?? null}
+        selectedConnectionName={context.toolbarConnection?.name ?? null}
       />
       <div className="flex min-h-0 flex-1 flex-col">
         {selectedConnection && selectedConnectionStatus === "failed" ? (
           <DatabaseConnectionErrorBanner
             connectionName={selectedConnection.name}
-            message={selectedSession?.message}
+            message={context.selectedSession?.message}
             onEdit={() => handleEditConnection(selectedConnection)}
             onRetry={() => connectConnection(selectedConnection)}
           />
@@ -612,11 +350,11 @@ export function DatabasePage({
           onTableFilter={applyTableFilter}
           onTablePageChange={handleTablePageChange}
           onTableSort={applyTableSort}
-          schema={visibleSchema}
-          schemaError={schemaQuery.error}
+          schema={tree.visibleSchema}
+          schemaError={tree.schemaQuery.error}
           structure={structureQuery.data}
           structureError={structureQuery.error}
-          structureLoading={structureEnabled && structureQuery.isFetching}
+          structureLoading={context.structureEnabled && structureQuery.isFetching}
           tableEditing={tableEditing}
           tabs={databaseTabs.tabs}
           workspaceId={workspaceId}
