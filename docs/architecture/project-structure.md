@@ -14,9 +14,11 @@ Unfour/
     app-shell/               global shell composition and mount slots
     command-client/          typed Tauri command wrappers and shared TS types
     database/                Database frontend module
+    flow/                    local runbook Canvas, step editor, and run history
     ssh-terminal/            SSH Terminal frontend module
     ui/                      shared UI primitives and layout helpers
     workspace-core/          shared frontend workspace state
+    workspace-environments/  Workspace environment and variable management UI
     workspace-local/         reserved local workspace lifecycle boundary
   crates/
     unfour-core/             shared Rust models, errors, redaction helpers
@@ -24,6 +26,7 @@ Unfour/
     unfour-diag/             structured logging and diagnostic bundles
     local-storage/           SQLite persistence and activity log
     http-engine/             API request execution and API persistence
+    flow-engine/             local runbook validation, scheduling, and history
     database-engine/         database connection, schema, and query service
     ssh-engine/              SSH connection and terminal session service
     workspace-engine/        workspace CRUD, environments, layout persistence
@@ -50,13 +53,15 @@ Unfour/
 
 | Package | Role |
 | --- | --- |
-| `@unfour/app-shell` | Frontend desktop workbench composition root. Owns global shell wiring, workspace switcher, module navigation, layout slots, command palette, diagnostics actions, and mounts the API Client, SSH Terminal, and Database modules without owning their internal feature logic. |
+| `@unfour/app-shell` | Frontend desktop workbench composition root. Owns global shell wiring, workspace switcher, module navigation, layout slots, command palette, diagnostics actions, and mounts the API Client, SSH Terminal, Database, and Flow modules without owning their internal feature logic. |
 | `@unfour/ui` | Shared UI primitives, shell helpers, states, menus, tabs, tree, data table, dialogs, and styling utilities. |
 | `@unfour/command-client` | Typed Tauri `invoke` wrappers, shared frontend command types, and browser-development mock fallback. |
 | `@unfour/workspace-core` | Zustand workspace store and workspace type re-exports. |
+| `@unfour/workspace-environments` | Shared Workspace environment and variable management UI. Persistence and resolution remain workspace-owned. |
 | `@unfour/workspace-local` | OSS local workspace lifecycle boundary; currently a compatibility/transitional package reserved for recent workspace, import/export, persistence lifecycle, and migration behavior. |
-| `@unfour/api-client` | API Client feature UI: requests, tabs, Send, request scripts, responses, history, saved requests, collections, and the current workspace-variable management surface. Persistence and resolution remain workspace-owned. |
+| `@unfour/api-client` | API Client feature UI: requests, tabs, Send, request scripts, responses, history, saved requests, collections, and collection import/export. |
 | `@unfour/database` | Database feature UI: connections, schema tree, SQL editor, query results, table preview, query history. |
+| `@unfour/flow` | Local runbook feature UI: Canvas and step authoring, typed inputs, API/SSH/Database action references, Condition and Wait Until, run inspection, and history. Uses shared command-client/UI contracts rather than importing other feature packages. |
 | `@unfour/ssh-terminal` | SSH Terminal feature UI: connections, sessions, xterm panes, split/search/clipboard/logs, host-key trust, SFTP remote files, and task automation. |
 | `@unfour/desktop` | Thin desktop frontend entrypoint that mounts `@unfour/app-shell`. |
 
@@ -74,6 +79,7 @@ Unfour/
 | `unfour-cloud-sync-storage` | Compatibility-aware unified migration entry point for core and historical Cloud Sync schema. |
 | `unfour-cloud-sync` | Local-first Cloud Sync service, transport, background runtime, repository, and command-bus outbox hook. |
 | `unfour-http-engine` | API execution after shared workspace-variable resolution, bounded request-script execution, saved requests, history, and persistence redaction. |
+| `unfour-flow-engine` | Workspace-scoped local runbook validation, expressions, serial scheduling, Wait Until, cancellation, and persisted definitions/run history. Exposes the FlowExecutor port implemented by CommandBus using existing capability services. |
 | `unfour-database-engine` | Database connection CRUD, schema browsing, SQL execution, table browsing, and SQL safety classification. |
 | `unfour-ssh-engine` | SSH connection/session lifecycle, PTY events, host-key trust, reconnect behavior, and redacted log export. |
 | `unfour-workspace-engine` | Workspace CRUD, active workspace state, workspace variables/environments, shared variable resolution, and layout persistence. |
@@ -88,22 +94,31 @@ Unfour/
 @unfour/ui                 no @unfour package dependencies
 @unfour/command-client     no feature dependencies
 
-@unfour/app-shell          -> api-client, database, ssh-terminal,
-                              command-client, workspace-core, ui
+@unfour/app-shell          -> api-client, database, ssh-terminal, flow,
+                              command-client, workspace-core,
+                              workspace-environments, ui
 @unfour/workspace-core     -> command-client
+@unfour/workspace-environments -> command-client, ui
 @unfour/workspace-local    -> workspace-core
 
 @unfour/api-client         -> command-client, ui
 @unfour/database           -> command-client, ui, workspace-core
+@unfour/flow               -> command-client, ui
 @unfour/ssh-terminal       -> command-client, ui, workspace-core
 
-@unfour/desktop            -> app-shell
+@unfour/desktop            -> app-shell, api-client, database, ssh-terminal,
+                              command-client, workspace-core, ui
 ```
 
 Feature packages must not depend on each other, on `packages/app-shell`, or on
 `packages/workspace-local`. The single desktop composition root wires optional
 Cloud Sync capabilities; feature packages consume only workspace contracts
 from `workspace-core`.
+
+Flow is lazy-mounted by app-shell. Its frontend composes saved capability
+references through command-client; it does not import API, SSH, or Database UI
+internals. Flow V1 definitions and run history are local-only and do not support
+Cloud Sync or workspace import/export.
 
 ## Rust Dependency Shape
 
@@ -119,13 +134,15 @@ unfour-account -> unfour-core, unfour-secret-store
 unfour-telemetry -> unfour-core, unfour-local-storage, unfour-secret-store
 unfour-cloud-sync-storage -> unfour-core, unfour-local-storage
 unfour-http-engine -> unfour-core, unfour-local-storage, unfour-diag
+unfour-flow-engine -> unfour-core, unfour-local-storage
 unfour-database-engine -> unfour-core, unfour-local-storage, unfour-diag
 unfour-ssh-engine -> unfour-core, unfour-local-storage, unfour-diag
 unfour-workspace-engine -> unfour-core, unfour-local-storage
 
 unfour-command-bus
-  -> unfour-core, unfour-diag, unfour-local-storage, unfour-secret-store
-  -> http, database, ssh, workspace engines
+  -> unfour-core, unfour-diag, unfour-local-storage, unfour-paths,
+     unfour-secret-store
+  -> http, database, ssh, workspace, flow engines
 
 unfour-app
   -> unfour-command-bus, unfour-core, unfour-diag, unfour-local-storage,
@@ -144,6 +161,12 @@ unfour Tauri binary
 ```
 
 ## Frontend-To-Rust Call Chain
+
+Flow follows the same adapter-to-command-bus path. CommandBus constructs
+`FlowService` from the shared local database and implements `FlowExecutor` by
+calling the existing API, SSH task, Database, and workspace-variable services.
+The engine owns runbook scheduling and persistence; Tauri and MCP adapters
+route Flow commands through CommandBus. See [Flow V1](flow-v1.md).
 
 ```text
 React component
@@ -175,7 +198,7 @@ The single desktop runtime lives under `apps/desktop/src-tauri`. It initializes
 unified storage, account state, Cloud Sync, and the outbox hook before handing
 the prepared command bus to `crates/unfour-app` for shared Tauri composition.
 There is no separate Pro client runtime. The product name is Unfour and the
-repository package version is `0.9.6`. Release readiness
+repository package version is `0.10.0`. Release readiness
 must be determined from the release verification documents, not from the
 version string alone.
 

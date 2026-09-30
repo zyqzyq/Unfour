@@ -4,6 +4,10 @@ This roadmap is a product-direction summary. It is not release evidence. Use
 `docs/testing/release-verification.md` and `docs/release/release-checklist.md`
 for release readiness.
 
+Current source version: `0.10.0` (release preparation). The previous published
+release / source checkpoint is `v0.9.6`; its verification records are historical
+and do not establish v0.10.0 candidate readiness.
+
 ## v0.1 (First Public Release)
 
 Release focus:
@@ -118,8 +122,8 @@ Historical status:
 - MCP tools are provided over local stdio through the command bus and support
   the product's troubleshooting loop: Codex and Cursor can use saved API, SSH,
   and database connections to reproduce issues, inspect logs and database
-  state, and act on the findings; Unfour does not ship an automatic
-  troubleshooting playbook or workflow runner.
+  state, and act on the findings. At this checkpoint, troubleshooting steps
+  were directed through individual tools; local Flow runbooks arrive in v0.10.0.
 
 Release claims remain limited by the current verification matrix.
 
@@ -256,7 +260,7 @@ Current status:
 
 Release claims remain limited by the current verification matrix.
 
-## v0.9.6 (Current source version)
+## v0.9.6 (Previous published release / source checkpoint)
 
 The follow-up from the `v0.9.5` tag focuses on MCP diagnostics and long-running
 call control, plus Database, API, SSH, and Workspace polish:
@@ -269,15 +273,41 @@ call control, plus Database, API, SSH, and Workspace polish:
   open/save polish, API save/history feedback, SSH batch close, and workspace
   label polish.
 
-Current status:
+Historical checkpoint status:
 
-- source version is `0.9.6`; release status is `NOT RELEASED`;
-- candidate artifact, platform, live-service, and manual verification remain
-  to be recorded in the active release matrix.
+- `v0.9.6` is the previous published release / source checkpoint and the
+  comparison baseline for v0.10.0;
+- the recorded v0.9.6 preparation checks remain historical evidence in the
+  active release matrix and do not verify a new candidate.
 
 Release claims remain limited by the current verification matrix.
 
-## Beyond v0.9
+## v0.10.0 (Current release preparation)
+
+The follow-up from `v0.9.6` prepares the next formal release with:
+
+- Flow V1 local runbooks combining saved API requests, SSH tasks, and Database
+  queries, with Condition, Wait Until, Canvas authoring, and run history;
+- MCP management and execution of the same Flow definitions and runs, including
+  cancellation and shared run history;
+- API Collection and Environment import/export with import previews;
+- Database table structure/data export and improved openGauss support; and
+- preserved SQL execution and Saved SQL database/schema context.
+
+Flow V1 is local-only. Its definitions and run history do not support Cloud
+Sync or workspace import/export.
+
+Current status:
+
+- source version is `0.10.0`; release status is `NOT RELEASED`;
+- local automated preparation results are recorded in
+  [release verification](testing/release-verification.md#v0100-preparation-status);
+- the next Standard Release Candidate needs fresh artifact, platform,
+  live-service, and manual evidence; unrun gates remain `NOT VERIFIED`.
+
+Release claims remain limited by the current verification matrix.
+
+## Beyond v0.10
 
 Likely follow-up areas:
 

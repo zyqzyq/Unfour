@@ -97,6 +97,12 @@ historical records.
 
 ## Standard
 
+- Before the final v0.10.0 release commit and tag, replace `Unreleased` in
+  [CHANGELOG.md](../../CHANGELOG.md) with the actual publication date
+  (`YYYY-MM-DD`) and pin its `[0.10.0]` comparison link to
+  `https://github.com/zyqzyq/Unfour/compare/v0.9.6...v0.10.0`.
+  RC preparation may retain `0.10.0 - Unreleased` and the comparison to `main`;
+  do not invent a publication date during preparation.
 - Proceed only from the reviewed commit represented by the Release Candidate;
   create the immutable `vX.Y.Z` tag according to the release procedure.
 - CI exports `UNFOUR_DISTRIBUTION=standard` and `stable`.
