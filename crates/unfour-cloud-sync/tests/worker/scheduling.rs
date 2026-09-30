@@ -300,11 +300,21 @@ async fn background_scheduler_runs_when_next_attempt_becomes_due() {
     .expect("scheduled retry did not run");
     assert!(transport.pushes.lock().unwrap().len() > pushes_before_due);
 
-    background.abort();
-    assert_eq!(
-        service.status(&workspace_id).await.unwrap().uncertain_count,
-        0
-    );
+    // The mock records a push before its acknowledgement is persisted. Close
+    // the trigger channel and let the round finish; aborting during a SQLx
+    // acquisition can discard this fixture's sole in-memory connection.
+    drop(bus);
+    tokio::time::timeout(Duration::from_secs(2), background)
+        .await
+        .expect("background scheduler did not stop after closing its trigger channel")
+        .expect("background scheduler panicked");
+
+    let status = service.status(&workspace_id).await.unwrap();
+    assert_eq!(status.pending_count, 0);
+    assert_eq!(status.in_flight_count, 0);
+    assert_eq!(status.uncertain_count, 0);
+    assert_eq!(status.dead_count, 0);
+    assert!(!status.running);
 }
 
 #[tokio::test]
