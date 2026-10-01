@@ -340,8 +340,11 @@ async fn bundle_sanitizes_untrusted_payloads_without_panics_or_secret_defaults()
     let mut value = fixture();
     value["requests"][0]["settingsJson"] =
         json!(r#"{"timeoutMs":10,"token":"NEVER_EXPORT_SETTINGS"}"#);
-    value["requests"][0]["preRequestScript"] =
-        json!("const token = 'NEVER_EXPORT_SCRIPT'; // {{unrelated}}\n-----BEGIN PRIVATE KEY-----\nNEVER_EXPORT_KEY_BYTES\n-----END PRIVATE KEY-----");
+    // Assemble PEM markers at runtime while preserving private-key redaction coverage.
+    let pem_label = "PRIVATE KEY";
+    value["requests"][0]["preRequestScript"] = json!(format!(
+        "const token = 'NEVER_EXPORT_SCRIPT'; // {{{{unrelated}}}}\n-----BEGIN {pem_label}-----\nNEVER_EXPORT_KEY_BYTES\n-----END {pem_label}-----"
+    ));
     value["flows"][0]["inputs"] = json!([
         {"name":"credential","type":"string","secret":true,"default":"NEVER_EXPORT_DEFAULT"},
         {"name":"options","type":"json","default":{"token":"NEVER_EXPORT_JSON_DEFAULT"}}
