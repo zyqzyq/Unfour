@@ -77,3 +77,6 @@ pub struct CommandBus {
 #[cfg(test)]
 #[path = "lib_tests.rs"]
 mod tests;
+
+mod workspace_bundle;
+pub use workspace_bundle::{WorkspaceBundleIssue, WorkspaceBundlePreview};

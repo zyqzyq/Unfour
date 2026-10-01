@@ -257,3 +257,21 @@ export function resolveWorkspaceVariables(
     input,
   });
 }
+export interface WorkspaceBundlePreview {
+  name: string;
+  counts: Record<string, number>;
+  reconfigure: { entityId: string; name: string; code: string }[];
+}
+export interface WorkspaceBundleFile {
+  content: string;
+  preview: WorkspaceBundlePreview;
+}
+export function pickWorkspaceBundle() {
+  return call<WorkspaceBundleFile | null>("workspace_bundle_pick");
+}
+export function importWorkspaceBundle(content: string, name: string) {
+  return call<Workspace>("workspace_bundle_import", { content, name });
+}
+export function exportWorkspaceBundle(workspaceId: string) {
+  return call<{saved: boolean}>("workspace_bundle_export", { workspaceId });
+}

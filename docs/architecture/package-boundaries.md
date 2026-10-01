@@ -87,9 +87,11 @@ state require review.
 
 ### Current Boundary
 
-`packages/workspace-local` is a compatibility/transitional package in v0.1 and
-may re-export `packages/workspace-core` until concrete local workspace behavior
-is scoped. It is not a completed cloud/local provider abstraction.
+`packages/workspace-local` owns Workspace bundle import/export UI and retains a
+compatibility re-export of `packages/workspace-core`. It uses command-client for
+backend calls and UI primitives for dialogs/feedback. The shell only mounts its
+menu actions and dialog. It is not a completed cloud/local provider abstraction.
+See [Workspace bundle V1](workspace-bundle.md).
 
 ### Forbidden
 
@@ -159,7 +161,7 @@ apps/desktop
   -> packages/workspace-core, packages/command-client, packages/ui
 
 packages/workspace-local
-  -> packages/workspace-core
+  -> packages/workspace-core, packages/command-client, packages/ui
 ```
 
 Feature packages may depend on:

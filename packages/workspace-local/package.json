@@ -8,6 +8,10 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@unfour/workspace-core": "workspace:*"
+    "@unfour/workspace-core": "workspace:*",
+    "@unfour/command-client": "workspace:*",
+    "@unfour/ui": "workspace:*",
+    "@tanstack/react-query": "^5.100.14",
+    "react": "^19.1.0"
   }
 }

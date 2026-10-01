@@ -49,3 +49,4 @@ impl ApiClientService {
 #[cfg(test)]
 #[path = "api_client_tests/mod.rs"]
 mod tests;
+pub use domain::sanitize_portable_api_request;

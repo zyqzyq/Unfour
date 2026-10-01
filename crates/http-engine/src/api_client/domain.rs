@@ -262,3 +262,14 @@ async fn list_requests_on(
     .fetch_all(&mut *connection)
     .await?)
 }
+/// Reapply the domain's secret boundary to untrusted portable request payloads.
+pub fn sanitize_portable_api_request(
+    record: &mut unfour_core::domain::ApiRequestSnapshot,
+) -> AppResult<()> {
+    record.auth_json = secrets::snapshot_auth_json(&record.auth_json);
+    record.url = secrets::snapshot_url(&record.url);
+    record.headers = secrets::snapshot_key_values(&serde_json::to_string(&record.headers)?)?;
+    record.query = secrets::snapshot_key_values(&serde_json::to_string(&record.query)?)?;
+    record.body = secrets::snapshot_body(record.body.as_deref(), &record.body_kind);
+    Ok(())
+}

@@ -183,3 +183,67 @@ fn tombstone(key: &DomainEntityKey, deleted_at: String, revision: i64) -> Domain
         revision,
     })
 }
+
+impl WorkspaceService {
+    pub async fn export_workspace_snapshots_on(
+        &self,
+        connection: &mut SqliteConnection,
+        workspace: &str,
+    ) -> AppResult<Vec<DomainSnapshot>> {
+        let mut records = Vec::new();
+        records.push(
+            self.read_snapshot_on(
+                connection,
+                &DomainEntityKey::new(DomainEntityType::Workspace, workspace, workspace),
+            )
+            .await?,
+        );
+        for id in sqlx::query_scalar::<_, String>("SELECT id FROM workspace_variables WHERE workspace_id = ? AND deleted_at IS NULL ORDER BY id").bind(workspace).fetch_all(&mut *connection).await? { records.push(self.read_snapshot_on(connection, &DomainEntityKey::new(DomainEntityType::WorkspaceVariable, workspace, id)).await?); }
+        for id in sqlx::query_scalar::<_, String>("SELECT id FROM workspace_environments WHERE workspace_id = ? AND deleted_at IS NULL ORDER BY id").bind(workspace).fetch_all(&mut *connection).await? { records.push(self.read_snapshot_on(connection, &DomainEntityKey::new(DomainEntityType::WorkspaceEnvironment, workspace, id)).await?); }
+        for id in sqlx::query_scalar::<_, String>("SELECT id FROM workspace_environment_variables WHERE workspace_id = ? AND deleted_at IS NULL ORDER BY id").bind(workspace).fetch_all(&mut *connection).await? { records.push(self.read_snapshot_on(connection, &DomainEntityKey::new(DomainEntityType::WorkspaceEnvironmentVariable, workspace, id)).await?); }
+        Ok(records)
+    }
+}
+impl WorkspaceService {
+    /// Resolve portable import names on the same transaction as creation.
+    pub async fn bundle_name_on(
+        &self,
+        connection: &mut SqliteConnection,
+        name: &str,
+    ) -> AppResult<String> {
+        let name = super::normalize_name(name.to_string())?;
+        let names: Vec<String> =
+            sqlx::query_scalar("SELECT name FROM workspaces WHERE deleted_at IS NULL")
+                .fetch_all(connection)
+                .await?;
+        let used = |candidate: &str| {
+            names
+                .iter()
+                .any(|n| n.to_lowercase() == candidate.to_lowercase())
+        };
+        if !used(&name) {
+            return Ok(name);
+        }
+        // Leave room within the 80-character workspace name limit for the copy suffix.
+        let base: String = name.chars().take(60).collect();
+        for i in 1..=100_000 {
+            let candidate = format!("{base} (Copy {i})");
+            if !used(&candidate) {
+                return Ok(candidate);
+            }
+        }
+        Err(AppError::Validation(
+            "WORKSPACE_BUNDLE_NAME_UNAVAILABLE".into(),
+        ))
+    }
+}
+
+impl WorkspaceService {
+    pub async fn read_workspace_on(
+        &self,
+        connection: &mut SqliteConnection,
+        workspace_id: &str,
+    ) -> AppResult<unfour_core::models::Workspace> {
+        super::get_workspace_on(connection, workspace_id, false).await
+    }
+}

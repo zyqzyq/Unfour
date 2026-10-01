@@ -536,3 +536,24 @@ async fn validate_live_workspace_on(
     }
     Ok(())
 }
+
+impl DatabaseService {
+    pub async fn export_connection_snapshots_on(
+        &self,
+        connection: &mut SqliteConnection,
+        workspace: &str,
+    ) -> AppResult<Vec<DomainSnapshot>> {
+        let ids = sqlx::query_scalar::<_, String>("SELECT id FROM connections WHERE workspace_id = ? AND connection_type = 'database' AND deleted_at IS NULL ORDER BY id").bind(workspace).fetch_all(&mut *connection).await?;
+        let mut records = Vec::new();
+        for id in ids {
+            records.push(
+                self.read_connection_domain_snapshot_on(
+                    connection,
+                    &connection_entity_key(workspace, id),
+                )
+                .await?,
+            );
+        }
+        Ok(records)
+    }
+}

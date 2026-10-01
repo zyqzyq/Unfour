@@ -47,3 +47,5 @@ pub(crate) async fn trace_command<T>(
     }
     result
 }
+pub mod workspace_bundle;
+pub use workspace_bundle::*;

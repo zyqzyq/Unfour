@@ -1,3 +1,4 @@
+import { useWorkspaceBundleExchange } from "@unfour/workspace-local";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ChevronDown, Folder, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -36,6 +37,7 @@ export function WorkspaceMenu({
 }) {
   const { t } = useI18n();
   const handleError = useFeedbackErrorHandler();
+  const bundleExchange = useWorkspaceBundleExchange(onActivateWorkspace);
   const [createOpen, setCreateOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [environmentOpen, setEnvironmentOpen] = useState(false);
@@ -113,6 +115,12 @@ export function WorkspaceMenu({
               onRename={() => setRenameOpen(true)}
               workspaceCount={workspaces.length}
             />
+            <DropdownMenu.Item className="flex min-h-8 cursor-pointer items-center rounded px-2 py-1 outline-none focus:bg-[var(--u-color-surface-hover)] data-[disabled]:opacity-50" disabled={bundleExchange.busy} onSelect={() => void bundleExchange.pick()}>
+              {t("workspaceBundle.import")}
+            </DropdownMenu.Item>
+            <DropdownMenu.Item className="flex min-h-8 cursor-pointer items-center rounded px-2 py-1 outline-none focus:bg-[var(--u-color-surface-hover)] data-[disabled]:opacity-50" disabled={!activeWorkspace || bundleExchange.busy} onSelect={() => { if (activeWorkspace) bundleExchange.exportWorkspace(activeWorkspace.id); }}>
+              {t("workspaceBundle.export")}
+            </DropdownMenu.Item>
             {activeWorkspace && activeWorkspaceActions.length > 0 && (
               <>
                 <DropdownMenu.Separator className="my-1 h-px bg-[var(--u-color-border)]" />
@@ -173,6 +181,7 @@ export function WorkspaceMenu({
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
 
+      {bundleExchange.dialog}
       <WorkspaceDialogs
         activeWorkspace={activeWorkspace}
         createOpen={createOpen}

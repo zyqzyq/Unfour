@@ -293,3 +293,37 @@ fn scrub_values(value: &mut Value, secrets: &[String]) {
         _ => {}
     }
 }
+
+impl FlowService {
+    pub async fn export_definitions_on(
+        &self,
+        connection: &mut sqlx::SqliteConnection,
+        workspace: &str,
+    ) -> AppResult<Vec<FlowDefinition>> {
+        let rows: Vec<String> = sqlx::query_scalar(
+            "SELECT definition_json FROM flow_definitions WHERE workspace_id = ? ORDER BY id",
+        )
+        .bind(workspace)
+        .fetch_all(connection)
+        .await?;
+        rows.iter()
+            .map(|row| Ok(serde_json::from_str(row)?))
+            .collect()
+    }
+    /// Fresh definitions only; caller owns atomic workspace import.
+    pub async fn import_definition_on(
+        &self,
+        connection: &mut sqlx::SqliteConnection,
+        definition: FlowDefinition,
+    ) -> AppResult<()> {
+        validation::validate(&definition)?;
+        let original = serde_json::to_value(&definition)?;
+        let mut cleaned = original.clone();
+        crate::expression::redact_definition(&mut cleaned);
+        if original != cleaned {
+            return Err(invalid("FLOW_INLINE_SECRET_NOT_ALLOWED"));
+        }
+        sqlx::query("INSERT INTO flow_definitions (id, workspace_id, revision, definition_json, updated_at) VALUES (?, ?, 1, ?, ?)").bind(&definition.id).bind(&definition.workspace_id).bind(serde_json::to_string(&definition)?).bind(chrono::Utc::now().to_rfc3339()).execute(connection).await?;
+        Ok(())
+    }
+}

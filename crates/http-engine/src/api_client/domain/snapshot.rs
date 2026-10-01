@@ -104,3 +104,31 @@ fn tombstone(key: DomainEntityKey, deleted_at: String, revision: i64) -> DomainS
         revision,
     })
 }
+
+impl ApiClientService {
+    pub async fn export_workspace_snapshots_on(
+        &self,
+        connection: &mut SqliteConnection,
+        workspace: &str,
+    ) -> AppResult<Vec<DomainSnapshot>> {
+        let mut records = Vec::new();
+        for id in sqlx::query_scalar::<_, String>("SELECT id FROM api_collections WHERE workspace_id = ? AND deleted_at IS NULL ORDER BY id").bind(workspace).fetch_all(&mut *connection).await? { records.push(self.read_domain_snapshot_on(connection, &DomainEntityKey::new(DomainEntityType::ApiCollection, workspace, id)).await?); }
+        for id in sqlx::query_scalar::<_, String>("SELECT id FROM api_collection_folders WHERE workspace_id = ? AND deleted_at IS NULL ORDER BY id").bind(workspace).fetch_all(&mut *connection).await? { records.push(self.read_domain_snapshot_on(connection, &DomainEntityKey::new(DomainEntityType::ApiFolder, workspace, id)).await?); }
+        for id in sqlx::query_scalar::<_, String>(
+            "SELECT id FROM api_requests WHERE workspace_id = ? AND deleted_at IS NULL ORDER BY id",
+        )
+        .bind(workspace)
+        .fetch_all(&mut *connection)
+        .await?
+        {
+            records.push(
+                self.read_domain_snapshot_on(
+                    connection,
+                    &DomainEntityKey::new(DomainEntityType::ApiRequest, workspace, id),
+                )
+                .await?,
+            );
+        }
+        Ok(records)
+    }
+}

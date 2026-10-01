@@ -1,4 +1,37 @@
 {
+  "workspaceBundle": {
+    "import": "Import Workspace…",
+    "export": "Export Workspace…",
+    "preview": "Workspace import preview",
+    "name": "New Workspace name",
+    "create": "Create new Workspace",
+    "working": "Working…",
+    "failed": "Workspace import or export failed",
+    "newOnly": "Creates a separate Workspace. Conflicting names receive a copy suffix. MCP access starts disabled.",
+    "scope": "Includes variables, environments, API definitions, connection metadata, SSH tasks, Saved SQL and Flows. History, UI state, Cloud Sync state, credentials and device paths are excluded.",
+    "review": "Secrets must be supplied again. Review scripts, SQL and other free-form text for embedded credentials before sharing. Importing definitions does not execute them.",
+    "reconfigure": "Needs configuration ({count})",
+    "issues": {
+      "connection": "Configure credentials or device settings before connecting.",
+      "secret": "Supply the secret value again.",
+      "redacted": "Review redacted content before use.",
+      "files": "Select upload files again.",
+      "localPath": "Local path removed; transfer step disabled. Configure and enable it before use."
+    },
+    "counts": {
+      "variables": "Variables",
+      "environments": "Environments",
+      "environmentVariables": "Environment variables",
+      "collections": "API collections",
+      "folders": "API folders",
+      "requests": "API requests",
+      "connections": "Connections",
+      "sshTasks": "SSH tasks",
+      "sshSteps": "SSH steps",
+      "savedSql": "Saved SQL",
+      "flows": "Flows"
+    }
+  },
   "exchange": {
     "collectionTargetName": "A collection with this name already exists. Import as: {name}",
     "collectionActions": "Collection actions for {name}",

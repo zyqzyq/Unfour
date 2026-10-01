@@ -195,3 +195,38 @@ pub(super) async fn clear_saved_sql_connection_on(
     .await?;
     Ok(())
 }
+
+impl DatabaseService {
+    pub async fn export_saved_sql_on(
+        &self,
+        connection: &mut SqliteConnection,
+        workspace: &str,
+    ) -> AppResult<Vec<SavedSql>> {
+        Ok(sqlx::query_as::<_, SavedSql>("SELECT id, workspace_id, connection_id, catalog, schema, name, sql, created_at, updated_at, deleted_at, revision, sync_status, remote_id FROM saved_sql WHERE workspace_id = ? AND deleted_at IS NULL ORDER BY id").bind(workspace).fetch_all(&mut *connection).await?)
+    }
+    /// Insert a fresh portable record inside the caller's transaction. No remote execution.
+    pub async fn import_saved_sql_on(
+        &self,
+        connection: &mut SqliteConnection,
+        input: SavedSqlInput,
+        id: &str,
+    ) -> AppResult<()> {
+        if input.name.trim().is_empty()
+            || input.name.chars().count() > 120
+            || input.sql.trim().is_empty()
+        {
+            return Err(AppError::Validation("WORKSPACE_BUNDLE_INVALID_SQL".into()));
+        }
+        if let Some(ref id) = input.connection_id {
+            let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM connections WHERE id = ? AND workspace_id = ? AND connection_type = 'database' AND deleted_at IS NULL)").bind(id).bind(&input.workspace_id).fetch_one(&mut *connection).await?;
+            if !exists {
+                return Err(AppError::Validation(
+                    "WORKSPACE_BUNDLE_SQL_CONNECTION".into(),
+                ));
+            }
+        }
+        let now = Utc::now().to_rfc3339();
+        sqlx::query("INSERT INTO saved_sql (id, workspace_id, connection_id, catalog, schema, name, sql, created_at, updated_at, revision, sync_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'local')").bind(id).bind(input.workspace_id).bind(input.connection_id).bind(input.catalog).bind(input.schema).bind(input.name).bind(input.sql).bind(&now).bind(&now).execute(&mut *connection).await?;
+        Ok(())
+    }
+}

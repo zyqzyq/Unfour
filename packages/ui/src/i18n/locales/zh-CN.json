@@ -1,4 +1,37 @@
 {
+  "workspaceBundle": {
+    "import": "导入 Workspace…",
+    "export": "导出 Workspace…",
+    "preview": "Workspace 导入预览",
+    "name": "新 Workspace 名称",
+    "create": "创建新 Workspace",
+    "working": "处理中…",
+    "failed": "Workspace 导入或导出失败",
+    "newOnly": "创建独立的新 Workspace；重名时自动追加副本序号。初始禁用 MCP 访问。",
+    "scope": "包含变量、环境、API 定义、连接信息、SSH 任务、Saved SQL 和 Flow。不包含历史、界面状态、Cloud Sync 状态、凭据和设备路径。",
+    "review": "敏感值需要重新填写。分享前请检查脚本、SQL 等自由文本中是否有硬编码凭据。导入不会执行这些定义。",
+    "reconfigure": "需要重新配置（{count} 项）",
+    "issues": {
+      "connection": "连接前请配置凭据或设备设置。",
+      "secret": "请重新填写敏感值。",
+      "redacted": "使用前请检查已脱敏的内容。",
+      "files": "请重新选择上传文件。",
+      "localPath": "本地路径已移除，传输步骤已禁用；配置后请手动启用。"
+    },
+    "counts": {
+      "variables": "变量",
+      "environments": "环境",
+      "environmentVariables": "环境变量",
+      "collections": "API 集合",
+      "folders": "API 文件夹",
+      "requests": "API 请求",
+      "connections": "连接",
+      "sshTasks": "SSH 任务",
+      "sshSteps": "SSH 步骤",
+      "savedSql": "Saved SQL",
+      "flows": "Flow"
+    }
+  },
   "exchange": {
     "collectionTargetName": "已有同名 Collection，将导入为：{name}",
     "collectionActions": "集合“{name}”的操作",
