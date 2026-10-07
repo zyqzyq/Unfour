@@ -268,7 +268,28 @@ export function startTabSave(
     ...tab,
     saveError: null,
     saving: true,
+    savingDraft: JSON.stringify(tab.draft),
   }));
+}
+
+function editsSinceSubmit(submitted: RequestDraft, current: RequestDraft): Partial<RequestDraft> {
+  const edits: Partial<RequestDraft> = {};
+  for (const key of Object.keys(current) as Array<keyof RequestDraft>) {
+    if (JSON.stringify(current[key]) !== JSON.stringify(submitted[key])) {
+      edits[key] = current[key] as never;
+    }
+  }
+  return edits;
+}
+
+function draftAfterSave(tab: ApiRequestTab, savedDraft: RequestDraft): RequestDraft {
+  if (!tab.savingDraft) return savedDraft;
+  try {
+    const submitted = JSON.parse(tab.savingDraft) as RequestDraft;
+    return { ...savedDraft, ...editsSinceSubmit(submitted, tab.draft) };
+  } catch {
+    return savedDraft;
+  }
 }
 
 export function completeTabSave(
@@ -292,11 +313,12 @@ export function completeTabSave(
         ? {
             ...tab,
             baseline: normalizeRequestDraft(savedDraft),
-            draft: savedDraft,
+            draft: draftAfterSave(tab, savedDraft),
             id: nextId,
             saveError: null,
             savedRequestId: saved.id,
             saving: false,
+            savingDraft: undefined,
             source: "saved" as const,
             sourceId: saved.id,
           }
@@ -319,6 +341,7 @@ export function failTabSave(
     ...tab,
     saveError: error,
     saving: false,
+    savingDraft: undefined,
   }));
 }
 

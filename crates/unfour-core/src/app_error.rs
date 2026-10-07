@@ -110,6 +110,9 @@ impl AppError {
             AppError::Validation(reason) if reason == "FLOW_REVISION_CONFLICT" => {
                 "FLOW_REVISION_CONFLICT"
             }
+            AppError::Validation(reason) if reason == "API_RESPONSE_TOO_LARGE" => {
+                "API_RESPONSE_TOO_LARGE"
+            }
             AppError::Validation(_) => "VALIDATION_ERROR",
             AppError::ReadOnly(_) => "READ_ONLY_CONNECTION",
             AppError::Timeout(_) => "QUERY_TIMEOUT",

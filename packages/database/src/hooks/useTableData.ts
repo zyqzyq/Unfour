@@ -46,6 +46,7 @@ export function useTableData({
       tableName,
     }: TableBrowseRequest) =>
       browseDatabaseTable({
+        includeTotal: false,
         workspaceId,
         connectionId,
         catalog,

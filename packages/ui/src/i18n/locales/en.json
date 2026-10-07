@@ -418,6 +418,7 @@
       "unknownError": "The script could not be executed."
     },
     "response": {
+      "tooLarge": "Response exceeds the 10 MiB limit. Reduce the response size and try again.",
       "copyBody": "Copy response body",
       "cancelledDescription": "Execution stopped before all request work completed. No history entry was written for this run.",
       "cancelledTitle": "Request cancelled",
@@ -775,6 +776,9 @@
       "username": "Username"
     },
     "grid": {
+      "rowRange": "{first}-{last}",
+      "rowRangeTotal": "{first}-{last} of {total}",
+      "pageUnknownTotal": "Page {page}",
       "cellCopied": "Cell copied",
       "clearSort": "Clear sort",
       "copyFailed": "Copy failed",

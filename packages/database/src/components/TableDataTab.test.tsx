@@ -49,6 +49,16 @@ const editing: TableEditing = {
 };
 
 describe("TableDataTab", () => {
+  it("uses lookahead without presenting a lower bound as an exact page count", () => {
+    const onPageChange = vi.fn();
+    render(<TableDataTab executePending={false} onPageChange={onPageChange} onRefresh={vi.fn()}
+      onTableFilter={vi.fn()} onTableSort={vi.fn()} result={result} table={table}
+      tableFilter="" tableSort={null} tableView={{ pageIndex: 0, pageSize: 1, readOnly: false,
+        tableName: "events", totalRows: 2, totalRowsExact: false, hasMore: true }} />);
+    expect(screen.getByText("Page 1")).toBeInTheDocument();
+    expect(screen.queryByText("1-1 of 2")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next page" })).toBeEnabled();
+  });
   it("keeps the table stable without rendering placeholder rows while loading", () => {
     const view = render(
       <TableDataTab

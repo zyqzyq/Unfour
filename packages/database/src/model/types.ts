@@ -38,6 +38,8 @@ export type PendingTableChange = {
 };
 
 export type DatabaseTableViewState = {
+  totalRowsExact?: boolean;
+  hasMore?: boolean;
   pageIndex: number;
   pageSize: number;
   readOnly: boolean;

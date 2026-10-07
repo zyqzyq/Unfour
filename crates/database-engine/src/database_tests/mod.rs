@@ -3,6 +3,7 @@ mod mysql;
 mod mysql_profile_server;
 mod opengauss;
 mod opengauss_fixture;
+mod paging;
 mod postgres;
 mod profile_server;
 mod runtime_profile;

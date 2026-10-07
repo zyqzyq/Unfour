@@ -30,6 +30,7 @@ export type ApiRequestTab = {
   sendErrorCode: string | null;
   sending: boolean;
   saving: boolean;
+  savingDraft?: string;
   source: ApiTabSource;
   sourceId: string | null;
 };

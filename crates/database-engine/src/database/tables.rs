@@ -23,6 +23,7 @@ impl DatabaseService {
         let descending = input.order_descending;
         let needs_columns = filter.is_some() || order_by.is_some();
         let timeout = resolve_timeout(input.timeout_ms);
+        let include_total = input.include_total.unwrap_or(true);
 
         let connection = self
             .get_connection(&input.workspace_id, &input.connection_id)
@@ -36,6 +37,7 @@ impl DatabaseService {
 
                     let limit = input.limit.unwrap_or(100).clamp(1, 1_000);
                     let offset = input.offset.unwrap_or(0);
+                    let fetch_limit = if include_total { limit } else { limit + 1 };
 
                     let column_names = if needs_columns {
                         sqlite_columns(&pool, table_name)
@@ -54,22 +56,28 @@ impl DatabaseService {
                         .unwrap_or_default();
                     let quoted = quote_identifier(table_name);
 
-                    let total_rows = if let Some(needle) = active_filter {
-                        let count_sql =
-                            format!("SELECT COUNT(*) AS total_rows FROM {}{}", quoted, where_sql);
-                        let mut count = sqlx::query(&count_sql);
-                        for _ in &column_names {
-                            count = count.bind(format!("%{}%", needle));
-                        }
-                        let row = count.fetch_one(&*pool).await?;
-                        row.try_get::<i64, _>("total_rows")?.max(0) as u64
+                    let total_rows = if include_total {
+                        Some(if let Some(needle) = active_filter {
+                            let count_sql = format!(
+                                "SELECT COUNT(*) AS total_rows FROM {}{}",
+                                quoted, where_sql
+                            );
+                            let mut count = sqlx::query(&count_sql);
+                            for _ in &column_names {
+                                count = count.bind(format!("%{}%", needle));
+                            }
+                            let row = count.fetch_one(&*pool).await?;
+                            row.try_get::<i64, _>("total_rows")?.max(0) as u64
+                        } else {
+                            sqlite_table_row_count(&pool, table_name).await?
+                        })
                     } else {
-                        sqlite_table_row_count(&pool, table_name).await?
+                        None
                     };
 
                     let sql = format!(
                         "SELECT * FROM {}{}{} LIMIT {} OFFSET {}",
-                        quoted, where_sql, order_sql, limit, offset
+                        quoted, where_sql, order_sql, fetch_limit, offset
                     );
                     let started = Instant::now();
                     let mut query = sqlx::query(&sql);
@@ -109,6 +117,7 @@ impl DatabaseService {
 
                     let limit = input.limit.unwrap_or(100).clamp(1, 1_000);
                     let offset = input.offset.unwrap_or(0);
+                    let fetch_limit = if include_total { limit } else { limit + 1 };
 
                     let column_names = if needs_columns {
                         postgres_columns(&pool, schema, table_name)
@@ -127,29 +136,38 @@ impl DatabaseService {
                         .map(|_| format!(" WHERE {}", postgres_filter_where(&column_names)))
                         .unwrap_or_default();
 
-                    let total_rows = if let Some(needle) = active_filter {
-                        // The same $1 bind is reused by every column predicate.
-                        let count_sql = format!(
-                            "SELECT COUNT(*) AS total_rows FROM {}{}",
-                            quote_qualified_identifier(schema, table_name),
-                            where_sql
-                        );
-                        let row = sqlx::query(&count_sql)
-                            .bind(format!("%{}%", needle))
-                            .fetch_one(&*pool)
-                            .await
-                            .map_err(sanitize_pg_error)?;
-                        row.try_get::<i64, _>("total_rows")
-                            .map_err(sanitize_pg_error)?
-                            .max(0) as u64
+                    let total_rows = if include_total {
+                        Some(if let Some(needle) = active_filter {
+                            // The same $1 bind is reused by every column predicate.
+                            let count_sql = format!(
+                                "SELECT COUNT(*) AS total_rows FROM {}{}",
+                                quote_qualified_identifier(schema, table_name),
+                                where_sql
+                            );
+                            let row = sqlx::query(&count_sql)
+                                .bind(format!("%{}%", needle))
+                                .fetch_one(&*pool)
+                                .await
+                                .map_err(sanitize_pg_error)?;
+                            row.try_get::<i64, _>("total_rows")
+                                .map_err(sanitize_pg_error)?
+                                .max(0) as u64
+                        } else {
+                            postgres_table_row_count(&pool, schema, table_name)
+                                .await
+                                .map_err(sanitize_pg_app_error)?
+                        })
                     } else {
-                        postgres_table_row_count(&pool, schema, table_name)
-                            .await
-                            .map_err(sanitize_pg_app_error)?
+                        None
                     };
 
                     let sql = postgres_browse_sql(
-                        schema, table_name, &where_sql, &order_sql, limit, offset,
+                        schema,
+                        table_name,
+                        &where_sql,
+                        &order_sql,
+                        fetch_limit,
+                        offset,
                     );
                     let started = Instant::now();
                     let mut query = sqlx::query(&sql);
@@ -202,6 +220,7 @@ impl DatabaseService {
 
                     let limit = input.limit.unwrap_or(100).clamp(1, 1_000);
                     let offset = input.offset.unwrap_or(0);
+                    let fetch_limit = if include_total { limit } else { limit + 1 };
 
                     let column_names = if needs_columns {
                         mysql_columns(&pool, schema, table_name)
@@ -224,31 +243,41 @@ impl DatabaseService {
                         .map(|_| format!(" WHERE {}", mysql_filter_where(&column_names)))
                         .unwrap_or_default();
 
-                    let total_rows = if let Some(needle) = active_filter {
-                        let count_sql = format!(
-                            "SELECT COUNT(*) AS total_rows FROM {}{}",
-                            quote_mysql_qualified_identifier(schema, table_name),
-                            where_sql
-                        );
-                        let mut count = sqlx::query(&count_sql);
-                        for _ in &column_names {
-                            count = count.bind(format!("%{}%", needle));
-                        }
-                        let row = count
-                            .fetch_one(&*pool)
-                            .await
-                            .map_err(sanitize_mysql_error)?;
-                        row.try_get::<i64, _>("total_rows")
-                            .map_err(sanitize_mysql_error)?
-                            .max(0) as u64
+                    let total_rows = if include_total {
+                        Some(if let Some(needle) = active_filter {
+                            let count_sql = format!(
+                                "SELECT COUNT(*) AS total_rows FROM {}{}",
+                                quote_mysql_qualified_identifier(schema, table_name),
+                                where_sql
+                            );
+                            let mut count = sqlx::query(&count_sql);
+                            for _ in &column_names {
+                                count = count.bind(format!("%{}%", needle));
+                            }
+                            let row = count
+                                .fetch_one(&*pool)
+                                .await
+                                .map_err(sanitize_mysql_error)?;
+                            row.try_get::<i64, _>("total_rows")
+                                .map_err(sanitize_mysql_error)?
+                                .max(0) as u64
+                        } else {
+                            mysql_table_row_count(&pool, schema, table_name)
+                                .await
+                                .map_err(sanitize_mysql_app_error)?
+                        })
                     } else {
-                        mysql_table_row_count(&pool, schema, table_name)
-                            .await
-                            .map_err(sanitize_mysql_app_error)?
+                        None
                     };
 
-                    let sql =
-                        mysql_browse_sql(schema, table_name, &where_sql, &order_sql, limit, offset);
+                    let sql = mysql_browse_sql(
+                        schema,
+                        table_name,
+                        &where_sql,
+                        &order_sql,
+                        fetch_limit,
+                        offset,
+                    );
                     let started = Instant::now();
                     let mut query = sqlx::query(&sql);
                     if let Some(needle) = active_filter {

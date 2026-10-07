@@ -57,6 +57,7 @@ describe("useTableData", () => {
     expect(onBrowseStart).toHaveBeenCalledWith(expect.objectContaining({ tabId: "table-users" }));
     expect(onSuccess.mock.calls[0][1]).toEqual(expect.objectContaining({ tabId: "table-users" }));
     expect(browseMock).toHaveBeenCalledWith({
+      includeTotal: false,
       workspaceId: "ws-1",
       connectionId: "conn-1",
       schema: "public",

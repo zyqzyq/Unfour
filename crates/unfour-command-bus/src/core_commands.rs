@@ -38,6 +38,7 @@ impl CommandBus {
             ssh: SshService::new(db, secret_store).with_task_log_dir(task_log_dir()?),
             workspace,
         };
+        bus.api_client.redact_legacy_history().await?;
         bus.ensure_default_workspace().await?;
         Ok(bus)
     }
@@ -94,7 +95,7 @@ impl CommandBus {
         let activity_log = ActivityLogService::new(db.clone());
         let workspace = WorkspaceService::new(db.clone());
 
-        Ok(Self {
+        let bus = Self {
             db: db.clone(),
             extensions,
             api_client: ApiClientService::new(db.clone()),
@@ -104,7 +105,9 @@ impl CommandBus {
             secret_store: secret_store.clone(),
             ssh: SshService::new(db, secret_store).with_task_log_dir(task_log_dir()?),
             workspace,
-        })
+        };
+        bus.api_client.redact_legacy_history().await?;
+        Ok(bus)
     }
 
     #[cfg(feature = "ssh-native")]

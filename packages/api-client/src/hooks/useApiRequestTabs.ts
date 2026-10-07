@@ -66,13 +66,19 @@ export function useApiRequestTabs(workspaceId: string) {
     mutationFn: ({ executionId, input }: { executionId: string; input: ApiRequestInput; tabId: string }) =>
       sendApiRequest(executionId, input),
     onSuccess: (execution, variables) => {
-      useApiRequestTabStore.getState().completeTabSend(workspaceId, variables.tabId, execution);
+      const workspaceId = variables.input.workspaceId;
+      if (execution.httpErrorCode === "API_RESPONSE_TOO_LARGE") execution = { ...execution, httpError: t("api.response.tooLarge") };
+      const store = useApiRequestTabStore.getState();
+      const current = store.byWorkspace[workspaceId]?.tabs.find((tab) => tab.executionId === variables.executionId);
+      if (current) store.completeTabSend(workspaceId, current.id, execution);
       queryClient.invalidateQueries({ queryKey: ["api-history", workspaceId] });
     },
-    onError: (error, variables) =>
-      useApiRequestTabStore
-        .getState()
-        .failTabSend(workspaceId, variables.tabId, formatError(error), errorCode(error)),
+    onError: (error, variables) => {
+      const workspaceId = variables.input.workspaceId;
+      const store = useApiRequestTabStore.getState();
+      const current = store.byWorkspace[workspaceId]?.tabs.find((tab) => tab.executionId === variables.executionId);
+      if (current) store.failTabSend(workspaceId, current.id, errorCode(error) === "API_RESPONSE_TOO_LARGE" ? t("api.response.tooLarge") : formatError(error), errorCode(error));
+    },
   });
 
   const saveMutation = useMutation({
@@ -88,13 +94,14 @@ export function useApiRequestTabs(workspaceId: string) {
         ? updateApiRequest(input.workspaceId, requestId, input)
         : saveApiRequest(input),
     onSuccess: (saved, variables) => {
+      const workspaceId = variables.input.workspaceId;
       useApiRequestTabStore.getState().completeTabSave(workspaceId, variables.tabId, saved);
       queryClient.invalidateQueries({ queryKey: ["api-saved", workspaceId] });
       // Also invalidate collections in case a default was auto-created
       queryClient.invalidateQueries({ queryKey: ["api-collections", workspaceId] });
     },
     onError: (error, variables) =>
-      useApiRequestTabStore.getState().failTabSave(workspaceId, variables.tabId, formatError(error)),
+      useApiRequestTabStore.getState().failTabSave(variables.input.workspaceId, variables.tabId, formatError(error)),
   });
 
   const duplicateMutation = useMutation({
@@ -149,6 +156,10 @@ export function useApiRequestTabs(workspaceId: string) {
 
   const sendTab = useCallback(
     (tab: ApiRequestTab) => {
+      const current = useApiRequestTabStore.getState().byWorkspace[workspaceId];
+      const liveTab = current ? current.tabs.find((item) => item.id === tab.id) : tab;
+      if (!liveTab || liveTab.sending || liveTab.cancelling) return;
+      tab = liveTab;
       const validationError = validateBeforeSend(tab, t);
       if (validationError) {
         useApiRequestTabStore.getState().failTabSend(workspaceId, tab.id, validationError);
@@ -177,6 +188,10 @@ export function useApiRequestTabs(workspaceId: string) {
         parentFolderId: string | null;
       },
     ) => {
+      const current = useApiRequestTabStore.getState().byWorkspace[workspaceId];
+      const liveTab = current ? current.tabs.find((item) => item.id === tab.id) : tab;
+      if (!liveTab || liveTab.saving) return null;
+      tab = liveTab;
       const draft = identity ? { ...tab.draft, ...identity } : tab.draft;
       if (identity) {
         useApiRequestTabStore.getState().updateTabDraft(workspaceId, tab.id, identity);

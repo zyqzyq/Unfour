@@ -84,10 +84,10 @@ export function TableDataTab({
 
   const displayName = tableView?.tableName ?? tableMeta?.name ?? "";
   const gridResult = result ?? buildLoadingResult(tableMeta);
-  const firstRow = tableView && tableView.totalRows > 0 ? tableView.pageIndex * tableView.pageSize + 1 : 0;
-  const lastRow = tableView ? Math.min(tableView.totalRows, (tableView.pageIndex + 1) * tableView.pageSize) : 0;
+  const firstRow = tableView && gridResult.rows.length > 0 ? tableView.pageIndex * tableView.pageSize + 1 : 0;
+  const lastRow = firstRow ? firstRow + gridResult.rows.length - 1 : 0;
   const hasPrevious = Boolean(tableView && tableView.pageIndex > 0);
-  const hasNext = Boolean(tableView && lastRow < tableView.totalRows);
+  const hasNext = Boolean(tableView && (tableView.hasMore ?? lastRow < tableView.totalRows));
   const totalPages = tableView ? Math.max(1, Math.ceil(tableView.totalRows / Math.max(1, tableView.pageSize))) : 1;
   const browseSql = tableView ? buildPreviewSql(tableView.tableName, tableView.pageSize, tableView.pageIndex) : "";
   const pendingCount = editing?.pendingChanges.length ?? 0;
@@ -100,7 +100,7 @@ export function TableDataTab({
           <span className="truncate text-[12px] font-medium text-[var(--u-color-text)]">{displayName}</span>
           {!isLoading && tableView ? (
             <span className="text-[11px] text-[var(--u-color-text-soft)]">
-              {firstRow}-{lastRow} of {tableView.totalRows}
+              {t(tableView.totalRowsExact === false ? "database.grid.rowRange" : "database.grid.rowRangeTotal", { first: firstRow, last: lastRow, total: tableView.totalRows })}
             </span>
           ) : null}
         </ToolbarGroup>
@@ -202,7 +202,7 @@ export function TableDataTab({
               <ChevronLeft size={14} />
             </IconButton>
             <span className="px-1 text-[11px] tabular-nums text-[var(--u-color-text-muted)]">
-              {t("database.grid.page", { page: tableView.pageIndex + 1, pages: totalPages })}
+              {t(tableView.totalRowsExact === false ? "database.grid.pageUnknownTotal" : "database.grid.page", { page: tableView.pageIndex + 1, pages: totalPages })}
             </span>
             <IconButton
               disabled={!hasNext || controlsLocked}

@@ -121,6 +121,7 @@ async fn browse_table_pushes_sort_and_filter_into_the_query() {
     // carries the ORDER BY so it orders the whole table, not just the page.
     let sorted = service
         .browse_table(DatabaseBrowseInput {
+            include_total: None,
             workspace_id: workspace_id.clone(),
             connection_id: connection.id.clone(),
             catalog: None,
@@ -142,6 +143,7 @@ async fn browse_table_pushes_sort_and_filter_into_the_query() {
     // Filter narrows both the rows and the total count.
     let filtered = service
         .browse_table(DatabaseBrowseInput {
+            include_total: None,
             workspace_id: workspace_id.clone(),
             connection_id: connection.id.clone(),
             catalog: None,
@@ -164,6 +166,7 @@ async fn browse_table_pushes_sort_and_filter_into_the_query() {
     // An unknown sort column is rejected rather than silently ignored.
     let bad_sort = service
         .browse_table(DatabaseBrowseInput {
+            include_total: None,
             workspace_id: workspace_id.clone(),
             connection_id: connection.id.clone(),
             catalog: None,

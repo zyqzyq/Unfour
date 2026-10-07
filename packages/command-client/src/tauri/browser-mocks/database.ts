@@ -369,7 +369,9 @@ export function handleDatabaseMock<T>(
       sql: `SELECT * FROM ${qualifiedTable} LIMIT ${limit} OFFSET ${offset}`,
       limit,
       offset,
-      totalRows: mockRows.length,
+      totalRows: input.includeTotal === false ? Math.min(mockRows.length, offset + limit + 1) : mockRows.length,
+      totalRowsExact: input.includeTotal !== false || offset + limit >= mockRows.length,
+      hasMore: offset + limit < mockRows.length,
       readOnly: true,
       result: {
         columns: [

@@ -19,6 +19,7 @@ mod domain;
 pub use domain::runtime_request_secret_values;
 mod execution;
 mod history;
+mod history_redaction;
 mod multipart;
 mod openapi_export;
 mod openapi_import;

@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { loader } from "@monaco-editor/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   I18nProvider,
@@ -16,6 +17,8 @@ import { telemetryI18nResources } from "./features/telemetry";
 import "@unfour/ui/styles.css";
 import "@unfour/app-shell/styles.css";
 import "./styles.css";
+
+loader.config({ paths: { vs: new URL(`${import.meta.env.BASE_URL}monaco/vs`, document.baseURI).href } });
 
 const queryClient = new QueryClient({
   defaultOptions: {

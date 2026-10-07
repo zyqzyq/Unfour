@@ -459,6 +459,9 @@ pub struct SavedSqlInput {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DatabaseBrowseInput {
+    /// Omit for compatibility. Interactive paging can skip the full-table count.
+    #[serde(default)]
+    pub include_total: Option<bool>,
     pub workspace_id: String,
     pub connection_id: String,
     #[serde(default)]
@@ -485,6 +488,8 @@ pub struct DatabaseBrowseInput {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DatabaseBrowseResult {
+    pub total_rows_exact: bool,
+    pub has_more: bool,
     pub table_name: String,
     pub sql: String,
     pub limit: u32,

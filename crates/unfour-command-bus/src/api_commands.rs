@@ -560,7 +560,7 @@ impl CommandBus {
                 Some(&response.history_id),
                 serde_json::json!({
                     "method": input.method,
-                    "url": input.url,
+                    "url": unfour_core::redaction::redact_connection_string(&unfour_core::redaction::redact_url_query(&input.url)),
                     "status": response.status
                 }),
             )

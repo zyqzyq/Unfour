@@ -9,10 +9,9 @@ impl ApiClientService {
         validate_workspace_id(&workspace_id)?;
         let limit = limit.unwrap_or(50).clamp(1, 200);
 
-        let items = sqlx::query_as::<_, ApiHistoryItem>(
+        let items = sqlx::query_as::<_, ApiHistoryDetail>(
             r#"
-            SELECT
-              id, workspace_id, name, method, url, status, duration_ms, created_at, updated_at
+            SELECT *
             FROM api_history
             WHERE workspace_id = ?1
             ORDER BY created_at DESC
@@ -24,7 +23,23 @@ impl ApiClientService {
         .fetch_all(self.db.pool())
         .await?;
 
-        Ok(items)
+        items
+            .into_iter()
+            .map(|mut item| {
+                super::history_redaction::sanitize_detail(&mut item)?;
+                Ok(ApiHistoryItem {
+                    id: item.id,
+                    workspace_id: item.workspace_id,
+                    name: item.name,
+                    method: item.method,
+                    url: item.url,
+                    status: item.status,
+                    duration_ms: item.duration_ms,
+                    created_at: item.created_at,
+                    updated_at: item.updated_at,
+                })
+            })
+            .collect()
     }
 
     pub async fn history_detail(
@@ -54,6 +69,8 @@ impl ApiClientService {
         .fetch_optional(self.db.pool())
         .await?;
 
-        item.ok_or_else(|| AppError::NotFound("api history".to_string()))
+        let mut item = item.ok_or_else(|| AppError::NotFound("api history".to_string()))?;
+        super::history_redaction::sanitize_detail(&mut item)?;
+        Ok(item)
     }
 }

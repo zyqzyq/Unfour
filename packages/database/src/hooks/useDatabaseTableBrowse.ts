@@ -78,6 +78,8 @@ export function useDatabaseTableBrowse({
           readOnly: browse.readOnly,
           tableName: browse.tableName,
           totalRows: browse.totalRows,
+          totalRowsExact: browse.totalRowsExact,
+          hasMore: browse.hasMore,
         },
       });
       setConnectionState(request.connectionId, {

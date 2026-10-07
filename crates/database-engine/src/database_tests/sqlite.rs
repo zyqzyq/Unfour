@@ -291,6 +291,7 @@ async fn sqlite_schema_query_and_safe_browse_work() {
 
     let browse = service
         .browse_table(DatabaseBrowseInput {
+            include_total: None,
             workspace_id: workspace_id.clone(),
             connection_id: connection.id.clone(),
             catalog: None,
@@ -316,6 +317,7 @@ async fn sqlite_schema_query_and_safe_browse_work() {
 
     let first_page = service
         .browse_table(DatabaseBrowseInput {
+            include_total: None,
             workspace_id: workspace_id.clone(),
             connection_id: connection.id.clone(),
             catalog: None,
@@ -334,6 +336,7 @@ async fn sqlite_schema_query_and_safe_browse_work() {
 
     let empty = service
         .browse_table(DatabaseBrowseInput {
+            include_total: None,
             workspace_id: workspace_id.clone(),
             connection_id: connection.id.clone(),
             catalog: None,
@@ -355,6 +358,7 @@ async fn sqlite_schema_query_and_safe_browse_work() {
 
     let missing = service
         .browse_table(DatabaseBrowseInput {
+            include_total: None,
             workspace_id,
             connection_id: connection.id,
             catalog: None,

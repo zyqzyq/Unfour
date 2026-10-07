@@ -35,6 +35,27 @@ import {
 } from "./request-tabs";
 
 describe("API request tab state", () => {
+  it("preserves edits made during save and keeps them dirty", () => {
+    const saved = savedRequest("req-1");
+    let state = openSavedRequest(emptyApiTabsState("ws-1"), saved);
+    state = startTabSave(state, "saved:req-1");
+    state = updateTabDraft(state, "saved:req-1", {
+      url: "https://new-edit.test",
+      body: "new body",
+      collectionId: "col-edited",
+    });
+    state = completeTabSave(state, "saved:req-1", {
+      ...saved,
+      collectionId: "col-from-server",
+      parentFolderId: "folder-from-server",
+    });
+    expect(state.tabs[0].draft.url).toBe("https://new-edit.test");
+    expect(state.tabs[0].draft.body).toBe("new body");
+    expect(state.tabs[0].draft.collectionId).toBe("col-edited");
+    expect(state.tabs[0].draft.parentFolderId).toBe("folder-from-server");
+    expect(getTabSaveState(state.tabs[0])).toBe("dirty");
+    expect(requestTabNeedsCloseConfirmation(state.tabs[0])).toBe(true);
+  });
   it("provides request config tabs in workbench order", () => {
     expect(requestConfigTabs.map((tab) => tab.id)).toEqual([
       "query",

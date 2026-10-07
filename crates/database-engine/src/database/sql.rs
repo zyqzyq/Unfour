@@ -310,12 +310,26 @@ pub(super) fn browse_result(
     sql: String,
     limit: u32,
     offset: u32,
-    total_rows: u64,
+    total_rows: Option<u64>,
     columns: Vec<DatabaseResultColumn>,
-    rows: Vec<Vec<Option<String>>>,
+    mut rows: Vec<Vec<Option<String>>>,
     started: Instant,
 ) -> DatabaseBrowseResult {
+    let has_more = total_rows.map_or(rows.len() > limit as usize, |total| {
+        u64::from(offset) + u64::from(limit) < total
+    });
+    rows.truncate(limit as usize);
+    let total_rows_exact = total_rows.is_some() || (!has_more && (offset == 0 || !rows.is_empty()));
+    let total_rows = total_rows.unwrap_or_else(|| {
+        if rows.is_empty() {
+            0
+        } else {
+            u64::from(offset) + rows.len() as u64 + u64::from(has_more)
+        }
+    });
     DatabaseBrowseResult {
+        total_rows_exact,
+        has_more,
         table_name: table_name.to_string(),
         sql,
         limit,

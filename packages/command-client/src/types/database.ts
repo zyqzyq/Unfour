@@ -179,6 +179,7 @@ export type SavedSqlInput = {
 };
 
 export type DatabaseBrowseInput = {
+  includeTotal?: boolean;
   workspaceId: string;
   connectionId: string;
   catalog?: string | null;
@@ -193,6 +194,8 @@ export type DatabaseBrowseInput = {
 };
 
 export type DatabaseBrowseResult = {
+  totalRowsExact?: boolean;
+  hasMore?: boolean;
   tableName: string;
   sql: string;
   limit: number;

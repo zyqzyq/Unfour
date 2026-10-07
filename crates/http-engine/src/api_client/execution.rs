@@ -79,7 +79,7 @@ impl ApiClientService {
             _ = cancellation.cancelled() => return Err(cancelled_error()),
             response = builder.send() => response,
         };
-        let response = match response_result {
+        let mut response = match response_result {
             Ok(response) => response,
             Err(error) => {
                 let error = classify_http_error(error);
@@ -107,12 +107,11 @@ impl ApiClientService {
             .collect::<Vec<_>>();
         let body_result = tokio::select! {
             _ = cancellation.cancelled() => return Err(cancelled_error()),
-            body = response.text() => body,
+            body = read_bounded_body(&mut response) => body,
         };
         let body = match body_result {
             Ok(body) => body,
             Err(error) => {
-                let error = classify_http_error(error);
                 unfour_diag::log_operation_event(
                     "api_request_failed",
                     "api_client",
@@ -197,30 +196,30 @@ impl ApiClientService {
     ) -> AppResult<String> {
         let now = Utc::now().to_rfc3339();
         let id = unfour_core::id::new_id();
-        let body_preview = response_body.chars().take(20_000).collect::<String>();
+        let safe = super::history_redaction::sanitize(input, response_headers, response_body)?;
 
         sqlx::query(
             r#"
             INSERT INTO api_history (
               id, workspace_id, name, method, url, request_headers_json, request_query_json,
               request_body, status, duration_ms, response_headers_json, response_body_preview,
-              created_at, updated_at, request_body_kind
+              created_at, updated_at, request_body_kind, redaction_version
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13, ?14)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13, ?14, 1)
             "#,
         )
         .bind(&id)
         .bind(&input.workspace_id)
-        .bind(&input.name)
+        .bind(safe.name)
         .bind(input.method.to_uppercase())
-        .bind(&input.url)
-        .bind(serde_json::to_string(&input.headers)?)
-        .bind(serde_json::to_string(&input.query)?)
-        .bind(input.body.clone())
+        .bind(safe.url)
+        .bind(safe.headers)
+        .bind(safe.query)
+        .bind(safe.body)
         .bind(i64::from(status))
         .bind(i64::try_from(duration_ms).unwrap_or(i64::MAX))
-        .bind(serde_json::to_string(response_headers)?)
-        .bind(body_preview)
+        .bind(safe.response_headers)
+        .bind(safe.response_body)
         .bind(now)
         .bind(&input.body_kind)
         .execute(self.db.pool())
@@ -228,6 +227,27 @@ impl ApiClientService {
 
         Ok(id)
     }
+}
+
+const MAX_RESPONSE_BYTES: usize = 10 * 1024 * 1024;
+
+async fn read_bounded_body(response: &mut reqwest::Response) -> AppResult<String> {
+    if response
+        .content_length()
+        .is_some_and(|size| size > MAX_RESPONSE_BYTES as u64)
+    {
+        return Err(AppError::Validation("API_RESPONSE_TOO_LARGE".into()));
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(classify_http_error)? {
+        if chunk.len() > MAX_RESPONSE_BYTES.saturating_sub(bytes.len()) {
+            return Err(AppError::Validation("API_RESPONSE_TOO_LARGE".into()));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(String::from_utf8_lossy(&bytes)
+        .trim_start_matches('\u{feff}')
+        .to_owned())
 }
 
 fn request_timeout_duration(timeout_ms: Option<u64>) -> Option<Duration> {

@@ -418,6 +418,7 @@
       "unknownError": "脚本无法执行。"
     },
     "response": {
+      "tooLarge": "响应超过 10 MiB 上限。请缩小响应范围后重试。",
       "copyBody": "复制响应正文",
       "cancelledDescription": "执行已在请求工作全部完成前停止，本次运行不会写入历史记录。",
       "cancelledTitle": "请求已取消",
@@ -774,6 +775,9 @@
       "username": "用户名"
     },
     "grid": {
+      "rowRange": "第 {first}-{last} 行",
+      "rowRangeTotal": "第 {first}-{last} 行，共 {total} 行",
+      "pageUnknownTotal": "第 {page} 页",
       "cellCopied": "已复制单元格",
       "clearSort": "清除排序",
       "copyFailed": "复制失败",
