@@ -106,7 +106,8 @@ vi.mock("@unfour/workspace-core", () => ({
   }),
 }));
 
-vi.mock("@unfour/ui", () => ({
+vi.mock("@unfour/ui", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@unfour/ui")>(),
   Button: ({ children, onClick }: { children: ReactNode; onClick: () => void }) => <button onClick={onClick}>{children}</button>,
   EmptyState: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   ErrorState: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -355,6 +356,9 @@ describe("DesktopApp extensions", () => {
     render(<DesktopApp />);
     expect(screen.getByText("Loading")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Open command palette" }));
+    expect(screen.getByRole("button", { name: "workspaceBundle.importCommand" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "workspaceBundle.exportCommand" })).toBeNull();
   });
 
   it("keeps the variable draft and leave guard when Manage is invoked again", () => {

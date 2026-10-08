@@ -51,8 +51,13 @@ are not copied: the new Workspace starts with MCP disabled.
 
 The adapter (`crates/unfour-app`) selects/saves files and calls CommandBus. It
 contains no remapping, reference validation, or feature-table reads. Frontend
-business state and preview live in `packages/workspace-local`; app-shell only
-wires its Workspace menu, dialog, and activation callback.
+business state and preview live in `packages/workspace-local`. Its exchange
+provider owns one shared dialog for the Workspace menu and command palette;
+app-shell only wires the provider, entry points, and activation callback.
+The switcher groups creation/import separately from current-Workspace actions
+(export, rename, safety tier, and extensions such as Cloud Sync), with deletion
+last. Export confirmation identifies the selected Workspace and retains that
+target while the dialog is open. Import always creates and activates a new copy.
 
 CommandBus coordinates owning Workspace/API/SSH/Database/Flow services. Export
 reads all live records through their services on one SQLite read transaction.

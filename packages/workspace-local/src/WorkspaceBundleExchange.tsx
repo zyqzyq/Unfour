@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { exportWorkspaceBundle, importWorkspaceBundle, pickWorkspaceBundle, type WorkspaceBundleFile } from "@unfour/command-client";
-import { Button, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Input, useFeedback, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
+import { exportWorkspaceBundle, importWorkspaceBundle, pickWorkspaceBundle, type Workspace, type WorkspaceBundleFile } from "@unfour/command-client";
+import { Badge, Button, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Input, useFeedback, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
 
 /** Local workspace lifecycle belongs here; the shell only mounts menu actions and the dialog. */
 export function useWorkspaceBundleExchange(onImported: (id: string) => void) {
@@ -12,7 +12,7 @@ export function useWorkspaceBundleExchange(onImported: (id: string) => void) {
   const [pending, setPending] = useState<WorkspaceBundleFile | null>(null);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
-  const [exportId, setExportId] = useState<string | null>(null);
+  const [exportTarget, setExportTarget] = useState<Pick<Workspace, "id" | "name" | "environmentType"> | null>(null);
   async function run(action: () => Promise<void>) {
     setBusy(true);
     try { await action(); }
@@ -37,24 +37,37 @@ export function useWorkspaceBundleExchange(onImported: (id: string) => void) {
   }
   function confirmExport() {
     return run(async () => {
-      if (!exportId) return;
-      const result = await exportWorkspaceBundle(exportId);
-      setExportId(null);
+      if (!exportTarget) return;
+      const result = await exportWorkspaceBundle(exportTarget.id);
+      setExportTarget(null);
       if (result.saved) feedback.success(t("exchange.exported"));
     });
   }
   const dialog = (
-    <Dialog open={pending !== null || exportId !== null} onOpenChange={(open) => { if (!open && !busy) { setPending(null); setExportId(null); } }}>
+    <Dialog open={pending !== null || exportTarget !== null} onOpenChange={(open) => { if (!open && !busy) { setPending(null); setExportTarget(null); } }}>
       <DialogContent onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onPointerDownOutside={(event) => { if (busy) event.preventDefault(); }}>
-        <DialogHeader><DialogTitle>{t(pending ? "workspaceBundle.preview" : "workspaceBundle.export")}</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>{t(pending ? "workspaceBundle.preview" : "workspaceBundle.exportTitle")}</DialogTitle>
+        </DialogHeader>
         <DialogBody>
-          <DialogDescription>{t("workspaceBundle.scope")}</DialogDescription>
-          <p className="my-3 text-xs text-[var(--u-color-text-muted)]">{t("workspaceBundle.review")}</p>
+          {pending && <label className="mb-3 block text-xs">{t("workspaceBundle.name")}
+            <Input autoFocus className="mt-1" maxLength={80} value={name} disabled={busy} onChange={(event) => setName(event.target.value)} />
+          </label>}
+          {exportTarget && <div className="mb-3 flex min-w-0 items-start gap-2 border-b border-[var(--u-color-border)] pb-3 text-sm">
+            <span className="shrink-0 text-[var(--u-color-text-muted)]">{t("workspaceBundle.target")}</span>
+            <span className="min-w-0 break-words font-medium">{exportTarget.name}</span>
+            <Badge tone={exportTarget.environmentType === "prod" ? "red" : exportTarget.environmentType === "test" ? "amber" : "green"}>
+              {exportTarget.environmentType.toUpperCase()}
+            </Badge>
+          </div>}
+          <DialogDescription className="mb-3">{t(pending ? "workspaceBundle.newOnly" : "workspaceBundle.exportDescription")}</DialogDescription>
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs">
+            <dt>{t("workspaceBundle.includedLabel")}</dt><dd>{t("workspaceBundle.included")}</dd>
+            <dt className="text-[var(--u-color-text-muted)]">{t("workspaceBundle.excludedLabel")}</dt>
+            <dd className="text-[var(--u-color-text-muted)]">{t("workspaceBundle.excluded")}</dd>
+          </dl>
+          <p className="my-3 text-xs text-[var(--u-color-text-muted)]">{t(pending ? "workspaceBundle.review" : "workspaceBundle.exportReview")}</p>
           {pending && <>
-            <label className="mb-3 block text-xs">{t("workspaceBundle.name")}
-              <Input autoFocus className="mt-1" maxLength={80} value={name} disabled={busy} onChange={(event) => setName(event.target.value)} />
-            </label>
-            <p className="mb-3 text-xs text-[var(--u-color-text-muted)]">{t("workspaceBundle.newOnly")}</p>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
               {Object.entries(pending.preview.counts).map(([key, count]) => <div key={key} className="flex justify-between gap-2"><dt>{t(`workspaceBundle.counts.${key}`)}</dt><dd>{count}</dd></div>)}
             </dl>
@@ -67,11 +80,11 @@ export function useWorkspaceBundleExchange(onImported: (id: string) => void) {
           </>}
         </DialogBody>
         <DialogFooter>
-          <Button variant="secondary" disabled={busy} onClick={() => { setPending(null); setExportId(null); }}>{t("common.confirm.cancel")}</Button>
-          <Button disabled={busy || (pending !== null && !name.trim())} onClick={() => void (pending ? confirmImport() : confirmExport())}>{t(busy ? "workspaceBundle.working" : pending ? "workspaceBundle.create" : "workspaceBundle.export")}</Button>
+          <Button variant="secondary" disabled={busy} onClick={() => { setPending(null); setExportTarget(null); }}>{t("common.confirm.cancel")}</Button>
+          <Button disabled={busy || (pending !== null && !name.trim())} onClick={() => void (pending ? confirmImport() : confirmExport())}>{t(busy ? "workspaceBundle.working" : pending ? "workspaceBundle.create" : "workspaceBundle.save")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
-  return { pick, exportWorkspace: setExportId, busy, dialog };
+  return { pick, exportWorkspace: (workspace: Pick<Workspace, "id" | "name" | "environmentType">) => setExportTarget({ id: workspace.id, name: workspace.name, environmentType: workspace.environmentType }), busy, dialog };
 }

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { CommandPalette, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
 import { exportDiagnosticsBundle, openDiagnosticsDir, openLogDir } from "@unfour/command-client";
+import { useWorkspaceBundleActions } from "@unfour/workspace-local";
 import type { DesktopAppCommandPaletteAction, DesktopAppExtensionContext } from "../extensions";
 
 export function DesktopCommandPalette({
@@ -22,6 +23,7 @@ export function DesktopCommandPalette({
 }) {
   const { t } = useI18n();
   const handleError = useFeedbackErrorHandler();
+  const bundleExchange = useWorkspaceBundleActions();
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -48,6 +50,13 @@ export function DesktopCommandPalette({
     { id: "ssh", label: t("app.commandPalette.openSshTerminal"), run: () => onSelectModule("ssh-main") },
     { id: "database", label: t("app.commandPalette.openDatabase"), run: () => onSelectModule("database-main") },
     ...(onManageVariables ? [{ id: "variables", label: t("variables.manage"), run: onManageVariables }] : []),
+    ...(!bundleExchange.busy ? [
+      { id: "workspace-import", label: t("workspaceBundle.importCommand"), run: bundleExchange.pick },
+      ...(extensionContext.activeWorkspace ? [{
+        id: "workspace-export", label: t("workspaceBundle.exportCommand"),
+        run: () => { if (extensionContext.activeWorkspace) bundleExchange.exportWorkspace(extensionContext.activeWorkspace); },
+      }] : []),
+    ] : []),
     { id: "logs", label: t("app.commandPalette.openLogDir"), run: openLogDir },
     { id: "diagnostics", label: t("app.commandPalette.openDiagnosticsDir"), run: openDiagnosticsDir },
     { id: "export", label: t("app.commandPalette.exportDiagnosticsBundle"), run: exportDiagnosticsBundle },

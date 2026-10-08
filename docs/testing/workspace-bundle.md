@@ -3,6 +3,29 @@
 Date: 2026-10-01. Scope: `unfour-workspace` V1 create-new import/export.
 See [format and boundaries](../architecture/workspace-bundle.md).
 
+## Grouped UI verification — 2026-10-08
+
+The switcher now groups new/import and global extension actions separately from
+current-Workspace export, rename, safety-tier and Cloud Sync actions. Delete is
+last. The menu and command palette share one exchange controller and dialog in
+`workspace-local`; export confirmation shows the reviewed Workspace name and
+safety tier and keeps that target if the active Workspace changes. Import
+retains preview/reconfiguration details and labels confirmation "Create and
+Switch". Both locales describe included and excluded data separately.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Targeted Vitest: WorkspaceBundleExchange, WorkspaceMenu, DesktopApp, DesktopApp startup smoke, i18n, Cloud Sync workspace actions | PASS, 38 tests across 6 files | Group ordering with extensions, import confirmation/cancel/retry, reviewed export target, missing-Workspace command availability and desktop regressions |
+| `pnpm exec playwright test apps/desktop/tests/smoke/workspace-bundle.spec.ts` | PASS, 2 tests | English/Chinese grouped menu, 960×600 import/export dialogs, visible action footer, and both command-palette entry points using the same dialog |
+| Targeted ESLint and `pnpm --filter @unfour/desktop exec tsc --noEmit` | PASS | Changed frontend sources and tests |
+| `pnpm run build` | PASS | TypeScript and production frontend bundle; existing chunk-size warning remains |
+
+Inspected the menu, import preview and export confirmation screenshots. The
+browser test substitutes native file selection and does not establish native
+Windows file-pick/save behavior. No real Workspace mutations or Cloud Sync
+operations were performed. The original backend evidence below is from
+2026-10-01; this UI change does not alter the Rust contract or security rules.
+
 ## Automated evidence
 
 | Check | Result | Coverage |

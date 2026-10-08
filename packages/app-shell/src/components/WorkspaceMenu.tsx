@@ -1,6 +1,6 @@
-import { useWorkspaceBundleExchange } from "@unfour/workspace-local";
+import { useWorkspaceBundleActions } from "@unfour/workspace-local";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ChevronDown, Folder, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { ChevronDown, Folder, Import, Pencil, Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { useState } from "react";
 import type { Workspace, WorkspaceMcpPolicy } from "@unfour/command-client";
 import { Badge, Button, cn, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
@@ -13,6 +13,8 @@ import type {
   DesktopAppWorkspaceMenuFooterAction,
 } from "../extensions";
 import { WorkspaceDialogs } from "./WorkspaceDialogs";
+
+const workspaceMenuItemClass = "flex min-h-8 cursor-pointer items-center gap-2 rounded px-2 py-1 outline-none hover:bg-[var(--u-color-surface-hover)] focus:bg-[var(--u-color-surface-hover)] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50";
 
 export function WorkspaceMenu({
   activeWorkspace,
@@ -37,7 +39,7 @@ export function WorkspaceMenu({
 }) {
   const { t } = useI18n();
   const handleError = useFeedbackErrorHandler();
-  const bundleExchange = useWorkspaceBundleExchange(onActivateWorkspace);
+  const bundleExchange = useWorkspaceBundleActions();
   const [createOpen, setCreateOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [environmentOpen, setEnvironmentOpen] = useState(false);
@@ -85,7 +87,7 @@ export function WorkspaceMenu({
         <DropdownMenu.Portal>
           <DropdownMenu.Content
             align="start"
-            className="z-50 w-72 rounded-md border border-[var(--u-color-border)] bg-[var(--u-color-surface)] p-1 text-sm text-[var(--u-color-text)] shadow-xl"
+            className="z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] w-72 overflow-y-auto rounded-md border border-[var(--u-color-border)] bg-[var(--u-color-surface)] p-1 text-sm text-[var(--u-color-text)] shadow-xl"
             sideOffset={6}
           >
             <DropdownMenu.Label className="px-2 py-1.5 text-xs font-semibold uppercase text-[var(--u-color-text-muted)]">
@@ -107,23 +109,42 @@ export function WorkspaceMenu({
               </div>
             )}
             <DropdownMenu.Separator className="my-1 h-px bg-[var(--u-color-border)]" />
-            <WorkspaceMenuCoreActions
-              activeWorkspace={activeWorkspace}
-              onCreate={() => setCreateOpen(true)}
-              onDelete={() => setDeleteOpen(true)}
-              onEnvironment={() => setEnvironmentOpen(true)}
-              onRename={() => setRenameOpen(true)}
-              workspaceCount={workspaces.length}
-            />
-            <DropdownMenu.Item className="flex min-h-8 cursor-pointer items-center rounded px-2 py-1 outline-none focus:bg-[var(--u-color-surface-hover)] data-[disabled]:opacity-50" disabled={bundleExchange.busy} onSelect={() => void bundleExchange.pick()}>
+            <DropdownMenu.Item className={workspaceMenuItemClass} onSelect={() => setCreateOpen(true)}>
+              <Plus size={14} />
+              {t("app.workspace.new")}
+            </DropdownMenu.Item>
+            <DropdownMenu.Item className={workspaceMenuItemClass} disabled={bundleExchange.busy} onSelect={() => void bundleExchange.pick()}>
+              <Import size={14} />
               {t("workspaceBundle.import")}
             </DropdownMenu.Item>
-            <DropdownMenu.Item className="flex min-h-8 cursor-pointer items-center rounded px-2 py-1 outline-none focus:bg-[var(--u-color-surface-hover)] data-[disabled]:opacity-50" disabled={!activeWorkspace || bundleExchange.busy} onSelect={() => { if (activeWorkspace) bundleExchange.exportWorkspace(activeWorkspace.id); }}>
+            {workspaceMenuFooterActions.map((action) => {
+              const actionDisabled = typeof action.disabled === "function"
+                ? action.disabled(extensionContext) : Boolean(action.disabled);
+              return <DropdownMenu.Item
+                className={workspaceMenuItemClass}
+                disabled={pendingActionId !== null || actionDisabled}
+                key={action.id}
+                onSelect={() => void runFooterAction(action)}
+              >
+                <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">{action.icon}</span>
+                <span className="min-w-0 flex-1 truncate">{action.label}</span>
+              </DropdownMenu.Item>;
+            })}
+            <DropdownMenu.Separator className="my-1 h-px bg-[var(--u-color-border)]" />
+            <DropdownMenu.Label className="truncate px-2 py-1.5 text-xs text-[var(--u-color-text-muted)]" title={activeWorkspace?.name}>
+              {t("workspaceBundle.current", { name: activeWorkspace?.name ?? t("app.workspace.none") })}
+            </DropdownMenu.Label>
+            <DropdownMenu.Item className={workspaceMenuItemClass} disabled={!activeWorkspace || bundleExchange.busy} onSelect={() => { if (activeWorkspace) bundleExchange.exportWorkspace(activeWorkspace); }}>
+              <Upload size={14} />
               {t("workspaceBundle.export")}
             </DropdownMenu.Item>
+            <WorkspaceMenuCurrentActions
+              activeWorkspace={activeWorkspace}
+              onEnvironment={() => setEnvironmentOpen(true)}
+              onRename={() => setRenameOpen(true)}
+            />
             {activeWorkspace && activeWorkspaceActions.length > 0 && (
               <>
-                <DropdownMenu.Separator className="my-1 h-px bg-[var(--u-color-border)]" />
                 {activeWorkspaceActions.map((action) => {
                   const context: DesktopAppWorkspaceActionContext = {
                     ...extensionContext,
@@ -136,12 +157,12 @@ export function WorkspaceMenu({
                     : undefined;
                   return (
                     <DropdownMenu.Item
-                      className="flex min-h-8 cursor-pointer items-center gap-2 rounded px-2 py-1 outline-none hover:bg-[var(--u-color-surface-hover)] focus:bg-[var(--u-color-surface-hover)] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+                      className={workspaceMenuItemClass}
                       disabled={disabled}
                       key={action.id}
                       onSelect={() => void runWorkspaceAction(action, context)}
                     >
-                      {action.icon}
+                      <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">{action.icon}</span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate">{action.label}</span>
                         {disabled && disabledReason && (
@@ -155,33 +176,19 @@ export function WorkspaceMenu({
                 })}
               </>
             )}
-            {workspaceMenuFooterActions.length > 0 && (
-              <>
-                <DropdownMenu.Separator className="my-1 h-px bg-[var(--u-color-border)]" />
-                {workspaceMenuFooterActions.map((action) => {
-                  const actionDisabled =
-                    typeof action.disabled === "function"
-                      ? action.disabled(extensionContext)
-                      : Boolean(action.disabled);
-                  return (
-                    <DropdownMenu.Item
-                      className="flex min-h-8 cursor-pointer items-center gap-2 rounded px-2 py-1 outline-none hover:bg-[var(--u-color-surface-hover)] focus:bg-[var(--u-color-surface-hover)] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
-                      disabled={pendingActionId !== null || actionDisabled}
-                      key={action.id}
-                      onSelect={() => void runFooterAction(action)}
-                    >
-                      {action.icon}
-                      <span className="min-w-0 flex-1 truncate">{action.label}</span>
-                    </DropdownMenu.Item>
-                  );
-                })}
-              </>
-            )}
+            <DropdownMenu.Separator className="my-1 h-px bg-[var(--u-color-border)]" />
+            <DropdownMenu.Item
+              className={cn(workspaceMenuItemClass, "text-[var(--u-color-danger-text)] hover:bg-[var(--u-color-danger-soft)] focus:bg-[var(--u-color-danger-soft)]")}
+              disabled={!activeWorkspace || activeWorkspace.isDefault || workspaces.length <= 1}
+              onSelect={() => setDeleteOpen(true)}
+            >
+              <Trash2 size={14} />
+              {t("app.workspace.deleteCurrent")}
+            </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
 
-      {bundleExchange.dialog}
       <WorkspaceDialogs
         activeWorkspace={activeWorkspace}
         createOpen={createOpen}
@@ -302,52 +309,29 @@ function WorkspaceMenuItem({
   );
 }
 
-function WorkspaceMenuCoreActions({
+function WorkspaceMenuCurrentActions({
   activeWorkspace,
-  onCreate,
-  onDelete,
   onEnvironment,
   onRename,
-  workspaceCount,
 }: {
   activeWorkspace?: Workspace;
-  onCreate: () => void;
-  onDelete: () => void;
   onEnvironment: () => void;
   onRename: () => void;
-  workspaceCount: number;
 }) {
   const { t } = useI18n();
-  const itemClass =
-    "flex h-8 cursor-pointer items-center gap-2 rounded px-2 outline-none hover:bg-[var(--u-color-surface-hover)] focus:bg-[var(--u-color-surface-hover)] disabled:pointer-events-none disabled:opacity-50";
   return (
     <>
-      <DropdownMenu.Item className={itemClass} onSelect={onCreate}>
-        <Plus size={14} />
-        {t("app.workspace.new")}
-      </DropdownMenu.Item>
-      <DropdownMenu.Item className={itemClass} disabled={!activeWorkspace} onSelect={onRename}>
+      <DropdownMenu.Item className={workspaceMenuItemClass} disabled={!activeWorkspace} onSelect={onRename}>
         <Pencil size={14} />
         {t("app.workspace.renameCurrent")}
       </DropdownMenu.Item>
       <DropdownMenu.Item
-        className={itemClass}
+        className={workspaceMenuItemClass}
         disabled={!activeWorkspace}
         onSelect={onEnvironment}
       >
         <ShieldCheck size={14} />
         {t("app.workspace.changeEnvironment")}
-      </DropdownMenu.Item>
-      <DropdownMenu.Item
-        className={cn(
-          itemClass,
-          "text-[var(--u-color-danger-text)] hover:bg-[var(--u-color-danger-soft)] focus:bg-[var(--u-color-danger-soft)]",
-        )}
-        disabled={!activeWorkspace || activeWorkspace.isDefault || workspaceCount <= 1}
-        onSelect={onDelete}
-      >
-        <Trash2 size={14} />
-        {t("app.workspace.deleteCurrent")}
       </DropdownMenu.Item>
     </>
   );

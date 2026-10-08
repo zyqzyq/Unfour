@@ -3,6 +3,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { FeedbackProvider } from "@unfour/ui";
 import { useWorkspaceStore } from "@unfour/workspace-core";
+import { WorkspaceBundleExchangeProvider } from "@unfour/workspace-local";
 import { AppTitleBar } from "./components/AppTitleBar";
 import { DesktopOverlays } from "./components/DesktopOverlays";
 import { DesktopStatusBar } from "./components/DesktopStatusBar";
@@ -63,6 +64,7 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
     [extensionContext, layoutControls, StatusBarEnd],
   );
   return <FeedbackProvider>
+    <WorkspaceBundleExchangeProvider onImported={handleActivateWorkspace}>
     <AppShell
       activityBar={<ModuleActivityBar
         activeKind={variableManagerOpen ? null : activeTab.kind}
@@ -137,6 +139,7 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
       commandPaletteOpen={commandPaletteOpen}
       onCommandPaletteOpenChange={setCommandPaletteOpen}
     />
+    </WorkspaceBundleExchangeProvider>
   </FeedbackProvider>;
 }
 

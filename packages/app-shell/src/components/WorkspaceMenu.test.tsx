@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { Workspace } from "@unfour/command-client";
+import { WorkspaceBundleExchangeProvider } from "@unfour/workspace-local";
 import type { DesktopAppExtensionContext } from "../extensions";
 import { WorkspaceMenu } from "./WorkspaceMenu";
 
@@ -42,7 +43,7 @@ function createWrapper() {
     defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
   });
   return function Wrapper({ children }: { children: ReactNode }) {
-    return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    return <QueryClientProvider client={client}><WorkspaceBundleExchangeProvider onImported={vi.fn()}>{children}</WorkspaceBundleExchangeProvider></QueryClientProvider>;
   };
 }
 
@@ -65,7 +66,7 @@ describe("WorkspaceMenu", () => {
     });
 
     expect(await screen.findByText("New workspace")).toBeTruthy();
-    expect(screen.getAllByRole("separator")).toHaveLength(1);
+    expect(screen.getAllByRole("separator")).toHaveLength(3);
   });
 
   it("keeps the trigger width fixed while workspace names change", () => {
@@ -347,7 +348,7 @@ describe("WorkspaceMenu extensions", () => {
     expect(runDisabled).not.toHaveBeenCalled();
   });
 
-  it("renders footer actions in a final group and runs them with extension context", async () => {
+  it("groups global extension actions with create/import and keeps delete after current actions", async () => {
     const active = workspace("Default Workspace");
     const context = extensionContext(active);
     const run = vi.fn();
@@ -359,6 +360,7 @@ describe("WorkspaceMenu extensions", () => {
         workspaceMenuFooterActions={[
           { id: "test.import", label: "Import workspace", run },
         ]}
+        workspaceActions={[{ id: "test.sync", label: "Cloud Sync", run: vi.fn() }]}
         workspaces={[active]}
       />,
       { wrapper: createWrapper() },
@@ -368,7 +370,13 @@ describe("WorkspaceMenu extensions", () => {
       button: 0,
       ctrlKey: false,
     });
-    fireEvent.click(await screen.findByText("Import workspace"));
+    await screen.findByText("Import workspace");
+    const items = screen.getAllByRole("menuitem").map((item) => item.textContent);
+    expect(items.slice(1)).toEqual([
+      "New workspace", "Import Workspace from File…", "Import workspace",
+      "Export Current Workspace…", "Rename current", "Change safety tier", "Cloud Sync", "Delete current",
+    ]);
+    fireEvent.click(screen.getByText("Import workspace"));
 
     expect(run).toHaveBeenCalledWith(context);
   });
