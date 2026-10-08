@@ -1,3 +1,4 @@
+mod filename;
 mod remap;
 mod safety;
 mod schema;
@@ -12,6 +13,11 @@ use unfour_core::{domain::*, models::*, AppError, AppResult};
 use unfour_flow_engine::FlowService;
 
 pub const MAX_BUNDLE_BYTES: usize = 32 * 1024 * 1024;
+#[derive(Debug, Clone)]
+pub struct WorkspaceBundleExportArtifact {
+    pub content: String,
+    pub suggested_file_name: String,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceBundleIssue {
@@ -62,6 +68,15 @@ fn parse(content: &str) -> AppResult<WorkspaceBundle> {
 }
 impl CommandBus {
     pub async fn workspace_bundle_export(&self, workspace: String) -> AppResult<String> {
+        Ok(self
+            .workspace_bundle_export_artifact(workspace)
+            .await?
+            .content)
+    }
+    pub async fn workspace_bundle_export_artifact(
+        &self,
+        workspace: String,
+    ) -> AppResult<WorkspaceBundleExportArtifact> {
         let mut tx = self.db.pool().begin().await?;
         let mut snapshots = self
             .workspace
@@ -150,7 +165,10 @@ impl CommandBus {
         if content.len() > MAX_BUNDLE_BYTES {
             return Err(AppError::Validation("WORKSPACE_BUNDLE_TOO_LARGE".into()));
         }
-        Ok(content)
+        Ok(WorkspaceBundleExportArtifact {
+            content,
+            suggested_file_name: filename::suggested_file_name(&bundle.workspace.name),
+        })
     }
     pub async fn workspace_bundle_preview(
         &self,

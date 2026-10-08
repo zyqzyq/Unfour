@@ -3,6 +3,22 @@
 Date: 2026-10-01. Scope: `unfour-workspace` V1 create-new import/export.
 See [format and boundaries](../architecture/workspace-bundle.md).
 
+## Export filename verification — 2026-10-08
+
+The native save adapter now uses `<Workspace-name>.unfour-workspace.json` from
+the same export snapshot as the content. Filename sanitization retains Unicode,
+replaces whitespace/unsafe characters, bounds the stem length, and falls back
+to `workspace` for empty or Windows-reserved stems.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| `cargo test -p unfour-command-bus workspace_bundle` | PASS, 10 tests | Selected Workspace name, Unicode/path characters, reserved/empty stems and long names, plus existing bundle security/import regressions |
+| `cargo check -p unfour-app --features ssh-native` | PASS | Export artifact reaches the native save adapter without changing the frontend command contract |
+| `cargo fmt -p unfour-command-bus -p unfour-app --check` / `git diff --check` | PASS | Changed Rust files and diff formatting |
+
+NOT VERIFIED: manual native Windows save dialog. Checks use disposable in-memory
+Workspaces; no real Workspace data was changed.
+
 ## Grouped UI verification — 2026-10-08
 
 The switcher now groups new/import and global extension actions separately from

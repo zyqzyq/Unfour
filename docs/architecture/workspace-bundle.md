@@ -58,6 +58,10 @@ The switcher groups creation/import separately from current-Workspace actions
 (export, rename, safety tier, and extensions such as Cloud Sync), with deletion
 last. Export confirmation identifies the selected Workspace and retains that
 target while the dialog is open. Import always creates and activates a new copy.
+The save dialog defaults to `<Workspace-name>.unfour-workspace.json`, using the
+name from the exported snapshot. Whitespace and unsafe filename characters become
+hyphens; Unicode names are preserved within a bounded filename length. Empty or
+Windows-reserved stems fall back to `workspace`.
 
 CommandBus coordinates owning Workspace/API/SSH/Database/Flow services. Export
 reads all live records through their services on one SQLite read transaction.

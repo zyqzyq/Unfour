@@ -37,6 +37,27 @@ async fn count(bus: &CommandBus, table: &str) -> i64 {
         .unwrap()
 }
 #[tokio::test]
+async fn bundle_export_file_name_uses_the_exported_workspace_name() {
+    let bus = bus().await;
+    let selected = bus
+        .create_workspace("客户 / API: v2?".into())
+        .await
+        .unwrap();
+    bus.create_workspace("Other Workspace".into())
+        .await
+        .unwrap();
+    let artifact = bus
+        .workspace_bundle_export_artifact(selected.id)
+        .await
+        .unwrap();
+    let bundle: Value = serde_json::from_str(&artifact.content).unwrap();
+    assert_eq!(bundle["workspace"]["name"], "客户 / API: v2?");
+    assert_eq!(
+        artifact.suggested_file_name,
+        "客户-API-v2.unfour-workspace.json"
+    );
+}
+#[tokio::test]
 async fn bundle_remaps_every_resource_and_flow_edge_on_repeated_import() {
     let bus = bus().await;
     let input = fixture().to_string();

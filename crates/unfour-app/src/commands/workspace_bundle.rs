@@ -56,14 +56,14 @@ pub async fn workspace_bundle_export(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> AppResult<ApiCollectionExportResult> {
-    let content = state
+    let artifact = state
         .command_bus
-        .workspace_bundle_export(workspace_id)
+        .workspace_bundle_export_artifact(workspace_id)
         .await?;
     let Some(file) = app
         .dialog()
         .file()
-        .set_file_name("workspace.unfour-workspace.json")
+        .set_file_name(&artifact.suggested_file_name)
         .add_filter("Unfour Workspace", &["json"])
         .blocking_save_file()
     else {
@@ -72,6 +72,6 @@ pub async fn workspace_bundle_export(
     let path = file
         .into_path()
         .map_err(|_| AppError::Validation("invalid export path".into()))?;
-    std::fs::write(path, content)?;
+    std::fs::write(path, artifact.content)?;
     Ok(ApiCollectionExportResult { saved: true })
 }

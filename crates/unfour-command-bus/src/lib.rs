@@ -79,4 +79,6 @@ pub struct CommandBus {
 mod tests;
 
 mod workspace_bundle;
-pub use workspace_bundle::{WorkspaceBundleIssue, WorkspaceBundlePreview};
+pub use workspace_bundle::{
+    WorkspaceBundleExportArtifact, WorkspaceBundleIssue, WorkspaceBundlePreview,
+};
