@@ -146,7 +146,9 @@ fn initialize_storage_dir(storage_dir: &Path) -> String {
         .execute(db.pool())
         .await
         .expect("create hook effects table");
-        bus.list_workspaces().await.unwrap().active_workspace_id
+        let workspace_id = bus.list_workspaces().await.unwrap().active_workspace_id;
+        db.pool().close().await;
+        workspace_id
     })
 }
 
@@ -169,6 +171,7 @@ fn read_counts(storage_dir: &Path) -> (i64, i64) {
             .fetch_one(db.pool())
             .await
             .unwrap();
+        db.pool().close().await;
         (environments, hook_effects)
     })
 }
@@ -369,10 +372,13 @@ fn adapter_extensions_observe_environment_create_update_and_delete() {
         let db = LocalDb::connect_path(storage_dir.join(unfour_command_bus::DEFAULT_DATABASE_FILE))
             .await
             .unwrap();
-        sqlx::query_as("SELECT DISTINCT command_name FROM hook_effects ORDER BY command_name")
-            .fetch_all(db.pool())
-            .await
-            .unwrap()
+        let commands =
+            sqlx::query_as("SELECT DISTINCT command_name FROM hook_effects ORDER BY command_name")
+                .fetch_all(db.pool())
+                .await
+                .unwrap();
+        db.pool().close().await;
+        commands
     });
     assert_eq!(
         commands,
