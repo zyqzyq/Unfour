@@ -13,6 +13,11 @@ impl ApiClientService {
         };
         let (target, key, value) = match auth["type"].as_str().unwrap_or("none") {
             "none" => return Ok(input),
+            "bearer" if field("token")?.trim().is_empty() => return Ok(input),
+            "basic" if field("username")?.is_empty() && field("password")?.is_empty() => {
+                return Ok(input)
+            }
+            "api-key" if field("key")?.trim().is_empty() => return Ok(input),
             "bearer" => (
                 "header",
                 "Authorization".to_string(),
@@ -35,7 +40,7 @@ impl ApiClientService {
             }
             "api-key" => (
                 auth["addTo"].as_str().unwrap_or("header"),
-                field("key")?.to_string(),
+                field("key")?.trim().to_string(),
                 field("value")?.to_string(),
             ),
             _ => return Err(AppError::Validation("API_AUTH_UNSUPPORTED".into())),
@@ -48,7 +53,7 @@ impl ApiClientService {
         if !entries.iter().any(|item| {
             item.enabled
                 && if target == "header" {
-                    item.key.eq_ignore_ascii_case(&key)
+                    item.key.trim().eq_ignore_ascii_case(&key)
                 } else {
                     item.key == key
                 }

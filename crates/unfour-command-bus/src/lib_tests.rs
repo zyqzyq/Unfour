@@ -5,6 +5,8 @@ mod flow_safety;
 #[path = "lib_tests/multipart.rs"]
 mod multipart;
 use super::*;
+#[path = "lib_tests/api_auth.rs"]
+mod api_auth;
 #[path = "lib_tests/api_environment_override.rs"]
 mod api_environment_override;
 #[path = "lib_tests/ephemeral_lifecycle.rs"]

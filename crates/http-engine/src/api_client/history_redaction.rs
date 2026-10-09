@@ -3,10 +3,6 @@ use unfour_core::redaction::{
     is_sensitive_key, redact_json_body, redact_sensitive_lines, REDACTED_VALUE,
 };
 
-/// Substring replacement is only safe for distinctive secrets. Structural
-/// redaction still covers short passwords, tokens, and auth headers by key.
-const MIN_SCRUB_CHARS: usize = 8;
-
 pub(super) struct SafeHistory {
     pub name: Option<String>,
     pub url: String,
@@ -22,7 +18,16 @@ pub(super) fn sanitize(
     response_headers: &[KeyValue],
     response_body: &str,
 ) -> AppResult<SafeHistory> {
-    let secrets = scrub_secrets(input)?;
+    sanitize_with_secrets(input, response_headers, response_body, &[])
+}
+
+pub(super) fn sanitize_with_secrets(
+    input: &ApiRequestInput,
+    response_headers: &[KeyValue],
+    response_body: &str,
+    variable_secrets: &[String],
+) -> AppResult<SafeHistory> {
+    let secrets = scrub_secrets(input, variable_secrets)?;
     let scrub = |value: &str| scrub_values(value, &secrets);
     Ok(SafeHistory {
         name: input.name.as_deref().map(&scrub),
@@ -40,21 +45,43 @@ pub(super) fn sanitize(
     })
 }
 
-fn scrub_secrets(input: &ApiRequestInput) -> AppResult<Vec<String>> {
+fn scrub_secrets(input: &ApiRequestInput, variable_secrets: &[String]) -> AppResult<Vec<String>> {
     let mut secrets = runtime_request_secret_values(input)?;
-    secrets.retain(|value| {
-        let trimmed = value.trim();
-        trimmed.chars().count() >= MIN_SCRUB_CHARS && !REDACTED_VALUE.contains(trimmed)
-    });
-    secrets.sort_by_key(|value| std::cmp::Reverse(value.len()));
-    secrets.dedup();
+    secrets.extend(variable_secrets.iter().cloned());
+    secrets.retain(|value| !value.is_empty() && value != REDACTED_VALUE);
     Ok(secrets)
 }
 
-fn scrub_values(value: &str, secrets: &[String]) -> String {
+pub(super) fn scrub_values(value: &str, secrets: &[String]) -> String {
+    let mut variants = Vec::new();
+    for secret in secrets
+        .iter()
+        .filter(|secret| !secret.is_empty() && secret.as_str() != REDACTED_VALUE)
+    {
+        let escaped = serde_json::to_string(secret).unwrap_or_default();
+        let encoded = reqwest::Url::parse_with_params("http://localhost/", &[("v", secret)])
+            .ok()
+            .and_then(|url| url.query().map(|q| q.trim_start_matches("v=").to_owned()))
+            .unwrap_or_default();
+        variants.extend([
+            secret.clone(),
+            escaped.trim_matches('"').to_owned(),
+            encoded.clone(),
+            encoded.replace('+', "%20"),
+        ]);
+    }
+    variants.retain(|value| !value.is_empty());
+    variants.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
+    variants.dedup();
     let mut value = value.to_owned();
-    for secret in secrets {
-        value = value.replace(secret, REDACTED_VALUE);
+    for secret in variants {
+        // Preserve markers inserted by earlier replacements, including when a
+        // one-character secret appears in the marker itself.
+        value = value
+            .split(REDACTED_VALUE)
+            .map(|part| part.replace(&secret, REDACTED_VALUE))
+            .collect::<Vec<_>>()
+            .join(REDACTED_VALUE);
     }
     value
 }
@@ -210,4 +237,27 @@ pub(super) fn sanitize_detail(row: &mut ApiHistoryDetail) -> AppResult<()> {
         .as_ref()
         .map(|_| safe.response_body);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn short_escaped_and_encoded_secrets_are_scrubbed_without_corrupting_markers() {
+        for secret in ["a", "red", "x y", "quote\"slash\\"] {
+            let escaped = serde_json::to_string(secret).unwrap();
+            let encoded = reqwest::Url::parse_with_params("http://localhost/", &[("v", secret)])
+                .unwrap()
+                .query()
+                .unwrap()
+                .trim_start_matches("v=")
+                .to_owned();
+            let input = format!(
+                "{secret}|{}|{encoded}|<redacted>",
+                escaped.trim_matches('"')
+            );
+            let safe = scrub_values(&input, &[secret.into()]);
+            assert_eq!(safe, "<redacted>|<redacted>|<redacted>|<redacted>");
+        }
+    }
 }

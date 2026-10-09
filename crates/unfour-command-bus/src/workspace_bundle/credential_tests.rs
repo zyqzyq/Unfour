@@ -1,6 +1,6 @@
 use super::*;
-use crate::{CommandBusExtensions, TransactionalCommandHook};
-use std::sync::{Arc, Mutex};
+use crate::CommandBusExtensions;
+use std::sync::Arc;
 
 const PASSWORD: &str = "regression-backup-password";
 fn options() -> WorkspaceBundleOptions {
@@ -49,72 +49,19 @@ async fn secret_variable(bus: &CommandBus, workspace: &str) -> WorkspaceVariable
         .find(|v| v.is_secret)
         .unwrap()
 }
-async fn read(bus: &CommandBus, workspace: &str, value: &str) -> AppResult<String> {
-    bus.secret_store
-        .read_secret(
-            workspace.into(),
-            value
-                .strip_prefix("@unfour-secret:")
-                .unwrap_or(value)
-                .into(),
-        )
-        .await
-}
 async fn entries(bus: &CommandBus, workspace: &str) -> Vec<String> {
     sqlx::query_scalar("SELECT credential_ref FROM workspace_bundle_credential_journal WHERE workspace_id=? ORDER BY credential_ref")
         .bind(workspace).fetch_all(bus.db.pool()).await.unwrap()
 }
 
-struct CaptureFailure(Arc<Mutex<Vec<String>>>);
-impl TransactionalCommandHook for CaptureFailure {
-    fn on_mutations<'a>(
-        &'a self,
-        db: &'a mut sqlx::SqliteConnection,
-        _: &'a CommandContext,
-        _: &'a [DomainMutation],
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = AppResult<()>> + Send + 'a>> {
-        Box::pin(async move {
-            *self.0.lock().unwrap() = sqlx::query_scalar(
-                "SELECT credential_ref FROM workspace_bundle_credential_journal",
-            )
-            .fetch_all(db)
-            .await?;
-            Err(AppError::Validation("injected finalization failure".into()))
-        })
-    }
-}
-
 #[tokio::test]
-async fn failed_import_removes_every_staged_keychain_entry() {
-    let mut bus = CommandBus::ephemeral().await.unwrap();
-    let content = backup(&bus).await;
-    let plaintext = unfour_secret_store::backup::decrypt(&content, PASSWORD).unwrap();
-    let payload: Value = serde_json::from_slice(&plaintext).unwrap();
-    let expected = payload["secrets"].as_array().unwrap().len();
-    assert!(expected >= 2);
-    let captured = Arc::new(Mutex::new(Vec::new()));
-    bus.extensions = CommandBusExtensions::new(vec![Arc::new(CaptureFailure(captured.clone()))]);
-    assert!(bus
-        .workspace_bundle_import_with_options(content, "Failed".into(), options())
-        .await
-        .is_err());
-    let references = captured.lock().unwrap().clone();
-    assert_eq!(references.len(), expected);
-    for reference in references {
-        let workspace = reference.split(':').nth(1).unwrap();
-        assert!(read(&bus, workspace, &reference).await.is_err());
-        assert!(entries(&bus, workspace).await.is_empty());
-    }
-}
-
-#[tokio::test]
-async fn variable_rotation_rolls_back_keychain_and_database_on_hook_failure() {
+async fn sqlite_secret_edits_clear_flags_and_rollback_keep_normal_semantics() {
     let mut bus = CommandBus::ephemeral().await.unwrap();
     let workspace = imported(&bus).await;
     let old = secret_variable(&bus, &workspace.id).await;
-    let before = entries(&bus, &workspace.id).await;
-    let captured = Arc::new(Mutex::new(Vec::new()));
-    bus.extensions = CommandBusExtensions::new(vec![Arc::new(CaptureFailure(captured.clone()))]);
+    assert_eq!(old.value, "original-secret");
+    assert!(entries(&bus, &workspace.id).await.is_empty());
+    bus.extensions = CommandBusExtensions::new(vec![Arc::new(tests::FailCommit)]);
     assert!(bus
         .workspace_variable_update(
             workspace.id.clone(),
@@ -124,249 +71,200 @@ async fn variable_rotation_rolls_back_keychain_and_database_on_hook_failure() {
         .await
         .is_err());
     assert_eq!(secret_variable(&bus, &workspace.id).await.value, old.value);
-    assert_eq!(
-        read(&bus, &workspace.id, &old.value).await.unwrap(),
-        "original-secret"
-    );
-    let created: Vec<_> = captured
-        .lock()
-        .unwrap()
-        .iter()
-        .filter(|r| !before.contains(r))
-        .cloned()
-        .collect();
-    assert_eq!(created.len(), 1);
-    assert!(read(&bus, &workspace.id, &created[0]).await.is_err());
-    assert_eq!(entries(&bus, &workspace.id).await, before);
-}
-
-#[tokio::test]
-async fn rotation_clear_delete_and_bulk_failure_reclaim_only_unused_references() {
-    let bus = CommandBus::ephemeral().await.unwrap();
-    let workspace = imported(&bus).await;
-    let old = secret_variable(&bus, &workspace.id).await;
-    let mut bad = input(&old, "bulk-failure");
-    bad.id = Some("missing-variable".into());
-    bad.key = "other".into();
-    let before = entries(&bus, &workspace.id).await;
-    assert!(bus
-        .workspace_variables_replace(
-            workspace.id.clone(),
-            vec![input(&old, "failed-batch-secret"), bad]
-        )
-        .await
-        .is_err());
-    assert_eq!(entries(&bus, &workspace.id).await, before);
-    assert_eq!(
-        read(&bus, &workspace.id, &old.value).await.unwrap(),
-        "original-secret"
-    );
+    bus.extensions = CommandBusExtensions::default();
+    let mut change = input(&old, "replacement-secret");
+    change.is_secret = true;
     let changed = bus
-        .workspace_variable_update(
-            workspace.id.clone(),
-            old.id.clone(),
-            input(&old, "rotated-secret"),
-        )
+        .workspace_variable_update(workspace.id.clone(), old.id.clone(), change)
         .await
         .unwrap();
-    assert!(changed.is_secret); // An imported handle cannot be downgraded to plaintext.
-    assert_ne!(old.value, changed.value);
-    assert!(read(&bus, &workspace.id, &old.value).await.is_err());
-    assert_eq!(
-        read(&bus, &workspace.id, &changed.value).await.unwrap(),
-        "rotated-secret"
-    );
+    assert_eq!(changed.value, "replacement-secret");
+    assert!(changed.is_secret);
     let cleared = bus
         .workspace_variable_update(workspace.id.clone(), old.id.clone(), input(&changed, ""))
         .await
         .unwrap();
-    assert_eq!(cleared.value, "");
-    assert!(cleared.is_secret);
-    assert!(read(&bus, &workspace.id, &changed.value).await.is_err());
-    let repopulated = bus
-        .workspace_variable_update(
-            workspace.id.clone(),
-            old.id.clone(),
-            input(&cleared, "repopulated-secret"),
-        )
-        .await
-        .unwrap();
-    assert_eq!(
-        read(&bus, &workspace.id, &repopulated.value).await.unwrap(),
-        "repopulated-secret"
-    );
-    bus.workspace_variable_delete(workspace.id.clone(), old.id.clone())
-        .await
-        .unwrap();
-    assert!(read(&bus, &workspace.id, &repopulated.value).await.is_err());
-    // Replacing a collection with an empty list also reclaims attached handles.
-    let environment = bus
-        .workspace_environments_list(workspace.id.clone())
-        .await
-        .unwrap()
-        .remove(0);
-    let reference = environment.variables[0].value.clone();
-    bus.workspace_environment_variables_replace(workspace.id.clone(), environment.id, vec![])
-        .await
-        .unwrap();
-    assert!(read(&bus, &workspace.id, &reference).await.is_err());
-}
-
-#[tokio::test]
-async fn environment_rotation_failure_metadata_and_cascade_delete_are_safe() {
-    let mut bus = CommandBus::ephemeral().await.unwrap();
-    let workspace = imported(&bus).await;
+    assert!(cleared.value.is_empty());
+    assert!(!cleared.is_secret); // Flags remain editable, as before V2.
+    assert!(entries(&bus, &workspace.id).await.is_empty());
     let env = bus
         .workspace_environments_list(workspace.id.clone())
         .await
         .unwrap()
         .remove(0);
-    let old = &env.variables[0];
-    let make = |value: &str| WorkspaceVariableInput {
-        id: Some(old.id.clone()),
-        key: old.key.clone(),
-        value: value.into(),
-        is_secret: true,
-        is_enabled: true,
-        description: Some("metadata edit".into()),
-        sort_order: 0,
-    };
-    let before = entries(&bus, &workspace.id).await;
-    // Invalid environment metadata fails after staging the first replacement.
+    assert_eq!(env.variables[0].value, "environment-secret");
+    let mut var = input(&old, "new-env-secret");
+    var.id = Some(env.variables[0].id.clone());
+    var.key = env.variables[0].key.clone();
+    var.is_secret = true;
     assert!(bus
         .workspace_environment_update(
             workspace.id.clone(),
             env.id.clone(),
             "".into(),
-            vec![make("failed-env-secret")]
+            vec![var.clone()]
         )
         .await
         .is_err());
-    assert_eq!(entries(&bus, &workspace.id).await, before);
     assert_eq!(
-        read(&bus, &workspace.id, &old.value).await.unwrap(),
+        bus.workspace_environments_list(workspace.id.clone())
+            .await
+            .unwrap()[0]
+            .variables[0]
+            .value,
         "environment-secret"
     );
     let updated = bus
         .workspace_environment_variable_update(
             workspace.id.clone(),
-            env.id.clone(),
-            old.id.clone(),
-            make("new-env-secret"),
+            env.id,
+            var.id.clone().unwrap(),
+            var,
         )
         .await
         .unwrap();
-    assert!(read(&bus, &workspace.id, &old.value).await.is_err());
-    assert_eq!(
-        read(&bus, &workspace.id, &updated.value).await.unwrap(),
-        "new-env-secret"
-    );
-    bus.extensions = CommandBusExtensions::new(vec![Arc::new(tests::FailCommit)]);
-    assert!(bus
-        .workspace_environment_delete(workspace.id.clone(), env.id.clone())
-        .await
-        .is_err());
-    assert_eq!(
-        read(&bus, &workspace.id, &updated.value).await.unwrap(),
-        "new-env-secret"
-    );
-    bus.extensions = CommandBusExtensions::default();
-    bus.workspace_environment_delete(workspace.id.clone(), env.id)
-        .await
-        .unwrap();
-    assert!(read(&bus, &workspace.id, &updated.value).await.is_err());
-    let remaining = entries(&bus, &workspace.id).await;
-    bus.delete_workspace(workspace.id.clone()).await.unwrap();
-    for reference in remaining {
-        assert!(read(&bus, &workspace.id, &reference).await.is_err());
-    }
-    assert!(entries(&bus, &workspace.id).await.is_empty());
+    assert_eq!(updated.value, "new-env-secret");
+    assert!(updated.is_secret);
 }
 
 #[tokio::test]
-async fn repeated_imports_and_shared_api_references_have_independent_lifetimes() {
+async fn repeated_imports_keep_sqlite_values_and_have_independent_records() {
     let bus = CommandBus::ephemeral().await.unwrap();
     let content = backup(&bus).await;
     let first = bus
-        .workspace_bundle_import_with_options(content.clone(), "Copy".into(), options())
+        .workspace_bundle_import_with_options(content.clone(), "First".into(), options())
         .await
         .unwrap();
     let second = bus
-        .workspace_bundle_import_with_options(content, "Copy".into(), options())
+        .workspace_bundle_import_with_options(content, "Second".into(), options())
         .await
         .unwrap();
-    let old = secret_variable(&bus, &first.id).await;
-    let independent = secret_variable(&bus, &second.id).await;
-    assert_ne!(old.value, independent.value);
-    let request: String = sqlx::query_scalar("SELECT id FROM api_requests WHERE workspace_id=?")
-        .bind(&first.id)
-        .fetch_one(bus.db.pool())
-        .await
-        .unwrap();
-    // Reuse a variable handle in a request: deleting its original variable
-    // must retain it until the last runtime reference disappears.
-    let token = format!("{{{{ {} }}}}", old.value);
-    sqlx::query("UPDATE api_requests SET auth_json=? WHERE id=?")
-        .bind(json!({"type":"bearer","token":token}).to_string())
-        .bind(&request)
-        .execute(bus.db.pool())
-        .await
-        .unwrap();
-    bus.workspace_variable_delete(first.id.clone(), old.id)
-        .await
-        .unwrap();
+    let a = secret_variable(&bus, &first.id).await;
+    let b = secret_variable(&bus, &second.id).await;
+    assert_ne!(a.id, b.id);
+    assert_eq!(a.value, b.value);
+    bus.workspace_variable_delete(first.id, a.id).await.unwrap();
     assert_eq!(
-        read(&bus, &first.id, &old.value).await.unwrap(),
+        bus.workspace
+            .resolve_variables(&second.id, None, "{{access_token}}")
+            .await
+            .unwrap(),
         "original-secret"
     );
-    bus.delete_api_request(first.id.clone(), request)
-        .await
-        .unwrap();
-    assert!(read(&bus, &first.id, &old.value).await.is_err());
-    assert_eq!(
-        read(&bus, &second.id, &independent.value).await.unwrap(),
-        "original-secret"
-    );
+    assert!(entries(&bus, &second.id).await.is_empty());
 }
 
+// Spawned by the process-concurrency regression below. The child has its own
+// pool and CommandBus, just like desktop startup alongside an MCP writer.
 #[tokio::test]
-async fn interrupted_cleanup_is_durable_and_legacy_live_handles_are_adopted() {
-    let mut bus = CommandBus::ephemeral().await.unwrap();
-    let workspace = imported(&bus).await;
-    let old = secret_variable(&bus, &workspace.id).await;
-    let store = bus.secret_store.clone();
-    // Simulate a keychain provider that cannot delete this service's handles.
-    bus.secret_store = unfour_secret_store::SecretStore::in_memory("unavailable-provider");
-    bus.workspace_variable_delete(workspace.id.clone(), old.id)
+async fn recovery_child() {
+    let Ok(path) = std::env::var("UNFOUR_TEST_RECOVERY_DB") else {
+        return;
+    };
+    let signal = std::env::var("UNFOUR_TEST_RECOVERY_SIGNAL").unwrap();
+    let db = unfour_local_storage::LocalDb::connect_existing_path(path)
         .await
         .unwrap();
-    assert!(entries(&bus, &workspace.id)
-        .await
-        .iter()
-        .any(|r| old.value.ends_with(r)));
-    bus.secret_store = store;
-    bus.recover_bundle_credentials().await.unwrap();
-    assert!(read(&bus, &workspace.id, &old.value).await.is_err());
-    let env = bus
-        .workspace_environments_list(workspace.id.clone())
-        .await
-        .unwrap()
-        .remove(0);
-    let reference = env.variables[0].value.clone();
-    sqlx::query("DELETE FROM workspace_bundle_credential_journal WHERE workspace_id=?")
-        .bind(&workspace.id)
-        .execute(bus.db.pool())
+    std::fs::write(format!("{signal}.ready"), "ready").unwrap();
+    let bus = CommandBus::from_db(db.clone()).await.unwrap();
+    let staged: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM workspace_bundle_credential_journal WHERE state='staged'",
+    )
+    .fetch_one(bus.db.pool())
+    .await
+    .unwrap();
+    assert_eq!(staged, 0);
+    std::fs::write(format!("{signal}.done"), "done").unwrap();
+    db.pool().close().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn primary_recovery_waits_for_a_satellite_staging_writer_in_another_process() {
+    let dir = std::env::temp_dir().join(format!(
+        "unfour-credential-race-{}",
+        unfour_core::id::new_id()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("test.sqlite");
+    let signal = dir.join("recovery");
+    let db = unfour_local_storage::LocalDb::connect_path(&path)
         .await
         .unwrap();
-    bus.recover_bundle_credentials().await.unwrap();
+    db.migrate().await.unwrap();
+    let store = unfour_secret_store::SecretStore::in_memory("unfour-test");
+    let bus = CommandBus::from_db_with_secret_store(db.clone(), store.clone())
+        .await
+        .unwrap();
+    let workspace = bus
+        .workspace_bundle_import(tests::fixture().to_string(), "MCP writer".into())
+        .await
+        .unwrap();
+    let guard = bus.credential_stage_guard().await.unwrap();
+    let reference = bus
+        .stage_connection_credential(&workspace.id, None, "ssh-password", "live-mcp-password")
+        .await
+        .unwrap();
+    let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "workspace_bundle::credential_tests::recovery_child",
+            "--nocapture",
+        ])
+        .env("UNFOUR_TEST_RECOVERY_DB", &path)
+        .env("UNFOUR_TEST_RECOVERY_SIGNAL", &signal)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let ready = signal.with_extension("ready");
+    for _ in 0..200 {
+        if ready.exists() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
+    assert!(ready.exists(), "child did not start");
+    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    assert!(child.try_wait().unwrap().is_none());
+    assert!(!signal.with_extension("done").exists());
+    assert_eq!(entries(&bus, &workspace.id).await, vec![reference.clone()]);
+    let mut tx = db.pool().begin_with("BEGIN IMMEDIATE").await.unwrap();
+    sqlx::query(
+        "UPDATE connections SET credential_ref=? WHERE workspace_id=? AND connection_type='ssh'",
+    )
+    .bind(&reference)
+    .bind(&workspace.id)
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    bus.workspace
+        .attach_bundle_credentials_on(&mut tx, &workspace.id)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    drop(guard);
+    for _ in 0..200 {
+        if child.try_wait().unwrap().is_some() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
+    if child.try_wait().unwrap().is_none() {
+        child.kill().unwrap();
+        panic!("recovery did not complete");
+    }
+    assert!(child.wait().unwrap().success());
+    assert!(signal.with_extension("done").exists());
     assert_eq!(
-        read(&bus, &workspace.id, &reference).await.unwrap(),
-        "environment-secret"
+        store
+            .read_secret(workspace.id.clone(), reference.clone())
+            .await
+            .unwrap(),
+        "live-mcp-password"
     );
-    bus.workspace_environment_delete(workspace.id.clone(), env.id)
-        .await
-        .unwrap();
-    assert!(read(&bus, &workspace.id, &reference).await.is_err());
+    assert_eq!(entries(&bus, &workspace.id).await, vec![reference]);
+    db.pool().close().await;
+    std::fs::remove_dir_all(&dir).unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -401,8 +299,7 @@ async fn encrypted_backup_is_one_snapshot_during_concurrent_edits() {
                 .begin_with("BEGIN IMMEDIATE")
                 .await
                 .unwrap();
-            let reference =
-                writer_store.make_ref(&id, "workspace-variable", &unfour_core::id::new_id());
+            let reference = writer_store.make_ref(&id, "ssh-password", &unfour_core::id::new_id());
             writer_store
                 .rotate_credential(id.clone(), reference.clone(), format!("secret-{epoch}"))
                 .await
@@ -414,7 +311,9 @@ async fn encrypted_backup_is_one_snapshot_during_concurrent_edits() {
                 .await
                 .unwrap();
             sqlx::query("UPDATE workspace_variables SET value=CASE WHEN is_secret=1 THEN ? ELSE ? END WHERE workspace_id=?")
-                .bind(format!("@unfour-secret:{reference}")).bind(format!("https://epoch.test/{epoch}")).bind(&id).execute(&mut *tx).await.unwrap();
+                .bind(format!("secret-{epoch}")).bind(format!("https://epoch.test/{epoch}")).bind(&id).execute(&mut *tx).await.unwrap();
+            sqlx::query("UPDATE connections SET credential_ref=? WHERE workspace_id=? AND connection_type='ssh'")
+                .bind(&reference).bind(&id).execute(&mut *tx).await.unwrap();
             sqlx::query("UPDATE api_requests SET auth_json=?,url=? WHERE workspace_id=?")
                 .bind(json!({"type":"bearer","token":format!("{{{{epoch_{epoch}}}}}")}).to_string())
                 .bind(format!("https://epoch.test?token=url-{epoch}"))

@@ -11,6 +11,20 @@ use unfour_core::{
 use super::trace_command;
 
 #[tauri::command]
+pub async fn connection_secret_reveal(
+    workspace_id: String,
+    connection_id: String,
+    connection_type: String,
+    credential_ref: String,
+    state: State<'_, AppState>,
+) -> AppResult<String> {
+    state
+        .command_bus
+        .reveal_connection_secret(workspace_id, connection_id, connection_type, credential_ref)
+        .await
+}
+
+#[tauri::command]
 pub async fn credential_create(
     input: CredentialCreateInput,
     state: State<'_, AppState>,

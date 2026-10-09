@@ -237,7 +237,7 @@ impl CommandBus {
                 if (safe.url.contains("<redacted>")
                     || safe.url.to_ascii_lowercase().contains("%3credacted%3e"))
                     && !raw.url.contains("<redacted>")
-                    && (!raw.url.contains("{{") || raw.url.starts_with("{{@unfour-secret:"))
+                    && !unfour_http_engine::is_bundle_variable_template(&raw.url)
                 {
                     secrets.push(BackupSecret {
                         kind: "api-secret".into(),
@@ -246,18 +246,6 @@ impl CommandBus {
                         pointer: String::new(),
                         value: raw.url,
                     });
-                }
-            }
-            for secret in secrets.iter_mut().filter(|s| s.kind == "api-secret") {
-                if let Some(reference) = secret
-                    .value
-                    .strip_prefix("{{@unfour-secret:")
-                    .and_then(|s| s.strip_suffix("}}"))
-                {
-                    secret.value = self
-                        .secret_store
-                        .read_secret(workspace.clone(), reference.into())
-                        .await?;
                 }
             }
         }
@@ -360,6 +348,7 @@ impl CommandBus {
         )
         .await?;
         tx.rollback().await?;
+        let _credential_guard = self.credential_stage_guard().await?;
         let workspace = plan.workspace_id.clone();
         let result = self.import_backup(plan, payload.secrets).await;
         if result.is_err() {
@@ -386,25 +375,35 @@ impl CommandBus {
         let workspace_id = plan.workspace_id.clone();
         let mut bindings = Vec::new();
         for secret in &secrets {
-            let reference =
+            let value = if matches!(
+                secret.kind.as_str(),
+                "ssh-password" | "ssh-key-passphrase" | "database-password"
+            ) {
+                let reference = self.secret_store.make_ref(
+                    &workspace_id,
+                    &secret.kind,
+                    &unfour_core::id::new_id(),
+                );
+                self.workspace
+                    .journal_bundle_credential(&workspace_id, &reference)
+                    .await?;
                 self.secret_store
-                    .make_ref(&workspace_id, &secret.kind, &unfour_core::id::new_id());
-            self.workspace
-                .journal_bundle_credential(&workspace_id, &reference)
-                .await?;
-            self.secret_store
-                .rotate_credential(
-                    workspace_id.clone(),
-                    reference.clone(),
-                    secret.value.clone(),
-                )
-                .await?;
+                    .rotate_credential(
+                        workspace_id.clone(),
+                        reference.clone(),
+                        secret.value.clone(),
+                    )
+                    .await?;
+                reference
+            } else {
+                secret.value.clone()
+            };
             for target in &secret.targets {
                 let (id, kind) = plan.ids.get(target).ok_or_else(invalid)?;
                 bindings.push((
                     id.clone(),
                     *kind,
-                    reference.clone(),
+                    Zeroizing::new(value.clone()),
                     secret.field.clone(),
                     secret.pointer.clone(),
                 ));
@@ -417,26 +416,16 @@ impl CommandBus {
             move |db| {
                 Box::pin(async move {
                     let mutations = bus.import_bundle_on(db, plan).await?;
-                    for (id, kind, reference, field, pointer) in bindings {
+                    for (id, kind, value, field, pointer) in bindings {
                         match kind {
                             "sshConnection" => {
                                 bus.ssh
-                                    .restore_bundle_credential_on(
-                                        db,
-                                        &workspace_id,
-                                        &id,
-                                        &reference,
-                                    )
+                                    .restore_bundle_credential_on(db, &workspace_id, &id, &value)
                                     .await?
                             }
                             "dbConnection" => {
                                 bus.database
-                                    .restore_bundle_credential_on(
-                                        db,
-                                        &workspace_id,
-                                        &id,
-                                        &reference,
-                                    )
+                                    .restore_bundle_credential_on(db, &workspace_id, &id, &value)
                                     .await?
                             }
                             "variable" | "environmentVariable" => {
@@ -446,19 +435,19 @@ impl CommandBus {
                                         &workspace_id,
                                         &id,
                                         kind,
-                                        &reference,
+                                        &value,
                                     )
                                     .await?
                             }
                             "request" => {
                                 bus.api_client
-                                    .restore_bundle_reference_on(
+                                    .restore_bundle_secret_on(
                                         db,
                                         &workspace_id,
                                         &id,
                                         &field,
                                         &pointer,
-                                        &reference,
+                                        &value,
                                     )
                                     .await?
                             }

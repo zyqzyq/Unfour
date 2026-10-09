@@ -5,7 +5,7 @@ use unfour_core::{AppError, AppResult};
 
 use super::helpers::{doomed_orphan_to_skip, validate_external_record, validate_owner};
 use crate::api_client::domain::secrets::{
-    restore_auth_json, restore_body, restore_key_values, restore_url,
+    restore_auth_json, restore_body, restore_request_key_values, restore_request_url,
 };
 use crate::api_client::domain::{collection_on, folder_on};
 use crate::api_client::helpers::normalize_entity_id;
@@ -78,15 +78,19 @@ pub(super) async fn upsert_request(
         &record.auth_json,
         current.as_ref().map(|request| request.auth_json.as_str()),
     );
-    let headers = restore_key_values(
+    let headers = restore_request_key_values(
         record.headers,
         current
             .as_ref()
             .map(|request| request.headers_json.as_str()),
+        &auth_json,
+        false,
     );
-    let query = restore_key_values(
+    let query = restore_request_key_values(
         record.query,
         current.as_ref().map(|request| request.query_json.as_str()),
+        &auth_json,
+        true,
     );
     let body = restore_body(
         record.body,
@@ -96,9 +100,10 @@ pub(super) async fn upsert_request(
     if record.body_kind == unfour_core::models::MULTIPART_BODY_KIND {
         unfour_core::models::parse_multipart_definition(body.as_deref())?;
     }
-    let url = restore_url(
+    let url = restore_request_url(
         &record.url,
         current.as_ref().map(|request| request.url.as_str()),
+        &auth_json,
     );
     let headers_json = serde_json::to_string(&headers)?;
     let query_json = serde_json::to_string(&query)?;

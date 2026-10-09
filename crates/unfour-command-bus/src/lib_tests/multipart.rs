@@ -30,7 +30,7 @@ async fn multipart_resolves_structured_text_and_keys_but_not_file_paths_or_names
         id: "f".into(),
         file_path: "C:/{{home}}/file.txt".into(),
     }];
-    let resolved = bus
+    let (resolved, _) = bus
         .resolve_api_request_input_for_environment(input, None)
         .await
         .unwrap();

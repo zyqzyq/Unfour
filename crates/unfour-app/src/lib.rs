@@ -434,6 +434,7 @@ macro_rules! generate_handlers {
             unfour_app::commands::credential_delete,
             unfour_app::commands::credential_inspect,
             unfour_app::commands::credential_rotate,
+            unfour_app::commands::connection_secret_reveal,
             unfour_app::commands::database_connection_delete,
             unfour_app::commands::database_connection_save,
             unfour_app::commands::database_catalogs_list,

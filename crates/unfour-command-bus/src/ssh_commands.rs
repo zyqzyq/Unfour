@@ -67,6 +67,9 @@ impl CommandBus {
         &self,
         mut input: SshConnectionInput,
     ) -> AppResult<SshConnection> {
+        let _credential_guard = self.credential_stage_guard().await?;
+        self.track_connection_credential_edit(&input.workspace_id, input.id.as_deref(), "ssh")
+            .await?;
         let staged = self.stage_ssh_secret_edit(&mut input).await?;
         let context = CommandContext::local("ssh.connection.save");
         let executor_context = context.clone();

@@ -124,6 +124,7 @@ impl SshService {
                 }
                 None => match existing_ref {
                     Some(existing) => (Some(existing), None),
+                    None if input.id.is_some() => (None, None),
                     None => {
                         return Err(AppError::Validation(
                             "password ssh auth requires a password".to_string(),
@@ -257,11 +258,13 @@ impl SshService {
         }
         let credential_ref = match storage.auth_method.as_str() {
             "none" => None,
-            "password" => Some(empty_to_none(input.credential_ref.clone()).ok_or_else(|| {
-                AppError::Validation(
-                    "password ssh auth requires a credential reference".to_string(),
-                )
-            })?),
+            "password" if input.id.is_none() => {
+                Some(empty_to_none(input.credential_ref.clone()).ok_or_else(|| {
+                    AppError::Validation(
+                        "password ssh auth requires a credential reference".to_string(),
+                    )
+                })?)
+            }
             _ => empty_to_none(input.credential_ref.clone()),
         };
         let now = Utc::now().to_rfc3339();

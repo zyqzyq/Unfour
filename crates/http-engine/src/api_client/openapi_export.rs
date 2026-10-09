@@ -44,7 +44,8 @@ impl ApiClientService {
             .await?
             .into_iter()
             .filter(|request| request.collection_id == collection_id)
-            .collect();
+            .map(super::domain::sanitize_saved_request)
+            .collect::<AppResult<Vec<_>>>()?;
         let histories = self
             .list_collection_export_histories(&workspace_id, &collection_id)
             .await?;

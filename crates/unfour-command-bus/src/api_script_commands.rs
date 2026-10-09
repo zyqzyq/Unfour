@@ -150,12 +150,12 @@ impl CommandBus {
             .iter()
             .map(key_value_from_script_variable)
             .collect();
-        let resolved_request = self
+        let (resolved_request, secrets) = self
             .resolve_api_request_input_for_environment(request, environment_id.as_deref())
             .await?;
         let response = match self
             .api_client
-            .send_cancellable(resolved_request.clone(), cancellation.clone())
+            .send_cancellable_with_secrets(resolved_request.clone(), cancellation.clone(), &secrets)
             .await
         {
             Ok(response) => response,
@@ -244,7 +244,6 @@ impl CommandBus {
                 Some(&response.history_id),
                 serde_json::json!({
                     "method": input.method,
-                    "url": unfour_core::redaction::redact_connection_string(&unfour_core::redaction::redact_url_query(&input.url)),
                     "status": response.status,
                     "preScriptStatus": pre.execution.status,
                     "postScriptStatus": post.execution.status,
@@ -270,7 +269,7 @@ impl CommandBus {
             .workspace
             .list_environments(workspace_id.to_string())
             .await?;
-        let mut selected = match environment_id {
+        let selected = match environment_id {
             Some(environment_id) => environments
                 .into_iter()
                 .find(|environment| environment.id == environment_id)
@@ -278,14 +277,6 @@ impl CommandBus {
                 .ok_or_else(|| AppError::NotFound("workspace environment".to_string())),
             None => Ok(None),
         }?;
-        if let Some(environment) = &mut selected {
-            for variable in &mut environment.variables {
-                variable.value = self
-                    .workspace
-                    .resolve_secret_value(workspace_id, &variable.value, variable.is_secret)
-                    .await?;
-            }
-        }
         Ok(selected)
     }
 

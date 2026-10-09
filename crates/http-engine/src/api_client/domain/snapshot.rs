@@ -5,7 +5,9 @@ use unfour_core::domain::{
 };
 use unfour_core::{AppError, AppResult};
 
-use super::secrets::{snapshot_auth_json, snapshot_body, snapshot_key_values, snapshot_url};
+use super::secrets::{
+    snapshot_auth_json, snapshot_body, snapshot_request_key_values, snapshot_request_url,
+};
 use super::{collection_on, effective_parent, folder_on, request_on, ApiClientService};
 
 impl ApiClientService {
@@ -76,9 +78,17 @@ impl ApiClientService {
                     sort_order: request.sort_order,
                     auth_json: snapshot_auth_json(&request.auth_json),
                     method: request.method,
-                    url: snapshot_url(&request.url),
-                    headers: snapshot_key_values(&request.headers_json)?,
-                    query: snapshot_key_values(&request.query_json)?,
+                    url: snapshot_request_url(&request.url, &request.auth_json),
+                    headers: snapshot_request_key_values(
+                        &request.headers_json,
+                        &request.auth_json,
+                        false,
+                    )?,
+                    query: snapshot_request_key_values(
+                        &request.query_json,
+                        &request.auth_json,
+                        true,
+                    )?,
                     body: snapshot_body(request.body.as_deref(), &request.body_kind),
                     body_kind: request.body_kind,
                     settings_json: request.settings_json,

@@ -194,6 +194,7 @@ fn redact(value: &str) -> String {
 }
 
 fn safe_request(request: ApiSavedRequest) -> AppResult<NormalizedRequest> {
+    let request = super::super::domain::sanitize_saved_request(request)?;
     let mut headers: Vec<KeyValue> = serde_json::from_str(&request.headers_json)?;
     let mut query: Vec<KeyValue> = serde_json::from_str(&request.query_json)?;
     for pair in headers.iter_mut().chain(query.iter_mut()) {

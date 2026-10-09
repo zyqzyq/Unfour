@@ -71,8 +71,8 @@ pub(super) fn normalize_folder_name(value: String) -> AppResult<String> {
 }
 
 pub(super) fn build_url(raw_url: &str, query: &[KeyValue]) -> AppResult<Url> {
-    let mut url = Url::parse(raw_url.trim())
-        .map_err(|_| AppError::Validation(format!("invalid URL: {}", raw_url)))?;
+    let mut url =
+        Url::parse(raw_url.trim()).map_err(|_| AppError::Validation("API_URL_INVALID".into()))?;
 
     {
         let mut pairs = url.query_pairs_mut();

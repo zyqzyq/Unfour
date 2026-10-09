@@ -68,6 +68,35 @@ fn redact_auth_json_value(value: &mut Value) {
     }
 }
 
+pub(super) fn auth_target_key(auth: &str, query: bool) -> Option<String> {
+    let auth: Value = serde_json::from_str(auth).ok()?;
+    if auth["type"] != "api-key" || (auth["addTo"] == "query") != query {
+        return None;
+    }
+    let key = auth["key"].as_str()?.trim();
+    (!key.is_empty()).then(|| key.to_owned())
+}
+
+pub(super) fn snapshot_request_key_values(
+    value: &str,
+    auth: &str,
+    query: bool,
+) -> AppResult<Vec<KeyValue>> {
+    let mut rows = snapshot_key_values(value)?;
+    if let Some(key) = auth_target_key(auth, query) {
+        for row in &mut rows {
+            if if query {
+                row.key == key
+            } else {
+                row.key.trim().eq_ignore_ascii_case(&key)
+            } {
+                row.value = REDACTED_VALUE.into();
+            }
+        }
+    }
+    Ok(rows)
+}
+
 pub(super) fn snapshot_key_values(value: &str) -> AppResult<Vec<KeyValue>> {
     let items = serde_json::from_str::<Vec<KeyValue>>(value).map_err(|_| {
         AppError::Config("stored API key-value configuration is invalid".to_string())
@@ -95,7 +124,20 @@ pub(super) fn snapshot_url(value: &str) -> String {
     if value.contains("@unfour-secret:") {
         return REDACTED_VALUE.into();
     }
-    transform_url(value, None, true)
+    transform_url(value, None, true, None)
+}
+
+pub(super) fn snapshot_request_url(value: &str, auth: &str) -> String {
+    transform_url(value, None, true, auth_target_key(auth, true).as_deref())
+}
+
+pub(super) fn restore_request_url(external: &str, current: Option<&str>, auth: &str) -> String {
+    transform_url(
+        external,
+        current,
+        false,
+        auth_target_key(auth, true).as_deref(),
+    )
 }
 
 pub(super) fn restore_auth_json(external: &str, current: Option<&str>) -> String {
@@ -162,13 +204,31 @@ pub(super) fn restore_key_values(
     external: Vec<KeyValue>,
     current_json: Option<&str>,
 ) -> Vec<KeyValue> {
+    restore_request_key_values(external, current_json, "{}", false)
+}
+
+pub(super) fn restore_request_key_values(
+    external: Vec<KeyValue>,
+    current_json: Option<&str>,
+    auth: &str,
+    query: bool,
+) -> Vec<KeyValue> {
+    let custom = auth_target_key(auth, query);
     let current = current_json
         .and_then(|value| serde_json::from_str::<Vec<KeyValue>>(value).ok())
         .unwrap_or_default();
     external
         .into_iter()
         .map(|mut item| {
-            if is_sensitive_key(&item.key) {
+            if is_sensitive_key(&item.key)
+                || custom.as_ref().is_some_and(|key| {
+                    if query {
+                        item.key == *key
+                    } else {
+                        item.key.trim().eq_ignore_ascii_case(key)
+                    }
+                })
+            {
                 item.value = if item.value == REDACTED_VALUE {
                     current
                         .iter()
@@ -200,8 +260,9 @@ pub(super) fn restore_body(
     })
 }
 
+#[cfg(test)]
 pub(super) fn restore_url(external: &str, current: Option<&str>) -> String {
-    transform_url(external, current, false)
+    transform_url(external, current, false, None)
 }
 
 fn is_form_urlencoded(body_kind: &str) -> bool {
@@ -222,7 +283,7 @@ fn snapshot_form_body(value: &str) -> String {
         );
         return serde_json::to_string(&items).unwrap_or_else(|_| REDACTED_VALUE.to_string());
     }
-    transform_pair_components(value, None, true)
+    transform_pair_components(value, None, true, None)
 }
 
 fn restore_form_body(external: String, current: Option<&str>) -> String {
@@ -230,7 +291,7 @@ fn restore_form_body(external: String, current: Option<&str>) -> String {
         let items = restore_key_values(items, current);
         return serde_json::to_string(&items).unwrap_or(external);
     }
-    transform_pair_components(&external, current, false)
+    transform_pair_components(&external, current, false, None)
 }
 
 fn restore_redacted_json(external: &str, current: Option<&str>) -> Option<String> {
@@ -272,13 +333,18 @@ fn restore_redacted_value(external: &mut Value, current: Option<&Value>) {
     }
 }
 
-fn transform_url(value: &str, local: Option<&str>, snapshot: bool) -> String {
+fn transform_url(
+    value: &str,
+    local: Option<&str>,
+    snapshot: bool,
+    custom_key: Option<&str>,
+) -> String {
     let value = transform_userinfo_password(value, local, snapshot);
     let Some((prefix, query, fragment)) = split_url_query(&value) else {
         return value;
     };
     let local_query = local.and_then(split_url_query).map(|(_, query, _)| query);
-    let query = transform_pair_components(query, local_query, snapshot);
+    let query = transform_pair_components(query, local_query, snapshot, custom_key);
     format!("{prefix}?{query}{fragment}")
 }
 
@@ -337,11 +403,20 @@ fn userinfo_password_span(value: &str) -> Option<(usize, usize)> {
 /// on snapshot and restoring redacted values from the matching local
 /// component (by key occurrence order) on restore. Shared by URL query
 /// strings and raw form-urlencoded bodies.
-fn transform_pair_components(pairs: &str, local: Option<&str>, snapshot: bool) -> String {
-    let mut local_values = local.map(sensitive_query_values).unwrap_or_default();
+fn transform_pair_components(
+    pairs: &str,
+    local: Option<&str>,
+    snapshot: bool,
+    custom_key: Option<&str>,
+) -> String {
+    let mut local_values = local
+        .map(|query| sensitive_query_values(query, custom_key))
+        .unwrap_or_default();
     pairs
         .split('&')
-        .map(|component| transform_pair_component(component, &mut local_values, snapshot))
+        .map(|component| {
+            transform_pair_component(component, &mut local_values, snapshot, custom_key)
+        })
         .collect::<Vec<_>>()
         .join("&")
 }
@@ -350,11 +425,12 @@ fn transform_pair_component(
     component: &str,
     local_values: &mut HashMap<String, VecDeque<String>>,
     snapshot: bool,
+    custom_key: Option<&str>,
 ) -> String {
     let Some((key, decoded_value)) = decode_query_component(component) else {
         return component.to_string();
     };
-    if !is_sensitive_key(&key) {
+    if !is_sensitive_key(&key) && custom_key != Some(key.as_str()) {
         return component.to_string();
     }
     let raw_key = component
@@ -383,13 +459,16 @@ fn split_url_query(value: &str) -> Option<(&str, &str, &str)> {
     Some((prefix, query, fragment))
 }
 
-fn sensitive_query_values(query: &str) -> HashMap<String, VecDeque<String>> {
+fn sensitive_query_values(
+    query: &str,
+    custom_key: Option<&str>,
+) -> HashMap<String, VecDeque<String>> {
     let mut values = HashMap::<String, VecDeque<String>>::new();
     for component in query.split('&') {
         let Some((key, _)) = decode_query_component(component) else {
             continue;
         };
-        if !is_sensitive_key(&key) {
+        if !is_sensitive_key(&key) && custom_key != Some(key.as_str()) {
             continue;
         }
         let raw_value = component
@@ -414,6 +493,38 @@ fn decode_query_component(component: &str) -> Option<(String, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn custom_api_key_snapshot_and_external_apply_keep_only_local_secret_values() {
+        for query in [false, true] {
+            let auth = format!(
+                r#"{{"type":"api-key","key":"clientCredential","addTo":"{}","value":"auth-secret"}}"#,
+                if query { "query" } else { "header" }
+            );
+            let rows = r#"[{"key":"clientCredential","value":"local-secret","enabled":true}]"#;
+            let safe = snapshot_request_key_values(rows, &auth, query).unwrap();
+            assert_eq!(safe[0].value, REDACTED_VALUE);
+            assert_eq!(
+                restore_request_key_values(safe, Some(rows), &auth, query)[0].value,
+                "local-secret"
+            );
+            let injected = serde_json::from_str(rows).unwrap();
+            assert_eq!(
+                restore_request_key_values(injected, None, &auth, query)[0].value,
+                ""
+            );
+            if query {
+                let url = "{{endpoint}}/path?clientCredential=local%2Bsecret&page=1";
+                let safe = snapshot_request_url(url, &auth);
+                assert!(!safe.contains("local%2Bsecret"));
+                assert_eq!(restore_request_url(&safe, Some(url), &auth), url);
+                assert_eq!(
+                    restore_request_url(url, None, &auth),
+                    "{{endpoint}}/path?clientCredential=&page=1"
+                );
+            }
+        }
+    }
 
     #[test]
     fn request_secret_helpers_redact_and_restore_local_material() {

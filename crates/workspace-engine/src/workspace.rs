@@ -8,6 +8,7 @@ mod variable_executor;
 mod variable_persistence;
 mod variable_secrets;
 mod variables;
+pub use variables::WorkspaceVariableResolver;
 
 use chrono::Utc;
 use sqlx::SqliteConnection;
@@ -27,20 +28,11 @@ const DEFAULT_MCP_POLICY: &str = "auto";
 #[derive(Clone)]
 pub struct WorkspaceService {
     pub(crate) db: LocalDb,
-    pub(crate) secret_store: Option<unfour_secret_store::SecretStore>,
 }
 
 impl WorkspaceService {
     pub fn new(db: LocalDb) -> Self {
-        Self {
-            db,
-            secret_store: None,
-        }
-    }
-
-    pub fn with_secret_store(mut self, store: unfour_secret_store::SecretStore) -> Self {
-        self.secret_store = Some(store);
-        self
+        Self { db }
     }
 
     pub async fn ensure_default_workspace_on(

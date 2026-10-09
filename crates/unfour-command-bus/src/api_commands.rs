@@ -545,14 +545,21 @@ impl CommandBus {
         input: ApiRequestInput,
         environment_id_override: Option<String>,
     ) -> AppResult<ApiResponse> {
-        let resolved_input = self
-            .resolve_api_request_input_in_environment(
-                input.clone(),
-                environment_id_override.as_deref(),
-            )
+        let environment_id = self
+            .resolve_api_environment_id(&input.workspace_id, environment_id_override.as_deref())
+            .await?;
+        let (resolved_input, secrets) = self
+            .resolve_api_request_input_for_environment(input.clone(), environment_id.as_deref())
             .await?;
         let resolved_input = self.resolve_desktop_api_timeout(resolved_input).await?;
-        let response = self.api_client.send(resolved_input).await?;
+        let response = self
+            .api_client
+            .send_cancellable_with_secrets(
+                resolved_input,
+                tokio_util::sync::CancellationToken::new(),
+                &secrets,
+            )
+            .await?;
         self.activity_log
             .record(
                 Some(&input.workspace_id),
@@ -560,7 +567,6 @@ impl CommandBus {
                 Some(&response.history_id),
                 serde_json::json!({
                     "method": input.method,
-                    "url": unfour_core::redaction::redact_connection_string(&unfour_core::redaction::redact_url_query(&input.url)),
                     "status": response.status
                 }),
             )
@@ -777,8 +783,19 @@ impl CommandBus {
             temporary_variables: vec![],
         };
 
-        let input = self.resolve_api_request_input(input).await?;
-        self.api_client.send(input).await
+        let environment_id = self
+            .resolve_api_environment_id(&input.workspace_id, None)
+            .await?;
+        let (input, secrets) = self
+            .resolve_api_request_input_for_environment(input, environment_id.as_deref())
+            .await?;
+        self.api_client
+            .send_cancellable_with_secrets(
+                input,
+                tokio_util::sync::CancellationToken::new(),
+                &secrets,
+            )
+            .await
     }
 
     pub async fn execute_saved_api_request_with_scripts_in_workspace(

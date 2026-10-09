@@ -11,7 +11,20 @@ impl ApiClientService {
         input: ApiRequestInput,
         cancellation: CancellationToken,
     ) -> AppResult<ApiResponse> {
+        self.send_cancellable_with_secrets(input, cancellation, &[])
+            .await
+    }
+
+    pub async fn send_cancellable_with_secrets(
+        &self,
+        input: ApiRequestInput,
+        cancellation: CancellationToken,
+        secrets: &[String],
+    ) -> AppResult<ApiResponse> {
         validate_workspace_id(&input.workspace_id)?;
+        let mut runtime_secrets = runtime_request_secret_values(&input)?;
+        runtime_secrets.extend(secrets.iter().cloned());
+        let secrets = runtime_secrets.as_slice();
         if input.body_kind == unfour_core::models::MULTIPART_BODY_KIND {
             unfour_core::models::parse_multipart_definition(input.body.as_deref())?;
         }
@@ -22,8 +35,8 @@ impl ApiClientService {
         let request_fields = serde_json::json!({
             "request_id": request_id.as_str(),
             "method": method.as_str(),
-            "host": url.host_str().unwrap_or(""),
-            "path": url.path(),
+            "host": super::history_redaction::scrub_values(url.host_str().unwrap_or(""), secrets),
+            "path": super::history_redaction::scrub_values(url.path(), secrets),
         });
 
         let mut builder = self.client.request(method.clone(), url.clone());
@@ -39,12 +52,10 @@ impl ApiClientService {
                 }
                 has_content_type = true;
             }
-            let name = HeaderName::from_bytes(header.key.trim().as_bytes()).map_err(|_| {
-                AppError::Validation(format!("invalid header name: {}", header.key))
-            })?;
-            let value = HeaderValue::from_str(&header.value).map_err(|_| {
-                AppError::Validation(format!("invalid header value for {}", header.key))
-            })?;
+            let name = HeaderName::from_bytes(header.key.trim().as_bytes())
+                .map_err(|_| AppError::Validation("API_HEADER_NAME_INVALID".into()))?;
+            let value = HeaderValue::from_str(&header.value)
+                .map_err(|_| AppError::Validation("API_HEADER_VALUE_INVALID".into()))?;
             builder = builder.header(name, value);
         }
 
@@ -137,6 +148,7 @@ impl ApiClientService {
                 duration_ms,
                 &response_headers,
                 &body,
+                secrets,
             ) => result,
         };
         let history_id = match history_result {
@@ -152,8 +164,8 @@ impl ApiClientService {
                     serde_json::json!({
                         "request_id": request_id.as_str(),
                         "method": method.as_str(),
-                        "host": url.host_str().unwrap_or(""),
-                        "path": url.path(),
+                        "host": super::history_redaction::scrub_values(url.host_str().unwrap_or(""), secrets),
+                        "path": super::history_redaction::scrub_values(url.path(), secrets),
                         "status_code": status.as_u16(),
                     }),
                 );
@@ -170,8 +182,8 @@ impl ApiClientService {
             serde_json::json!({
                 "request_id": request_id.as_str(),
                 "method": method.as_str(),
-                "host": url.host_str().unwrap_or(""),
-                "path": url.path(),
+                "host": super::history_redaction::scrub_values(url.host_str().unwrap_or(""), secrets),
+                "path": super::history_redaction::scrub_values(url.path(), secrets),
                 "status_code": status.as_u16(),
             }),
         );
@@ -193,10 +205,16 @@ impl ApiClientService {
         duration_ms: u128,
         response_headers: &[KeyValue],
         response_body: &str,
+        secrets: &[String],
     ) -> AppResult<String> {
         let now = Utc::now().to_rfc3339();
         let id = unfour_core::id::new_id();
-        let safe = super::history_redaction::sanitize(input, response_headers, response_body)?;
+        let safe = super::history_redaction::sanitize_with_secrets(
+            input,
+            response_headers,
+            response_body,
+            secrets,
+        )?;
 
         sqlx::query(
             r#"
@@ -258,6 +276,7 @@ fn request_timeout_duration(timeout_ms: Option<u64>) -> Option<Duration> {
 }
 
 fn classify_http_error(error: reqwest::Error) -> AppError {
+    let error = error.without_url();
     if error.is_timeout() {
         AppError::ApiTimeout(error.to_string())
     } else if error.is_connect() {

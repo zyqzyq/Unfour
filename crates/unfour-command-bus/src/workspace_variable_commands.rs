@@ -66,41 +66,35 @@ impl CommandBus {
     pub async fn workspace_variables_replace(
         &self,
         workspace_id: String,
-        mut variables: Vec<WorkspaceVariableInput>,
+        variables: Vec<WorkspaceVariableInput>,
     ) -> AppResult<Vec<WorkspaceVariable>> {
-        let staged = self
-            .workspace
-            .stage_variable_secret_edits(&workspace_id, None, &mut variables)
-            .await?;
         let context = CommandContext::local("workspace.variables.replace");
         let executor_context = context.clone();
         let service = self.workspace.clone();
         let activity_workspace_id = workspace_id.clone();
         let variable_count = variables.len();
-        let result = self
-            .execute_domain_command(
-                context,
-                Some(CommandActivity {
-                    workspace_id: Some(activity_workspace_id.clone()),
-                    action: "workspace.variables.update",
-                    target: Some(activity_workspace_id),
-                    details: serde_json::json!({ "variableCount": variable_count }),
-                }),
-                move |connection| {
-                    Box::pin(async move {
-                        service
-                            .replace_variables_on(
-                                connection,
-                                &executor_context,
-                                workspace_id,
-                                variables,
-                            )
-                            .await
-                    })
-                },
-            )
-            .await;
-        self.finish_bundle_credential_edits(&staged, result).await
+        self.execute_domain_command(
+            context,
+            Some(CommandActivity {
+                workspace_id: Some(activity_workspace_id.clone()),
+                action: "workspace.variables.update",
+                target: Some(activity_workspace_id),
+                details: serde_json::json!({ "variableCount": variable_count }),
+            }),
+            move |connection| {
+                Box::pin(async move {
+                    service
+                        .replace_variables_on(
+                            connection,
+                            &executor_context,
+                            workspace_id,
+                            variables,
+                        )
+                        .await
+                })
+            },
+        )
+        .await
     }
 
     pub async fn workspace_variable_create(
@@ -137,39 +131,33 @@ impl CommandBus {
         mut input: WorkspaceVariableInput,
     ) -> AppResult<WorkspaceVariable> {
         input.id = Some(variable_id.clone());
-        let staged = self
-            .workspace
-            .stage_variable_secret_edits(&workspace_id, None, std::slice::from_mut(&mut input))
-            .await?;
         let context = CommandContext::local("workspace.variable.update");
         let executor_context = context.clone();
         let service = self.workspace.clone();
         let activity_workspace_id = workspace_id.clone();
         let activity_variable_id = variable_id.clone();
-        let result = self
-            .execute_domain_command(
-                context,
-                Some(entity_activity(
-                    &activity_workspace_id,
-                    "workspace.variable.update",
-                    Some(activity_variable_id),
-                )),
-                move |connection| {
-                    Box::pin(async move {
-                        service
-                            .update_variable_on(
-                                connection,
-                                &executor_context,
-                                workspace_id,
-                                variable_id,
-                                input,
-                            )
-                            .await
-                    })
-                },
-            )
-            .await;
-        self.finish_bundle_credential_edits(&staged, result).await
+        self.execute_domain_command(
+            context,
+            Some(entity_activity(
+                &activity_workspace_id,
+                "workspace.variable.update",
+                Some(activity_variable_id),
+            )),
+            move |connection| {
+                Box::pin(async move {
+                    service
+                        .update_variable_on(
+                            connection,
+                            &executor_context,
+                            workspace_id,
+                            variable_id,
+                            input,
+                        )
+                        .await
+                })
+            },
+        )
+        .await
     }
 
     pub async fn workspace_variable_delete(
@@ -244,44 +232,38 @@ impl CommandBus {
         workspace_id: String,
         environment_id: String,
         name: String,
-        mut variables: Vec<WorkspaceVariableInput>,
+        variables: Vec<WorkspaceVariableInput>,
     ) -> AppResult<WorkspaceEnvironment> {
-        let staged = self
-            .workspace
-            .stage_variable_secret_edits(&workspace_id, Some(&environment_id), &mut variables)
-            .await?;
         let context = CommandContext::local("workspace.environment.update");
         let executor_context = context.clone();
         let service = self.workspace.clone();
         let activity_workspace_id = workspace_id.clone();
         let activity_environment_id = environment_id.clone();
         let variable_count = variables.len();
-        let result = self
-            .execute_domain_command(
-                context,
-                Some(CommandActivity {
-                    workspace_id: Some(activity_workspace_id),
-                    action: "workspace.environment.update",
-                    target: Some(activity_environment_id),
-                    details: serde_json::json!({ "variableCount": variable_count }),
-                }),
-                move |connection| {
-                    Box::pin(async move {
-                        service
-                            .update_environment_on(
-                                connection,
-                                &executor_context,
-                                workspace_id,
-                                environment_id,
-                                name,
-                                variables,
-                            )
-                            .await
-                    })
-                },
-            )
-            .await;
-        self.finish_bundle_credential_edits(&staged, result).await
+        self.execute_domain_command(
+            context,
+            Some(CommandActivity {
+                workspace_id: Some(activity_workspace_id),
+                action: "workspace.environment.update",
+                target: Some(activity_environment_id),
+                details: serde_json::json!({ "variableCount": variable_count }),
+            }),
+            move |connection| {
+                Box::pin(async move {
+                    service
+                        .update_environment_on(
+                            connection,
+                            &executor_context,
+                            workspace_id,
+                            environment_id,
+                            name,
+                            variables,
+                        )
+                        .await
+                })
+            },
+        )
+        .await
     }
 
     pub async fn workspace_environment_update_metadata(
@@ -453,87 +435,71 @@ impl CommandBus {
         mut input: WorkspaceVariableInput,
     ) -> AppResult<WorkspaceEnvironmentVariable> {
         input.id = Some(variable_id.clone());
-        let staged = self
-            .workspace
-            .stage_variable_secret_edits(
-                &workspace_id,
-                Some(&environment_id),
-                std::slice::from_mut(&mut input),
-            )
-            .await?;
         let context = CommandContext::local("workspace.environment_variable.update");
         let executor_context = context.clone();
         let service = self.workspace.clone();
         let activity_workspace_id = workspace_id.clone();
         let activity_variable_id = variable_id.clone();
-        let result = self
-            .execute_domain_command(
-                context,
-                Some(entity_activity(
-                    &activity_workspace_id,
-                    "workspace.environment_variable.update",
-                    Some(activity_variable_id),
-                )),
-                move |connection| {
-                    Box::pin(async move {
-                        service
-                            .update_environment_variable_on(
-                                connection,
-                                &executor_context,
-                                workspace_id,
-                                environment_id,
-                                variable_id,
-                                input,
-                            )
-                            .await
-                    })
-                },
-            )
-            .await;
-        self.finish_bundle_credential_edits(&staged, result).await
+        self.execute_domain_command(
+            context,
+            Some(entity_activity(
+                &activity_workspace_id,
+                "workspace.environment_variable.update",
+                Some(activity_variable_id),
+            )),
+            move |connection| {
+                Box::pin(async move {
+                    service
+                        .update_environment_variable_on(
+                            connection,
+                            &executor_context,
+                            workspace_id,
+                            environment_id,
+                            variable_id,
+                            input,
+                        )
+                        .await
+                })
+            },
+        )
+        .await
     }
 
     pub async fn workspace_environment_variables_replace(
         &self,
         workspace_id: String,
         environment_id: String,
-        mut variables: Vec<WorkspaceVariableInput>,
+        variables: Vec<WorkspaceVariableInput>,
     ) -> AppResult<Vec<WorkspaceEnvironmentVariable>> {
-        let staged = self
-            .workspace
-            .stage_variable_secret_edits(&workspace_id, Some(&environment_id), &mut variables)
-            .await?;
         let context = CommandContext::local("workspace.environment_variables.replace");
         let executor_context = context.clone();
         let service = self.workspace.clone();
         let activity_workspace_id = workspace_id.clone();
         let activity_environment_id = environment_id.clone();
         let count = variables.len();
-        let result = self
-            .execute_domain_command(
-                context,
-                Some(CommandActivity {
-                    workspace_id: Some(activity_workspace_id),
-                    action: "workspace.environment_variables.replace",
-                    target: Some(activity_environment_id),
-                    details: serde_json::json!({ "variableCount": count }),
-                }),
-                move |connection| {
-                    Box::pin(async move {
-                        service
-                            .replace_environment_variables_on(
-                                connection,
-                                &executor_context,
-                                workspace_id,
-                                environment_id,
-                                variables,
-                            )
-                            .await
-                    })
-                },
-            )
-            .await;
-        self.finish_bundle_credential_edits(&staged, result).await
+        self.execute_domain_command(
+            context,
+            Some(CommandActivity {
+                workspace_id: Some(activity_workspace_id),
+                action: "workspace.environment_variables.replace",
+                target: Some(activity_environment_id),
+                details: serde_json::json!({ "variableCount": count }),
+            }),
+            move |connection| {
+                Box::pin(async move {
+                    service
+                        .replace_environment_variables_on(
+                            connection,
+                            &executor_context,
+                            workspace_id,
+                            environment_id,
+                            variables,
+                        )
+                        .await
+                })
+            },
+        )
+        .await
     }
 
     pub async fn workspace_environment_variable_delete(
@@ -582,6 +548,7 @@ impl CommandBus {
             .await
     }
 
+    #[cfg(test)]
     pub(crate) async fn resolve_api_request_input(
         &self,
         input: ApiRequestInput,
@@ -590,6 +557,7 @@ impl CommandBus {
             .await
     }
 
+    #[cfg(test)]
     pub(crate) async fn resolve_api_request_input_in_environment(
         &self,
         input: ApiRequestInput,
@@ -600,6 +568,7 @@ impl CommandBus {
             .await?;
         self.resolve_api_request_input_for_environment(input, environment_id.as_deref())
             .await
+            .map(|(input, _)| input)
     }
 
     pub(crate) async fn resolve_api_environment_id(
@@ -628,128 +597,47 @@ impl CommandBus {
         &self,
         mut input: ApiRequestInput,
         environment_id: Option<&str>,
-    ) -> AppResult<ApiRequestInput> {
-        input.url = self
+    ) -> AppResult<(ApiRequestInput, Vec<String>)> {
+        let resolver = self
             .workspace
-            .resolve_variables_with_overrides(
+            .variable_resolver(
                 &input.workspace_id,
                 environment_id,
-                &input.url,
                 &input.temporary_variables,
             )
             .await?;
-        input.auth_json = match input.auth_json {
-            Some(auth_json) => Some(
-                self.workspace
-                    .resolve_json_variables(
-                        &input.workspace_id,
-                        environment_id,
-                        &auth_json,
-                        &input.temporary_variables,
-                    )
-                    .await?,
-            ),
-            None => None,
-        };
+        input.url = resolver.resolve(&input.url)?;
+        input.auth_json = input
+            .auth_json
+            .map(|auth| resolver.resolve_json(&auth))
+            .transpose()?;
         if input.body_kind == unfour_core::models::MULTIPART_BODY_KIND {
             use unfour_core::models::{parse_multipart_definition, ApiMultipartPart};
             let mut parts = parse_multipart_definition(input.body.as_deref())?;
-            for part in &mut parts {
-                if !part.enabled() {
-                    continue;
-                }
+            for part in parts.iter_mut().filter(|part| part.enabled()) {
                 let (key, value) = match part {
                     ApiMultipartPart::Text { key, value, .. } => (key, Some(value)),
                     ApiMultipartPart::File { key, .. } => (key, None),
                 };
-                *key = self
-                    .workspace
-                    .resolve_variables_with_overrides(
-                        &input.workspace_id,
-                        environment_id,
-                        key,
-                        &input.temporary_variables,
-                    )
-                    .await?;
+                *key = resolver.resolve(key)?;
                 if let Some(value) = value {
-                    *value = self
-                        .workspace
-                        .resolve_variables_with_overrides(
-                            &input.workspace_id,
-                            environment_id,
-                            value,
-                            &input.temporary_variables,
-                        )
-                        .await?;
+                    *value = resolver.resolve(value)?;
                 }
             }
             input.body = Some(serde_json::to_string(&parts)?);
         } else {
-            input.body = match input.body {
-                Some(body) => Some(
-                    self.workspace
-                        .resolve_variables_with_overrides(
-                            &input.workspace_id,
-                            environment_id,
-                            &body,
-                            &input.temporary_variables,
-                        )
-                        .await?,
-                ),
-                None => None,
-            };
+            input.body = input.body.map(|body| resolver.resolve(&body)).transpose()?;
         }
-        input.headers = self
-            .resolve_api_key_values(
-                &input.workspace_id,
-                environment_id,
-                input.headers,
-                &input.temporary_variables,
-            )
-            .await?;
-        input.query = self
-            .resolve_api_key_values(
-                &input.workspace_id,
-                environment_id,
-                input.query,
-                &input.temporary_variables,
-            )
-            .await?;
-        Ok(input)
-    }
-
-    async fn resolve_api_key_values(
-        &self,
-        workspace_id: &str,
-        active_environment_id: Option<&str>,
-        values: Vec<KeyValue>,
-        temporary_variables: &[KeyValue],
-    ) -> AppResult<Vec<KeyValue>> {
-        let mut resolved = Vec::with_capacity(values.len());
-        for value in values {
-            resolved.push(KeyValue {
-                key: self
-                    .workspace
-                    .resolve_variables_with_overrides(
-                        workspace_id,
-                        active_environment_id,
-                        &value.key,
-                        temporary_variables,
-                    )
-                    .await?,
-                value: self
-                    .workspace
-                    .resolve_variables_with_overrides(
-                        workspace_id,
-                        active_environment_id,
-                        &value.value,
-                        temporary_variables,
-                    )
-                    .await?,
-                enabled: value.enabled,
-            });
+        for rows in [&mut input.headers, &mut input.query] {
+            for row in rows {
+                row.key = resolver.resolve(&row.key)?;
+                row.value = resolver.resolve(&row.value)?;
+            }
         }
-        Ok(resolved)
+        Ok((
+            self.api_client.materialize_auth(input)?,
+            resolver.secret_values().to_vec(),
+        ))
     }
 }
 

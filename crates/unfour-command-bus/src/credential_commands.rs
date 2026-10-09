@@ -1,6 +1,41 @@
 use super::*;
 
 impl CommandBus {
+    /// Desktop editor only. Resolve a live saved connection, never an arbitrary
+    /// credential reference. No command dispatch or MCP tool exposes this read.
+    pub async fn reveal_connection_secret(
+        &self,
+        workspace_id: String,
+        connection_id: String,
+        connection_type: String,
+        credential_ref: String,
+    ) -> AppResult<String> {
+        if !matches!(connection_type.as_str(), "ssh" | "database") {
+            return Err(unfour_core::AppError::Validation(
+                "CONNECTION_CREDENTIAL_UNAVAILABLE".into(),
+            ));
+        }
+        let mut guard = self.db.pool().begin_with("BEGIN IMMEDIATE").await?;
+        let current: Option<String> = sqlx::query_scalar(
+            "SELECT credential_ref FROM connections WHERE workspace_id=? AND id=? AND connection_type=? AND deleted_at IS NULL",
+        ).bind(&workspace_id).bind(&connection_id).bind(&connection_type)
+            .fetch_optional(&mut *guard).await?.flatten();
+        let reference = current
+            .filter(|value| value == &credential_ref)
+            .ok_or_else(|| {
+                unfour_core::AppError::Validation("CONNECTION_CREDENTIAL_UNAVAILABLE".into())
+            })?;
+        let result = self
+            .secret_store
+            .read_secret(workspace_id, reference)
+            .await
+            .map_err(|_| {
+                unfour_core::AppError::Validation("CONNECTION_CREDENTIAL_UNAVAILABLE".into())
+            });
+        guard.rollback().await?;
+        result
+    }
+
     pub async fn create_credential(
         &self,
         input: CredentialCreateInput,

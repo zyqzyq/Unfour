@@ -21,6 +21,47 @@ pub(crate) struct WorkspaceEnvironmentRow {
     pub revision: i64,
 }
 
+/// Ephemeral values and secret provenance from one SQLite read snapshot.
+/// This is request preparation state, never a new persistence layer.
+pub struct WorkspaceVariableResolver {
+    values: HashMap<String, String>,
+    secrets: Vec<String>,
+}
+
+impl WorkspaceVariableResolver {
+    pub fn resolve(&self, input: &str) -> AppResult<String> {
+        resolve_template(input, &self.values)
+    }
+    pub fn secret_values(&self) -> &[String] {
+        &self.secrets
+    }
+    pub fn resolve_json(&self, input: &str) -> AppResult<String> {
+        fn resolve(
+            value: &mut serde_json::Value,
+            resolver: &WorkspaceVariableResolver,
+        ) -> AppResult<()> {
+            match value {
+                serde_json::Value::String(text) => *text = resolver.resolve(text)?,
+                serde_json::Value::Object(fields) => {
+                    for child in fields.values_mut() {
+                        resolve(child, resolver)?;
+                    }
+                }
+                serde_json::Value::Array(items) => {
+                    for child in items {
+                        resolve(child, resolver)?;
+                    }
+                }
+                _ => {}
+            }
+            Ok(())
+        }
+        let mut json = serde_json::from_str(input)?;
+        resolve(&mut json, self)?;
+        Ok(serde_json::to_string(&json)?)
+    }
+}
+
 impl WorkspaceService {
     pub async fn list_variables(&self, workspace_id: String) -> AppResult<Vec<WorkspaceVariable>> {
         let mut connection = self.db.pool().acquire().await?;
@@ -66,7 +107,18 @@ impl WorkspaceService {
         input: &str,
         overrides: &[KeyValue],
     ) -> AppResult<String> {
-        let mut connection = self.db.pool().acquire().await?;
+        self.variable_resolver(workspace_id, active_environment_id, overrides)
+            .await?
+            .resolve(input)
+    }
+
+    pub async fn variable_resolver(
+        &self,
+        workspace_id: &str,
+        active_environment_id: Option<&str>,
+        overrides: &[KeyValue],
+    ) -> AppResult<WorkspaceVariableResolver> {
+        let mut connection = self.db.pool().begin().await?;
         get_workspace_on(&mut connection, workspace_id, false).await?;
         let mut values = HashMap::new();
         for variable in list_variables_on(&mut connection, workspace_id, false)
@@ -90,36 +142,27 @@ impl WorkspaceService {
         }
 
         for variable in overrides.iter().filter(|variable| variable.enabled) {
-            values.insert(variable.key.clone(), (variable.value.clone(), false));
+            let secret = values.get(&variable.key).is_some_and(|(_, secret)| *secret);
+            values.insert(variable.key.clone(), (variable.value.clone(), secret));
         }
 
-        // Only resolve credentials actually referenced by this operation.
-        let referenced: HashSet<_> = input
-            .split("{{")
-            .skip(1)
-            .filter_map(|s| s.split_once("}}").map(|(key, _)| key.trim()))
+        connection.rollback().await?;
+        let secrets = values
+            .iter()
+            .filter(|(key, (value, secret))| {
+                !value.is_empty()
+                    && unfour_core::redaction::is_sensitive_workspace_variable(key, value, *secret)
+            })
+            .map(|(_, (value, _))| value.clone())
             .collect();
-        let mut resolved = HashMap::new();
-        for (key, (value, secret)) in values {
-            if referenced.contains(key.as_str()) {
-                resolved.insert(
-                    key,
-                    self.resolve_secret_value(workspace_id, &value, secret)
-                        .await?,
-                );
-            } else {
-                resolved.insert(key, value);
-            }
-        }
-        for key in referenced {
-            if key.starts_with("@unfour-secret:") {
-                resolved.insert(
-                    key.into(),
-                    self.resolve_secret_value(workspace_id, key, true).await?,
-                );
-            }
-        }
-        resolve_template(input, &resolved)
+        let resolved = values
+            .into_iter()
+            .map(|(key, (value, _))| (key, value))
+            .collect();
+        Ok(WorkspaceVariableResolver {
+            values: resolved,
+            secrets,
+        })
     }
 }
 

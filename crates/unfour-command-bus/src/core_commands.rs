@@ -26,7 +26,7 @@ impl CommandBus {
         extensions: CommandBusExtensions,
     ) -> AppResult<Self> {
         let activity_log = ActivityLogService::new(db.clone());
-        let workspace = WorkspaceService::new(db.clone()).with_secret_store(secret_store.clone());
+        let workspace = WorkspaceService::new(db.clone());
         let bus = Self {
             db: db.clone(),
             extensions,
@@ -97,7 +97,7 @@ impl CommandBus {
         extensions: CommandBusExtensions,
     ) -> AppResult<Self> {
         let activity_log = ActivityLogService::new(db.clone());
-        let workspace = WorkspaceService::new(db.clone()).with_secret_store(secret_store.clone());
+        let workspace = WorkspaceService::new(db.clone());
 
         let bus = Self {
             db: db.clone(),

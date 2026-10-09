@@ -52,7 +52,7 @@ pub(super) fn collect_api_secrets(
             if safe == "<redacted>"
                 && !value.is_empty()
                 && value != "<redacted>"
-                && (!value.contains("{{") || value.starts_with("{{@unfour-secret:")) =>
+                && !unfour_http_engine::is_bundle_variable_template(value) =>
         {
             out.push(BackupSecret {
                 kind: "api-secret".into(),

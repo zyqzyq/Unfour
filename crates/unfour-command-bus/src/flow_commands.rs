@@ -306,17 +306,20 @@ impl FlowExecutor for CommandBus {
                     let mut request = snapshot["request"].clone();
                     apply_api_arguments(&mut request, &action.arguments)?;
                     let request: ApiRequestInput = serde_json::from_value(request)?;
-                    let request = self
+                    let (request, variable_secrets) = self
                         .resolve_api_request_input_for_environment(
                             request,
                             input.environment_id.as_deref(),
                         )
                         .await?;
-                    let request = self.api_client.materialize_auth(request)?;
                     let request_secrets =
                         unfour_http_engine::runtime_request_secret_values(&request)?;
                     persistence.extend(request_secrets.iter().cloned());
-                    let response = self.api_client.send_cancellable(request, cancel).await?;
+                    persistence.extend(variable_secrets.iter().cloned());
+                    let response = self
+                        .api_client
+                        .send_cancellable_with_secrets(request, cancel, &variable_secrets)
+                        .await?;
                     let body = serde_json::from_str::<Value>(&response.body)
                         .unwrap_or(Value::String(response.body));
                     if response.status >= 400 {

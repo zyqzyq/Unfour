@@ -42,6 +42,7 @@ mod api_script_commands;
 mod command_models;
 mod core_commands;
 mod credential_commands;
+mod credential_lock;
 mod database_commands;
 mod domain_commands;
 mod flow_authoring;

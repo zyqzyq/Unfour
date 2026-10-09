@@ -181,7 +181,7 @@ async fn source(bus: &CommandBus) -> Workspace {
 }
 
 #[tokio::test]
-async fn encrypted_round_trip_restores_local_refs_and_resolves_quoted_api_secrets() {
+async fn encrypted_round_trip_restores_connection_refs_and_sqlite_secrets() {
     let bus = CommandBus::ephemeral().await.unwrap();
     let source = source(&bus).await;
     let artifact = bus
@@ -229,12 +229,10 @@ async fn encrypted_round_trip_restores_local_refs_and_resolves_quoted_api_secret
         .await
         .is_err());
     let vars = bus.workspace.list_variables(copy.id.clone()).await.unwrap();
-    assert!(vars
-        .iter()
-        .find(|v| v.is_secret)
-        .unwrap()
-        .value
-        .starts_with("@unfour-secret:"));
+    assert_eq!(
+        vars.iter().find(|v| v.is_secret).unwrap().value,
+        "backup-variable-canary"
+    );
     assert_eq!(
         bus.workspace
             .resolve_variables(&copy.id, None, "{{access_token}}")
@@ -258,7 +256,13 @@ async fn encrypted_round_trip_restores_local_refs_and_resolves_quoted_api_secret
         serde_json::from_str::<Value>(&auth).unwrap()["token"],
         "api-canary\"quoted\\value"
     );
-    assert!(!requests[0].auth_json.contains("api-canary"));
+    assert!(requests[0].auth_json.contains("api-canary"));
+    assert_eq!(
+        serde_json::from_str::<Value>(&requests[0].headers_json).unwrap()[0]["value"],
+        "header-canary"
+    );
+    assert_eq!(requests[0].url, "https://example.test?token=url-canary");
+    assert!(!requests[0].auth_json.contains("@unfour-secret:"));
     let variable = vars.iter().find(|v| v.is_secret).unwrap();
     let updated = bus
         .workspace_variable_update(
@@ -276,7 +280,7 @@ async fn encrypted_round_trip_restores_local_refs_and_resolves_quoted_api_secret
         )
         .await
         .unwrap();
-    assert!(updated.value.starts_with("@unfour-secret:"));
+    assert_eq!(updated.value, "edited-variable-canary");
     assert_ne!(updated.value, variable.value);
     assert_eq!(
         bus.workspace
@@ -285,7 +289,7 @@ async fn encrypted_round_trip_restores_local_refs_and_resolves_quoted_api_secret
             .unwrap(),
         "edited-variable-canary"
     );
-    // Re-exporting an imported backup must dereference the new local handles too.
+    // Re-export retains the SQLite secret values and the connection credential.
     let again = bus
         .workspace_bundle_export_with_options(copy.id.clone(), options())
         .await
@@ -379,4 +383,91 @@ async fn paths_remap_without_filesystem_access_and_enabled_steps_are_preserved()
     assert!(config.contains("D:/new/file.txt"));
     let cloud_safe = bus.workspace_bundle_export(copy.id).await.unwrap();
     assert!(!cloud_safe.contains("D:/new"));
+}
+
+#[tokio::test]
+async fn custom_api_key_fields_are_redacted_for_sharing_and_restored_only_in_encrypted_sqlite_backup(
+) {
+    let bus = CommandBus::ephemeral().await.unwrap();
+    let source = source(&bus).await;
+    for target in ["header", "query"] {
+        let auth = json!({"type":"api-key","key":"clientCredential","addTo":target,"value":"auth-custom-canary"}).to_string();
+        let rows =
+            json!([{"key":"clientCredential","value":"explicit-custom-canary","enabled":true}])
+                .to_string();
+        sqlx::query("UPDATE api_requests SET auth_json=?, headers_json=?, query_json=?, url=? WHERE workspace_id=?")
+            .bind(&auth).bind(if target == "header" { &rows } else { "[]" }).bind(if target == "query" { &rows } else { "[]" })
+            .bind(if target == "query" { "https://example.test?clientCredential=url-custom-canary" } else { "https://example.test" }).bind(&source.id).execute(bus.db.pool()).await.unwrap();
+        let sharing = bus
+            .workspace_bundle_export_with_options(
+                source.id.clone(),
+                WorkspaceBundleOptions::default(),
+            )
+            .await
+            .unwrap();
+        assert!(!sharing.content.contains("custom-canary"));
+        let snapshot = bus
+            .workspace_bundle_export(source.id.clone())
+            .await
+            .unwrap();
+        assert!(!snapshot.contains("custom-canary"));
+        let collection = bus
+            .api_collection_list(source.id.clone())
+            .await
+            .unwrap()
+            .remove(0);
+        for format in [
+            ApiCollectionExportFormat::Unfour,
+            ApiCollectionExportFormat::Postman,
+            ApiCollectionExportFormat::Json,
+            ApiCollectionExportFormat::Yaml,
+        ] {
+            let file = bus
+                .api_collection_export(source.id.clone(), collection.id.clone(), format)
+                .await
+                .unwrap();
+            assert!(!file.content.contains("custom-canary"));
+        }
+
+        let encrypted = bus
+            .workspace_bundle_export_with_options(source.id.clone(), options())
+            .await
+            .unwrap();
+        let copy = bus
+            .workspace_bundle_import_with_options(
+                encrypted.content,
+                "Custom key copy".into(),
+                options(),
+            )
+            .await
+            .unwrap();
+        let restored: (String, String, String, String) = sqlx::query_as(
+            "SELECT auth_json,headers_json,query_json,url FROM api_requests WHERE workspace_id=?",
+        )
+        .bind(&copy.id)
+        .fetch_one(bus.db.pool())
+        .await
+        .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(&restored.0).unwrap(),
+            serde_json::from_str::<Value>(&auth).unwrap()
+        );
+        let restored_rows = if target == "header" {
+            restored.1
+        } else {
+            restored.2
+        };
+        assert_eq!(restored_rows, rows);
+        if target == "query" {
+            assert!(restored.3.contains("url-custom-canary"));
+        }
+        let journal: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM workspace_bundle_credential_journal WHERE workspace_id=?",
+        )
+        .bind(copy.id)
+        .fetch_one(bus.db.pool())
+        .await
+        .unwrap();
+        assert_eq!(journal, 1, "only the SSH password should enter Keychain");
+    }
 }

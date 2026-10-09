@@ -12,7 +12,7 @@ use sqlx::{FromRow, SqliteConnection};
 use unfour_core::domain::{
     CommandContext, DomainEntityKey, DomainEntityType, DomainMutation, MutationOperation,
 };
-use unfour_core::models::{ApiCollection, ApiCollectionFolder, ApiSavedRequest};
+use unfour_core::models::{ApiCollection, ApiCollectionFolder, ApiSavedRequest, KeyValue};
 use unfour_core::{AppError, AppResult};
 
 use super::ApiClientService;
@@ -266,10 +266,36 @@ async fn list_requests_on(
 pub fn sanitize_portable_api_request(
     record: &mut unfour_core::domain::ApiRequestSnapshot,
 ) -> AppResult<()> {
-    record.auth_json = secrets::snapshot_auth_json(&record.auth_json);
-    record.url = secrets::snapshot_url(&record.url);
-    record.headers = secrets::snapshot_key_values(&serde_json::to_string(&record.headers)?)?;
-    record.query = secrets::snapshot_key_values(&serde_json::to_string(&record.query)?)?;
+    let auth = record.auth_json.clone();
+    record.auth_json = secrets::snapshot_auth_json(&auth);
+    record.url = secrets::snapshot_request_url(&record.url, &auth);
+    record.headers = secrets::snapshot_request_key_values(
+        &serde_json::to_string(&record.headers)?,
+        &auth,
+        false,
+    )?;
+    record.query =
+        secrets::snapshot_request_key_values(&serde_json::to_string(&record.query)?, &auth, true)?;
     record.body = secrets::snapshot_body(record.body.as_deref(), &record.body_kind);
     Ok(())
+}
+
+/// Apply the same outbound secret boundary to collection export source rows.
+/// The source is a local copy; the persisted request is never changed.
+pub(super) fn sanitize_saved_request(mut request: ApiSavedRequest) -> AppResult<ApiSavedRequest> {
+    request.url = secrets::snapshot_request_url(&request.url, &request.auth_json);
+    for (rows, query) in [
+        (&mut request.headers_json, false),
+        (&mut request.query_json, true),
+    ] {
+        let original: Vec<KeyValue> = serde_json::from_str(rows)?;
+        let mut safe = secrets::snapshot_request_key_values(rows, &request.auth_json, query)?;
+        for (safe, original) in safe.iter_mut().zip(original) {
+            if super::is_bundle_variable_template(&original.value) {
+                safe.value = original.value;
+            }
+        }
+        *rows = serde_json::to_string(&safe)?;
+    }
+    Ok(request)
 }

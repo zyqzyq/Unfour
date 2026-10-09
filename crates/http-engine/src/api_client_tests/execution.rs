@@ -92,7 +92,7 @@ fn delayed_body_server(delay: Duration, body: &'static str) -> (String, thread::
 }
 
 #[test]
-fn history_redaction_keeps_form_context_and_short_unrelated_text() {
+fn history_redaction_keeps_form_context_and_scrubs_short_credential_echoes() {
     let mut form = request("https://example.test", None);
     form.body_kind = "form-urlencoded".into();
     form.body = Some("password=body-secret&note=keep".into());
@@ -106,7 +106,7 @@ fn history_redaction_keeps_form_context_and_short_unrelated_text() {
     json.body = Some(r#"{"password":"ab","note":"ab"}"#.into());
     let json = super::super::history_redaction::sanitize(&json, &[], r#"{"ok":true}"#).unwrap();
     let json_body = json.body.unwrap();
-    assert!(json_body.contains("\"note\":\"ab\""), "{json_body}");
+    assert!(!json_body.contains("\"note\":\"ab\""), "{json_body}");
     assert!(!json_body.contains("\"password\":\"ab\""), "{json_body}");
     assert!(
         json.response_body.contains("true"),

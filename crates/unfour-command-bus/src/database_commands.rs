@@ -46,30 +46,58 @@ impl CommandBus {
         &self,
         input: DatabaseConnectionInput,
     ) -> AppResult<DatabaseConnection> {
+        self.save_database_connection_with_secret(input, None).await
+    }
+
+    pub async fn save_database_connection_with_secret(
+        &self,
+        mut input: DatabaseConnectionInput,
+        secret: Option<String>,
+    ) -> AppResult<DatabaseConnection> {
+        let _credential_guard = self.credential_stage_guard().await?;
+        self.track_connection_credential_edit(&input.workspace_id, input.id.as_deref(), "database")
+            .await?;
+        let mut staged = Vec::new();
+        if input.driver != "sqlite" {
+            if let Some(secret) = secret.filter(|value| !value.is_empty()) {
+                let reference = self
+                    .stage_connection_credential(
+                        &input.workspace_id,
+                        input.credential_ref.as_deref(),
+                        "database-password",
+                        &secret,
+                    )
+                    .await?;
+                input.credential_ref = Some(reference.clone());
+                staged.push(reference);
+            }
+        }
         let context = CommandContext::local("database.connection.save");
         let executor_context = context.clone();
         let service = self.database.clone();
-        self.execute_domain_command_with_activity_even_without_mutation(
-            context,
-            |connection: &DatabaseConnection| CommandActivity {
-                workspace_id: Some(connection.workspace_id.clone()),
-                action: "database.connection.save",
-                target: Some(connection.id.clone()),
-                details: serde_json::json!({
-                    "name": connection.name,
-                    "driver": connection.driver,
-                    "credentialRef": connection.credential_ref.is_some()
-                }),
-            },
-            move |connection| {
-                Box::pin(async move {
-                    service
-                        .save_connection_on(connection, &executor_context, input)
-                        .await
-                })
-            },
-        )
-        .await
+        let result = self
+            .execute_domain_command_with_activity_even_without_mutation(
+                context,
+                |connection: &DatabaseConnection| CommandActivity {
+                    workspace_id: Some(connection.workspace_id.clone()),
+                    action: "database.connection.save",
+                    target: Some(connection.id.clone()),
+                    details: serde_json::json!({
+                        "name": connection.name,
+                        "driver": connection.driver,
+                        "credentialRef": connection.credential_ref.is_some()
+                    }),
+                },
+                move |connection| {
+                    Box::pin(async move {
+                        service
+                            .save_connection_on(connection, &executor_context, input)
+                            .await
+                    })
+                },
+            )
+            .await;
+        self.finish_bundle_credential_edits(&staged, result).await
     }
 
     pub async fn delete_database_connection(
