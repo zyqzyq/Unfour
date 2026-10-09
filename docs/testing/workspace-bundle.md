@@ -1,9 +1,12 @@
 # Workspace bundle verification
 
-Current scope: V2 local bundles and encrypted backups. Earlier V1 evidence follows below.
+Current scope: V2 local bundles and encrypted backups. See the latest
+[storage and Secret correction verification](secret-backup-storage.md). Earlier
+audit/V1 evidence below is historical; imported API/variable Keychain references
+and legacy adoption described there are superseded.
 See [format and boundaries](../architecture/workspace-bundle.md).
 
-## Credential lifecycle audit of `176f37b` — 2026-10-09
+## Historical credential lifecycle audit of `176f37b` — 2026-10-09
 
 The review fixes imported-variable and saved-SSH credential replacement with
 fresh staged handles, durable attachment/reclamation metadata, rollback

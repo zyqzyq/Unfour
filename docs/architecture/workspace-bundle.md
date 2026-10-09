@@ -178,35 +178,51 @@ characters. There is no recovery key or server-side decryption.
 Optional secrets include SSH/database passwords, SSH key passphrases, Workspace
 and environment secret variables, and saved API auth/header/query/URL secrets.
 Body/script/SQL/Flow literal secrets remain subject to redaction; the backup is
-not a byte-for-byte database image. Source credential handles never become target
-handles. Import allocates fresh workspace-scoped references in the local credential
-store. Variables and API values persist only those references; runtime resolves
-them with workspace checks. Auth JSON resolves string leaves before serialization,
-so quotes/backslashes in credentials cannot change authentication structure.
-Preview returns counts, paths and field statuses, never decrypted secret values.
+not a byte-for-byte database image. Source connection credential handles never
+become target handles. Import allocates fresh workspace-scoped Keychain references
+only for SSH/database passwords and SSH key passphrases. API sensitive fields and
+Workspace/environment Secret values restore to their original SQLite slots.
+Secret flags, variable templates and enabled state keep their existing semantics.
+Auth JSON resolves string leaves before serialization and auth materialization,
+so quotes/backslashes cannot change authentication structure and Basic auth is
+encoded only after variable resolution. Resolution and diagnostic/history
+scrubbing use values from the same temporary SQLite read snapshot, including
+request-local overrides, so concurrent edits cannot change the redaction source.
+No additional persisted secret state is created. Preview returns counts, paths
+and field statuses, never decrypted secret values.
 
 Before Keychain writes, import validates all domain rows in a rollback-only
-transaction. The metadata journal tracks `staged`, `attached` and `garbage`
-references. Attachment and loss of the last live reference are recorded in the
-business transaction. Keychain deletion follows commit, with a fresh reference
-check under the SQLite writer lock; failed cleanup stays durable for retry.
-The check includes variables, API values and connection fields, so shared handles
-survive until their last use disappears. Failed transactions retain the old
-credential and reclaim only unpublished stages. Imported variable replacements
-and saved SSH credential edits allocate fresh handles instead of overwriting
-shared credentials. Clearing a Secret retains its flag, and refilling it writes
-a new Keychain credential.
+transaction. The existing metadata journal tracks `staged`, `attached` and
+`garbage` connection references. Attachment and loss of the last live connection
+reference are recorded in the business transaction. Keychain deletion follows
+commit, with a fresh reference check under the SQLite writer lock; failed cleanup
+stays durable for retry. Shared connection handles survive until their last use
+disappears. Failed edits retain the old credential and reclaim only unpublished
+stages. SSH/database replacements allocate fresh handles instead of overwriting
+shared credentials; explicit clear removes the connection's reference.
 
-Primary startup reclaims interrupted stages and garbage and adopts live handles
-saved by the original V2 implementation without ownership metadata. Satellite/MCP
-construction does not run startup recovery. Historically orphaned handles with
-neither a live reference nor journal metadata cannot be recovered or enumerated
-portably. An external OS credential change cannot participate in the SQLite lock.
-Slow Keychain reads may briefly delay local edits during credential capture.
+Staging writers hold the same per-database OS file lock before journaling through
+commit or rollback cleanup. Primary startup takes that lock before reclaiming
+interrupted stages and garbage. Satellite/MCP construction skips startup recovery
+and its writes participate in the same lock. Process exit releases the lock; the
+lock file is retained to avoid replacing a live lock inode. This prevents another
+process's startup from deleting an active writer's staged credential. SQLite
+writer transactions still protect backup capture and reference checks.
 
-The variable editor shows a localized saved-credential placeholder for an imported
-handle. Leaving it untouched preserves the reference; typing replaces it, and an
-explicit clear action removes its value. It never reveals the handle as a password.
+V2 import/export has not shipped: test imports that stored API/variable values as
+Keychain references receive no compatibility resolver, adoption or migration.
+Ordinary SQLite values and V1 import keep their normal behavior. Historically
+orphaned handles with neither a live connection nor journal metadata cannot be
+enumerated portably. External OS credential changes cannot participate in the
+SQLite lock. Slow Keychain reads may briefly delay local edits during capture.
+
+API and variable editors hide sensitive values by default and reveal them with
+local presentation state. Saved SSH/database editors fetch plaintext only on
+explicit reveal; viewing never changes the edit value. Preserve, replace and
+clear are distinct save intents. SQLite Secret replacement/clear remains a normal
+variable edit and preserves the Secret flag. Custom API Key Auth field names
+participate in the existing share/domain snapshot redaction boundary.
+
 Save writes a temporary sibling file and persists it only after
 the complete write succeeds. Cancelling or failing leaves the dialog editable.
 

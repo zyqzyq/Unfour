@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { Workspace, WorkspaceEnvironment } from "@unfour/command-client";
 import { I18nProvider, ThemeProvider } from "@unfour/ui";
+import { WorkspaceBundleExchangeProvider } from "@unfour/workspace-local";
 import { AppTitleBar } from "./AppTitleBar";
 import type { DesktopAppExtensionContext } from "../extensions";
 
@@ -57,7 +58,7 @@ function createWrapper() {
       <QueryClientProvider client={client}>
         <ThemeProvider defaultThemeMode="dark" storageKey="test.theme">
           <I18nProvider initialLocale="en" storageKey="test.locale">
-            {children}
+            <WorkspaceBundleExchangeProvider onImported={vi.fn()}>{children}</WorkspaceBundleExchangeProvider>
           </I18nProvider>
         </ThemeProvider>
       </QueryClientProvider>

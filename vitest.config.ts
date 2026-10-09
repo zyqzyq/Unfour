@@ -22,6 +22,8 @@ export default defineConfig({
     // Node by default keeps the pure-logic suite fast. Component tests opt into
     // a DOM via a `// @vitest-environment jsdom` docblock at the top of the file.
     environment: "node",
+    // Bound concurrent DOM workers to avoid starving desktop integration tests.
+    maxWorkers: 4,
     setupFiles: ["./vitest.setup.ts"],
     coverage: {
       provider: "v8",

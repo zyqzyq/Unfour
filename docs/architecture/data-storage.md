@@ -322,22 +322,32 @@ placeholders such as `{{base_url}}` in URL, auth metadata, headers, query
 parameters, and body before sending. Resolution is workspace-scoped and an
 environment ID is rejected unless it belongs to the supplied workspace.
 
-Environment values are not encrypted. Do not store long-lived secrets in
-workspace environment variables. Use credential references for passwords,
-private-key passphrases, database passwords, and API tokens when a feature
-supports them.
+Workspace and environment values, including values marked Secret, remain in
+SQLite. API Auth, Headers and Query sensitive values also keep their existing
+SQLite storage. Secret flags and hidden inputs control presentation and outbound
+redaction; they do not encrypt local SQLite fields. Encrypted backups protect
+export, transfer and restore without changing this storage model.
 
 ## Credential Boundary
 
-SQLite records may store `credential_ref`, but must never store raw secret
-material such as passwords, API tokens, or SSH private-key passphrases.
+SSH/database connection passwords and SSH private-key passphrases live in OS
+Keychain; their SQLite records contain only `credential_ref`. Do not write these
+connection credentials into SQLite, activity details, history or Cloud Sync.
 
-`crates/secret-store` is the credential boundary:
+`crates/secret-store` owns the credential boundary:
 
 - production builds use OS keychain backends;
 - tests can use an in-memory backend;
-- metadata commands may return credential references and labels, but not raw
-  secret values.
+- metadata commands return references and labels, never raw secret values;
+- the desktop editor can reveal a saved SSH/database credential only after
+  checking its live connection, workspace, type and expected reference. MCP has
+  no generic plaintext read or connection-reveal tool.
+
+Connection saves stage fresh references and publish them with the SQLite business
+transaction. A per-database OS file lock covers staging through commit/rollback
+and primary startup recovery, including concurrent MCP/desktop processes. The
+existing credential journal records cleanup intent; no new vault or encrypted
+SQLite storage is involved. Viewing does not rotate or persist a credential.
 
 The keychain service name is currently `unfour`, and credential references use
 the format `unfour:<workspace_id>:<kind>:<record_uuid>`. Keep that service name
