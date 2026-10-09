@@ -140,6 +140,37 @@ test("test-code and generated-artifact detectors avoid external test-module fals
   assert.equal(looksLikeGeneratedOrBuildArtifact("packages/app/src/file.ts", "// @generated\n"), true);
 });
 
+test("only byte-identical assets from the pinned Monaco distribution are exempt", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "unfour-monaco-guard-"));
+  try {
+    const desktop = path.join(root, "apps/desktop");
+    const dependency = path.join(desktop, "node_modules/monaco-editor");
+    const original = path.join(dependency, "min/vs");
+    const copied = path.join(desktop, "public/monaco/vs");
+    for (const dir of [original, copied, path.join(copied, "assets"), path.join(original, "assets"), path.join(desktop, "src")]) {
+      await mkdir(dir, { recursive: true });
+    }
+    await writeFile(path.join(desktop, "package.json"), JSON.stringify({ dependencies: { "monaco-editor": "0.55.1" } }));
+    await writeFile(path.join(dependency, "package.json"), JSON.stringify({ name: "monaco-editor", version: "0.55.1" }));
+    for (const file of ["loader.js", "assets/ts.worker-CMbG-7ft.js"]) {
+      await writeFile(path.join(original, file), lines(1300));
+      await writeFile(path.join(copied, file), lines(1300));
+    }
+    await writeFile(path.join(copied, "project.js"), lines(1300));
+    await writeFile(path.join(desktop, "src/ts.worker-project.js"), lines(1300));
+    const paths = async () => (await scanLargeFiles(root)).map((issue) => issue.path).sort();
+    const projectFiles = ["apps/desktop/public/monaco/vs/project.js", "apps/desktop/src/ts.worker-project.js"];
+    assert.deepEqual(await paths(), projectFiles);
+
+    await writeFile(path.join(copied, "loader.js"), `${lines(1300)}\nproject code`);
+    assert.deepEqual(await paths(), ["apps/desktop/public/monaco/vs/loader.js", ...projectFiles]);
+    await writeFile(path.join(dependency, "package.json"), JSON.stringify({ name: "monaco-editor", version: "0.56.0" }));
+    assert.deepEqual(await paths(), ["apps/desktop/public/monaco/vs/assets/ts.worker-CMbG-7ft.js", "apps/desktop/public/monaco/vs/loader.js", ...projectFiles]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("formatIssue includes actionable guidance", () => {
   const message = formatIssue({
     path: "src/large.tsx",

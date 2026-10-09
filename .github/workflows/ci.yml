@@ -58,6 +58,11 @@ jobs:
       - name: Migration integrity check
         run: pnpm run check:migrations
 
+      - name: Large-file guard with copied Monaco assets
+        run: |
+          node scripts/prepare-monaco.mjs
+          pnpm run check:large-files
+
   rust:
     name: Rust ${{ matrix.task }}
     runs-on: ubuntu-latest

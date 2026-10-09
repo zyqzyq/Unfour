@@ -1,5 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 export const CRITICAL_THRESHOLD = 1200;
@@ -203,6 +204,35 @@ async function walkSourceFiles(dir, root, files) {
   }
 }
 
+async function monacoDistributionRoot(root) {
+  const desktopManifest = path.join(root, "apps/desktop/package.json");
+  try {
+    const desktop = JSON.parse(await readFile(desktopManifest, "utf8"));
+    const require = createRequire(desktopManifest);
+    const manifestPath = require.resolve("monaco-editor/package.json");
+    const monaco = JSON.parse(await readFile(manifestPath, "utf8"));
+    // Only the exact desktop dependency pin is a trusted source of copied assets.
+    if (desktop.dependencies?.["monaco-editor"] === monaco.version) {
+      return path.join(path.dirname(manifestPath), "min/vs");
+    }
+  } catch (error) {
+    if (!["ENOENT", "MODULE_NOT_FOUND"].includes(error?.code)) throw error;
+  }
+  return null;
+}
+
+async function isCopiedMonacoAsset(relativePath, bytes, distributionRoot) {
+  const prefix = "apps/desktop/public/monaco/vs/";
+  if (!distributionRoot || !relativePath.startsWith(prefix)) return false;
+  try {
+    const original = await readFile(path.join(distributionRoot, relativePath.slice(prefix.length)));
+    return bytes.equals(original);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+    return false;
+  }
+}
+
 export async function scanLargeFiles(root = process.cwd(), options = {}) {
   const resolvedRoot = path.resolve(root);
   const rootDirectories = options.rootDirectories ?? DEFAULT_SCAN_ROOTS;
@@ -213,15 +243,19 @@ export async function scanLargeFiles(root = process.cwd(), options = {}) {
   }
 
   const issues = [];
+  const monacoRoot = await monacoDistributionRoot(resolvedRoot);
 
   for (const filePath of files) {
-    const text = await readFile(filePath, "utf8");
+    const bytes = await readFile(filePath);
+    const relativePath = normalizeRelativePath(filePath, resolvedRoot);
+    // prepare-monaco.mjs copies min/vs verbatim. A path/name/header alone must
+    // never exempt new project code or a modified third-party copy.
+    if (await isCopiedMonacoAsset(relativePath, bytes, monacoRoot)) continue;
+    const text = bytes.toString("utf8");
     const lineCount = countLines(text);
     const classification = classifyLineCount(lineCount);
 
     if (classification) {
-      const relativePath = normalizeRelativePath(filePath, resolvedRoot);
-
       issues.push({
         path: relativePath,
         lineCount,

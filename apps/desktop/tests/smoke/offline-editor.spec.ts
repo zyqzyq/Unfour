@@ -13,7 +13,7 @@ test("Monaco initializes and edits with all external network requests blocked", 
   });
   await page.goto("/");
   const modules = page.getByRole("navigation", { name: "Modules" });
-  await modules.getByRole("button", { name: "API", exact: true }).click();
+  await modules.getByRole("button", { name: "API Client", exact: true }).click();
   await page.getByRole("button", { name: "Scripts", exact: true }).click();
   const editor = page.locator(".monaco-editor").first();
   await expect(editor).toBeVisible();
