@@ -92,6 +92,9 @@ pub(super) fn snapshot_body(value: Option<&str>, body_kind: &str) -> Option<Stri
 }
 
 pub(super) fn snapshot_url(value: &str) -> String {
+    if value.contains("@unfour-secret:") {
+        return REDACTED_VALUE.into();
+    }
     transform_url(value, None, true)
 }
 

@@ -393,6 +393,7 @@ macro_rules! generate_handlers {
             unfour_app::commands::api_collection_import,
             unfour_app::commands::api_collection_import_preview,
             unfour_app::commands::workspace_bundle_pick,
+            unfour_app::commands::workspace_bundle_preview,
             unfour_app::commands::workspace_bundle_import,
             unfour_app::commands::workspace_bundle_export,
             unfour_app::commands::workspace_environment_import_preview,

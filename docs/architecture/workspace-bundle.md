@@ -1,8 +1,11 @@
-# Workspace bundle V1
+# Workspace bundles and encrypted local backups
 
 A Workspace can be exported from its switcher menu and imported as a new local
 Workspace. This is a portable business definition package, not a database backup.
-The independently versioned contract is `format: "unfour-workspace", version: 1`.
+The desktop exports `format: "unfour-workspace", version: 2`; V1 remains readable.
+V2 adds optional `localPaths`, `credentialRequirements`, and `apiTemplates` arrays.
+The V1 base record contract below is unchanged. Cloud Sync does not consume these
+local supplements or encrypted backups.
 The schema is defined in `crates/unfour-command-bus/src/workspace_bundle/schema.rs`.
 
 ## Envelope and content
@@ -42,7 +45,7 @@ null. Top-level records and connection configurations reject unknown fields.
 | Flows | Name, input declarations, action/control-flow steps and references |
 
 No timestamps, revision, remote IDs, sync status, tombstones, Cloud Sync bindings,
-outbox, credentials, Keychain values, histories, activity, open tabs, layouts,
+outbox, histories, activity, open tabs, layouts,
 selected environment, active workspace, or host trust records enter the bundle.
 Default local companion state is freshly initialized on import. MCP permissions
 are not copied: the new Workspace starts with MCP disabled.
@@ -71,7 +74,7 @@ added to the Cloud Sync domain registry.
 
 Import follows:
 
-1. Read bounded UTF-8 JSON (32 MiB maximum), check format/version and typed fields.
+1. Read bounded UTF-8 JSON (48 MiB envelope / 32 MiB plaintext maximum), check format/version and typed fields.
 2. Sanitize untrusted content with the same export security rules.
 3. Validate unique IDs, reference kinds, folder ownership/cycles, and Flow graph
    and expression constraints. At most 50,000 top-level records and 128 folder
@@ -121,19 +124,25 @@ references repaired before it can be imported.
 
 ## Secrets and device settings
 
-Connection DTOs are allowlists. No credential reference, password, token,
-passphrase, private-key path, SQLite file path, tunnel/other opaque device config,
-or Keychain content is transported. SQLite endpoint/catalog fields are omitted.
-Fresh connections retain the existing engine's missing-credential/device-setting
-behavior; the preview lists connections requiring configuration. No secrets are
-read from the Keychain during export or written during import.
+Sharing mode removes credentials and excludes device paths by default. Paths can
+be included explicitly. Encrypted backup mode includes paths by default and offers
+an independent switch for saved credentials. Connection DTOs remain allowlists;
+local paths and credential requirement metadata travel in separate V2 fields.
+SQLite endpoint/catalog fields and opaque connection configuration remain omitted.
+Preview identifies specific missing fields instead of treating every connection
+as requiring credentials. Retained paths begin as unchecked, with an optional
+read-only check and per-path editing/prefix replacement before import.
 
-Secret variables keep their names/metadata but import with empty values. Sensitive
-API auth/header/query/body fields reuse domain redaction. Request settings retain
-only the supported timeout field. Multipart file bindings/bytes never travel and
-must be selected again. SSH upload/download local paths become `{{local_path}}`
-and the transfer steps are disabled until explicitly configured/enabled. Remote
-paths are business intent and are retained.
+Sharing keeps secret variable metadata with empty values. Sensitive API fields
+reuse domain redaction; explicit variable templates in auth/headers/query are
+restored through validated local supplements. Request settings retain only the
+supported timeout field. Multipart file bindings are currently runtime-only and
+must be selected again. Files, including private keys, are never embedded. Retained
+paths cover SSH private-key files, SQLite files, and SSH upload/download steps.
+An omitted transfer path becomes `{{local_path}}`; the original enabled flag is
+preserved, so missing inputs fail rather than silently skipping a transfer.
+Native SSH tasks check all resolved transfer paths before starting any remote
+command, and drivers recheck at use. SQLite still refuses to create a missing DB.
 
 Flow secret input defaults are removed. Structured sensitive fields and recognized
 sensitive lines in scripts/SQL/SSH configuration are redacted. Definition text is
@@ -143,11 +152,44 @@ to inspect scripts, SQL and free text for hardcoded credentials before sharing.
 Redacted definitions may need editing before execution. Prefer variables and
 runtime inputs for secret values.
 
-## V2 candidates and non-goals
+## Encrypted envelope and local credentials
+
+The outer format is `unfour-workspace-encrypted`, version 1. It encrypts a V2
+bundle and credential bindings using AES-256-GCM. A random 256-bit data key is
+wrapped with a key derived from the user password using PBKDF2-HMAC-SHA256,
+600,000 iterations and a random 128-bit salt. Both operations use independent
+random 96-bit nonces and version-bound AAD. Fixed versioned parameters, strict
+field/length validation and authenticated decryption reject unsupported, damaged
+or wrong-password input before any persistence. Passwords require at least 12
+characters. There is no recovery key or server-side decryption.
+
+Optional secrets include SSH/database passwords, SSH key passphrases, Workspace
+and environment secret variables, and saved API auth/header/query/URL secrets.
+Body/script/SQL/Flow literal secrets remain subject to redaction; the backup is
+not a byte-for-byte database image. Source credential handles never become target
+handles. Import allocates fresh workspace-scoped references in the local credential
+store. Variables and API values persist only those references; runtime resolves
+them with workspace checks. Auth JSON resolves string leaves before serialization,
+so quotes/backslashes in credentials cannot change authentication structure.
+Preview returns counts, paths and field statuses, never decrypted secret values.
+
+Before keychain writes, import validates all domain rows in a rollback-only
+transaction. A durable journal records staged credential references, then the final
+business transaction attaches the credentials and removes that journal atomically.
+Failure cleans up staged credentials; interrupted cleanup is retried at primary
+application startup before imports are exposed. Satellite/MCP construction does
+not run cleanup. Save writes a temporary sibling file and persists it only after
+the complete write succeeds. Cancelling or failing leaves the dialog editable.
+
+New dependencies: `ring` provides maintained AEAD/KDF primitives, `base64` encodes
+the envelope, `zeroize` clears sensitive buffers, `tempfile` protects existing
+backups during replacement, and `tracing` reports pending cleanup without secrets.
+These dependencies are already present in the workspace lockfile dependency graph.
+
+## Non-goals
 
 Selective export/import, dependency repair/rebinding, merge/conflict policies,
 bundle migration between versions, file attachments with explicit portability
-rules, richer per-field repair reports, signatures/checksums and large-bundle
-progress/cancellation can follow separately. V1 adds no Flow Cloud Sync, separate
-Flow import/export, remote execution, credential migration, or database schema
-migration.
+rules, signatures and large-bundle progress/cancellation can follow separately.
+This change adds no multi-device encrypted credential sync, Flow Cloud Sync,
+separate Flow import/export, remote execution, or database file migration.

@@ -20,10 +20,12 @@ pub use domain::runtime_request_secret_values;
 mod execution;
 mod history;
 mod history_redaction;
+mod local_bundle;
 mod multipart;
 mod openapi_export;
 mod openapi_import;
 mod requests;
+pub use local_bundle::is_bundle_variable_template;
 
 const DEFAULT_AUTH_JSON: &str = r#"{"type":"none"}"#;
 const DEFAULT_COLLECTION_NAME: &str = "My Collection";

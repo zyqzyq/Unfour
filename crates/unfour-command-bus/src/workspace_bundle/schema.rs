@@ -153,6 +153,20 @@ pub struct WorkspaceBundle {
     pub ssh_steps: Vec<SshTaskStepRecord>,
     pub saved_sql: Vec<SavedSqlRecord>,
     pub flows: Vec<FlowRecord>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub local_paths: Vec<LocalPath>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub credential_requirements: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub api_templates: Vec<super::templates::ApiTemplate>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalPath {
+    pub entity_id: String,
+    pub field: String,
+    pub path: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

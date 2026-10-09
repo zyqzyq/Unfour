@@ -286,6 +286,12 @@ impl CommandBus {
                 }
             }
         }
+        for (value, secret) in values.values_mut() {
+            *value = self
+                .workspace
+                .resolve_secret_value(&input.workspace_id, value, *secret)
+                .await?;
+        }
         Ok(values)
     }
 

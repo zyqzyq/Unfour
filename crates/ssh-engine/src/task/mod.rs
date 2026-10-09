@@ -92,6 +92,29 @@ impl SshService {
 
         #[cfg(feature = "ssh-native")]
         {
+            // Validate every transfer before the first remote command can have side effects.
+            let mut downloaded = std::collections::HashSet::new();
+            for step in &steps {
+                if matches!(step.step_type.as_str(), "upload" | "download") {
+                    let path = step.config_json["localPath"].as_str().unwrap_or_default();
+                    let resolved_path = std::env::current_dir()?.join(path);
+                    let result =
+                        unfour_core::local_path::check_runtime(path, step.step_type == "download");
+                    // A preceding download may provide a later upload's source.
+                    let result =
+                        if result == Err("pathMissing") && downloaded.contains(&resolved_path) {
+                            Ok(())
+                        } else {
+                            result
+                        };
+                    result.map_err(|code| {
+                        AppError::Validation(format!("LOCAL_PATH_UNAVAILABLE:{code}:{}", step.name))
+                    })?;
+                    if step.step_type == "download" {
+                        downloaded.insert(resolved_path);
+                    }
+                }
+            }
             self.record_task_connection_use(&input.workspace_id, &detail.task.id, &connection_id)
                 .await?;
             let run_id = unfour_core::id::new_id();

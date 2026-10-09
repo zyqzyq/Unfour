@@ -270,14 +270,23 @@ impl CommandBus {
             .workspace
             .list_environments(workspace_id.to_string())
             .await?;
-        match environment_id {
+        let mut selected = match environment_id {
             Some(environment_id) => environments
                 .into_iter()
                 .find(|environment| environment.id == environment_id)
                 .map(Some)
                 .ok_or_else(|| AppError::NotFound("workspace environment".to_string())),
             None => Ok(None),
+        }?;
+        if let Some(environment) = &mut selected {
+            for variable in &mut environment.variables {
+                variable.value = self
+                    .workspace
+                    .resolve_secret_value(workspace_id, &variable.value, variable.is_secret)
+                    .await?;
+            }
         }
+        Ok(selected)
     }
 
     async fn commit_script_environment(
@@ -294,6 +303,13 @@ impl CommandBus {
             .iter()
             .map(|variable| (variable.key.as_str(), variable))
             .collect::<HashMap<_, _>>();
+        let persisted = self
+            .workspace
+            .list_environments(workspace_id.into())
+            .await?
+            .into_iter()
+            .find(|e| e.id == environment.id)
+            .ok_or_else(|| AppError::NotFound("workspace environment".into()))?;
         let variables = output
             .iter()
             .enumerate()
@@ -302,7 +318,14 @@ impl CommandBus {
                 WorkspaceVariableInput {
                     id: current.map(|item| item.id.clone()),
                     key: variable.key.clone(),
-                    value: variable.value.clone(),
+                    value: persisted
+                        .variables
+                        .iter()
+                        .find(|v| {
+                            current.is_some_and(|c| c.id == v.id && c.value == variable.value)
+                        })
+                        .map(|v| v.value.clone())
+                        .unwrap_or_else(|| variable.value.clone()),
                     is_secret: current
                         .map(|item| item.is_secret)
                         .unwrap_or_else(|| is_sensitive_key(&variable.key)),

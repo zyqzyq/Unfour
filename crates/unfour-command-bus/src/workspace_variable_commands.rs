@@ -605,7 +605,7 @@ impl CommandBus {
         input.auth_json = match input.auth_json {
             Some(auth_json) => Some(
                 self.workspace
-                    .resolve_variables_with_overrides(
+                    .resolve_json_variables(
                         &input.workspace_id,
                         environment_id,
                         &auth_json,

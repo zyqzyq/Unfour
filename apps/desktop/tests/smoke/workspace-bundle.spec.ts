@@ -45,6 +45,14 @@ for (const locale of ["en", "zh-CN"]) {
     await expect(dialog.getByText(activeName, { exact: true })).toBeVisible();
     await expect(dialog.getByRole("button", { name: locale === "en" ? "Choose Save Location…" : "选择保存位置…", exact: true })).toBeInViewport({ ratio: 1 });
     await page.screenshot({ animations: "disabled", path: testInfo.outputPath(`workspace-export-${locale}.png`) });
+    await dialog.getByLabel(locale === "en" ? "Export mode" : "导出方式", { exact: true }).selectOption("backup");
+    const save = dialog.getByRole("button", { name: locale === "en" ? "Choose Save Location…" : "选择保存位置…", exact: true });
+    await expect(save).toBeDisabled();
+    await dialog.getByLabel(locale === "en" ? "Backup password" : "备份密码", { exact: true }).fill("disposable-visual-password");
+    await dialog.getByLabel(locale === "en" ? "Confirm backup password" : "确认备份密码", { exact: true }).fill("disposable-visual-password");
+    await expect(save).toBeEnabled();
+    await expect(save).toBeInViewport({ ratio: 1 });
+    await page.screenshot({ animations: "disabled", path: testInfo.outputPath(`workspace-backup-${locale}.png`) });
     await dialog.getByRole("button", { name: locale === "en" ? "Cancel" : "取消", exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await page.keyboard.press("Control+Shift+P");

@@ -1,7 +1,13 @@
+mod backup;
 mod filename;
+mod local;
 mod remap;
 mod safety;
 mod schema;
+mod templates;
+pub use local::WorkspaceBundleOptions;
+#[cfg(test)]
+mod backup_tests;
 #[cfg(test)]
 mod tests;
 use crate::CommandBus;
@@ -24,6 +30,8 @@ pub struct WorkspaceBundleIssue {
     pub entity_id: String,
     pub name: String,
     pub code: String,
+    pub field: String,
+    pub status: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,6 +39,7 @@ pub struct WorkspaceBundlePreview {
     pub name: String,
     pub counts: BTreeMap<String, usize>,
     pub reconfigure: Vec<WorkspaceBundleIssue>,
+    pub paths: Vec<LocalPath>,
 }
 fn invalid() -> AppError {
     AppError::Validation("WORKSPACE_BUNDLE_INVALID".into())
@@ -58,12 +67,13 @@ fn parse(content: &str) -> AppResult<WorkspaceBundle> {
         return Err(AppError::Validation("WORKSPACE_BUNDLE_TOO_LARGE".into()));
     }
     let mut bundle: WorkspaceBundle = serde_json::from_str(content).map_err(|_| invalid())?;
-    if bundle.format != "unfour-workspace" || bundle.version != 1 {
+    if bundle.format != "unfour-workspace" || !matches!(bundle.version, 1 | 2) {
         return Err(AppError::Validation(
             "WORKSPACE_BUNDLE_UNSUPPORTED_VERSION".into(),
         ));
     }
     safety::sanitize(&mut bundle)?;
+    local::validate_paths(&bundle)?;
     Ok(bundle)
 }
 impl CommandBus {
@@ -123,6 +133,9 @@ impl CommandBus {
             ssh_steps: vec![],
             saved_sql: vec![],
             flows: vec![],
+            local_paths: vec![],
+            api_templates: vec![],
+            credential_requirements: vec![],
         };
         for snapshot in snapshots {
             match snapshot {
@@ -258,10 +271,11 @@ impl CommandBus {
         );
         mutations.extend(
             self.ssh
-                .apply_external_task_page_on(connection, &context, plan.page)
+                .apply_external_task_page_on(connection, &context, plan.page.clone())
                 .await?
                 .mutations,
         );
+        self.restore_local_fields_on(connection, &plan).await?;
         for record in plan.sql {
             self.database
                 .import_saved_sql_on(connection, record.1, &record.0)

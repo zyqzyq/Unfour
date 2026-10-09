@@ -30,10 +30,12 @@ impl WorkspaceService {
         connection: &mut SqliteConnection,
         context: &CommandContext,
         workspace_id: String,
-        variables: Vec<WorkspaceVariableInput>,
+        mut variables: Vec<WorkspaceVariableInput>,
     ) -> AppResult<DomainCommandResult<Vec<WorkspaceVariable>>> {
         get_workspace_on(connection, &workspace_id, false).await?;
         validate_variables(&variables)?;
+        self.preserve_imported_variable_edits(connection, &workspace_id, None, &mut variables)
+            .await?;
         let mutations =
             replace_workspace_variables_exact(connection, context, &workspace_id, variables)
                 .await?;
@@ -90,6 +92,8 @@ impl WorkspaceService {
         input.id = Some(variable_id.clone());
         validate_variables(std::slice::from_ref(&input))?;
         let current = get_variable_on(connection, &workspace_id, &variable_id, false).await?;
+        self.preserve_imported_variable_secret(&workspace_id, &current.value, &mut input)
+            .await?;
         if same_workspace_variable(&current, &input, input.sort_order) {
             return Ok(DomainCommandResult::unchanged(current));
         }
@@ -213,12 +217,19 @@ impl WorkspaceService {
         workspace_id: String,
         environment_id: String,
         name: String,
-        variables: Vec<WorkspaceVariableInput>,
+        mut variables: Vec<WorkspaceVariableInput>,
     ) -> AppResult<DomainCommandResult<WorkspaceEnvironment>> {
         get_workspace_on(connection, &workspace_id, false).await?;
         let current = get_environment_on(connection, &workspace_id, &environment_id, false).await?;
         let name = normalize_environment_name(name)?;
         validate_variables(&variables)?;
+        self.preserve_imported_variable_edits(
+            connection,
+            &workspace_id,
+            Some(&environment_id),
+            &mut variables,
+        )
+        .await?;
         assert_environment_name_unique_on(connection, &workspace_id, &name, Some(&environment_id))
             .await?;
         let now = Utc::now().to_rfc3339();
@@ -509,6 +520,8 @@ impl WorkspaceService {
             false,
         )
         .await?;
+        self.preserve_imported_variable_secret(&workspace_id, &current.value, &mut input)
+            .await?;
         if same_environment_variable(&current, &input, input.sort_order) {
             return Ok(DomainCommandResult::unchanged(current));
         }
@@ -549,10 +562,17 @@ impl WorkspaceService {
         context: &CommandContext,
         workspace_id: String,
         environment_id: String,
-        variables: Vec<WorkspaceVariableInput>,
+        mut variables: Vec<WorkspaceVariableInput>,
     ) -> AppResult<DomainCommandResult<Vec<WorkspaceEnvironmentVariable>>> {
         get_environment_on(connection, &workspace_id, &environment_id, false).await?;
         validate_variables(&variables)?;
+        self.preserve_imported_variable_edits(
+            connection,
+            &workspace_id,
+            Some(&environment_id),
+            &mut variables,
+        )
+        .await?;
         let mutations = replace_environment_variables_exact(
             connection,
             context,

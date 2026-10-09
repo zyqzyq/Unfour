@@ -6977,6 +6977,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
  "tauri-plugin-window-state",
+ "tempfile",
  "toml_edit 0.25.12+spec-1.1.0",
  "unfour-command-bus",
  "unfour-core",
@@ -7032,6 +7033,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "tokio-util",
+ "tracing",
  "unfour-core",
  "unfour-database-engine",
  "unfour-diag",
@@ -7042,6 +7044,7 @@ dependencies = [
  "unfour-secret-store",
  "unfour-ssh-engine",
  "unfour-workspace-engine",
+ "zeroize",
 ]
 
 [[package]]
@@ -7166,12 +7169,16 @@ dependencies = [
 name = "unfour-secret-store"
 version = "0.10.0"
 dependencies = [
+ "base64 0.22.1",
  "keyring",
+ "ring",
+ "serde",
  "serde_json",
  "tokio",
  "unfour-core",
  "unfour-diag",
  "uuid",
+ "zeroize",
 ]
 
 [[package]]
@@ -7222,6 +7229,7 @@ dependencies = [
  "tokio",
  "unfour-core",
  "unfour-local-storage",
+ "unfour-secret-store",
  "uuid",
 ]
 

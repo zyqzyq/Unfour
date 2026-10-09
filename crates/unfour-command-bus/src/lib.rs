@@ -80,5 +80,6 @@ mod tests;
 
 mod workspace_bundle;
 pub use workspace_bundle::{
-    WorkspaceBundleExportArtifact, WorkspaceBundleIssue, WorkspaceBundlePreview,
+    WorkspaceBundleExportArtifact, WorkspaceBundleIssue, WorkspaceBundleOptions,
+    WorkspaceBundlePreview,
 };

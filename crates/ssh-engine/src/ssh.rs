@@ -37,6 +37,7 @@ mod connection;
 mod connection_crud;
 pub use connection_crud::PreparedSshConnectionSave;
 mod connection_domain;
+mod local_bundle;
 pub use connection_domain::SshConnectionCleanup;
 mod diagnostic_execution;
 mod native_transport;

@@ -260,18 +260,31 @@ export function resolveWorkspaceVariables(
 export interface WorkspaceBundlePreview {
   name: string;
   counts: Record<string, number>;
-  reconfigure: { entityId: string; name: string; code: string }[];
+  reconfigure: { entityId: string; name: string; code: string; field?: string; status?: "missing" | "unchecked" | "ready" }[];
+  paths?: { entityId: string; field: string; path: string }[];
 }
 export interface WorkspaceBundleFile {
   content: string;
-  preview: WorkspaceBundlePreview;
+  preview: WorkspaceBundlePreview | null;
+  encrypted?: boolean;
+}
+export interface WorkspaceBundleOptions {
+  password?: string;
+  includeSecrets?: boolean;
+  keepLocalPaths?: boolean;
+  pathMappings?: { from: string; to: string }[];
+  pathOverrides?: { entityId: string; field: string; path: string }[];
+  checkPaths?: boolean;
 }
 export function pickWorkspaceBundle() {
   return call<WorkspaceBundleFile | null>("workspace_bundle_pick");
 }
-export function importWorkspaceBundle(content: string, name: string) {
-  return call<Workspace>("workspace_bundle_import", { content, name });
+export function previewWorkspaceBundle(content: string, options: WorkspaceBundleOptions) {
+  return call<WorkspaceBundlePreview>("workspace_bundle_preview", { content, options });
 }
-export function exportWorkspaceBundle(workspaceId: string) {
-  return call<{saved: boolean}>("workspace_bundle_export", { workspaceId });
+export function importWorkspaceBundle(content: string, name: string, options: WorkspaceBundleOptions = {}) {
+  return call<Workspace>("workspace_bundle_import", { content, name, options });
+}
+export function exportWorkspaceBundle(workspaceId: string, options: WorkspaceBundleOptions = {}) {
+  return call<{saved: boolean}>("workspace_bundle_export", { workspaceId, options });
 }

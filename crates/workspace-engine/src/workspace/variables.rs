@@ -74,7 +74,7 @@ impl WorkspaceService {
             .into_iter()
             .filter(|variable| variable.is_enabled)
         {
-            values.insert(variable.key, variable.value);
+            values.insert(variable.key, (variable.value, variable.is_secret));
         }
 
         if let Some(environment_id) = active_environment_id.filter(|id| !id.trim().is_empty()) {
@@ -85,15 +85,41 @@ impl WorkspaceService {
                     .into_iter()
                     .filter(|variable| variable.is_enabled)
             {
-                values.insert(variable.key, variable.value);
+                values.insert(variable.key, (variable.value, variable.is_secret));
             }
         }
 
         for variable in overrides.iter().filter(|variable| variable.enabled) {
-            values.insert(variable.key.clone(), variable.value.clone());
+            values.insert(variable.key.clone(), (variable.value.clone(), false));
         }
 
-        resolve_template(input, &values)
+        // Only resolve credentials actually referenced by this operation.
+        let referenced: HashSet<_> = input
+            .split("{{")
+            .skip(1)
+            .filter_map(|s| s.split_once("}}").map(|(key, _)| key.trim()))
+            .collect();
+        let mut resolved = HashMap::new();
+        for (key, (value, secret)) in values {
+            if referenced.contains(key.as_str()) {
+                resolved.insert(
+                    key,
+                    self.resolve_secret_value(workspace_id, &value, secret)
+                        .await?,
+                );
+            } else {
+                resolved.insert(key, value);
+            }
+        }
+        for key in referenced {
+            if key.starts_with("@unfour-secret:") {
+                resolved.insert(
+                    key.into(),
+                    self.resolve_secret_value(workspace_id, key, true).await?,
+                );
+            }
+        }
+        resolve_template(input, &resolved)
     }
 }
 

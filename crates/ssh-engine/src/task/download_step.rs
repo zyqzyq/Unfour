@@ -23,6 +23,12 @@ impl NativeTaskDriver {
             data: format!("$ download {remote_path} -> {}\n", config.local_path),
         });
         let target = resolve_download_local_target(&config.local_path)?;
+        unfour_core::local_path::check_runtime(&config.local_path, true).map_err(|code| {
+            TaskStepError::Failed {
+                message: format!("LOCAL_PATH_UNAVAILABLE:{code}"),
+                exit_code: None,
+            }
+        })?;
         if target.exists() && !config.overwrite {
             return Err(TaskStepError::Failed {
                 message: "local target already exists".to_string(),

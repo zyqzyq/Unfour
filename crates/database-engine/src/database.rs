@@ -25,6 +25,7 @@ mod connection_domain;
 mod connection_storage;
 mod connections;
 mod export;
+mod local_bundle;
 mod mysql;
 mod pools;
 mod postgres;

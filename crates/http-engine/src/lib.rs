@@ -1,6 +1,7 @@
 pub mod api_client;
 pub mod script_runtime;
 
+pub use api_client::is_bundle_variable_template;
 pub use api_client::runtime_request_secret_values;
 pub use api_client::sanitize_portable_api_request;
 pub use api_client::ApiClientService;

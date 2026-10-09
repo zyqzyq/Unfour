@@ -2,7 +2,7 @@ use super::*;
 use crate::{CommandBusExtensions, TransactionalCommandHook};
 use std::{future::Future, pin::Pin, sync::Arc};
 
-fn fixture() -> Value {
+pub(super) fn fixture() -> Value {
     json!({"format":"unfour-workspace","version":1,
     "workspace":{"id":"ws","name":"Portable","environmentType":"dev"},
     "variables":[{"id":"var","key":"endpoint","value":{"kind":"plain","value":"https://example.test"},"isSecret":false,"isEnabled":true,"description":null,"sortOrder":0},
@@ -266,7 +266,7 @@ async fn bundle_rejects_missing_wrong_kind_duplicate_cyclic_and_unsupported_refe
     assert!(bus.workspace_bundle_preview("not JSON").await.is_err());
     assert_eq!(count(&bus, "workspaces").await, baseline);
 }
-struct FailCommit;
+pub(super) struct FailCommit;
 impl TransactionalCommandHook for FailCommit {
     fn on_mutations<'a>(
         &'a self,

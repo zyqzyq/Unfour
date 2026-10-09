@@ -26,7 +26,7 @@ impl CommandBus {
         extensions: CommandBusExtensions,
     ) -> AppResult<Self> {
         let activity_log = ActivityLogService::new(db.clone());
-        let workspace = WorkspaceService::new(db.clone());
+        let workspace = WorkspaceService::new(db.clone()).with_secret_store(secret_store.clone());
         let bus = Self {
             db: db.clone(),
             extensions,
@@ -40,6 +40,10 @@ impl CommandBus {
         };
         bus.api_client.redact_legacy_history().await?;
         bus.ensure_default_workspace().await?;
+        // Only primary startup performs recovery; MCP/satellite construction skips it.
+        if bus.workspace.recover_bundle_credentials().await.is_err() {
+            tracing::warn!("Workspace backup credential cleanup remains pending");
+        }
         Ok(bus)
     }
 
@@ -93,7 +97,7 @@ impl CommandBus {
         extensions: CommandBusExtensions,
     ) -> AppResult<Self> {
         let activity_log = ActivityLogService::new(db.clone());
-        let workspace = WorkspaceService::new(db.clone());
+        let workspace = WorkspaceService::new(db.clone()).with_secret_store(secret_store.clone());
 
         let bus = Self {
             db: db.clone(),

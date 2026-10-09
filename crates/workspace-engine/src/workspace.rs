@@ -2,6 +2,7 @@ mod delete_cascade;
 mod environment_exchange;
 mod external_apply;
 mod layout;
+mod local_bundle;
 mod snapshot;
 mod variable_executor;
 mod variable_persistence;
@@ -25,11 +26,20 @@ const DEFAULT_MCP_POLICY: &str = "auto";
 #[derive(Clone)]
 pub struct WorkspaceService {
     pub(crate) db: LocalDb,
+    pub(crate) secret_store: Option<unfour_secret_store::SecretStore>,
 }
 
 impl WorkspaceService {
     pub fn new(db: LocalDb) -> Self {
-        Self { db }
+        Self {
+            db,
+            secret_store: None,
+        }
+    }
+
+    pub fn with_secret_store(mut self, store: unfour_secret_store::SecretStore) -> Self {
+        self.secret_store = Some(store);
+        self
     }
 
     pub async fn ensure_default_workspace_on(

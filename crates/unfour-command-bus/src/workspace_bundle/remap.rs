@@ -5,6 +5,9 @@ pub(super) struct ImportPlan {
     pub page: ExternalApplyPage,
     pub sql: Vec<(String, SavedSqlInput)>,
     pub flows: Vec<FlowDefinition>,
+    pub ids: HashMap<String, (String, &'static str)>,
+    pub local_paths: Vec<LocalPath>,
+    pub api_templates: Vec<templates::ApiTemplate>,
 }
 fn reference(
     map: &HashMap<String, (String, &'static str)>,
@@ -321,6 +324,9 @@ pub(super) fn prepare(bundle: WorkspaceBundle) -> AppResult<ImportPlan> {
         page,
         sql,
         flows,
+        local_paths: bundle.local_paths,
+        api_templates: bundle.api_templates,
+        ids,
     })
 }
 fn pointer(text: &str, ids: &HashMap<String, String>) -> AppResult<String> {

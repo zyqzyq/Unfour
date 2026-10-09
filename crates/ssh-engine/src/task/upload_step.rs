@@ -18,6 +18,12 @@ impl NativeTaskDriver {
                 }
             })?;
         let remote_path = normalize_task_remote_path(&config.remote_path)?;
+        unfour_core::local_path::check_runtime(&config.local_path, false).map_err(|code| {
+            TaskStepError::Failed {
+                message: format!("LOCAL_PATH_UNAVAILABLE:{code}"),
+                exit_code: None,
+            }
+        })?;
         emit(DriverEvent::Output {
             stream: "command".to_string(),
             data: format!("$ upload {} -> {remote_path}\n", config.local_path),

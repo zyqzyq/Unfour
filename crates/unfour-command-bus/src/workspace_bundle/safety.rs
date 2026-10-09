@@ -28,6 +28,9 @@ pub(super) fn sanitize(bundle: &mut WorkspaceBundle) -> AppResult<()> {
         let mut snapshot: ApiRequestSnapshot = serde_json::from_value(value)?;
         unfour_http_engine::sanitize_portable_api_request(&mut snapshot)?;
         *r = portable(snapshot)?;
+        if r.url.contains("@unfour-secret:") {
+            r.url = "<redacted>".into();
+        }
         // V1 carries only the supported timeout setting, never unknown opaque config.
         let settings: ApiRequestSettings =
             serde_json::from_str(&r.settings_json).map_err(|_| invalid())?;
@@ -68,7 +71,7 @@ pub(super) fn sanitize(bundle: &mut WorkspaceBundle) -> AppResult<()> {
         scrub(&mut step.config_json);
         if matches!(step.step_type.as_str(), "upload" | "download") {
             step.config_json["localPath"] = json!("{{local_path}}");
-            step.enabled = false;
+            // Missing dependencies must fail preflight, never silently skip an enabled step.
         }
     }
     for r in &mut bundle.saved_sql {
@@ -89,6 +92,7 @@ pub(super) fn sanitize(bundle: &mut WorkspaceBundle) -> AppResult<()> {
             step.node = serde_json::from_value(value)?;
         }
     }
+    super::templates::apply(bundle)?;
     Ok(())
 }
 fn scrub_text(text: &str) -> String {
@@ -100,6 +104,7 @@ fn scrub_text(text: &str) -> String {
             let key_end = upper.contains("-----END ") && upper.contains("PRIVATE KEY-----");
             private_key |= key_start;
             let sensitive = private_key
+                || line.contains("@unfour-secret:")
                 || unfour_core::redaction::is_sensitive_log_line(line)
                 || (is_sensitive_flow_name(line) && line.contains(['=', ':']));
             let result = if sensitive && !is_reference_text(line.trim_end()) {
@@ -182,69 +187,132 @@ pub(super) fn preview(bundle: &WorkspaceBundle) -> WorkspaceBundlePreview {
         ("flows".into(), bundle.flows.len()),
     ]);
     let mut reconfigure = Vec::new();
-    let mut issue = |id: &str, name: &str, code: &str| {
+    let mut issue = |id: &str, name: &str, code: &str, field: &str, status: &str| {
         reconfigure.push(WorkspaceBundleIssue {
             entity_id: id.into(),
             name: name.into(),
             code: code.into(),
+            field: field.into(),
+            status: status.into(),
         })
     };
     for c in &bundle.connections {
-        issue(&c.id, &c.name, "connection");
+        if bundle.credential_requirements.contains(&c.id)
+            || matches!(&c.config, BundleConnectionConfig::Ssh { auth_method, .. } if auth_method == "password")
+        {
+            issue(&c.id, &c.name, "connection", "credential", "missing");
+        }
+        let field = match &c.config {
+            BundleConnectionConfig::Ssh { auth_method, .. } if auth_method == "private-key" => {
+                Some("keyPath")
+            }
+            BundleConnectionConfig::Database { driver, .. } if driver == "sqlite" => {
+                Some("sqlitePath")
+            }
+            _ => None,
+        };
+        if let Some(field) = field {
+            if !bundle
+                .local_paths
+                .iter()
+                .any(|p| p.entity_id == c.id && p.field == field)
+            {
+                issue(&c.id, &c.name, "localPath", field, "missing");
+            }
+        }
     }
     for v in &bundle.variables {
         if v.is_secret {
-            issue(&v.id, &v.key, "secret");
+            issue(&v.id, &v.key, "secret", "value", "missing");
         }
     }
     for v in &bundle.environment_variables {
         if v.is_secret {
-            issue(&v.id, &v.key, "secret");
+            issue(&v.id, &v.key, "secret", "value", "missing");
         }
     }
     for r in &bundle.requests {
-        if serde_json::to_string(r)
-            .unwrap_or_default()
-            .to_ascii_lowercase()
-            .contains("redacted")
-        {
-            issue(&r.id, &r.name, "redacted");
+        for (field, value) in [
+            ("auth", r.auth_json.clone()),
+            ("url", r.url.clone()),
+            (
+                "headers",
+                serde_json::to_string(&r.headers).unwrap_or_default(),
+            ),
+            ("query", serde_json::to_string(&r.query).unwrap_or_default()),
+            ("body", r.body.clone().unwrap_or_default()),
+            (
+                "preRequestScript",
+                r.pre_request_script.clone().unwrap_or_default(),
+            ),
+            (
+                "postResponseScript",
+                r.post_response_script.clone().unwrap_or_default(),
+            ),
+        ] {
+            if redacted(&value) {
+                issue(&r.id, &r.name, "redacted", field, "missing");
+            }
         }
-        if r.body_kind == MULTIPART_BODY_KIND {
-            issue(&r.id, &r.name, "files");
+        if r.body_kind == MULTIPART_BODY_KIND
+            && parse_multipart_definition(r.body.as_deref())
+                .unwrap_or_default()
+                .iter()
+                .any(|p| matches!(p, ApiMultipartPart::File { enabled: true, .. }))
+        {
+            issue(&r.id, &r.name, "files", "body", "missing");
         }
     }
     for r in &bundle.ssh_steps {
         if matches!(r.step_type.as_str(), "upload" | "download") {
-            issue(&r.id, &r.name, "localPath");
+            if !bundle
+                .local_paths
+                .iter()
+                .any(|p| p.entity_id == r.id && p.field == "localPath")
+            {
+                issue(&r.id, &r.name, "localPath", "localPath", "missing");
+            }
         }
-        if r.config_json
-            .to_string()
-            .to_ascii_lowercase()
-            .contains("redacted")
-        {
-            issue(&r.id, &r.name, "redacted");
+        if redacted(&r.config_json.to_string()) {
+            issue(&r.id, &r.name, "redacted", "config", "missing");
         }
     }
     for r in &bundle.saved_sql {
-        if r.sql.to_ascii_lowercase().contains("redacted") {
-            issue(&r.id, &r.name, "redacted");
+        if redacted(&r.sql) {
+            issue(&r.id, &r.name, "redacted", "sql", "missing");
         }
     }
     for f in &bundle.flows {
-        if serde_json::to_string(f)
-            .unwrap_or_default()
-            .to_ascii_lowercase()
-            .contains("redacted")
-        {
-            issue(&f.id, &f.name, "redacted");
+        if redacted(&serde_json::to_string(f).unwrap_or_default()) {
+            issue(&f.id, &f.name, "redacted", "steps", "missing");
         }
+    }
+    for path in &bundle.local_paths {
+        let name = bundle
+            .connections
+            .iter()
+            .find(|r| r.id == path.entity_id)
+            .map(|r| r.name.as_str())
+            .or_else(|| {
+                bundle
+                    .ssh_steps
+                    .iter()
+                    .find(|r| r.id == path.entity_id)
+                    .map(|r| r.name.as_str())
+            })
+            .unwrap_or("");
+        issue(&path.entity_id, name, "pathCheck", &path.field, "unchecked");
     }
     WorkspaceBundlePreview {
         name: bundle.workspace.name.clone(),
         counts,
         reconfigure,
+        paths: bundle.local_paths.clone(),
     }
+}
+
+fn redacted(value: &str) -> bool {
+    value.contains("<redacted>") || value.to_ascii_lowercase().contains("%3credacted%3e")
 }
 
 fn is_reference_text(value: &str) -> bool {
