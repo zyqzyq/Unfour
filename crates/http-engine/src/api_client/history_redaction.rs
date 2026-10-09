@@ -165,6 +165,9 @@ impl ApiClientService {
             .fetch_all(&mut *tx)
             .await?;
             if rows.is_empty() {
+                // Transaction::drop queues rollback on SQLx's worker. Await it
+                // before startup can seed through another pooled connection.
+                tx.rollback().await?;
                 return Ok(());
             }
             for row in rows {
@@ -238,6 +241,9 @@ pub(super) fn sanitize_detail(row: &mut ApiHistoryDetail) -> AppResult<()> {
         .map(|_| safe.response_body);
     Ok(())
 }
+
+#[cfg(test)]
+mod storage_tests;
 
 #[cfg(test)]
 mod tests {
