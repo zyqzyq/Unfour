@@ -17,6 +17,20 @@ const HTTP_METHODS: [&str; 8] = [
 pub(super) fn build_document(source: &OpenApiExportSource) -> AppResult<OpenApiDocument> {
     let folder_paths = build_folder_paths(source);
     let tags = build_tags(source, &folder_paths);
+    // Service exports retain raw local copies for matching only. Use their
+    // stable saved IDs to attach responses to the sanitized document requests.
+    let mut responses = source
+        .history_match_requests
+        .as_ref()
+        .unwrap_or(&source.requests)
+        .iter()
+        .map(|request| {
+            Ok((
+                request.id.clone(),
+                build_responses(request, &source.histories)?,
+            ))
+        })
+        .collect::<AppResult<BTreeMap<_, _>>>()?;
     let prepared = source
         .requests
         .iter()
@@ -159,7 +173,7 @@ pub(super) fn build_document(source: &OpenApiExportSource) -> AppResult<OpenApiD
             description: None,
             parameters: build_parameters(&request, &headers, &query),
             request_body: build_request_body(request.request, &headers),
-            responses: build_responses(request.request, &source.histories),
+            responses: responses.remove(&request.request.id).unwrap_or_default(),
             security,
             servers: operation_servers,
             extensions,

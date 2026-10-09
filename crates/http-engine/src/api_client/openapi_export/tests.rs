@@ -22,6 +22,7 @@ fn source(requests: Vec<ApiSavedRequest>) -> OpenApiExportSource {
         folders: Vec::new(),
         histories: Vec::new(),
         requests,
+        history_match_requests: None,
     }
 }
 

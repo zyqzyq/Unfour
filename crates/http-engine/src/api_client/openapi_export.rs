@@ -5,6 +5,7 @@ use unfour_core::models::{
 
 mod content;
 mod convert;
+mod history_matching;
 mod model;
 mod source;
 
@@ -44,11 +45,15 @@ impl ApiClientService {
             .await?
             .into_iter()
             .filter(|request| request.collection_id == collection_id)
-            .map(super::domain::sanitize_saved_request)
-            .collect::<AppResult<Vec<_>>>()?;
+            .collect::<Vec<_>>();
         let histories = self
             .list_collection_export_histories(&workspace_id, &collection_id)
             .await?;
+        let sanitized_requests = requests
+            .iter()
+            .cloned()
+            .map(super::domain::sanitize_saved_request)
+            .collect::<AppResult<Vec<_>>>()?;
         let source = OpenApiExportSource {
             collection,
             collection_auth_json: None,
@@ -57,7 +62,8 @@ impl ApiClientService {
             environments: environments.into_iter().map(Into::into).collect(),
             folders,
             histories,
-            requests,
+            requests: sanitized_requests,
+            history_match_requests: Some(requests),
         };
         let document = build_document(&source)?;
         let content = serialize_document(&document, format)?;
@@ -82,23 +88,20 @@ impl ApiClientService {
     ) -> AppResult<Vec<ApiHistoryDetail>> {
         let histories = sqlx::query_as::<_, ApiHistoryDetail>(
             r#"
-            SELECT DISTINCT
+            SELECT
               history.id, history.workspace_id, history.name, history.method, history.url,
               history.request_headers_json, history.request_query_json, history.request_body, history.request_body_kind,
               history.status, history.duration_ms, history.response_headers_json,
               history.response_body_preview, history.created_at, history.updated_at
             FROM api_history history
-            JOIN api_requests request
-              ON request.workspace_id = history.workspace_id
-             AND request.collection_id = ?2
-             AND request.deleted_at IS NULL
-             AND request.name = history.name
-             AND UPPER(request.method) = UPPER(history.method)
-             AND request.url = history.url
-             AND request.headers_json = history.request_headers_json
-             AND request.query_json = history.request_query_json
-             AND COALESCE(request.body, '') = COALESCE(history.request_body, '')
             WHERE history.workspace_id = ?1
+              AND EXISTS (
+                SELECT 1 FROM api_requests request
+                WHERE request.workspace_id = history.workspace_id
+                  AND request.collection_id = ?2
+                  AND request.deleted_at IS NULL
+                  AND UPPER(request.method) = UPPER(history.method)
+              )
             ORDER BY history.created_at DESC
             "#,
         )

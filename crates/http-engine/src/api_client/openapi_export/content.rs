@@ -1,8 +1,10 @@
+use super::history_matching::matching_histories;
 use super::model::*;
 use super::source::export_sensitive_key;
 use std::collections::{BTreeMap, HashSet};
 use unfour_core::models::{ApiHistoryDetail, ApiSavedRequest, KeyValue};
 use unfour_core::redaction::{redact_sensitive_lines, REDACTED_VALUE};
+use unfour_core::AppResult;
 
 pub(super) fn build_parameters(
     prepared: &PreparedRequest<'_>,
@@ -208,18 +210,15 @@ fn request_body_example(
 pub(super) fn build_responses(
     request: &ApiSavedRequest,
     histories: &[ApiHistoryDetail],
-) -> BTreeMap<String, OpenApiResponse> {
+) -> AppResult<BTreeMap<String, OpenApiResponse>> {
     let mut responses = BTreeMap::new();
-    for history in histories
-        .iter()
-        .filter(|history| history_matches_request(history, request))
-    {
+    for history in matching_histories(request, histories)? {
         let Some(status) = history.status.filter(|status| (100..=599).contains(status)) else {
             continue;
         };
         responses
             .entry(status.to_string())
-            .or_insert_with(|| response_from_history(history, status));
+            .or_insert_with(|| response_from_history(&history, status));
     }
     if responses.is_empty() {
         responses.insert(
@@ -232,27 +231,7 @@ pub(super) fn build_responses(
             },
         );
     }
-    responses
-}
-
-fn history_matches_request(history: &ApiHistoryDetail, request: &ApiSavedRequest) -> bool {
-    history.workspace_id == request.workspace_id
-        && history.name.as_deref() == Some(request.name.as_str())
-        && history.method.eq_ignore_ascii_case(&request.method)
-        && history.url == request.url
-        && json_text_equal(&history.request_headers_json, &request.headers_json)
-        && json_text_equal(&history.request_query_json, &request.query_json)
-        && history.request_body == request.body
-}
-
-fn json_text_equal(left: &str, right: &str) -> bool {
-    match (
-        serde_json::from_str::<serde_json::Value>(left),
-        serde_json::from_str::<serde_json::Value>(right),
-    ) {
-        (Ok(left), Ok(right)) => left == right,
-        _ => left == right,
-    }
+    Ok(responses)
 }
 
 fn response_from_history(history: &ApiHistoryDetail, status: i64) -> OpenApiResponse {

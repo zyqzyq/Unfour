@@ -21,6 +21,9 @@ pub(super) struct OpenApiExportSource {
     pub(super) histories: Vec<ApiHistoryDetail>,
     #[serde(default)]
     pub(super) requests: Vec<ApiSavedRequest>,
+    // Internal matching copies; never part of exchange/backup formats.
+    #[serde(skip)]
+    pub(super) history_match_requests: Option<Vec<ApiSavedRequest>>,
 }
 
 // Export reads workspace metadata directly. The legacy API environment contract
