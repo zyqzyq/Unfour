@@ -297,6 +297,7 @@
     }
   },
   "api": {
+    "errors": { "invalidJsonBody": "请求体不是有效的 JSON。" },
     "multipart": {
       "mode": "form-data",
       "contentType": "form-data 的 Content-Type 由系统自动生成。",
@@ -593,6 +594,16 @@
     "workspaceVariables": "工作区变量"
   },
   "common": {
+    "secret": {
+      "saved": "已保存凭据，输入新值可替换",
+      "retaining": "保留已保存凭据",
+      "replacing": "保存时替换",
+      "cleared": "保存时清除",
+      "empty": "无凭据",
+      "keep": "保留已保存值",
+      "clear": "清除",
+      "revealFailed": "无法查看已保存凭据。"
+    },
     "actions": {
       "connect": "连接",
       "connecting": "连接中",

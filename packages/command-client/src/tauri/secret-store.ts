@@ -22,3 +22,13 @@ export function inspectCredential(input: CredentialInspectInput) {
 export function rotateCredential(input: CredentialRotateInput) {
   return call<CredentialMetadata>("credential_rotate", { input });
 }
+
+/** Desktop saved-connection editor read, deliberately absent from MCP. */
+export function revealConnectionSecret(input: {
+  workspaceId: string;
+  connectionId: string;
+  connectionType: "ssh" | "database";
+  credentialRef: string;
+}) {
+  return call<string>("connection_secret_reveal", input);
+}

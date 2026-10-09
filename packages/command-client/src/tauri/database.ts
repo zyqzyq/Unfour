@@ -25,8 +25,8 @@ export function listDatabaseConnections(workspaceId: string) {
   return call<DatabaseConnection[]>("database_connections_list", { workspaceId });
 }
 
-export function saveDatabaseConnection(input: DatabaseConnectionInput) {
-  return call<DatabaseConnection>("database_connection_save", { input });
+export function saveDatabaseConnection(input: DatabaseConnectionInput, secret?: string | null) {
+  return call<DatabaseConnection>("database_connection_save", { input, secret: secret ?? null });
 }
 
 export function deleteDatabaseConnection(workspaceId: string, connectionId: string) {

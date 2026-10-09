@@ -125,129 +125,45 @@ beforeEach(() => {
 
 afterEach(() => vi.resetAllMocks());
 
-describe("useDatabaseConnectionMutations save credentialRef sync", () => {
-  it("uses the saved current-workspace credentialRef on the next blank-password save", async () => {
-    const existing = persisted();
-    const { Wrapper, client } = createWrapper(existing);
-    const { result } = renderHook(() => useEditorSession("ws-current", existing.id), {
-      wrapper: Wrapper,
-    });
-
-    act(() => {
-      result.current.formState.hydrateFormFromConnection(existing);
-      result.current.formState.setPassword("new-password");
-      result.current.formState.setEditorOpen(true);
-    });
-
-    rotateMock.mockRejectedValue({
-      code: "VALIDATION_ERROR",
-      message: "credential reference does not belong to the workspace",
-    });
-
-    await act(async () => {
-      await result.current.mutations.saveMutation.mutateAsync({
-        input: databaseConnectionToInput(existing, "ws-current"),
-        secret: "new-password",
-      });
-    });
-
-    expect(createMock).toHaveBeenCalledWith({
-      workspaceId: "ws-current",
-      kind: DATABASE_PASSWORD_KIND,
-      label: "App DB",
-      secret: "new-password",
-    });
-    expect(saveMock).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "db-a", credentialRef: NEW_REF }),
-    );
-    expect(result.current.formState.form.credentialRef).toBe(NEW_REF);
-    expect(result.current.formState.password).toBe("");
-    expect(result.current.formState.editorOpen).toBe(false);
-    expect(client.getQueryData(databaseConnectionsQueryKey("ws-current"))).toEqual([
-      expect.objectContaining({ id: "db-a", credentialRef: NEW_REF }),
-    ]);
-    expect(client.getQueryState(databaseConnectionsQueryKey("ws-current"))?.fetchStatus).toBe(
-      "fetching",
-    );
-
-    const cached = client.getQueryData<DatabaseConnection[]>(
-      databaseConnectionsQueryKey("ws-current"),
-    )?.[0];
-    expect(cached).toBeDefined();
-    act(() => {
-      result.current.formState.hydrateFormFromConnection(cached!);
-      result.current.formState.setEditorOpen(true);
-    });
-    expect(result.current.formState.form.credentialRef).toBe(NEW_REF);
-    expect(result.current.formState.password).toBe("");
-
-    await act(async () => {
-      await result.current.mutations.saveMutation.mutateAsync({
-        input: result.current.formState.form,
-        secret: "",
-      });
-    });
-
-    expect(saveMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ id: "db-a", credentialRef: NEW_REF }),
-    );
-    expect(createMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps a current-workspace credentialRef when the password is left blank", async () => {
+describe("database credential save", () => {
+  it("sends a replacement in the backend save and retains the returned reference", async () => {
     const existing = persisted({ credentialRef: CURRENT_REF });
+    saveMock.mockResolvedValue(persisted({ credentialRef: NEW_REF }));
     const { Wrapper } = createWrapper(existing);
-    const { result } = renderHook(() => useEditorSession("ws-current", existing.id), {
-      wrapper: Wrapper,
-    });
-
-    act(() => result.current.formState.hydrateFormFromConnection(existing));
-
+    const { result } = renderHook(() => useEditorSession("ws-current", existing.id), { wrapper: Wrapper });
     await act(async () => {
-      await result.current.mutations.saveMutation.mutateAsync({
-        input: result.current.formState.form,
-        secret: "",
-      });
+      await result.current.mutations.saveMutation.mutateAsync({ input: databaseConnectionToInput(existing, "ws-current"), secret: "replacement" });
     });
-
+    expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ credentialRef: CURRENT_REF }), "replacement");
+    expect(createMock).not.toHaveBeenCalled();
     expect(rotateMock).not.toHaveBeenCalled();
-    expect(createMock).not.toHaveBeenCalled();
-    expect(saveMock).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "db-a", credentialRef: CURRENT_REF }),
-    );
-    expect(result.current.formState.form.credentialRef).toBe(CURRENT_REF);
+    expect(result.current.formState.form.credentialRef).toBe(NEW_REF);
+    await act(async () => {
+      await result.current.mutations.saveMutation.mutateAsync({ input: result.current.formState.form, secret: "" });
+    });
+    expect(saveMock).toHaveBeenLastCalledWith(expect.objectContaining({ credentialRef: NEW_REF }), null);
   });
-
-  it("rotates the existing current-workspace credential when a new password is entered", async () => {
+  it("sends an explicit cleared reference without rotating credentials", async () => {
     const existing = persisted({ credentialRef: CURRENT_REF });
     const { Wrapper } = createWrapper(existing);
-    const { result } = renderHook(() => useEditorSession("ws-current", existing.id), {
-      wrapper: Wrapper,
-    });
-
-    rotateMock.mockResolvedValue({
-      workspaceId: "ws-current",
-      kind: DATABASE_PASSWORD_KIND,
-      label: "App DB",
-      credentialRef: CURRENT_REF,
-    });
-
+    const { result } = renderHook(() => useEditorSession("ws-current", existing.id), { wrapper: Wrapper });
     await act(async () => {
-      await result.current.mutations.saveMutation.mutateAsync({
-        input: databaseConnectionToInput(existing, "ws-current"),
-        secret: "rotated-secret",
-      });
+      await result.current.mutations.saveMutation.mutateAsync({ input: { ...databaseConnectionToInput(existing, "ws-current"), credentialRef: null }, secret: "" });
     });
-
-    expect(rotateMock).toHaveBeenCalledWith({
-      workspaceId: "ws-current",
-      credentialRef: CURRENT_REF,
-      secret: "rotated-secret",
+    expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ credentialRef: null }), null);
+    expect(rotateMock).not.toHaveBeenCalled();
+  });
+  it("keeps the unsaved replacement and dialog open on a backend failure", async () => {
+    const existing = persisted({ credentialRef: CURRENT_REF });
+    const { Wrapper } = createWrapper(existing);
+    const { result } = renderHook(() => useEditorSession("ws-current", existing.id), { wrapper: Wrapper });
+    act(() => { result.current.formState.setEditorOpen(true); result.current.formState.setPassword("replacement"); });
+    saveMock.mockRejectedValue(new Error("save failed"));
+    await act(async () => {
+      await expect(result.current.mutations.saveMutation.mutateAsync({ input: databaseConnectionToInput(existing, "ws-current"), secret: "replacement" })).rejects.toThrow("save failed");
     });
-    expect(createMock).not.toHaveBeenCalled();
-    expect(saveMock).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "db-a", credentialRef: CURRENT_REF }),
-    );
-    expect(result.current.formState.form.credentialRef).toBe(CURRENT_REF);
+    expect(result.current.formState.password).toBe("replacement");
+    expect(result.current.formState.editorOpen).toBe(true);
+    expect(rotateMock).not.toHaveBeenCalled();
   });
 });

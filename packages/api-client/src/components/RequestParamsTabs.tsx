@@ -4,7 +4,7 @@ import { useState } from "react";
 import type * as React from "react";
 import Editor from "@monaco-editor/react";
 import { Wand2 } from "lucide-react";
-import { Button, Input, cn, useI18n, useTheme } from "@unfour/ui";
+import { Button, Input, SecretInput, cn, useI18n, useTheme } from "@unfour/ui";
 import type { KeyValue } from "@unfour/command-client";
 import { KeyValueEditor } from "./KeyValueEditor";
 import { RequestScriptEditors } from "./RequestScriptEditors";
@@ -108,6 +108,7 @@ export function RequestParamsTabs({
           <PaneScroll>
             <KeyValueEditor
               items={query}
+              sensitiveKey={auth.type === "api-key" && auth.addTo === "query" ? auth.key : undefined}
               onChange={onQueryChange}
               showTitle={false}
               title={t("api.keyValue.queryParams")}
@@ -118,6 +119,7 @@ export function RequestParamsTabs({
           <PaneScroll>
             <KeyValueEditor
               items={headers}
+              sensitiveKey={auth.type === "api-key" && auth.addTo === "header" ? auth.key : undefined}
               onChange={onHeadersChange}
               showTitle={false}
               title={t("api.keyValue.headers")}
@@ -442,12 +444,11 @@ function AuthPanel({
       {auth.type === "bearer" && (
         <label className="grid gap-1 text-[12px] text-[var(--u-color-text-muted)]">
           Token
-          <Input
+          <SecretInput key="bearer"
             onChange={(event) =>
               onAuthChange({ ...auth, token: event.target.value })
             }
             placeholder="{{token}}"
-            type="text"
             value={auth.token}
           />
         </label>
@@ -465,11 +466,10 @@ function AuthPanel({
           </label>
           <label className="grid gap-1 text-[12px] text-[var(--u-color-text-muted)]">
             Password
-            <Input
+            <SecretInput key="basic"
               onChange={(event) =>
                 onAuthChange({ ...auth, password: event.target.value })
               }
-              type="text"
               value={auth.password}
             />
           </label>
@@ -489,11 +489,10 @@ function AuthPanel({
           </label>
           <label className="grid gap-1 text-[12px] text-[var(--u-color-text-muted)]">
             Value
-            <Input
+            <SecretInput key="api-key"
               onChange={(event) =>
                 onAuthChange({ ...auth, value: event.target.value })
               }
-              type="text"
               value={auth.value}
             />
           </label>

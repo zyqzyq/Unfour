@@ -3,9 +3,14 @@ import "@testing-library/jest-dom/vitest";
 import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import type { DatabaseConnectionInput } from "@unfour/command-client";
+import { revealConnectionSecret, type DatabaseConnectionInput } from "@unfour/command-client";
 import { DatabaseConnectionDialog } from "./DatabaseConnectionDialog";
 import { DatabaseTestResultDialog } from "./DatabaseTestResultDialog";
+
+vi.mock("@unfour/command-client", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@unfour/command-client")>(),
+  revealConnectionSecret: vi.fn().mockResolvedValue("saved-db-secret"),
+}));
 
 afterEach(cleanup);
 
@@ -40,4 +45,28 @@ it("shows runtime detection separately from the protocol and raw banner", () => 
   expect(screen.getByText("Protocol: PostgreSQL")).toBeInTheDocument();
   expect(screen.getByText("Detected server: openGauss")).toBeInTheDocument();
   expect(screen.getByText("PostgreSQL 9.2.4 (openGauss 6.0.3)")).toBeInTheDocument();
+});
+
+it("views a saved database password without saving plaintext and keeps clear reversible", async () => {
+  const save = vi.fn();
+  function Editor() {
+    const [form, setForm] = useState<DatabaseConnectionInput>({ workspaceId: "ws", id: "db", name: "Database", driver: "postgres", credentialRef: "saved-ref" });
+    const [password, setPassword] = useState("");
+    return <DatabaseConnectionDialog canTest error={null} form={form} open onOpenChange={() => {}}
+      onPasswordChange={setPassword} password={password} onSubmit={(event) => { event.preventDefault(); save(form, password); }}
+      onTest={() => {}} onUpdate={(patch) => setForm((current) => ({ ...current, ...patch }))} savePending={false} testPending={false} />;
+  }
+  render(<Editor />);
+  fireEvent.click(screen.getByRole("button", { name: "Show secret value" }));
+  await screen.findByDisplayValue("saved-db-secret");
+  expect(revealConnectionSecret).toHaveBeenCalledWith({ workspaceId: "ws", connectionId: "db", connectionType: "database", credentialRef: "saved-ref" });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(save.mock.lastCall).toEqual([expect.objectContaining({ credentialRef: "saved-ref" }), ""]);
+  fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(save.mock.lastCall).toEqual([expect.objectContaining({ credentialRef: null }), ""]);
+  fireEvent.click(screen.getByRole("button", { name: "Keep saved" }));
+  fireEvent.change(screen.getByPlaceholderText("Saved credential; type to replace"), { target: { value: "replacement" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(save.mock.lastCall).toEqual([expect.objectContaining({ credentialRef: "saved-ref" }), "replacement"]);
 });

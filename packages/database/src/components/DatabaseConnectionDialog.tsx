@@ -1,6 +1,6 @@
 import { Plug, Save } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
-import type { DatabaseConnectionInput } from "@unfour/command-client";
+import { revealConnectionSecret, type DatabaseConnectionInput } from "@unfour/command-client";
 import {
   Button,
   Dialog,
@@ -11,6 +11,7 @@ import {
   DialogTitle,
   ErrorState,
   Input,
+  SavedSecretInput,
   Select,
   useI18n,
 } from "@unfour/ui";
@@ -87,13 +88,7 @@ export function DatabaseConnectionDialog({
                   <Input onChange={(event) => onUpdate({ username: event.target.value })} value={form.username ?? ""} />
                 </Field>
                 <Field title={t("database.fields.password")}>
-                  <Input
-                    autoComplete="off"
-                    onChange={(event) => onPasswordChange(event.target.value)}
-                    placeholder={form.credentialRef ? t("database.fields.passwordKeep") : ""}
-                    type="password"
-                    value={password}
-                  />
+                  {open && <ConnectionSecretEditor key={`${form.workspaceId}:${form.id ?? "new"}`} form={form} password={password} onPasswordChange={onPasswordChange} onUpdate={onUpdate} disabled={savePending} />}
                 </Field>
               </>
             )}
@@ -182,4 +177,16 @@ function ConnectionPresetSelect({ form, onUpdate }: {
       });
     }}
   />;
+}
+
+function ConnectionSecretEditor({ form, password, onPasswordChange, onUpdate, disabled }: {
+  form: DatabaseConnectionInput; password: string; onPasswordChange: (value: string) => void;
+  onUpdate: (patch: Partial<DatabaseConnectionInput>) => void; disabled: boolean;
+}) {
+  const [savedReference] = useState(form.credentialRef);
+  return <SavedSecretInput saved={Boolean(savedReference)} cleared={Boolean(savedReference) && !form.credentialRef} disabled={disabled} value={password}
+    onChange={(value) => { onPasswordChange(value); onUpdate({ credentialRef: savedReference }); }}
+    onKeep={() => { onPasswordChange(""); onUpdate({ credentialRef: savedReference }); }}
+    onClear={() => { onPasswordChange(""); onUpdate({ credentialRef: null }); }}
+    onReveal={() => revealConnectionSecret({ workspaceId: form.workspaceId, connectionId: form.id!, connectionType: "database", credentialRef: savedReference! })} />;
 }

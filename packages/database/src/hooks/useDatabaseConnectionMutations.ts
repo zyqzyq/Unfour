@@ -15,7 +15,6 @@ import type {
 import { useI18n } from "@unfour/ui";
 import { useDatabaseTabs } from "./useDatabaseTabs";
 import type { DatabaseConnectionSessionState } from "../model/types";
-import { persistDatabaseConnectionPassword } from "../model/database-credentials";
 import {
   databaseConnectionsQueryKey,
   replaceDatabaseConnectionInCache,
@@ -54,16 +53,7 @@ export function useDatabaseConnectionMutations({
 }) {
   const saveMutation = useMutation({
     mutationFn: async ({ input, secret }: { input: DatabaseConnectionInput; secret: string }) => {
-      // Non-SQLite drivers persist the password through SecretStore and store
-      // only the returned reference. An empty secret while editing keeps the
-      // existing credential untouched. A workspace-mismatched reference is
-      // replaced by creating a credential in the current workspace.
-      const credentialRef = await persistDatabaseConnectionPassword({
-        input,
-        secret,
-        workspaceId,
-      });
-      return saveDatabaseConnection({ ...input, credentialRef });
+      return saveDatabaseConnection(input, secret || null);
     },
     onSuccess: (connection) => {
       const queryKey = databaseConnectionsQueryKey(workspaceId);
@@ -103,7 +93,7 @@ export function useDatabaseConnectionMutations({
   // Clone a connection into a new record. The stored credential is shared by
   // reusing its reference (the plaintext secret is never exposed to the client),
   // so the copy can connect immediately without re-entering the password.
-  // Editing the password on either copy rotates that shared secret.
+  // Password replacement publishes a fresh reference for the edited copy.
   const duplicateMutation = useMutation({
     mutationFn: (connection: DatabaseConnection) =>
       saveDatabaseConnection({

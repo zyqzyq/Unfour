@@ -297,6 +297,7 @@
     }
   },
   "api": {
+    "errors": { "invalidJsonBody": "Request body is not valid JSON." },
     "multipart": {
       "mode": "form-data",
       "contentType": "Content-Type is generated automatically for form-data.",
@@ -593,6 +594,16 @@
     "workspaceVariables": "Workspace Variables"
   },
   "common": {
+    "secret": {
+      "saved": "Saved credential; type to replace",
+      "retaining": "Keep saved credential",
+      "replacing": "Replace on save",
+      "cleared": "Clear on save",
+      "empty": "No credential",
+      "keep": "Keep saved",
+      "clear": "Clear",
+      "revealFailed": "Unable to show the saved credential."
+    },
     "actions": {
       "connect": "Connect",
       "connecting": "Connecting",

@@ -1,6 +1,6 @@
-import type { FormEvent, ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { KeyRound, Lock, Plug, Save, ShieldOff } from "lucide-react";
-import type { SshConnectionInput } from "@unfour/command-client";
+import { revealConnectionSecret, type SshConnectionInput } from "@unfour/command-client";
 import {
   Button,
   Dialog,
@@ -14,6 +14,7 @@ import {
   DialogXClose,
   ErrorState,
   Input,
+  SavedSecretInput,
   SegmentedControl,
   useI18n,
 } from "@unfour/ui";
@@ -94,6 +95,7 @@ export function SshConnectionDialog({
                     authKind,
                     keyPath: authKind === "private-key" ? form.keyPath : null,
                     secret: null,
+                    credentialRef: null,
                   })
                 }
                 options={[
@@ -118,13 +120,7 @@ export function SshConnectionDialog({
             </FieldGroup>
             {form.authKind === "password" && (
               <FieldGroup title={t("ssh.dialog.authPassword")}>
-                <Input
-                  autoComplete="off"
-                  onChange={(event) => onUpdate({ secret: event.target.value })}
-                  placeholder={t("ssh.dialog.passwordPlaceholder")}
-                  type="password"
-                  value={form.secret ?? ""}
-                />
+                {open && <ConnectionSecretEditor key={`${form.workspaceId}:${form.id ?? "new"}:${form.authKind}`} form={form} onUpdate={onUpdate} disabled={pending} />}
                 {Boolean(form.id) && (
                   <span className="text-[11.5px] text-[var(--u-color-text-muted)]">
                     {t("ssh.dialog.passwordEditHint")}
@@ -142,13 +138,7 @@ export function SshConnectionDialog({
                   />
                 </FieldGroup>
                 <FieldGroup title={t("ssh.dialog.passphrase")}>
-                  <Input
-                    autoComplete="off"
-                    onChange={(event) => onUpdate({ secret: event.target.value })}
-                    placeholder={t("ssh.dialog.passphrasePlaceholder")}
-                    type="password"
-                    value={form.secret ?? ""}
-                  />
+                  {open && <ConnectionSecretEditor key={`${form.workspaceId}:${form.id ?? "new"}:${form.authKind}`} form={form} onUpdate={onUpdate} disabled={pending} />}
                   {Boolean(form.id) && (
                     <span className="text-[11.5px] text-[var(--u-color-text-muted)]">
                       {t("ssh.dialog.passwordEditHint")}
@@ -205,4 +195,13 @@ function FieldGroup({ children, title }: { children: ReactNode; title: string })
       {children}
     </label>
   );
+}
+
+function ConnectionSecretEditor({ form, onUpdate, disabled }: { form: SshConnectionInput; onUpdate: (patch: Partial<SshConnectionInput>) => void; disabled?: boolean }) {
+  const [savedReference] = useState(form.credentialRef);
+  return <SavedSecretInput saved={Boolean(savedReference)} cleared={Boolean(savedReference) && !form.credentialRef} disabled={disabled}
+    value={form.secret ?? ""} onChange={(secret) => onUpdate({ secret, credentialRef: savedReference })}
+    onKeep={() => onUpdate({ secret: null, credentialRef: savedReference })}
+    onClear={() => onUpdate({ secret: null, credentialRef: null })}
+    onReveal={() => revealConnectionSecret({ workspaceId: form.workspaceId, connectionId: form.id!, connectionType: "ssh", credentialRef: savedReference! })} />;
 }

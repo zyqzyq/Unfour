@@ -1,5 +1,5 @@
 import { Plus, Trash2 } from "lucide-react";
-import { Button, Input, cn, useI18n } from "@unfour/ui";
+import { Button, Input, SecretInput, cn, useI18n } from "@unfour/ui";
 import type { KeyValue } from "@unfour/command-client";
 
 export function KeyValueEditor({
@@ -7,11 +7,13 @@ export function KeyValueEditor({
   onChange,
   showTitle = true,
   title,
+  sensitiveKey,
 }: {
   items: KeyValue[];
   onChange: (items: KeyValue[]) => void;
   showTitle?: boolean;
   title: string;
+  sensitiveKey?: string;
 }) {
   const { t } = useI18n();
 
@@ -74,13 +76,17 @@ export function KeyValueEditor({
               placeholder={t("api.keyValue.key")}
               value={item.key}
             />
-            <Input
+            {(isSensitiveField(item.key) || Boolean(sensitiveKey?.trim() && item.key.trim().toLowerCase() === sensitiveKey.trim().toLowerCase())) ? <SecretInput key={`${index}:${item.key}`}
               className={cellInputClass}
               onChange={(event) => update(index, { value: event.target.value })}
               placeholder={t("api.keyValue.value")}
-              type="text"
               value={item.value}
-            />
+            /> : <Input
+              className={cellInputClass}
+              onChange={(event) => update(index, { value: event.target.value })}
+              placeholder={t("api.keyValue.value")}
+              value={item.value}
+            />}
             <button
               aria-label={t("api.keyValue.deleteRow", { title })}
               className="grid h-7 w-7 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-danger)] disabled:pointer-events-none disabled:opacity-0"
@@ -120,4 +126,8 @@ function findDuplicateKeys(items: KeyValue[]): string[] {
     }
   }
   return [...duplicates];
+}
+
+function isSensitiveField(key: string): boolean {
+  return ["authorization", "cookie", "set-cookie", "proxy-authorization", "x-api-key", "x-auth-token", "password", "passwd", "token", "access_token", "refresh_token", "secret", "private_key", "api_key", "license_key"].includes(key.trim().toLowerCase());
 }

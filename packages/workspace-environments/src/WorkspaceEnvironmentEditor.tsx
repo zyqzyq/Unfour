@@ -263,15 +263,6 @@ export function WorkspaceEnvironmentEditor({
         )}
         <VariableTable
           items={draft.variables}
-          valuePresentation={(item) => item.value.startsWith("@unfour-secret:")
-            ? {
-                value: "",
-                placeholder: t("variables.savedSecret"),
-                canReveal: false,
-                clearLabel: t("variables.clearSavedSecret"),
-                secretToggleDisabled: true,
-              }
-            : { value: item.value }}
           onChange={(variables) =>
             setDraft((current) =>
               current.kind === "none" ? current : { ...current, variables },

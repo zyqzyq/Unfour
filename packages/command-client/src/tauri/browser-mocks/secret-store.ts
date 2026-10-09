@@ -13,6 +13,13 @@ export function handleSecretStoreMock<T>(
   command: string,
   args?: Record<string, unknown>,
 ): MockResult<T> {
+  if (command === "connection_secret_reveal") {
+    const rows = args?.connectionType === "ssh" ? mockStore.sshConnections : args?.connectionType === "database" ? mockStore.databaseConnections : [];
+    const connection = rows.find((row) => row.workspaceId === args?.workspaceId && row.id === args?.connectionId && row.credentialRef === args?.credentialRef);
+    if (!connection?.credentialRef || !(connection.credentialRef in mockStore.credentials)) throw new Error("CONNECTION_CREDENTIAL_UNAVAILABLE");
+    inspectMockCredential(connection.workspaceId, connection.credentialRef);
+    return mockStore.credentials[connection.credentialRef] as T;
+  }
   if (command === "credential_create") {
     const input = args?.input as CredentialCreateInput;
     const credentialRef = `unfour:${input.workspaceId}:${input.kind}:${crypto.randomUUID()}`;

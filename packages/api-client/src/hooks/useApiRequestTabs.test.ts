@@ -89,7 +89,7 @@ describe("tabToInput", () => {
     expect(input.body).toBe('{"a":1}');
   });
 
-  it("generates a Bearer Authorization header from bearer auth", () => {
+  it("passes Bearer configuration to the backend without a generated header", () => {
     const input = tabToInput(
       tabWithDraft({
         method: "POST",
@@ -99,7 +99,8 @@ describe("tabToInput", () => {
       WORKSPACE,
     );
 
-    expect(header(input, "Authorization")?.value).toBe("Bearer abc123");
+    expect(header(input, "Authorization")).toBeUndefined();
+    expect(JSON.parse(input.authJson!)).toEqual({ type: "bearer", token: "abc123" });
   });
 
 
@@ -116,10 +117,11 @@ describe("tabToInput", () => {
       },
     );
 
-    expect(header(input, "Authorization")?.value).toBe("Bearer abc123");
+    expect(header(input, "Authorization")).toBeUndefined();
+    expect(JSON.parse(input.authJson!)).toEqual({ type: "bearer", token: "abc123" });
   });
 
-  it("generates a Basic Authorization header from basic auth", () => {
+  it("passes Basic credentials without encoding them before resolution", () => {
     const input = tabToInput(
       tabWithDraft({
         method: "POST",
@@ -129,9 +131,8 @@ describe("tabToInput", () => {
       WORKSPACE,
     );
 
-    expect(header(input, "Authorization")?.value).toBe(
-      `Basic ${btoa("user:pass")}`,
-    );
+    expect(header(input, "Authorization")).toBeUndefined();
+    expect(JSON.parse(input.authJson!)).toEqual({ type: "basic", username: "user", password: "pass" });
   });
 
   it("places an api-key into the query when configured for the query", () => {
@@ -144,9 +145,8 @@ describe("tabToInput", () => {
       WORKSPACE,
     );
 
-    expect(input.query.find((item) => item.key === "api_key")?.value).toBe(
-      "secret",
-    );
+    expect(input.query).toEqual([]);
+    expect(JSON.parse(input.authJson!)).toEqual({ type: "api-key", addTo: "query", key: "api_key", value: "secret" });
   });
 
 
@@ -174,8 +174,10 @@ describe("tabToInput", () => {
       },
     );
 
-    expect(queryInput.query.find((item) => item.key === "api_key")?.value).toBe("secret");
-    expect(header(headerInput, "X-API-Key")?.value).toBe("secret");
+    expect(queryInput.query).toEqual([]);
+    expect(header(headerInput, "X-API-Key")).toBeUndefined();
+    expect(JSON.parse(queryInput.authJson!).value).toBe("secret");
+    expect(JSON.parse(headerInput.authJson!).value).toBe("secret");
   });
 
   it("preserves an explicit Authorization header over generated auth", () => {

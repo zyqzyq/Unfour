@@ -24,9 +24,7 @@ import {
 import type { ApiRequestTab } from "../model/request-tabs";
 import {
   addHeaderIfMissing,
-  addQueryIfMissing,
   bodyFieldsToInput,
-  hasHeader,
   sendableKeyValues,
   stripUrlQuery,
 } from "../request-utils";
@@ -257,17 +255,14 @@ export function tabToInput(
   const headers =
     purpose === "save"
       ? tab.draft.headers
-      : applyGeneratedHeaders(tab.draft, options.auth ?? tab.draft.auth);
-  const query =
-    purpose === "save"
-      ? tab.draft.query
-      : applyGeneratedQuery(tab.draft, options.auth ?? tab.draft.auth);
+      : applyGeneratedHeaders(tab.draft);
+  const query = purpose === "save" ? tab.draft.query : sendableKeyValues(tab.draft.query);
   return {
     workspaceId,
     name: tab.draft.name.trim() || undefined,
     parentFolderId: tab.draft.parentFolderId,
     collectionId: tab.draft.collectionId,
-    authJson: JSON.stringify(tab.draft.auth),
+    authJson: JSON.stringify(options.auth ?? tab.draft.auth),
     method: tab.draft.method,
     url: stripUrlQuery(tab.draft.url),
     headers,
@@ -299,8 +294,8 @@ export function validateBeforeSend(tab: ApiRequestTab, t: TFunction = createTran
   ) {
     try {
       JSON.parse(tab.draft.body);
-    } catch (error) {
-      return `Request body is not valid JSON: ${formatError(error)}`;
+    } catch {
+      return t("api.errors.invalidJsonBody");
     }
   }
   return null;
@@ -308,54 +303,11 @@ export function validateBeforeSend(tab: ApiRequestTab, t: TFunction = createTran
 
 function applyGeneratedHeaders(
   draft: RequestDraft,
-  auth: ApiAuthConfig,
 ): KeyValue[] {
   let headers = sendableKeyValues(draft.headers);
   const contentType = bodyContentType(draft);
   if (contentType) headers = addHeaderIfMissing(headers, "Content-Type", contentType);
 
-  // Explicit Authorization in the Headers table wins over generated Auth headers.
-  if (auth.type === "bearer" && !hasHeader(headers, "Authorization")) {
-    const token = auth.token;
-    if (token.trim()) {
-      headers = [
-        ...headers,
-        {
-          enabled: true,
-          key: "Authorization",
-          value: `Bearer ${token}`,
-        },
-      ];
-    }
-  }
-  if (auth.type === "basic" && !hasHeader(headers, "Authorization")) {
-    const username = auth.username;
-    const password = auth.password;
-    if (username || password) {
-      headers = [
-        ...headers,
-        {
-          enabled: true,
-          key: "Authorization",
-          value: `Basic ${encodeBasicCredential(username, password)}`,
-        },
-      ];
-    }
-  }
-  if (auth.type === "api-key" && auth.addTo === "header") {
-    const key = auth.key.trim();
-    const value = auth.value;
-    if (key && !hasHeader(headers, key)) {
-      headers = [
-        ...headers,
-        {
-          enabled: true,
-          key,
-          value,
-        },
-      ];
-    }
-  }
   return headers;
 }
 
@@ -363,29 +315,4 @@ function bodyContentType(draft: RequestDraft): string | null {
   if (draft.bodyMode === "raw" && draft.rawBodyType === "json" && draft.body.trim()) return "application/json";
   if (draft.bodyMode === "form" && sendableKeyValues(draft.formBody).length) return "application/x-www-form-urlencoded";
   return null;
-}
-
-function applyGeneratedQuery(
-  draft: RequestDraft,
-  auth: ApiAuthConfig,
-): KeyValue[] {
-  let query = sendableKeyValues(draft.query);
-  if (auth.type === "api-key" && auth.addTo === "query") {
-    const key = auth.key.trim();
-    const value = auth.value;
-    if (key) {
-      query = addQueryIfMissing(query, key, value);
-    }
-  }
-  return query;
-}
-
-function encodeBasicCredential(username: string, password: string): string {
-  const value = `${username}:${password}`;
-  const bytes = new TextEncoder().encode(value);
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary);
 }

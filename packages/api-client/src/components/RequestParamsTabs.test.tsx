@@ -93,10 +93,10 @@ describe("RequestParamsTabs auth inputs", () => {
     expect(screen.getByLabelText("Request timeout in milliseconds")).toBeDisabled();
   });
 
-  it("shows auth secret values as editable text instead of password fields", () => {
+  it("hides auth values by default and reveals without editing", () => {
     const { rerender } = renderAuth({ type: "bearer", token: "secret-token" });
 
-    expect(screen.getByLabelText("Token")).toHaveAttribute("type", "text");
+    expect(screen.getByLabelText("Token")).toHaveAttribute("type", "password");
 
     rerender(
       <I18nProvider initialLocale="en">
@@ -126,7 +126,7 @@ describe("RequestParamsTabs auth inputs", () => {
         />
       </I18nProvider>,
     );
-    expect(screen.getByLabelText("Password")).toHaveAttribute("type", "text");
+    expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password");
 
     rerender(
       <I18nProvider initialLocale="en">
@@ -161,7 +161,7 @@ describe("RequestParamsTabs auth inputs", () => {
         />
       </I18nProvider>,
     );
-    expect(screen.getByLabelText("Value")).toHaveAttribute("type", "text");
+    expect(screen.getByLabelText("Value")).toHaveAttribute("type", "password");
   });
 
   it("loads and edits both request-level script phases", () => {

@@ -35,6 +35,12 @@ export function handleDatabaseMock<T>(
 
   if (command === "database_connection_save") {
     const input = args?.input as DatabaseConnectionInput;
+    const secret = args?.secret as string | null;
+    let credentialRef = input.driver === "sqlite" ? null : input.credentialRef ?? null;
+    if (input.driver !== "sqlite" && secret) {
+      credentialRef = `unfour:${input.workspaceId}:database-password:${crypto.randomUUID()}`;
+      mockStore.credentials[credentialRef] = secret;
+    }
     const now = new Date().toISOString();
     const existingIndex = input.id
       ? mockStore.databaseConnections.findIndex((item) => item.id === input.id)
@@ -50,7 +56,7 @@ export function handleDatabaseMock<T>(
       username: input.username ?? null,
       sslMode: input.sslMode ?? null,
       sqlitePath: input.sqlitePath ?? null,
-      credentialRef: input.credentialRef ?? null,
+      credentialRef,
       readOnly: input.readOnly ?? false,
       createdAt:
         existingIndex >= 0
