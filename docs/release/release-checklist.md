@@ -1,5 +1,10 @@
 # v0.10.0 release checklist
 
+For the next candidate, see the
+[v0.11.0 scoped RC preparation record](../testing/v0.11.0-rc-readiness-2026-10-09.md).
+It records current main failure evidence and local verification separately from
+the published v0.10.0 results below; it does not declare v0.11.0 released.
+
 ## v0.10.0 released status
 
 - Status: `RELEASED` as Standard stable on 2026-09-30
