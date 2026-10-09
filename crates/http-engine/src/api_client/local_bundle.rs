@@ -16,6 +16,34 @@ pub fn is_bundle_variable_template(value: &str) -> bool {
 }
 
 impl ApiClientService {
+    pub async fn bundle_credential_references_on(
+        &self,
+        db: &mut SqliteConnection,
+        workspace: &str,
+    ) -> AppResult<Vec<String>> {
+        let mut references = Vec::new();
+        let rows: Vec<(String, String, String, String, Option<String>)> = sqlx::query_as(
+            "SELECT url, auth_json, headers_json, query_json, body FROM api_requests WHERE workspace_id=? AND deleted_at IS NULL",
+        ).bind(workspace).fetch_all(db).await?;
+        for (url, auth, headers, query, body) in rows {
+            for value in [
+                url.as_str(),
+                auth.as_str(),
+                headers.as_str(),
+                query.as_str(),
+                body.as_deref().unwrap_or(""),
+            ] {
+                for suffix in value.split("{{").skip(1) {
+                    if let Some((key, _)) = suffix.split_once("}}") {
+                        if let Some(reference) = key.trim().strip_prefix("@unfour-secret:") {
+                            references.push(reference.into());
+                        }
+                    }
+                }
+            }
+        }
+        Ok(references)
+    }
     pub async fn bundle_requests_on(
         &self,
         db: &mut SqliteConnection,

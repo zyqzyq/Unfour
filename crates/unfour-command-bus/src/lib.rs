@@ -1,5 +1,6 @@
 mod activity_summary;
 mod api_execution;
+mod bundle_credentials;
 mod storage_paths;
 mod transaction;
 

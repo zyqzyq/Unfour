@@ -33,5 +33,7 @@ mod ssh_tasks;
 mod support;
 #[path = "worker/transactions.rs"]
 mod transactions;
+#[path = "worker/variable_secrets.rs"]
+mod variable_secrets;
 #[path = "worker/workspace_conflicts.rs"]
 mod workspace_conflicts;

@@ -582,6 +582,8 @@
     "saving": "保存中...",
     "secret": "Secret",
     "selectHint": "选择一个变量环境以编辑其变量。",
+    "clearSavedSecret": "清除已保存凭据",
+    "savedSecret": "已保存凭据，输入新值可替换",
     "showSecret": "显示 Secret 值",
     "unsaved": "有未保存的更改",
     "value": "值",

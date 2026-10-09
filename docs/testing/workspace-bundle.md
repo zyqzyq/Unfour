@@ -3,6 +3,44 @@
 Current scope: V2 local bundles and encrypted backups. Earlier V1 evidence follows below.
 See [format and boundaries](../architecture/workspace-bundle.md).
 
+## Credential lifecycle audit of `176f37b` — 2026-10-09
+
+The review fixes imported-variable and saved-SSH credential replacement with
+fresh staged handles, durable attachment/reclamation metadata, rollback
+compensation and last-reference cleanup across variables, API and connections.
+Primary recovery adopts legacy live handles. The editor preserves an untouched
+handle behind a localized saved-credential placeholder and supports replacement
+and explicit clearing. Bundle/Cloud Sync variable classification is shared;
+unsafe older retries are parked without changing their operation IDs or payloads.
+V1/V2 formats, Cloud Sync wire contracts and sharing exclusions remain unchanged.
+This audit adds no dependencies.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| `cargo test -p unfour-command-bus -p unfour-cloud-sync -p unfour-workspace-engine -p unfour-core -p unfour-local-storage -p unfour-http-engine -p unfour-ssh-engine -p unfour-database-engine -- --test-threads=4` | PASS, 703 tests | Domain rollback, storage migration, Cloud Sync contracts/outbox/worker, runtime resolution and connection cleanup |
+| Final `cargo test -p unfour-command-bus workspace_bundle -- --test-threads=4` | PASS, 26 tests | All staged entries removed after failed import/hook; failed bulk/environment edits; rotation, clear/refill, individual and cascade delete; repeated imports; shared SSH/Database/API handles including whitespace templates; pending GC and legacy adoption; V1/V2 and safe sharing |
+| Concurrent snapshot regression within the focused suite | PASS | Isolated file SQLite with a concurrent writer updates Workspace name, ordinary value, fresh Keychain handle, API template/URL and transfer path together while reclaiming the old credential. Four encrypted/decrypted captures match one epoch across base records and supplements |
+| `pnpm exec vitest run packages/workspace-environments/src packages/workspace-local/src/WorkspaceBundleExchange.test.tsx packages/ui/src/i18n.test.ts` | PASS, 28 tests across 6 files | Workspace/environment saved handles stay opaque; metadata edits retain handles; replacement and clear send intended values; exchange/i18n regressions |
+| Targeted ESLint; `pnpm --filter @unfour/desktop exec tsc --noEmit`; `pnpm --filter @unfour/desktop build` | PASS | Changed React sources/tests, shared UI types and frontend production build |
+| `cargo check -p unfour-app --features ssh-native` | PASS | Desktop command composition and native SSH feature compatibility |
+| Affected Cargo formatting; `git diff --check`; migrations/public-secret/shared-token checks | PASS | 33 migrations and source checks |
+| `node scripts/check-large-files.mjs` | FAIL, existing generated Monaco assets | Same blocking `ts.worker-CMbG-7ft.js` (67,731 lines) and `vs/loader.js` (1,368 lines) recorded below; no changed source reaches the blocking threshold |
+
+The first broad run failed one new test's hardcoded credential count (the fixture
+also contains an API binding); it now verifies every binding actually present in
+the encrypted payload. That run also produced `FLOW_TIMEOUT` in an existing
+history-limit test under unrestricted test concurrency. The controlled-concurrency
+rerun passed it unchanged. After the broad run, the focused suite was rerun for
+the strengthened Keychain-concurrency and whitespace-reference regressions.
+
+NOT VERIFIED: native Windows credential-store persistence, permissions/provider
+failures, native dialogs and live SSH/database services. Tests use disposable
+in-memory credentials, isolated SQLite files and mock Cloud Sync transport; no
+user Workspace, credential or remote service was used. Historical orphaned keys
+whose live references and journal metadata are already lost cannot be enumerated
+portably. OS-level changes outside Unfour cannot honor the SQLite snapshot lock;
+slow Keychain access may briefly delay local writes during credential capture.
+
 ## Encrypted backups and local paths — 2026-10-09
 
 Desktop export now distinguishes sharing from encrypted backup, with explicit

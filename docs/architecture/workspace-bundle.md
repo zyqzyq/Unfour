@@ -68,6 +68,10 @@ Windows-reserved stems fall back to `workspace`.
 
 CommandBus coordinates owning Workspace/API/SSH/Database/Flow services. Export
 reads all live records through their services on one SQLite read transaction.
+V2 local paths, templates, raw secret bindings and the export filename use that
+same snapshot. Credential capture reserves the SQLite writer lock until all
+referenced Keychain values are read; encryption/KDF runs after releasing it.
+Application credential rotation, deletion and reclamation use the same lock.
 Existing domain snapshots provide the Workspace/API/connection secret boundary.
 Saved SQL and Flow have explicit caller-transaction service methods; neither is
 added to the Cloud Sync domain registry.
@@ -133,7 +137,15 @@ Preview identifies specific missing fields instead of treating every connection
 as requiring credentials. Retained paths begin as unchecked, with an optional
 read-only check and per-path editing/prefix replacement before import.
 
-Sharing keeps secret variable metadata with empty values. Sensitive API fields
+Sharing keeps secret variable metadata with empty values. Bundle sanitization,
+domain snapshots and Cloud Sync use one variable rule: an explicit Secret flag,
+a recognized sensitive key (including password/passphrase/token/API-key names),
+or a local credential handle makes the value sensitive. A false Secret flag
+cannot make those values shareable. Cloud Sync omits their values using its
+existing protocol. Unsafe immutable retries from an older client are parked as
+dead letters; the existing current-local repair creates a fresh operation with
+a safe payload, preserving the original operation's identity and payload.
+Sensitive API fields
 reuse domain redaction; explicit variable templates in auth/headers/query are
 restored through validated local supplements. Request settings retain only the
 supported timeout field. Multipart file bindings are currently runtime-only and
@@ -173,12 +185,29 @@ them with workspace checks. Auth JSON resolves string leaves before serializatio
 so quotes/backslashes in credentials cannot change authentication structure.
 Preview returns counts, paths and field statuses, never decrypted secret values.
 
-Before keychain writes, import validates all domain rows in a rollback-only
-transaction. A durable journal records staged credential references, then the final
-business transaction attaches the credentials and removes that journal atomically.
-Failure cleans up staged credentials; interrupted cleanup is retried at primary
-application startup before imports are exposed. Satellite/MCP construction does
-not run cleanup. Save writes a temporary sibling file and persists it only after
+Before Keychain writes, import validates all domain rows in a rollback-only
+transaction. The metadata journal tracks `staged`, `attached` and `garbage`
+references. Attachment and loss of the last live reference are recorded in the
+business transaction. Keychain deletion follows commit, with a fresh reference
+check under the SQLite writer lock; failed cleanup stays durable for retry.
+The check includes variables, API values and connection fields, so shared handles
+survive until their last use disappears. Failed transactions retain the old
+credential and reclaim only unpublished stages. Imported variable replacements
+and saved SSH credential edits allocate fresh handles instead of overwriting
+shared credentials. Clearing a Secret retains its flag, and refilling it writes
+a new Keychain credential.
+
+Primary startup reclaims interrupted stages and garbage and adopts live handles
+saved by the original V2 implementation without ownership metadata. Satellite/MCP
+construction does not run startup recovery. Historically orphaned handles with
+neither a live reference nor journal metadata cannot be recovered or enumerated
+portably. An external OS credential change cannot participate in the SQLite lock.
+Slow Keychain reads may briefly delay local edits during credential capture.
+
+The variable editor shows a localized saved-credential placeholder for an imported
+handle. Leaving it untouched preserves the reference; typing replaces it, and an
+explicit clear action removes its value. It never reveals the handle as a password.
+Save writes a temporary sibling file and persists it only after
 the complete write succeeds. Cancelling or failing leaves the dialog editable.
 
 New dependencies: `ring` provides maintained AEAD/KDF primitives, `base64` encodes

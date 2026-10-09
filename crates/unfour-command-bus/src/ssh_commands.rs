@@ -63,11 +63,22 @@ impl CommandBus {
         Ok(result)
     }
 
-    pub async fn save_ssh_connection(&self, input: SshConnectionInput) -> AppResult<SshConnection> {
+    pub async fn save_ssh_connection(
+        &self,
+        mut input: SshConnectionInput,
+    ) -> AppResult<SshConnection> {
+        let staged = self.stage_ssh_secret_edit(&mut input).await?;
         let context = CommandContext::local("ssh.connection.save");
         let executor_context = context.clone();
         let service = self.ssh.clone();
-        let mut prepared = service.prepare_connection_save(input).await?;
+        let mut prepared = match service.prepare_connection_save(input).await {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                return self
+                    .finish_bundle_credential_edits(&staged, Err(error))
+                    .await
+            }
+        };
         let transaction_input = prepared.take_transaction_input();
         let executor_service = service.clone();
         let result = self
@@ -93,7 +104,7 @@ impl CommandBus {
                 },
             )
             .await;
-        match result {
+        let result = match result {
             Ok(connection) => Ok(connection),
             Err(error) => {
                 if let Err(rollback_error) = service.rollback_connection_save(prepared).await {
@@ -103,7 +114,8 @@ impl CommandBus {
                 }
                 Err(error)
             }
-        }
+        };
+        self.finish_bundle_credential_edits(&staged, result).await
     }
 
     pub async fn test_ssh_connection(&self, input: SshConnectionInput) -> AppResult<SshTestResult> {

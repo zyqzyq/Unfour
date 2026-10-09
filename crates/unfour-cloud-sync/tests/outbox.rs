@@ -24,6 +24,9 @@ use unfour_local_storage::LocalDb;
 mod support;
 use support::create_registry_binding;
 
+#[path = "outbox/variable_secrets.rs"]
+mod variable_secrets;
+
 struct FixedClock;
 
 impl Clock for FixedClock {

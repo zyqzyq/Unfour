@@ -120,15 +120,22 @@ impl CommandBus {
                 "WORKSPACE_BUNDLE_PASSWORD_REQUIRED".into(),
             ));
         }
-        let artifact = self
-            .workspace_bundle_export_artifact(workspace.clone())
+        // Prevent credential reclamation by writers until every referenced value
+        // has been captured. Encryption runs after releasing this short snapshot.
+        let mut db = if options.include_secrets {
+            self.db.pool().begin_with("BEGIN IMMEDIATE").await?
+        } else {
+            self.db.pool().begin().await?
+        };
+        let mut bundle = self
+            .workspace_bundle_snapshot_on(&mut db, &workspace)
             .await?;
-        let mut bundle = parse(&artifact.content)?;
         bundle.version = 2;
         let references = self
-            .collect_local_fields(&mut bundle, options.keep_local_paths)
+            .collect_local_fields_on(&mut db, &mut bundle, options.keep_local_paths)
             .await?;
-        self.collect_bundle_templates(&mut bundle).await?;
+        self.collect_bundle_templates_on(&mut db, &mut bundle)
+            .await?;
         let mut secrets: Vec<BackupSecret> = Vec::new();
         if options.include_secrets {
             let mut grouped: HashMap<(String, String), usize> = HashMap::new();
@@ -177,7 +184,6 @@ impl CommandBus {
                     pointer: String::new(),
                 });
             }
-            let mut db = self.db.pool().acquire().await?;
             for (id, kind, value) in self
                 .workspace
                 .bundle_variable_values_on(&mut db, &workspace)
@@ -255,6 +261,8 @@ impl CommandBus {
                 }
             }
         }
+        db.rollback().await?;
+        let suggested_file_name = filename::suggested_file_name(&bundle.workspace.name);
         let payload = BackupPayload { bundle, secrets };
         validate_secrets(&payload)?;
         let content = if let Some(password) = options.password.as_deref() {
@@ -268,7 +276,7 @@ impl CommandBus {
         }
         Ok(WorkspaceBundleExportArtifact {
             content,
-            suggested_file_name: artifact.suggested_file_name,
+            suggested_file_name,
         })
     }
 
@@ -358,9 +366,10 @@ impl CommandBus {
             // Journal survives cleanup failures for recovery; never report a partial import as success.
             if self
                 .workspace
-                .cleanup_bundle_credentials(&workspace)
+                .discard_bundle_stages(&workspace)
                 .await
                 .is_err()
+                || self.cleanup_bundle_garbage().await.is_err()
             {
                 return Err(AppError::Validation(
                     "WORKSPACE_BUNDLE_CLEANUP_PENDING".into(),
@@ -457,7 +466,7 @@ impl CommandBus {
                         }
                     }
                     bus.workspace
-                        .clear_bundle_journal_on(db, &workspace_id)
+                        .attach_bundle_credentials_on(db, &workspace_id)
                         .await?;
                     let workspace = bus.workspace.read_workspace_on(db, &workspace_id).await?;
                     Ok(DomainCommandResult::new(workspace, mutations))

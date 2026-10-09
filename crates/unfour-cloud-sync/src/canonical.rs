@@ -200,11 +200,23 @@ pub fn canonical_payload(snapshot: DomainSnapshot) -> Result<Option<Value>, Sync
             updated_at: snapshot.updated_at,
         }),
         DomainSnapshot::WorkspaceVariable(snapshot) => {
-            let value = snapshot_value(snapshot.value, snapshot.is_secret)?;
+            let is_secret = unfour_core::redaction::is_sensitive_workspace_variable(
+                &snapshot.key,
+                match &snapshot.value {
+                    SnapshotVariableValue::Plain(value) => value,
+                    _ => "",
+                },
+                snapshot.is_secret,
+            );
+            let value = if is_secret && !snapshot.is_secret {
+                None
+            } else {
+                snapshot_value(snapshot.value, snapshot.is_secret)?
+            };
             serde_json::to_value(VariablePayload {
                 key: snapshot.key,
                 value,
-                is_secret: snapshot.is_secret,
+                is_secret,
                 is_enabled: snapshot.is_enabled,
                 description: snapshot.description,
                 sort_order: snapshot.sort_order,
@@ -223,11 +235,23 @@ pub fn canonical_payload(snapshot: DomainSnapshot) -> Result<Option<Value>, Sync
             })
         }
         DomainSnapshot::WorkspaceEnvironmentVariable(snapshot) => {
-            let value = snapshot_value(snapshot.value, snapshot.is_secret)?;
+            let is_secret = unfour_core::redaction::is_sensitive_workspace_variable(
+                &snapshot.key,
+                match &snapshot.value {
+                    SnapshotVariableValue::Plain(value) => value,
+                    _ => "",
+                },
+                snapshot.is_secret,
+            );
+            let value = if is_secret && !snapshot.is_secret {
+                None
+            } else {
+                snapshot_value(snapshot.value, snapshot.is_secret)?
+            };
             serde_json::to_value(VariablePayload {
                 key: snapshot.key,
                 value,
-                is_secret: snapshot.is_secret,
+                is_secret,
                 is_enabled: snapshot.is_enabled,
                 description: snapshot.description,
                 sort_order: snapshot.sort_order,
@@ -547,10 +571,12 @@ pub(crate) async fn canonical_intent_on(
             .bind(&mutation.entity.workspace_id)
             .fetch_one(&mut *connection)
             .await?;
+            let is_secret =
+                unfour_core::redaction::is_sensitive_workspace_variable(&row.0, &row.1, row.2);
             serde_json::to_value(VariablePayload {
                 key: row.0,
-                value: (!row.2).then_some(row.1),
-                is_secret: row.2,
+                value: (!is_secret).then_some(row.1),
+                is_secret,
                 is_enabled: row.3,
                 description: row.4,
                 sort_order: row.5,
@@ -599,10 +625,12 @@ pub(crate) async fn canonical_intent_on(
             .bind(&mutation.entity.workspace_id)
             .fetch_one(&mut *connection)
             .await?;
+            let is_secret =
+                unfour_core::redaction::is_sensitive_workspace_variable(&row.0, &row.1, row.2);
             serde_json::to_value(VariablePayload {
                 key: row.0,
-                value: (!row.2).then_some(row.1),
-                is_secret: row.2,
+                value: (!is_secret).then_some(row.1),
+                is_secret,
                 is_enabled: row.3,
                 description: row.4,
                 sort_order: row.5,

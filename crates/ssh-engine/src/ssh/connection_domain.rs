@@ -480,10 +480,21 @@ impl SshService {
                 .credential_ref
                 .filter(|credential_ref| !credential_ref.is_empty())
             {
-                let _ = self
-                    .secret_store
-                    .delete_credential(cleanup.workspace_id.clone(), credential_ref)
-                    .await;
+                // A backup may restore one reference into several connections.
+                // Hold the SQLite writer lock through the reference check/delete.
+                // Managed references are reclaimed by CommandBus across all features.
+                if let Ok(mut db) = self.db.pool().begin_with("BEGIN IMMEDIATE").await {
+                    let used = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM connections WHERE workspace_id=? AND credential_ref=? AND deleted_at IS NULL) OR EXISTS(SELECT 1 FROM workspace_bundle_credential_journal WHERE workspace_id=? AND credential_ref=?)")
+                        .bind(&cleanup.workspace_id).bind(&credential_ref)
+                        .bind(&cleanup.workspace_id).bind(&credential_ref).fetch_one(&mut *db).await;
+                    if matches!(used, Ok(false)) {
+                        let _ = self
+                            .secret_store
+                            .delete_credential(cleanup.workspace_id.clone(), credential_ref)
+                            .await;
+                    }
+                    let _ = db.commit().await;
+                }
             }
             if cleanup.cleanup_runtime {
                 let _ = self

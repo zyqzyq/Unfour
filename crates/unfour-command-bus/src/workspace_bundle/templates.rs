@@ -73,14 +73,14 @@ fn collect(id: &str, field: &str, pointer: &str, value: &Value, out: &mut Vec<Ap
 }
 
 impl CommandBus {
-    pub(super) async fn collect_bundle_templates(
+    pub(super) async fn collect_bundle_templates_on(
         &self,
+        db: &mut sqlx::SqliteConnection,
         bundle: &mut WorkspaceBundle,
     ) -> AppResult<()> {
-        let mut db = self.db.pool().acquire().await?;
         for raw in self
             .api_client
-            .bundle_requests_on(&mut db, &bundle.workspace.id)
+            .bundle_requests_on(&mut *db, &bundle.workspace.id)
             .await?
         {
             for (field, value) in [

@@ -117,7 +117,7 @@ async fn startup_recovery_removes_interrupted_staged_credentials() {
         )
         .await
         .unwrap();
-    bus.workspace.recover_bundle_credentials().await.unwrap();
+    bus.recover_bundle_credentials().await.unwrap();
     assert!(bus
         .secret_store
         .read_secret(workspace.into(), reference)
@@ -302,11 +302,12 @@ async fn encrypted_round_trip_restores_local_refs_and_resolves_quoted_api_secret
     assert!(!share.content.contains("canary"));
     assert!(!share.content.contains("@unfour-secret:"));
     assert!(!share.content.contains("C:/old"));
-    let journal: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM workspace_bundle_credential_journal")
-            .fetch_one(bus.db.pool())
-            .await
-            .unwrap();
+    let journal: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM workspace_bundle_credential_journal WHERE state!='attached'",
+    )
+    .fetch_one(bus.db.pool())
+    .await
+    .unwrap();
     assert_eq!(journal, 0);
 }
 
@@ -337,11 +338,12 @@ async fn wrong_password_invalid_content_and_commit_failure_leave_no_workspace_or
         .fetch_one(bus.db.pool())
         .await
         .unwrap();
-    let journal: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM workspace_bundle_credential_journal")
-            .fetch_one(bus.db.pool())
-            .await
-            .unwrap();
+    let journal: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM workspace_bundle_credential_journal WHERE state!='attached'",
+    )
+    .fetch_one(bus.db.pool())
+    .await
+    .unwrap();
     assert_eq!(before, after);
     assert_eq!(journal, 0);
 }

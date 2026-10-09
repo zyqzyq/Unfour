@@ -1,15 +1,6 @@
 use super::*;
 const PREFIX: &str = "@unfour-secret:";
 impl WorkspaceService {
-    /// Called by primary application startup before exposing import commands, never by satellite adapters.
-    pub async fn recover_bundle_credentials(&self) -> AppResult<()> {
-        let workspaces: Vec<String> = sqlx::query_scalar("SELECT DISTINCT workspace_id FROM workspace_bundle_credential_journal WHERE NOT EXISTS (SELECT 1 FROM workspaces WHERE workspaces.id=workspace_bundle_credential_journal.workspace_id)")
-            .fetch_all(self.db.pool()).await?;
-        for workspace in workspaces {
-            self.cleanup_bundle_credentials(&workspace).await?;
-        }
-        Ok(())
-    }
     /// Resolve JSON string leaves, then serialize, so quotes in credentials cannot alter auth structure.
     pub async fn resolve_json_variables(
         &self,
@@ -58,40 +49,17 @@ impl WorkspaceService {
             .bind(workspace).bind(reference).execute(self.db.pool()).await?;
         Ok(())
     }
-    pub async fn clear_bundle_journal_on(
+    pub async fn attach_bundle_credentials_on(
         &self,
         db: &mut SqliteConnection,
         workspace: &str,
     ) -> AppResult<()> {
-        sqlx::query("DELETE FROM workspace_bundle_credential_journal WHERE workspace_id=?")
-            .bind(workspace)
-            .execute(&mut *db)
-            .await?;
-        Ok(())
-    }
-    pub async fn cleanup_bundle_credentials(&self, workspace: &str) -> AppResult<()> {
-        let references: Vec<String> = sqlx::query_scalar(
-            "SELECT credential_ref FROM workspace_bundle_credential_journal WHERE workspace_id=?",
+        sqlx::query(
+            "UPDATE workspace_bundle_credential_journal SET state='attached' WHERE workspace_id=?",
         )
         .bind(workspace)
-        .fetch_all(self.db.pool())
+        .execute(&mut *db)
         .await?;
-        let store = self
-            .secret_store
-            .as_ref()
-            .ok_or_else(|| AppError::Config("credential store unavailable".into()))?;
-        for reference in references {
-            match store
-                .delete_credential(workspace.into(), reference.clone())
-                .await
-            {
-                Ok(()) | Err(AppError::NotFound(_)) => {
-                    sqlx::query("DELETE FROM workspace_bundle_credential_journal WHERE workspace_id=? AND credential_ref=?")
-                        .bind(workspace).bind(reference).execute(self.db.pool()).await?;
-                }
-                Err(error) => return Err(error),
-            }
-        }
         Ok(())
     }
     pub async fn resolve_secret_value(
@@ -110,39 +78,27 @@ impl WorkspaceService {
             Ok(value.into())
         }
     }
-    /// Keep edits to imported credentials in the credential store as well.
+    /// Keychain writes are staged before entering the caller's business transaction.
     pub(super) async fn preserve_imported_variable_secret(
         &self,
         workspace: &str,
         previous: &str,
         input: &mut unfour_core::models::WorkspaceVariableInput,
     ) -> AppResult<()> {
-        if let Some(reference) = previous.strip_prefix(PREFIX) {
-            if input.value.is_empty() {
-                return Ok(());
-            }
-            if input.value != previous {
-                let store = self
-                    .secret_store
-                    .as_ref()
-                    .ok_or_else(|| AppError::Config("credential store unavailable".into()))?;
-                let metadata = store
-                    .inspect_credential(workspace.into(), reference.into())
-                    .await?;
-                // Allocate a replacement so a later SQLite rollback cannot change the old value.
-                let created = store
-                    .create_credential(
-                        workspace.into(),
-                        metadata.kind,
-                        "Workspace variable".into(),
-                        input.value.clone(),
-                    )
-                    .await?;
-                input.value = format!("{PREFIX}{}", created.credential_ref);
-            } else {
-                input.value = previous.into();
-            }
+        if previous.starts_with(PREFIX) {
             input.is_secret = true;
+        }
+        if let Some(reference) = input.value.strip_prefix(PREFIX) {
+            self.secret_store
+                .as_ref()
+                .ok_or_else(|| AppError::Config("credential store unavailable".into()))?
+                .inspect_credential(workspace.into(), reference.into())
+                .await?;
+            input.is_secret = true;
+        } else if previous.starts_with(PREFIX) && !input.value.is_empty() {
+            return Err(AppError::Validation(
+                "workspace secret edit was not staged".into(),
+            ));
         }
         Ok(())
     }
@@ -184,13 +140,13 @@ impl WorkspaceService {
             let rows: Vec<(String, String, String, bool)> = sqlx::query_as(&format!("SELECT id, key, value, is_secret FROM {table} WHERE workspace_id=? AND deleted_at IS NULL"))
                 .bind(workspace).fetch_all(&mut *db).await?;
             for (id, key, value, secret) in rows {
-                if (secret || unfour_core::redaction::is_sensitive_flow_name(&key))
+                if unfour_core::redaction::is_sensitive_workspace_variable(&key, &value, secret)
                     && !value.is_empty()
                 {
                     values.push((
                         id,
                         kind.into(),
-                        self.resolve_secret_value(workspace, &value, secret).await?,
+                        self.resolve_secret_value(workspace, &value, true).await?,
                     ));
                 }
             }

@@ -148,24 +148,24 @@ pub(super) fn override_paths(
 }
 
 impl CommandBus {
-    pub(super) async fn collect_local_fields(
+    pub(super) async fn collect_local_fields_on(
         &self,
+        db: &mut sqlx::SqliteConnection,
         bundle: &mut WorkspaceBundle,
         keep_paths: bool,
     ) -> AppResult<Vec<(String, String)>> {
-        let mut db = self.db.pool().acquire().await?;
         let workspace = &bundle.workspace.id;
         let mut credentials = Vec::new();
         for (rows, field) in [
             (
                 self.ssh
-                    .bundle_connection_fields_on(&mut db, workspace)
+                    .bundle_connection_fields_on(&mut *db, workspace)
                     .await?,
                 "keyPath",
             ),
             (
                 self.database
-                    .bundle_connection_fields_on(&mut db, workspace)
+                    .bundle_connection_fields_on(&mut *db, workspace)
                     .await?,
                 "sqlitePath",
             ),
@@ -202,7 +202,7 @@ impl CommandBus {
         }
         for (id, path, enabled) in self
             .ssh
-            .bundle_transfer_fields_on(&mut db, workspace)
+            .bundle_transfer_fields_on(&mut *db, workspace)
             .await?
         {
             if let Some(step) = bundle.ssh_steps.iter_mut().find(|s| s.id == id) {

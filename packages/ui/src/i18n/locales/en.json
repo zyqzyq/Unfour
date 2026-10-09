@@ -582,6 +582,8 @@
     "saving": "Saving...",
     "secret": "Secret",
     "selectHint": "Select a variable environment to edit its variables.",
+    "clearSavedSecret": "Clear saved credential",
+    "savedSecret": "Saved credential — enter to replace",
     "showSecret": "Show secret value",
     "unsaved": "Unsaved changes",
     "value": "Value",

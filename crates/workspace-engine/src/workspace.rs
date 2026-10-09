@@ -6,6 +6,7 @@ mod local_bundle;
 mod snapshot;
 mod variable_executor;
 mod variable_persistence;
+mod variable_secrets;
 mod variables;
 
 use chrono::Utc;

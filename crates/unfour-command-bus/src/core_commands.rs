@@ -41,7 +41,7 @@ impl CommandBus {
         bus.api_client.redact_legacy_history().await?;
         bus.ensure_default_workspace().await?;
         // Only primary startup performs recovery; MCP/satellite construction skips it.
-        if bus.workspace.recover_bundle_credentials().await.is_err() {
+        if bus.recover_bundle_credentials().await.is_err() {
             tracing::warn!("Workspace backup credential cleanup remains pending");
         }
         Ok(bus)

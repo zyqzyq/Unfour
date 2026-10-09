@@ -70,14 +70,19 @@ pub(crate) async fn read_snapshot_on(
             if let Some(deleted_at) = variable.deleted_at {
                 return Ok(tombstone(key, deleted_at, variable.revision));
             }
-            let value = snapshot_value(variable.is_secret, variable.value);
+            let is_secret = unfour_core::redaction::is_sensitive_workspace_variable(
+                &variable.key,
+                &variable.value,
+                variable.is_secret,
+            );
+            let value = snapshot_value(is_secret, variable.value);
             Ok(DomainSnapshot::WorkspaceVariable(
                 WorkspaceVariableSnapshot {
                     id: variable.id,
                     workspace_id: variable.workspace_id,
                     key: variable.key,
                     value,
-                    is_secret: variable.is_secret,
+                    is_secret,
                     is_enabled: variable.is_enabled,
                     description: variable.description,
                     sort_order: variable.sort_order,
@@ -136,7 +141,12 @@ pub(crate) async fn read_snapshot_on(
                 tombstone_key.parent_entity_id = Some(variable.environment_id);
                 return Ok(tombstone(&tombstone_key, deleted_at, variable.revision));
             }
-            let value = snapshot_value(variable.is_secret, variable.value);
+            let is_secret = unfour_core::redaction::is_sensitive_workspace_variable(
+                &variable.key,
+                &variable.value,
+                variable.is_secret,
+            );
+            let value = snapshot_value(is_secret, variable.value);
             Ok(DomainSnapshot::WorkspaceEnvironmentVariable(
                 WorkspaceEnvironmentVariableSnapshot {
                     id: variable.id,
@@ -144,7 +154,7 @@ pub(crate) async fn read_snapshot_on(
                     environment_id: variable.environment_id,
                     key: variable.key,
                     value,
-                    is_secret: variable.is_secret,
+                    is_secret,
                     is_enabled: variable.is_enabled,
                     description: variable.description,
                     sort_order: variable.sort_order,

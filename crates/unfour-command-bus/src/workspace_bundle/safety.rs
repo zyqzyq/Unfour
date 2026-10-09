@@ -2,19 +2,27 @@ use super::*;
 use unfour_core::redaction::is_sensitive_flow_name;
 pub(super) fn sanitize(bundle: &mut WorkspaceBundle) -> AppResult<()> {
     for r in &mut bundle.variables {
-        if r.is_secret
-            || matches!(r.value, SnapshotVariableValue::SecretRedacted)
-            || is_sensitive_flow_name(&r.key)
-        {
+        if unfour_core::redaction::is_sensitive_workspace_variable(
+            &r.key,
+            match &r.value {
+                SnapshotVariableValue::Plain(value) => value,
+                _ => "",
+            },
+            r.is_secret || matches!(r.value, SnapshotVariableValue::SecretRedacted),
+        ) {
             r.is_secret = true;
             r.value = SnapshotVariableValue::SecretRedacted;
         }
     }
     for r in &mut bundle.environment_variables {
-        if r.is_secret
-            || matches!(r.value, SnapshotVariableValue::SecretRedacted)
-            || is_sensitive_flow_name(&r.key)
-        {
+        if unfour_core::redaction::is_sensitive_workspace_variable(
+            &r.key,
+            match &r.value {
+                SnapshotVariableValue::Plain(value) => value,
+                _ => "",
+            },
+            r.is_secret || matches!(r.value, SnapshotVariableValue::SecretRedacted),
+        ) {
             r.is_secret = true;
             r.value = SnapshotVariableValue::SecretRedacted;
         }

@@ -25,9 +25,11 @@ impl CommandBus {
     }
 
     pub async fn delete_credential(&self, input: CredentialDeleteInput) -> AppResult<()> {
+        let guard = self.db.pool().begin_with("BEGIN IMMEDIATE").await?;
         self.secret_store
             .delete_credential(input.workspace_id.clone(), input.credential_ref.clone())
             .await?;
+        guard.rollback().await?;
         self.activity_log
             .record(
                 Some(&input.workspace_id),
@@ -52,10 +54,12 @@ impl CommandBus {
         &self,
         input: CredentialRotateInput,
     ) -> AppResult<CredentialMetadata> {
+        let guard = self.db.pool().begin_with("BEGIN IMMEDIATE").await?;
         let credential = self
             .secret_store
             .rotate_credential(input.workspace_id, input.credential_ref, input.secret)
             .await?;
+        guard.rollback().await?;
         self.activity_log
             .record(
                 Some(&credential.workspace_id),

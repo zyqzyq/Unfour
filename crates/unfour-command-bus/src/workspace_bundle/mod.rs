@@ -9,6 +9,10 @@ pub use local::WorkspaceBundleOptions;
 #[cfg(test)]
 mod backup_tests;
 #[cfg(test)]
+mod connection_credential_tests;
+#[cfg(test)]
+mod credential_tests;
+#[cfg(test)]
 mod tests;
 use crate::CommandBus;
 use schema::*;
@@ -88,37 +92,60 @@ impl CommandBus {
         workspace: String,
     ) -> AppResult<WorkspaceBundleExportArtifact> {
         let mut tx = self.db.pool().begin().await?;
+        let bundle = self
+            .workspace_bundle_snapshot_on(&mut tx, &workspace)
+            .await?;
+        tx.rollback().await?;
+        let content = serde_json::to_string_pretty(&bundle)?;
+        if content.len() > MAX_BUNDLE_BYTES {
+            return Err(AppError::Validation("WORKSPACE_BUNDLE_TOO_LARGE".into()));
+        }
+        Ok(WorkspaceBundleExportArtifact {
+            content,
+            suggested_file_name: filename::suggested_file_name(&bundle.workspace.name),
+        })
+    }
+    /// All business definitions and supplements must use the caller's snapshot.
+    async fn workspace_bundle_snapshot_on(
+        &self,
+        db: &mut sqlx::SqliteConnection,
+        workspace: &str,
+    ) -> AppResult<WorkspaceBundle> {
         let mut snapshots = self
             .workspace
-            .export_workspace_snapshots_on(&mut tx, &workspace)
+            .export_workspace_snapshots_on(&mut *db, &workspace)
             .await?;
         snapshots.extend(
             self.api_client
-                .export_workspace_snapshots_on(&mut tx, &workspace)
+                .export_workspace_snapshots_on(&mut *db, &workspace)
                 .await?,
         );
         snapshots.extend(
             self.ssh
-                .export_connection_snapshots_on(&mut tx, &workspace)
+                .export_connection_snapshots_on(&mut *db, &workspace)
                 .await?,
         );
         snapshots.extend(
             self.database
-                .export_connection_snapshots_on(&mut tx, &workspace)
+                .export_connection_snapshots_on(&mut *db, &workspace)
                 .await?,
         );
         for key in self
             .ssh
-            .list_task_domain_entities_on(&mut tx, &workspace)
+            .list_task_domain_entities_on(&mut *db, &workspace)
             .await?
         {
-            snapshots.push(self.ssh.read_task_domain_snapshot_on(&mut tx, &key).await?);
+            snapshots.push(
+                self.ssh
+                    .read_task_domain_snapshot_on(&mut *db, &key)
+                    .await?,
+            );
         }
         let mut bundle = WorkspaceBundle {
             format: "unfour-workspace".into(),
             version: 1,
             workspace: WorkspaceRecord {
-                id: workspace,
+                id: workspace.into(),
                 name: String::new(),
                 environment_type: "dev".into(),
             },
@@ -161,27 +188,19 @@ impl CommandBus {
         }
         for record in self
             .database
-            .export_saved_sql_on(&mut tx, &bundle.workspace.id)
+            .export_saved_sql_on(&mut *db, &bundle.workspace.id)
             .await?
         {
             bundle.saved_sql.push(portable(record)?);
         }
         for record in FlowService::new(self.db.clone())
-            .export_definitions_on(&mut tx, &bundle.workspace.id)
+            .export_definitions_on(&mut *db, &bundle.workspace.id)
             .await?
         {
             bundle.flows.push(portable(record)?);
         }
-        tx.rollback().await?;
         safety::sanitize(&mut bundle)?;
-        let content = serde_json::to_string_pretty(&bundle)?;
-        if content.len() > MAX_BUNDLE_BYTES {
-            return Err(AppError::Validation("WORKSPACE_BUNDLE_TOO_LARGE".into()));
-        }
-        Ok(WorkspaceBundleExportArtifact {
-            content,
-            suggested_file_name: filename::suggested_file_name(&bundle.workspace.name),
-        })
+        Ok(bundle)
     }
     pub async fn workspace_bundle_preview(
         &self,

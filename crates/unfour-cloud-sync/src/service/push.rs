@@ -36,7 +36,7 @@ impl SyncService {
         let mut entries = Vec::new();
         let mut operations = Vec::new();
         let mut bytes = 0;
-        let mut parked_oversized = false;
+        let mut parked_entries = false;
         for mut entry in candidates {
             let operation = SyncOperation::parse(&entry.operation)?;
             let needs_snapshot = (operation == SyncOperation::Upsert
@@ -66,6 +66,21 @@ impl SyncService {
                 entry = materialized;
             }
             let operation = build_push_operation(&entry)?;
+            // Old immutable retries may predate the shared variable boundary.
+            // Park them for existing repair instead of changing an operation's
+            // payload under its id or transmitting a credential.
+            if !variable_payload_is_safe(&operation) {
+                self.repository
+                    .mark_not_sent(
+                        std::slice::from_ref(&entry),
+                        "sensitive_variable_payload",
+                        false,
+                        self.dependencies.clock.now(),
+                    )
+                    .await?;
+                parked_entries = true;
+                continue;
+            }
             let operation_bytes = serde_json::to_vec(&operation)
                 .map_err(|_| SyncError::InvalidData)?
                 .len();
@@ -83,7 +98,7 @@ impl SyncService {
                         self.dependencies.clock.now(),
                     )
                     .await?;
-                parked_oversized = true;
+                parked_entries = true;
                 continue;
             }
             if !operations.is_empty() && bytes + operation_bytes > PUSH_BATCH_MAX_BYTES {
@@ -94,7 +109,7 @@ impl SyncService {
             operations.push(operation);
         }
         if entries.is_empty() {
-            return Ok(parked_oversized);
+            return Ok(parked_entries);
         }
         // Recheck at the outbound side-effect boundary. A periodic flight can
         // outlive an account switch while it materializes local snapshots;
@@ -399,4 +414,30 @@ fn build_push_operation(entry: &OutboxEntry) -> Result<PushOperation, SyncError>
         payload_schema_version: entry.payload_schema_version,
         payload,
     })
+}
+
+fn variable_payload_is_safe(operation: &PushOperation) -> bool {
+    if !matches!(
+        operation.entity_type,
+        SyncEntityType::WorkspaceVariable | SyncEntityType::WorkspaceEnvironmentVariable
+    ) {
+        return true;
+    }
+    let Some(payload) = &operation.payload else {
+        return true;
+    };
+    let Some(value) = payload.get("value").and_then(serde_json::Value::as_str) else {
+        return true;
+    };
+    !unfour_core::redaction::is_sensitive_workspace_variable(
+        payload
+            .get("key")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(""),
+        value,
+        payload
+            .get("isSecret")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false),
+    )
 }

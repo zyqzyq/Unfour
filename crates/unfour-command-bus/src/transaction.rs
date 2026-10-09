@@ -88,10 +88,24 @@ impl CommandBus {
         F: for<'a> FnOnce(&'a mut SqliteConnection) -> CommandExecutorFuture<'a, T>,
     {
         let mut transaction = self.db.pool().begin().await?;
-        let outcome = executor(&mut transaction).await?;
-        self.finalize_domain_command(&mut transaction, &context, activity, &outcome, false)
-            .await?;
+        let outcome = match executor(&mut transaction).await {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                transaction.rollback().await?;
+                return Err(error);
+            }
+        };
+        if let Err(error) = self
+            .finalize_domain_command(&mut transaction, &context, activity, &outcome, false)
+            .await
+        {
+            transaction.rollback().await?;
+            return Err(error);
+        }
         transaction.commit().await?;
+        if self.cleanup_bundle_garbage().await.is_err() {
+            tracing::warn!("Workspace credential cleanup remains pending");
+        }
         Ok(outcome.value)
     }
 
@@ -145,17 +159,31 @@ impl CommandBus {
         F: for<'a> FnOnce(&'a mut SqliteConnection) -> CommandExecutorFuture<'a, T>,
     {
         let mut transaction = self.db.pool().begin().await?;
-        let outcome = executor(&mut transaction).await?;
+        let outcome = match executor(&mut transaction).await {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                transaction.rollback().await?;
+                return Err(error);
+            }
+        };
         let activity = activity(&outcome.value);
-        self.finalize_domain_command(
-            &mut transaction,
-            &context,
-            Some(activity),
-            &outcome,
-            record_activity_without_mutation,
-        )
-        .await?;
+        if let Err(error) = self
+            .finalize_domain_command(
+                &mut transaction,
+                &context,
+                Some(activity),
+                &outcome,
+                record_activity_without_mutation,
+            )
+            .await
+        {
+            transaction.rollback().await?;
+            return Err(error);
+        }
         transaction.commit().await?;
+        if self.cleanup_bundle_garbage().await.is_err() {
+            tracing::warn!("Workspace credential cleanup remains pending");
+        }
         Ok(outcome.value)
     }
 
@@ -200,6 +228,7 @@ impl CommandBus {
         if outcome.mutations.is_empty() {
             return Ok(());
         }
+        self.reconcile_bundle_credentials_on(transaction).await?;
         for hook in self.extensions.transactional_hooks() {
             hook.on_mutations(transaction, context, &outcome.mutations)
                 .await?;

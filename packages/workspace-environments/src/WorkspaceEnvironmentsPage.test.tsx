@@ -136,6 +136,39 @@ afterEach(() => {
 });
 
 describe("WorkspaceEnvironmentsPage", () => {
+  it.each(["workspace", "environment"])("keeps a saved %s credential opaque until replacement or clearing", async (scope) => {
+    const value = "@unfour-secret:unfour:ws-1:workspace-variable:opaque";
+    const variable = workspaceVariable({ key: "access_token", value, isSecret: true });
+    listVariablesMock.mockResolvedValue(scope === "workspace" ? [variable] : []);
+    listEnvironmentsMock.mockResolvedValue([
+      environment({ variables: scope === "environment" ? [{ ...variable, environmentId: "env-1" }] : [] }),
+    ]);
+    renderPage(scope === "workspace" ? null : "env-1");
+    const input = await screen.findByPlaceholderText("Saved credential — enter to replace");
+    expect((input as HTMLInputElement).value).toBe("");
+    expect(screen.queryByDisplayValue(value)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Show secret value" })).toBeNull();
+    fireEvent.change(screen.getByPlaceholderText("Description"), { target: { value: "changed metadata" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      const call = scope === "workspace" ? replaceMock.mock.calls[0]?.[1] : updateMock.mock.calls[0]?.[3];
+      expect(call?.[0].value).toBe(value);
+    });
+  });
+
+  it("replaces and explicitly clears an imported credential without displaying its handle", async () => {
+    const variable = workspaceVariable({ key: "access_token", value: "@unfour-secret:opaque", isSecret: true });
+    listVariablesMock.mockResolvedValue([variable]);
+    replaceMock.mockResolvedValue([variable]);
+    renderPage(null);
+    fireEvent.change(await screen.findByPlaceholderText("Saved credential — enter to replace"), { target: { value: "replacement" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(replaceMock.mock.calls[0]?.[1][0].value).toBe("replacement"));
+    fireEvent.click(await screen.findByRole("button", { name: "Clear saved credential" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(replaceMock.mock.calls[1]?.[1][0].value).toBe(""));
+  });
+
   it("previews a same-name environment and imports only after confirmation", async () => {
     vi.mocked(previewEnvironmentImport).mockResolvedValue({content:"environment-content",preview:{format:"postman",name:"Local",variables:[{key:"credential",isSecret:true,isEnabled:false}],conflict:true,warnings:["environmentCopy"]}});
     vi.mocked(importEnvironment).mockResolvedValue(environment({id:"copy",name:"Local (Copy 1)"}));

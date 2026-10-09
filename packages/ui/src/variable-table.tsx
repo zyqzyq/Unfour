@@ -1,4 +1,4 @@
-import { Eye, EyeOff, Plus, Trash2 } from "lucide-react";
+import { Eye, EyeOff, Plus, Trash2, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Button } from "./button";
 import { Input } from "./input";
@@ -20,12 +20,20 @@ export function VariableTable<T extends VariableTableItem>({
   onChange,
   overridingKeys,
   renderDecoration,
+  valuePresentation,
   title,
 }: {
   items: T[];
   onChange: (items: T[]) => void;
   overridingKeys?: ReadonlySet<string>;
   renderDecoration?: (item: T) => ReactNode;
+  valuePresentation?: (item: T) => {
+    value: string;
+    placeholder?: string;
+    canReveal?: boolean;
+    clearLabel?: string;
+    secretToggleDisabled?: boolean;
+  };
   title: string;
 }) {
   const { t } = useI18n();
@@ -99,6 +107,7 @@ export function VariableTable<T extends VariableTableItem>({
           items.map((item, index) => {
             const rowId = item.id ?? `new-${index}`;
             const revealed = revealedIds.has(rowId);
+            const presentation = valuePresentation?.(item);
             const normalizedKey = item.key.trim().toLowerCase();
             const overrides = Boolean(
               normalizedKey && normalizedOverridingKeys.has(normalizedKey),
@@ -140,11 +149,11 @@ export function VariableTable<T extends VariableTableItem>({
                   <Input
                     className={cn(cellInputClass, "min-w-0 flex-1 pr-7")}
                     onChange={(event) => update(index, { value: event.target.value } as Partial<T>)}
-                    placeholder={t("variables.value")}
+                    placeholder={presentation?.placeholder ?? t("variables.value")}
                     type={item.isSecret && !revealed ? "password" : "text"}
-                    value={item.value}
+                    value={presentation?.value ?? item.value}
                   />
-                  {item.isSecret && (
+                  {item.isSecret && presentation?.canReveal !== false && (
                     <button
                       aria-label={revealed ? t("variables.hideSecret") : t("variables.showSecret")}
                       className="-ml-7 grid h-7 w-7 cursor-pointer place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]"
@@ -161,10 +170,23 @@ export function VariableTable<T extends VariableTableItem>({
                       {revealed ? <EyeOff size={13} /> : <Eye size={13} />}
                     </button>
                   )}
+                  {presentation?.clearLabel && (
+                    <Button
+                      aria-label={presentation.clearLabel}
+                      onClick={() => update(index, { value: "" } as Partial<T>)}
+                      size="icon"
+                      className="h-7 w-7"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <X size={13} />
+                    </Button>
+                  )}
                 </div>
                 <label className="flex cursor-pointer items-center gap-1 text-[11px] text-[var(--u-color-text-muted)]">
                   <input
                     checked={item.isSecret}
+                    disabled={presentation?.secretToggleDisabled}
                     className="h-4 w-4 cursor-pointer"
                     onChange={(event) => update(index, { isSecret: event.target.checked } as Partial<T>)}
                     type="checkbox"

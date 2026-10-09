@@ -24,6 +24,12 @@ pub fn is_sensitive_flow_name(value: &str) -> bool {
 
 pub const REDACTED_VALUE: &str = "<redacted>";
 
+/// Shared Workspace Bundle and Cloud Sync variable boundary. Handles are local
+/// secrets even if an older or untrusted record has lost its explicit flag.
+pub fn is_sensitive_workspace_variable(key: &str, value: &str, is_secret: bool) -> bool {
+    is_secret || is_sensitive_flow_name(key) || value.contains("@unfour-secret:")
+}
+
 pub fn is_sensitive_key(value: &str) -> bool {
     matches!(
         value.trim().to_ascii_lowercase().as_str(),
