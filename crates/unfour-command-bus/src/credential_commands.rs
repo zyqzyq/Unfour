@@ -10,30 +10,61 @@ impl CommandBus {
         connection_type: String,
         credential_ref: String,
     ) -> AppResult<String> {
-        if !matches!(connection_type.as_str(), "ssh" | "database") {
+        self.reveal_connection_secret_with(
+            &workspace_id,
+            &connection_id,
+            &connection_type,
+            &credential_ref,
+            self.secret_store
+                .read_secret(workspace_id.clone(), credential_ref.clone()),
+        )
+        .await
+    }
+
+    async fn reveal_connection_secret_with(
+        &self,
+        workspace_id: &str,
+        connection_id: &str,
+        connection_type: &str,
+        credential_ref: &str,
+        read: impl std::future::Future<Output = AppResult<String>>,
+    ) -> AppResult<String> {
+        if !matches!(connection_type, "ssh" | "database") {
             return Err(unfour_core::AppError::Validation(
                 "CONNECTION_CREDENTIAL_UNAVAILABLE".into(),
             ));
         }
+        // Reuse the cross-process credential lifecycle lock for staging and
+        // same-reference rotation/deletion. Hold no SQLite connection or lock
+        // while an OS keychain prompt/read can block.
+        let _credential_guard = self.credential_stage_guard().await?;
+        let revision: Option<i64> = sqlx::query_scalar(LIVE_CONNECTION_CREDENTIAL)
+            .bind(workspace_id)
+            .bind(connection_id)
+            .bind(connection_type)
+            .bind(credential_ref)
+            .fetch_optional(self.db.pool())
+            .await?;
+        let revision = revision.ok_or_else(credential_unavailable)?;
+        let secret = zeroize::Zeroizing::new(read.await.map_err(|_| credential_unavailable())?);
+
+        // Deletion, workspace removal and GC need not wait for the keychain.
+        // Revalidate after I/O against a fresh snapshot under a short writer
+        // guard. Revision also rejects a replace/restore (ABA) race. This is
+        // the read's linearization point; no secret escapes on a failed check.
         let mut guard = self.db.pool().begin_with("BEGIN IMMEDIATE").await?;
-        let current: Option<String> = sqlx::query_scalar(
-            "SELECT credential_ref FROM connections WHERE workspace_id=? AND id=? AND connection_type=? AND deleted_at IS NULL",
-        ).bind(&workspace_id).bind(&connection_id).bind(&connection_type)
-            .fetch_optional(&mut *guard).await?.flatten();
-        let reference = current
-            .filter(|value| value == &credential_ref)
-            .ok_or_else(|| {
-                unfour_core::AppError::Validation("CONNECTION_CREDENTIAL_UNAVAILABLE".into())
-            })?;
-        let result = self
-            .secret_store
-            .read_secret(workspace_id, reference)
-            .await
-            .map_err(|_| {
-                unfour_core::AppError::Validation("CONNECTION_CREDENTIAL_UNAVAILABLE".into())
-            });
+        let current: Result<Option<i64>, _> = sqlx::query_scalar(LIVE_CONNECTION_CREDENTIAL)
+            .bind(workspace_id)
+            .bind(connection_id)
+            .bind(connection_type)
+            .bind(credential_ref)
+            .fetch_optional(&mut *guard)
+            .await;
         guard.rollback().await?;
-        result
+        if current? != Some(revision) {
+            return Err(credential_unavailable());
+        }
+        Ok(secret.to_string())
     }
 
     pub async fn create_credential(
@@ -60,6 +91,7 @@ impl CommandBus {
     }
 
     pub async fn delete_credential(&self, input: CredentialDeleteInput) -> AppResult<()> {
+        let _credential_guard = self.credential_stage_guard().await?;
         let guard = self.db.pool().begin_with("BEGIN IMMEDIATE").await?;
         self.secret_store
             .delete_credential(input.workspace_id.clone(), input.credential_ref.clone())
@@ -89,6 +121,7 @@ impl CommandBus {
         &self,
         input: CredentialRotateInput,
     ) -> AppResult<CredentialMetadata> {
+        let _credential_guard = self.credential_stage_guard().await?;
         let guard = self.db.pool().begin_with("BEGIN IMMEDIATE").await?;
         let credential = self
             .secret_store
@@ -109,3 +142,18 @@ impl CommandBus {
         Ok(credential)
     }
 }
+
+const LIVE_CONNECTION_CREDENTIAL: &str = "
+    SELECT c.revision FROM connections c
+    JOIN workspaces w ON w.id=c.workspace_id AND w.deleted_at IS NULL
+    WHERE c.workspace_id=? AND c.id=? AND c.connection_type=?
+      AND c.credential_ref=? AND c.deleted_at IS NULL
+      AND ((c.connection_type='ssh' AND EXISTS (SELECT 1 FROM ssh_connections s WHERE s.connection_id=c.id))
+        OR (c.connection_type='database' AND EXISTS (SELECT 1 FROM database_connections d WHERE d.connection_id=c.id)))";
+
+fn credential_unavailable() -> unfour_core::AppError {
+    unfour_core::AppError::Validation("CONNECTION_CREDENTIAL_UNAVAILABLE".into())
+}
+
+#[cfg(test)]
+mod tests;
