@@ -1,6 +1,143 @@
 use super::*;
 
 #[tokio::test]
+async fn openapi_export_matches_real_auth_sends_with_sensitive_variable_references() {
+    let bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    for (key, value, is_secret) in [
+        ("private_value", "resolution-canary-value", true),
+        ("auth_slot", "X-Custom-Credential", false),
+        ("public_page", "2", false),
+    ] {
+        bus.workspace_variable_create(
+            workspace.clone(),
+            WorkspaceVariableInput {
+                id: None,
+                key: key.into(),
+                value: value.into(),
+                is_secret,
+                is_enabled: true,
+                description: None,
+                sort_order: 0,
+            },
+        )
+        .await
+        .unwrap();
+    }
+    for (index, (auth, matches, public_variable)) in [
+        (
+            serde_json::json!({"type":"bearer","token":"{{private_value}}"}),
+            true,
+            false,
+        ),
+        (
+            serde_json::json!({"type":"basic","username":"user","password":"{{private_value}}"}),
+            true,
+            false,
+        ),
+        (
+            serde_json::json!({"type":"api-key","addTo":"header","key":"X-Custom-Credential","value":"{{private_value}}"}),
+            true,
+            false,
+        ),
+        (
+            serde_json::json!({"type":"api-key","addTo":"query","key":"credential","value":"{{private_value}}"}),
+            true,
+            false,
+        ),
+        // Export cannot reconstruct historical public values or auth slot names.
+        (
+            serde_json::json!({"type":"api-key","addTo":"header","key":"{{auth_slot}}","value":"{{private_value}}"}),
+            false,
+            false,
+        ),
+        (
+            serde_json::json!({"type":"bearer","token":"{{private_value}}"}),
+            false,
+            true,
+        ),
+    ].into_iter().enumerate() {
+        let collection = bus
+            .api_collection_create(workspace.clone(), format!("Auth round trip {index}"))
+            .await
+            .unwrap();
+        let (url, received) = spawn_api_test_server();
+        let mut input = api_script_test_input(workspace.clone(), url);
+        input.name = Some("Auth round trip".into());
+        input.collection_id = Some(collection.id.clone());
+        input.auth_json = Some(auth.to_string());
+        input.headers.push(KeyValue {
+            key: "X-Ordinary".into(),
+            value: "{{private_value}}".into(),
+            enabled: true,
+        });
+        input.query.push(KeyValue {
+            key: "note".into(),
+            value: "{{private_value}}".into(),
+            enabled: true,
+        });
+        if public_variable {
+            input.query.push(KeyValue {
+                key: "page".into(),
+                value: "{{public_page}}".into(),
+                enabled: true,
+            });
+        }
+        let saved = bus.save_api_request(input.clone()).await.unwrap();
+        let response = bus.send_api_request(input).await.unwrap();
+        let wire = received
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .unwrap();
+        assert!(
+            wire.contains("resolution-canary-value"),
+            "the loopback server must receive the resolved value"
+        );
+        let artifact = bus
+            .api_collection_export(
+                workspace.clone(),
+                collection.id,
+                ApiCollectionExportFormat::Json,
+            )
+            .await
+            .unwrap();
+        assert!(!artifact.content.contains("resolution-canary-value"));
+        assert!(!artifact
+            .content
+            .contains("dXNlcjpyZXNvbHV0aW9uLWNhbmFyeS12YWx1ZQ=="));
+        let document: serde_json::Value = serde_json::from_str(&artifact.content).unwrap();
+        let responses = &document["paths"]["/echo"]["get"]["responses"];
+        if matches {
+            assert_eq!(responses["200"]["x-unfour-history-id"], response.history_id);
+        } else {
+            assert!(responses["default"].is_object());
+        }
+        let after = bus
+            .list_saved_api_requests(workspace.clone())
+            .await
+            .unwrap();
+        let after = after.iter().find(|request| request.id == saved.id).unwrap();
+        assert!(after.auth_json == saved.auth_json);
+        let history = bus
+            .api_history_detail(workspace.clone(), response.history_id)
+            .await
+            .unwrap();
+        assert!(!history
+            .request_headers_json
+            .contains("resolution-canary-value"));
+        assert!(!history
+            .request_query_json
+            .contains("resolution-canary-value"));
+        let activity: Vec<String> =
+            sqlx::query_scalar("SELECT details_json FROM activity_events WHERE workspace_id=?")
+                .bind(&workspace)
+                .fetch_all(bus.db.pool())
+                .await
+                .unwrap();
+        assert!(!activity.join("").contains("resolution-canary-value"));
+    }
+}
+
+#[tokio::test]
 async fn auth_is_materialized_after_workspace_environment_and_temporary_resolution() {
     let bus = test_bus().await;
     let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;

@@ -201,6 +201,13 @@ fn database_is_readonly(error: &AppError) -> bool {
 }
 
 fn safe_detail(row: &ApiHistoryDetail) -> AppResult<SafeHistory> {
+    safe_detail_with_auth(row, None)
+}
+
+fn safe_detail_with_auth(
+    row: &ApiHistoryDetail,
+    auth_json: Option<&str>,
+) -> AppResult<SafeHistory> {
     let input = ApiRequestInput {
         workspace_id: row.workspace_id.clone(),
         name: row.name.clone(),
@@ -210,7 +217,7 @@ fn safe_detail(row: &ApiHistoryDetail) -> AppResult<SafeHistory> {
         query: serde_json::from_str(&row.request_query_json).unwrap_or_default(),
         body: row.request_body.clone(),
         body_kind: row.request_body_kind.clone(),
-        auth_json: None,
+        auth_json: auth_json.map(str::to_owned),
         collection_id: None,
         parent_folder_id: None,
         timeout_ms: None,
@@ -228,7 +235,14 @@ fn safe_detail(row: &ApiHistoryDetail) -> AppResult<SafeHistory> {
 }
 
 pub(super) fn sanitize_detail(row: &mut ApiHistoryDetail) -> AppResult<()> {
-    let safe = safe_detail(row)?;
+    sanitize_detail_with_auth(row, None)
+}
+
+pub(super) fn sanitize_detail_with_auth(
+    row: &mut ApiHistoryDetail,
+    auth_json: Option<&str>,
+) -> AppResult<()> {
+    let safe = safe_detail_with_auth(row, auth_json)?;
     row.name = safe.name;
     row.url = safe.url;
     row.request_headers_json = safe.headers;

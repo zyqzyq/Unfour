@@ -2,7 +2,7 @@ use super::super::*;
 use super::support::service;
 use unfour_core::models::ApiCollectionExportFormat;
 
-fn input(collection: &str, sensitive: bool) -> ApiRequestInput {
+pub(super) fn input(collection: &str, sensitive: bool) -> ApiRequestInput {
     let rows = |key: &str, value: &str| KeyValue {
         key: key.into(),
         value: value.into(),
@@ -64,7 +64,7 @@ fn input(collection: &str, sensitive: bool) -> ApiRequestInput {
     }
 }
 
-async fn insert_history(
+pub(super) async fn insert_history(
     service: &ApiClientService,
     input: &ApiRequestInput,
     id: &str,
@@ -88,7 +88,7 @@ async fn insert_history(
         .execute(service.db.pool()).await.unwrap();
 }
 
-async fn exported(service: &ApiClientService, collection: &str) -> serde_json::Value {
+pub(super) async fn exported(service: &ApiClientService, collection: &str) -> serde_json::Value {
     let artifact = service
         .export_collection_openapi(
             "workspace-a".into(),

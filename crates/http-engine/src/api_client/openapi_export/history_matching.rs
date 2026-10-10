@@ -3,6 +3,7 @@ use unfour_core::models::{ApiHistoryDetail, ApiRequestInput, ApiSavedRequest};
 use unfour_core::AppResult;
 
 pub(super) fn matching_histories(
+    client: &reqwest::Client,
     request: &ApiSavedRequest,
     histories: &[ApiHistoryDetail],
 ) -> AppResult<Vec<ApiHistoryDetail>> {
@@ -28,6 +29,9 @@ pub(super) fn matching_histories(
         multipart_parts: vec![],
         temporary_variables: vec![],
     };
+    // Saved definitions do not contain generated auth rows. Use exactly the
+    // execution rules (including explicit enabled overrides) before redaction.
+    let input = super::super::auth::materialize_auth(client, input)?;
     let safe = history_redaction::sanitize(&input, &[], "")?;
     let mut matches = Vec::new();
     for history in histories {
@@ -37,7 +41,10 @@ pub(super) fn matching_histories(
             continue;
         }
         let mut history = history.clone();
-        history_redaction::sanitize_detail(&mut history)?;
+        // Old plaintext custom API-key rows have no auth metadata of their own.
+        // The definition supplies the target slot for redaction, never extra
+        // rows: histories missing materialized auth must remain non-matches.
+        history_redaction::sanitize_detail_with_auth(&mut history, input.auth_json.as_deref())?;
         if history.name == safe.name
             && normalize_redaction_markers(&history.url) == normalize_redaction_markers(&safe.url)
             && json_text_equal(&history.request_headers_json, &safe.headers)

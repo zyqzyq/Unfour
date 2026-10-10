@@ -20,7 +20,7 @@ pub fn runtime_request_secret_values(request: &ApiRequestInput) -> AppResult<Vec
     let auth: Value = serde_json::from_str(request.auth_json.as_deref().unwrap_or("{}"))?;
     collect_json(&auth, false, true, &mut secrets);
     let custom_key = (auth["type"] == "api-key")
-        .then(|| auth["key"].as_str())
+        .then(|| auth["key"].as_str().map(str::trim))
         .flatten();
     let query_auth = auth["addTo"] == "query";
     for (rows, query) in [(&request.headers, false), (&request.query, true)] {
@@ -30,7 +30,7 @@ pub fn runtime_request_secret_values(request: &ApiRequestInput) -> AppResult<Vec
                     if query {
                         row.key == key
                     } else {
-                        row.key.eq_ignore_ascii_case(key)
+                        row.key.trim().eq_ignore_ascii_case(key)
                     }
                 });
             if sensitive(&row.key) || custom {

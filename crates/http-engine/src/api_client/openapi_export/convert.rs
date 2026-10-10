@@ -14,7 +14,10 @@ const HTTP_METHODS: [&str; 8] = [
     "delete", "get", "head", "options", "patch", "post", "put", "trace",
 ];
 
-pub(super) fn build_document(source: &OpenApiExportSource) -> AppResult<OpenApiDocument> {
+pub(super) fn build_document(
+    source: &OpenApiExportSource,
+    client: &reqwest::Client,
+) -> AppResult<OpenApiDocument> {
     let folder_paths = build_folder_paths(source);
     let tags = build_tags(source, &folder_paths);
     // Service exports retain raw local copies for matching only. Use their
@@ -27,7 +30,7 @@ pub(super) fn build_document(source: &OpenApiExportSource) -> AppResult<OpenApiD
         .map(|request| {
             Ok((
                 request.id.clone(),
-                build_responses(request, &source.histories)?,
+                build_responses(client, request, &source.histories)?,
             ))
         })
         .collect::<AppResult<BTreeMap<_, _>>>()?;

@@ -65,7 +65,7 @@ impl ApiClientService {
             requests: sanitized_requests,
             history_match_requests: Some(requests),
         };
-        let document = build_document(&source)?;
+        let document = build_document(&source, &self.client)?;
         let content = serialize_document(&document, format)?;
         let base_name = sanitize_file_name(&source.collection.name);
         let (extension, media_type) = match format {

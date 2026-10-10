@@ -208,11 +208,12 @@ fn request_body_example(
 }
 
 pub(super) fn build_responses(
+    client: &reqwest::Client,
     request: &ApiSavedRequest,
     histories: &[ApiHistoryDetail],
 ) -> AppResult<BTreeMap<String, OpenApiResponse>> {
     let mut responses = BTreeMap::new();
-    for history in matching_histories(request, histories)? {
+    for history in matching_histories(client, request, histories)? {
         let Some(status) = history.status.filter(|status| (100..=599).contains(status)) else {
             continue;
         };

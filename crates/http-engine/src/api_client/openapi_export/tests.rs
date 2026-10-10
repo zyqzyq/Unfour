@@ -1,9 +1,15 @@
-use super::convert::{build_document, sanitize_file_name, serialize_document};
+use super::convert::{sanitize_file_name, serialize_document};
 use super::model::{ExportEnvironment, ExportVariable, OpenApiExportSource};
 use unfour_core::models::{
     ApiCollection, ApiCollectionExportFormat, ApiCollectionFolder, ApiHistoryDetail,
     ApiSavedRequest, KeyValue,
 };
+
+fn build_document(
+    source: &OpenApiExportSource,
+) -> unfour_core::AppResult<super::model::OpenApiDocument> {
+    super::convert::build_document(source, &reqwest::Client::new())
+}
 
 fn source(requests: Vec<ApiSavedRequest>) -> OpenApiExportSource {
     OpenApiExportSource {
