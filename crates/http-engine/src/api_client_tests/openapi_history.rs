@@ -144,10 +144,17 @@ async fn openapi_associates_redacted_plain_and_legacy_history_through_service() 
                 response["x-unfour-history-id"], "matching",
                 "sensitive={sensitive}, legacy={legacy}, repair={repair}"
             );
-            assert_eq!(
-                response["content"]["application/json"]["example"]["result"],
-                "ok"
-            );
+            if sensitive && (!legacy || repair) {
+                // Existing markers cannot establish whether an old response
+                // echoed a credential that has since been rotated.
+                assert!(response["content"].is_null());
+                assert!(response["headers"].is_null());
+            } else {
+                assert_eq!(
+                    response["content"]["application/json"]["example"]["result"],
+                    "ok"
+                );
+            }
             let text = document.to_string();
             for secret in ["url-secret", "header-secret", "query-secret", "body-secret"] {
                 assert!(!text.contains(secret));

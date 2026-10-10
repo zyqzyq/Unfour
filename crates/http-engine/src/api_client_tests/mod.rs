@@ -4,5 +4,6 @@ mod execution;
 mod multipart;
 mod openapi_auth_history;
 mod openapi_history;
+mod openapi_safety;
 mod requests;
 mod support;
