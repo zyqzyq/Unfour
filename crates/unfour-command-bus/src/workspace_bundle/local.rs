@@ -4,6 +4,8 @@ use std::collections::HashSet;
 #[derive(Default, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WorkspaceBundleOptions {
+    /// Local user's import choice, never read from the portable bundle.
+    pub mcp_policy: Option<String>,
     pub password: Option<String>,
     #[serde(default)]
     pub include_secrets: bool,

@@ -690,6 +690,30 @@ fn unknown_tool_name_stays_unknown() {
 }
 
 #[test]
+fn agents_cannot_modify_workspace_mcp_permissions() {
+    let registry = ToolRegistry::with_command_bus(Arc::new(StubCommandBus));
+    for name in [
+        "unfour.workspace.update_mcp_policy",
+        "unfour_workspace_update_mcp_policy",
+        "workspace_update_mcp_policy",
+        "unfour.workspace.update_environment",
+        "unfour.workspace.bundle_import",
+    ] {
+        let error = registry
+            .call(
+                name,
+                json!({"workspaceId":"workspace-1", "mcpPolicy":"full_access"}),
+            )
+            .expect_err("workspace permissions are controlled only by the local user");
+        assert_eq!(error, super::ToolCallError::UnknownTool(name.into()));
+    }
+    assert!(registry
+        .definitions()
+        .iter()
+        .all(|tool| !tool.name.contains("mcp_policy")));
+}
+
+#[test]
 fn alias_index_rejects_duplicate_canonical_names_and_alias_collisions() {
     let duplicate = super::build_tool_alias_index(["unfour.system.health", "unfour.system.health"]);
     assert_eq!(

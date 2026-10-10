@@ -6,11 +6,11 @@ import {
   createWorkspace,
   deleteWorkspace,
   renameWorkspace,
-  updateWorkspaceEnvironment,
 } from "@unfour/command-client";
 import type { Workspace, WorkspaceEnvironmentType } from "@unfour/command-client";
 import { Button, Input, Select, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
 import { useWorkspaceStore } from "@unfour/workspace-core";
+import { WorkspaceSecurityDialog } from "@unfour/workspace-local";
 
 export function WorkspaceDialogs({
   activeWorkspace,
@@ -43,14 +43,10 @@ export function WorkspaceDialogs({
   const [workspaceEnvironment, setWorkspaceEnvironment] =
     useState<WorkspaceEnvironmentType>("dev");
   const [renameDraft, setRenameDraft] = useState(activeWorkspace?.name ?? "");
-  const [environmentDraft, setEnvironmentDraft] = useState<WorkspaceEnvironmentType>(
-    activeWorkspace?.environmentType ?? "dev",
-  );
   const [lastSyncedWorkspaceId, setLastSyncedWorkspaceId] = useState(activeWorkspace?.id);
   if (activeWorkspace?.id !== lastSyncedWorkspaceId) {
     setLastSyncedWorkspaceId(activeWorkspace?.id);
     setRenameDraft(activeWorkspace?.name ?? "");
-    setEnvironmentDraft(activeWorkspace?.environmentType ?? "dev");
   }
   const canDelete =
     Boolean(activeWorkspace) && !activeWorkspace?.isDefault && workspaces.length > 1;
@@ -98,21 +94,6 @@ export function WorkspaceDialogs({
     onError: (error) => handleError(error, { key: "feedback.workspace.deleteFailed" }),
   });
 
-  const updateEnvironmentMutation = useMutation({
-    mutationFn: ({
-      environmentType,
-      workspaceId,
-    }: {
-      environmentType: WorkspaceEnvironmentType;
-      workspaceId: string;
-    }) => updateWorkspaceEnvironment(workspaceId, environmentType),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
-      onEnvironmentClose();
-    },
-    onError: (error) => handleError(error, { key: "feedback.workspace.environmentFailed" }),
-  });
-
   function createWorkspaceFromDialog(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = workspaceName.trim();
@@ -141,17 +122,6 @@ export function WorkspaceDialogs({
       return;
     }
     deleteWorkspaceMutation.mutate(activeWorkspace.id);
-  }
-
-  function updateEnvironmentFromDialog(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!activeWorkspace || environmentDraft === activeWorkspace.environmentType) {
-      return;
-    }
-    updateEnvironmentMutation.mutate({
-      workspaceId: activeWorkspace.id,
-      environmentType: environmentDraft,
-    });
   }
 
   function isDuplicateName(name: string, exceptId?: string): boolean {
@@ -224,54 +194,11 @@ export function WorkspaceDialogs({
         </Dialog.Portal>
       </Dialog.Root>
 
-      <Dialog.Root onOpenChange={(open) => { if (!open) onEnvironmentClose(); }} open={environmentOpen}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-[var(--u-color-overlay)]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[380px] -translate-x-1/2 -translate-y-1/2 rounded-md border border-[var(--u-color-border)] bg-[var(--u-color-surface)] p-4 shadow-xl">
-            <Dialog.Title className="text-base font-semibold text-[var(--u-color-text)]">
-              {t("app.workspace.dialog.environmentTitle")}
-            </Dialog.Title>
-            <Dialog.Description className="mt-2 text-sm text-[var(--u-color-text-muted)]">
-              {t("app.workspace.dialog.environmentDescription")}
-            </Dialog.Description>
-            <form className="mt-4 space-y-4" onSubmit={updateEnvironmentFromDialog}>
-              <label className="block space-y-1.5 text-sm text-[var(--u-color-text)]">
-                <span className="font-medium">{t("app.workspace.environment.label")}</span>
-                <Select
-                  autoFocus
-                  onChange={(event) =>
-                    setEnvironmentDraft(event.target.value as WorkspaceEnvironmentType)
-                  }
-                  options={environmentOptions}
-                  value={environmentDraft}
-                />
-              </label>
-              {environmentDraft === "prod" && (
-                <p className="rounded border border-[var(--u-badge-danger-ring)] bg-[var(--u-badge-danger-bg)] px-3 py-2 text-xs text-[var(--u-badge-danger-text)]">
-                  {t("app.workspace.environment.prodWarning")}
-                </p>
-              )}
-              <div className="flex justify-end gap-2">
-                <Dialog.Close asChild>
-                  <Button type="button" variant="outline">
-                    {t("app.workspace.dialog.cancel")}
-                  </Button>
-                </Dialog.Close>
-                <Button
-                  disabled={
-                    updateEnvironmentMutation.isPending ||
-                    !activeWorkspace ||
-                    environmentDraft === activeWorkspace.environmentType
-                  }
-                  type="submit"
-                >
-                  {t("app.workspace.dialog.saveEnvironment")}
-                </Button>
-              </div>
-            </form>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+      {environmentOpen && activeWorkspace && <WorkspaceSecurityDialog
+        key={activeWorkspace.id}
+        workspace={activeWorkspace}
+        onClose={onEnvironmentClose}
+      />}
 
       <Dialog.Root onOpenChange={(open) => { if (!open) onRenameClose(); }} open={renameOpen}>
         <Dialog.Portal>

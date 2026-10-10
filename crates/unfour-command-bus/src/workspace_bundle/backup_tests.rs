@@ -3,6 +3,36 @@ use std::sync::Arc;
 const PASSWORD: &str = "test-only-backup-password";
 
 #[tokio::test]
+async fn encrypted_import_uses_the_explicit_local_mcp_policy() {
+    let bus = CommandBus::ephemeral().await.unwrap();
+    let source = source(&bus).await;
+    bus.update_workspace_mcp_policy(source.id.clone(), "full_access".into())
+        .await
+        .unwrap();
+    let artifact = bus
+        .workspace_bundle_export_with_options(source.id, options())
+        .await
+        .unwrap();
+    let mut selected = options();
+    selected.mcp_policy = Some("guarded".into());
+    let copy = bus
+        .workspace_bundle_import_with_options(artifact.content, "Authorized copy".into(), selected)
+        .await
+        .unwrap();
+    assert_eq!(copy.mcp_policy, "guarded");
+    let state = bus.list_workspaces().await.unwrap();
+    assert_eq!(
+        state
+            .workspaces
+            .iter()
+            .find(|w| w.id == copy.id)
+            .unwrap()
+            .mcp_policy,
+        "guarded"
+    );
+}
+
+#[tokio::test]
 async fn ordinary_urls_do_not_become_credentials_due_to_url_normalization() {
     let bus = CommandBus::ephemeral().await.unwrap();
     let workspace = source(&bus).await;
@@ -208,6 +238,7 @@ async fn encrypted_round_trip_restores_connection_refs_and_sqlite_secrets() {
         .workspace_bundle_import_with_options(artifact.content.clone(), "Copy".into(), options())
         .await
         .unwrap();
+    assert_eq!(copy.mcp_policy, "disabled");
     let reference: String = sqlx::query_scalar(
         "SELECT credential_ref FROM connections WHERE workspace_id=? AND connection_type='ssh'",
     )

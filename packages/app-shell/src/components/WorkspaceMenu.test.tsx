@@ -165,9 +165,9 @@ describe("WorkspaceMenu", () => {
       ctrlKey: false,
     });
 
-    expect(await screen.findByText("MCP: Read-only")).toBeTruthy();
+    expect(await screen.findByText("MCP: Auto → Read-only (read_only)")).toBeTruthy();
     expect(screen.getByText("TEST")).toBeTruthy();
-    expect(screen.getByText("MCP: Guarded")).toBeTruthy();
+    expect(screen.getByText("MCP: Auto → Guarded (guarded)")).toBeTruthy();
   });
 
   it("offers environment selection when creating a workspace", async () => {
@@ -192,10 +192,27 @@ describe("WorkspaceMenu", () => {
     expect(environmentSelect.value).toBe("dev");
     fireEvent.change(environmentSelect, { target: { value: "prod" } });
     expect(environmentSelect.value).toBe("prod");
-    expect(screen.getByText("Workspace safety tier")).toBeTruthy();
+    expect(screen.getByText("Workspace environment type")).toBeTruthy();
     expect(
-      screen.getByText("Safety tier controls the default MCP permission level."),
+      screen.getByText("Environment defaults apply only when MCP permissions are Auto: DEV → full access, TEST → guarded, PROD → read-only."),
     ).toBeTruthy();
+  });
+
+  it("opens security settings for an imported disabled workspace", async () => {
+    const active = workspace("Imported", "test", "disabled");
+    render(<WorkspaceMenu activeWorkspace={active} extensionContext={extensionContext(active)} onActivateWorkspace={vi.fn()} workspaces={[active]} />, { wrapper: createWrapper() });
+    fireEvent.pointerDown(screen.getByRole("button", { name: /imported/i }), { button: 0, ctrlKey: false });
+    expect(await screen.findByText("MCP: Disabled")).toBeTruthy();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Workspace security settings" }));
+    expect(await screen.findByRole("dialog", { name: "Workspace security settings" })).toBeTruthy();
+    expect(screen.getByLabelText("MCP permissions")).toHaveValue("disabled");
+    expect(screen.getByLabelText("Workspace environment type")).toHaveValue("test");
+    fireEvent.change(screen.getByLabelText("MCP permissions"), { target: { value: "auto" } });
+    expect(screen.getByRole("button", { name: "Save MCP permissions" })).not.toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.pointerDown(screen.getByRole("button", { name: /imported/i }), { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Workspace security settings" }));
+    expect(await screen.findByLabelText("MCP permissions")).toHaveValue("disabled");
   });
 
   it("shows the full workspace name for truncated trigger and list items", async () => {
@@ -374,7 +391,7 @@ describe("WorkspaceMenu extensions", () => {
     const items = screen.getAllByRole("menuitem").map((item) => item.textContent);
     expect(items.slice(1)).toEqual([
       "New workspace", "Import Workspace from File…", "Import workspace",
-      "Export Current Workspace…", "Rename current", "Change safety tier", "Cloud Sync", "Delete current",
+      "Export Current Workspace…", "Rename current", "Workspace security settings", "Cloud Sync", "Delete current",
     ]);
     fireEvent.click(screen.getByText("Import workspace"));
 

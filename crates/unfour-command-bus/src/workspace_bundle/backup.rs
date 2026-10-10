@@ -311,7 +311,7 @@ impl CommandBus {
         preview
             .counts
             .insert("credentials".into(), payload.secrets.len());
-        let plan = remap::prepare(payload.bundle)?;
+        let plan = remap::prepare(payload.bundle, options.mcp_policy.as_deref())?;
         let mut tx = self.db.pool().begin().await?;
         preview.name = self
             .workspace
@@ -331,7 +331,7 @@ impl CommandBus {
         let options = Zeroizing::new(options);
         let mut payload = decode(&content, &options)?;
         payload.bundle.workspace.name = name;
-        let plan = remap::prepare(payload.bundle)?;
+        let plan = remap::prepare(payload.bundle, options.mcp_policy.as_deref())?;
         // Validate all domain data before touching the keychain.
         let mut tx = self.db.pool().begin().await?;
         self.import_bundle_on(

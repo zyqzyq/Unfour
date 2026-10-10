@@ -1,4 +1,5 @@
 export { useWorkspaceStore } from "./workspace-store";
+export { resolveWorkspaceMcpPolicy } from "./workspace-mcp-policy";
 export {
   DEFAULT_SIDEBAR_WIDTHS,
   MODULE_SIDEBAR_CONFIG,

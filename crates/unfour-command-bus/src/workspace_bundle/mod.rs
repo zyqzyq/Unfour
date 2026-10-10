@@ -13,6 +13,8 @@ mod connection_credential_tests;
 #[cfg(test)]
 mod credential_tests;
 #[cfg(test)]
+mod mcp_policy_tests;
+#[cfg(test)]
 mod tests;
 use crate::CommandBus;
 use schema::*;
@@ -208,7 +210,7 @@ impl CommandBus {
     ) -> AppResult<WorkspaceBundlePreview> {
         let bundle = parse(content)?;
         let mut preview = safety::preview(&bundle);
-        let plan = remap::prepare(bundle)?;
+        let plan = remap::prepare(bundle, None)?;
         // Exercise every domain validator, including cross-record constraints, without committing.
         let mut tx = self.db.pool().begin().await?;
         preview.name = self
@@ -226,7 +228,7 @@ impl CommandBus {
     ) -> AppResult<Workspace> {
         let mut bundle = parse(&content)?;
         bundle.workspace.name = name;
-        let plan = remap::prepare(bundle)?;
+        let plan = remap::prepare(bundle, None)?;
         let workspace_id = plan.workspace_id.clone();
         let bus = self.clone();
         self.execute_domain_command(

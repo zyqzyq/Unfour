@@ -269,6 +269,8 @@ export interface WorkspaceBundleFile {
   encrypted?: boolean;
 }
 export interface WorkspaceBundleOptions {
+  /** Explicit local import choice. Omitted imports remain disabled. */
+  mcpPolicy?: WorkspaceMcpPolicy;
   password?: string;
   includeSecrets?: boolean;
   keepLocalPaths?: boolean;

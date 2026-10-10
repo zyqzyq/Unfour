@@ -39,6 +39,17 @@ beforeEach(() => {
   vi.mocked(previewWorkspaceBundle).mockResolvedValue(file.preview);
 });
 describe("Workspace bundle exchange", () => {
+  it.each(["auto", "read_only", "guarded", "full_access"] as const)("imports with explicitly selected %s and resets the next import to disabled", async (mcpPolicy) => {
+    const { imported } = mount();
+    vi.mocked(importWorkspaceBundle).mockResolvedValue({ id: "chosen", name: "Chosen", environmentType: "prod", mcpPolicy, isDefault: false, lastOpenedAt: null, deletedAt: null, createdAt: "", updatedAt: "", revision: 1 });
+    fireEvent.click(screen.getByText("Pick file"));
+    fireEvent.change(await screen.findByLabelText("MCP permissions"), { target: { value: mcpPolicy } });
+    fireEvent.click(screen.getByRole("button", { name: "Create and Switch" }));
+    await waitFor(() => expect(imported).toHaveBeenCalledWith("chosen"));
+    expect(importWorkspaceBundle).toHaveBeenCalledExactlyOnceWith(file.content, "Example (Copy 1)", { mcpPolicy });
+    fireEvent.click(screen.getByText("Pick file"));
+    expect(await screen.findByLabelText("MCP permissions")).toHaveValue("disabled");
+  });
   it("keeps preserved paths separate from missing fields and reviews path changes before import", async () => {
     mount();
     const path = { entityId: "upload", field: "localPath", path: "C:/source/file.txt" };
@@ -106,7 +117,8 @@ describe("Workspace bundle exchange", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create and Switch" }));
     expect(await screen.findByRole("button", { name: "Working…" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
-    expect(importWorkspaceBundle).toHaveBeenCalledExactlyOnceWith(file.content, "New copy", {});
+    expect(screen.getByLabelText("MCP permissions")).toHaveValue("disabled");
+    expect(importWorkspaceBundle).toHaveBeenCalledExactlyOnceWith(file.content, "New copy", { mcpPolicy: "disabled" });
     finish({ id: "new-workspace", name: "New copy", environmentType: "dev", mcpPolicy: "disabled", isDefault: false, lastOpenedAt: null, createdAt: "2026-10-01T00:00:00Z", updatedAt: "2026-10-01T00:00:00Z", deletedAt: null, revision: 1 });
     await waitFor(() => expect(imported).toHaveBeenCalledWith("new-workspace"));
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["workspaces"] });
@@ -128,10 +140,13 @@ describe("Workspace bundle exchange", () => {
     vi.mocked(importWorkspaceBundle).mockRejectedValueOnce(new Error("WORKSPACE_BUNDLE_MISSING_REFERENCE"));
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     fireEvent.click(screen.getByText("Pick file"));
+    fireEvent.change(await screen.findByLabelText("MCP permissions"), { target: { value: "guarded" } });
     fireEvent.click(await screen.findByRole("button", { name: "Create and Switch" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Create and Switch" })).not.toBeDisabled());
     expect(screen.getByRole("dialog")).toBeTruthy();
     expect(imported).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("MCP permissions")).toHaveValue("guarded");
+    expect(importWorkspaceBundle).toHaveBeenCalledWith(file.content, "Example (Copy 1)", { mcpPolicy: "guarded" });
     log.mockRestore();
   });
   it("only exports the selected workspace after reviewing the exclusions", async () => {

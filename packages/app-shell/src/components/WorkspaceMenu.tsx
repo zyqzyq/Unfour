@@ -2,7 +2,8 @@ import { useWorkspaceBundleActions } from "@unfour/workspace-local";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ChevronDown, Folder, Import, Pencil, Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { useState } from "react";
-import type { Workspace, WorkspaceMcpPolicy } from "@unfour/command-client";
+import type { Workspace } from "@unfour/command-client";
+import { resolveWorkspaceMcpPolicy } from "@unfour/workspace-core";
 import { Badge, Button, cn, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
 import type {
   DesktopAppExtensionContext,
@@ -302,7 +303,9 @@ function WorkspaceMenuItem({
           )}
         </span>
         <span className="block truncate text-xs text-[var(--u-color-text-muted)]">
-          {t(policySummaryKey(workspace))}
+          {workspace.mcpPolicy === "auto"
+            ? t("app.workspace.mcp.autoSummary", { policy: t(`app.workspace.mcp.options.${resolveWorkspaceMcpPolicy(workspace)}`) })
+            : t(policySummaryKey(workspace))}
         </span>
       </span>
     </DropdownMenu.Item>
@@ -366,7 +369,7 @@ function environmentTone(environmentType: Workspace["environmentType"]): "green"
 }
 
 function policySummaryKey(workspace: Workspace) {
-  switch (resolveMcpPolicy(workspace)) {
+  switch (resolveWorkspaceMcpPolicy(workspace)) {
     case "disabled":
       return "app.workspace.mcp.disabled";
     case "read_only":
@@ -378,11 +381,4 @@ function policySummaryKey(workspace: Workspace) {
     default:
       return "app.workspace.mcp.guarded";
   }
-}
-
-function resolveMcpPolicy(workspace: Workspace): Exclude<WorkspaceMcpPolicy, "auto"> {
-  if (workspace.mcpPolicy !== "auto") return workspace.mcpPolicy;
-  if (workspace.environmentType === "prod") return "read_only";
-  if (workspace.environmentType === "test") return "guarded";
-  return "full_access";
 }

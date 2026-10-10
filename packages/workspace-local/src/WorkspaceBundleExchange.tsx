@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { exportWorkspaceBundle, importWorkspaceBundle, pickWorkspaceBundle, previewWorkspaceBundle, type Workspace, type WorkspaceBundleFile, type WorkspaceBundleOptions } from "@unfour/command-client";
+import { exportWorkspaceBundle, importWorkspaceBundle, pickWorkspaceBundle, previewWorkspaceBundle, type Workspace, type WorkspaceBundleFile, type WorkspaceBundleOptions, type WorkspaceMcpPolicy } from "@unfour/command-client";
 import { Badge, Button, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Input, Select, useFeedback, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
+import { WorkspaceMcpPolicyField } from "./WorkspaceMcpPolicyField";
 
 export function useWorkspaceBundleExchange(onImported: (id: string) => void) {
   const { t } = useI18n();
@@ -10,6 +11,7 @@ export function useWorkspaceBundleExchange(onImported: (id: string) => void) {
   const queryClient = useQueryClient();
   const [pending, setPending] = useState<WorkspaceBundleFile | null>(null);
   const [name, setName] = useState("");
+  const [mcpPolicy, setMcpPolicy] = useState<WorkspaceMcpPolicy>("disabled");
   const [busy, setBusy] = useState(false);
   const [exportTarget, setExportTarget] = useState<Pick<Workspace, "id" | "name" | "environmentType"> | null>(null);
   const [mode, setMode] = useState("share");
@@ -23,6 +25,7 @@ export function useWorkspaceBundleExchange(onImported: (id: string) => void) {
   const [reviewed, setReviewed] = useState(true);
   const [errorKey, setErrorKey] = useState<string | null>(null);
   function reset() {
+    setMcpPolicy("disabled");
     setPassword(""); setConfirmation(""); setFrom(""); setTo(""); setOverrides([]); setReviewed(true); setErrorKey(null);
   }
   function close() { setPending(null); setExportTarget(null); reset(); }
@@ -57,7 +60,7 @@ export function useWorkspaceBundleExchange(onImported: (id: string) => void) {
   function confirmImport() {
     return run(async () => {
       if (!pending?.preview || !reviewed || !name.trim()) return;
-      const workspace = await importWorkspaceBundle(pending.content, name.trim(), importOptions());
+      const workspace = await importWorkspaceBundle(pending.content, name.trim(), { ...importOptions(), mcpPolicy });
       await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
       close(); onImported(workspace.id); feedback.success(t("exchange.imported", { name: workspace.name }));
     });
@@ -97,6 +100,10 @@ export function useWorkspaceBundleExchange(onImported: (id: string) => void) {
         {exportTarget && <p className="mb-3 text-xs text-[var(--u-color-text-muted)]">{t(mode === "backup" ? "workspaceBundle.backupHelp" : "workspaceBundle.exportReview")}</p>}
         {preview && <>
           <label className="mb-3 block text-xs">{t("workspaceBundle.name")}<Input className="mt-1" maxLength={80} value={name} disabled={busy} onChange={(event) => setName(event.target.value)} /></label>
+          <div className="mb-3 space-y-1.5">
+            <WorkspaceMcpPolicyField disabled={busy} value={mcpPolicy} onChange={setMcpPolicy} />
+            <p className="text-xs text-[var(--u-color-text-muted)]">{t("workspaceBundle.mcpPolicyHint")}</p>
+          </div>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">{Object.entries(preview.counts).map(([key, count]) => <div key={key} className="flex justify-between gap-2"><dt>{t(`workspaceBundle.counts.${key}`)}</dt><dd>{count}</dd></div>)}</dl>
           <p className="my-3 text-xs text-[var(--u-color-text-muted)]">{t("workspaceBundle.review")}</p>
           {["missing", "unchecked", "ready"].map((status) => {

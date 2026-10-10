@@ -48,7 +48,16 @@ No timestamps, revision, remote IDs, sync status, tombstones, Cloud Sync binding
 outbox, histories, activity, open tabs, layouts,
 selected environment, active workspace, or host trust records enter the bundle.
 Default local companion state is freshly initialized on import. MCP permissions
-are not copied: the new Workspace starts with MCP disabled.
+are not copied: the new Workspace defaults to MCP disabled. The import preview
+lets the local user explicitly select `auto`, `disabled`, `read_only`, `guarded`,
+or `full_access`. Only the caller's `WorkspaceBundleOptions.mcpPolicy` is used;
+omitted options remain disabled, and permission fields embedded in a bundle
+remain rejected by the strict portable schema. The choice is validated before
+credential staging and committed inside the existing import transaction.
+After import, Workspace security settings save environment type and MCP policy
+independently through the existing commands. New workspaces still default to
+`auto` (DEV → full access, TEST → guarded, PROD → read-only). MCP agents have no
+policy-editing tools.
 
 ## Ownership and transactions
 
@@ -58,7 +67,7 @@ business state and preview live in `packages/workspace-local`. Its exchange
 provider owns one shared dialog for the Workspace menu and command palette;
 app-shell only wires the provider, entry points, and activation callback.
 The switcher groups creation/import separately from current-Workspace actions
-(export, rename, safety tier, and extensions such as Cloud Sync), with deletion
+(export, rename, security settings, and extensions such as Cloud Sync), with deletion
 last. Export confirmation identifies the selected Workspace and retains that
 target while the dialog is open. Import always creates and activates a new copy.
 The save dialog defaults to `<Workspace-name>.unfour-workspace.json`, using the

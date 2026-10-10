@@ -5,6 +5,8 @@ Current scope: V2 local bundles and encrypted backups. See the latest
 audit/V1 evidence below is historical; imported API/variable Keychain references
 and legacy adoption described there are superseded.
 See [format and boundaries](../architecture/workspace-bundle.md).
+See [Workspace MCP permissions verification](workspace-mcp-permissions.md) for
+the current import permission choices and independent security settings.
 
 ## Historical credential lifecycle audit of `176f37b` — 2026-10-09
 

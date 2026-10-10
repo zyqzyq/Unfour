@@ -19,7 +19,7 @@ fn reference(
         .map(|(new, _)| new.clone())
         .ok_or_else(|| AppError::Validation("WORKSPACE_BUNDLE_MISSING_REFERENCE".into()))
 }
-pub(super) fn prepare(bundle: WorkspaceBundle) -> AppResult<ImportPlan> {
+pub(super) fn prepare(bundle: WorkspaceBundle, mcp_policy: Option<&str>) -> AppResult<ImportPlan> {
     let mut ids = HashMap::new();
     let mut add = |id: &str, kind| -> AppResult<()> {
         if id.trim().is_empty()
@@ -77,7 +77,7 @@ pub(super) fn prepare(bundle: WorkspaceBundle) -> AppResult<ImportPlan> {
         Ok(r)
     };
     let mut workspace = convert(serde_json::to_value(&bundle.workspace)?)?;
-    workspace["mcpPolicy"] = json!("disabled");
+    workspace["mcpPolicy"] = json!(mcp_policy.unwrap_or("disabled"));
     let drivers: HashMap<_, _> = bundle
         .connections
         .iter()
