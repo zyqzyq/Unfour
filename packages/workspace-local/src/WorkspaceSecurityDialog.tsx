@@ -48,6 +48,9 @@ export function WorkspaceSecurityDialog({ workspace, onClose }: {
             ]} />
           </label>
           <p className="text-xs text-[var(--u-color-text-muted)]">{t("app.workspace.environment.hint")}</p>
+          {environment === "prod" && (policy === "auto" || policy === "guarded" || policy === "full_access") && <p role="status" className="rounded border border-[var(--u-badge-danger-ring)] bg-[var(--u-badge-danger-bg)] px-3 py-2 text-xs text-[var(--u-badge-danger-text)]">
+            {t(policy === "auto" ? "app.workspace.environment.prodWarning" : "app.workspace.environment.prodOverrideWarning", { policy: t(`app.workspace.mcp.options.${policy}`) })}
+          </p>}
           {environmentMutation.isError && <p role="alert" className="text-xs text-[var(--u-color-danger)]">{t("feedback.workspace.environmentFailed")}</p>}
           <div className="flex justify-end"><Button disabled={busy || environment === saved.environmentType} type="submit">{t("app.workspace.dialog.saveEnvironment")}</Button></div>
         </form>

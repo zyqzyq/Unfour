@@ -6,6 +6,9 @@ const PASSWORD: &str = "test-only-backup-password";
 async fn encrypted_import_uses_the_explicit_local_mcp_policy() {
     let bus = CommandBus::ephemeral().await.unwrap();
     let source = source(&bus).await;
+    bus.update_workspace_environment(source.id.clone(), "prod".into())
+        .await
+        .unwrap();
     bus.update_workspace_mcp_policy(source.id.clone(), "full_access".into())
         .await
         .unwrap();
@@ -15,11 +18,17 @@ async fn encrypted_import_uses_the_explicit_local_mcp_policy() {
         .unwrap();
     let mut selected = options();
     selected.mcp_policy = Some("guarded".into());
+    let preview = bus
+        .workspace_bundle_preview_with_options(&artifact.content, selected.clone())
+        .await
+        .unwrap();
+    assert_eq!(preview.environment_type, "prod");
     let copy = bus
         .workspace_bundle_import_with_options(artifact.content, "Authorized copy".into(), selected)
         .await
         .unwrap();
     assert_eq!(copy.mcp_policy, "guarded");
+    assert_eq!(copy.environment_type, "prod");
     let state = bus.list_workspaces().await.unwrap();
     assert_eq!(
         state

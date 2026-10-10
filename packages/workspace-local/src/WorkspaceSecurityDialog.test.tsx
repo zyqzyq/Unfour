@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { updateWorkspaceEnvironment, updateWorkspaceMcpPolicy, type Workspace, type WorkspaceState } from "@unfour/command-client";
+import { I18nProvider, type Locale } from "@unfour/ui";
 import { WorkspaceSecurityDialog } from "./WorkspaceSecurityDialog";
 
 vi.mock("@unfour/command-client", () => ({ updateWorkspaceEnvironment: vi.fn(), updateWorkspaceMcpPolicy: vi.fn() }));
@@ -11,17 +12,57 @@ const imported: Workspace = {
   isDefault: false, lastOpenedAt: null, deletedAt: null, revision: 1,
   createdAt: "2026-10-10T00:00:00Z", updatedAt: "2026-10-10T00:00:00Z",
 };
-function mount(workspace = imported) {
+function mount(workspace = imported, locale: Locale = "en") {
   const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
   client.setQueryData<WorkspaceState>(["workspaces"], { activeWorkspaceId: workspace.id, workspaces: [workspace] });
   const close = vi.fn();
-  render(<QueryClientProvider client={client}><WorkspaceSecurityDialog workspace={workspace} onClose={close} /></QueryClientProvider>);
+  render(<I18nProvider initialLocale={locale}><QueryClientProvider client={client}><WorkspaceSecurityDialog workspace={workspace} onClose={close} /></QueryClientProvider></I18nProvider>);
   return { client, close };
 }
 beforeEach(() => vi.resetAllMocks());
 afterEach(cleanup);
 
 describe("Workspace security settings", () => {
+  it.each(["en", "zh-CN"] as const)("updates PROD safety reminders with the environment and policy drafts in %s", (locale) => {
+    mount({ ...imported, mcpPolicy: "auto" }, locale);
+    const environment = screen.getByLabelText(locale === "en" ? "Workspace environment type" : "工作区环境类型");
+    const policy = screen.getByLabelText(locale === "en" ? "MCP permissions" : "MCP 权限");
+    const autoWarning = locale === "en"
+      ? "When these settings are saved, PROD with Auto uses read-only MCP defaults. Write and execution actions are blocked."
+      : "这两项设置保存生效后，PROD + Auto 的 MCP 默认只读，写入和执行类操作会被拦截。";
+    expect(screen.queryByRole("status")).toBeNull();
+    fireEvent.change(environment, { target: { value: "prod" } });
+    expect(screen.getByRole("status")).toHaveTextContent(autoWarning);
+    for (const [value, en, zh] of [["guarded", "Guarded (guarded)", "受保护 (guarded)"], ["full_access", "Full access (full_access)", "完全访问 (full_access)"]]) {
+      fireEvent.change(policy, { target: { value } });
+      expect(screen.getByRole("status")).toHaveTextContent(locale === "en"
+        ? `When these settings are saved, PROD with ${en} overrides the production environment's default protection and may allow an Agent to modify real resources.`
+        : `这两项设置保存生效后，PROD + ${zh} 会覆盖生产环境的默认保护，可能允许 Agent 修改真实资源。`);
+      expect(screen.queryByText(autoWarning)).toBeNull();
+    }
+    fireEvent.change(policy, { target: { value: "auto" } });
+    expect(screen.getByRole("status")).toHaveTextContent(autoWarning);
+    for (const value of ["disabled", "read_only"]) {
+      fireEvent.change(policy, { target: { value } });
+      expect(screen.queryByRole("status")).toBeNull();
+    }
+    fireEvent.change(policy, { target: { value: "guarded" } });
+    for (const value of ["test", "dev"]) {
+      fireEvent.change(environment, { target: { value } });
+      expect(screen.queryByRole("status")).toBeNull();
+    }
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(updateWorkspaceEnvironment).not.toHaveBeenCalled();
+    expect(updateWorkspaceMcpPolicy).not.toHaveBeenCalled();
+  });
+
+  it.each(["guarded", "full_access"] as const)("warns immediately for saved PROD with %s", (mcpPolicy) => {
+    mount({ ...imported, environmentType: "prod", mcpPolicy });
+    expect(screen.getByRole("status")).toHaveTextContent("overrides the production environment's default protection");
+    expect(screen.getByRole("status")).toHaveTextContent("may allow an Agent to modify real resources");
+    expect(screen.getByRole("button", { name: "Save MCP permissions" })).toBeDisabled();
+  });
+
   it("lets an imported disabled workspace save permissions without saving an environment draft", async () => {
     const { client, close } = mount();
     expect(screen.getByLabelText("MCP permissions")).toHaveValue("disabled");

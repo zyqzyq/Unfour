@@ -62,7 +62,8 @@ vi.mock("@unfour/command-client", () => ({
   updateWorkspaceEnvironment: vi.fn(),
 }));
 
-vi.mock("@unfour/workspace-core", () => ({
+vi.mock("@unfour/workspace-core", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@unfour/workspace-core")>(),
   useWorkspaceStore: () => ({
     activeTabId: "api-main",
     activeWorkspaceId: "ws-default",
@@ -155,6 +156,7 @@ describe("DesktopApp startup smoke", () => {
     });
 
     expect(await screen.findByText("decoration-listItem")).toBeTruthy();
+    expect(screen.getByText("MCP: Auto → Full access (full_access)")).toBeTruthy();
     expect(screen.getByText("Publish workspace")).toBeTruthy();
     expect(screen.getByText("Import workspace")).toBeTruthy();
   });

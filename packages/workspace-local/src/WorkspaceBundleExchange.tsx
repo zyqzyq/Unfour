@@ -101,7 +101,7 @@ export function useWorkspaceBundleExchange(onImported: (id: string) => void) {
         {preview && <>
           <label className="mb-3 block text-xs">{t("workspaceBundle.name")}<Input className="mt-1" maxLength={80} value={name} disabled={busy} onChange={(event) => setName(event.target.value)} /></label>
           <div className="mb-3 space-y-1.5">
-            <WorkspaceMcpPolicyField disabled={busy} value={mcpPolicy} onChange={setMcpPolicy} />
+            <WorkspaceMcpPolicyField disabled={busy} value={mcpPolicy} environmentType={preview.environmentType} environmentSource="import" onChange={setMcpPolicy} />
             <p className="text-xs text-[var(--u-color-text-muted)]">{t("workspaceBundle.mcpPolicyHint")}</p>
           </div>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">{Object.entries(preview.counts).map(([key, count]) => <div key={key} className="flex justify-between gap-2"><dt>{t(`workspaceBundle.counts.${key}`)}</dt><dd>{count}</dd></div>)}</dl>

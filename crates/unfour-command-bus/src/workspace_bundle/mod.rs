@@ -43,6 +43,7 @@ pub struct WorkspaceBundleIssue {
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceBundlePreview {
     pub name: String,
+    pub environment_type: String,
     pub counts: BTreeMap<String, usize>,
     pub reconfigure: Vec<WorkspaceBundleIssue>,
     pub paths: Vec<LocalPath>,

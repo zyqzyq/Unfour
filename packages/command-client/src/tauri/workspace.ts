@@ -259,6 +259,7 @@ export function resolveWorkspaceVariables(
 }
 export interface WorkspaceBundlePreview {
   name: string;
+  environmentType: WorkspaceEnvironmentType;
   counts: Record<string, number>;
   reconfigure: { entityId: string; name: string; code: string; field?: string; status?: "missing" | "unchecked" | "ready" }[];
   paths?: { entityId: string; field: string; path: string }[];

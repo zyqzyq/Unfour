@@ -2,7 +2,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { exportWorkspaceBundle, importWorkspaceBundle, pickWorkspaceBundle, previewWorkspaceBundle, type Workspace } from "@unfour/command-client";
+import { exportWorkspaceBundle, importWorkspaceBundle, pickWorkspaceBundle, previewWorkspaceBundle, type Workspace, type WorkspaceBundleFile } from "@unfour/command-client";
+import { I18nProvider, type Locale } from "@unfour/ui";
 import { useWorkspaceBundleExchange } from "./WorkspaceBundleExchange";
 
 vi.mock("@unfour/command-client", () => ({
@@ -11,8 +12,8 @@ vi.mock("@unfour/command-client", () => ({
 }));
 const file = {
   content: '{"format":"unfour-workspace"}',
-  preview: { name: "Example (Copy 1)", counts: { requests: 3, flows: 1 }, reconfigure: [{ entityId: "ssh-old", name: "Deploy host", code: "connection" }] },
-};
+  preview: { name: "Example (Copy 1)", environmentType: "dev", counts: { requests: 3, flows: 1 }, reconfigure: [{ entityId: "ssh-old", name: "Deploy host", code: "connection" }] },
+} satisfies WorkspaceBundleFile;
 function Harness({ imported, target = { id: "current", name: "Current project", environmentType: "test" } }: {
   imported: (id: string) => void;
   target?: Pick<Workspace, "id" | "name" | "environmentType">;
@@ -24,11 +25,11 @@ function Harness({ imported, target = { id: "current", name: "Current project", 
     {exchange.dialog}
   </>;
 }
-function mount() {
+function mount(locale: Locale = "en") {
   const imported = vi.fn();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const invalidate = vi.spyOn(client, "invalidateQueries");
-  render(<QueryClientProvider client={client}><Harness imported={imported} /></QueryClientProvider>);
+  render(<I18nProvider initialLocale={locale}><QueryClientProvider client={client}><Harness imported={imported} /></QueryClientProvider></I18nProvider>);
   return { imported, invalidate };
 }
 afterEach(cleanup);
@@ -39,6 +40,48 @@ beforeEach(() => {
   vi.mocked(previewWorkspaceBundle).mockResolvedValue(file.preview);
 });
 describe("Workspace bundle exchange", () => {
+  describe.each(["en", "zh-CN"] as const)("Auto import preview in %s", (locale) => {
+    it.each([
+      ["dev", "Full access (full_access)", "完全访问 (full_access)"],
+      ["test", "Guarded (guarded)", "受保护 (guarded)"],
+      ["prod", "Read-only (read_only)", "只读 (read_only)"],
+    ] as const)("shows the effective permissions for %s and trusts only the local selection", async (environmentType, en, zh) => {
+      const { imported } = mount(locale);
+      const untrustedFile = { ...file, content: JSON.stringify({ workspace: { environmentType, mcpPolicy: "full_access" } }), preview: { ...file.preview, environmentType } };
+      vi.mocked(pickWorkspaceBundle).mockResolvedValue(untrustedFile);
+      vi.mocked(importWorkspaceBundle).mockResolvedValue({ id: "chosen", name: "Chosen", environmentType, mcpPolicy: "auto", isDefault: false, lastOpenedAt: null, deletedAt: null, createdAt: "", updatedAt: "", revision: 1 });
+      fireEvent.click(screen.getByText("Pick file"));
+      const policy = await screen.findByLabelText(locale === "en" ? "MCP permissions" : "MCP 权限");
+      expect(policy).toHaveValue("disabled");
+      fireEvent.change(policy, { target: { value: "auto" } });
+      const hint = locale === "en"
+        ? `After import, Auto resolves to ${en} using the file's ${environmentType.toUpperCase()} environment type.`
+        : `导入后，Auto 按文件中的 ${environmentType.toUpperCase()} 环境类型实际生效为：${zh}。`;
+      expect(screen.getByText(hint)).toBeTruthy();
+      fireEvent.change(policy, { target: { value: "guarded" } });
+      expect(screen.queryByText(hint)).toBeNull();
+      expect(importWorkspaceBundle).not.toHaveBeenCalled();
+      fireEvent.change(policy, { target: { value: "auto" } });
+      fireEvent.click(screen.getByRole("button", { name: locale === "en" ? "Create and Switch" : "创建并切换" }));
+      await waitFor(() => expect(imported).toHaveBeenCalledWith("chosen"));
+      expect(importWorkspaceBundle).toHaveBeenCalledExactlyOnceWith(untrustedFile.content, file.preview.name, { mcpPolicy: "auto" });
+    });
+  });
+
+  it("uses the decrypted preview environment for Auto permissions", async () => {
+    mount();
+    vi.mocked(pickWorkspaceBundle).mockResolvedValue({ content: "encrypted-content", encrypted: true, preview: null });
+    vi.mocked(previewWorkspaceBundle).mockResolvedValue({ ...file.preview, environmentType: "prod" });
+    fireEvent.click(screen.getByText("Pick file"));
+    fireEvent.change(await screen.findByLabelText("Backup password"), { target: { value: "test-backup-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Review Import" }));
+    const policy = await screen.findByLabelText("MCP permissions");
+    expect(policy).toHaveValue("disabled");
+    fireEvent.change(policy, { target: { value: "auto" } });
+    expect(screen.getByText("After import, Auto resolves to Read-only (read_only) using the file's PROD environment type.")).toBeTruthy();
+    expect(importWorkspaceBundle).not.toHaveBeenCalled();
+  });
+
   it.each(["auto", "read_only", "guarded", "full_access"] as const)("imports with explicitly selected %s and resets the next import to disabled", async (mcpPolicy) => {
     const { imported } = mount();
     vi.mocked(importWorkspaceBundle).mockResolvedValue({ id: "chosen", name: "Chosen", environmentType: "prod", mcpPolicy, isDefault: false, lastOpenedAt: null, deletedAt: null, createdAt: "", updatedAt: "", revision: 1 });

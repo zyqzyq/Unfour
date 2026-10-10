@@ -313,6 +313,17 @@ pub(super) fn preview(bundle: &WorkspaceBundle) -> WorkspaceBundlePreview {
     }
     WorkspaceBundlePreview {
         name: bundle.workspace.name.clone(),
+        // Display only; workspace materialization still validates the environment.
+        environment_type: match bundle
+            .workspace
+            .environment_type
+            .trim()
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "" => "dev".into(),
+            value => value.into(),
+        },
         counts,
         reconfigure,
         paths: bundle.local_paths.clone(),

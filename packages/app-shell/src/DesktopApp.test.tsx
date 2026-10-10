@@ -82,7 +82,8 @@ vi.mock("@unfour/command-client", () => ({
 
 const setActiveTab = vi.fn((tabId: string) => { queryMocks.activeTabId = tabId; });
 
-vi.mock("@unfour/workspace-core", () => ({
+vi.mock("@unfour/workspace-core", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@unfour/workspace-core")>(),
   useWorkspaceStore: () => ({
     activeTabId: queryMocks.activeTabId,
     activeWorkspaceId: "ws-default",

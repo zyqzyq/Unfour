@@ -17,6 +17,7 @@
     "failed": "Workspace 导入或导出失败",
     "newOnly": "创建独立的新 Workspace；重名时自动追加副本序号。默认禁用 MCP 访问。",
     "mcpPolicyHint": "MCP 仅使用此处选择的权限，不信任文件中的权限字段。导入后可在工作区安全设置中修改。",
+    "mcpAutoEffective": "导入后，Auto 按文件中的 {environment} 环境类型实际生效为：{policy}。",
     "includedLabel": "包含",
     "included": "变量、环境、API 定义、连接信息、SSH 任务、Saved SQL 和 Flow。",
     "excludedLabel": "不包含",
@@ -272,7 +273,8 @@
         "development": "开发",
         "hint": "仅当 MCP 权限为 Auto 时使用环境默认值：DEV → 完全访问，TEST → 受保护，PROD → 只读。",
         "label": "工作区环境类型",
-        "prodWarning": "该 workspace 将使用生产环境安全默认值。MCP 默认只能读取，写入和执行类操作会被拦截。",
+        "prodWarning": "这两项设置保存生效后，PROD + Auto 的 MCP 默认只读，写入和执行类操作会被拦截。",
+        "prodOverrideWarning": "这两项设置保存生效后，PROD + {policy} 会覆盖生产环境的默认保护，可能允许 Agent 修改真实资源。",
         "production": "生产",
         "test": "测试 / 预发"
       },

@@ -17,7 +17,10 @@ const mocks = vi.hoisted(() => ({
     })),
   },
 }));
-vi.mock("@unfour/workspace-core", () => ({ useWorkspaceStore: () => mocks.layout }));
+vi.mock("@unfour/workspace-core", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@unfour/workspace-core")>(),
+  useWorkspaceStore: () => mocks.layout,
+}));
 vi.mock("@unfour/command-client", () => ({ updateWorkspaceLayout: mocks.save }));
 vi.mock("@unfour/ui", () => ({ useFeedbackErrorHandler: () => mocks.error }));
 import { useLayoutPersistence } from "./useLayoutPersistence";

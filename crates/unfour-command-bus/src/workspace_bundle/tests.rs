@@ -58,6 +58,45 @@ async fn bundle_export_file_name_uses_the_exported_workspace_name() {
     );
 }
 #[tokio::test]
+async fn bundle_preview_exposes_environment_type_without_importing() {
+    let bus = bus().await;
+    let before = count(&bus, "workspaces").await;
+    for version in [1, 2] {
+        for (environment, effective) in [
+            ("dev", "dev"),
+            ("test", "test"),
+            ("prod", "prod"),
+            (" DEV ", "dev"),
+            ("TEST", "test"),
+            (" Prod ", "prod"),
+            ("", "dev"),
+        ] {
+            let mut bundle = fixture();
+            bundle["version"] = json!(version);
+            bundle["workspace"]["environmentType"] = json!(environment);
+            let input = bundle.to_string();
+            let previews = [
+                bus.workspace_bundle_preview(&input).await.unwrap(),
+                bus.workspace_bundle_preview_with_options(
+                    &input,
+                    WorkspaceBundleOptions::default(),
+                )
+                .await
+                .unwrap(),
+            ];
+            for preview in previews {
+                assert_eq!(preview.environment_type, effective);
+                assert_eq!(
+                    serde_json::to_value(preview).unwrap()["environmentType"],
+                    effective
+                );
+            }
+        }
+    }
+    assert_eq!(count(&bus, "workspaces").await, before);
+}
+
+#[tokio::test]
 async fn bundle_remaps_every_resource_and_flow_edge_on_repeated_import() {
     let bus = bus().await;
     let input = fixture().to_string();

@@ -17,6 +17,7 @@
     "failed": "Workspace import or export failed",
     "newOnly": "Creates a separate Workspace. Conflicting names receive a copy suffix. MCP access is disabled by default.",
     "mcpPolicyHint": "Only this selection grants MCP access. Permissions in the file are never trusted. You can change this later in Workspace security settings.",
+    "mcpAutoEffective": "After import, Auto resolves to {policy} using the file's {environment} environment type.",
     "includedLabel": "Includes",
     "included": "Variables, environments, API definitions, connection metadata, SSH tasks, Saved SQL and Flows.",
     "excludedLabel": "Excludes",
@@ -272,7 +273,8 @@
         "development": "Development",
         "hint": "Environment defaults apply only when MCP permissions are Auto: DEV → full access, TEST → guarded, PROD → read-only.",
         "label": "Workspace environment type",
-        "prodWarning": "This workspace will use production-safe MCP defaults. MCP write and execution actions will be blocked by default.",
+        "prodWarning": "When these settings are saved, PROD with Auto uses read-only MCP defaults. Write and execution actions are blocked.",
+        "prodOverrideWarning": "When these settings are saved, PROD with {policy} overrides the production environment's default protection and may allow an Agent to modify real resources.",
         "production": "Production",
         "test": "Test / Staging"
       },
