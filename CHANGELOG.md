@@ -6,10 +6,10 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
-## [0.11.0] - Unreleased
+## [0.11.0] - 2026-10-10
 
-Release candidate preparation after `v0.10.0`, focused on portable Workspaces,
-encrypted local backups, and safer credential handling. Not yet released.
+Standard stable release after `v0.10.0`, focused on portable Workspaces,
+encrypted local backups, and safer credential handling.
 
 ### Added
 
@@ -27,6 +27,10 @@ encrypted local backups, and safer credential handling. Not yet released.
 
 ### Fixed
 
+- **Workspace MCP permissions** — Edit environment type and MCP permissions
+  independently, including after import. Imports default to MCP disabled and
+  honor an explicit local permission choice; show effective Auto permissions
+  and warn when PROD settings override its default protection.
 - **API editing and authentication** — Preserve edits made while Send/save is
   pending, resolve variables before Basic/Bearer/API Key authentication, and
   respect explicit Header/Query overrides. Scrub runtime credentials and their
@@ -769,7 +773,7 @@ First public release.
 - Linux artifacts remain experimental/unverified until real-device smoke checks
   are complete.
 
-[0.11.0]: https://github.com/zyqzyq/Unfour/compare/v0.10.0...main
+[0.11.0]: https://github.com/zyqzyq/Unfour/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/zyqzyq/Unfour/compare/v0.9.6...v0.10.0
 [0.9.6]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.6
 [0.9.5]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.5

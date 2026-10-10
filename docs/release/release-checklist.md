@@ -1,27 +1,49 @@
 # v0.11.0 release checklist
 
-## v0.11.0 candidate status
+## v0.11.0 released status
 
-- Source version: `0.11.0`; status: **RC PREPARATION / NOT RELEASED**.
+- Status: **RELEASED** as Standard stable on **2026-10-10**
+  (`2026-10-10T08:57:14Z`); version `0.11.0`, tag `v0.11.0`.
+- Exact tag/release commit: `311910dedaaa849ee9130e9d03a1301714b02726`;
+  comparison: `v0.10.0...v0.11.0`.
+- [GitHub Release](https://github.com/zyqzyq/Unfour/releases/tag/v0.11.0):
+  published, non-draft, non-prerelease, Release ID `408823362`.
 - Community/free and Pro use the same application, Cargo workspace, Tauri
   configuration, and package versions; no separate Pro build is introduced.
-- Current checks, remaining gates, exact-ref dispatch instructions, and the
-  native/manual acceptance checklist are in the
-  [2026-10-10 preparation record](../testing/v0.11.0-release-preparation-2026-10-10.md).
-- [English GitHub Release Notes draft](v0.11.0-release-notes.md) and
-  [candidate changelog](../../CHANGELOG.md#0110---unreleased) cover only changes
-  after v0.10.0. Set the actual publication date and pin the comparison to
-  `v0.10.0...v0.11.0` only when a formal release is authorized.
-- Reuse the [initial RC fixes](../testing/v0.11.0-rc-readiness-2026-10-09.md) and
+- Evidence checked on 2026-10-10; exact workflow, artifact, checksum, and live
+  manifest results are in the
+  [v0.11.0 final verification record](../testing/release-verification.md#v0110-final-release-verification-record).
+- [Release Notes](v0.11.0-release-notes.md) and
+  [published changelog](../../CHANGELOG.md#0110---2026-10-10) cover changes after
+  v0.10.0, including the final Workspace MCP permission and safety-hint fixes.
+- Preserve the [source preparation checkpoint](../testing/v0.11.0-release-preparation-2026-10-10.md),
+  [initial RC fixes](../testing/v0.11.0-rc-readiness-2026-10-09.md), and
   [latest Auth/export-safety evidence](../testing/v0.11.0-rc-openapi-auth-history-2026-10-10.md#export-compatibility-and-rotated-credential-follow-up-latest)
-  within their recorded scope. They do not replace checks on the bumped source
-  or acceptance of the signed candidate artifacts.
+  as historical scoped evidence. Their preparation-time `NOT RELEASED` and
+  `NOT RUN` values do not describe the completed publication.
 - Workspace encrypted backups remain local files. Sensitive data and Flow
   definitions/history are not added to Cloud Sync.
-- No push, tag, GitHub Release, workflow dispatch, installation package
-  publication, live manifest update, MSIX publication, or website deployment is
-  part of this preparation. RC dispatch requires this commit to be available
-  remotely after a separately authorized push.
+
+| Gate | v0.11.0 status and evidence |
+| --- | --- |
+| Formal tag and release commit | VERIFIED: local/GitHub tag and release workflow agree on the SHA above |
+| CI on release commit | PASS: [run 38035203118](https://github.com/zyqzyq/Unfour/actions/runs/38035203118) |
+| Standard Release Candidate on release commit | PASS: [run 38036217463](https://github.com/zyqzyq/Unfour/actions/runs/38036217463); verify and four signed native builds |
+| Standard Release on formal tag | PASS: [run 38038525070](https://github.com/zyqzyq/Unfour/actions/runs/38038525070); identity, verify, four builds, and publish |
+| Automated frontend/Rust/MCP, SSH-native, version, secret, migration, release-contract, and browser checks | PASS: recorded CI and reusable RC/Release jobs; browser smoke does not establish native/manual coverage |
+| Canonical build/staging and GitHub assets | PASS / VERIFIED: four Release Actions artifacts and 13 uploaded Release assets; Linux used `ubuntu-22.04` |
+| Immutable R2 checksums | PASS: publish log reports ten checksum entries as OK; GitHub/R2 checksum files and API digests agree |
+| Stable downloads/updater manifests | PASS: HTTP 200, version `0.11.0`, expected keys/URLs/signatures; byte-identical to GitHub assets; downloads promoted before updater |
+| Changelog date, pinned comparison, Release Notes, README, and User Guide | COMPLETE: post-release documentation archived for `2026-10-10` |
+| Release-operator tree review/cleanliness at publication | NOT RECORDED; successful workflows do not establish it |
+| Native installation, launch, upgrade/uninstall, MCP sidecar replacement, OS trust, previous-Stable updater and invalid-signature rejection | NOT VERIFIED |
+| Released-artifact Workspace exchange/backup, Auth/OpenAPI, credential, Database/MCP/Flow and live-service/Cloud Sync regressions | NOT VERIFIED; earlier implementation and local Windows Keychain evidence retain their original scope |
+| Linux Ubuntu 22.04/24.04 runtime, macOS/Linux native credential stores, and manual MSIX/Store journey | NOT VERIFIED; Linux remains Experimental; Store is separate |
+
+Publication and automated verification do not turn unrun manual checks into
+`PASS`. Use the historical [manual acceptance checklist](../testing/v0.11.0-release-preparation-2026-10-10.md#manual-rc-acceptance)
+for any follow-up against the exact released artifacts. This documentation
+follow-up does not push, retag, rebuild, redispatch, or republish the release.
 
 The published v0.10.0 evidence below is retained with its original scope.
 
@@ -93,8 +115,9 @@ The completed real Codex and Cursor checks supersede a separate basic MCP
 manual-smoke release gate. Keep the protocol smoke procedure for diagnostics
 and future regression use.
 
-The sections below retain the reusable release procedure. Actual v0.10.0
-outcomes are recorded above; imperative steps alone are not `PASS` claims.
+The sections below retain the reusable release procedure. Actual v0.11.0 and
+historical v0.10.0 outcomes are recorded above; imperative steps alone are not
+`PASS` claims.
 The v0.9.0 table above and the v0.9.6 preparation section in
 `docs/testing/release-verification.md` remain
 historical records.
@@ -114,8 +137,8 @@ historical records.
   Wait Until, cancellation and run history through both Desktop and MCP.
   Confirm Flow definitions/history remain local-only with Cloud Sync enabled.
   Use the [v0.11.0 acceptance checklist](../testing/v0.11.0-release-preparation-2026-10-10.md#manual-rc-acceptance)
-  for current candidate regressions; existing implementation reports do not
-  establish candidate-level native/manual verification.
+  for v0.11.0 regressions; existing implementation reports do not establish
+  released-artifact native/manual verification.
 
 ## Release Candidate
 
@@ -151,10 +174,10 @@ historical records.
 
 ## Standard
 
-- v0.10.0 documentation follow-up: `COMPLETE`.
+- v0.11.0 documentation follow-up: `COMPLETE`.
   [CHANGELOG.md](../../CHANGELOG.md) records the actual publication date
-  `2026-09-30` and pins `[0.10.0]` to
-  `https://github.com/zyqzyq/Unfour/compare/v0.9.6...v0.10.0`.
+  `2026-10-10` and pins `[0.11.0]` to
+  `https://github.com/zyqzyq/Unfour/compare/v0.10.0...v0.11.0`.
 - Proceed only from the reviewed commit represented by the Release Candidate;
   create the immutable `vX.Y.Z` tag according to the release procedure.
 - CI exports `UNFOUR_DISTRIBUTION=standard` and `stable`.

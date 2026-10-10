@@ -18,13 +18,13 @@ Unfour 在一个桌面应用中提供 API 测试、SSH、数据库工具、本�
 </div>
 
 > [!WARNING]
-> Unfour v0.10.0 已于 2026-09-30 正式发布。产品统一为 Unfour。
+> Unfour v0.11.0 已于 2026-10-10 正式发布。产品统一为 Unfour。
 > Windows NSIS 安装包尚未签名，可能触发 SmartScreen 或其他操作系统安全警告。
 > 请使用 GitHub Release 中的 `SHA256SUMS.txt` 校验下载文件。
 
-当前源码正在准备 **v0.11.0 RC**，尚未正式发布。请参阅
-[候选版本变更记录](CHANGELOG.md#0110---unreleased)及
-[RC 准备与验收记录](docs/testing/v0.11.0-release-preparation-2026-10-10.md)。
+请参阅 [v0.11.0 变更记录](CHANGELOG.md#0110---2026-10-10)、
+[Release Notes](docs/release/v0.11.0-release-notes.md)及
+[正式发布验证记录](docs/testing/release-verification.md#v0110-final-release-verification-record)。
 
 ## 下载
 
@@ -196,11 +196,11 @@ pnpm run test:rust      # cargo test --workspace
 
 ## 发布状态
 
-[Unfour v0.10.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.10.0) 已于
-2026-09-30 作为 Standard stable 版本正式发布。CI、Standard Release Candidate、
+[Unfour v0.11.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.11.0) 已于
+2026-10-10 作为 Standard stable 版本正式发布。CI、Standard Release Candidate、
 Standard Release、发布资产、checksums 以及在线 updater/download manifests 已验证。
-没有 v0.10.0 实际证据的平台、真实服务与人工回归继续保持 `NOT VERIFIED`。
-v0.9.0 与 v0.9.6 记录继续作为历史证据保留；当前 main 已基于 v0.10.0 继续开发。产品统一为 Unfour。
+没有 v0.11.0 实际证据的平台、真实服务与人工回归继续保持 `NOT VERIFIED`。
+早期版本及 v0.11.0 RC 准备记录保留其历史范围。产品统一为 Unfour。
 发布验证证据见：
 
 - `docs/testing/release-verification.md`
@@ -218,9 +218,9 @@ glibc 版本就保证其他发行版兼容。`.deb` 和 `.rpm` 暂不正式支�
 否则不得声称其通过。
 
 已发布的 v0.9.0 Linux AppImage 构建成功，但因依赖 Ubuntu 24.04 时代的
-GLIBC/GLIBCXX 符号，在 Ubuntu 20.04 上启动失败。v0.10.0 AppImage 已使用
+GLIBC/GLIBCXX 符号，在 Ubuntu 20.04 上启动失败。v0.11.0 AppImage 已使用
 Ubuntu 22.04 构建，不会替换已发布的 v0.9.0 文件。在记录已发布产物的实际运行测试前，
-v0.10.0 Ubuntu 22.04/24.04 运行回归仍为 `NOT VERIFIED`，详见
+v0.11.0 Ubuntu 22.04/24.04 运行回归仍为 `NOT VERIFIED`，详见
 [发布验证记录](docs/testing/release-verification.md#linux-appimage-compatibility)。
 
 ## 文档

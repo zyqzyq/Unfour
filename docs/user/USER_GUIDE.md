@@ -14,9 +14,10 @@ Unfour opens into a single workspace surface:
 
 ## Current Capabilities
 
-This guide documents the source preparing v0.11.0 RC. The latest published
-release is v0.10.0; candidate features and native verification are tracked in
-the [current preparation record](../testing/v0.11.0-release-preparation-2026-10-10.md).
+This guide documents v0.11.0, released as Standard stable on 2026-10-10.
+See the [Release Notes](../release/v0.11.0-release-notes.md) and
+[final release verification](../testing/release-verification.md#v0110-final-release-verification-record).
+Unrun v0.11.0 native/manual and live-service checks remain `NOT VERIFIED`.
 Earlier real-device checks below retain their original version scope:
 
 - The workspace shell is usable.
@@ -95,7 +96,11 @@ this does not add at-rest encryption to SQLite. Private-key files, SQLite databa
 files, and upload/download file contents are not embedded. Select multipart files
 again and verify paths before connecting or running imported tasks. History,
 activity, tabs/layout, host trust, and Cloud Sync bindings are excluded; the new
-Workspace starts with MCP disabled and is not automatically cloud-bound.
+Workspace defaults to MCP disabled and is not automatically cloud-bound.
+You can explicitly select MCP permissions in the import preview. After import,
+Workspace security settings let you save environment type and MCP permissions
+independently. Auto uses DEV full access, TEST guarded, and PROD read-only;
+the UI shows effective permissions and warns about PROD protection overrides.
 
 This is a local backup and transfer feature, separate from Pro Cloud Sync.
 v0.11.0 does not support sensitive-data Cloud Sync. Flow definitions and history

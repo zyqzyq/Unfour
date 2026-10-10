@@ -18,14 +18,14 @@ Unfour brings API testing, SSH, database tools, local Flow runbooks, and MCP-ass
 </div>
 
 > [!WARNING]
-> Unfour v0.10.0 was released on 2026-09-30. Windows NSIS
+> Unfour v0.11.0 was released on 2026-10-10. Windows NSIS
 > installers are unsigned and may trigger SmartScreen or other operating-system
 > security warnings. Use `SHA256SUMS.txt` from the GitHub Release to verify
 > downloaded files.
 
-The source tree is preparing **v0.11.0 RC**; it is not a published release.
-See the [candidate changelog](CHANGELOG.md#0110---unreleased) and
-[RC preparation and acceptance record](docs/testing/v0.11.0-release-preparation-2026-10-10.md).
+See the [v0.11.0 changelog](CHANGELOG.md#0110---2026-10-10),
+[Release Notes](docs/release/v0.11.0-release-notes.md), and
+[final release verification](docs/testing/release-verification.md#v0110-final-release-verification-record).
 
 ## Download
 
@@ -227,12 +227,12 @@ map.
 
 ## Release Status
 
-[Unfour v0.10.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.10.0) was
-published as a Standard stable release on 2026-09-30. CI, Standard Release
+[Unfour v0.11.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.11.0) was
+published as a Standard stable release on 2026-10-10. CI, Standard Release
 Candidate, Standard Release, published assets, checksums, and live updater/download
 manifests are verified. Native platform, live-service, and manual regressions
-without v0.10.0 evidence remain `NOT VERIFIED`. The v0.9.0 and v0.9.6 records
-remain historical; current `main` continues development from v0.10.0.
+without v0.11.0 evidence remain `NOT VERIFIED`. Earlier releases and v0.11.0
+RC preparation records retain their historical scope.
 Release verification evidence is documented in:
 
 - `docs/testing/release-verification.md`
@@ -255,8 +255,8 @@ successfully for the target platform or is backed by current repository evidence
 
 The published v0.9.0 Linux AppImage built successfully but failed to launch on
 Ubuntu 20.04 because it requires Ubuntu 24.04-era GLIBC/GLIBCXX symbols. The
-v0.10.0 AppImage was built on Ubuntu 22.04; the immutable v0.9.0 download
-remains unchanged. v0.10.0 Ubuntu 22.04/24.04 runtime regression remains
+v0.11.0 AppImage was built on Ubuntu 22.04; the immutable v0.9.0 download
+remains unchanged. v0.11.0 Ubuntu 22.04/24.04 runtime regression remains
 `NOT VERIFIED` until installed-artifact testing is recorded; see
 [release verification](docs/testing/release-verification.md#linux-appimage-compatibility).
 

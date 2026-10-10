@@ -1,4 +1,143 @@
-# v0.10.0 Release Verification
+# v0.11.0 Release Verification
+
+This document records the published v0.11.0 release against `v0.10.0`
+(`96f0022ec344fd643b567a54fe6f3686c2272dc0`). Earlier release and RC
+preparation records retain their original scope and results below or in their
+linked reports; they do not establish new native/manual coverage.
+
+## v0.11.0 Final Release Verification Record
+
+Evidence checked on 2026-10-10 through GitHub tag, Release, workflow, job,
+artifact APIs and publish logs, plus direct public checksum/manifest HTTP reads.
+This follow-up archives existing results and changes documentation only.
+
+### Source and publication
+
+- Status: **RELEASED** as Standard stable; version `0.11.0`, tag `v0.11.0`.
+- Exact tag/release commit:
+  [`311910dedaaa849ee9130e9d03a1301714b02726`](https://github.com/zyqzyq/Unfour/commit/311910dedaaa849ee9130e9d03a1301714b02726).
+  Local `main`/HEAD, local tag, GitHub tag and GitHub `main` agreed at the start
+  of this follow-up. The initial local working tree was clean.
+- [GitHub Release](https://github.com/zyqzyq/Unfour/releases/tag/v0.11.0):
+  `Unfour v0.11.0`, Release ID `408823362`, `draft=false`, `prerelease=false`,
+  published `2026-10-10T08:57:14Z` (2026-10-10 16:57:14 Asia/Shanghai).
+  Its actual body is the workflow's generic Standard distribution text; the
+  [detailed local Release Notes](../release/v0.11.0-release-notes.md) archive
+  user-facing changes without claiming a remote body edit.
+- Release-operator tree review/cleanliness at publication: `NOT RECORDED`.
+  The later clean tree and successful workflows do not establish that state.
+
+### Workflow and build results
+
+All three runs resolved to the exact SHA above, completed with
+`conclusion=success`, and used attempt 1:
+
+| Workflow | Run / trigger | Result |
+| --- | --- | --- |
+| CI | [38035203118](https://github.com/zyqzyq/Unfour/actions/runs/38035203118); `push`, `main` | PASS; all seven jobs: frontend lint/build/tests, Rust check/tests, release contracts, MCP contracts/tests |
+| Standard Release Candidate | [38036217463](https://github.com/zyqzyq/Unfour/actions/runs/38036217463); `workflow_dispatch`, `main` | PASS; identity, reusable verify, four signed native builds; four Actions artifacts, no publish job |
+| Standard Release | [38038525070](https://github.com/zyqzyq/Unfour/actions/runs/38038525070); `push`, `v0.11.0` | PASS; identity, reusable verify, four signed native builds, publish |
+
+Both RC and formal verify jobs passed `pnpm run lint`, `pnpm run test`,
+`pnpm run test:release-env`, `pnpm run check`, `pnpm run check:rust:ssh`,
+`pnpm run test:rust`, and `pnpm run test:e2e`. These are hosted workflow
+results, not application suites rerun for this documentation follow-up.
+The Linux build jobs used `ubuntu-22.04`; the independent verify jobs used
+`ubuntu-latest`. Browser mocks/builds do not verify installed native behavior.
+
+The Actions API listed these artifacts with `expired=false`. RC and formal
+artifacts are separate builds of the same source; no RC/Release byte-equality
+claim is made.
+
+| Target suffix | RC artifact ID | Release artifact ID / build job |
+| --- | --- | --- |
+| `x86_64-pc-windows-msvc` | `11663579938` | `11664992824` / [114175104007](https://github.com/zyqzyq/Unfour/actions/runs/38038525070/job/114175104007) |
+| `aarch64-apple-darwin` | `11664329333` | `11664808397` / [114175104066](https://github.com/zyqzyq/Unfour/actions/runs/38038525070/job/114175104066) |
+| `x86_64-apple-darwin` | `11664569226` | `11664833480` / [114175104044](https://github.com/zyqzyq/Unfour/actions/runs/38038525070/job/114175104044) |
+| `x86_64-unknown-linux-gnu` | `11663574922` | `11664918338` / [114175104075](https://github.com/zyqzyq/Unfour/actions/runs/38038525070/job/114175104075) |
+
+### Published assets, checksums, and Stable manifests
+
+GitHub lists 13 assets, all `state=uploaded`: six payloads, four updater
+signatures, checksums and two manifests. The API's ten payload/signature
+SHA-256 digests agree with the downloaded checksum entries. No MSIX, `.deb`,
+`.rpm`, or Linux ARM64 asset is in this release inventory.
+
+| Asset | Bytes | SHA-256 (Release API) |
+| --- | --- | --- |
+| `downloads.json` | 504 | `31dc60cd38b683abd2999e31206934cba2fefcf7342151d1cfe89fecbe86e5e2` |
+| `latest.json` | 2,362 | `491969ed74b2da9a1be2088c2d36deeb990077f4e058b678d326eded35a01fe5` |
+| `SHA256SUMS.txt` | 1,004 | `decd1b918426bbd90dc227d4c172ab07d88c5f63df41d928d92358d935dee494` |
+| `Unfour_0.11.0_linux_x64.AppImage` | 115,350,008 | `c2e505a7a1d68068ca682abee46a1826ec9a7f24cafaff079ae494ca0d33e40b` |
+| `Unfour_0.11.0_linux_x64.AppImage.sig` | 420 | `f8a848e38f7af8bd554a0ec1220bd6017bc2a69f55b47a633c03927c690639a8` |
+| `Unfour_0.11.0_macos_arm64.app.tar.gz` | 37,827,355 | `db2a453e8e1916702ca28db196bd50e4651cd04a735b9c6f01e357f0c53a0567` |
+| `Unfour_0.11.0_macos_arm64.app.tar.gz.sig` | 404 | `13869dd98b50f0ecb6a6af97ba044c9683b9da6b594dcacfbc0b12e0b721eb6e` |
+| `Unfour_0.11.0_macos_arm64.dmg` | 38,375,159 | `455d0a654f350308eabfbb0e22948e970f401c9191fdae5f20b16edfe456e1ea` |
+| `Unfour_0.11.0_macos_x64.app.tar.gz` | 40,381,001 | `b52fd5f88d163cc061b9257105ea83f00c617f56132697959d403df23e7594c6` |
+| `Unfour_0.11.0_macos_x64.app.tar.gz.sig` | 404 | `0c9e26ec3f548bed36d9f68c9161459372d41cb7b6b8e6aef9f482f0e9d0613c` |
+| `Unfour_0.11.0_macos_x64.dmg` | 41,258,489 | `c5cc5eebd63bc35344463a5cec68c6c3b2355d5c671b7ff1f1f9b6154b6e75ac` |
+| `Unfour_0.11.0_windows_x64.exe` | 24,801,880 | `dba2e7f72f14e4c6f06a80ea7f20c9d181e2db6454058e1f5fd44985184bb267` |
+| `Unfour_0.11.0_windows_x64.exe.sig` | 416 | `14344faf3018425a6e305c9560ab4415f4bed9b1dbdecbdd5c8d40235cbd4476` |
+
+The [publish job 114177060956](https://github.com/zyqzyq/Unfour/actions/runs/38038525070/job/114177060956)
+passed finalization, immutable R2 upload/re-download, GitHub publication, and
+ordered Stable promotion. Its log reports all ten `sha256sum -c` entries as
+`OK`, then uploads `downloads.json` before `latest.json`.
+
+Direct public reads returned HTTP 200:
+
+- [Versioned R2 checksums](https://releases.unfour.dev/stable/0.11.0/SHA256SUMS.txt)
+  are byte-identical to the [GitHub checksum asset](https://github.com/zyqzyq/Unfour/releases/download/v0.11.0/SHA256SUMS.txt).
+  Exactly ten entries exclude the checksum file itself and both manifests.
+- [Stable downloads](https://releases.unfour.dev/stable/downloads.json):
+  `version=0.11.0`; exactly `windows-x64`, `macos-arm64`, `macos-x64`,
+  `linux-x64`, pointing to NSIS, DMG, DMG, AppImage respectively.
+- [Stable updater](https://releases.unfour.dev/stable/latest.json):
+  `version=0.11.0`; exactly `windows-x86_64`, `darwin-aarch64`,
+  `darwin-x86_64`, `linux-x86_64`, each with a non-empty signature.
+  macOS updater URLs use `.app.tar.gz`.
+- Both manifests are byte-identical to their GitHub assets, with
+  `Content-Type: application/json` and `Cache-Control: no-cache`. All eight
+  payload URLs reference canonical assets under `stable/0.11.0/`.
+
+Full R2 payload checks rely on the workflow's re-download/checksum log; no
+installers were downloaded or installed locally in this follow-up. API digests
+and signature presence do not establish manual update/signature-rejection PASS.
+
+### Manual limits and historical RC evidence
+
+| Gate | v0.11.0 release-level result |
+| --- | --- |
+| Windows/macOS/Linux native install, launch, upgrade/uninstall, MCP sidecar replacement, OS trust and Linux 22.04/24.04 runtime/updater | NOT VERIFIED; Linux remains Experimental; Windows/macOS OS signing and macOS notarization are not enabled |
+| v0.10.0-to-v0.11.0 in-app update and manual invalid-signature rejection | NOT VERIFIED |
+| Released-artifact Workspace exchange/encrypted backup, credential lifecycle, Auth/OpenAPI/redaction, Database/MCP/Flow and live API/SSH/database/client regressions | NOT VERIFIED; scoped automated/implementation evidence is retained |
+| Account/OAuth/billing, Cloud Sync single/multi-device and MCP prod-policy real journeys | NOT VERIFIED |
+| macOS/Linux native credential stores and manual MSIX/Store build/install/servicing | NOT VERIFIED; Store remains a separate process |
+
+The [2026-10-10 source preparation](v0.11.0-release-preparation-2026-10-10.md),
+[2026-10-09 RC readiness](v0.11.0-rc-readiness-2026-10-09.md), and
+[Auth/export follow-up](v0.11.0-rc-openapi-auth-history-2026-10-10.md)
+are preserved unchanged. Their preparation-time outstanding RC/publication
+gates describe historical checkpoints. The preparation's real Windows
+credential-store smoke remains scoped local evidence, not an installed-artifact
+or cross-platform result. Final source also includes the
+[Workspace MCP permission fixes](workspace-mcp-permissions.md).
+Use the [manual acceptance steps](v0.11.0-release-preparation-2026-10-10.md#manual-rc-acceptance)
+against the exact released artifacts for future verification. Formal publication,
+automated verification, and manual verification remain separate states.
+
+### Documentation follow-up validation
+
+- `node scripts/sync-version.mjs --check`: PASS; all tracked consumers remain
+  `0.11.0`. `node scripts/release-contract.mjs v0.11.0`: PASS.
+- Local Markdown paths/anchors: PASS; 58 local links and 19 anchors in the
+  seven changed documents. Documented sizes/digests match all 13 Release assets.
+- `node scripts/audit-public-secrets.mjs`: PASS; 1,380 publishable files, no findings.
+- `git diff --check`: PASS. Older changelog/release results and all three v0.11.0
+  RC/preparation records are preserved. No business source, versions, AGENTS,
+  tags, workflows, or published files are changed; no push or dispatch is performed.
+
+## Historical v0.10.0 release record
 
 This document records the published v0.10.0 release, compared with
 `v0.9.6` (`87bea5d6f337cc6d1d10055972bce2f3ee24aaee`). The local v0.10.0
