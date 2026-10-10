@@ -1,9 +1,29 @@
-# v0.10.0 release checklist
+# v0.11.0 release checklist
 
-For the next candidate, see the
-[v0.11.0 scoped RC preparation record](../testing/v0.11.0-rc-readiness-2026-10-09.md).
-It records current main failure evidence and local verification separately from
-the published v0.10.0 results below; it does not declare v0.11.0 released.
+## v0.11.0 candidate status
+
+- Source version: `0.11.0`; status: **RC PREPARATION / NOT RELEASED**.
+- Community/free and Pro use the same application, Cargo workspace, Tauri
+  configuration, and package versions; no separate Pro build is introduced.
+- Current checks, remaining gates, exact-ref dispatch instructions, and the
+  native/manual acceptance checklist are in the
+  [2026-10-10 preparation record](../testing/v0.11.0-release-preparation-2026-10-10.md).
+- [English GitHub Release Notes draft](v0.11.0-release-notes.md) and
+  [candidate changelog](../../CHANGELOG.md#0110---unreleased) cover only changes
+  after v0.10.0. Set the actual publication date and pin the comparison to
+  `v0.10.0...v0.11.0` only when a formal release is authorized.
+- Reuse the [initial RC fixes](../testing/v0.11.0-rc-readiness-2026-10-09.md) and
+  [latest Auth/export-safety evidence](../testing/v0.11.0-rc-openapi-auth-history-2026-10-10.md#export-compatibility-and-rotated-credential-follow-up-latest)
+  within their recorded scope. They do not replace checks on the bumped source
+  or acceptance of the signed candidate artifacts.
+- Workspace encrypted backups remain local files. Sensitive data and Flow
+  definitions/history are not added to Cloud Sync.
+- No push, tag, GitHub Release, workflow dispatch, installation package
+  publication, live manifest update, MSIX publication, or website deployment is
+  part of this preparation. RC dispatch requires this commit to be available
+  remotely after a separately authorized push.
+
+The published v0.10.0 evidence below is retained with its original scope.
 
 ## v0.10.0 released status
 
@@ -93,9 +113,9 @@ historical records.
 - Exercise Flow Canvas authoring, API/SSH/Database actions, Condition branches,
   Wait Until, cancellation and run history through both Desktop and MCP.
   Confirm Flow definitions/history remain local-only with Cloud Sync enabled.
-  Use the [v0.10.0 candidate scope](../testing/release-verification.md#v0100-candidate-scope)
-  for the new-feature regression gates; existing Flow implementation reports
-  do not establish candidate-level native/manual verification.
+  Use the [v0.11.0 acceptance checklist](../testing/v0.11.0-release-preparation-2026-10-10.md#manual-rc-acceptance)
+  for current candidate regressions; existing implementation reports do not
+  establish candidate-level native/manual verification.
 
 ## Release Candidate
 

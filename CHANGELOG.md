@@ -6,6 +6,56 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
+## [0.11.0] - Unreleased
+
+Release candidate preparation after `v0.10.0`, focused on portable Workspaces,
+encrypted local backups, and safer credential handling. Not yet released.
+
+### Added
+
+- **Whole-Workspace import/export** — Move variables, environments, API
+  definitions, SSH/Database connection settings, SSH tasks, Saved SQL, and Flow
+  definitions together. Preview before importing into a new, independent
+  Workspace; resource references are remapped and existing Workspaces stay intact.
+  Sharing exports remove recognized secrets and omit device paths by default.
+- **Password-encrypted local backups** — Protect a Workspace export with a
+  password and optionally include saved connection passwords, key passphrases,
+  secret variables, and API authentication values. Restore supported secrets
+  locally, with fresh OS credential-store references for SSH/Database credentials.
+  Paths can be reviewed and replaced during import; referenced files are not
+  embedded. This is a local backup, not sensitive-data Cloud Sync.
+
+### Fixed
+
+- **API editing and authentication** — Preserve edits made while Send/save is
+  pending, resolve variables before Basic/Bearer/API Key authentication, and
+  respect explicit Header/Query overrides. Scrub runtime credentials and their
+  encoded forms from new history and diagnostics; startup repairs recognized
+  sensitive fields in older history where source values remain available.
+- **OpenAPI export** — Match history using redacted request snapshots and
+  materialized authentication. Invalid Auth on one request no longer aborts a
+  collection export. Omit response examples when historical credential redaction
+  cannot establish safe provenance, including after credential rotation.
+- **Secret editing and lifecycle** — Separate reveal from preserve/replace/clear
+  intent, protect shared connection credentials during edits and deletion, and
+  recover interrupted credential staging. Revealing a saved connection credential
+  rechecks its current ownership without holding SQLite locks during OS reads.
+- **Database browsing** — Open Design Table from the sidebar correctly and
+  browse pages without requiring a full row count; navigation and row ranges
+  reflect whether an exact total is available.
+- **MCP, Flow, and startup stability** — Keep ephemeral SQLite state through
+  cancelled acquisition, including MCP-driven Flow runs, and complete history
+  repair rollback before subsequent startup writes.
+- **Cloud Sync secret exclusion** — Apply the existing sensitive-variable rules
+  even when a Secret flag is unset; unsafe older retries stay quarantined while
+  safe local changes can be repaired. Sensitive values remain excluded from
+  Cloud Sync, and Flow definitions/history remain local-only.
+
+Backups contain definitions and supported credentials, not database files,
+private-key files, histories, layouts, or a complete database image. Passwords
+cannot be recovered. Review scripts, SQL, and free text for hardcoded secrets
+before sharing; complete erasure of already-redacted legacy history is not claimed.
+
 ## [0.10.0] - 2026-09-30
 
 Release after `v0.9.6`, adding local runbooks and easier exchange of API
@@ -719,6 +769,7 @@ First public release.
 - Linux artifacts remain experimental/unverified until real-device smoke checks
   are complete.
 
+[0.11.0]: https://github.com/zyqzyq/Unfour/compare/v0.10.0...main
 [0.10.0]: https://github.com/zyqzyq/Unfour/compare/v0.9.6...v0.10.0
 [0.9.6]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.6
 [0.9.5]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.5

@@ -314,15 +314,15 @@ importers:
       '@unfour/ui':
         specifier: workspace:*
         version: link:../ui
-      '@unfour/workspace-local':
-        specifier: workspace:*
-        version: link:../workspace-local
       '@unfour/workspace-core':
         specifier: workspace:*
         version: link:../workspace-core
       '@unfour/workspace-environments':
         specifier: workspace:*
         version: link:../workspace-environments
+      '@unfour/workspace-local':
+        specifier: workspace:*
+        version: link:../workspace-local
       lucide-react:
         specifier: ^1.17.0
         version: 1.17.0(react@19.2.7)
@@ -338,15 +338,15 @@ importers:
 
   packages/database:
     dependencies:
-      '@tauri-apps/plugin-dialog':
-        specifier: ^2
-        version: 2.7.2
       '@monaco-editor/react':
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tanstack/react-query':
         specifier: ^5.100.14
         version: 5.100.14(react@19.2.7)
+      '@tauri-apps/plugin-dialog':
+        specifier: ^2
+        version: 2.7.2
       '@unfour/command-client':
         specifier: workspace:*
         version: link:../command-client

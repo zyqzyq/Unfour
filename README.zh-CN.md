@@ -22,6 +22,10 @@ Unfour 在一个桌面应用中提供 API 测试、SSH、数据库工具、本�
 > Windows NSIS 安装包尚未签名，可能触发 SmartScreen 或其他操作系统安全警告。
 > 请使用 GitHub Release 中的 `SHA256SUMS.txt` 校验下载文件。
 
+当前源码正在准备 **v0.11.0 RC**，尚未正式发布。请参阅
+[候选版本变更记录](CHANGELOG.md#0110---unreleased)及
+[RC 准备与验收记录](docs/testing/v0.11.0-release-preparation-2026-10-10.md)。
+
 ## 下载
 
 请从 [GitHub Releases](https://github.com/zyqzyq/Unfour/releases/latest) 下载最新的 Unfour 正式版本。
@@ -99,13 +103,19 @@ Unfour 本身不修改代码仓库：代码变更由 Coding 客户端负责，Un
   Condition 分支与 Wait Until 检查。通过 Canvas 编排步骤，查看步骤结果与运行历史。
   Flow V1 当前为 local-only，不支持 Cloud Sync。
 - **Workspace（工作区）** - 将已保存的请求、共享环境变量、连接、活动、标签页与布局状态
-  限定在某个本地工作区之内，并支持标题栏切换当前环境。
+  限定在某个本地工作区之内，并支持标题栏切换当前环境。可整体导入导出工作区定义，
+  或创建可选包含已保存凭据的密码加密本地备份；导入预览确认后创建独立副本。请参阅
+  [工作区交换与备份说明](docs/user/USER_GUIDE.md#workspace-exchange-and-local-backups)。
 - **MCP integration（面向 Codex 与 Cursor）** - 通过桌面应用所用的同一命令总线，
   以本地 stdio 方式提供安全的诊断工具。Codex 与 Cursor 可以使用同一套已保存的 API、
   SSH 与数据库连接来复现问题、查日志、查数据库状态并验证修复，也能管理和运行本地 Flow
   runbook，沿用相同的安全检查并共享运行历史。
 
 > [连接 Codex 与 Cursor 到 Unfour MCP →](docs/mcp/client-setup.md)
+
+加密备份是本地文件，与 Pro Cloud Sync 分开。v0.11.0 不支持敏感数据云同步，
+Flow 定义与历史也仍保留在本地。备份不嵌入数据库文件、私钥文件或历史记录；
+分享普通定义导出前，仍需检查脚本、SQL 等自由文本中的硬编码凭据。
 
 ## 截图
 

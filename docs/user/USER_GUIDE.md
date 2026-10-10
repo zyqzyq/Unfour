@@ -14,9 +14,10 @@ Unfour opens into a single workspace surface:
 
 ## Current Capabilities
 
-This guide documents the current v0.9.6 product capabilities. The published
-v0.9.0 verification record remains the latest completed release evidence until
-the v0.9.6 candidate is verified:
+This guide documents the source preparing v0.11.0 RC. The latest published
+release is v0.10.0; candidate features and native verification are tracked in
+the [current preparation record](../testing/v0.11.0-release-preparation-2026-10-10.md).
+Earlier real-device checks below retain their original version scope:
 
 - The workspace shell is usable.
 - API, SSH, and Database sidebars keep independent bounded widths and restore
@@ -63,6 +64,42 @@ the v0.9.6 candidate is verified:
   published v0.9.0 release record.
 - SSH Terminal workflows have completed release-level verification against a
   real SSH server.
+
+## Workspace Exchange and Local Backups
+
+In the Workspace menu, choose import to create a new Workspace, or export for
+the currently selected Workspace. Both actions are also available in the command
+palette. Export includes variables/environments, API collections/folders/requests,
+SSH/Database connection settings, SSH tasks, Saved SQL, and Flow definitions.
+
+- **Share definitions:** recognized secrets are removed and device paths are
+  omitted by default. Review scripts, SQL, and free text for hardcoded credentials
+  before sharing. Fill missing credentials and local paths before using the copy.
+- **Encrypted backup:** the entire export file is password-encrypted. Use at
+  least 12 characters and keep the password separately; it cannot be recovered.
+  You can include saved SSH/Database passwords, SSH key passphrases, secret
+  variables, and API authentication values. Paths are included by default and can
+  be omitted independently. Literal secrets in bodies, scripts, SQL, and Flow
+  defaults remain subject to redaction even in an encrypted backup.
+
+Import a plain or encrypted file, unlock it if needed, then review the name,
+resource counts, exclusions, missing fields, and local paths. Paths can be edited
+or replaced by prefix and optionally checked before confirming. Import creates
+and activates an independent copy with fresh IDs and remapped references; it
+does not merge into or overwrite an existing Workspace. Preview and cancellation
+create no Workspace. Failed validation must leave no partial imported data.
+
+Restored SSH/Database credentials receive new local OS credential-store references.
+Supported API and variable secrets return to their existing local storage fields;
+this does not add at-rest encryption to SQLite. Private-key files, SQLite database
+files, and upload/download file contents are not embedded. Select multipart files
+again and verify paths before connecting or running imported tasks. History,
+activity, tabs/layout, host trust, and Cloud Sync bindings are excluded; the new
+Workspace starts with MCP disabled and is not automatically cloud-bound.
+
+This is a local backup and transfer feature, separate from Pro Cloud Sync.
+v0.11.0 does not support sensitive-data Cloud Sync. Flow definitions and history
+also remain local-only. See the [format and security boundaries](../architecture/workspace-bundle.md).
 
 ## Account and Cloud Sync
 

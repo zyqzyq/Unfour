@@ -23,6 +23,10 @@ Unfour brings API testing, SSH, database tools, local Flow runbooks, and MCP-ass
 > security warnings. Use `SHA256SUMS.txt` from the GitHub Release to verify
 > downloaded files.
 
+The source tree is preparing **v0.11.0 RC**; it is not a published release.
+See the [candidate changelog](CHANGELOG.md#0110---unreleased) and
+[RC preparation and acceptance record](docs/testing/v0.11.0-release-preparation-2026-10-10.md).
+
 ## Download
 
 Download the [latest Unfour release](https://github.com/zyqzyq/Unfour/releases/latest)
@@ -123,7 +127,10 @@ workspace, environment, risky actions, and final decision.
   and does not support Cloud Sync.
 - **Workspace** - Scope saved requests, shared environments/variables,
   connections, activity, tabs, and layout state to a local workspace, with
-  title-bar active-environment switching.
+  title-bar active-environment switching. Export/import whole Workspace
+  definitions or create a password-encrypted local backup with optional saved
+  credentials. Import previews create independent copies. See
+  [Workspace exchange and backups](docs/user/USER_GUIDE.md#workspace-exchange-and-local-backups).
 - **MCP integration for Codex and Cursor** - Expose safe local stdio diagnostic
   tools through the same command bus used by the desktop app. Codex and Cursor
   can use the same saved API, SSH, and database connections to reproduce
@@ -131,6 +138,11 @@ workspace, environment, risky actions, and final decision.
   Flow runbooks with the same safety checks and shared run history.
 
 > [Connect Codex and Cursor to Unfour MCP →](docs/mcp/client-setup.md)
+
+Encrypted backups are local files, separate from Pro Cloud Sync. Sensitive data
+is not synchronized to the cloud in v0.11.0; Flow definitions/history also stay
+local. Backups do not embed database/private-key files or history. Review free-form
+scripts and SQL before sharing a definitions export.
 
 ## Screenshots
 
