@@ -1,6 +1,23 @@
 import { expect, test } from "@playwright/test";
 
 for (const locale of ["en", "zh-CN"]) {
+  const notices = locale === "en" ? {
+    create: "Create and Switch",
+    auto: "PROD with Auto uses read-only MCP defaults. Write and execution actions are blocked.",
+    guarded: "PROD with Guarded (guarded) overrides",
+    full: "PROD with Full access (full_access) overrides",
+    policyContext: "Saving MCP permissions uses the saved environment type.",
+    savedProd: "Saved environment: PROD",
+    savedAutoProd: "Auto currently resolves to Read-only (read_only) using the saved environment type.",
+  } : {
+    create: "创建并切换",
+    auto: "PROD + Auto 的 MCP 默认只读，写入和执行类操作会被拦截。",
+    guarded: "PROD + 受保护 (guarded) 会覆盖",
+    full: "PROD + 完全访问 (full_access) 会覆盖",
+    policyContext: "保存 MCP 权限时沿用已保存的环境类型。",
+    savedProd: "已保存环境：PROD",
+    savedAutoProd: "Auto 按已保存的环境类型实际生效为：只读 (read_only)。",
+  };
   test(`${locale}: Workspace bundle preview stays readable at a compact viewport`, async ({ page }, testInfo) => {
     await page.addInitScript((language) => localStorage.setItem("unfour.locale", language), locale);
     await page.setViewportSize({ width: 960, height: 600 });
@@ -32,17 +49,26 @@ for (const locale of ["en", "zh-CN"]) {
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole("textbox")).toHaveValue(preview.preview.name);
     await expect(dialog.getByLabel(locale === "en" ? "MCP permissions" : "MCP 权限", { exact: true })).toHaveValue("disabled");
+    await expect(dialog.getByRole("status")).toHaveCount(0);
     await dialog.getByLabel(locale === "en" ? "MCP permissions" : "MCP 权限", { exact: true }).selectOption("auto");
     await expect(dialog.getByText(locale === "en"
       ? "After import, Auto resolves to Read-only (read_only) using the file's PROD environment type."
       : "导入后，Auto 按文件中的 PROD 环境类型实际生效为：只读 (read_only)。", { exact: true })).toBeVisible();
-    await expect(dialog.getByRole("button", { name: locale === "en" ? "Create and Switch" : "创建并切换", exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(dialog.getByRole("status")).toContainText(notices.auto);
+    await expect(dialog.getByRole("button", { name: notices.create, exact: true })).toBeInViewport({ ratio: 1 });
     await page.screenshot({ animations: "disabled", path: testInfo.outputPath(`workspace-auto-preview-${locale}.png`) });
     await dialog.getByLabel(locale === "en" ? "MCP permissions" : "MCP 权限", { exact: true }).selectOption("guarded");
+    await expect(dialog.getByRole("status")).toContainText(notices.guarded);
     await expect(dialog.getByText("Deployment host 1", { exact: true })).toBeVisible();
-    await expect(dialog.getByRole("button", { name: locale === "en" ? "Create and Switch" : "创建并切换", exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(dialog.getByRole("button", { name: notices.create, exact: true })).toBeInViewport({ ratio: 1 });
     await expect(dialog).toHaveCSS("opacity", "1");
     await page.screenshot({ animations: "disabled", path: testInfo.outputPath(`workspace-preview-${locale}.png`) });
+    await dialog.getByLabel(locale === "en" ? "MCP permissions" : "MCP 权限", { exact: true }).selectOption("full_access");
+    await expect(dialog.getByRole("status")).toContainText(notices.full);
+    await expect(dialog.getByRole("button", { name: notices.create, exact: true })).toBeInViewport({ ratio: 1 });
+    await page.screenshot({ animations: "disabled", path: testInfo.outputPath(`workspace-preview-full-${locale}.png`) });
+    await dialog.getByLabel(locale === "en" ? "MCP permissions" : "MCP 权限", { exact: true }).selectOption("read_only");
+    await expect(dialog.getByRole("status")).toHaveCount(0);
     await dialog.getByRole("button", { name: locale === "en" ? "Cancel" : "取消", exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await workspaceMenu.click();
@@ -82,14 +108,14 @@ for (const locale of ["en", "zh-CN"]) {
   test(`${locale}: imported MCP permissions can be changed independently in security settings`, async ({ page }, testInfo) => {
     await page.addInitScript((language) => localStorage.setItem("unfour.locale", language), locale);
     await page.setViewportSize({ width: 960, height: 600 });
-    const file = { content: "browser-only-fixture", preview: { name: "Imported project", environmentType: "dev", counts: {}, reconfigure: [] } };
+    const file = { content: "browser-only-fixture", preview: { name: "Imported project", environmentType: "prod", counts: {}, reconfigure: [] } };
     // Native import is covered by Rust tests. Here seed the browser store with the
     // selected policy so the actual switcher, cache and update commands are exercised.
     await page.route("**/packages/command-client/src/tauri/workspace.ts*", async (route) => {
       const response = await route.fetch();
       const source = await response.text();
       let body = source.replace('return call("workspace_bundle_pick");', `return Promise.resolve(${JSON.stringify(file)});`);
-      body = body.replace('return call("workspace_bundle_import", { content, name, options });', 'return createWorkspace(name, "dev", options.mcpPolicy ?? "disabled");');
+      body = body.replace('return call("workspace_bundle_import", { content, name, options });', 'return createWorkspace(name, "prod", options.mcpPolicy ?? "disabled");');
       expect(body).not.toBe(source);
       await route.fulfill({ response, body });
     });
@@ -109,28 +135,30 @@ for (const locale of ["en", "zh-CN"]) {
     const policy = dialog.getByLabel(locale === "en" ? "MCP permissions" : "MCP 权限", { exact: true });
     const environment = dialog.getByLabel(locale === "en" ? "Workspace environment type" : "工作区环境类型", { exact: true });
     await expect(policy).toHaveValue("disabled");
-    await environment.selectOption("prod");
+    await expect(environment).toHaveValue("prod");
+    await environment.selectOption("dev");
+    await expect(dialog.getByText(notices.savedProd, { exact: true })).toBeVisible();
     await policy.selectOption("auto");
-    await expect(dialog.getByRole("status")).toHaveText(locale === "en"
-      ? "When these settings are saved, PROD with Auto uses read-only MCP defaults. Write and execution actions are blocked."
-      : "这两项设置保存生效后，PROD + Auto 的 MCP 默认只读，写入和执行类操作会被拦截。");
+    await expect(dialog.getByRole("status")).toContainText(notices.auto);
+    await expect(dialog.getByRole("status")).toContainText(notices.policyContext);
     await policy.selectOption("guarded");
-    await expect(dialog.getByRole("status")).toContainText(locale === "en" ? "PROD with Guarded (guarded) overrides" : "PROD + 受保护 (guarded) 会覆盖");
+    await expect(dialog.getByRole("status")).toContainText(notices.guarded);
     await policy.selectOption("full_access");
-    await expect(dialog.getByRole("status")).toContainText(locale === "en" ? "PROD with Full access (full_access) overrides" : "PROD + 完全访问 (full_access) 会覆盖");
+    await expect(dialog.getByRole("status")).toContainText(notices.full);
     await expect(dialog.getByRole("button", { name: locale === "en" ? "Close" : "关闭", exact: true })).toBeInViewport({ ratio: 1 });
     await page.screenshot({ animations: "disabled", path: testInfo.outputPath(`workspace-prod-warning-${locale}.png`) });
     await dialog.getByRole("button", { name: locale === "en" ? "Save MCP permissions" : "保存 MCP 权限", exact: true }).click();
     await expect(dialog.getByText(locale === "en" ? "Saved permissions: Full access (full_access)" : "已保存权限：完全访问 (full_access)", { exact: true })).toBeVisible();
-    await expect(environment).toHaveValue("prod");
+    await expect(environment).toHaveValue("dev");
     await dialog.getByRole("button", { name: locale === "en" ? "Close" : "关闭", exact: true }).click();
     await workspaceMenu.click();
-    await expect(page.getByText("DEV", { exact: true }).last()).toBeVisible();
+    await expect(page.getByText("PROD", { exact: true }).last()).toBeVisible();
     await expect(page.getByText(locale === "en" ? "MCP: Full access" : "MCP：完全访问", { exact: true })).toBeVisible();
     await page.getByRole("menuitem", { name: locale === "en" ? "Workspace security settings" : "工作区安全设置", exact: true }).click();
-    await expect(environment).toHaveValue("dev");
+    await expect(environment).toHaveValue("prod");
     await environment.selectOption("test");
     await policy.selectOption("auto");
+    await expect(dialog.getByText(notices.savedAutoProd, { exact: true })).toBeVisible();
     await dialog.getByRole("button", { name: locale === "en" ? "Save environment" : "保存环境类型", exact: true }).click();
     await expect(dialog.getByText(locale === "en" ? "Auto currently resolves to Guarded (guarded) using the saved environment type." : "Auto 按已保存的环境类型实际生效为：受保护 (guarded)。", { exact: true })).toBeVisible();
     await expect(dialog.getByText(locale === "en" ? "Saved permissions: Full access (full_access)" : "已保存权限：完全访问 (full_access)", { exact: true })).toBeVisible();

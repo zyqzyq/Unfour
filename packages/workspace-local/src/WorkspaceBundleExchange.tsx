@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { exportWorkspaceBundle, importWorkspaceBundle, pickWorkspaceBundle, previewWorkspaceBundle, type Workspace, type WorkspaceBundleFile, type WorkspaceBundleOptions, type WorkspaceMcpPolicy } from "@unfour/command-client";
 import { Badge, Button, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Input, Select, useFeedback, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
 import { WorkspaceMcpPolicyField } from "./WorkspaceMcpPolicyField";
+import { WorkspaceMcpRiskNotice } from "./WorkspaceMcpRiskNotice";
 
 export function useWorkspaceBundleExchange(onImported: (id: string) => void) {
   const { t } = useI18n();
@@ -103,6 +104,7 @@ export function useWorkspaceBundleExchange(onImported: (id: string) => void) {
           <div className="mb-3 space-y-1.5">
             <WorkspaceMcpPolicyField disabled={busy} value={mcpPolicy} environmentType={preview.environmentType} environmentSource="import" onChange={setMcpPolicy} />
             <p className="text-xs text-[var(--u-color-text-muted)]">{t("workspaceBundle.mcpPolicyHint")}</p>
+            <WorkspaceMcpRiskNotice environmentType={preview.environmentType} policy={mcpPolicy} />
           </div>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">{Object.entries(preview.counts).map(([key, count]) => <div key={key} className="flex justify-between gap-2"><dt>{t(`workspaceBundle.counts.${key}`)}</dt><dd>{count}</dd></div>)}</dl>
           <p className="my-3 text-xs text-[var(--u-color-text-muted)]">{t("workspaceBundle.review")}</p>

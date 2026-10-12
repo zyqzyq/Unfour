@@ -270,11 +270,13 @@
         "thisWorkspace": "此工作区"
       },
       "environment": {
+        "current": "已保存环境：{environment}",
         "development": "开发",
         "hint": "仅当 MCP 权限为 Auto 时使用环境默认值：DEV → 完全访问，TEST → 受保护，PROD → 只读。",
         "label": "工作区环境类型",
-        "prodWarning": "这两项设置保存生效后，PROD + Auto 的 MCP 默认只读，写入和执行类操作会被拦截。",
-        "prodOverrideWarning": "这两项设置保存生效后，PROD + {policy} 会覆盖生产环境的默认保护，可能允许 Agent 修改真实资源。",
+        "prodWarning": "PROD + Auto 的 MCP 默认只读，写入和执行类操作会被拦截。",
+        "prodOverrideWarning": "PROD + {policy} 会覆盖生产环境的默认保护，可能允许 Agent 修改真实资源。",
+        "saveRiskContext": "保存环境类型时沿用已保存的 MCP 权限。",
         "production": "生产",
         "test": "测试 / 预发"
       },
@@ -282,6 +284,7 @@
       "mcp": {
         "label": "MCP 权限",
         "current": "已保存权限：{policy}",
+        "saveRiskContext": "保存 MCP 权限时沿用已保存的环境类型。",
         "autoSummary": "MCP：Auto → {policy}",
         "autoEffective": "Auto 按已保存的环境类型实际生效为：{policy}。",
         "autoRules": "Auto：DEV → 完全访问，TEST → 受保护，PROD → 只读。",

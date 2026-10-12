@@ -270,11 +270,13 @@
         "thisWorkspace": "this workspace"
       },
       "environment": {
+        "current": "Saved environment: {environment}",
         "development": "Development",
         "hint": "Environment defaults apply only when MCP permissions are Auto: DEV → full access, TEST → guarded, PROD → read-only.",
         "label": "Workspace environment type",
-        "prodWarning": "When these settings are saved, PROD with Auto uses read-only MCP defaults. Write and execution actions are blocked.",
-        "prodOverrideWarning": "When these settings are saved, PROD with {policy} overrides the production environment's default protection and may allow an Agent to modify real resources.",
+        "prodWarning": "PROD with Auto uses read-only MCP defaults. Write and execution actions are blocked.",
+        "prodOverrideWarning": "PROD with {policy} overrides the production environment's default protection and may allow an Agent to modify real resources.",
+        "saveRiskContext": "Saving the environment uses the saved MCP permissions.",
         "production": "Production",
         "test": "Test / Staging"
       },
@@ -282,6 +284,7 @@
       "mcp": {
         "label": "MCP permissions",
         "current": "Saved permissions: {policy}",
+        "saveRiskContext": "Saving MCP permissions uses the saved environment type.",
         "autoSummary": "MCP: Auto → {policy}",
         "autoEffective": "Auto currently resolves to {policy} using the saved environment type.",
         "autoRules": "Auto: DEV → full access, TEST → guarded, PROD → read-only.",

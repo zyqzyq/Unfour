@@ -39,6 +39,124 @@ beforeEach(() => {
   vi.mocked(exportWorkspaceBundle).mockResolvedValue({ saved: true });
   vi.mocked(previewWorkspaceBundle).mockResolvedValue(file.preview);
 });
+
+describe.each(["en", "zh-CN"] as const)("PROD import risk notices in %s", (locale) => {
+  const labels = locale === "en" ? {
+    policy: "MCP permissions", create: "Create and Switch", review: "Review Import", password: "Backup password",
+    auto: "PROD with Auto uses read-only MCP defaults. Write and execution actions are blocked.",
+    guarded: "PROD with Guarded (guarded) overrides the production environment's default protection and may allow an Agent to modify real resources.",
+    full: "PROD with Full access (full_access) overrides the production environment's default protection and may allow an Agent to modify real resources.",
+  } : {
+    policy: "MCP 权限", create: "创建并切换", review: "预览导入内容", password: "备份密码",
+    auto: "PROD + Auto 的 MCP 默认只读，写入和执行类操作会被拦截。",
+    guarded: "PROD + 受保护 (guarded) 会覆盖生产环境的默认保护，可能允许 Agent 修改真实资源。",
+    full: "PROD + 完全访问 (full_access) 会覆盖生产环境的默认保护，可能允许 Agent 修改真实资源。",
+  };
+  const prodFile = {
+    ...file,
+    content: JSON.stringify({ workspace: { environmentType: "prod", mcpPolicy: "full_access" } }),
+    preview: { ...file.preview, environmentType: "prod" as const },
+  };
+  const workspace: Workspace = {
+    id: "prod-copy", name: "PROD copy", environmentType: "prod", mcpPolicy: "disabled",
+    isDefault: false, lastOpenedAt: null, deletedAt: null, createdAt: "", updatedAt: "", revision: 1,
+  };
+
+  it.each(["guarded", "full_access"] as const)("warns before importing with explicit %s, preserves the warning on failure and resets the next import", async (mcpPolicy) => {
+    const { imported } = mount(locale);
+    vi.mocked(pickWorkspaceBundle).mockResolvedValue(prodFile);
+    fireEvent.click(screen.getByText("Pick file"));
+    const policy = await screen.findByLabelText(labels.policy);
+    expect(policy).toHaveValue("disabled");
+    expect(screen.queryByRole("status")).toBeNull();
+    fireEvent.change(policy, { target: { value: mcpPolicy } });
+    const warning = mcpPolicy === "guarded" ? labels.guarded : labels.full;
+    expect(screen.getByRole("status")).toHaveTextContent(warning);
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(importWorkspaceBundle).not.toHaveBeenCalled();
+
+    vi.mocked(importWorkspaceBundle).mockRejectedValueOnce(new Error("WORKSPACE_BUNDLE_UNLOCK_FAILED"));
+    fireEvent.click(screen.getByRole("button", { name: labels.create }));
+    await screen.findByRole("alert");
+    await waitFor(() => expect(screen.getByRole("button", { name: labels.create })).not.toBeDisabled());
+    expect(policy).toHaveValue(mcpPolicy);
+    expect(screen.getByRole("status")).toHaveTextContent(warning);
+    expect(imported).not.toHaveBeenCalled();
+    vi.mocked(importWorkspaceBundle).mockResolvedValue({ ...workspace, mcpPolicy });
+    fireEvent.click(screen.getByRole("button", { name: labels.create }));
+    await waitFor(() => expect(imported).toHaveBeenCalledExactlyOnceWith(workspace.id));
+    expect(importWorkspaceBundle).toHaveBeenCalledTimes(2);
+    expect(importWorkspaceBundle).toHaveBeenLastCalledWith(prodFile.content, prodFile.preview.name, { mcpPolicy });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(screen.getByText("Pick file"));
+    expect(await screen.findByLabelText(labels.policy)).toHaveValue("disabled");
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("imports PROD as disabled when no local permission override is selected", async () => {
+    const { imported } = mount(locale);
+    vi.mocked(pickWorkspaceBundle).mockResolvedValue(prodFile);
+    vi.mocked(importWorkspaceBundle).mockResolvedValue(workspace);
+    fireEvent.click(screen.getByText("Pick file"));
+    expect(await screen.findByLabelText(labels.policy)).toHaveValue("disabled");
+    expect(screen.queryByRole("status")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: labels.create }));
+    await waitFor(() => expect(imported).toHaveBeenCalledWith(workspace.id));
+    expect(importWorkspaceBundle).toHaveBeenCalledExactlyOnceWith(prodFile.content, prodFile.preview.name, { mcpPolicy: "disabled" });
+  });
+
+  it("updates the PROD notice when the local selection changes", async () => {
+    mount(locale);
+    vi.mocked(pickWorkspaceBundle).mockResolvedValue(prodFile);
+    fireEvent.click(screen.getByText("Pick file"));
+    const policy = await screen.findByLabelText(labels.policy);
+    for (const [value, warning] of [["guarded", labels.guarded], ["full_access", labels.full], ["auto", labels.auto]]) {
+      fireEvent.change(policy, { target: { value } });
+      expect(screen.getByRole("status")).toHaveTextContent(warning);
+    }
+    for (const value of ["read_only", "disabled"]) {
+      fireEvent.change(policy, { target: { value } });
+      expect(screen.queryByRole("status")).toBeNull();
+    }
+    expect(importWorkspaceBundle).not.toHaveBeenCalled();
+  });
+
+  it.each(["dev", "test"] as const)("does not show a PROD notice for %s imports", async (environmentType) => {
+    mount(locale);
+    vi.mocked(pickWorkspaceBundle).mockResolvedValue({ ...file, preview: { ...file.preview, environmentType } });
+    fireEvent.click(screen.getByText("Pick file"));
+    const policy = await screen.findByLabelText(labels.policy);
+    for (const value of ["guarded", "full_access", "auto", "read_only", "disabled"]) {
+      fireEvent.change(policy, { target: { value } });
+      expect(screen.queryByRole("status")).toBeNull();
+    }
+    expect(importWorkspaceBundle).not.toHaveBeenCalled();
+  });
+
+  it("uses the latest decrypted preview for the notice and keeps review required after a password change", async () => {
+    mount(locale);
+    vi.mocked(pickWorkspaceBundle).mockResolvedValue({ content: "encrypted-content", encrypted: true, preview: null });
+    vi.mocked(previewWorkspaceBundle).mockResolvedValue({ ...file.preview, environmentType: "prod" });
+    fireEvent.click(screen.getByText("Pick file"));
+    fireEvent.change(await screen.findByLabelText(labels.password), { target: { value: "test-backup-password" } });
+    fireEvent.click(screen.getByRole("button", { name: labels.review }));
+    fireEvent.change(await screen.findByLabelText(labels.policy), { target: { value: "guarded" } });
+    expect(screen.getByRole("status")).toHaveTextContent(labels.guarded);
+
+    vi.mocked(previewWorkspaceBundle).mockResolvedValue({ ...file.preview, environmentType: "test" });
+    fireEvent.change(screen.getByLabelText(labels.password), { target: { value: "another-password" } });
+    expect(screen.queryByRole("button", { name: labels.create })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: labels.review }));
+    await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
+    expect(screen.getByLabelText(labels.policy)).toHaveValue("guarded");
+
+    vi.mocked(previewWorkspaceBundle).mockResolvedValue({ ...file.preview, environmentType: "prod" });
+    fireEvent.change(screen.getByLabelText(labels.password), { target: { value: "test-backup-password" } });
+    fireEvent.click(screen.getByRole("button", { name: labels.review }));
+    expect(await screen.findByRole("status")).toHaveTextContent(labels.guarded);
+    expect(importWorkspaceBundle).not.toHaveBeenCalled();
+  });
+});
 describe("Workspace bundle exchange", () => {
   describe.each(["en", "zh-CN"] as const)("Auto import preview in %s", (locale) => {
     it.each([

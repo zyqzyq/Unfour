@@ -72,3 +72,42 @@ with native file dialogs and the real OS credential store was **NOT VERIFIED**.
 Builds retain existing warnings for the default test release channel, unused SSH
 tracker `reset`, and large frontend chunks. These did not fail the affected
 checks. This record makes no platform packaging or live-service readiness claim.
+
+## PROD risk notice regressions — 2026-10-12
+
+The two independent security saves now preview their actual combinations:
+environment draft + saved policy, and saved environment + policy draft.
+The saved environment is displayed separately, and each notice explains which
+saved counterpart the action preserves. This also fixes the reverse bypass:
+drafting disabled/read-only permissions cannot hide the risk of saving PROD
+while guarded/full access remains persisted. The small workspace-local
+`WorkspaceMcpRiskNotice` component supplies the same PROD rules and localized
+message to security settings and bundle import. Import still starts disabled,
+ignores permission fields in the file, and keeps its existing review flow.
+Auto resolution, backend authorization and persistent schemas are unchanged.
+
+Changed files: `WorkspaceSecurityDialog.tsx`, `WorkspaceBundleExchange.tsx`,
+the new `WorkspaceMcpRiskNotice.tsx` and the two adjacent component test files;
+`packages/ui/src/i18n/locales/{en,zh-CN}.json`;
+`apps/desktop/tests/smoke/workspace-bundle.spec.ts`; this verification record.
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Targeted Vitest: both workspace-local component suites, workspace-core MCP policy, UI i18n helpers/provider, WorkspaceMenu and DesktopApp smoke | PASS, 86 tests / 7 files | English/Chinese independent saves, unsaved counterpart drafts, dynamic warnings before/after success, both save failure/retry paths, PROD import defaults/overrides/reset/retry, refreshed encrypted preview, unchanged Auto rules and shell integration |
+| `pnpm exec playwright test apps/desktop/tests/smoke/workspace-bundle.spec.ts` | PASS, 4 tests | English/Chinese at 960×600: PROD import Auto/guarded/full access notices, read-only dismissal, saved PROD with an unsaved DEV environment and permission-only save, reopening and independent environment save; screenshots inspected |
+| ESLint on all six changed TypeScript/TSX source and test files, with `--max-warnings 0` | PASS, zero warnings | No thresholds or exclusions changed |
+| `pnpm --filter @unfour/desktop exec tsc --noEmit` | PASS | Desktop and imported workspace components |
+| `pnpm run build` | PASS | Production frontend build; only the existing >500 kB chunk advisory remains. A comparison build loaded the original four production files from HEAD without replacing working-tree files and reproduced that advisory (747.32 kB baseline / 748.12 kB after fix) |
+| `git diff --check` | PASS | Scoped diff and whitespace |
+
+One initial Chinese browser-button lookup in a component test used the wrong
+label; it was corrected and the final suite passed. Added browser assertions
+initially exceeded the test complexity warning threshold; shared expected
+localized strings removed that duplication, and final Lint passed with zero
+warnings. The first browser run also reported conflicting terminal color
+environment variables; the final run removed `NO_COLOR` while retaining
+Playwright's `FORCE_COLOR` and emitted no warning.
+
+Native Tauri file dialogs/credential-store behavior and live Agent operations
+were **NOT VERIFIED** in this UI-only follow-up. Component and browser tests
+mock native import/file selection; no Rust or backend semantics were modified.

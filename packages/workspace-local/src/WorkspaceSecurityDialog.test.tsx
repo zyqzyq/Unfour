@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { updateWorkspaceEnvironment, updateWorkspaceMcpPolicy, type Workspace, type WorkspaceState } from "@unfour/command-client";
 import { I18nProvider, type Locale } from "@unfour/ui";
@@ -23,28 +23,25 @@ beforeEach(() => vi.resetAllMocks());
 afterEach(cleanup);
 
 describe("Workspace security settings", () => {
-  it.each(["en", "zh-CN"] as const)("updates PROD safety reminders with the environment and policy drafts in %s", (locale) => {
+  it.each(["en", "zh-CN"] as const)("previews environment saves using the saved policy rather than its draft in %s", (locale) => {
     mount({ ...imported, mcpPolicy: "auto" }, locale);
     const environment = screen.getByLabelText(locale === "en" ? "Workspace environment type" : "工作区环境类型");
     const policy = screen.getByLabelText(locale === "en" ? "MCP permissions" : "MCP 权限");
+    const environmentForm = within(environment.closest("form")!);
+    const policyForm = within(policy.closest("form")!);
     const autoWarning = locale === "en"
-      ? "When these settings are saved, PROD with Auto uses read-only MCP defaults. Write and execution actions are blocked."
-      : "这两项设置保存生效后，PROD + Auto 的 MCP 默认只读，写入和执行类操作会被拦截。";
+      ? "PROD with Auto uses read-only MCP defaults. Write and execution actions are blocked."
+      : "PROD + Auto 的 MCP 默认只读，写入和执行类操作会被拦截。";
     expect(screen.queryByRole("status")).toBeNull();
     fireEvent.change(environment, { target: { value: "prod" } });
-    expect(screen.getByRole("status")).toHaveTextContent(autoWarning);
-    for (const [value, en, zh] of [["guarded", "Guarded (guarded)", "受保护 (guarded)"], ["full_access", "Full access (full_access)", "完全访问 (full_access)"]]) {
+    expect(environmentForm.getByRole("status")).toHaveTextContent(autoWarning);
+    expect(environmentForm.getByRole("status")).toHaveTextContent(locale === "en"
+      ? "Saving the environment uses the saved MCP permissions."
+      : "保存环境类型时沿用已保存的 MCP 权限。");
+    for (const value of ["guarded", "full_access", "auto", "disabled", "read_only"]) {
       fireEvent.change(policy, { target: { value } });
-      expect(screen.getByRole("status")).toHaveTextContent(locale === "en"
-        ? `When these settings are saved, PROD with ${en} overrides the production environment's default protection and may allow an Agent to modify real resources.`
-        : `这两项设置保存生效后，PROD + ${zh} 会覆盖生产环境的默认保护，可能允许 Agent 修改真实资源。`);
-      expect(screen.queryByText(autoWarning)).toBeNull();
-    }
-    fireEvent.change(policy, { target: { value: "auto" } });
-    expect(screen.getByRole("status")).toHaveTextContent(autoWarning);
-    for (const value of ["disabled", "read_only"]) {
-      fireEvent.change(policy, { target: { value } });
-      expect(screen.queryByRole("status")).toBeNull();
+      expect(environmentForm.getByRole("status")).toHaveTextContent(autoWarning);
+      expect(policyForm.queryByRole("status")).toBeNull();
     }
     fireEvent.change(policy, { target: { value: "guarded" } });
     for (const value of ["test", "dev"]) {
@@ -58,8 +55,10 @@ describe("Workspace security settings", () => {
 
   it.each(["guarded", "full_access"] as const)("warns immediately for saved PROD with %s", (mcpPolicy) => {
     mount({ ...imported, environmentType: "prod", mcpPolicy });
-    expect(screen.getByRole("status")).toHaveTextContent("overrides the production environment's default protection");
-    expect(screen.getByRole("status")).toHaveTextContent("may allow an Agent to modify real resources");
+    for (const notice of screen.getAllByRole("status")) {
+      expect(notice).toHaveTextContent("overrides the production environment's default protection");
+      expect(notice).toHaveTextContent("may allow an Agent to modify real resources");
+    }
     expect(screen.getByRole("button", { name: "Save MCP permissions" })).toBeDisabled();
   });
 
@@ -145,5 +144,142 @@ describe("Workspace security settings", () => {
     expect(close).not.toHaveBeenCalled();
     finish({ ...imported, mcpPolicy: "guarded" });
     await waitFor(() => expect(screen.getByRole("button", { name: "Close" })).not.toBeDisabled());
+  });
+});
+
+describe.each(["en", "zh-CN"] as const)("Independent security save risk previews in %s", (locale) => {
+  const labels = locale === "en" ? {
+    environment: "Workspace environment type", policy: "MCP permissions",
+    saveEnvironment: "Save environment", savePolicy: "Save MCP permissions",
+    savedProd: "Saved environment: PROD", savedDev: "Saved environment: DEV",
+    savedDisabled: "Saved permissions: Disabled (disabled)", savedFull: "Saved permissions: Full access (full_access)",
+    policyContext: "Saving MCP permissions uses the saved environment type.",
+    auto: "PROD with Auto uses read-only MCP defaults.",
+    guarded: "PROD with Guarded (guarded) overrides the production environment's default protection",
+    full: "PROD with Full access (full_access) overrides the production environment's default protection",
+  } : {
+    environment: "工作区环境类型", policy: "MCP 权限",
+    saveEnvironment: "保存环境类型", savePolicy: "保存 MCP 权限",
+    savedProd: "已保存环境：PROD", savedDev: "已保存环境：DEV",
+    savedDisabled: "已保存权限：禁用 (disabled)", savedFull: "已保存权限：完全访问 (full_access)",
+    policyContext: "保存 MCP 权限时沿用已保存的环境类型。",
+    auto: "PROD + Auto 的 MCP 默认只读",
+    guarded: "PROD + 受保护 (guarded) 会覆盖生产环境的默认保护",
+    full: "PROD + 完全访问 (full_access) 会覆盖生产环境的默认保护",
+  };
+
+  it("warns for a permission-only save on saved PROD even with an unsaved DEV or TEST environment", async () => {
+    const workspace = { ...imported, environmentType: "prod" as const };
+    const { client, close } = mount(workspace, locale);
+    const environment = screen.getByLabelText(labels.environment);
+    const policy = screen.getByLabelText(labels.policy);
+    const environmentForm = within(environment.closest("form")!);
+    const policyForm = within(policy.closest("form")!);
+    for (const draft of ["test", "dev"]) {
+      fireEvent.change(environment, { target: { value: draft } });
+      for (const [value, warning] of [["guarded", labels.guarded], ["full_access", labels.full], ["auto", labels.auto]]) {
+        fireEvent.change(policy, { target: { value } });
+        expect(policyForm.getByRole("status")).toHaveTextContent(warning);
+        expect(policyForm.getByRole("status")).toHaveTextContent(labels.policyContext);
+        expect(environmentForm.queryByRole("status")).toBeNull();
+      }
+      for (const value of ["disabled", "read_only"]) {
+        fireEvent.change(policy, { target: { value } });
+        expect(screen.queryByRole("status")).toBeNull();
+      }
+    }
+    expect(screen.getByText(labels.savedProd)).toBeTruthy();
+    expect(screen.getByText(labels.savedDisabled)).toBeTruthy();
+    fireEvent.change(policy, { target: { value: "full_access" } });
+    vi.mocked(updateWorkspaceMcpPolicy).mockResolvedValue({ ...workspace, mcpPolicy: "full_access", revision: 2 });
+    fireEvent.click(screen.getByRole("button", { name: labels.savePolicy }));
+    await waitFor(() => expect(screen.getByText(labels.savedFull)).toBeTruthy());
+    expect(policyForm.getByRole("status")).toHaveTextContent(labels.full);
+    expect(environment).toHaveValue("dev");
+    expect(updateWorkspaceMcpPolicy).toHaveBeenCalledExactlyOnceWith(workspace.id, "full_access");
+    expect(updateWorkspaceEnvironment).not.toHaveBeenCalled();
+    expect(client.getQueryData<WorkspaceState>(["workspaces"])?.workspaces[0]).toMatchObject({ environmentType: "prod", mcpPolicy: "full_access" });
+    expect(close).not.toHaveBeenCalled();
+
+    vi.mocked(updateWorkspaceEnvironment).mockResolvedValue({ ...workspace, environmentType: "dev", mcpPolicy: "full_access", revision: 3 });
+    fireEvent.click(screen.getByRole("button", { name: labels.saveEnvironment }));
+    await waitFor(() => expect(screen.getByText(labels.savedDev)).toBeTruthy());
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(policy).toHaveValue("full_access");
+  });
+
+  it("warns for an environment-only save using saved full access even with a safer permission draft, including retry", async () => {
+    const workspace = { ...imported, mcpPolicy: "full_access" as const };
+    const { client } = mount(workspace, locale);
+    const environment = screen.getByLabelText(labels.environment);
+    const policy = screen.getByLabelText(labels.policy);
+    const environmentForm = within(environment.closest("form")!);
+    const policyForm = within(policy.closest("form")!);
+    fireEvent.change(environment, { target: { value: "prod" } });
+    for (const value of ["disabled", "read_only", "auto"]) {
+      fireEvent.change(policy, { target: { value } });
+      expect(environmentForm.getByRole("status")).toHaveTextContent(labels.full);
+      expect(policyForm.queryByRole("status")).toBeNull();
+    }
+    vi.mocked(updateWorkspaceEnvironment).mockRejectedValueOnce(new Error("disk write failed"));
+    fireEvent.click(screen.getByRole("button", { name: labels.saveEnvironment }));
+    await screen.findByRole("alert");
+    expect(environmentForm.getByRole("status")).toHaveTextContent(labels.full);
+    expect(policyForm.queryByRole("status")).toBeNull();
+    expect(client.getQueryData<WorkspaceState>(["workspaces"])?.workspaces[0]).toEqual(workspace);
+
+    vi.mocked(updateWorkspaceEnvironment).mockResolvedValue({ ...workspace, environmentType: "prod", revision: 2 });
+    fireEvent.click(screen.getByRole("button", { name: labels.saveEnvironment }));
+    await waitFor(() => expect(screen.getByText(labels.savedProd)).toBeTruthy());
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(environmentForm.getByRole("status")).toHaveTextContent(labels.full);
+    expect(policyForm.getByRole("status")).toHaveTextContent(labels.auto);
+    expect(policy).toHaveValue("auto");
+    expect(updateWorkspaceEnvironment).toHaveBeenCalledTimes(2);
+    expect(updateWorkspaceEnvironment).toHaveBeenLastCalledWith(workspace.id, "prod");
+    expect(updateWorkspaceMcpPolicy).not.toHaveBeenCalled();
+    expect(client.getQueryData<WorkspaceState>(["workspaces"])?.workspaces[0]).toMatchObject({ environmentType: "prod", mcpPolicy: "full_access" });
+    fireEvent.change(policy, { target: { value: "disabled" } });
+    expect(policyForm.queryByRole("status")).toBeNull();
+    expect(environmentForm.getByRole("status")).toHaveTextContent(labels.full);
+  });
+
+  it("changes the environment risk preview only after a permission save succeeds, retaining the draft on failure", async () => {
+    const workspace = { ...imported, mcpPolicy: "guarded" as const };
+    const { client } = mount(workspace, locale);
+    fireEvent.change(screen.getByLabelText(labels.environment), { target: { value: "prod" } });
+    fireEvent.change(screen.getByLabelText(labels.policy), { target: { value: "disabled" } });
+    expect(screen.getByRole("status")).toHaveTextContent(labels.guarded);
+    vi.mocked(updateWorkspaceMcpPolicy).mockRejectedValueOnce(new Error("disk write failed"));
+    fireEvent.click(screen.getByRole("button", { name: labels.savePolicy }));
+    await screen.findByRole("alert");
+    expect(screen.getByRole("status")).toHaveTextContent(labels.guarded);
+    expect(screen.getByLabelText(labels.policy)).toHaveValue("disabled");
+    expect(client.getQueryData<WorkspaceState>(["workspaces"])?.workspaces[0]).toEqual(workspace);
+
+    vi.mocked(updateWorkspaceMcpPolicy).mockResolvedValue({ ...workspace, mcpPolicy: "disabled", revision: 2 });
+    fireEvent.click(screen.getByRole("button", { name: labels.savePolicy }));
+    await waitFor(() => expect(screen.getByText(labels.savedDisabled)).toBeTruthy());
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByLabelText(labels.environment)).toHaveValue("prod");
+    expect(screen.getByText(labels.savedDev)).toBeTruthy();
+    expect(updateWorkspaceMcpPolicy).toHaveBeenCalledTimes(2);
+    expect(updateWorkspaceEnvironment).not.toHaveBeenCalled();
+  });
+
+  it("warns for a pending permission override only after the independently saved environment becomes PROD", async () => {
+    mount(imported, locale);
+    fireEvent.change(screen.getByLabelText(labels.environment), { target: { value: "prod" } });
+    fireEvent.change(screen.getByLabelText(labels.policy), { target: { value: "guarded" } });
+    expect(screen.queryByRole("status")).toBeNull();
+    vi.mocked(updateWorkspaceEnvironment).mockResolvedValue({ ...imported, environmentType: "prod", revision: 2 });
+    fireEvent.click(screen.getByRole("button", { name: labels.saveEnvironment }));
+    await waitFor(() => expect(screen.getByText(labels.savedProd)).toBeTruthy());
+    expect(screen.getByRole("status")).toHaveTextContent(labels.guarded);
+    expect(screen.getByRole("status")).toHaveTextContent(labels.policyContext);
+    expect(screen.getByText(labels.savedDisabled)).toBeTruthy();
+    expect(screen.getByLabelText(labels.policy)).toHaveValue("guarded");
+    expect(updateWorkspaceMcpPolicy).not.toHaveBeenCalled();
   });
 });
