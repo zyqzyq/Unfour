@@ -1512,6 +1512,7 @@
     },
     "title": "Flow",
     "new": "新建 Flow",
+    "empty": "还没有 Flow，点击 + 新建。",
     "loading": "加载中…",
     "loadFailed": "无法加载 Flow 资源或运行记录。",
     "selectFlow": "从侧栏选择或新建 Flow。",

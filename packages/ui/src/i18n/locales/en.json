@@ -1514,6 +1514,7 @@
     },
     "title": "Flow",
     "new": "New Flow",
+    "empty": "No Flows yet. Use + to create one.",
     "loading": "Loading…",
     "loadFailed": "Unable to load Flow resources or history.",
     "selectFlow": "Select a Flow or create one in the sidebar.",

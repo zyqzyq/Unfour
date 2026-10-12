@@ -6,7 +6,7 @@ import {
   useFeedback,
   useFeedbackErrorHandler,
   useI18n,
-  Button, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Button, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle, IconButton,
 } from "@unfour/ui";
 
 export function ApiCollectionToolbarActions({
@@ -57,16 +57,14 @@ export function ApiCollectionToolbarActions({
 
   return (
     <div className="flex items-center gap-0.5">
-      <button
-        aria-label={t("api.collection.import")}
-        className="grid h-6 w-6 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] transition-colors hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]"
+      <IconButton
+        label={t("api.collection.import")}
+        size="compact"
         disabled={importMutation.isPending || previewMutation.isPending}
         onClick={() => previewMutation.mutate()}
-        title={t("api.collection.import")}
-        type="button"
       >
         <Upload size={14} />
-      </button>
+      </IconButton>
       <Dialog open={pending !== null} onOpenChange={(open) => !open && !importMutation.isPending && setPending(null)}>
         <DialogContent title={t("exchange.preview")}>
           <DialogHeader><DialogTitle>{t("exchange.preview")}</DialogTitle></DialogHeader>
@@ -85,16 +83,14 @@ export function ApiCollectionToolbarActions({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <button
-        aria-label={t("api.collection.new")}
-        className="grid h-6 w-6 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] transition-colors hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]"
+      <IconButton
+        label={t("api.collection.new")}
+        size="compact"
         disabled={createPending}
         onClick={onCreate}
-        title={t("api.collection.new")}
-        type="button"
       >
         <Plus size={14} />
-      </button>
+      </IconButton>
     </div>
   );
 }

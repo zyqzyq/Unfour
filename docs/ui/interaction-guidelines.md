@@ -55,6 +55,10 @@ Global Toolbar
 - Context-menu actions and row action buttons should call the same business
   handlers.
 - Do not embed full forms inside tree rows.
+- Place resource creation in the sidebar section header as a compact shared
+  icon button with a `Plus` icon, localized accessible label, and tooltip.
+  Keep the header visible while the resource list scrolls. Empty states may
+  also offer a labeled creation action.
 
 Keyboard expectations:
 

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Loader2, X } from "lucide-react";
+import { Loader2, Plus, X } from "lucide-react";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -142,7 +142,7 @@ export function ApiRequestTabs({
         title={t("common.actions.newRequest")}
         type="button"
       >
-        +
+        <Plus size={14} />
       </button>
       <div className="min-w-0 flex-1" />
       {endControl && (

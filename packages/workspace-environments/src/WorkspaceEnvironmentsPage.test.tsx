@@ -225,7 +225,7 @@ describe("WorkspaceEnvironmentsPage", () => {
   it("creates an environment from the workspace manager", async () => {
     renderPage();
     await screen.findByRole("heading", { name: "Local" });
-    fireEvent.click(screen.getByRole("button", { name: "New" }));
+    fireEvent.click(screen.getByRole("button", { name: "New variable environment" }));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "QA" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 

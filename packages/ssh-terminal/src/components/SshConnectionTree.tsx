@@ -373,8 +373,8 @@ export function SshConnectionTree({
   });
 
   return (
-    <SidebarSection>
-      <div className="flex h-7 items-center justify-between gap-2 px-1">
+    <SidebarSection className="flex h-full min-h-0 flex-col">
+      <div className="flex h-7 shrink-0 items-center justify-between gap-2 px-1">
         <SshSidebarModeSwitcher
           activeMode="connections"
           onChange={(mode) => mode === "tasks" && onOpenTasks?.()}
@@ -391,6 +391,7 @@ export function SshConnectionTree({
       </div>
       {connections.length ? (
         <TreeView
+          className="min-h-0 flex-1 overflow-y-auto"
           items={connectionItems}
           onActivate={(item) => {
             const connection = connections.find((candidate) => candidate.id === item.id);

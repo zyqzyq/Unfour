@@ -42,8 +42,8 @@ function WorkspaceFlowPage({ workspaceId, onSidebarContentChange }: FlowPageProp
   }, [busy, dirty, resetSelection, setPendingSelection]);
   const { data: definitions, isPending, isError, refetch } = data.flows;
   const sidebar = useMemo(() => (
-    <FlowSidebar workspaceId={workspaceId} definitions={definitions} pending={isPending} failed={isError} retry={refetch} selectedFlowId={draft?.id} select={select} />
-  ), [workspaceId, definitions, isPending, isError, refetch, draft?.id, select]);
+    <FlowSidebar workspaceId={workspaceId} definitions={definitions} pending={isPending} failed={isError} busy={busy} retry={refetch} selectedFlowId={draft?.id} select={select} />
+  ), [workspaceId, definitions, isPending, isError, busy, refetch, draft?.id, select]);
   useEffect(() => {
     onSidebarContentChange(sidebar);
     return () => onSidebarContentChange(null);

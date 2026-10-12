@@ -6,7 +6,6 @@ import type {
   WorkspaceVariable,
 } from "@unfour/command-client";
 import {
-  Button,
   cn,
   ConfirmDialog,
   DropdownMenu,
@@ -251,16 +250,14 @@ function EnvironmentList({
         <span className="text-[11px] font-semibold uppercase text-[var(--u-color-text-soft)]">
           {t("variables.environmentsGroup")}
         </span>
-        <Button
+        <IconButton
           disabled={creating}
+          label={t("variables.newEnvironment")}
           onClick={onCreate}
-          size="sm"
-          type="button"
-          variant="ghost"
+          size="compact"
         >
-          <Plus size={13} />
-          {t("variables.new")}
-        </Button>
+          <Plus size={14} />
+        </IconButton>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         {isLoading ? (

@@ -314,10 +314,36 @@ it("cannot switch definitions while a save is pending", async () => {
   mount();
   fireEvent.click(await screen.findByText("Release"));
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(screen.getByRole("button", { name: "New Flow" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Other" })).toBeDisabled();
   fireEvent.click(screen.getByText("Other"));
   expect(screen.getByLabelText("Flow name")).toHaveValue("Release");
   finishSave(flow);
   await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeEnabled());
+  expect(screen.getByRole("button", { name: "New Flow" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Other" })).toBeEnabled();
+});
+
+it("selects Flows by keyboard and keeps the dirty-draft confirmation", async () => {
+  vi.mocked(commands.listFlows).mockResolvedValue([flow, { ...flow, id: "other", name: "Other" }]);
+  mount();
+  await screen.findByText("Release");
+  const [first, second] = screen.getAllByRole("treeitem");
+  act(() => first.focus());
+  fireEvent.keyDown(first, { key: "ArrowDown" });
+  expect(second).toHaveFocus();
+  fireEvent.keyDown(second, { key: "Enter" });
+  expect(screen.getByLabelText("Flow name")).toHaveValue("Other");
+  expect(second).toHaveAttribute("aria-selected", "true");
+  fireEvent.change(screen.getByLabelText("Flow name"), { target: { value: "Unsaved draft" } });
+  fireEvent.keyDown(second, { key: "Home" });
+  fireEvent.keyDown(first, { key: "Enter" });
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Cancel" }));
+  expect(screen.getByLabelText("Flow name")).toHaveValue("Unsaved draft");
+  fireEvent.keyDown(first, { key: "Enter" });
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Discard" }));
+  expect(screen.getByLabelText("Flow name")).toHaveValue("Release");
+  expect(first).toHaveAttribute("aria-selected", "true");
 });
 
 it("shows persisted latest result, error, attempts and next check", async () => {
