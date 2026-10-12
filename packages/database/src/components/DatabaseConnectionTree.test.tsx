@@ -282,3 +282,62 @@ it("places saved queries under their database and starts queries with that catal
   fireEvent.click(await screen.findByRole("menuitem", { name: "New Query" }));
   expect(onNewQuery).toHaveBeenCalledWith(server, "analytics");
 });
+
+describe("DatabaseConnectionTree lazy catalog interactions", () => {
+  const server = { ...sqliteConnection, driver: "postgres", database: "app" };
+
+  it("routes expansion without selection and preserves a manually collapsed catalog after refresh", () => {
+    const onToggleCatalog = vi.fn();
+    const onSelectConnection = vi.fn();
+    const props = {
+      connections: [server], connectionStates: connectedState,
+      catalogNamesByConnection: { "conn-1": ["app", "reporting"] },
+      onToggleCatalog, onSelectConnection, selectedConnectionId: "conn-1",
+    };
+    const view = render(<DatabaseConnectionTree {...props} />);
+    const row = screen.getByRole("button", { name: "reporting" }).closest("[role=treeitem]") as HTMLElement;
+    fireEvent.click(within(row).getByRole("button", { name: "Expand" }));
+    expect(onToggleCatalog).toHaveBeenCalledExactlyOnceWith("conn-1", "reporting");
+    expect(onSelectConnection).not.toHaveBeenCalled();
+    expect(screen.getByText("Expand to load")).toBeInTheDocument();
+
+    view.rerender(<DatabaseConnectionTree {...props} loadingKeys={["conn-1::reporting"]} />);
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    view.rerender(<DatabaseConnectionTree {...props} loadErrors={{ "conn-1::reporting": "Fixture unavailable" }} />);
+    expect(screen.getByText("Fixture unavailable")).toBeInTheDocument();
+    fireEvent.click(within(row).getByRole("button", { name: "Collapse" }));
+    expect(onToggleCatalog).toHaveBeenCalledTimes(1);
+
+    view.rerender(<DatabaseConnectionTree {...props} schemaCache={{
+      "conn-1::reporting": { connectionId: "conn-1", tables: [{ ...usersTable, catalog: "reporting" }] },
+    }} />);
+    expect(row).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: "users" })).not.toBeInTheDocument();
+    fireEvent.click(within(row).getByRole("button", { name: "Expand" }));
+    expect(screen.getByRole("button", { name: "users" })).toBeInTheDocument();
+  });
+
+  it("preserves schema grouping, stable table IDs, and select versus activate semantics", () => {
+    const table = { ...usersTable, catalog: "app", schema: "public" };
+    const viewTable = { ...table, name: "active_users", kind: "MATERIALIZED VIEW" };
+    const onSelectTable = vi.fn();
+    const onPreviewTable = vi.fn();
+    renderTree({ connections: [server], connectionStates: connectedState,
+      catalogNamesByConnection: { "conn-1": ["app"] },
+      schemaCache: { "conn-1::app": { connectionId: "conn-1", tables: [table, viewTable] } },
+      onSelectTable, onPreviewTable,
+    });
+    expect(screen.getByRole("button", { name: "public" })).toBeInTheDocument();
+    const button = screen.getByRole("button", { name: "users" });
+    expect(button.closest("[role=treeitem]")).toHaveAttribute("data-tree-id", "conn-1:table:app:public:users");
+    fireEvent.click(button);
+    expect(onSelectTable).toHaveBeenCalledExactlyOnceWith("conn-1", table);
+    expect(onPreviewTable).not.toHaveBeenCalled();
+    fireEvent.doubleClick(button);
+    expect(onPreviewTable).toHaveBeenCalledExactlyOnceWith("conn-1", table);
+    expect(screen.queryByRole("button", { name: "active_users" })).not.toBeInTheDocument();
+    const views = screen.getByRole("button", { name: "Views" }).closest("[role=treeitem]") as HTMLElement;
+    fireEvent.click(within(views).getByRole("button", { name: "Expand" }));
+    expect(screen.getByRole("button", { name: "active_users" })).toBeInTheDocument();
+  });
+});
