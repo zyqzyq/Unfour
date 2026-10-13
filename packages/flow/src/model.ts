@@ -3,17 +3,10 @@ import type {
   FlowCapability,
   FlowPredicate,
   FlowStep,
-  FlowDefinition,
   FlowInputDefinition,
 } from "@unfour/command-client";
-import { sqlProblem } from "./actionAuthoring";
-import type { SshTaskDetail } from "@unfour/command-client";
-export type Resources = {
-  api: { id: string; name: string; url?: string; authJson?: string; headersJson?: string; queryJson?: string; body?: string | null; method?: string; bodyKind?: string; preRequestScript?: string | null; postResponseScript?: string | null }[];
-  database: { id: string; name: string; readOnly?: boolean }[];
-  ssh: { id: string; name: string; detail?: SshTaskDetail }[];
-  connections: { id: string; name: string }[];
-};
+export type { Resources } from "./resourceValidation";
+export { environmentInputErrors, resourceErrors } from "./resourceValidation";
 export const emptyAction = (
   capability: FlowCapability = "api",
 ): FlowAction => ({
@@ -124,53 +117,4 @@ export function maskInputs(values: unknown, definitions: FlowInputDefinition[], 
     return value;
   };
   return mask(values);
-}
-function sshInputsMissing(action: FlowAction, resources: Resources, defaults?: Map<string, string>) {
-  const detail = resources.ssh.find((task) => task.id === action.resourceId)?.detail;
-  const values = action.arguments.inputs;
-  if (!detail || (values && typeof values === "object" && "$ref" in values)) return false;
-  const bindings = (values ?? {}) as Record<string, unknown>;
-  const useDefaults = action.arguments.workspaceDefaults === true;
-  return (detail.detectedInputs ?? []).some((name) => {
-    if (Object.prototype.hasOwnProperty.call(bindings, name)) {
-      const value = bindings[name];
-      return typeof value === "string" && !value.trim();
-    }
-    if (!useDefaults) return true;
-    if (!defaults) return false;
-    return !defaults.get(name.toLowerCase())?.trim();
-  });
-}
-
-/** SSH gaps that appear only after the selected run environment is known. */
-export function environmentInputErrors(definition: FlowDefinition, resources: Resources, defaults: Map<string, string>) {
-  const saved = new Set(resourceErrors(definition, resources).map((problem) => `${problem.name}\0${problem.key}`));
-  return resourceErrors(definition, resources, defaults).filter((problem) => problem.key === "flow.sshMissingInputs" && !saved.has(`${problem.name}\0${problem.key}`));
-}
-
-export function resourceErrors(definition: FlowDefinition, resources: Resources, defaults?: Map<string, string>) {
-  return definition.steps.flatMap((step) => {
-    const probe = step.kind === "poll" || step.kind === "waitUntil";
-    const action = step.kind === "action" ? step.action : probe ? step.probe : null;
-    if (!action) return [];
-    const errors: { stepId: string; name: string; key: string }[] = [];
-    const add = (key: string) => errors.push({ stepId: step.id, name: step.name, key });
-    if (!resources[action.capability].some((r) => r.id === action.resourceId)) { add("flow.missingResource"); return errors; }
-    if (action.capability === "ssh" && !resources.connections.some((c) => c.id === action.connectionId)) add("flow.missingConnection");
-    if (action.capability === "api") {
-      const request = resources.api.find((r) => r.id === action.resourceId)!;
-      if (request.preRequestScript?.trim() || request.postResponseScript?.trim()) add("flow.apiScriptsUnsupported");
-      if (request.bodyKind === "multipart-form-data") add("flow.apiMultipartUnsupported");
-      if (probe && !["GET", "HEAD"].includes(request.method?.toUpperCase() ?? "")) add("flow.probeMethodError");
-    }
-    if (action.capability === "database") {
-      const problem = sqlProblem(action.arguments.sql);
-      if (problem) add(problem);
-      if ("limit" in action.arguments && (typeof action.arguments.limit !== "number" ? action.arguments.limit === null : !Number.isInteger(action.arguments.limit) || action.arguments.limit < 1 || action.arguments.limit > 1000)) add("flow.inputTypeError");
-    }
-    if (action.capability === "ssh" && sshInputsMissing(action, resources, defaults)) add("flow.sshMissingInputs");
-    if (probe && action.capability === "database" && !resources.database.find((r) => r.id === action.resourceId)?.readOnly) add("flow.probeReadOnlyError");
-    if (probe && action.capability === "ssh") add("flow.probeSshUnsupported");
-    return errors;
-  });
 }
