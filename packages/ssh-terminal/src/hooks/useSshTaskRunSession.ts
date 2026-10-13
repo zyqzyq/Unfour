@@ -280,7 +280,7 @@ export function useSshTaskRunSession({
         setActiveRunState(run);
         setActiveRunTask(detail);
 
-        await loadHistoryLog(run.id);
+        await loadHistoryLog(run.id, run.taskId);
       } catch (error) {
         if (isCurrent()) handleError(error, { key: "feedback.ssh.taskLoadFailed" });
       }

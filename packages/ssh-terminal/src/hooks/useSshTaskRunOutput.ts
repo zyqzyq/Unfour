@@ -29,7 +29,7 @@ export function useSshTaskRunOutput({
   const pendingEventsRef = useRef<SshTaskRunEvent[]>([]);
   const tasksSurfaceActiveRef = useRef(active);
   const activeRunIdRef = useRef(activeRunId);
-  const { historyLogByRun, historyLogLoading, loadHistoryLog, clearHistoryLogs } =
+  const { historyLogByRun, historyLogLoading, loadHistoryLog, clearTaskHistoryLogs } =
     useSshTaskRunHistory({ activeRunId, eventsByRunRef, handleError, workspaceId });
 
   useEffect(() => {
@@ -97,13 +97,13 @@ export function useSshTaskRunOutput({
   }, [queryClient, workspaceId]);
 
   const clearTaskOutput = useCallback((taskId: string) => {
-    if (!clearHistoryLogs()) return;
+    if (!clearTaskHistoryLogs(taskId)) return;
     // Cleanup success is the boundary for events already received. Do not block
     // run IDs: a running task can still produce fresh output after cleanup.
     pendingEventsRef.current = pendingEventsRef.current.filter((event) => event.taskId !== taskId);
     eventsByRunRef.current = removeTaskRunEventsForTask(eventsByRunRef.current, taskId);
     setEventsByRun(eventsByRunRef.current);
-  }, [clearHistoryLogs]);
+  }, [clearTaskHistoryLogs]);
 
   return { eventsByRun, historyLogByRun, historyLogLoading, loadHistoryLog, clearTaskOutput };
 }

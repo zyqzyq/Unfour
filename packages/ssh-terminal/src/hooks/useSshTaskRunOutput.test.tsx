@@ -75,11 +75,11 @@ describe("task output cleanup races", () => {
     vi.mocked(readSshTaskRunLog).mockReturnValueOnce(oldLog.promise).mockReturnValueOnce(newLog.promise);
     let oldRead!: Promise<void>;
     let newRead!: Promise<void>;
-    act(() => { oldRead = result.current.loadHistoryLog("run"); });
+    act(() => { oldRead = result.current.loadHistoryLog("run", "task"); });
     expect(result.current.historyLogLoading).toBe(true);
     act(() => result.current.clearTaskOutput("task"));
     const loadingAfterClear = result.current.historyLogLoading;
-    act(() => { newRead = result.current.loadHistoryLog("run"); });
+    act(() => { newRead = result.current.loadHistoryLog("run", "task"); });
     await act(async () => {
       if (outcome === "resolve") oldLog.resolve("deleted log");
       else oldLog.reject(new Error("deleted run"));
@@ -94,14 +94,63 @@ describe("task output cleanup races", () => {
     expect(result.current.historyLogLoading).toBe(false);
   });
 
-  it("invalidates all in-flight history logs along with the existing all-log cache reset", async () => {
+  it("keeps another task's in-flight log and drops the cleared task's stale response", async () => {
+    const { result, handleError } = await setup();
+    const otherLog = deferred<string>();
+    const clearedLog = deferred<string>();
+    vi.mocked(readSshTaskRunLog).mockReturnValueOnce(otherLog.promise).mockReturnValueOnce(clearedLog.promise);
+    let otherRead!: Promise<void>;
+    let clearedRead!: Promise<void>;
+    act(() => {
+      otherRead = result.current.loadHistoryLog("other-run", "other-task");
+      clearedRead = result.current.loadHistoryLog("run", "task");
+    });
+    expect(result.current.historyLogLoading).toBe(true);
+    act(() => {
+      result.current.clearTaskOutput("task");
+      listeners[0](event({ data: "fresh output" }));
+    });
+    expect(result.current.historyLogLoading).toBe(false);
+    await act(async () => {
+      clearedLog.resolve("deleted log");
+      otherLog.resolve("other log");
+      await clearedRead;
+      await otherRead;
+    });
+    await tick(16);
+    expect(result.current.historyLogByRun).toEqual({ "other-run": "other log" });
+    expect(result.current.eventsByRun.run.map((item) => item.data)).toEqual(["fresh output"]);
+    expect(result.current.historyLogLoading).toBe(false);
+    expect(handleError).not.toHaveBeenCalled();
+  });
+
+  it("keeps another task's cached logs when cleanup removes every run of the cleared task", async () => {
     const { result } = await setup();
-    const log = deferred<string>();
-    vi.mocked(readSshTaskRunLog).mockReturnValue(log.promise);
-    let reading!: Promise<void>;
-    act(() => { reading = result.current.loadHistoryLog("other-task-run"); });
+    vi.mocked(readSshTaskRunLog)
+      .mockResolvedValueOnce("a-1")
+      .mockResolvedValueOnce("b")
+      .mockResolvedValueOnce("a-2");
+    await act(async () => {
+      await result.current.loadHistoryLog("a-1", "task");
+      await result.current.loadHistoryLog("b-run", "other-task");
+      await result.current.loadHistoryLog("a-2", "task");
+    });
     act(() => result.current.clearTaskOutput("task"));
-    await act(async () => { log.resolve("old other log"); await reading; });
+    expect(result.current.historyLogByRun).toEqual({ "b-run": "b" });
+    await act(async () => { await result.current.loadHistoryLog("b-run", "other-task"); });
+    expect(readSshTaskRunLog).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps the four-log bound and only the runs still owned by a later clear", async () => {
+    const { result } = await setup();
+    for (let index = 0; index < 5; index += 1) {
+      await act(async () => {
+        await result.current.loadHistoryLog(`run-${index}`, index === 0 ? "evicted-task" : "kept-task");
+      });
+    }
+    act(() => result.current.clearTaskOutput("evicted-task"));
+    expect(Object.keys(result.current.historyLogByRun)).toEqual(["run-1", "run-2", "run-3", "run-4"]);
+    act(() => result.current.clearTaskOutput("kept-task"));
     expect(result.current.historyLogByRun).toEqual({});
   });
 
@@ -121,7 +170,7 @@ describe("task output cleanup races", () => {
     expect(result.current.eventsByRun.run.map((item) => item.data)).toEqual(["fresh output"]);
     expect(result.current.eventsByRun.other).toEqual([event({ runId: "other", taskId: "other-task" })]);
     expect(registerSshTaskRunChannel).toHaveBeenCalledTimes(1);
-    await act(async () => { await result.current.loadHistoryLog("run"); });
+    await act(async () => { await result.current.loadHistoryLog("run", "task"); });
     expect(readSshTaskRunLog).not.toHaveBeenCalled();
   });
 
@@ -141,7 +190,7 @@ describe("task output cleanup races", () => {
 describe("history read lifecycle and concurrency", () => {
   it.each(["resolve", "reject"] as const)("ignores an old workspace log %s and resets committed caches", async (outcome) => {
     const { result, rerender, handleError } = await setup();
-    await act(async () => { await result.current.loadHistoryLog("cached"); });
+    await act(async () => { await result.current.loadHistoryLog("cached", "task"); });
     act(() => listeners[0](event({ runId: "cached-live" })));
     await tick(16);
     const oldLog = deferred<string>();
@@ -149,12 +198,12 @@ describe("history read lifecycle and concurrency", () => {
     vi.mocked(readSshTaskRunLog).mockReturnValueOnce(oldLog.promise).mockReturnValueOnce(newLog.promise);
     let oldRead!: Promise<void>;
     let newRead!: Promise<void>;
-    act(() => { oldRead = result.current.loadHistoryLog("run"); });
+    act(() => { oldRead = result.current.loadHistoryLog("run", "task"); });
     rerender({ active: true, activeRunId: "run", workspaceId: "w2" });
     expect(result.current.historyLogByRun).toEqual({});
     expect(result.current.eventsByRun).toEqual({});
     expect(result.current.historyLogLoading).toBe(false);
-    act(() => { newRead = result.current.loadHistoryLog("run"); });
+    act(() => { newRead = result.current.loadHistoryLog("run", "task"); });
     await act(async () => {
       if (outcome === "resolve") oldLog.resolve("old workspace");
       else oldLog.reject(new Error("old workspace"));
@@ -173,7 +222,7 @@ describe("history read lifecycle and concurrency", () => {
     const log = deferred<string>();
     vi.mocked(readSshTaskRunLog).mockReturnValue(log.promise);
     let reading!: Promise<void>;
-    act(() => { reading = result.current.loadHistoryLog("run"); });
+    act(() => { reading = result.current.loadHistoryLog("run", "task"); });
     rerender({ active: true, activeRunId: "run", workspaceId: "w2" });
     rerender({ active: true, activeRunId: "run", workspaceId: "w1" });
     await act(async () => { log.resolve("old lifecycle"); await reading; });
@@ -185,12 +234,12 @@ describe("history read lifecycle and concurrency", () => {
     const oldOutput = result.current;
     rerender({ active: true, activeRunId: "run", workspaceId: "w2" });
     rerender({ active: true, activeRunId: "run", workspaceId: "w1" });
-    await act(async () => { await result.current.loadHistoryLog("run"); });
+    await act(async () => { await result.current.loadHistoryLog("run", "task"); });
     act(() => listeners[2](event({ data: "current lifecycle" })));
     await tick(16);
     await act(async () => {
       oldOutput.clearTaskOutput("task");
-      await oldOutput.loadHistoryLog("old-run");
+      await oldOutput.loadHistoryLog("old-run", "task");
     });
     expect(readSshTaskRunLog).toHaveBeenCalledExactlyOnceWith("w1", "run");
     expect(result.current.historyLogByRun).toEqual({ run: "history log" });
@@ -205,8 +254,8 @@ describe("history read lifecycle and concurrency", () => {
     let firstRead!: Promise<void>;
     let secondRead!: Promise<void>;
     act(() => {
-      firstRead = result.current.loadHistoryLog("run");
-      secondRead = result.current.loadHistoryLog("run");
+      firstRead = result.current.loadHistoryLog("run", "task");
+      secondRead = result.current.loadHistoryLog("run", "task");
     });
     await act(async () => { second.resolve("first completed"); await secondRead; });
     expect(result.current.historyLogLoading).toBe(true);
@@ -217,19 +266,19 @@ describe("history read lifecycle and concurrency", () => {
 
   it("keeps loading tied to the selected run across quick switches and cache hits", async () => {
     const { result, rerender } = await setup();
-    await act(async () => { await result.current.loadHistoryLog("cached"); });
+    await act(async () => { await result.current.loadHistoryLog("cached", "task"); });
     const first = deferred<string>();
     const second = deferred<string>();
     vi.mocked(readSshTaskRunLog).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
     let firstRead!: Promise<void>;
     let secondRead!: Promise<void>;
-    act(() => { firstRead = result.current.loadHistoryLog("run"); });
+    act(() => { firstRead = result.current.loadHistoryLog("run", "task"); });
     rerender({ active: true, activeRunId: "second", workspaceId: "w1" });
-    act(() => { secondRead = result.current.loadHistoryLog("second"); });
+    act(() => { secondRead = result.current.loadHistoryLog("second", "task"); });
     await act(async () => { first.resolve("first log"); await firstRead; });
     expect(result.current.historyLogLoading).toBe(true);
     rerender({ active: true, activeRunId: "cached", workspaceId: "w1" });
-    await act(async () => { await result.current.loadHistoryLog("cached"); });
+    await act(async () => { await result.current.loadHistoryLog("cached", "task"); });
     expect(result.current.historyLogLoading).toBe(false);
     rerender({ active: true, activeRunId: "second", workspaceId: "w1" });
     expect(result.current.historyLogLoading).toBe(true);
@@ -243,8 +292,8 @@ describe("history read lifecycle and concurrency", () => {
   it("reuses a completed log before React commits the cache update", async () => {
     const { result } = await setup();
     await act(async () => {
-      await result.current.loadHistoryLog("run");
-      await result.current.loadHistoryLog("run");
+      await result.current.loadHistoryLog("run", "task");
+      await result.current.loadHistoryLog("run", "task");
     });
     expect(readSshTaskRunLog).toHaveBeenCalledTimes(1);
   });
@@ -254,7 +303,7 @@ describe("history read lifecycle and concurrency", () => {
     const log = deferred<string>();
     vi.mocked(readSshTaskRunLog).mockReturnValue(log.promise);
     let reading!: Promise<void>;
-    act(() => { reading = result.current.loadHistoryLog("run"); });
+    act(() => { reading = result.current.loadHistoryLog("run", "task"); });
     const snapshot = result.current;
     unmount();
     await act(async () => {

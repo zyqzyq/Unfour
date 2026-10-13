@@ -64,3 +64,36 @@ Run、历史日志缓存 4 个 Run。传输进度合并、终态查询失效、�
 现有 IPC 事件没有 Workspace 或清理 epoch 字段；尚未送达的原生消息与后端
 清理的跨端排序不由本次前端 generation 证明。本次保留该协议，避免通过
 Run 黑名单或时间戳过滤误丢正常新输出。
+
+## 后续修正：按 Task 失效历史日志
+
+上一轮清理成功时会推进共用的日志 generation，并清空全部历史日志和在途
+读取。实时事件已经按 Task 删除，但历史日志只按 Run ID 缓存，面板显示的是
+`historyLogByRun[activeRun.id]`，缓存被清掉后不会自动重新请求。因此清理
+Task A 时，正在查看或加载的 Task B 日志会消失且停在空白。
+
+修正只记录每次读取所属的 Task。清理 A 时删除 A 的日志和在途请求，并只递增
+A 的 generation，所以 A 的旧响应和旧缓冲事件不能写回；之后的新事件和新读取
+仍然接受。B 的缓存、在途读取和实时事件不动。Workspace 切换仍重置全部缓存
+并推进共用 generation，卸载仍使旧请求失效。清理失败不调用输出清理。
+Session 返回值、缓存上限、Rust、IPC 和持久化格式都没有改。上文清理成功
+的表格描述的是上一轮行为；当前契约以下表为准。
+
+| 场景 | 处理 |
+| --- | --- |
+| 清理成功 | 只递增该 Task 的日志 generation，删除它的历史日志、在途读取和已提交/待刷新事件；使该 Task 未完成的历史选择失效 |
+| 清理另一个 Task | 其已缓存日志、在途读取、事件和正在打开的历史选择都保留，并在读取完成后正常显示 |
+| 清理失败 | 不修改任何 Task 的日志、事件或在途读取 |
+| Workspace 切换或卸载 | 仍使全部历史日志和在途读取失效 |
+
+| 命令 | 结果 |
+| --- | --- |
+| `pnpm exec vitest run packages/ssh-terminal` | PASS：37 文件，221 测试 |
+| `pnpm test` | PASS：176 文件，1167 测试 |
+| `pnpm run lint` | PASS：0 errors，32 个已有警告；Session 函数长度警告在基线已存在 |
+| `pnpm --filter @unfour/desktop exec tsc --noEmit` | PASS |
+| `pnpm run build` | PASS：保留现有大于 500 kB 的 chunk 提示 |
+| `git diff --check` | PASS |
+| `pnpm run check:large-files` | PASS：0 blocking |
+
+真实 SSH 与原生 IPC 链路仍为 **NOT VERIFIED**。

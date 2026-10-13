@@ -301,8 +301,9 @@ describe("task mutations and output ownership", () => {
     expect(cancelSshTaskRun).toHaveBeenCalledExactlyOnceWith({ workspaceId: "w1", runId: "run" });
   });
 
-  it("clears only the selected task's live cache and all history logs after successful cleanup", async () => {
+  it("clears only the selected task's live cache and history logs after successful cleanup", async () => {
     const { result, invalidate } = await setup();
+    await act(async () => { await result.current.openHistoryRun(run("other-history", "other-task")); });
     await act(async () => { await result.current.openHistoryRun(run("history")); });
     act(() => {
       subscriptions[0].listener(event());
@@ -312,17 +313,37 @@ describe("task mutations and output ownership", () => {
     await act(async () => { await result.current.clearMutation.mutateAsync("task"); });
     expect(clearSshTaskRuns).toHaveBeenCalledExactlyOnceWith({ workspaceId: "w1", taskId: "task" });
     expect(Object.keys(result.current.eventsByRun)).toEqual(["other"]);
-    expect(result.current.historyLogByRun).toEqual({});
+    expect(result.current.historyLogByRun).toEqual({ "other-history": "history log" });
     expect(result.current.activeRun?.id).toBe("history");
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["ssh-task-runs", "w1", "task"] });
     await act(async () => { await result.current.openHistoryRun(run("history")); });
-    expect(readSshTaskRunLog).toHaveBeenCalledTimes(2);
+    expect(readSshTaskRunLog).toHaveBeenCalledTimes(3);
+  });
+
+  it("finishes another task's in-flight history log after cleanup succeeds", async () => {
+    const { result, handleError } = await setup();
+    const otherLog = deferred<string>();
+    vi.mocked(readSshTaskRunLog).mockReturnValue(otherLog.promise);
+    let opening!: Promise<void>;
+    await act(async () => { opening = result.current.openHistoryRun(run("other-run", "other-task")); });
+    expect(result.current.historyLogLoading).toBe(true);
+    await act(async () => { await result.current.clearMutation.mutateAsync("task"); });
+    expect(result.current.historyLogLoading).toBe(true);
+    expect(result.current.activeRun?.id).toBe("other-run");
+    await act(async () => { otherLog.resolve("other log"); await opening; });
+    expect(result.current.historyLogByRun).toEqual({ "other-run": "other log" });
+    expect(result.current.historyLogLoading).toBe(false);
+    expect(handleError).not.toHaveBeenCalled();
   });
 
   it("retains output when cleanup fails and reports cancel/cleanup failures", async () => {
     const { result, handleError } = await setup();
+    await act(async () => { await result.current.openHistoryRun(run("other-history", "other-task")); });
     await act(async () => { await result.current.openHistoryRun(run()); });
-    act(() => subscriptions[0].listener(event()));
+    act(() => {
+      subscriptions[0].listener(event());
+      subscriptions[0].listener(event({ runId: "other", taskId: "other-task" }));
+    });
     await tick(16);
     const failure = new Error("denied");
     vi.mocked(clearSshTaskRuns).mockRejectedValue(failure);
@@ -330,7 +351,11 @@ describe("task mutations and output ownership", () => {
     await act(async () => { await expect(result.current.clearMutation.mutateAsync("task")).rejects.toBe(failure); });
     await act(async () => { await expect(result.current.cancelMutation.mutateAsync()).rejects.toBe(failure); });
     expect(result.current.eventsByRun.run).toHaveLength(1);
-    expect(result.current.historyLogByRun.run).toBe("history log");
+    expect(result.current.eventsByRun.other).toHaveLength(1);
+    expect(result.current.historyLogByRun).toEqual({
+      "other-history": "history log",
+      run: "history log",
+    });
     expect(handleError).toHaveBeenCalledWith(failure, { key: "feedback.ssh.taskHistoryClearFailed" });
     expect(handleError).toHaveBeenCalledWith(failure, { key: "feedback.ssh.taskCancelFailed" });
   });
