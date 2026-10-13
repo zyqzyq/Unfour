@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   cancelSshTaskRun,
@@ -48,9 +48,32 @@ export function useSshTaskRunSession({
   const [runActiveEnvironmentName, setRunActiveEnvironmentName] = useState<string | null>(
     null,
   );
-  const [activeRun, setActiveRun] = useState<SshTaskRun | null>(null);
+  const [activeRun, setActiveRunState] = useState<SshTaskRun | null>(null);
   const [activeRunTask, setActiveRunTask] = useState<SshTaskDetail | null>(null);
   const runEnvironmentSyncKeyRef = useRef<string | null>(null);
+  const workspaceScope = useMemo(() => ({ workspaceId }), [workspaceId]);
+  const mountedScopeRef = useRef<typeof workspaceScope | null>(null);
+  const sessionGenerationRef = useRef(0);
+  const historySelectionVersionRef = useRef(0);
+  const historySelectionTaskIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    mountedScopeRef.current = workspaceScope;
+    sessionGenerationRef.current += 1;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- A run selection belongs to the current workspace.
+    setActiveRunState(null);
+    setActiveRunTask(null);
+    return () => {
+      mountedScopeRef.current = null;
+      sessionGenerationRef.current += 1;
+    };
+  }, [workspaceScope]);
+
+  const setActiveRun = useCallback<typeof setActiveRunState>((run) => {
+    historySelectionVersionRef.current += 1;
+    historySelectionTaskIdRef.current = null;
+    setActiveRunState(run);
+  }, []);
 
   const workspaceEnvironmentsQuery = useQuery({
     enabled: Boolean(active && workspaceId),
@@ -135,15 +158,23 @@ export function useSshTaskRunSession({
     onError: (error) => handleError(error, { key: "feedback.ssh.taskCancelFailed" }),
   });
   const clearMutation = useMutation({
-    mutationFn: (taskId: string) => clearSshTaskRuns({ workspaceId, taskId }),
-    onSuccess: (_, taskId) => {
-      clearTaskOutput(taskId);
-      queryClient.invalidateQueries({
-        queryKey: ["ssh-task-runs", workspaceId, taskId],
-      });
+    mutationFn: async (taskId: string) => {
+      const generation = sessionGenerationRef.current;
+      const isCurrent = () => mountedScopeRef.current === workspaceScope && generation === sessionGenerationRef.current;
+      try {
+        const result = await clearSshTaskRuns({ workspaceId, taskId });
+        if (isCurrent()) {
+          if (historySelectionTaskIdRef.current === taskId) historySelectionVersionRef.current += 1;
+          clearTaskOutput(taskId);
+        }
+        // The backend mutation still changed this workspace if the view moved.
+        queryClient.invalidateQueries({ queryKey: ["ssh-task-runs", workspaceId, taskId] });
+        return result;
+      } catch (error) {
+        if (isCurrent()) handleError(error, { key: "feedback.ssh.taskHistoryClearFailed" });
+        throw error;
+      }
     },
-    onError: (error) =>
-      handleError(error, { key: "feedback.ssh.taskHistoryClearFailed" }),
   });
   const resetRunMutation = runMutation.reset;
 
@@ -234,20 +265,27 @@ export function useSshTaskRunSession({
 
   const openHistoryRun = useCallback(
     async (run: SshTaskRun) => {
+      if (mountedScopeRef.current !== workspaceScope) return;
+      const generation = sessionGenerationRef.current;
+      const selectionVersion = ++historySelectionVersionRef.current;
+      historySelectionTaskIdRef.current = run.taskId;
+      const isCurrent = () => mountedScopeRef.current === workspaceScope && generation === sessionGenerationRef.current &&
+        selectionVersion === historySelectionVersionRef.current;
       try {
         const detail = await queryClient.fetchQuery({
           queryKey: ["ssh-task", workspaceId, run.taskId],
           queryFn: () => getSshTask(workspaceId, run.taskId),
         });
-        setActiveRun(run);
+        if (!isCurrent()) return;
+        setActiveRunState(run);
         setActiveRunTask(detail);
 
         await loadHistoryLog(run.id);
       } catch (error) {
-        handleError(error, { key: "feedback.ssh.taskLoadFailed" });
+        if (isCurrent()) handleError(error, { key: "feedback.ssh.taskLoadFailed" });
       }
     },
-    [handleError, loadHistoryLog, queryClient, workspaceId],
+    [handleError, loadHistoryLog, queryClient, workspaceScope, workspaceId],
   );
 
   return {

@@ -335,3 +335,135 @@ describe("task mutations and output ownership", () => {
     expect(handleError).toHaveBeenCalledWith(failure, { key: "feedback.ssh.taskCancelFailed" });
   });
 });
+
+describe("task history selection and cleanup races", () => {
+  it.each([
+    { success: true, active: true }, { success: true, active: false },
+    { success: false, active: true }, { success: false, active: false },
+  ])("handles output during cleanup with success=$success active=$active", async ({ success, active }) => {
+    const { result, rerender, handleError } = await setup(active);
+    const clearing = deferred<Awaited<ReturnType<typeof clearSshTaskRuns>>>();
+    const log = deferred<string>();
+    vi.mocked(clearSshTaskRuns).mockReturnValue(clearing.promise);
+    vi.mocked(readSshTaskRunLog).mockReturnValue(log.promise);
+    let opening!: Promise<void>;
+    let cleanupResult!: Promise<unknown>;
+    await act(async () => { opening = result.current.openHistoryRun(run()); });
+    await act(async () => { cleanupResult = result.current.clearMutation.mutateAsync("task").catch((error) => error); });
+    act(() => subscriptions[0].listener(event({ data: "during cleanup" })));
+    await tick(16);
+    expect(result.current.eventsByRun).toEqual(active ? { run: [event({ data: "during cleanup" })] } : {});
+    const failure = new Error("cleanup denied");
+    await act(async () => {
+      if (success) clearing.resolve({ deletedRuns: 1, deletedLogs: 1 });
+      else clearing.reject(failure);
+      await cleanupResult;
+    });
+    act(() => subscriptions[0].listener(event({ data: "after cleanup" })));
+    await act(async () => { log.resolve("in-flight log"); await opening; });
+    rerender({ active: true, workspaceId: "w1" });
+    await tick(active ? 16 : 250);
+    expect(result.current.eventsByRun.run.map((item) => item.data)).toEqual(
+      success ? ["after cleanup"] : ["during cleanup", "after cleanup"],
+    );
+    expect(result.current.historyLogByRun).toEqual(success ? {} : { run: "in-flight log" });
+    if (success) expect(handleError).not.toHaveBeenCalled();
+    else expect(handleError).toHaveBeenCalledExactlyOnceWith(failure, { key: "feedback.ssh.taskHistoryClearFailed" });
+  });
+
+  it("keeps the latest selection when task details resolve in reverse order", async () => {
+    const { result } = await setup();
+    const oldDetail = deferred<SshTaskDetail>();
+    vi.mocked(getSshTask).mockReturnValueOnce(oldDetail.promise).mockResolvedValueOnce({
+      ...detail, task: { ...detail.task, id: "new-task" },
+    });
+    let opening!: Promise<void>;
+    await act(async () => { opening = result.current.openHistoryRun(run("old")); });
+    await act(async () => { await result.current.openHistoryRun(run("new", "new-task")); });
+    await act(async () => { oldDetail.resolve(detail); await opening; });
+    expect(result.current.activeRun?.id).toBe("new");
+    expect(result.current.activeRunTask?.task.id).toBe("new-task");
+    expect(readSshTaskRunLog).toHaveBeenCalledExactlyOnceWith("w1", "new");
+  });
+
+  it("allows another task's pending selection to finish after cleanup", async () => {
+    const { result } = await setup();
+    const taskDetail = deferred<SshTaskDetail>();
+    vi.mocked(getSshTask).mockReturnValue(taskDetail.promise);
+    let opening!: Promise<void>;
+    await act(async () => { opening = result.current.openHistoryRun(run("other-run", "other-task")); });
+    await act(async () => { await result.current.clearMutation.mutateAsync("task"); });
+    const otherDetail = { ...detail, task: { ...detail.task, id: "other-task" } };
+    await act(async () => { taskDetail.resolve(otherDetail); await opening; });
+    expect(result.current.activeRun?.id).toBe("other-run");
+    expect(result.current.activeRunTask).toEqual(otherDetail);
+    expect(readSshTaskRunLog).toHaveBeenCalledExactlyOnceWith("w1", "other-run");
+  });
+
+  it.each([
+    { action: "clear", reject: false }, { action: "clear", reject: true },
+    { action: "close", reject: false }, { action: "close", reject: true },
+    { action: "workspace", reject: false }, { action: "workspace", reject: true },
+    { action: "unmount", reject: false }, { action: "unmount", reject: true },
+  ])("invalidates pending task details on $action with reject=$reject", async ({ action, reject }) => {
+    const { result, rerender, unmount, handleError } = await setup();
+    const taskDetail = deferred<SshTaskDetail>();
+    vi.mocked(getSshTask).mockReturnValue(taskDetail.promise);
+    let opening!: Promise<void>;
+    await act(async () => { opening = result.current.openHistoryRun(run()); });
+    if (action === "clear") await act(async () => { await result.current.clearMutation.mutateAsync("task"); });
+    if (action === "close") act(() => result.current.setActiveRun(null));
+    if (action === "workspace") rerender({ active: true, workspaceId: "w2" });
+    if (action === "unmount") unmount();
+    await act(async () => {
+      if (reject) taskDetail.reject(new Error("stale task detail"));
+      else taskDetail.resolve(detail);
+      await opening;
+    });
+    expect(result.current.activeRun).toBeNull();
+    expect(readSshTaskRunLog).not.toHaveBeenCalled();
+    expect(handleError).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])("ignores old workspace cleanup success=%s after a new run is selected", async (success) => {
+    const { result, rerender, handleError, invalidate } = await setup();
+    const clearing = deferred<Awaited<ReturnType<typeof clearSshTaskRuns>>>();
+    vi.mocked(clearSshTaskRuns).mockReturnValue(clearing.promise);
+    let cleanupResult!: Promise<unknown>;
+    await act(async () => { cleanupResult = result.current.clearMutation.mutateAsync("task").catch((error) => error); });
+    rerender({ active: true, workspaceId: "w2" });
+    await act(async () => { await result.current.openHistoryRun({ ...run(), workspaceId: "w2" }); });
+    act(() => subscriptions[1].listener(event({ data: "new workspace" })));
+    await tick(16);
+    await act(async () => {
+      if (success) clearing.resolve({ deletedRuns: 1, deletedLogs: 1 });
+      else clearing.reject(new Error("old workspace cleanup"));
+      await cleanupResult;
+    });
+    expect(result.current.eventsByRun.run.map((item) => item.data)).toEqual(["new workspace"]);
+    expect(result.current.historyLogByRun).toEqual({ run: "history log" });
+    expect(result.current.activeRun?.workspaceId).toBe("w2");
+    expect(handleError).not.toHaveBeenCalled();
+    if (success) expect(invalidate).toHaveBeenCalledExactlyOnceWith({ queryKey: ["ssh-task-runs", "w1", "task"] });
+    else expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])("avoids output updates and feedback after unmounted cleanup with success=%s", async (success) => {
+    const { result, unmount, handleError, invalidate } = await setup();
+    const clearing = deferred<Awaited<ReturnType<typeof clearSshTaskRuns>>>();
+    vi.mocked(clearSshTaskRuns).mockReturnValue(clearing.promise);
+    let cleanupResult!: Promise<unknown>;
+    await act(async () => { cleanupResult = result.current.clearMutation.mutateAsync("task").catch((error) => error); });
+    const snapshot = result.current;
+    unmount();
+    await act(async () => {
+      if (success) clearing.resolve({ deletedRuns: 1, deletedLogs: 1 });
+      else clearing.reject(new Error("unmounted cleanup"));
+      await cleanupResult;
+    });
+    expect(result.current).toBe(snapshot);
+    expect(handleError).not.toHaveBeenCalled();
+    if (success) expect(invalidate).toHaveBeenCalledExactlyOnceWith({ queryKey: ["ssh-task-runs", "w1", "task"] });
+    else expect(invalidate).not.toHaveBeenCalled();
+  });
+});

@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  readSshTaskRunLog,
   registerSshTaskRunChannel,
   type SshTaskRunEvent,
 } from "@unfour/command-client";
 import type { useFeedbackErrorHandler } from "@unfour/ui";
 import {
   appendTaskRunEventCache,
-  cacheTaskRunLog,
   removeTaskRunEventsForTask,
 } from "../model/task-run-events";
+import { useSshTaskRunHistory } from "./useSshTaskRunHistory";
 
 /** Own live output delivery and bounded history caches for the Tasks surface. */
 export function useSshTaskRunOutput({
@@ -26,46 +25,47 @@ export function useSshTaskRunOutput({
 }) {
   const queryClient = useQueryClient();
   const [eventsByRun, setEventsByRun] = useState<Record<string, SshTaskRunEvent[]>>({});
-  const [historyLogByRun, setHistoryLogByRun] = useState<Record<string, string>>({});
-  const [historyLogLoading, setHistoryLogLoading] = useState(false);
   const eventsByRunRef = useRef(eventsByRun);
-  const historyLogByRunRef = useRef(historyLogByRun);
+  const pendingEventsRef = useRef<SshTaskRunEvent[]>([]);
   const tasksSurfaceActiveRef = useRef(active);
   const activeRunIdRef = useRef(activeRunId);
+  const { historyLogByRun, historyLogLoading, loadHistoryLog, clearHistoryLogs } =
+    useSshTaskRunHistory({ activeRunId, eventsByRunRef, handleError, workspaceId });
 
   useEffect(() => {
-    eventsByRunRef.current = eventsByRun;
-    historyLogByRunRef.current = historyLogByRun;
     tasksSurfaceActiveRef.current = active;
     activeRunIdRef.current = activeRunId;
-  }, [active, activeRunId, eventsByRun, historyLogByRun]);
+  }, [active, activeRunId]);
 
   useEffect(() => {
     let disposed = false;
     let dispose: (() => void) | null = null;
+    eventsByRunRef.current = {};
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Live output is scoped to this workspace subscription.
+    setEventsByRun({});
     // Coalesce per-line task output into one React update ~per frame. Without
     // this, a verbose command (or transfer progress) re-renders thousands of
     // transcript spans and can freeze the Tasks surface.
-    let pending: SshTaskRunEvent[] = [];
+    pendingEventsRef.current = [];
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
     const flushPending = () => {
       flushTimer = null;
       if (disposed) {
-        pending = [];
         return;
       }
-      if (!pending.length) return;
+      if (!pendingEventsRef.current.length) return;
       // Keep buffering while Connections is shown so a hidden Tasks tree does
       // not re-render on every remote line; flush when Tasks becomes active.
       if (!tasksSurfaceActiveRef.current) {
         flushTimer = setTimeout(flushPending, 250);
         return;
       }
-      const batch = pending;
-      pending = [];
-      setEventsByRun((current) =>
-        appendTaskRunEventCache(current, batch, activeRunIdRef.current),
+      const batch = pendingEventsRef.current;
+      pendingEventsRef.current = [];
+      eventsByRunRef.current = appendTaskRunEventCache(
+        eventsByRunRef.current, batch, activeRunIdRef.current,
       );
+      setEventsByRun(eventsByRunRef.current);
       for (const event of batch) {
         if (event.kind === "run" && event.status && event.status !== "running") {
           queryClient.invalidateQueries({
@@ -76,9 +76,9 @@ export function useSshTaskRunOutput({
     };
     registerSshTaskRunChannel((event) => {
       if (disposed) return;
-      pending.push(event);
-      if (pending.length > 10_000) {
-        pending = pending.slice(-10_000);
+      pendingEventsRef.current.push(event);
+      if (pendingEventsRef.current.length > 10_000) {
+        pendingEventsRef.current = pendingEventsRef.current.slice(-10_000);
       }
       if (flushTimer === null) {
         flushTimer = setTimeout(flushPending, 16);
@@ -91,44 +91,19 @@ export function useSshTaskRunOutput({
       disposed = true;
       if (flushTimer !== null) clearTimeout(flushTimer);
       flushTimer = null;
-      pending = [];
+      pendingEventsRef.current = [];
       dispose?.();
     };
   }, [queryClient, workspaceId]);
 
-  const loadHistoryLog = useCallback(
-    async (runId: string) => {
-      const hasLiveEvents = (eventsByRunRef.current[runId]?.length ?? 0) > 0;
-      if (hasLiveEvents || historyLogByRunRef.current[runId] !== undefined) {
-        return;
-      }
-
-      setHistoryLogLoading(true);
-      try {
-        const logText = await readSshTaskRunLog(workspaceId, runId);
-        setHistoryLogByRun((current) =>
-          current[runId] === undefined
-            ? cacheTaskRunLog(current, runId, logText)
-            : current,
-        );
-      } catch (error) {
-        handleError(error, { key: "feedback.ssh.taskLogLoadFailed" });
-        setHistoryLogByRun((current) =>
-          current[runId] === undefined
-            ? cacheTaskRunLog(current, runId, "")
-            : current,
-        );
-      } finally {
-        setHistoryLogLoading(false);
-      }
-    },
-    [handleError, workspaceId],
-  );
-
   const clearTaskOutput = useCallback((taskId: string) => {
-    setEventsByRun((current) => removeTaskRunEventsForTask(current, taskId));
-    setHistoryLogByRun({});
-  }, []);
+    if (!clearHistoryLogs()) return;
+    // Cleanup success is the boundary for events already received. Do not block
+    // run IDs: a running task can still produce fresh output after cleanup.
+    pendingEventsRef.current = pendingEventsRef.current.filter((event) => event.taskId !== taskId);
+    eventsByRunRef.current = removeTaskRunEventsForTask(eventsByRunRef.current, taskId);
+    setEventsByRun(eventsByRunRef.current);
+  }, [clearHistoryLogs]);
 
   return { eventsByRun, historyLogByRun, historyLogLoading, loadHistoryLog, clearTaskOutput };
 }
