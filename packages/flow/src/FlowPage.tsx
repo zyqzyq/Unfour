@@ -3,6 +3,8 @@ import type { FlowDefinition } from "@unfour/command-client";
 import { useI18n } from "@unfour/ui";
 import { FlowCanvas } from "./FlowCanvas";
 import { FlowSidebar } from "./FlowSidebar";
+import { FlowStart } from "./FlowStart";
+import { newStep } from "./model";
 import { FlowToolbar } from "./FlowToolbar";
 import { FlowProblems } from "./FlowProblems";
 import { FlowRunToolbar } from "./FlowRunToolbar";
@@ -49,11 +51,14 @@ function WorkspaceFlowPage({ workspaceId, onSidebarContentChange }: FlowPageProp
     return () => onSidebarContentChange(null);
   }, [sidebar, onSidebarContentChange]);
 
-  if (!draft) return (
-    <div className="flex h-full items-center justify-center text-sm text-[var(--u-color-text-muted)]">
-      {t("flow.selectFlow")}
-    </div>
-  );
+  if (!draft) return <FlowStart
+    pending={isPending}
+    failed={isError}
+    hasFlows={Boolean(definitions?.length)}
+    refreshing={data.flows.isFetching}
+    onRetry={() => void refetch()}
+    onCreate={() => select({ id: "", workspaceId, name: t("flow.new"), revision: 0, inputs: [], steps: [newStep("api", t("flow.api"))] })}
+  />;
   const validation = getFlowPageValidation(draft, editor, data);
   return (
     <div className="flow-page flex h-full min-h-0 min-w-0 flex-col text-[13px]">

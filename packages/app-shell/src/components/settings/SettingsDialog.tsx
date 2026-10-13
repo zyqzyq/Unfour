@@ -23,18 +23,24 @@ import type {
 type SettingsSection = "general" | "mcp" | "about";
 
 export function SettingsDialog({
+  activeSection: controlledSection,
+  onSectionChange,
   extensionContext,
   extensionSections = [],
   onOpenChange,
   open,
 }: {
+  activeSection?: string;
+  onSectionChange?: (section: string) => void;
   extensionContext: DesktopAppExtensionContext;
   extensionSections?: readonly DesktopAppSettingsSection[];
   onOpenChange: (open: boolean) => void;
   open: boolean;
 }) {
   const { t } = useI18n();
-  const [activeSection, setActiveSection] = useState<string>("general");
+  const [localSection, setLocalSection] = useState<string>("general");
+  const activeSection = controlledSection ?? localSection;
+  const setActiveSection = onSectionChange ?? setLocalSection;
   const [closeGuardOpen, setCloseGuardOpen] = useState(false);
   const closeGuardTimerRef = useRef<number | null>(null);
   const pointerCloseRef = useRef(false);

@@ -3,7 +3,8 @@ import type { DesktopAppExtensionContext, DesktopAppExtensions } from "../extens
 import { DesktopCommandPalette } from "./DesktopCommandPalette";
 import type { DesktopNavigationController } from "./useDesktopNavigation";
 
-export function DesktopOverlays({ extensions, extensionContext, navigation, commandPaletteOpen, onCommandPaletteOpenChange }: {
+export function DesktopOverlays({ extensions, extensionContext, navigation, commandPaletteOpen, onCommandPaletteOpenChange, onOpenSettings }: {
+  onOpenSettings: (section?: "mcp") => void;
   extensions?: DesktopAppExtensions;
   extensionContext: DesktopAppExtensionContext;
   navigation: DesktopNavigationController;
@@ -22,6 +23,7 @@ export function DesktopOverlays({ extensions, extensionContext, navigation, comm
       title={t("variables.discardChangesTitle")}
     />
     <DesktopCommandPalette
+      onOpenSettings={onOpenSettings}
       extensionContext={extensionContext}
       extensionActions={extensions?.commandPaletteActions}
       onClose={() => onCommandPaletteOpenChange(false)}

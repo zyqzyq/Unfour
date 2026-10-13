@@ -9,6 +9,7 @@ export function DesktopCommandPalette({
   extensionContext,
   onClose,
   onManageVariables,
+  onOpenSettings,
   onOpen,
   onSelectModule,
   open,
@@ -17,6 +18,7 @@ export function DesktopCommandPalette({
   extensionContext: DesktopAppExtensionContext;
   onClose: () => void;
   onManageVariables?: () => void;
+  onOpenSettings?: (section?: "mcp") => void;
   onOpen: () => void;
   onSelectModule: (tabId: string) => void;
   open: boolean;
@@ -49,6 +51,11 @@ export function DesktopCommandPalette({
     { id: "api", label: t("app.commandPalette.openApiClient"), run: () => onSelectModule("api-main") },
     { id: "ssh", label: t("app.commandPalette.openSshTerminal"), run: () => onSelectModule("ssh-main") },
     { id: "database", label: t("app.commandPalette.openDatabase"), run: () => onSelectModule("database-main") },
+    { id: "flow", label: t("app.commandPalette.openFlow"), run: () => onSelectModule("flow-main") },
+    ...(onOpenSettings ? [
+      { id: "settings", label: t("app.titlebar.settings"), run: () => onOpenSettings() },
+      { id: "mcp", label: t("app.commandPalette.openMcp"), run: () => onOpenSettings("mcp") },
+    ] : []),
     ...(onManageVariables ? [{ id: "variables", label: t("variables.manage"), run: onManageVariables }] : []),
     ...(!bundleExchange.busy ? [
       { id: "workspace-import", label: t("workspaceBundle.importCommand"), run: bundleExchange.pick },

@@ -57,6 +57,26 @@ afterEach(() => {
 });
 
 describe("SettingsMcp", () => {
+  it("recovers failed checks in place and prevents configuration while refreshing", async () => {
+    mocks.getMcpBinaryPath.mockRejectedValueOnce(new Error("Unavailable"));
+    mocks.getMcpClientStatus.mockRejectedValueOnce(new Error("Unavailable"));
+    renderSettings();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Refresh status to retry");
+    expect(screen.getByRole("button", { name: "Configure Codex" })).toBeDisabled();
+    let resolveBinary!: (value: unknown) => void;
+    mocks.getMcpBinaryPath.mockImplementationOnce(() => new Promise((resolve) => { resolveBinary = resolve; }));
+    const refresh = screen.getByRole("button", { name: "Refresh status" });
+    fireEvent.click(refresh);
+    expect(refresh).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Configure Codex" })).toBeDisabled();
+    await act(async () => resolveBinary({ path: "/unfour-mcp", found: true, buildKind: "release" }));
+    await waitFor(() => expect(refresh).toBeEnabled());
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Configure Codex" })).toBeEnabled();
+    expect(mocks.getMcpBinaryPath).toHaveBeenCalledTimes(2);
+    expect(mocks.configureMcpClient).not.toHaveBeenCalled();
+  });
+
   it("prioritizes one-click client actions and removes in-app setup documentation", async () => {
     renderSettings();
 

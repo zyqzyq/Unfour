@@ -5,6 +5,7 @@ import { FeedbackProvider } from "@unfour/ui";
 import { useWorkspaceStore } from "@unfour/workspace-core";
 import { WorkspaceBundleExchangeProvider } from "@unfour/workspace-local";
 import { AppTitleBar } from "./components/AppTitleBar";
+import { SettingsDialog } from "./components/settings/SettingsDialog";
 import { DesktopOverlays } from "./components/DesktopOverlays";
 import { DesktopStatusBar } from "./components/DesktopStatusBar";
 import { DesktopWorkspaceContent } from "./components/DesktopWorkspaceContent";
@@ -24,6 +25,12 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
   const queryClient = useQueryClient();
   const [bottomPanelCollapsed, setBottomPanelCollapsed] = useState(true);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState("general");
+  function openSettings(section?: "mcp") {
+    if (section) setSettingsSection(section);
+    setSettingsOpen(true);
+  }
   const [apiSidebarContent, setApiSidebarContent] = useState<ReactNode>(null);
   const [flowSidebarContent, setFlowSidebarContent] = useState<ReactNode>(null);
   const [sshSidebarContent, setSshSidebarContent] = useState<ReactNode>(null);
@@ -90,6 +97,7 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
         extensionContext={extensionContext}
         onActivateWorkspace={handleActivateWorkspace}
         onManageVariables={handleManageVariables}
+        onOpenSettings={openSettings}
         onOpenEnvironmentMenu={workspace.refreshWorkspaceEnvironments}
         onSelectEnvironment={workspace.selectEnvironment}
         settingsSections={extensions?.settingsSections}
@@ -133,11 +141,20 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
       />}
     />
     <DesktopOverlays
+      onOpenSettings={openSettings}
       extensions={extensions}
       extensionContext={extensionContext}
       navigation={navigation}
       commandPaletteOpen={commandPaletteOpen}
       onCommandPaletteOpenChange={setCommandPaletteOpen}
+    />
+    <SettingsDialog
+      activeSection={settingsSection}
+      onSectionChange={setSettingsSection}
+      extensionContext={extensionContext}
+      extensionSections={extensions?.settingsSections}
+      onOpenChange={setSettingsOpen}
+      open={settingsOpen}
     />
     </WorkspaceBundleExchangeProvider>
   </FeedbackProvider>;

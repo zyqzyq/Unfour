@@ -168,6 +168,36 @@ function mount(locale: "en" | "zh-CN" = "en", client = new QueryClient({ default
   );
 }
 
+it("offers a first Flow action that creates a draft without saving or running", async () => {
+  vi.mocked(commands.listFlows).mockResolvedValue([]);
+  mount();
+  await screen.findByRole("heading", { name: "Create your first Flow" });
+  fireEvent.click(screen.getByRole("button", { name: "Create Flow" }));
+  expect(screen.getByLabelText("Flow name")).toHaveValue("New Flow");
+  expect(commands.saveFlow).not.toHaveBeenCalled();
+  expect(commands.runFlow).not.toHaveBeenCalled();
+});
+
+it("waits for the Flow list before showing first-use guidance", async () => {
+  let resolveFlows!: (value: commands.FlowDefinition[]) => void;
+  vi.mocked(commands.listFlows).mockImplementationOnce(() => new Promise((resolve) => { resolveFlows = resolve; }));
+  mount();
+  expect(screen.queryByRole("heading", { name: "Create your first Flow" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Create Flow" })).not.toBeInTheDocument();
+  await act(async () => resolveFlows([structuredClone(flow)]));
+  expect(await screen.findByRole("heading", { name: "Open a Flow" })).toBeInTheDocument();
+});
+
+it("does not present a failed Flow load as an empty workspace and retries in place", async () => {
+  vi.mocked(commands.listFlows).mockRejectedValueOnce(new Error("Unavailable")).mockResolvedValue([]);
+  mount();
+  await screen.findAllByRole("alert");
+  expect(screen.queryByRole("heading", { name: "Create your first Flow" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getAllByRole("button", { name: "Retry" }).at(-1)!);
+  expect(await screen.findByRole("heading", { name: "Create your first Flow" })).toBeInTheDocument();
+  expect(commands.listFlows).toHaveBeenCalledTimes(2);
+});
+
 it("sends explicit context only after run confirmation and supports cancellation", async () => {
   mount();
   fireEvent.click(await screen.findByText("Release"));

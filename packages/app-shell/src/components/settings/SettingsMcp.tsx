@@ -4,6 +4,7 @@ import {
   Copy,
   LoaderCircle,
   MousePointer2,
+  RefreshCw,
   type LucideIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -65,36 +66,51 @@ export function SettingsMcp() {
   const [configuring, setConfiguring] = useState<McpClient | null>(null);
   const [copyState, setCopyState] = useState<"copied" | "failed" | null>(null);
   const [promptCopyState, setPromptCopyState] = useState<"copied" | "failed" | null>(null);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     let active = true;
 
-    void getMcpBinaryPath()
+    const binaryRequest = getMcpBinaryPath()
       .then((result) => {
-        if (active) setMcp(result);
+        if (active) {
+          setMcp(result);
+          setMcpError(false);
+        }
       })
       .catch(() => {
         if (active) setMcpError(true);
       });
 
-    for (const { client } of CLIENTS) {
-      void getMcpClientStatus(client)
+    const clientRequests = CLIENTS.map(({ client }) =>
+      getMcpClientStatus(client)
         .then((result) => {
           if (active) {
             setClientStatuses((current) => ({ ...current, [client]: result }));
+            setClientLoadErrors((current) => ({ ...current, [client]: false }));
           }
         })
         .catch(() => {
           if (active) {
             setClientLoadErrors((current) => ({ ...current, [client]: true }));
           }
-        });
-    }
+        }),
+    );
+    void Promise.all([binaryRequest, ...clientRequests]).then(() => {
+      if (active) setChecking(false);
+    });
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [refreshVersion]);
+
+  function refreshStatus() {
+    if (checking || configuring) return;
+    setChecking(true);
+    setRefreshVersion((version) => version + 1);
+  }
 
   useEffect(() => {
     if (!copyState) return undefined;
@@ -108,16 +124,18 @@ export function SettingsMcp() {
     return () => window.clearTimeout(timeout);
   }, [promptCopyState]);
 
-  const mcpChecking = !mcp && !mcpError;
-  const status = mcpChecking ? "connecting" : mcp?.found ? "connected" : "error";
+  const mcpChecking = checking;
+  const status = mcpChecking ? "connecting" : mcp?.found && !mcpError ? "connected" : "error";
   const statusText = mcpChecking
     ? t("app.settings.mcp.statusChecking")
-    : mcp?.found
-      ? t("app.settings.mcp.statusValue")
-      : t("app.settings.mcp.statusUnavailable");
+    : mcpError
+      ? t("app.settings.mcp.checkFailed")
+      : mcp?.found
+        ? t("app.settings.mcp.statusValue")
+        : t("app.settings.mcp.statusUnavailable");
 
   async function configureClient(client: McpClient, clientName: string) {
-    if (!mcp?.found || configuring) return;
+    if (!mcp?.found || mcpError || checking || configuring) return;
     setConfiguring(client);
     setClientMessages((current) => ({ ...current, [client]: null }));
     try {
@@ -169,13 +187,21 @@ export function SettingsMcp() {
         title={t("app.settings.mcp.title")}
       />
 
-      <InfoBlock label={t("app.settings.mcp.statusLabel")}>
+      <InfoBlock label={t("app.settings.mcp.statusLabel")} action={
+        <Button size="sm" variant="secondary" disabled={checking || Boolean(configuring)} onClick={refreshStatus}>
+          <RefreshCw aria-hidden="true" size={13} className={checking ? "animate-spin" : undefined} />
+          {t("app.settings.mcp.refresh")}
+        </Button>
+      }>
         <ConnectionStatus
           label={statusText}
           pulse={mcpChecking}
           status={status}
           variant="dot"
         />
+        {!checking && (mcpError || Object.values(clientLoadErrors).some(Boolean)) && (
+          <p role="alert" className="text-[12px] text-[var(--u-color-danger)]">{t("app.settings.mcp.checkFailedHelp")}</p>
+        )}
       </InfoBlock>
 
       {mcp && !mcp.found ? (
@@ -207,7 +233,7 @@ export function SettingsMcp() {
               client={client}
               clientName={name}
               configuring={configuring === client}
-              disabled={!mcp?.found || Boolean(configuring)}
+              disabled={!mcp?.found || mcpError || checking || Boolean(configuring)}
               icon={icon}
               key={client}
               loadError={clientLoadErrors[client]}
@@ -410,10 +436,13 @@ function clientActionLabel(
   return t("app.settings.mcp.configureClient", { client: clientName });
 }
 
-function InfoBlock({ children, label }: { children: ReactNode; label: string }) {
+function InfoBlock({ children, label, action }: { children: ReactNode; label: string; action?: ReactNode }) {
   return (
     <div className="space-y-2 border-t border-[var(--u-color-border)] pt-3">
-      <h3 className="text-[12px] font-semibold text-[var(--u-color-text)]">{label}</h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-[12px] font-semibold text-[var(--u-color-text)]">{label}</h3>
+        {action}
+      </div>
       {children}
     </div>
   );

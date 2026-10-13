@@ -1,5 +1,6 @@
 {
   "workspaceBundle": {
+    "menuScope": "API、SSH、数据库、变量和 Flow",
     "import": "从文件导入 Workspace…",
     "export": "导出当前 Workspace…",
     "importCommand": "Workspace：从文件导入…",
@@ -101,6 +102,8 @@
   },
   "app": {
     "commandPalette": {
+      "openFlow": "打开 Flow",
+      "openMcp": "MCP 设置",
       "open": "打开命令面板",
       "openApiClient": "打开 API 调试器",
       "openDatabase": "打开数据库",
@@ -184,6 +187,9 @@
         "statusLabel": "MCP 状态",
         "statusValue": "本地 MCP 可用",
         "statusUnavailable": "本地 MCP 不可用",
+        "refresh": "刷新状态",
+        "checkFailed": "MCP 状态读取失败",
+        "checkFailedHelp": "无法读取部分 MCP 状态。请刷新状态重试；现有配置未更改。",
         "statusChecking": "检测中…",
         "clientsLabel": "客户端",
         "clientsDescription": "一键写入用户级 MCP 配置，同时保留客户端的其他设置。",
@@ -1450,6 +1456,12 @@
     "title": "SSH 终端"
   },
   "flow": {
+    "start": {
+      "create": "创建 Flow",
+      "title": "创建第一个 Flow",
+      "selectTitle": "打开一个 Flow",
+      "description": "将 API 请求、SSH 任务与数据库查询串联为可重复运行的流程。先创建步骤，准备好后再保存并运行。"
+    },
     "databaseConnection": "数据库连接",
     "selectSshTaskHelp": "请选择可用的 SSH 任务以配置其输入。",
     "runAgainBlocked": "请返回编辑器修正配置并保存，再次运行。",

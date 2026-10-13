@@ -114,9 +114,12 @@ export function WorkspaceMenu({
               <Plus size={14} />
               {t("app.workspace.new")}
             </DropdownMenu.Item>
-            <DropdownMenu.Item className={workspaceMenuItemClass} disabled={bundleExchange.busy} onSelect={() => void bundleExchange.pick()}>
+            <DropdownMenu.Item aria-label={t("workspaceBundle.import")} className={workspaceMenuItemClass} disabled={bundleExchange.busy} onSelect={() => void bundleExchange.pick()}>
               <Import size={14} />
-              {t("workspaceBundle.import")}
+              <span className="min-w-0">
+                <span className="block">{t("workspaceBundle.import")}</span>
+                <span className="block text-xs text-[var(--u-color-text-muted)]">{t("workspaceBundle.menuScope")}</span>
+              </span>
             </DropdownMenu.Item>
             {workspaceMenuFooterActions.map((action) => {
               const actionDisabled = typeof action.disabled === "function"
@@ -135,9 +138,12 @@ export function WorkspaceMenu({
             <DropdownMenu.Label className="truncate px-2 py-1.5 text-xs text-[var(--u-color-text-muted)]" title={activeWorkspace?.name}>
               {t("workspaceBundle.current", { name: activeWorkspace?.name ?? t("app.workspace.none") })}
             </DropdownMenu.Label>
-            <DropdownMenu.Item className={workspaceMenuItemClass} disabled={!activeWorkspace || bundleExchange.busy} onSelect={() => { if (activeWorkspace) bundleExchange.exportWorkspace(activeWorkspace); }}>
+            <DropdownMenu.Item aria-label={t("workspaceBundle.export")} className={workspaceMenuItemClass} disabled={!activeWorkspace || bundleExchange.busy} onSelect={() => { if (activeWorkspace) bundleExchange.exportWorkspace(activeWorkspace); }}>
               <Upload size={14} />
-              {t("workspaceBundle.export")}
+              <span className="min-w-0">
+                <span className="block">{t("workspaceBundle.export")}</span>
+                <span className="block text-xs text-[var(--u-color-text-muted)]">{t("workspaceBundle.menuScope")}</span>
+              </span>
             </DropdownMenu.Item>
             <WorkspaceMenuCurrentActions
               activeWorkspace={activeWorkspace}

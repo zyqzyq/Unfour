@@ -388,7 +388,7 @@ describe("WorkspaceMenu extensions", () => {
       ctrlKey: false,
     });
     await screen.findByText("Import workspace");
-    const items = screen.getAllByRole("menuitem").map((item) => item.textContent);
+    const items = screen.getAllByRole("menuitem").map((item) => item.getAttribute("aria-label") ?? item.textContent);
     expect(items.slice(1)).toEqual([
       "New workspace", "Import Workspace from File…", "Import workspace",
       "Export Current Workspace…", "Rename current", "Workspace security settings", "Cloud Sync", "Delete current",

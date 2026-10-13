@@ -1,10 +1,11 @@
-import { Settings } from "lucide-react";
+import { Plug, Settings } from "lucide-react";
 import type { Workspace, WorkspaceEnvironment } from "@unfour/command-client";
 import { useState, type ReactNode } from "react";
 import {
   GlobalToolbar,
   ActiveEnvironmentSelect,
   IconButton,
+  Button,
   useI18n,
 } from "@unfour/ui";
 import { SettingsDialog } from "./settings/SettingsDialog";
@@ -27,6 +28,7 @@ export function AppTitleBar({
   extensionContext,
   onActivateWorkspace,
   onManageVariables = () => {},
+  onOpenSettings,
   onOpenEnvironmentMenu = () => {},
   onSelectEnvironment = () => {},
   settingsSections,
@@ -43,6 +45,7 @@ export function AppTitleBar({
   extensionContext: DesktopAppExtensionContext;
   onActivateWorkspace: (workspaceId: string) => void;
   onManageVariables?: () => void;
+  onOpenSettings?: (section?: "mcp") => void;
   onOpenEnvironmentMenu?: () => void;
   onSelectEnvironment?: (environmentId: string | null) => void;
   settingsSections?: readonly DesktopAppSettingsSection[];
@@ -54,6 +57,12 @@ export function AppTitleBar({
 }) {
   const { t } = useI18n();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState("general");
+  function openSettings(section?: "mcp") {
+    if (onOpenSettings) return onOpenSettings(section);
+    if (section) setSettingsSection(section);
+    setSettingsOpen(true);
+  }
 
   return (
     <>
@@ -81,7 +90,17 @@ export function AppTitleBar({
         }
         right={
           <>
-            <IconButton label={t("app.titlebar.settings")} onClick={() => setSettingsOpen(true)}>
+            <Button
+              aria-label={t("app.commandPalette.openMcp")}
+              onClick={() => openSettings("mcp")}
+              size="sm"
+              title={t("app.commandPalette.openMcp")}
+              variant="ghost"
+            >
+              <Plug aria-hidden="true" size={14} />
+              {t("app.settings.sections.mcp")}
+            </Button>
+            <IconButton label={t("app.titlebar.settings")} onClick={() => openSettings()}>
               <Settings size={15} />
             </IconButton>
             {endAccessory}
@@ -89,12 +108,14 @@ export function AppTitleBar({
           </>
         }
       />
-      <SettingsDialog
+      {!onOpenSettings && <SettingsDialog
+        activeSection={settingsSection}
+        onSectionChange={setSettingsSection}
         extensionContext={extensionContext}
         extensionSections={settingsSections}
         onOpenChange={setSettingsOpen}
         open={settingsOpen}
-      />
+      />}
     </>
   );
 }

@@ -1,5 +1,6 @@
 {
   "workspaceBundle": {
+    "menuScope": "API, SSH, databases, variables & Flows",
     "import": "Import Workspace from File…",
     "export": "Export Current Workspace…",
     "importCommand": "Workspace: Import from File…",
@@ -101,6 +102,8 @@
   },
   "app": {
     "commandPalette": {
+      "openFlow": "Open Flow",
+      "openMcp": "MCP settings",
       "open": "Open command palette",
       "openApiClient": "Open API Debugger",
       "openDatabase": "Open Database",
@@ -184,6 +187,9 @@
         "statusLabel": "MCP status",
         "statusValue": "Local MCP available",
         "statusUnavailable": "Local MCP unavailable",
+        "refresh": "Refresh status",
+        "checkFailed": "MCP status check failed",
+        "checkFailedHelp": "Some MCP status checks failed. Refresh status to retry; your configuration has not changed.",
         "statusChecking": "Checking…",
         "clientsLabel": "Clients",
         "clientsDescription": "Configure a user-level MCP connection without replacing your other client settings.",
@@ -1452,6 +1458,12 @@
     "title": "SSH Terminal"
   },
   "flow": {
+    "start": {
+      "create": "Create Flow",
+      "title": "Create your first Flow",
+      "selectTitle": "Open a Flow",
+      "description": "Connect API requests, SSH tasks and database queries in a repeatable workflow. Create steps, then save and run when ready."
+    },
     "databaseConnection": "Database connection",
     "selectSshTaskHelp": "Select an available SSH task to configure its inputs.",
     "runAgainBlocked": "Return to the editor, fix the configuration and save before running again.",
