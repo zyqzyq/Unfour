@@ -61,18 +61,25 @@ describe("SettingsMcp", () => {
     mocks.getMcpBinaryPath.mockRejectedValueOnce(new Error("Unavailable"));
     mocks.getMcpClientStatus.mockRejectedValueOnce(new Error("Unavailable"));
     renderSettings();
-    expect(await screen.findByRole("alert")).toHaveTextContent("Refresh status to retry");
-    expect(screen.getByRole("button", { name: "Configure Codex" })).toBeDisabled();
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Refresh status to retry");
+      expect(screen.getByRole("button", { name: "Configure Codex" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Update Cursor configuration" })).toBeDisabled();
+    });
     let resolveBinary!: (value: unknown) => void;
     mocks.getMcpBinaryPath.mockImplementationOnce(() => new Promise((resolve) => { resolveBinary = resolve; }));
     const refresh = screen.getByRole("button", { name: "Refresh status" });
     fireEvent.click(refresh);
     expect(refresh).toBeDisabled();
     expect(screen.getByRole("button", { name: "Configure Codex" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Update Cursor configuration" })).toBeDisabled();
     await act(async () => resolveBinary({ path: "/unfour-mcp", found: true, buildKind: "release" }));
-    await waitFor(() => expect(refresh).toBeEnabled());
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Configure Codex" })).toBeEnabled();
+    await waitFor(() => {
+      expect(refresh).toBeEnabled();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Configure Codex" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Update Cursor configuration" })).toBeEnabled();
+    });
     expect(mocks.getMcpBinaryPath).toHaveBeenCalledTimes(2);
     expect(mocks.configureMcpClient).not.toHaveBeenCalled();
   });
@@ -80,19 +87,73 @@ describe("SettingsMcp", () => {
   it("prioritizes one-click client actions and removes in-app setup documentation", async () => {
     renderSettings();
 
-    const configureCodex = await screen.findByRole("button", { name: "Configure Codex" });
-    expect(screen.getByRole("button", { name: "Update Cursor configuration" })).toBeEnabled();
+    // "Configure Codex" is also the label while client status is still loading.
+    // Readiness is the settled Cursor action plus an enabled refresh.
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Refresh status" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Configure Codex" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Update Cursor configuration" })).toBeEnabled();
+    });
     expect(screen.queryByText("Config example")).toBeNull();
     expect(screen.queryByRole("button", { name: "Copy config" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Open MCP docs" })).toBeNull();
 
-    fireEvent.click(configureCodex);
+    fireEvent.click(screen.getByRole("button", { name: "Configure Codex" }));
 
     await waitFor(() => expect(mocks.configureMcpClient).toHaveBeenCalledWith("codex"));
     expect(
       await screen.findByText("Codex configured. Restart Codex to load Unfour MCP."),
     ).toBeTruthy();
     expect(screen.getByRole("button", { name: "Codex configured" })).toBeDisabled();
+  });
+
+  it("keeps Codex and Cursor actions disabled until both status checks settle", async () => {
+    let resolveCodex!: (value: unknown) => void;
+    let resolveCursor!: (value: unknown) => void;
+    mocks.getMcpClientStatus.mockImplementation(
+      (client: "codex" | "cursor") =>
+        new Promise((resolve) => {
+          if (client === "codex") resolveCodex = resolve;
+          else resolveCursor = resolve;
+        }),
+    );
+
+    renderSettings();
+
+    await waitFor(() => expect(mocks.getMcpClientStatus).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("button", { name: "Configure Codex" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Configure Cursor" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Update Cursor configuration" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Refresh status" })).toBeDisabled();
+
+    await act(async () => {
+      resolveCursor({
+        client: "cursor",
+        status: "outdated",
+        configPath: "C:\\Users\\test\\.cursor\\mcp.json",
+      });
+    });
+
+    expect(await screen.findByRole("button", { name: "Update Cursor configuration" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Configure Codex" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Refresh status" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Update Cursor configuration" }));
+    fireEvent.click(screen.getByRole("button", { name: "Configure Codex" }));
+    expect(mocks.configureMcpClient).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveCodex({
+        client: "codex",
+        status: "notConfigured",
+        configPath: "C:\\Users\\test\\.codex\\config.toml",
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Refresh status" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Configure Codex" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Update Cursor configuration" })).toBeEnabled();
+    });
   });
 
   it("disables both client actions when the runtime MCP binary is unavailable", async () => {
@@ -104,9 +165,12 @@ describe("SettingsMcp", () => {
 
     renderSettings();
 
-    expect(await screen.findByText("MCP binary not found")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Configure Codex" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Update Cursor configuration" })).toBeDisabled();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Refresh status" })).toBeEnabled();
+      expect(screen.getByText("MCP binary not found")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Configure Codex" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Update Cursor configuration" })).toBeDisabled();
+    });
     expect(mocks.configureMcpClient).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Copy example prompt" })).toBeEnabled();
   });
