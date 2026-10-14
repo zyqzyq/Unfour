@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { deleteFlow, getFlow, saveFlow, type FlowDefinition, type FlowInputDefinition, type FlowStep, type WorkspaceEnvironment } from "@unfour/command-client";
 import { useI18n } from "@unfour/ui";
@@ -24,6 +24,14 @@ export function useFlowEditor(workspaceId: string, flows: FlowWorkspaceData["flo
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<"delete" | null>(null);
   const [pendingSelection, setPendingSelection] = useState<{ flow: FlowDefinition; latest?: boolean } | null>(null);
+
+  // Keep an untouched default pending through failures; any successful retry
+  // can initialize it. Manual choices and new dialog contexts replace it.
+  useEffect(() => {
+    if (!runDialog || !runEnvironment.pending || !environments.isSuccess) return;
+    const id = environments.data.find((environment) => environment.isActive)?.id ?? "";
+    setRunEnvironment((current) => current === runEnvironment ? { id, pending: false } : current);
+  }, [runDialog, runEnvironment, environments.isSuccess, environments.data]);
 
   // Selection and explicit discard share one reset. Query refreshes never replace a draft.
   const resetSelection = useCallback((flow: FlowDefinition) => {
@@ -136,18 +144,12 @@ export function useFlowEditor(workspaceId: string, flows: FlowWorkspaceData["flo
     setRemovingNode(null);
   }
   function openRun() {
-    // Snapshot on open. Only an unresolved initial load may fill this selection;
+    // Snapshot on open. Only an unresolved default may fill this selection;
     // manual choices (including workspace-only), resets and reopens replace it.
     const available = queryClient.getQueryData<WorkspaceEnvironment[]>(["workspace-environments", workspaceId]);
     const selection = { id: available?.find((environment) => environment.isActive)?.id ?? "", pending: !available };
     setRunEnvironment(selection);
-    if (selection.pending) {
-      void environments.refetch({ cancelRefetch: false }).then((result) => {
-        setRunEnvironment((current) => current === selection
-          ? { id: result.data?.find((environment) => environment.isActive)?.id ?? "", pending: false }
-          : current);
-      });
-    }
+    if (selection.pending) void environments.refetch({ cancelRefetch: false });
     setInvalid((state) => Object.fromEntries(Object.entries(state).filter(([key]) => !key.startsWith("run:"))));
     setRunDialog(true);
   }

@@ -64,6 +64,151 @@ async function open(locale: keyof typeof copy = "en") {
   fireEvent.click(screen.getByRole("button", { name: copy[locale].run, exact: true }));
   return within(screen.getByRole("dialog"));
 }
+function deferredEnvironments() {
+  let resolve!: (items: commands.WorkspaceEnvironment[]) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<commands.WorkspaceEnvironment[]>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
+}
+async function openWithEnvironmentFailure() {
+  const initial = deferredEnvironments();
+  vi.mocked(commands.listWorkspaceEnvironments).mockReturnValueOnce(initial.promise);
+  const mounted = mount();
+  const dialog = await open();
+  await act(async () => initial.reject(new Error("Unavailable")));
+  await dialog.findByRole("alert");
+  return { ...mounted, dialog };
+}
+
+it.each([
+  { items: [environment("dev", true)], expected: "dev" },
+  { items: [environment("dev")], expected: "" },
+  { items: [], expected: "" },
+])("restores the default only after a successful retry (%j)", async ({ items, expected }) => {
+  const { dialog } = await openWithEnvironmentFailure();
+  const retry = deferredEnvironments();
+  vi.mocked(commands.listWorkspaceEnvironments).mockReturnValueOnce(retry.promise);
+  expect(dialog.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+  fireEvent.click(dialog.getByRole("button", { name: "Retry", exact: true }));
+  expect(dialog.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+  expect(commands.runFlow).not.toHaveBeenCalled();
+  await act(async () => retry.resolve(items));
+  await waitFor(() => expect(dialog.getByRole("button", { name: "Run", exact: true })).toBeEnabled());
+  expect(dialog.getByLabelText(copy.en.environment)).toHaveValue(expected);
+  expect(commands.runFlow).not.toHaveBeenCalled();
+  fireEvent.click(dialog.getByRole("button", { name: "Run", exact: true }));
+  await waitFor(() => expect(commands.runFlow).toHaveBeenCalledWith(expect.objectContaining({ environmentId: expected || null, confirmEffects: true }), 3));
+});
+
+it.each(["before retry", "during retry"])("preserves an explicit workspace-only choice %s", async (when) => {
+  const { dialog } = await openWithEnvironmentFailure();
+  const retry = deferredEnvironments();
+  vi.mocked(commands.listWorkspaceEnvironments).mockReturnValueOnce(retry.promise);
+  const chooseWorkspace = () => fireEvent.change(dialog.getByLabelText(copy.en.environment), { target: { value: "" } });
+  if (when === "before retry") chooseWorkspace();
+  fireEvent.click(dialog.getByRole("button", { name: "Retry", exact: true }));
+  if (when === "during retry") chooseWorkspace();
+  expect(dialog.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+  await act(async () => retry.resolve([environment("dev", true)]));
+  await waitFor(() => expect(dialog.getByRole("button", { name: "Run", exact: true })).toBeEnabled());
+  expect(dialog.getByLabelText(copy.en.environment)).toHaveValue("");
+  fireEvent.click(dialog.getByRole("button", { name: "Run", exact: true }));
+  await waitFor(() => expect(commands.runFlow).toHaveBeenCalledWith(expect.objectContaining({ environmentId: null }), 3));
+});
+
+it.each(["", "prod"])("preserves a manual cached selection across a failed refresh and retry (%s)", async (selected) => {
+  const { client } = mount();
+  const dialog = await open();
+  fireEvent.change(dialog.getByLabelText(copy.en.environment), { target: { value: selected } });
+  vi.mocked(commands.listWorkspaceEnvironments).mockRejectedValueOnce(new Error("Unavailable"));
+  await act(async () => client.refetchQueries({ queryKey: ["workspace-environments", "ws"] }));
+  await dialog.findByRole("alert");
+  expect(dialog.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+  fireEvent.click(dialog.getByRole("button", { name: "Retry", exact: true }));
+  await waitFor(() => expect(dialog.getByRole("button", { name: "Run", exact: true })).toBeEnabled());
+  expect(dialog.getByLabelText(copy.en.environment)).toHaveValue(selected);
+  expect(commands.runFlow).not.toHaveBeenCalled();
+});
+
+it("recovers an untouched default when the shared query refresh succeeds without the Retry button", async () => {
+  const { client, dialog } = await openWithEnvironmentFailure();
+  await act(async () => client.refetchQueries({ queryKey: ["workspace-environments", "ws"] }));
+  await waitFor(() => expect(dialog.getByRole("button", { name: "Run", exact: true })).toBeEnabled());
+  expect(dialog.getByLabelText(copy.en.environment)).toHaveValue("dev");
+  act(() => client.setQueryData(["workspace-environments", "ws"], [{ ...environment("prod", true), name: "Refreshed Production" }, environment("dev")]));
+  await dialog.findByRole("option", { name: "Refreshed Production" });
+  expect(dialog.getByLabelText(copy.en.environment)).toHaveValue("dev");
+  expect(commands.runFlow).not.toHaveBeenCalled();
+});
+
+it.each([false, true])("uses the reopened dialog's choice when an earlier retry returns (%s)", async (manual) => {
+  const { dialog } = await openWithEnvironmentFailure();
+  const retry = deferredEnvironments();
+  vi.mocked(commands.listWorkspaceEnvironments).mockReturnValueOnce(retry.promise);
+  fireEvent.click(dialog.getByRole("button", { name: "Retry", exact: true }));
+  fireEvent.click(dialog.getByRole("button", { name: "Cancel", exact: true }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  fireEvent.click(screen.getByRole("button", { name: "Run", exact: true }));
+  if (manual) fireEvent.change(screen.getByLabelText(copy.en.environment), { target: { value: "" } });
+  expect(screen.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+  await act(async () => retry.resolve([environment("dev", true)]));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Run", exact: true })).toBeEnabled());
+  expect(screen.getByLabelText(copy.en.environment)).toHaveValue(manual ? "" : "dev");
+  expect(commands.listWorkspaceEnvironments).toHaveBeenCalledTimes(2);
+  expect(commands.runFlow).not.toHaveBeenCalled();
+});
+
+it("ignores an old retry result after reopening with a newer cached default", async () => {
+  const { client, dialog } = await openWithEnvironmentFailure();
+  const retry = deferredEnvironments();
+  vi.mocked(commands.listWorkspaceEnvironments).mockReturnValueOnce(retry.promise);
+  fireEvent.click(dialog.getByRole("button", { name: "Retry", exact: true }));
+  fireEvent.click(dialog.getByRole("button", { name: "Cancel", exact: true }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  act(() => client.setQueryData(["workspace-environments", "ws"], [environment("prod", true), environment("dev")]));
+  fireEvent.click(screen.getByRole("button", { name: "Run", exact: true }));
+  expect(screen.getByLabelText(copy.en.environment)).toHaveValue("prod");
+  await act(async () => retry.resolve([environment("dev", true), environment("prod")]));
+  await waitFor(() => expect(client.getQueryData<commands.WorkspaceEnvironment[]>(["workspace-environments", "ws"])?.find((item) => item.isActive)?.id).toBe("dev"));
+  await waitFor(() => expect(within(screen.getByRole("dialog")).getAllByRole("option").map((option) => option.getAttribute("value"))).toEqual(["", "dev", "prod"]));
+  expect(screen.getByLabelText(copy.en.environment)).toHaveValue("prod");
+  expect(commands.runFlow).not.toHaveBeenCalled();
+});
+
+it.each([false, true])("resets the default when switching Flow while a retry is pending (%s)", async (manual) => {
+  vi.mocked(commands.listFlows).mockResolvedValue([flow, { ...flow, id: "other-flow", name: "Other" }]);
+  const { dialog } = await openWithEnvironmentFailure();
+  const retry = deferredEnvironments();
+  vi.mocked(commands.listWorkspaceEnvironments).mockReturnValueOnce(retry.promise);
+  fireEvent.click(dialog.getByRole("button", { name: "Retry", exact: true }));
+  fireEvent.change(dialog.getByLabelText(copy.en.environment), { target: { value: "" } });
+  fireEvent.click(dialog.getByRole("button", { name: "Cancel", exact: true }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  fireEvent.click(screen.getByRole("button", { name: "Other", exact: true }));
+  fireEvent.click(screen.getByRole("button", { name: "Run", exact: true }));
+  if (manual) fireEvent.change(screen.getByLabelText(copy.en.environment), { target: { value: "" } });
+  await act(async () => retry.resolve([environment("dev", true)]));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Run", exact: true })).toBeEnabled());
+  expect(screen.getByLabelText(copy.en.environment)).toHaveValue(manual ? "" : "dev");
+  fireEvent.click(screen.getByRole("button", { name: "Run", exact: true }));
+  await waitFor(() => expect(commands.runFlow).toHaveBeenCalledWith(expect.objectContaining({ flowId: "other-flow", environmentId: manual ? null : "dev" }), 3));
+});
+
+it("ignores an old Workspace retry result after switching Workspace", async () => {
+  const { client, dialog, switchWorkspace } = await openWithEnvironmentFailure();
+  const retry = deferredEnvironments();
+  vi.mocked(commands.listWorkspaceEnvironments).mockImplementation((workspaceId) => workspaceId === "ws"
+    ? retry.promise : Promise.resolve([environment("other", true, workspaceId)]));
+  fireEvent.click(dialog.getByRole("button", { name: "Retry", exact: true }));
+  switchWorkspace("other-ws");
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  const currentDialog = await open();
+  await act(async () => retry.resolve([environment("dev", true)]));
+  await waitFor(() => expect(client.getQueryData<commands.WorkspaceEnvironment[]>(["workspace-environments", "ws"])?.[0].id).toBe("dev"));
+  expect(currentDialog.getByLabelText(copy.en.environment)).toHaveValue("other");
+  fireEvent.click(currentDialog.getByRole("button", { name: "Run", exact: true }));
+  await waitFor(() => expect(commands.runFlow).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: "other-ws", environmentId: "other" }), 3));
+});
 
 it.each(["en", "zh-CN"] as const)("prefills the active environment and submits it only after confirmation (%s)", async (locale) => {
   mount(locale);

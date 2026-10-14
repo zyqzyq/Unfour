@@ -283,10 +283,14 @@ The frontend uses the corresponding string unions.
 Flow selection, New Flow, accepted discard, and workspace changes reset run
 inputs to that definition's defaults and reset manual secret names. Each time
 the desktop Run dialog opens, it snapshots the Workspace's active variable
-environment, or workspace-only if none is active. An initial pending environment
-query may fill that default only if the user has not selected an environment
-(including workspace-only) or reset/reopened the dialog. Subsequent query or
-title-bar changes never replace the selection. Submission explicitly passes
+environment, or workspace-only if none is active. Without cached environment
+data, default initialization stays pending through query failures until the
+first successful query/retry while the current dialog is open. It may fill the
+default only if the user has not selected an environment (including
+workspace-only); manual choices, resets and reopens replace the pending context.
+Once initialized or manually selected, subsequent query or title-bar changes
+never replace the selection. Submission is blocked while the environment is
+unresolved or its query has failed. Submission explicitly passes
 the selected environment and still requires confirmation. MCP's absent/null
 environment continues to mean workspace-only. Run details display the recorded
 `context.environmentId` as an ID, without inferring a historical name from the

@@ -8,11 +8,13 @@ Frontend-only fix; see [Flow V1](../architecture/flow-v1.md).
 - Each desktop Run / Run again opens with a snapshot of the current Workspace's
   active variable environment from the shared workspace-scoped query cache.
   No active environment means Workspace variables only.
-- If the initial query is pending, submission stays disabled until it resolves.
-  Only that initial load may fill the default. Selecting any value, including
+- If the initial query is pending or has failed, submission stays disabled until
+  a successful query/retry confirms the environment state. Only the first
+  success may fill an untouched pending default. Selecting any value, including
   Workspace-only, replaces the initialization token; late results cannot replace
   it. Reopening, changing Flow and switching Workspace also replace the token.
-  Later active-environment changes/refetches never change an open selection.
+  Later active-environment changes/refetches never change an initialized or
+  manually selected value.
 - The existing effects notice, masked preview, revision pin, resource validation
   and explicit Run confirmation remain. The selected ID is sent explicitly;
   Workspace-only sends `environmentId: null`. No automatic execution is added.
@@ -83,3 +85,48 @@ API/SSH/database side effects; those integrations were NOT VERIFIED here.
 Historical environment names are not persisted, so displaying the recorded ID
 is intentional. Environment/resource changes concurrent with execution remain
 subject to the existing backend validation and race limitations in Flow V1.
+
+## Retry recovery follow-up — 2026-10-14
+
+Baseline: latest `origin/main`, `8a4bd9a3`, clean working tree on `main`.
+
+Root cause: the `openRun` refetch callback cleared `runEnvironment.pending` on
+failure as well as success. The dialog's Retry button only refreshed queries,
+so a later successful response never initialized the default. The new active
+environment regression failed against that baseline (received Workspace-only),
+while the two no-active-environment variants passed.
+
+The fix is limited to `useFlowEditor.ts`. An open dialog with an untouched
+pending default now observes the existing shared query's first success,
+including explicit retries or a shared query refresh. Failures leave the
+default pending. The update checks both the open dialog and the same selection
+object; manual selection, Flow reset and reopening replace that object, and
+Workspace changes already remount the editor. After successful initialization
+or an explicit selection, subsequent query changes cannot replace the value.
+The existing pending/error execution gates, effects consent, revision pin and
+MCP environment contract are unchanged. No environment state model, dialog
+layout, dependencies, API, Database, Rust or MCP implementation was changed.
+
+PASS:
+
+- `pnpm exec vitest run packages/flow/src`: 18 files, 206 tests.
+- `pnpm test --reporter=dot`: all 179 frontend files, 1209 tests.
+- `pnpm exec eslint packages/flow/src/useFlowEditor.ts packages/flow/src/FlowEnvironment.test.tsx`:
+  zero errors, two non-blocking warnings (existing hook length and guarded
+  query-to-state synchronization in an effect; no rule suppression added).
+- `pnpm --filter @unfour/desktop exec tsc --noEmit`.
+- `pnpm run build`: retains the existing Vite large-chunk advisory.
+- `pnpm exec playwright test apps/desktop/tests/smoke/flow-environment.spec.ts --project=chromium --workers=1`:
+  both existing English/Chinese browser interaction tests.
+- `git diff --check`.
+
+The environment suite now has 30 cases, including 14 new regressions for
+failure then successful retry, pending submission guards, no active environment
+and empty environment lists, manual Workspace-only before/during retry, cached
+manual environment choices across failed refreshes, shared-query recovery,
+close/reopen, changing Flow, changing Workspace, and delayed old retry results.
+Assertions also verify explicit run arguments and that loading/recovery never
+automatically starts a run. Browser tests cover existing default/override
+interactions; retry-specific coverage uses real React Query with deferred
+command mocks in the component suite. Native Tauri and real service effects
+remain NOT VERIFIED in this frontend-only follow-up.
