@@ -1,5 +1,5 @@
-import { Activity, Copy, Download, Minus } from "lucide-react";
-import { useMemo } from "react";
+import { Activity, Check, Copy, Download, LoaderCircle, Minus } from "lucide-react";
+import { useEffect, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { exportSshLog } from "@unfour/command-client";
 import {
@@ -9,6 +9,7 @@ import {
   StatusBadge,
   Toolbar,
   ToolbarGroup,
+  useI18n,
 } from "@unfour/ui";
 import { useTerminalStore, redactTerminalLog } from "../model/terminal-state";
 
@@ -27,6 +28,7 @@ export function TerminalLogPanel({
   onHeightChange: (height: number) => void;
   workspaceId: string;
 }) {
+  const { t } = useI18n();
   const activeSessionId = useTerminalStore((state) => state.activeSessionId);
   const eventCount = useTerminalStore((state) => state.terminalEvents.length);
   // Collapsed by default in the shell. Skip rebuilding the full log string on
@@ -55,6 +57,18 @@ export function TerminalLogPanel({
     mutationFn: () => exportSshLog({ workspaceId, sessionId: activeSessionId ?? "" }),
     onSuccess: (log) => setExportedLog(log.content),
   });
+  const copyMutation = useMutation({
+    mutationFn: async (content: string) => {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(content);
+    },
+  });
+  const { isSuccess: copied, reset: resetCopy } = copyMutation;
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(resetCopy, 1800);
+    return () => window.clearTimeout(timer);
+  }, [copied, resetCopy]);
 
   return (
     <BottomPanel
@@ -68,38 +82,48 @@ export function TerminalLogPanel({
         <ToolbarGroup>
           <Activity size={14} />
           <span className="text-[12px] font-semibold text-[var(--u-color-text)]">
-            Connection Events
+            {t("ssh.logs.title")}
           </span>
           <StatusBadge>{eventCount}</StatusBadge>
-          {exportMutation.error && <StatusBadge tone="danger">Export failed</StatusBadge>}
         </ToolbarGroup>
         <ToolbarGroup>
           <IconButton
-            disabled={!visibleLog}
-            label="Copy terminal logs"
-            onClick={() => void navigator.clipboard?.writeText(visibleLog)}
+            disabled={!visibleLog || copyMutation.isPending}
+            label={t("ssh.logs.copy")}
+            onClick={() => copyMutation.mutate(visibleLog)}
           >
-            <Copy size={14} />
+            {copyMutation.isPending ? <LoaderCircle className="animate-spin" size={14} /> : copied ? <Check size={14} /> : <Copy size={14} />}
           </IconButton>
           <IconButton
             disabled={!activeSessionId || exportMutation.isPending}
-            label="Export terminal logs"
+            label={t(exportMutation.isPending ? "ssh.logs.exporting" : "ssh.logs.export")}
             onClick={() => exportMutation.mutate()}
           >
-            <Download size={14} />
+            {exportMutation.isPending ? <LoaderCircle className="animate-spin" size={14} /> : <Download size={14} />}
           </IconButton>
-          <IconButton label="Collapse bottom panel" onClick={onCollapse}>
+          <IconButton label={t("ssh.logs.collapse")} onClick={onCollapse}>
             <Minus size={14} />
           </IconButton>
         </ToolbarGroup>
       </Toolbar>
+      {copyMutation.isError ? (
+        <p role="alert" className="px-2 py-1 text-xs text-[var(--u-color-danger)]">{t("ssh.logs.copyFailed")}</p>
+      ) : copied && (
+        <p role="status" className="px-2 py-1 text-xs text-[var(--u-color-success)]">{t("ssh.logs.copied")}</p>
+      )}
+      {exportMutation.isError && <p role="alert" className="px-2 py-1 text-xs text-[var(--u-color-danger)]">{t("ssh.logs.exportFailed")}</p>}
       <div className="min-h-0 flex-1 overflow-auto p-2">
         {visibleLog ? (
           <pre className="min-h-full whitespace-pre-wrap break-words font-mono text-[12px] leading-5 text-[var(--u-color-text-muted)]">
             {visibleLog}
           </pre>
         ) : (
-          <EmptyState className="h-full min-h-0">No connection events yet.</EmptyState>
+          <EmptyState className="h-full min-h-0">
+            <div className="space-y-1">
+              <p>{t("ssh.logs.empty")}</p>
+              <p>{t("ssh.logs.emptyHelp")}</p>
+            </div>
+          </EmptyState>
         )}
       </div>
     </BottomPanel>

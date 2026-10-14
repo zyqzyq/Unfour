@@ -722,6 +722,13 @@
     }
   },
   "database": {
+    "start": {
+      "title": "添加第一个数据库连接",
+      "description": "连接数据库后，即可浏览表结构、预览数据并编写 SQL。",
+      "create": "添加连接",
+      "loading": "正在加载数据库连接…",
+      "failed": "无法加载数据库连接。请重试。"
+    },
     "batch": {
       "confirmationChanged": "SQL 或连接上下文已变化，请重新点击全部运行或运行选中。",
       "confirmationHint": "请核对下方 SQL，然后点击确认运行。这是安全确认，不是执行失败。",
@@ -1014,6 +1021,18 @@
     "title": "数据库"
   },
   "ssh": {
+    "logs": {
+      "title": "连接事件",
+      "copy": "复制终端日志",
+      "copied": "日志已复制",
+      "copyFailed": "无法复制日志。请检查剪贴板权限后重试。",
+      "export": "导出终端日志",
+      "exporting": "正在导出终端日志…",
+      "exportFailed": "日志导出失败。请重试。",
+      "collapse": "收起底部面板",
+      "empty": "暂无连接事件",
+      "emptyHelp": "启动 SSH 会话后，连接事件会显示在这里。"
+    },
     "actions": {
       "cancelReconnect": "取消重连",
       "clearTerminal": "清空终端",

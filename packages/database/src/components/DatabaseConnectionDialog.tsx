@@ -1,5 +1,5 @@
 import { Plug, Save } from "lucide-react";
-import { type FormEvent, type ReactNode, useState } from "react";
+import { type FormEvent, type ReactNode, useRef, useState } from "react";
 import { revealConnectionSecret, type DatabaseConnectionInput } from "@unfour/command-client";
 import {
   Button,
@@ -47,10 +47,21 @@ export function DatabaseConnectionDialog({
   children?: ReactNode;
 }) {
   const { t } = useI18n();
+  const returnFocus = useRef<HTMLElement | null>(null);
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent title={t("database.connection.settings")}>
+      <DialogContent
+        onOpenAutoFocus={() => {
+          returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        }}
+        onCloseAutoFocus={(event) => {
+          if (!returnFocus.current?.isConnected) return;
+          event.preventDefault();
+          returnFocus.current.focus();
+        }}
+        title={t("database.connection.settings")}
+      >
         <DialogHeader>
           <DialogTitle>{t("database.connection.settings")}</DialogTitle>
         </DialogHeader>

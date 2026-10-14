@@ -11,6 +11,7 @@ import { DatabaseModuleToolbar } from "./components/DatabaseModuleToolbar";
 import { DatabaseConnectionErrorBanner } from "./components/DatabaseConnectionErrorBanner";
 import { DatabaseConnectionDialog } from "./components/DatabaseConnectionDialog";
 import { DatabaseWorkspace } from "./components/DatabaseWorkspace";
+import { DatabaseStart } from "./components/DatabaseStart";
 import { useDatabaseConnections } from "./hooks/useDatabaseConnections";
 import { useDatabaseConnectionMutations } from "./hooks/useDatabaseConnectionMutations";
 import { useDatabaseWorkspaceController } from "./hooks/useDatabaseWorkspaceController";
@@ -300,8 +301,23 @@ export function DatabasePage({
     updateTableTab: databaseTabs.updateTableTab,
   });
 
+  // Only replace an unused initial workspace. Existing drafts, results, errors
+  // and multiple tabs must remain reachable even when connections disappear.
+  const showConnectionStart = connections.length === 0 && databaseTabs.tabs.length <= 1 &&
+    databaseTabs.tabs.every((tab) => tab.kind === "query" && !tab.connectionId &&
+      !tab.sql.trim() && !tab.sqlBaseline?.trim() && tab.resultTab === "results" && !tab.pendingSqlBatch &&
+      !tab.result && !tab.results.length && !tab.statements?.length && !tab.error &&
+      !tab.loading && !tab.pendingConfirmation && !tab.executionNotice);
+
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col bg-[var(--u-color-surface)]">
+      {showConnectionStart ? <DatabaseStart
+        pending={connectionsQuery.isPending}
+        failed={connectionsQuery.isError}
+        refreshing={connectionsQuery.isFetching}
+        onRetry={() => void connectionsQuery.refetch()}
+        onCreate={handleNewConnection}
+      /> : <>
       <DatabaseModuleToolbar
         connectionStatus={context.toolbarConnectionStatus}
         onNewQuery={startNewQuery}
@@ -360,6 +376,7 @@ export function DatabasePage({
           workspaceId={workspaceId}
         />
       </div>
+      </>}
       <DatabaseConnectionDialog
         canTest={canTest}
         error={saveMutation.error}

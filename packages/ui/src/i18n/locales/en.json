@@ -723,6 +723,13 @@
     }
   },
   "database": {
+    "start": {
+      "title": "Add your first database connection",
+      "description": "Connect a database to browse schemas, preview table data and write SQL.",
+      "create": "Add connection",
+      "loading": "Loading database connections…",
+      "failed": "Database connections could not be loaded. Please retry."
+    },
     "batch": {
       "confirmationChanged": "The SQL or connection context changed. Click Run All or Run Selected again.",
       "confirmationHint": "Review the SQL below, then click Confirm run. This is a safety check, not an execution failure.",
@@ -1015,6 +1022,18 @@
     "title": "Database"
   },
   "ssh": {
+    "logs": {
+      "title": "Connection Events",
+      "copy": "Copy terminal logs",
+      "copied": "Logs copied",
+      "copyFailed": "Could not copy logs. Check clipboard access and try again.",
+      "export": "Export terminal logs",
+      "exporting": "Exporting terminal logs…",
+      "exportFailed": "Log export failed. Please try again.",
+      "collapse": "Collapse bottom panel",
+      "empty": "No connection events yet.",
+      "emptyHelp": "Start an SSH session to see connection events here."
+    },
     "actions": {
       "cancelReconnect": "Cancel Reconnect",
       "clearTerminal": "Clear Terminal",
