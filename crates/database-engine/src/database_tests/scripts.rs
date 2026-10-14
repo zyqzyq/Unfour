@@ -128,6 +128,8 @@ async fn script_keeps_temp_and_transaction_state_and_drains_returning() {
     );
     let insert = result.statements[2].result.as_ref().unwrap();
     assert_eq!(insert.rows.len(), 1);
+    assert!(insert.truncated);
+    assert_eq!(insert.row_limit, 1);
     assert_eq!(insert.affected_rows, 3);
     let update = result.statements[3].result.as_ref().unwrap();
     assert_eq!(update.affected_rows, 3);

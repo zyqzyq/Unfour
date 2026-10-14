@@ -26,6 +26,12 @@ import {
   useTheme,
 } from "@unfour/ui";
 import { useSavedSql } from "../hooks/useSavedSql";
+import {
+  SQL_RESULT_ROW_LIMIT_DEFAULT,
+  SQL_RESULT_ROW_LIMIT_OPTIONS,
+  isSqlResultRowLimitOption,
+  sqlResultRowLimit,
+} from "../model/result-row-limit";
 import type { RunSqlOptions } from "../model/types";
 import { formatSql } from "../result-utils";
 import { formatDatabaseError } from "../result-utils";
@@ -56,10 +62,12 @@ export function SqlEditorTab({
   onSqlSaved,
   onStop,
   pendingConfirmation,
+  onResultRowLimitChange,
   queryCatalog,
   querySchema,
   schema,
   schemaOptions,
+  resultRowLimit,
   selectedConnectionId,
   sql,
   workspaceId,
@@ -78,10 +86,12 @@ export function SqlEditorTab({
   onSqlSaved: (sql: string) => void;
   onStop: () => void;
   pendingConfirmation: boolean;
+  onResultRowLimitChange?: (limit: number) => void;
   queryCatalog: string | null;
   querySchema: string | null;
   schema?: DatabaseSchema;
   schemaOptions: string[];
+  resultRowLimit?: number;
   selectedConnectionId: string | null;
   sql: string;
   workspaceId: string;
@@ -94,6 +104,7 @@ export function SqlEditorTab({
   const schemaRef = useRef<DatabaseSchema | undefined>(schema);
   const completionDisposable = useRef<{ dispose: () => void } | null>(null);
   const selectedConnection = connections.find((connection) => connection.id === selectedConnectionId);
+  const selectedResultRowLimit = sqlResultRowLimit(resultRowLimit);
   const savedSql = useSavedSql(workspaceId, { active });
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [savedDialogOpen, setSavedDialogOpen] = useState(false);
@@ -361,6 +372,21 @@ export function SqlEditorTab({
           </DropdownMenu>
         </ToolbarGroup>
         <ToolbarGroup className="min-w-0">
+          <Select
+            aria-label={t("database.result.rowLimitAria")}
+            className="max-w-[120px]"
+            onChange={(event) => {
+              const next = Number(event.target.value);
+              if (isSqlResultRowLimitOption(next)) {
+                onResultRowLimitChange?.(next);
+              }
+            }}
+            options={SQL_RESULT_ROW_LIMIT_OPTIONS.map((count) => ({
+              label: t("database.result.rowLimitOption", { count }),
+              value: String(count),
+            }))}
+            value={String(isSqlResultRowLimitOption(selectedResultRowLimit) ? selectedResultRowLimit : SQL_RESULT_ROW_LIMIT_DEFAULT)}
+          />
           <Select
             aria-label={t("database.editor.connectionAria")}
             className="max-w-[220px]"

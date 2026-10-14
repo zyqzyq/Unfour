@@ -437,6 +437,8 @@ impl CommandBusAdapter for ApiStubCommandBus {
                 confirmed: true,
                 message: None,
             },
+            truncated: false,
+            row_limit: 0,
         })
     }
 }

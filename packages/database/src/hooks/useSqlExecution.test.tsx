@@ -61,6 +61,27 @@ describe("useSqlExecution", () => {
     expect(callbacks.onSuccess).toHaveBeenCalledWith(queryResult, false);
   });
 
+  it("forwards an explicit result row limit", async () => {
+    executeMock.mockResolvedValue({ rows: [] } as unknown as DatabaseQueryResult);
+    const { result } = renderHook(
+      () =>
+        useSqlExecution({
+          connectionId: "conn-1",
+          onConfirmationRequired: vi.fn(),
+          onExecuteStart: vi.fn(),
+          onSuccess: vi.fn(),
+          workspaceId: "ws-1",
+        }),
+      { wrapper: createWrapper() },
+    );
+    result.current.mutate({ confirmMutation: false, limit: 500, sql: "select * from t limit 500" });
+    await waitFor(() => expect(executeMock).toHaveBeenCalled());
+    expect(executeMock).toHaveBeenCalledWith(expect.objectContaining({
+      limit: 500,
+      sql: "select * from t limit 500",
+    }));
+  });
+
   it("requests confirmation when the backend reports CONFIRMATION_REQUIRED", async () => {
     executeMock.mockRejectedValue({ code: "CONFIRMATION_REQUIRED" });
     const onConfirmationRequired = vi.fn();

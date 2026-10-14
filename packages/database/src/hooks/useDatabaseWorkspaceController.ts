@@ -289,6 +289,7 @@ export function useDatabaseWorkspaceController({
     showQueryHistory,
     startNewQuery,
     updateActiveSql,
+    updateResultRowLimit,
   } = useDatabaseQueryWorkspaceActions({
     activeQueryTab,
     activeTableTab,
@@ -408,6 +409,7 @@ export function useDatabaseWorkspaceController({
     submitConnection,
     testConnectionInput,
     updateActiveSql,
+    updateResultRowLimit,
     updateForm,
   };
 }

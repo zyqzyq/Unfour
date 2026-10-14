@@ -108,6 +108,11 @@ async fn serve(
                     .lock()
                     .unwrap()
                     .push((catalog.clone(), query.clone()));
+                if let Some(spec) = super::result_cap::result_fixture(&query) {
+                    send_simple_fixture(&mut stream, &query, &spec).await?;
+                    send(&mut stream, b'Z', b"I").await?;
+                    continue;
+                }
                 if query.starts_with("SET search_path") {
                     send(&mut stream, b'C', b"SET\0").await?;
                 } else if query.starts_with("UPDATE ") {
@@ -182,7 +187,9 @@ async fn serve(
             b'B' => send(&mut stream, b'2', &[]).await?,
             b'E' => {
                 let value = version.lock().unwrap().clone();
-                if value == "probe-hang" {
+                if let Some(spec) = super::result_cap::result_fixture(&sql) {
+                    send_execute_fixture(&mut stream, &sql, &spec).await?;
+                } else if value == "probe-hang" {
                     std::future::pending::<()>().await;
                 } else if value == "probe-error" {
                     send(
@@ -223,4 +230,86 @@ async fn serve(
             other => panic!("unexpected PostgreSQL fixture message: {other}"),
         }
     }
+}
+
+fn text_description(name: &str) -> Vec<u8> {
+    let mut description = 1u16.to_be_bytes().to_vec();
+    description.extend(name.as_bytes());
+    description.push(0);
+    description.extend(0u32.to_be_bytes());
+    description.extend(0u16.to_be_bytes());
+    description.extend(25u32.to_be_bytes());
+    description.extend((-1i16).to_be_bytes());
+    description.extend((-1i32).to_be_bytes());
+    description.extend(0u16.to_be_bytes());
+    description
+}
+
+fn text_row(value: &str) -> Vec<u8> {
+    let mut row = 1u16.to_be_bytes().to_vec();
+    row.extend((value.len() as u32).to_be_bytes());
+    row.extend(value.as_bytes());
+    row
+}
+
+fn command_tag(sql: &str, spec: &super::result_cap::ResultFixture) -> Vec<u8> {
+    let trimmed = sql.trim_start();
+    let mut tag = if trimmed.len() >= 6 && trimmed[..6].eq_ignore_ascii_case("insert") {
+        format!("INSERT 0 {}", spec.affected)
+    } else if trimmed.len() >= 6 && trimmed[..6].eq_ignore_ascii_case("update") {
+        format!("UPDATE {}", spec.affected)
+    } else if trimmed.len() >= 6 && trimmed[..6].eq_ignore_ascii_case("delete") {
+        format!("DELETE {}", spec.affected)
+    } else {
+        format!("SELECT {}", spec.rows)
+    };
+    tag.push('\0');
+    tag.into_bytes()
+}
+
+async fn send_result_rows(
+    stream: &mut TcpStream,
+    sql: &str,
+    spec: &super::result_cap::ResultFixture,
+    include_description: bool,
+) -> std::io::Result<()> {
+    let tag = command_tag(sql, spec);
+    for _ in 0..spec.sets {
+        if include_description {
+            send(stream, b'T', &text_description("n")).await?;
+        }
+        for index in 1..=spec.rows {
+            send(stream, b'D', &text_row(&index.to_string())).await?;
+        }
+        send(stream, b'C', &tag).await?;
+    }
+    Ok(())
+}
+
+async fn send_simple_fixture(
+    stream: &mut TcpStream,
+    sql: &str,
+    spec: &super::result_cap::ResultFixture,
+) -> std::io::Result<()> {
+    send_result_rows(stream, sql, spec, true).await
+}
+
+async fn send_execute_fixture(
+    stream: &mut TcpStream,
+    sql: &str,
+    spec: &super::result_cap::ResultFixture,
+) -> std::io::Result<()> {
+    // Describe already sent the first row description. A later set includes
+    // its own so the boundary stays visible to the driver.
+    let tag = command_tag(sql, spec);
+    for set in 0..spec.sets {
+        if set > 0 {
+            send(stream, b'T', &text_description("n")).await?;
+        }
+        for index in 1..=spec.rows {
+            send(stream, b'D', &text_row(&index.to_string())).await?;
+        }
+        send(stream, b'C', &tag).await?;
+    }
+    Ok(())
 }

@@ -224,6 +224,8 @@ impl CommandBusAdapter for StubCommandBus {
                 confirmed: true,
                 message: None,
             },
+            truncated: false,
+            row_limit: 0,
         })
     }
 }

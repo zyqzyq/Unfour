@@ -347,6 +347,8 @@ pub(super) fn browse_result(
                 confirmed: true,
                 message: None,
             },
+            truncated: false,
+            row_limit: 0,
         },
     }
 }

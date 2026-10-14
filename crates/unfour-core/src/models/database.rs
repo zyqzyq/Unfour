@@ -507,6 +507,15 @@ pub struct DatabaseQueryResult {
     pub affected_rows: u64,
     pub duration_ms: u128,
     pub safety: DatabaseQuerySafety,
+    /// True only when the retained result set yielded another row after
+    /// `row_limit` rows were kept. Reaching exactly `row_limit` rows is not
+    /// truncation, and this flag is independent of any `LIMIT` in the SQL.
+    #[serde(default)]
+    pub truncated: bool,
+    /// Client retention cap applied to this execution. `0` means this result
+    /// did not come from that cap (for example a table-browse page).
+    #[serde(default)]
+    pub row_limit: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -9,6 +9,7 @@ import { useI18n } from "@unfour/ui";
 import { useDatabaseTabs } from "./useDatabaseTabs";
 import { useQueryHistory } from "./useQueryHistory";
 import { useSavedSql } from "./useSavedSql";
+import { sqlResultRowLimit } from "../model/result-row-limit";
 import type {
   DatabaseQueryWorkspaceTab,
   DatabaseTableWorkspaceTab,
@@ -277,6 +278,13 @@ export function useDatabaseQueryWorkspaceActions({
     databaseTabs.updateQueryTab(activeQueryTab.id, { sqlBaseline: sql });
   }
 
+  function updateResultRowLimit(limit: number) {
+    if (!activeQueryTab) {
+      return;
+    }
+    databaseTabs.updateQueryTab(activeQueryTab.id, { resultRowLimit: sqlResultRowLimit(limit) });
+  }
+
 
   return {
     clearQueryHistory,
@@ -298,5 +306,6 @@ export function useDatabaseQueryWorkspaceActions({
     showQueryHistory,
     startNewQuery,
     updateActiveSql,
+    updateResultRowLimit,
   };
 }

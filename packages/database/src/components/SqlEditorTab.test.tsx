@@ -180,6 +180,15 @@ function setSelection(sql: string) {
 }
 
 describe("SQL editor run actions", () => {
+  it("changes the result row limit without rewriting SQL", () => {
+    const onResultRowLimitChange = vi.fn();
+    renderEditor({ onResultRowLimitChange, resultRowLimit: 100 });
+    expect(screen.getByLabelText("Result row limit")).toHaveValue("100");
+    fireEvent.change(screen.getByLabelText("Result row limit"), { target: { value: "500" } });
+    expect(onResultRowLimitChange).toHaveBeenCalledWith(500);
+    expect(screen.getByLabelText("sql editor")).toHaveValue(MULTI_SQL);
+  });
+
   it("runs the full editor SQL on Run All without cursor or selection", () => {
     const { onRun } = renderEditor();
     fireEvent.click(screen.getByRole("button", { name: "Run All" }));

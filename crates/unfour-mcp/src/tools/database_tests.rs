@@ -415,6 +415,8 @@ impl CommandBusAdapter for DbStubCommandBus {
                 confirmed: is_read || input.confirm_mutation == Some(true),
                 message: None,
             },
+            truncated: false,
+            row_limit: 0,
         })
     }
 

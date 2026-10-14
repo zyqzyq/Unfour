@@ -262,6 +262,8 @@ mod tests {
                     confirmed: true,
                     message: None,
                 },
+                truncated: false,
+                row_limit: 0,
             })
         }
     }

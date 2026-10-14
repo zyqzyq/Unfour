@@ -11,6 +11,9 @@ export function SqlBatchMessages({ statements }: { statements: DatabaseStatement
           <div>{t("database.batch.statement", { index: entry.index, status: t(`database.batch.${entry.status}`) })}</div>
           <pre className="whitespace-pre-wrap break-words text-[var(--u-color-text-muted)]">{entry.sql}</pre>
           {entry.result ? <div>{t("database.result.affectedRows", { rows: entry.result.affectedRows, durationMs: entry.result.durationMs })}</div> : null}
+          {entry.result?.truncated ? (
+            <div>{t("database.result.limitHint", { rows: entry.result.rows.length, limit: entry.result.rowLimit ?? entry.result.rows.length })}</div>
+          ) : null}
           {entry.error ? <DatabaseErrorDetails error={entry.error} /> : null}
           {entry.status === "skipped" ? <div>{t("database.batch.skippedDetail")}</div> : null}
         </div>

@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { executeDatabaseQuery } from "@unfour/command-client";
+import { sqlResultRowLimit } from "../model/result-row-limit";
 import { isConfirmationRequired } from "../result-utils";
 
 export type RunSqlParams = {
@@ -7,6 +8,8 @@ export type RunSqlParams = {
   sql: string;
   catalog?: string | null;
   schema?: string | null;
+  /** Client retention cap. Omitted values use the shared default. */
+  limit?: number;
 };
 
 export function useSqlExecution({
@@ -28,12 +31,12 @@ export function useSqlExecution({
 }) {
   return useMutation({
     onMutate: onExecuteStart,
-    mutationFn: ({ catalog, confirmMutation, schema, sql }: RunSqlParams) =>
+    mutationFn: ({ catalog, confirmMutation, limit, schema, sql }: RunSqlParams) =>
       executeDatabaseQuery({
         workspaceId,
         connectionId: connectionId ?? "",
         sql,
-        limit: 100,
+        limit: sqlResultRowLimit(limit),
         confirmMutation,
         catalog,
         schema,

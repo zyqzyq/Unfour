@@ -219,6 +219,8 @@ impl CommandBusAdapter for StubCommandBus {
                 confirmed: true,
                 message: None,
             },
+            truncated: false,
+            row_limit: 0,
         })
     }
 
@@ -605,6 +607,8 @@ impl CommandBusAdapter for PolicyBus {
                 confirmed: true,
                 message: None,
             },
+            truncated: false,
+            row_limit: 0,
         })
     }
 

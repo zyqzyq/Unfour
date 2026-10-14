@@ -211,6 +211,14 @@ export type DatabaseQueryResult = {
   affectedRows: number;
   durationMs: number;
   safety: DatabaseQuerySafety;
+  /**
+   * True only when the driver returned another row after `rowLimit` rows were
+   * kept. A result whose length equals the limit is not truncated by itself.
+   * This is the client display cap, not a LIMIT clause in the SQL.
+   */
+  truncated?: boolean;
+  /** Client retention cap applied to this result. */
+  rowLimit?: number;
 };
 
 export type DatabaseExportFilter = {

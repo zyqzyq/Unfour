@@ -132,6 +132,9 @@ export function QueryResultPanel({
           ) : result ? (
             <StatusBadge tone="success">{t("database.result.statusOk")}</StatusBadge>
           ) : null}
+          {result?.truncated ? (
+            <StatusBadge tone="warning">{t("database.result.truncatedBadge")}</StatusBadge>
+          ) : null}
           <span className="text-[12px] text-[var(--u-color-text-muted)]">
             {result
               ? t("database.result.rowsInMs", { rows: result.rows.length, durationMs: result.durationMs })
@@ -185,6 +188,11 @@ export function QueryResultPanel({
         </ToolbarGroup>
       </Toolbar>
       {executionNotice ? <div role="status" className="px-2 py-1 text-[12px] text-[var(--u-color-text-muted)]">{executionNotice}</div> : null}
+      {result?.truncated && !pendingConfirmation ? (
+        <div role="status" className="px-2 py-1 text-[12px] text-[var(--u-color-text-muted)]">
+          {t("database.result.limitHint", { rows: result.rows.length, limit: result.rowLimit ?? result.rows.length })}
+        </div>
+      ) : null}
       {pendingConfirmation && activeTab !== "history" ? (
         <ConfirmationPanel sql={confirmationSql ?? ""} t={t} />
       ) : null}
@@ -363,7 +371,9 @@ function Messages({
             <div>{t("database.result.affectedRowsShort", { rows: item.affectedRows })}</div>
             <div>{t("database.result.safety", { classification: item.safety.classification })}</div>
             {item.safety.message ? <div>{item.safety.message}</div> : null}
-            {item.columns.length > 0 ? <div>{t("database.result.limitHint")}</div> : null}
+            {item.truncated ? (
+              <div>{t("database.result.limitHint", { rows: item.rows.length, limit: item.rowLimit ?? item.rows.length })}</div>
+            ) : null}
           </div>
         ))}
       </div>
@@ -396,7 +406,7 @@ function Logs({
             ? items
                 .map(
                   (item, index) =>
-                    `#${index + 1} duration=${item.durationMs}ms rows=${item.rows.length} affected=${item.affectedRows} classification=${item.safety.classification}`,
+                    `#${index + 1} duration=${item.durationMs}ms rows=${item.rows.length} affected=${item.affectedRows} truncated=${item.truncated === true} rowLimit=${item.rowLimit ?? 0} classification=${item.safety.classification}`,
                 )
                 .join("\n")
             : t("database.result.noLogs")}

@@ -158,6 +158,8 @@ impl CommandBusAdapter for SshStubCommandBus {
                 confirmed: true,
                 message: None,
             },
+            truncated: false,
+            row_limit: 0,
         })
     }
 }

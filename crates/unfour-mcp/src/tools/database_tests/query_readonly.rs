@@ -85,6 +85,8 @@ fn query_readonly_forwards_catalog_schema_and_timeout() {
                     confirmed: true,
                     message: None,
                 },
+                truncated: false,
+                row_limit: 0,
             })
         }
     }
@@ -324,6 +326,8 @@ fn query_readonly_truncates_large_results() {
                     confirmed: true,
                     message: None,
                 },
+                truncated: false,
+                row_limit: 0,
             })
         }
     }

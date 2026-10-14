@@ -68,3 +68,45 @@ it("still renders DATABASE_ERROR as a failed execution", () => {
   expect(screen.getByText("Execution failed")).toBeInTheDocument();
   expect(screen.getByText("syntax error at or near FROM")).toBeInTheDocument();
 });
+
+const cappedResult = {
+  columns: [{ name: "n", dataType: "int" }],
+  rows: [["1"], ["2"]],
+  affectedRows: 3,
+  durationMs: 4,
+  rowLimit: 2,
+  safety: { classification: "mutation", requiresConfirmation: true, confirmed: true, message: null },
+  truncated: false,
+};
+
+it("does not treat a result that exactly fills the display limit as truncated", () => {
+  const { rerender } = render(
+    <QueryResultPanel {...props} activeResultIndex={0} result={cappedResult} results={[cappedResult]} statements={[]} />,
+  );
+  expect(screen.queryByText("Truncated")).not.toBeInTheDocument();
+  expect(screen.queryByText(/display limit/)).not.toBeInTheDocument();
+  expect(screen.getByText("2 rows in 4ms")).toBeInTheDocument();
+  rerender(
+    <QueryResultPanel {...props} activeResultIndex={0} activeTab="logs" result={cappedResult} results={[cappedResult]} statements={[]} />,
+  );
+  expect(screen.getByText(/truncated=false rowLimit=2/)).toBeInTheDocument();
+});
+
+it("explains a real display-cap truncation separately from SQL LIMIT", () => {
+  const result = { ...cappedResult, truncated: true };
+  const statement = {
+    index: 1, start: 0, end: 20, sql: "INSERT INTO t(n) VALUES (1),(2),(3) RETURNING n", status: "success" as const,
+    error: null, result,
+  };
+  const { rerender } = render(
+    <QueryResultPanel {...props} activeResultIndex={0} result={result} results={[result]} statements={[statement]} />,
+  );
+  expect(screen.getByText("Truncated")).toBeInTheDocument();
+  expect(screen.getByText(/Showing 2 rows/)).toBeInTheDocument();
+  expect(screen.getByText(/display limit of 2/)).toBeInTheDocument();
+  expect(screen.getByText(/separate from any LIMIT/)).toBeInTheDocument();
+  rerender(
+    <QueryResultPanel {...props} activeResultIndex={0} activeTab="messages" result={result} results={[result]} statements={[statement]} />,
+  );
+  expect(screen.getAllByText(/separate from any LIMIT/).length).toBeGreaterThan(0);
+});

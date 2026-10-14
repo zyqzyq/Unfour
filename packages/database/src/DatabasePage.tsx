@@ -209,6 +209,7 @@ export function DatabasePage({
     submitConnection,
     testConnectionInput,
     updateActiveSql,
+    updateResultRowLimit,
     updateForm,
   } = useDatabaseWorkspaceController({
     activeQueryTab,
@@ -347,6 +348,7 @@ export function DatabasePage({
           onPreviewSelectedTable={previewSelectedTable}
           onRefreshSchema={refreshActiveSchema}
           onReorderTabs={databaseTabs.reorderTabs}
+          onResultRowLimitChange={updateResultRowLimit}
           onRun={runSql}
           onSelectConnection={(connectionId) => selectQueryConnection(connectionId || null)}
           onSelectResultSet={selectQueryResult}

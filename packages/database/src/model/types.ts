@@ -145,6 +145,8 @@ export type DatabaseQueryWorkspaceTab = {
   executionRunId?: string | null;
   confirmationSql?: string | null;
   resultTab: DatabaseResultTab;
+  /** Client retention cap sent as `limit`. Distinct from any LIMIT in `sql`. */
+  resultRowLimit?: number;
   schema: string | null;
   sql: string;
   /** SQL present when the tab was created or given an explicit initial script. */

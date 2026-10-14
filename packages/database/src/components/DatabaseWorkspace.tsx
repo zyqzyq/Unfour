@@ -37,6 +37,7 @@ export function DatabaseWorkspace({
   onPreviewSelectedTable,
   onRefreshSchema,
   onReorderTabs,
+  onResultRowLimitChange,
   onRun,
   onSelectConnection,
   onSelectResultSet,
@@ -79,6 +80,7 @@ export function DatabaseWorkspace({
   onPreviewSelectedTable: () => void;
   onRefreshSchema: () => void;
   onReorderTabs: (fromIndex: number, toIndex: number) => void;
+  onResultRowLimitChange?: (limit: number) => void;
   onRun: (options?: string | RunSqlOptions) => void;
   onSelectConnection: (connectionId: string) => void;
   onSelectResultSet: (index: number) => void;
@@ -254,10 +256,12 @@ export function DatabaseWorkspace({
                 onSqlSaved={onSqlSaved}
                 onStop={onStop}
                 pendingConfirmation={renderQuery.pendingConfirmation}
+                onResultRowLimitChange={onResultRowLimitChange}
                 queryCatalog={queryCatalog}
                 querySchema={querySchema}
                 schema={schema}
                 schemaOptions={schemaOptions}
+                resultRowLimit={renderQuery.resultRowLimit}
                 selectedConnectionId={renderQuery.connectionId}
                 sql={renderQuery.sql}
                 workspaceId={workspaceId}

@@ -1,4 +1,5 @@
 import { executeDatabaseScript } from "@unfour/command-client";
+import { sqlResultRowLimit } from "./result-row-limit";
 import type { DatabaseQueryWorkspaceTab, RunSqlOptions, SqlBatchState } from "./types";
 
 export type { SqlBatchState };
@@ -21,7 +22,7 @@ export function createSqlBatch(tab: DatabaseQueryWorkspaceTab, options: RunSqlOp
       cursorOffset: runAll || options.sql !== undefined ? undefined : options.cursorOffset ?? 0,
       runId: crypto.randomUUID(),
       explain: options.explain,
-      limit: 100,
+      limit: sqlResultRowLimit(tab.resultRowLimit),
       confirmMutation: false,
     },
   };

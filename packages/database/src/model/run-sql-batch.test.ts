@@ -15,6 +15,14 @@ describe("SQL script command", () => {
     const batch = createSqlBatch(tab, { cursorOffset: 15 }, "ws");
     expect(sqlAwaitingConfirmation(batch, { details: { statementRanges: [{ start: 10, end: tab.sql.length }] } })).toBe("DELETE FROM t;");
   });
+  it("sends the client row limit separately from any LIMIT in the SQL", () => {
+    expect(createSqlBatch(tab, { mode: "all" }, "ws").input.limit).toBe(100);
+    const sql = "SELECT * FROM t LIMIT 500";
+    const batch = createSqlBatch({ ...tab, resultRowLimit: 500, sql }, { mode: "all" }, "ws");
+    expect(batch.input.limit).toBe(500);
+    expect(batch.input.sql).toBe(sql);
+    expect(createSqlBatch({ ...tab, resultRowLimit: 5000 }, { mode: "all" }, "ws").input.limit).toBe(1000);
+  });
   it("sends Run All as a single unmodified script without a cursor", async () => {
     const batch = createSqlBatch(tab, { mode: "all", sql: "DELETE FROM t;", cursorOffset: 15 }, "ws");
     await executeSqlBatch(batch, false);

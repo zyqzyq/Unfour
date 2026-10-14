@@ -68,9 +68,12 @@ async fn serve(
             0x03 | 0x16 => {
                 let sql = String::from_utf8_lossy(&packet[1..]).into_owned();
                 let version_probe = sql.trim().eq_ignore_ascii_case("SELECT VERSION()");
-                queries.lock().unwrap().push(sql);
+                queries.lock().unwrap().push(sql.clone());
                 if version_probe && hang_version_probe {
                     std::future::pending::<()>().await;
+                } else if let Some(spec) = super::result_cap::result_fixture(&sql) {
+                    let mut seq = 1u8;
+                    send_text_results(&mut stream, &mut seq, &sql, &spec).await?;
                 } else if version_probe {
                     send_packet(&mut stream, 1, &err_packet("probe denied")).await?;
                 } else {
@@ -126,6 +129,82 @@ async fn send_packet(stream: &mut TcpStream, seq: u8, payload: &[u8]) -> std::io
     message.push(seq);
     message.extend_from_slice(payload);
     stream.write_all(&message).await
+}
+
+fn lenenc_str(value: &str) -> Vec<u8> {
+    let mut body = Vec::with_capacity(1 + value.len());
+    body.push(value.len() as u8);
+    body.extend(value.as_bytes());
+    body
+}
+
+fn column_definition(name: &str) -> Vec<u8> {
+    let mut body = Vec::new();
+    body.extend(lenenc_str("def"));
+    body.extend(lenenc_str(""));
+    body.extend(lenenc_str(""));
+    body.extend(lenenc_str(""));
+    body.extend(lenenc_str(name));
+    body.extend(lenenc_str(name));
+    body.push(0x0c);
+    body.extend(&45u16.to_le_bytes());
+    body.extend(&255u32.to_le_bytes());
+    body.push(0xfd);
+    body.extend(&0u16.to_le_bytes());
+    body.push(0);
+    body.extend(&0u16.to_le_bytes());
+    body
+}
+
+fn text_result_row(value: &str) -> Vec<u8> {
+    lenenc_str(value)
+}
+
+/// With CLIENT_DEPRECATE_EOF, sqlx ends a text result set on a short 0xFE
+/// packet and decodes it as an OK packet. A 0x00 header is treated as a row.
+/// The payload must stay under 9 bytes or it is also treated as a row.
+fn result_eof(affected: u8, more: bool) -> Vec<u8> {
+    let status: u16 = 0x0002 | if more { 0x0008 } else { 0 };
+    let mut body = vec![0xfe, affected, 0x00];
+    body.extend(status.to_le_bytes());
+    body.extend(0u16.to_le_bytes());
+    body
+}
+
+async fn send_next(stream: &mut TcpStream, seq: &mut u8, payload: &[u8]) -> std::io::Result<()> {
+    send_packet(stream, *seq, payload).await?;
+    *seq = seq.wrapping_add(1);
+    Ok(())
+}
+
+async fn send_text_results(
+    stream: &mut TcpStream,
+    seq: &mut u8,
+    sql: &str,
+    spec: &super::result_cap::ResultFixture,
+) -> std::io::Result<()> {
+    let affected =
+        if sql.trim_start().len() >= 6 && sql.trim_start()[..6].eq_ignore_ascii_case("insert") {
+            u8::try_from(spec.affected).unwrap_or(0)
+        } else {
+            0
+        };
+    for set in 0..spec.sets {
+        send_next(stream, seq, &[1]).await?;
+        send_next(stream, seq, &column_definition("n")).await?;
+        for index in 1..=spec.rows {
+            send_next(stream, seq, &text_result_row(&index.to_string())).await?;
+        }
+        let more = set + 1 < spec.sets;
+        // sqlx currently reports rows_affected as 0 for this terminator.
+        send_next(
+            stream,
+            seq,
+            &result_eof(if set == 0 { affected } else { 0 }, more),
+        )
+        .await?;
+    }
+    Ok(())
 }
 
 async fn read_packet(stream: &mut TcpStream) -> std::io::Result<Vec<u8>> {
