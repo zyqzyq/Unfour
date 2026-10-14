@@ -281,9 +281,18 @@ run `running`, `succeeded`, `failed`, `timedOut`, `cancelled`, `interrupted`,
 The frontend uses the corresponding string unions.
 
 Flow selection, New Flow, accepted discard, and workspace changes reset run
-inputs to that definition's defaults, reset manual secret names, and clear the
-environment selection to workspace-only. Environment is deliberately scoped
-to the selected Flow invocation, not an implicit workspace-level preference.
+inputs to that definition's defaults and reset manual secret names. Each time
+the desktop Run dialog opens, it snapshots the Workspace's active variable
+environment, or workspace-only if none is active. An initial pending environment
+query may fill that default only if the user has not selected an environment
+(including workspace-only) or reset/reopened the dialog. Subsequent query or
+title-bar changes never replace the selection. Submission explicitly passes
+the selected environment and still requires confirmation. MCP's absent/null
+environment continues to mean workspace-only. Run details display the recorded
+`context.environmentId` as an ID, without inferring a historical name from the
+current environment list. Workspace DEV/TEST/PROD is a workspace type used by
+the Auto MCP policy; variable environments and explicit MCP permissions are
+separate settings.
 JsonField synchronizes external values while retaining invalid local edits
 until reset/correction. Input definitions drive typed run fields. Run confirmation
 shows the Flow/workspace/environment and masks declared/manual/known-sensitive

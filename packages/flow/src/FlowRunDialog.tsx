@@ -18,6 +18,8 @@ export function FlowRunDialog({ workspaceId, draft, editor, execution, data, val
   const { runDialog, busy, setRunDialog, environmentId, setEnvironmentId, contextRevision, setInputs, secretInputNames, setSecretInputNames, error } = editor;
   const { viewingRun } = execution;
   const { resourcesQuery, environments, workspaceVariables } = data;
+  const selectedEnvironment = environments.data?.find((environment) => environment.id === environmentId);
+  const environmentLabel = environmentId ? selectedEnvironment?.name ?? environmentId : t("flow.workspaceOnly");
   const { resolvedInputs, inputProblems, manualSecretErrors, resourceProblems, environmentInputProblems, needsWorkspaceDefaults, hasApi, apiProblems, manualSecrets, invalidRun } = validation;
   return (
     <Dialog open={runDialog} onOpenChange={(open) => { if (!busy) setRunDialog(open); }}>
@@ -31,6 +33,7 @@ export function FlowRunDialog({ workspaceId, draft, editor, execution, data, val
             onChange={(e) => setEnvironmentId(e.target.value)}
             options={[
               { value: "", label: t("flow.workspaceOnly") },
+              ...(environmentId && !selectedEnvironment ? [{ value: environmentId, label: environmentId }] : []),
               ...(environments.data ?? []).map((e) => ({
                 value: e.id,
                 label: e.name,
@@ -70,14 +73,14 @@ export function FlowRunDialog({ workspaceId, draft, editor, execution, data, val
         <p className="text-xs text-[var(--u-color-text-muted)]">{t("flow.runAgainHelp")}</p>
         <DialogDescription>{t("flow.effectsHelp")}</DialogDescription>
         <p>{t("flow.name")}: {draft.name} · {t("flow.workspace")}: {workspaceId}</p>
-        <p>{t("flow.environment")}: {environments.data?.find((environment) => environment.id === environmentId)?.name ?? t("flow.workspaceOnly")}{environmentId ? ` (${environmentId})` : ""}</p>
-        {apiProblems.map((problem) => <p role="alert" key={`${problem.stepId}:${problem.variable}`}>{t("flow.apiVariableUnavailable", { step: problem.name, variable: problem.variable, environment: environments.data?.find((env) => env.id === environmentId)?.name ?? t("flow.workspaceOnly") })}</p>)}
+        <p>{t("flow.environment")}: {environmentLabel}{selectedEnvironment ? ` (${environmentId})` : ""}</p>
+        {apiProblems.map((problem) => <p role="alert" key={`${problem.stepId}:${problem.variable}`}>{t("flow.apiVariableUnavailable", { step: problem.name, variable: problem.variable, environment: environmentLabel })}</p>)}
         <pre aria-label={t("flow.inputPreview")} className="max-h-40 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(maskInputs(resolvedInputs, draft.inputs, manualSecrets), null, 2)}</pre>
         {error && <p role="alert">{error}</p>}
         </fieldset></DialogBody>
         <DialogFooter>
           <Button variant="ghost" disabled={busy} onClick={() => setRunDialog(false)}>{t("common.confirm.cancel")}</Button>
-          <Button disabled={busy || invalidRun || environments.isPending} onClick={() => void execution.startRun(validation)}>{t("flow.run")}</Button>
+          <Button disabled={busy || invalidRun || environments.isPending || editor.environmentPending} onClick={() => void execution.startRun(validation)}>{t("flow.run")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

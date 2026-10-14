@@ -23,7 +23,7 @@ export function FlowPage(props: FlowPageProps) {
 function WorkspaceFlowPage({ workspaceId, onSidebarContentChange }: FlowPageProps) {
   const { t } = useI18n();
   const data = useFlowWorkspaceData(workspaceId);
-  const editor = useFlowEditor(workspaceId, data.flows);
+  const editor = useFlowEditor(workspaceId, data.flows, data.environments);
   const execution = useFlowRuns(workspaceId, editor);
   const runTrigger = useRef<HTMLButtonElement>(null);
   const backToEditor = useRef<HTMLButtonElement>(null);

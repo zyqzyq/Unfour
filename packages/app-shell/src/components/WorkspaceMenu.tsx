@@ -224,9 +224,11 @@ export function WorkspaceMenuTrigger({
   extensionContext: DesktopAppExtensionContext;
 }) {
   const { t } = useI18n();
+  const typeHelp = activeWorkspace ? t("app.workspace.environment.typeHelp", { type: environmentBadge(activeWorkspace.environmentType) }) : undefined;
   return (
     <DropdownMenu.Trigger asChild>
       <Button
+        aria-description={typeHelp}
         className={cn(
           "w-[220px] justify-start gap-1 border-transparent bg-[var(--u-color-surface)] px-2 font-semibold shadow-none hover:bg-[var(--u-color-surface-hover)]",
           className,
@@ -243,6 +245,8 @@ export function WorkspaceMenuTrigger({
         {activeWorkspace && (
           <>
             <Badge
+              title={typeHelp}
+              aria-label={t("app.workspace.environment.typeName", { type: environmentBadge(activeWorkspace.environmentType) })}
               className="shrink-0 px-1.5 leading-4"
               tone={environmentTone(activeWorkspace.environmentType)}
             >
@@ -293,6 +297,8 @@ function WorkspaceMenuItem({
             {workspace.name}
           </span>
           <Badge
+            title={t("app.workspace.environment.typeHelp", { type: environmentBadge(workspace.environmentType) })}
+            aria-label={t("app.workspace.environment.typeName", { type: environmentBadge(workspace.environmentType) })}
             className="shrink-0 px-1.5 leading-4"
             tone={environmentTone(workspace.environmentType)}
           >

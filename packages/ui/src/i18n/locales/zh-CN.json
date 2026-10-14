@@ -152,6 +152,7 @@
       "system": "跟随系统"
     },
     "titlebar": {
+      "mcpPermissionsHelp": "MCP 权限由独立策略决定：Auto 按工作区类型推导，也可显式设置权限。",
       "moreActions": "更多操作",
       "settings": "设置",
       "toggleBottomPanel": "切换底部面板",
@@ -276,6 +277,8 @@
         "thisWorkspace": "此工作区"
       },
       "environment": {
+        "typeName": "工作区类型：{type}",
+        "typeHelp": "工作区类型：{type}。用于 Auto MCP 策略推导；MCP 权限可独立设置。变量解析由变量环境控制。",
         "current": "已保存环境：{environment}",
         "development": "开发",
         "hint": "仅当 MCP 权限为 Auto 时使用环境默认值：DEV → 完全访问，TEST → 受保护，PROD → 只读。",
@@ -569,6 +572,7 @@
   "variables": {
     "active": "当前",
     "activeEnvironment": "当前变量环境",
+    "activeEnvironmentHelp": "用于 API、SSH Task 的变量解析，并在打开 Flow 运行框时作为默认值。工作区类型与 MCP 权限独立设置。",
     "add": "添加变量",
     "closeManager": "关闭 Workspace 变量管理",
     "defaultEnvironmentName": "新建变量环境",
@@ -1564,7 +1568,8 @@
     "referenceHelp": "使用 {\"$ref\":\"/steps/step_id/body/value\"} 引用操作结果，使用 /steps/step_id/result 引用等待条件满足的结果，或在文本中使用 ${/inputs/name}。SQL 和 Shell 替换为字面文本，请按目标语言正确引用。API：url、body、headers、query。SSH：inputs。数据库：sql、catalog、schema、limit。",
     "requiredInputs": "必需输入名称（逗号分隔）",
     "addStep": "添加步骤",
-    "environment": "环境",
+    "environment": "变量环境",
+    "recordedEnvironment": "使用的变量环境（ID）",
     "workspaceOnly": "仅 Workspace 变量",
     "runInputs": "运行输入（JSON 对象）",
     "history": "运行历史",

@@ -12,12 +12,14 @@ export type EnvironmentSelectItem = {
 export function ActiveEnvironmentSelect({
   activeEnvironmentId,
   environments,
+  description,
   onManage,
   onOpenChange,
   onSelect,
 }: {
   activeEnvironmentId: string | null;
   environments: EnvironmentSelectItem[];
+  description?: string;
   onManage: () => void;
   onOpenChange?: (open: boolean) => void;
   onSelect: (environmentId: string | null) => void;
@@ -32,11 +34,12 @@ export function ActiveEnvironmentSelect({
       <DropdownMenu.Trigger asChild>
         <Button
           aria-label={t("variables.activeEnvironment")}
+          aria-description={description}
           className="max-w-[132px] justify-start gap-1.5 border-transparent bg-[var(--u-color-surface)] px-1.5 font-medium shadow-none hover:bg-[var(--u-color-surface-hover)]"
           size="sm"
-          title={t("variables.environmentPrefix", {
+          title={[t("variables.environmentPrefix", {
             name: activeEnvironment?.name ?? t("variables.noEnvironment"),
-          })}
+          }), description].filter(Boolean).join("\n")}
           type="button"
           variant="outline"
         >

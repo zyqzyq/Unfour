@@ -1,12 +1,12 @@
 import { useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { deleteFlow, getFlow, saveFlow, type FlowDefinition, type FlowInputDefinition, type FlowStep } from "@unfour/command-client";
+import { deleteFlow, getFlow, saveFlow, type FlowDefinition, type FlowInputDefinition, type FlowStep, type WorkspaceEnvironment } from "@unfour/command-client";
 import { useI18n } from "@unfour/ui";
 import { START, END, removalImpact, removeCanvasStep } from "./canvasGraph";
 import { inputDefaults, normalizeInputs } from "./model";
 import type { FlowWorkspaceData } from "./useFlowWorkspaceData";
 
-export function useFlowEditor(workspaceId: string, flows: FlowWorkspaceData["flows"]) {
+export function useFlowEditor(workspaceId: string, flows: FlowWorkspaceData["flows"], environments: FlowWorkspaceData["environments"]) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<FlowDefinition | null>(null);
@@ -17,7 +17,7 @@ export function useFlowEditor(workspaceId: string, flows: FlowWorkspaceData["flo
   const [inputs, setInputs] = useState<Record<string, unknown>>({});
   const [invalid, setInvalid] = useState<Record<string, boolean>>({});
   const [secretInputNames, setSecretInputNames] = useState("");
-  const [environmentId, setEnvironmentId] = useState("");
+  const [runEnvironment, setRunEnvironment] = useState({ id: "", pending: false });
   const [runDialog, setRunDialog] = useState(false);
   const [revisionConflict, setRevisionConflict] = useState(false);
   const [error, setError] = useState("");
@@ -34,7 +34,7 @@ export function useFlowEditor(workspaceId: string, flows: FlowWorkspaceData["flo
     setDirty(!flow.id);
     setInputs(inputDefaults(normalized.inputs));
     setSecretInputNames("");
-    setEnvironmentId("");
+    setRunEnvironment({ id: "", pending: false });
     setInvalid({});
     setRunDialog(false);
     setConfirm(null);
@@ -136,8 +136,23 @@ export function useFlowEditor(workspaceId: string, flows: FlowWorkspaceData["flo
     setRemovingNode(null);
   }
   function openRun() {
+    // Snapshot on open. Only an unresolved initial load may fill this selection;
+    // manual choices (including workspace-only), resets and reopens replace it.
+    const available = queryClient.getQueryData<WorkspaceEnvironment[]>(["workspace-environments", workspaceId]);
+    const selection = { id: available?.find((environment) => environment.isActive)?.id ?? "", pending: !available };
+    setRunEnvironment(selection);
+    if (selection.pending) {
+      void environments.refetch({ cancelRefetch: false }).then((result) => {
+        setRunEnvironment((current) => current === selection
+          ? { id: result.data?.find((environment) => environment.isActive)?.id ?? "", pending: false }
+          : current);
+      });
+    }
     setInvalid((state) => Object.fromEntries(Object.entries(state).filter(([key]) => !key.startsWith("run:"))));
     setRunDialog(true);
+  }
+  function setEnvironmentId(id: string) {
+    setRunEnvironment({ id, pending: false });
   }
   function runValidity(key: string, valid: boolean) {
     setInvalid((state) => ({ ...state, [`run:${key}`]: !valid }));
@@ -147,7 +162,7 @@ export function useFlowEditor(workspaceId: string, flows: FlowWorkspaceData["flo
   }
   return {
     draft, dirty, selectedNode, setSelectedNode, removingNode, setRemovingNode, contextRevision,
-    inputs, setInputs, invalid, secretInputNames, setSecretInputNames, environmentId, setEnvironmentId,
+    inputs, setInputs, invalid, secretInputNames, setSecretInputNames, environmentId: runEnvironment.id, environmentPending: runEnvironment.pending, setEnvironmentId,
     runDialog, setRunDialog, revisionConflict, error, busy, confirm, setConfirm, pendingSelection, setPendingSelection,
     resetSelection, update, perform, save, deleteDefinition, reloadLatest, discardSelection,
     changeInputDefinitions, schemaValidity, stepValidity, changeStep, impact, removeStep, openRun, runValidity, restoreEditorSelection,

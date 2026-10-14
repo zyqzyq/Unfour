@@ -260,13 +260,13 @@ it("resets inputs, secrets and explicit environment on selection and discard to 
   openRun();
   fireEvent.change(screen.getByLabelText("Run inputs (JSON object)"), { target: { value: '{"version":42}' } });
   fireEvent.change(screen.getByLabelText("Secret input names (comma separated)"), { target: { value: "version" } });
-  fireEvent.change(screen.getByLabelText("Environment"), { target: { value: "prod" } });
+  fireEvent.change(screen.getByLabelText("Variable environment"), { target: { value: "prod" } });
   await closeRun();
   fireEvent.click(screen.getByText("Other"));
   openRun();
   expect(screen.getByLabelText("Run inputs (JSON object)")).toHaveValue("{}");
   expect(screen.getByLabelText("Secret input names (comma separated)")).toHaveValue("");
-  expect(screen.getByLabelText("Environment")).toHaveValue("");
+  expect(screen.getByLabelText("Variable environment")).toHaveValue("");
   fireEvent.change(screen.getByLabelText("Run inputs (JSON object)"), { target: { value: '{"private":"x"}' } });
   await closeRun();
   fireEvent.change(screen.getByLabelText("Flow name"), { target: { value: "Unsaved" } });
@@ -543,7 +543,7 @@ it("keeps runtime fields in the dialog and restores the editor after inspecting 
   expect(screen.queryByText("Run inputs & history")).not.toBeInTheDocument();
   expect(screen.queryByLabelText("version", { exact: true })).not.toBeInTheDocument();
   openRun();
-  expect(within(screen.getByRole("dialog")).getByLabelText("Environment")).toBeVisible();
+  expect(within(screen.getByRole("dialog")).getByLabelText("Variable environment")).toBeVisible();
   expect(screen.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
   fireEvent.change(screen.getByLabelText("version", { exact: true }), { target: { value: "42" } });
   await closeRun();
@@ -605,7 +605,7 @@ it("submits the selected environment only after effects confirmation", async () 
   mount();
   fireEvent.click(await screen.findByText("Release"));
   openRun();
-  fireEvent.change(screen.getByLabelText("Environment"), { target: { value: "prod" } });
+  fireEvent.change(screen.getByLabelText("Variable environment"), { target: { value: "prod" } });
   fireEvent.change(screen.getByLabelText("version", { exact: true }), { target: { value: "42" } });
   expect(screen.getByRole("dialog")).toHaveTextContent("Production");
   expect(commands.runFlow).not.toHaveBeenCalled();
@@ -748,7 +748,7 @@ it.each([false, true])("blocks dev-only API variables in Production unless works
   mount();
   fireEvent.click(await screen.findByText("Release"));
   openRun();
-  fireEvent.change(screen.getByLabelText("Environment"), { target: { value: "prod" } });
+  fireEvent.change(screen.getByLabelText("Variable environment"), { target: { value: "prod" } });
   const button = screen.getByRole("button", { name: "Run", exact: true });
   if (fallback) {
     await waitFor(() => expect(button).toBeEnabled());
@@ -758,7 +758,7 @@ it.each([false, true])("blocks dev-only API variables in Production unless works
     expect(button).toBeDisabled();
     fireEvent.click(button);
     expect(commands.runFlow).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText("Environment"), { target: { value: "dev" } });
+    fireEvent.change(screen.getByLabelText("Variable environment"), { target: { value: "dev" } });
     await waitFor(() => expect(button).toBeEnabled());
   }
 });
@@ -1021,7 +1021,7 @@ it("resets confirmation context only after accepting the latest revision", async
   fireEvent.click(await screen.findByText("Release"));
   openRun();
   fireEvent.change(screen.getByLabelText("version", { exact: true }), { target: { value: "42" } });
-  fireEvent.change(screen.getByLabelText("Environment"), { target: { value: "prod" } });
+  fireEvent.change(screen.getByLabelText("Variable environment"), { target: { value: "prod" } });
   fireEvent.change(screen.getByLabelText("Secret input names (comma separated)"), { target: { value: "version" } });
   await closeRun();
   fireEvent.change(screen.getByLabelText("Flow name"), { target: { value: "My edits" } });
@@ -1033,7 +1033,7 @@ it("resets confirmation context only after accepting the latest revision", async
   fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Discard" }));
   openRun();
   expect(screen.getByLabelText("version", { exact: true })).toHaveValue(7);
-  expect(screen.getByLabelText("Environment")).toHaveValue("");
+  expect(screen.getByLabelText("Variable environment")).toHaveValue("");
   expect(screen.getByLabelText("Secret input names (comma separated)")).toHaveValue("");
   expect(screen.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
   fireEvent.click(screen.getByRole("button", { name: "Run", exact: true }));

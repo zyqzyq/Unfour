@@ -80,6 +80,7 @@ export function AppTitleBar({
               workspaces={workspaces}
             />
             <ActiveEnvironmentSelect
+              description={t("variables.activeEnvironmentHelp")}
               activeEnvironmentId={activeEnvironmentId}
               environments={environments}
               onManage={onManageVariables}
@@ -92,9 +93,10 @@ export function AppTitleBar({
           <>
             <Button
               aria-label={t("app.commandPalette.openMcp")}
+              aria-description={t("app.titlebar.mcpPermissionsHelp")}
               onClick={() => openSettings("mcp")}
               size="sm"
-              title={t("app.commandPalette.openMcp")}
+              title={t("app.titlebar.mcpPermissionsHelp")}
               variant="ghost"
             >
               <Plug aria-hidden="true" size={14} />

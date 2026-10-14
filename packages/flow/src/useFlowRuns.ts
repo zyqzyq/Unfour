@@ -55,7 +55,7 @@ export function useFlowRuns(workspaceId: string, editor: FlowEditor) {
   function startRun(validation: FlowPageValidation) {
     if (!draft) return;
     return editor.perform(async () => {
-      if (validation.invalidRun || dirty) return;
+      if (validation.invalidRun || dirty || editor.environmentPending) return;
       const run = await runFlow({
         workspaceId, flowId: draft.id, environmentId: editor.environmentId || null,
         inputs: validation.resolvedInputs, secretInputNames: validation.manualSecrets,

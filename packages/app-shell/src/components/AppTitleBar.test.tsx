@@ -49,7 +49,7 @@ function workspace(): Workspace {
   };
 }
 
-function createWrapper() {
+function createWrapper(locale: "en" | "zh-CN" = "en") {
   const client = new QueryClient({
     defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
   });
@@ -57,7 +57,7 @@ function createWrapper() {
     return (
       <QueryClientProvider client={client}>
         <ThemeProvider defaultThemeMode="dark" storageKey="test.theme">
-          <I18nProvider initialLocale="en" storageKey="test.locale">
+          <I18nProvider initialLocale={locale} storageKey="test.locale">
             <WorkspaceBundleExchangeProvider onImported={vi.fn()}>{children}</WorkspaceBundleExchangeProvider>
           </I18nProvider>
         </ThemeProvider>
@@ -91,6 +91,25 @@ function environment(id: string, name: string, isActive = false): WorkspaceEnvir
 }
 
 describe("AppTitleBar settings entry", () => {
+  it.each(["en", "zh-CN"] as const)("distinguishes workspace type, variables and independent MCP permissions (%s)", (locale) => {
+    const activeWorkspace = { ...workspace(), environmentType: "prod" as const, mcpPolicy: "full_access" as const };
+    render(<AppTitleBar activeWorkspace={activeWorkspace} activeEnvironmentId="dev"
+      environments={[environment("dev", "Development", true)]}
+      extensionContext={extensionContext(activeWorkspace)} onActivateWorkspace={vi.fn()}
+      workspaces={[activeWorkspace]} />, { wrapper: createWrapper(locale) });
+    const type = locale === "en" ? "Workspace type: PROD" : "工作区类型：PROD";
+    const workspaceTrigger = screen.getByRole("button", { name: /Default Workspace/ });
+    expect(workspaceTrigger.getAttribute("aria-description")).toContain(type);
+    expect(screen.getByLabelText(type).getAttribute("title")).toContain(locale === "en" ? "MCP permissions can be set separately" : "MCP 权限可独立设置");
+    const variables = screen.getByRole("button", { name: locale === "en" ? "Active variable environment" : "当前变量环境" });
+    expect(variables).toHaveTextContent("Development");
+    expect(variables.getAttribute("title")).toContain(locale === "en" ? "Variable environment: Development" : "变量环境：Development");
+    expect(variables.getAttribute("aria-description")).toMatch(/API.*SSH Task.*Flow/);
+    const mcp = screen.getByRole("button", { name: locale === "en" ? "MCP settings" : "MCP 设置" });
+    expect(mcp.getAttribute("title")).toContain(locale === "en" ? "independent policy" : "独立策略");
+    expect(mcp.getAttribute("aria-description")).toBe(mcp.getAttribute("title"));
+  });
+
   it("registers the window resize listener only once across title-bar rerenders", async () => {
     mockWindow.onResized.mockClear();
     mockWindow.show.mockClear();

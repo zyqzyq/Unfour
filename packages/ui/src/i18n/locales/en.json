@@ -152,6 +152,7 @@
       "system": "System"
     },
     "titlebar": {
+      "mcpPermissionsHelp": "MCP permissions use an independent policy: Auto derives from workspace type, or permissions can be set explicitly.",
       "moreActions": "More actions",
       "settings": "Settings",
       "toggleBottomPanel": "Toggle bottom panel",
@@ -276,6 +277,8 @@
         "thisWorkspace": "this workspace"
       },
       "environment": {
+        "typeName": "Workspace type: {type}",
+        "typeHelp": "Workspace type: {type}. Used by the Auto MCP policy; MCP permissions can be set separately. Variable environments control variable resolution.",
         "current": "Saved environment: {environment}",
         "development": "Development",
         "hint": "Environment defaults apply only when MCP permissions are Auto: DEV → full access, TEST → guarded, PROD → read-only.",
@@ -569,6 +572,7 @@
   "variables": {
     "active": "Active",
     "activeEnvironment": "Active variable environment",
+    "activeEnvironmentHelp": "Used for API and SSH Task variables and as the default when opening a Flow run. Workspace type and MCP permissions are separate settings.",
     "add": "Add variable",
     "closeManager": "Close workspace variables",
     "defaultEnvironmentName": "New Variable Environment",
@@ -1566,7 +1570,8 @@
     "referenceHelp": "Use {\"$ref\":\"/steps/step_id/body/value\"} for action results, /steps/step_id/result for Wait Until results, or ${/inputs/name} in text. SQL and shell substitutions are literal; quote values for the target language. API: url, body, headers, query. SSH: inputs. Database: sql, catalog, schema, limit.",
     "requiredInputs": "Required input names (comma separated)",
     "addStep": "Add step",
-    "environment": "Environment",
+    "environment": "Variable environment",
+    "recordedEnvironment": "Variable environment used (ID)",
     "workspaceOnly": "Workspace variables only",
     "runInputs": "Run inputs (JSON object)",
     "history": "Run history",

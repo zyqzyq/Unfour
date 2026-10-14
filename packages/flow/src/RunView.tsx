@@ -22,6 +22,7 @@ export function RunView({ run, cancel, selectedStep, onSelectStep, onEditStep, e
       {run.status === "running" && cancel && <Button variant="secondary" onClick={cancel}>{t("flow.cancel")}</Button>}
     </div>
     <code className="break-all text-xs">{run.id}</code>
+    <p className="text-xs">{t("flow.recordedEnvironment")}: {run.context.environmentId ?? t("flow.workspaceOnly")}</p>
     {run.error && <p role="alert">{run.error}</p>}
     <p className="text-xs">{t("flow.startedAt")}: {run.startedAt}</p>
     {run.finishedAt && <p className="text-xs">{t("flow.finishedAt")}: {run.finishedAt}</p>}
