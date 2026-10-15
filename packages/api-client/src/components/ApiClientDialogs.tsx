@@ -46,6 +46,7 @@ export function ApiClientDialogs({
           defaultParentFolderId={saveDialogTab.draft.parentFolderId}
           defaultName={saveDialogTab.draft.name}
           error={saveDialogError}
+          notice={saveDialogTab.source === "history" ? t("api.history.snapshotNotice") : undefined}
           folders={folders}
           key={saveDialogTab.id}
           savedRequests={savedRequests}

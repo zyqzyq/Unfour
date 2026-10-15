@@ -72,15 +72,17 @@ export function savedRequestToInput(
 }
 
 export function historyDetailToInput(history: ApiHistoryDetail): ApiRequestInput {
+  // Legacy rows may keep URL query separately from the additional query rows.
+  const query = [...queryFromUrl(history.url), ...parseKeyValues(history.requestQueryJson)];
   return {
     workspaceId: history.workspaceId,
     name: history.name?.trim() || undefined,
     parentFolderId: null,
     collectionId: null,
     method: history.method,
-    url: history.url,
+    url: syncUrlQuery(history.url, query),
     headers: parseKeyValues(history.requestHeadersJson),
-    query: parseKeyValues(history.requestQueryJson),
+    query,
     body: history.requestBody ?? undefined,
     bodyKind: history.requestBodyKind ?? "json",
     preRequestScript: null,

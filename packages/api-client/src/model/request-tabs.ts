@@ -203,12 +203,13 @@ export function setTabResponsePanel(
 export function startTabSend(
   state: ApiTabsState,
   tabId: string,
-  request: ApiRequestInput | null = null,
+  _request: ApiRequestInput | null = null,
   executionId: string | null = null,
 ): ApiTabsState {
   return updateTab(state, tabId, (tab) => ({
     ...tab,
-    lastRequest: request ? { ...request, multipartParts: undefined } : tab.lastRequest,
+    // Only a backend-sanitized executed request may populate this panel.
+    lastRequest: null,
     cancelling: false,
     execution: null,
     executionId,
@@ -230,6 +231,7 @@ export function completeTabSend(
     cancelling: false,
     executionId: null,
     response: execution.response,
+    lastRequest: execution.response?.requestSnapshot ?? null,
     sendError: execution.httpError,
     sendErrorCode: execution.httpErrorCode,
     sending: false,

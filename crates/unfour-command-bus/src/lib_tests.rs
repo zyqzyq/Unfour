@@ -9,6 +9,8 @@ use super::*;
 mod api_auth;
 #[path = "lib_tests/api_environment_override.rs"]
 mod api_environment_override;
+#[path = "lib_tests/api_snapshot.rs"]
+mod api_snapshot;
 #[path = "lib_tests/ephemeral_lifecycle.rs"]
 mod ephemeral_lifecycle;
 #[path = "lib_tests/exchange.rs"]

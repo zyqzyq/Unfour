@@ -65,6 +65,10 @@ async fn ad_hoc_send_uses_per_call_environment_without_changing_active_environme
         .expect("explicit environment should reach test server");
 
     assert_eq!(response.status, 200);
+    assert_eq!(
+        response.request_snapshot.as_ref().unwrap().url,
+        format!("{server_url}?")
+    );
     assert!(
         outbound.starts_with("GET /echo? HTTP/1.1"),
         "unexpected outbound request: {outbound:?}"
@@ -143,7 +147,14 @@ pm.test("response status", () => pm.response.to.have.status(200));
 
     assert_eq!(result.pre_request.status, ScriptExecutionStatus::Success);
     assert_eq!(result.post_response.status, ScriptExecutionStatus::Success);
-    assert_eq!(result.response.expect("HTTP response").status, 200);
+    let response = result.response.expect("HTTP response");
+    assert_eq!(response.status, 200);
+    let snapshot = response.request_snapshot.unwrap();
+    assert_eq!(snapshot.url, format!("{server_url}?"));
+    assert!(snapshot
+        .headers
+        .iter()
+        .any(|v| v.key == "x-environment" && v.value == "<redacted>"));
     assert!(
         outbound.starts_with("GET /echo? HTTP/1.1"),
         "unexpected outbound request: {outbound:?}"

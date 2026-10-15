@@ -22,6 +22,7 @@ impl ApiClientService {
         secrets: &[String],
     ) -> AppResult<ApiResponse> {
         validate_workspace_id(&input.workspace_id)?;
+        super::execution_snapshot::validate_replay_values(&input)?;
         let mut runtime_secrets = runtime_request_secret_values(&input)?;
         runtime_secrets.extend(secrets.iter().cloned());
         let secrets = runtime_secrets.as_slice();
@@ -76,6 +77,13 @@ impl ApiClientService {
             }
         }
 
+        let request = builder.build().map_err(classify_http_error)?;
+        let executed = super::execution_snapshot::executed_input(&input, &request);
+        let mut executed_secrets = secrets.to_vec();
+        executed_secrets.extend(runtime_request_secret_values(&executed)?);
+        let secrets = executed_secrets.as_slice();
+        let request_snapshot =
+            super::execution_snapshot::snapshot(&executed, request.url(), secrets)?;
         let started = Instant::now();
         unfour_diag::log_operation_event(
             "api_request_started",
@@ -88,7 +96,7 @@ impl ApiClientService {
         );
         let response_result = tokio::select! {
             _ = cancellation.cancelled() => return Err(cancelled_error()),
-            response = builder.send() => response,
+            response = self.client.execute(request) => response,
         };
         let mut response = match response_result {
             Ok(response) => response,
@@ -143,7 +151,7 @@ impl ApiClientService {
             biased;
             _ = cancellation.cancelled() => return Err(cancelled_error()),
             result = self.insert_history(
-                &input,
+                &executed,
                 status.as_u16(),
                 duration_ms,
                 &response_headers,
@@ -189,6 +197,7 @@ impl ApiClientService {
         );
 
         Ok(ApiResponse {
+            request_snapshot: Some(request_snapshot),
             history_id,
             status: status.as_u16(),
             status_text: status.canonical_reason().unwrap_or("").to_string(),

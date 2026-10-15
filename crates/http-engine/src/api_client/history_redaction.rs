@@ -31,7 +31,7 @@ pub(super) fn sanitize_with_secrets(
     let scrub = |value: &str| scrub_values(value, &secrets);
     Ok(SafeHistory {
         name: input.name.as_deref().map(&scrub),
-        url: scrub(&super::domain::export_url(&input.url)),
+        url: scrub(&super::domain::export_url(&scrub(&input.url))),
         headers: redact_rows(&input.headers, &scrub)?,
         query: redact_rows(&input.query, &scrub)?,
         body: redact_request_body(input, &scrub),
@@ -90,7 +90,7 @@ fn redact_rows(items: &[KeyValue], scrub: &impl Fn(&str) -> String) -> AppResult
     let safe = items
         .iter()
         .map(|item| KeyValue {
-            key: item.key.clone(),
+            key: scrub(&item.key),
             enabled: item.enabled,
             value: if is_sensitive_key(&item.key)
                 || item.key.trim().eq_ignore_ascii_case("set-cookie")
@@ -105,6 +105,13 @@ fn redact_rows(items: &[KeyValue], scrub: &impl Fn(&str) -> String) -> AppResult
 }
 
 fn redact_request_body(input: &ApiRequestInput, scrub: &impl Fn(&str) -> String) -> Option<String> {
+    if input
+        .body
+        .as_deref()
+        .is_some_and(|body| scrub(body) == REDACTED_VALUE)
+    {
+        return Some(REDACTED_VALUE.into());
+    }
     let exported = super::domain::export_body(input.body.as_deref(), &input.body_kind)?;
     let original = input.body.as_deref().unwrap_or("");
     let source = if json_values_equal(original, &exported) {
@@ -116,10 +123,11 @@ fn redact_request_body(input: &ApiRequestInput, scrub: &impl Fn(&str) -> String)
     // an entire `password=...&note=keep` body because the line contains "password".
     let structured = input.body_kind.eq_ignore_ascii_case("form-urlencoded")
         || serde_json::from_str::<serde_json::Value>(source).is_ok();
-    let safe = if structured {
+    let safe = if structured || source.is_empty() {
         source.to_owned()
     } else {
-        safe_body(source)
+        // Includes legacy history: opaque text/XML may carry unnamed secrets.
+        REDACTED_VALUE.into()
     };
     Some(scrub(&safe))
 }

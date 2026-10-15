@@ -138,6 +138,123 @@ fn request(url: &str, timeout_ms: Option<u64>) -> ApiRequestInput {
 }
 
 #[tokio::test]
+async fn executed_snapshot_uses_built_url_headers_and_omits_unsent_get_body() {
+    let service = service().await;
+    let (url, server) = delayed_body_server(Duration::ZERO, "ok");
+    let mut input = request(&format!("{url}?inline=one%20word#not-sent"), None);
+    input.query = vec![
+        KeyValue {
+            key: "page".into(),
+            value: "two words".into(),
+            enabled: true,
+        },
+        KeyValue {
+            key: "ignored".into(),
+            value: "no".into(),
+            enabled: false,
+        },
+    ];
+    input.headers = vec![KeyValue {
+        key: "Cookie".into(),
+        value: "session=canary-cookie".into(),
+        enabled: true,
+    }];
+    input.body = Some(r#"{"password":"not-sent"}"#.into());
+    input.body_kind = "json".into();
+    let response = service.send(input).await.unwrap();
+    server.join().unwrap();
+    let snapshot = response.request_snapshot.unwrap();
+    assert_eq!(
+        snapshot.url,
+        format!("{url}?inline=one%20word&page=two+words")
+    );
+    assert_eq!(snapshot.query.len(), 2);
+    assert!(snapshot.body.is_none());
+    assert!(snapshot
+        .headers
+        .iter()
+        .any(|v| v.key == "content-type" && v.value == "application/json"));
+    assert!(snapshot
+        .headers
+        .iter()
+        .any(|v| v.key == "cookie" && v.value == "<redacted>"));
+    let history = service
+        .history_detail("workspace-a".into(), response.history_id)
+        .await
+        .unwrap();
+    assert_eq!(history.request_body, None);
+    assert_eq!(
+        serde_json::from_str::<Vec<KeyValue>>(&history.request_query_json).unwrap(),
+        snapshot.query
+    );
+    assert!(!serde_json::to_string(&history)
+        .unwrap()
+        .contains("canary-cookie"));
+}
+
+#[tokio::test]
+async fn redacted_history_values_never_reach_network() {
+    let service = service().await;
+    for marker in [
+        "<redacted>",
+        "[mask kind=jwt len=40]",
+        "%5Bmask+empty%5D",
+        "%3Credacted%3E",
+        "%253Credacted%253E",
+        r"\u003credacted\u003e",
+    ] {
+        for location in 0..4 {
+            let mut input = request("http://127.0.0.1:1/never", None);
+            match location {
+                0 => input.url.push_str(&format!("?token={marker}")),
+                1 => input.headers.push(KeyValue {
+                    key: "Authorization".into(),
+                    value: marker.into(),
+                    enabled: true,
+                }),
+                2 => input.body = Some(format!(r#"{{"value":"{marker}"}}"#)),
+                _ => {
+                    input.auth_json =
+                        Some(serde_json::json!({"type":"bearer", "token":marker}).to_string())
+                }
+            }
+            let error = service.send(input).await.unwrap_err();
+            assert!(
+                error.to_string().contains("API_REDACTED_REQUEST"),
+                "marker={marker}, location={location}: {error}"
+            );
+        }
+    }
+    assert!(service
+        .list_history("workspace-a".into(), None)
+        .await
+        .unwrap()
+        .is_empty());
+}
+
+#[test]
+fn old_response_ipc_without_snapshot_still_deserializes() {
+    let response: ApiResponse = serde_json::from_str(r#"{"historyId":"old","status":200,"statusText":"OK","headers":[],"body":"","durationMs":1}"#).unwrap();
+    assert!(response.request_snapshot.is_none());
+}
+
+#[test]
+fn snapshot_redaction_covers_dynamic_signature_names_and_opaque_legacy_bodies() {
+    let mut input = request("https://example.test/?X-Amz-Signature=signed-canary", None);
+    input.body_kind = "text".into();
+    input.body = Some("<data>opaque-canary</data>".into());
+    input.headers.push(KeyValue {
+        key: "X-Company-Token".into(),
+        value: "header-canary".into(),
+        enabled: true,
+    });
+    let safe = super::super::history_redaction::sanitize(&input, &[], "").unwrap();
+    assert!(!safe.url.contains("signed-canary"));
+    assert!(!safe.headers.contains("header-canary"));
+    assert_eq!(safe.body.as_deref(), Some("<redacted>"));
+}
+
+#[tokio::test]
 async fn history_redacts_credentials_without_changing_runtime_payloads() {
     let service = service().await;
     let (url, server) =

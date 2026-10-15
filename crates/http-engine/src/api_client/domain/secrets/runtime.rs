@@ -14,7 +14,7 @@ mod tests;
 
 /// Collect credential values from the final resolved, auth-materialized request.
 /// This is runtime provenance for diagnostic scrubbing, never persisted metadata.
-/// Snapshot/export and normal API history behavior remain independent.
+/// Shared by execution snapshots, API history, and Flow diagnostics.
 pub fn runtime_request_secret_values(request: &ApiRequestInput) -> AppResult<Vec<String>> {
     let mut secrets = Vec::new();
     let auth: Value = serde_json::from_str(request.auth_json.as_deref().unwrap_or("{}"))?;
@@ -91,12 +91,20 @@ pub fn runtime_request_secret_values(request: &ApiRequestInput) -> AppResult<Vec
 }
 
 fn sensitive(key: &str) -> bool {
-    // Reuse the snapshot classifier, with equivalent camelCase/compact spellings
-    // for runtime JSON fields (without changing persisted API snapshots/history).
+    // Reuse shared credential naming, adding signature and compact spellings
+    // for execution/history without changing portable template contracts.
     is_sensitive_key(key)
+        || unfour_core::redaction::is_sensitive_flow_name(key)
+        || key.to_ascii_lowercase().contains("signature")
         || matches!(
             key.trim().to_ascii_lowercase().as_str(),
-            "apikey" | "accesstoken" | "refreshtoken" | "privatekey" | "licensekey" | "passphrase"
+            "apikey"
+                | "accesstoken"
+                | "refreshtoken"
+                | "privatekey"
+                | "licensekey"
+                | "passphrase"
+                | "sig"
         )
 }
 

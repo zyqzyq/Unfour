@@ -49,6 +49,10 @@ pub(super) fn matching_histories(
         return Ok(Vec::new());
     };
     let safe = history_redaction::sanitize(&input, &[], "")?;
+    if safe.body.as_deref() == Some(REDACTED_VALUE) {
+        // Entirely hidden bodies cannot establish request identity.
+        return Ok(Vec::new());
+    }
     let mut matches = Vec::new();
     for history in histories {
         if history.workspace_id != request.workspace_id
@@ -62,14 +66,15 @@ pub(super) fn matching_histories(
         // The definition supplies the target slot for redaction, never extra
         // rows: histories missing materialized auth must remain non-matches.
         history_redaction::sanitize_detail_with_auth(&mut history, input.auth_json.as_deref())?;
-        if history.name == safe.name
-            && normalize_redaction_markers(&history.url) == normalize_redaction_markers(&safe.url)
+        let legacy_match = normalize_redaction_markers(&history.url)
+            == normalize_redaction_markers(&safe.url)
             && json_text_equal(&history.request_headers_json, &safe.headers)
             && json_text_equal(&history.request_query_json, &safe.query)
             && json_text_equal(
                 history.request_body.as_deref().unwrap_or(""),
                 safe.body.as_deref().unwrap_or(""),
-            )
+            );
+        if history.name == safe.name && (legacy_match || matches_execution(&input, &safe, &history))
         {
             if omit_examples {
                 // A marker has lost its original value; current credentials are
@@ -82,6 +87,69 @@ pub(super) fn matching_histories(
         }
     }
     Ok(matches)
+}
+
+// New history stores normalized enabled wire fields. Retain the old comparison
+// above for legacy records; never infer identity from URL/name alone.
+fn matches_execution(
+    input: &ApiRequestInput,
+    safe: &history_redaction::SafeHistory,
+    history: &ApiHistoryDetail,
+) -> bool {
+    let Ok(mut url) = super::super::helpers::build_url(
+        &safe.url,
+        &serde_json::from_str::<Vec<KeyValue>>(&safe.query).unwrap_or_default(),
+    ) else {
+        return false;
+    };
+    let query: Vec<KeyValue> = url
+        .query_pairs()
+        .map(|(key, value)| KeyValue {
+            key: key.into_owned(),
+            value: value.into_owned(),
+            enabled: true,
+        })
+        .collect();
+    url.set_query(None);
+    url.set_fragment(None);
+    if normalize_redaction_markers(url.as_str()) != normalize_redaction_markers(&history.url)
+        || !json_text_equal(
+            &serde_json::to_string(&query).unwrap_or_default(),
+            &history.request_query_json,
+        )
+    {
+        return false;
+    }
+    let normalize_headers = |text: &str| -> Option<Vec<KeyValue>> {
+        let mut headers: Vec<KeyValue> = serde_json::from_str(text).ok()?;
+        headers.retain(|row| row.enabled);
+        for row in &mut headers {
+            row.key = row.key.trim().to_ascii_lowercase();
+        }
+        headers.sort_by(|a, b| a.key.cmp(&b.key));
+        Some(headers)
+    };
+    let Some(mut expected) = normalize_headers(&safe.headers) else {
+        return false;
+    };
+    if input.body_kind == "json"
+        && input.body.as_ref().is_some_and(|body| !body.is_empty())
+        && !expected.iter().any(|row| row.key == "content-type")
+    {
+        expected.push(KeyValue {
+            key: "content-type".into(),
+            value: "application/json".into(),
+            enabled: true,
+        });
+        expected.sort_by(|a, b| a.key.cmp(&b.key));
+    }
+    let expected_body = if matches!(input.method.to_ascii_uppercase().as_str(), "GET" | "HEAD") {
+        ""
+    } else {
+        safe.body.as_deref().unwrap_or("")
+    };
+    normalize_headers(&history.request_headers_json).as_ref() == Some(&expected)
+        && json_text_equal(history.request_body.as_deref().unwrap_or(""), expected_body)
 }
 
 fn response_secrets_unavailable(history: &ApiHistoryDetail, auth: &serde_json::Value) -> bool {

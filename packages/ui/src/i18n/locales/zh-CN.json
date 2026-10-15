@@ -528,7 +528,8 @@
         "body": "请求正文",
         "headers": "请求头",
         "query": "查询参数",
-        "summary": "请求概要"
+        "summary": "请求概要",
+        "snapshotNotice": "脱敏后的初始 HTTP 请求，不包含传输层自动添加的请求头及重定向后续请求。敏感值、不透明正文及无法安全展示的脚本生成内容已隐藏。旧历史可能不完整。"
       },
       "tabs": {
         "body": "正文",
@@ -563,8 +564,14 @@
       "unsaved": "未保存的请求"
     },
     "history": {
-      "open": "打开",
-      "saveAsRequest": "保存为请求",
+      "open": "打开历史快照",
+      "saveAsRequest": "从快照创建请求",
+      "snapshotNotice": "这是脱敏快照，不是原始请求模板，无法恢复 Auth、脚本和变量引用。重新执行模板请打开对应的已保存请求并检查当前环境；在此创建请求只使用编辑后的快照。",
+      "reviewRequired": "请检查 Auth、脚本、变量及当前环境，确认将快照作为新请求后再发送或保存。",
+      "reviewConfirmed": "我已检查此新请求的 Auth、脚本和变量配置。",
+      "redactedBlocked": "发送或保存前请替换或移除全部 <redacted> 值，无法重放已隐藏的凭据。",
+      "authMissing": "认证配置不完整，请补全凭据或明确选择无认证。",
+      "sendNew": "发送新请求",
       "copyUrl": "复制 URL"
     },
     "title": "API 调试器"

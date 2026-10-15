@@ -182,6 +182,7 @@ impl CommandBusAdapter for StubCommandBus {
         _timeout_ms: Option<u64>,
     ) -> Result<ApiResponse, CommandBusAdapterError> {
         Ok(ApiResponse {
+            request_snapshot: None,
             history_id: "h-1".to_string(),
             status: 200,
             status_text: "OK".to_string(),

@@ -41,6 +41,7 @@ export function ApiSaveDialog({
   defaultParentFolderId,
   defaultName,
   error: submittedError,
+  notice,
   folders,
   onCancel,
   onSave,
@@ -53,6 +54,7 @@ export function ApiSaveDialog({
   defaultParentFolderId: string | null;
   defaultName: string;
   error?: string | null;
+  notice?: string;
   folders: ApiCollectionFolder[];
   onCancel: () => void;
   onSave: (identity: SaveIdentity) => void;
@@ -209,6 +211,7 @@ export function ApiSaveDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit}>
         <DialogBody className="space-y-3">
+          {notice && <p className="text-[12px] text-[var(--u-color-text-muted)]">{notice}</p>}
           <label className="block space-y-1">
             <span className="text-[12px] font-medium">{t("api.save.name")}</span>
             <Input

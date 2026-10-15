@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, EmptyState, useI18n } from "@unfour/ui";
 import { formatError } from "./model/api-request-state";
+import { historyReplayError } from "./model/history-replay";
 import { useApiRequestTabs } from "./hooks/useApiRequestTabs";
 import { useApiCollections } from "./hooks/useApiCollections";
 import { useApiCollectionFolders } from "./hooks/useApiCollectionFolders";
@@ -246,6 +247,11 @@ export function ApiClientPage({
 
   async function saveWithIdentity(identity: SaveIdentity) {
     if (!saveDialogTab || saveDialogPendingRef.current) {
+      return;
+    }
+    const replayError = historyReplayError(saveDialogTab, t);
+    if (replayError) {
+      setSaveDialogError(replayError);
       return;
     }
     saveDialogPendingRef.current = true;

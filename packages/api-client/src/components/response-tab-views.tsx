@@ -3,7 +3,7 @@ import { useState, type ReactNode } from "react";
 import Editor from "@monaco-editor/react";
 import { AlertCircle, CheckCircle2, Loader2, WifiOff } from "lucide-react";
 import { Badge, Button, EmptyState, cn, useI18n, useTheme } from "@unfour/ui";
-import type { ApiRequestInput, ApiResponse, KeyValue, ScriptExecutionResult } from "@unfour/command-client";
+import type { ApiExecutedRequestSnapshot, ApiResponse, KeyValue, ScriptExecutionResult } from "@unfour/command-client";
 import { formatByteSize } from "../request-utils";
 import { formatResponseBody, looksLikeJson } from "../model/api-request-state";
 import { deriveTabResponseState } from "../model/request-tabs";
@@ -154,7 +154,7 @@ export function ResponseBodyView({
   );
 }
 
-export function RequestSnapshot({ request }: { request: ApiRequestInput | null }) {
+export function RequestSnapshot({ request }: { request: ApiExecutedRequestSnapshot | null }) {
   const { t } = useI18n();
 
   if (!request) {
@@ -166,6 +166,7 @@ export function RequestSnapshot({ request }: { request: ApiRequestInput | null }
 
   return (
     <div className="h-full overflow-auto p-3 text-[12px] text-[var(--u-color-text)]">
+      <p className="mb-2 text-[var(--u-color-text-soft)]">{t("api.response.request.snapshotNotice")}</p>
       <div className="mb-3 rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-2">
         <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--u-color-text-soft)]">
           {t("api.response.request.summary")}

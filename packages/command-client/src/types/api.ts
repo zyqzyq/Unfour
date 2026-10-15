@@ -89,6 +89,7 @@ export type ApiClientPreferences = {
 };
 
 export type ApiResponse = {
+  requestSnapshot?: ApiExecutedRequestSnapshot | null;
   historyId: string;
   status: number;
   statusText: string;
@@ -96,6 +97,9 @@ export type ApiResponse = {
   body: string;
   durationMs: number;
 };
+
+/** Backend-sanitized initial HTTP request; never a replayable template. */
+export type ApiExecutedRequestSnapshot = Pick<ApiRequestInput, "method" | "url" | "headers" | "query" | "bodyKind"> & { body?: string | null };
 
 export type ApiHistoryItem = {
   id: string;

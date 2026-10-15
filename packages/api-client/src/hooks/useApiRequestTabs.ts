@@ -17,6 +17,7 @@ import {
   type KeyValue,
 } from "@unfour/command-client";
 import { errorCode, formatError } from "../model/api-request-state";
+import { historyReplayError, localizeReplayError } from "../model/history-replay";
 import {
   DEFAULT_API_TAB_STATE,
   useApiRequestTabStore,
@@ -66,6 +67,7 @@ export function useApiRequestTabs(workspaceId: string) {
     onSuccess: (execution, variables) => {
       const workspaceId = variables.input.workspaceId;
       if (execution.httpErrorCode === "API_RESPONSE_TOO_LARGE") execution = { ...execution, httpError: t("api.response.tooLarge") };
+      if (execution.httpError) execution = { ...execution, httpError: localizeReplayError(execution.httpError, t) };
       const store = useApiRequestTabStore.getState();
       const current = store.byWorkspace[workspaceId]?.tabs.find((tab) => tab.executionId === variables.executionId);
       if (current) store.completeTabSend(workspaceId, current.id, execution);
@@ -75,7 +77,7 @@ export function useApiRequestTabs(workspaceId: string) {
       const workspaceId = variables.input.workspaceId;
       const store = useApiRequestTabStore.getState();
       const current = store.byWorkspace[workspaceId]?.tabs.find((tab) => tab.executionId === variables.executionId);
-      if (current) store.failTabSend(workspaceId, current.id, errorCode(error) === "API_RESPONSE_TOO_LARGE" ? t("api.response.tooLarge") : formatError(error), errorCode(error));
+      if (current) store.failTabSend(workspaceId, current.id, errorCode(error) === "API_RESPONSE_TOO_LARGE" ? t("api.response.tooLarge") : localizeReplayError(formatError(error), t), errorCode(error));
     },
   });
 
@@ -190,6 +192,11 @@ export function useApiRequestTabs(workspaceId: string) {
       const liveTab = current ? current.tabs.find((item) => item.id === tab.id) : tab;
       if (!liveTab || liveTab.saving) return null;
       tab = liveTab;
+      const replayError = historyReplayError(tab, t);
+      if (replayError) {
+        useApiRequestTabStore.getState().failTabSave(workspaceId, tab.id, replayError);
+        return null;
+      }
       const draft = identity ? { ...tab.draft, ...identity } : tab.draft;
       if (identity) {
         useApiRequestTabStore.getState().updateTabDraft(workspaceId, tab.id, identity);
@@ -206,7 +213,7 @@ export function useApiRequestTabs(workspaceId: string) {
         return null;
       }
     },
-    [saveRequest, workspaceId],
+    [saveRequest, workspaceId, t],
   );
 
   return {
@@ -283,6 +290,8 @@ export function tabToInput(
 }
 
 export function validateBeforeSend(tab: ApiRequestTab, t: TFunction = createTranslator("en")): string | null {
+  const replayError = historyReplayError(tab, t);
+  if (replayError) return replayError;
   if (tab.draft.bodyMode === "multipart" && !["GET", "HEAD"].includes(tab.draft.method)) {
     const issue = multipartValidation(tab.draft.multipartParts);
     if (issue) return t(issue === "key" ? "api.multipart.keyError" : "api.multipart.fileError");

@@ -464,7 +464,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                 name: "unfour.api.get_history",
                 title: "Get API Request History Detail",
                 description:
-                    "Returns a single API history entry with request and response detail through the Unfour command bus. Sensitive headers, query parameters, and body fields are masked.",
+                    "Returns a sanitized API history snapshot through the Unfour command bus. Sensitive headers, query parameters, and body fields are masked. This is not a replayable template: original Auth, scripts and variable references are unavailable. To rerun a template, use its saved requestId with the intended environmentId; never resend mask placeholders.",
                 input_schema: json!({
                     "type": "object",
                     "properties": {

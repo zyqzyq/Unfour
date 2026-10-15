@@ -51,6 +51,15 @@ afterEach(() => {
 });
 
 describe("ApiRequestBar", () => {
+  it("labels history as a lossy snapshot and requires explicit review for a new send", () => {
+    const tab = { ...requestTab(), source: "history" as const };
+    const onUpdate = vi.fn();
+    render(<I18nProvider initialLocale="en"><ApiRequestBar tab={tab} onNameCommit={vi.fn()} onSave={vi.fn()} onSend={vi.fn()} onUpdate={onUpdate} /></I18nProvider>);
+    expect(screen.getByText(/Auth, scripts and variable references cannot be restored/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Send New Request" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(onUpdate).toHaveBeenCalledWith({ historyReviewConfirmed: true });
+  });
   it("replaces Send with Stop and prevents repeated cancellation", () => {
     const onStop = vi.fn();
     const sending = { ...requestTab(), sending: true };

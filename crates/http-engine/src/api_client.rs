@@ -18,6 +18,8 @@ mod collections;
 mod domain;
 pub use domain::runtime_request_secret_values;
 mod execution;
+mod execution_snapshot;
+pub use execution_snapshot::script_mutation_secret_values;
 mod history;
 mod history_redaction;
 mod local_bundle;

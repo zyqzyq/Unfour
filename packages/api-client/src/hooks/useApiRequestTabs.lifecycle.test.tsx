@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { sendApiRequest, type RequestExecutionResult } from "@unfour/command-client";
+import { sendApiRequest, saveApiRequest, type RequestExecutionResult } from "@unfour/command-client";
 import { useApiRequestTabs } from "./useApiRequestTabs";
 import { resetApiRequestTabStore, useApiRequestTabStore } from "../model/api-request-tab-state";
 
@@ -13,6 +13,7 @@ vi.mock("@unfour/command-client", async (importOriginal) => ({
   listApiHistory: vi.fn().mockResolvedValue([]),
   listWorkspaceEnvironments: vi.fn().mockResolvedValue([]),
   sendApiRequest: vi.fn(),
+  saveApiRequest: vi.fn(),
 }));
 afterEach(() => { cleanup(); resetApiRequestTabStore(); vi.clearAllMocks(); });
 
@@ -30,6 +31,29 @@ const execution: RequestExecutionResult = {
   preRequest: { status: "skipped", console: [], tests: [], durationMs: 0, error: null },
   postResponse: { status: "skipped", console: [], tests: [], durationMs: 0, error: null },
 };
+
+it("blocks both sending and saving a history snapshot until reviewed and repaired", async () => {
+  const { result } = setup();
+  act(() => {
+    const workspace = useApiRequestTabStore.getState().byWorkspace.w;
+    useApiRequestTabStore.setState({ byWorkspace: { w: { ...workspace, tabs: workspace.tabs.map((tab) => ({ ...tab, source: "history" })) } } });
+  });
+  await act(async () => {
+    result.current.sendTab(result.current.activeTab!);
+    await result.current.saveTab(result.current.activeTab!);
+  });
+  expect(sendApiRequest).not.toHaveBeenCalled();
+  expect(saveApiRequest).not.toHaveBeenCalled();
+  expect(result.current.activeTab!.saveError).toContain("Review Auth");
+  act(() => result.current.updateDraft("new:1", { historyReviewConfirmed: true, headers: [{ key: "Authorization", value: "<redacted>", enabled: true }] }));
+  await act(async () => {
+    result.current.sendTab(result.current.activeTab!);
+    await result.current.saveTab(result.current.activeTab!);
+  });
+  expect(sendApiRequest).not.toHaveBeenCalled();
+  expect(saveApiRequest).not.toHaveBeenCalled();
+  expect(result.current.activeTab!.saveError).toContain("Replace or remove");
+});
 
 it("ignores repeated sends, including calls with the same stale tab object", async () => {
   vi.mocked(sendApiRequest).mockImplementation(() => new Promise(() => {}));

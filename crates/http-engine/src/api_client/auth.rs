@@ -23,11 +23,15 @@ pub(super) fn materialize_auth(
     };
     let (target, key, value) = match auth["type"].as_str().unwrap_or("none") {
         "none" => return Ok(input),
-        "bearer" if field("token")?.trim().is_empty() => return Ok(input),
-        "basic" if field("username")?.is_empty() && field("password")?.is_empty() => {
-            return Ok(input)
+        "bearer" if field("token")?.trim().is_empty() => {
+            return Err(AppError::Validation("API_AUTH_MISSING".into()))
         }
-        "api-key" if field("key")?.trim().is_empty() => return Ok(input),
+        "basic" if field("username")?.is_empty() && field("password")?.is_empty() => {
+            return Err(AppError::Validation("API_AUTH_MISSING".into()))
+        }
+        "api-key" if field("key")?.trim().is_empty() || field("value")?.trim().is_empty() => {
+            return Err(AppError::Validation("API_AUTH_MISSING".into()))
+        }
         "bearer" => (
             "header",
             "Authorization".to_string(),

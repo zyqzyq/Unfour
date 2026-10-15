@@ -99,12 +99,27 @@ pub struct ApiClientPreferences {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiResponse {
+    /// Sanitized initial HTTP request, after resolution, scripts and auth.
+    /// Optional for older adapters; never reconstruct it from a frontend draft.
+    #[serde(default)]
+    pub request_snapshot: Option<ApiExecutedRequestSnapshot>,
     pub history_id: String,
     pub status: u16,
     pub status_text: String,
     pub headers: Vec<KeyValue>,
     pub body: String,
     pub duration_ms: u128,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiExecutedRequestSnapshot {
+    pub method: String,
+    pub url: String,
+    pub headers: Vec<KeyValue>,
+    pub query: Vec<KeyValue>,
+    pub body: Option<String>,
+    pub body_kind: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]

@@ -528,7 +528,8 @@
         "body": "Request body",
         "headers": "Request headers",
         "query": "Query params",
-        "summary": "Request summary"
+        "summary": "Request summary",
+        "snapshotNotice": "Sanitized initial HTTP request. Transport headers and redirect hops are not captured. Sensitive values, opaque bodies and script-generated fields that cannot be safely displayed are hidden. Legacy history may be incomplete."
       },
       "tabs": {
         "body": "Body",
@@ -563,8 +564,14 @@
       "unsaved": "Unsaved request"
     },
     "history": {
-      "open": "Open",
-      "saveAsRequest": "Save as Request",
+      "open": "Open Snapshot",
+      "saveAsRequest": "Create Request from Snapshot",
+      "snapshotNotice": "This is a sanitized snapshot, not the original template. Auth, scripts and variable references cannot be restored. To rerun a template, open its saved request and check the current environment. Creating a request here uses only the edited snapshot.",
+      "reviewRequired": "Review Auth, scripts, variables and the current environment, then confirm this snapshot as a new request before sending or saving.",
+      "reviewConfirmed": "I have checked Auth, scripts and variables for this new request.",
+      "redactedBlocked": "Replace or remove all <redacted> values before sending or saving. Hidden credentials cannot be replayed.",
+      "authMissing": "Authentication is incomplete. Provide the required credentials or explicitly select No Auth.",
+      "sendNew": "Send New Request",
       "copyUrl": "Copy URL"
     },
     "title": "API Debugger"

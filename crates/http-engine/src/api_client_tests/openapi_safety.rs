@@ -24,6 +24,25 @@ async fn export(service: &ApiClientService, collection: &str, yaml: bool) -> ser
     }
 }
 
+#[tokio::test]
+async fn opaque_hidden_bodies_do_not_establish_history_identity() {
+    let service = service().await;
+    let collection = service
+        .create_collection("workspace-a".into(), "Opaque bodies".into())
+        .await
+        .unwrap();
+    let mut old = input(&collection.id, false);
+    old.body_kind = "text".into();
+    old.body = Some("opaque historical payload".into());
+    insert_history(&service, &old, "opaque-history", true).await;
+    old.body = Some("different current payload".into());
+    service.save_request(old).await.unwrap();
+    let document = export(&service, &collection.id, false).await;
+    let responses = &document["paths"]["/items"]["post"]["responses"];
+    assert!(responses["default"].is_object());
+    assert!(responses["201"].is_null());
+}
+
 fn auth_cases(value: &str) -> [serde_json::Value; 4] {
     [
         serde_json::json!({"type":"bearer","token":value}),
@@ -180,7 +199,10 @@ async fn openapi_rotated_auth_omits_examples_when_historical_secrets_are_lost() 
                             "lost historical credentials must not leak"
                         );
                         assert!(!document.to_string().contains("rotated-current-canary"));
-                        if !plaintext || (repair && version == 0 && index == 0) || index == 1 {
+                        // Runtime history redaction now recognizes custom
+                        // credential names too. Once repaired, their provenance
+                        // is lost just like Bearer; examples must stay omitted.
+                        if !plaintext || (repair && version == 0) || index == 1 {
                             assert!(
                                 response["content"].is_null(),
                                 "uncertain response body must be omitted"

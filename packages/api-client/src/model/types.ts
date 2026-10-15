@@ -45,6 +45,8 @@ export type MultipartPart =
   | { id: string; enabled: boolean; key: string; type: "file"; fileName: string | null; filePath: string | null };
 
 export type RequestDraft = {
+  /** Explicit review of a lossy historical snapshot; never serialized to IPC. */
+  historyReviewConfirmed?: boolean;
   multipartParts: MultipartPart[];
   auth: ApiAuthConfig;
   body: string;

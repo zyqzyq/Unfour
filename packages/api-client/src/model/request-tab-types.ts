@@ -1,6 +1,6 @@
 import type {
   ApiHistoryItem,
-  ApiRequestInput,
+  ApiExecutedRequestSnapshot,
   ApiResponse,
   RequestExecutionResult,
 } from "@unfour/command-client";
@@ -21,7 +21,7 @@ export type ApiRequestTab = {
   id: string;
   executionId: string | null;
   requestTab: RequestParamsTab;
-  lastRequest: ApiRequestInput | null;
+  lastRequest: ApiExecutedRequestSnapshot | null;
   response: ApiResponse | null;
   responseTab: ResponseTab;
   saveError: string | null;

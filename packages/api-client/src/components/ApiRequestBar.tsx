@@ -99,13 +99,13 @@ export function ApiRequestBar({
           </Button>
         ) : (
           <Button
-            disabled={!tab.draft.url.trim()}
+            disabled={!tab.draft.url.trim() || (tab.source === "history" && !tab.draft.historyReviewConfirmed)}
             size="sm"
             onClick={onSend}
             type="button"
           >
             <Send size={14} />
-            {t("api.actions.send")}
+            {t(tab.source === "history" ? "api.history.sendNew" : "api.actions.send")}
           </Button>
         )}
         <Button
@@ -121,6 +121,16 @@ export function ApiRequestBar({
           <Save size={14} />
         </Button>
       </div>
+      {tab.source === "history" && (
+        <div className="text-[12px] text-[var(--u-color-text-muted)]">
+          <p>{t("api.history.snapshotNotice")}</p>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={Boolean(tab.draft.historyReviewConfirmed)}
+              onChange={(event) => onUpdate({ historyReviewConfirmed: event.target.checked })} />
+            {t("api.history.reviewConfirmed")}
+          </label>
+        </div>
+      )}
       {tab.saveError && (
         <span
           className="min-w-0 truncate text-[12px] text-[var(--u-color-danger)]"

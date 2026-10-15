@@ -634,10 +634,16 @@ impl CommandBus {
                 row.value = resolver.resolve(&row.value)?;
             }
         }
-        Ok((
-            self.api_client.materialize_auth(input)?,
-            resolver.secret_values().to_vec(),
-        ))
+        let mut secrets = resolver.secret_values().to_vec();
+        // Temporary/script values are execution-local, never durable history.
+        secrets.extend(
+            input
+                .temporary_variables
+                .iter()
+                .filter(|v| v.enabled)
+                .map(|v| v.value.clone()),
+        );
+        Ok((self.api_client.materialize_auth(input)?, secrets))
     }
 }
 

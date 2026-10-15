@@ -190,6 +190,7 @@ impl CommandBusAdapter for ApiStubCommandBus {
         _timeout_ms: Option<u64>,
     ) -> Result<ApiResponse, CommandBusAdapterError> {
         Ok(ApiResponse {
+            request_snapshot: None,
             history_id: "hist-1".to_string(),
             status: 200,
             status_text: "OK".to_string(),
@@ -378,6 +379,7 @@ impl CommandBusAdapter for ApiStubCommandBus {
         assert_eq!(input.method, "POST");
         assert_eq!(input.workspace_id, "ws-1");
         Ok(ApiResponse {
+            request_snapshot: None,
             history_id: "hist-post".to_string(),
             status: 201,
             status_text: "Created".to_string(),

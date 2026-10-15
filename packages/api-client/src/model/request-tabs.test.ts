@@ -180,6 +180,8 @@ describe("API request tab state", () => {
     expect(second.tabs[0].lastRequest?.url).toBe("https://history.test");
   });
 
+
+
   it("keeps an unnamed history replay unnamed instead of deriving a URL title", () => {
     const opened = openHistoryRequest(
       emptyApiTabsState("ws-1"),
@@ -187,7 +189,7 @@ describe("API request tab state", () => {
     );
 
     expect(opened.tabs[0].draft.name).toBe("");
-    expect(opened.tabs[0].lastRequest?.name).toBeUndefined();
+    expect(opened.tabs[0].lastRequest).not.toHaveProperty("authJson");
     expect(requestTabTitle(opened.tabs[0])).toBe("Untitled Request");
   });
 
@@ -218,14 +220,18 @@ describe("API request tab state", () => {
     expect(completed.tabs.find((tab) => tab.id === "new:2")?.response).toBeNull();
   });
 
-  it("keeps the request snapshot used for the latest send", () => {
+  it("uses only the sanitized backend snapshot, never the unresolved draft", () => {
     const opened = createNewRequestTab(emptyApiTabsState("ws-1"), "new:1");
     const input = requestInput();
     const sending = startTabSend(opened, "new:1", input);
-    const completed = completeTabSend(sending, "new:1", execution());
+    const result = execution();
+    const snapshot = { method: "POST", url: "https://resolved.test/?page=2", query: [{ key: "page", value: "2", enabled: true }], headers: [{ key: "authorization", value: "<redacted>", enabled: true }], body: null, bodyKind: "none" };
+    result.response!.requestSnapshot = snapshot;
+    const completed = completeTabSend(sending, "new:1", result);
 
-    expect(sending.tabs[0].lastRequest).toEqual(input);
-    expect(completed.tabs[0].lastRequest).toEqual(input);
+    expect(sending.tabs[0].lastRequest).toBeNull();
+    expect(completed.tabs[0].lastRequest).toEqual(snapshot);
+    expect(completeTabSend(sending, "new:1", execution()).tabs[0].lastRequest).toBeNull();
   });
 
   it("updates the saved baseline only after successful save", () => {
@@ -487,4 +493,16 @@ describe("multipart saved and history reopen", () => {
     expect(state.tabs[0].baseline).not.toContain("filePath");
     expect(openSavedRequest(emptyApiTabsState("ws-1"), saved).tabs[0].draft.multipartParts[0]).toMatchObject({ filePath: null, fileName: "avatar.png" });
   });
+});
+
+it("combines legacy URL query and extra query rows without replaying them twice", () => {
+  const opened = openHistoryRequest(emptyApiTabsState("ws-1"), historyDetail("legacy", {
+    url: "https://history.test/items?inline=one",
+    requestQueryJson: JSON.stringify([{ key: "page", value: "2", enabled: true }]),
+  }));
+  expect(opened.tabs[0].lastRequest?.url).toBe("https://history.test/items?inline=one&page=2");
+  expect(opened.tabs[0].draft.query).toHaveLength(2);
+  expect(opened.tabs[0].draft.historyReviewConfirmed).toBeUndefined();
+  expect(opened.tabs[0].draft.auth).toEqual({ type: "none" });
+  expect(opened.tabs[0].draft.preRequestScript).toBe("");
 });

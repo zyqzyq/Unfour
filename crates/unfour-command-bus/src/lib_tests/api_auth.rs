@@ -289,6 +289,10 @@ async fn desktop_and_saved_script_sends_apply_auth_once_and_keep_secrets_out_of_
         assert_eq!(request.to_lowercase().matches("authorization:").count(), 1);
         assert!(request.contains("Basic dXNlcjpzaG9ydA=="));
         assert!(request.contains("short"));
+        let snapshot = serde_json::to_string(response.request_snapshot.as_ref().unwrap()).unwrap();
+        assert!(!snapshot.contains("short"));
+        assert!(!snapshot.contains("dXNlcjpzaG9ydA=="));
+        assert!(snapshot.contains("authorization"));
         let row: (String, String, String) = sqlx::query_as(
             "SELECT url, request_headers_json, request_query_json FROM api_history WHERE id=?",
         )

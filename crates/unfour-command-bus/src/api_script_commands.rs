@@ -150,9 +150,29 @@ impl CommandBus {
             .iter()
             .map(key_value_from_script_variable)
             .collect();
-        let (resolved_request, secrets) = self
-            .resolve_api_request_input_for_environment(request, environment_id.as_deref())
+        let (resolved_request, mut secrets) = self
+            .resolve_api_request_input_for_environment(request.clone(), environment_id.as_deref())
             .await?;
+        secrets.extend(unfour_http_engine::script_mutation_secret_values(
+            &input,
+            &request,
+            &resolved_request,
+        ));
+        // A script may derive a signature into an innocently named environment
+        // variable without directly mutating the request template.
+        secrets.extend(
+            pre.environment
+                .iter()
+                .filter(|variable| {
+                    variable.enabled
+                        && !pre_environment.as_ref().is_some_and(|environment| {
+                            environment.variables.iter().any(|before| {
+                                before.key == variable.key && before.value == variable.value
+                            })
+                        })
+                })
+                .map(|variable| variable.value.clone()),
+        );
         let response = match self
             .api_client
             .send_cancellable_with_secrets(resolved_request.clone(), cancellation.clone(), &secrets)
