@@ -26,7 +26,8 @@ pub(super) fn safe_connection_summary(conn: &DatabaseConnection) -> Value {
 // --- Result truncation ---
 
 /// Truncate rows if their serialized JSON size exceeds `max_bytes`.
-/// Returns `(kept_rows, was_truncated)`.
+/// Returns `(kept_rows, was_truncated)`. Reaching exactly `max_bytes` is not
+/// truncation.
 pub(super) fn truncate_query_rows(
     rows: Vec<Vec<Option<String>>>,
     max_bytes: usize,
@@ -48,6 +49,16 @@ pub(super) fn truncate_query_rows(
         kept.push(row);
     }
     (kept, true)
+}
+
+/// Apply the MCP response-size cap and OR it with the engine row-cap flag.
+/// Either limit having dropped rows makes the MCP result truncated.
+pub(super) fn cap_query_rows(
+    rows: Vec<Vec<Option<String>>>,
+    engine_truncated: bool,
+) -> (Vec<Vec<Option<String>>>, bool) {
+    let (kept, byte_truncated) = truncate_query_rows(rows, MAX_QUERY_RESULT_BYTES);
+    (kept, engine_truncated || byte_truncated)
 }
 
 pub(super) fn result_columns(columns: &[unfour_core::models::DatabaseResultColumn]) -> Vec<Value> {

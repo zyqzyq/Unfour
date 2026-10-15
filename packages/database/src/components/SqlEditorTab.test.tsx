@@ -189,6 +189,33 @@ describe("SQL editor run actions", () => {
     expect(screen.getByLabelText("sql editor")).toHaveValue(MULTI_SQL);
   });
 
+  it("disables the row limit selector while a write confirmation is pending", () => {
+    const onResultRowLimitChange = vi.fn();
+    const { onRun } = renderEditor({
+      onResultRowLimitChange,
+      pendingConfirmation: true,
+      resultRowLimit: 100,
+    });
+    const limit = screen.getByLabelText("Result row limit");
+    expect(limit).toBeDisabled();
+    expect(limit).toHaveValue("100");
+    fireEvent.change(limit, { target: { value: "1000" } });
+    expect(onResultRowLimitChange).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm run" }));
+    expect(onRun).toHaveBeenCalledTimes(1);
+    expect(onRun).toHaveBeenCalledWith({ resume: true });
+  });
+
+  it("disables the row limit selector while SQL execution is in progress", () => {
+    const onResultRowLimitChange = vi.fn();
+    renderEditor({ executePending: true, onResultRowLimitChange, resultRowLimit: 500 });
+    const limit = screen.getByLabelText("Result row limit");
+    expect(limit).toBeDisabled();
+    expect(limit).toHaveValue("500");
+    fireEvent.change(limit, { target: { value: "100" } });
+    expect(onResultRowLimitChange).not.toHaveBeenCalled();
+  });
+
   it("runs the full editor SQL on Run All without cursor or selection", () => {
     const { onRun } = renderEditor();
     fireEvent.click(screen.getByRole("button", { name: "Run All" }));

@@ -588,3 +588,5 @@ mod query_readonly;
 mod schema;
 #[path = "database_tests/test_connection.rs"]
 mod test_connection;
+#[path = "database_tests/truncation.rs"]
+mod truncation;

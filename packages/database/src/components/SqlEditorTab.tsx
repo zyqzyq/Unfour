@@ -105,6 +105,9 @@ export function SqlEditorTab({
   const completionDisposable = useRef<{ dispose: () => void } | null>(null);
   const selectedConnection = connections.find((connection) => connection.id === selectedConnectionId);
   const selectedResultRowLimit = sqlResultRowLimit(resultRowLimit);
+  // The in-flight batch already captured its limit. Changing this control
+  // during confirmation or execution cannot affect that request.
+  const rowLimitLocked = executePending || pendingConfirmation;
   const savedSql = useSavedSql(workspaceId, { active });
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [savedDialogOpen, setSavedDialogOpen] = useState(false);
@@ -375,7 +378,11 @@ export function SqlEditorTab({
           <Select
             aria-label={t("database.result.rowLimitAria")}
             className="max-w-[120px]"
+            disabled={rowLimitLocked}
             onChange={(event) => {
+              if (rowLimitLocked) {
+                return;
+              }
               const next = Number(event.target.value);
               if (isSqlResultRowLimitOption(next)) {
                 onResultRowLimitChange?.(next);

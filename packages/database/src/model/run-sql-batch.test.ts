@@ -51,6 +51,16 @@ describe("SQL script command", () => {
     await executeSqlBatch(batch, true);
     expect(executeDatabaseScript).toHaveBeenCalledWith(expect.objectContaining({ sql: tab.sql, confirmMutation: true }));
   });
+  it("confirms the snapshotted row limit after the tab limit changes", async () => {
+    const batch = createSqlBatch({ ...tab, resultRowLimit: 100 }, { mode: "all" }, "ws");
+    expect(canConfirmBatch(batch, { ...tab, resultRowLimit: 1000 }, "ws")).toBe(true);
+    await executeSqlBatch(batch, true);
+    expect(executeDatabaseScript).toHaveBeenCalledWith(expect.objectContaining({
+      confirmMutation: true,
+      limit: 100,
+      sql: tab.sql,
+    }));
+  });
   it("preserves statement errors and skipped entries from one execution", async () => {
     const output = { stopped: false, statements: [{ index: 2, status: "failed", error: { code: "DATABASE_ERROR", message: "already exists" } }, { index: 3, status: "skipped" }] };
     vi.mocked(executeDatabaseScript).mockResolvedValueOnce(output as Awaited<ReturnType<typeof executeDatabaseScript>>);

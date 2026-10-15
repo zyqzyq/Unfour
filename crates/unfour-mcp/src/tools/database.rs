@@ -717,8 +717,7 @@ fn db_query_readonly(
 
     match command_bus.execute_db_query(input) {
         Ok(result) => {
-            let (truncated_rows, was_truncated) =
-                truncate_query_rows(result.rows, MAX_QUERY_RESULT_BYTES);
+            let (truncated_rows, was_truncated) = cap_query_rows(result.rows, result.truncated);
 
             let columns: Vec<Value> = result
                 .columns
@@ -836,8 +835,7 @@ fn db_execute(
 
     match command_bus.execute_db_query(input) {
         Ok(result) => {
-            let (truncated_rows, was_truncated) =
-                truncate_query_rows(result.rows, MAX_QUERY_RESULT_BYTES);
+            let (truncated_rows, was_truncated) = cap_query_rows(result.rows, result.truncated);
             let columns = result_columns(&result.columns);
 
             Ok(json!({
@@ -905,8 +903,7 @@ fn db_explain(
 
     match command_bus.execute_db_query(input) {
         Ok(result) => {
-            let (truncated_rows, was_truncated) =
-                truncate_query_rows(result.rows, MAX_QUERY_RESULT_BYTES);
+            let (truncated_rows, was_truncated) = cap_query_rows(result.rows, result.truncated);
             Ok(json!({
                 "ok": true,
                 "connectionId": connection_id,

@@ -177,6 +177,41 @@ describe("SQL runner outcomes", () => {
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
+  it("confirms the original row limit after the tab limit changes", async () => {
+    execute.mockRejectedValueOnce({ code: "CONFIRMATION_REQUIRED", message: "Confirm script" });
+    const { result } = setup("DELETE FROM t;");
+    act(() => result.current.tabs.updateQueryTab(result.current.tab!.id, { resultRowLimit: 100 }));
+    act(() => result.current.runner.runSql({ mode: "all" }));
+    await waitFor(() => expect(result.current.tab?.pendingConfirmation).toBe(true));
+    expect(execute.mock.calls[0][0]).toEqual(expect.objectContaining({
+      confirmMutation: false, limit: 100, sql: "DELETE FROM t;",
+    }));
+    act(() => result.current.tabs.updateQueryTab(result.current.tab!.id, { resultRowLimit: 1000 }));
+    execute.mockResolvedValueOnce({ statements: [entry(1, "success")], stopped: false });
+    act(() => result.current.runner.runSql({ resume: true }));
+    await waitFor(() => expect(execute).toHaveBeenCalledTimes(2));
+    expect(execute.mock.calls[1][0]).toEqual(expect.objectContaining({
+      confirmMutation: true, limit: 100, sql: "DELETE FROM t;",
+    }));
+    expect(result.current.tab?.pendingConfirmation).toBe(false);
+  });
+
+  it("keeps the in-flight row limit when the tab limit changes during execution", async () => {
+    let finish!: (value: DatabaseScriptResult) => void;
+    execute.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const { result } = setup("SELECT 1;");
+    act(() => result.current.tabs.updateQueryTab(result.current.tab!.id, { resultRowLimit: 500 }));
+    act(() => result.current.runner.runSql({ mode: "all" }));
+    expect(execute.mock.calls[0][0]).toEqual(expect.objectContaining({
+      confirmMutation: false, limit: 500, sql: "SELECT 1;",
+    }));
+    act(() => result.current.tabs.updateQueryTab(result.current.tab!.id, { resultRowLimit: 1000 }));
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute.mock.calls[0][0].limit).toBe(500);
+    await act(async () => finish({ statements: [entry(1, "success")], stopped: false }));
+    expect(result.current.tab?.resultRowLimit).toBe(1000);
+  });
+
   it("resumes the original Run All script after confirmation", async () => {
     execute.mockRejectedValueOnce({ code: "CONFIRMATION_REQUIRED", message: "Confirm script" });
     const { result } = setup(FOUR_STATEMENT_SQL);
