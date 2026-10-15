@@ -3,14 +3,18 @@ use std::sync::{
     Arc,
 };
 use std::time::{Duration, Instant};
+use std::{cell::RefCell, rc::Rc};
 
-use rquickjs::{CatchResultExt, Context, Runtime};
+use rquickjs::{CatchResultExt, Context, Function, Runtime};
 use serde::{Deserialize, Serialize};
 use unfour_core::models::{
     KeyValue, ScriptConsoleEntry, ScriptError, ScriptErrorKind, ScriptExecutionResult,
     ScriptExecutionStatus, ScriptTestResult,
 };
 use unfour_core::{AppError, AppResult};
+
+mod diagnostics;
+use diagnostics::DiagnosticRedactions;
 
 pub const SCRIPT_SCHEMA_VERSION: i64 = 1;
 pub const SCRIPT_TIMEOUT: Duration = Duration::from_millis(1_000);
@@ -184,7 +188,7 @@ pub async fn run_script(script: String, input: ScriptRunInput) -> AppResult<Scri
 
     tokio::task::spawn_blocking(move || execute_sync(script, input_json, input))
         .await
-        .map_err(|error| AppError::Config(format!("script worker failed: {error}")))?
+        .map_err(|_| AppError::Config("script worker failed".to_string()))?
 }
 
 fn execute_sync(
@@ -193,7 +197,7 @@ fn execute_sync(
     input: ScriptRunInput,
 ) -> AppResult<ScriptRunOutcome> {
     let started = Instant::now();
-    let redactions = input.redactions.clone();
+    let redactions = Rc::new(RefCell::new(DiagnosticRedactions::new(&input)));
     let timed_out = Arc::new(AtomicBool::new(false));
     let interrupt_enabled = Arc::new(AtomicBool::new(true));
     let deadline = started + SCRIPT_TIMEOUT;
@@ -222,6 +226,14 @@ fn execute_sync(
     let mut script_error = None;
     let mut raw_output = None;
     context.with(|ctx| -> AppResult<()> {
+        let tracked = redactions.clone();
+        let track_value = Function::new(ctx.clone(), move |value: String| {
+            tracked.borrow_mut().record(&value);
+        })
+        .map_err(|_| AppError::Config("cannot initialize script diagnostics".to_string()))?;
+        ctx.globals()
+            .set("__UNFOUR_TRACK_VALUE", track_value)
+            .map_err(|_| AppError::Config("cannot inject script diagnostics".to_string()))?;
         ctx.globals()
             .set("__UNFOUR_INPUT_JSON", input_json)
             .map_err(|error| AppError::Config(format!("cannot inject script context: {error}")))?;
@@ -271,10 +283,9 @@ fn execute_sync(
                     SCRIPT_TIMEOUT.as_millis()
                 )
             } else {
-                redact_message(
-                    script_error.unwrap_or_else(|| "cannot collect script result".to_string()),
-                    &redactions,
-                )
+                // Export may fail after a mutation or invoke script-controlled
+                // getters/toJSON. Its exception is not a safe diagnostic.
+                "Cannot safely collect script result".to_string()
             },
             duration_ms,
         ));
@@ -290,7 +301,26 @@ fn execute_sync(
             duration_ms,
         ));
     }
-    let parsed: RawScriptOutput = serde_json::from_str(&output)?;
+    let mut parsed: RawScriptOutput = match serde_json::from_str(&output) {
+        Ok(parsed) => parsed,
+        Err(_) => {
+            // Serde errors can quote attacker-controlled field/enum values.
+            return Ok(failed_outcome(
+                input.request,
+                input.environment,
+                input.variables,
+                ScriptErrorKind::Validation,
+                "SCRIPT_OUTPUT_INVALID",
+                "Cannot safely decode script result".to_string(),
+                duration_ms,
+            ));
+        }
+    };
+    let mut redactions = redactions.borrow_mut();
+    redactions.collect_output(&input, &parsed);
+    // This boundary also precedes output validation and every early return
+    // carrying collected console/tests. Business values stay untouched.
+    redactions.sanitize_diagnostics(&mut parsed.console, &mut parsed.tests);
     if let Err(message) = validate_output(&parsed) {
         return Ok(ScriptRunOutcome {
             execution: ScriptExecutionResult {
@@ -324,7 +354,7 @@ fn execute_sync(
         script_error.map(|message| ScriptError {
             kind: ScriptErrorKind::Runtime,
             code: "SCRIPT_RUNTIME_ERROR".to_string(),
-            message: redact_message(message, &redactions),
+            message: redactions.scrub(&message),
         })
     };
     let status = match error.as_ref().map(|error| error.kind) {
@@ -374,32 +404,6 @@ fn validate_output(output: &RawScriptOutput) -> Result<(), String> {
     Ok(())
 }
 
-fn redact_message(mut message: String, redactions: &[String]) -> String {
-    for secret in redactions.iter().filter(|value| !value.is_empty()) {
-        message = message.replace(secret, "[REDACTED]");
-    }
-    let lower = message.to_ascii_lowercase();
-    if [
-        "authorization:",
-        "authorization=",
-        "cookie:",
-        "cookie=",
-        "password:",
-        "password=",
-        "\"password\"",
-        "\"token\"",
-        "\"secret\"",
-        "\"private_key\"",
-        "\"api_key\"",
-    ]
-    .iter()
-    .any(|marker| lower.contains(marker))
-    {
-        return "Script error contained sensitive data and was redacted".to_string();
-    }
-    message
-}
-
 fn failed_outcome(
     request: ScriptRequestContext,
     environment: Vec<ScriptVariable>,
@@ -438,10 +442,11 @@ const BOOTSTRAP: &str = r#"
 (() => {
   const input = JSON.parse(globalThis.__UNFOUR_INPUT_JSON);
   const stringify = JSON.stringify.bind(JSON);
+  const trackValue = globalThis.__UNFOUR_TRACK_VALUE;
+  delete globalThis.__UNFOUR_TRACK_VALUE;
   delete globalThis.__UNFOUR_INPUT_JSON;
   const limits = Object.freeze({ logCount: 100, logEntry: 8192, logTotal: 65536, tests: 100 });
   const sensitiveKey = /(authorization|cookie|proxy-authorization|x-api-key|x-auth-token|password|passwd|token|secret|private[_-]?key|api[_-]?key|credential|license[_-]?key)/i;
-  const redactions = input.redactions.filter((value) => typeof value === "string" && value.length > 0);
   let logSize = 0;
   const logs = [];
   const tests = [];
@@ -467,12 +472,14 @@ const BOOTSTRAP: &str = r#"
   }
   function setVariable(map, name, value) {
     const key = variableName(name);
-    map.set(key, { key, value: String(value), enabled: true });
+    const text = String(value);
+    trackValue(text);
+    map.set(key, { key, value: text, enabled: true });
   }
   function redactString(value) {
-    let output = String(value);
-    for (const secret of redactions) output = output.split(secret).join("[REDACTED]");
-    return output;
+    // Keep complete values until the host can replace overlapping old/new
+    // credentials longest-first with the shared history scrubber.
+    return String(value);
   }
   function sanitize(value, seen = new WeakSet(), depth = 0) {
     if (typeof value === "string") return redactString(value);
@@ -502,18 +509,22 @@ const BOOTSTRAP: &str = r#"
   function pushLog(level, args) {
     if (logs.length >= limits.logCount || logSize >= limits.logTotal) return;
     let message = args.map(display).join(" ");
+    let truncated = false;
     const suffix = " [truncated]";
     if (message.length > limits.logEntry) {
       message = message.slice(0, limits.logEntry - suffix.length) + suffix;
+      truncated = true;
     }
     const remaining = limits.logTotal - logSize;
     if (message.length > remaining) {
+      truncated = true;
       message = remaining > suffix.length
         ? message.slice(0, remaining - suffix.length) + suffix
         : suffix.slice(0, remaining);
     }
     logSize += message.length;
-    logs.push({ level, message, sequence: logs.length });
+    // A clipped credential no longer matches its complete value in Rust.
+    logs.push({ level, message: truncated ? "<redacted>" : message, sequence: logs.length });
   }
   function findHeader(headers, name) {
     const key = String(name).toLowerCase();
@@ -554,8 +565,10 @@ const BOOTSTRAP: &str = r#"
       const key = String(item.key ?? "").trim();
       if (!key) throw new Error("Header key cannot be empty");
       const current = request.headers.find((entry) => String(entry.key).toLowerCase() === key.toLowerCase());
-      if (current) Object.assign(current, { key, value: String(item.value ?? ""), enabled: true });
-      else request.headers.push({ key, value: String(item.value ?? ""), enabled: true });
+      const value = String(item.value ?? "");
+      trackValue(value);
+      if (current) Object.assign(current, { key, value, enabled: true });
+      else request.headers.push({ key, value, enabled: true });
     },
     remove(name) {
       const key = String(name).toLowerCase();
@@ -578,7 +591,8 @@ const BOOTSTRAP: &str = r#"
     json() {
       if (input.response.bodyError) throw new Error(input.response.bodyError);
       try { return JSON.parse(input.response.body ?? ""); }
-      catch (error) { throw new Error(`Response body is not valid JSON: ${error.message}`); }
+      // Parser errors can echo an unclassified response-body fragment.
+      catch (_) { throw new Error("Response body is not valid JSON"); }
     }
   }) : undefined;
 
@@ -645,3 +659,7 @@ const BOOTSTRAP: &str = r#"
 #[cfg(test)]
 #[path = "script_runtime_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "script_runtime/diagnostics_tests.rs"]
+mod diagnostics_tests;

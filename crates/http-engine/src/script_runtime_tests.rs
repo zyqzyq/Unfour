@@ -1,6 +1,6 @@
 use super::*;
 
-fn input(phase: ScriptPhase) -> ScriptRunInput {
+pub(super) fn input(phase: ScriptPhase) -> ScriptRunInput {
     ScriptRunInput {
         phase,
         request: ScriptRequestContext {
@@ -105,7 +105,7 @@ async fn response_json_tests_and_console_are_collected() {
     assert_eq!(outcome.execution.tests.len(), 4);
     assert!(!outcome.execution.tests[2].passed);
     assert!(outcome.execution.tests[3].passed);
-    assert_eq!(outcome.execution.console[0].message, "token [REDACTED]");
+    assert_eq!(outcome.execution.console[0].message, "<redacted>");
     assert!(!outcome.execution.console[1]
         .message
         .contains("must-not-appear"));
@@ -120,18 +120,15 @@ async fn invalid_json_is_a_script_error() {
         "OK".to_string(),
         1,
         vec![],
-        "not json",
+        "invalid-json-canary",
     ));
     let outcome = run_script("pm.response.json();".to_string(), context)
         .await
         .expect("run script");
     assert_eq!(outcome.execution.status, ScriptExecutionStatus::Failed);
-    assert!(outcome
-        .execution
-        .error
-        .unwrap()
-        .message
-        .contains("not valid JSON"));
+    let message = outcome.execution.error.unwrap().message;
+    assert!(message.contains("not valid JSON"));
+    assert!(!message.contains("invalid-json-canary"));
 }
 
 #[tokio::test]
@@ -160,7 +157,7 @@ async fn oversized_response_body_is_not_injected() {
 #[tokio::test]
 async fn host_capabilities_are_unavailable() {
     let outcome = run_script(
-        r#"pm.test("sandbox", () => pm.expect([typeof require, typeof process, typeof fetch, typeof __unfourExport]).to.eql(["undefined", "undefined", "undefined", "undefined"]));"#.to_string(),
+        r#"pm.test("sandbox", () => pm.expect([typeof require, typeof process, typeof fetch, typeof __unfourExport, typeof __UNFOUR_TRACK_VALUE]).to.eql(["undefined", "undefined", "undefined", "undefined", "undefined"]));"#.to_string(),
         input(ScriptPhase::PostResponse),
     )
     .await

@@ -89,7 +89,7 @@ impl CommandBus {
                 .map(script_variable_from_key_value)
                 .collect(),
             None,
-        );
+        )?;
         let pre = tokio::select! {
             _ = cancellation.cancelled() => {
                 return Ok(cancelled_execution(
@@ -204,7 +204,7 @@ impl CommandBus {
         let post_environment = self
             .script_environment(&input.workspace_id, environment_id.as_deref())
             .await?;
-        let post_input = script_input(
+        let mut post_input = script_input(
             ScriptPhase::PostResponse,
             &resolved_request,
             post_environment.as_ref(),
@@ -216,7 +216,10 @@ impl CommandBus {
                 response.headers.clone(),
                 &response.body,
             )),
-        );
+        )?;
+        // Carry pre-request mutation provenance across the phase boundary,
+        // including innocently named environment values and resolved Auth.
+        post_input.redactions.extend(secrets);
         let post = tokio::select! {
             _ = cancellation.cancelled() => {
                 return Ok(RequestExecutionResult {
@@ -375,7 +378,7 @@ fn script_input(
     active_environment: Option<&WorkspaceEnvironment>,
     variables: Vec<ScriptVariable>,
     response: Option<ScriptResponseContext>,
-) -> ScriptRunInput {
+) -> AppResult<ScriptRunInput> {
     let environment = active_environment
         .map(|environment| {
             environment
@@ -389,7 +392,9 @@ fn script_input(
                 .collect()
         })
         .unwrap_or_default();
-    let mut redactions = HashSet::new();
+    let mut redactions = unfour_http_engine::runtime_request_secret_values(input)?
+        .into_iter()
+        .collect::<HashSet<_>>();
     if let Some(environment) = active_environment {
         for variable in &environment.variables {
             if variable.is_secret || is_sensitive_key(&variable.key) {
@@ -415,7 +420,7 @@ fn script_input(
         }
     }
 
-    ScriptRunInput {
+    Ok(ScriptRunInput {
         phase,
         request: ScriptRequestContext {
             method: input.method.clone(),
@@ -428,7 +433,7 @@ fn script_input(
         variables,
         has_environment: active_environment.is_some(),
         redactions: redactions.into_iter().collect(),
-    }
+    })
 }
 
 fn insert_redaction(redactions: &mut HashSet<String>, value: &str) {

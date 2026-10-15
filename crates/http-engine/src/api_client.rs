@@ -22,6 +22,7 @@ mod execution_snapshot;
 pub use execution_snapshot::script_mutation_secret_values;
 mod history;
 mod history_redaction;
+pub(crate) use history_redaction::scrub_values;
 mod local_bundle;
 mod multipart;
 mod openapi_export;

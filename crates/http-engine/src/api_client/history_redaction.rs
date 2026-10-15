@@ -52,7 +52,7 @@ fn scrub_secrets(input: &ApiRequestInput, variable_secrets: &[String]) -> AppRes
     Ok(secrets)
 }
 
-pub(super) fn scrub_values(value: &str, secrets: &[String]) -> String {
+pub(crate) fn scrub_values(value: &str, secrets: &[String]) -> String {
     let mut variants = Vec::new();
     for secret in secrets
         .iter()

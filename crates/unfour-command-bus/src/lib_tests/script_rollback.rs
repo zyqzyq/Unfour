@@ -94,7 +94,9 @@ async fn failed_post_script_preserves_pre_commit_http_history_and_redacts_secret
         pm.environment.set("token", "post-secret-canary");
         pm.environment.set("partial_new_key", "must-rollback");
         console.log(original);
-        throw new Error(original);
+        console.log(pm.environment.get("token"), pm.environment.get("partial_new_key"));
+        pm.test(pm.environment.get("token"), () => pm.expect(pm.environment.get("partial_new_key")).to.equal("other"));
+        throw new Error(original + pm.environment.get("token") + pm.environment.get("partial_new_key"));
     "#
         .into(),
     );
@@ -150,6 +152,7 @@ async fn failed_post_script_preserves_pre_commit_http_history_and_redacts_secret
         "original-secret-canary",
         "pre-secret-canary",
         "post-secret-canary",
+        "must-rollback",
     ] {
         assert!(
             !visible.contains(canary),
