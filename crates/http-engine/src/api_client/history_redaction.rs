@@ -53,37 +53,7 @@ fn scrub_secrets(input: &ApiRequestInput, variable_secrets: &[String]) -> AppRes
 }
 
 pub(crate) fn scrub_values(value: &str, secrets: &[String]) -> String {
-    let mut variants = Vec::new();
-    for secret in secrets
-        .iter()
-        .filter(|secret| !secret.is_empty() && secret.as_str() != REDACTED_VALUE)
-    {
-        let escaped = serde_json::to_string(secret).unwrap_or_default();
-        let encoded = reqwest::Url::parse_with_params("http://localhost/", &[("v", secret)])
-            .ok()
-            .and_then(|url| url.query().map(|q| q.trim_start_matches("v=").to_owned()))
-            .unwrap_or_default();
-        variants.extend([
-            secret.clone(),
-            escaped.trim_matches('"').to_owned(),
-            encoded.clone(),
-            encoded.replace('+', "%20"),
-        ]);
-    }
-    variants.retain(|value| !value.is_empty());
-    variants.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
-    variants.dedup();
-    let mut value = value.to_owned();
-    for secret in variants {
-        // Preserve markers inserted by earlier replacements, including when a
-        // one-character secret appears in the marker itself.
-        value = value
-            .split(REDACTED_VALUE)
-            .map(|part| part.replace(&secret, REDACTED_VALUE))
-            .collect::<Vec<_>>()
-            .join(REDACTED_VALUE);
-    }
-    value
+    unfour_core::redaction::scrub_secret_values(value, secrets)
 }
 
 fn redact_rows(items: &[KeyValue], scrub: &impl Fn(&str) -> String) -> AppResult<String> {

@@ -280,12 +280,7 @@ fn scrub_values(value: &mut Value, secrets: &[String]) {
         }
         Value::Array(values) => values.iter_mut().for_each(|v| scrub_values(v, secrets)),
         Value::String(text) => {
-            for secret in secrets
-                .iter()
-                .filter(|s| !s.is_empty() && s.as_str() != "<redacted>")
-            {
-                *text = text.replace(secret, "<redacted>");
-            }
+            *text = unfour_core::redaction::scrub_secret_values(text, secrets);
         }
         Value::Number(_) | Value::Bool(_) if secrets.contains(&value.to_string()) => {
             *value = Value::String("<redacted>".into());

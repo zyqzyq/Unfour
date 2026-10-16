@@ -401,9 +401,7 @@ pub(super) fn scrub_diagnostics(value: &mut Value, secrets: &[String]) {
             .iter_mut()
             .for_each(|v| scrub_diagnostics(v, secrets)),
         Value::String(text) => {
-            for secret in secrets.iter().filter(|s| !s.is_empty()) {
-                *text = text.replace(secret, "<redacted>");
-            }
+            *text = unfour_core::redaction::scrub_secret_values(text, secrets);
         }
         _ => {}
     }

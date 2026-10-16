@@ -176,6 +176,50 @@ async fn flow_sensitive_inputs_are_usable_but_never_persisted() {
 }
 
 #[tokio::test]
+async fn flow_escaped_secret_inputs_keep_runtime_values_but_scrub_persisted_copies() {
+    let bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let service = unfour_flow_engine::FlowService::new(bus.db.clone());
+    let flow = service
+        .save(definition(
+            &workspace,
+            json!([
+                action(
+                    "first",
+                    "api",
+                    "a",
+                    json!({"echo":{"$ref":"/inputs/payload"}})
+                ),
+                action(
+                    "second",
+                    "api",
+                    "b",
+                    json!({"echo":{"$ref":"/steps/first/echo"}})
+                )
+            ]),
+        ))
+        .await
+        .unwrap();
+    let secret = "opaque\"value\\end";
+    let payload = json!({"echo":secret, "safe":"visible"}).to_string();
+    let mut input = request(&workspace, &flow.id);
+    input.inputs = json!({"value":42,"custom":secret,"payload":payload});
+    input.secret_input_names = vec!["custom".into()];
+    let driver = std::sync::Arc::new(Driver::default());
+    let run = service.run(input, driver.clone()).await.unwrap();
+    let result = finished(&bus, &run).await;
+    assert_eq!(result.status, FlowRunStatus::Succeeded);
+    assert_eq!(driver.calls.lock().unwrap()[1]["echo"], payload);
+    let expected = json!({"echo":"<redacted>","safe":"visible"}).to_string();
+    assert_eq!(result.context.inputs["payload"], expected);
+    for step in &result.steps {
+        assert_eq!(step.output.as_ref().unwrap()["echo"], expected);
+        assert_eq!(step.attempts[0].input["echo"], expected);
+        assert_eq!(step.attempts[0].output.as_ref().unwrap()["echo"], expected);
+    }
+}
+
+#[tokio::test]
 async fn flow_cancel_reaches_active_http_and_never_schedules_later_steps() {
     use std::io::{BufRead, BufReader, Read};
     let bus = test_bus().await;

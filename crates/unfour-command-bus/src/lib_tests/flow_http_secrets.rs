@@ -4,6 +4,91 @@ use std::io::{Read, Write};
 use unfour_core::models::FlowRunStatus;
 
 #[tokio::test]
+async fn flow_http_encoded_credentials_never_reach_history() {
+    for status in [200, 422] {
+        let bus = test_bus().await;
+        let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+        let secret = "opaque+value/with space=42";
+        let encoded = "opaque%2Bvalue%2Fwith+space%3D42";
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            let (mut socket, _) = loop {
+                match listener.accept() {
+                    Ok(connection) => break connection,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        assert!(
+                            std::time::Instant::now() < deadline,
+                            "request never arrived"
+                        );
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    }
+                    Err(error) => panic!("accept request: {error}"),
+                }
+            };
+            socket.set_nonblocking(false).unwrap();
+            socket
+                .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+                .unwrap();
+            let mut request = Vec::new();
+            while !request.windows(4).any(|w| w == b"\r\n\r\n") {
+                let mut chunk = [0; 4096];
+                let n = socket.read(&mut chunk).unwrap();
+                assert!(n > 0);
+                request.extend_from_slice(&chunk[..n]);
+            }
+            assert!(String::from_utf8_lossy(&request).contains(secret));
+            let response = json!({"echo": encoded, "safe": "visible"}).to_string();
+            write!(socket, "HTTP/1.1 {status} Test\r\nX-Echo: {encoded}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{response}", response.len()).unwrap();
+        });
+        let mut api = api_script_test_input(workspace.clone(), url);
+        api.headers.push(KeyValue {
+            key: "x-api-key".into(),
+            value: secret.into(),
+            enabled: true,
+        });
+        let api = bus.save_api_request(api).await.unwrap();
+        let flow = bus
+            .save_flow(super::flow::definition(
+                &workspace,
+                json!([super::flow::action("request", "api", &api.id, json!({}))]),
+            ))
+            .await
+            .unwrap();
+        let run = bus
+            .run_flow(super::flow::request(&workspace, &flow.id))
+            .await
+            .unwrap();
+        let result = super::flow::finished(&bus, &run).await;
+        server.join().unwrap();
+        assert_eq!(
+            result.status,
+            if status == 200 {
+                FlowRunStatus::Succeeded
+            } else {
+                FlowRunStatus::Failed
+            }
+        );
+        let stored: String = sqlx::query_scalar("SELECT run_json FROM flow_runs WHERE id = ?")
+            .bind(&run.id)
+            .fetch_one(bus.db.pool())
+            .await
+            .unwrap();
+        assert!(
+            !stored.contains(encoded),
+            "encoded credential persisted for HTTP {status}"
+        );
+        assert!(!stored.contains(secret));
+        let output = result.steps[0].output.as_ref().unwrap();
+        assert_eq!(output["body"]["echo"], "<redacted>");
+        assert_eq!(output["body"]["safe"], "visible");
+        assert_eq!(result.steps[0].attempts[0].output.as_ref(), Some(output));
+    }
+}
+
+#[tokio::test]
 async fn flow_http_failure_scrubs_saved_request_secrets_from_persisted_history() {
     for (kind, body, suffix, userinfo, secrets) in [
         (

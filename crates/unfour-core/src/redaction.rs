@@ -1,3 +1,6 @@
+mod known_values;
+pub use known_values::scrub_secret_values;
+
 /// Flow input/output names; keep aligned with packages/flow/src/model.ts.
 pub fn is_sensitive_flow_name(value: &str) -> bool {
     let normalized: String = value
