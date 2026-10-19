@@ -63,8 +63,9 @@ impl ApiClientService {
         if input.body_kind == unfour_core::models::MULTIPART_BODY_KIND {
             if !matches!(method, Method::GET | Method::HEAD) {
                 let form = tokio::select! {
-                    _ = cancellation.cancelled() => return Err(cancelled_error()),
+                    biased;
                     form = super::multipart::build_form(&input) => form?,
+                    _ = cancellation.cancelled() => return Err(cancelled_error()),
                 };
                 builder = builder.multipart(form);
             }
@@ -78,6 +79,9 @@ impl ApiClientService {
         }
 
         let request = builder.build().map_err(classify_http_error)?;
+        if cancellation.is_cancelled() {
+            return Err(cancelled_error());
+        }
         let executed = super::execution_snapshot::executed_input(&input, &request);
         let mut executed_secrets = secrets.to_vec();
         executed_secrets.extend(runtime_request_secret_values(&executed)?);
@@ -95,8 +99,9 @@ impl ApiClientService {
             request_fields.clone(),
         );
         let response_result = tokio::select! {
-            _ = cancellation.cancelled() => return Err(cancelled_error()),
+            biased;
             response = self.client.execute(request) => response,
+            _ = cancellation.cancelled() => return Err(cancelled_error()),
         };
         let mut response = match response_result {
             Ok(response) => response,
@@ -125,8 +130,9 @@ impl ApiClientService {
             })
             .collect::<Vec<_>>();
         let body_result = tokio::select! {
-            _ = cancellation.cancelled() => return Err(cancelled_error()),
+            biased;
             body = read_bounded_body(&mut response) => body,
+            _ = cancellation.cancelled() => return Err(cancelled_error()),
         };
         let body = match body_result {
             Ok(body) => body,
@@ -143,13 +149,9 @@ impl ApiClientService {
                 return Err(error);
             }
         };
-        if cancellation.is_cancelled() {
-            return Err(cancelled_error());
-        }
         let duration_ms = started.elapsed().as_millis();
         let history_result = tokio::select! {
             biased;
-            _ = cancellation.cancelled() => return Err(cancelled_error()),
             result = self.insert_history(
                 &executed,
                 status.as_u16(),
@@ -158,6 +160,7 @@ impl ApiClientService {
                 &body,
                 secrets,
             ) => result,
+            _ = cancellation.cancelled() => return Err(cancelled_error()),
         };
         let history_id = match history_result {
             Ok(history_id) => history_id,

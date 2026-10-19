@@ -3,7 +3,7 @@ use super::support::service;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 
 #[tokio::test]
@@ -68,6 +68,26 @@ async fn cancellation_stops_body_receive_and_does_not_write_history() {
         .expect("count history");
     assert_eq!(history_count, 0);
     server.join().expect("server thread completes");
+}
+
+#[tokio::test]
+async fn already_cancelled_send_returns_before_opening_a_request() {
+    let service = service().await;
+    let cancellation = CancellationToken::new();
+    cancellation.cancel();
+    let started = Instant::now();
+    let error = service
+        .send_cancellable(
+            request("http://127.0.0.1:1/unreachable", Some(0)),
+            cancellation,
+        )
+        .await
+        .expect_err("cancelled before connect");
+    assert!(matches!(error, AppError::ApiCancelled(_)));
+    assert!(
+        started.elapsed() < Duration::from_millis(200),
+        "cancelled send attempted a connection"
+    );
 }
 
 fn delayed_body_server(delay: Duration, body: &'static str) -> (String, thread::JoinHandle<()>) {

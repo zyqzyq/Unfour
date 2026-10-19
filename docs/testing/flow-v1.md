@@ -53,7 +53,9 @@ Other Flow coverage verifies:
   after Flow deletion, and workspace isolation.
 - Poll attempt exhaustion, total timeout, cancellation during polling, and
   stopping subsequent scheduling.
-- Active HTTP cancellation closes the connection before the response arrives.
+- Active HTTP cancellation closes the connection when no response arrives in
+  the grace window, and the step is `FLOW_OUTCOME_UNCERTAIN`. A response that
+  arrives in that window is stored as the step result.
 - Runtime secrets can feed later steps but do not appear in raw SQLite run JSON;
   inline sensitive definition literals are rejected.
 - Saved bearer/basic/API-key auth works without UI materialization, with explicit

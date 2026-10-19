@@ -1,5 +1,6 @@
 use crate::{
     expression::{invalid, predicate},
+    runner::error_code,
     FlowExecutor, FlowService,
 };
 use serde_json::{json, Value};
@@ -83,13 +84,19 @@ impl FlowService {
                     }
                 }
                 Err(error) => {
-                    if cancel.is_cancelled() {
-                        return Err(invalid("FLOW_CANCELLED"));
+                    let code = error_code(&error);
+                    // A finished probe keeps its own outcome. Cancellation only
+                    // stops another check; it does not rewrite a confirmed result.
+                    if code == "FLOW_CANCELLED" || code == "FLOW_OUTCOME_UNCERTAIN" {
+                        return Err(error);
                     }
                     if *probe_error_policy != FlowProbeErrorPolicy::RetryTransientErrors
                         || !transient(&error)
                     {
                         return Err(error);
+                    }
+                    if cancel.is_cancelled() {
+                        return Err(invalid("FLOW_CANCELLED"));
                     }
                 }
             }
@@ -102,8 +109,9 @@ impl FlowService {
             );
             self.persist_run(run).await?;
             tokio::select! {
-                _ = cancel.cancelled() => return Err(invalid("FLOW_CANCELLED")),
+                biased;
                 _ = tokio::time::sleep(Duration::from_millis(*interval_ms)) => {}
+                _ = cancel.cancelled() => return Err(invalid("FLOW_CANCELLED")),
             }
         }
     }

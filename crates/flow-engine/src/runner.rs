@@ -18,6 +18,20 @@ pub(crate) fn error_code(error: &AppError) -> String {
         _ => error.code().into(),
     }
 }
+
+enum Interrupt {
+    Timeout,
+    Cancelled(AppError),
+}
+
+enum Observed {
+    Ready(AppResult<(Value, Option<String>)>),
+    Abandoned(Interrupt),
+}
+
+/// How long an interrupted step may finish work that has already started.
+const INTERRUPT_GRACE: Duration = Duration::from_secs(2);
+
 impl FlowService {
     pub(crate) async fn execute_run(
         &self,
@@ -65,23 +79,41 @@ impl FlowService {
                     token.clone(),
                 );
                 tokio::pin!(work);
+                // A ready step result wins over a timeout or cancel observed in
+                // the same poll. Otherwise the grace window still accepts a
+                // result that finishes after the signal.
                 outcome = loop {
                     tokio::select! {
                         biased;
+                        result = &mut work => break Observed::Ready(result),
                         _ = &mut timeout => {
                             token.cancel();
-                            let _ = tokio::time::timeout(Duration::from_secs(2), &mut work).await;
-                            break Err(invalid("FLOW_TIMEOUT"));
+                            break match tokio::time::timeout(INTERRUPT_GRACE, &mut work).await {
+                                Ok(result) => {
+                                    Observed::Ready(adopt_completed(Interrupt::Timeout, result))
+                                }
+                                Err(_) => Observed::Abandoned(Interrupt::Timeout),
+                            };
                         }
                         error = &mut heartbeat => {
                             token.cancel();
-                            let _ = tokio::time::timeout(Duration::from_secs(2), &mut work).await;
-                            break Err(error);
+                            break match tokio::time::timeout(INTERRUPT_GRACE, &mut work).await {
+                                Ok(result) => Observed::Ready(adopt_completed(
+                                    Interrupt::Cancelled(error),
+                                    result,
+                                )),
+                                Err(_) => Observed::Abandoned(Interrupt::Cancelled(error)),
+                            };
                         }
-                        result = &mut work => break result,
                     }
                 };
             }
+            let outcome = match outcome {
+                Observed::Ready(result) => result,
+                Observed::Abandoned(interrupt) => {
+                    adopt_abandoned(interrupt, &step, &run.steps[index])
+                }
+            };
             // Drop the heartbeat future before the next write. An in-flight
             // heartbeat may otherwise retain the single available connection.
             run.steps[index].duration_ms = started.elapsed().as_millis() as u64;
@@ -190,7 +222,11 @@ impl FlowService {
                     duration_ms: 0,
                 });
                 self.persist_run(run).await?;
-                tokio::select! { _ = cancel.cancelled() => return Err(invalid("FLOW_CANCELLED")), _ = tokio::time::sleep(Duration::from_millis(*duration_ms)) => {} }
+                tokio::select! {
+                    biased;
+                    _ = tokio::time::sleep(Duration::from_millis(*duration_ms)) => {}
+                    _ = cancel.cancelled() => return Err(invalid("FLOW_CANCELLED")),
+                }
                 let output = json!({"waitedMs": duration_ms});
                 run.steps[index].attempts[0].output = Some(output.clone());
                 run.steps[index].attempts[0].duration_ms = *duration_ms;
@@ -223,7 +259,11 @@ impl FlowService {
                     if number == *max_attempts {
                         return Err(invalid("FLOW_MAX_ATTEMPTS"));
                     }
-                    tokio::select! { _ = cancel.cancelled() => return Err(invalid("FLOW_CANCELLED")), _ = tokio::time::sleep(Duration::from_millis(*interval_ms)) => {} }
+                    tokio::select! {
+                        biased;
+                        _ = tokio::time::sleep(Duration::from_millis(*interval_ms)) => {}
+                        _ = cancel.cancelled() => return Err(invalid("FLOW_CANCELLED")),
+                    }
                 }
                 unreachable!()
             }
@@ -300,4 +340,85 @@ impl FlowService {
         // only the former are eligible for a probe retry.
         Ok(output)
     }
+}
+
+fn adopt_completed(
+    interrupt: Interrupt,
+    result: AppResult<(Value, Option<String>)>,
+) -> AppResult<(Value, Option<String>)> {
+    match result {
+        Ok(completed) => Ok(completed),
+        Err(error) if error_code(&error) == "FLOW_CANCELLED" => Err(clean_interrupt(interrupt)),
+        Err(error) => Err(error),
+    }
+}
+
+fn adopt_abandoned(
+    interrupt: Interrupt,
+    step: &FlowStep,
+    step_run: &FlowStepRun,
+) -> AppResult<(Value, Option<String>)> {
+    if let Some(output) = completed_action_output(step, step_run) {
+        return Ok((output, None));
+    }
+    if let Some(code) = step_run
+        .attempts
+        .last()
+        .and_then(|attempt| attempt.error.clone())
+    {
+        if code == "FLOW_CANCELLED" {
+            return Err(clean_interrupt(interrupt));
+        }
+        return Err(recorded_attempt_error(&code));
+    }
+    // The attempt was handed to an external capability and never reported back.
+    // A later retry could repeat a side effect that already happened.
+    if external_attempt_open(step, step_run) {
+        return Err(invalid("FLOW_OUTCOME_UNCERTAIN"));
+    }
+    Err(clean_interrupt(interrupt))
+}
+
+fn clean_interrupt(interrupt: Interrupt) -> AppError {
+    match interrupt {
+        Interrupt::Timeout => invalid("FLOW_TIMEOUT"),
+        Interrupt::Cancelled(cause) => cause,
+    }
+}
+
+/// Rebuild a code already stored on an attempt without turning it into
+/// `VALIDATION_ERROR`. `FLOW_*` codes pass through `invalid`.
+fn recorded_attempt_error(code: &str) -> AppError {
+    match code {
+        "API_CANCELLED" => AppError::ApiCancelled("cancelled".into()),
+        "API_TIMEOUT" => AppError::ApiTimeout("timeout".into()),
+        "NETWORK_ERROR" => AppError::ApiNetwork("network".into()),
+        "QUERY_TIMEOUT" => AppError::Timeout("timeout".into()),
+        "DATABASE_ERROR" => AppError::Database(sqlx::Error::PoolTimedOut),
+        _ => invalid(code),
+    }
+}
+
+fn completed_action_output(step: &FlowStep, step_run: &FlowStepRun) -> Option<Value> {
+    if !matches!(step.node, FlowNode::Action { .. }) {
+        return None;
+    }
+    let attempt = step_run.attempts.last()?;
+    attempt
+        .error
+        .is_none()
+        .then(|| attempt.output.clone())
+        .flatten()
+}
+
+fn external_attempt_open(step: &FlowStep, step_run: &FlowStepRun) -> bool {
+    let external = matches!(
+        step.node,
+        FlowNode::Action { .. } | FlowNode::Poll { .. } | FlowNode::WaitUntil { .. }
+    );
+    external
+        && step_run
+            .attempts
+            .last()
+            .is_some_and(|attempt| attempt.output.is_none() && attempt.error.is_none())
 }

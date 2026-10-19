@@ -220,7 +220,7 @@ async fn flow_escaped_secret_inputs_keep_runtime_values_but_scrub_persisted_copi
 }
 
 #[tokio::test]
-async fn flow_cancel_reaches_active_http_and_never_schedules_later_steps() {
+async fn flow_cancel_of_unanswered_http_is_uncertain_and_skips_later_steps() {
     use std::io::{BufRead, BufReader, Read};
     let bus = test_bus().await;
     let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
@@ -230,7 +230,7 @@ async fn flow_cancel_reaches_active_http_and_never_schedules_later_steps() {
     let server = std::thread::spawn(move || {
         let (mut socket, _) = listener.accept().unwrap();
         socket
-            .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+            .set_read_timeout(Some(std::time::Duration::from_secs(8)))
             .unwrap();
         let mut reader = BufReader::new(socket.try_clone().unwrap());
         loop {
@@ -271,7 +271,16 @@ async fn flow_cancel_reaches_active_http_and_never_schedules_later_steps() {
         .await
         .unwrap();
     let result = finished(&bus, &run).await;
-    assert_eq!(result.status, FlowRunStatus::Cancelled);
+    // The request was already on the wire and no response arrived. Cancelling
+    // it is not evidence that the server skipped the call.
+    assert_eq!(result.status, FlowRunStatus::Failed);
+    assert_eq!(result.error.as_deref(), Some("FLOW_OUTCOME_UNCERTAIN"));
+    assert_eq!(result.steps[0].status, FlowStepRunStatus::Failed);
+    assert_eq!(
+        result.steps[0].error.as_deref(),
+        Some("FLOW_OUTCOME_UNCERTAIN")
+    );
+    assert!(result.steps[0].output.is_none());
     assert_eq!(result.steps[1].status, FlowStepRunStatus::Skipped);
     server.join().unwrap();
 }

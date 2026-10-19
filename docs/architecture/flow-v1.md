@@ -242,10 +242,18 @@ guards, not a database retention policy.
 ## Cancellation, recovery, and sensitive values
 
 Cancellation persists intent, stops subsequent scheduling, and signals the
-active executor. HTTP uses the existing cancellation token, SSH uses task
-cancellation, and Database drops the query future. A bounded two-second grace
-allows the active action to observe cancellation/timeout. Remote effects may
-already have occurred and are never described as rolled back.
+active executor. HTTP aborts by dropping the request future, SSH uses task
+cancellation, and Database cannot roll back a query it drops. A bounded
+two-second grace lets an in-flight action finish. A result that arrives in
+that window is kept: success stays success and a confirmed failure stays a
+failure, including when timeout, heartbeat cancellation, and completion become
+ready together. `FLOW_CANCELLED` and `FLOW_TIMEOUT` are only for steps that
+stopped before an external attempt was in flight, or whose executor reported a
+clean stop. An external attempt that does not report back is `failed` with
+`FLOW_OUTCOME_UNCERTAIN`, so it is not recorded as a timeout or cancellation
+that would be safe to retry. Run status values are unchanged. Remote effects
+may already have occurred and are never described as rolled back. There is no
+automatic retry.
 
 Running nodes heartbeat every 100 ms. Reads mark a run with a heartbeat older
 than 30 seconds as `interrupted`; unfinished steps become interrupted/skipped.
