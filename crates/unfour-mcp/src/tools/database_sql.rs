@@ -1,90 +1,62 @@
+use unfour_command_bus::{
+    classify_sql_safety, sql_is_proven_read_for_driver, sql_is_single_statement_for_driver,
+    DatabaseDialect,
+};
+use unfour_core::models::DatabaseQuerySafety;
+
 use super::*;
 
 // --- SQL validation ---
 
-/// MCP-layer read-only SQL validation. Strips comments, rejects multi-statement
-/// SQL, and only allows an explicit allowlist of read-only keywords.
+#[cfg(test)]
 pub(super) fn validate_readonly_sql(sql: &str) -> Result<(), ToolCallError> {
-    let trimmed = sql.trim();
-    if trimmed.is_empty() {
+    validate_readonly_sql_for_driver(sql, None)
+}
+
+/// Read-only SQL must be a single statement the database engine can prove is a
+/// read. `driver` is the saved connection driver when the statement is not a
+/// proven read in every dialect; `None` keeps the all-dialect fail-closed check.
+pub(super) fn validate_readonly_sql_for_driver(
+    sql: &str,
+    driver: Option<&str>,
+) -> Result<(), ToolCallError> {
+    if sql.trim().is_empty() {
         return Err(ToolCallError::Execution {
             code: "READONLY_SQL_REJECTED",
             message: "SQL cannot be empty.",
         });
     }
-
-    // Strip leading comments to prevent bypass via `/* ... */ INSERT ...`.
-    let stripped = strip_leading_comments(trimmed);
-    if stripped.is_empty() {
-        return Err(ToolCallError::Execution {
+    if sql_is_proven_read(sql, driver) {
+        Ok(())
+    } else {
+        Err(ToolCallError::Execution {
             code: "READONLY_SQL_REJECTED",
-            message: "SQL cannot be empty after removing comments.",
-        });
-    }
-
-    // Reject multi-statement SQL: after removing trailing semicolons, any
-    // remaining semicolons indicate multiple statements.
-    let without_trailing = stripped.trim_end_matches(';').trim_end();
-    if without_trailing.contains(';') {
-        return Err(ToolCallError::Execution {
-            code: "READONLY_SQL_REJECTED",
-            message: "Only one SQL statement is allowed.",
-        });
-    }
-
-    let keyword = stripped
-        .split_whitespace()
-        .next()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-
-    match keyword.as_str() {
-        "select" | "show" | "describe" | "desc" => Ok(()),
-        // EXPLAIN and WITH can wrap a statement that actually writes (EXPLAIN
-        // ANALYZE <write> and data-modifying CTEs execute in PostgreSQL), so a
-        // read-only tool must reject them when they contain a write keyword.
-        "with" | "explain" => {
-            if statement_has_write(&stripped) {
-                Err(ToolCallError::Execution {
-                    code: "READONLY_SQL_REJECTED",
-                    message:
-                        "EXPLAIN/WITH statements that modify data or schema are not allowed in read-only mode.",
-                })
-            } else {
-                Ok(())
-            }
-        }
-        _ => Err(ToolCallError::Execution {
-            code: "READONLY_SQL_REJECTED",
-            message:
-                "Only read-only SQL is permitted (SELECT, WITH, SHOW, DESCRIBE, DESC, EXPLAIN).",
-        }),
+            message: "Only read-only SQL is permitted. Wrapped writes, SELECT INTO, and assignment PRAGMA statements are not read-only.",
+        })
     }
 }
 
-/// Scan a statement's tokens for a data-modifying or schema-changing keyword.
-/// Used to reject writes hidden behind an `EXPLAIN`/`WITH` wrapper. Errs toward
-/// over-detection: a keyword inside a string literal only causes a rejection,
-/// never a missed write.
-pub(super) fn statement_has_write(sql: &str) -> bool {
-    const WRITE: &[&str] = &[
-        "insert", "update", "delete", "replace", "merge", "upsert", "create", "alter", "drop",
-        "truncate", "vacuum", "reindex", "grant", "revoke",
-    ];
-    sql.split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
-        .any(|token| !token.is_empty() && WRITE.contains(&token.to_ascii_lowercase().as_str()))
+pub(super) fn sql_is_proven_read(sql: &str, driver: Option<&str>) -> bool {
+    sql_is_proven_read_for_driver(sql, None)
+        || driver.is_some_and(|driver| sql_is_proven_read_for_driver(sql, Some(driver)))
 }
 
-pub(super) fn validate_single_statement_for_execute(sql: &str) -> Result<(), ToolCallError> {
-    let stripped = strip_leading_comments(sql);
-    let without_trailing = stripped.trim_end_matches(';').trim_end();
-    if without_trailing.contains(';') {
-        return Err(ToolCallError::Execution {
+pub(super) fn validate_single_statement_for_execute(
+    sql: &str,
+    driver: Option<&str>,
+) -> Result<(), ToolCallError> {
+    let single = match driver {
+        Some(driver) => sql_is_single_statement_for_driver(sql, Some(driver)),
+        None => sql_is_single_statement_for_driver(sql, None),
+    };
+    if single {
+        Ok(())
+    } else {
+        Err(ToolCallError::Execution {
             code: "UNSUPPORTED_OPERATION",
             message: "db_execute accepts exactly one SQL statement; split multi-statement SQL into separate confirmed calls.",
-        });
+        })
     }
-    Ok(())
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -95,70 +67,112 @@ pub(super) struct SqlRisk {
     pub(super) reason: &'static str,
 }
 
-pub(super) fn classify_sql_risk(sql: &str) -> SqlRisk {
+pub(super) fn classify_sql_risk(sql: &str, driver: Option<&str>) -> SqlRisk {
+    let safety = authoritative_safety(sql, driver);
+    if safety.classification == "read" && !safety.requires_confirmation {
+        return SqlRisk {
+            statement_type: "read",
+            requires_confirmation: false,
+            confirmation_code: "READ_SQL",
+            reason: "Read-only SQL.",
+        };
+    }
+
     let stripped = strip_leading_comments(sql);
-    let lower = stripped.to_ascii_lowercase();
     let keyword = stripped
         .split_whitespace()
         .next()
         .unwrap_or_default()
         .to_ascii_lowercase();
-
-    match keyword.as_str() {
-        "delete" if !contains_where(&lower) => SqlRisk {
+    let lower = stripped.to_ascii_lowercase();
+    // Ordinary dev/test writes keep their previous confirmation rules. Anything
+    // the engine cannot prove is one of those statements, including wrappers,
+    // still requires confirmation before a write flag is sent.
+    match (safety.classification.as_str(), keyword.as_str()) {
+        ("mutation", "delete") if !contains_where(&lower) => SqlRisk {
             statement_type: "mutation",
             requires_confirmation: true,
             confirmation_code: "DELETE_WITHOUT_WHERE",
             reason: "DELETE without WHERE is dangerous and may affect an entire table.",
         },
-        "update" if !contains_where(&lower) => SqlRisk {
+        ("mutation", "update") if !contains_where(&lower) => SqlRisk {
             statement_type: "mutation",
             requires_confirmation: true,
             confirmation_code: "UPDATE_WITHOUT_WHERE",
             reason: "UPDATE without WHERE is dangerous and may affect an entire table.",
         },
-        "drop" => SqlRisk {
-            statement_type: "schema-change",
-            requires_confirmation: true,
-            confirmation_code: "DROP_SQL",
-            reason: "DROP can remove schema objects or databases.",
-        },
-        "truncate" => SqlRisk {
-            statement_type: "schema-change",
-            requires_confirmation: true,
-            confirmation_code: "TRUNCATE_SQL",
-            reason: "TRUNCATE can delete all rows in a table.",
-        },
-        "alter" => SqlRisk {
-            statement_type: "schema-change",
-            requires_confirmation: true,
-            confirmation_code: "ALTER_SQL",
-            reason: "ALTER changes table or database structure.",
-        },
-        "create" | "vacuum" | "reindex" => SqlRisk {
-            statement_type: "schema-change",
-            requires_confirmation: false,
-            confirmation_code: "SCHEMA_SQL",
-            reason: "Schema-changing SQL.",
-        },
-        "insert" | "update" | "delete" | "replace" => SqlRisk {
+        ("mutation", "insert" | "update" | "delete" | "replace") => SqlRisk {
             statement_type: "mutation",
             requires_confirmation: false,
             confirmation_code: "MUTATION_SQL",
             reason: "Data mutation SQL.",
         },
-        "select" | "with" | "show" | "describe" | "desc" | "explain" | "pragma" => SqlRisk {
-            statement_type: "read",
+        ("schema-change", "drop") => SqlRisk {
+            statement_type: "schema-change",
+            requires_confirmation: true,
+            confirmation_code: "DROP_SQL",
+            reason: "DROP can remove schema objects or databases.",
+        },
+        ("schema-change", "truncate") => SqlRisk {
+            statement_type: "schema-change",
+            requires_confirmation: true,
+            confirmation_code: "TRUNCATE_SQL",
+            reason: "TRUNCATE can delete all rows in a table.",
+        },
+        ("schema-change", "alter") => SqlRisk {
+            statement_type: "schema-change",
+            requires_confirmation: true,
+            confirmation_code: "ALTER_SQL",
+            reason: "ALTER changes table or database structure.",
+        },
+        ("schema-change", "create" | "vacuum" | "reindex") => SqlRisk {
+            statement_type: "schema-change",
             requires_confirmation: false,
-            confirmation_code: "READ_SQL",
-            reason: "Read-only SQL.",
+            confirmation_code: "SCHEMA_SQL",
+            reason: "Schema-changing SQL.",
         },
         _ => SqlRisk {
-            statement_type: "unknown",
+            statement_type: statement_type(&safety.classification),
             requires_confirmation: true,
             confirmation_code: "UNKNOWN_SQL",
-            reason: "Unrecognized SQL statement type requires confirmation before execution.",
+            reason: "This SQL is not a proven read and requires confirmation before execution.",
         },
+    }
+}
+
+fn authoritative_safety(sql: &str, driver: Option<&str>) -> DatabaseQuerySafety {
+    let dialects = match driver.map(DatabaseDialect::for_driver) {
+        Some(dialect) => vec![dialect],
+        None => vec![
+            DatabaseDialect::Sqlite,
+            DatabaseDialect::Postgres,
+            DatabaseDialect::Mysql,
+            DatabaseDialect::Generic,
+        ],
+    };
+    let mut read = None;
+    for dialect in dialects {
+        let safety = classify_sql_safety(sql, dialect);
+        if safety.classification != "read" || safety.requires_confirmation {
+            return safety;
+        }
+        read = Some(safety);
+    }
+    read.unwrap_or_else(|| DatabaseQuerySafety {
+        classification: "unknown".to_string(),
+        requires_confirmation: true,
+        confirmed: false,
+        message: None,
+    })
+}
+
+fn statement_type(classification: &str) -> &'static str {
+    match classification {
+        "read" => "read",
+        "mutation" => "mutation",
+        "schema-change" => "schema-change",
+        "transaction-control" => "transaction-control",
+        _ => "unknown",
     }
 }
 

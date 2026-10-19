@@ -559,9 +559,9 @@ impl CommandBusAdapter for ProdDbStubCommandBus {
 
     fn list_db_connections(
         &self,
-        _workspace_id: &str,
+        workspace_id: &str,
     ) -> Result<Vec<DatabaseConnection>, CommandBusAdapterError> {
-        unreachable!()
+        DbStubCommandBus.list_db_connections(workspace_id)
     }
 
     fn get_db_schema(

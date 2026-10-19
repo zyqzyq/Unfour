@@ -61,6 +61,96 @@ fn classify_query_flags_select_into_as_write() {
     assert_eq!(wrapped_cte.classification, "schema-change");
 }
 
+#[test]
+fn proven_read_rejects_wrapped_writes_across_dialects() {
+    let reads = [
+        "SELECT * FROM users",
+        "SELECT 'delete' AS verb FROM users",
+        "SELECT updated_at, created_at FROM users",
+        "(SELECT 1) UNION (SELECT 2)",
+        "EXPLAIN SELECT * FROM users",
+        "EXPLAIN ANALYZE SELECT * FROM users",
+        "EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM users",
+        "EXPLAIN QUERY PLAN SELECT * FROM users",
+        "WITH c AS (SELECT 1) SELECT * FROM c",
+        "WITH a AS (SELECT 1), b AS (SELECT 2) SELECT * FROM a",
+        "WITH RECURSIVE c AS (SELECT 1 UNION ALL SELECT 1) SELECT * FROM c",
+        "/* comment */ SELECT 1",
+        "-- comment\nSELECT 1",
+        "SHOW TABLES",
+        "DESCRIBE users",
+        "DESC users",
+        "PRAGMA table_info(users)",
+    ];
+    let writes = [
+        "EXPLAIN ANALYZE DELETE FROM users",
+        "EXPLAIN ANALYZE INSERT INTO users VALUES (1)",
+        "EXPLAIN CREATE TABLE t (id INT)",
+        "EXPLAIN PRAGMA writable_schema = ON",
+        "WITH d AS (DELETE FROM users RETURNING *) SELECT * FROM d",
+        "WITH d AS (INSERT INTO users VALUES (1) RETURNING *) SELECT * FROM d",
+        "WITH c AS (SELECT 1) DELETE FROM users",
+        "WITH c AS (SELECT 1) UPDATE users SET name = 'x'",
+        "SELECT * INTO new_table FROM users",
+        "SELECT * INTO OUTFILE '/tmp/out.csv' FROM users",
+        "SELECT * INTO DUMPFILE '/tmp/out.txt' FROM users",
+        "EXPLAIN ANALYZE SELECT * INTO new_table FROM users",
+        "PRAGMA writable_schema = ON",
+        "PRAGMA journal_mode = WAL",
+        "PRAGMA writable_schema",
+        "/* hide */ DELETE FROM users",
+        "-- hide\nDROP TABLE users",
+        "SELECT 1; DELETE FROM users",
+        "BEGIN",
+        "CALL do_write()",
+        "COPY users TO '/tmp/users.csv'",
+    ];
+    for dialect in [
+        DatabaseDialect::Sqlite,
+        DatabaseDialect::Postgres,
+        DatabaseDialect::Mysql,
+        DatabaseDialect::Generic,
+    ] {
+        for sql in reads {
+            assert!(
+                sql_is_proven_read(sql, dialect),
+                "{dialect:?} should prove read: {sql}"
+            );
+        }
+        for sql in writes {
+            assert!(
+                !sql_is_proven_read(sql, dialect),
+                "{dialect:?} should reject: {sql}"
+            );
+        }
+    }
+    assert!(sql_is_proven_read(
+        "SELECT col INTO @var FROM users",
+        DatabaseDialect::Mysql
+    ));
+    assert!(!sql_is_proven_read(
+        "SELECT col INTO @var FROM users",
+        DatabaseDialect::Sqlite
+    ));
+    assert!(sql_is_proven_read(
+        "SELECT * FROM `users`",
+        DatabaseDialect::Mysql
+    ));
+    assert!(!sql_is_proven_read(
+        "/*! INSERT INTO users VALUES (1) */",
+        DatabaseDialect::Mysql
+    ));
+    assert!(!sql_is_proven_read(
+        "SELECT 1 /*! ; DELETE FROM users */",
+        DatabaseDialect::Mysql
+    ));
+    assert!(!sql_is_proven_read_for_driver(
+        "EXPLAIN ANALYZE DELETE FROM users",
+        None
+    ));
+    assert!(sql_is_proven_read_for_driver("SELECT 1", None));
+}
+
 #[tokio::test]
 async fn explain_analyze_write_requires_confirmation_before_execution() {
     let (service, workspace_id) = service_with_workspace().await;
@@ -89,6 +179,125 @@ async fn explain_analyze_write_requires_confirmation_before_execution() {
         Err(AppError::ConfirmationRequired { .. })
     ));
     let _ = fs::remove_file(path);
+}
+
+#[tokio::test]
+async fn read_only_connection_does_not_apply_wrapped_writes() {
+    let (service, workspace_id) = service_with_workspace().await;
+    let path = sqlite_fixture().await;
+    let writable = service
+        .save_connection(sqlite_input(&workspace_id, &path))
+        .await
+        .expect("save writable connection");
+    let before = service
+        .execute_query(query_input(
+            &workspace_id,
+            &writable.id,
+            "SELECT COUNT(*) FROM deploys",
+            None,
+        ))
+        .await
+        .expect("count before");
+    assert_eq!(before.rows[0][0].as_deref(), Some("2"));
+    let mode_before = service
+        .execute_query(query_input(
+            &workspace_id,
+            &writable.id,
+            "PRAGMA journal_mode",
+            Some(true),
+        ))
+        .await
+        .expect("journal mode before");
+
+    let read_only = service
+        .save_connection(DatabaseConnectionInput {
+            read_only: true,
+            ..sqlite_input(&workspace_id, &path)
+        })
+        .await
+        .expect("save read-only connection");
+    let wrapped = [
+        "EXPLAIN ANALYZE DELETE FROM deploys",
+        "WITH d AS (DELETE FROM deploys RETURNING *) SELECT * FROM d",
+        "SELECT * INTO copied FROM deploys",
+        "PRAGMA writable_schema = ON",
+        "PRAGMA journal_mode = WAL",
+        "/* comment */ EXPLAIN ANALYZE INSERT INTO deploys (service, version) VALUES ('x', 'y')",
+        "EXPLAIN CREATE TABLE extra (id INT)",
+        "SELECT 1; DELETE FROM deploys",
+    ];
+    for sql in wrapped {
+        let confirmed = service
+            .execute_query(query_input(&workspace_id, &read_only.id, sql, Some(true)))
+            .await;
+        assert!(
+            matches!(
+                confirmed,
+                Err(AppError::ReadOnly(_) | AppError::Validation(_))
+            ),
+            "{sql} on a read-only connection: {confirmed:?}"
+        );
+        let unconfirmed = service
+            .execute_query(query_input(&workspace_id, &writable.id, sql, None))
+            .await;
+        assert!(
+            matches!(
+                unconfirmed,
+                Err(AppError::ConfirmationRequired { .. } | AppError::Validation(_))
+            ),
+            "{sql} without confirmation: {unconfirmed:?}"
+        );
+    }
+
+    let after = service
+        .execute_query(query_input(
+            &workspace_id,
+            &writable.id,
+            "SELECT COUNT(*) FROM deploys",
+            None,
+        ))
+        .await
+        .expect("count after");
+    assert_eq!(after.rows[0][0].as_deref(), Some("2"));
+    let copied = service
+        .execute_query(query_input(
+            &workspace_id,
+            &writable.id,
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'copied'",
+            None,
+        ))
+        .await
+        .expect("schema check");
+    assert!(copied.rows.is_empty());
+    let mode = service
+        .execute_query(query_input(
+            &workspace_id,
+            &writable.id,
+            "PRAGMA journal_mode",
+            Some(true),
+        ))
+        .await
+        .expect("journal mode");
+    assert_eq!(mode.rows, mode_before.rows);
+    let _ = fs::remove_file(path);
+}
+
+fn query_input(
+    workspace_id: &str,
+    connection_id: &str,
+    sql: &str,
+    confirm_mutation: Option<bool>,
+) -> DatabaseQueryInput {
+    DatabaseQueryInput {
+        workspace_id: workspace_id.to_string(),
+        connection_id: connection_id.to_string(),
+        sql: sql.to_string(),
+        limit: Some(10),
+        confirm_mutation,
+        catalog: None,
+        schema: None,
+        timeout_ms: None,
+    }
 }
 
 #[test]

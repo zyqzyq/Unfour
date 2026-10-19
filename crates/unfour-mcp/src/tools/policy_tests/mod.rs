@@ -86,7 +86,7 @@ fn check_mcp_permission_never_allows_secret_reveal_or_destructive_full_access() 
 
 #[test]
 fn ssh_history_is_classified_as_workspace_read() {
-    let (capability, risk) = classify_mcp_action("unfour.ssh.list_history", None, None)
+    let (capability, risk) = classify_mcp_action("unfour.ssh.list_history", None, None, None)
         .expect("registered tool must have explicit policy");
     assert_eq!(capability, McpCapability::WorkspaceRead);
     assert_eq!(risk, McpRisk::Read);
@@ -105,6 +105,58 @@ fn ssh_readonly_classifier_allows_prod_diagnostics_only() {
 }
 
 #[test]
+fn wrapped_sql_cannot_enter_read_only_workspaces() {
+    let reads = [
+        "SELECT id FROM users",
+        "WITH c AS (SELECT 1) SELECT * FROM c",
+        "EXPLAIN SELECT id FROM users",
+        "/* comment */ SELECT 1",
+        "PRAGMA table_info(users)",
+        "DESCRIBE users",
+    ];
+    let writes = [
+        "EXPLAIN ANALYZE DELETE FROM users",
+        "WITH d AS (DELETE FROM users RETURNING *) SELECT * FROM d",
+        "SELECT * INTO copied FROM users",
+        "SELECT * INTO OUTFILE '/tmp/users.csv' FROM users",
+        "PRAGMA writable_schema = ON",
+        "PRAGMA journal_mode = WAL",
+        "/* hide */ EXPLAIN ANALYZE INSERT INTO users VALUES (1)",
+        "-- hide\nWITH c AS (SELECT 1) DELETE FROM users",
+        "SELECT 1; DELETE FROM users",
+        "EXPLAIN PRAGMA writable_schema = ON",
+    ];
+    for sql in reads {
+        let arguments = json!({"connectionId": "conn-1", "sql": sql});
+        let (capability, risk) = classify_mcp_action(
+            "unfour.db.execute",
+            arguments.as_object(),
+            None,
+            Some("postgres"),
+        )
+        .unwrap();
+        assert_eq!(risk, McpRisk::Read, "{sql}");
+        assert_eq!(capability, McpCapability::DbDataRead, "{sql}");
+        assert!(check_mcp_permission(&workspace("prod", "auto"), capability, risk).is_ok());
+    }
+    for sql in writes {
+        let arguments = json!({"connectionId": "conn-1", "sql": sql});
+        let (capability, risk) =
+            classify_mcp_action("unfour.db.execute", arguments.as_object(), None, None).unwrap();
+        assert_eq!(risk, McpRisk::Write, "{sql}");
+        assert_eq!(capability, McpCapability::DbDataWrite, "{sql}");
+        for context in [workspace("prod", "auto"), workspace("dev", "read_only")] {
+            assert!(
+                check_mcp_permission(&context, capability, risk).is_err(),
+                "{sql}"
+            );
+        }
+        assert!(check_mcp_permission(&workspace("dev", "full_access"), capability, risk).is_ok());
+        assert!(check_mcp_permission(&workspace("test", "guarded"), capability, risk).is_ok());
+    }
+}
+
+#[test]
 fn ssh_mutating_utility_arguments_cannot_enter_read_only_workspaces() {
     for command in [
         "ip link set eth0 down",
@@ -117,7 +169,7 @@ fn ssh_mutating_utility_arguments_cannot_enter_read_only_workspaces() {
     ] {
         let arguments = json!({"command": command});
         let (capability, risk) =
-            classify_mcp_action("unfour.ssh.exec", arguments.as_object(), None).unwrap();
+            classify_mcp_action("unfour.ssh.exec", arguments.as_object(), None, None).unwrap();
         assert_ne!(risk, McpRisk::Read, "{command}");
         for context in [workspace("prod", "auto"), workspace("dev", "read_only")] {
             assert!(
@@ -136,8 +188,9 @@ fn ssh_exec_classifier_uses_effective_command_after_cwd_wrapping() {
         "cwd": "/srv/app"
     });
 
-    let (capability, risk) = classify_mcp_action("unfour.ssh.exec", arguments.as_object(), None)
-        .expect("registered tool must have explicit policy");
+    let (capability, risk) =
+        classify_mcp_action("unfour.ssh.exec", arguments.as_object(), None, None)
+            .expect("registered tool must have explicit policy");
 
     assert_eq!(capability, McpCapability::SshExec);
     assert_eq!(risk, McpRisk::Execute);
@@ -151,7 +204,7 @@ fn api_delete_tools_are_destructive() {
         "unfour.api.delete_environment",
         "unfour.api.delete_environment_variable",
     ] {
-        let (capability, risk) = classify_mcp_action(tool_name, None, None)
+        let (capability, risk) = classify_mcp_action(tool_name, None, None, None)
             .expect("registered delete tool must have explicit policy");
         assert_eq!(capability, McpCapability::ApiMutate, "{tool_name}");
         assert_eq!(risk, McpRisk::Destructive, "{tool_name}");
@@ -161,7 +214,7 @@ fn api_delete_tools_are_destructive() {
 #[test]
 fn unknown_tool_has_no_policy_fallback() {
     assert_eq!(
-        classify_mcp_action("unfour.future.unclassified_write", None, None),
+        classify_mcp_action("unfour.future.unclassified_write", None, None, None),
         None
     );
 }
@@ -178,7 +231,7 @@ fn every_registered_tool_has_explicit_policy_classification() {
 
     for tool in tools {
         assert!(
-            classify_mcp_action(tool.definition.name, None, None).is_some(),
+            classify_mcp_action(tool.definition.name, None, None, None).is_some(),
             "registered MCP tool {} is missing explicit policy classification",
             tool.definition.name
         );

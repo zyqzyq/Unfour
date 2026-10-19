@@ -3,6 +3,7 @@ mod cancellation;
 mod diagnostics;
 mod flow;
 mod script_diagnostics;
+mod sql_policy;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;

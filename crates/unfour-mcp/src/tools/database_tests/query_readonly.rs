@@ -156,6 +156,30 @@ fn query_readonly_allows_explain() {
 }
 
 #[test]
+fn query_readonly_rejects_wrapped_writes_and_explain_of_writes() {
+    for sql in [
+        "SELECT * INTO copied FROM users",
+        "EXPLAIN ANALYZE DELETE FROM users",
+        "WITH d AS (DELETE FROM users RETURNING *) SELECT * FROM d",
+        "PRAGMA writable_schema = ON",
+        "/* hide */ INSERT INTO users VALUES (1)",
+        "SELECT 1; DROP TABLE users",
+    ] {
+        for tool in ["unfour.db.query_readonly", "unfour.db.explain"] {
+            let result = registry()
+                .call(tool, json!({"connectionId": "conn-1", "sql": sql}))
+                .expect("structured error");
+            assert_eq!(result["isError"], true, "{tool} {sql}");
+            assert_eq!(
+                crate::response::error_json(&result)["error"]["code"],
+                "READONLY_SQL_REJECTED",
+                "{tool} {sql}"
+            );
+        }
+    }
+}
+
+#[test]
 fn query_readonly_rejects_insert() {
     let result = registry()
         .call(

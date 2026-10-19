@@ -51,6 +51,10 @@ pub use runtime_profile::{
     DatabaseCapabilities, DatabaseDialect, DetectedServerType, RuntimeDatabaseProfile,
 };
 use sql::*;
+pub use sql::{
+    classify_sql_safety, sql_is_proven_read, sql_is_proven_read_for_driver,
+    sql_is_single_statement, sql_is_single_statement_for_driver,
+};
 use sqlite::*;
 
 #[derive(Clone)]

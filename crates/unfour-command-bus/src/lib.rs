@@ -37,6 +37,10 @@ use unfour_local_storage::{ActivityLogService, LocalDb};
 use unfour_secret_store::SecretStore;
 use unfour_ssh_engine::SshService;
 // Expose the capability owner's pure validation to adapters; do not duplicate policy.
+pub use unfour_database_engine::{
+    classify_sql_safety, sql_is_proven_read_for_driver, sql_is_single_statement_for_driver,
+    DatabaseDialect,
+};
 pub use unfour_ssh_engine::validate_diagnostic_command;
 use unfour_workspace_engine::WorkspaceService;
 

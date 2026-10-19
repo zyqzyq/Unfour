@@ -56,6 +56,44 @@ fn validate_readonly_sql_rejects_writes_behind_explain_and_with() {
 }
 
 #[test]
+fn validate_readonly_sql_rejects_select_into_pragma_assignment_and_comment_wrappers() {
+    for sql in [
+        "SELECT * INTO new_table FROM users",
+        "SELECT * INTO OUTFILE '/tmp/out.csv' FROM users",
+        "SELECT * INTO DUMPFILE '/tmp/out.txt' FROM users",
+        "PRAGMA writable_schema = ON",
+        "PRAGMA journal_mode = WAL",
+        "EXPLAIN PRAGMA writable_schema = ON",
+        "/* hide */ EXPLAIN ANALYZE DELETE FROM users",
+        "-- hide\nWITH d AS (DELETE FROM users RETURNING *) SELECT * FROM d",
+        "WITH c AS (SELECT 1) DELETE FROM users",
+        "SELECT 1; DROP TABLE users",
+        "CALL do_write()",
+        "COPY users TO '/tmp/users.csv'",
+    ] {
+        assert!(validate_readonly_sql(sql).is_err(), "should reject {sql}");
+    }
+    for sql in [
+        "SELECT 'delete' AS verb FROM users",
+        "(SELECT 1) UNION (SELECT 2)",
+        "EXPLAIN (ANALYZE, BUFFERS) SELECT 1",
+        "EXPLAIN QUERY PLAN SELECT 1",
+        "WITH a AS (SELECT 1), b AS (SELECT 2) SELECT * FROM a",
+        "PRAGMA table_info(users)",
+        "DESCRIBE users",
+        "DESC users",
+        "/* comment */ SELECT 1",
+    ] {
+        assert!(validate_readonly_sql(sql).is_ok(), "should allow {sql}");
+    }
+    assert!(validate_readonly_sql("SELECT col INTO @var FROM users").is_err());
+    assert!(
+        validate_readonly_sql_for_driver("SELECT col INTO @var FROM users", Some("mysql")).is_ok()
+    );
+    assert!(validate_readonly_sql_for_driver("SELECT * FROM `users`", Some("mysql")).is_ok());
+}
+
+#[test]
 fn export_filter_values_accept_string_number_and_null_only() {
     let arguments = json!({
         "filters": [

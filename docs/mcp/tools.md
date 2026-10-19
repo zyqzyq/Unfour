@@ -244,24 +244,25 @@ errors, since database error messages can echo literal values and connection
 strings. This is an intentionally conservative diagnostic projection of the
 existing Desktop history, not a new history recorder.
 
-`unfour.db.query_readonly` and `unfour.db.explain` allow only read-only SQL
-keywords:
-
-- `SELECT`
-- `WITH`
-- `SHOW`
-- `DESCRIBE`
-- `DESC`
-- `EXPLAIN`
+`unfour.db.query_readonly` and `unfour.db.explain` allow one statement only
+when the database engine can prove it is read-only. `SELECT`, `WITH`, `SHOW`,
+`DESCRIBE`, `DESC`, `EXPLAIN`, and known inspection `PRAGMA` forms qualify only
+when they do not wrap a write. `SELECT INTO`, `INTO OUTFILE` / `DUMPFILE`,
+assignment `PRAGMA`, data-modifying CTEs, and `EXPLAIN` of a write are rejected.
+Comments do not change that classification. A statement that is not proven
+read-only in every supported dialect is proven only for the saved connection's
+driver; if that driver cannot be resolved, it is treated as a write.
 
 `unfour.db.execute` accepts one SQL statement. In dev it can run ordinary
 mutations. In test it is guarded by policy and confirmation for high-risk
-statements. In prod it is blocked by read-only policy. These statements require
-confirmation before execution:
+statements. In prod it is blocked by read-only policy. Proven reads are not
+sent with a mutation confirmation. These statements require confirmation
+before execution:
 
 - `DELETE` without `WHERE`
 - `UPDATE` without `WHERE`
 - `DROP`, `TRUNCATE`, or `ALTER`
+- wrapped writes, `SELECT INTO`, assignment `PRAGMA`, and other statements that are not proven reads
 - statements whose risk cannot be classified confidently
 
 Set `dryRun=true` to return the detected risk and execution plan without

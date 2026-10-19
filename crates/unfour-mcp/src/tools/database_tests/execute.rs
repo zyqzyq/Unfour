@@ -205,6 +205,108 @@ fn execute_delete_without_where_requires_confirmation_then_executes() {
 }
 
 #[test]
+fn execute_proven_read_does_not_set_mutation_confirmation() {
+    let bus = Arc::new(RecordingBus::default());
+    let registry = ToolRegistry::with_command_bus(bus.clone());
+    for sql in [
+        "SELECT id FROM users",
+        "WITH c AS (SELECT id FROM users) SELECT * FROM c",
+        "EXPLAIN SELECT id FROM users",
+        "/* comment */ SELECT 1",
+        "PRAGMA table_info(users)",
+    ] {
+        let result = registry
+            .call(
+                "unfour.db.execute",
+                json!({"connectionId": "conn-1", "sql": sql}),
+            )
+            .unwrap();
+        assert_eq!(result["isError"], false, "{sql}");
+    }
+    let writes = bus.writes.lock().unwrap();
+    assert_eq!(writes.len(), 5);
+    assert!(writes.iter().all(|input| input.confirm_mutation.is_none()));
+}
+
+#[test]
+fn guarded_wrapped_write_requires_confirmation_before_execution() {
+    let bus = Arc::new(RecordingBus::default());
+    let registry = ToolRegistry::with_command_bus(bus.clone());
+    let sql = "EXPLAIN ANALYZE DELETE FROM users";
+    let request = json!({"connectionId": "conn-1", "sql": sql});
+    let first = registry.call("unfour.db.execute", request.clone()).unwrap();
+    assert_eq!(first["isError"], true);
+    let payload = crate::response::error_json(&first);
+    assert_eq!(payload["error"]["code"], "CONFIRMATION_REQUIRED");
+    assert!(bus.writes.lock().unwrap().is_empty());
+
+    let confirmation = payload["confirmation_text"].as_str().unwrap();
+    let confirmed = registry
+        .call(
+            "unfour.db.execute",
+            json!({
+                "connectionId": "conn-1",
+                "sql": sql,
+                "confirm": true,
+                "confirmation_text": confirmation
+            }),
+        )
+        .unwrap();
+    assert_eq!(confirmed["isError"], false);
+    let writes = bus.writes.lock().unwrap();
+    assert_eq!(writes.len(), 1);
+    assert_eq!(writes[0].confirm_mutation, Some(true));
+    assert_eq!(writes[0].sql, sql);
+}
+
+#[test]
+fn read_only_policy_blocks_wrapped_writes_without_calling_the_database() {
+    let bus = Arc::new(RecordingBus::default());
+    bus.read_only.store(true, Ordering::SeqCst);
+    let registry = ToolRegistry::with_command_bus(bus.clone());
+    for sql in [
+        "EXPLAIN ANALYZE DELETE FROM users",
+        "WITH d AS (DELETE FROM users RETURNING *) SELECT * FROM d",
+        "SELECT * INTO copied FROM users",
+        "SELECT * INTO OUTFILE '/tmp/users.csv' FROM users",
+        "PRAGMA writable_schema = ON",
+        "/* hide */ EXPLAIN ANALYZE INSERT INTO users VALUES (1)",
+        "SELECT 1; DELETE FROM users",
+        "UPDATE users SET email = 'x' WHERE id = 1",
+    ] {
+        let result = registry
+            .call(
+                "unfour.db.execute",
+                json!({
+                    "connectionId": "conn-1",
+                    "sql": sql,
+                    "confirm": true,
+                    "confirmation_text": "UNKNOWN_SQL:ignored"
+                }),
+            )
+            .unwrap();
+        assert_eq!(result["isError"], true, "{sql}");
+        assert_eq!(
+            crate::response::error_json(&result)["error"]["code"],
+            "WORKSPACE_POLICY_BLOCKED",
+            "{sql}"
+        );
+    }
+    assert!(bus.writes.lock().unwrap().is_empty());
+
+    let allowed = registry
+        .call(
+            "unfour.db.execute",
+            json!({"connectionId": "conn-1", "sql": "SELECT id FROM users"}),
+        )
+        .unwrap();
+    assert_eq!(allowed["isError"], false);
+    let writes = bus.writes.lock().unwrap();
+    assert_eq!(writes.len(), 1);
+    assert_eq!(writes[0].confirm_mutation, None);
+}
+
+#[test]
 fn execute_prod_update_is_blocked_by_policy() {
     let registry = ToolRegistry::with_command_bus(Arc::new(ProdDbStubCommandBus));
     let result = registry

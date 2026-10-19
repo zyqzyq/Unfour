@@ -181,6 +181,7 @@ pub(super) fn classify_mcp_action(
     tool_name: &str,
     arguments: Option<&Map<String, Value>>,
     api_method: Option<&str>,
+    database_driver: Option<&str>,
 ) -> Option<(McpCapability, McpRisk)> {
     Some(match tool_name {
         "unfour.flow.list"
@@ -253,8 +254,7 @@ pub(super) fn classify_mcp_action(
             if arguments
                 .and_then(|arguments| arguments.get("sql"))
                 .and_then(Value::as_str)
-                .map(is_readonly_sql)
-                .unwrap_or(false)
+                .is_some_and(|sql| is_readonly_sql(sql, database_driver))
             {
                 (McpCapability::DbDataRead, McpRisk::Read)
             } else {
@@ -371,8 +371,8 @@ pub(super) fn evaluate_tool_policy(
     arguments: &Value,
 ) -> Result<ToolPolicyEvaluation, ToolCallError> {
     let Some(arguments) = arguments.as_object() else {
-        let (capability, risk) =
-            classify_mcp_action(tool_name, None, None).ok_or_else(unclassified_policy_error)?;
+        let (capability, risk) = classify_mcp_action(tool_name, None, None, None)
+            .ok_or_else(unclassified_policy_error)?;
         let workspace = active_workspace_context(command_bus)?;
         let resolved_policy = resolve_mcp_policy(&workspace);
         check_mcp_permission(&workspace, capability, risk).map_err(ToolCallError::PolicyBlocked)?;
@@ -418,12 +418,18 @@ pub(super) fn evaluate_tool_policy(
         }
     }
 
+    let database_driver = database_driver_hint(command_bus, tool_name, arguments);
     let (capability, risk) = if tool_name == "unfour.api.send_request" && saved_request_has_scripts
     {
         (McpCapability::ApiMutate, McpRisk::Write)
     } else {
-        classify_mcp_action(tool_name, Some(arguments), api_method.as_deref())
-            .ok_or_else(unclassified_policy_error)?
+        classify_mcp_action(
+            tool_name,
+            Some(arguments),
+            api_method.as_deref(),
+            database_driver.as_deref(),
+        )
+        .ok_or_else(unclassified_policy_error)?
     };
     let workspace = match workspace_id {
         Some(workspace_id) => workspace_context_by_id(command_bus, &workspace_id)?,
@@ -522,18 +528,38 @@ fn is_readonly_http_method(method: &str) -> bool {
     )
 }
 
-fn is_readonly_sql(sql: &str) -> bool {
-    let keyword = sql
-        .trim()
-        .trim_start_matches(';')
-        .split_whitespace()
-        .next()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    matches!(
-        keyword.as_str(),
-        "select" | "with" | "show" | "describe" | "desc" | "explain" | "pragma"
-    )
+fn database_driver_hint(
+    command_bus: &dyn CommandBusAdapter,
+    tool_name: &str,
+    arguments: &Map<String, Value>,
+) -> Option<String> {
+    if tool_name != "unfour.db.execute" {
+        return None;
+    }
+    let sql = arguments.get("sql").and_then(Value::as_str)?;
+    // A statement proven read-only in every dialect does not need the driver.
+    // Dialect-specific syntax is proven only against the saved connection.
+    if unfour_command_bus::sql_is_proven_read_for_driver(sql, None) {
+        return None;
+    }
+    let connection_id = parse_optional_string(arguments, "connectionId")?;
+    let workspace_id = match parse_optional_string(arguments, "workspaceId") {
+        Some(workspace_id) => workspace_id,
+        None => active_workspace_context(command_bus).ok()?.workspace_id,
+    };
+    command_bus
+        .list_db_connections(&workspace_id)
+        .ok()?
+        .into_iter()
+        .find(|connection| connection.id == connection_id)
+        .map(|connection| connection.driver)
+}
+
+fn is_readonly_sql(sql: &str, driver: Option<&str>) -> bool {
+    unfour_command_bus::sql_is_proven_read_for_driver(sql, None)
+        || driver.is_some_and(|driver| {
+            unfour_command_bus::sql_is_proven_read_for_driver(sql, Some(driver))
+        })
 }
 
 fn unexpected_result() -> ToolCallError {

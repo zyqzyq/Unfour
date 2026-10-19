@@ -702,8 +702,10 @@ fn db_query_readonly(
     let schema = parse_optional_string(&arguments, "schema")?;
     let timeout_ms = parse_optional_u64(&arguments, "timeoutMs")?;
 
-    // MCP-layer read-only validation (defense-in-depth).
-    validate_readonly_sql(&sql)?;
+    // MCP-layer read-only validation (defense-in-depth). The engine classification
+    // is authoritative; a statement that is not a proven read never reaches SQL.
+    let driver = sql_driver_hint(command_bus, &workspace_id, &connection_id, &sql);
+    validate_readonly_sql_for_driver(&sql, driver.as_deref())?;
 
     let input = DatabaseQueryInput {
         workspace_id,
@@ -777,8 +779,18 @@ fn db_execute(
     let timeout_ms = parse_optional_u64(&arguments, "timeoutMs")?;
     let dry_run = parse_optional_bool(&arguments, "dryRun")?.unwrap_or(false);
     let transaction = parse_optional_bool(&arguments, "transaction")?.unwrap_or(false);
-    validate_single_statement_for_execute(&sql)?;
-    let risk = classify_sql_risk(&sql);
+    let driver = sql_driver_hint(command_bus, &workspace_id, &connection_id, &sql);
+    validate_single_statement_for_execute(&sql, driver.as_deref())?;
+    let proven_read = sql_is_proven_read(&sql, driver.as_deref());
+    let risk = classify_sql_risk(&sql, driver.as_deref());
+    // Policy and this handler share the engine classifier. If policy still saw a
+    // read, do not execute a statement this check can no longer prove is read-only.
+    if !proven_read && evaluation.risk == super::policy::McpRisk::Read {
+        return Err(ToolCallError::Execution {
+            code: "READONLY_SQL_REJECTED",
+            message: "Only read-only SQL is permitted in this workspace.",
+        });
+    }
 
     if risk.requires_confirmation {
         ensure_confirmed_if_guarded(
@@ -825,10 +837,10 @@ fn db_execute(
         connection_id: connection_id.clone(),
         sql,
         limit: Some(limit),
-        // The MCP layer has already applied environment policy and the
-        // content-bound confirmation token; pass the engine confirmation flag
-        // so non-high-risk dev/test writes can execute through the shared path.
-        confirm_mutation: Some(true),
+        // Proven reads do not carry a mutation confirmation. Writes receive one
+        // only after workspace policy allowed the write and any required
+        // content-bound confirmation succeeded.
+        confirm_mutation: if proven_read { None } else { Some(true) },
         catalog,
         schema,
         timeout_ms,
@@ -885,7 +897,8 @@ fn db_explain(
     let schema = parse_optional_string(&arguments, "schema")?;
     let timeout_ms = parse_optional_u64(&arguments, "timeoutMs")?;
 
-    validate_readonly_sql(&sql)?;
+    let driver = sql_driver_hint(command_bus, &workspace_id, &connection_id, &sql);
+    validate_readonly_sql_for_driver(&sql, driver.as_deref())?;
     let explain_sql = if sql.trim_start().to_ascii_lowercase().starts_with("explain") {
         sql
     } else {
@@ -920,6 +933,30 @@ fn db_explain(
         }
         Err(error) => Err(adapter_execution(error)),
     }
+}
+
+/// Resolve the saved connection driver only when the statement is not already
+/// a proven read on every dialect. Universal reads never need a connection lookup.
+fn sql_driver_hint(
+    command_bus: &dyn CommandBusAdapter,
+    workspace_id: &str,
+    connection_id: &str,
+    sql: &str,
+) -> Option<String> {
+    if unfour_command_bus::sql_is_proven_read_for_driver(sql, None)
+        && unfour_command_bus::sql_is_single_statement_for_driver(sql, None)
+    {
+        return None;
+    }
+    command_bus
+        .list_db_connections(workspace_id)
+        .ok()
+        .and_then(|connections| {
+            connections
+                .into_iter()
+                .find(|connection| connection.id == connection_id)
+                .map(|connection| connection.driver)
+        })
 }
 
 fn db_test_connection(

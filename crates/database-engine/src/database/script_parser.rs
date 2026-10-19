@@ -32,7 +32,10 @@ pub(super) fn safety_words(sql: &str, dialect: DatabaseDialect) -> AppResult<Str
         .filter_map(|item| match item.token {
             Token::Word(word) if word.quote_style.is_none() => Some(word.value),
             Token::Eq => Some("=".into()),
+            // Parentheses stay visible so EXPLAIN/WITH structure can be parsed.
+            // They are not execution tokens and are never written back as SQL.
             Token::LParen => Some("(".into()),
+            Token::RParen => Some(")".into()),
             _ => None,
         })
         .collect::<Vec<_>>()
