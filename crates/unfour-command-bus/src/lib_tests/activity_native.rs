@@ -423,6 +423,16 @@ async fn native_ssh_session_keeps_its_id_when_activity_logging_fails() {
         history_failure.to_string().contains("history unavailable"),
         "engine history error was rewritten: {history_failure}"
     );
+    let listed = bus.list_ssh_sessions(workspace.clone()).await.unwrap();
+    assert!(
+        listed.iter().all(|session| {
+            !matches!(
+                session.status.as_str(),
+                "connected" | "degraded" | "reconnecting"
+            )
+        }),
+        "history failure left a live session: {listed:?}"
+    );
     sqlx::query("DROP TRIGGER fail_native_history")
         .execute(bus.db.pool())
         .await
@@ -466,4 +476,149 @@ async fn native_ssh_session_keeps_its_id_when_activity_logging_fails() {
     .unwrap();
     assert_eq!(recorded, 0);
     server_task.abort();
+}
+
+#[tokio::test]
+async fn native_history_persistence_failure_releases_the_session() {
+    let bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let socket = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = socket.local_addr().unwrap().port();
+    let mut server = super::native::Server::new(Arc::new(Mutex::new(vec![])));
+    let opened_sessions = server.opened_sessions.clone();
+    let config = Arc::new(russh::server::Config {
+        keys: vec![russh::keys::PrivateKey::random(
+            &mut rand::rng(),
+            russh::keys::Algorithm::Ed25519,
+        )
+        .unwrap()],
+        ..Default::default()
+    });
+    let server_task = tokio::spawn(async move {
+        server.run_on_socket(config, &socket).await.unwrap();
+    });
+    let connection = bus
+        .save_ssh_connection(SshConnectionInput {
+            id: None,
+            workspace_id: workspace.clone(),
+            name: "history-cleanup".into(),
+            host: "127.0.0.1".into(),
+            port: Some(port),
+            username: "fixture".into(),
+            auth_kind: "password".into(),
+            key_path: None,
+            credential_ref: None,
+            secret: Some("fixture-password".into()),
+        })
+        .await
+        .unwrap();
+    let input = SshConnectInput {
+        workspace_id: workspace.clone(),
+        connection_id: connection.id,
+        cols: Some(80),
+        rows: Some(24),
+        secret: None,
+    };
+    let opened = || *opened_sessions.lock().unwrap();
+
+    sqlx::query("CREATE TRIGGER fail_save_session BEFORE INSERT ON ssh_terminal_history BEGIN SELECT RAISE(FAIL, 'save session unavailable'); END;")
+        .execute(bus.db.pool())
+        .await
+        .unwrap();
+    let save_failure = tokio::time::timeout(
+        Duration::from_secs(8),
+        bus.connect_ssh_session(input.clone()),
+    )
+    .await
+    .expect("save-failure connect timed out")
+    .expect_err("save_session failure must stay an error");
+    assert!(
+        save_failure
+            .to_string()
+            .contains("save session unavailable"),
+        "original save error was rewritten: {save_failure}"
+    );
+    assert!(!save_failure.to_string().contains("ACTIVITY_RECORD_FAILED"));
+    assert_no_live_ssh_session(&bus, &workspace, "save_session").await;
+    tokio::time::sleep(Duration::from_millis(1_500)).await;
+    assert_eq!(opened(), 1, "save_session failure reconnected");
+    sqlx::query("DROP TRIGGER fail_save_session")
+        .execute(bus.db.pool())
+        .await
+        .unwrap();
+
+    sqlx::query("CREATE TRIGGER fail_append_output BEFORE UPDATE OF content ON ssh_terminal_history BEGIN SELECT RAISE(FAIL, 'append output unavailable'); END;")
+        .execute(bus.db.pool())
+        .await
+        .unwrap();
+    let append_failure = tokio::time::timeout(
+        Duration::from_secs(8),
+        bus.connect_ssh_session(input.clone()),
+    )
+    .await
+    .expect("append-failure connect timed out")
+    .expect_err("append_output failure must stay an error");
+    assert!(
+        append_failure
+            .to_string()
+            .contains("append output unavailable"),
+        "original append error was rewritten: {append_failure}"
+    );
+    assert!(!append_failure
+        .to_string()
+        .contains("ACTIVITY_RECORD_FAILED"));
+    assert_no_live_ssh_session(&bus, &workspace, "append_output").await;
+    tokio::time::sleep(Duration::from_millis(1_500)).await;
+    assert_eq!(opened(), 2, "append_output failure reconnected");
+    sqlx::query("DROP TRIGGER fail_append_output")
+        .execute(bus.db.pool())
+        .await
+        .unwrap();
+
+    let session = tokio::time::timeout(
+        Duration::from_secs(8),
+        bus.connect_ssh_session(input.clone()),
+    )
+    .await
+    .expect("connect timed out")
+    .expect("connect after history recovery");
+    assert_eq!(opened(), 3);
+    sqlx::query("CREATE TRIGGER fail_close_history BEFORE UPDATE ON ssh_terminal_history BEGIN SELECT RAISE(FAIL, 'close history unavailable'); END;")
+        .execute(bus.db.pool())
+        .await
+        .unwrap();
+    let close_failure = bus
+        .close_ssh_session(SshCloseInput {
+            workspace_id: workspace.clone(),
+            session_id: session.session_id,
+        })
+        .await
+        .expect_err("close history failure must stay an error");
+    assert!(
+        close_failure
+            .to_string()
+            .contains("close history unavailable"),
+        "original close error was rewritten: {close_failure}"
+    );
+    assert!(!close_failure.to_string().contains("ACTIVITY_RECORD_FAILED"));
+    assert_no_live_ssh_session(&bus, &workspace, "close_session").await;
+    tokio::time::sleep(Duration::from_millis(1_500)).await;
+    assert_eq!(opened(), 3, "close history failure reconnected");
+    server_task.abort();
+}
+
+async fn assert_no_live_ssh_session(bus: &crate::CommandBus, workspace_id: &str, label: &str) {
+    let listed = bus
+        .list_ssh_sessions(workspace_id.to_string())
+        .await
+        .unwrap();
+    assert!(
+        listed.iter().all(|session| {
+            !matches!(
+                session.status.as_str(),
+                "connected" | "degraded" | "reconnecting"
+            )
+        }),
+        "{label} left a live session: {listed:?}"
+    );
 }

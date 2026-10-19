@@ -5,6 +5,7 @@ use russh::server::{Msg, Server as _, Session};
 pub(super) struct Server {
     pub(super) commands: Arc<Mutex<Vec<String>>>,
     pub(super) sftp_ops: Arc<Mutex<Vec<String>>>,
+    pub(super) opened_sessions: Arc<Mutex<u32>>,
     sftp_channel: Arc<Mutex<Option<russh::ChannelId>>>,
     sftp_buffer: Arc<Mutex<Vec<u8>>>,
 }
@@ -14,6 +15,7 @@ impl Server {
         Self {
             commands,
             sftp_ops: Arc::new(Mutex::new(Vec::new())),
+            opened_sessions: Arc::new(Mutex::new(0)),
             sftp_channel: Arc::new(Mutex::new(None)),
             sftp_buffer: Arc::new(Mutex::new(Vec::new())),
         }
@@ -40,6 +42,7 @@ impl russh::server::Handler for Server {
         _: russh::Channel<Msg>,
         _: &mut Session,
     ) -> Result<bool, Self::Error> {
+        *self.opened_sessions.lock().unwrap() += 1;
         Ok(true)
     }
     async fn exec_request(

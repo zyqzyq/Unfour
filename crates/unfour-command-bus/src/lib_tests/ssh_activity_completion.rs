@@ -216,6 +216,18 @@ async fn ssh_session_activity_failure_keeps_the_session_id() {
         error.to_string().contains("history unavailable"),
         "engine history error was rewritten: {error}"
     );
+    assert!(
+        !error.to_string().contains("ACTIVITY_RECORD_FAILED"),
+        "history persistence must stay distinct from activity warnings: {error}"
+    );
+    let listed = bus.list_ssh_sessions(workspace.clone()).await.unwrap();
+    assert!(
+        listed.iter().all(|session| !matches!(
+            session.status.as_str(),
+            "connected" | "degraded" | "reconnecting"
+        )),
+        "failed history persistence left a live session: {listed:?}"
+    );
     let recorded: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM activity_events WHERE action = 'ssh.session.connect'",
     )

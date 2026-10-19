@@ -29,18 +29,7 @@ impl SshService {
         #[cfg(not(feature = "ssh-native"))]
         let result = self.connect_simulated(&connection, &input).await;
         let summary = match result {
-            Ok(summary) => {
-                unfour_diag::log_operation_event(
-                    "ssh_connect_succeeded",
-                    "ssh",
-                    "connect",
-                    "ok",
-                    Some(started.elapsed().as_millis()),
-                    None,
-                    fields,
-                );
-                summary
-            }
+            Ok(summary) => summary,
             Err(error) => {
                 unfour_diag::log_operation_event(
                     "ssh_connect_failed",
@@ -55,20 +44,104 @@ impl SshService {
             }
         };
 
-        self.terminal_history.save_session(&summary).await?;
-        self.terminal_history
+        // The native transport, in-memory session, and supervisor already exist.
+        // A terminal-history failure cannot be reported as a successful connect,
+        // and it must not leave that session alive or eligible to reconnect.
+        let connected_line = format!(
+            "Connected to {}@{}. PTY {}x{} allocated.\r\n",
+            summary.username, summary.host, summary.cols, summary.rows
+        );
+        if let Err(error) = self.terminal_history.save_session(&summary).await {
+            self.discard_unpersisted_session(&summary.session_id).await;
+            unfour_diag::log_operation_event(
+                "ssh_connect_failed",
+                "ssh",
+                "connect",
+                "error",
+                Some(started.elapsed().as_millis()),
+                Some(unfour_diag::app_error_kind(&error)),
+                fields,
+            );
+            return Err(error);
+        }
+        if let Err(error) = self
+            .terminal_history
             .append_output(
                 &summary.workspace_id,
                 &summary.session_id,
                 &summary.connection_id,
-                &format!(
-                    "Connected to {}@{}. PTY {}x{} allocated.\r\n",
-                    summary.username, summary.host, summary.cols, summary.rows
-                ),
+                &connected_line,
             )
-            .await?;
+            .await
+        {
+            self.discard_unpersisted_session(&summary.session_id).await;
+            unfour_diag::log_operation_event(
+                "ssh_connect_failed",
+                "ssh",
+                "connect",
+                "error",
+                Some(started.elapsed().as_millis()),
+                Some(unfour_diag::app_error_kind(&error)),
+                fields,
+            );
+            return Err(error);
+        }
+        unfour_diag::log_operation_event(
+            "ssh_connect_succeeded",
+            "ssh",
+            "connect",
+            "ok",
+            Some(started.elapsed().as_millis()),
+            None,
+            fields,
+        );
         Ok(summary)
     }
+
+    /// Drop a session whose terminal history could not be saved.
+    ///
+    /// This path must not write terminal history again: the store is already
+    /// failing. It only stops the supervisor, closes the transport, and removes
+    /// the in-memory entry so a failed connect cannot reconnect in the background.
+    async fn discard_unpersisted_session(&self, session_id: &str) {
+        #[cfg(feature = "ssh-native")]
+        let native_handle = self.detach_native_session(session_id);
+        #[cfg(feature = "ssh-native")]
+        if let Some(native) = native_handle {
+            let _ = native.writer.close().await;
+            let handle = native.handle.lock().await;
+            let _ = handle
+                .disconnect(russh::Disconnect::ByApplication, "session closed", "en")
+                .await;
+        }
+        #[cfg(feature = "ssh-native")]
+        self.cancel_sftp_transfers_for_session(session_id);
+        if let Ok(mut sessions) = self.sessions.lock() {
+            sessions.remove(session_id);
+        }
+    }
+
+    #[cfg(feature = "ssh-native")]
+    fn detach_native_session(&self, session_id: &str) -> Option<NativeSshHandle> {
+        let Ok(mut sessions) = self.sessions.lock() else {
+            return None;
+        };
+        let Some(state) = sessions.get_mut(session_id) else {
+            return None;
+        };
+        // Mark closed before releasing the lock so a supervisor that observes
+        // the channel drop cannot start a reconnect.
+        state.intentional_close = true;
+        state.summary.status = "disconnected".to_string();
+        state.summary.reconnect_attempt = 0;
+        if let Some(cancel_tx) = state.cancel_tx.take() {
+            let _ = cancel_tx.send(true);
+        }
+        state.sftp = None;
+        state.sftp_generation = state.sftp_generation.saturating_add(1);
+        state.native_handle.take()
+    }
+
     pub async fn list_sessions(&self, workspace_id: String) -> AppResult<Vec<SshSessionSummary>> {
         validate_workspace_id(&workspace_id)?;
         let active_sessions = self
@@ -498,18 +571,28 @@ impl SshService {
             }
         };
 
-        // Persist terminal output and the final summary, then drop the in-memory
-        // entry. The entry is removed unconditionally even when persistence
-        // fails, so a persistence error cannot leak the session (#4). None of
-        // these holds a `self.sessions` guard across an await.
+        // The transport is already gone and intentional_close is set. Persist
+        // the transcript, then drop memory even when that write fails. The
+        // returned error stays the history failure; it is not an activity-log
+        // warning and does not mean the remote session is still open.
         let flush_result = self.flush_session_history(&input.session_id).await;
         let update_result = self.terminal_history.update_session(&summary).await;
         self.sessions
             .lock()
             .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?
             .remove(&input.session_id);
-        flush_result?;
-        update_result?;
+        if let Err(error) = flush_result.and(update_result) {
+            unfour_diag::log_operation_event(
+                "ssh_disconnect_failed",
+                "ssh",
+                "close_session",
+                "error",
+                Some(started.elapsed().as_millis()),
+                Some(unfour_diag::app_error_kind(&error)),
+                serde_json::json!({ "status": &summary.status }),
+            );
+            return Err(error);
+        }
         unfour_diag::log_operation_event(
             "ssh_disconnected",
             "ssh",
