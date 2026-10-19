@@ -18,6 +18,7 @@ import {
 import {
   ConfirmDialog,
   ErrorState,
+  useFeedback,
   useFeedbackErrorHandler,
   useI18n,
 } from "@unfour/ui";
@@ -44,8 +45,14 @@ export function SftpPanel({
   session: SshSessionSummary;
 }) {
   const { t } = useI18n();
+  const feedback = useFeedback();
   const queryClient = useQueryClient();
   const handleError = useFeedbackErrorHandler();
+  const noteActivityWarning = (warnings?: string[]) => {
+    if (warnings?.includes("ACTIVITY_RECORD_FAILED")) {
+      feedback.info(t("feedback.activityRecordFailed"));
+    }
+  };
   const tab = useSftpStore((state) => state.tabs[session.sessionId]);
   const transfers = useSftpStore(
     (state) => state.transfers[session.sessionId] ?? EMPTY_TRANSFERS,
@@ -120,38 +127,40 @@ export function SftpPanel({
       const name = validateRemoteName(nameValue, t("ssh.sftp.invalidName"));
       const basePath = currentPath ?? "/";
       if (nameAction === "mkdir") {
-        await createSftpDirectory({
+        const result = await createSftpDirectory({
           workspaceId: session.workspaceId,
           sessionId: session.sessionId,
           path: joinRemotePath(basePath, name),
         });
-        return null;
+        return { transfer: null, warnings: result?.warnings };
       }
       if (nameAction === "rename" && selectedEntry) {
-        await renameSftpPath({
+        const result = await renameSftpPath({
           workspaceId: session.workspaceId,
           sessionId: session.sessionId,
           oldPath: selectedEntry.path,
           newPath: joinRemotePath(basePath, name),
         });
-        return null;
+        return { transfer: null, warnings: result?.warnings };
       }
       if (nameAction === "upload" && localUploadPath) {
         const existing = entries.find((entry) => entry.name === name);
         if (existing && existing.kind !== "file") {
           throw new Error(t("ssh.sftp.uploadCannotReplaceNonFile"));
         }
-        return uploadSftpFile({
+        const transfer = await uploadSftpFile({
           workspaceId: session.workspaceId,
           sessionId: session.sessionId,
           localPath: localUploadPath,
           remotePath: joinRemotePath(basePath, name),
           overwrite: Boolean(existing),
         });
+        return { transfer, warnings: transfer.warnings };
       }
       throw new Error(t("ssh.sftp.invalidOperation"));
     },
-    onSuccess: (transfer) => {
+    onSuccess: ({ transfer, warnings }) => {
+      noteActivityWarning(warnings);
       if (transfer) {
         // Upload keeps using the SFTP channel; refresh after it finishes.
         upsertTransfer(transfer);
@@ -165,16 +174,20 @@ export function SftpPanel({
 
   const deleteMutation = useMutation({
     mutationFn: async (targets: SftpFileEntry[]) => {
+      const warnings: string[] = [];
       for (const entry of targets) {
-        await deleteSftpPath({
+        const result = await deleteSftpPath({
           workspaceId: session.workspaceId,
           sessionId: session.sessionId,
           path: entry.path,
           isDirectory: entry.kind === "directory",
         });
+        warnings.push(...(result?.warnings ?? []));
       }
+      return warnings;
     },
-    onSuccess: () => {
+    onSuccess: (warnings) => {
+      noteActivityWarning(warnings);
       setDeleteTargets([]);
       setSelectedPath(session.sessionId, session.connectionId, null);
       void refreshDirectory();
@@ -269,6 +282,7 @@ export function SftpPanel({
         remotePath: entry.path,
         overwrite: true,
       });
+      noteActivityWarning(transfer.warnings);
       upsertTransfer(transfer);
     } catch (error) {
       handleError(error, { key: "ssh.sftp.downloadFailed" });
@@ -281,7 +295,10 @@ export function SftpPanel({
     entries,
     listRef,
     onError: handleError,
-    onTransfer: upsertTransfer,
+    onTransfer: (transfer) => {
+      noteActivityWarning(transfer.warnings);
+      upsertTransfer(transfer);
+    },
     sessionId: session.sessionId,
     workspaceId: session.workspaceId,
   });

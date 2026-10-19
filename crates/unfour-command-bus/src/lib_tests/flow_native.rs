@@ -4,7 +4,22 @@ use russh::server::{Msg, Server as _, Session};
 #[derive(Clone)]
 pub(super) struct Server {
     pub(super) commands: Arc<Mutex<Vec<String>>>,
+    pub(super) sftp_ops: Arc<Mutex<Vec<String>>>,
+    sftp_channel: Arc<Mutex<Option<russh::ChannelId>>>,
+    sftp_buffer: Arc<Mutex<Vec<u8>>>,
 }
+
+impl Server {
+    pub(super) fn new(commands: Arc<Mutex<Vec<String>>>) -> Self {
+        Self {
+            commands,
+            sftp_ops: Arc::new(Mutex::new(Vec::new())),
+            sftp_channel: Arc::new(Mutex::new(None)),
+            sftp_buffer: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+}
+
 impl russh::server::Server for Server {
     type Handler = Self;
     fn new_client(&mut self, _: Option<std::net::SocketAddr>) -> Self {
@@ -49,6 +64,142 @@ impl russh::server::Handler for Server {
         session.close(channel)?;
         Ok(())
     }
+
+    async fn pty_request(
+        &mut self,
+        channel: russh::ChannelId,
+        term: &str,
+        col_width: u32,
+        row_height: u32,
+        pix_width: u32,
+        pix_height: u32,
+        modes: &[(russh::Pty, u32)],
+        session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        let _ = (term, col_width, row_height, pix_width, pix_height, modes);
+        session.channel_success(channel)?;
+        Ok(())
+    }
+
+    async fn shell_request(
+        &mut self,
+        channel: russh::ChannelId,
+        session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        session.channel_success(channel)?;
+        Ok(())
+    }
+
+    async fn subsystem_request(
+        &mut self,
+        channel: russh::ChannelId,
+        name: &str,
+        session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        if name == "sftp" {
+            *self.sftp_channel.lock().unwrap() = Some(channel);
+            self.sftp_buffer.lock().unwrap().clear();
+        }
+        session.channel_success(channel)?;
+        Ok(())
+    }
+
+    async fn data(
+        &mut self,
+        channel: russh::ChannelId,
+        data: &[u8],
+        session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        if self.sftp_channel.lock().unwrap().as_ref() != Some(&channel) {
+            return Ok(());
+        }
+        let mut buffer = self.sftp_buffer.lock().unwrap();
+        buffer.extend_from_slice(data);
+        let replies = sftp_replies(&mut buffer, &mut self.sftp_ops.lock().unwrap());
+        drop(buffer);
+        for reply in replies {
+            session.data(channel, reply)?;
+        }
+        Ok(())
+    }
+}
+
+fn sftp_replies(buffer: &mut Vec<u8>, ops: &mut Vec<String>) -> Vec<Vec<u8>> {
+    let mut replies = Vec::new();
+    while buffer.len() >= 4 {
+        let length = u32::from_be_bytes(buffer[..4].try_into().unwrap()) as usize;
+        if length == 0 || buffer.len() < 4 + length {
+            break;
+        }
+        let packet = buffer[4..4 + length].to_vec();
+        buffer.drain(..4 + length);
+        if let Some(payload) = sftp_reply(&packet, ops) {
+            let mut framed = (payload.len() as u32).to_be_bytes().to_vec();
+            framed.extend(payload);
+            replies.push(framed);
+        }
+    }
+    replies
+}
+
+fn sftp_reply(packet: &[u8], ops: &mut Vec<String>) -> Option<Vec<u8>> {
+    let kind = *packet.first()?;
+    if kind == 1 {
+        ops.push("init".into());
+        let mut payload = vec![2];
+        payload.extend_from_slice(&3u32.to_be_bytes());
+        return Some(payload);
+    }
+    let id = u32::from_be_bytes(packet.get(1..5)?.try_into().ok()?);
+    ops.push(
+        match kind {
+            3 => "open",
+            5 => "read",
+            6 => "write",
+            13 => "remove",
+            14 => "mkdir",
+            15 => "rmdir",
+            16 => "realpath",
+            18 => "rename",
+            _ => "other",
+        }
+        .into(),
+    );
+    Some(match kind {
+        3 => sftp_handle(id),
+        5 => sftp_status(id, 1),
+        16 => sftp_name(id, "/"),
+        _ => sftp_status(id, 0),
+    })
+}
+
+fn sftp_status(id: u32, code: u32) -> Vec<u8> {
+    let mut payload = vec![101];
+    payload.extend_from_slice(&id.to_be_bytes());
+    payload.extend_from_slice(&code.to_be_bytes());
+    payload.extend_from_slice(&0u32.to_be_bytes());
+    payload.extend_from_slice(&0u32.to_be_bytes());
+    payload
+}
+
+fn sftp_handle(id: u32) -> Vec<u8> {
+    let mut payload = vec![102];
+    payload.extend_from_slice(&id.to_be_bytes());
+    payload.extend_from_slice(&1u32.to_be_bytes());
+    payload.push(b'h');
+    payload
+}
+
+fn sftp_name(id: u32, path: &str) -> Vec<u8> {
+    let mut payload = vec![104];
+    payload.extend_from_slice(&id.to_be_bytes());
+    payload.extend_from_slice(&1u32.to_be_bytes());
+    for value in [path, path] {
+        payload.extend_from_slice(&(value.len() as u32).to_be_bytes());
+        payload.extend_from_slice(value.as_bytes());
+    }
+    payload.extend_from_slice(&0u32.to_be_bytes());
+    payload
 }
 
 #[tokio::test]
@@ -61,9 +212,7 @@ async fn flow_real_api_condition_native_ssh_database() {
     let socket = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = socket.local_addr().unwrap().port();
     let commands = Arc::new(Mutex::new(vec![]));
-    let mut server = Server {
-        commands: commands.clone(),
-    };
+    let mut server = Server::new(commands.clone());
     let config = Arc::new(russh::server::Config {
         keys: vec![russh::keys::PrivateKey::random(
             &mut rand::rng(),
@@ -160,9 +309,7 @@ async fn flow_native_ssh_secret_inputs_and_failed_history() {
     let socket = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = socket.local_addr().unwrap().port();
     let commands = Arc::new(Mutex::new(vec![]));
-    let mut server = Server {
-        commands: commands.clone(),
-    };
+    let mut server = Server::new(commands.clone());
     let config = Arc::new(russh::server::Config {
         keys: vec![russh::keys::PrivateKey::random(
             &mut rand::rng(),

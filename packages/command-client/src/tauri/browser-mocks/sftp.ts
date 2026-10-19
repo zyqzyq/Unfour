@@ -152,7 +152,7 @@ function handleSftpMutationMock<T>(
       permissions: "rwxr-xr-x",
       linkTarget: null,
     });
-    return undefined as T;
+    return { warnings: [] } as T;
   }
 
   if (command === "ssh_sftp_rename") {
@@ -162,7 +162,7 @@ function handleSftpMutationMock<T>(
     entry.path = input.newPath;
     const nameParts = input.newPath.split("/").filter(Boolean);
     entry.name = nameParts[nameParts.length - 1] ?? entry.name;
-    return undefined as T;
+    return { warnings: [] } as T;
   }
 
   if (command === "ssh_sftp_delete") {
@@ -171,7 +171,7 @@ function handleSftpMutationMock<T>(
       input.sessionId,
       sftpEntries(input.sessionId).filter((entry) => entry.path !== input.path),
     );
-    return undefined as T;
+    return { warnings: [] } as T;
   }
 
   return UNHANDLED;

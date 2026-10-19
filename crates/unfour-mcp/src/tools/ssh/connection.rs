@@ -100,7 +100,7 @@ pub(super) fn ssh_run_diagnostic(
             message: error.message,
         })?;
 
-    Ok(json!({
+    let mut value = json!({
         "connectionId": result.connection_id,
         "command": result.command,
         "stdout": result.stdout,
@@ -108,7 +108,9 @@ pub(super) fn ssh_run_diagnostic(
         "exitStatus": result.exit_status,
         "truncated": result.truncated,
         "source": "command-bus"
-    }))
+    });
+    insert_activity_warnings(&mut value, &result.warnings);
+    Ok(value)
 }
 
 pub(super) fn ssh_list_connections(

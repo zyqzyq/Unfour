@@ -59,8 +59,8 @@ Default location for tests that exercise a single hook, component, model
 function, or utility in isolation. Dependencies on other packages are mocked
 with `vi.mock`. These tests:
 
-- Live next to the file under test (e.g. `useSqlExecution.ts` and
-  `useSqlExecution.test.tsx` in the same `hooks/` directory).
+- Live next to the file under test (e.g. `useDatabaseSqlRunner.ts` and
+  `useDatabaseSqlRunner.test.tsx` in the same `hooks/` directory).
 - Use `// @vitest-environment jsdom` at the top of the file when they need a
   DOM.
 - Are picked up by vitest's default include pattern
@@ -169,7 +169,7 @@ introduce a `dev-dependency` on another crate's tests directory.
 
 - vitest unit/component: `*.test.ts` or `*.test.tsx` next to the file under
   test. The base name should match the file under test
-  (`useSqlExecution.ts` → `useSqlExecution.test.tsx`).
+  (`useDatabaseSqlRunner.ts` → `useDatabaseSqlRunner.test.tsx`).
 - vitest integration: `*.test.ts` / `*.test.tsx` named after the flow or
   feature under test (`collection-flow.test.tsx`).
 - Playwright: `*.spec.ts` / `*.spec.tsx`. The `.spec` extension is what

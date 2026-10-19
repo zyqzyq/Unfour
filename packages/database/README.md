@@ -14,7 +14,7 @@ See [AGENTS.md](AGENTS.md) for this package's scope and invariants.
   mutations.
 - `src/hooks/useDatabaseConnections.ts` - connection query hook.
 - `src/hooks/useSchemaTree.ts` - schema loading hook.
-- `src/hooks/useSqlExecution.ts` - SQL execution mutation hook.
+- `src/hooks/useDatabaseSqlRunner.ts` - SQL editor execution hook.
 - `src/hooks/useTableData.ts` - table preview mutation hook.
 - `src/components/DatabaseConnectionTree.tsx` - connection and schema tree.
 - `src/components/DatabaseWorkspace.tsx` - SQL/table/results workspace.

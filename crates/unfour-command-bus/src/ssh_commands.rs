@@ -20,19 +20,24 @@ impl CommandBus {
         input: SshDiagnosticInput,
     ) -> AppResult<SshDiagnosticResult> {
         let workspace_id = input.workspace_id.clone();
-        let result = self.ssh.run_diagnostic(input).await?;
-        self.activity_log
-            .record(
-                Some(&workspace_id),
-                "ssh.diagnostic",
-                Some(&result.connection_id),
-                serde_json::json!({
-                    "command": result.command,
-                    "exitStatus": result.exit_status,
-                    "truncated": result.truncated,
-                }),
+        let mut result = self.ssh.run_diagnostic(input).await?;
+        result.warnings.extend(
+            self.record_completion_activity(
+                CommandActivity {
+                    workspace_id: Some(workspace_id),
+                    action: "ssh.diagnostic",
+                    target: Some(result.connection_id.clone()),
+                    details: serde_json::json!({
+                        "command": result.command,
+                        "exitStatus": result.exit_status,
+                        "truncated": result.truncated,
+                    }),
+                },
+                "ssh",
+                "run_diagnostic",
             )
-            .await?;
+            .await,
+        );
         Ok(result)
     }
 
@@ -46,20 +51,25 @@ impl CommandBus {
         let workspace_id = input.workspace_id.clone();
         let connection_id = input.connection_id.clone();
         let (command_kind, command_redacted) = command_activity_kind(&input.command);
-        let result = self.ssh.run_command(input).await?;
-        self.activity_log
-            .record(
-                Some(&workspace_id),
-                "ssh.command",
-                Some(&connection_id),
-                serde_json::json!({
-                    "commandKind": command_kind,
-                    "commandRedacted": command_redacted,
-                    "exitStatus": result.exit_status,
-                    "truncated": result.truncated,
-                }),
+        let mut result = self.ssh.run_command(input).await?;
+        result.warnings.extend(
+            self.record_completion_activity(
+                CommandActivity {
+                    workspace_id: Some(workspace_id),
+                    action: "ssh.command",
+                    target: Some(connection_id),
+                    details: serde_json::json!({
+                        "commandKind": command_kind,
+                        "commandRedacted": command_redacted,
+                        "exitStatus": result.exit_status,
+                        "truncated": result.truncated,
+                    }),
+                },
+                "ssh",
+                "run_command",
             )
-            .await?;
+            .await,
+        );
         Ok(result)
     }
 
@@ -529,58 +539,69 @@ impl CommandBus {
         self.ssh.sftp_stat(input).await
     }
 
-    pub async fn create_ssh_sftp_directory(&self, input: SftpPathInput) -> AppResult<()> {
+    pub async fn create_ssh_sftp_directory(
+        &self,
+        input: SftpPathInput,
+    ) -> AppResult<SftpMutationResult> {
         let workspace_id = input.workspace_id.clone();
         let session_id = input.session_id.clone();
         self.ssh.sftp_create_directory(input).await?;
-        self.activity_log
-            .record(
-                Some(&workspace_id),
+        Ok(self
+            .finish_sftp_mutation(
+                workspace_id,
+                session_id,
                 "ssh.sftp.mkdir",
-                Some(&session_id),
+                "sftp_mkdir",
                 serde_json::json!({}),
             )
-            .await?;
-        Ok(())
+            .await)
     }
 
-    pub async fn rename_ssh_sftp_path(&self, input: SftpRenameInput) -> AppResult<()> {
+    pub async fn rename_ssh_sftp_path(
+        &self,
+        input: SftpRenameInput,
+    ) -> AppResult<SftpMutationResult> {
         let workspace_id = input.workspace_id.clone();
         let session_id = input.session_id.clone();
         self.ssh.sftp_rename(input).await?;
-        self.activity_log
-            .record(
-                Some(&workspace_id),
+        Ok(self
+            .finish_sftp_mutation(
+                workspace_id,
+                session_id,
                 "ssh.sftp.rename",
-                Some(&session_id),
+                "sftp_rename",
                 serde_json::json!({}),
             )
-            .await?;
-        Ok(())
+            .await)
     }
 
-    pub async fn delete_ssh_sftp_path(&self, input: SftpDeleteInput) -> AppResult<()> {
+    pub async fn delete_ssh_sftp_path(
+        &self,
+        input: SftpDeleteInput,
+    ) -> AppResult<SftpMutationResult> {
         let workspace_id = input.workspace_id.clone();
         let session_id = input.session_id.clone();
         let is_directory = input.is_directory;
         self.ssh.sftp_delete(input).await?;
-        self.activity_log
-            .record(
-                Some(&workspace_id),
+        Ok(self
+            .finish_sftp_mutation(
+                workspace_id,
+                session_id,
                 "ssh.sftp.delete",
-                Some(&session_id),
+                "sftp_delete",
                 serde_json::json!({ "isDirectory": is_directory }),
             )
-            .await?;
-        Ok(())
+            .await)
     }
 
     pub async fn download_ssh_sftp_file(
         &self,
         input: SftpTransferInput,
     ) -> AppResult<SftpTransferState> {
-        let transfer = self.ssh.sftp_download(input).await?;
-        self.record_sftp_transfer_started(&transfer).await?;
+        let mut transfer = self.ssh.sftp_download(input).await?;
+        transfer
+            .warnings
+            .extend(self.record_sftp_transfer_started(&transfer).await);
         Ok(transfer)
     }
 
@@ -588,8 +609,10 @@ impl CommandBus {
         &self,
         input: SftpTransferInput,
     ) -> AppResult<SftpTransferState> {
-        let transfer = self.ssh.sftp_upload(input).await?;
-        self.record_sftp_transfer_started(&transfer).await?;
+        let mut transfer = self.ssh.sftp_upload(input).await?;
+        transfer
+            .warnings
+            .extend(self.record_sftp_transfer_started(&transfer).await);
         Ok(transfer)
     }
 
@@ -607,18 +630,45 @@ impl CommandBus {
         self.ssh.sftp_list_transfers(input).await
     }
 
-    async fn record_sftp_transfer_started(&self, transfer: &SftpTransferState) -> AppResult<()> {
-        self.activity_log
-            .record(
-                Some(&transfer.workspace_id),
-                "ssh.sftp.transfer.start",
-                Some(&transfer.transfer_id),
-                serde_json::json!({
+    async fn finish_sftp_mutation(
+        &self,
+        workspace_id: String,
+        session_id: String,
+        action: &'static str,
+        operation: &'static str,
+        details: serde_json::Value,
+    ) -> SftpMutationResult {
+        SftpMutationResult {
+            warnings: self
+                .record_completion_activity(
+                    CommandActivity {
+                        workspace_id: Some(workspace_id),
+                        action,
+                        target: Some(session_id),
+                        details,
+                    },
+                    "ssh",
+                    operation,
+                )
+                .await,
+        }
+    }
+
+    async fn record_sftp_transfer_started(&self, transfer: &SftpTransferState) -> Vec<String> {
+        self.record_completion_activity(
+            CommandActivity {
+                workspace_id: Some(transfer.workspace_id.clone()),
+                action: "ssh.sftp.transfer.start",
+                target: Some(transfer.transfer_id.clone()),
+                details: serde_json::json!({
                     "connectionId": transfer.connection_id,
                     "direction": transfer.direction,
                 }),
-            )
-            .await
+            },
+            "ssh",
+            "sftp_transfer_start",
+        )
+        .await
     }
 
     pub fn reserved_status(&self) -> serde_json::Value {

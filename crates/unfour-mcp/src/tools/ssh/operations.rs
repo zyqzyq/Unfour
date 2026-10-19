@@ -135,7 +135,7 @@ pub(super) fn ssh_read_file(
             message: error.message,
         })?;
 
-    Ok(json!({
+    let mut value = json!({
         "connectionId": connection_id,
         "path": path,
         "content": result.stdout,
@@ -144,7 +144,9 @@ pub(super) fn ssh_read_file(
         "limit": limit,
         "truncated": result.truncated,
         "source": "command-bus"
-    }))
+    });
+    insert_activity_warnings(&mut value, &result.warnings);
+    Ok(value)
 }
 
 pub(super) fn ssh_write_file(
@@ -212,7 +214,7 @@ pub(super) fn ssh_write_file(
             message: error.message,
         })?;
 
-    Ok(json!({
+    let mut value = json!({
         "connectionId": connection_id,
         "path": path,
         "mode": mode,
@@ -222,7 +224,9 @@ pub(super) fn ssh_write_file(
         "exitCode": result.exit_status,
         "truncated": result.truncated,
         "source": "command-bus"
-    }))
+    });
+    insert_activity_warnings(&mut value, &result.warnings);
+    Ok(value)
 }
 
 pub(super) fn ssh_patch_file(
@@ -317,7 +321,7 @@ pub(super) fn ssh_patch_file(
     } else {
         0
     };
-    Ok(json!({
+    let mut value = json!({
         "connectionId": connection_id,
         "path": path,
         "patched": result.exit_status == Some(0),
@@ -332,7 +336,9 @@ pub(super) fn ssh_patch_file(
         "exitCode": result.exit_status,
         "truncated": result.truncated,
         "source": "command-bus"
-    }))
+    });
+    insert_activity_warnings(&mut value, &result.warnings);
+    Ok(value)
 }
 
 pub(super) fn ssh_list_dir(
@@ -368,7 +374,7 @@ pub(super) fn ssh_list_dir(
             message: error.message,
         })?;
     let entries = parse_find_entries(&result.stdout);
-    Ok(json!({
+    let mut value = json!({
         "connectionId": connection_id,
         "path": path,
         "entries": entries,
@@ -377,5 +383,7 @@ pub(super) fn ssh_list_dir(
         "exitCode": result.exit_status,
         "truncated": result.truncated,
         "source": "command-bus"
-    }))
+    });
+    insert_activity_warnings(&mut value, &result.warnings);
+    Ok(value)
 }

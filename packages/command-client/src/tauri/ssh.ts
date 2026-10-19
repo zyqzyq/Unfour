@@ -35,6 +35,7 @@ import type {
   SftpDeleteInput,
   SftpDirectoryListing,
   SftpFileEntry,
+  SftpMutationResult,
   SftpOpenResult,
   SftpPathInput,
   SftpRenameInput,
@@ -175,15 +176,15 @@ export function statSftpPath(input: SftpPathInput) {
 }
 
 export function createSftpDirectory(input: SftpPathInput) {
-  return call<void>("ssh_sftp_create_directory", { input });
+  return call<SftpMutationResult>("ssh_sftp_create_directory", { input });
 }
 
 export function renameSftpPath(input: SftpRenameInput) {
-  return call<void>("ssh_sftp_rename", { input });
+  return call<SftpMutationResult>("ssh_sftp_rename", { input });
 }
 
 export function deleteSftpPath(input: SftpDeleteInput) {
-  return call<void>("ssh_sftp_delete", { input });
+  return call<SftpMutationResult>("ssh_sftp_delete", { input });
 }
 
 export function downloadSftpFile(input: SftpTransferInput) {

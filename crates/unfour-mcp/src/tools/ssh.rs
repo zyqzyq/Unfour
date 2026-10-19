@@ -13,6 +13,15 @@ use self::connection::{ssh_create_connection, ssh_list_connections, ssh_run_diag
 use self::operations::{ssh_exec, ssh_list_dir, ssh_patch_file, ssh_read_file, ssh_write_file};
 use super::{RegisteredTool, ToolAnnotations, ToolDefinition};
 
+fn command_output_schema() -> serde_json::Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "warnings": { "type": "array", "items": { "type": "string" } }
+        }
+    })
+}
+
 const MAX_DIAGNOSTIC_TIMEOUT_MS: u64 = 60_000;
 const MAX_ONE_SHOT_COMMAND_CHARS: usize = 4096;
 const DEFAULT_FILE_LIMIT: u64 = 20 * 1024;
@@ -83,7 +92,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["connectionId", "command"],
                     "additionalProperties": false
                 }),
-                output_schema: json!({ "type": "object" }),
+                output_schema: command_output_schema(),
                 annotations: ToolAnnotations::remote_read(),
             },
             handler: ssh_run_diagnostic,
@@ -110,7 +119,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["connectionId", "command"],
                     "additionalProperties": false
                 }),
-                output_schema: json!({ "type": "object" }),
+                output_schema: command_output_schema(),
                 annotations: ToolAnnotations::remote_action(),
             },
             handler: ssh_exec,
@@ -135,7 +144,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["connectionId", "path"],
                     "additionalProperties": false
                 }),
-                output_schema: json!({ "type": "object" }),
+                output_schema: command_output_schema(),
                 annotations: ToolAnnotations::remote_read(),
             },
             handler: ssh_read_file,
@@ -162,7 +171,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["connectionId", "path", "content"],
                     "additionalProperties": false
                 }),
-                output_schema: json!({ "type": "object" }),
+                output_schema: command_output_schema(),
                 annotations: ToolAnnotations::remote_action(),
             },
             handler: ssh_write_file,
@@ -189,7 +198,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["connectionId", "path", "search", "replace"],
                     "additionalProperties": false
                 }),
-                output_schema: json!({ "type": "object" }),
+                output_schema: command_output_schema(),
                 annotations: ToolAnnotations::remote_action(),
             },
             handler: ssh_patch_file,
@@ -212,7 +221,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "required": ["connectionId", "path"],
                     "additionalProperties": false
                 }),
-                output_schema: json!({ "type": "object" }),
+                output_schema: command_output_schema(),
                 annotations: ToolAnnotations::remote_read(),
             },
             handler: ssh_list_dir,

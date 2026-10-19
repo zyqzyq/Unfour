@@ -42,6 +42,7 @@ impl CommandBusAdapter for SshStubCommandBus {
         input: SshDiagnosticInput,
     ) -> Result<SshDiagnosticResult, CommandBusAdapterError> {
         Ok(SshDiagnosticResult {
+            warnings: Vec::new(),
             connection_id: input.connection_id,
             command: input.command,
             stdout: "Filesystem Size Used Avail\n/dev/sda1 50G 20G 30G".to_string(),
@@ -67,6 +68,7 @@ impl CommandBusAdapter for SshStubCommandBus {
             let allow_multiple =
                 input.command.contains("allow_multiple = True") || input.command.ends_with(" '1'");
             return Ok(SshDiagnosticResult {
+                warnings: Vec::new(),
                 connection_id: input.connection_id,
                 command: input.command,
                 stdout: if allow_multiple {
@@ -81,6 +83,7 @@ impl CommandBusAdapter for SshStubCommandBus {
         }
 
         Ok(SshDiagnosticResult {
+            warnings: Vec::new(),
             connection_id: input.connection_id,
             command: input.command.clone(),
             stdout: format!("ran: {}", input.command),

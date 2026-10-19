@@ -3,15 +3,15 @@ use tauri::State;
 use unfour_core::{
     models::{
         SftpCancelTransferInput, SftpDeleteInput, SftpDirectoryListing, SftpFileEntry,
-        SftpOpenResult, SftpPathInput, SftpRenameInput, SftpSessionInput, SftpTransferInput,
-        SftpTransferState, SshCloseInput, SshCommandHistoryEntry, SshCommandHistoryQuery,
-        SshConnectInput, SshConnection, SshConnectionInput, SshHostFingerprintInfo,
-        SshHostKeyInput, SshKnownHostsExportInput, SshKnownHostsExportResult,
-        SshKnownHostsImportInput, SshKnownHostsImportResult, SshLogExport, SshLogExportInput,
-        SshReconnectCancelInput, SshResizeInput, SshSessionEvent, SshSessionInput,
-        SshSessionSummary, SshTask, SshTaskCancelInput, SshTaskCleanupInput, SshTaskCleanupResult,
-        SshTaskDetail, SshTaskRun, SshTaskRunInput, SshTaskSaveInput, SshTasksReorderInput,
-        SshTestResult,
+        SftpMutationResult, SftpOpenResult, SftpPathInput, SftpRenameInput, SftpSessionInput,
+        SftpTransferInput, SftpTransferState, SshCloseInput, SshCommandHistoryEntry,
+        SshCommandHistoryQuery, SshConnectInput, SshConnection, SshConnectionInput,
+        SshHostFingerprintInfo, SshHostKeyInput, SshKnownHostsExportInput,
+        SshKnownHostsExportResult, SshKnownHostsImportInput, SshKnownHostsImportResult,
+        SshLogExport, SshLogExportInput, SshReconnectCancelInput, SshResizeInput, SshSessionEvent,
+        SshSessionInput, SshSessionSummary, SshTask, SshTaskCancelInput, SshTaskCleanupInput,
+        SshTaskCleanupResult, SshTaskDetail, SshTaskRun, SshTaskRunInput, SshTaskSaveInput,
+        SshTasksReorderInput, SshTestResult,
     },
     AppResult,
 };
@@ -268,17 +268,23 @@ pub async fn ssh_sftp_stat(
 pub async fn ssh_sftp_create_directory(
     input: SftpPathInput,
     state: State<'_, AppState>,
-) -> AppResult<()> {
+) -> AppResult<SftpMutationResult> {
     state.command_bus.create_ssh_sftp_directory(input).await
 }
 
 #[tauri::command]
-pub async fn ssh_sftp_rename(input: SftpRenameInput, state: State<'_, AppState>) -> AppResult<()> {
+pub async fn ssh_sftp_rename(
+    input: SftpRenameInput,
+    state: State<'_, AppState>,
+) -> AppResult<SftpMutationResult> {
     state.command_bus.rename_ssh_sftp_path(input).await
 }
 
 #[tauri::command]
-pub async fn ssh_sftp_delete(input: SftpDeleteInput, state: State<'_, AppState>) -> AppResult<()> {
+pub async fn ssh_sftp_delete(
+    input: SftpDeleteInput,
+    state: State<'_, AppState>,
+) -> AppResult<SftpMutationResult> {
     state.command_bus.delete_ssh_sftp_path(input).await
 }
 

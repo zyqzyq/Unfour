@@ -234,6 +234,8 @@ describe("DatabaseWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close Query 1" }));
     expect(onCloseTab).not.toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("database.batch.closeRunning");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Stop the running script and wait for its outcome before closing this SQL tab.",
+    );
   });
 });

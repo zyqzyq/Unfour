@@ -42,6 +42,17 @@ pub struct SftpDeleteInput {
     pub is_directory: bool,
 }
 
+/// Successful SFTP mutation whose only extra signal is a completion warning.
+/// An empty warning list serializes as `{}`, so callers that ignore the body
+/// still observe success. A recording failure is explicit instead of `null`
+/// followed by a retryable command error.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SftpMutationResult {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SftpFileEntry {
@@ -85,6 +96,9 @@ pub struct SftpCancelTransferInput {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SftpTransferState {
+    /// Response-only activity warning. Live progress copies leave this empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
     pub transfer_id: String,
     pub workspace_id: String,
     pub session_id: String,

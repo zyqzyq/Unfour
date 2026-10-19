@@ -166,6 +166,7 @@ impl SshService {
         let (stderr_text, _) = redact_sensitive_lines(&String::from_utf8_lossy(&stderr));
 
         Ok(SshDiagnosticResult {
+            warnings: Vec::new(),
             connection_id: connection.id.clone(),
             command: command.to_string(),
             stdout: stdout_text,

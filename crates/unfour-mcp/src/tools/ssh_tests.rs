@@ -1,3 +1,5 @@
+#[path = "ssh_tests/activity.rs"]
+mod activity;
 #[path = "ssh_tests/connection.rs"]
 mod connection;
 #[path = "ssh_tests/diagnostics.rs"]

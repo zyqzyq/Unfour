@@ -72,6 +72,10 @@ pub struct SshDiagnosticInput {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SshDiagnosticResult {
+    /// Non-fatal completion warnings; absent in older responses.
+    /// The command outcome stays authoritative when activity recording fails.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
     pub connection_id: String,
     pub command: String,
     pub stdout: String,

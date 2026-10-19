@@ -70,6 +70,21 @@ it("does not start uploads after unmount while native hit testing is pending", a
   expect(input.onTransfer).not.toHaveBeenCalled();
 });
 
+it("forwards the started transfer id and activity warning without retrying", async () => {
+  const started = {
+    transferId: "transfer-drop", warnings: ["ACTIVITY_RECORD_FAILED"], status: "pending",
+  };
+  mocks.upload.mockResolvedValueOnce(started);
+  const input = options();
+  renderHook(() => useSftpNativeDragDrop(input));
+  await act(async () => {});
+  const listener: DragListener = mocks.listen.mock.calls[0][0];
+  await act(async () => { await listener(drop()); });
+  expect(mocks.upload).toHaveBeenCalledTimes(1);
+  expect(input.onTransfer).toHaveBeenCalledWith(started);
+  expect(input.onError).not.toHaveBeenCalled();
+});
+
 it("does not start the next dropped file after an in-flight upload outlives the panel", async () => {
   let finishUpload!: () => void;
   mocks.upload.mockReturnValueOnce(new Promise<void>((resolve) => { finishUpload = resolve; }));

@@ -11,9 +11,7 @@ async fn ssh_run_handle_cancellation_and_flow_survive_activity_failure() {
     let socket = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = socket.local_addr().unwrap().port();
     let commands = Arc::new(Mutex::new(vec![]));
-    let mut server = super::native::Server {
-        commands: commands.clone(),
-    };
+    let mut server = super::native::Server::new(commands.clone());
     let config = Arc::new(russh::server::Config {
         keys: vec![russh::keys::PrivateKey::random(
             &mut rand::rng(),
@@ -127,4 +125,244 @@ async fn ssh_run_handle_cancellation_and_flow_survive_activity_failure() {
     assert_eq!(*commands.lock().unwrap(), ["hold", "echo once"]);
     server_task.abort();
     std::fs::remove_dir_all(logs).unwrap();
+}
+
+#[tokio::test]
+async fn ssh_command_and_sftp_outcomes_survive_activity_failure() {
+    let bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let socket = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = socket.local_addr().unwrap().port();
+    let commands = Arc::new(Mutex::new(vec![]));
+    let mut server = super::native::Server::new(commands.clone());
+    let sftp_ops = server.sftp_ops.clone();
+    let config = Arc::new(russh::server::Config {
+        keys: vec![russh::keys::PrivateKey::random(
+            &mut rand::rng(),
+            russh::keys::Algorithm::Ed25519,
+        )
+        .unwrap()],
+        ..Default::default()
+    });
+    let server_task = tokio::spawn(async move {
+        server.run_on_socket(config, &socket).await.unwrap();
+    });
+    let connection = bus
+        .save_ssh_connection(SshConnectionInput {
+            id: None,
+            workspace_id: workspace.clone(),
+            name: "activity".into(),
+            host: "127.0.0.1".into(),
+            port: Some(port),
+            username: "fixture".into(),
+            auth_kind: "password".into(),
+            key_path: None,
+            credential_ref: None,
+            secret: Some("fixture-password".into()),
+        })
+        .await
+        .unwrap();
+    let diagnostic = |command: &str| SshDiagnosticInput {
+        workspace_id: workspace.clone(),
+        connection_id: connection.id.clone(),
+        command: command.into(),
+        timeout_ms: Some(5_000),
+    };
+    assert!(bus
+        .run_ssh_diagnostic(diagnostic("rm -rf /"))
+        .await
+        .is_err());
+    assert!(commands.lock().unwrap().is_empty());
+    sqlx::query("CREATE TRIGGER fail_completion_activity BEFORE INSERT ON activity_events WHEN NEW.action IN ('ssh.diagnostic','ssh.command','ssh.sftp.mkdir','ssh.sftp.rename','ssh.sftp.delete','ssh.sftp.transfer.start') BEGIN SELECT RAISE(FAIL, 'audit sink unavailable'); END;")
+        .execute(bus.db.pool()).await.unwrap();
+    assert!(bus
+        .run_ssh_command(SshDiagnosticInput {
+            workspace_id: workspace.clone(),
+            connection_id: "missing-connection".into(),
+            command: "echo should-not-run".into(),
+            timeout_ms: Some(5_000),
+        })
+        .await
+        .is_err());
+    let diagnosed = bus
+        .run_ssh_diagnostic(diagnostic("uptime"))
+        .await
+        .expect("diagnostic result must survive activity failure");
+    assert_eq!(diagnosed.exit_status, Some(0));
+    assert!(diagnosed.stdout.contains("flow fixture completed"));
+    assert_eq!(diagnosed.warnings, ["ACTIVITY_RECORD_FAILED"]);
+    assert!(!diagnosed.stdout.contains("audit sink"));
+    let mut serialized = serde_json::to_value(&diagnosed).unwrap();
+    assert_eq!(serialized["warnings"], json!(["ACTIVITY_RECORD_FAILED"]));
+    assert!(!serialized.to_string().contains("audit sink unavailable"));
+    serialized.as_object_mut().unwrap().remove("warnings");
+    let legacy: SshDiagnosticResult = serde_json::from_value(serialized).unwrap();
+    assert!(legacy.warnings.is_empty());
+    let command = "echo marker-9f3c password=activity-secret-value";
+    let executed = bus
+        .run_ssh_command(diagnostic(command))
+        .await
+        .expect("command result must survive activity failure");
+    assert_eq!(executed.exit_status, Some(0));
+    assert!(executed.stdout.contains("flow fixture completed"));
+    assert_eq!(executed.stderr, "");
+    assert_eq!(executed.warnings, ["ACTIVITY_RECORD_FAILED"]);
+    assert!(!executed.warnings.iter().any(|warning| {
+        warning.contains("activity-secret-value") || warning.contains("audit sink")
+    }));
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert_eq!(
+        commands.lock().unwrap().as_slice(),
+        ["uptime", command],
+        "activity failure must not replay the remote command"
+    );
+    let missing = bus
+        .create_ssh_sftp_directory(SftpPathInput {
+            workspace_id: workspace.clone(),
+            session_id: "missing-session".into(),
+            path: "/activity-dir".into(),
+        })
+        .await;
+    assert!(missing.is_err(), "a failed mutation must stay an error");
+    assert!(sftp_ops.lock().unwrap().is_empty());
+    let session = tokio::time::timeout(
+        Duration::from_secs(8),
+        bus.connect_ssh_session(SshConnectInput {
+            workspace_id: workspace.clone(),
+            connection_id: connection.id.clone(),
+            cols: Some(80),
+            rows: Some(24),
+            secret: None,
+        }),
+    )
+    .await
+    .expect("connect timed out")
+    .expect("connect failed");
+    tokio::time::timeout(
+        Duration::from_secs(8),
+        bus.open_ssh_sftp(SftpSessionInput {
+            workspace_id: workspace.clone(),
+            session_id: session.session_id.clone(),
+        }),
+    )
+    .await
+    .expect("sftp open timed out")
+    .expect("sftp open failed");
+    let mkdir = bus
+        .create_ssh_sftp_directory(SftpPathInput {
+            workspace_id: workspace.clone(),
+            session_id: session.session_id.clone(),
+            path: "/activity-dir".into(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(mkdir.warnings, ["ACTIVITY_RECORD_FAILED"]);
+    assert!(!serde_json::to_string(&mkdir)
+        .unwrap()
+        .contains("activity-dir"));
+    let renamed = bus
+        .rename_ssh_sftp_path(SftpRenameInput {
+            workspace_id: workspace.clone(),
+            session_id: session.session_id.clone(),
+            old_path: "/activity-dir".into(),
+            new_path: "/activity-renamed".into(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(renamed.warnings, ["ACTIVITY_RECORD_FAILED"]);
+    let deleted = bus
+        .delete_ssh_sftp_path(SftpDeleteInput {
+            workspace_id: workspace.clone(),
+            session_id: session.session_id.clone(),
+            path: "/activity-renamed".into(),
+            is_directory: true,
+        })
+        .await
+        .unwrap();
+    assert_eq!(deleted.warnings, ["ACTIVITY_RECORD_FAILED"]);
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let ops = sftp_ops.lock().unwrap().clone();
+    assert_eq!(ops.iter().filter(|op| op.as_str() == "mkdir").count(), 1);
+    assert_eq!(ops.iter().filter(|op| op.as_str() == "rename").count(), 1);
+    assert_eq!(ops.iter().filter(|op| op.as_str() == "rmdir").count(), 1);
+    let download_path = std::env::temp_dir().join(format!(
+        "unfour-activity-download-{}",
+        unfour_core::id::new_id()
+    ));
+    let upload_path = std::env::temp_dir().join(format!(
+        "unfour-activity-upload-{}",
+        unfour_core::id::new_id()
+    ));
+    std::fs::write(&upload_path, b"upload-body").unwrap();
+    let download = bus
+        .download_ssh_sftp_file(SftpTransferInput {
+            workspace_id: workspace.clone(),
+            session_id: session.session_id.clone(),
+            local_path: download_path.display().to_string(),
+            remote_path: "/activity-file".into(),
+            overwrite: true,
+        })
+        .await
+        .unwrap();
+    assert!(!download.transfer_id.is_empty());
+    assert_eq!(download.warnings, ["ACTIVITY_RECORD_FAILED"]);
+    assert!(!download
+        .warnings
+        .iter()
+        .any(|warning| warning.contains("audit sink") || warning.contains(&download.local_path)));
+    let listed = bus
+        .list_ssh_sftp_transfers(SftpSessionInput {
+            workspace_id: workspace.clone(),
+            session_id: session.session_id.clone(),
+        })
+        .await
+        .unwrap();
+    assert!(listed
+        .iter()
+        .any(|transfer| transfer.transfer_id == download.transfer_id));
+    tokio::time::timeout(Duration::from_secs(8), async {
+        loop {
+            let states = bus
+                .list_ssh_sftp_transfers(SftpSessionInput {
+                    workspace_id: workspace.clone(),
+                    session_id: session.session_id.clone(),
+                })
+                .await
+                .unwrap();
+            let state = states
+                .iter()
+                .find(|transfer| transfer.transfer_id == download.transfer_id)
+                .expect("download handle disappeared");
+            if state.status != "pending" && state.status != "running" {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("download did not leave the running state");
+    let upload = bus
+        .upload_ssh_sftp_file(SftpTransferInput {
+            workspace_id: workspace.clone(),
+            session_id: session.session_id.clone(),
+            local_path: upload_path.display().to_string(),
+            remote_path: "/activity-upload".into(),
+            overwrite: true,
+        })
+        .await
+        .unwrap();
+    assert_ne!(upload.transfer_id, download.transfer_id);
+    assert_eq!(upload.warnings, ["ACTIVITY_RECORD_FAILED"]);
+    let recorded: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM activity_events WHERE action IN ('ssh.diagnostic','ssh.command','ssh.sftp.mkdir','ssh.sftp.rename','ssh.sftp.delete','ssh.sftp.transfer.start')")
+        .fetch_one(bus.db.pool()).await.unwrap();
+    assert_eq!(recorded, 0);
+    let _ = bus
+        .close_ssh_session(SshCloseInput {
+            workspace_id: workspace,
+            session_id: session.session_id,
+        })
+        .await;
+    server_task.abort();
+    let _ = std::fs::remove_file(download_path);
+    let _ = std::fs::remove_file(upload_path);
 }

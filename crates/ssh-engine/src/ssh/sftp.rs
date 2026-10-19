@@ -447,6 +447,7 @@ impl SshService {
             let transfer_id = Uuid::new_v4().to_string();
             let now = Utc::now().to_rfc3339();
             let state = SftpTransferState {
+                warnings: Vec::new(),
                 transfer_id: transfer_id.clone(),
                 workspace_id: input.workspace_id.clone(),
                 session_id: input.session_id.clone(),

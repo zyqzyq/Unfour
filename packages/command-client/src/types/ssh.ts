@@ -219,6 +219,11 @@ export type SftpDeleteInput = SftpPathInput & {
   isDirectory: boolean;
 };
 
+/** Successful mkdir, rename, or delete. Absent warnings mean recording succeeded. */
+export type SftpMutationResult = {
+  warnings?: string[];
+};
+
 export type SftpFileKind = "directory" | "file" | "symlink" | "other";
 
 export type SftpFileEntry = {
@@ -256,6 +261,8 @@ export type SftpTransferStatus =
   | "cancelled";
 
 export type SftpTransferState = SftpSessionInput & {
+  /** Non-fatal completion warnings; absent on progress events and older responses. */
+  warnings?: string[];
   transferId: string;
   connectionId: string;
   direction: "upload" | "download";

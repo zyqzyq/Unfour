@@ -69,7 +69,7 @@ pub(super) fn ssh_command_result(
     result: unfour_core::models::SshDiagnosticResult,
     source: &str,
 ) -> Value {
-    json!({
+    let mut value = json!({
         "connectionId": result.connection_id,
         "command": redact_command_display(&result.command),
         "stdout": result.stdout,
@@ -78,7 +78,15 @@ pub(super) fn ssh_command_result(
         "exitStatus": result.exit_status,
         "truncated": result.truncated,
         "source": source
-    })
+    });
+    insert_activity_warnings(&mut value, &result.warnings);
+    value
+}
+
+pub(super) fn insert_activity_warnings(value: &mut Value, warnings: &[String]) {
+    if !warnings.is_empty() {
+        value["warnings"] = json!(warnings);
+    }
 }
 
 pub(super) fn safe_connection_summary(connection: &SshConnection) -> Value {
