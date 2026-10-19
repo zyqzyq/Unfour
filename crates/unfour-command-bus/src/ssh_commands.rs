@@ -133,6 +133,8 @@ impl CommandBus {
 
     pub async fn test_ssh_connection(&self, input: SshConnectionInput) -> AppResult<SshTestResult> {
         let result = self.ssh.test_connection(input.clone()).await?;
+        // The probe has already been closed. Retrying it does not repeat a
+        // committed workspace mutation, so a missing audit record stays an error.
         self.activity_log
             .record(
                 Some(&input.workspace_id),
@@ -188,23 +190,28 @@ impl CommandBus {
         &self,
         input: SshConnectInput,
     ) -> AppResult<SshSessionSummary> {
-        let session = self.ssh.connect(input.clone()).await?;
-        self.activity_log
-            .record(
-                Some(&input.workspace_id),
-                "ssh.session.connect",
-                Some(&session.session_id),
-                serde_json::json!({
-                    "connectionId": input.connection_id,
-                    "authKind": session.auth_kind,
-                    "host": session.host,
-                    "pty": {
-                        "cols": session.cols,
-                        "rows": session.rows
-                    }
-                }),
+        let mut session = self.ssh.connect(input.clone()).await?;
+        session.warnings.extend(
+            self.record_completion_activity(
+                CommandActivity {
+                    workspace_id: Some(input.workspace_id),
+                    action: "ssh.session.connect",
+                    target: Some(session.session_id.clone()),
+                    details: serde_json::json!({
+                        "connectionId": input.connection_id,
+                        "authKind": session.auth_kind,
+                        "host": session.host,
+                        "pty": {
+                            "cols": session.cols,
+                            "rows": session.rows
+                        }
+                    }),
+                },
+                "ssh",
+                "session_connect",
             )
-            .await?;
+            .await,
+        );
         Ok(session)
     }
 
@@ -238,15 +245,20 @@ impl CommandBus {
     }
 
     pub async fn close_ssh_session(&self, input: SshCloseInput) -> AppResult<SshSessionSummary> {
-        let session = self.ssh.close_session(input.clone()).await?;
-        self.activity_log
-            .record(
-                Some(&input.workspace_id),
-                "ssh.session.close",
-                Some(&input.session_id),
-                serde_json::json!({ "status": session.status }),
+        let mut session = self.ssh.close_session(input.clone()).await?;
+        session.warnings.extend(
+            self.record_completion_activity(
+                CommandActivity {
+                    workspace_id: Some(input.workspace_id),
+                    action: "ssh.session.close",
+                    target: Some(input.session_id),
+                    details: serde_json::json!({ "status": session.status }),
+                },
+                "ssh",
+                "session_close",
             )
-            .await?;
+            .await,
+        );
         Ok(session)
     }
 
@@ -259,6 +271,8 @@ impl CommandBus {
 
     pub async fn export_ssh_log(&self, input: SshLogExportInput) -> AppResult<SshLogExport> {
         let export = self.ssh.export_log(input.clone()).await?;
+        // Export only reads session history. Retrying it does not repeat a
+        // committed mutation, so a missing audit record stays an error.
         self.activity_log
             .record(
                 Some(&input.workspace_id),
@@ -280,22 +294,30 @@ impl CommandBus {
         self.ssh.get_host_fingerprint(input).await
     }
 
-    pub async fn reset_ssh_host_fingerprint(&self, input: SshHostKeyInput) -> AppResult<bool> {
+    pub async fn reset_ssh_host_fingerprint(
+        &self,
+        input: SshHostKeyInput,
+    ) -> AppResult<SshHostKeyResetResult> {
         let workspace_id = input.workspace_id.clone();
         let host = input.host.clone();
         let port = input.port;
         let deleted = self.ssh.reset_host_fingerprint(input).await?;
-        if deleted {
-            self.activity_log
-                .record(
-                    Some(&workspace_id),
-                    "ssh.host_key.reset",
-                    Some(&format!("{}:{}", host, port)),
-                    serde_json::json!({ "host": host, "port": port }),
-                )
-                .await?;
-        }
-        Ok(deleted)
+        let warnings = if deleted {
+            self.record_completion_activity(
+                CommandActivity {
+                    workspace_id: Some(workspace_id),
+                    action: "ssh.host_key.reset",
+                    target: Some(format!("{host}:{port}")),
+                    details: serde_json::json!({ "host": host, "port": port }),
+                },
+                "ssh",
+                "host_key_reset",
+            )
+            .await
+        } else {
+            Vec::new()
+        };
+        Ok(SshHostKeyResetResult { deleted, warnings })
     }
 
     pub async fn list_all_ssh_fingerprints(
@@ -310,19 +332,24 @@ impl CommandBus {
         input: SshKnownHostsImportInput,
     ) -> AppResult<SshKnownHostsImportResult> {
         let workspace_id = input.workspace_id.clone();
-        let result = self.ssh.import_known_hosts(input).await?;
-        self.activity_log
-            .record(
-                Some(&workspace_id),
-                "ssh.known_hosts.import",
-                None,
-                serde_json::json!({
-                    "imported": result.imported,
-                    "skipped": result.skipped,
-                    "errors": result.errors.len(),
-                }),
+        let mut result = self.ssh.import_known_hosts(input).await?;
+        result.warnings.extend(
+            self.record_completion_activity(
+                CommandActivity {
+                    workspace_id: Some(workspace_id),
+                    action: "ssh.known_hosts.import",
+                    target: None,
+                    details: serde_json::json!({
+                        "imported": result.imported,
+                        "skipped": result.skipped,
+                        "errors": result.errors.len(),
+                    }),
+                },
+                "ssh",
+                "known_hosts_import",
             )
-            .await?;
+            .await,
+        );
         Ok(result)
     }
 
@@ -509,18 +536,23 @@ impl CommandBus {
     ) -> AppResult<SshTaskCleanupResult> {
         let workspace_id = input.workspace_id.clone();
         let task_id = input.task_id.clone();
-        let result = self.ssh.clear_task_runs(input).await?;
-        self.activity_log
-            .record(
-                Some(&workspace_id),
-                "ssh.task.history.clear",
-                task_id.as_deref(),
-                serde_json::json!({
-                    "deletedRuns": result.deleted_runs,
-                    "deletedLogs": result.deleted_logs,
-                }),
+        let mut result = self.ssh.clear_task_runs(input).await?;
+        result.warnings.extend(
+            self.record_completion_activity(
+                CommandActivity {
+                    workspace_id: Some(workspace_id),
+                    action: "ssh.task.history.clear",
+                    target: task_id,
+                    details: serde_json::json!({
+                        "deletedRuns": result.deleted_runs,
+                        "deletedLogs": result.deleted_logs,
+                    }),
+                },
+                "ssh",
+                "task_history_clear",
             )
-            .await?;
+            .await,
+        );
         Ok(result)
     }
 

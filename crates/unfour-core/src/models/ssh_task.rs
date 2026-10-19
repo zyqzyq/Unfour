@@ -154,6 +154,9 @@ pub struct SshTaskCleanupInput {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SshTaskCleanupResult {
+    /// Response-only completion warnings. Deleted counts stay authoritative.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
     pub deleted_runs: usize,
     pub deleted_logs: usize,
 }

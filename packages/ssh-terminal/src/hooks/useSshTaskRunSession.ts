@@ -38,11 +38,12 @@ export function useSshTaskRunSession({
   const queryClient = useQueryClient();
   const feedback = useFeedback();
   const { t } = useI18n();
-  const showCompletionWarning = (run: SshTaskRun) => {
-    if (run.warnings?.includes("ACTIVITY_RECORD_FAILED")) {
+  const noteActivityWarning = (warnings?: string[]) => {
+    if (warnings?.includes("ACTIVITY_RECORD_FAILED")) {
       feedback.info(t("feedback.activityRecordFailed"));
     }
   };
+  const showCompletionWarning = (run: SshTaskRun) => noteActivityWarning(run.warnings);
   const [runDialogTask, setRunDialogTask] = useState<SshTaskDetail | null>(null);
   const [runConnectionId, setRunConnectionId] = useState("");
   const [runInputs, setRunInputs] = useState<Record<string, string>>({});
@@ -175,6 +176,7 @@ export function useSshTaskRunSession({
         if (isCurrent()) {
           if (historySelectionTaskIdRef.current === taskId) historySelectionVersionRef.current += 1;
           clearTaskOutput(taskId);
+          noteActivityWarning(result?.warnings);
         }
         // The backend mutation still changed this workspace if the view moved.
         queryClient.invalidateQueries({ queryKey: ["ssh-task-runs", workspaceId, taskId] });

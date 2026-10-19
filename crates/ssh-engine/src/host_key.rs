@@ -228,6 +228,7 @@ impl HostKeyStore {
         }
 
         Ok(SshKnownHostsImportResult {
+            warnings: Vec::new(),
             imported,
             skipped,
             errors,

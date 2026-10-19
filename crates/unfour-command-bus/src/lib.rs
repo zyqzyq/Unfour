@@ -21,13 +21,14 @@ use unfour_core::models::{
     SftpMutationResult, SftpOpenResult, SftpPathInput, SftpRenameInput, SftpSessionInput,
     SftpTransferInput, SftpTransferState, SshCloseInput, SshCommandHistoryEntry,
     SshCommandHistoryQuery, SshConnectInput, SshConnection, SshConnectionInput, SshDiagnosticInput,
-    SshDiagnosticResult, SshHostFingerprintInfo, SshHostKeyInput, SshKnownHostsExportInput,
-    SshKnownHostsExportResult, SshKnownHostsImportInput, SshKnownHostsImportResult, SshLogExport,
-    SshLogExportInput, SshReconnectCancelInput, SshResizeInput, SshSessionEvent, SshSessionInput,
-    SshSessionSummary, SshTask, SshTaskCancelInput, SshTaskCleanupInput, SshTaskCleanupResult,
-    SshTaskDetail, SshTaskRun, SshTaskRunInput, SshTaskSaveInput, SshTasksReorderInput,
-    SshTestResult, SystemHealth, Workspace, WorkspaceEnvironment, WorkspaceEnvironmentVariable,
-    WorkspaceLayout, WorkspaceState, WorkspaceVariable, WorkspaceVariableInput,
+    SshDiagnosticResult, SshHostFingerprintInfo, SshHostKeyInput, SshHostKeyResetResult,
+    SshKnownHostsExportInput, SshKnownHostsExportResult, SshKnownHostsImportInput,
+    SshKnownHostsImportResult, SshLogExport, SshLogExportInput, SshReconnectCancelInput,
+    SshResizeInput, SshSessionEvent, SshSessionInput, SshSessionSummary, SshTask,
+    SshTaskCancelInput, SshTaskCleanupInput, SshTaskCleanupResult, SshTaskDetail, SshTaskRun,
+    SshTaskRunInput, SshTaskSaveInput, SshTasksReorderInput, SshTestResult, SystemHealth,
+    Workspace, WorkspaceEnvironment, WorkspaceEnvironmentVariable, WorkspaceLayout, WorkspaceState,
+    WorkspaceVariable, WorkspaceVariableInput,
 };
 use unfour_core::AppResult;
 use unfour_database_engine::DatabaseService;

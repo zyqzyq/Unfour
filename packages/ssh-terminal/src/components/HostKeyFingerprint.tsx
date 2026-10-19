@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Shield, ShieldAlert, Trash2 } from "lucide-react";
 import type { SshHostFingerprintInfo } from "@unfour/command-client";
 import { getSshHostFingerprint, resetSshHostFingerprint } from "@unfour/command-client";
-import { Button, useI18n } from "@unfour/ui";
+import { Button, useFeedback, useI18n } from "@unfour/ui";
 
 export function HostKeyFingerprint({
   workspaceId,
@@ -14,6 +14,7 @@ export function HostKeyFingerprint({
   port: number;
 }) {
   const { t } = useI18n();
+  const feedback = useFeedback();
   const trimmedHost = host.trim();
   const validPort = port > 0;
 
@@ -62,9 +63,12 @@ export function HostKeyFingerprint({
     if (!trimmedHost || !validPort) return;
     setState((prev) => ({ ...prev, error: null, info: null, resolvedKey: "" }));
     resetSshHostFingerprint({ workspaceId, host: trimmedHost, port })
-      .then(() =>
-        setState((prev) => ({ ...prev, info: null, error: null, resolvedKey: currentKey })),
-      )
+      .then((result) => {
+        if (result.warnings?.includes("ACTIVITY_RECORD_FAILED")) {
+          feedback.info(t("feedback.activityRecordFailed"));
+        }
+        setState((prev) => ({ ...prev, info: null, error: null, resolvedKey: currentKey }));
+      })
       .catch((err) =>
         setState((prev) => ({
           ...prev,

@@ -21,6 +21,8 @@ mod exchange;
 mod script_diagnostics;
 #[path = "lib_tests/script_rollback.rs"]
 mod script_rollback;
+#[path = "lib_tests/ssh_activity_completion.rs"]
+mod ssh_activity_completion;
 use unfour_core::models::{
     ApiClientPreferences, ApiCollectionExportFormat, ApiRequestInput, DatabaseConnectionInput,
     ScriptExecutionStatus, SshConnectionInput, WorkspaceVariableInput,

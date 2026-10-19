@@ -163,6 +163,7 @@ impl TerminalHistoryService {
         Ok(rows
             .into_iter()
             .map(|row| SshSessionSummary {
+                warnings: Vec::new(),
                 session_id: row.session_id,
                 workspace_id: row.workspace_id,
                 connection_id: row.connection_id,

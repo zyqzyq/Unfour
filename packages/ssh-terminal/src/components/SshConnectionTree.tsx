@@ -34,6 +34,7 @@ import {
   SidebarSection,
   StatusBadge,
   TreeView,
+  useFeedback,
   useI18n,
   type TreeViewItem,
 } from "@unfour/ui";
@@ -66,6 +67,7 @@ export function SshConnectionTree({
   workspaceId: string;
 }) {
   const { t } = useI18n();
+  const feedback = useFeedback();
   const queryClient = useQueryClient();
   const { selectedSshConnectionId, setSelectedSshConnection } = useWorkspaceStore();
   const appendTerminalEvents = useTerminalStore((state) => state.appendTerminalEvents);
@@ -92,6 +94,9 @@ export function SshConnectionTree({
       split?: boolean;
     }) => connectSshSession({ workspaceId, connectionId, cols: 120, rows: 32 }),
     onSuccess: (session, variables) => {
+      if (session.warnings?.includes("ACTIVITY_RECORD_FAILED")) {
+        feedback.info(t("feedback.activityRecordFailed"));
+      }
       startTerminalSession(session.sessionId, [
         {
           sessionId: session.sessionId,
@@ -151,6 +156,9 @@ export function SshConnectionTree({
   const closeMutation = useMutation({
     mutationFn: (sessionId: string) => closeSshSession({ workspaceId, sessionId }),
     onSuccess: (session) => {
+      if (session.warnings?.includes("ACTIVITY_RECORD_FAILED")) {
+        feedback.info(t("feedback.activityRecordFailed"));
+      }
       appendTerminalEvents([
         {
           sessionId: session.sessionId,

@@ -516,3 +516,16 @@ it("keeps the task handle and warns after activity logging fails", async () => {
   expect(warningMock).toHaveBeenCalledTimes(2);
   expect(handleError).not.toHaveBeenCalled();
 });
+
+it("keeps cleared task history when activity logging fails", async () => {
+  vi.mocked(clearSshTaskRuns).mockResolvedValue({
+    deletedRuns: 2,
+    deletedLogs: 1,
+    warnings: ["ACTIVITY_RECORD_FAILED"],
+  });
+  const { result, handleError } = await setup();
+  await act(async () => { await result.current.clearMutation.mutateAsync("task"); });
+  expect(clearSshTaskRuns).toHaveBeenCalledExactlyOnceWith({ workspaceId: "w1", taskId: "task" });
+  expect(warningMock).toHaveBeenCalledOnce();
+  expect(handleError).not.toHaveBeenCalled();
+});

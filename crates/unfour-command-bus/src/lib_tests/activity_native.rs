@@ -366,3 +366,104 @@ async fn ssh_command_and_sftp_outcomes_survive_activity_failure() {
     let _ = std::fs::remove_file(download_path);
     let _ = std::fs::remove_file(upload_path);
 }
+
+#[tokio::test]
+async fn native_ssh_session_keeps_its_id_when_activity_logging_fails() {
+    let bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let socket = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = socket.local_addr().unwrap().port();
+    let commands = Arc::new(Mutex::new(vec![]));
+    let mut server = super::native::Server::new(commands);
+    let config = Arc::new(russh::server::Config {
+        keys: vec![russh::keys::PrivateKey::random(
+            &mut rand::rng(),
+            russh::keys::Algorithm::Ed25519,
+        )
+        .unwrap()],
+        ..Default::default()
+    });
+    let server_task = tokio::spawn(async move {
+        server.run_on_socket(config, &socket).await.unwrap();
+    });
+    let connection = bus
+        .save_ssh_connection(SshConnectionInput {
+            id: None,
+            workspace_id: workspace.clone(),
+            name: "session-activity".into(),
+            host: "127.0.0.1".into(),
+            port: Some(port),
+            username: "fixture".into(),
+            auth_kind: "password".into(),
+            key_path: None,
+            credential_ref: None,
+            secret: Some("fixture-password".into()),
+        })
+        .await
+        .unwrap();
+    let input = SshConnectInput {
+        workspace_id: workspace.clone(),
+        connection_id: connection.id.clone(),
+        cols: Some(80),
+        rows: Some(24),
+        secret: None,
+    };
+    sqlx::query("CREATE TRIGGER fail_native_history BEFORE INSERT ON ssh_terminal_history BEGIN SELECT RAISE(FAIL, 'history unavailable'); END;")
+        .execute(bus.db.pool())
+        .await
+        .unwrap();
+    let history_failure = tokio::time::timeout(
+        Duration::from_secs(8),
+        bus.connect_ssh_session(input.clone()),
+    )
+    .await
+    .expect("history-failure connect timed out")
+    .expect_err("native history persistence failure must stay an error");
+    assert!(
+        history_failure.to_string().contains("history unavailable"),
+        "engine history error was rewritten: {history_failure}"
+    );
+    sqlx::query("DROP TRIGGER fail_native_history")
+        .execute(bus.db.pool())
+        .await
+        .unwrap();
+    sqlx::query("CREATE TRIGGER fail_native_session_activity BEFORE INSERT ON activity_events WHEN NEW.action IN ('ssh.session.connect','ssh.session.close') BEGIN SELECT RAISE(FAIL, 'audit sink unavailable'); END;")
+        .execute(bus.db.pool())
+        .await
+        .unwrap();
+    let session = tokio::time::timeout(Duration::from_secs(8), bus.connect_ssh_session(input))
+        .await
+        .expect("connect timed out")
+        .expect("native session id must survive activity failure");
+    assert!(!session.session_id.is_empty());
+    assert_eq!(session.warnings, ["ACTIVITY_RECORD_FAILED"]);
+    assert!(!serde_json::to_string(&session)
+        .unwrap()
+        .contains("audit sink"));
+    let closed = bus
+        .close_ssh_session(SshCloseInput {
+            workspace_id: workspace.clone(),
+            session_id: session.session_id.clone(),
+        })
+        .await
+        .expect("closed native session must survive activity failure");
+    assert_eq!(closed.session_id, session.session_id);
+    assert_eq!(closed.status, "disconnected");
+    assert_eq!(closed.warnings, ["ACTIVITY_RECORD_FAILED"]);
+    let listed = bus.list_ssh_sessions(workspace).await.unwrap();
+    assert_eq!(
+        listed
+            .iter()
+            .filter(|item| item.session_id == session.session_id && item.status == "disconnected")
+            .count(),
+        1
+    );
+    let recorded: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM activity_events WHERE action IN ('ssh.session.connect','ssh.session.close')",
+    )
+    .fetch_one(bus.db.pool())
+    .await
+    .unwrap();
+    assert_eq!(recorded, 0);
+    server_task.abort();
+}

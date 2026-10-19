@@ -9,6 +9,7 @@ import type {
   SshConnectionInput,
   SshHostFingerprintInfo,
   SshHostKeyInput,
+  SshHostKeyResetResult,
   SshKnownHostsExportInput,
   SshKnownHostsExportResult,
   SshKnownHostsImportInput,
@@ -148,7 +149,7 @@ export function getSshHostFingerprint(input: SshHostKeyInput) {
 }
 
 export function resetSshHostFingerprint(input: SshHostKeyInput) {
-  return call<boolean>("ssh_host_key_reset", { input });
+  return call<SshHostKeyResetResult>("ssh_host_key_reset", { input });
 }
 
 export function listSshHostFingerprints(workspaceId: string) {

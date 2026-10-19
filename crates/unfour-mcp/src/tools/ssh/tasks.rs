@@ -11,6 +11,7 @@ use super::super::policy::ToolPolicyEvaluation;
 use super::super::{
     object_with_allowed_keys, RegisteredTool, ToolAnnotations, ToolCallError, ToolDefinition,
 };
+use super::helpers::insert_activity_warnings;
 use super::task_parse::*;
 use super::task_schemas::{id_schema, run_schema, save_schema, workspace_schema};
 use super::task_serialize::*;
@@ -18,7 +19,7 @@ use super::task_serialize::*;
 const MAX_TASK_LOG_CHARS: usize = 128 * 1024;
 
 pub(super) fn registered_tools() -> Vec<RegisteredTool> {
-    vec![
+    let mut tools = vec![
         tool(
             "unfour.ssh.list_tasks",
             "List SSH Tasks",
@@ -125,7 +126,22 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
             ToolAnnotations::local_write_destructive(),
             clear_task_runs,
         ),
-    ]
+    ];
+    if let Some(clear) = tools
+        .iter_mut()
+        .find(|tool| tool.definition.name == "unfour.ssh.clear_task_runs")
+    {
+        clear.definition.output_schema = json!({
+            "type": "object",
+            "properties": {
+                "deletedRuns": { "type": "integer" },
+                "deletedLogs": { "type": "integer" },
+                "source": { "type": "string" },
+                "warnings": { "type": "array", "items": { "type": "string" } }
+            }
+        });
+    }
+    tools
 }
 
 fn tool(
@@ -407,9 +423,11 @@ fn clear_task_runs(
             task_id,
         })
         .map_err(execution_error)?;
-    Ok(json!({
+    let mut value = json!({
         "deletedRuns": result.deleted_runs,
         "deletedLogs": result.deleted_logs,
         "source": "command-bus"
-    }))
+    });
+    insert_activity_warnings(&mut value, &result.warnings);
+    Ok(value)
 }

@@ -106,6 +106,7 @@ impl SshService {
                 .await?
         };
         Ok(SshTaskCleanupResult {
+            warnings: Vec::new(),
             deleted_runs: result.rows_affected() as usize,
             deleted_logs: remove_task_logs(log_paths, &self.task_log_dir),
         })
@@ -224,6 +225,7 @@ impl SshService {
                 remove_task_logs(vec![PathBuf::from(&run.log_path)], &self.task_log_dir);
         }
         Ok(SshTaskCleanupResult {
+            warnings: Vec::new(),
             deleted_runs: remove.len(),
             deleted_logs,
         })

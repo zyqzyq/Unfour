@@ -110,6 +110,8 @@ export type SshLogExportInput = {
 };
 
 export type SshSessionSummary = {
+  /** Response-only. Absent when activity recording succeeded or the field is from an older client. */
+  warnings?: string[];
   sessionId: string;
   workspaceId: string;
   connectionId: string;
@@ -168,6 +170,11 @@ export type SshHostKeyInput = {
   port: number;
 };
 
+export type SshHostKeyResetResult = {
+  deleted: boolean;
+  warnings?: string[];
+};
+
 export type SshHostFingerprintInfo = {
   workspaceId: string;
   host: string;
@@ -186,6 +193,7 @@ export type SshKnownHostsExportInput = {
 };
 
 export type SshKnownHostsImportResult = {
+  warnings?: string[];
   imported: number;
   skipped: number;
   errors: string[];
@@ -426,6 +434,7 @@ export type SshTaskCleanupInput = {
 };
 
 export type SshTaskCleanupResult = {
+  warnings?: string[];
   deletedRuns: number;
   deletedLogs: number;
 };

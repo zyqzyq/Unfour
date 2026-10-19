@@ -125,6 +125,10 @@ pub struct SshLogExportInput {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SshSessionSummary {
+    /// Response-only completion warnings. Terminal history stores the session
+    /// columns and does not persist this field.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
     pub session_id: String,
     pub workspace_id: String,
     pub connection_id: String,
@@ -228,6 +232,17 @@ pub struct SshHostKeyInput {
     pub port: u16,
 }
 
+/// Result of removing one stored host fingerprint.
+///
+/// `deleted` is the reset outcome. Empty warnings are omitted from JSON.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SshHostKeyResetResult {
+    pub deleted: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
+}
+
 /// Information about a stored SSH host-key fingerprint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -258,6 +273,9 @@ pub struct SshKnownHostsExportInput {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SshKnownHostsImportResult {
+    /// Non-fatal completion warnings. Import counts stay authoritative.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
     pub imported: u32,
     pub skipped: u32,
     pub errors: Vec<String>,

@@ -3,8 +3,8 @@ use std::sync::Arc;
 use serde_json::json;
 use unfour_command_bus::{CurrentWorkspaceResult, ReadCommand, ReadCommandResult};
 use unfour_core::models::{
-    SshTask, SshTaskDetail, SshTaskLocalBinding, SshTaskRun, SshTaskRunInput, SshTaskSaveInput,
-    SshTaskStep,
+    SshTask, SshTaskCleanupInput, SshTaskCleanupResult, SshTaskDetail, SshTaskLocalBinding,
+    SshTaskRun, SshTaskRunInput, SshTaskSaveInput, SshTaskStep,
 };
 
 use crate::command_bus_adapter::{CommandBusAdapter, CommandBusAdapterError};
@@ -96,6 +96,19 @@ impl CommandBusAdapter for TaskStub {
         assert_eq!(input.workspace_id, "workspace-1");
         assert_eq!(input.task_id, "task-1");
         Ok(run())
+    }
+
+    fn clear_ssh_task_runs(
+        &self,
+        input: SshTaskCleanupInput,
+    ) -> Result<SshTaskCleanupResult, CommandBusAdapterError> {
+        assert_eq!(input.workspace_id, "workspace-1");
+        assert_eq!(input.task_id.as_deref(), Some("task-1"));
+        Ok(SshTaskCleanupResult {
+            warnings: vec!["ACTIVITY_RECORD_FAILED".into()],
+            deleted_runs: 2,
+            deleted_logs: 1,
+        })
     }
 }
 
@@ -281,6 +294,28 @@ fn task_start_preserves_handle_and_activity_warning() {
     crate::output_schema::assert_success_matches_output_schema(
         &registry,
         "unfour.ssh.run_task",
+        &result,
+    );
+}
+
+#[test]
+fn task_clear_preserves_deleted_counts_and_activity_warning() {
+    let registry = ToolRegistry::with_command_bus(Arc::new(TaskStub {
+        environment_type: "dev",
+    }));
+    let result = registry
+        .call("unfour.ssh.clear_task_runs", json!({"taskId":"task-1"}))
+        .unwrap();
+    assert_eq!(result["isError"], false);
+    assert_eq!(result["structuredContent"]["deletedRuns"], 2);
+    assert_eq!(result["structuredContent"]["deletedLogs"], 1);
+    assert_eq!(
+        result["structuredContent"]["warnings"],
+        json!(["ACTIVITY_RECORD_FAILED"])
+    );
+    crate::output_schema::assert_success_matches_output_schema(
+        &registry,
+        "unfour.ssh.clear_task_runs",
         &result,
     );
 }

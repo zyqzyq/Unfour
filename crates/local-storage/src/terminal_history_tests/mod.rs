@@ -56,6 +56,7 @@ async fn service() -> TerminalHistoryService {
 fn summary(workspace_id: &str, session_id: &str, connection_id: &str) -> SshSessionSummary {
     let now = Utc::now().to_rfc3339();
     SshSessionSummary {
+        warnings: Vec::new(),
         session_id: session_id.to_string(),
         workspace_id: workspace_id.to_string(),
         connection_id: connection_id.to_string(),

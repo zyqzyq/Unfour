@@ -15,7 +15,7 @@ import {
   type SshSessionSummary,
 } from "@unfour/command-client";
 import { useWorkspaceStore } from "@unfour/workspace-core";
-import { ConfirmDialog, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
+import { ConfirmDialog, useFeedback, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
 import { TerminalWorkspace } from "./components/TerminalWorkspace";
 import { SshConnectionTree } from "./components/SshConnectionTree";
 import { SshConnectionDialog } from "./components/SshConnectionDialog";
@@ -52,6 +52,7 @@ export function SshConnectionsPage({
 }) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
+  const feedback = useFeedback();
   const handleError = useFeedbackErrorHandler();
   const {
     selectedSshConnectionId: selectedConnectionId,
@@ -254,6 +255,9 @@ export function SshConnectionsPage({
     mutationFn: (connectionId: string) =>
       connectSshSession({ workspaceId, connectionId, cols: 120, rows: 32 }),
     onSuccess: (session) => {
+      if (session.warnings?.includes("ACTIVITY_RECORD_FAILED")) {
+        feedback.info(t("feedback.activityRecordFailed"));
+      }
       markSessionHistoryHydrated(session.sessionId);
       startTerminalSession(session.sessionId, [
         {
@@ -309,6 +313,9 @@ export function SshConnectionsPage({
   const closeMutation = useMutation({
     mutationFn: (sessionId: string) => closeSshSession({ workspaceId, sessionId }),
     onSuccess: (session) => {
+      if (session.warnings?.includes("ACTIVITY_RECORD_FAILED")) {
+        feedback.info(t("feedback.activityRecordFailed"));
+      }
       appendTerminalEvents([
         {
           sessionId: session.sessionId,
@@ -331,7 +338,10 @@ export function SshConnectionsPage({
   const resetHostKeyMutation = useMutation({
     mutationFn: (input: { host: string; port: number }) =>
       resetSshHostFingerprint({ workspaceId, ...input }),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (result.warnings?.includes("ACTIVITY_RECORD_FAILED")) {
+        feedback.info(t("feedback.activityRecordFailed"));
+      }
       setTrustDialogState((prev) => ({ ...prev, open: false, mismatchError: null }));
       const targetConnectionId = trustDialogState.connectionId ?? selectedConnectionId;
       if (targetConnectionId) {

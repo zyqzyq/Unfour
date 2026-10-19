@@ -298,7 +298,7 @@ export function handleSshMock<T>(
     const key = mockHostKeyFingerprintKey(input.workspaceId, input.host, input.port);
     const existed = key in mockStore.hostKeyFingerprints;
     delete mockStore.hostKeyFingerprints[key];
-    return existed as T;
+    return { deleted: existed } as T;
   }
 
   if (command === "ssh_host_key_list") {

@@ -6,7 +6,7 @@ use unfour_core::{
         SftpMutationResult, SftpOpenResult, SftpPathInput, SftpRenameInput, SftpSessionInput,
         SftpTransferInput, SftpTransferState, SshCloseInput, SshCommandHistoryEntry,
         SshCommandHistoryQuery, SshConnectInput, SshConnection, SshConnectionInput,
-        SshHostFingerprintInfo, SshHostKeyInput, SshKnownHostsExportInput,
+        SshHostFingerprintInfo, SshHostKeyInput, SshHostKeyResetResult, SshKnownHostsExportInput,
         SshKnownHostsExportResult, SshKnownHostsImportInput, SshKnownHostsImportResult,
         SshLogExport, SshLogExportInput, SshReconnectCancelInput, SshResizeInput, SshSessionEvent,
         SshSessionInput, SshSessionSummary, SshTask, SshTaskCancelInput, SshTaskCleanupInput,
@@ -372,7 +372,7 @@ pub async fn ssh_host_key_get(
 pub async fn ssh_host_key_reset(
     input: SshHostKeyInput,
     state: State<'_, AppState>,
-) -> AppResult<bool> {
+) -> AppResult<SshHostKeyResetResult> {
     state.command_bus.reset_ssh_host_fingerprint(input).await
 }
 

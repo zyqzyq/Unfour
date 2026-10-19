@@ -21,6 +21,7 @@ impl SshService {
         let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
 
         let summary = SshSessionSummary {
+            warnings: Vec::new(),
             session_id: session_id.clone(),
             workspace_id: connection.workspace_id.clone(),
             connection_id: connection.id.clone(),

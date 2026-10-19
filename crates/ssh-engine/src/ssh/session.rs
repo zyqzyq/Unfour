@@ -666,6 +666,7 @@ impl SshService {
         let cols = input.cols.unwrap_or(120).clamp(20, 300);
         let rows = input.rows.unwrap_or(32).clamp(8, 100);
         let summary = SshSessionSummary {
+            warnings: Vec::new(),
             session_id: session_id.clone(),
             workspace_id: connection.workspace_id.clone(),
             connection_id: connection.id.clone(),
