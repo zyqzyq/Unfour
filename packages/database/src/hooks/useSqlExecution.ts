@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { executeDatabaseQuery } from "@unfour/command-client";
+import { useFeedback, useI18n } from "@unfour/ui";
 import { sqlResultRowLimit } from "../model/result-row-limit";
 import { isConfirmationRequired } from "../result-utils";
 
@@ -29,6 +30,8 @@ export function useSqlExecution({
     : never;
   workspaceId: string;
 }) {
+  const feedback = useFeedback();
+  const { t } = useI18n();
   return useMutation({
     onMutate: onExecuteStart,
     mutationFn: ({ catalog, confirmMutation, limit, schema, sql }: RunSqlParams) =>
@@ -48,6 +51,9 @@ export function useSqlExecution({
     onSuccess: (result, variables) => {
       onConfirmationRequired(false);
       onSuccess(result, variables.confirmMutation);
+      if (result.warnings?.includes("ACTIVITY_RECORD_FAILED")) {
+        feedback.info(t("feedback.activityRecordFailed"));
+      }
     },
   });
 }

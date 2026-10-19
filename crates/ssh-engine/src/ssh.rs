@@ -25,7 +25,8 @@ mod diagnostics;
 #[path = "validation.rs"]
 mod validation;
 use command_line::SshCommandLineTracker;
-use diagnostics::{validate_diagnostic_command, validate_one_shot_command};
+pub use diagnostics::validate_diagnostic_command;
+use diagnostics::validate_one_shot_command;
 use validation::{
     empty_to_none, validate_connection_id, validate_pty_size, validate_session_id,
     validate_workspace_id,

@@ -1,5 +1,9 @@
 # Independent global audit — 2026-10-16
 
+## Follow-up status — 2026-10-19
+
+F-02 and F-03 have now been repaired following the user's explicit authorization. See [the follow-up report](p1-follow-up-2026-10-19.md) for implementation, compatibility, regression evidence and the current recommendation to proceed to release regression. The findings and results below retain the state observed during the original audit.
+
 ## Baseline and scope
 
 - Base: `main`, `5eaa224ff9e54df6555a785a7165127a43ebd723`. `git fetch origin main` succeeded and `main...origin/main` was `0 0` before review. The initial working tree was clean.
@@ -113,4 +117,4 @@ NOT VERIFIED: external production services, real remote SSH/SFTP behavior, real 
 
 ## Release recommendation
 
-Do not advance this state to release sign-off or a release-candidate regression baseline while F-02 and F-03 remain open. Targeted verification of F-01 can proceed. Repair the remaining P1s, then rerun their caller-level regressions and the relevant live-service/platform release matrix. No P0 was confirmed within the audited scope.
+Original audit baseline recommendation (superseded by the follow-up linked above): do not advance this state to release sign-off or a release-candidate regression baseline while F-02 and F-03 remain open. Targeted verification of F-01 can proceed. Repair the remaining P1s, then rerun their caller-level regressions and the relevant live-service/platform release matrix. No P0 was confirmed within the audited scope.

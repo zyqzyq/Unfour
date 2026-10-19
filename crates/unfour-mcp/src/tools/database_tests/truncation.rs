@@ -46,6 +46,7 @@ impl CommandBusAdapter for TruncationBus {
         _: DatabaseQueryInput,
     ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
         Ok(DatabaseQueryResult {
+            warnings: Vec::new(),
             columns: vec![DatabaseResultColumn {
                 name: "value".to_string(),
                 data_type: "text".to_string(),

@@ -316,6 +316,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                         "dryRun": { "type": "boolean" },
                         "transaction": { "type": "boolean" },
                         "safety": { "type": "object" },
+                        "warnings": { "type": "array", "items": { "type": "string" } },
                         "source": { "type": "string", "const": "command-bus" }
                     },
                     "required": ["ok", "connectionId", "statementType", "dryRun", "source"],
@@ -851,6 +852,7 @@ fn db_execute(
                 "dryRun": false,
                 "transaction": transaction,
                 "safety": result.safety,
+                "warnings": result.warnings,
                 "source": "command-bus"
             }))
         }

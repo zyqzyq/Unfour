@@ -212,7 +212,11 @@ fn finish_result(affected_rows: u64, sql: String) -> AppResult<DatabaseRowMutati
             "expected to affect exactly one row, affected {affected_rows}; reload the table before retrying"
         )));
     }
-    Ok(DatabaseRowMutationResult { affected_rows, sql })
+    Ok(DatabaseRowMutationResult {
+        affected_rows,
+        sql,
+        warnings: Vec::new(),
+    })
 }
 
 async fn execute_sqlite_mutation(

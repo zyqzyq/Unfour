@@ -22,6 +22,7 @@ pub(super) fn safe_run(run: &SshTaskRun) -> Value {
         "status": run.status,
         "startedAt": run.started_at,
         "finishedAt": run.finished_at,
-        "errorMessage": run.error_message
+        "errorMessage": run.error_message,
+        "warnings": run.warnings
     })
 }

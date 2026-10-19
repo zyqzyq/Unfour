@@ -656,6 +656,7 @@
     }
   },
   "feedback": {
+    "activityRecordFailed": "The operation was accepted, but its activity log could not be saved. Keep the returned result or task ID; do not repeat the operation to repair the log.",
     "dismiss": "Dismiss",
     "error": {
       "default": "Operation failed"

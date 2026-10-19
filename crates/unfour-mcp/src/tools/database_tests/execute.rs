@@ -47,7 +47,12 @@ impl CommandBusAdapter for RecordingBus {
         &self,
         input: DatabaseQueryInput,
     ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
-        let result = DbStubCommandBus.execute_db_query(input.clone());
+        let result = DbStubCommandBus
+            .execute_db_query(input.clone())
+            .map(|mut result| {
+                result.warnings.push("ACTIVITY_RECORD_FAILED".into());
+                result
+            });
         self.writes.lock().unwrap().push(input);
         result
     }
@@ -217,4 +222,26 @@ fn execute_prod_update_is_blocked_by_policy() {
     assert!(payload.get("ok").is_none());
     assert_eq!(payload["error"]["code"], "WORKSPACE_POLICY_BLOCKED");
     crate::response::assert_call_meta(&result, "prod", "medium");
+}
+
+#[test]
+fn execute_preserves_success_and_activity_warning() {
+    let registry = ToolRegistry::with_command_bus(Arc::new(RecordingBus::default()));
+    let result = registry
+        .call(
+            "unfour.db.execute",
+            json!({"connectionId":"conn-1","sql":"INSERT INTO users(id) VALUES (3)"}),
+        )
+        .unwrap();
+    assert_eq!(result["isError"], false);
+    assert_eq!(
+        result["structuredContent"]["warnings"],
+        json!(["ACTIVITY_RECORD_FAILED"])
+    );
+    assert_eq!(result["structuredContent"]["affectedRows"], 2);
+    crate::output_schema::assert_success_matches_output_schema(
+        &registry,
+        "unfour.db.execute",
+        &result,
+    );
 }

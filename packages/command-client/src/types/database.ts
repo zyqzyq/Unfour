@@ -121,6 +121,8 @@ export type DatabaseRowMutationInput = {
 };
 
 export type DatabaseRowMutationResult = {
+  /** Non-fatal completion warnings; absent in older responses. */
+  warnings?: string[];
   affectedRows: number;
   sql: string;
 };
@@ -206,6 +208,8 @@ export type DatabaseBrowseResult = {
 };
 
 export type DatabaseQueryResult = {
+  /** Non-fatal completion warnings; absent in older responses. */
+  warnings?: string[];
   columns: DatabaseResultColumn[];
   rows: Array<Array<string | null>>;
   affectedRows: number;

@@ -114,6 +114,7 @@ pub(super) fn binding_from_row(row: StoredBinding) -> SshTaskLocalBinding {
 
 pub(super) fn run_from_row(row: StoredRun) -> SshTaskRun {
     SshTaskRun {
+        warnings: Vec::new(),
         id: row.id,
         workspace_id: row.workspace_id,
         task_id: row.task_id,

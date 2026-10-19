@@ -1,9 +1,10 @@
 use unfour_core::{AppError, AppResult};
 
-/// Leading command words permitted for read-only SSH diagnostics. Each is a
-/// non-mutating utility; commands that can also write/control state (notably
-/// `systemctl`, `journalctl`, `docker`, `podman`, and `kubectl`) get additional
-/// subcommand/flag restrictions in `validate_diagnostic_command`.
+#[path = "diagnostic_arguments.rs"]
+mod arguments;
+
+/// Utilities permitted in read-only diagnostic forms. Mixed-purpose utilities
+/// also require argument restrictions below and in `diagnostic_arguments.rs`.
 const SSH_DIAGNOSTIC_ALLOWED_COMMANDS: &[&str] = &[
     "df",
     "du",
@@ -61,7 +62,7 @@ const KUBECTL_READONLY_SUBCOMMANDS: &[&str] = &[
 /// metacharacters (so no chaining/piping/redirection/subshells), a bare
 /// allowlisted leading utility, and read-only subcommands/flags for utilities
 /// that could otherwise mutate state.
-pub(crate) fn validate_diagnostic_command(command: &str) -> AppResult<String> {
+pub fn validate_diagnostic_command(command: &str) -> AppResult<String> {
     let trimmed = command.trim();
     if trimmed.is_empty() {
         return Err(AppError::Validation(
@@ -103,6 +104,11 @@ pub(crate) fn validate_diagnostic_command(command: &str) -> AppResult<String> {
         )));
     }
 
+    if !arguments::readonly_arguments(head, &tokens.clone().collect::<Vec<_>>()) {
+        return Err(AppError::Validation(format!(
+            "`{head}` arguments are not an allowed read-only diagnostic form"
+        )));
+    }
     match head {
         "systemctl" => {
             const SYSTEMCTL_READONLY: &[&str] = &[
@@ -118,23 +124,10 @@ pub(crate) fn validate_diagnostic_command(command: &str) -> AppResult<String> {
                 "list-sockets",
                 "get-default",
             ];
-            let sub = tokens.find(|token| !token.starts_with('-')).unwrap_or("");
+            let sub = tokens.next().unwrap_or("");
             if !SYSTEMCTL_READONLY.contains(&sub) {
                 return Err(AppError::Validation(
-                    "systemctl diagnostics are limited to read-only subcommands (status, is-active, show, list-units, ...)".to_string(),
-                ));
-            }
-        }
-        "journalctl" => {
-            if tokens.any(|token| {
-                token.starts_with("--vacuum")
-                    || token == "--rotate"
-                    || token == "--flush"
-                    || token == "--sync"
-                    || token == "--relinquish-var"
-            }) {
-                return Err(AppError::Validation(
-                    "journalctl diagnostics cannot use log-management flags".to_string(),
+                    "systemctl diagnostics require a read-only subcommand placed first (status, is-active, show, list-units, ...)".to_string(),
                 ));
             }
         }
@@ -152,7 +145,9 @@ pub(crate) fn validate_diagnostic_command(command: &str) -> AppResult<String> {
         }
         "kubectl" => {
             let sub = tokens.next().unwrap_or("");
-            if !KUBECTL_READONLY_SUBCOMMANDS.contains(&sub) {
+            if !KUBECTL_READONLY_SUBCOMMANDS.contains(&sub)
+                || (sub == "cluster-info" && tokens.next().is_some())
+            {
                 return Err(AppError::Validation(
                     "kubectl diagnostics are limited to read-only subcommands placed first (get, describe, logs, top, ...)".to_string(),
                 ));

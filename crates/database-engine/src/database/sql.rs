@@ -337,6 +337,7 @@ pub(super) fn browse_result(
         total_rows,
         read_only: true,
         result: DatabaseQueryResult {
+            warnings: Vec::new(),
             columns,
             rows,
             affected_rows: 0,

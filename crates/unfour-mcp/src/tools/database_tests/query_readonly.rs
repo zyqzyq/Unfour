@@ -75,6 +75,7 @@ fn query_readonly_forwards_catalog_schema_and_timeout() {
         ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
             *self.captured.lock().expect("capture lock") = Some(input);
             Ok(DatabaseQueryResult {
+                warnings: Vec::new(),
                 columns: vec![],
                 rows: vec![],
                 affected_rows: 0,
@@ -307,6 +308,7 @@ fn query_readonly_truncates_large_results() {
                 .map(|i| vec![Some(i.to_string()), Some(big_value.clone())])
                 .collect();
             Ok(DatabaseQueryResult {
+                warnings: Vec::new(),
                 columns: vec![
                     DatabaseResultColumn {
                         name: "id".to_string(),

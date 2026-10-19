@@ -39,6 +39,7 @@ vi.mock("@unfour/ui", () => ({
   SplitPane: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Tabs: () => null,
   useFeedbackErrorHandler: () => vi.fn(),
+  useFeedback: () => ({ info: vi.fn() }),
   useI18n: () => ({ t: (key: string) => key }),
 }));
 

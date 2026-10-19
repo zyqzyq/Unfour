@@ -148,6 +148,7 @@ impl CommandBusAdapter for SshStubCommandBus {
         _input: DatabaseQueryInput,
     ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
         Ok(DatabaseQueryResult {
+            warnings: Vec::new(),
             columns: vec![],
             rows: vec![],
             affected_rows: 0,

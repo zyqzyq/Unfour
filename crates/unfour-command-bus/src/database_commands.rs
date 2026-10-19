@@ -192,23 +192,15 @@ impl CommandBus {
         &self,
         input: DatabaseQueryInput,
     ) -> AppResult<DatabaseQueryResult> {
-        let result = self.database.execute_query(input.clone()).await?;
+        let mut result = self.database.execute_query(input.clone()).await?;
         if result.safety.classification != "read" {
             let classification = result.safety.classification.clone();
-            self.activity_log
-                .record(
-                    Some(&input.workspace_id),
-                    "database.query.execute",
-                    Some(&input.connection_id),
-                    serde_json::json!({
-                        "classification": classification,
-                        "confirmed": result.safety.confirmed,
-                        "columns": result.columns.len(),
-                        "rows": result.rows.len(),
-                        "affectedRows": result.affected_rows
-                    }),
-                )
-                .await?;
+            result.warnings.extend(self.record_completion_activity(CommandActivity {
+                workspace_id: Some(input.workspace_id.clone()),
+                action: "database.query.execute", target: Some(input.connection_id.clone()),
+                details: serde_json::json!({"classification": classification, "confirmed": result.safety.confirmed,
+                    "columns": result.columns.len(), "rows": result.rows.len(), "affectedRows": result.affected_rows}),
+            }, "database", "execute_query").await);
         }
         Ok(result)
     }
@@ -235,20 +227,21 @@ impl CommandBus {
         let connection_id = input.connection_id.clone();
         let table_name = input.table_name.clone();
         let operation = input.operation.clone();
-        let result = self.database.mutate_table_row(input).await?;
-        self.activity_log
-            .record(
-                Some(&workspace_id),
-                "database.row.mutate",
-                Some(&connection_id),
-                serde_json::json!({
-                    "operation": operation,
-                    "tableName": table_name,
-                    "affectedRows": result.affected_rows,
-                    "confirmed": true
-                }),
+        let mut result = self.database.mutate_table_row(input).await?;
+        result.warnings.extend(
+            self.record_completion_activity(
+                CommandActivity {
+                    workspace_id: Some(workspace_id),
+                    action: "database.row.mutate",
+                    target: Some(connection_id),
+                    details: serde_json::json!({"operation": operation, "tableName": table_name,
+                "affectedRows": result.affected_rows, "confirmed": true}),
+                },
+                "database",
+                "mutate_row",
             )
-            .await?;
+            .await,
+        );
         Ok(result)
     }
 

@@ -35,11 +35,14 @@ use unfour_http_engine::ApiClientService;
 use unfour_local_storage::{ActivityLogService, LocalDb};
 use unfour_secret_store::SecretStore;
 use unfour_ssh_engine::SshService;
+// Expose the capability owner's pure validation to adapters; do not duplicate policy.
+pub use unfour_ssh_engine::validate_diagnostic_command;
 use unfour_workspace_engine::WorkspaceService;
 
 mod api_commands;
 mod api_script_commands;
 mod command_models;
+mod completion_activity;
 mod core_commands;
 mod credential_commands;
 mod credential_lock;

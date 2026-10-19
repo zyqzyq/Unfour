@@ -146,6 +146,7 @@ fn detail() -> SshTaskDetail {
 
 fn run() -> SshTaskRun {
     SshTaskRun {
+        warnings: vec!["ACTIVITY_RECORD_FAILED".into()],
         id: "run-1".to_string(),
         workspace_id: "workspace-1".to_string(),
         task_id: "task-1".to_string(),
@@ -261,4 +262,25 @@ fn guarded_task_run_requires_content_bound_confirmation() {
     let second = registry.call("unfour.ssh.run_task", confirmed).unwrap();
     assert_eq!(second["isError"], false);
     assert!(second["structuredContent"]["run"].get("logPath").is_none());
+}
+
+#[test]
+fn task_start_preserves_handle_and_activity_warning() {
+    let registry = ToolRegistry::with_command_bus(Arc::new(TaskStub {
+        environment_type: "dev",
+    }));
+    let result = registry
+        .call("unfour.ssh.run_task", json!({"taskId":"task-1"}))
+        .unwrap();
+    assert_eq!(result["isError"], false);
+    assert_eq!(result["structuredContent"]["run"]["id"], "run-1");
+    assert_eq!(
+        result["structuredContent"]["run"]["warnings"],
+        json!(["ACTIVITY_RECORD_FAILED"])
+    );
+    crate::output_schema::assert_success_matches_output_schema(
+        &registry,
+        "unfour.ssh.run_task",
+        &result,
+    );
 }

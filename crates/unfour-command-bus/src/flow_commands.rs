@@ -402,14 +402,14 @@ impl FlowExecutor for CommandBus {
                             log.truncate(end);
                         }
                         if current.status != "success" && current.status != "succeeded" {
-                            let details = json!({"runId":current.id,"status":current.status,"errorMessage":current.error_message,"log":log,"logTruncated":log_truncated});
+                            let details = json!({"runId":current.id,"status":current.status,"errorMessage":current.error_message,"log":log,"logTruncated":log_truncated,"warnings":run.warnings});
                             return Err(unfour_core::AppError::FlowActionFailed {
                                 source: Box::new(invalid("FLOW_SSH_FAILED")),
                                 details: self.flow_diagnostics(details, input).await?,
                             });
                         }
                         return Ok(
-                            json!({"runId": current.id, "status": current.status, "startedAt": current.started_at, "finishedAt": current.finished_at, "log": log, "logTruncated": log_truncated}),
+                            json!({"runId": current.id, "status": current.status, "startedAt": current.started_at, "finishedAt": current.finished_at, "log": log, "logTruncated": log_truncated, "warnings": run.warnings}),
                         );
                     }
                 }

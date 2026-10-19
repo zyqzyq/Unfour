@@ -2,6 +2,61 @@ use super::super::*;
 use super::support::diagnostic_fixture;
 
 #[test]
+fn diagnostic_command_rejects_state_changes_and_option_bypasses() {
+    for command in [
+        "ip link set eth0 down",
+        "ip l s eth0 down",
+        "ip -batch /tmp/commands",
+        "ip -b /tmp/commands",
+        "mount -o remount,rw /",
+        "hostname audit-name",
+        "hostname -F /tmp/name",
+        "date -s 2030-01-01",
+        "date --set=2030-01-01",
+        "date --s=2030-01-01",
+        "date 010100002030",
+        "ifconfig eth0 down",
+        "ss -K dst 127.0.0.1",
+        "ss -nK",
+        "ss -D /tmp/sockets",
+        "journalctl --rot",
+        "journalctl --vacuum-size=1M",
+        "systemctl --root status reboot",
+        "kubectl cluster-info dump --output-directory=/tmp/dump",
+    ] {
+        assert!(
+            validate_diagnostic_command(command).is_err(),
+            "accepted {command}"
+        );
+    }
+}
+
+#[test]
+fn diagnostic_command_keeps_explicit_read_only_forms() {
+    for command in [
+        "ip addr show",
+        "ip -4 route show",
+        "ip link show dev eth0",
+        "mount",
+        "mount -l",
+        "hostname",
+        "hostname -f",
+        "date",
+        "date -u +%FT%TZ",
+        "ifconfig",
+        "ifconfig -a",
+        "ifconfig eth0",
+        "ss -tulpn",
+        "journalctl --unit=nginx -n 10 --no-pager",
+    ] {
+        assert!(
+            validate_diagnostic_command(command).is_ok(),
+            "rejected {command}"
+        );
+    }
+}
+
+#[test]
 fn diagnostic_command_allows_read_only_utilities() {
     for cmd in [
         "df -h",
@@ -85,15 +140,23 @@ async fn run_diagnostic_validates_before_connecting() {
     // An invalid command must be rejected by validation, independent of any
     // SSH transport or feature flag.
     let (service, workspace_a, connection_id) = diagnostic_fixture().await;
-    let result = service
-        .run_diagnostic(SshDiagnosticInput {
-            workspace_id: workspace_a,
-            connection_id,
-            command: "rm -rf /".to_string(),
-            timeout_ms: None,
-        })
-        .await;
-    assert!(matches!(result, Err(AppError::Validation(_))));
+    for command in [
+        "rm -rf /",
+        "ip link set eth0 down",
+        "mount -o remount,rw /",
+        "hostname audit-name",
+        "date -s 2030-01-01",
+    ] {
+        let result = service
+            .run_diagnostic(SshDiagnosticInput {
+                workspace_id: workspace_a.clone(),
+                connection_id: connection_id.clone(),
+                command: command.to_string(),
+                timeout_ms: None,
+            })
+            .await;
+        assert!(matches!(result, Err(AppError::Validation(_))));
+    }
 }
 
 #[cfg(not(feature = "ssh-native"))]

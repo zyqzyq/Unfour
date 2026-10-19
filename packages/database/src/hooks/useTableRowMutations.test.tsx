@@ -5,6 +5,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseTableWorkspaceTab } from "../model/types";
 
+const warningMock = vi.hoisted(() => vi.fn());
+vi.mock("@unfour/ui", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@unfour/ui")>(),
+  useFeedback: () => ({ info: warningMock }),
+}));
+
 vi.mock("@unfour/command-client", () => ({ mutateDatabaseRow: vi.fn() }));
 
 import { mutateDatabaseRow } from "@unfour/command-client";
@@ -116,4 +122,23 @@ describe("useTableRowMutations", () => {
     expect(updateTableTab).toHaveBeenCalledTimes(2);
     expect(refreshTablePage).toHaveBeenCalledOnce();
   });
+});
+
+it("removes committed pending edits even when activity logging warns", async () => {
+  mutateMock.mockResolvedValue({ affectedRows: 1, sql: "UPDATE users", warnings: ["ACTIVITY_RECORD_FAILED"] });
+  let current = { ...tab };
+  const updateTableTab: ReturnType<typeof useDatabaseTabs>["updateTableTab"] = (_id, patch) => {
+    current = { ...current, ...(typeof patch === "function" ? patch(current) : patch) };
+  };
+  const databaseTabs = { updateTableTab } as unknown as ReturnType<typeof useDatabaseTabs>;
+  const refreshTablePage = vi.fn();
+  const { result, rerender } = renderHook(() => useTableRowMutations({ activeTableTab: current,
+    databaseTabs, refreshTablePage, workspaceId: "ws-1" }), { wrapper: createWrapper() });
+  await act(() => result.current.applyPendingTableChanges());
+  expect(current.pendingChanges).toEqual([]);
+  expect(current.error).toBeNull();
+  expect(warningMock).toHaveBeenCalledOnce();
+  rerender();
+  await act(() => result.current.applyPendingTableChanges());
+  expect(mutateMock).toHaveBeenCalledOnce();
 });

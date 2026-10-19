@@ -2,8 +2,8 @@ use super::*;
 use russh::server::{Msg, Server as _, Session};
 
 #[derive(Clone)]
-struct Server {
-    commands: Arc<Mutex<Vec<String>>>,
+pub(super) struct Server {
+    pub(super) commands: Arc<Mutex<Vec<String>>>,
 }
 impl russh::server::Server for Server {
     type Handler = Self;
@@ -38,6 +38,10 @@ impl russh::server::Handler for Server {
             .unwrap()
             .push(String::from_utf8_lossy(data).into_owned());
         session.channel_success(channel)?;
+        if data == b"hold" {
+            // A deterministic running channel for cancellation regression tests.
+            return Ok(());
+        }
         session.data(channel, b"flow fixture completed\n".to_vec())?;
         session.data(channel, data.to_vec())?;
         session.exit_status_request(channel, if data.starts_with(b"fail ") { 1 } else { 0 })?;

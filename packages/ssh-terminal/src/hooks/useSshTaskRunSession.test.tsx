@@ -5,6 +5,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SshTaskDetail, SshTaskRun, SshTaskRunEvent } from "@unfour/command-client";
 
+const warningMock = vi.hoisted(() => vi.fn());
+vi.mock("@unfour/ui", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@unfour/ui")>(),
+  useFeedback: () => ({ info: warningMock }),
+}));
+
 vi.mock("@unfour/command-client", () => ({
   cancelSshTaskRun: vi.fn(), clearSshTaskRuns: vi.fn(), getSshTask: vi.fn(),
   listWorkspaceEnvironments: vi.fn(), listWorkspaceVariables: vi.fn(),
@@ -64,6 +70,7 @@ beforeEach(() => {
   vi.mocked(getSshTask).mockResolvedValue(detail);
   vi.mocked(readSshTaskRunLog).mockResolvedValue("history log");
   vi.mocked(runSshTask).mockResolvedValue(run());
+  vi.mocked(cancelSshTaskRun).mockResolvedValue(run());
 });
 
 afterEach(() => {
@@ -491,4 +498,21 @@ describe("task history selection and cleanup races", () => {
     if (success) expect(invalidate).toHaveBeenCalledExactlyOnceWith({ queryKey: ["ssh-task-runs", "w1", "task"] });
     else expect(invalidate).not.toHaveBeenCalled();
   });
+});
+
+it("keeps the task handle and warns after activity logging fails", async () => {
+  const output = { ...run(), warnings: ["ACTIVITY_RECORD_FAILED"] };
+  vi.mocked(runSshTask).mockResolvedValue(output);
+  vi.mocked(cancelSshTaskRun).mockResolvedValue(output);
+  const { result, handleError } = await setup();
+  await act(async () => { await result.current.prepareRun("task"); });
+  await act(async () => { await result.current.runMutation.mutateAsync(); });
+  expect(result.current.activeRun?.id).toBe("run");
+  expect(result.current.runDialogTask).toBeNull();
+  expect(warningMock).toHaveBeenCalledOnce();
+  expect(runSshTask).toHaveBeenCalledOnce();
+  await act(async () => { await result.current.cancelMutation.mutateAsync(); });
+  expect(cancelSshTaskRun).toHaveBeenCalledWith({ workspaceId: "w1", runId: "run" });
+  expect(warningMock).toHaveBeenCalledTimes(2);
+  expect(handleError).not.toHaveBeenCalled();
 });

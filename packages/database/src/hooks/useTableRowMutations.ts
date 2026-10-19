@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { mutateDatabaseRow } from "@unfour/command-client";
+import { useFeedback, useI18n } from "@unfour/ui";
 import type { DatabaseTableWorkspaceTab } from "../model/types";
 import type { useDatabaseTabs } from "./useDatabaseTabs";
 
@@ -14,6 +15,8 @@ export function useTableRowMutations({
   refreshTablePage: () => void;
   workspaceId: string;
 }) {
+  const feedback = useFeedback();
+  const { t } = useI18n();
   const rowMutation = useMutation({
     mutationFn: mutateDatabaseRow,
     onError: (error) => {
@@ -29,7 +32,7 @@ export function useTableRowMutations({
 
     for (const change of [...tab.pendingChanges]) {
       try {
-        await rowMutation.mutateAsync({
+        const result = await rowMutation.mutateAsync({
           workspaceId,
           connectionId: tab.connectionId,
           catalog: tab.table.catalog,
@@ -45,6 +48,9 @@ export function useTableRowMutations({
         databaseTabs.updateTableTab(tab.id, (current) => ({
           pendingChanges: current.pendingChanges.filter((candidate) => candidate.id !== change.id),
         }));
+        if (result.warnings?.includes("ACTIVITY_RECORD_FAILED")) {
+          feedback.info(t("feedback.activityRecordFailed"));
+        }
       } catch {
         if (appliedAny) refreshTablePage();
         return;

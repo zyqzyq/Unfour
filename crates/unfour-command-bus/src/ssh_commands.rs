@@ -450,32 +450,30 @@ impl CommandBus {
         for guard in self.extensions.ssh_task_execution_guards() {
             guard.validate(&workspace_id, &task_id).await?;
         }
-        let run = self.ssh.run_task(input).await?;
-        self.activity_log
-            .record(
-                Some(&workspace_id),
-                "ssh.task.run",
-                Some(&run.id),
-                serde_json::json!({
-                    "taskId": task_id,
-                    "connectionId": run.connection_id,
-                }),
-            )
-            .await?;
+        let mut run = self.ssh.run_task(input).await?;
+        run.warnings.extend(self.record_completion_activity(CommandActivity {
+            workspace_id: Some(workspace_id), action: "ssh.task.run", target: Some(run.id.clone()),
+            details: serde_json::json!({"taskId": task_id, "connectionId": run.connection_id}),
+        }, "ssh", "run_task").await);
         Ok(run)
     }
 
     pub async fn cancel_ssh_task_run(&self, input: SshTaskCancelInput) -> AppResult<SshTaskRun> {
         let workspace_id = input.workspace_id.clone();
-        let run = self.ssh.cancel_task_run(input).await?;
-        self.activity_log
-            .record(
-                Some(&workspace_id),
-                "ssh.task.cancel",
-                Some(&run.id),
-                serde_json::json!({ "taskId": run.task_id }),
+        let mut run = self.ssh.cancel_task_run(input).await?;
+        run.warnings.extend(
+            self.record_completion_activity(
+                CommandActivity {
+                    workspace_id: Some(workspace_id),
+                    action: "ssh.task.cancel",
+                    target: Some(run.id.clone()),
+                    details: serde_json::json!({"taskId": run.task_id}),
+                },
+                "ssh",
+                "cancel_task_run",
             )
-            .await?;
+            .await,
+        );
         Ok(run)
     }
 

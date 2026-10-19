@@ -121,6 +121,7 @@ impl SshService {
             let log_path = self.task_log_path(&run_id)?;
             let mut log = TaskLogWriter::create(&log_path)?;
             let run = SshTaskRun {
+                warnings: Vec::new(),
                 id: run_id.clone(),
                 workspace_id: input.workspace_id.clone(),
                 task_id: detail.task.id.clone(),

@@ -655,6 +655,7 @@
     }
   },
   "feedback": {
+    "activityRecordFailed": "操作已执行或任务已启动，但活动日志保存失败。请保留返回结果或任务编号，不要为补写日志而重复操作。",
     "dismiss": "关闭提示",
     "error": {
       "default": "操作失败"

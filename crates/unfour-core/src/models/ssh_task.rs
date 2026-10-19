@@ -107,6 +107,9 @@ pub struct SshTaskCancelInput {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SshTaskRun {
+    /// Response-only warnings, not persisted in the task-run table.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
     pub id: String,
     pub workspace_id: String,
     pub task_id: String,

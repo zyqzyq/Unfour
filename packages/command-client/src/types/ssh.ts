@@ -379,6 +379,8 @@ export type SshTaskCancelInput = {
 export type SshTaskRunStatus = "running" | "success" | "failed" | "cancelled";
 
 export type SshTaskRun = {
+  /** Non-fatal completion warnings; absent in older responses. */
+  warnings?: string[];
   id: string;
   workspaceId: string;
   taskId: string;

@@ -386,6 +386,7 @@ impl CommandBusAdapter for DbStubCommandBus {
             .to_ascii_lowercase();
         let is_read = matches!(keyword.as_str(), "select" | "with" | "explain" | "show");
         Ok(DatabaseQueryResult {
+            warnings: Vec::new(),
             columns: if is_read {
                 vec![
                     DatabaseResultColumn {

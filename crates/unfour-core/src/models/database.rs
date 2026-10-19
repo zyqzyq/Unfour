@@ -225,6 +225,9 @@ pub struct DatabaseRowMutationInput {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DatabaseRowMutationResult {
+    /// Non-fatal completion warnings; absent in older responses.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
     pub affected_rows: u64,
     pub sql: String,
 }
@@ -502,6 +505,9 @@ pub struct DatabaseBrowseResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DatabaseQueryResult {
+    /// Non-fatal completion warnings; execution outcome remains authoritative.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
     pub columns: Vec<DatabaseResultColumn>,
     pub rows: Vec<Vec<Option<String>>>,
     pub affected_rows: u64,

@@ -12,7 +12,7 @@ import {
   type WorkspaceEnvironment,
   type WorkspaceVariable,
 } from "@unfour/command-client";
-import { useFeedbackErrorHandler } from "@unfour/ui";
+import { useFeedback, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
 import {
   detectTaskInputs,
   preferredTaskConnectionId,
@@ -36,6 +36,13 @@ export function useSshTaskRunSession({
   workspaceId: string;
 }) {
   const queryClient = useQueryClient();
+  const feedback = useFeedback();
+  const { t } = useI18n();
+  const showCompletionWarning = (run: SshTaskRun) => {
+    if (run.warnings?.includes("ACTIVITY_RECORD_FAILED")) {
+      feedback.info(t("feedback.activityRecordFailed"));
+    }
+  };
   const [runDialogTask, setRunDialogTask] = useState<SshTaskDetail | null>(null);
   const [runConnectionId, setRunConnectionId] = useState("");
   const [runInputs, setRunInputs] = useState<Record<string, string>>({});
@@ -148,6 +155,7 @@ export function useSshTaskRunSession({
       setActiveRun(run);
       setActiveRunTask(runDialogTask);
       setRunDialogTask(null);
+      showCompletionWarning(run);
       queryClient.invalidateQueries({
         queryKey: ["ssh-task-runs", workspaceId, run.taskId],
       });
@@ -155,6 +163,7 @@ export function useSshTaskRunSession({
   });
   const cancelMutation = useMutation({
     mutationFn: () => cancelSshTaskRun({ workspaceId, runId: activeRun!.id }),
+    onSuccess: showCompletionWarning,
     onError: (error) => handleError(error, { key: "feedback.ssh.taskCancelFailed" }),
   });
   const clearMutation = useMutation({

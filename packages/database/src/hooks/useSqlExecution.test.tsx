@@ -5,6 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 
+const warningMock = vi.hoisted(() => vi.fn());
+vi.mock("@unfour/ui", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@unfour/ui")>(),
+  useFeedback: () => ({ info: warningMock }),
+}));
+
 vi.mock("@unfour/command-client", () => ({
   executeDatabaseQuery: vi.fn(),
 }));
@@ -127,4 +133,20 @@ describe("useSqlExecution", () => {
     await waitFor(() => expect(onConfirmationRequired).toHaveBeenCalled());
     expect(onConfirmationRequired).toHaveBeenCalledWith(false);
   });
+});
+
+it("retains a committed SQL outcome and shows the activity warning without retrying", async () => {
+  const output: DatabaseQueryResult = { columns: [], rows: [], affectedRows: 1, durationMs: 1,
+    safety: { classification: "write", requiresConfirmation: true, confirmed: true, message: null },
+    warnings: ["ACTIVITY_RECORD_FAILED"] };
+  executeMock.mockResolvedValue(output);
+  const onSuccess = vi.fn();
+  const onError = vi.fn();
+  const { result } = renderHook(() => useSqlExecution({ connectionId: "c", workspaceId: "w",
+    onSuccess, onError, onExecuteStart: vi.fn(), onConfirmationRequired: vi.fn() }), { wrapper: createWrapper() });
+  result.current.mutate({ confirmMutation: true, sql: "INSERT INTO effects VALUES (1)" });
+  await waitFor(() => expect(warningMock).toHaveBeenCalledOnce());
+  expect(onSuccess).toHaveBeenCalledWith(output, true);
+  expect(onError).not.toHaveBeenCalled();
+  expect(executeMock).toHaveBeenCalledOnce();
 });

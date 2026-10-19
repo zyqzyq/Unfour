@@ -120,6 +120,7 @@ impl ScriptConnection {
         // the command-bus maximum, and so `row_limit` matches what was applied.
         let limit = limit.clamp(1, 1_000);
         let mut result = DatabaseQueryResult {
+            warnings: Vec::new(),
             columns: Vec::new(),
             rows: Vec::new(),
             affected_rows: 0,

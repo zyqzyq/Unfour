@@ -105,6 +105,31 @@ fn ssh_readonly_classifier_allows_prod_diagnostics_only() {
 }
 
 #[test]
+fn ssh_mutating_utility_arguments_cannot_enter_read_only_workspaces() {
+    for command in [
+        "ip link set eth0 down",
+        "mount -o remount,rw /",
+        "hostname audit-name",
+        "date -s 2030-01-01",
+        "ifconfig eth0 down",
+        "ss -K",
+        "journalctl --rot",
+    ] {
+        let arguments = json!({"command": command});
+        let (capability, risk) =
+            classify_mcp_action("unfour.ssh.exec", arguments.as_object(), None).unwrap();
+        assert_ne!(risk, McpRisk::Read, "{command}");
+        for context in [workspace("prod", "auto"), workspace("dev", "read_only")] {
+            assert!(
+                check_mcp_permission(&context, capability, risk).is_err(),
+                "{command}"
+            );
+        }
+        assert!(check_mcp_permission(&workspace("dev", "full_access"), capability, risk).is_ok());
+    }
+}
+
+#[test]
 fn ssh_exec_classifier_uses_effective_command_after_cwd_wrapping() {
     let arguments = json!({
         "command": "df -h",
