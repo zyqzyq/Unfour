@@ -56,7 +56,11 @@ V1 detection is a banner heuristic, not a proof of product identity. Additional
 probes can be added here if a product reports an indistinguishable upstream banner.
 Capabilities describe Unfour's supported operation set for the detected family;
 they do not replace read-only settings, SQL confirmation, permissions, or server
-errors. The existing three families retain their supported feature baseline.
+errors. MCP read-only execution and connections marked read-only apply a
+separate constraint at query time: PostgreSQL and openGauss use `BEGIN READ ONLY`,
+MySQL uses `START TRANSACTION READ ONLY`, and SQLite uses `PRAGMA query_only`.
+Product detection does not establish that constraint. The existing three
+families retain their supported feature baseline.
 
 ## Dependency boundaries
 

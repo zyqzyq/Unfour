@@ -253,11 +253,32 @@ Comments do not change that classification. A statement that is not proven
 read-only in every supported dialect is proven only for the saved connection's
 driver; if that driver cannot be resolved, it is treated as a write.
 
+Those two tools always execute on the same physical connection under a
+database-enforced read-only constraint. `unfour.db.execute` does the same when
+the resolved workspace policy is read-only, including explicit `read_only` and
+`auto` on production or an unknown environment. A saved connection with
+`read_only: false` does not bypass it. PostgreSQL and openGauss run
+`BEGIN READ ONLY` and continue only when `transaction_read_only` is `on`. MySQL
+runs `START TRANSACTION READ ONLY` and continues only when
+`@@transaction_read_only` is on. SQLite sets `PRAGMA query_only` and continues
+only when that pragma reads back as on. If the constraint cannot be started or
+verified, the statement is not sent.
+
+The constraint blocks ordinary writes and sequence changes such as PostgreSQL
+`SELECT nextval(...)`. It does not block every effect outside that transaction:
+temporary-table writes the server still allows, file or network functions,
+`dblink` or foreign-data writes that use another credential, and openGauss
+autonomous transactions. Use a database account that itself cannot write when
+those effects matter. Multi-statement scripts are unchanged and are not this
+MCP path.
+
 `unfour.db.execute` accepts one SQL statement. In dev it can run ordinary
 mutations. In test it is guarded by policy and confirmation for high-risk
 statements. In prod it is blocked by read-only policy. Proven reads are not
-sent with a mutation confirmation. These statements require confirmation
-before execution:
+sent with a mutation confirmation. Dev, test, guarded, and full-access
+execution does not wrap statements in a read-only transaction, so ordinary
+writes and `SELECT nextval(...)` keep their existing behavior. These statements
+require confirmation before execution:
 
 - `DELETE` without `WHERE`
 - `UPDATE` without `WHERE`

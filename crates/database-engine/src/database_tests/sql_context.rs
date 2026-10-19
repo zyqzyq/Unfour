@@ -134,6 +134,8 @@ async fn mysql_script_reports_each_statement_catalog_after_successful_use() {
                 limit: None,
                 timeout_ms: Some(2000),
                 confirm_mutation: Some(true),
+
+                enforce_read_only: false,
             },
             run_id: uuid::Uuid::new_v4().to_string(),
             cursor_offset: None,

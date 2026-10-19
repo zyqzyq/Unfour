@@ -275,6 +275,12 @@ pub struct DatabaseQueryInput {
     /// absent a default timeout protects against runaway queries.
     #[serde(default)]
     pub timeout_ms: Option<u64>,
+    /// Run this single statement under a database-enforced read-only constraint
+    /// on the checked-out connection. Independent of the saved connection's
+    /// `read_only` flag. Desktop and Flow omit it. Does not change script
+    /// execution.
+    #[serde(default)]
+    pub enforce_read_only: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

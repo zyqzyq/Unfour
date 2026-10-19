@@ -10,6 +10,9 @@ pub(super) struct ProfileServer {
     pub query_catalogs: Arc<Mutex<Vec<(String, String)>>>,
     pub catalogs: Arc<Mutex<Vec<String>>>,
     pub queries: Arc<Mutex<Vec<String>>>,
+    /// `on` or `off` is returned by `SHOW transaction_read_only`. `reject`
+    /// makes `BEGIN READ ONLY` fail before any caller statement.
+    pub transaction_read_only: Arc<Mutex<String>>,
     task: tokio::task::JoinHandle<()>,
 }
 
@@ -21,11 +24,13 @@ impl ProfileServer {
         let queries = Arc::new(Mutex::new(Vec::new()));
         let catalogs = Arc::new(Mutex::new(Vec::new()));
         let query_catalogs = Arc::new(Mutex::new(Vec::new()));
+        let transaction_read_only = Arc::new(Mutex::new("on".to_string()));
         let state = (
             version.clone(),
             queries.clone(),
             catalogs.clone(),
             query_catalogs.clone(),
+            transaction_read_only.clone(),
         );
         let task = tokio::spawn(async move {
             let mut clients = tokio::task::JoinSet::new();
@@ -33,7 +38,7 @@ impl ProfileServer {
                 let (stream, _) = listener.accept().await.unwrap();
                 let state = state.clone();
                 clients.spawn(async move {
-                    let _ = serve(stream, state.0, state.1, state.2, state.3).await;
+                    let _ = serve(stream, state.0, state.1, state.2, state.3, state.4).await;
                 });
             }
         });
@@ -43,6 +48,7 @@ impl ProfileServer {
             queries,
             catalogs,
             query_catalogs,
+            transaction_read_only,
             task,
         }
     }
@@ -67,6 +73,7 @@ async fn serve(
     queries: Arc<Mutex<Vec<String>>>,
     catalogs: Arc<Mutex<Vec<String>>>,
     query_catalogs: Arc<Mutex<Vec<(String, String)>>>,
+    transaction_read_only: Arc<Mutex<String>>,
 ) -> std::io::Result<()> {
     let mut catalog = String::new();
     loop {
@@ -111,6 +118,9 @@ async fn serve(
                 if let Some(spec) = super::result_cap::result_fixture(&query) {
                     send_simple_fixture(&mut stream, &query, &spec).await?;
                     send(&mut stream, b'Z', b"I").await?;
+                    continue;
+                }
+                if answer_read_only_control(&mut stream, &query, &transaction_read_only).await? {
                     continue;
                 }
                 if query.starts_with("SET search_path") {
@@ -230,6 +240,50 @@ async fn serve(
             other => panic!("unexpected PostgreSQL fixture message: {other}"),
         }
     }
+}
+
+/// Protocol-fixture replies for the read-only transaction probe. This is not a
+/// PostgreSQL or openGauss server and does not prove `nextval` behavior.
+async fn answer_read_only_control(
+    stream: &mut TcpStream,
+    query: &str,
+    transaction_read_only: &Mutex<String>,
+) -> std::io::Result<bool> {
+    let trimmed = query.trim();
+    let mode = transaction_read_only.lock().unwrap().clone();
+    if trimmed.eq_ignore_ascii_case("BEGIN READ ONLY") {
+        if mode == "reject" {
+            send(
+                stream,
+                b'E',
+                b"SERROR\0VERROR\0C0A000\0Mread-only transactions are not available\0\0",
+            )
+            .await?;
+        } else {
+            send(stream, b'C', b"BEGIN\0").await?;
+        }
+        send(stream, b'Z', b"I").await?;
+        return Ok(true);
+    }
+    if trimmed.eq_ignore_ascii_case("ROLLBACK") {
+        send(stream, b'C', b"ROLLBACK\0").await?;
+        send(stream, b'Z', b"I").await?;
+        return Ok(true);
+    }
+    if trimmed.eq_ignore_ascii_case("COMMIT") {
+        send(stream, b'C', b"COMMIT\0").await?;
+        send(stream, b'Z', b"I").await?;
+        return Ok(true);
+    }
+    if trimmed.eq_ignore_ascii_case("SHOW transaction_read_only") {
+        let value = if mode == "on" { "on" } else { "off" };
+        send(stream, b'T', &text_description("transaction_read_only")).await?;
+        send(stream, b'D', &text_row(value)).await?;
+        send(stream, b'C', b"SHOW\0").await?;
+        send(stream, b'Z', b"I").await?;
+        return Ok(true);
+    }
+    Ok(false)
 }
 
 fn text_description(name: &str) -> Vec<u8> {

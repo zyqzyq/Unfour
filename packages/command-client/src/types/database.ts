@@ -139,6 +139,12 @@ export type DatabaseQueryInput = {
   schema?: string | null;
   /** Optional per-statement timeout in milliseconds; clamped server-side. */
   timeoutMs?: number;
+  /**
+   * Ask the engine to run this one statement inside a database-enforced
+   * read-only transaction. Desktop omits it. MCP sets it for read-only tools
+   * and read-only workspace policy.
+   */
+  enforceReadOnly?: boolean;
 };
 
 export type DbQueryHistoryEntry = {

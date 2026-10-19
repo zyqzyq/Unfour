@@ -31,6 +31,7 @@ mod pools;
 mod postgres;
 mod queries;
 mod query_history;
+mod read_only_execution;
 mod row_mutations;
 mod runtime_profile;
 mod saved_sql;

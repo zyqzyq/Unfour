@@ -98,6 +98,14 @@ Database mutation SQL must continue to use backend safety classification and
 confirmation metadata. Frontend confirmation UI is additive; it must not replace
 backend checks.
 
+MCP read-only SQL — `unfour.db.query_readonly`, `unfour.db.explain`, and
+`unfour.db.execute` under a read-only or production-auto policy — runs on the
+checked-out connection inside a database-enforced read-only transaction, even
+when the saved connection is writable. Classification still rejects wrapped
+writes before connect. The transaction does not stop every external side effect
+or cross-database call; a database role without write privilege remains the
+additional control. See [MCP tools](../mcp/tools.md).
+
 ## SSH Host-Key Policy
 
 Unfour uses trust on first use (TOFU) for SSH host-key verification.

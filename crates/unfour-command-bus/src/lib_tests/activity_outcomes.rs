@@ -50,6 +50,8 @@ async fn committed_database_effects_survive_activity_failure() {
         catalog: None,
         schema: None,
         timeout_ms: None,
+
+        enforce_read_only: false,
     };
     assert!(bus
         .execute_database_query(input("INSERT INTO effects(n) VALUES (0)", false))

@@ -36,14 +36,14 @@ pub(super) fn log_query_outcome(
 
 /// One checked-out physical connection for the entire script. Never return
 /// arbitrary editor session state or an open user transaction to a pool.
-enum ScriptDriverConnection {
+pub(super) enum ScriptDriverConnection {
     Sqlite(sqlx::pool::PoolConnection<sqlx::Sqlite>),
     Postgres(sqlx::pool::PoolConnection<sqlx::Postgres>),
     Mysql(sqlx::pool::PoolConnection<sqlx::MySql>),
 }
 
 pub(super) struct ScriptConnection {
-    driver: ScriptDriverConnection,
+    pub(super) driver: ScriptDriverConnection,
     pub profile: RuntimeDatabaseProfile,
 }
 

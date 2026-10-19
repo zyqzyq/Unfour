@@ -125,6 +125,30 @@ fn query_readonly_forwards_catalog_schema_and_timeout() {
     assert_eq!(captured.catalog.as_deref(), Some("other_db"));
     assert_eq!(captured.schema.as_deref(), Some("public"));
     assert_eq!(captured.timeout_ms, Some(1500));
+    assert!(captured.enforce_read_only);
+
+    *bus.captured.lock().expect("capture lock") = None;
+    registry
+        .call(
+            "unfour.db.explain",
+            json!({"connectionId": "conn-1", "sql": "SELECT nextval('users_id_seq')"}),
+        )
+        .expect("explain stays read-only");
+    let explained = bus.captured.lock().expect("capture lock").clone().unwrap();
+    assert!(explained.enforce_read_only);
+    assert!(explained.sql.to_ascii_lowercase().starts_with("explain"));
+    assert!(explained.sql.contains("nextval"));
+
+    *bus.captured.lock().expect("capture lock") = None;
+    registry
+        .call(
+            "unfour.db.query_readonly",
+            json!({"connectionId": "conn-1", "sql": "SELECT nextval('users_id_seq')"}),
+        )
+        .expect("side-effecting select is still a read at the tool boundary");
+    let nextval = bus.captured.lock().expect("capture lock").clone().unwrap();
+    assert!(nextval.enforce_read_only);
+    assert_eq!(nextval.sql, "SELECT nextval('users_id_seq')");
 }
 
 #[test]

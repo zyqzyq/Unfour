@@ -257,6 +257,8 @@ async fn postgres_mutating_query_requires_confirmation() {
             catalog: None,
             schema: None,
             timeout_ms: None,
+
+            enforce_read_only: false,
         })
         .await;
     assert!(

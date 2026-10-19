@@ -281,6 +281,8 @@ async fn sqlite_schema_query_and_safe_browse_work() {
             catalog: None,
             schema: None,
             timeout_ms: None,
+
+            enforce_read_only: false,
         })
         .await
         .expect("query");
@@ -682,6 +684,8 @@ async fn mutating_sql_requires_confirmation_and_rejects_multiple_statements() {
             catalog: None,
             schema: None,
             timeout_ms: None,
+
+            enforce_read_only: false,
         })
         .await;
     assert!(matches!(
@@ -699,6 +703,8 @@ async fn mutating_sql_requires_confirmation_and_rejects_multiple_statements() {
             catalog: None,
             schema: None,
             timeout_ms: None,
+
+            enforce_read_only: false,
         })
         .await
         .expect("confirmed update");
@@ -716,6 +722,8 @@ async fn mutating_sql_requires_confirmation_and_rejects_multiple_statements() {
             catalog: None,
             schema: None,
             timeout_ms: None,
+
+            enforce_read_only: false,
         })
         .await;
     assert!(matches!(multiple, Err(AppError::Validation(_))));
@@ -815,6 +823,8 @@ async fn sqlite_database_error_details_keep_message_and_omit_sqlstate() {
             catalog: None,
             schema: None,
             timeout_ms: None,
+
+            enforce_read_only: false,
         })
         .await
         .expect_err("missing table");

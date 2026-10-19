@@ -716,6 +716,9 @@ fn db_query_readonly(
         catalog,
         schema,
         timeout_ms,
+        // The tool contract is read-only in every policy, including when the
+        // saved connection itself is writable.
+        enforce_read_only: true,
     };
 
     match command_bus.execute_db_query(input) {
@@ -844,6 +847,10 @@ fn db_execute(
         catalog,
         schema,
         timeout_ms,
+        // Read-only and production-auto workspaces stay constrained even when
+        // this tool is allowed to run a proven read. Writable policies keep
+        // normal statement execution.
+        enforce_read_only: evaluation.resolved_policy == super::policy::ResolvedMcpPolicy::ReadOnly,
     };
 
     match command_bus.execute_db_query(input) {
@@ -914,6 +921,7 @@ fn db_explain(
         catalog,
         schema,
         timeout_ms,
+        enforce_read_only: true,
     };
 
     match command_bus.execute_db_query(input) {

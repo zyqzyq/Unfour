@@ -7,6 +7,9 @@ use tokio::net::{TcpListener, TcpStream};
 pub(super) struct MysqlProfileServer {
     pub port: u16,
     pub queries: Arc<Mutex<Vec<String>>>,
+    /// `on` or `off` is returned for `SELECT @@transaction_read_only`.
+    /// `reject` makes `START TRANSACTION READ ONLY` fail.
+    pub transaction_read_only: Arc<Mutex<String>>,
     task: tokio::task::JoinHandle<()>,
 }
 
@@ -24,20 +27,24 @@ impl MysqlProfileServer {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         let queries = Arc::new(Mutex::new(Vec::new()));
+        let transaction_read_only = Arc::new(Mutex::new("on".to_string()));
         let recorded = queries.clone();
+        let read_only = transaction_read_only.clone();
         let task = tokio::spawn(async move {
             let mut clients = tokio::task::JoinSet::new();
             loop {
                 let (stream, _) = listener.accept().await.unwrap();
                 let queries = recorded.clone();
+                let read_only = read_only.clone();
                 clients.spawn(async move {
-                    let _ = serve(stream, queries, hang_version_probe).await;
+                    let _ = serve(stream, queries, read_only, hang_version_probe).await;
                 });
             }
         });
         Self {
             port,
             queries,
+            transaction_read_only,
             task,
         }
     }
@@ -52,6 +59,7 @@ impl Drop for MysqlProfileServer {
 async fn serve(
     mut stream: TcpStream,
     queries: Arc<Mutex<Vec<String>>>,
+    transaction_read_only: Arc<Mutex<String>>,
     hang_version_probe: bool,
 ) -> std::io::Result<()> {
     send_packet(&mut stream, 0, &handshake()).await?;
@@ -76,6 +84,9 @@ async fn serve(
                     send_text_results(&mut stream, &mut seq, &sql, &spec).await?;
                 } else if version_probe {
                     send_packet(&mut stream, 1, &err_packet("probe denied")).await?;
+                } else if answer_read_only_control(&mut stream, &sql, &transaction_read_only)
+                    .await?
+                {
                 } else {
                     send_packet(&mut stream, 1, &ok_packet()).await?;
                 }
@@ -83,6 +94,49 @@ async fn serve(
             _ => send_packet(&mut stream, 1, &err_packet("unsupported")).await?,
         }
     }
+}
+
+/// Protocol-fixture replies. Not a MySQL server and not proof of live
+/// read-only transaction semantics.
+async fn answer_read_only_control(
+    stream: &mut TcpStream,
+    sql: &str,
+    transaction_read_only: &Mutex<String>,
+) -> std::io::Result<bool> {
+    let trimmed = sql.trim();
+    let mode = transaction_read_only.lock().unwrap().clone();
+    if trimmed.eq_ignore_ascii_case("START TRANSACTION READ ONLY") {
+        if mode == "reject" {
+            send_packet(
+                stream,
+                1,
+                &err_packet("read-only transactions are not available"),
+            )
+            .await?;
+        } else {
+            send_packet(stream, 1, &ok_packet()).await?;
+        }
+        return Ok(true);
+    }
+    if trimmed.eq_ignore_ascii_case("ROLLBACK") || trimmed.eq_ignore_ascii_case("COMMIT") {
+        send_packet(stream, 1, &ok_packet()).await?;
+        return Ok(true);
+    }
+    if trimmed.eq_ignore_ascii_case("SELECT @@transaction_read_only") {
+        let value = if mode == "on" { "1" } else { "0" };
+        let mut seq = 1u8;
+        send_next(stream, &mut seq, &[1]).await?;
+        send_next(
+            stream,
+            &mut seq,
+            &column_definition("transaction_read_only"),
+        )
+        .await?;
+        send_next(stream, &mut seq, &text_result_row(value)).await?;
+        send_next(stream, &mut seq, &result_eof(0, false)).await?;
+        return Ok(true);
+    }
+    Ok(false)
 }
 
 fn handshake() -> Vec<u8> {

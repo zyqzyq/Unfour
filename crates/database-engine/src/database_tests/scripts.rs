@@ -14,6 +14,8 @@ fn input(workspace: &str, connection: &str, sql: &str) -> DatabaseScriptInput {
             catalog: None,
             schema: None,
             timeout_ms: None,
+
+            enforce_read_only: false,
         },
         run_id: uuid::Uuid::new_v4().to_string(),
         cursor_offset: None,

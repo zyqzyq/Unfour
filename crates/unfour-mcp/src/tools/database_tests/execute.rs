@@ -118,6 +118,7 @@ fn confirmation_is_bound_to_workspace_connection_sql_catalog_schema_and_transact
     assert_eq!(writes.len(), 1);
     assert_eq!(writes[0].workspace_id, "workspace-1");
     assert_eq!(writes[0].confirm_mutation, Some(true));
+    assert!(!writes[0].enforce_read_only);
 }
 
 #[test]
@@ -257,6 +258,7 @@ fn guarded_wrapped_write_requires_confirmation_before_execution() {
     assert_eq!(writes.len(), 1);
     assert_eq!(writes[0].confirm_mutation, Some(true));
     assert_eq!(writes[0].sql, sql);
+    assert!(!writes[0].enforce_read_only);
 }
 
 #[test]
@@ -304,6 +306,10 @@ fn read_only_policy_blocks_wrapped_writes_without_calling_the_database() {
     let writes = bus.writes.lock().unwrap();
     assert_eq!(writes.len(), 1);
     assert_eq!(writes[0].confirm_mutation, None);
+    assert!(
+        writes[0].enforce_read_only,
+        "a writable saved connection still requests a native read-only constraint"
+    );
 }
 
 #[test]
@@ -328,7 +334,8 @@ fn execute_prod_update_is_blocked_by_policy() {
 
 #[test]
 fn execute_preserves_success_and_activity_warning() {
-    let registry = ToolRegistry::with_command_bus(Arc::new(RecordingBus::default()));
+    let bus = Arc::new(RecordingBus::default());
+    let registry = ToolRegistry::with_command_bus(bus.clone());
     let result = registry
         .call(
             "unfour.db.execute",
@@ -341,9 +348,126 @@ fn execute_preserves_success_and_activity_warning() {
         json!(["ACTIVITY_RECORD_FAILED"])
     );
     assert_eq!(result["structuredContent"]["affectedRows"], 2);
+    assert!(!bus.writes.lock().unwrap()[0].enforce_read_only);
     crate::output_schema::assert_success_matches_output_schema(
         &registry,
         "unfour.db.execute",
         &result,
     );
+}
+
+struct PolicySwitchBus {
+    environment: Mutex<String>,
+    policy: Mutex<String>,
+    writes: Mutex<Vec<DatabaseQueryInput>>,
+}
+
+impl CommandBusAdapter for PolicySwitchBus {
+    fn execute_read(
+        &self,
+        command: ReadCommand,
+    ) -> Result<ReadCommandResult, CommandBusAdapterError> {
+        let mut result = DbStubCommandBus.execute_read(command)?;
+        let environment = self.environment.lock().unwrap().clone();
+        let policy = self.policy.lock().unwrap().clone();
+        match &mut result {
+            ReadCommandResult::CurrentWorkspace(workspace) => {
+                workspace.environment_type = environment;
+                workspace.mcp_policy = policy;
+            }
+            ReadCommandResult::Workspaces(list) => {
+                list.workspaces[0].environment_type = environment;
+                list.workspaces[0].mcp_policy = policy;
+            }
+            _ => {}
+        }
+        Ok(result)
+    }
+
+    fn execute_saved_api_request(
+        &self,
+        _: &str,
+        _: Option<u64>,
+    ) -> Result<ApiResponse, CommandBusAdapterError> {
+        unreachable!("policy switch does not send API requests")
+    }
+
+    fn execute_db_query(
+        &self,
+        input: DatabaseQueryInput,
+    ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
+        let result = DbStubCommandBus.execute_db_query(input.clone());
+        self.writes.lock().unwrap().push(input);
+        result
+    }
+
+    fn list_db_connections(
+        &self,
+        workspace_id: &str,
+    ) -> Result<Vec<DatabaseConnection>, CommandBusAdapterError> {
+        let connections = DbStubCommandBus.list_db_connections(workspace_id)?;
+        assert!(
+            connections.iter().all(|connection| !connection.read_only),
+            "the fixture connection is writable"
+        );
+        Ok(connections)
+    }
+
+    fn get_db_schema(
+        &self,
+        workspace_id: &str,
+        connection_id: &str,
+    ) -> Result<DatabaseSchema, CommandBusAdapterError> {
+        DbStubCommandBus.get_db_schema(workspace_id, connection_id)
+    }
+}
+
+#[test]
+fn read_only_policy_switches_native_constraint_without_blocking_full_access_writes() {
+    let bus = Arc::new(PolicySwitchBus {
+        environment: Mutex::new("prod".into()),
+        policy: Mutex::new("auto".into()),
+        writes: Mutex::new(Vec::new()),
+    });
+    let registry = ToolRegistry::with_command_bus(bus.clone());
+    let nextval = json!({"connectionId": "conn-1", "sql": "SELECT nextval('users_id_seq')"});
+
+    let prod = registry.call("unfour.db.execute", nextval.clone()).unwrap();
+    assert_eq!(prod["isError"], false);
+    assert!(bus.writes.lock().unwrap()[0].enforce_read_only);
+    assert_eq!(bus.writes.lock().unwrap()[0].confirm_mutation, None);
+
+    let explain = registry.call("unfour.db.explain", nextval.clone()).unwrap();
+    assert_eq!(explain["isError"], false);
+    assert!(bus.writes.lock().unwrap()[1].enforce_read_only);
+
+    *bus.environment.lock().unwrap() = "dev".into();
+    *bus.policy.lock().unwrap() = "full_access".into();
+    let writable_read = registry.call("unfour.db.execute", nextval).unwrap();
+    assert_eq!(writable_read["isError"], false);
+    assert!(!bus.writes.lock().unwrap()[2].enforce_read_only);
+
+    let write = registry
+        .call(
+            "unfour.db.execute",
+            json!({"connectionId": "conn-1", "sql": "INSERT INTO users(id) VALUES (3)"}),
+        )
+        .unwrap();
+    assert_eq!(write["isError"], false);
+    assert!(!bus.writes.lock().unwrap()[3].enforce_read_only);
+    assert_eq!(bus.writes.lock().unwrap()[3].confirm_mutation, Some(true));
+
+    *bus.environment.lock().unwrap() = "dev".into();
+    *bus.policy.lock().unwrap() = "read_only".into();
+    let blocked = registry
+        .call(
+            "unfour.db.execute",
+            json!({"connectionId": "conn-1", "sql": "INSERT INTO users(id) VALUES (4)"}),
+        )
+        .unwrap();
+    assert_eq!(
+        crate::response::error_json(&blocked)["error"]["code"],
+        "WORKSPACE_POLICY_BLOCKED"
+    );
+    assert_eq!(bus.writes.lock().unwrap().len(), 4);
 }

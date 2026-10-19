@@ -285,6 +285,8 @@ async fn postgres_internal_char_decodes_at_result_boundary() {
             catalog: None,
             schema: None,
             timeout_ms: None,
+
+            enforce_read_only: false,
         })
         .await
         .unwrap();
@@ -306,6 +308,8 @@ async fn query_and_mutate(service: &DatabaseService, workspace: &str, connection
                 limit: Some(1),
                 confirm_mutation: Some(true),
                 timeout_ms: Some(2000),
+
+                enforce_read_only: false,
             })
             .await
             .unwrap();

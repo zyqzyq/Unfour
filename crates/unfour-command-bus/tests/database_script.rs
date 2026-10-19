@@ -64,6 +64,8 @@ async fn script_activity_failure_does_not_hide_executed_mutations() {
             catalog: None,
             schema: None,
             timeout_ms: None,
+
+            enforce_read_only: false,
         },
         run_id: unfour_core::id::new_id(),
         cursor_offset: None,

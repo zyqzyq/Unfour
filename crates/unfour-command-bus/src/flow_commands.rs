@@ -366,6 +366,7 @@ impl FlowExecutor for CommandBus {
                         catalog: args["catalog"].as_str().map(str::to_owned),
                         schema: args["schema"].as_str().map(str::to_owned),
                         timeout_ms: Some(60_000),
+                        enforce_read_only: false,
                     };
                     if cancel.is_cancelled() {
                         return Err(invalid("FLOW_CANCELLED"));

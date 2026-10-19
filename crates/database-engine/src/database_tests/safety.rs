@@ -172,6 +172,8 @@ async fn explain_analyze_write_requires_confirmation_before_execution() {
             catalog: None,
             schema: None,
             timeout_ms: None,
+
+            enforce_read_only: false,
         })
         .await;
     assert!(matches!(
@@ -297,6 +299,8 @@ fn query_input(
         catalog: None,
         schema: None,
         timeout_ms: None,
+
+        enforce_read_only: false,
     }
 }
 
@@ -418,6 +422,8 @@ async fn read_only_connection_blocks_writes_and_row_edits() {
             catalog: None,
             schema: None,
             timeout_ms: None,
+
+            enforce_read_only: false,
         })
         .await
         .expect("read query allowed");
@@ -434,6 +440,8 @@ async fn read_only_connection_blocks_writes_and_row_edits() {
             catalog: None,
             schema: None,
             timeout_ms: None,
+
+            enforce_read_only: false,
         })
         .await;
     assert!(matches!(write, Err(AppError::ReadOnly(_))));
@@ -488,6 +496,8 @@ async fn read_only_connection_blocks_select_into() {
             catalog: None,
             schema: None,
             timeout_ms: None,
+
+            enforce_read_only: false,
         })
         .await;
     assert!(matches!(select_into, Err(AppError::ReadOnly(_))));

@@ -6,6 +6,7 @@ mod opengauss_fixture;
 mod paging;
 mod postgres;
 mod profile_server;
+mod read_only_execution;
 mod result_cap;
 mod runtime_profile;
 mod safety;

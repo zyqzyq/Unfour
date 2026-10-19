@@ -179,6 +179,8 @@ async fn mysql_test_connection_and_read_query_use_live_path_with_sanitized_error
             catalog: None,
             schema: None,
             timeout_ms: None,
+
+            enforce_read_only: false,
         })
         .await
         .expect_err("closed local port should reject MySQL query");
@@ -207,6 +209,8 @@ async fn mysql_mutating_query_requires_confirmation_before_connecting() {
             catalog: None,
             schema: None,
             timeout_ms: None,
+
+            enforce_read_only: false,
         })
         .await;
     assert!(matches!(result, Err(AppError::ConfirmationRequired { .. })));

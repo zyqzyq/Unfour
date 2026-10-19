@@ -84,6 +84,8 @@ fn query(
         catalog: None,
         schema: None,
         timeout_ms: Some(5_000),
+
+        enforce_read_only: false,
     }
 }
 

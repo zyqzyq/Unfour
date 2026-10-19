@@ -26,9 +26,18 @@ impl DatabaseService {
             ));
         }
         let mut safety = classify_query_for_dialect(&input.sql, dialect);
-        if connection.read_only && safety.classification != "read" {
+        // The saved flag and an explicit MCP request share one gate. Neither
+        // one is enough on its own: a later native constraint covers reads
+        // that classification still treats as read-only.
+        let enforce_read_only = input.enforce_read_only || connection.read_only;
+        if enforce_read_only && safety.classification != "read" {
+            let scope = if connection.read_only {
+                "this connection is read-only"
+            } else {
+                "read-only execution"
+            };
             return Err(AppError::ReadOnly(format!(
-                "this connection is read-only; {} statements are not allowed",
+                "{scope}; {} statements are not allowed",
                 safety.classification
             )));
         }
@@ -45,13 +54,30 @@ impl DatabaseService {
         let timeout = resolve_timeout(input.timeout_ms);
         let run = async {
             let mut conn = self.script_connection(&connection, &input).await?;
-            conn.execute(
-                &input.sql,
-                input.limit.unwrap_or(100).clamp(1, 1_000),
-                safety,
-            )
-            .await
-            .map(|(result, _)| result)
+            if enforce_read_only {
+                conn.establish_read_only().await?;
+            }
+            let executed = conn
+                .execute(
+                    &input.sql,
+                    input.limit.unwrap_or(100).clamp(1, 1_000),
+                    safety,
+                )
+                .await
+                .map(|(result, _)| result);
+            if !enforce_read_only {
+                return executed;
+            }
+            // Always leave the physical connection before it can return to a
+            // pool. A failed statement still rolls back; its error wins.
+            let released = conn.release_read_only().await;
+            match executed {
+                Ok(result) => released.map(|()| result),
+                Err(error) => {
+                    let _ = released;
+                    Err(error)
+                }
+            }
         };
         let started = Instant::now();
         let result = tokio::time::timeout(timeout, run)
