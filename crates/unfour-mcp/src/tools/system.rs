@@ -25,10 +25,6 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "appName": { "type": "string" },
                     "storageReady": { "type": "boolean" },
                     "commandBusReady": { "type": "boolean" },
-                    "aiReservedCapabilities": {
-                        "type": "array",
-                        "items": { "type": "string" }
-                    },
                     "source": { "type": "string", "const": "command-bus" }
                 },
                 "required": ["appName", "storageReady", "commandBusReady", "source"],
@@ -54,11 +50,14 @@ fn system_health(
             message: error.message,
         })?;
 
+    // Desktop `system_health` still returns `ai_reserved_capabilities` for
+    // existing clients. Those IDs are not registered MCP tools, so this
+    // agent-facing result does not project them. The tool registry remains
+    // the tool contract.
     Ok(json!({
         "appName": health.app_name,
         "storageReady": health.storage_ready,
         "commandBusReady": health.command_bus_ready,
-        "aiReservedCapabilities": health.ai_reserved_capabilities,
         "source": "command-bus"
     }))
 }

@@ -24,6 +24,42 @@ fn health_structured_content_matches_output_schema() {
     assert_eq!(result["structuredContent"]["storageReady"], true);
     assert_eq!(result["structuredContent"]["commandBusReady"], true);
     assert_eq!(result["structuredContent"]["source"], "command-bus");
+    assert!(result["structuredContent"]
+        .get("aiReservedCapabilities")
+        .is_none());
+}
+
+#[test]
+fn health_schema_omits_reserved_capabilities_and_keeps_the_tool() {
+    let registry = stub_registry();
+    let definitions = registry.definitions();
+    let health = definitions
+        .iter()
+        .find(|tool| tool.name == "unfour.system.health")
+        .expect("health tool remains registered");
+    assert!(health.output_schema["properties"]
+        .get("aiReservedCapabilities")
+        .is_none());
+    assert_eq!(
+        health.output_schema["required"],
+        json!(["appName", "storageReady", "commandBusReady", "source"])
+    );
+    assert_eq!(health.output_schema["additionalProperties"], false);
+
+    let command_bus =
+        LocalCommandBusAdapter::ephemeral().expect("ephemeral command bus should initialize");
+    let registry = ToolRegistry::with_command_bus(command_bus);
+    let result = registry
+        .call("unfour.system.health", json!({}))
+        .expect("real health should succeed");
+    assert_success_matches_output_schema(&registry, "unfour.system.health", &result);
+    let structured = &result["structuredContent"];
+    assert!(structured.get("aiReservedCapabilities").is_none());
+    assert!(!structured.to_string().contains("ssh.connect.reserved"));
+    assert!(!structured
+        .to_string()
+        .contains("database.execute_sql.reserved"));
+    assert_eq!(structured["source"], "command-bus");
 }
 
 #[test]
