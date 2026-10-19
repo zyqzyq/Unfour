@@ -47,14 +47,14 @@ Unfour 帮助后端开发者排查涉及 API、服务器及其数据库的故障
 
 统一、本地优先的工作区让请求、连接、本地活动和布局贯穿整个排查过程。
 API 测试、SSH 终端与数据库工具为这条链路中的各个步骤提供能力。Flow 将这些能力组合成
-本地 runbook，用于重复执行检查与任务。Flow V1 当前为 local-only，定义与运行历史均不支持
-Cloud Sync；它定位于工作区内的 runbook，不是通用工作流平台。
+本地 runbook，用于重复执行检查与任务。Flow 定义包含在工作区整体导入导出中；
+运行历史留在本机。Flow 不参与 Cloud Sync，它是工作区内的 runbook，不是通用工作流平台。
 
 MCP 是可选的辅助层：Codex 与 Cursor 可以通过本地 stdio MCP 服务，使用与桌面应用相同的
-已保存 API、SSH 和数据库连接。工具限定在工作区范围内，经由共享命令总线执行，并遵循
-MCP 策略和高风险操作确认检查。MCP 也可以启动、取消 Flow 运行并查看运行历史。
-排障仍由用户主导：用户编写并启动 runbook，Unfour 不会自动关联请求、日志与数据库状态，
-也不会自动检测根因。
+已保存 API、SSH、数据库和 Flow 数据。工具限定在工作区范围内，经由共享命令总线执行，并遵循
+MCP 策略和高风险操作确认检查。MCP 可以保存、运行、取消和查询 Flow，
+但不会自动生成排障剧本，也不会自动关联请求、日志与数据库状态或检测根因。
+用户编写并启动 runbook。能力边界与确认机制见 [MCP 概述](docs/mcp/overview.md)。
 
 Unfour 是一个统一的应用和产品。核心桌面功能免费并以 Apache-2.0 协议开源。
 用户可通过有效的 Pro 订阅在同一个应用中解锁 Cloud Sync。Pro 是 Unfour 内的订阅权益，
@@ -101,21 +101,23 @@ Unfour 本身不修改代码仓库：代码变更由 Coding 客户端负责，Un
   结构使用 SQL，数据支持 SQL、CSV 与 JSON。
 - **Flow** - 将已保存的 API 请求、SSH 任务与 Database 查询组合成本地 runbook，支持
   Condition 分支与 Wait Until 检查。通过 Canvas 编排步骤，查看步骤结果与运行历史。
-  Flow V1 当前为 local-only，不支持 Cloud Sync。
+  定义随工作区整体导入导出转移；运行历史与 Cloud Sync 不包含 Flow。详见
+  [Flow V1](docs/architecture/flow-v1.md)。
 - **Workspace（工作区）** - 将已保存的请求、共享环境变量、连接、活动、标签页与布局状态
-  限定在某个本地工作区之内，并支持标题栏切换当前环境。可整体导入导出工作区定义，
-  或创建可选包含已保存凭据的密码加密本地备份；导入预览确认后创建独立副本。请参阅
+  限定在某个本地工作区之内，并支持标题栏切换当前环境。可整体导入导出工作区定义（含 Flow
+  定义），或创建可选包含已保存凭据的密码加密本地备份；导入预览确认后创建独立副本。请参阅
   [工作区交换与备份说明](docs/user/USER_GUIDE.md#workspace-exchange-and-local-backups)。
 - **MCP integration（面向 Codex 与 Cursor）** - 通过桌面应用所用的同一命令总线，
-  以本地 stdio 方式提供安全的诊断工具。Codex 与 Cursor 可以使用同一套已保存的 API、
-  SSH 与数据库连接来复现问题、查日志、查数据库状态并验证修复，也能管理和运行本地 Flow
-  runbook，沿用相同的安全检查并共享运行历史。
+  以本地 stdio 方式提供工具。Codex 与 Cursor 可以使用同一套已保存的 API、SSH 与数据库
+  连接来复现问题、查日志、查数据库状态并验证修复，也可以保存、运行、取消和查询本地 Flow，
+  并沿用相同的安全检查。MCP 不会自动生成排障剧本。详见
+  [MCP 概述](docs/mcp/overview.md)。
 
 > [连接 Codex 与 Cursor 到 Unfour MCP →](docs/mcp/client-setup.md)
 
-加密备份是本地文件，与 Pro Cloud Sync 分开。v0.11.0 不支持敏感数据云同步，
-Flow 定义与历史也仍保留在本地。备份不嵌入数据库文件、私钥文件或历史记录；
-分享普通定义导出前，仍需检查脚本、SQL 等自由文本中的硬编码凭据。
+加密备份是本地文件，与 Pro Cloud Sync 分开。v0.11.0 不支持敏感数据云同步。
+工作区导出包含 Flow 定义、不含运行历史；二者都不参与 Cloud Sync。备份不嵌入
+数据库文件或私钥文件。分享普通定义导出前，仍需检查脚本、SQL 等自由文本中的硬编码凭据。
 
 ## 截图
 
@@ -187,7 +189,7 @@ pnpm run test:rust      # cargo test --workspace
 | `packages/flow` | 本地 Flow runbook 编辑器、Canvas 与运行历史。 |
 | `packages/workspace-core` | 共享前端工作区状态。 |
 | `packages/workspace-environments` | 工作区环境与变量管理 UI。 |
-| `packages/workspace-local` | 预留的本地工作区生命周期边界。 |
+| `packages/workspace-local` | 本地工作区生命周期与整体导入导出界面。 |
 | `packages/ui` | 共享 UI 基础组件与无状态布局辅助。 |
 | `packages/command-client` | 类型化的 Tauri 命令封装与前端命令类型。 |
 | `crates/*` | Rust 后端能力模块与适配器。 |
@@ -223,20 +225,33 @@ Ubuntu 22.04 构建，不会替换已发布的 v0.9.0 文件。在记录已发�
 v0.11.0 Ubuntu 22.04/24.04 运行回归仍为 `NOT VERIFIED`，详见
 [发布验证记录](docs/testing/release-verification.md#linux-appimage-compatibility)。
 
+早期版本的真机与人工结果，以及仍然保持 `NOT VERIFIED` 的检查，集中记录在
+[发布验证](docs/testing/release-verification.md)。该记录中，下列 v0.11.0 事项仍为
+`NOT VERIFIED`：原生安装与更新、已发布产物上的工作区 / Auth / 数据库 / MCP / Flow
+回归、账号 / Cloud Sync 与 MCP 生产策略旅程、Linux 运行、macOS 与 Linux 凭据存储，
+以及人工 MSIX / Store 路径。正式发布不会把这些事项改成 `PASS`。v0.9.0 的平台结果
+保留其原始范围。
+
 ## 文档
 
-- `AGENTS.md` - 面向编码 Agent 的仓库规则。
-- `docs/agents/START_HERE.md` - 面向 AI Agent 的按需引导路径。
-- `docs/architecture/package-boundaries.md` - 包归属与禁止的依赖方向。
-- `docs/architecture/project-structure.md` - 仓库、包、模块（crate）与调用链映射。
-- `docs/architecture/data-storage.md` - 工作区数据、SQLite、凭据引用与本地活动规则。
-- `docs/architecture/diagnostics.md` - 本地结构化日志、脱敏、留存、诊断包与开发日志指引。
-- `docs/architecture/security-model.md` - 安全姿态、脱敏、主机密钥策略与危险操作规则。
-- `docs/mcp/overview.md` 与 `docs/mcp/tools.md` - 本地 MCP 服务行为。
-- `docs/mcp/client-setup.md` - 面向 Codex 与 Cursor 的安装用户配置。
-- `docs/testing/release-verification.md` - 发布验证矩阵。
-- `docs/release/release-checklist.md` - 公开发布检查清单。
-- `docs/user/USER_GUIDE.md` - 面向用户的工作流指南。
+按问题查阅对应文档。本 README 可以单独阅读；下表是进一步说明的权威来源。
+
+| 问题 | 文档 |
+| --- | --- |
+| 如何使用应用？ | [用户指南](docs/user/USER_GUIDE.md) |
+| MCP 能做什么，哪些操作需要确认？ | [MCP 概述](docs/mcp/overview.md) |
+| 如何连接 Codex 或 Cursor？ | [客户端配置](docs/mcp/client-setup.md) |
+| 工具接受什么参数、返回什么结果？ | [MCP 工具](docs/mcp/tools.md) |
+| 如何构建 MCP 服务？ | [Codex 开发配置](docs/mcp/codex-setup.md) |
+| 已发布什么，哪些只是计划？ | [路线图](docs/roadmap.md) |
+| 哪些发布检查已通过？ | [发布验证](docs/testing/release-verification.md) |
+| 仓库如何划分？ | [包边界](docs/architecture/package-boundaries.md)、[项目结构](docs/architecture/project-structure.md) |
+| 密钥与本地数据如何存储？ | [数据存储](docs/architecture/data-storage.md)、[安全模型](docs/architecture/security-model.md) |
+| Flow 与工作区交换如何工作？ | [Flow V1](docs/architecture/flow-v1.md)、[工作区包](docs/architecture/workspace-bundle.md) |
+
+`AGENTS.md` 与 `docs/agents/START_HERE.md` 面向在本仓库中工作的编码 Agent。
+`docs/release/release-checklist.md` 是公开发布检查清单。
+`docs/architecture/diagnostics.md` 说明本地日志与诊断包。
 
 ## 参与贡献
 

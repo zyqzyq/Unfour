@@ -108,8 +108,10 @@ are capped at one day; invalid values use the disabled default.
 ## Example Prompts
 
 These examples are individual diagnostic or remediation actions that Codex or
-Cursor can combine with the user into a troubleshooting loop. The server does not
-automatically run a complete root-cause playbook.
+Cursor can combine with the user into a troubleshooting loop. MCP can also
+save, run, cancel, and query a Flow when asked. The server does not generate
+or automatically run a troubleshooting playbook. Boundaries and confirmation
+are in [MCP Overview](overview.md).
 
 ```text
 Use the Unfour MCP server to list saved API requests in the current workspace.
@@ -127,6 +129,8 @@ Use the Unfour MCP server to run the read-only SSH diagnostic command df -h on c
 Use the Unfour MCP server to list /var/log on SSH connection <id>.
 Use the Unfour MCP server to read the last 20000 bytes of /var/log/app.log on SSH connection <id>.
 Use the Unfour MCP server to check system health.
+Use the Unfour MCP server to list saved Flows, then show the definition with id <flow-id>.
+Use the Unfour MCP server to run the saved Flow with id <flow-id> only after I confirm.
 ```
 
 For high-risk requests, the first call returns `CONFIRMATION_REQUIRED` with a
@@ -134,4 +138,5 @@ For high-risk requests, the first call returns `CONFIRMATION_REQUIRED` with a
 command/SQL/path, and payload, passing `confirm=true` and that exact
 confirmation text.
 
-See `docs/mcp/tools.md` for the current tool list and safety constraints.
+See [MCP Tools](tools.md) for the tool contract and
+[MCP Overview](overview.md) for safety constraints.

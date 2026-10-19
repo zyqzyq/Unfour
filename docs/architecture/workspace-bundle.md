@@ -246,4 +246,5 @@ Selective export/import, dependency repair/rebinding, merge/conflict policies,
 bundle migration between versions, file attachments with explicit portability
 rules, signatures and large-bundle progress/cancellation can follow separately.
 This change adds no multi-device encrypted credential sync, Flow Cloud Sync,
-separate Flow import/export, remote execution, or database file migration.
+separate Flow-only import/export, remote execution, or database file migration.
+Flow definitions travel inside the Workspace bundle; run history does not.

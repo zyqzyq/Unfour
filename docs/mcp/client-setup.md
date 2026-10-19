@@ -17,16 +17,8 @@ the configuration status for each client. Microsoft Store/MSIX installs use the
 stable `unfour-mcp.exe` execution alias; Standard installs use the absolute path
 to the installed sidecar. The one-click actions preserve the existing client
 configuration according to the client's integration and report success or an
-error in the Settings page.
-
-Codex and Cursor can use those saved connections to reproduce issues, inspect
-logs and database state, and then act with the user's review. The steps are
-worked through together; Unfour provides diagnostic tools rather than an
-automatic troubleshooting playbook or workflow runner.
-
-The coding client uses its own tools to inspect, edit, and test code; Unfour MCP
-provides runtime evidence and re-checks after a change. You keep control of the
-workspace, environment, risky actions, and final decision.
+error in the Settings page. They write the client entry only. They do not start
+a troubleshooting run or change workspace policy.
 
 After restarting your configured client, use `Settings → MCP → Example Prompt`
 and `Copy example prompt`, then paste it into that client and describe your
@@ -105,14 +97,12 @@ path:
 For a Microsoft Store/MSIX install, use `"unfour-mcp.exe"` as the `command`
 value. Do not use the versioned physical path under `WindowsApps`.
 
-In the default `prod` environment, MCP is read-only. High-risk actions do not
-run immediately: the server returns `CONFIRMATION_REQUIRED` with confirmation
-details, and Codex or Cursor must retry only after the target and payload
-have been reviewed.
+Do not set `UNFOUR_MCP_STORAGE_MODE=ephemeral` for daily use. That mode is for
+registry validation and isolated tests; see
+[Ephemeral registry mode](overview.md#ephemeral-registry-mode).
 
-Do not set `UNFOUR_MCP_STORAGE_MODE=ephemeral` for daily use. It is intended for
-registry validation, CI, protocol smoke checks, and isolated tests, and uses an
-empty in-memory workspace instead of the desktop app's saved data.
-
-See [MCP Overview](overview.md) for the protocol and safety model, and
-[MCP Tools](tools.md) for the current tool list.
+Capability boundaries, the default prod read-only mapping, confirmation, and
+the limit that MCP does not generate a troubleshooting playbook are defined in
+[MCP Overview](overview.md). Tool arguments are in [MCP Tools](tools.md).
+Day-to-day use of the connected client is in the
+[user guide](../user/USER_GUIDE.md#connect-codex-or-cursor-mcp).

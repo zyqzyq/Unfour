@@ -32,8 +32,10 @@ Deleting a definition leaves its runs and all referenced resources intact.
 Deleting a workspace cascades its Flow records. Every lookup is workspace
 scoped. Editing a definition cannot change an existing Run.
 
-Flow V1 is local-only and is not part of Cloud Sync or workspace import/export.
-It does not emit cloud outbox intent because these records are not cloud-bound.
+Flow definitions are included in whole-Workspace import/export. Run history is
+not exported. Flow definitions and run history are not part of Cloud Sync, and
+these records do not emit cloud outbox intent. There is no separate Flow-only
+exchange format. See [Workspace bundle](workspace-bundle.md).
 
 ## Invocation and expressions
 
@@ -308,12 +310,15 @@ enforces the authoritative execution checks.
 
 CommandBus already exposes `list_flows`, `get_flow`, `save_flow`, `delete_flow`,
 `run_flow`, `list_flow_runs`, `get_flow_run`, and `cancel_flow_run`.
-MCP V1 registers `unfour.flow.list/get/save/run/cancel_run/list_runs/get_run`
+MCP registers `unfour.flow.list`, `unfour.flow.get`, `unfour.flow.save`,
+`unfour.flow.delete`, `unfour.flow.run`, `unfour.flow.cancel_run`,
+`unfour.flow.list_runs`, and `unfour.flow.get_run`
 through `MCP -> CommandBusAdapter -> CommandBus -> FlowService`. Desktop and
 MCP use the same FlowDefinition, validation/revision semantics, engine, SQLite
 records and redacted history. MCP definitions open directly in Canvas; no
 adapter-specific execution or persistence model exists. Initiator is provenance,
-not permission: MCP sets `initiator: mcp` itself.
+not permission: MCP sets `initiator: mcp` itself. These tools save, run, cancel,
+and query Flows. They do not generate a troubleshooting playbook.
 
 Flow runs are conservatively classified as execution regardless of their nodes.
 Workspace policy is checked before the handler: auto dev allows execution,
@@ -330,7 +335,8 @@ does not undo effects. The existing engine still owns resource validation,
 secret redaction, cancellation and interruption recovery.
 
 Tool input/output schemas describe the wire contracts; successful structuredContent
-contains exactly `{flows}`, `{flow}`, `{runs}` or `{run}`. Confirmation and
+contains exactly `{flows}`, `{flow}`, `{deleted, flowId}`, `{runs}`, or `{run}`.
+Confirmation and
 policy errors use the existing MCP error content without success structuredContent.
 See [MCP tools](../mcp/tools.md) for arguments and confirmation usage.
 
@@ -352,9 +358,10 @@ independent columns without loading or decoding `run_json`. History loads on
 open; selecting an entry loads its full snapshot with `getFlowRun`. Completion
 invalidates History for its next open or active refresh. The summary migration
 adds `finished_at`, backfilled once from snapshots; writes and stale-run recovery
-keep it equal to snapshot finishedAt. Snapshot semantics are unchanged. There is
-no pagination, pruning, or deleted-Flow history
-browser. Retained runs remain accessible by ID through the service. Definition
+keep it equal to snapshot finishedAt. Snapshot semantics are unchanged. The
+desktop history browser loads at most 100 summaries and has no pager, pruning,
+or deleted-Flow history browser. MCP `unfour.flow.list_runs` pages with a
+cursor; see the [tool contract](../mcp/tools.md). Retained runs remain accessible by ID through the service. Definition
 drafts survive module switching but are not persisted across workspace changes
 or application restarts. Browser preview supports authoring only; execution
 requires the desktop backend and is never simulated as success.

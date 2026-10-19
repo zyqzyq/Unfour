@@ -1,8 +1,15 @@
 # MCP Overview
 
+This document is the authority for Unfour MCP capability boundaries, environment
+permissions, confirmation, non-goals, and the troubleshooting method. Tool
+arguments and outputs stay in [MCP Tools](tools.md). Installed Codex and Cursor
+configuration stays in [client setup](client-setup.md). A development build and
+smoke check stay in [Codex setup](codex-setup.md).
+
 `unfour-mcp` is a local stdio Model Context Protocol server. It exposes
-workspace, API Client, database, SSH, activity, and system-health tools to
-Codex and Cursor.
+workspace, API Client, database, SSH, Flow, activity, and system-health tools
+to Codex and Cursor. Flow tools can save, run, cancel, and query local
+runbooks. They do not generate a troubleshooting playbook.
 
 ## Coding Tools and Runtime Tools
 
@@ -34,7 +41,7 @@ Codex or Cursor
   -> MCP tool handler
   -> command-bus adapter
   -> unfour-command-bus
-  -> workspace / API / database / SSH / activity services
+  -> workspace / API / database / SSH / Flow / activity services
   -> structured MCP result
 ```
 
@@ -102,11 +109,13 @@ cleanup. Broken stdout also cancels the active call. Idle timeout only applies
 when no tool is running. An uncooperative worker can keep business calls busy,
 but cannot block ping, tool discovery or process shutdown.
 
-This adds no HTTP transport, interactive SSH, Flow runner, automatic
-troubleshooting workflow, policy-editing tools, raw credential/known_hosts
-access, or lower-priority CRUD/import/export/batch capabilities.
+Cancellation does not add an HTTP transport or an interactive SSH session.
+Registered Flow tools are a separate, explicit surface and are not started by
+cancellation. See [Current Non-Goals](#current-non-goals).
 
-The `initialize` response includes instructions for a diagnose → act → verify flow:
+The `initialize` response includes instructions for a diagnose → act → verify
+sequence. That text currently names health, activity, API, database, and SSH
+tools. It does not mention Flow tools and it does not author a runbook:
 
 1. Check `unfour.system.health`.
 2. Review recent `unfour.activity.list`.
@@ -131,11 +140,17 @@ Code changes in step 7 belong to the coding client, not Unfour MCP. Re-checking
 requires the updated code to be running in the target environment; a local code
 edit alone does not establish that a runtime issue is fixed.
 
-This diagnose → act → verify sequence is Unfour's troubleshooting loop: Codex or
-Cursor can use saved API, SSH, and database connections to reproduce an issue,
-inspect logs and database state, and then act with the user's review. The
-server does not automatically run a complete troubleshooting playbook; the
-user and Codex or Cursor coordinate the steps.
+This diagnose → act → verify sequence is Unfour's troubleshooting method: Codex
+or Cursor can use saved API, SSH, and database connections to reproduce an
+issue, inspect logs and database state, and then act with the user's review.
+The server does not generate or automatically run a troubleshooting playbook.
+Saved Flows are explicit runbooks. When the user asks, MCP can list, read,
+save, or delete a Flow definition, run it, cancel that run, and query run
+history through `unfour.flow.list`, `unfour.flow.get`, `unfour.flow.save`,
+`unfour.flow.delete`, `unfour.flow.run`, `unfour.flow.cancel_run`,
+`unfour.flow.list_runs`, and `unfour.flow.get_run`. Those calls use the same
+policy and confirmation rules as other tools. The initialize instructions do
+not turn a symptom into a Flow.
 
 ## Safety Posture
 
@@ -272,16 +287,26 @@ workspace-scoped data.
 
 The current Unfour MCP surface does not:
 
+- generate or automatically execute a troubleshooting playbook;
+- turn the initialize instructions into a workflow runner;
 - accept ad-hoc database connection strings;
 - open interactive SSH sessions;
-- ship an automatic troubleshooting playbook or workflow runner;
 - implement HTTP MCP transport;
 - return raw secret values;
-- attach to the running desktop process over IPC.
+- attach to the running desktop process over IPC;
+- edit MCP policy, known_hosts, or raw credentials;
+- put Flow definitions or run history into Cloud Sync.
+
+Flow execution is in scope when a caller explicitly uses the Flow tools above.
+Flow definitions travel with a whole-Workspace import or export. Run history
+does not. Cloud Sync still excludes both. Scheduler, webhook, subflow, and
+automatic playbook authoring remain outside Flow V1; see
+[Flow V1](../architecture/flow-v1.md).
 
 See also:
 
-- `docs/mcp/tools.md`
-- `docs/mcp/client-setup.md`
-- `docs/mcp/codex-setup.md`
-- `docs/architecture/security-model.md`
+- [MCP Tools](tools.md) — tool contracts
+- [Client setup](client-setup.md) — installed Codex and Cursor configuration
+- [Codex setup](codex-setup.md) — development build and smoke check
+- [Security model](../architecture/security-model.md)
+- [User guide](../user/USER_GUIDE.md#connect-codex-or-cursor-mcp)

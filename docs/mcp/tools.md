@@ -1,6 +1,12 @@
 # MCP Tools
 
-This is the active tool reference for the local `unfour-mcp` server.
+This is the tool contract for the local `unfour-mcp` server: names, inputs,
+successful outputs, and tool-specific limits.
+
+Capability boundaries, environment permissions, the confirmation handshake,
+non-goals, and the troubleshooting method are defined in
+[MCP Overview](overview.md). Installed-client configuration is in
+[client setup](client-setup.md).
 
 ## Tool names
 
@@ -44,16 +50,13 @@ Tools with `openWorldHint: true`:
 - `unfour.flow.run`
 - `unfour.flow.cancel_run`
 
-Write-capable tools are also checked by workspace policy at call time. The
-default `auto` mapping is dev = full access, test = guarded, prod = read-only.
-Every registered tool has an explicit capability/risk classification; an
-unknown or newly registered-but-unclassified tool is denied instead of being
-treated as a read.
-High-risk calls return `CONFIRMATION_REQUIRED` in `content[].text` with a
-content-bound `confirmation_text`; re-run the same call with `confirm=true`
-and that exact text to execute. Judge risk from tool annotations first;
-server-side policy and confirmation are the final control. `_meta.riskLevel`
-is advisory call metadata and is not part of `structuredContent`.
+Write-capable tools are checked against workspace policy at call time. The
+default `auto` mapping, `CONFIRMATION_REQUIRED` handshake, and result layers
+are defined in [MCP Overview](overview.md#safety-posture). Every registered
+tool has an explicit capability and risk classification; an unknown or
+unclassified tool is denied. `_meta.riskLevel` is advisory metadata and is not
+part of `structuredContent`. Judge risk from the annotations above first;
+server-side policy and confirmation remain the final control.
 
 ## Tool Reference
 
@@ -394,6 +397,9 @@ rows and replaces any remaining credential-marker commands with
 `[redacted command]`.
 
 ## Flow V1
+
+These tools save, run, cancel, and query Flows. They do not generate a
+troubleshooting playbook. See [Current Non-Goals](overview.md#current-non-goals).
 
 All Flow tools accept optional `workspaceId` (otherwise the active workspace).
 The MCP server and Desktop use the same CommandBus/FlowService and local history.

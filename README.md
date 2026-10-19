@@ -55,17 +55,18 @@ A unified, local-first workspace keeps requests, connections, local activity,
 and layout together throughout the investigation. API testing, SSH terminals,
 and database tools provide the capabilities for each step in that loop. Flow
 combines those capabilities into local runbooks for repeatable checks and tasks.
-Flow V1 is local-only: its definitions and run history are not included in Cloud
-Sync. It is a runbook tool for this workspace, not a general workflow platform.
+Flow definitions are included in a whole-Workspace import or export. Run history
+stays on the device. Flow is not part of Cloud Sync, and it is a runbook for
+this workspace, not a general workflow platform.
 
 MCP is an optional assisted layer: Codex and Cursor can use the local stdio
-MCP server to work with the same saved API, SSH, and database connections as
+MCP server to work with the same saved API, SSH, database, and Flow data as
 the desktop app. Its workspace-scoped tools run through the shared command
 bus, subject to MCP policy and high-risk action confirmation checks.
-MCP can also start and cancel Flow runs and inspect their history.
-Troubleshooting remains user-directed: you author and start runbooks, while
-Unfour does not automatically correlate requests, logs, and database state or
-detect root causes.
+MCP can save, run, cancel, and query Flows. It does not generate a
+troubleshooting playbook, correlate requests with logs and database state, or
+detect root causes. You author and start runbooks. Boundaries and confirmation
+are in the [MCP overview](docs/mcp/overview.md).
 
 Unfour is one application and one product. Its core desktop features are free
 and open source under Apache-2.0. An active Pro subscription unlocks Cloud Sync
@@ -123,26 +124,30 @@ workspace, environment, risky actions, and final decision.
   table structure as SQL and data as SQL, CSV, or JSON.
 - **Flow** - Compose saved API requests, SSH tasks, and Database queries into
   local runbooks with Condition branches and Wait Until checks. Author them on
-  the Canvas and inspect step results and run history. Flow V1 is local-only
-  and does not support Cloud Sync.
+  the Canvas and inspect step results and run history. Definitions travel with
+  a whole-Workspace import or export. Run history and Cloud Sync do not include
+  Flow. See [Flow V1](docs/architecture/flow-v1.md).
 - **Workspace** - Scope saved requests, shared environments/variables,
   connections, activity, tabs, and layout state to a local workspace, with
   title-bar active-environment switching. Export/import whole Workspace
-  definitions or create a password-encrypted local backup with optional saved
-  credentials. Import previews create independent copies. See
+  definitions, including Flow definitions, or create a password-encrypted local
+  backup with optional saved credentials. Import previews create independent
+  copies. See
   [Workspace exchange and backups](docs/user/USER_GUIDE.md#workspace-exchange-and-local-backups).
-- **MCP integration for Codex and Cursor** - Expose safe local stdio diagnostic
-  tools through the same command bus used by the desktop app. Codex and Cursor
-  can use the same saved API, SSH, and database connections to reproduce
-  issues, inspect logs and database state, verify a fix, and manage or run local
-  Flow runbooks with the same safety checks and shared run history.
+- **MCP integration for Codex and Cursor** - Expose local stdio tools through
+  the same command bus used by the desktop app. Codex and Cursor can use the
+  same saved API, SSH, and database connections to reproduce issues, inspect
+  logs and database state, and verify a fix. They can also save, run, cancel,
+  and query local Flows under the same safety checks. MCP does not generate a
+  troubleshooting playbook. See the [MCP overview](docs/mcp/overview.md).
 
 > [Connect Codex and Cursor to Unfour MCP →](docs/mcp/client-setup.md)
 
 Encrypted backups are local files, separate from Pro Cloud Sync. Sensitive data
-is not synchronized to the cloud in v0.11.0; Flow definitions/history also stay
-local. Backups do not embed database/private-key files or history. Review free-form
-scripts and SQL before sharing a definitions export.
+is not synchronized to the cloud in v0.11.0. A Workspace export includes Flow
+definitions and omits run history; neither is part of Cloud Sync. Backups do
+not embed database or private-key files. Review free-form scripts and SQL
+before sharing a definitions export.
 
 ## Screenshots
 
@@ -217,7 +222,7 @@ with `UNFOUR_RELEASE_CHANNEL=stable` and an exact `UNFOUR_BUILD_COMMIT`.
 | `packages/flow` | Local Flow runbook editor, Canvas, and run history. |
 | `packages/workspace-core` | Shared frontend workspace state. |
 | `packages/workspace-environments` | Workspace environments and variables management UI. |
-| `packages/workspace-local` | Reserved local workspace lifecycle boundary. |
+| `packages/workspace-local` | Local workspace lifecycle and whole-Workspace import/export UI. |
 | `packages/ui` | Shared UI primitives and stateless layout helpers. |
 | `packages/command-client` | Typed Tauri command wrappers and frontend command types. |
 | `crates/*` | Rust backend capability crates and adapters. |
@@ -260,40 +265,37 @@ remains unchanged. v0.11.0 Ubuntu 22.04/24.04 runtime regression remains
 `NOT VERIFIED` until installed-artifact testing is recorded; see
 [release verification](docs/testing/release-verification.md#linux-appimage-compatibility).
 
-Recorded v0.9.0 real-environment verification includes Windows install, launch,
-uninstall, and a previous-Stable-to-new-Stable update; macOS arm64/x64 install
-and run; GitHub browser OAuth and the Desktop callback/login; Creem Test
-checkout, webhook, entitlement, and billing portal; PostgreSQL and MySQL; SSH
-Terminal, SFTP, and SSH Tasks; and real Codex and Cursor MCP initialization,
-tool discovery, tool calls, and access to Unfour data/tools.
-
-Historical live multi-device Cloud Sync verification exists, but the v0.9.0
-unified-client multi-device regression remains `NOT VERIFIED` and will include
-single-device coverage. Creem Production will be recorded after the first real
-production transaction flow. MCP production-policy behavior, Linux AppImage
-runtime integration, real MSIX/Store servicing, and macOS Gatekeeper trust
-behavior also remain `NOT VERIFIED`; these limits do not reduce the verified
-platform install/run results above.
+Earlier live and manual results, including checks that remain `NOT VERIFIED`,
+are collected in [release verification](docs/testing/release-verification.md).
+That record still leaves these v0.11.0 items `NOT VERIFIED`: native install and
+update journeys, released-artifact Workspace/Auth/Database/MCP/Flow regressions,
+Account/Cloud Sync and MCP production-policy journeys, Linux runtime, macOS and
+Linux credential stores, and the manual MSIX/Store path. Publication does not
+convert those items to `PASS`. Historical v0.9.0 platform results keep their
+original scope.
 
 ## Documentation
 
-- `AGENTS.md` - repository rules for coding agents.
-- `docs/agents/START_HERE.md` - scoped onboarding path for AI agents.
-- `docs/architecture/package-boundaries.md` - package ownership and forbidden
-  dependency directions.
-- `docs/architecture/project-structure.md` - repository, package, crate, and
-  call-chain map.
-- `docs/architecture/data-storage.md` - workspace data, SQLite, credential
-  references, and local activity rules.
-- `docs/architecture/diagnostics.md` - local structured logs, redaction,
-  retention, diagnostic bundles, and developer logging guidance.
-- `docs/architecture/security-model.md` - security posture, redaction, host-key
-  policy, and dangerous-action rules.
-- `docs/mcp/overview.md` and `docs/mcp/tools.md` - local MCP server behavior.
-- `docs/mcp/client-setup.md` - installed-user setup for Codex and Cursor.
-- `docs/testing/release-verification.md` - release verification matrix.
-- `docs/release/release-checklist.md` - public release checklist.
-- `docs/user/USER_GUIDE.md` - user-facing workflow guide.
+Read the document that owns the question. The README stays usable on its own;
+the links below are the detailed sources.
+
+| Question | Document |
+| --- | --- |
+| How do I use the app? | [User guide](docs/user/USER_GUIDE.md) |
+| What can MCP do, and what must be confirmed? | [MCP overview](docs/mcp/overview.md) |
+| How do I connect Codex or Cursor? | [Client setup](docs/mcp/client-setup.md) |
+| What does a tool accept and return? | [MCP tools](docs/mcp/tools.md) |
+| How do I build the MCP server? | [Codex setup](docs/mcp/codex-setup.md) |
+| What shipped, and what is only planned? | [Roadmap](docs/roadmap.md) |
+| Which release checks passed? | [Release verification](docs/testing/release-verification.md) |
+| How is the repository split? | [Package boundaries](docs/architecture/package-boundaries.md), [project structure](docs/architecture/project-structure.md) |
+| How are secrets and local data stored? | [Data storage](docs/architecture/data-storage.md), [security model](docs/architecture/security-model.md) |
+| How do Flow and Workspace exchange work? | [Flow V1](docs/architecture/flow-v1.md), [Workspace bundle](docs/architecture/workspace-bundle.md) |
+
+`AGENTS.md` and `docs/agents/START_HERE.md` are for coding agents working in
+this repository. `docs/release/release-checklist.md` is the public release
+checklist. `docs/architecture/diagnostics.md` covers local logs and diagnostic
+bundles.
 
 ## Contributing
 

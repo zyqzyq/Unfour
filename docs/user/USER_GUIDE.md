@@ -1,7 +1,8 @@
 # Unfour User Guide
 
-This document is for people using the app. Implementation details live in
-`docs/architecture`, `docs/mcp`, `docs/testing`, and `docs/release`.
+This document is for people using the app. Implementation layout, MCP
+boundaries, and release evidence are listed in
+[Documentation Split](#documentation-split).
 
 ## Current Product
 
@@ -9,20 +10,21 @@ Unfour opens into a single workspace surface:
 
 - Workspaces on the left
 - Tool tabs across the top
-- API client, SSH terminal, and database panels in the center
+- API client, SSH terminal, database, and Flow panels in the center
 - Local-first storage by default
 
 ## Current Capabilities
 
 This guide documents v0.11.0, released as Standard stable on 2026-10-10.
-See the [Release Notes](../release/v0.11.0-release-notes.md) and
-[final release verification](../testing/release-verification.md#v0110-final-release-verification-record).
-Unrun v0.11.0 native/manual and live-service checks remain `NOT VERIFIED`.
-Earlier real-device checks below retain their original version scope:
+See the [Release Notes](../release/v0.11.0-release-notes.md). Version-scoped
+results, including checks that remain `NOT VERIFIED`, are collected in
+[release verification](../testing/release-verification.md#v0110-final-release-verification-record).
+This guide does not restate those results. Unrun v0.11.0 native, manual, and
+live-service checks remain `NOT VERIFIED`.
 
-- The workspace shell is usable.
-- API, SSH, and Database sidebars keep independent bounded widths and restore
-  their own layout when switching modules or restarting the app.
+- The workspace shell is usable. API, SSH, and Database sidebars keep
+  independent bounded widths and restore their own layout when switching
+  modules or restarting the app.
 - API debugging supports request editing, Send/cancel, response viewing,
   history, saved requests, collections, environments, import/export, request
   timeouts, multipart text/file form-data, and request scripts with test and
@@ -39,32 +41,24 @@ Earlier real-device checks below retain their original version scope:
 - SSH Close All, Close Others, and close-to-left/right ask once and disconnect
   only the confirmed sessions.
 - Truncated workspace names show in full on hover. Workspace safety-tier and
-  variable-environment wording is distinct from delete, which now states that
-  local API, SSH, and Database resources are removed.
+  variable-environment wording is distinct from delete, which states that local
+  API, SSH, and Database resources are removed.
 - The About page includes GitHub Discussions and issue links for feedback.
 - Local MCP is available through the stdio `unfour-mcp` server. It uses the
-  same command bus and the same saved API, SSH, and database connections, so
+  same command bus and the same saved API, SSH, database, and Flow data, so
   Codex and Cursor can reproduce issues, inspect logs and database state, and
-  make fixes alongside the user. Real v0.9.0 client checks completed in both
-  Codex and Cursor, including server start, initialization, tool discovery,
-  tool calls, and access to real Unfour data/tools. MCP also supports per-call
-  environment selection, saved-request script replay, and environment-variable
-  set/delete tools subject to policy and confirmation checks. Diagnostic tools
-  can read database query history, update or delete saved database and SSH
-  connection metadata, test SSH connections, and read stored host fingerprints.
-  Long-running calls stay cancellable, keep stdio controls responsive, and stop
-  at a 120-second safety deadline.
+  make fixes alongside the user. MCP can save, run, cancel, and query Flows.
+  It does not generate a troubleshooting playbook. Calls follow workspace
+  policy and confirmation, including per-call environment selection and
+  saved-request script replay. See [Connect Codex or Cursor](#connect-codex-or-cursor-mcp).
 - Stable Desktop builds show a one-time notice for anonymous active-install
   statistics and expose an opt-out under `Settings -> Privacy`; test/dev builds
   do not send telemetry. See [anonymous usage telemetry](../privacy/telemetry.md).
 - Unfour's core desktop features are free and open source under Apache-2.0. An
   active Pro subscription unlocks Cloud Sync in the same application.
-- SQLite, PostgreSQL, and MySQL database workflows are verified.
-- Compatible MariaDB servers use the MySQL driver path where protocol and SQL
-  behavior are compatible; independent MariaDB verification is not part of the
-  published v0.9.0 release record.
-- SSH Terminal workflows have completed release-level verification against a
-  real SSH server.
+- SQLite, PostgreSQL, and MySQL are supported. Compatible MariaDB servers use
+  the MySQL driver path. A separate MariaDB verification matrix is not part of
+  the published record.
 
 ## Workspace Exchange and Local Backups
 
@@ -103,8 +97,9 @@ independently. Auto uses DEV full access, TEST guarded, and PROD read-only;
 the UI shows effective permissions and warns about PROD protection overrides.
 
 This is a local backup and transfer feature, separate from Pro Cloud Sync.
-v0.11.0 does not support sensitive-data Cloud Sync. Flow definitions and history
-also remain local-only. See the [format and security boundaries](../architecture/workspace-bundle.md).
+v0.11.0 does not support sensitive-data Cloud Sync. Flow definitions are part
+of this exchange. Flow run history stays on the device and is not exported or
+synchronized. See the [format and security boundaries](../architecture/workspace-bundle.md).
 
 ## Account and Cloud Sync
 
@@ -123,44 +118,30 @@ Sync; there is no separate client for Pro.
    sync status in `Settings → Cloud Sync`. First account activation on a device
    turns Global Sync on; an existing Off preference is left unchanged.
 
-The v0.9.0 GitHub browser sign-in, Desktop login,
-`unfour://auth/callback`, and basic account state have been verified in the real
-Desktop flow. Creem Test checkout, webhook, entitlement, and billing portal
-have also been verified. Creem Production will be recorded after the first
-successful real production transaction, webhook, entitlement, Desktop refresh,
-Cloud Sync entitlement, and billing-portal flow; this pending record is not a
-failed Production result and does not require repeating the Test validation.
+The v0.9.0 account, Creem, and Cloud Sync results, and the checks that remain
+`NOT VERIFIED`, are recorded in
+[release verification](../testing/release-verification.md). This guide does not
+restate them. An unrecorded production or multi-device check stays
+`NOT VERIFIED`.
 
 Cloud Sync synchronizes the supported non-secret workspace data shown in the
 app, including workspace settings, connection definitions, environments,
 non-secret variables, API collections/folders/requests, and SSH tasks. Secrets,
 SSH credentials and local key paths, database credentials and local file paths,
-and history/runtime results remain local to each device.
-
-Live multi-device Cloud Sync was verified in an earlier version. After Pro
-capabilities were merged into the unified Unfour client, the v0.9.0 real
-multi-device regression has not yet been recorded and remains `NOT VERIFIED`.
-Single-device v0.9.0 coverage will be recorded during that same regression.
-
-Troubleshooting is a core product loop. Unfour does not include an automatic
-troubleshooting playbook: the user and Codex or Cursor work through the steps
-together with the available diagnostic tools. Those tools are not a workflow
-runner.
+history, runtime results, and Flow definitions and run history remain local to
+each device.
 
 ## Connect Codex or Cursor (MCP)
 
 Unfour provides a local stdio MCP server for Codex and Cursor. It uses the same
 command bus as the desktop app and reads the workspace data and saved
-connections from the local storage.
-
-This gives Codex and Cursor the same troubleshooting surface as the desktop
-app: they can use saved connections to reproduce an issue, inspect logs or
-database state, and then act with your review. The steps remain collaborative;
-the server provides diagnostic tools, not an automatic troubleshooting
-playbook.
+connections from the local storage. MCP can save, run, cancel, and query
+Flows. It does not generate a troubleshooting playbook. Capability boundaries,
+environment permissions, and confirmation are defined in the
+[MCP overview](../mcp/overview.md).
 
 Codex and Cursor use their own coding tools to inspect, modify, and test code.
-Unfour MCP supplies API, SSH/server, and database runtime evidence, including
+Unfour MCP supplies API, SSH, database, and Flow runtime access, including
 re-checking the original symptom after a change in your selected environment.
 
 1. Open the desktop app once. This creates `~/.unfour/unfour.sqlite`.
@@ -169,24 +150,36 @@ re-checking the original symptom after a change in your selected environment.
    connect.
 4. Wait for configuration to complete.
 5. Restart the corresponding client.
+6. Use `Settings → MCP → Example Prompt`, copy it, and paste it into that
+   client with a description of the issue.
 
-If one-click configuration is unavailable or you want to review the
-configuration manually, see [docs/mcp/client-setup.md](../mcp/client-setup.md)
-for the Manual / Advanced configuration steps.
+If one-click configuration is unavailable, or a Windows path needs the
+`cmd.exe /c` wrapper, follow
+[client setup](../mcp/client-setup.md). Do not set
+`UNFOUR_MCP_STORAGE_MODE=ephemeral` for daily use.
 
-Do not set `UNFOUR_MCP_STORAGE_MODE=ephemeral` for daily use. That mode is for
-registry validation, CI, protocol smoke checks, and isolated tests; it uses an
-empty in-memory workspace instead of the desktop app's saved data.
+In the default `prod` mapping, MCP is read-only except safe SSH diagnostics.
+High-risk actions return `CONFIRMATION_REQUIRED` and must be reviewed before
+retry. Real production-policy client checks remain `NOT VERIFIED`; see
+[release verification](../testing/release-verification.md).
 
-In the default `prod` environment, MCP is read-only. High-risk actions return
-`CONFIRMATION_REQUIRED` and must be reviewed before Codex or Cursor retries
-them.
+## Flow
 
-That production policy is implemented, but its real v0.9.0 prod-workspace
-verification remains `NOT VERIFIED`: permitted read-only calls, blocked writes,
-`CONFIRMATION_REQUIRED`, `confirmation_text`/payload binding, and the confirmed
-retry path still need to be exercised together. This does not change the
-completed real Codex and Cursor client verification above.
+1. Open a workspace that already contains the saved API requests, SSH tasks, or
+   database connections the runbook should use.
+2. Open `Flow` and choose `New Flow`.
+3. Name the Flow. On the canvas, insert `API Request`, `SSH Task`,
+   `Database Query`, `Condition`, `Wait`, or `Wait Until` nodes.
+4. Choose `Save`.
+5. Choose `Run`, review the variable environment and inputs, and confirm. A
+   run may send requests, execute remote commands, and modify databases.
+6. Open `Run history` to inspect a run. `Cancel run` stops later scheduling;
+   completed remote effects are not rolled back.
+
+Deleting a Flow keeps its run history and the referenced API, SSH, and database
+resources. Exporting the Workspace includes Flow definitions and omits run
+history. Flow is not part of Cloud Sync. Codex or Cursor can save, run, cancel,
+and query the same Flows through MCP; they do not write a playbook for you.
 
 ## API Client
 
@@ -209,8 +202,9 @@ Saved requests are stored inside the active workspace.
 The SSH Terminal supports saved SSH connections, credential references,
 terminal sessions, PTY input/output, resize, search, redacted log export,
 clipboard context actions, host-key trust, reconnect, SFTP remote files, and
-serial command/upload/download tasks. These workflows have completed
-release-level verification against a real SSH server.
+serial command/upload/download tasks. Recorded SSH checks and the checks that
+remain `NOT VERIFIED` are in
+[release verification](../testing/release-verification.md).
 
 Verify host-key fingerprints before trusting a new server. Review destructive
 commands before running them, and use disposable data when testing SFTP or SSH
@@ -234,67 +228,37 @@ The database screen can save workspace-scoped database connections.
    current statement.
 10. Review result rows, affected rows, and duration.
 
-SQLite, PostgreSQL, and MySQL workflows are verified for the v0.9.0 release.
-Compatible MariaDB servers use the MySQL driver path where protocol and SQL
-behavior are compatible. This release record does not claim a separate
-MariaDB-specific verification matrix. Use credential references for database
-passwords, and review mutation SQL before confirming execution.
+SQLite, PostgreSQL, and MySQL are supported. Compatible MariaDB servers use the
+MySQL driver path. Recorded database checks, and the separate MariaDB matrix
+that the published record does not claim, are in
+[release verification](../testing/release-verification.md). Use credential
+references for database passwords, and review mutation SQL before confirming
+execution.
 
-## Code Architecture Overview
+## Where The Code Lives
 
-This section explains the code layout in human terms. It is here so a reader can understand how the app is assembled without reading the engineering design docs first.
-
-Unfour has two halves:
-
-- The desktop window and interface are written with React and TypeScript.
-- The secure local capabilities are written in Rust inside Tauri.
-
-The frontend is responsible for what you see and edit:
-
-- `apps/desktop/src/App.tsx` mounts the composed desktop shell.
-
-- `packages/app-shell provides` the frontend desktop workbench composition root.
-  It wires the workspace switcher, module navigation, layout slots, command
-  palette, diagnostics actions, and mounts the API Client, Database, and SSH
-  Terminal modules without owning their feature internals.
-- `packages/command-client` is the bridge used by React to call Rust commands. It also contains browser-only mocks so the interface can run during frontend development.
-- `packages/workspace-core` keeps temporary UI state such as the active workspace, active tab, and sidebar state.
-- `packages/workspace-local` is the frontend boundary reserved for local workspace persistence and currently provides a compatibility re-export.
-- `packages/ui` contains reusable interface primitives.
-- `packages/api-client`, `packages/database`, and `packages/ssh-terminal` contain feature-specific frontend logic.
-
-The Rust backend is responsible for actions that should not live only in the browser:
-
-- Rust/Tauri commands are registered and shared through `crates/unfour-app`.
-- `apps/desktop/src-tauri` is the thin desktop binary wrapper.
-- `crates/unfour-command-bus` routes commands to the correct service. Tauri,
-  MCP, and future AI/CLI automation should use this same command boundary.
-- `crates/local-storage` opens and migrates the local SQLite database and records local activity.
-- `crates/workspace-engine` handles workspace data.
-- `crates/http-engine` sends HTTP requests and stores API history/templates.
-- `crates/database-engine` stores database connections and runs database
-  test/schema/query/table-browse actions.
-- `crates/ssh-engine` owns SSH sessions, host-key trust, reconnect behavior,
-  and terminal log export.
-- `crates/secret-store` owns OS keychain-backed credential references in
-  production and in-memory credentials for tests.
-
-The important idea is that API, SSH, and Database are not separate apps. They share the same Workspace, tabs, local database, local activity trail, credential boundary, and future sync model.
+Package ownership, the command-bus path, and crate responsibilities are in
+[project structure](../architecture/project-structure.md) and
+[package boundaries](../architecture/package-boundaries.md). This guide does not
+repeat that layout.
 
 ## Data And Privacy
 
 The app is local-first. Workspace metadata is stored locally. High-value actions
 such as writes, credential changes, external API sends, SSH session lifecycle
-events, and future AI-triggered actions keep redacted local activity records for
-troubleshooting. Routine reads and UI layout changes are not treated as activity
-events. Use credential references for SSH and database secrets where available;
-do not place long-lived secrets in workspace environment variables or saved
-request bodies.
+events, and MCP or Flow actions that write state, call external systems, or send
+data keep redacted local activity records for troubleshooting. Routine reads and
+UI layout changes are not treated as activity events. Use credential references
+for SSH and database secrets where available; do not place long-lived secrets in
+workspace environment variables or saved request bodies.
 
 ## Documentation Split
 
-- This guide explains how to use the app.
-- `docs/architecture` explains how the app is built.
-- `docs/mcp` explains the local MCP server.
-- `docs/testing` and `docs/release` explain release verification.
-- `AGENTS.md` explains how coding agents should work in this repository.
+| Question | Document |
+| --- | --- |
+| How do I use the app? | This guide |
+| What can MCP do, and what must be confirmed? | [MCP overview](../mcp/overview.md) |
+| How do I connect an installed client? | [Client setup](../mcp/client-setup.md) |
+| What does each tool accept? | [MCP tools](../mcp/tools.md) |
+| How is the app built? | [Architecture](../architecture/project-structure.md) |
+| Which release checks passed? | [Release verification](../testing/release-verification.md) |

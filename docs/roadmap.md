@@ -1,14 +1,72 @@
 # Roadmap
 
 This roadmap is a product-direction summary. It is not release evidence. Use
-`docs/testing/release-verification.md` and `docs/release/release-checklist.md`
-for release readiness.
+[release verification](testing/release-verification.md) and
+[the release checklist](release/release-checklist.md) for release readiness.
+Sections through v0.10.0 record what those releases shipped. They do not
+describe the current source, and they do not change any `NOT VERIFIED` result.
 
-Current source version: `0.10.0`. The latest published release is
-[v0.10.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.10.0), published on
-2026-09-30. Current development on `main` continues from v0.10.0; no next
+Current source version: `0.11.0`. The latest published release is
+[v0.11.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.11.0), published on
+2026-10-10. Current development on `main` continues from v0.11.0; no next
 version or feature scope has been assigned. Earlier verification records
-remain historical and do not establish v0.10.0 manual coverage.
+remain historical and do not establish v0.11.0 manual coverage.
+
+## Current capabilities
+
+Shipped through v0.11.0:
+
+- API Client, SSH Terminal, Database, and local Flow runbooks in one workspace.
+- Local stdio MCP over the command bus, including Flow save, run, cancel, and
+  query. MCP does not generate a troubleshooting playbook. Boundaries,
+  environment permissions, and confirmation are in the
+  [MCP overview](mcp/overview.md).
+- Whole-Workspace import/export, including Flow definitions, plus
+  password-encrypted local backups. Run history is not exported.
+- Pro Cloud Sync for supported non-secret workspace data. Flow definitions,
+  Flow run history, and sensitive values are not synchronized.
+
+## Not yet verified for v0.11.0
+
+Publication does not make these checks `PASS`. They remain `NOT VERIFIED` in
+the [v0.11.0 verification record](testing/release-verification.md#v0110-final-release-verification-record):
+
+- native install, launch, upgrade, uninstall, MCP sidecar replacement, and OS
+  trust, including Linux 22.04/24.04 runtime;
+- v0.10.0-to-v0.11.0 in-app update and manual invalid-signature rejection;
+- released-artifact Workspace exchange, credential, Auth, Database, MCP, and
+  Flow regressions, plus live API, SSH, and database journeys;
+- Account, Cloud Sync, and MCP production-policy journeys;
+- macOS and Linux native credential stores, and the manual MSIX/Store path.
+
+## v0.11.0 (Published)
+
+The published follow-up from `v0.10.0` includes:
+
+- whole-Workspace import/export of variables, environments, API definitions,
+  SSH and Database connection settings, SSH tasks, Saved SQL, and Flow
+  definitions, with an import preview that creates an independent Workspace;
+- password-encrypted local backups that can optionally include supported saved
+  secrets, without embedding private-key files, database files, or histories;
+- independent editing of workspace environment type and MCP permissions,
+  including after import.
+
+Flow definitions are part of that Workspace exchange. Flow run history is not
+exported. Flow definitions and run history remain outside Cloud Sync. Sensitive
+data is not synchronized. MCP Flow tools shipped in v0.10.0 and remain the way
+to save, run, cancel, and query a Flow; they still do not author a playbook.
+
+Current status:
+
+- `v0.11.0` was released on 2026-10-10;
+- CI, Standard Release Candidate, Standard Release, artifacts, checksums, and
+  manifest evidence are recorded in the
+  [final verification record](testing/release-verification.md#v0110-final-release-verification-record);
+- the items in [Not yet verified for v0.11.0](#not-yet-verified-for-v0110)
+  remain `NOT VERIFIED`;
+- current `main` continues from v0.11.0 without an assigned next version.
+
+Release claims remain limited by the current verification matrix.
 
 ## v0.1 (First Public Release)
 
@@ -112,7 +170,7 @@ The connection domain work is a local command-bus foundation and does not by
 itself provide a hosted sync service. Release claims remain limited by the
 current verification matrix.
 
-## v0.8.0 (Previous published release)
+## v0.8.0 (Earlier published release)
 
 Historical status:
 
@@ -129,7 +187,7 @@ Historical status:
 
 Release claims remain limited by the current verification matrix.
 
-## v0.9.0 (Previous published release)
+## v0.9.0 (Earlier published release)
 
 Implemented in v0.9.0:
 
@@ -174,7 +232,7 @@ Maintenance and release-hardening follow-up to the published v0.9.0 release:
 
 Current status:
 
-- the `v0.9.1` tag is the comparison baseline for the current source;
+- the `v0.9.1` tag is a historical source checkpoint, not the current release baseline;
 - the active release verification record still treats the v0.9.0 publication
   evidence as historical.
 
@@ -196,7 +254,7 @@ desktop usability:
 
 Current status:
 
-- the `v0.9.2` tag is the comparison baseline for the current source;
+- the `v0.9.2` tag is a historical source checkpoint, not the current release baseline;
 - the active release verification record still treats the v0.9.0 publication
   evidence as historical.
 
@@ -217,7 +275,7 @@ Cloud Sync reliability:
 
 Current status:
 
-- the `v0.9.3` tag is the comparison baseline for the current source;
+- the `v0.9.3` tag is a historical source checkpoint, not the current release baseline;
 - the active release verification record still treats the v0.9.0 publication
   evidence as historical.
 
@@ -235,7 +293,7 @@ Sync Protocol 5 compatibility:
 
 Current status:
 
-- the `v0.9.4` tag is the comparison baseline for the current source;
+- the `v0.9.4` tag is a historical source checkpoint, not the current release baseline;
 - the active release verification record still treats the v0.9.0 publication
   evidence as historical.
 
@@ -256,13 +314,13 @@ Cloud Sync defaults for new accounts, and workbench navigation:
 
 Current status:
 
-- the `v0.9.5` tag is the comparison baseline for the current source;
+- the `v0.9.5` tag is a historical source checkpoint, not the current release baseline;
 - the active release verification record still treats the v0.9.0 publication
   evidence as historical.
 
 Release claims remain limited by the current verification matrix.
 
-## v0.9.6 (Previous published release / source checkpoint)
+## v0.9.6 (Earlier published release)
 
 The follow-up from the `v0.9.5` tag focuses on MCP diagnostics and long-running
 call control, plus Database, API, SSH, and Workspace polish:
@@ -277,14 +335,13 @@ call control, plus Database, API, SSH, and Workspace polish:
 
 Historical checkpoint status:
 
-- `v0.9.6` is the previous published release / source checkpoint and the
-  comparison baseline for v0.10.0;
+- `v0.9.6` was the published baseline compared with v0.10.0;
 - the recorded v0.9.6 preparation checks remain historical evidence in the
   active release matrix and do not verify a new candidate.
 
 Release claims remain limited by the current verification matrix.
 
-## v0.10.0 (Published)
+## v0.10.0 (Previous published release)
 
 The published follow-up from `v0.9.6` includes:
 
@@ -296,35 +353,39 @@ The published follow-up from `v0.9.6` includes:
 - Database table structure/data export and improved openGauss support; and
 - preserved SQL execution and Saved SQL database/schema context.
 
-Flow V1 is local-only. Its definitions and run history do not support Cloud
-Sync or workspace import/export.
+Flow V1 at the v0.10.0 release was local-only. Its definitions and run history
+did not support Cloud Sync or workspace import/export. v0.11.0 later included
+Flow definitions in whole-Workspace import/export; run history and Cloud Sync
+still exclude Flow.
 
-Current status:
+Historical status:
 
 - `v0.10.0` was released on 2026-09-30 from commit
   `96f0022ec344fd643b567a54fe6f3686c2272dc0`;
 - CI, Standard Release Candidate, Standard Release, artifacts, checksums, and
   manifest evidence are recorded in the
   [final verification record](testing/release-verification.md#v0100-final-release-verification-record);
-- unrecorded native platform, live-service, and manual checks remain
-  `NOT VERIFIED`; publication does not establish manual coverage;
-- current `main` continues development from v0.10.0 without an assigned next
-  version or feature scope.
+- unrecorded native platform, live-service, and manual checks for that release
+  remain `NOT VERIFIED`; publication does not establish manual coverage.
 
 Release claims remain limited by the current verification matrix.
 
-## Beyond v0.10
+## Beyond v0.11.0
 
-Likely follow-up areas:
+No next version is assigned. Likely follow-up areas, none of which are release
+claims:
 
-- signed and notarized distribution;
-- screenshots and fuller user documentation;
-- query cancellation and richer database result interactions;
-- optional AI/automation adapters over the command bus;
-- hosted sync adapters and UI over the optional domain foundation;
+- operating-system code signing and macOS notarization;
+- richer database result interactions;
+- sensitive-data Cloud Sync, and Cloud Sync for Flow definitions or run history;
 - plugin extension points.
+
+MCP and local Flow runbooks are current capabilities, not future AI work. A
+separate CLI is not part of the current product. Adding another adapter later
+would still go through the command bus.
 
 ## Release Rule
 
 Do not claim a roadmap item is complete in release notes unless it is backed by
-current verification or repository evidence.
+current verification or repository evidence. Roadmap text does not change a
+`NOT VERIFIED` result into a verified one.

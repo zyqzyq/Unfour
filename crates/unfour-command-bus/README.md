@@ -2,8 +2,8 @@
 
 ## Purpose
 
-`unfour-command-bus` is the reusable Rust command entry point for manual UI
-actions and future automated adapters.
+`unfour-command-bus` is the reusable Rust command entry point for desktop UI
+actions and the MCP adapter. A later adapter must use this same entry point.
 
 ## Local constraints
 
@@ -22,7 +22,7 @@ See [AGENTS.md](AGENTS.md) for this crate's scope and invariants.
 - Database connection, schema, query, and browse commands.
 - SSH connection/session/log/host-key commands.
 - Credential create, inspect, rotate, and delete commands.
-- Safe read commands for MCP and future AI surfaces.
+- Safe read commands for MCP.
 
 ## Known Gaps
 

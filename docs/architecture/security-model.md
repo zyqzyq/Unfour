@@ -55,8 +55,9 @@ must record metadata needed for troubleshooting, such as method, host, status,
 driver, duration, command id, request id, and stable error code, without raw
 payloads or reusable secrets.
 
-MCP results have an additional LLM-facing masking layer. See
-`docs/mcp/tools.md` for the MCP-specific masking and tool safety policy.
+MCP results have an additional LLM-facing masking layer. Masking details are
+in [MCP tools](../mcp/tools.md). Environment permissions, confirmation, and
+non-goals are in the [MCP overview](../mcp/overview.md).
 
 ## Command-Bus Safety
 
@@ -78,9 +79,11 @@ change affects security posture.
 
 ## Dangerous Actions
 
-Future AI/workflow actions should distinguish local reads, writes, and data
-egress. Routine metadata reads can proceed without a confirmation dialog, but
-sensitive reads may need workspace-level authorization.
+MCP tools and Flow runs are the current AI and runbook surface. They use the
+same command-bus confirmation and redaction rules as the desktop UI. Tool
+policy distinguishes local reads, local writes, destructive changes, and
+actions that reach external systems. See the
+[MCP overview](../mcp/overview.md#safety-posture).
 
 These actions require explicit confirmation and redacted activity records:
 

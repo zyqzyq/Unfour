@@ -365,7 +365,7 @@ Record redacted summaries for:
   session lifecycle writes;
 - external API sends;
 - database SQL that requires confirmation;
-- future AI/workflow actions that write local state, execute external side
+- MCP and Flow actions that write local state, execute external side
   effects, or send local data outside the app.
 
 Do not record routine reads, UI layout noise, terminal resize events, request

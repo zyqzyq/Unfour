@@ -19,7 +19,7 @@ Unfour/
     ui/                      shared UI primitives and layout helpers
     workspace-core/          shared frontend workspace state
     workspace-environments/  Workspace environment and variable management UI
-    workspace-local/         reserved local workspace lifecycle boundary
+    workspace-local/         local workspace lifecycle and bundle import/export UI
   crates/
     unfour-core/             shared Rust models, errors, redaction helpers
     unfour-paths/            shared runtime path resolution
@@ -41,7 +41,7 @@ Unfour/
   docs/
     agents/                  AI agent onboarding and execution protocol
     architecture/            package, storage, security, and structure docs
-    mcp/                     MCP overview, tools, and Codex setup
+    mcp/                     MCP overview, tool contract, and client setup
     testing/                 release verification and manual test cases
     release/                 release checklist, distribution, signing
     ui/                      active design-system and interaction docs
@@ -58,7 +58,7 @@ Unfour/
 | `@unfour/command-client` | Typed Tauri `invoke` wrappers, shared frontend command types, and browser-development mock fallback. |
 | `@unfour/workspace-core` | Zustand workspace store and workspace type re-exports. |
 | `@unfour/workspace-environments` | Shared Workspace environment and variable management UI. Persistence and resolution remain workspace-owned. |
-| `@unfour/workspace-local` | OSS local workspace lifecycle boundary; currently a compatibility/transitional package reserved for recent workspace, import/export, persistence lifecycle, and migration behavior. |
+| `@unfour/workspace-local` | Local workspace lifecycle boundary. Owns Workspace bundle import/export UI and retains a compatibility re-export of workspace-core. |
 | `@unfour/api-client` | API Client feature UI: requests, tabs, Send, request scripts, responses, history, saved requests, collections, and collection import/export. |
 | `@unfour/database` | Database feature UI: connections, schema tree, SQL editor, query results, table preview, query history. |
 | `@unfour/flow` | Local runbook feature UI: Canvas and step authoring, typed inputs, API/SSH/Database action references, Condition and Wait Until, run inspection, and history. Uses shared command-client/UI contracts rather than importing other feature packages. |
@@ -84,7 +84,7 @@ Unfour/
 | `unfour-ssh-engine` | SSH connection/session lifecycle, PTY events, host-key trust, reconnect behavior, and redacted log export. |
 | `unfour-workspace-engine` | Workspace CRUD, active workspace state, workspace variables/environments, shared variable resolution, and layout persistence. |
 | `unfour-app` | Shared Tauri composition layer for plugins, command-bus setup, managed `AppState`, commands, and edition-independent wiring. |
-| `unfour-command-bus` | Shared command entry point used by Tauri, MCP, and future adapters. |
+| `unfour-command-bus` | Shared command entry point used by Tauri and MCP. A later adapter must use this same entry point. |
 | `unfour-mcp` | Local stdio MCP server that routes tools through the command bus. |
 | `unfour` | Single Tauri desktop composition root in `apps/desktop/src-tauri`. |
 
@@ -117,8 +117,9 @@ from `workspace-core`.
 
 Flow is lazy-mounted by app-shell. Its frontend composes saved capability
 references through command-client; it does not import API, SSH, or Database UI
-internals. Flow V1 definitions and run history are local-only and do not support
-Cloud Sync or workspace import/export.
+internals. Flow definitions are included in whole-Workspace import/export. Run
+history is not exported. Flow definitions and run history do not support Cloud
+Sync. See [Flow V1](flow-v1.md) and [Workspace bundle](workspace-bundle.md).
 
 ## Rust Dependency Shape
 
@@ -198,7 +199,7 @@ The single desktop runtime lives under `apps/desktop/src-tauri`. It initializes
 unified storage, account state, Cloud Sync, and the outbox hook before handing
 the prepared command bus to `crates/unfour-app` for shared Tauri composition.
 There is no separate Pro client runtime. The product name is Unfour and the
-repository package version is `0.10.0`. Release readiness
+repository package version is `0.11.0`. Release readiness
 must be determined from the release verification documents, not from the
 version string alone.
 

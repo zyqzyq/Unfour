@@ -143,7 +143,7 @@ and should reuse `packages/ui` primitives where possible.
 | `crates/database-engine` | Database connection CRUD, schema browsing, query execution, browse-table behavior, SQL safety classification. | API request execution, SSH sessions. |
 | `crates/ssh-engine` | SSH connection/session service, terminal events, host-key handling, reconnect, log export. | API request execution, SQL execution. |
 | `crates/workspace-engine` | Workspace CRUD, active workspace state, workspace variables/environments, shared variable resolution, and layout persistence. | Feature-specific execution. |
-| `crates/unfour-command-bus` | Reusable Rust command entry point for Tauri, MCP, and future AI/CLI adapters. | UI components, duplicated domain logic. |
+| `crates/unfour-command-bus` | Reusable Rust command entry point for Tauri and MCP adapters. A later adapter must use this same entry point. | UI components, duplicated domain logic. |
 | `crates/unfour-mcp` | Local stdio MCP server adapter over the command bus. | Bypassing command-bus safety, redaction, or tool policy. |
 
 `apps/desktop/src-tauri` is the single Tauri desktop composition root. It owns
@@ -183,8 +183,8 @@ Forbidden:
 
 ## Command-Bus Rule
 
-Manual UI actions, MCP tools, and future AI/CLI adapters must use the same Rust
-command bus path:
+Manual UI actions and MCP tools must use the same Rust
+command bus path. A later adapter must use that path too:
 
 ```text
 adapter -> CommandBus -> service -> driver
