@@ -210,6 +210,7 @@ pub(super) fn api_send_request(
                 "bodyType": body_type,
                 "sizeBytes": size_bytes,
                 "truncated": truncated,
+                "warnings": response.warnings,
                 "source": "command-bus"
             }))
         }

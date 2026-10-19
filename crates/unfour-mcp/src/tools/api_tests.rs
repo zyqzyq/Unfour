@@ -208,6 +208,7 @@ impl CommandBusAdapter for ApiStubCommandBus {
             ],
             body: r#"{"ok":true,"token":"secret-jwt"}"#.to_string(),
             duration_ms: 123,
+            warnings: Vec::new(),
         })
     }
 
@@ -390,6 +391,7 @@ impl CommandBusAdapter for ApiStubCommandBus {
             }],
             body: r#"{"id":1,"token":"secret-jwt"}"#.to_string(),
             duration_ms: 77,
+            warnings: Vec::new(),
         })
     }
 

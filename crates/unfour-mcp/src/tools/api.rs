@@ -242,6 +242,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                         "bodyType": { "type": "string" },
                         "sizeBytes": { "type": "integer" },
                         "truncated": { "type": "boolean" },
+                        "warnings": { "type": "array", "items": { "type": "string" } },
                         "error": {
                             "type": "object",
                             "properties": {

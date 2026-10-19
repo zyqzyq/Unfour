@@ -197,6 +197,7 @@ impl ApiClientService {
         );
 
         Ok(ApiResponse {
+            warnings: Vec::new(),
             request_snapshot: Some(request_snapshot),
             history_id,
             status: status.as_u16(),

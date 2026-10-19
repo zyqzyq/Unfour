@@ -198,6 +198,7 @@ impl CommandBusAdapter for DbStubCommandBus {
             headers: vec![],
             body: "{}".to_string(),
             duration_ms: 0,
+            warnings: Vec::new(),
         })
     }
 

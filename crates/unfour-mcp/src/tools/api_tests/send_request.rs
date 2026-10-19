@@ -309,6 +309,7 @@ fn send_request_returns_structured_error_on_failure() {
         crate::response::error_json(&result)["error"]["code"],
         "COMMAND_BUS_API_SEND_FAILED"
     );
+    assert!(!result.to_string().contains("ACTIVITY_RECORD_FAILED"));
 }
 
 #[test]
@@ -323,4 +324,117 @@ fn command_bus_read_failure_returns_structured_error() {
         crate::response::error_json(&result)["error"]["code"],
         "COMMAND_BUS_READ_FAILED"
     );
+}
+
+#[test]
+fn send_request_keeps_completed_response_when_activity_record_fails() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct ActivityWarningBus {
+        calls: AtomicUsize,
+    }
+
+    fn warned_response() -> ApiResponse {
+        ApiResponse {
+            warnings: vec!["ACTIVITY_RECORD_FAILED".into()],
+            request_snapshot: None,
+            history_id: "hist-kept".into(),
+            status: 201,
+            status_text: "Created".into(),
+            headers: vec![KeyValue {
+                key: "Set-Cookie".into(),
+                value: "session=secret-session-id".into(),
+                enabled: true,
+            }],
+            body: r#"{"id":1,"token":"secret-jwt"}"#.into(),
+            duration_ms: 12,
+        }
+    }
+
+    impl CommandBusAdapter for ActivityWarningBus {
+        fn execute_read(
+            &self,
+            command: ReadCommand,
+        ) -> Result<ReadCommandResult, CommandBusAdapterError> {
+            ApiStubCommandBus.execute_read(command)
+        }
+
+        fn execute_saved_api_request(
+            &self,
+            request_id: &str,
+            timeout_ms: Option<u64>,
+        ) -> Result<ApiResponse, CommandBusAdapterError> {
+            ApiStubCommandBus.execute_saved_api_request(request_id, timeout_ms)
+        }
+
+        fn execute_saved_api_request_with_scripts_in_workspace(
+            &self,
+            _workspace_id: Option<&str>,
+            _request_id: &str,
+            _timeout_ms: Option<u64>,
+            _environment_id: Option<&str>,
+        ) -> Result<ApiResponse, CommandBusAdapterError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(warned_response())
+        }
+
+        fn send_api_request_in_environment(
+            &self,
+            _input: ApiRequestInput,
+            _environment_id: Option<&str>,
+        ) -> Result<ApiResponse, CommandBusAdapterError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(warned_response())
+        }
+
+        fn list_db_connections(
+            &self,
+            workspace_id: &str,
+        ) -> Result<Vec<DatabaseConnection>, CommandBusAdapterError> {
+            ApiStubCommandBus.list_db_connections(workspace_id)
+        }
+
+        fn get_db_schema(
+            &self,
+            workspace_id: &str,
+            connection_id: &str,
+        ) -> Result<DatabaseSchema, CommandBusAdapterError> {
+            ApiStubCommandBus.get_db_schema(workspace_id, connection_id)
+        }
+
+        fn execute_db_query(
+            &self,
+            input: DatabaseQueryInput,
+        ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
+            ApiStubCommandBus.execute_db_query(input)
+        }
+    }
+
+    let bus = Arc::new(ActivityWarningBus {
+        calls: AtomicUsize::new(0),
+    });
+    let registry = ToolRegistry::with_command_bus(bus.clone());
+    for arguments in [
+        json!({"requestId": "req-1"}),
+        json!({"method": "POST", "url": "https://api.example.test/users"}),
+    ] {
+        bus.calls.store(0, Ordering::SeqCst);
+        let result = registry
+            .call("unfour.api.send_request", arguments)
+            .expect("completed send stays successful");
+        assert_eq!(result["isError"], false);
+        assert_eq!(bus.calls.load(Ordering::SeqCst), 1);
+        let content = &result["structuredContent"];
+        assert_eq!(content["ok"], true);
+        assert_eq!(content["status"], 201);
+        assert_eq!(content["warnings"], json!(["ACTIVITY_RECORD_FAILED"]));
+        assert!(!result.to_string().contains("secret-jwt"));
+        assert!(!result.to_string().contains("secret-session-id"));
+        assert!(!result.to_string().contains("audit sink unavailable"));
+        crate::output_schema::assert_success_matches_output_schema(
+            &registry,
+            "unfour.api.send_request",
+            &result,
+        );
+    }
 }

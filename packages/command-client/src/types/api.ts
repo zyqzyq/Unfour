@@ -89,6 +89,8 @@ export type ApiClientPreferences = {
 };
 
 export type ApiResponse = {
+  /** Non-fatal completion warnings; absent in older responses. */
+  warnings?: string[];
   requestSnapshot?: ApiExecutedRequestSnapshot | null;
   historyId: string;
   status: number;
@@ -202,4 +204,6 @@ export type RequestExecutionResult = {
   httpErrorCode: string | null;
   preRequest: ScriptExecutionResult;
   postResponse: ScriptExecutionResult;
+  /** Non-fatal completion warnings; absent in older responses. */
+  warnings?: string[];
 };

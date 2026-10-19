@@ -49,6 +49,7 @@ fn saved_script_failure_returns_safe_diagnostics_through_the_real_mcp_registry()
             content_json(&result)["error"]["code"],
             "API_SCRIPT_EXECUTION_FAILED"
         );
+        assert!(!result.to_string().contains("ACTIVITY_RECORD_FAILED"));
         assert!(!result.to_string().contains("mcp-generated-canary"));
         assert!(adapter
             .run(adapter.bus.list_api_history(workspace.clone(), Some(10)))

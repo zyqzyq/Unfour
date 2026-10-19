@@ -184,6 +184,7 @@ impl CommandBusAdapter for StubCommandBus {
             }],
             body: "{\"ok\":true}".to_string(),
             duration_ms: 42,
+            warnings: Vec::new(),
         })
     }
 

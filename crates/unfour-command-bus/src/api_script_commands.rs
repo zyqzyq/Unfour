@@ -12,6 +12,7 @@ use unfour_http_engine::{
 };
 
 use super::*;
+use crate::transaction::CommandActivity;
 
 impl CommandBus {
     /// Versioned API Client execution path that preserves the existing MCP and
@@ -110,6 +111,7 @@ impl CommandBus {
                 http_error_code: None,
                 pre_request: pre.execution,
                 post_response: ScriptExecutionResult::skipped(),
+                warnings: Vec::new(),
             });
         }
         if cancellation.is_cancelled() {
@@ -173,7 +175,7 @@ impl CommandBus {
                 })
                 .map(|variable| variable.value.clone()),
         );
-        let response = match self
+        let mut response = match self
             .api_client
             .send_cancellable_with_secrets(resolved_request.clone(), cancellation.clone(), &secrets)
             .await
@@ -187,6 +189,7 @@ impl CommandBus {
                     http_error_code: Some(error_code),
                     pre_request: pre.execution,
                     post_response: ScriptExecutionResult::skipped(),
+                    warnings: Vec::new(),
                 });
             }
         };
@@ -198,6 +201,7 @@ impl CommandBus {
                 http_error_code: Some("API_CANCELLED".to_string()),
                 pre_request: pre.execution,
                 post_response: ScriptExecutionResult::skipped(),
+                warnings: Vec::new(),
             });
         }
 
@@ -228,6 +232,7 @@ impl CommandBus {
                     http_error_code: Some("API_CANCELLED".to_string()),
                     pre_request: pre.execution,
                     post_response: ScriptExecutionResult::skipped(),
+                    warnings: Vec::new(),
                 });
             }
             result = run_script(input.post_response_script.clone().unwrap_or_default(), post_input) => result?,
@@ -239,6 +244,7 @@ impl CommandBus {
                 http_error_code: Some("API_CANCELLED".to_string()),
                 pre_request: pre.execution,
                 post_response: post.execution,
+                warnings: Vec::new(),
             });
         }
         if post.execution.status == ScriptExecutionStatus::Success && post.environment_changed {
@@ -257,22 +263,28 @@ impl CommandBus {
                 http_error_code: Some("API_CANCELLED".to_string()),
                 pre_request: pre.execution,
                 post_response: post.execution,
+                warnings: Vec::new(),
             });
         }
 
-        self.activity_log
-            .record(
-                Some(&input.workspace_id),
-                "api.send_request",
-                Some(&response.history_id),
-                serde_json::json!({
-                    "method": input.method,
-                    "status": response.status,
-                    "preScriptStatus": pre.execution.status,
-                    "postScriptStatus": post.execution.status,
-                }),
+        let warnings = self
+            .record_completion_activity(
+                CommandActivity {
+                    workspace_id: Some(input.workspace_id.clone()),
+                    action: "api.send_request",
+                    target: Some(response.history_id.clone()),
+                    details: serde_json::json!({
+                        "method": input.method,
+                        "status": response.status,
+                        "preScriptStatus": pre.execution.status,
+                        "postScriptStatus": post.execution.status,
+                    }),
+                },
+                "api",
+                "send_request",
             )
-            .await?;
+            .await;
+        response.warnings.clone_from(&warnings);
 
         Ok(RequestExecutionResult {
             response: Some(response),
@@ -280,6 +292,7 @@ impl CommandBus {
             http_error_code: None,
             pre_request: pre.execution,
             post_response: post.execution,
+            warnings,
         })
     }
 
@@ -369,6 +382,7 @@ fn cancelled_execution(
         http_error_code: Some("API_CANCELLED".to_string()),
         pre_request,
         post_response,
+        warnings: Vec::new(),
     }
 }
 

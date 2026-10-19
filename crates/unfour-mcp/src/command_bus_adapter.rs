@@ -446,7 +446,14 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
                 )
             })?;
         match result.response {
-            Some(response) => Ok(response),
+            Some(mut response) => {
+                for warning in result.warnings {
+                    if !response.warnings.contains(&warning) {
+                        response.warnings.push(warning);
+                    }
+                }
+                Ok(response)
+            }
             None if result.http_error.is_some() => Err(CommandBusAdapterError {
                 code: "HTTP_ERROR",
                 message: "The command-bus API send operation failed.",

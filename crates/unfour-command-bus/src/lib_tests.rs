@@ -7,6 +7,8 @@ mod multipart;
 use super::*;
 #[path = "lib_tests/activity_outcomes.rs"]
 mod activity_outcomes;
+#[path = "lib_tests/api_activity_completion.rs"]
+mod api_activity_completion;
 #[path = "lib_tests/api_auth.rs"]
 mod api_auth;
 #[path = "lib_tests/api_environment_override.rs"]
@@ -176,6 +178,7 @@ async fn controlled_api_cancellation_cleans_up_and_skips_post_script_and_history
         .expect("cancelled execution returns a typed result");
 
     assert_eq!(result.http_error_code.as_deref(), Some("API_CANCELLED"));
+    assert!(result.warnings.is_empty());
     assert_eq!(result.post_response.status, ScriptExecutionStatus::Skipped);
     assert_eq!(bus.api_executions.active_count(), 0);
     assert!(!bus.cancel_api_request("unknown"));

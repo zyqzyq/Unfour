@@ -189,6 +189,7 @@ impl CommandBusAdapter for StubCommandBus {
             headers: vec![],
             body: "{}".to_string(),
             duration_ms: 10,
+            warnings: Vec::new(),
         })
     }
 

@@ -99,6 +99,9 @@ pub struct ApiClientPreferences {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiResponse {
+    /// Non-fatal completion warnings. The HTTP response and history id stay authoritative.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
     /// Sanitized initial HTTP request, after resolution, scripts and auth.
     /// Optional for older adapters; never reconstruct it from a frontend draft.
     #[serde(default)]
@@ -274,6 +277,9 @@ pub struct RequestExecutionResult {
     pub http_error_code: Option<String>,
     pub pre_request: ScriptExecutionResult,
     pub post_response: ScriptExecutionResult,
+    /// Non-fatal completion warnings. HTTP, script, and cancellation outcomes stay authoritative.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 fn default_request_settings_json() -> String {

@@ -552,7 +552,7 @@ impl CommandBus {
             .resolve_api_request_input_for_environment(input.clone(), environment_id.as_deref())
             .await?;
         let resolved_input = self.resolve_desktop_api_timeout(resolved_input).await?;
-        let response = self
+        let mut response = self
             .api_client
             .send_cancellable_with_secrets(
                 resolved_input,
@@ -560,17 +560,21 @@ impl CommandBus {
                 &secrets,
             )
             .await?;
-        self.activity_log
-            .record(
-                Some(&input.workspace_id),
-                "api.send_request",
-                Some(&response.history_id),
-                serde_json::json!({
-                    "method": input.method,
-                    "status": response.status
-                }),
+        response.warnings = self
+            .record_completion_activity(
+                CommandActivity {
+                    workspace_id: Some(input.workspace_id.clone()),
+                    action: "api.send_request",
+                    target: Some(response.history_id.clone()),
+                    details: serde_json::json!({
+                        "method": input.method,
+                        "status": response.status
+                    }),
+                },
+                "api",
+                "send_request",
             )
-            .await?;
+            .await;
         Ok(response)
     }
 

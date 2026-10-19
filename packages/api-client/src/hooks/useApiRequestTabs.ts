@@ -1,4 +1,4 @@
-import { useI18n, createTranslator, type TFunction } from "@unfour/ui";
+import { useFeedback, useI18n, createTranslator, type TFunction } from "@unfour/ui";
 import { multipartRuntimeInput, multipartValidation } from "../model/multipart";
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -39,6 +39,7 @@ import type {
 
 export function useApiRequestTabs(workspaceId: string) {
   const { t } = useI18n();
+  const feedback = useFeedback();
   const queryClient = useQueryClient();
   const [collectionStatus, setCollectionStatus] = useState("");
   const state = useApiRequestTabStore(
@@ -71,6 +72,10 @@ export function useApiRequestTabs(workspaceId: string) {
       const store = useApiRequestTabStore.getState();
       const current = store.byWorkspace[workspaceId]?.tabs.find((tab) => tab.executionId === variables.executionId);
       if (current) store.completeTabSend(workspaceId, current.id, execution);
+      const warnings = execution.warnings ?? execution.response?.warnings;
+      if (execution.response && !execution.httpError && warnings?.includes("ACTIVITY_RECORD_FAILED")) {
+        feedback.info(t("feedback.activityRecordFailed"));
+      }
       queryClient.invalidateQueries({ queryKey: ["api-history", workspaceId] });
     },
     onError: (error, variables) => {
