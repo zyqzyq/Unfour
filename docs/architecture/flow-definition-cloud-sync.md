@@ -1,7 +1,7 @@
 # Flow Definition Cloud Sync client contract (dormant)
 
-Based on main `bbfc8d1f`. This change prepares the client only. Unfour-api does
-not yet support `flow`; this is **not enabled cross-device sync**.
+Client safety revision based on main `f089a90`. This prepares the client only.
+Unfour-api does not yet support `flow`; this is **not enabled cross-device sync**.
 
 ## Ownership and activation boundary
 
@@ -25,7 +25,7 @@ Community databases continue to use the local migration chain independently.
 
 ## Server alignment required
 
-| Contract | Proposed value / behavior |
+| Contract | Required final value / behavior |
 | --- | --- |
 | EntityType | `flow` (one complete definition, never one entity per step) |
 | Protocol | 5, unchanged |
@@ -91,27 +91,78 @@ schema-independent tombstone can still be applied by a reader supporting Flow.
 Clients that do not support Flow retain its envelopes, advance the cursor and
 enter compatibility waiting without materializing definitions.
 
-### Sensitive data and conservative literal policy
+### Final schema 1 safety rules (client and future Unfour-api)
 
-Secret inputs carry name/type/required/secret/description only. A secret default
-(including null) is invalid. No credential references, Keychain handles,
-private-key material, device paths, runtime variables, Flow Runs, outcomes,
-consent, environment selection or execution snapshots enter the payload.
+The wire shape, schema version and reader revision stay **1**. These rules
+replace the former reference-only string restriction before production activation.
+Unfour-api must implement this final acceptance contract, not the old restriction.
+Validation accepts the complete definition unchanged or returns an explicit
+error; it never redacts, strips fields, truncates, or rewrites executable values.
 
-Schema 1's client safety validator intentionally supports a conservative subset:
-string values in executable slots (`arguments`, input defaults, predicate
-operands) must be exact runtime references, either `{"$ref":"/inputs/name"}`
-or `${/inputs/name}` (also `/steps/...` and predicate `/probe/...`; an exact
-`Bearer ${/...}` is allowed).
-Numeric, boolean and null literals and structured containers are supported;
-sensitive-named values require references. Local handles/path fields are
-forbidden even when their value is a reference. No sanitization is performed.
-Opaque literal SQL, shell text, bodies, URLs, string defaults and string
-predicate constants are rejected with `cloud_sync_flow_unsafe_definition`.
-This deliberately rejects some harmless definitions rather than pretending to
-infer the secrecy of arbitrary strings. Expanding that subset requires a
-separate reviewed safety contract, not silently removing or rewriting values.
-Names/descriptions are declarative metadata, not a channel for secret values.
+1. Ordinary string literals, numbers, booleans, null, arrays and objects are
+   allowed in executable values and ordinary input defaults. This includes SQL,
+   SSH Task `inputs` (and `workspaceDefaults`), API URLs/body text, headers/query
+   replacement and patch rows, string predicate operands and mixed templates
+   such as `build-${/inputs/version}.zip`. Remote SSH directory arguments such
+   as `/home/deploy/app` are portable parameter data; a path-shaped string alone
+   does not establish that it is a device-local credential.
+2. Inputs marked `secret`, or whose names match the shared sensitive-name rule,
+   have **no default at all**, including null or a reference. Defaults are copied
+   as literal data by the engine, not evaluated: embedded reference-shaped data
+   cannot justify a sensitive default or a sensitive nested default field.
+3. Explicit sensitive fields require a whole runtime value: a singleton
+   `{"$ref":"/inputs/name"}`, exact `${/inputs/name}`, or exact
+   `Bearer ${/inputs/name}`. Arbitrary literal prefixes/suffixes in a sensitive
+   value are rejected; supply the fully assembled value at runtime instead.
+   The same applies to numeric/boolean/null/container literals in such fields.
+   The shared field rule lowercases and removes underscores, hyphens and spaces,
+   then matches `authorization`, `cookie`, `password`, `passwd`, `secret`,
+   `token`, `apikey`, `privatekey`, `passphrase`, `credential`, or `licensekey`.
+   This classifies field names; it is **not a general secret detector**.
+4. Inspect nested objects/arrays and actual API `{key,value,enabled}` rows,
+   including disabled rows, `headersPatch`, `queryPatch` and repeated query
+   occurrences. A sensitive `key` (or named `name`/`value` pair) protects `value`.
+   Runtime-selected field names also require runtime-supplied values, since
+   their sensitivity cannot be known until execution.
+5. Inspect JSON-looking text (starts with `{` or `[` after whitespace), URL
+   userinfo passwords and query pairs, and API Body form pairs when non-JSON
+   body text contains `=`. Apply the same field rules after JSON/percent decoding.
+   JSON Body templates can be quoted or occupy a complete unquoted JSON value.
+   Only actual `${...}` sequences in the original executable text count as
+   runtime references: escaped/percent-encoded lookalikes and `$ref` objects
+   inside JSON text remain literals. Reference masking is validation-only.
+   Uninspectable JSON-looking text or ambiguous JSON escape/template boundaries
+   are rejected; supply the whole body through a runtime reference instead.
+6. References use the engine's JSON Pointer roots `/inputs`, `/steps`, `/probe`,
+   valid `~0`/`~1` escaping and no braces/control characters. Malformed singleton
+   objects/templates, unavailable/forward/self step outputs and `/probe` outside
+   a probe predicate are rejected. `/steps` references must be guaranteed on
+   every incoming execution path. Actual input values/output paths are checked
+   at run time; no secret or referenced resource is resolved during sync.
+7. Never accept device-local material: normalized field names containing
+   `credentialref`, `secretref`, `secretstore`, `keychain`, `privatekeypath`,
+   `localpath`, `runtimevariables`, or `temporaryvariables`, including named pair
+   keys, are forbidden even with reference values. Strings containing reserved
+   `@unfour-secret:`, `unfour:<workspace>:<kind>:<record>`, `keychain:`,
+   `secret-store:`, or `secretstore:` handles, `file:` URIs, PEM private-key
+   headers or PuTTY private-key material are forbidden, including in decoded
+   structured data. A runtime reference to
+   a secret input is portable; a persisted Secret Store reference is not.
+
+Opaque SQL, shell/task text and ordinary text cannot be proven secret-free by
+examining keywords, entropy or field lists. They are accepted as user-authored
+definition data; hardcoded secrets hidden in arbitrary text, innocuously named
+fields, encoded blobs, custom handle formats or metadata cannot be reliably
+identified. Authors must keep those secrets in runtime secret inputs or existing
+resource credential storage. Names/descriptions are metadata, not a secret
+channel. Structured ambiguous cases above fail explicitly instead of falling
+back to opaque acceptance. This is a practical boundary, not a claim of DLP.
+
+Flow Runs/history, output values, consent, selected environment, resolved
+variables, credential provenance and execution snapshots are never wire fields.
+Future changes must not add them to definition payloads. Existing local Flow
+save/execution security validation still applies; sync acceptance grants no
+execution permission and does not bypass missing-resource preflight.
 
 Oversized definitions produce `cloud_sync_flow_payload_too_large`. The existing
 local 1 MiB limit is unchanged. In the rehearsed enabled path, unsafe/oversized
@@ -154,9 +205,9 @@ atomically. Workspace deletion conflicts include pending Flow intent.
    verify first upload/repair for pre-existing bound workspaces, old-client
    compatibility waiting, offline retry, conflicts, workspace cascade and
    reference resources that arrive later or remain unavailable.
-4. Add shared i18n error presentation for rejected safety/size cases. Decide
-   whether the conservative literal policy is acceptable for release, or
-   implement a separately reviewed expansion. No automatic truncation/redaction.
+4. Add shared i18n error presentation for rejected safety/size cases. Deploy and
+   verify the final schema 1 safety rules above in Unfour-api before enabling
+   any client. No automatic truncation/redaction.
 
 Verification evidence is in
 [the client test report](../testing/flow-definition-cloud-sync-client.md).

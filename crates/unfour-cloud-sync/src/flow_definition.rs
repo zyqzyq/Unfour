@@ -6,6 +6,9 @@ use unfour_core::{domain::*, models::FlowDefinition};
 
 use crate::{RemoteChange, SyncError, SyncOperation};
 
+mod safety;
+use safety::{reject_local_material, safe_value, References};
+
 pub const WIRE_NAME: &str = "flow";
 pub const SCHEMA_VERSION: i64 = 1;
 pub const MAX_PAYLOAD_BYTES: usize = 65_536;
@@ -92,15 +95,15 @@ fn validate_payload(
     workspace: &str,
     id: &str,
 ) -> Result<FlowDefinition, SyncError> {
-    if unsupported_subtype(payload)? {
-        return Err(SyncError::CompatibilityWaiting);
-    }
     if serde_json::to_vec(payload)
         .map_err(|_| SyncError::InvalidData)?
         .len()
         > MAX_PAYLOAD_BYTES
     {
         return Err(SyncError::FlowPayloadTooLarge);
+    }
+    if unsupported_subtype(payload)? {
+        return Err(SyncError::CompatibilityWaiting);
     }
     uuid::Uuid::parse_str(id).map_err(|_| SyncError::InvalidData)?;
     let wire: Payload =
@@ -125,7 +128,8 @@ fn validate_payload(
             if input.secret || unfour_core::redaction::is_sensitive_flow_name(&input.name) {
                 return Err(SyncError::FlowUnsafeDefinition);
             }
-            safe_expression(default)?;
+            // Defaults are copied as data by the engine, never evaluated.
+            safe_value(default, References::Literal)?;
         }
     }
     for step in normalized["steps"]
@@ -143,13 +147,16 @@ fn validate_payload(
                 if let Some(connection) = action["connectionId"].as_str() {
                     uuid::Uuid::parse_str(connection).map_err(|_| SyncError::InvalidData)?;
                 }
-                safe_expression(&action["arguments"])?;
+                safe_value(&action["arguments"], References::Runtime)?;
+                if action["capability"] == "api" {
+                    safety::api_arguments(&action["arguments"])?;
+                }
             }
         }
         for field in ["predicate", "successWhen", "failureWhen"] {
             if let Some(predicate) = step.get(field).filter(|value| !value.is_null()) {
-                safe_expression(&predicate["left"])?;
-                safe_expression(&predicate["right"])?;
+                safe_value(&predicate["left"], References::Runtime)?;
+                safe_value(&predicate["right"], References::Runtime)?;
             }
         }
     }
@@ -248,96 +255,6 @@ fn ensure_known_fields(raw: &Value, normalized: &Value) -> Result<(), SyncError>
         _ => {}
     }
     Ok(())
-}
-
-/// Opaque literal strings in executable slots cannot be proven secret-free.
-/// v1 conservatively requires runtime references there (including SQL/shell
-/// text, string defaults and string predicates). Numeric/bool/null literals
-/// remain valid. Refusal is explicit; local definitions remain unrestricted.
-fn safe_expression(value: &Value) -> Result<(), SyncError> {
-    match value {
-        Value::String(text) if is_reference(text) => Ok(()),
-        Value::String(_) => Err(SyncError::FlowUnsafeDefinition),
-        Value::Object(map) if map.len() == 1 && map.contains_key("$ref") => {
-            let reference = map["$ref"]
-                .as_str()
-                .ok_or(SyncError::FlowUnsafeDefinition)?;
-            if valid_pointer(reference) {
-                Ok(())
-            } else {
-                Err(SyncError::FlowUnsafeDefinition)
-            }
-        }
-        Value::Object(map) => {
-            for (key, value) in map {
-                if unfour_core::redaction::is_sensitive_flow_name(key)
-                    && !value.as_str().is_some_and(is_reference)
-                    && !(value
-                        .as_object()
-                        .is_some_and(|v| v.len() == 1 && v.contains_key("$ref")))
-                {
-                    return Err(SyncError::FlowUnsafeDefinition);
-                }
-                safe_expression(value)?;
-            }
-            Ok(())
-        }
-        Value::Array(values) => values.iter().try_for_each(safe_expression),
-        _ => Ok(()),
-    }
-}
-
-fn valid_pointer(value: &str) -> bool {
-    ["/inputs", "/steps", "/probe"].iter().any(|prefix| {
-        value == *prefix
-            || value
-                .strip_prefix(prefix)
-                .is_some_and(|tail| tail.starts_with('/'))
-    }) && !value.contains(['{', '}', '\n', '\r'])
-}
-fn is_reference(value: &str) -> bool {
-    value
-        .strip_prefix("Bearer ")
-        .unwrap_or(value)
-        .strip_prefix("${")
-        .and_then(|value| value.strip_suffix('}'))
-        .is_some_and(valid_pointer)
-}
-
-fn reject_local_material(value: &Value) -> Result<(), SyncError> {
-    match value {
-        Value::Object(map) => map.iter().try_for_each(|(key, value)| {
-            let normalized = key.to_ascii_lowercase().replace(['_', '-'], "");
-            if [
-                "credentialref",
-                "secretref",
-                "keychain",
-                "privatekeypath",
-                "localpath",
-                "runtimevariables",
-                "temporaryvariables",
-            ]
-            .iter()
-            .any(|marker| normalized.contains(marker))
-            {
-                return Err(SyncError::FlowUnsafeDefinition);
-            }
-            reject_local_material(value)
-        }),
-        Value::Array(values) => values.iter().try_for_each(reject_local_material),
-        Value::String(value)
-            if value.contains("@unfour-secret:")
-                || value.contains("-----BEGIN ")
-                || value.starts_with("file:")
-                || value.contains(":\\")
-                || value.starts_with("/Users/")
-                || value.starts_with("/home/")
-                || value.starts_with("\\\\") =>
-        {
-            Err(SyncError::FlowUnsafeDefinition)
-        }
-        _ => Ok(()),
-    }
 }
 
 #[cfg(test)]

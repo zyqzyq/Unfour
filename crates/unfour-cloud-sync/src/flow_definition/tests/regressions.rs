@@ -80,10 +80,23 @@ async fn repair_captures_preexisting_flow_and_unsafe_edits_roll_back() {
         .iter()
         .flat_map(|p| &p.operations)
         .any(|p| p.entity_type == SyncEntityType::Flow && p.entity_id == flow.id));
+    let mut ordinary = flow;
+    ordinary.inputs[0].secret = false;
+    ordinary.inputs[0].name = "label".into();
+    ordinary.inputs[0].default = Some(json!("stable"));
+    let flow = bus.save_flow(ordinary).await.unwrap();
+    let captured: String = sqlx::query_scalar(
+        "SELECT canonical_payload_json FROM cloud_sync_outbox WHERE entity_type='flow'",
+    )
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(
+        serde_json::from_str::<Value>(&captured).unwrap()["inputs"][0]["default"],
+        "stable"
+    );
     let mut unsafe_flow = flow.clone();
-    unsafe_flow.inputs[0].secret = false;
-    unsafe_flow.inputs[0].name = "label".into();
-    unsafe_flow.inputs[0].default = Some(json!("opaque literal"));
+    unsafe_flow.inputs[0].default = Some(json!("@unfour-secret:fixture"));
     let error = bus.save_flow(unsafe_flow).await.unwrap_err();
     assert!(error
         .to_string()
@@ -92,6 +105,13 @@ async fn repair_captures_preexisting_flow_and_unsafe_edits_roll_back() {
         bus.get_flow(ws, flow.id).await.unwrap().revision,
         flow.revision
     );
+    let retained: String = sqlx::query_scalar(
+        "SELECT canonical_payload_json FROM cloud_sync_outbox WHERE entity_type='flow'",
+    )
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(retained, captured);
 }
 
 #[tokio::test]

@@ -104,14 +104,11 @@ fn secrets_and_local_material_are_rejected_without_redaction() {
         json!({"proxy-authorization":false}),
         json!({"x-api-key":"secret"}),
         json!({"x-auth-token":"secret"}),
-        json!({"data":"opaque-literal"}),
         json!({"data":"{\"token\":\"secret\"}"}),
         json!({"data":"@unfour-secret:handle"}),
         json!({"keychain":"${/inputs/key}"}),
         json!({"privateKeyPath":"${/inputs/path}"}),
-        json!({"data":"${/inputs/key} literal}"}),
-        json!({"data":"-----BEGIN PRIVATE KEY-----"}),
-        json!({"data":"C:\\Users\\me\\key"}),
+        json!({"data":format!("-----BEGIN {}-----", "PRIVATE KEY")}),
         json!({"data":"file:///home/me/key"}),
     ] {
         let mut value = payload();

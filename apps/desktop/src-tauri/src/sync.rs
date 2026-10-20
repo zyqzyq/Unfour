@@ -176,6 +176,12 @@ impl From<SyncError> for SyncCommandError {
         Self {
             code: error.code(),
             message: match error {
+                SyncError::FlowPayloadTooLarge => {
+                    "The Flow definition exceeds the Cloud Sync payload size limit."
+                }
+                SyncError::FlowUnsafeDefinition => {
+                    "The Flow definition contains sensitive values or device-local material."
+                }
                 SyncError::Unauthorized => "Cloud Sync requires a valid desktop session.",
                 SyncError::EntitlementRequired => {
                     "This account does not include an active cloud_sync entitlement."
@@ -468,6 +474,24 @@ mod tests {
         assert_eq!(error.code, "cloud_sync_unauthorized");
         for forbidden in ["sessionToken", "remotePayload", "secretValue"] {
             assert!(!encoded.contains(forbidden));
+        }
+    }
+
+    #[test]
+    fn flow_sync_errors_preserve_distinct_codes() {
+        for (error, code) in [
+            (
+                SyncError::FlowPayloadTooLarge,
+                "cloud_sync_flow_payload_too_large",
+            ),
+            (
+                SyncError::FlowUnsafeDefinition,
+                "cloud_sync_flow_unsafe_definition",
+            ),
+        ] {
+            let encoded = serde_json::to_value(SyncCommandError::from(error)).unwrap();
+            assert_eq!(encoded["code"], code);
+            assert!(encoded["message"].as_str().is_some_and(|s| !s.is_empty()));
         }
     }
 

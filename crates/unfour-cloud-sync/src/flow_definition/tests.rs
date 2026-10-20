@@ -2,6 +2,7 @@ use super::*;
 
 mod contracts;
 mod lifecycle;
+mod payload_safety;
 mod regressions;
 mod snapshots;
 #[allow(dead_code, unused_imports)]

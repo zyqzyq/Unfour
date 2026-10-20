@@ -10,7 +10,7 @@ use crate::SyncConflictDetails;
 pub enum SyncError {
     #[error("flow definition exceeds the cloud sync 64 KiB payload limit")]
     FlowPayloadTooLarge,
-    #[error("flow definition contains unsafe or opaque literal values; use runtime references")]
+    #[error("flow definition contains sensitive values or device-local material; use runtime references")]
     FlowUnsafeDefinition,
     #[error("cloud sync is not authorized")]
     Unauthorized,
