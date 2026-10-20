@@ -22,6 +22,7 @@ fn cloud_sync_migrator() -> Migrator {
 #[cfg(test)]
 mod tests {
     mod diagnostics;
+    mod flow;
     mod ownership;
 
     use super::*;

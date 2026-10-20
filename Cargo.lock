@@ -7003,6 +7003,7 @@ dependencies = [
  "unfour-command-bus",
  "unfour-core",
  "unfour-database-engine",
+ "unfour-flow-engine",
  "unfour-http-engine",
  "unfour-local-storage",
  "unfour-secret-store",

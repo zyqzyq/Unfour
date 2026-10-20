@@ -17,6 +17,7 @@ url = "2"
 uuid = { version = "1", features = ["v4"] }
 unfour-command-bus = { path = "../unfour-command-bus" }
 unfour-core = { path = "../unfour-core" }
+unfour-flow-engine = { path = "../flow-engine" }
 unfour-database-engine = { path = "../database-engine" }
 unfour-http-engine = { path = "../http-engine" }
 unfour-local-storage = { path = "../local-storage" }

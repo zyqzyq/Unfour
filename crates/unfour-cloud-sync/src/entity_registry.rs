@@ -26,6 +26,8 @@ pub enum SnapshotProvider {
     Connection,
     ApiClient,
     SshTask,
+    #[cfg(test)]
+    Flow,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,6 +75,22 @@ const SSH_TASK_PARENT: &[SyncEntityType] = &[SyncEntityType::SshTask];
 
 /// The only complete list of entity types supported by Cloud Sync.
 pub const SYNC_ENTITY_REGISTRY: &[SyncEntityDescriptor] = &[
+    // Dormant registration rehearsal, absent from all production/integration builds.
+    #[cfg(test)]
+    descriptor(
+        SyncEntityType::Flow,
+        DomainEntityType::FlowDefinition,
+        "flow",
+        1,
+        true,
+        ParentDependency::Workspace,
+        SnapshotProvider::Flow,
+        RecoveryPolicy::Leaf,
+        1,
+        "flow_definitions",
+        Some("workspace_id"),
+        "NULL",
+    ),
     descriptor(
         SyncEntityType::Workspace,
         DomainEntityType::Workspace,
@@ -308,6 +326,10 @@ impl<'a> SyncEntityAdapters<'a> {
     ) -> Result<Option<DomainSnapshot>, SyncError> {
         let descriptor = sync_entity_descriptor_for_domain(key.entity_type);
         let result = match descriptor.snapshot_provider {
+            #[cfg(test)]
+            SnapshotProvider::Flow => {
+                unfour_flow_engine::FlowService::read_definition_snapshot_on(connection, key).await
+            }
             SnapshotProvider::Workspace => self.workspace.read_snapshot_on(connection, key).await,
             SnapshotProvider::ApiClient => {
                 self.api_client
@@ -482,13 +504,13 @@ mod tests {
 
     #[test]
     fn registry_metadata_is_complete_and_valid() {
-        // The sole local-only domain entity must remain outside Protocol 5.
+        // Unit builds rehearse Flow registration; integration tests verify production exclusion.
         assert_eq!(
             DomainEntityType::ALL
                 .into_iter()
                 .filter(|entity| SyncEntityType::try_from(*entity).is_err())
                 .collect::<Vec<_>>(),
-            vec![DomainEntityType::FlowDefinition]
+            Vec::<DomainEntityType>::new()
         );
         let types = SYNC_ENTITY_REGISTRY
             .iter()

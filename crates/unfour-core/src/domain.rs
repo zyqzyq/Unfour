@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 
 mod connection;
 pub use connection::*;
+mod flow;
+pub use flow::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -328,6 +330,7 @@ pub struct TombstoneSnapshot {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "entityType", content = "snapshot", rename_all = "camelCase")]
 pub enum DomainSnapshot {
+    FlowDefinition(FlowDefinitionSnapshot),
     Workspace(WorkspaceSnapshot),
     Connection(ConnectionSnapshot),
     WorkspaceVariable(WorkspaceVariableSnapshot),
@@ -539,6 +542,8 @@ pub enum ExternalApiRequestApply {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExternalApplyPage {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub flow_definitions: Vec<ExternalFlowDefinitionApply>,
     pub workspaces: Vec<ExternalWorkspaceApply>,
     #[serde(default)]
     pub connections: Vec<ExternalConnectionApply>,

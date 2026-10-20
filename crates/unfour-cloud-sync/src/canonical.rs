@@ -311,6 +311,9 @@ pub fn canonical_payload(snapshot: DomainSnapshot) -> Result<Option<Value>, Sync
             created_at: snapshot.created_at,
             updated_at: snapshot.updated_at,
         }),
+        DomainSnapshot::FlowDefinition(snapshot) => {
+            return crate::flow_definition::canonical_payload(&snapshot).map(Some)
+        }
         DomainSnapshot::Tombstone(_) => return Ok(None),
     }
     .map_err(|_| SyncError::InvalidData)?;
@@ -423,6 +426,15 @@ pub(crate) fn canonical_snapshot_intent(
             value.revision,
             None,
         ),
+        DomainSnapshot::FlowDefinition(value) => (
+            DomainEntityKey::new(
+                DomainEntityType::FlowDefinition,
+                &value.workspace_id,
+                &value.id,
+            ),
+            value.revision,
+            None,
+        ),
         DomainSnapshot::Tombstone(value) => (
             value.entity.clone(),
             value.revision,
@@ -464,6 +476,20 @@ pub(crate) async fn canonical_intent_on(
 ) -> Result<CanonicalIntent, SyncError> {
     let entity_type = SyncEntityType::try_from(mutation.entity.entity_type)?;
     let operation = SyncOperation::from(mutation.operation);
+    #[cfg(test)]
+    if entity_type == SyncEntityType::Flow {
+        let snapshot = unfour_flow_engine::FlowService::read_definition_snapshot_on(
+            connection,
+            &mutation.entity,
+        )
+        .await
+        .map_err(|_| SyncError::Core)?;
+        let captured = canonical_snapshot_intent(snapshot)?;
+        if captured.revision != mutation.revision || captured.intent.operation != operation {
+            return Err(SyncError::InvalidData);
+        }
+        return Ok(captured.intent);
+    }
     if matches!(
         entity_type,
         SyncEntityType::Connection
@@ -487,6 +513,8 @@ pub(crate) async fn canonical_intent_on(
     }
     if operation == SyncOperation::Delete {
         let deleted_at = match entity_type {
+            #[cfg(test)]
+            SyncEntityType::Flow => unreachable!("Flow captured above"),
             SyncEntityType::Workspace => sqlx::query_scalar::<_, String>(
                 "SELECT deleted_at FROM workspaces WHERE id = ?1",
             )
@@ -533,6 +561,8 @@ pub(crate) async fn canonical_intent_on(
     }
 
     let payload = match entity_type {
+        #[cfg(test)]
+        SyncEntityType::Flow => unreachable!("Flow captured above"),
         SyncEntityType::Workspace => {
             let row: (String, String, String, String, String, Option<String>) = sqlx::query_as(
                 r#"SELECT name, environment_type, mcp_policy,
@@ -722,6 +752,13 @@ pub(crate) fn parse_remote_change_as(
     entity_type: SyncEntityType,
     change: &RemoteChange,
 ) -> Result<ExternalApplyPage, SyncError> {
+    #[cfg(test)]
+    if entity_type == SyncEntityType::Flow {
+        let mut page = ExternalApplyPage::default();
+        page.flow_definitions
+            .push(crate::flow_definition::parse_change(workspace_id, change)?);
+        return Ok(page);
+    }
     if change.entity_id.trim().is_empty()
         || change.server_version < 1
         || change.payload_schema_version < 1
@@ -755,6 +792,8 @@ pub(crate) fn parse_remote_change_as(
     let payload = change.payload.clone().ok_or(SyncError::InvalidData)?;
     let mut page = ExternalApplyPage::default();
     match entity_type {
+        #[cfg(test)]
+        SyncEntityType::Flow => unreachable!("Flow parsed above"),
         SyncEntityType::Workspace => {
             let payload: WorkspacePayload =
                 serde_json::from_value(payload).map_err(|_| SyncError::InvalidData)?;
@@ -972,6 +1011,13 @@ pub(crate) fn parse_remote_change_as(
 fn delete_page(entity_type: SyncEntityType, delete: ExternalDelete) -> ExternalApplyPage {
     let mut page = ExternalApplyPage::default();
     match entity_type {
+        #[cfg(test)]
+        SyncEntityType::Flow => {
+            page.flow_definitions
+                .push(unfour_core::domain::ExternalFlowDefinitionApply::Delete(
+                    delete,
+                ))
+        }
         SyncEntityType::Workspace => page.workspaces.push(ExternalWorkspaceApply::Delete(delete)),
         SyncEntityType::Connection => page
             .connections

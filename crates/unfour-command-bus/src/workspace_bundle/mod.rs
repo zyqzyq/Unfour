@@ -186,7 +186,9 @@ impl CommandBus {
                 DomainSnapshot::SshTask(record) => bundle.ssh_tasks.push(portable(record)?),
                 DomainSnapshot::SshTaskStep(record) => bundle.ssh_steps.push(portable(record)?),
 
-                DomainSnapshot::Tombstone(_) => return Err(invalid()),
+                DomainSnapshot::Tombstone(_) | DomainSnapshot::FlowDefinition(_) => {
+                    return Err(invalid())
+                }
             }
         }
         for record in self

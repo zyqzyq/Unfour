@@ -115,6 +115,28 @@ impl SyncService {
             .await
             .map_err(|_| SyncError::Core)?;
         cleanup.record_keys(workspace_outcome.value.materialized_entities);
+        #[cfg(test)]
+        for change in page.flow_definitions.clone() {
+            let key = match &change {
+                unfour_core::domain::ExternalFlowDefinitionApply::Upsert(value) => {
+                    DomainEntityKey::new(
+                        DomainEntityType::FlowDefinition,
+                        &value.workspace_id,
+                        &value.id,
+                    )
+                }
+                unfour_core::domain::ExternalFlowDefinitionApply::Delete(value) => {
+                    value.entity.clone()
+                }
+            };
+            unfour_flow_engine::FlowService::apply_external_definition_on(
+                connection, &context, change,
+            )
+            .await
+            .map_err(|_| SyncError::Core)?;
+            cleanup.record_keys([key]);
+        }
+
         for change in page.connections.clone() {
             let connection_type = match &change {
                 ExternalConnectionApply::Upsert(record) => record.connection_type.as_str(),
@@ -208,6 +230,8 @@ impl SyncService {
 pub(super) fn merge_external_pages(pages: Vec<ExternalApplyPage>) -> ExternalApplyPage {
     let mut merged = ExternalApplyPage::default();
     for mut page in pages {
+        #[cfg(test)]
+        merged.flow_definitions.append(&mut page.flow_definitions);
         merged.workspaces.append(&mut page.workspaces);
         merged.connections.append(&mut page.connections);
         merged
@@ -272,6 +296,13 @@ pub(super) fn merge_external_pages(pages: Vec<ExternalApplyPage>) -> ExternalApp
         ExternalSshTaskStepApply::Upsert(record) => &record.id,
         ExternalSshTaskStepApply::Delete(delete) => &delete.entity.entity_id,
     });
+    #[cfg(test)]
+    retain_last_by_key(&mut merged.flow_definitions, |change| match change {
+        unfour_core::domain::ExternalFlowDefinitionApply::Upsert(record) => &record.id,
+        unfour_core::domain::ExternalFlowDefinitionApply::Delete(delete) => {
+            &delete.entity.entity_id
+        }
+    });
     merged
 }
 
@@ -288,7 +319,8 @@ fn retain_last_by_key<T>(items: &mut Vec<T>, key: impl Fn(&T) -> &str) {
 }
 
 fn external_page_is_empty(page: &ExternalApplyPage) -> bool {
-    page.workspaces.is_empty()
+    page.flow_definitions.is_empty()
+        && page.workspaces.is_empty()
         && page.connections.is_empty()
         && page.workspace_variables.is_empty()
         && page.workspace_environments.is_empty()

@@ -8,6 +8,10 @@ use crate::SyncConflictDetails;
 
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
 pub enum SyncError {
+    #[error("flow definition exceeds the cloud sync 64 KiB payload limit")]
+    FlowPayloadTooLarge,
+    #[error("flow definition contains unsafe or opaque literal values; use runtime references")]
+    FlowUnsafeDefinition,
     #[error("cloud sync is not authorized")]
     Unauthorized,
     #[error("cloud sync entitlement is unavailable")]
@@ -57,6 +61,8 @@ pub enum SyncError {
 impl SyncError {
     pub const fn code(&self) -> &'static str {
         match self {
+            Self::FlowPayloadTooLarge => "cloud_sync_flow_payload_too_large",
+            Self::FlowUnsafeDefinition => "cloud_sync_flow_unsafe_definition",
             Self::Unauthorized => "cloud_sync_unauthorized",
             Self::EntitlementRequired => "cloud_sync_entitlement_required",
             Self::ProtocolIncompatible => "cloud_sync_protocol_incompatible",

@@ -1,9 +1,13 @@
+#[cfg(test)]
+extern crate self as unfour_cloud_sync;
+
 mod canonical;
 mod canonical_parent;
 mod conflict_scope;
 mod entity_registry;
 mod error;
 mod execution_guard;
+pub mod flow_definition;
 mod hook;
 mod remote_compatibility;
 mod repository;

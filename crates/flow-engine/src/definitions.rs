@@ -37,7 +37,7 @@ fn mutation(
     )
 }
 
-fn validate(definition: &FlowDefinition) -> AppResult<()> {
+pub(crate) fn validate(definition: &FlowDefinition) -> AppResult<()> {
     validation::validate(definition)?;
     let original = serde_json::to_value(definition)?;
     let mut cleaned = original.clone();

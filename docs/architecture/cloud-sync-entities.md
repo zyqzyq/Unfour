@@ -38,6 +38,8 @@ stay in the owning domain and canonical mapping layers.
 | SshTaskStep | `sshTaskStep` | SshTask | SSH Task |
 
 All current entries participate in initial upload and support tombstones.
+Flow Definition has a [dormant client adapter](flow-definition-cloud-sync.md),
+but remains excluded from this production set until the server supports `flow`.
 Parent-before-child push ordering and child blocking continue to use descriptor
 topology plus the hierarchy-specific ordering needed for nested API folders and
 aggregate deletes.

@@ -79,6 +79,11 @@ pub(crate) async fn cascade_workspace_feature_entities_on(
 impl CommandBus {
     pub async fn read_domain_snapshot(&self, key: &DomainEntityKey) -> AppResult<DomainSnapshot> {
         match key.entity_type {
+            DomainEntityType::FlowDefinition => {
+                let mut connection = self.db.pool().acquire().await?;
+                unfour_flow_engine::FlowService::read_definition_snapshot_on(&mut connection, key)
+                    .await
+            }
             DomainEntityType::Connection => match self.connection_type_for_key(key).await?.as_str()
             {
                 SSH_CONNECTION_TYPE => self.ssh.read_connection_domain_snapshot(key).await,
@@ -139,6 +144,9 @@ impl CommandBus {
         &self,
         page: ExternalApplyPage,
     ) -> AppResult<ExternalApplyReport> {
+        if !page.flow_definitions.is_empty() {
+            return Err(AppError::Validation("FLOW_SYNC_NOT_ENABLED".into()));
+        }
         let counts = serde_json::json!({
             "workspaceCount": page.workspaces.len(),
             "connectionCount": page.connections.len(),
