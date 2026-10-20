@@ -23,9 +23,13 @@ pub async fn flow_get(
 pub async fn flow_delete(
     workspace_id: String,
     flow_id: String,
+    expected_revision: i64,
     state: State<'_, AppState>,
 ) -> AppResult<()> {
-    state.command_bus.delete_flow(workspace_id, flow_id).await
+    state
+        .command_bus
+        .delete_flow(workspace_id, flow_id, expected_revision)
+        .await
 }
 
 #[tauri::command]

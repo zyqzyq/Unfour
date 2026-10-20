@@ -65,20 +65,55 @@ impl CommandBus {
                 }
             }
         }
-        self.flow_service().save(input).await
+        let context = unfour_core::domain::CommandContext::local("flow.save");
+        let executor_context = context.clone();
+        let service = self.flow_service();
+        self.execute_domain_command(
+            context,
+            Some(crate::transaction::CommandActivity {
+                workspace_id: Some(input.workspace_id.clone()),
+                action: "flow.save",
+                target: (!input.id.is_empty()).then(|| input.id.clone()),
+                details: json!({}),
+            }),
+            move |connection| {
+                Box::pin(async move { service.save_on(connection, &executor_context, input).await })
+            },
+        )
+        .await
     }
-    pub async fn delete_flow(&self, workspace_id: String, flow_id: String) -> AppResult<()> {
-        self.flow_service().delete(&workspace_id, &flow_id).await
-    }
-    pub async fn delete_flow_at_revision(
+    pub async fn delete_flow(
         &self,
         workspace_id: String,
         flow_id: String,
-        revision: i64,
+        expected_revision: i64,
     ) -> AppResult<()> {
-        self.flow_service()
-            .delete_at_revision(&workspace_id, &flow_id, revision)
-            .await
+        let context = unfour_core::domain::CommandContext::local("flow.delete");
+        let executor_context = context.clone();
+        let service = self.flow_service();
+        self.execute_domain_command(
+            context,
+            Some(crate::transaction::CommandActivity {
+                workspace_id: Some(workspace_id.clone()),
+                action: "flow.delete",
+                target: Some(flow_id.clone()),
+                details: json!({"softDelete": true}),
+            }),
+            move |connection| {
+                Box::pin(async move {
+                    service
+                        .delete_on(
+                            connection,
+                            &executor_context,
+                            &workspace_id,
+                            &flow_id,
+                            expected_revision,
+                        )
+                        .await
+                })
+            },
+        )
+        .await
     }
     pub async fn run_flow(&self, input: FlowRunInput) -> AppResult<FlowRun> {
         self.run_flow_at_revision(input, None).await

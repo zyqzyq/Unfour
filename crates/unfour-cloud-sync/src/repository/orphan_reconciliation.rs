@@ -36,7 +36,7 @@ impl SyncRepository {
         let keys = live_syncable_entity_keys_on(&mut tx, &binding.local_workspace_id).await?;
         let mut repaired = 0;
         for key in keys {
-            let entity_type = SyncEntityType::from(key.entity_type);
+            let entity_type = SyncEntityType::try_from(key.entity_type)?;
             let known: bool = sqlx::query_scalar(
                 r#"SELECT EXISTS(
                      SELECT 1 FROM cloud_sync_entity_state

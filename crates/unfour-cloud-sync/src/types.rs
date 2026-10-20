@@ -106,9 +106,11 @@ impl SyncEntityType {
     }
 }
 
-impl From<DomainEntityType> for SyncEntityType {
-    fn from(value: DomainEntityType) -> Self {
-        match value {
+impl TryFrom<DomainEntityType> for SyncEntityType {
+    type Error = SyncError;
+
+    fn try_from(value: DomainEntityType) -> Result<Self, Self::Error> {
+        Ok(match value {
             DomainEntityType::Workspace => Self::Workspace,
             DomainEntityType::Connection => Self::Connection,
             DomainEntityType::WorkspaceVariable => Self::WorkspaceVariable,
@@ -119,7 +121,8 @@ impl From<DomainEntityType> for SyncEntityType {
             DomainEntityType::ApiRequest => Self::ApiRequest,
             DomainEntityType::SshTask => Self::SshTask,
             DomainEntityType::SshTaskStep => Self::SshTaskStep,
-        }
+            DomainEntityType::FlowDefinition => return Err(SyncError::InvalidData),
+        })
     }
 }
 

@@ -1,15 +1,20 @@
 use crate::{
     expression::{invalid, redact},
-    validation, FlowService,
+    FlowService,
 };
 use serde_json::Value;
 use sqlx::Row;
 use unfour_core::{models::*, AppError, AppResult};
 
 impl FlowService {
+    async fn require_workspace(&self, workspace: &str) -> AppResult<()> {
+        crate::definitions::require_workspace_on(&mut *self.db.pool().acquire().await?, workspace)
+            .await
+    }
     pub async fn list_summaries(&self, workspace: &str) -> AppResult<Vec<FlowSummary>> {
+        self.require_workspace(workspace).await?;
         // Project metadata without deserializing steps or inputs.
-        let rows = sqlx::query("SELECT id, workspace_id, revision, json_extract(definition_json, '$.name') AS name FROM flow_definitions WHERE workspace_id = ? ORDER BY updated_at DESC")
+        let rows = sqlx::query("SELECT id, workspace_id, revision, json_extract(definition_json, '$.name') AS name FROM flow_definitions WHERE workspace_id = ? AND deleted_at IS NULL ORDER BY updated_at DESC")
             .bind(workspace).fetch_all(self.db.pool()).await?;
         rows.iter()
             .map(|row| {
@@ -24,14 +29,16 @@ impl FlowService {
     }
 
     pub async fn list(&self, workspace: &str) -> AppResult<Vec<FlowDefinition>> {
-        let rows: Vec<String> = sqlx::query_scalar("SELECT definition_json FROM flow_definitions WHERE workspace_id = ? ORDER BY updated_at DESC").bind(workspace).fetch_all(self.db.pool()).await?;
+        self.require_workspace(workspace).await?;
+        let rows: Vec<String> = sqlx::query_scalar("SELECT definition_json FROM flow_definitions WHERE workspace_id = ? AND deleted_at IS NULL ORDER BY updated_at DESC").bind(workspace).fetch_all(self.db.pool()).await?;
         rows.iter()
             .map(|row| Ok(serde_json::from_str(row)?))
             .collect()
     }
     pub async fn get(&self, workspace: &str, id: &str) -> AppResult<FlowDefinition> {
+        self.require_workspace(workspace).await?;
         let row: String = sqlx::query_scalar(
-            "SELECT definition_json FROM flow_definitions WHERE workspace_id = ? AND id = ?",
+            "SELECT definition_json FROM flow_definitions WHERE workspace_id = ? AND id = ? AND deleted_at IS NULL",
         )
         .bind(workspace)
         .bind(id)
@@ -39,57 +46,6 @@ impl FlowService {
         .await?
         .ok_or_else(|| AppError::NotFound("flow".into()))?;
         Ok(serde_json::from_str(&row)?)
-    }
-    pub async fn save(&self, mut definition: FlowDefinition) -> AppResult<FlowDefinition> {
-        validation::validate(&definition)?;
-        // Definitions must use resource credential references, never inline secrets.
-        let original = serde_json::to_value(&definition)?;
-        let mut cleaned = original.clone();
-        crate::expression::redact_definition(&mut cleaned);
-        if original != cleaned {
-            return Err(invalid("FLOW_INLINE_SECRET_NOT_ALLOWED"));
-        }
-        let now = chrono::Utc::now().to_rfc3339();
-        if definition.id.is_empty() {
-            definition.id = unfour_core::id::new_id();
-            definition.revision = 1;
-            sqlx::query("INSERT INTO flow_definitions (id, workspace_id, revision, definition_json, updated_at) VALUES (?, ?, ?, ?, ?)").bind(&definition.id).bind(&definition.workspace_id).bind(definition.revision).bind(serde_json::to_string(&definition)?).bind(now).execute(self.db.pool()).await?;
-        } else {
-            let previous = definition.revision;
-            definition.revision += 1;
-            let result = sqlx::query("UPDATE flow_definitions SET revision = ?, definition_json = ?, updated_at = ? WHERE workspace_id = ? AND id = ? AND revision = ?").bind(definition.revision).bind(serde_json::to_string(&definition)?).bind(now).bind(&definition.workspace_id).bind(&definition.id).bind(previous).execute(self.db.pool()).await?;
-            if result.rows_affected() != 1 {
-                return Err(invalid("FLOW_REVISION_CONFLICT"));
-            }
-        }
-        Ok(definition)
-    }
-    pub async fn delete(&self, workspace: &str, id: &str) -> AppResult<()> {
-        sqlx::query("DELETE FROM flow_definitions WHERE workspace_id = ? AND id = ?")
-            .bind(workspace)
-            .bind(id)
-            .execute(self.db.pool())
-            .await?;
-        Ok(())
-    }
-    pub async fn delete_at_revision(
-        &self,
-        workspace: &str,
-        id: &str,
-        revision: i64,
-    ) -> AppResult<()> {
-        let result = sqlx::query(
-            "DELETE FROM flow_definitions WHERE workspace_id = ? AND id = ? AND revision = ?",
-        )
-        .bind(workspace)
-        .bind(id)
-        .bind(revision)
-        .execute(self.db.pool())
-        .await?;
-        if result.rows_affected() != 1 {
-            return Err(invalid("FLOW_REVISION_CONFLICT"));
-        }
-        Ok(())
     }
     pub async fn list_runs(&self, workspace: &str, flow: &str) -> AppResult<Vec<FlowRunSummary>> {
         Ok(self.list_runs_page(workspace, flow, 100, None).await?.runs)
@@ -101,6 +57,7 @@ impl FlowService {
         limit: u32,
         cursor: Option<&str>,
     ) -> AppResult<FlowRunPage> {
+        self.require_workspace(workspace).await?;
         if !(1..=100).contains(&limit) {
             return Err(invalid("FLOW_INVALID_PAGE_LIMIT"));
         }
@@ -137,6 +94,7 @@ impl FlowService {
         Ok(FlowRunPage { runs, next_cursor })
     }
     pub async fn get_run(&self, workspace: &str, id: &str) -> AppResult<FlowRun> {
+        self.require_workspace(workspace).await?;
         self.recover_stale(workspace).await?;
         let row: String =
             sqlx::query_scalar("SELECT run_json FROM flow_runs WHERE workspace_id = ? AND id = ?")
@@ -148,6 +106,7 @@ impl FlowService {
         decode_run(&row)
     }
     pub async fn cancel(&self, workspace: &str, id: &str) -> AppResult<FlowRun> {
+        self.require_workspace(workspace).await?;
         sqlx::query("UPDATE flow_runs SET cancel_requested = 1 WHERE workspace_id = ? AND id = ? AND status = 'running'").bind(workspace).bind(id).execute(self.db.pool()).await?;
         self.get_run(workspace, id).await
     }
@@ -163,7 +122,10 @@ impl FlowService {
         Ok(())
     }
     pub(crate) async fn insert_run(&self, run: &FlowRun) -> AppResult<()> {
-        sqlx::query("INSERT INTO flow_runs (id, workspace_id, flow_id, status, run_json, started_at, updated_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(&run.id).bind(&run.workspace_id).bind(&run.flow_id).bind(run.status.as_str()).bind(safe_run(run, &self.persistence.values())?).bind(&run.started_at).bind(&run.started_at).bind(&run.finished_at).execute(self.db.pool()).await?;
+        let result = sqlx::query("INSERT INTO flow_runs (id, workspace_id, flow_id, status, run_json, started_at, updated_at, finished_at) SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS(SELECT 1 FROM flow_definitions AS definition JOIN workspaces AS workspace ON workspace.id = definition.workspace_id WHERE definition.workspace_id = ? AND definition.id = ? AND definition.deleted_at IS NULL AND workspace.deleted_at IS NULL)").bind(&run.id).bind(&run.workspace_id).bind(&run.flow_id).bind(run.status.as_str()).bind(safe_run(run, &self.persistence.values())?).bind(&run.started_at).bind(&run.started_at).bind(&run.finished_at).bind(&run.workspace_id).bind(&run.flow_id).execute(self.db.pool()).await?;
+        if result.rows_affected() != 1 {
+            return Err(AppError::NotFound("flow".into()));
+        }
         Ok(())
     }
     pub(crate) async fn persist_run(&self, run: &FlowRun) -> AppResult<()> {
@@ -286,39 +248,5 @@ fn scrub_values(value: &mut Value, secrets: &[String]) {
             *value = Value::String("<redacted>".into());
         }
         _ => {}
-    }
-}
-
-impl FlowService {
-    pub async fn export_definitions_on(
-        &self,
-        connection: &mut sqlx::SqliteConnection,
-        workspace: &str,
-    ) -> AppResult<Vec<FlowDefinition>> {
-        let rows: Vec<String> = sqlx::query_scalar(
-            "SELECT definition_json FROM flow_definitions WHERE workspace_id = ? ORDER BY id",
-        )
-        .bind(workspace)
-        .fetch_all(connection)
-        .await?;
-        rows.iter()
-            .map(|row| Ok(serde_json::from_str(row)?))
-            .collect()
-    }
-    /// Fresh definitions only; caller owns atomic workspace import.
-    pub async fn import_definition_on(
-        &self,
-        connection: &mut sqlx::SqliteConnection,
-        definition: FlowDefinition,
-    ) -> AppResult<()> {
-        validation::validate(&definition)?;
-        let original = serde_json::to_value(&definition)?;
-        let mut cleaned = original.clone();
-        crate::expression::redact_definition(&mut cleaned);
-        if original != cleaned {
-            return Err(invalid("FLOW_INLINE_SECRET_NOT_ALLOWED"));
-        }
-        sqlx::query("INSERT INTO flow_definitions (id, workspace_id, revision, definition_json, updated_at) VALUES (?, ?, 1, ?, ?)").bind(&definition.id).bind(&definition.workspace_id).bind(serde_json::to_string(&definition)?).bind(chrono::Utc::now().to_rfc3339()).execute(connection).await?;
-        Ok(())
     }
 }

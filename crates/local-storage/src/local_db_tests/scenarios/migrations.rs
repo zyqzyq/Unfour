@@ -1,6 +1,62 @@
 use super::*;
 
 #[tokio::test]
+async fn flow_tombstone_upgrade_preserves_live_data_and_repairs_deleted_workspaces() {
+    let db = test_db().await;
+    let mut legacy = core_migrator();
+    legacy.migrations = std::borrow::Cow::Owned(
+        legacy
+            .iter()
+            .filter(|migration| migration.version < 20261020000000)
+            .cloned()
+            .collect(),
+    );
+    legacy.run(db.pool()).await.unwrap();
+    sqlx::raw_sql(
+        r#"
+        INSERT INTO workspaces (id,name,is_default,created_at,updated_at,deleted_at)
+        VALUES ('live','Live',1,'created','updated',NULL),
+               ('dead','Deleted',0,'created','deleted','deleted');
+        INSERT INTO flow_definitions (id,workspace_id,revision,definition_json,updated_at)
+        VALUES ('f-live','live',7,'{"id":"f-live","revision":7,"inputs":["legacy"]}','updated'),
+               ('f-dead','dead',3,'{"id":"f-dead","revision":3}','updated');
+        INSERT INTO flow_runs (id,workspace_id,flow_id,status,run_json,started_at,updated_at)
+        VALUES ('r-live','live','f-live','succeeded','{"legacy":"history"}','now','now'),
+               ('r-dead','dead','f-dead','running','{"legacy":"private-output"}','now','now');
+    "#,
+    )
+    .execute(db.pool())
+    .await
+    .unwrap();
+    db.migrate().await.unwrap();
+    db.migrate().await.unwrap();
+    let live: (i64, String, Option<String>, String) = sqlx::query_as(
+        "SELECT revision,definition_json,deleted_at,updated_at FROM flow_definitions WHERE id='f-live'",
+    ).fetch_one(db.pool()).await.unwrap();
+    assert_eq!(
+        live,
+        (
+            7,
+            r#"{"id":"f-live","revision":7,"inputs":["legacy"]}"#.into(),
+            None,
+            "updated".into()
+        )
+    );
+    let dead: (i64, i64, String, String) = sqlx::query_as(
+        "SELECT revision,json_extract(definition_json,'$.revision'),deleted_at,updated_at FROM flow_definitions WHERE id='f-dead'",
+    ).fetch_one(db.pool()).await.unwrap();
+    assert_eq!(dead, (4, 4, "deleted".into(), "deleted".into()));
+    let runs: Vec<(String, String)> = sqlx::query_as("SELECT id,run_json FROM flow_runs")
+        .fetch_all(db.pool())
+        .await
+        .unwrap();
+    assert_eq!(
+        runs,
+        vec![("r-live".into(), r#"{"legacy":"history"}"#.into())]
+    );
+}
+
+#[tokio::test]
 async fn migrate_creates_all_tables() {
     let db = test_db().await;
     db.migrate().await.expect("run migrations");

@@ -17,7 +17,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
         ("list", "List saved Flow summaries; use get for the complete definition.", list, ToolAnnotations::local_read()),
         ("get", "Read a saved Flow definition for use in Desktop Canvas or MCP.", get, ToolAnnotations::local_read()),
         ("save", "Save a FlowDefinition using existing validation and revision checks. Empty id creates; updates require the current revision.", save, ToolAnnotations::local_write()),
-        ("delete", "Delete a saved Flow definition while retaining its run history. Guarded workspaces require confirmation bound to the current revision.", delete, ToolAnnotations::local_write_destructive()),
+        ("delete", "Soft-delete a saved Flow definition at expectedRevision while retaining local run history. Guarded workspaces require confirmation bound to that revision.", delete, ToolAnnotations::local_write_destructive()),
         ("run", "Start a Flow with initiator=mcp. Requires payload-bound confirmation even with full_access. Read-only/disabled policy blocks execution. Cancellation does not undo effects.", run, ToolAnnotations::remote_action()),
         ("cancel_run", "Request cancellation of a running Flow; remote effects are not rolled back.", cancel, ToolAnnotations::remote_action()),
         ("list_runs", "Read lightweight FlowRunSummary history without loading run details.", list_runs, ToolAnnotations::local_read()),
@@ -130,6 +130,7 @@ fn delete(
         &[
             "workspaceId",
             "flowId",
+            "expectedRevision",
             "confirm",
             "confirmationText",
             "confirmation_text",
@@ -149,7 +150,20 @@ fn delete(
     }
     let workspace_id = workspace(&a, p)?;
     let flow_id = id(&a, "flowId")?;
+    let expected_revision = a
+        .get("expectedRevision")
+        .and_then(Value::as_i64)
+        .filter(|revision| *revision > 0)
+        .ok_or_else(|| {
+            ToolCallError::InvalidArguments("expectedRevision must be a positive integer".into())
+        })?;
     let definition = b.get_flow(&workspace_id, &flow_id).map_err(error)?;
+    if expected_revision != definition.revision {
+        return Err(ToolCallError::Execution {
+            code: "FLOW_REVISION_CONFLICT",
+            message: "The Flow revision changed. Reload the definition before deleting it.".into(),
+        });
+    }
     ensure_confirmed_if_guarded(
         p,
         &a,
@@ -157,7 +171,7 @@ fn delete(
         "Deleting a Flow removes its definition but retains run history.",
         json!({"workspaceId": workspace_id, "flowId": flow_id, "revision": definition.revision}),
     )?;
-    b.delete_flow(&workspace_id, &flow_id, definition.revision)
+    b.delete_flow(&workspace_id, &flow_id, expected_revision)
         .map_err(error)?;
     Ok(json!({"deleted": true, "flowId": flow_id}))
 }

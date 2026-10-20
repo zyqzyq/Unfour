@@ -27,13 +27,21 @@ fn protocol_5_connection_entity_contract_is_stable() {
     );
     assert_eq!(SyncEntityType::Connection.topology_rank(), 1);
     assert_eq!(
-        SyncEntityType::from(DomainEntityType::Connection),
+        SyncEntityType::try_from(DomainEntityType::Connection).unwrap(),
         SyncEntityType::Connection
     );
     assert_eq!(
         DomainEntityType::from(SyncEntityType::Connection),
         DomainEntityType::Connection
     );
+}
+
+#[test]
+fn flow_definitions_are_not_protocol_5_entities() {
+    assert_eq!(PROTOCOL_VERSION, 5);
+    assert!(SyncEntityType::try_from(DomainEntityType::FlowDefinition).is_err());
+    assert!(SyncEntityType::parse("flowDefinition").is_err());
+    assert!(serde_json::from_str::<SyncEntityType>(r#""flowDefinition""#).is_err());
 }
 
 #[test]

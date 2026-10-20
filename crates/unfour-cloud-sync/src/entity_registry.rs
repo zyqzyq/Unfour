@@ -482,6 +482,14 @@ mod tests {
 
     #[test]
     fn registry_metadata_is_complete_and_valid() {
+        // The sole local-only domain entity must remain outside Protocol 5.
+        assert_eq!(
+            DomainEntityType::ALL
+                .into_iter()
+                .filter(|entity| SyncEntityType::try_from(*entity).is_err())
+                .collect::<Vec<_>>(),
+            vec![DomainEntityType::FlowDefinition]
+        );
         let types = SYNC_ENTITY_REGISTRY
             .iter()
             .map(|descriptor| descriptor.entity_type)
@@ -496,7 +504,7 @@ mod tests {
             types,
             DomainEntityType::ALL
                 .into_iter()
-                .map(SyncEntityType::from)
+                .filter_map(|entity| SyncEntityType::try_from(entity).ok())
                 .collect::<HashSet<_>>()
         );
         assert!(SYNC_ENTITY_REGISTRY.iter().all(|descriptor| {

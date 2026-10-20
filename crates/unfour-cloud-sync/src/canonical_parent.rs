@@ -9,7 +9,7 @@ pub(super) async fn protocol_parent(
     connection: &mut SqliteConnection,
     mutation: &DomainMutation,
 ) -> Result<Option<String>, SyncError> {
-    let entity_type = SyncEntityType::from(mutation.entity.entity_type);
+    let entity_type = SyncEntityType::try_from(mutation.entity.entity_type)?;
     let descriptor = sync_entity_descriptor(entity_type);
     if !matches!(descriptor.parent_dependency, ParentDependency::Entity(_))
         || mutation.entity.parent_entity_id.is_some()

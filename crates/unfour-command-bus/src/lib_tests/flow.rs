@@ -102,7 +102,7 @@ async fn flow_serial_references_exclusive_branch_history_and_revision() {
         .await
         .unwrap();
     flow.name = "changed".into();
-    service.save(flow.clone()).await.unwrap();
+    let updated = service.save(flow.clone()).await.unwrap();
     assert!(service.save(flow.clone()).await.is_err());
     let result = finished(&bus, &run).await;
     assert_eq!(
@@ -123,7 +123,10 @@ async fn flow_serial_references_exclusive_branch_history_and_revision() {
     assert_eq!(false_result.steps[2].status, FlowStepRunStatus::Skipped);
     assert_eq!(false_result.steps[3].status, FlowStepRunStatus::Skipped);
     assert_eq!(false_result.steps[4].status, FlowStepRunStatus::Failed);
-    service.delete(&workspace, &flow.id).await.unwrap();
+    service
+        .delete(&workspace, &flow.id, updated.revision)
+        .await
+        .unwrap();
     assert_eq!(
         service.list_runs(&workspace, &flow.id).await.unwrap().len(),
         2

@@ -13,7 +13,13 @@ pub(crate) async fn cascade_delete_workspace_children_on(
     workspace_id: &str,
     deleted_at: &str,
 ) -> AppResult<Vec<DomainMutation>> {
-    let mut mutations = Vec::new();
+    let mut mutations = unfour_flow_engine::FlowService::delete_workspace_on(
+        connection,
+        context,
+        workspace_id,
+        deleted_at,
+    )
+    .await?;
     let environment_variables: Vec<(String, String)> = sqlx::query_as(
         r#"
         SELECT id, environment_id

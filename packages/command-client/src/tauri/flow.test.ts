@@ -2,11 +2,17 @@
 import { readFileSync } from "node:fs";
 import { afterEach, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { runFlow } from "./flow";
+import { deleteFlow, runFlow } from "./flow";
 import type { FlowRunInput } from "../types/flow";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); });
+
+it("passes the loaded editor revision when deleting a Flow", async () => {
+  vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
+  await deleteFlow("ws", "flow", 3);
+  expect(invoke).toHaveBeenCalledWith("flow_delete", { workspaceId: "ws", flowId: "flow", expectedRevision: 3 });
+});
 
 it("passes the confirmed revision as a required Tauri argument", async () => {
   vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });

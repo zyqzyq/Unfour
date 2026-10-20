@@ -19,6 +19,10 @@ impl SyncRepository {
         let now = clock.now();
         let mut workspaces = Vec::new();
         for mutation in mutations {
+            // Only registered sync entities can capture intent or wake a worker.
+            if crate::SyncEntityType::try_from(mutation.entity.entity_type).is_err() {
+                continue;
+            }
             let Some(owner) =
                 Self::resolve_cloud_sync_owner_on(connection, &mutation.entity.workspace_id)
                     .await?

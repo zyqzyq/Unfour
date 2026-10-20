@@ -305,7 +305,10 @@ impl CommandBus {
         }
         let flow = FlowService::new(self.db.clone());
         for definition in plan.flows {
-            flow.import_definition_on(connection, definition).await?;
+            mutations.push(
+                flow.import_definition_on(connection, &context, definition)
+                    .await?,
+            );
         }
         for mutation in &mut mutations {
             mutation.origin = MutationOrigin::Local;

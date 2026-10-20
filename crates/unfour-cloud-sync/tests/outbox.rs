@@ -1,3 +1,5 @@
+#[path = "outbox/flow_definitions.rs"]
+mod flow_definitions;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};

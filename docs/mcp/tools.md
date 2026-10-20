@@ -435,7 +435,7 @@ definition. Desktop list/get contracts are unchanged.
 | `unfour.flow.list` | None | `{ "flows": FlowSummary[] }` |
 | `unfour.flow.get` | `flowId` | `{ "flow": FlowDefinition }` |
 | `unfour.flow.save` | `definition: FlowDefinition` | `{ "flow": FlowDefinition }` |
-| `unfour.flow.delete` | `flowId`; optional `confirm`, `confirmation_text` (or `confirmationText`) | `{ "deleted": true, "flowId": string }` |
+| `unfour.flow.delete` | `flowId`, `expectedRevision` (positive integer from the loaded definition); optional `confirm`, `confirmation_text` (or `confirmationText`) | `{ "deleted": true, "flowId": string }` |
 | `unfour.flow.run` | `flowId`; optional `environmentId`, `inputs` object, `secretInputNames` string array, `confirm`, `confirmation_text` (or `confirmationText`) | `{ "run": FlowRun }` |
 | `unfour.flow.cancel_run` | `runId` | `{ "run": FlowRun }` |
 | `unfour.flow.list_runs` | `flowId`; optional `limit` (1–100, default 100), `cursor` | `{ "runs": FlowRunSummary[], "nextCursor": string \| null }` |

@@ -242,7 +242,7 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         flow_id: &str,
         expected_revision: i64,
     ) -> Result<(), CommandBusAdapterError> {
-        self.run(self.bus.delete_flow_at_revision(
+        self.run(self.bus.delete_flow(
             workspace_id.to_string(),
             flow_id.to_string(),
             expected_revision,

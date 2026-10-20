@@ -20,7 +20,9 @@ The HTTP engine exposes saved-auth materialization for callers without a UI.
 ## Persisted model
 
 - `flow_definitions`: stable UUID, workspace ID, revision, definition JSON,
-  updated timestamp. Saves use an optimistic revision check.
+  updated timestamp and nullable `deleted_at`. Saves and deletes require the
+  loaded revision; deletes increment both stored and JSON revisions and retain
+  a tombstone. Tombstones cannot be read, edited, exported, or executed.
 - `flow_runs`: stable UUID, workspace ID, originating Flow ID, status,
   cancellation flag, run JSON, start timestamp, heartbeat timestamp, and
   nullable finish timestamp (`finished_at`).
@@ -29,12 +31,20 @@ The HTTP engine exposes saved-auth materialization for callers without a UI.
   contain resolved input, structured output, stable error code, and duration.
 
 Deleting a definition leaves its runs and all referenced resources intact.
-Deleting a workspace cascades its Flow records. Every lookup is workspace
-scoped. Editing a definition cannot change an existing Run.
+Workspace soft-deletion tombstones its live definitions with the same timestamp
+while preserving existing tombstones. It physically purges local Flow run
+snapshots, runtime inputs, outputs and status for privacy, in the same
+transaction. History has no synchronization tombstones. Every lookup requires
+a live workspace. In-flight runs lose their local lease and cannot recreate
+purged history; already-started remote effects remain subject to cancellation
+limits. Editing a definition cannot change an existing Run.
 
 Flow definitions are included in whole-Workspace import/export. Run history is
 not exported. Flow definitions and run history are not part of Cloud Sync, and
-these records do not emit cloud outbox intent. There is no separate Flow-only
+these records do not emit cloud outbox intent. Definition save, delete, bundle
+import and workspace cascade emit transaction-scoped DomainMutations, but the
+Cloud Sync boundary excludes the unregistered FlowDefinition type before owner
+resolution, outbox capture or worker triggers. There is no separate Flow-only
 exchange format. See [Workspace bundle](workspace-bundle.md).
 
 ## Invocation and expressions
@@ -352,7 +362,9 @@ MCP passes its confirmed revision through CommandBus to FlowService. The service
 checks the revision on the same owned definition subsequently used for execution,
 before resource preparation or Run creation. A mismatch returns
 FLOW_CONFIRMATION_STALE and requires a new confirmation; later edits cannot
-replace the pinned definition. Desktop run behavior remains unpinned and unchanged.
+replace the pinned definition. Desktop also forwards the editor revision for execution.
+Desktop and MCP deletion require `expectedRevision`; the MCP confirmation token
+is bound to that same revision and the final SQL delete checks it again.
 MCP flow.list uses FlowSummary (id, workspaceId, name, revision), projecting
 metadata without deserializing steps/inputs; Desktop list still returns definitions.
 Referenced resources retain the concurrent-edit limitations described above. MCP process exit

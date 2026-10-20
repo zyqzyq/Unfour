@@ -7228,6 +7228,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "unfour-core",
+ "unfour-flow-engine",
  "unfour-local-storage",
  "uuid",
 ]

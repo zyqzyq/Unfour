@@ -33,12 +33,13 @@ pub enum DomainEntityType {
     ApiRequest,
     SshTask,
     SshTaskStep,
+    /// Local domain mutations only; not registered for Cloud Sync yet.
+    FlowDefinition,
 }
 
 impl DomainEntityType {
-    /// Complete domain entity enumeration. Cloud Sync uses this to prove that
-    /// every currently syncable domain type has exactly one Registry entry.
-    pub const ALL: [Self; 10] = [
+    /// Complete domain enumeration, including entities not yet syncable.
+    pub const ALL: [Self; 11] = [
         Self::Workspace,
         Self::Connection,
         Self::WorkspaceVariable,
@@ -49,6 +50,7 @@ impl DomainEntityType {
         Self::ApiRequest,
         Self::SshTask,
         Self::SshTaskStep,
+        Self::FlowDefinition,
     ];
 }
 

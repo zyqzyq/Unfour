@@ -1,3 +1,4 @@
+mod definitions;
 pub mod expression;
 mod reference_graph;
 mod runner;

@@ -271,12 +271,16 @@ fn flow_tools_list_exposes_valid_schemas_and_shared_crud_revision() {
     assert!(registry
         .call(
             "unfour.flow.delete",
-            json!({"flowId":flow_id,"confirm":"yes"})
+            json!({"flowId":flow_id,"expectedRevision":2,"confirm":"yes"})
         )
         .is_err());
     assert!(adapter.get_flow(&ws, flow_id).is_ok());
     assert_eq!(
-        success(&registry, "delete", json!({"flowId":flow_id})),
+        success(
+            &registry,
+            "delete",
+            json!({"flowId":flow_id,"expectedRevision":2})
+        ),
         json!({"deleted":true,"flowId":flow_id})
     );
     assert!(adapter.get_flow(&ws, flow_id).is_err());
@@ -301,7 +305,7 @@ fn flow_delete_requires_guarded_confirmation_and_preserves_history() {
                 .update_workspace_environment(ws.clone(), "test".into()),
         )
         .unwrap();
-    let args = json!({"flowId":saved.id});
+    let args = json!({"flowId":saved.id,"expectedRevision":saved.revision});
     let initial = registry.call("unfour.flow.delete", args.clone()).unwrap();
     assert_eq!(
         content_json(&initial)["error"]["code"],
@@ -313,6 +317,11 @@ fn flow_delete_requires_guarded_confirmation_and_preserves_history() {
         .to_owned();
     assert!(adapter.get_flow(&ws, &saved.id).is_ok());
     let revised = adapter.save_flow(saved.clone()).unwrap();
+    let outdated = registry.call("unfour.flow.delete", args.clone()).unwrap();
+    assert_eq!(
+        content_json(&outdated)["error"]["code"],
+        "FLOW_REVISION_CONFLICT"
+    );
     assert_eq!(
         adapter
             .delete_flow(&ws, &saved.id, saved.revision)
@@ -323,7 +332,7 @@ fn flow_delete_requires_guarded_confirmation_and_preserves_history() {
     let stale = registry
         .call(
             "unfour.flow.delete",
-            json!({"flowId":saved.id,"confirm":true,"confirmationText":old_token}),
+            json!({"flowId":saved.id,"expectedRevision":revised.revision,"confirm":true,"confirmationText":old_token}),
         )
         .unwrap();
     assert_eq!(
@@ -337,7 +346,7 @@ fn flow_delete_requires_guarded_confirmation_and_preserves_history() {
         success(
             &registry,
             "delete",
-            json!({"flowId":saved.id,"confirm":true,"confirmationText":new_token})
+            json!({"flowId":saved.id,"expectedRevision":revised.revision,"confirm":true,"confirmationText":new_token})
         ),
         json!({"deleted":true,"flowId":saved.id})
     );
@@ -347,6 +356,24 @@ fn flow_delete_requires_guarded_confirmation_and_preserves_history() {
         success(&registry, "get_run", json!({"runId":run["id"]}))["run"]["status"],
         "succeeded"
     );
+}
+
+#[test]
+fn flow_delete_requires_an_explicit_positive_expected_revision() {
+    let (adapter, registry, ws) = setup();
+    let saved = adapter.save_flow(definition(&ws)).unwrap();
+    for value in [Value::Null, json!(0), json!(-1), json!(1.5), json!("1")] {
+        assert!(registry
+            .call(
+                "unfour.flow.delete",
+                json!({"flowId":saved.id,"expectedRevision":value})
+            )
+            .is_err());
+    }
+    assert!(registry
+        .call("unfour.flow.delete", json!({"flowId":saved.id}))
+        .is_err());
+    assert!(adapter.get_flow(&ws, &saved.id).is_ok());
 }
 
 #[test]

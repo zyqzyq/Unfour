@@ -88,7 +88,7 @@ export function useFlowEditor(workspaceId: string, flows: FlowWorkspaceData["flo
   function deleteDefinition() {
     if (!draft) return;
     return perform(async () => {
-      await deleteFlow(workspaceId, draft.id);
+      await deleteFlow(workspaceId, draft.id, draft.revision);
       setDraft(null);
       setDirty(false);
       setConfirm(null);

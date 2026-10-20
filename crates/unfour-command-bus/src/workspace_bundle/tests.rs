@@ -57,6 +57,54 @@ async fn bundle_export_file_name_uses_the_exported_workspace_name() {
         "客户-API-v2.unfour-workspace.json"
     );
 }
+
+#[tokio::test]
+async fn bundle_round_trip_resets_flow_revisions_and_excludes_tombstones_and_history() {
+    let bus = bus().await;
+    for version in [1, 2] {
+        let mut legacy = fixture();
+        legacy["version"] = json!(version);
+        legacy["flows"][0]["steps"] = json!([{"id":"wait","name":"Wait",
+            "kind":"wait","durationMs":0,"timeoutMs":1000}]);
+        let imported = bus
+            .workspace_bundle_import(legacy.to_string(), "Flows".into())
+            .await
+            .unwrap();
+        let flow = bus
+            .list_flows(imported.id.clone())
+            .await
+            .unwrap()
+            .pop()
+            .unwrap();
+        assert_eq!(flow.revision, 1);
+        let mut revised = flow.clone();
+        revised.name = "Changed".into();
+        let revised = bus.save_flow(revised).await.unwrap();
+        let exported: Value = serde_json::from_str(
+            &bus.workspace_bundle_export(imported.id.clone())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(exported["flows"][0]["name"], "Changed");
+        assert!(exported["flows"][0].get("revision").is_none());
+        assert!(exported["flows"][0].get("deletedAt").is_none());
+        assert!(exported.get("flowRuns").is_none());
+        let copy = bus
+            .workspace_bundle_import(exported.to_string(), "Copy".into())
+            .await
+            .unwrap();
+        let copied = bus.list_flows(copy.id).await.unwrap().pop().unwrap();
+        assert_ne!(copied.id, flow.id);
+        assert_eq!(copied.revision, 1);
+        bus.delete_flow(imported.id.clone(), revised.id, revised.revision)
+            .await
+            .unwrap();
+        let exported: Value =
+            serde_json::from_str(&bus.workspace_bundle_export(imported.id).await.unwrap()).unwrap();
+        assert_eq!(exported["flows"], json!([]));
+    }
+}
 #[tokio::test]
 async fn bundle_preview_exposes_environment_type_without_importing() {
     let bus = bus().await;

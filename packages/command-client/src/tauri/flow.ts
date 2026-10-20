@@ -6,8 +6,8 @@ export const getFlow = (workspaceId: string, flowId: string) =>
   call<FlowDefinition>("flow_get", { workspaceId, flowId });
 export const saveFlow = (input: FlowDefinition) =>
   call<FlowDefinition>("flow_save", { input });
-export const deleteFlow = (workspaceId: string, flowId: string) =>
-  call<void>("flow_delete", { workspaceId, flowId });
+export const deleteFlow = (workspaceId: string, flowId: string, expectedRevision: number) =>
+  call<void>("flow_delete", { workspaceId, flowId, expectedRevision });
 export const runFlow = (input: FlowRunInput, expectedRevision: number) =>
   call<FlowRun>("flow_run", { input, expectedRevision });
 export const listFlowRuns = (workspaceId: string, flowId: string) =>

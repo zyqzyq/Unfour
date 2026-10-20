@@ -22,6 +22,7 @@ vi.mock("@unfour/command-client", async (importOriginal) => ({
   listFlowRuns: vi.fn(),
   getFlowRun: vi.fn(),
   saveFlow: vi.fn(),
+  deleteFlow: vi.fn(),
   getFlow: vi.fn(),
   runFlow: vi.fn(),
   cancelFlowRun: vi.fn(),
@@ -110,6 +111,17 @@ beforeEach(() => {
     vi.mocked(command).mockResolvedValue([]);
 });
 afterEach(cleanup);
+
+it("deletes using the draft revision and retains the editor after a conflict", async () => {
+  vi.mocked(commands.deleteFlow).mockRejectedValueOnce({ code: "FLOW_REVISION_CONFLICT" });
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
+  await waitFor(() => expect(commands.deleteFlow).toHaveBeenCalledWith("ws", flow.id, flow.revision));
+  expect(await screen.findByText(/FLOW_REVISION_CONFLICT/)).toBeInTheDocument();
+  expect(screen.getByLabelText("Flow name")).toHaveValue("Release");
+});
 
 it("clears stale run-field validity after changing its schema type", async () => {
   vi.mocked(commands.listFlows).mockResolvedValue([{ ...flow, inputs: [{ name: "payload", type: "json", required: false, secret: false }] }]);

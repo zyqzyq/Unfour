@@ -429,7 +429,7 @@ pub(crate) fn canonical_snapshot_intent(
             Some(value.deleted_at.clone()),
         ),
     };
-    let entity_type = SyncEntityType::from(entity.entity_type);
+    let entity_type = SyncEntityType::try_from(entity.entity_type)?;
     entity.parent_entity_id = canonical_parent(
         entity_type,
         &entity.workspace_id,
@@ -462,7 +462,7 @@ pub(crate) async fn canonical_intent_on(
     connection: &mut SqliteConnection,
     mutation: &DomainMutation,
 ) -> Result<CanonicalIntent, SyncError> {
-    let entity_type = SyncEntityType::from(mutation.entity.entity_type);
+    let entity_type = SyncEntityType::try_from(mutation.entity.entity_type)?;
     let operation = SyncOperation::from(mutation.operation);
     if matches!(
         entity_type,

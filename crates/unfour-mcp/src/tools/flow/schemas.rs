@@ -146,6 +146,8 @@ pub(super) fn input(name: &str) -> Value {
         properties.as_object_mut().unwrap().extend(json!({"environmentId":nullable_string(),"inputs":{"type":"object"},"secretInputNames":array(string()),"confirm":{"type":"boolean"},"confirmationText":string(),"confirmation_text":string()}).as_object().unwrap().clone());
     }
     if name == "unfour.flow.delete" {
+        properties["expectedRevision"] = json!({"type":"integer","minimum":1});
+        required.push("expectedRevision");
         properties.as_object_mut().unwrap().extend(json!({"confirm":{"type":"boolean"},"confirmationText":string(),"confirmation_text":string()}).as_object().unwrap().clone());
     }
     if name == "unfour.flow.list_runs" {

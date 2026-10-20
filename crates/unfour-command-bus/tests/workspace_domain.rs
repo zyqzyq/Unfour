@@ -19,6 +19,8 @@ use unfour_local_storage::LocalDb;
 mod environments;
 #[path = "workspace_domain/external_apply.rs"]
 mod external_apply;
+#[path = "workspace_domain/flows.rs"]
+mod flows;
 #[path = "workspace_domain/hooks.rs"]
 mod hooks;
 #[path = "workspace_domain/variables.rs"]

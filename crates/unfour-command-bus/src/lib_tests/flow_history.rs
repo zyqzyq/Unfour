@@ -70,6 +70,11 @@ async fn flow_history_reads_columns_without_decoding_snapshots_and_limits_scope(
     assert!(bus
         .list_flow_runs("other".into(), "deleted-flow".into())
         .await
+        .is_err());
+    let other = bus.create_workspace("Other history".into()).await.unwrap();
+    assert!(bus
+        .list_flow_runs(other.id, "deleted-flow".into())
+        .await
         .unwrap()
         .is_empty());
     assert!(bus
@@ -122,7 +127,10 @@ async fn flow_history_preserves_exact_snapshot_finish_time_after_completion_and_
     assert_eq!(summary[0].status, FlowRunStatus::Running);
     assert_eq!(summary[0].finished_at, None);
     let done = finished(&bus, &run).await;
-    service.delete(&workspace, &flow.id).await.unwrap();
+    service
+        .delete(&workspace, &flow.id, flow.revision)
+        .await
+        .unwrap();
     let summary = bus
         .list_flow_runs(workspace.clone(), flow.id)
         .await
