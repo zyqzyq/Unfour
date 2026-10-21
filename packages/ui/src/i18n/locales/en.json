@@ -1581,6 +1581,8 @@
     "history": "Run history",
     "selectRun": "Select a run",
     "operationFailed": "Operation failed.",
+    "syncPayloadTooLarge": "This Flow definition exceeds the Cloud Sync limit of 64 KiB. Reduce its size and try again. Your edits are kept.",
+    "syncUnsafeDefinition": "Cloud Sync rejected sensitive or device-local content in this Flow definition. Supply secrets through runtime inputs and remove local credential references. Your edits are kept.",
     "deleteHelp": "Delete this Flow? Referenced resources and run history are retained.",
     "effectsHelp": "This Flow may send requests, run remote commands and modify databases. Cancel stops further scheduling and tries to stop active work; remote effects are not rolled back.",
     "discardHelp": "Discard unsaved changes and switch Flow?",

@@ -115,7 +115,6 @@ impl SyncService {
             .await
             .map_err(|_| SyncError::Core)?;
         cleanup.record_keys(workspace_outcome.value.materialized_entities);
-        #[cfg(test)]
         for change in page.flow_definitions.clone() {
             let key = match &change {
                 unfour_core::domain::ExternalFlowDefinitionApply::Upsert(value) => {
@@ -129,12 +128,14 @@ impl SyncService {
                     value.entity.clone()
                 }
             };
-            unfour_flow_engine::FlowService::apply_external_definition_on(
+            let outcome = unfour_flow_engine::FlowService::apply_external_definition_on(
                 connection, &context, change,
             )
             .await
             .map_err(|_| SyncError::Core)?;
-            cleanup.record_keys([key]);
+            if outcome.value.is_materialized() {
+                cleanup.record_keys([key]);
+            }
         }
 
         for change in page.connections.clone() {
@@ -230,7 +231,6 @@ impl SyncService {
 pub(super) fn merge_external_pages(pages: Vec<ExternalApplyPage>) -> ExternalApplyPage {
     let mut merged = ExternalApplyPage::default();
     for mut page in pages {
-        #[cfg(test)]
         merged.flow_definitions.append(&mut page.flow_definitions);
         merged.workspaces.append(&mut page.workspaces);
         merged.connections.append(&mut page.connections);
@@ -296,7 +296,6 @@ pub(super) fn merge_external_pages(pages: Vec<ExternalApplyPage>) -> ExternalApp
         ExternalSshTaskStepApply::Upsert(record) => &record.id,
         ExternalSshTaskStepApply::Delete(delete) => &delete.entity.entity_id,
     });
-    #[cfg(test)]
     retain_last_by_key(&mut merged.flow_definitions, |change| match change {
         unfour_core::domain::ExternalFlowDefinitionApply::Upsert(record) => &record.id,
         unfour_core::domain::ExternalFlowDefinitionApply::Delete(delete) => {

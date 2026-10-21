@@ -1,7 +1,9 @@
-# Flow Definition Cloud Sync client contract (dormant)
+# Flow Definition Cloud Sync client contract
 
-Client safety revision based on main `f089a90`. This prepares the client only.
-Unfour-api does not yet support `flow`; this is **not enabled cross-device sync**.
+Production client activation based on main `d5cb4c00`, 2026-10-21. The client
+registers `flow` without a feature flag. This document specifies the client and
+required server contract; server implementation/deployment and real cross-device
+verification are outside this change.
 
 ## Ownership and activation boundary
 
@@ -11,14 +13,21 @@ The existing Protocol 5 Registry, initial upload, Outbox, Worker, retained remot
 envelopes, generation fences and conflict resolver remain the sync engine.
 
 Production `SyncEntityType`, Registry, mutation conversion, first upload, repair,
-push and pull do not recognize `flow`. Core's generic external page command
-explicitly rejects a nonempty Flow page with `FLOW_SYNC_NOT_ENABLED`. Independent
-adapter functions are available for verification. `#[cfg(test)]` arms rehearse
-registration with the real sync engine in unit tests only; integration tests
-compile the production library and assert the opposite boundary. There is no
-runtime preference, environment flag or Cargo feature enabling Flow sync.
+push, Changes/Snapshot and conflict resolution recognize `flow`. CommandBus's
+generic external-page adapter dispatches to the Flow engine on the shared
+transaction, reports materialization (including equivalent documents), and
+emits External-origin mutations to hooks. Lifecycle integration tests compile
+the shipping library rather than test-only registration arms.
 
-The new storage migration extends only the entity-name CHECKs in Outbox and
+Before Pull/retained-envelope replay, the Worker captures local Flow documents
+and tombstones that have neither entity state nor Outbox intent for the durable
+owner. This reuses canonical snapshots, the existing generation-fenced repair
+transaction and Outbox. It prevents an old client's untracked local definition
+or deletion from being overwritten before backfill, including by a remote
+Workspace deletion. Known Flow state is untouched; repeated sync does not echo
+remote applies. Other entities retain their existing replay-before-repair order.
+
+The existing storage migration extends only the entity-name CHECKs in Outbox and
 entity state. It preserves canonical intents, leases, retry metadata, conflict
 schemas and applied reader revisions. It creates no Flow intent or binding.
 Community databases continue to use the local migration chain independently.
@@ -164,13 +173,17 @@ Future changes must not add them to definition payloads. Existing local Flow
 save/execution security validation still applies; sync acceptance grants no
 execution permission and does not bypass missing-resource preflight.
 
-Oversized definitions produce `cloud_sync_flow_payload_too_large`. The existing
-local 1 MiB limit is unchanged. In the rehearsed enabled path, unsafe/oversized
-first upload rolls back the binding transaction; an unsafe/oversized edit to a
-bound workspace rolls back both the definition and its Outbox capture. The
-production-disabled path continues accepting locally valid definitions normally.
-No new UI copy is introduced while the feature is dormant; user-facing localized
-error presentation must be wired before release activation.
+Oversized definitions produce `cloud_sync_flow_payload_too_large`; unsafe
+definitions produce `cloud_sync_flow_unsafe_definition`. These stable codes
+survive CommandBus hook failures and reach both the Flow editor and Cloud Sync
+panels with shared English/Chinese i18n messages. Conflicts use the existing
+`cloud_sync_conflict` code and whole-definition choice UI.
+
+The local 1 MiB limit remains unchanged for Community and unbound workspaces.
+Unsafe/oversized first upload rolls back the binding transaction; an
+unsafe/oversized edit to a bound workspace rolls back both the definition and
+its Outbox capture. Unsaved editor input is retained. No value is silently
+redacted or truncated.
 
 ## Revision, history and conflicts
 
@@ -190,24 +203,25 @@ the current entire document/tombstone against the conflict serverVersion;
 use-remote abandons the scoped intent and applies the remote document/tombstone
 atomically. Workspace deletion conflicts include pending Flow intent.
 
-## Final activation steps (future change)
+## Manual packaging verification
 
-1. Align and deploy the server contract above, with its own migration and
-   compatibility tests. This task makes no Unfour-api changes.
-2. Promote only the Flow rehearsal arms in `types.rs`, `entity_registry.rs`,
-   `canonical.rs`, `remote_compatibility.rs` and `service/external_apply.rs` from
-   `#[cfg(test)]` to production. Remove the disabled domain-to-sync conversion;
-   retain the schema migration. Update the generic Core external-page adapter
-   if that entry point is to support Flow, including materialization reporting
-   and External-origin hooks. Do not remove all test cfgs indiscriminately.
-3. Replace production-exclusion assertions with registration assertions. Run
-   the same lifecycle cases through a deployed test server and two real clients;
-   verify first upload/repair for pre-existing bound workspaces, old-client
-   compatibility waiting, offline retry, conflicts, workspace cascade and
-   reference resources that arrive later or remain unavailable.
-4. Add shared i18n error presentation for rejected safety/size cases. Deploy and
-   verify the final schema 1 safety rules above in Unfour-api before enabling
-   any client. No automatic truncation/redaction.
+The client is enabled in production code; packaging/publishing is a separate
+user-managed step. No Unfour-api changes, GCP deployment checks, or actual
+two-device tests are part of this change. When packaging is verified, check:
+
+1. New and already-bound workspaces upload whole definitions, including upgrade
+   backfill before remote updates/deletion; repeated sync stays quiet.
+2. Offline edits/deletions survive sign-out, pause and restart, then resume with
+   the same immutable retry intent and durable workspace owner.
+3. Remote documents, tombstones and both conflict choices preserve local
+   revisions, editor stale-revision protection and local-only run history.
+4. API/SSH/Database UUID references stay unchanged; absent resources continue
+   blocking runs until configured under those UUIDs.
+5. English/Chinese size, safety and conflict feedback retains the editor draft;
+   ordinary SQL, SSH/API parameters and templates preserve their exact values.
+6. Old readers retain unsupported envelopes and wait; upgrading replays retained
+   Flow without duplicate uploads. The service must satisfy the schema 1 and
+   Protocol 5 requirements above; this repository's tests do not prove that.
 
 Verification evidence is in
 [the client test report](../testing/flow-definition-cloud-sync-client.md).

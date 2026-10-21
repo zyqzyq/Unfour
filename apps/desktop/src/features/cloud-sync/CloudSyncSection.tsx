@@ -57,7 +57,7 @@ export function CloudSyncSection({ activeWorkspace }: DesktopAppExtensionContext
     </section>
 
     <section className="grid grid-cols-2 gap-4 border-b border-[var(--u-color-border)] pb-4">
-      <div><h3 className="text-sm font-semibold">{t("cloudSync.syncScope")}</h3><ul className="mt-2 space-y-1 text-xs"><li>✓ {t("cloudSync.scope.workspace")}</li><li>✓ {t("cloudSync.scope.connections")}</li><li>✓ {t("cloudSync.scope.environments")}</li><li>✓ {t("cloudSync.scope.variables")}</li><li>✓ {t("cloudSync.scope.apiCollections")}</li><li>✓ {t("cloudSync.scope.apiFolders")}</li><li>✓ {t("cloudSync.scope.apiRequests")}</li><li>✓ {t("cloudSync.scope.sshTasks")}</li></ul></div>
+      <div><h3 className="text-sm font-semibold">{t("cloudSync.syncScope")}</h3><ul className="mt-2 space-y-1 text-xs"><li>✓ {t("cloudSync.scope.workspace")}</li><li>✓ {t("cloudSync.scope.connections")}</li><li>✓ {t("cloudSync.scope.environments")}</li><li>✓ {t("cloudSync.scope.variables")}</li><li>✓ {t("cloudSync.scope.apiCollections")}</li><li>✓ {t("cloudSync.scope.apiFolders")}</li><li>✓ {t("cloudSync.scope.apiRequests")}</li><li>✓ {t("cloudSync.scope.sshTasks")}</li><li>✓ {t("cloudSync.scope.flows")}</li></ul></div>
       <div><h3 className="text-sm font-semibold">{t("cloudSync.notSynced")}</h3><ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-[var(--u-color-text-muted)]"><li>{t("cloudSync.scope.secrets")}</li><li>{t("cloudSync.scope.ssh")}</li><li>{t("cloudSync.scope.database")}</li><li>{t("cloudSync.scope.historyRuntime")}</li></ul></div>
     </section>
     <p className="text-xs text-[var(--u-color-text-muted)]">{t("cloudSync.secretPolicy")}</p>

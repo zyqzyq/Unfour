@@ -110,6 +110,12 @@ impl AppError {
             AppError::Validation(reason) if reason == "FLOW_REVISION_CONFLICT" => {
                 "FLOW_REVISION_CONFLICT"
             }
+            AppError::Validation(reason) if reason == "cloud_sync_flow_payload_too_large" => {
+                "cloud_sync_flow_payload_too_large"
+            }
+            AppError::Validation(reason) if reason == "cloud_sync_flow_unsafe_definition" => {
+                "cloud_sync_flow_unsafe_definition"
+            }
             AppError::Validation(reason) if reason == "API_RESPONSE_TOO_LARGE" => {
                 "API_RESPONSE_TOO_LARGE"
             }
@@ -235,6 +241,18 @@ mod tests {
             ("FLOW_REVISION_CONFLICT", "FLOW_REVISION_CONFLICT"),
             ("FLOW_INVALID_REFERENCE", "FLOW_INVALID_REFERENCE"),
             ("FLOW_UNSAFE_REFERENCE", "FLOW_UNSAFE_REFERENCE"),
+            (
+                "cloud_sync_flow_payload_too_large",
+                "cloud_sync_flow_payload_too_large",
+            ),
+            (
+                "cloud_sync_flow_unsafe_definition",
+                "cloud_sync_flow_unsafe_definition",
+            ),
+            (
+                "cloud_sync_flow_unsafe_definition extra detail",
+                "VALIDATION_ERROR",
+            ),
             ("invalid input", "VALIDATION_ERROR"),
             ("FLOW_REVISION_CONFLICT extra detail", "VALIDATION_ERROR"),
         ] {

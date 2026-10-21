@@ -112,6 +112,23 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it.each([
+  ["en", "cloud_sync_flow_payload_too_large", /exceeds the Cloud Sync limit of 64 KiB/],
+  ["zh-CN", "cloud_sync_flow_payload_too_large", /超过 Cloud Sync 的 64 KiB 上限/],
+  ["en", "cloud_sync_flow_unsafe_definition", /Cloud Sync rejected sensitive or device-local content/],
+  ["zh-CN", "cloud_sync_flow_unsafe_definition", /Cloud Sync 拒绝了此 Flow 定义中的敏感或设备本地内容/],
+] as const)("keeps rejected edits with localized sync feedback (%s, %s)", async (locale, code, message) => {
+  vi.mocked(commands.saveFlow).mockRejectedValueOnce({ code, message: "unsafe raw diagnostic" });
+  mount(locale);
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.change(screen.getByLabelText(locale === "en" ? "Flow name" : "Flow 名称"), { target: { value: "Draft release" } });
+  fireEvent.click(screen.getByRole("button", { name: locale === "en" ? "Save" : "保存", exact: true }));
+  expect(await screen.findByText(message)).toBeInTheDocument();
+  expect(screen.getByLabelText(locale === "en" ? "Flow name" : "Flow 名称")).toHaveValue("Draft release");
+  expect(screen.queryByText(/unsafe raw diagnostic/)).not.toBeInTheDocument();
+  expect(commands.runFlow).not.toHaveBeenCalled();
+});
+
 it("deletes using the draft revision and retains the editor after a conflict", async () => {
   vi.mocked(commands.deleteFlow).mockRejectedValueOnce({ code: "FLOW_REVISION_CONFLICT" });
   mount();

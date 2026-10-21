@@ -118,8 +118,10 @@ from `workspace-core`.
 Flow is lazy-mounted by app-shell. Its frontend composes saved capability
 references through command-client; it does not import API, SSH, or Database UI
 internals. Flow definitions are included in whole-Workspace import/export. Run
-history is not exported. Flow definitions and run history do not support Cloud
-Sync. See [Flow V1](flow-v1.md) and [Workspace bundle](workspace-bundle.md).
+history is not exported. Flow definitions use the owning engine's snapshot and
+external-apply adapters for [Cloud Sync](flow-definition-cloud-sync.md); run
+history and runtime data remain local. See [Flow V1](flow-v1.md) and
+[Workspace bundle](workspace-bundle.md).
 
 ## Rust Dependency Shape
 

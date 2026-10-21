@@ -1,10 +1,7 @@
 use super::*;
 
 mod contracts;
-mod lifecycle;
 mod payload_safety;
-mod regressions;
-mod snapshots;
 #[allow(dead_code, unused_imports)]
 #[path = "../../tests/worker/support/mod.rs"]
 mod support;
@@ -15,14 +12,6 @@ const RESOURCE_ID: &str = "00000000-0000-4000-8000-000000000002";
 fn payload() -> Value {
     json!({"name":"Deploy", "inputs":[{"name":"credential", "type":"string", "secret":true, "required":true}],
         "steps":[{"id":"wait", "name":"Wait", "kind":"wait", "durationMs":0, "timeoutMs":1000}]})
-}
-
-fn definition(workspace: &str) -> FlowDefinition {
-    let mut value = payload();
-    value["id"] = json!("");
-    value["workspaceId"] = json!(workspace);
-    value["revision"] = json!(0);
-    serde_json::from_value(value).unwrap()
 }
 
 fn change(workspace: &str, id: &str, payload: Option<Value>, version: i64) -> RemoteChange {

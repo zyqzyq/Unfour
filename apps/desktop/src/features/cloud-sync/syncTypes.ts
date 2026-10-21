@@ -8,7 +8,8 @@ export type SyncEntityType =
   | "apiFolder"
   | "apiRequest"
   | "sshTask"
-  | "sshTaskStep";
+  | "sshTaskStep"
+  | "flow";
 
 export interface SyncBinding {
   accountId: string;

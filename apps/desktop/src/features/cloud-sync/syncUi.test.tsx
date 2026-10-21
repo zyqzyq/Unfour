@@ -71,6 +71,8 @@ const translations: Record<string, string> = {
   "cloudSync.conflict.variableTitle": "Variable conflict",
   "cloudSync.conflict.apiTitle": "API conflict",
   "cloudSync.conflict.connectionTitle": "Connection conflict",
+  "cloudSync.conflict.flowTitle": "Flow definition conflict",
+  "cloudSync.conflict.flowDescription": "Choose one complete definition. Steps are replaced together. Run history stays on this device.",
   "cloudSync.conflict.thisDevice": "This device",
   "cloudSync.conflict.cloud": "Cloud",
   "cloudSync.conflict.useThisDevice": "Use this device",
@@ -460,5 +462,18 @@ describe("Cloud Sync UI", () => {
     await waitFor(() => expect((screen.getByText("Use cloud") as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByText("Use cloud"));
     await waitFor(() => expect(mocks.useRemote).toHaveBeenCalled());
+  });
+
+  it.each(["upsert", "delete"])("resolves a Flow %s conflict as one definition", async (operation) => {
+    mocks.listConflicts.mockResolvedValue([{ cloudWorkspaceId: "cloud", entityType: "flow", entityId: "flow-1", serverVersion: 19, operation, localPayload: { name: "Deploy", inputs: [], steps: [{ id: "local" }] }, remotePayload: operation === "delete" ? null : { name: "Deploy", inputs: [], steps: [{ id: "remote" }] }, localSecretPresent: null }]);
+    render(<SyncConflictList onResolved={vi.fn()} workspaceId="workspace" />);
+    expect(await screen.findByText("Flow definition conflict")).toBeTruthy();
+    expect(screen.getByText(/Choose one complete definition/)).toBeTruthy();
+    fireEvent.click(screen.getByText("Use this device"));
+    await waitFor(() => expect(mocks.keepLocal).toHaveBeenCalledWith("workspace", "flow", "flow-1"));
+    const useCloud = await screen.findByText(operation === "delete" ? "cloudSync.conflict.acceptCloudDeletion" : "Use cloud");
+    await waitFor(() => expect((useCloud as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(useCloud);
+    await waitFor(() => expect(mocks.useRemote).toHaveBeenCalledWith("workspace", "flow", "flow-1"));
   });
 });

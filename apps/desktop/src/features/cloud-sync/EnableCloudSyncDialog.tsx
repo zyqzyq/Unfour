@@ -55,6 +55,7 @@ export function EnableCloudSyncDialog() {
               <li>{t("cloudSync.scope.apiFolders")}</li>
               <li>{t("cloudSync.scope.apiRequests")}</li>
               <li>{t("cloudSync.scope.sshTasks")}</li>
+              <li>{t("cloudSync.scope.flows")}</li>
             </ul>
           </div>
           <div>

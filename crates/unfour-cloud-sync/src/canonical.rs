@@ -476,7 +476,6 @@ pub(crate) async fn canonical_intent_on(
 ) -> Result<CanonicalIntent, SyncError> {
     let entity_type = SyncEntityType::try_from(mutation.entity.entity_type)?;
     let operation = SyncOperation::from(mutation.operation);
-    #[cfg(test)]
     if entity_type == SyncEntityType::Flow {
         let snapshot = unfour_flow_engine::FlowService::read_definition_snapshot_on(
             connection,
@@ -513,7 +512,6 @@ pub(crate) async fn canonical_intent_on(
     }
     if operation == SyncOperation::Delete {
         let deleted_at = match entity_type {
-            #[cfg(test)]
             SyncEntityType::Flow => unreachable!("Flow captured above"),
             SyncEntityType::Workspace => sqlx::query_scalar::<_, String>(
                 "SELECT deleted_at FROM workspaces WHERE id = ?1",
@@ -561,7 +559,6 @@ pub(crate) async fn canonical_intent_on(
     }
 
     let payload = match entity_type {
-        #[cfg(test)]
         SyncEntityType::Flow => unreachable!("Flow captured above"),
         SyncEntityType::Workspace => {
             let row: (String, String, String, String, String, Option<String>) = sqlx::query_as(
@@ -752,7 +749,6 @@ pub(crate) fn parse_remote_change_as(
     entity_type: SyncEntityType,
     change: &RemoteChange,
 ) -> Result<ExternalApplyPage, SyncError> {
-    #[cfg(test)]
     if entity_type == SyncEntityType::Flow {
         let mut page = ExternalApplyPage::default();
         page.flow_definitions
@@ -792,7 +788,6 @@ pub(crate) fn parse_remote_change_as(
     let payload = change.payload.clone().ok_or(SyncError::InvalidData)?;
     let mut page = ExternalApplyPage::default();
     match entity_type {
-        #[cfg(test)]
         SyncEntityType::Flow => unreachable!("Flow parsed above"),
         SyncEntityType::Workspace => {
             let payload: WorkspacePayload =
@@ -1011,7 +1006,6 @@ pub(crate) fn parse_remote_change_as(
 fn delete_page(entity_type: SyncEntityType, delete: ExternalDelete) -> ExternalApplyPage {
     let mut page = ExternalApplyPage::default();
     match entity_type {
-        #[cfg(test)]
         SyncEntityType::Flow => {
             page.flow_definitions
                 .push(unfour_core::domain::ExternalFlowDefinitionApply::Delete(

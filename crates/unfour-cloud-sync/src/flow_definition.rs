@@ -1,5 +1,4 @@
-//! Dormant Protocol 5 Flow adapter. Production Registry deliberately excludes it.
-//! No runtime feature flag: test-only wiring exercises the existing sync engine.
+//! Protocol 5 whole-document Flow Definition adapter for the production Registry.
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use unfour_core::{domain::*, models::FlowDefinition};

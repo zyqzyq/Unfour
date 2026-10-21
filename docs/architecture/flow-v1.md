@@ -40,12 +40,13 @@ purged history; already-started remote effects remain subject to cancellation
 limits. Editing a definition cannot change an existing Run.
 
 Flow definitions are included in whole-Workspace import/export. Run history is
-not exported. Flow definitions and run history are not part of Cloud Sync, and
-these records do not emit cloud outbox intent. Definition save, delete, bundle
-import and workspace cascade emit transaction-scoped DomainMutations, but the
-Cloud Sync boundary excludes the unregistered FlowDefinition type before owner
-resolution, outbox capture or worker triggers. There is no separate Flow-only
-exchange format. See [Workspace bundle](workspace-bundle.md).
+not exported. Definitions participate in [Cloud Sync](flow-definition-cloud-sync.md)
+as complete documents under the existing workspace owner, Protocol 5 Outbox,
+Worker and conflict mechanism. Runs, runtime inputs/outputs and credentials
+remain local. Definition save, delete, bundle import and workspace cascade emit
+transaction-scoped DomainMutations; bound workspace mutations retain durable
+intent even offline or signed out. Import does not create a Cloud binding.
+There is no separate Flow-only exchange format. See [Workspace bundle](workspace-bundle.md).
 
 ## Invocation and expressions
 

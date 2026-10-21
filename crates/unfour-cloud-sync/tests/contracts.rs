@@ -37,9 +37,13 @@ fn protocol_5_connection_entity_contract_is_stable() {
 }
 
 #[test]
-fn flow_definitions_are_not_protocol_5_entities() {
+fn flow_definitions_are_protocol_5_entities() {
     assert_eq!(PROTOCOL_VERSION, 5);
-    assert!(SyncEntityType::try_from(DomainEntityType::FlowDefinition).is_err());
+    assert_eq!(
+        SyncEntityType::try_from(DomainEntityType::FlowDefinition).unwrap(),
+        SyncEntityType::Flow
+    );
+    assert_eq!(SyncEntityType::parse("flow").unwrap(), SyncEntityType::Flow);
     assert!(SyncEntityType::parse("flowDefinition").is_err());
     assert!(serde_json::from_str::<SyncEntityType>(r#""flowDefinition""#).is_err());
 }
@@ -64,6 +68,7 @@ fn cloud_sync_wire_names_and_push_fields_are_stable() {
         (SyncEntityType::ApiRequest, "apiRequest"),
         (SyncEntityType::SshTask, "sshTask"),
         (SyncEntityType::SshTaskStep, "sshTaskStep"),
+        (SyncEntityType::Flow, "flow"),
     ];
     for (entity_type, wire_name) in entity_types {
         assert_eq!(entity_type.as_str(), wire_name);

@@ -97,6 +97,8 @@ describe("getCloudSyncViewState", () => {
       ["cloud_sync_core_apply_failed", "cloudSync.errors.localApply"],
       ["cloud_sync_account_changed", "cloudSync.errors.accountChanged"],
       ["cloud_sync_conflict", "cloudSync.errors.conflict"],
+      ["cloud_sync_flow_payload_too_large", "flow.syncPayloadTooLarge"],
+      ["cloud_sync_flow_unsafe_definition", "flow.syncUnsafeDefinition"],
       ["cloud_sync_local_workspace_not_empty", "cloudSync.errors.localWorkspaceNotEmpty"],
       ["cloud_sync_workspace_name_conflict", "cloudSync.errors.workspaceNameConflict"],
       ["cloud_sync_cloud_workspace_not_empty", "cloudSync.errors.cloudWorkspaceNotEmpty"],

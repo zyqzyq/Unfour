@@ -58,7 +58,6 @@ pub enum SyncEntityType {
     ApiRequest,
     SshTask,
     SshTaskStep,
-    #[cfg(test)]
     Flow,
 }
 
@@ -123,10 +122,7 @@ impl TryFrom<DomainEntityType> for SyncEntityType {
             DomainEntityType::ApiRequest => Self::ApiRequest,
             DomainEntityType::SshTask => Self::SshTask,
             DomainEntityType::SshTaskStep => Self::SshTaskStep,
-            #[cfg(test)]
             DomainEntityType::FlowDefinition => Self::Flow,
-            #[cfg(not(test))]
-            DomainEntityType::FlowDefinition => return Err(SyncError::InvalidData),
         })
     }
 }
@@ -144,7 +140,6 @@ impl From<SyncEntityType> for DomainEntityType {
             SyncEntityType::ApiRequest => Self::ApiRequest,
             SyncEntityType::SshTask => Self::SshTask,
             SyncEntityType::SshTaskStep => Self::SshTaskStep,
-            #[cfg(test)]
             SyncEntityType::Flow => Self::FlowDefinition,
         }
     }

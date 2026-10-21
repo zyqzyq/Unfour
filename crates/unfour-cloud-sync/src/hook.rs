@@ -8,7 +8,7 @@ use unfour_command_bus::TransactionalCommandHook;
 use unfour_core::domain::{CommandContext, DomainMutation, MutationOrigin};
 use unfour_core::{AppError, AppResult};
 
-use crate::{Clock, IdGenerator, SyncRepository};
+use crate::{Clock, IdGenerator, SyncError, SyncRepository};
 
 /// Pro's CommandBus transaction hook. It performs SQLite-only work on the
 /// caller-owned connection and never reads canonical payloads or calls the
@@ -60,7 +60,12 @@ impl TransactionalCommandHook for SyncOutboxHook {
                 self.clock.as_ref(),
             )
             .await
-            .map_err(|error| AppError::Config(error.code().to_string()))?;
+            .map_err(|error| match error {
+                SyncError::FlowPayloadTooLarge | SyncError::FlowUnsafeDefinition => {
+                    AppError::Validation(error.code().to_string())
+                }
+                _ => AppError::Config(error.code().to_string()),
+            })?;
             if let Some(trigger) = &self.trigger {
                 for workspace_id in workspaces {
                     let _ = trigger.send(workspace_id);

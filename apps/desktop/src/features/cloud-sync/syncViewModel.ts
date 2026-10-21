@@ -96,6 +96,8 @@ export function viewStateTone(state: CloudSyncViewState): "neutral" | "success" 
 }
 
 export function syncErrorMessageKey(code: string): string {
+  if (code === "cloud_sync_flow_payload_too_large") return "flow.syncPayloadTooLarge";
+  if (code === "cloud_sync_flow_unsafe_definition") return "flow.syncUnsafeDefinition";
   if (["cloud_sync_transport_failed", "cloud_sync_temporarily_unavailable", "cloud_sync_timeout"].includes(code)) {
     return "cloudSync.errors.network";
   }

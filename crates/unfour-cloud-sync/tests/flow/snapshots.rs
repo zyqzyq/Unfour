@@ -1,10 +1,10 @@
 use super::lifecycle::{fixture, queue};
 use super::support::{database, workspace_payload, CommandBus, MockTransport};
 use super::*;
-use crate::{
+use std::sync::{atomic::Ordering, Arc};
+use unfour_cloud_sync::{
     DownloadDecision, SnapshotItem, SnapshotPage, SyncEntityType, SyncRuntime, PROTOCOL_VERSION,
 };
-use std::sync::{atomic::Ordering, Arc};
 
 #[tokio::test]
 async fn snapshot_download_installs_flow_after_workspace_without_history() {
@@ -117,6 +117,9 @@ async fn local_workspace_delete_captures_flow_tombstone_offline() {
 async fn oversized_initial_upload_rolls_back_binding_and_incremental_edit_is_atomic() {
     let (db, bus, service, _, ws) = fixture().await;
     let mut big = definition(&ws);
+    big.inputs[0].secret = false;
+    big.inputs[0].name = "label".into();
+    big.inputs[0].default = Some(json!("unchanged literal"));
     big.inputs[0].description = Some("x".repeat(MAX_PAYLOAD_BYTES));
     let saved = bus.save_flow(big).await.unwrap(); // local 1 MiB policy unchanged
     assert_eq!(
@@ -132,12 +135,8 @@ async fn oversized_initial_upload_rolls_back_binding_and_incremental_edit_is_ato
     service.enable(&ws).await.unwrap();
     let mut big = small.clone();
     big.inputs[0].description = Some("x".repeat(MAX_PAYLOAD_BYTES));
-    assert!(bus
-        .save_flow(big)
-        .await
-        .unwrap_err()
-        .to_string()
-        .contains("cloud_sync_flow_payload_too_large"));
+    let error = bus.save_flow(big).await.unwrap_err();
+    assert_eq!(error.code(), "cloud_sync_flow_payload_too_large");
     assert_eq!(
         bus.get_flow(ws, small.id).await.unwrap().revision,
         small.revision

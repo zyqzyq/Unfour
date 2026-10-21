@@ -32,6 +32,7 @@ function conflictTitleKey(type: SyncConflict["entityType"]): string {
   if (type === "connection") return "cloudSync.conflict.connectionTitle";
   if (type === "apiCollection" || type === "apiFolder" || type === "apiRequest") return "cloudSync.conflict.apiTitle";
   if (type === "sshTask" || type === "sshTaskStep") return "cloudSync.conflict.sshTaskTitle";
+  if (type === "flow") return "cloudSync.conflict.flowTitle";
   return "cloudSync.conflict.workspaceTitle";
 }
 
@@ -101,13 +102,14 @@ function WorkspaceConflictList({ onResolved, workspaceId }: { onResolved(): void
       return <section className="rounded-[var(--u-radius-md)] border border-[var(--u-color-warning)] p-3" key={key}>
         <h4 className="text-sm font-semibold">{t(conflictTitleKey(conflict.entityType))}</h4>
         <p className="mt-1 font-medium">{label}</p>
+        {conflict.entityType === "flow" && <p className="mt-2 text-xs text-[var(--u-color-text-muted)]">{t("cloudSync.conflict.flowDescription")}</p>}
         {deleted ? <p className="mt-2 text-xs text-[var(--u-color-text-muted)]">{t("cloudSync.conflict.deletedDescription", { name: label })}</p> : <div className="mt-2 grid grid-cols-2 gap-2">
           <div><p className="text-xs text-[var(--u-color-text-muted)]">{t("cloudSync.conflict.thisDevice")}</p><p className="mt-1 break-words rounded bg-[var(--u-color-surface-muted)] p-2 text-xs">{payloadValue(conflict.localPayload)}</p></div>
           <div><p className="text-xs text-[var(--u-color-text-muted)]">{t("cloudSync.conflict.cloud")}</p><p className="mt-1 break-words rounded bg-[var(--u-color-surface-muted)] p-2 text-xs">{payloadValue(conflict.remotePayload)}</p></div>
         </div>}
         {conflict.localSecretPresent !== null && <p className="mt-2 text-xs text-[var(--u-color-text-muted)]">{conflict.localSecretPresent ? t("cloudSync.localSecretPresent") : t("cloudSync.localSecretMissing")}</p>}
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button disabled={Boolean(busyKey)} onClick={() => void resolve(conflict, "local")} size="sm" type="button">{deleted ? t("cloudSync.conflict.keepLocalVariable") : t("cloudSync.conflict.useThisDevice")}</Button>
+          <Button disabled={Boolean(busyKey)} onClick={() => void resolve(conflict, "local")} size="sm" type="button">{deleted && conflict.entityType !== "flow" ? t("cloudSync.conflict.keepLocalVariable") : t("cloudSync.conflict.useThisDevice")}</Button>
           <Button disabled={Boolean(busyKey)} onClick={() => void resolve(conflict, "remote")} size="sm" type="button" variant="outline">{deleted ? t("cloudSync.conflict.acceptCloudDeletion") : t("cloudSync.conflict.useCloud")}</Button>
         </div>
         <details className="mt-3 text-xs"><summary className="cursor-pointer text-[var(--u-color-text-muted)]">{t("cloudSync.technicalDetails")}</summary><pre className="mt-2 max-h-48 overflow-auto rounded bg-[var(--u-color-surface-muted)] p-2 text-[11px]">{JSON.stringify(conflict, null, 2)}</pre></details>

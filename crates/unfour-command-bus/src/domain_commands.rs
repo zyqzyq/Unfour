@@ -144,10 +144,8 @@ impl CommandBus {
         &self,
         page: ExternalApplyPage,
     ) -> AppResult<ExternalApplyReport> {
-        if !page.flow_definitions.is_empty() {
-            return Err(AppError::Validation("FLOW_SYNC_NOT_ENABLED".into()));
-        }
         let counts = serde_json::json!({
+            "flowDefinitionCount": page.flow_definitions.len(),
             "workspaceCount": page.workspaces.len(),
             "connectionCount": page.connections.len(),
             "workspaceVariableCount": page.workspace_variables.len(),
@@ -192,6 +190,7 @@ impl CommandBus {
                         let api_page = page.clone();
                         let ssh_page = page.clone();
                         let connection_changes = page.connections.clone();
+                        let flow_changes = page.flow_definitions.clone();
                         let mut mutations = Vec::new();
                         let mut cascade_materialized = Vec::new();
                         let mut ssh_connection_cleanups = Vec::new();
@@ -217,6 +216,31 @@ impl CommandBus {
                             .apply_external_page_on(connection, &executor_context, page)
                             .await?;
                         mutations.extend(workspace_outcome.mutations);
+                        for change in flow_changes {
+                            let key = match &change {
+                                unfour_core::domain::ExternalFlowDefinitionApply::Upsert(value) => {
+                                    DomainEntityKey::new(
+                                        DomainEntityType::FlowDefinition,
+                                        &value.workspace_id,
+                                        &value.id,
+                                    )
+                                }
+                                unfour_core::domain::ExternalFlowDefinitionApply::Delete(value) => {
+                                    value.entity.clone()
+                                }
+                            };
+                            let outcome =
+                                unfour_flow_engine::FlowService::apply_external_definition_on(
+                                    connection,
+                                    &executor_context,
+                                    change,
+                                )
+                                .await?;
+                            if outcome.value.is_materialized() {
+                                cascade_materialized.push(key);
+                            }
+                            mutations.extend(outcome.mutations);
+                        }
                         let connection_outcome = apply_external_connection_changes_on(
                             &ssh,
                             &database,

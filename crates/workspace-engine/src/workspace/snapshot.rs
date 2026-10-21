@@ -165,7 +165,7 @@ pub(crate) async fn read_snapshot_on(
             ))
         }
         DomainEntityType::FlowDefinition => Err(AppError::Validation(
-            "Flow Definition sync snapshots are not enabled".into(),
+            "Flow Definition snapshots belong to flow-engine".into(),
         )),
         DomainEntityType::Connection => Err(AppError::Validation(
             "connection snapshots must be read through a connection domain service".to_string(),

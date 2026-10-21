@@ -123,6 +123,7 @@ async fn initial_upload_is_topological_and_matches_all_four_v1_payloads() {
                 );
             }
             SyncEntityType::Connection
+            | SyncEntityType::Flow
             | SyncEntityType::ApiCollection
             | SyncEntityType::ApiFolder
             | SyncEntityType::ApiRequest
@@ -290,6 +291,15 @@ async fn initial_upload_entity_types_match_registry_exactly() {
     let db = database().await;
     let seed = CommandBus::from_db(db.clone()).await.unwrap();
     let workspace_id = seed.list_workspaces().await.unwrap().active_workspace_id;
+    seed.save_flow(
+        serde_json::from_value(serde_json::json!({
+            "id":"", "workspaceId":workspace_id, "name":"Registry Flow", "revision":0, "inputs":[],
+            "steps":[{"id":"wait","name":"Wait","kind":"wait","durationMs":0,"timeoutMs":1000}]
+        }))
+        .unwrap(),
+    )
+    .await
+    .unwrap();
     seed.workspace_variable_create(
         workspace_id.clone(),
         variable(None, "PLAIN", "value", false),

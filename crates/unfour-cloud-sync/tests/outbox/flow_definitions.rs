@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test]
-async fn flow_mutations_never_enqueue_or_trigger_sync_even_when_bound() {
+async fn flow_mutations_capture_canonical_intent_and_trigger_sync_when_bound() {
     let (_seed, db, ws) = hooked_bus(vec![]).await;
     let (trigger, mut receiver) = tokio::sync::mpsc::unbounded_channel();
     let bus = CommandBus::from_db_with_extensions(
@@ -28,11 +28,19 @@ async fn flow_mutations_never_enqueue_or_trigger_sync_even_when_bound() {
             .fetch_one(db.pool())
             .await
             .unwrap(),
-        0
+        1
     );
+    for _ in 0..3 {
+        assert_eq!(receiver.try_recv().unwrap(), ws);
+    }
     assert!(receiver.try_recv().is_err());
+    assert_eq!(
+        outbox_row(&db, &revised.id).await,
+        ("flow".into(), "delete".into(), Some(ws.clone()))
+    );
 
-    // Initial upload enumerates neither live definitions nor tombstones.
+    // Initial upload captures live definitions; old tombstones are unnecessary
+    // for a new cloud workspace. Bound-workspace deletions above are durable.
     let fresh = bus
         .create_workspace("Initial upload".into())
         .await
@@ -63,7 +71,7 @@ async fn flow_mutations_never_enqueue_or_trigger_sync_even_when_bound() {
     )
     .await
     .unwrap();
-    for id in [&live.id, &dead.id] {
+    for (id, expected) in [(&live.id, 1), (&dead.id, 0)] {
         assert_eq!(
             sqlx::query_scalar::<_, i64>(
                 "SELECT count(*) FROM cloud_sync_outbox WHERE entity_id=?"
@@ -72,7 +80,7 @@ async fn flow_mutations_never_enqueue_or_trigger_sync_even_when_bound() {
             .fetch_one(db.pool())
             .await
             .unwrap(),
-            0
+            expected
         );
     }
 }

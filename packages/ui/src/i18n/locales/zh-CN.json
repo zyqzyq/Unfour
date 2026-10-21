@@ -1579,6 +1579,8 @@
     "history": "运行历史",
     "selectRun": "选择运行记录",
     "operationFailed": "操作失败。",
+    "syncPayloadTooLarge": "此 Flow 定义超过 Cloud Sync 的 64 KiB 上限。请缩小定义后重试，当前编辑已保留。",
+    "syncUnsafeDefinition": "Cloud Sync 拒绝了此 Flow 定义中的敏感或设备本地内容。请通过运行时输入提供密钥，并移除本地凭据引用。当前编辑已保留。",
     "deleteHelp": "删除此 Flow？引用的资源与运行历史会保留。",
     "effectsHelp": "此 Flow 可能发送请求、执行远端命令或修改数据库。取消会停止后续调度并尽力停止当前执行，但不会回滚已发生的远端副作用。",
     "discardHelp": "放弃未保存的修改并切换 Flow？",

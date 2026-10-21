@@ -1,6 +1,6 @@
 use super::lifecycle::{fixture, queue};
 use super::*;
-use crate::SyncEntityType;
+use unfour_cloud_sync::SyncEntityType;
 
 #[tokio::test]
 async fn local_tombstone_conflict_can_keep_delete_or_restore_remote() {
@@ -98,9 +98,7 @@ async fn repair_captures_preexisting_flow_and_unsafe_edits_roll_back() {
     let mut unsafe_flow = flow.clone();
     unsafe_flow.inputs[0].default = Some(json!("@unfour-secret:fixture"));
     let error = bus.save_flow(unsafe_flow).await.unwrap_err();
-    assert!(error
-        .to_string()
-        .contains("cloud_sync_flow_unsafe_definition"));
+    assert_eq!(error.code(), "cloud_sync_flow_unsafe_definition");
     assert_eq!(
         bus.get_flow(ws, flow.id).await.unwrap().revision,
         flow.revision

@@ -63,6 +63,14 @@ export function useFlowEditor(workspaceId: string, flows: FlowWorkspaceData["flo
       await action();
     } catch (cause) {
       const detail = cause as { code?: string; message?: string };
+      if (detail.code === "cloud_sync_flow_payload_too_large") {
+        setError(t("flow.syncPayloadTooLarge"));
+        return;
+      }
+      if (detail.code === "cloud_sync_flow_unsafe_definition") {
+        setError(t("flow.syncUnsafeDefinition"));
+        return;
+      }
       if (detail.code === "FLOW_CONFIRMATION_STALE") {
         setRevisionConflict(true);
         setRunDialog(false);

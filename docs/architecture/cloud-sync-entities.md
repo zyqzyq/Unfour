@@ -18,7 +18,7 @@ of syncable entity types. Each `SyncEntityDescriptor` records:
   revision, deletion, and live enumeration.
 
 `SyncEntityAdapters` dispatches snapshot reads to the owning Workspace, API
-Client, SSH Task, SSH Connection, or Database Connection domain service. The
+Client, Flow, SSH Task, SSH Connection, or Database Connection domain service. The
 Registry owns orchestration metadata; payload construction and business rules
 stay in the owning domain and canonical mapping layers.
 
@@ -36,10 +36,11 @@ stay in the owning domain and canonical mapping layers.
 | ApiRequest | `apiRequest` | ApiCollection or ApiFolder | API Client |
 | SshTask | `sshTask` | none | SSH Task |
 | SshTaskStep | `sshTaskStep` | SshTask | SSH Task |
+| FlowDefinition | `flow` | Workspace | Flow |
 
 All current entries participate in initial upload and support tombstones.
-Flow Definition has a [dormant client adapter](flow-definition-cloud-sync.md),
-but remains excluded from this production set until the server supports `flow`.
+Flow Definition uses a [whole-document adapter](flow-definition-cloud-sync.md)
+with schema 1 safety validation and a 64 KiB limit; run data remains local.
 Parent-before-child push ordering and child blocking continue to use descriptor
 topology plus the hierarchy-specific ordering needed for nested API folders and
 aggregate deletes.
@@ -52,7 +53,7 @@ Enabling Cloud Sync for a new local workspace performs one local transaction:
 create binding and durable owner
   -> enumerate every Registry entry
   -> read redacted domain snapshots through Registry adapters
-  -> produce canonical protocol-v4 intents
+  -> produce canonical Protocol 5 intents
   -> enqueue the complete initial outbox
   -> set initial_total from the rows actually captured
 ```

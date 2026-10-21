@@ -1,92 +1,106 @@
 # Flow Definition Cloud Sync client verification
 
-Date: 2026-10-20. Safety/CI follow-up baseline: main `f089a90`.
-Scope: Unfour only. No Unfour-api changes, production registration or real
-cross-device synchronization.
+Date: 2026-10-21. Baseline: latest main `d5cb4c00` (origin/main fetched and
+confirmed equal before editing). Scope: Unfour client production activation.
+No Unfour-api inspection/changes, GCP verification, actual two-device test,
+native packaging, publication, or push.
 
-## Coverage
+## Implementation and coverage
 
-The unit build rehearses Flow registration with the existing Protocol 5
-Registry/Outbox/Worker. It uses disposable SQLite databases and scripted
-transport. The production-library integration build excludes Flow.
+Flow is registered in the shipping Protocol 5 Registry, wire enum, canonical
+mapping, snapshot adapters, external apply and mutation conversion. There is no
+new feature flag, schema version, dependency, or synchronization engine.
+
+Lifecycle tests moved from unit-only wiring into
+`crates/unfour-cloud-sync/tests/flow.rs` and `tests/flow/`; they compile the
+production library. Adapter schema/safety tests remain in
+`src/flow_definition/tests/`. Production-exclusion tests were replaced with
+registration, upload and materialization coverage.
 
 | Area | Evidence |
 | --- | --- |
-| Definition contract | All five node kinds roundtrip; strict top-level/nested fields; graph and resource UUID preservation |
-| Literal values | SQL, SSH Task inputs and remote directories, API URLs/JSON/form/plain bodies, patch rows, mixed templates, string predicates and ordinary defaults preserve exact values |
-| Inputs and secrets | Secret metadata only; every secret/sensitive-named default rejected, including null/references; nested sensitive defaults cannot use reference-shaped literal data |
-| Structured safety | Sensitive object fields, API key/value rows (including disabled/dynamic keys), JSON text, URL passwords/query and form pairs require actual runtime values; encoded lookalikes, local handles and private keys rejected without redaction |
-| Reference syntax | Invalid roots/escapes, malformed singleton objects/templates, missing/self step outputs and out-of-scope probe references rejected; existing graph validation retained |
-| Size | 64 KiB UTF-8 payload boundary; larger definitions rejected, no truncation; failed initial upload/edits roll back atomically |
-| Initial upload | Canonical Flow snapshot with Workspace parent, no local revision, history or runtime state |
-| Old bound workspace | Generic reconciliation captures previously local-only Flow |
-| Offline mutation | Signed-out/paused owner retains canonical intent; resume publishes through existing Worker |
-| External apply | Whole-document update, local revision increment, duplicate content no-op, stale version fence, tombstone and resurrection |
-| Conflict | Keep-local/use-remote for local edits and local tombstones against remote updates/deletes; conflict baseVersion retained |
-| Workspace | Local deletion captures Flow tombstones offline; remote Workspace deletion conflicts with pending Flow and cascades history cleanup |
-| References | API/SSH/Database UUIDs accepted before resources exist; no resource rows synthesized; execution still fails preflight |
-| History | Sentinel local run payload remains unchanged by Flow update/delete and never enters serialized definition payloads |
-| Transaction rollback | Normal string default enters the durable Outbox unchanged; rejected local-handle edit preserves both prior definition revision and canonical intent |
-| Compatibility | Legacy local inputs normalized; unknown local step fields rejected; future schema/subtypes retained rather than partially applied |
-| Production exclusion | Wire enum/Registry reject Flow; initial upload and mutations never capture it; Changes/Snapshot retain it without business apply |
-| Local behavior | Bound production workspace still accepts 70 KiB Flow with literal default; local limit and definition remain unchanged |
-| Storage upgrade | Existing canonical intents, uncertain leases/retries and conflict/reader fences preserved; foreign-key validation and CHECK constraints retained |
-
-Tests live under `crates/unfour-cloud-sync/src/flow_definition/tests/`,
-`crates/unfour-cloud-sync/tests/flow_disabled.rs`, the previous phase's
-`tests/outbox/flow_definitions.rs`, and
-`crates/unfour-cloud-sync-storage/src/tests/flow.rs`.
+| Registry | `flow`, Workspace parent, initial upload, tombstones, schema/reader 1 and unchanged Protocol 5; complete initial-upload entity set includes Flow |
+| Initial upload | Whole canonical document, existing UUID, no revision/timestamps/runtime fields; 64 KiB rejection rolls back binding and Outbox |
+| Existing bindings | Generation-fenced, owner-scoped missing-state capture runs for Flow before Pull/replay; protects legacy documents and tombstones against remote replacement/resurrection and Workspace deletion |
+| Incremental/offline | Bound mutations capture canonical durable intent while paused/signed out; resume sends updates and deletion tombstones through the existing Worker |
+| Restart/idempotency | Uncertain delivery retries the identical operation and payload after restart; repeated sync emits no new upload |
+| Remote apply | Whole-document replacement; local revision independent of serverVersion; equivalent newer content and duplicate tombstones are no-ops; stale replay cannot resurrect a newer tombstone |
+| Page ordering | One Changes page with update/delete/restore materializes the last Flow document only |
+| Conflicts | Keep-local/use-remote for edits and local tombstones against remote update/delete; CAS uses remote serverVersion; whole-document UI identifies Flow |
+| Workspace | Offline local delete captures Flow tombstones; remote deletion conflicts with pending/untracked Flow and atomically purges local run history after resolution |
+| Core adapter | Generic external page supports Flow, reports equivalent materialization, emits External-origin hooks, and rolls the page back on hook failure; SyncOutboxHook creates no echo |
+| History/credentials | Canonical payload is exactly name/inputs/steps; run/history sentinel stays local through Flow update/delete, never enters push data |
+| Resource references | API/SSH/Database UUIDs remain unchanged; remote apply synthesizes no resources; missing-resource execution remains blocked |
+| Compatibility | Old-reader retained Flow envelopes replay on upgrade without echo; future schema/critical subtype waits with retained envelope/cursor; future-schema tombstones still apply |
+| Payload safety | Existing schema 1 tests preserve SQL, SSH/API arguments, ordinary defaults and templates; strict fields, runtime-reference rules, sensitive content rejection and compact UTF-8 64 KiB boundary remain unchanged |
+| Local behavior | Community/unbound local limit remains 1 MiB; a definition above 64 KiB with a literal default remains locally valid; only binding/upload applies the cloud limit |
+| UI | Stable Flow size/safety codes survive CommandBus errors; English/Chinese editor feedback retains draft edits and hides raw diagnostics; Flow conflict actions use entity type flow |
+| Other modules | Full workspace and frontend suites cover existing sync entities, MCP, local Flow execution and Workspace bundle import/export |
 
 ## Commands and results
 
 | Check | Result |
 | --- | --- |
-| `cargo check --workspace` | PASS, including desktop `sync.rs` exhaustive error mapping |
-| `cargo check -p unfour --features ssh-native` | PASS |
-| `cargo test --workspace --exclude unfour-mcp` | PASS: 978 tests; existing OS Keychain smoke ignored (requires platform credential store) |
-| `cargo test -p unfour-mcp` | PASS: 260 tests, including binary contracts |
-| `cargo fmt -p unfour-cloud-sync -p unfour --check` | PASS |
-| `pnpm run check:secrets` | PASS; no audit-rule/exemption changes |
-| `pnpm run lint` | PASS: zero errors; 34 existing warnings |
+| `cargo test --workspace --no-fail-fast` | FAIL: 1,242 passed, 1 existing history-capacity test timed out, 1 OS Keychain smoke ignored |
+| `cargo test -p unfour-command-bus --features ssh-native --lib flow_wait_until_final_output_respects_total_history_limit -- --test-threads=1` | PASS: unchanged test passes in 5.52 seconds in isolation |
+| `cargo test --workspace --no-fail-fast -- --test-threads=1` | PASS: 1,243 tests, zero failures; 1 existing OS Keychain smoke ignored (platform credential store required) |
+| `cargo test -p unfour-cloud-sync --test flow` | PASS; shipping-library lifecycle cases, subsequently expanded to 21 passing cases in workspace run |
+| `cargo test -p unfour-cloud-sync --test worker initial_upload_entity_types_match_registry_exactly` | PASS; updated Registry fixture includes Flow |
+| `cargo fmt --all -- --check` | PASS |
+| `pnpm run test` | PASS: 186 files, 1,250 tests |
+| `pnpm exec vitest run apps/desktop/src/features/cloud-sync` | PASS: 4 files, 51 tests after final scope-copy correction |
 | `pnpm run build` | PASS; existing bundle-size warning |
-| `pnpm run test` | PASS: 186 files, 1,244 tests |
-| `pnpm run test:release-env` | PASS: 81 tests |
+| `pnpm run lint` | PASS: zero errors; 34 existing warnings |
 | `pnpm run check:migrations` | PASS: 35 migration files |
-| `pnpm run check:large-files` | PASS: zero blocking files; existing advisory findings remain |
+| `pnpm run check:secrets` | PASS; no audit-rule changes |
+| `pnpm run check:large-files` | PASS: zero blocking files; advisory findings remain |
 | `git diff --check` | PASS |
 
-The first targeted run passed 23/24 cases: the old rollback fixture needed to
-reach Sync validation after ordinary literals became valid. A nested sensitive
-default is rejected earlier by the owning Flow engine. The corrected fixture
-uses a locally accepted Secret Store handle; all 24 Flow cases passed on rerun.
-The final suite additionally verifies an ordinary default's canonical intent
-survives rejection unchanged.
+The new upgrade-preservation regression first failed: Pull/replay overwrote an
+old client's local-only Flow before the generic missing-state repair. Flow now
+uses the same repair transaction before Pull for previously untracked documents
+and tombstones; existing entity readers retain replay-before-repair behavior.
+The regression passes for both a remote Flow replacement and Workspace deletion.
 
-The sandboxed pnpm launcher initially reported `unable to open database file`.
-The required pnpm commands were rerun successfully outside that sandbox. Rust
-loopback HTTP tests also run outside the network sandbox against disposable
-fixtures; no deployed sync service or real user workspace is used. Initial-phase
-verification history remains available in Git.
+Intermediate verification also caught and fixed the old Registry-completeness
+fixture, which did not seed the newly registered Flow. The first Rust unit
+compile after moving lifecycle tests needed the remaining safety-test support
+module restored; that was corrected. Sandboxed HTTP contract tests could not
+reach their loopback fixtures, and the sandboxed pnpm launcher could not open its
+local database. Relevant commands were rerun outside the sandbox against local,
+disposable fixtures. No deployed service or real user workspace was used.
 
-## Limits and remaining release work
+The complete parallel workspace run reached every suite, including 202 Cloud
+Sync tests and all 260 MCP tests, which passed. One unchanged CommandBus test,
+`flow_wait_until_final_output_respects_total_history_limit`, hit its existing
+20-second step timeout under concurrent workload and returned `FLOW_TIMEOUT`
+instead of the expected `FLOW_HISTORY_LIMIT`. Its isolated rerun passed in 5.52
+seconds. No execution code, timeout or assertion was changed to suppress it;
+the serial full-workspace result is reported separately above.
 
-- NOT VERIFIED: deployed server acceptance, real two-device synchronization,
-  native UI and real API/SSH/database resource execution. Tests establish client
-  adaptation and local safety, not service deployment.
-- CI-equivalent commands run locally on Windows. No push or GitHub Actions run
-  is part of this commit-only task; hosted Linux CI status is not asserted.
-- Production entry points deliberately remain disabled. The test-only
-  registration is not a product toggle.
-- Arbitrary SQL, shell/text, innocuously named fields, custom encodings/handles
-  and metadata can hide secrets that structural checks cannot detect. These
-  are user-authored definition data, not certified secret-free data. Malformed
-  JSON-looking text and ambiguous sensitive templates fail explicitly; authors
-  can supply a whole runtime value. No automatic redaction/rewrite occurs.
-- Unfour-api must implement the final schema 1 acceptance rules before release
-  activation. Shared i18n error presentation is still a future activation task.
-- Resources such as saved SQL must exist under the referenced UUID before a run
-  can succeed; Flow synchronization does not itself sync or synthesize them.
-- No dependency was added in this follow-up. Cloud Sync already uses the owning
-  `unfour-flow-engine` snapshot/external-apply adapter.
+## Limits and manual packaging checks
 
-See [the final server contract and activation checklist](../architecture/flow-definition-cloud-sync.md).
+- NOT VERIFIED: deployed server acceptance, native UI, actual cross-device
+  convergence and real API/SSH/database resource execution. These are outside
+  this client's local automated evidence; packaging/release is user-managed.
+- Verify first upload and upgrade of an already-bound workspace, including a
+  local-only edit/deletion concurrent with a retained remote update/deletion.
+- Verify offline edits/deletions across pause, sign-out and process restart,
+  then resume without duplicate operations or workspace-owner fan-out.
+- Verify both conflict choices, stale open editors, remote resurrection and
+  Workspace deletion; individual Flow deletion retains local runs, whereas
+  Workspace deletion purges them.
+- Verify unchanged resource UUIDs, absent resources, and resources arriving
+  later. Existing run preflight must still block missing resources.
+- Verify English/Chinese safety and size feedback retains drafts, normal SQL,
+  SSH/API parameters and templates remain unchanged, and runs/runtime values
+  and credentials never appear in cloud payloads.
+- Old clients remain unable to materialize Flow. They must retain its envelopes
+  and enter compatibility waiting; upgrading replays them. No old-client binary
+  or actual two-device exercise was performed here.
+- Schema 1 is structural protection, not general DLP. Arbitrary SQL/shell/text,
+  innocuously named values, encoded blobs and metadata may hide secrets that
+  cannot be identified reliably. Explicit sensitive/device-local material is
+  rejected; values are never silently redacted or truncated.
+
+See [the client/server contract and manual checklist](../architecture/flow-definition-cloud-sync.md).

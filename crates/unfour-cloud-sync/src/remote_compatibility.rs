@@ -78,7 +78,6 @@ fn payload_has_unsupported_subtype(
 ) -> Result<bool, SyncError> {
     let object = payload.as_object().ok_or(SyncError::InvalidData)?;
     match entity_type {
-        #[cfg(test)]
         SyncEntityType::Flow => crate::flow_definition::unsupported_subtype(payload),
         SyncEntityType::Workspace => Ok(string_field(object, "environmentType")?
             .is_some_and(|value| !matches!(value, "dev" | "test" | "prod"))

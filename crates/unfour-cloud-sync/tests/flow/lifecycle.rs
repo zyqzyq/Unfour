@@ -1,7 +1,7 @@
 use super::support::{database, CommandBus, CommandBusExtensions, MockTransport};
 use super::*;
-use crate::{ChangesPage, SyncEntityType, SyncRuntime, SyncService, PROTOCOL_VERSION};
 use std::sync::{atomic::Ordering, Arc};
+use unfour_cloud_sync::{ChangesPage, SyncEntityType, SyncRuntime, SyncService, PROTOCOL_VERSION};
 use unfour_flow_engine::FlowService;
 
 pub(super) async fn fixture() -> (

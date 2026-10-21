@@ -376,6 +376,23 @@ impl SyncService {
             }
         }
 
+        // Flow was previously local-only. Capture untracked local documents and
+        // tombstones before Pull/replay can overwrite them. Known Flow state
+        // is untouched, so this cannot manufacture an echo for remote applies.
+        self.repository
+            .capture_untracked_flow_definitions(
+                &binding,
+                &crate::SyncEntityAdapters::new(
+                    &self.workspace,
+                    &self.api_client,
+                    &self.ssh,
+                    &self.database,
+                ),
+                self.dependencies.ids.as_ref(),
+                self.dependencies.clock.as_ref(),
+            )
+            .await?;
+
         // Even a conflicted binding keeps pulling so a 409 delete conflict can
         // be hydrated with the protocol tombstone's deletedAt. Pull and remote
         // replay intentionally precede local repair: an upgraded reader must
