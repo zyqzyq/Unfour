@@ -10,6 +10,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  UNFOUR_RELEASE_CHANNEL: test
+
 jobs:
   frontend:
     name: Frontend ${{ matrix.task }}

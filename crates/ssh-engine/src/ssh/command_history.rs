@@ -73,7 +73,7 @@ impl SshService {
         });
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(all(test, not(feature = "ssh-native")))]
     pub(super) async fn ingest_terminal_output(
         &self,
         workspace_id: &str,
