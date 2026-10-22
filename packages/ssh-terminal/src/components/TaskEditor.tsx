@@ -73,7 +73,7 @@ export function TaskEditor({
   }
 
   function addStep(stepType: SshTaskStepType, atIndex?: number) {
-    const step = createTaskStep(stepType, draft.steps.length);
+    const step = createTaskStep(stepType, draft.steps.length, t);
     const nextSteps =
       atIndex === undefined
         ? [...draft.steps, step]
@@ -209,7 +209,7 @@ export function TaskEditor({
                     onDuplicate={() => {
                       onChange({
                         ...draft,
-                        steps: duplicateTaskStep(draft.steps, index),
+                        steps: duplicateTaskStep(draft.steps, index, t),
                       });
                       setExpandedIndex(index + 1);
                     }}

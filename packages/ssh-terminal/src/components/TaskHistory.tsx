@@ -1,21 +1,27 @@
 import type { SshTaskRun } from "@unfour/command-client";
-import { Button, LoadingState, StatusBadge, useI18n } from "@unfour/ui";
+import { Button, ErrorState, LoadingState, StatusBadge, useI18n } from "@unfour/ui";
 import { Trash2 } from "lucide-react";
 
 export function TaskHistory({
   clearing,
+  failed,
   loading,
   onClear,
   onSelectRun,
   onRerun,
+  onRetry,
+  retrying,
   runs,
   selectedRunId,
 }: {
   clearing: boolean;
+  failed: boolean;
   loading: boolean;
   onClear: () => void;
   onSelectRun: (run: SshTaskRun) => void;
   onRerun?: (run: SshTaskRun) => void;
+  onRetry: () => void;
+  retrying: boolean;
   runs: SshTaskRun[];
   selectedRunId?: string | null;
 }) {
@@ -34,6 +40,14 @@ export function TaskHistory({
           {clearing ? t("ssh.tasks.history.clearing") : t("ssh.tasks.history.clear")}
         </Button>
       </div>
+      {failed && (
+        <ErrorState>
+          <span role="alert">{t("ssh.tasks.history.loadFailed")}</span>{" "}
+          <Button disabled={retrying} onClick={onRetry} size="sm" variant="secondary">
+            {t("ssh.tasks.actions.retry")}
+          </Button>
+        </ErrorState>
+      )}
       {runs.length ? (
         <div className="min-h-0 flex-1 overflow-auto">
           <table className="w-full table-fixed text-left text-[12px]">
@@ -99,7 +113,7 @@ export function TaskHistory({
             </tbody>
           </table>
         </div>
-      ) : (
+      ) : !failed && (
         <div className="flex min-h-0 flex-1 items-center justify-center text-[12px] text-[var(--u-color-text-muted)]">
           {t("ssh.tasks.history.empty")}
         </div>

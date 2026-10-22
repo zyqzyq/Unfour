@@ -41,6 +41,13 @@ describe("TaskList", () => {
     expect(onOpenConnections).toHaveBeenCalledOnce();
   });
 
+  it("keeps cached tasks visible when a refresh fails", () => {
+    renderTaskList({ failed: true, tasks: [task()] });
+    expect(screen.getByRole("alert")).toHaveTextContent("ssh.tasks.list.loadFailed");
+    expect(screen.getByRole("button", { name: "Task" })).toBeInTheDocument();
+    expect(screen.queryByText("ssh.tasks.list.emptyTitle")).not.toBeInTheDocument();
+  });
+
   it("sorts tasks by manual position, name, and last update", () => {
     const tasks = [
       task({ id: "beta", name: "Beta", sortOrder: 0, updatedAt: "2026-01-01" }),
@@ -85,16 +92,19 @@ describe("TaskList", () => {
 });
 
 function renderTaskList({
+  failed = false,
   onNew = vi.fn(),
   onOpenConnections = vi.fn(),
   tasks = [],
 }: {
+  failed?: boolean;
   onNew?: () => void;
   onOpenConnections?: () => void;
   tasks?: SshTask[];
 }) {
   return render(
     <TaskList
+      failed={failed}
       loading={false}
       onDelete={vi.fn()}
       onDuplicate={vi.fn()}
@@ -103,8 +113,10 @@ function renderTaskList({
       onOpenConnections={onOpenConnections}
       onReorder={vi.fn()}
       onRun={vi.fn()}
+      onRetry={vi.fn()}
       onSelect={vi.fn()}
       reordering={false}
+      retrying={false}
       selectedTaskId={null}
       tasks={tasks}
     />,

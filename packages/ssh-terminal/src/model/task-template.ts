@@ -5,6 +5,7 @@ import type {
   SshTaskStepType,
   SshTaskDetail,
 } from "@unfour/command-client";
+import type { TFunction } from "@unfour/ui";
 
 const TEMPLATE_FIELDS: Record<SshTaskStepType, string[]> = {
   command: ["command", "workingDirectory"],
@@ -40,9 +41,10 @@ export function detectTaskInputs(steps: SshTaskStepInput[], enabledOnly = false)
 export function createTaskStep(
   stepType: SshTaskStepType,
   position: number,
+  t: TFunction,
 ): SshTaskStepInput {
   return {
-    name: `${stepType[0].toUpperCase()}${stepType.slice(1)} ${position + 1}`,
+    name: t("ssh.tasks.editor.defaultStepName", { type: t(`ssh.tasks.stepTypes.${stepType}`), position: position + 1 }),
     stepType,
     position,
     enabled: true,
@@ -61,18 +63,18 @@ export function createTaskStep(
   };
 }
 
-export function dockerImageExportTemplate(workspaceId: string): SshTaskSaveInput {
+export function dockerImageExportTemplate(workspaceId: string, t: TFunction): SshTaskSaveInput {
   const commands = [
-    ["Pull image", "docker pull {{source_image}}"],
-    ["Tag image", "docker tag {{source_image}} {{target_image}}"],
+    ["pullImage", "docker pull {{source_image}}"],
+    ["tagImage", "docker tag {{source_image}} {{target_image}}"],
     [
-      "Save image",
+      "saveImage",
       "docker save {{target_image}} -o /tmp/{{archive_name}}.tar",
     ],
   ] as const;
   const steps: SshTaskStepInput[] = commands.map(([name, command], position) => ({
-    ...createTaskStep("command", position),
-    name,
+    ...createTaskStep("command", position, t),
+    name: t(`ssh.tasks.dockerExample.${name}`),
     configJson: {
       command,
       workingDirectory: "",
@@ -81,8 +83,8 @@ export function dockerImageExportTemplate(workspaceId: string): SshTaskSaveInput
     },
   }));
   steps.push({
-    ...createTaskStep("download", 3),
-    name: "Download archive",
+    ...createTaskStep("download", 3, t),
+    name: t("ssh.tasks.dockerExample.downloadArchive"),
     configJson: {
       remotePath: "/tmp/{{archive_name}}.tar",
       localPath: "{{local_output_dir}}/{{archive_name}}.tar",
@@ -90,8 +92,8 @@ export function dockerImageExportTemplate(workspaceId: string): SshTaskSaveInput
     },
   });
   steps.push({
-    ...createTaskStep("command", 4),
-    name: "Remove remote archive",
+    ...createTaskStep("command", 4, t),
+    name: t("ssh.tasks.dockerExample.removeArchive"),
     configJson: {
       command: "rm -f /tmp/{{archive_name}}.tar",
       workingDirectory: "",
@@ -101,8 +103,8 @@ export function dockerImageExportTemplate(workspaceId: string): SshTaskSaveInput
   });
   return {
     workspaceId,
-    name: "Docker Image Export",
-    description: "Pull, retag, save, and download a Docker image for offline use.",
+    name: t("ssh.tasks.dockerExample.name"),
+    description: t("ssh.tasks.dockerExample.description"),
     defaultConnectionId: null,
     steps,
   };
@@ -111,13 +113,14 @@ export function dockerImageExportTemplate(workspaceId: string): SshTaskSaveInput
 export function duplicateTaskStep(
   steps: SshTaskStepInput[],
   index: number,
+  t: TFunction,
 ): SshTaskStepInput[] {
   const source = steps[index];
   if (!source) return steps;
   const copy: SshTaskStepInput = {
     ...source,
     id: undefined,
-    name: `${source.name} Copy`,
+    name: t("ssh.tasks.editor.stepCopyName", { name: source.name }),
     configJson: { ...source.configJson },
   };
   return normalizePositions([

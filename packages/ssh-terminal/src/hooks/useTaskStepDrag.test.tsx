@@ -3,11 +3,12 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { SshTaskSaveInput } from "@unfour/command-client";
 import { createTaskStep } from "../model/task-template";
+import { createTranslator } from "@unfour/ui";
 import { useTaskStepDrag } from "./useTaskStepDrag";
 
 const draft: SshTaskSaveInput = {
   workspaceId: "ws", name: "Task", description: "", defaultConnectionId: null,
-  steps: [{ ...createTaskStep("command", 0), id: "a" }, { ...createTaskStep("command", 1), id: "b" }],
+  steps: [{ ...createTaskStep("command", 0, createTranslator("en")), id: "a" }, { ...createTaskStep("command", 1, createTranslator("en")), id: "b" }],
 };
 const originalHitTest = Object.getOwnPropertyDescriptor(document, "elementFromPoint");
 beforeEach(() => {

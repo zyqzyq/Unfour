@@ -20,6 +20,7 @@ import {
   type SshTaskSaveInput,
 } from "@unfour/command-client";
 import {
+  Button,
   ConfirmDialog,
   ErrorState,
   SegmentedControl,
@@ -120,6 +121,7 @@ export function SshTasksPage({
     queryFn: () => listSshTasks(workspaceId),
   });
   const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
+  const { refetch: refetchTasks } = tasksQuery;
   const activeTab =
     editorState.tabs.find((tab) => tab.id === editorState.activeTabId) ?? null;
   const activeTaskId = activeTab?.taskId ?? null;
@@ -293,14 +295,15 @@ export function SshTasksPage({
     [duplicateTask],
   );
   const handleExample = useCallback(
-    () => newTask(dockerImageExportTemplate(workspaceId)),
-    [newTask, workspaceId],
+    () => newTask(dockerImageExportTemplate(workspaceId, t)),
+    [newTask, workspaceId, t],
   );
 
   const shellSidebar = useMemo(
     () => (
       <TaskList
         key={workspaceId}
+        failed={tasksQuery.isError}
         loading={tasksQuery.isLoading}
         onDelete={setDeleteTarget}
         onDuplicate={handleDuplicate}
@@ -309,8 +312,10 @@ export function SshTasksPage({
         onOpenConnections={onOpenConnections}
         onReorder={reorderTasks}
         onRun={handleListRun}
+        onRetry={() => void refetchTasks()}
         onSelect={selectTask}
         reordering={reorderMutation.isPending}
+        retrying={tasksQuery.isFetching}
         selectedTaskId={activeTaskId}
         tasks={tasks}
       />
@@ -326,7 +331,10 @@ export function SshTasksPage({
       reorderTasks,
       selectTask,
       tasks,
+      tasksQuery.isError,
+      tasksQuery.isFetching,
       tasksQuery.isLoading,
+      refetchTasks,
       workspaceId,
     ],
   );
@@ -436,9 +444,15 @@ export function SshTasksPage({
     };
   });
 
-  const editorPane =
-    detailQuery.isError && !draft ? (
-      <ErrorState className="min-h-0 flex-1">{String(detailQuery.error)}</ErrorState>
+  const failedLoadQuery = tasksQuery.isError && !tasks.length && !activeTab ? tasksQuery
+    : detailQuery.isError && !draft ? detailQuery : null;
+  const editorPane = failedLoadQuery ? (
+      <ErrorState className="min-h-0 flex-1">
+        <span role="alert">{t(activeTab ? "ssh.tasks.editor.loadFailed" : "ssh.tasks.list.loadFailed")}</span>{" "}
+        <Button disabled={failedLoadQuery.isFetching} onClick={() => void failedLoadQuery.refetch()} size="sm" variant="secondary">
+          {t("ssh.tasks.actions.retry")}
+        </Button>
+      </ErrorState>
     ) : draft ? (
       <TaskEditor
         connections={connections}
@@ -453,7 +467,7 @@ export function SshTasksPage({
     ) : (
       <TaskWorkspaceEmpty
         hasTasks={tasks.length > 0}
-        loading={Boolean(activeTab)}
+        loading={Boolean(activeTab) || tasksQuery.isLoading}
         onExample={handleExample}
         onNew={() => newTask()}
       />
@@ -463,10 +477,13 @@ export function SshTasksPage({
     activeTaskId && draft ? (
       <TaskHistory
         clearing={clearMutation.isPending && clearMutation.variables === activeTaskId}
+        failed={runsQuery.isError}
         loading={runsQuery.isLoading}
         onClear={() => setClearTaskId(activeTaskId)}
         onSelectRun={(run) => void openHistoryRun(run)}
         onRerun={(run) => void prepareRun(run.taskId, run)}
+        onRetry={() => void runsQuery.refetch()}
+        retrying={runsQuery.isFetching}
         runs={runsQuery.data ?? []}
         selectedRunId={activeRun?.id}
       />

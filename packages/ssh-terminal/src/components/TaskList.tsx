@@ -8,6 +8,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  ErrorState,
   IconButton,
   Input,
   LoadingState,
@@ -26,6 +27,7 @@ import {
 import { SshSidebarModeSwitcher } from "./SshSidebarModeSwitcher";
 
 export function TaskList({
+  failed,
   loading,
   onDelete,
   onDuplicate,
@@ -34,11 +36,14 @@ export function TaskList({
   onOpenConnections,
   onReorder,
   onRun,
+  onRetry,
   onSelect,
   reordering,
+  retrying,
   selectedTaskId,
   tasks,
 }: {
+  failed: boolean;
   loading: boolean;
   onDelete: (task: SshTask) => void;
   onDuplicate: (task: SshTask) => void;
@@ -47,8 +52,10 @@ export function TaskList({
   onOpenConnections: () => void;
   onReorder: (taskIds: string[]) => void;
   onRun: (task: SshTask) => void;
+  onRetry: () => void;
   onSelect: (taskId: string) => void;
   reordering: boolean;
+  retrying: boolean;
   selectedTaskId: string | null;
   tasks: SshTask[];
 }) {
@@ -179,6 +186,14 @@ export function TaskList({
           </IconButton>
         </div>
       </div>
+      {failed && (
+        <ErrorState>
+          <span role="alert">{t("ssh.tasks.list.loadFailed")}</span>{" "}
+          <Button disabled={retrying} onClick={onRetry} size="sm" variant="secondary">
+            {t("ssh.tasks.actions.retry")}
+          </Button>
+        </ErrorState>
+      )}
       {loading ? (
         <LoadingState className="min-h-0 flex-1 rounded-none border-0">
           {t("ssh.tasks.list.loading")}
@@ -216,7 +231,7 @@ export function TaskList({
             </div>
           )}
         </>
-      ) : (
+      ) : !failed && (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-center">
           <Workflow className="text-[var(--u-color-text-soft)]" size={24} />
           <div>
