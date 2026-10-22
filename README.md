@@ -27,9 +27,10 @@ See the [v0.11.0 changelog](CHANGELOG.md#0110---2026-10-10),
 [Release Notes](docs/release/v0.11.0-release-notes.md), and
 [final release verification](docs/testing/release-verification.md#v0110-final-release-verification-record).
 
-Current `main` is preparing **v0.12.0**; it has not been released or accepted as
-an RC. Flow Definition Cloud Sync is enabled in this client; deployed-server
-compatibility and real two-device acceptance are **NOT VERIFIED**. See the
+Current `main` is preparing **v0.12.0 Standard Release Candidate**, with source
+version `0.12.0`; it has not been released or accepted as an RC. The user reports
+completing Flow Sync manual validation; detailed checks without evidence remain
+**NOT VERIFIED**. See the
 [draft notes](docs/release/v0.12.0-release-notes.md) and
 [verification checklist](docs/testing/v0.12.0-rc-checklist.md). Capabilities below
 describe current source; the v0.11.0 download does not include Flow Cloud Sync.
@@ -134,7 +135,7 @@ workspace, environment, risky actions, and final decision.
   the Canvas and inspect step results and run history. Definitions travel with
   a whole-Workspace import or export and the current Pro Cloud Sync client.
   Only definitions sync; run history and actual runtime inputs/outputs remain
-  local. Real two-device acceptance is **NOT VERIFIED**. See
+  local. Detailed candidate acceptance is tracked separately. See
   [Flow V1](docs/architecture/flow-v1.md).
 - **Workspace** - Scope saved requests, shared environments/variables,
   connections, activity, tabs, and layout state to a local workspace, with
@@ -160,6 +161,13 @@ credentials. Recognized sensitive/device-local material is rejected; arbitrary
 secrets in free text cannot be reliably detected. Keep secrets in runtime secret
 inputs or resource credential storage. Backups do not embed database or
 private-key files. Review free-form scripts and SQL before sharing or syncing.
+
+Cloud Sync refreshes saved data in already-open modules and the workspace
+switcher after remote changes commit locally, while preserving drafts and
+execution state. SSH Tasks support reviewed reruns and previous-parameter recall,
+with shared English/Chinese feedback and retry for loading/refresh failures.
+Database MCP calls bind policy and execution to one workspace per call; guarded
+UPDATE/DELETE confirmation checks the parsed outer WHERE.
 
 ## Screenshots
 

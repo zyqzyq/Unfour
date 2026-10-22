@@ -26,8 +26,9 @@ Unfour 在一个桌面应用中提供 API 测试、SSH、数据库工具、本�
 [Release Notes](docs/release/v0.11.0-release-notes.md)及
 [正式发布验证记录](docs/testing/release-verification.md#v0110-final-release-verification-record)。
 
-当前 `main` 正在准备 **v0.12.0**，尚未发布，也未完成 RC 验收。当前客户端已启用
-Flow Definition Cloud Sync；已部署服务端兼容性和真实双设备验收均为 **NOT VERIFIED**。
+当前 `main` 正在准备 **v0.12.0 Standard Release Candidate**，源码版本为 `0.12.0`，
+尚未发布，也未完成 RC 验收。用户已确认完成 Flow Sync 手动验证；缺少明细证据的
+具体检查项仍为 **NOT VERIFIED**。
 请参阅[发布说明草稿](docs/release/v0.12.0-release-notes.md)和
 [验证清单](docs/testing/v0.12.0-rc-checklist.md)。下文能力描述基于当前源码；
 v0.11.0 下载版本不包含 Flow Cloud Sync。
@@ -109,7 +110,7 @@ Unfour 本身不修改代码仓库：代码变更由 Coding 客户端负责，Un
 - **Flow** - 将已保存的 API 请求、SSH 任务与 Database 查询组合成本地 runbook，支持
   Condition 分支与 Wait Until 检查。通过 Canvas 编排步骤，查看步骤结果与运行历史。
   定义随工作区整体导入导出转移，也参与当前 Pro Cloud Sync 客户端的同步。
-  仅同步定义，运行历史及实际运行输入、输出留在本机；真实双设备验收为 **NOT VERIFIED**。详见
+  仅同步定义，运行历史及实际运行输入、输出留在本机；候选版本的详细验收单独记录。详见
   [Flow V1](docs/architecture/flow-v1.md)。
 - **Workspace（工作区）** - 将已保存的请求、共享环境变量、连接、活动、标签页与布局状态
   限定在某个本地工作区之内，并支持标题栏切换当前环境。可整体导入导出工作区定义（含 Flow
@@ -128,6 +129,11 @@ Unfour 本身不修改代码仓库：代码变更由 Coding 客户端负责，Un
 输出、历史和凭据不参与同步。可识别的敏感字段及设备本地材料会被拒绝，但无法可靠识别
 任意自由文本中隐藏的秘密。请使用运行时 Secret 输入或资源凭据存储。备份不嵌入数据库文件
 或私钥文件。分享或同步前，仍需检查脚本、SQL 等自由文本中的硬编码凭据。
+
+Cloud Sync 的远端变更在本地提交后，会刷新已打开模块及工作区切换器中的已保存数据，
+保留编辑草稿和执行状态。SSH Task 支持审核后重跑、上次参数回填，以及共享中英文提示和
+加载／刷新失败重试。Database MCP 调用将权限与执行绑定到同一次工作区快照；
+guarded 模式的 UPDATE/DELETE 确认使用解析后的最外层 WHERE 判断。
 
 ## 截图
 

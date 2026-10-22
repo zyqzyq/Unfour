@@ -1,19 +1,23 @@
 # Release checklist
 
-## v0.12.0 documentation preparation
+## v0.12.0 Standard Release Candidate preparation
 
 Target: **v0.12.0 — NOT RELEASED / RC NOT STARTED**. This is documentation
-preparation on current `main`; application versions remain `0.11.0`. Use the
+preparation on current `main`; application versions are synchronized to `0.12.0`.
+The reviewed base is `9f02b16caf18a858c694279617d561e03fd56f46`; the preparation
+is uncommitted, so that base SHA is not the final candidate. Use the
 [draft notes](v0.12.0-release-notes.md) and the
 [v0.12.0 RC verification checklist](../testing/v0.12.0-rc-checklist.md) for the
-reviewed source, commit audit and prospective gates. Flow Definition Cloud Sync
-is enabled in the client; deployed-server compatibility and real two-device
-acceptance remain **NOT VERIFIED**. No Tag, workflow dispatch or server deployment
-is part of this preparation.
+reviewed source, all 45 commits and acceptance gates, plus the
+[dated preparation record](../testing/v0.12.0-release-preparation-2026-10-22.md)
+for actual automated results and blockers. The user confirms completing Flow
+Sync manual validation; detailed rows without evidence stay **NOT VERIFIED**.
+RC dispatch waits for user review, commit and push of the exact candidate.
+No Tag, workflow dispatch or server deployment is part of this preparation.
 
 The v0.11.0 and older outcomes below remain historical records. Their `PASS`
 results do not verify a v0.12.0 candidate. The shared procedure below is for a
-later separately authorized RC/release.
+later separately authorized RC/release. No formal release date is assigned.
 
 ## v0.11.0 released status
 
@@ -162,8 +166,10 @@ historical records.
 
 ## Release Candidate
 
-- In GitHub Actions, manually run **Standard Release Candidate** with `ref=main`
-  or another reviewed branch/commit; record the resolved commit SHA.
+- After source review, commit and push, manually run **Standard Release Candidate**
+  with `ref` set to the reviewed full commit SHA and record the resolved SHA.
+  Do not dispatch the pre-preparation base SHA or a moving branch in place of
+  the reviewed candidate.
 - Confirm the GitHub Environment `production` contains
   `TAURI_SIGNING_PRIVATE_KEY` and, when the key is encrypted,
   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. The reusable workflow's actual

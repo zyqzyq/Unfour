@@ -15,10 +15,11 @@ Unfour opens into a single workspace surface:
 
 ## Current Capabilities
 
-This guide describes current `main`, targeting **v0.12.0** in documentation
-preparation only (**NOT RELEASED / RC NOT STARTED**). Flow Sync and SSH Task
-recall/rerun additions are identified below; live-service and real-device
-acceptance for the new target remains **NOT VERIFIED**.
+This guide describes current `main`, prepared as **v0.12.0 Standard Release
+Candidate** source (**NOT RELEASED / RC NOT STARTED**). The user confirms
+completing Flow Sync manual validation; detailed live-service and real-device
+checks without evidence remain **NOT VERIFIED** in the
+[RC checklist](../testing/v0.12.0-rc-checklist.md).
 
 The latest published version is v0.11.0, released as Standard stable on
 2026-10-10; see its [Release Notes](../release/v0.11.0-release-notes.md).
@@ -137,11 +138,17 @@ resolved variables and selected run environments stay on each device. Secrets,
 SSH credentials and local key paths, database credentials and local file paths
 are excluded.
 
-Flow definition sync is planned for **v0.12.0**, which is not released or
-RC-accepted. It is enabled in the client; deployed-server compatibility and
-real two-device acceptance are **NOT VERIFIED**. The v0.11.0 download keeps Flow
+Flow definition sync is prepared for **v0.12.0**, which is not released or
+RC-accepted. It is enabled in the client; the user's general manual confirmation
+does not establish individual scenarios or the final candidate. The v0.11.0 download keeps Flow
 outside Cloud Sync. See the [draft notes](../release/v0.12.0-release-notes.md)
 and [verification checklist](../testing/v0.12.0-rc-checklist.md).
+
+After remote changes commit locally, already-open API, SSH, Database, Flow and
+variables/environment views refresh saved data, including the workspace switcher.
+Unsaved drafts and current execution state retain their existing rules. If the
+change subscription fails, local reads refresh every 15 seconds; this does not
+change the Rust worker's cloud polling interval or automatically run resources.
 
 ## Connect Codex or Cursor (MCP)
 
@@ -174,6 +181,12 @@ In the default `prod` mapping, MCP is read-only except safe SSH diagnostics.
 High-risk actions return `CONFIRMATION_REQUIRED` and must be reviewed before
 retry. Real production-policy client checks remain `NOT VERIFIED`; see
 [release verification](../testing/release-verification.md).
+
+Database MCP calls bind driver lookup, permission checks, confirmation and
+execution to one workspace snapshot per call. In guarded mode, only a parsed
+outer UPDATE/DELETE WHERE can waive the existing unbounded-write confirmation;
+comments, literals and nested SELECTs cannot. A predicate such as `WHERE 1=1`
+can still affect every row. Full access keeps its existing confirmation bypass.
 
 ## Flow
 
@@ -220,9 +233,10 @@ references.
 - v0.11.0 cannot materialize synced Flow definitions. Its retained envelopes and
   pre-existing local definitions/deletions require upgrade regression coverage.
 
-These describe the implemented client contract. All real server, two-device,
-offline recovery, conflict, deletion and upgrade acceptance is **NOT VERIFIED**;
-use the [RC checklist](../testing/v0.12.0-rc-checklist.md) to record it separately.
+These describe the implemented client contract. The user reports completing
+Flow Sync manual validation. Specific server, device, offline recovery, conflict,
+deletion and upgrade rows without scenario evidence remain **NOT VERIFIED**;
+the [RC checklist](../testing/v0.12.0-rc-checklist.md) records them separately.
 
 ## API Client
 
@@ -265,6 +279,11 @@ automatically sensitive sources stay locked. Recall context stays local and is
 excluded from Cloud Sync and Workspace bundles. Mark opaque manual secrets
 sensitive; content-based detection cannot identify every secret. Packaged
 real-host rerun acceptance is **NOT VERIFIED**.
+
+Task labels and validation/history/run feedback use shared English/Chinese
+translations. Loading, empty and load-failure states are distinct and offer
+retry. Refresh failures keep already-loaded tasks/history available, with compact
+messages in narrow sidebars and history panels.
 
 ## Database
 

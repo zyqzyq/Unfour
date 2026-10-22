@@ -6,9 +6,9 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
-Planned for **v0.12.0**; not released and no v0.12.0 RC acceptance is recorded.
-Flow Definition Cloud Sync is enabled in the current client; deployed-server
-compatibility and real two-device acceptance remain **NOT VERIFIED**. See the
+Prepared as **v0.12.0 Standard Release Candidate** source; not released and no
+v0.12.0 RC acceptance is recorded. The user reports completing Flow Sync manual
+validation; individual scenarios without evidence remain **NOT VERIFIED**. See the
 [draft release notes](docs/release/v0.12.0-release-notes.md) and
 [RC verification checklist](docs/testing/v0.12.0-rc-checklist.md).
 
@@ -21,8 +21,8 @@ compatibility and real two-device acceptance remain **NOT VERIFIED**. See the
   snapshots and credentials on the device. Definitions have a 64 KiB cloud
   payload limit and reject recognized sensitive/device-local material; use
   runtime secret inputs instead of hardcoded secrets. Arbitrary secrets hidden
-  in free text cannot be reliably detected. Real cross-device behavior and
-  server acceptance remain **NOT VERIFIED**.
+  in free text cannot be reliably detected. The RC checklist records the scope
+  of the user's manual confirmation separately from detailed acceptance.
 - **SSH Task parameter recall and reruns** — Explicitly restore previous
   parameters or prepare a rerun from completed history/result entries. Review
   and edit the parameters before starting a new run with the current saved task;
@@ -37,6 +37,14 @@ compatibility and real two-device acceptance remain **NOT VERIFIED**. See the
   locked, including after history recall and manual edits. New preparation,
   environment changes and recall start masked. Preserve dialog edits during
   recall and reject stale variable-source versions before execution.
+- **Cloud Sync live views** — Refresh saved workspace data across API, SSH,
+  Database, Flow and variables/environments after remote data commits, including
+  the workspace switcher. Preserve drafts and in-flight reads. Failed event
+  subscriptions fall back to local reads; cloud polling stays in Rust.
+- **SSH Task language and recovery** — Complete shared English/Chinese task
+  labels and validation feedback. Distinguish initial loading, empty, failure
+  and refresh errors, with retry and compact feedback in narrow panels while
+  keeping an already-loaded task list usable.
 - **First-use guidance and navigation** — Add actionable Flow and Database empty,
   loading and error states, direct Database connection setup with focus return,
   a title-bar MCP entry, Flow/Settings/MCP command-palette entries, and in-place
@@ -52,6 +60,12 @@ compatibility and real two-device acceptance remain **NOT VERIFIED**. See the
   and read-only connections before sending user SQL. Tighten SSH diagnostic
   argument validation to reject mutating forms. These checks do not replace a
   least-privilege database/SSH account or isolate external effects of functions.
+- **MCP SQL confirmation and workspace isolation** — Require a parsed outer
+  UPDATE/DELETE WHERE before waiving the existing guarded confirmation; comments,
+  literals and nested queries cannot supply that proof. Bind Database driver
+  lookup, permission checks, confirmation and execution to one workspace snapshot
+  per call, including when the active workspace changes. A WHERE proves syntax,
+  not selectivity; full-access policy retains its existing confirmation bypass.
 - **Completed execution results** — Preserve completed API responses, SQL/row-edit
   results, SSH/SFTP outcomes, task start/cancel handles and session/trust/history
   mutation results when subsequent local activity logging fails. Return an
@@ -76,6 +90,13 @@ compatibility and real two-device acceptance remain **NOT VERIFIED**. See the
   after cleanup or workspace changes while keeping other tasks' logs. Base PROD
   risk notices on the actual saved setting paired with each independent save.
   Remove unimplemented reserved capabilities from MCP health output.
+
+### Maintenance
+
+- Remove unused imports and a native-feature dead-code warning; explicitly use
+  the Test channel in ordinary CI while Standard verify/build stay Stable.
+  Existing lint complexity/size and bundle-size advisories remain; this does
+  not add a new feature or change the release workflow.
 
 ## [0.11.0] - 2026-10-10
 

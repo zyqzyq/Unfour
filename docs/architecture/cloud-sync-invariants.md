@@ -102,7 +102,10 @@ outbox upsert is coalesced by its account/cloud/entity key.
 
 The repair covers the current syncable set: Workspace, Connection,
 WorkspaceVariable, WorkspaceEnvironment, WorkspaceEnvironmentVariable,
-ApiCollection, ApiFolder, ApiRequest, SshTask, and SshTaskStep. Snapshot
+ApiCollection, ApiFolder, ApiRequest, SshTask, SshTaskStep, and FlowDefinition
+(wire name `flow`). Before Pull/replay, the Flow activation path also captures
+untracked definitions and tombstones so older-client edits/deletions cannot be
+silently overwritten; other entities retain replay-before-repair order. Snapshot
 materialization must use the same redaction boundary as ordinary outbox
 capture. Secret values, credentials, private-key material, and other device
 local fields must not enter canonical payloads.

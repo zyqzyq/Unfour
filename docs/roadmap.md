@@ -6,10 +6,10 @@ This roadmap is a product-direction summary. It is not release evidence. Use
 Sections through v0.10.0 record what those releases shipped. They do not
 describe the current source, and they do not change any `NOT VERIFIED` result.
 
-Current source version: `0.11.0`. The latest published release is
+Current source version: `0.12.0`. The latest published release is
 [v0.11.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.11.0), published on
-2026-10-10. Current development on `main` targets **v0.12.0**, in documentation
-preparation only: **NOT RELEASED / RC NOT STARTED**. Earlier verification records
+2026-10-10. Current development on `main` prepares **v0.12.0 Standard Release
+Candidate**: **NOT RELEASED / RC NOT STARTED**. Earlier verification records
 remain historical and do not establish v0.11.0 manual coverage.
 
 ## Published capabilities through v0.11.0
@@ -35,15 +35,24 @@ Shipped through v0.11.0:
   and device-local material is rejected, but arbitrary secrets in free text
   cannot be reliably detected. The cloud payload limit is 64 KiB.
 - SSH Task previous-parameter recall, reviewed history/result-panel reruns,
-  stale-input protection and sensitivity/source locks.
+  stale-input protection and sensitivity/source locks, shared English/Chinese
+  messages, and compact loading/refresh-failure recovery.
+- Cloud Sync post-commit refresh across open modules and the workspace switcher,
+  preserving drafts and imperative reads, with local-read subscription fallback.
 - MCP/Database/SSH read-only enforcement, retained completed results after
   activity logging failures, API history/diagnostic safety and Flow Runtime
   environment/timeout fixes, plus first-use and navigation improvements.
+- Parsed outer-WHERE MCP confirmation and one-workspace-per-call Database
+  policy/execution binding. Ordinary CI explicitly uses Test; Standard remains
+  Stable, with low-risk unused-import/native-helper warning cleanup.
 
-Deployed-server Flow support, real two-device convergence, offline/conflict/delete
-recovery, history isolation and old-version upgrade are **NOT VERIFIED**. See
+The user confirms completing Flow Sync manual validation. Detailed service,
+device, offline/conflict/delete, history-isolation and upgrade rows without
+scenario evidence remain **NOT VERIFIED**. See
 the [draft notes](release/v0.12.0-release-notes.md) and
-[prospective RC checklist](testing/v0.12.0-rc-checklist.md). No v0.12.0 workflow,
+[RC checklist](testing/v0.12.0-rc-checklist.md) and
+[fresh preparation checks](testing/v0.12.0-release-preparation-2026-10-22.md).
+No v0.12.0 workflow,
 artifact or release acceptance is established by this roadmap.
 
 ## Not yet verified for v0.11.0
@@ -84,7 +93,7 @@ Current status:
   [final verification record](testing/release-verification.md#v0110-final-release-verification-record);
 - the items in [Not yet verified for v0.11.0](#not-yet-verified-for-v0110)
   remain `NOT VERIFIED`;
-- current `main` continues from v0.11.0 without an assigned next version.
+- current `main` continues from v0.11.0 with v0.12.0 RC preparation above.
 
 Release claims remain limited by the current verification matrix.
 
