@@ -102,6 +102,7 @@ export function useSshTaskRunSession({
       try {
         const detail = await queryClient.fetchQuery({
           queryKey: ["ssh-task", workspaceId, run.taskId],
+          meta: { cloudSyncWorkspaceId: workspaceId },
           queryFn: () => getSshTask(workspaceId, run.taskId),
         });
         if (!isCurrent()) return;

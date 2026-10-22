@@ -116,6 +116,7 @@ export function SshTasksPage({
   const tasksQuery = useQuery({
     enabled: Boolean(active && workspaceId),
     queryKey: ["ssh-tasks", workspaceId],
+    meta: { cloudSyncWorkspaceId: workspaceId },
     queryFn: () => listSshTasks(workspaceId),
   });
   const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
@@ -127,6 +128,7 @@ export function SshTasksPage({
 
   const detailQuery = useQuery({
     queryKey: ["ssh-task", workspaceId, activeTaskId],
+    meta: { cloudSyncWorkspaceId: workspaceId },
     queryFn: () => getSshTask(workspaceId, activeTaskId!),
     enabled: Boolean(active && activeTaskId),
   });

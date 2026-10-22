@@ -190,8 +190,10 @@ redacted or truncated.
 After a remote page, snapshot, retained replay or use-remote resolution commits,
 Cloud Sync notifies the desktop adapter of the affected local workspace IDs.
 The adapter emits `cloud-sync://workspace-changed` with `{workspaceId}` only.
-Flow subscribes through command-client and refreshes its definition list,
-resource references, environments and workspace variables. Listener readiness
+The desktop subscribes through command-client and refreshes Flow's registered
+definition list, resource references, environments and workspace variables.
+Other modules use the same [query refresh contract](cloud-sync-invariants.md#post-commit-ui-refresh).
+Listener readiness
 also triggers a fresh read to cover startup races; subscription failure logs a
 diagnostic and falls back to local reads every 15 seconds. Refresh never
 replaces the selected editor draft or changes its expected revision. The Rust

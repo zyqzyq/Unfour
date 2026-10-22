@@ -49,6 +49,7 @@ export function useApiRequestTabs(workspaceId: string) {
   const savedQuery = useQuery({
     enabled: Boolean(workspaceId),
     queryKey: ["api-saved", workspaceId],
+    meta: { cloudSyncWorkspaceId: workspaceId },
     queryFn: () => listSavedApiRequests(workspaceId),
   });
   const historyQuery = useQuery({
@@ -59,6 +60,7 @@ export function useApiRequestTabs(workspaceId: string) {
   const environmentsQuery = useQuery({
     enabled: Boolean(workspaceId),
     queryKey: ["workspace-environments", workspaceId],
+    meta: { cloudSyncWorkspaceId: workspaceId },
     queryFn: () => listWorkspaceEnvironments(workspaceId),
   });
 

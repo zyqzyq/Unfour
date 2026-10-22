@@ -3,6 +3,10 @@
 Date: 2026-10-22. Scope: keeping an already-open Flow page current after remote
 data commits. No live account or real workspace was modified.
 
+This report records the initial Flow fix in commit `c3cac8b`. The subscription
+was subsequently consolidated across modules; current behavior and regression
+locations are in [Cloud Sync UI refresh verification](cloud-sync-ui-refresh.md).
+
 ## Finding and change
 
 `useFlowWorkspaceData` previously loaded the definition list with React Query

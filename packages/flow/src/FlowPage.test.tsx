@@ -33,7 +33,6 @@ vi.mock("@unfour/command-client", async (importOriginal) => ({
   listWorkspaceEnvironments: vi.fn(),
   listWorkspaceVariables: vi.fn(),
   getSshTask: vi.fn(),
-  subscribeCloudSyncWorkspaceChanges: vi.fn(),
 }));
 const flow: commands.FlowDefinition = {
   id: "flow-1",
@@ -91,8 +90,6 @@ const run: commands.FlowRun = {
 };
 beforeEach(() => {
   vi.clearAllMocks();
-  // Listener readiness is controlled separately from each test's initial read.
-  vi.mocked(commands.subscribeCloudSyncWorkspaceChanges).mockImplementation(() => new Promise(() => {}));
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   vi.mocked(commands.listFlows).mockResolvedValue([structuredClone(flow)]);
   vi.mocked(commands.listFlowRuns).mockResolvedValue([summary(run)]);
@@ -208,32 +205,6 @@ it("offers a first Flow action that creates a draft without saving or running", 
   expect(screen.getByLabelText("Flow name")).toHaveValue("New Flow");
   expect(commands.saveFlow).not.toHaveBeenCalled();
   expect(commands.runFlow).not.toHaveBeenCalled();
-});
-
-it("shows cloud-synced definitions without reopening an initially empty Flow page", async () => {
-  vi.mocked(commands.listFlows).mockResolvedValue([]);
-  mount();
-  await screen.findByRole("heading", { name: "Create your first Flow" });
-  vi.mocked(commands.listFlows).mockResolvedValue([flow]);
-  const notify = vi.mocked(commands.subscribeCloudSyncWorkspaceChanges).mock.calls[0][0];
-  act(() => notify("ws"));
-  fireEvent.click(await screen.findByText("Release"));
-  expect(screen.getByLabelText("Flow name")).toHaveValue("Release");
-});
-
-it("refreshes synced Flow names and deletions while preserving an unsaved editor draft", async () => {
-  mount();
-  fireEvent.click(await screen.findByText("Release"));
-  fireEvent.change(screen.getByLabelText("Flow name"), { target: { value: "Unsaved draft" } });
-  const notify = vi.mocked(commands.subscribeCloudSyncWorkspaceChanges).mock.calls[0][0];
-  vi.mocked(commands.listFlows).mockResolvedValue([{ ...flow, name: "Remote release", revision: 4 }]);
-  act(() => notify("ws"));
-  await screen.findByText("Remote release");
-  expect(screen.getByLabelText("Flow name")).toHaveValue("Unsaved draft");
-  vi.mocked(commands.listFlows).mockResolvedValue([]);
-  act(() => notify("ws"));
-  await waitFor(() => expect(screen.queryByText("Remote release")).not.toBeInTheDocument());
-  expect(screen.getByLabelText("Flow name")).toHaveValue("Unsaved draft");
 });
 
 it("waits for the Flow list before showing first-use guidance", async () => {

@@ -20,6 +20,7 @@ export function useApiCollectionFolders(workspaceId: string) {
   const query = useQuery({
     enabled: Boolean(workspaceId),
     queryKey: ["api-collection-folders", workspaceId],
+    meta: { cloudSyncWorkspaceId: workspaceId },
     queryFn: () => listApiCollectionFolders(workspaceId),
   });
 

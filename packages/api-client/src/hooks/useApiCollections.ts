@@ -22,6 +22,7 @@ export function useApiCollections(workspaceId: string) {
   const query = useQuery({
     enabled: Boolean(workspaceId),
     queryKey: ["api-collections", workspaceId],
+    meta: { cloudSyncWorkspaceId: workspaceId },
     queryFn: () => listApiCollections(workspaceId),
   });
 

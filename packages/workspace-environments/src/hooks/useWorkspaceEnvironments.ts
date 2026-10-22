@@ -18,6 +18,7 @@ export function useWorkspaceEnvironments(workspaceId: string) {
   const query = useQuery({
     enabled: Boolean(workspaceId),
     queryKey,
+    meta: { cloudSyncWorkspaceId: workspaceId },
     queryFn: () => listWorkspaceEnvironments(workspaceId),
   });
 

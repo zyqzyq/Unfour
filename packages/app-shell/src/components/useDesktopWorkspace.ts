@@ -19,7 +19,7 @@ export function useDesktopWorkspace() {
   const handleError = useFeedbackErrorHandler();
   const { activeWorkspaceId } = useWorkspaceStore();
   const healthQuery = useQuery({ queryKey: ["system-health"], queryFn: getSystemHealth });
-  const workspaceQuery = useQuery({ queryKey: ["workspaces"], queryFn: getWorkspaceState });
+  const workspaceQuery = useQuery({ queryKey: ["workspaces"], meta: { cloudSyncWorkspaceId: null }, queryFn: getWorkspaceState });
   const activeWorkspace =
     workspaceQuery.data?.workspaces.find(
       (w) => w.id === (activeWorkspaceId || workspaceQuery.data.activeWorkspaceId),
@@ -32,12 +32,14 @@ export function useDesktopWorkspace() {
   const workspaceEnvironmentsQuery = useQuery({
     enabled: Boolean(activeWorkspace?.id),
     queryKey: ["workspace-environments", activeWorkspace?.id],
+    meta: { cloudSyncWorkspaceId: activeWorkspace?.id },
     queryFn: () => listWorkspaceEnvironments(activeWorkspace?.id ?? ""),
     refetchOnWindowFocus: true,
   });
   const sidebarDatabaseConnectionsQuery = useQuery({
     enabled: Boolean(activeWorkspace?.id),
     queryKey: ["database-connections", activeWorkspace?.id],
+    meta: { cloudSyncWorkspaceId: activeWorkspace?.id },
     queryFn: () => listDatabaseConnections(activeWorkspace?.id ?? ""),
   });
   useWorkspaceInit(workspaceQuery.data?.activeWorkspaceId, workspaceLayoutQuery.data, sidebarDatabaseConnectionsQuery.data);

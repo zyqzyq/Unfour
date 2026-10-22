@@ -12,6 +12,7 @@ export function useWorkspaceVariables(workspaceId: string) {
   const query = useQuery({
     enabled: Boolean(workspaceId),
     queryKey,
+    meta: { cloudSyncWorkspaceId: workspaceId },
     queryFn: () => listWorkspaceVariables(workspaceId),
   });
   const replaceMut = useMutation({

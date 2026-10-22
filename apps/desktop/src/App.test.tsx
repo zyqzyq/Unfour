@@ -2,12 +2,19 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { subscribeCloudSyncWorkspaceChanges } from "@unfour/command-client";
 import type { DesktopAppExtensions } from "@unfour/app-shell";
 
 const mocks = vi.hoisted(() => ({
   extensions: undefined as DesktopAppExtensions | undefined,
   getAccountState: vi.fn(),
   getUpdateInfo: vi.fn(),
+}));
+
+vi.mock("@unfour/command-client", async (original) => ({
+  ...await original<typeof import("@unfour/command-client")>(),
+  subscribeCloudSyncWorkspaceChanges: vi.fn(async () => null),
 }));
 
 vi.mock("@unfour/app-shell", () => ({
@@ -75,11 +82,13 @@ afterEach(cleanup);
 
 describe("desktop feature composition", () => {
   it("injects API Client, Privacy, and Updates slots plus Account & Sync navigation", async () => {
-    render(<App />);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><App /></QueryClientProvider>);
 
     expect(screen.getByTestId("desktop-app")).toHaveTextContent("local desktop");
     await waitFor(() => expect(mocks.getAccountState).toHaveBeenCalledTimes(1));
     expect(screen.getByTestId("desktop-app")).toBeInTheDocument();
+    expect(subscribeCloudSyncWorkspaceChanges).toHaveBeenCalledOnce();
 
     const extensions = mocks.extensions;
     expect(

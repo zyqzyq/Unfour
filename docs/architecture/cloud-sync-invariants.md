@@ -135,6 +135,39 @@ This conservative behavior avoids incorrectly resuming a workspace the user
 had deliberately paused. New account-context pauses carry a pause-reason row
 and can resume on re-authentication.
 
+## Post-commit UI refresh
+
+Remote page/snapshot application, retained replay and use-remote recovery notify
+the desktop only after their local business transaction commits. The
+`cloud-sync://workspace-changed` event contains the affected local
+`{workspaceId}` and no business payload, credentials or runtime values.
+
+The desktop Cloud Sync composition owns one event subscription. Query owners
+opt local data reads into refresh with React Query metadata
+`{cloudSyncWorkspaceId: workspaceId}`; the shared command-client
+`CloudSyncQueryMeta` contract and matcher define this shape. The global
+workspace list uses `null` so changes to any workspace update the switcher.
+The refresher identifies queries by this metadata and contains no feature
+query-name mapping. Features retain ownership of their cache keys and drafts.
+
+Active observers reread local data; inactive/disabled queries stay invalidated
+until requested. An in-flight read finishes for existing callers, then is
+invalidated again so its pre-commit result cannot remain current in the cache.
+This also preserves imperative reads used when opening a task. Listener
+readiness also refreshes registered queries to cover startup races. A failed
+subscription logs a static diagnostic and polls registered local reads every
+15 seconds; browser previews skip native subscription and startup rereads.
+
+Registered reads cover Workspace names, variables/environments, API collections,
+folders/saved requests, SSH connections/tasks/step details, Database connection
+definitions, and Flow definitions/resource references. Duplicate observers and
+imperative fetches of a registered key retain its metadata. Local run/session
+history, SQL drafts/results, schema/catalog requests, credentials, layout and
+execution commands are outside this refresh contract. The Rust Worker remains
+the sole cloud request scheduler.
+
+See [UI refresh verification](../testing/cloud-sync-ui-refresh.md).
+
 ## Command bus and MCP
 
 All production mutable desktop and MCP command paths install

@@ -13,6 +13,7 @@ export function useApiCollectionTreeData(
   const savedQuery = useQuery({
     enabled: Boolean(workspaceId),
     queryKey: ["api-saved", workspaceId],
+    meta: { cloudSyncWorkspaceId: workspaceId },
     queryFn: () => listSavedApiRequests(workspaceId),
   });
   const historyQuery = useQuery({

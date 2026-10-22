@@ -10,18 +10,18 @@ import {
   listWorkspaceVariables,
 } from "@unfour/command-client";
 import type { Resources } from "./model";
-import { useFlowSyncRefresh } from "./useFlowSyncRefresh";
 
 const emptyResources: Resources = { api: [], ssh: [], database: [], connections: [] };
 
 export function useFlowWorkspaceData(workspaceId: string) {
-  useFlowSyncRefresh(workspaceId);
   const flows = useQuery({
     queryKey: ["flows", workspaceId],
+    meta: { cloudSyncWorkspaceId: workspaceId },
     queryFn: () => listFlows(workspaceId),
   });
   const resourcesQuery = useQuery({
     queryKey: ["flow-resources", workspaceId],
+    meta: { cloudSyncWorkspaceId: workspaceId },
     queryFn: async (): Promise<Resources> => {
       const [api, ssh, database, connections] = await Promise.all([
         listSavedApiRequests(workspaceId),
@@ -37,10 +37,12 @@ export function useFlowWorkspaceData(workspaceId: string) {
   });
   const environments = useQuery({
     queryKey: ["workspace-environments", workspaceId],
+    meta: { cloudSyncWorkspaceId: workspaceId },
     queryFn: () => listWorkspaceEnvironments(workspaceId),
   });
   const workspaceVariables = useQuery({
     queryKey: ["flow-workspace-variables", workspaceId],
+    meta: { cloudSyncWorkspaceId: workspaceId },
     queryFn: () => listWorkspaceVariables(workspaceId),
   });
   return { flows, resourcesQuery, environments, workspaceVariables, resources: resourcesQuery.data ?? emptyResources };

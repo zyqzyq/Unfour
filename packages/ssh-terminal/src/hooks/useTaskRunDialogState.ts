@@ -97,7 +97,7 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
     if (previous !== "latest") setState(null);
     resetMutation();
     try {
-      const detail = await queryClient.fetchQuery({ queryKey: ["ssh-task", workspaceId, taskId], queryFn: () => getSshTask(workspaceId, taskId), staleTime: 0 });
+      const detail = await queryClient.fetchQuery({ queryKey: ["ssh-task", workspaceId, taskId], meta: { cloudSyncWorkspaceId: workspaceId }, queryFn: () => getSshTask(workspaceId, taskId), staleTime: 0 });
       const run = previous === "latest" ? (await listSshTaskRuns(workspaceId, taskId))[0] : previous;
       if (previous === "latest" && !run) {
         if (current()) setState((value) => value ? { ...value, generation: version, notice: "ssh.tasks.run.noPrevious" } : value);

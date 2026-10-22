@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
 import { listen } from "@tauri-apps/api/event";
-import { subscribeCloudSyncWorkspaceChanges } from "./cloud-sync";
+import { isCloudSyncQuery, subscribeCloudSyncWorkspaceChanges } from "./cloud-sync";
 
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 afterEach(() => { vi.unstubAllGlobals(); vi.resetAllMocks(); });
@@ -21,4 +21,17 @@ it("forwards committed workspace IDs and returns the native cleanup function", a
 it("keeps browser previews independent of Tauri events", async () => {
   expect(await subscribeCloudSyncWorkspaceChanges(vi.fn())).toBeNull();
   expect(listen).not.toHaveBeenCalled();
+});
+
+it.each([
+  [undefined, "ws", false],
+  [{}, "ws", false],
+  [{ cloudSyncWorkspaceId: 1 }, "ws", false],
+  [{ cloudSyncWorkspaceId: "ws" }, "ws", true],
+  [{ cloudSyncWorkspaceId: "other" }, "ws", false],
+  [{ cloudSyncWorkspaceId: null }, "ws", true],
+  [{ cloudSyncWorkspaceId: "ws" }, undefined, true],
+  [{ cloudSyncWorkspaceId: null }, undefined, true],
+])("matches only explicitly registered query scopes (%j, %s)", (meta, workspaceId, expected) => {
+  expect(isCloudSyncQuery(meta, workspaceId)).toBe(expected);
 });
