@@ -22,6 +22,7 @@ pub(super) struct ExternalApplyCleanup {
     ssh_connections: Vec<SshConnectionCleanup>,
     database_connections: Vec<DatabaseConnectionCleanup>,
     materialized: HashSet<(DomainEntityType, String)>,
+    workspaces: HashSet<String>,
 }
 
 impl ExternalApplyCleanup {
@@ -31,8 +32,10 @@ impl ExternalApplyCleanup {
     }
 
     fn record_keys(&mut self, keys: impl IntoIterator<Item = DomainEntityKey>) {
-        self.materialized
-            .extend(keys.into_iter().map(|key| (key.entity_type, key.entity_id)));
+        for key in keys {
+            self.workspaces.insert(key.workspace_id);
+            self.materialized.insert((key.entity_type, key.entity_id));
+        }
     }
 
     fn record_connection(&mut self, change: &ExternalConnectionApply) {
@@ -44,7 +47,7 @@ impl ExternalApplyCleanup {
             ),
             ExternalConnectionApply::Delete(delete) => delete.entity.clone(),
         };
-        self.materialized.insert((key.entity_type, key.entity_id));
+        self.record_keys([key]);
     }
 }
 
@@ -219,6 +222,18 @@ impl SyncService {
     }
 
     pub(super) async fn finish_external_cleanup(&self, cleanup: ExternalApplyCleanup) {
+        // Every caller reaches this only after committing the shared transaction.
+        // Clone before invoking the adapter so no callback runs under the lock.
+        let callback = self
+            .workspace_change_callback
+            .lock()
+            .expect("workspace change callback lock poisoned")
+            .clone();
+        if let Some(callback) = callback {
+            for workspace_id in &cleanup.workspaces {
+                callback(workspace_id);
+            }
+        }
         self.ssh
             .cleanup_connection_changes(cleanup.ssh_connections)
             .await;

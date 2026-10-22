@@ -8,3 +8,4 @@ export * from "./tauri/ssh";
 export * from "./tauri/telemetry";
 export * from "./tauri/workspace";
 export * from "./tauri/flow";
+export * from "./tauri/cloud-sync";

@@ -38,10 +38,15 @@ async fn snapshot_download_installs_flow_after_workspace_without_history() {
         next_page_token: None,
     });
     let (service, _, _) = SyncRuntime::build(db.clone(), transport.clone());
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    service.set_workspace_change_callback(Arc::new(move |workspace_id| {
+        sender.send(workspace_id.to_string()).unwrap();
+    }));
     service
         .download_workspace("cloud-1", DownloadDecision::DownloadToNewWorkspace)
         .await
         .unwrap();
+    assert_eq!(receiver.try_recv().unwrap(), "workspace-remote");
     let bus = CommandBus::from_db(db.clone()).await.unwrap();
     let flow = bus
         .get_flow("workspace-remote".into(), FLOW_ID.into())

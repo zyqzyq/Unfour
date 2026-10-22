@@ -10,10 +10,12 @@ import {
   listWorkspaceVariables,
 } from "@unfour/command-client";
 import type { Resources } from "./model";
+import { useFlowSyncRefresh } from "./useFlowSyncRefresh";
 
 const emptyResources: Resources = { api: [], ssh: [], database: [], connections: [] };
 
 export function useFlowWorkspaceData(workspaceId: string) {
+  useFlowSyncRefresh(workspaceId);
   const flows = useQuery({
     queryKey: ["flows", workspaceId],
     queryFn: () => listFlows(workspaceId),

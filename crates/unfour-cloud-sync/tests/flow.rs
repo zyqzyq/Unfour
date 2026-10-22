@@ -10,6 +10,7 @@ mod flow {
     pub mod lifecycle;
     mod regressions;
     mod snapshots;
+    mod ui_notifications;
     mod upgrade;
     use super::*;
 }

@@ -34,6 +34,8 @@ mod worker;
 const MAX_REMOTE_PAGES: usize = 10_000;
 const GLOBAL_WORKSPACE_CONCURRENCY: usize = 4;
 
+type WorkspaceChangeCallback = Arc<dyn Fn(&str) + Send + Sync>;
+
 #[derive(Clone)]
 pub struct SyncService {
     repository: SyncRepository,
@@ -57,6 +59,7 @@ pub struct SyncService {
     /// one retry per app run is warranted).
     protocol_revival_done: Arc<Mutex<HashSet<String>>>,
     retry_scheduler_wakeup: Arc<Notify>,
+    workspace_change_callback: Arc<Mutex<Option<WorkspaceChangeCallback>>>,
 }
 
 pub struct SyncRuntime;
@@ -107,12 +110,22 @@ impl SyncRuntime {
             activation_sync_pending: Arc::new(Mutex::new(None)),
             protocol_revival_done: Arc::new(Mutex::new(HashSet::new())),
             retry_scheduler_wakeup: Arc::new(Notify::new()),
+            workspace_change_callback: Arc::new(Mutex::new(None)),
         };
         (service, hook, receiver)
     }
 }
 
 impl SyncService {
+    /// Notify UI adapters only after remote materialization has committed.
+    /// The callback receives a local workspace ID, never business payloads.
+    pub fn set_workspace_change_callback(&self, callback: WorkspaceChangeCallback) {
+        *self
+            .workspace_change_callback
+            .lock()
+            .expect("workspace change callback lock poisoned") = Some(callback);
+    }
+
     pub fn repository(&self) -> &SyncRepository {
         &self.repository
     }

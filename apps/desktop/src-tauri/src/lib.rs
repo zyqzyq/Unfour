@@ -42,6 +42,7 @@ pub fn run() {
     // by account state and entitlement, so signed-out/offline startup remains
     // fully local-first.
     let background_sync = sync_state.service.clone();
+    let workspace_change_plugin = sync::workspace_change_plugin(sync_state.service.clone());
     tauri::async_runtime::spawn(async move {
         background_sync.run_background(sync_receiver).await;
     });
@@ -51,6 +52,7 @@ pub fn run() {
         config,
         unfour_app::UnfourAppExtensions::with_prepared_command_bus(command_bus),
     )
+    .plugin(workspace_change_plugin)
     .plugin(tauri_plugin_deep_link::init())
     .manage(account_state)
     .manage(sync_state)

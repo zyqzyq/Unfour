@@ -158,6 +158,24 @@ pub struct SyncAppState {
     pub(crate) access: SyncAccessGate,
 }
 
+pub(crate) fn workspace_change_plugin<R: tauri::Runtime>(
+    service: SyncService,
+) -> tauri::plugin::TauriPlugin<R> {
+    tauri::plugin::Builder::new("cloud-sync-events")
+        .setup(move |app, _| {
+            use tauri::Emitter;
+            let app = app.clone();
+            service.set_workspace_change_callback(Arc::new(move |workspace_id| {
+                let _ = app.emit(
+                    "cloud-sync://workspace-changed",
+                    serde_json::json!({ "workspaceId": workspace_id }),
+                );
+            }));
+            Ok(())
+        })
+        .build()
+}
+
 impl SyncAppState {
     pub fn new(service: SyncService, access: SyncAccessGate) -> Self {
         Self { service, access }

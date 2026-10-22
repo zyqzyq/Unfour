@@ -187,6 +187,16 @@ redacted or truncated.
 
 ## Revision, history and conflicts
 
+After a remote page, snapshot, retained replay or use-remote resolution commits,
+Cloud Sync notifies the desktop adapter of the affected local workspace IDs.
+The adapter emits `cloud-sync://workspace-changed` with `{workspaceId}` only.
+Flow subscribes through command-client and refreshes its definition list,
+resource references, environments and workspace variables. Listener readiness
+also triggers a fresh read to cover startup races; subscription failure logs a
+diagnostic and falls back to local reads every 15 seconds. Refresh never
+replaces the selected editor draft or changes its expected revision. The Rust
+Worker remains the sole scheduler for cloud requests.
+
 Local revision is never a serverVersion. New external definitions start at 1;
 changed external documents, resurrection and live-row deletion increment the
 existing local revision. Equivalent content and duplicate tombstones do not.
