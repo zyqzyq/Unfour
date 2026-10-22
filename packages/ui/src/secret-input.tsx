@@ -11,7 +11,7 @@ export function SecretInput({ className, ...props }: Omit<ComponentProps<typeof 
   const [revealed, setRevealed] = useState(false);
   return <div className="flex min-w-0 items-center">
     <Input {...props} autoComplete="off" className={cn("min-w-0 flex-1 pr-8", className)} type={revealed ? "text" : "password"} />
-    <Button aria-label={t(revealed ? "variables.hideSecret" : "variables.showSecret")} title={t(revealed ? "variables.hideSecret" : "variables.showSecret")} className="-ml-8 h-7 w-7" disabled={props.disabled} onClick={() => setRevealed(!revealed)} size="icon" type="button" variant="ghost">
+    <Button aria-label={t(revealed ? "variables.hideSecret" : "variables.showSecret")} title={t(revealed ? "variables.hideSecret" : "variables.showSecret")} className="-ml-7 h-7 w-7" disabled={props.disabled} onClick={() => setRevealed(!revealed)} size="icon" type="button" variant="ghost">
       {revealed ? <EyeOff size={13} /> : <Eye size={13} />}
     </Button>
   </div>;
@@ -58,7 +58,7 @@ export function SavedSecretInput({ value, saved, cleared, disabled, onChange, on
   return <div className="space-y-1">
     {retaining ? <div className="flex min-w-0 items-center">
       <Input autoComplete="off" className="min-w-0 flex-1 pr-8" disabled={disabled} onChange={(event) => { reset(); onChange(event.target.value); }} placeholder={t("common.secret.saved")} type={view === null ? "password" : "text"} value={view ?? ""} />
-      <Button aria-label={t(view !== null || pending ? "variables.hideSecret" : "variables.showSecret")} title={t(view !== null || pending ? "variables.hideSecret" : "variables.showSecret")} className="-ml-8 h-7 w-7" disabled={disabled} onClick={() => void reveal()} size="icon" type="button" variant="ghost">
+      <Button aria-label={t(view !== null || pending ? "variables.hideSecret" : "variables.showSecret")} title={t(view !== null || pending ? "variables.hideSecret" : "variables.showSecret")} className="-ml-7 h-7 w-7" disabled={disabled} onClick={() => void reveal()} size="icon" type="button" variant="ghost">
         {view !== null || pending ? <EyeOff size={13} /> : <Eye size={13} />}
       </Button>
     </div> : <SecretInput disabled={disabled} onChange={(event) => { reset(); onChange(event.target.value); }} value={value} />}

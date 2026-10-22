@@ -1446,6 +1446,8 @@
         "connectionMissing": "请选择有效的连接；原连接可能已删除。",
         "secretInput": "敏感输入（不保存）",
         "markSensitive": "标记为敏感输入",
+        "unmarkSensitive": "取消敏感标记",
+        "automaticSensitive": "根据参数名称或 Secret 变量类型自动识别为敏感字段，无法取消。",
         "prepareAgain": "请重新打开运行弹窗并检查配置。",
         "host": "Host",
         "inputs": "本次运行输入",

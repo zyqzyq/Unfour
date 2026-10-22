@@ -1,4 +1,6 @@
 import type { SshConnection, SshTaskDetail } from "@unfour/command-client";
+import { Lock, LockOpen } from "lucide-react";
+import { useId, type ChangeEvent } from "react";
 import {
   Badge,
   Button,
@@ -10,6 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  IconButton,
+  SecretInput,
   Select,
   useI18n,
 } from "@unfour/ui";
@@ -17,6 +21,7 @@ import { detectTaskInputs } from "../model/task-template";
 
 export function TaskRunDialog({
   activeEnvironmentName,
+  automaticSecretInputNames,
   connectionId,
   connections,
   environmentId,
@@ -25,6 +30,7 @@ export function TaskRunDialog({
   error,
   filledFromWorkspace,
   inputValues,
+  inputScopeKey,
   onConnectionChange,
   onEnvironmentChange,
   onInputChange,
@@ -39,6 +45,7 @@ export function TaskRunDialog({
   task,
 }: {
   activeEnvironmentName: string | null;
+  automaticSecretInputNames: string[];
   connectionId: string;
   connections: SshConnection[];
   environmentId: string;
@@ -47,6 +54,7 @@ export function TaskRunDialog({
   error: Error | null;
   filledFromWorkspace: boolean;
   inputValues: Record<string, string>;
+  inputScopeKey: number;
   onConnectionChange: (connectionId: string) => void;
   onEnvironmentChange: (environmentId: string) => void;
   onInputChange: (name: string, value: string) => void;
@@ -68,6 +76,7 @@ export function TaskRunDialog({
   const canRun = Boolean(task && connection && !missing && !missingEnvironment && !environmentLoadFailed && task.steps.some((step) => step.enabled));
   const title = t("ssh.tasks.run.title");
   const secretNames = new Set(secretInputNames);
+  const automaticSecretNames = new Set(automaticSecretInputNames);
   const errorMessage = error?.message.includes("SSH_TASK_DEFINITION_CHANGED") ? `${t("ssh.tasks.run.taskChanged")} ${t("ssh.tasks.run.prepareAgain")}`
     : error?.message.includes("SSH_TASK_ENVIRONMENT_CHANGED") ? `${t("ssh.tasks.run.environmentChanged")} ${t("ssh.tasks.run.prepareAgain")}`
     : error?.message.includes("SSH_TASK_ENVIRONMENT_MISSING") ? t("ssh.tasks.run.environmentMissing")
@@ -146,29 +155,18 @@ export function TaskRunDialog({
               {detectedInputs.length ? (
                 <div className="grid grid-cols-2 gap-2">
                   {detectedInputs.map((name, index) => (
-                    <label className="flex flex-col gap-1" key={name}>
-                      <span className="font-mono text-[11px] text-[var(--u-color-text-muted)]">{name}</span>
-                      <Input
-                        aria-label={name}
-                        disabled={pending}
-                        autoFocus={index === 0}
-                        onChange={(event) => onInputChange(name, event.target.value)}
-                        type={secretNames.has(name) ? "password" : "text"}
-                        value={inputValues[name] ?? ""}
-                      />
-                      {onToggleSecret && (
-                        <Button
-                          aria-pressed={secretNames.has(name)}
-                          disabled={pending}
-                          onClick={() => onToggleSecret(name)}
-                          size="sm"
-                          type="button"
-                          variant={secretNames.has(name) ? "secondary" : "ghost"}
-                        >
-                          {t(secretNames.has(name) ? "ssh.tasks.run.secretInput" : "ssh.tasks.run.markSensitive")}
-                        </Button>
-                      )}
-                    </label>
+                    <TaskRunInputField
+                      automatic={automaticSecretNames.has(name)}
+                      autoFocus={index === 0}
+                      inputScopeKey={inputScopeKey}
+                      key={name}
+                      name={name}
+                      onChange={(value) => onInputChange(name, value)}
+                      onToggleSecret={onToggleSecret}
+                      pending={pending}
+                      secret={secretNames.has(name)}
+                      value={inputValues[name] ?? ""}
+                    />
                   ))}
                 </div>
               ) : (
@@ -217,6 +215,48 @@ export function TaskRunDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function TaskRunInputField({ automatic, autoFocus, inputScopeKey, name, onChange, onToggleSecret, pending, secret, value }: {
+  automatic: boolean;
+  autoFocus: boolean;
+  inputScopeKey: number;
+  name: string;
+  onChange: (value: string) => void;
+  onToggleSecret?: (name: string) => void;
+  pending: boolean;
+  secret: boolean;
+  value: string;
+}) {
+  const { t } = useI18n();
+  const id = useId();
+  const sensitive = automatic || secret;
+  const action = t(automatic ? "ssh.tasks.run.secretInput" : sensitive ? "ssh.tasks.run.unmarkSensitive" : "ssh.tasks.run.markSensitive");
+  const tooltip = automatic ? t("ssh.tasks.run.automaticSensitive") : action;
+  const inputProps = { id, "aria-label": name, autoFocus, disabled: pending, value,
+    onChange: (event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value) };
+
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <div className="relative flex min-w-0 items-center gap-1">
+        <label className="min-w-0 truncate font-mono text-[11px] text-[var(--u-color-text-muted)]" htmlFor={id} title={name}>{name}</label>
+        <IconButton
+          aria-description={automatic ? tooltip : undefined}
+          aria-disabled={automatic || !onToggleSecret}
+          aria-pressed={sensitive}
+          className={`static h-5 w-5 ${sensitive ? "text-[var(--u-color-text-muted)]" : "text-[var(--u-color-text-soft)]"} [&>span]:bottom-full [&>span]:left-0 [&>span]:top-auto [&>span]:mb-1 [&>span]:mt-0 [&>span]:w-max [&>span]:max-w-full [&>span]:translate-x-0 [&>span]:whitespace-normal`}
+          disabled={pending}
+          label={`${name}: ${action}`}
+          onClick={() => { if (!automatic) onToggleSecret?.(name); }}
+          size="compact"
+          tooltip={tooltip}
+        >
+          {sensitive ? <Lock aria-hidden="true" size={12} /> : <LockOpen aria-hidden="true" size={12} />}
+        </IconButton>
+      </div>
+      {sensitive ? <SecretInput {...inputProps} key={inputScopeKey} /> : <Input {...inputProps} className="min-w-0" type="text" />}
+    </div>
   );
 }
 

@@ -540,6 +540,33 @@ it("keeps cleared task history when activity logging fails", async () => {
 
 
 describe("rerun dialog ownership", () => {
+  it("exposes the existing automatic sensitivity rules separately from manual marking", async () => {
+    vi.mocked(getSshTask).mockResolvedValue({ ...inputDetail, steps: [{ ...inputDetail.steps[0],
+      configJson: { command: "echo {{VERSION}} {{CUSTOM}} {{PASSWORD}} {{PUBLIC}}" } }] });
+    const variable: WorkspaceVariable = { id: "var", workspaceId: "w1", key: "VERSION", value: "workspace-secret", isSecret: true, isEnabled: true,
+      description: null, sortOrder: 0, createdAt: "", updatedAt: "", deletedAt: null, revision: 1 };
+    vi.mocked(listWorkspaceVariables).mockResolvedValue([variable]);
+    vi.mocked(listWorkspaceEnvironments).mockResolvedValue([{ id: "env", workspaceId: "w1", name: "Env", isActive: true, sortOrder: 0,
+      createdAt: "", updatedAt: "", deletedAt: null, revision: 1, variables: [{ ...variable, id: "env-var", environmentId: "env", key: "CUSTOM" }] }]);
+    const { result } = await setup();
+    await act(async () => { await result.current.prepareRun("task"); });
+    expect(result.current.runAutomaticSecretInputs).toEqual(["VERSION", "CUSTOM", "PASSWORD"]);
+    const scopeKey = result.current.runInputScopeKey;
+    act(() => result.current.setRunInputs((values) => ({ ...values, VERSION: "manual-override" })));
+    act(() => ["VERSION", "CUSTOM", "PASSWORD"].forEach(result.current.toggleSecretInput));
+    expect(result.current.runSecretInputs).toEqual(["VERSION", "CUSTOM", "PASSWORD"]);
+    expect(result.current.runInputScopeKey).toBe(scopeKey);
+    act(() => result.current.toggleSecretInput("PUBLIC"));
+    expect(result.current.runSecretInputs).toContain("PUBLIC");
+    expect(result.current.runAutomaticSecretInputs).not.toContain("PUBLIC");
+    act(() => result.current.toggleSecretInput("PUBLIC"));
+    expect(result.current.runSecretInputs).not.toContain("PUBLIC");
+    await act(async () => { await result.current.changeRunEnvironment(""); });
+    expect(result.current.runAutomaticSecretInputs).toEqual(["VERSION", "PASSWORD"]);
+    expect(result.current.runSecretInputs).not.toContain("CUSTOM");
+    expect(result.current.runInputScopeKey).not.toBe(scopeKey);
+  });
+
   it.each(["input", "connection", "environment", "secret"])("preserves edited %s and every other selection when previous parameters are requested", async (edit) => {
     vi.mocked(getSshTask).mockResolvedValue(inputDetail);
     vi.mocked(listSshTaskRuns).mockResolvedValue([{ ...run(), context: { version: 1, environmentId: "past-env", environmentUpdatedAt: "old", taskVersion: "old", inputs: { VERSION: { source: "manual", value: "past" } } } }]);
@@ -623,12 +650,15 @@ describe("rerun dialog ownership", () => {
     const { result } = await setup();
     await act(async () => { await result.current.prepareRun("task"); });
     expect(result.current.runInputs).toEqual({ VERSION: "", CUSTOM: "" });
+    const scopeKey = result.current.runInputScopeKey;
     await act(async () => { await result.current.restorePreviousRun(); });
     expect(result.current.runDialogTask).toEqual(inputDetail);
     expect(result.current.runConnectionId).toBe("connection");
     expect(result.current.runEnvironmentId).toBe("deleted-env");
     expect(result.current.runInputs).toEqual({ VERSION: "v1", CUSTOM: "" });
     expect(result.current.runSecretInputs).toContain("CUSTOM");
+    expect(result.current.runAutomaticSecretInputs).not.toContain("CUSTOM");
+    expect(result.current.runInputScopeKey).not.toBe(scopeKey);
     expect(result.current.runNotice).toBeTruthy();
     expect(runSshTask).not.toHaveBeenCalled();
     await act(async () => { await result.current.prepareRun("task", { ...previous, context: null }); });

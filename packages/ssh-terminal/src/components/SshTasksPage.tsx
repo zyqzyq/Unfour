@@ -100,6 +100,8 @@ export function SshTasksPage({
     runInputs,
     runMutation,
     runSecretInputs,
+    runAutomaticSecretInputs,
+    runInputScopeKey,
     setActiveRun,
     setActiveRunTask,
     setRunConnectionId,
@@ -532,6 +534,7 @@ export function SshTasksPage({
 
       <TaskRunDialog
         activeEnvironmentName={runActiveEnvironmentName}
+        automaticSecretInputNames={runAutomaticSecretInputs}
         connectionId={runConnectionId}
         connections={connections}
         environmentId={runEnvironmentId}
@@ -540,6 +543,7 @@ export function SshTasksPage({
         error={runMutation.error}
         filledFromWorkspace={runFilledFromWorkspace}
         inputValues={runInputs}
+        inputScopeKey={runInputScopeKey}
         onConnectionChange={setRunConnectionId}
         onEnvironmentChange={changeRunEnvironment}
         onInputChange={(name, value) =>

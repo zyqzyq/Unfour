@@ -1448,6 +1448,8 @@
         "connectionMissing": "Select a valid connection; the original connection may have been deleted.",
         "secretInput": "Sensitive input (never saved)",
         "markSensitive": "Mark as sensitive",
+        "unmarkSensitive": "Remove sensitive marking",
+        "automaticSensitive": "Automatically sensitive because of its name or Secret variable type. This cannot be turned off.",
         "prepareAgain": "Reopen the run dialog and review the configuration.",
         "host": "Host",
         "inputs": "Inputs for this run",

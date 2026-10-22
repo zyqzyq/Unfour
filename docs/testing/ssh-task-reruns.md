@@ -83,3 +83,31 @@ service failure. Browser screenshot was visually inspected at 1280 x 720.
 NOT VERIFIED: packaged Tauri GUI against a real external SSH host or production
 credentials. The browser test uses UI fixtures; native loopback tests independently
 exercise the real CommandBus, service, SSH driver, storage, cancellation, and logs.
+
+## Sensitive parameter controls follow-up
+
+Verified on Windows on 2026-10-22, based on `main` / `8e7a660a` (neither the
+local repository nor origin had a `dev` branch; the user approved `main`).
+
+- Parameter labels now share one row with a compact lock control. Manual
+  sensitivity can be toggled; automatically sensitive names and Secret variables
+  remain locked, with a focusable localized explanation.
+- Shared `SecretInput` handles visibility independently of values and sensitivity.
+  New preparation generations, including environment changes and history recall,
+  start masked. Existing source resolution, recall, and redaction rules are intact.
+- Long names truncate while controls remain available in both columns. Tooltips
+  wrap above the field. A shared secret-input negative-margin mismatch causing
+  4 px overflow was fixed for both new and saved secret editors.
+
+| Check | Result |
+| --- | --- |
+| Affected Vitest tests and shared secret-input consumers | PASS: 11 files, 92 tests; includes manual/automatic sensitivity, English/Chinese visibility labels, source metadata, and historical recall |
+| Playwright `ssh-task-rerun.spec.ts` | PASS: keyboard Space/Enter/Tab, locked name/Secret fields, independent visibility, remasking on recall, history/panel reruns, two columns and no horizontal overflow at 360 x 740 |
+| Desktop `tsc --noEmit` and production build | PASS; Vite still reports its large-chunk advisory |
+| ESLint on all changed TypeScript files | PASS: zero errors; two pre-existing hook length/complexity warnings confirmed against HEAD |
+| `git diff --check` | PASS |
+
+Desktop and narrow browser screenshots were visually inspected. Initial test
+failures exposed a missing explicit text-input type and the 4 px layout overflow;
+both were fixed and all affected checks passed again. These checks use UI fixtures;
+packaged Tauri behavior against a real SSH host was not verified in this follow-up.

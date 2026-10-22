@@ -193,6 +193,8 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
     runActiveEnvironmentName: environment?.name ?? null,
     runInputs: values.inputs,
     runSecretInputs: values.secretNames,
+    runAutomaticSecretInputs: state ? taskRunDefaults(Object.keys(values.inputs), state.variables, environment).secretNames : [],
+    runInputScopeKey: state?.generation ?? 0,
     runFilledFromWorkspace: values.filledFromWorkspace.length > 0,
   };
 }
