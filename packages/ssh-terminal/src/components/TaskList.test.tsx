@@ -42,9 +42,48 @@ describe("TaskList", () => {
   });
 
   it("keeps cached tasks visible when a refresh fails", () => {
-    renderTaskList({ failed: true, tasks: [task()] });
+    const onRetry = vi.fn();
+    const { rerender } = renderTaskList({ failed: true, onRetry, tasks: [task()] });
     expect(screen.getByRole("alert")).toHaveTextContent("ssh.tasks.list.loadFailed");
     expect(screen.getByRole("button", { name: "Task" })).toBeInTheDocument();
+    expect(screen.queryByText("ssh.tasks.list.emptyTitle")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "ssh.tasks.actions.retry" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+
+    rerender(taskList({ failed: true, onRetry, retrying: true, tasks: [task()] }));
+    const retry = screen.getByRole("button", { name: "ssh.tasks.actions.retry" });
+    expect(retry).toBeDisabled();
+    fireEvent.click(retry);
+    expect(onRetry).toHaveBeenCalledOnce();
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Task" })).toBeInTheDocument();
+
+    rerender(taskList({ tasks: [task()] }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Task" })).toBeInTheDocument();
+  });
+
+  it("shows a full load error without cached tasks and keeps retry available", () => {
+    const onRetry = vi.fn();
+    const { rerender } = renderTaskList({ failed: true, onRetry });
+    expect(screen.getByRole("alert")).toHaveTextContent("ssh.tasks.list.loadFailed");
+    expect(screen.queryByRole("tree")).not.toBeInTheDocument();
+    expect(screen.queryByText("ssh.tasks.list.emptyTitle")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "ssh.tasks.actions.retry" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+
+    rerender(taskList({ failed: true, retrying: true }));
+    expect(screen.getByRole("button", { name: "ssh.tasks.actions.retry" })).toBeDisabled();
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+
+  it("keeps refresh errors alongside the filter when no cached task matches", () => {
+    renderTaskList({ failed: true, tasks: [task()] });
+    fireEvent.change(screen.getByRole("textbox", { name: "ssh.tasks.list.filter" }), {
+      target: { value: "missing" },
+    });
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByText("ssh.tasks.list.filterEmpty")).toBeInTheDocument();
     expect(screen.queryByText("ssh.tasks.list.emptyTitle")).not.toBeInTheDocument();
   });
 
@@ -91,18 +130,26 @@ describe("TaskList", () => {
   });
 });
 
-function renderTaskList({
+function renderTaskList(props: Parameters<typeof taskList>[0]) {
+  return render(taskList(props));
+}
+
+function taskList({
   failed = false,
   onNew = vi.fn(),
   onOpenConnections = vi.fn(),
+  onRetry = vi.fn(),
+  retrying = false,
   tasks = [],
 }: {
   failed?: boolean;
   onNew?: () => void;
   onOpenConnections?: () => void;
+  onRetry?: () => void;
+  retrying?: boolean;
   tasks?: SshTask[];
 }) {
-  return render(
+  return (
     <TaskList
       failed={failed}
       loading={false}
@@ -113,13 +160,13 @@ function renderTaskList({
       onOpenConnections={onOpenConnections}
       onReorder={vi.fn()}
       onRun={vi.fn()}
-      onRetry={vi.fn()}
+      onRetry={onRetry}
       onSelect={vi.fn()}
       reordering={false}
-      retrying={false}
+      retrying={retrying}
       selectedTaskId={null}
       tasks={tasks}
-    />,
+    />
   );
 }
 

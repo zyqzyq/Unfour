@@ -30,10 +30,39 @@ it("keeps cached history visible when a refresh fails and offers retry", () => {
     id: "run", taskId: "task", workspaceId: "workspace", connectionId: null, status: "failed",
     startedAt: "2026-01-01T00:00:00Z", finishedAt: null, errorMessage: "Connection refused", logPath: "",
   };
-  render(<TaskHistory clearing={false} failed loading={false} onClear={vi.fn()} onSelectRun={vi.fn()} onRetry={onRetry} retrying={false} runs={[run]} />);
+  const props = { clearing: false, failed: true, loading: false, onClear: vi.fn(), onSelectRun: vi.fn(), onRetry, retrying: false, runs: [run] };
+  const { rerender } = render(<TaskHistory {...props} />);
   expect(screen.getByRole("alert")).toHaveTextContent("ssh.tasks.history.loadFailed");
   expect(screen.getByText("Connection refused")).toBeInTheDocument();
   expect(screen.queryByText("ssh.tasks.history.empty")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "ssh.tasks.actions.retry" }));
   expect(onRetry).toHaveBeenCalledOnce();
+
+  rerender(<TaskHistory {...props} retrying />);
+  const retry = screen.getByRole("button", { name: "ssh.tasks.actions.retry" });
+  expect(retry).toBeDisabled();
+  fireEvent.click(retry);
+  expect(onRetry).toHaveBeenCalledOnce();
+  expect(screen.getByRole("alert")).toBeInTheDocument();
+  expect(screen.getByRole("table")).toHaveTextContent("Connection refused");
+
+  rerender(<TaskHistory {...props} failed={false} />);
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.getByRole("table")).toHaveTextContent("Connection refused");
+});
+
+it("shows a full load error without cached history and keeps retry available", () => {
+  const onRetry = vi.fn();
+  const props = { clearing: false, failed: true, loading: false, onClear: vi.fn(), onSelectRun: vi.fn(), onRetry, retrying: false, runs: [] };
+  const { rerender } = render(<TaskHistory {...props} />);
+  expect(screen.getByRole("alert")).toHaveTextContent("ssh.tasks.history.loadFailed");
+  expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  expect(screen.queryByText("ssh.tasks.history.empty")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "ssh.tasks.history.clear" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "ssh.tasks.actions.retry" }));
+  expect(onRetry).toHaveBeenCalledOnce();
+
+  rerender(<TaskHistory {...props} retrying />);
+  expect(screen.getByRole("button", { name: "ssh.tasks.actions.retry" })).toBeDisabled();
+  expect(screen.getByRole("alert")).toBeInTheDocument();
 });

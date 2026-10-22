@@ -31,7 +31,7 @@ export function TaskHistory({
   }
   return (
     <div className="flex min-h-0 flex-1 flex-col border-t border-[var(--u-color-border)] bg-[var(--u-color-surface)]">
-      <div className="flex h-[var(--u-size-section-toolbar)] items-center justify-between border-b border-[var(--u-color-border)] px-2">
+      <div className="flex h-[var(--u-size-section-toolbar)] shrink-0 items-center justify-between border-b border-[var(--u-color-border)] px-2">
         <span className="text-[12px] font-semibold text-[var(--u-color-text)]">
           {t("ssh.tasks.history.title")}
         </span>
@@ -41,8 +41,10 @@ export function TaskHistory({
         </Button>
       </div>
       {failed && (
-        <ErrorState>
-          <span role="alert">{t("ssh.tasks.history.loadFailed")}</span>{" "}
+        <ErrorState className={runs.length ? "min-h-0 shrink-0 justify-start rounded-none border-x-0 border-t-0 px-2 py-0.5 text-left [&>svg]:shrink-0 [&>span]:flex [&>span]:flex-1 [&>span]:items-center [&>span]:gap-2" : undefined}>
+          <span className={runs.length ? "min-w-0 flex-1 truncate" : undefined} role="alert" title={t("ssh.tasks.history.loadFailed")}>
+            {t("ssh.tasks.history.loadFailed")}
+          </span>{" "}
           <Button disabled={retrying} onClick={onRetry} size="sm" variant="secondary">
             {t("ssh.tasks.actions.retry")}
           </Button>

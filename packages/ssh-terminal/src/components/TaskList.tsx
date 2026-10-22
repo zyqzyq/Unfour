@@ -187,8 +187,10 @@ export function TaskList({
         </div>
       </div>
       {failed && (
-        <ErrorState>
-          <span role="alert">{t("ssh.tasks.list.loadFailed")}</span>{" "}
+        <ErrorState className={tasks.length ? "min-h-0 shrink-0 justify-start rounded-none border-x-0 border-t-0 px-2 py-0.5 text-left [&>svg]:shrink-0 [&>span]:flex [&>span]:flex-1 [&>span]:items-center [&>span]:gap-2" : undefined}>
+          <span className={tasks.length ? "min-w-0 flex-1 truncate" : undefined} role="alert" title={t("ssh.tasks.list.loadFailed")}>
+            {t("ssh.tasks.list.loadFailed")}
+          </span>{" "}
           <Button disabled={retrying} onClick={onRetry} size="sm" variant="secondary">
             {t("ssh.tasks.actions.retry")}
           </Button>
