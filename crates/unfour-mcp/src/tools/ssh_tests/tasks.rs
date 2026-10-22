@@ -95,6 +95,8 @@ impl CommandBusAdapter for TaskStub {
     fn run_ssh_task(&self, input: SshTaskRunInput) -> Result<SshTaskRun, CommandBusAdapterError> {
         assert_eq!(input.workspace_id, "workspace-1");
         assert_eq!(input.task_id, "task-1");
+        // MCP's existing explicit-input path does not acquire UI recall dependencies.
+        assert!(input.context.is_none());
         Ok(run())
     }
 

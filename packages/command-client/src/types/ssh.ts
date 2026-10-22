@@ -385,6 +385,7 @@ export type SshTaskRunContextInput = {
   taskVersion: string;
   environmentUpdatedAt: string | null;
   inputSources: Record<string, SshTaskInputSource>;
+  inputVersions?: Record<string, { id: string; revision: number }>;
 };
 
 export type SshTaskRunContext = {

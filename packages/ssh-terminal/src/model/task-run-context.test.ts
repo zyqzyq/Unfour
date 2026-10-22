@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SshTaskRun } from "@unfour/command-client";
-import { restoreTaskRunInputs, taskRunDefaults } from "./task-run-context";
+import { restoreTaskRunInputs, taskInputVersions, taskRunDefaults } from "./task-run-context";
 
 const variable = (key: string, value: string, isSecret = false) => ({ key, value, isSecret, isEnabled: true });
 const environment = { id: "env", isActive: false, variables: [variable("region", "new-env"), variable("custom", "rotated", true)] };
@@ -15,6 +15,14 @@ const run: SshTaskRun = {
 const names = ["region", "custom", "version", "credential", "privateValue", "newInput"];
 
 describe("task run recall", () => {
+  it("tracks only the selected source identity and revision, including historical workspace sources under an environment overlay", () => {
+    const workspace = [{ ...variable("region", "workspace"), id: "w-var", revision: 2 }];
+    const env = { ...environment, variables: [{ ...variable("REGION", "secret", true), id: "e-var", revision: 8 }] };
+    expect(taskInputVersions({ region: "environment" }, workspace, env)).toEqual({ region: { id: "e-var", revision: 8 } });
+    expect(taskInputVersions({ region: "workspace" }, workspace, env)).toEqual({ region: { id: "w-var", revision: 2 } });
+    expect(taskInputVersions({ region: "manual", missing: "environment" }, workspace, env)).toEqual({});
+    expect(taskInputVersions({ region: "environment" }, workspace, { ...env, variables: [{ ...env.variables[0], isEnabled: false }] })).toEqual({});
+  });
   it("loads current defaults on ordinary run and restores only manual non-sensitive values", () => {
     expect(taskRunDefaults(names, variables, environment).inputs.version).toBe("current");
     const restored = restoreTaskRunInputs(names, variables, environment, run);

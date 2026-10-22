@@ -72,6 +72,7 @@ export function TaskRunDialog({
     : error?.message.includes("SSH_TASK_ENVIRONMENT_CHANGED") ? `${t("ssh.tasks.run.environmentChanged")} ${t("ssh.tasks.run.prepareAgain")}`
     : error?.message.includes("SSH_TASK_ENVIRONMENT_MISSING") ? t("ssh.tasks.run.environmentMissing")
     : error?.message.includes("SSH_TASK_INPUT_SOURCE_MISSING") ? t("ssh.tasks.run.prepareAgain")
+    : error?.message.includes("SSH_TASK_INPUTS_CHANGED") ? t("ssh.tasks.run.inputsChanged")
     : error?.message.includes("SSH_TASK_CONNECTION_REQUIRED") ? t("ssh.tasks.run.connectionMissing") : error?.message;
 
   return (

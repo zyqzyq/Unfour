@@ -47,6 +47,7 @@ async fn fixture() -> (SshService, SshTaskDetail, SshTaskRunInput) {
             task_version: context::task_version(&detail),
             environment_updated_at: Some("now".into()),
             input_sources: sources,
+            input_versions: None,
         }),
     };
     (service, detail, input)

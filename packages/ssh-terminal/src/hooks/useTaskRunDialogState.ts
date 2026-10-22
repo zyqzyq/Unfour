@@ -5,7 +5,7 @@ import { getSshTask, listSshTaskRuns, listWorkspaceEnvironments, listWorkspaceVa
 import { useI18n, type useFeedbackErrorHandler } from "@unfour/ui";
 import { detectTaskInputs } from "../model/task-template";
 import { workspaceEnvironmentById } from "../model/task-run-inputs";
-import { sensitiveTaskInput, taskRunDefaults, taskRunSelection, taskVersion } from "../model/task-run-context";
+import { sensitiveTaskInput, taskInputVersions, taskRunDefaults, taskRunSelection, taskVersion } from "../model/task-run-context";
 
 type DialogState = {
   generation: number;
@@ -32,11 +32,15 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
   const mounted = useRef<typeof scope | null>(null);
   const generation = useRef(0);
   const starting = useRef<Promise<SshTaskRun> | null>(null);
+  const editRevision = useRef(0);
+  const restoring = useRef<number | null>(null);
   useEffect(() => {
     mounted.current = scope;
     generation.current += 1;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- Dialog values belong to one workspace only.
     setState(null);
+    editRevision.current = 0;
+    restoring.current = null;
     setLoading(false);
     return () => { mounted.current = null; generation.current += 1; };
   }, [scope]);
@@ -44,6 +48,8 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
   const closeRunDialog = useCallback(() => {
     generation.current += 1;
     setState(null);
+    editRevision.current = 0;
+    restoring.current = null;
     setLoading(false);
   }, []);
 
@@ -60,7 +66,8 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
         workspaceId, taskId: selected.detail.task.id, connectionId: selected.connectionId || null,
         inputs: Object.fromEntries(Object.entries(selected.values.inputs).map(([name, value]) => [name, selected.values.sources[name] === "manual" ? value : ""])), secretInputNames: selected.values.secretNames,
         context: { environmentId: selected.environmentId || null, taskVersion: taskVersion(selected.detail),
-          environmentUpdatedAt: environment?.updatedAt ?? null, inputSources: selected.values.sources },
+          environmentUpdatedAt: environment?.updatedAt ?? null, inputSources: selected.values.sources,
+          inputVersions: taskInputVersions(selected.values.sources, selected.variables, environment) },
       }).then((run) => {
         void queryClient.invalidateQueries({ queryKey: ["ssh-task-runs", workspaceId, run.taskId] });
         if (current()) { closeRunDialog(); onStarted(run, selected.detail); }
@@ -75,7 +82,16 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
   const prepareRun = useCallback(async (taskId: string, previous?: SshTaskRun | "latest") => {
     if (mounted.current !== scope || starting.current) return;
     if (!matchesRunScope(previous, workspaceId, taskId)) return;
+    if (previous === "latest") {
+      if (restoring.current !== null) return;
+      if (editRevision.current > 0) {
+        setState((value) => value ? { ...value, notice: "ssh.tasks.run.editsKept" } : value);
+        return;
+      }
+    } else { editRevision.current = 0; restoring.current = null; }
     const version = ++generation.current;
+    const revision = editRevision.current;
+    if (previous === "latest") restoring.current = version;
     const current = () => mounted.current === scope && generation.current === version;
     setLoading(true);
     if (previous !== "latest") setState(null);
@@ -96,16 +112,27 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
         ]);
       } catch { environmentLoadFailed = true; }
       if (!current()) return;
+      if (previous === "latest" && editRevision.current !== revision) {
+        setState((value) => value ? { ...value, generation: version, notice: "ssh.tasks.run.editsKept" } : value);
+        return;
+      }
       environments = environments.filter((environment) => !environment.deletedAt);
       setState({ generation: version, detail, environments, variables, environmentLoadFailed,
         ...taskRunSelection(detail, variables, environments, run) });
     } catch (error) {
-      if (current()) { setState(null); handleError(error, { key: "feedback.ssh.taskLoadFailed" }); }
-    } finally { if (current()) setLoading(false); }
+      if (current()) {
+        setState((value) => previous === "latest" && value ? { ...value, generation: version } : null);
+        handleError(error, { key: "feedback.ssh.taskLoadFailed" });
+      }
+    } finally {
+      if (restoring.current === version) restoring.current = null;
+      if (current()) setLoading(false);
+    }
   }, [handleError, queryClient, resetMutation, scope, workspaceId]);
 
   const changeRunEnvironment = useCallback(async (environmentId: string) => {
     if (!state || starting.current) return;
+    editRevision.current += 1;
     const selected = state;
     const version = ++generation.current;
     const current = () => mounted.current === scope && generation.current === version;
@@ -122,6 +149,7 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
   }, [handleError, scope, state, workspaceId]);
 
   const setRunInputs = (update: Record<string, string> | ((values: Record<string, string>) => Record<string, string>)) => {
+    editRevision.current += 1;
     setState((current) => {
       if (!current) return current;
       const inputs = typeof update === "function" ? update(current.values.inputs) : update;
@@ -131,13 +159,16 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
     });
   };
 
-  const toggleSecretInput = (name: string) => setState((current) => {
-    if (!current || sensitiveTaskInput(name)) return current;
-    const defaults = taskRunDefaults([name], current.variables, workspaceEnvironmentById(current.environments, current.environmentId));
-    if (defaults.secretNames.includes(name)) return current;
-    const secretNames = current.values.secretNames.includes(name) ? current.values.secretNames.filter((key) => key !== name) : [...current.values.secretNames, name];
-    return { ...current, values: { ...current.values, secretNames } };
-  });
+  const toggleSecretInput = (name: string) => {
+    editRevision.current += 1;
+    setState((current) => {
+      if (!current || sensitiveTaskInput(name)) return current;
+      const defaults = taskRunDefaults([name], current.variables, workspaceEnvironmentById(current.environments, current.environmentId));
+      if (defaults.secretNames.includes(name)) return current;
+      const secretNames = current.values.secretNames.includes(name) ? current.values.secretNames.filter((key) => key !== name) : [...current.values.secretNames, name];
+      return { ...current, values: { ...current.values, secretNames } };
+    });
+  };
 
   const {
     detail = null, connectionId = "", environmentId = "", environments = [],
@@ -152,7 +183,10 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
     runNotice: notice ? t(notice) : null,
     runDialogTask: detail,
     runConnectionId: connectionId,
-    setRunConnectionId: (connectionId: string) => setState((current) => current ? { ...current, connectionId } : current),
+    setRunConnectionId: (connectionId: string) => {
+      editRevision.current += 1;
+      setState((current) => current ? { ...current, connectionId } : current);
+    },
     runEnvironmentId: environmentId,
     runEnvironments: environments,
     runEnvironmentLoadFailed: environmentLoadFailed,

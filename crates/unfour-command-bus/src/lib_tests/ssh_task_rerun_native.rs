@@ -111,6 +111,7 @@ async fn ssh_rerun_executes_current_definition_from_start_and_keeps_local_contex
             environment_id: None,
             task_version: version(&detail),
             environment_updated_at: None,
+            input_versions: None,
             input_sources: ["MODE", "CUSTOM", "LABEL"]
                 .into_iter()
                 .map(|key| (key.into(), SshTaskInputSource::Manual))
@@ -205,7 +206,7 @@ async fn ssh_rerun_executes_current_definition_from_start_and_keeps_local_contex
     let final_run = bus.run_ssh_task(input).await.unwrap();
     assert_eq!(done(&bus, &final_run).await.status, "success");
     assert_eq!(
-        bus.list_ssh_task_runs(workspace, detail.task.id)
+        bus.list_ssh_task_runs(workspace.clone(), detail.task.id.clone())
             .await
             .unwrap()
             .len(),
@@ -214,6 +215,128 @@ async fn ssh_rerun_executes_current_definition_from_start_and_keeps_local_contex
     assert_eq!(
         std::fs::read_to_string(&first.log_path).unwrap(),
         original_log
+    );
+    // A variable-backed rerun rejects a rotated secret before creating history.
+    let variable = bus
+        .workspace_variable_create(
+            workspace.clone(),
+            WorkspaceVariableInput {
+                id: None,
+                key: "REGION".into(),
+                value: "before-rotation".into(),
+                is_secret: true,
+                is_enabled: true,
+                description: None,
+                sort_order: 0,
+            },
+        )
+        .await
+        .unwrap();
+    let variable_task = bus
+        .save_ssh_task(SshTaskSaveInput {
+            id: None,
+            workspace_id: workspace.clone(),
+            name: "Variable runs".into(),
+            description: String::new(),
+            default_connection_id: None,
+            steps: vec![SshTaskStepInput {
+                id: None,
+                name: "Echo".into(),
+                step_type: "command".into(),
+                position: 0,
+                enabled: true,
+                config_version: Some(1),
+                config_json: json!({"command":"echo {{REGION}}","timeoutSeconds":5}),
+            }],
+        })
+        .await
+        .unwrap();
+    let mut variable_run = SshTaskRunInput {
+        workspace_id: workspace.clone(),
+        task_id: variable_task.task.id.clone(),
+        connection_id: final_run.connection_id.clone(),
+        inputs: [("REGION".into(), String::new())].into(),
+        secret_input_names: vec![],
+        context: Some(SshTaskRunContextInput {
+            environment_id: None,
+            environment_updated_at: None,
+            task_version: version(&variable_task),
+            input_sources: [("REGION".into(), SshTaskInputSource::Workspace)].into(),
+            input_versions: Some(
+                [(
+                    "REGION".into(),
+                    unfour_core::models::SshTaskInputVersion {
+                        id: variable.id.clone(),
+                        revision: variable.revision,
+                    },
+                )]
+                .into(),
+            ),
+        }),
+    };
+    let rotated = bus
+        .workspace_variable_update(
+            workspace.clone(),
+            variable.id,
+            WorkspaceVariableInput {
+                id: None,
+                key: "REGION".into(),
+                value: "after-rotation".into(),
+                is_secret: true,
+                is_enabled: true,
+                description: None,
+                sort_order: 0,
+            },
+        )
+        .await
+        .unwrap();
+    let command_count = commands.lock().unwrap().len();
+    assert!(bus
+        .run_ssh_task(variable_run.clone())
+        .await
+        .unwrap_err()
+        .to_string()
+        .contains("SSH_TASK_INPUTS_CHANGED"));
+    assert_eq!(commands.lock().unwrap().len(), command_count);
+    assert!(bus
+        .list_ssh_task_runs(workspace.clone(), variable_task.task.id.clone())
+        .await
+        .unwrap()
+        .is_empty());
+    variable_run
+        .context
+        .as_mut()
+        .unwrap()
+        .input_versions
+        .as_mut()
+        .unwrap()
+        .get_mut("REGION")
+        .unwrap()
+        .revision = rotated.revision;
+    // Independent concurrent runs use the confirmed snapshot and retain separate redacted histories.
+    let (left, right) = tokio::join!(
+        bus.run_ssh_task(variable_run.clone()),
+        bus.run_ssh_task(variable_run)
+    );
+    let (left, right) = (left.unwrap(), right.unwrap());
+    let (left, right) = tokio::join!(done(&bus, &left), done(&bus, &right));
+    assert_ne!(left.id, right.id);
+    for run in [left, right] {
+        assert_eq!(run.status, "success");
+        let context = run.context.as_ref().unwrap();
+        assert_eq!(context.version, 1);
+        assert!(context.inputs["REGION"].secret);
+        assert!(context.inputs["REGION"].value.is_none());
+        assert!(!serde_json::to_string(context)
+            .unwrap()
+            .contains("inputVersions"));
+        assert!(!std::fs::read_to_string(run.log_path)
+            .unwrap()
+            .contains("after-rotation"));
+    }
+    assert_eq!(
+        commands.lock().unwrap()[command_count..],
+        ["echo after-rotation", "echo after-rotation"]
     );
     server_task.abort();
     std::fs::remove_dir_all(logs).unwrap();

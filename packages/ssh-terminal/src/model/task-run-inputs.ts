@@ -1,4 +1,6 @@
 export type WorkspaceVariableLike = {
+  id?: string;
+  revision?: number;
   key: string;
   value: string;
   isEnabled: boolean;

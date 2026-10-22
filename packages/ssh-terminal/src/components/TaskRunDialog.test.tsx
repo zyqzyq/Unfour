@@ -43,7 +43,7 @@ describe("TaskRunDialog", () => {
           { id: "dev", name: "Dev" },
           { id: "prod", name: "Prod" },
         ]}
-        error={null}
+        error={new Error("SSH_TASK_INPUTS_CHANGED")}
         filledFromWorkspace
         inputValues={{}}
         onConnectionChange={vi.fn()}
@@ -63,9 +63,7 @@ describe("TaskRunDialog", () => {
       { target: { value: "prod" } },
     );
     expect(onEnvironmentChange).toHaveBeenCalledWith("prod");
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "ssh.tasks.run.environmentLoadFailed",
-    );
+    expect(screen.getAllByRole("alert").map((node) => node.textContent)).toEqual(["ssh.tasks.run.environmentLoadFailed", "ssh.tasks.run.inputsChanged"]);
   });
 });
 

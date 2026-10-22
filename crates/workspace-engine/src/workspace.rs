@@ -7,7 +7,9 @@ mod snapshot;
 mod variable_executor;
 mod variable_persistence;
 mod variable_secrets;
+mod variable_snapshot;
 mod variables;
+pub use variable_snapshot::WorkspaceVariableSnapshot;
 pub use variables::WorkspaceVariableResolver;
 
 use chrono::Utc;

@@ -20,37 +20,56 @@ impl CommandBus {
         {
             return Err(invalid("SSH_TASK_CONNECTION_REQUIRED"));
         }
-        let workspace_resolver = self
+        let snapshot = self
             .workspace
-            .variable_resolver(&input.workspace_id, None, &[])
-            .await?;
-        let resolver = self
-            .workspace
-            .variable_resolver(&input.workspace_id, context.environment_id.as_deref(), &[])
-            .await;
-        let variables = self
-            .workspace
-            .list_variables(input.workspace_id.clone())
-            .await?;
-        let environments = self
-            .workspace
-            .list_environments(input.workspace_id.clone())
-            .await?;
-        let environment = match &context.environment_id {
-            Some(id) => Some(
-                environments
-                    .iter()
-                    .find(|env| &env.id == id && env.deleted_at.is_none())
-                    .ok_or_else(|| invalid("SSH_TASK_ENVIRONMENT_MISSING"))?,
-            ),
-            None => None,
-        };
-        if context.environment_updated_at.as_deref()
-            != environment.map(|env| env.updated_at.as_str())
+            .variable_snapshot(&input.workspace_id, context.environment_id.as_deref())
+            .await
+            .map_err(|error| match error {
+                unfour_core::AppError::NotFound(ref name) if name == "workspace environment" => {
+                    invalid("SSH_TASK_ENVIRONMENT_MISSING")
+                }
+                other => other,
+            })?;
+        let variables = &snapshot.variables;
+        let environment = snapshot.environment.as_ref();
+        // Older contexts can still be decoded, but a referenced value without an
+        // expected version must be reloaded, never silently upgraded to today's value.
+        if context.input_versions.is_none()
+            && context.environment_updated_at.as_deref()
+                != environment.map(|env| env.updated_at.as_str())
         {
             return Err(invalid("SSH_TASK_ENVIRONMENT_CHANGED"));
         }
-        let resolver = resolver?;
+        for (name, source) in &context.input_sources {
+            let key = name.trim().to_lowercase();
+            let version = match source {
+                SshTaskInputSource::Manual => continue,
+                SshTaskInputSource::Workspace => variables
+                    .iter()
+                    .find(|v| v.is_enabled && v.key.trim().to_lowercase() == key)
+                    .map(|v| (&v.id, v.revision)),
+                SshTaskInputSource::Environment => environment.and_then(|env| {
+                    env.variables
+                        .iter()
+                        .find(|v| v.is_enabled && v.key.trim().to_lowercase() == key)
+                        .map(|v| (&v.id, v.revision))
+                }),
+            };
+            let expected = context
+                .input_versions
+                .as_ref()
+                .and_then(|versions| versions.get(name));
+            if !version
+                .zip(expected)
+                .is_some_and(|((id, revision), expected)| {
+                    *id == expected.id && revision == expected.revision
+                })
+            {
+                return Err(invalid("SSH_TASK_INPUTS_CHANGED"));
+            }
+        }
+        let workspace_resolver = snapshot.resolver(false);
+        let resolver = snapshot.resolver(true);
         for (name, source) in &context.input_sources {
             let key = name.trim().to_lowercase();
             let workspace_match = variables.iter().find(|v| {
@@ -111,8 +130,7 @@ impl CommandBus {
     }
 }
 
-// Resolver and metadata are separate reads. Refuse a changed source instead of
-// executing a stale value or a workspace fallback after an environment edit.
+// Defense in depth against accidental fallback/lookup mismatches within the snapshot.
 fn checked_source_value(resolved: String, current: &str) -> AppResult<String> {
     if resolved != current {
         return Err(unfour_core::AppError::Validation(
@@ -127,7 +145,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ssh_context_rejects_values_changed_between_resolver_and_metadata_reads() {
+    fn ssh_context_rejects_resolver_lookup_fallbacks() {
         assert!(checked_source_value("stale-secret".into(), "rotated-secret").is_err());
         assert!(checked_source_value("workspace-fallback".into(), "environment").is_err());
         assert_eq!(

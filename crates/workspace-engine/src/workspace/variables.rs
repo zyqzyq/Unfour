@@ -29,6 +29,24 @@ pub struct WorkspaceVariableResolver {
 }
 
 impl WorkspaceVariableResolver {
+    pub(super) fn from_values(values: HashMap<String, (String, bool)>) -> Self {
+        let secrets = values
+            .iter()
+            .filter(|(key, (value, secret))| {
+                !value.is_empty()
+                    && unfour_core::redaction::is_sensitive_workspace_variable(key, value, *secret)
+            })
+            .map(|(_, (value, _))| value.clone())
+            .collect();
+        Self {
+            values: values
+                .into_iter()
+                .map(|(key, (value, _))| (key, value))
+                .collect(),
+            secrets,
+        }
+    }
+
     pub fn resolve(&self, input: &str) -> AppResult<String> {
         resolve_template(input, &self.values)
     }
@@ -147,22 +165,7 @@ impl WorkspaceService {
         }
 
         connection.rollback().await?;
-        let secrets = values
-            .iter()
-            .filter(|(key, (value, secret))| {
-                !value.is_empty()
-                    && unfour_core::redaction::is_sensitive_workspace_variable(key, value, *secret)
-            })
-            .map(|(_, (value, _))| value.clone())
-            .collect();
-        let resolved = values
-            .into_iter()
-            .map(|(key, (value, _))| (key, value))
-            .collect();
-        Ok(WorkspaceVariableResolver {
-            values: resolved,
-            secrets,
-        })
+        Ok(WorkspaceVariableResolver::from_values(values))
     }
 }
 

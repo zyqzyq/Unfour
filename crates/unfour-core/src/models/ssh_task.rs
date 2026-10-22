@@ -116,6 +116,16 @@ pub struct SshTaskRunContextInput {
     pub environment_updated_at: Option<String>,
     #[serde(default)]
     pub input_sources: BTreeMap<String, SshTaskInputSource>,
+    /// Expected versions of referenced variables, never their values. Absent on older clients.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_versions: Option<BTreeMap<String, SshTaskInputVersion>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SshTaskInputVersion {
+    pub id: String,
+    pub revision: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

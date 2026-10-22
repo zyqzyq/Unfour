@@ -1437,6 +1437,8 @@
         "exitCode": "exit {code}",
         "historyReplayHint": "No output is available for this past run.",
         "usePrevious": "Use previous parameters",
+        "editsKept": "Your edits are kept. Reopen this dialog before restoring previous parameters.",
+        "inputsChanged": "Referenced variables changed. Reopen the run dialog to reload and review the parameters.",
         "noPrevious": "No previous run is available.",
         "legacyContext": "This run has no saved parameters. Current defaults are loaded; review the connection and environment.",
         "taskChanged": "The task definition changed. All enabled steps in the current definition will run from the beginning. Review the inputs.",

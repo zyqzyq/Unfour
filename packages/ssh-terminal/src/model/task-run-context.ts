@@ -1,4 +1,4 @@
-import type { SshTaskDetail, SshTaskInputSource, SshTaskRun } from "@unfour/command-client";
+import type { SshTaskDetail, SshTaskInputSource, SshTaskRun, SshTaskRunContextInput } from "@unfour/command-client";
 import { activeWorkspaceEnvironmentId, defaultTaskRunInputs, mergeWorkspaceVariables, workspaceEnvironmentById, type WorkspaceEnvironmentLike, type WorkspaceVariableLike } from "./task-run-inputs";
 import { detectTaskInputs, preferredTaskConnectionId } from "./task-template";
 
@@ -21,6 +21,18 @@ export function taskRunDefaults(names: string[], variables: WorkspaceVariableLik
     sources[name] = environmentKeys.has(key) ? "environment" : merged.has(key) ? "workspace" : "manual";
   }
   return { ...defaults, sources, secretNames: names.filter((name) => sensitiveTaskInput(name) || defaults.secretNames.includes(name)) };
+}
+
+// Only metadata for the explicitly selected sources travels back to execution.
+export function taskInputVersions(sources: Record<string, SshTaskInputSource>, variables: WorkspaceVariableLike[], environment: WorkspaceEnvironmentLike | null) {
+  const versions: NonNullable<SshTaskRunContextInput["inputVersions"]> = {};
+  for (const [name, source] of Object.entries(sources)) {
+    if (source === "manual") continue;
+    const candidates = source === "workspace" ? variables : environment?.variables ?? [];
+    const variable = candidates.find((v) => v.isEnabled && !v.deletedAt && v.key.trim().toLowerCase() === name.trim().toLowerCase());
+    if (variable?.id && variable.revision !== undefined) versions[name] = { id: variable.id, revision: variable.revision };
+  }
+  return versions;
 }
 
 export function restoreTaskRunInputs(names: string[], variables: WorkspaceVariableLike[], environment: WorkspaceEnvironmentLike | null, run: SshTaskRun) {

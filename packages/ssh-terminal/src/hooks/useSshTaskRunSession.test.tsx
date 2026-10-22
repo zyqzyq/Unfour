@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SshTaskDetail, SshTaskRun, SshTaskRunEvent } from "@unfour/command-client";
+import type { SshTaskDetail, SshTaskRun, SshTaskRunEvent, WorkspaceVariable } from "@unfour/command-client";
 
 const warningMock = vi.hoisted(() => vi.fn());
 vi.mock("@unfour/ui", async (importOriginal) => ({
@@ -307,7 +307,7 @@ describe("task mutations and output ownership", () => {
     await act(async () => { await result.current.runMutation.mutateAsync(); });
     expect(runSshTask).toHaveBeenCalledExactlyOnceWith({
       workspaceId: "w1", taskId: "task", connectionId: null, inputs: { ARG: "fixture" }, secretInputNames: [],
-      context: { environmentId: null, environmentUpdatedAt: null, taskVersion: "", inputSources: { ARG: "manual" } },
+      context: { environmentId: null, environmentUpdatedAt: null, taskVersion: "", inputSources: { ARG: "manual" }, inputVersions: {} },
     });
     expect(result.current.activeRunTask).toEqual(detail);
     expect(result.current.runDialogTask).toBeNull();
@@ -540,6 +540,81 @@ it("keeps cleared task history when activity logging fails", async () => {
 
 
 describe("rerun dialog ownership", () => {
+  it.each(["input", "connection", "environment", "secret"])("preserves edited %s and every other selection when previous parameters are requested", async (edit) => {
+    vi.mocked(getSshTask).mockResolvedValue(inputDetail);
+    vi.mocked(listSshTaskRuns).mockResolvedValue([{ ...run(), context: { version: 1, environmentId: "past-env", environmentUpdatedAt: "old", taskVersion: "old", inputs: { VERSION: { source: "manual", value: "past" } } } }]);
+    const { result } = await setup();
+    await act(async () => { await result.current.prepareRun("task"); });
+    if (edit === "input") act(() => result.current.setRunInputs({ VERSION: "typed", CUSTOM: "custom" }));
+    if (edit === "connection") act(() => result.current.setRunConnectionId("selected"));
+    if (edit === "environment") await act(async () => { await result.current.changeRunEnvironment("selected-env"); });
+    if (edit === "secret") act(() => result.current.toggleSecretInput("CUSTOM"));
+    const before = { inputs: result.current.runInputs, connection: result.current.runConnectionId, environment: result.current.runEnvironmentId, secrets: result.current.runSecretInputs };
+    await act(async () => { await result.current.restorePreviousRun(); });
+    expect({ inputs: result.current.runInputs, connection: result.current.runConnectionId, environment: result.current.runEnvironmentId, secrets: result.current.runSecretInputs }).toEqual(before);
+    expect(result.current.runNotice).toContain("Your edits are kept");
+    expect(getSshTask).toHaveBeenCalledOnce();
+    expect(listSshTaskRuns).not.toHaveBeenCalled();
+    expect(runSshTask).not.toHaveBeenCalled();
+    act(() => result.current.closeRunDialog());
+    await act(async () => { await result.current.prepareRun("task"); });
+    // A new dialog starts clean; a prior edit must not permanently disable recall.
+    await act(async () => { await result.current.restorePreviousRun(); });
+    expect(result.current.runInputs.VERSION).toBe("past");
+  });
+
+  it("coalesces restore clicks and preserves edits made while history is loading", async () => {
+    vi.mocked(getSshTask).mockResolvedValue(inputDetail);
+    const history = deferred<SshTaskRun[]>();
+    vi.mocked(listSshTaskRuns).mockReturnValue(history.promise);
+    const { result } = await setup();
+    await act(async () => { await result.current.prepareRun("task"); });
+    let restoring!: Promise<void> | null;
+    await act(async () => { restoring = result.current.restorePreviousRun(); await result.current.restorePreviousRun(); });
+    expect(listSshTaskRuns).toHaveBeenCalledOnce();
+    act(() => { result.current.setRunInputs({ VERSION: "typed", CUSTOM: "edited" }); result.current.setRunConnectionId("selected"); });
+    await act(async () => { history.resolve([run()]); await restoring; });
+    expect(result.current.runInputs).toEqual({ VERSION: "typed", CUSTOM: "edited" });
+    expect(result.current.runConnectionId).toBe("selected");
+    expect(result.current.runNotice).toContain("Your edits are kept");
+    expect(result.current.runPreparing).toBe(false);
+    await act(async () => { await result.current.runMutation.mutateAsync(); });
+    expect(runSshTask).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the current dialog usable after restore fails or finds no previous run", async () => {
+    const { result, handleError } = await setup();
+    await act(async () => { await result.current.prepareRun("task"); });
+    vi.mocked(listSshTaskRuns).mockRejectedValueOnce(new Error("history unavailable")).mockResolvedValueOnce([]);
+    await act(async () => { await result.current.restorePreviousRun(); });
+    expect(result.current.runDialogTask).toEqual(detail);
+    expect(handleError).toHaveBeenCalledOnce();
+    await act(async () => { await result.current.restorePreviousRun(); });
+    expect(result.current.runDialogTask).toEqual(detail);
+    expect(result.current.runNotice).toBeTruthy();
+    await act(async () => { await result.current.runMutation.mutateAsync(); });
+    expect(runSshTask).toHaveBeenCalledOnce();
+  });
+
+  it("sends the displayed variable versions without sending their values and excludes manual overrides", async () => {
+    vi.mocked(getSshTask).mockResolvedValue(inputDetail);
+    const variable: WorkspaceVariable = { id: "var", workspaceId: "w1", key: "VERSION", value: "displayed-secret", isSecret: true, isEnabled: true, description: null, sortOrder: 0, createdAt: "", updatedAt: "", deletedAt: null, revision: 4 };
+    vi.mocked(listWorkspaceVariables).mockResolvedValue([variable]);
+    vi.mocked(runSshTask).mockRejectedValue(new Error("SSH_TASK_INPUTS_CHANGED"));
+    const { result } = await setup();
+    await act(async () => { await result.current.prepareRun("task"); });
+    // Later list results must not refresh the submitted expectation behind the user's back.
+    vi.mocked(listWorkspaceVariables).mockResolvedValue([{ ...variable, revision: 5, value: "rotated-secret" }]);
+    await act(async () => { await expect(result.current.runMutation.mutateAsync()).rejects.toThrow("SSH_TASK_INPUTS_CHANGED"); });
+    expect(runSshTask).toHaveBeenLastCalledWith(expect.objectContaining({ inputs: { VERSION: "", CUSTOM: "" }, context: expect.objectContaining({ inputVersions: { VERSION: { id: "var", revision: 4 } } }) }));
+    expect(JSON.stringify(vi.mocked(runSshTask).mock.calls)).not.toContain("displayed-secret");
+    expect(result.current.runInputs.VERSION).toBe("displayed-secret");
+    act(() => result.current.setRunInputs({ VERSION: "typed", CUSTOM: "custom" }));
+    vi.mocked(runSshTask).mockResolvedValue(run());
+    await act(async () => { await result.current.runMutation.mutateAsync(); });
+    expect(runSshTask).toHaveBeenLastCalledWith(expect.objectContaining({ inputs: { VERSION: "typed", CUSTOM: "custom" }, context: expect.objectContaining({ inputVersions: {}, inputSources: { VERSION: "manual", CUSTOM: "manual" } }) }));
+  });
+
   it("restores failed history into the current definition and does not execute until submitted", async () => {
     vi.mocked(getSshTask).mockResolvedValue(inputDetail);
     const previous: SshTaskRun = { ...run(), status: "failed", context: { version: 1, environmentId: "deleted-env", environmentUpdatedAt: "old", taskVersion: "old",

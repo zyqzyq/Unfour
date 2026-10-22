@@ -1435,6 +1435,8 @@
         "exitCode": "退出码 {code}",
         "historyReplayHint": "此次历史运行没有可显示的输出。",
         "usePrevious": "使用上次参数",
+        "editsKept": "已保留当前编辑。如需恢复上次参数，请重新打开运行弹窗。",
+        "inputsChanged": "引用的变量已变化。请重新打开运行弹窗，加载并核对参数。",
         "noPrevious": "暂无可恢复的执行记录。",
         "legacyContext": "此历史记录未保存参数，将使用当前默认值。请确认连接和环境。",
         "taskChanged": "任务定义已变化，将使用当前定义从第一个启用步骤完整执行。请检查参数。",
