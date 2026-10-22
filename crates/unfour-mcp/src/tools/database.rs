@@ -1,5 +1,4 @@
 use serde_json::{json, Map, Value};
-use unfour_command_bus::{ReadCommand, ReadCommandResult};
 use unfour_core::models::{
     DatabaseConnection, DatabaseExportContent, DatabaseExportFormat, DatabaseExportTableInput,
     DatabaseQueryInput, DatabaseTableStructureInput,
@@ -410,11 +409,11 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
 
 fn db_list_connections(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["workspaceId"])?;
-    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let workspace_id = resolve_workspace_id(evaluation, &arguments)?;
 
     let connections = command_bus
         .list_db_connections(&workspace_id)
@@ -431,7 +430,7 @@ fn db_list_connections(
 
 fn db_list_tables(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -439,7 +438,7 @@ fn db_list_tables(
         &["connectionId", "workspaceId", "limit", "catalog", "schema"],
     )?;
     let connection_id = parse_required_string(&arguments, "connectionId", "unfour.db.list_tables")?;
-    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let workspace_id = resolve_workspace_id(evaluation, &arguments)?;
     let limit = parse_optional_limit(&arguments, "limit", DEFAULT_TABLE_LIMIT, MAX_TABLE_LIMIT)?;
     let catalog = parse_optional_string(&arguments, "catalog")?;
     let schema = parse_optional_string(&arguments, "schema")?;
@@ -483,7 +482,7 @@ fn db_list_tables(
 
 fn db_describe_table(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -501,7 +500,7 @@ fn db_describe_table(
     let table_name = parse_required_string(&arguments, "tableName", "unfour.db.describe_table")?;
     let catalog = parse_optional_string(&arguments, "catalog")?;
     let schema = parse_optional_string(&arguments, "schema")?;
-    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let workspace_id = resolve_workspace_id(evaluation, &arguments)?;
     let table = command_bus
         .get_db_table_structure(DatabaseTableStructureInput {
             workspace_id,
@@ -550,7 +549,7 @@ fn describe_table_output_schema() -> Value {
 
 fn db_export_table(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -574,7 +573,7 @@ fn db_export_table(
     let connection_id =
         parse_required_string(&arguments, "connectionId", "unfour.db.export_table")?;
     let table_name = parse_required_string(&arguments, "tableName", "unfour.db.export_table")?;
-    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let workspace_id = resolve_workspace_id(evaluation, &arguments)?;
     let catalog = parse_optional_string(&arguments, "catalog")?;
     let schema = parse_optional_string(&arguments, "schema")?;
     let columns = parse_export_columns(&arguments)?;
@@ -678,7 +677,7 @@ fn db_export_table(
 
 fn db_query_readonly(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -696,7 +695,7 @@ fn db_query_readonly(
     let connection_id =
         parse_required_string(&arguments, "connectionId", "unfour.db.query_readonly")?;
     let sql = parse_required_string(&arguments, "sql", "unfour.db.query_readonly")?;
-    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let workspace_id = resolve_workspace_id(evaluation, &arguments)?;
     let limit = parse_optional_limit(&arguments, "limit", DEFAULT_QUERY_LIMIT, MAX_QUERY_LIMIT)?;
     let catalog = parse_optional_string(&arguments, "catalog")?;
     let schema = parse_optional_string(&arguments, "schema")?;
@@ -775,7 +774,7 @@ fn db_execute(
     )?;
     let connection_id = parse_required_string(&arguments, "connectionId", "unfour.db.execute")?;
     let sql = parse_required_string(&arguments, "sql", "unfour.db.execute")?;
-    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let workspace_id = resolve_workspace_id(evaluation, &arguments)?;
     let limit = parse_optional_limit(&arguments, "limit", DEFAULT_QUERY_LIMIT, MAX_QUERY_LIMIT)?;
     let catalog = parse_optional_string(&arguments, "catalog")?;
     let schema = parse_optional_string(&arguments, "schema")?;
@@ -881,7 +880,7 @@ fn db_execute(
 
 fn db_explain(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -898,7 +897,7 @@ fn db_explain(
     )?;
     let connection_id = parse_required_string(&arguments, "connectionId", "unfour.db.explain")?;
     let sql = parse_required_string(&arguments, "sql", "unfour.db.explain")?;
-    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let workspace_id = resolve_workspace_id(evaluation, &arguments)?;
     let limit = parse_optional_limit(&arguments, "limit", DEFAULT_QUERY_LIMIT, MAX_QUERY_LIMIT)?;
     let catalog = parse_optional_string(&arguments, "catalog")?;
     let schema = parse_optional_string(&arguments, "schema")?;
@@ -962,20 +961,24 @@ fn sql_driver_hint(
         .and_then(|connections| {
             connections
                 .into_iter()
-                .find(|connection| connection.id == connection_id)
+                .find(|connection| {
+                    connection.id == connection_id
+                        && connection.workspace_id == workspace_id
+                        && connection.deleted_at.is_none()
+                })
                 .map(|connection| connection.driver)
         })
 }
 
 fn db_test_connection(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["connectionId", "workspaceId"])?;
     let connection_id =
         parse_required_string(&arguments, "connectionId", "unfour.db.test_connection")?;
-    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let workspace_id = resolve_workspace_id(evaluation, &arguments)?;
 
     match command_bus.test_db_connection(&workspace_id, &connection_id) {
         Ok(result) => Ok(json!({

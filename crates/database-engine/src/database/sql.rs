@@ -549,6 +549,20 @@ pub fn sql_is_single_statement_for_driver(sql: &str, driver: Option<&str>) -> bo
     }
 }
 
+/// True only for one parsed UPDATE/DELETE with an outer WHERE expression.
+/// Without a saved driver every supported dialect must prove the predicate;
+/// comments, literals, nested queries and unrecognized grammar are no proof.
+pub fn sql_has_outer_write_where_for_driver(sql: &str, driver: Option<&str>) -> bool {
+    let proven = |dialect| {
+        sql_is_single_statement(sql, dialect)
+            && super::script_parser::has_outer_write_where(sql, dialect)
+    };
+    match driver.map(DatabaseDialect::for_driver) {
+        Some(dialect) => proven(dialect),
+        None => SAFETY_DIALECTS.into_iter().all(proven),
+    }
+}
+
 const SAFETY_DIALECTS: [DatabaseDialect; 4] = [
     DatabaseDialect::Sqlite,
     DatabaseDialect::Postgres,

@@ -1,6 +1,7 @@
 use super::*;
 use sqlparser::dialect::{Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::tokenizer::{Location, Token, TokenWithSpan, Tokenizer};
+use sqlparser::{ast::Statement, parser::Parser};
 
 pub(super) struct ScriptStatement {
     pub index: usize,
@@ -15,6 +16,19 @@ fn parser_dialect(dialect: DatabaseDialect) -> Box<dyn Dialect> {
         DatabaseDialect::Mysql => Box::new(MySqlDialect {}),
         DatabaseDialect::Sqlite => Box::new(SQLiteDialect {}),
         _ => Box::new(GenericDialect {}),
+    }
+}
+
+/// Prove the predicate belongs to a single, direct UPDATE/DELETE. Unsupported
+/// syntax, wrappers (including CTEs), and parse failures cannot waive a prompt.
+pub(super) fn has_outer_write_where(sql: &str, dialect: DatabaseDialect) -> bool {
+    let Ok(statements) = Parser::parse_sql(parser_dialect(dialect).as_ref(), sql) else {
+        return false;
+    };
+    match statements.as_slice() {
+        [Statement::Update(update)] => update.selection.is_some(),
+        [Statement::Delete(delete)] => delete.selection.is_some(),
+        _ => false,
     }
 }
 

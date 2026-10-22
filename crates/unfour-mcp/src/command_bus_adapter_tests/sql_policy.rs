@@ -7,7 +7,7 @@ use sqlx::Row;
 use std::path::{Path, PathBuf};
 use unfour_core::models::DatabaseConnectionInput;
 
-fn workspace(adapter: &LocalCommandBusAdapter, env: &str, policy: &str) -> String {
+pub(super) fn workspace(adapter: &LocalCommandBusAdapter, env: &str, policy: &str) -> String {
     adapter
         .run(adapter.bus.create_workspace_with_options(
             format!("sql-policy-{env}-{policy}-{}", unfour_core::id::new_id()),
@@ -18,13 +18,13 @@ fn workspace(adapter: &LocalCommandBusAdapter, env: &str, policy: &str) -> Strin
         .id
 }
 
-struct SqliteFile {
-    path: PathBuf,
+pub(super) struct SqliteFile {
+    pub(super) path: PathBuf,
     journal_mode: String,
 }
 
 impl SqliteFile {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         let path = std::env::temp_dir().join(format!(
             "unfour-mcp-sql-policy-{}.sqlite",
             unfour_core::id::new_id()
@@ -50,7 +50,7 @@ impl SqliteFile {
         Self { path, journal_mode }
     }
 
-    fn snapshot(&self) -> (i64, Vec<String>, String) {
+    pub(super) fn snapshot(&self) -> (i64, Vec<String>, String) {
         let path = self.path.clone();
         block_on(async move {
             let pool = open_pool(&path).await;
@@ -74,6 +74,18 @@ impl SqliteFile {
                 .get::<String, _>(0);
             pool.close().await;
             (count, tables, mode)
+        })
+    }
+
+    pub(super) fn names(&self) -> Vec<String> {
+        block_on(async {
+            let pool = open_pool(&self.path).await;
+            let names = sqlx::query_scalar("SELECT name FROM items ORDER BY id")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+            pool.close().await;
+            names
         })
     }
 }
@@ -106,7 +118,7 @@ async fn open_pool(path: &Path) -> sqlx::SqlitePool {
         .unwrap()
 }
 
-fn connect(adapter: &LocalCommandBusAdapter, workspace_id: &str, path: &Path) -> String {
+pub(super) fn connect(adapter: &LocalCommandBusAdapter, workspace_id: &str, path: &Path) -> String {
     adapter
         .save_db_connection(DatabaseConnectionInput {
             id: None,
@@ -318,4 +330,87 @@ fn dev_full_access_still_runs_ordinary_inserts_without_confirmation() {
     assert_eq!(inserted["isError"], false, "{inserted}");
     adapter.shutdown();
     assert_eq!(file.snapshot().0, 2);
+}
+
+#[test]
+fn guarded_forged_where_never_writes_sqlite_before_confirmation() {
+    for sql in [
+        "DELETE FROM items /* WHERE id = 1 */",
+        "DELETE FROM items -- WHERE id = 1",
+        "UPDATE items SET name = 'where'",
+        "UPDATE items SET name = (SELECT name || '-changed' FROM items WHERE id = 1)",
+        "UPDATE items SET name = 'changed' RETURNING 'where'",
+        "WITH c AS (SELECT id FROM items WHERE id = 1) DELETE FROM items",
+        "WITH c AS (SELECT id FROM items WHERE id = 1) UPDATE items SET name = 'changed'",
+    ] {
+        let file = SqliteFile::new();
+        let before = file.snapshot();
+        let names = file.names();
+        let adapter = LocalCommandBusAdapter::ephemeral().unwrap();
+        let workspace_id = workspace(&adapter, "test", "guarded");
+        let connection_id = connect(&adapter, &workspace_id, &file.path);
+        let registry = ToolRegistry::with_command_bus(adapter.clone());
+        let mut args =
+            json!({"workspaceId": workspace_id, "connectionId": connection_id, "sql": sql});
+        let required = call(&registry, "unfour.db.execute", args.clone());
+        // Check the real data even if the old implementation executed the SQL.
+        assert_eq!(
+            file.snapshot(),
+            before,
+            "unconfirmed SQL changed SQLite: {sql}"
+        );
+        assert_eq!(file.names(), names, "unconfirmed SQL changed values: {sql}");
+        let error = error_json(&required);
+        assert_eq!(
+            error["error"]["code"], "CONFIRMATION_REQUIRED",
+            "{sql}: {required}"
+        );
+        args["confirm"] = json!(true);
+        args["confirmation_text"] = error["confirmation_text"].clone();
+        let executed = call(&registry, "unfour.db.execute", args);
+        assert_eq!(executed["isError"], false, "{sql}: {executed}");
+        assert!(
+            file.snapshot() != before || file.names() != names,
+            "confirmed SQL must execute: {sql}"
+        );
+        adapter.shutdown();
+    }
+}
+
+#[test]
+fn forged_where_keeps_full_access_guarded_and_read_only_semantics() {
+    for policy in ["full_access", "guarded", "read_only"] {
+        let file = SqliteFile::new();
+        let adapter = LocalCommandBusAdapter::ephemeral().unwrap();
+        let workspace_id = workspace(&adapter, "dev", policy);
+        let connection_id = connect(&adapter, &workspace_id, &file.path);
+        let registry = ToolRegistry::with_command_bus(adapter.clone());
+        let result = call(
+            &registry,
+            "unfour.db.execute",
+            json!({
+                "workspaceId":workspace_id, "connectionId":connection_id,
+                "sql":"UPDATE items SET name = 'where'"
+            }),
+        );
+        match policy {
+            "full_access" => {
+                assert_eq!(result["isError"], false, "{result}");
+                assert_eq!(file.names(), vec!["where"]);
+            }
+            "guarded" | "read_only" => {
+                assert_eq!(
+                    error_json(&result)["error"]["code"],
+                    if policy == "guarded" {
+                        "CONFIRMATION_REQUIRED"
+                    } else {
+                        "WORKSPACE_POLICY_BLOCKED"
+                    }
+                );
+                assert_eq!(file.names(), vec!["kept"]);
+            }
+            _ => unreachable!(),
+        }
+        adapter.shutdown();
+    }
 }

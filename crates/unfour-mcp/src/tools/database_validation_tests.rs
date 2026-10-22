@@ -5,6 +5,78 @@ use super::*;
 // --- SQL validation unit tests ---
 
 #[test]
+fn sql_risk_requires_a_real_outer_where() {
+    for driver in [
+        None,
+        Some("sqlite"),
+        Some("postgres"),
+        Some("mysql"),
+        Some("other"),
+    ] {
+        for sql in [
+            "DELETE FROM users /* WHERE id = 1 */",
+            "DELETE FROM users -- WHERE id = 1",
+            "UPDATE users SET email = 'where'",
+            "UPDATE users SET \"where\" = 1",
+            "UPDATE users SET email = (SELECT email FROM users WHERE id = 1)",
+            "DELETE FROM users RETURNING (SELECT id FROM users WHERE id = 1)",
+            "UPDATE users SET email = 'x' RETURNING 'where'",
+            "WITH c AS (SELECT id FROM users WHERE id = 1) DELETE FROM users",
+            "WITH c AS (SELECT id FROM users WHERE id = 1) UPDATE users SET email = 'x'",
+            "WITH d AS (DELETE FROM users RETURNING *) UPDATE users SET email = 'x' WHERE id = 1",
+            "UPDATE users SET email = 'x' WHERE",
+            "UPDATE users SET email = 'x' WHERE id = 1 unexpected syntax",
+        ] {
+            assert!(
+                classify_sql_risk(sql, driver).requires_confirmation,
+                "{driver:?}: {sql}"
+            );
+        }
+        for sql in [
+            "UPDATE users SET email = 'where' WHERE id = 1",
+            "DELETE FROM users WHERE id IN (SELECT id FROM users WHERE id = 1)",
+            "/* comment */ UPDATE users SET email = 'x' WHERE id = 1",
+        ] {
+            assert!(
+                !classify_sql_risk(sql, driver).requires_confirmation,
+                "{driver:?}: {sql}"
+            );
+        }
+    }
+    for (driver, sql) in [
+        ("sqlite", "UPDATE [users] SET email = 'where'"),
+        ("postgres", "UPDATE users SET email = $$where$$"),
+        (
+            "postgres",
+            "DELETE FROM users /* outer /* nested */ WHERE id = 1 */",
+        ),
+        ("mysql", "DELETE FROM `users` # WHERE id = 1"),
+        ("mysql", "UPDATE `users` SET email = 'where' LIMIT 1"),
+    ] {
+        assert!(
+            classify_sql_risk(sql, Some(driver)).requires_confirmation,
+            "{driver}: {sql}"
+        );
+    }
+    for (driver, sql) in [
+        ("sqlite", "UPDATE [users] SET email = 'where' WHERE id = 1"),
+        (
+            "postgres",
+            "UPDATE users SET email = $$where$$ WHERE id = 1",
+        ),
+        (
+            "mysql",
+            "UPDATE `users` SET email = 'where' WHERE id = 1 LIMIT 1",
+        ),
+    ] {
+        assert!(
+            !classify_sql_risk(sql, Some(driver)).requires_confirmation,
+            "{driver}: {sql}"
+        );
+    }
+}
+
+#[test]
 fn validate_readonly_sql_case_insensitive() {
     assert!(validate_readonly_sql("SELECT 1").is_ok());
     assert!(validate_readonly_sql("select 1").is_ok());

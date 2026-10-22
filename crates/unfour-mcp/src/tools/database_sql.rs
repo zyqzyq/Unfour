@@ -1,6 +1,6 @@
 use unfour_command_bus::{
-    classify_sql_safety, sql_is_proven_read_for_driver, sql_is_single_statement_for_driver,
-    DatabaseDialect,
+    classify_sql_safety, sql_has_outer_write_where_for_driver, sql_is_proven_read_for_driver,
+    sql_is_single_statement_for_driver, DatabaseDialect,
 };
 use unfour_core::models::DatabaseQuerySafety;
 
@@ -84,18 +84,17 @@ pub(super) fn classify_sql_risk(sql: &str, driver: Option<&str>) -> SqlRisk {
         .next()
         .unwrap_or_default()
         .to_ascii_lowercase();
-    let lower = stripped.to_ascii_lowercase();
     // Ordinary dev/test writes keep their previous confirmation rules. Anything
     // the engine cannot prove is one of those statements, including wrappers,
     // still requires confirmation before a write flag is sent.
     match (safety.classification.as_str(), keyword.as_str()) {
-        ("mutation", "delete") if !contains_where(&lower) => SqlRisk {
+        ("mutation", "delete") if !sql_has_outer_write_where_for_driver(sql, driver) => SqlRisk {
             statement_type: "mutation",
             requires_confirmation: true,
             confirmation_code: "DELETE_WITHOUT_WHERE",
             reason: "DELETE without WHERE is dangerous and may affect an entire table.",
         },
-        ("mutation", "update") if !contains_where(&lower) => SqlRisk {
+        ("mutation", "update") if !sql_has_outer_write_where_for_driver(sql, driver) => SqlRisk {
             statement_type: "mutation",
             requires_confirmation: true,
             confirmation_code: "UPDATE_WITHOUT_WHERE",
@@ -174,12 +173,6 @@ fn statement_type(classification: &str) -> &'static str {
         "transaction-control" => "transaction-control",
         _ => "unknown",
     }
-}
-
-pub(super) fn contains_where(lower_sql: &str) -> bool {
-    lower_sql
-        .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
-        .any(|token| token == "where")
 }
 
 /// Strip leading SQL line comments (`--`) and block comments (`/* ... */`).

@@ -4,6 +4,48 @@ use std::fs;
 use unfour_core::models::DatabaseCellValueMode;
 
 #[test]
+fn outer_write_where_requires_one_parsed_direct_mutation() {
+    for driver in [
+        None,
+        Some("sqlite"),
+        Some("postgres"),
+        Some("mysql"),
+        Some("unknown"),
+    ] {
+        for sql in [
+            "DELETE FROM users /* WHERE id = 1 */",
+            "UPDATE users SET name = 'where'",
+            "UPDATE users SET name = (SELECT name FROM users WHERE id = 1)",
+            "WITH c AS (SELECT id FROM users WHERE id = 1) DELETE FROM users",
+            "WITH c AS (SELECT 1) UPDATE users SET name = 'x' WHERE id = 1",
+            "EXPLAIN UPDATE users SET name = 'x' WHERE id = 1",
+            "UPDATE users SET name = 'x' WHERE",
+            "UPDATE users SET name = 'x' WHERE id = 1; DELETE FROM users",
+            "SELECT * FROM users WHERE id = 1",
+            "",
+        ] {
+            assert!(
+                !sql_has_outer_write_where_for_driver(sql, driver),
+                "{driver:?}: {sql}"
+            );
+        }
+        for sql in [
+            "DELETE FROM users WHERE id = 1;",
+            "UPDATE users SET name = (SELECT name FROM users WHERE id = 2) WHERE id = 1",
+        ] {
+            assert!(
+                sql_has_outer_write_where_for_driver(sql, driver),
+                "{driver:?}: {sql}"
+            );
+        }
+    }
+    assert!(!sql_has_outer_write_where_for_driver(
+        "UPDATE users SET name = 'x' /*! WHERE id = 1 */",
+        Some("mysql")
+    ));
+}
+
+#[test]
 fn classify_query_flags_writes_hidden_behind_explain_and_with() {
     // Plain reads stay no-confirmation, including read-only EXPLAIN ANALYZE.
     assert!(!classify_query("SELECT * FROM users").requires_confirmation);

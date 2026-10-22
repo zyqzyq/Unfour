@@ -51,7 +51,7 @@ pub(super) fn registered_tool() -> RegisteredTool {
 
 fn db_create_connection(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -72,7 +72,7 @@ fn db_create_connection(
             "readOnly",
         ],
     )?;
-    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let workspace_id = resolve_workspace_id(evaluation, &arguments)?;
     let name = parse_required_string(&arguments, "name", "unfour.db.create_connection")?;
     let driver = parse_required_string(&arguments, "driver", "unfour.db.create_connection")?;
     let supplied_credential_ref = parse_optional_string(&arguments, "credentialRef")?;

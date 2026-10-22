@@ -76,24 +76,13 @@ pub(super) fn result_columns(columns: &[unfour_core::models::DatabaseResultColum
 // --- Helpers ---
 
 pub(super) fn resolve_workspace_id(
-    command_bus: &dyn CommandBusAdapter,
+    evaluation: &ToolPolicyEvaluation,
     arguments: &Map<String, Value>,
 ) -> Result<String, ToolCallError> {
-    match parse_optional_string(arguments, "workspaceId")? {
-        Some(id) => Ok(id),
-        None => {
-            let ws_result = command_bus
-                .execute_read(ReadCommand::CurrentWorkspace)
-                .map_err(|e| ToolCallError::Execution {
-                    code: e.code,
-                    message: e.message,
-                })?;
-            let ReadCommandResult::CurrentWorkspace(ws) = ws_result else {
-                return Err(unexpected_result());
-            };
-            Ok(ws.workspace_id)
-        }
-    }
+    // Preserve argument validation, but never resolve the active workspace a
+    // second time after policy has authorized this call's target.
+    parse_optional_string(arguments, "workspaceId")?;
+    Ok(evaluation.workspace.workspace_id.clone())
 }
 
 pub(super) fn parse_required_string(
@@ -315,12 +304,5 @@ fn export_filter_value(value: &Value) -> Result<Option<String>, ToolCallError> {
         _ => Err(ToolCallError::InvalidArguments(
             "export filter values must be strings, numbers, or null".into(),
         )),
-    }
-}
-
-pub(super) fn unexpected_result() -> ToolCallError {
-    ToolCallError::Execution {
-        code: "COMMAND_BUS_RESULT_MISMATCH",
-        message: "The command-bus returned an unexpected result.",
     }
 }

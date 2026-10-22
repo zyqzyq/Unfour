@@ -418,7 +418,12 @@ pub(super) fn evaluate_tool_policy(
         }
     }
 
-    let database_driver = database_driver_hint(command_bus, tool_name, arguments);
+    let workspace = match workspace_id {
+        Some(workspace_id) => workspace_context_by_id(command_bus, &workspace_id)?,
+        None => active_workspace_context(command_bus)?,
+    };
+    let database_driver =
+        database_driver_hint(command_bus, tool_name, arguments, &workspace.workspace_id);
     let (capability, risk) = if tool_name == "unfour.api.send_request" && saved_request_has_scripts
     {
         (McpCapability::ApiMutate, McpRisk::Write)
@@ -431,11 +436,6 @@ pub(super) fn evaluate_tool_policy(
         )
         .ok_or_else(unclassified_policy_error)?
     };
-    let workspace = match workspace_id {
-        Some(workspace_id) => workspace_context_by_id(command_bus, &workspace_id)?,
-        None => active_workspace_context(command_bus)?,
-    };
-
     let resolved_policy = resolve_mcp_policy(&workspace);
     check_mcp_permission(&workspace, capability, risk).map_err(ToolCallError::PolicyBlocked)?;
     Ok(ToolPolicyEvaluation {
@@ -532,6 +532,7 @@ fn database_driver_hint(
     command_bus: &dyn CommandBusAdapter,
     tool_name: &str,
     arguments: &Map<String, Value>,
+    workspace_id: &str,
 ) -> Option<String> {
     if tool_name != "unfour.db.execute" {
         return None;
@@ -543,15 +544,15 @@ fn database_driver_hint(
         return None;
     }
     let connection_id = parse_optional_string(arguments, "connectionId")?;
-    let workspace_id = match parse_optional_string(arguments, "workspaceId") {
-        Some(workspace_id) => workspace_id,
-        None => active_workspace_context(command_bus).ok()?.workspace_id,
-    };
     command_bus
-        .list_db_connections(&workspace_id)
+        .list_db_connections(workspace_id)
         .ok()?
         .into_iter()
-        .find(|connection| connection.id == connection_id)
+        .find(|connection| {
+            connection.id == connection_id
+                && connection.workspace_id == workspace_id
+                && connection.deleted_at.is_none()
+        })
         .map(|connection| connection.driver)
 }
 

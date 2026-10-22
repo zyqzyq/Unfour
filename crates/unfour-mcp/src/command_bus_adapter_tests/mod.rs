@@ -1,5 +1,6 @@
 use std::future::Future;
 mod cancellation;
+mod database_workspace;
 mod diagnostics;
 mod flow;
 mod script_diagnostics;
