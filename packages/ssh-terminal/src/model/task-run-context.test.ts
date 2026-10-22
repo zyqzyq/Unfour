@@ -42,6 +42,37 @@ describe("task run recall", () => {
     expect(restored.inputs.custom).toBe("");
     expect(restored.inputs.region).toBe("workspace-private");
     expect(restored.secretNames).toEqual(expect.arrayContaining(["custom", "region"]));
+    expect(restored.automaticSecretNames).toEqual(expect.arrayContaining(["custom", "region"]));
+  });
+  it.each(["workspace", "environment"] as const)("locks the actual historical %s source rather than the merged default", (source) => {
+    const previous = { ...run, context: { ...run.context!, inputs: { region: { source } } } };
+    const workspace = [variable(" REGION ", "workspace-private", source === "workspace")];
+    const env = { ...environment, variables: [variable("region", "environment-private", source === "environment")] };
+    const restored = restoreTaskRunInputs(["region"], workspace, env, previous);
+    expect(restored.inputs.region).toBe(`${source}-private`);
+    expect(restored.automaticSecretNames).toEqual(["region"]);
+
+    const publicSource = restoreTaskRunInputs(["region"], workspace.map((v) => ({ ...v, isSecret: !v.isSecret })),
+      { ...env, variables: env.variables.map((v) => ({ ...v, isSecret: !v.isSecret })) }, previous);
+    expect(publicSource.automaticSecretNames).toEqual([]);
+  });
+  it.each(["removed", "disabled", "deleted", "public"])("retains historical secret provenance when its source is %s", (change) => {
+    const previous = { ...run, context: { ...run.context!, inputs: { region: { source: "workspace" as const, secret: true } } } };
+    const workspace = change === "removed" ? [] : [{ ...variable("region", "current", change !== "public"),
+      isEnabled: change !== "disabled", deletedAt: change === "deleted" ? "now" : null }];
+    const restored = restoreTaskRunInputs(["region"], workspace, environment, previous);
+    expect(restored.inputs.region).toBe(change === "public" ? "current" : "");
+    expect(restored.automaticSecretNames).toEqual(["region"]);
+    expect(restored.secretNames).toEqual(["region"]);
+  });
+  it("keeps restored explicit manual secrets locked without promoting ordinary manual values", () => {
+    const previous = { ...run, context: { ...run.context!, inputs: {
+      region: { source: "manual" as const, value: "unsafe", secret: true },
+      version: { source: "manual" as const, value: "public" },
+    } } };
+    const restored = restoreTaskRunInputs(["region", "version"], variables, environment, previous);
+    expect(restored.inputs).toEqual({ region: "", version: "public" });
+    expect(restored.automaticSecretNames).toEqual(["region"]);
   });
   it("uses current defaults for legacy histories and explicitly re-resolves workspace sources", () => {
     expect(restoreTaskRunInputs(names, variables, environment, { ...run, context: null }).inputs.version).toBe("current");

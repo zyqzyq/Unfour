@@ -5,7 +5,7 @@ import { getSshTask, listSshTaskRuns, listWorkspaceEnvironments, listWorkspaceVa
 import { useI18n, type useFeedbackErrorHandler } from "@unfour/ui";
 import { detectTaskInputs } from "../model/task-template";
 import { workspaceEnvironmentById } from "../model/task-run-inputs";
-import { sensitiveTaskInput, taskInputVersions, taskRunDefaults, taskRunSelection, taskVersion } from "../model/task-run-context";
+import { taskInputVersions, taskRunDefaults, taskRunSelection, taskVersion } from "../model/task-run-context";
 
 type DialogState = {
   generation: number;
@@ -162,9 +162,7 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
   const toggleSecretInput = (name: string) => {
     editRevision.current += 1;
     setState((current) => {
-      if (!current || sensitiveTaskInput(name)) return current;
-      const defaults = taskRunDefaults([name], current.variables, workspaceEnvironmentById(current.environments, current.environmentId));
-      if (defaults.secretNames.includes(name)) return current;
+      if (!current || current.values.automaticSecretNames.includes(name)) return current;
       const secretNames = current.values.secretNames.includes(name) ? current.values.secretNames.filter((key) => key !== name) : [...current.values.secretNames, name];
       return { ...current, values: { ...current.values, secretNames } };
     });
@@ -173,7 +171,7 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
   const {
     detail = null, connectionId = "", environmentId = "", environments = [],
     environmentLoadFailed = false, notice = null,
-    values = { inputs: {}, secretNames: [], filledFromWorkspace: [] },
+    values = { inputs: {}, secretNames: [], automaticSecretNames: [], filledFromWorkspace: [] },
   } = state ?? {};
   const environment = workspaceEnvironmentById(environments, environmentId);
   return {
@@ -193,7 +191,7 @@ export function useTaskRunDialogState({ workspaceId, handleError, onStarted }: {
     runActiveEnvironmentName: environment?.name ?? null,
     runInputs: values.inputs,
     runSecretInputs: values.secretNames,
-    runAutomaticSecretInputs: state ? taskRunDefaults(Object.keys(values.inputs), state.variables, environment).secretNames : [],
+    runAutomaticSecretInputs: values.automaticSecretNames,
     runInputScopeKey: state?.generation ?? 0,
     runFilledFromWorkspace: values.filledFromWorkspace.length > 0,
   };

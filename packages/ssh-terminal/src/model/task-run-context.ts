@@ -20,7 +20,8 @@ export function taskRunDefaults(names: string[], variables: WorkspaceVariableLik
     const key = name.toLowerCase();
     sources[name] = environmentKeys.has(key) ? "environment" : merged.has(key) ? "workspace" : "manual";
   }
-  return { ...defaults, sources, secretNames: names.filter((name) => sensitiveTaskInput(name) || defaults.secretNames.includes(name)) };
+  const secretNames = names.filter((name) => sensitiveTaskInput(name) || defaults.secretNames.includes(name));
+  return { ...defaults, sources, secretNames, automaticSecretNames: secretNames };
 }
 
 // Only metadata for the explicitly selected sources travels back to execution.
@@ -39,9 +40,11 @@ export function restoreTaskRunInputs(names: string[], variables: WorkspaceVariab
   const defaults = taskRunDefaults(names, variables, environment);
   const workspace = taskRunDefaults(names, variables, null);
   const secretNames = new Set(defaults.secretNames);
-  if (run.context?.version !== 1) return defaults;
+  const context = run.context;
+  if (context?.version !== 1) return defaults;
+  const environmentDefaults = taskRunDefaults(names, [], environment);
   for (const name of names) {
-    const saved = run.context.inputs[name];
+    const saved = context.inputs[name];
     if (!saved) continue;
     if (saved.secret) secretNames.add(name);
     if (saved.source === "workspace" && workspace.secretNames.includes(name)) secretNames.add(name);
@@ -57,6 +60,11 @@ export function restoreTaskRunInputs(names: string[], variables: WorkspaceVariab
     }
   }
   defaults.secretNames = [...secretNames];
+  // Lock the selected source, not the environment overlay. Historical secret
+  // provenance survives missing/changed variables and manual edits in this scope.
+  defaults.automaticSecretNames = names.filter((name) => sensitiveTaskInput(name) || context.inputs[name]?.secret ||
+    (defaults.sources[name] === "workspace" && workspace.secretNames.includes(name)) ||
+    (defaults.sources[name] === "environment" && environmentDefaults.secretNames.includes(name)));
   defaults.filledFromWorkspace = names.filter((name) => defaults.sources[name] !== "manual" && Boolean(defaults.inputs[name]));
   return defaults;
 }
