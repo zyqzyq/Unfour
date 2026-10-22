@@ -378,7 +378,25 @@ export type SshTasksReorderInput = {
   taskIds: string[];
 };
 
+export type SshTaskInputSource = "manual" | "workspace" | "environment";
+
+export type SshTaskRunContextInput = {
+  environmentId: string | null;
+  taskVersion: string;
+  environmentUpdatedAt: string | null;
+  inputSources: Record<string, SshTaskInputSource>;
+};
+
+export type SshTaskRunContext = {
+  version: 1;
+  environmentId: string | null;
+  taskVersion: string;
+  environmentUpdatedAt: string | null;
+  inputs: Record<string, { source: SshTaskInputSource; secret?: boolean; value?: string }>;
+};
+
 export type SshTaskRunInput = {
+  context?: SshTaskRunContextInput;
   workspaceId: string;
   taskId: string;
   connectionId: string | null;
@@ -394,6 +412,7 @@ export type SshTaskCancelInput = {
 export type SshTaskRunStatus = "running" | "success" | "failed" | "cancelled";
 
 export type SshTaskRun = {
+  context?: SshTaskRunContext | null;
   /** Non-fatal completion warnings; absent in older responses. */
   warnings?: string[];
   id: string;

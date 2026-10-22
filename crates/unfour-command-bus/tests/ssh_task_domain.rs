@@ -312,6 +312,7 @@ async fn task_execution_guards_run_before_the_ssh_service() {
 
     let error = bus
         .run_ssh_task(SshTaskRunInput {
+            context: None,
             workspace_id,
             task_id: "missing-task-that-service-would-reject".into(),
             connection_id: None,

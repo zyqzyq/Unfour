@@ -41,6 +41,7 @@ pub(super) struct StoredBinding {
 
 #[derive(sqlx::FromRow)]
 pub(super) struct StoredRun {
+    context_json: Option<String>,
     id: String,
     workspace_id: String,
     task_id: String,
@@ -114,6 +115,10 @@ pub(super) fn binding_from_row(row: StoredBinding) -> SshTaskLocalBinding {
 
 pub(super) fn run_from_row(row: StoredRun) -> SshTaskRun {
     SshTaskRun {
+        context: row
+            .context_json
+            .and_then(|json| serde_json::from_str(&json).ok())
+            .filter(|context: &unfour_core::models::SshTaskRunContext| context.version == 1),
         warnings: Vec::new(),
         id: row.id,
         workspace_id: row.workspace_id,

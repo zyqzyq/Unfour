@@ -15,6 +15,21 @@ vi.mock("@unfour/ui", async (importOriginal) => {
 afterEach(cleanup);
 
 describe("TaskRunDialog", () => {
+  it.each(["connection", "environment", "inputs", "pending"])("blocks execution with missing %s and keeps recall explicit", (missing) => {
+    const onRun = vi.fn();
+    const onUsePrevious = vi.fn();
+    const detail = task();
+    detail.steps = [{ id: "step", workspaceId: "workspace", taskId: "task", name: "Command", stepType: "command", position: 0, enabled: true, configVersion: 1,
+      configJson: { command: "echo {{VERSION}}" }, createdAt: "", updatedAt: "", deletedAt: null }];
+    render(<TaskRunDialog activeEnvironmentName={null} connectionId="connection" connections={missing === "connection" ? [] : [connection()]}
+      environmentId={missing === "environment" ? "deleted" : ""} environmentLoadFailed={false} environments={[]} error={null}
+      filledFromWorkspace={false} inputValues={{ VERSION: missing === "inputs" ? "" : "v1" }} onConnectionChange={vi.fn()} onEnvironmentChange={vi.fn()}
+      onInputChange={vi.fn()} onOpenChange={vi.fn()} onRun={onRun} onUsePrevious={onUsePrevious} open pending={missing === "pending"} secretInputNames={[]} task={detail} />);
+    expect(screen.getByRole("button", { name: missing === "pending" ? "ssh.tasks.run.starting" : "ssh.tasks.actions.run" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "ssh.tasks.run.usePrevious" }));
+    expect(onRun).not.toHaveBeenCalled();
+    expect(onUsePrevious).toHaveBeenCalledTimes(missing === "pending" ? 0 : 1);
+  });
   it("selects a run-only variable environment and exposes load failures inline", () => {
     const onEnvironmentChange = vi.fn();
     render(

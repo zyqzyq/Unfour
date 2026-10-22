@@ -95,6 +95,48 @@ pub struct SshTaskRunInput {
     pub inputs: BTreeMap<String, String>,
     #[serde(default)]
     pub secret_input_names: Vec<String>,
+    /// Optional local recall metadata. Older adapters keep their existing behavior.
+    #[serde(default)]
+    pub context: Option<SshTaskRunContextInput>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SshTaskInputSource {
+    Manual,
+    Workspace,
+    Environment,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SshTaskRunContextInput {
+    pub environment_id: Option<String>,
+    pub task_version: String,
+    pub environment_updated_at: Option<String>,
+    #[serde(default)]
+    pub input_sources: BTreeMap<String, SshTaskInputSource>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SshTaskInputSnapshot {
+    pub source: SshTaskInputSource,
+    #[serde(default)]
+    pub secret: bool,
+    /// Only an explicitly manual, non-sensitive value may be retained.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SshTaskRunContext {
+    pub version: u32,
+    pub environment_id: Option<String>,
+    pub task_version: String,
+    pub environment_updated_at: Option<String>,
+    pub inputs: BTreeMap<String, SshTaskInputSnapshot>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -107,6 +149,8 @@ pub struct SshTaskCancelInput {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SshTaskRun {
+    #[serde(default)]
+    pub context: Option<SshTaskRunContext>,
     /// Response-only warnings, not persisted in the task-run table.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,

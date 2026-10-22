@@ -4,6 +4,8 @@ mod flow;
 mod flow_safety;
 #[path = "lib_tests/multipart.rs"]
 mod multipart;
+#[path = "lib_tests/ssh_task_context.rs"]
+mod ssh_task_context;
 use super::*;
 #[path = "lib_tests/activity_outcomes.rs"]
 mod activity_outcomes;

@@ -262,6 +262,7 @@ async fn ssh_tasks_schema_separates_syncable_templates_from_local_state() {
         .iter()
         .map(|(name,)| name.as_str())
         .collect::<Vec<_>>();
+    assert!(run_names.contains(&"context_json"));
     for transient in ["inputs", "stdout", "stderr", "transfer_progress"] {
         assert!(
             !run_names.contains(&transient),

@@ -1,6 +1,41 @@
 use super::*;
 
 #[tokio::test]
+async fn ssh_task_recall_upgrade_preserves_legacy_history() {
+    let db = test_db().await;
+    let mut legacy = core_migrator();
+    legacy.migrations = std::borrow::Cow::Owned(
+        legacy
+            .iter()
+            .filter(|migration| migration.version < 20261021000000)
+            .cloned()
+            .collect(),
+    );
+    legacy.run(db.pool()).await.unwrap();
+    seed_workspace(&db, "recall-workspace").await;
+    sqlx::raw_sql(
+        r#"
+      INSERT INTO ssh_task (id, workspace_id, name, description, created_at, updated_at)
+      VALUES ('task', 'recall-workspace', 'Task', '', 'created', 'updated');
+      INSERT INTO ssh_task_run (id, workspace_id, task_id, status, started_at, log_path)
+      VALUES ('legacy', 'recall-workspace', 'task', 'failed', 'started', 'original.log');
+    "#,
+    )
+    .execute(db.pool())
+    .await
+    .unwrap();
+    db.migrate().await.unwrap();
+    db.migrate().await.unwrap();
+    let row: (String, String, Option<String>) = sqlx::query_as(
+        "SELECT status, log_path, context_json FROM ssh_task_run WHERE id = 'legacy'",
+    )
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(row, ("failed".into(), "original.log".into(), None));
+}
+
+#[tokio::test]
 async fn flow_tombstone_upgrade_preserves_live_data_and_repairs_deleted_workspaces() {
     let db = test_db().await;
     let mut legacy = core_migrator();

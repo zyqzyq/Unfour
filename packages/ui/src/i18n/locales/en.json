@@ -1324,6 +1324,7 @@
     },
     "tasks": {
       "actions": {
+        "rerun": "Run again",
         "addCommand": "Add Command",
         "addDownload": "Add Download",
         "addStep": "Add step",
@@ -1392,6 +1393,7 @@
         "workingDirectory": "Working directory"
       },
       "history": {
+        "actions": "Actions",
         "clear": "Clear History",
         "clearDescription": "Delete this task's persisted run summaries and log files? This cannot be undone.",
         "clearTitle": "Clear SSH task history?",
@@ -1431,9 +1433,20 @@
         "currentStep": "Current: {name}",
         "disabled": "Disabled",
         "environment": "Variable environment",
-        "environmentLoadFailed": "Workspace environments could not be loaded. You can still enter values manually for this run.",
+        "environmentLoadFailed": "Workspace variables or environments could not be loaded. Reopen this dialog to retry before running.",
         "exitCode": "exit {code}",
         "historyReplayHint": "No output is available for this past run.",
+        "usePrevious": "Use previous parameters",
+        "noPrevious": "No previous run is available.",
+        "legacyContext": "This run has no saved parameters. Current defaults are loaded; review the connection and environment.",
+        "taskChanged": "The task definition changed. All enabled steps in the current definition will run from the beginning. Review the inputs.",
+        "environmentChanged": "The environment changed. Variables were resolved again; review the inputs and environment selection.",
+        "restoredContext": "Safe previous parameters restored. Variables were resolved again; re-enter any missing sensitive inputs. The entire current task will run.",
+        "environmentMissing": "The original environment is unavailable. Select an environment or explicitly choose workspace variables only.",
+        "connectionMissing": "Select a valid connection; the original connection may have been deleted.",
+        "secretInput": "Sensitive input (never saved)",
+        "markSensitive": "Mark as sensitive",
+        "prepareAgain": "Reopen the run dialog and review the configuration.",
         "host": "Host",
         "inputs": "Inputs for this run",
         "loadingLog": "Loading log...",

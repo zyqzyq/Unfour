@@ -7,6 +7,7 @@ export function TaskHistory({
   loading,
   onClear,
   onSelectRun,
+  onRerun,
   runs,
   selectedRunId,
 }: {
@@ -14,6 +15,7 @@ export function TaskHistory({
   loading: boolean;
   onClear: () => void;
   onSelectRun: (run: SshTaskRun) => void;
+  onRerun?: (run: SshTaskRun) => void;
   runs: SshTaskRun[];
   selectedRunId?: string | null;
 }) {
@@ -42,6 +44,7 @@ export function TaskHistory({
                 <th className="w-44 px-2 font-medium">{t("ssh.tasks.history.finished")}</th>
                 <th className="px-2 font-medium">{t("ssh.tasks.history.error")}</th>
                 <th className="w-[34%] px-2 font-medium">{t("ssh.tasks.history.logPath")}</th>
+                <th className="w-28 px-2 font-medium">{t("ssh.tasks.history.actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -57,6 +60,7 @@ export function TaskHistory({
                     key={run.id}
                     onClick={() => onSelectRun(run)}
                     onKeyDown={(event) => {
+                      if (event.target !== event.currentTarget) return;
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
                         onSelectRun(run);
@@ -85,6 +89,9 @@ export function TaskHistory({
                       title={run.logPath}
                     >
                       {run.logPath}
+                    </td>
+                    <td className="px-2">
+                      {onRerun && run.status !== "running" && <Button onClick={(event) => { event.stopPropagation(); onRerun(run); }} size="sm" variant={run.status === "failed" ? "secondary" : "ghost"}>{t("ssh.tasks.actions.rerun")}</Button>}
                     </td>
                   </tr>
                 );

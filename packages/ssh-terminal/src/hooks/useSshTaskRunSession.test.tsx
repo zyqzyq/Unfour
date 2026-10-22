@@ -13,13 +13,13 @@ vi.mock("@unfour/ui", async (importOriginal) => ({
 
 vi.mock("@unfour/command-client", () => ({
   cancelSshTaskRun: vi.fn(), clearSshTaskRuns: vi.fn(), getSshTask: vi.fn(),
-  listWorkspaceEnvironments: vi.fn(), listWorkspaceVariables: vi.fn(),
+  listWorkspaceEnvironments: vi.fn(), listWorkspaceVariables: vi.fn(), listSshTaskRuns: vi.fn(),
   readSshTaskRunLog: vi.fn(), registerSshTaskRunChannel: vi.fn(), runSshTask: vi.fn(),
 }));
 
 import {
   cancelSshTaskRun, clearSshTaskRuns, getSshTask, listWorkspaceEnvironments,
-  listWorkspaceVariables, readSshTaskRunLog, registerSshTaskRunChannel, runSshTask,
+  listWorkspaceVariables, listSshTaskRuns, readSshTaskRunLog, registerSshTaskRunChannel, runSshTask,
 } from "@unfour/command-client";
 import { useSshTaskRunSession } from "./useSshTaskRunSession";
 
@@ -33,6 +33,12 @@ function deferred<T>() {
 const detail: SshTaskDetail = {
   task: { id: "task", workspaceId: "w1", name: "Task", description: "", sortOrder: 0, createdAt: "", updatedAt: "", deletedAt: null },
   steps: [], localBinding: null, detectedInputs: [],
+};
+
+const inputDetail: SshTaskDetail = {
+  ...detail,
+  steps: [{ id: "step", workspaceId: "w1", taskId: "task", name: "Command", stepType: "command", position: 0, enabled: true, configVersion: 1,
+    configJson: { command: "echo {{VERSION}} {{CUSTOM}}" }, createdAt: "", updatedAt: "now", deletedAt: null }],
 };
 
 function run(id = "run", taskId = "task"): SshTaskRun {
@@ -65,6 +71,7 @@ beforeEach(() => {
     subscriptions.push(entry);
     return entry.registration.promise;
   });
+  vi.mocked(listSshTaskRuns).mockResolvedValue([]);
   vi.mocked(listWorkspaceEnvironments).mockResolvedValue([]);
   vi.mocked(listWorkspaceVariables).mockResolvedValue([]);
   vi.mocked(getSshTask).mockResolvedValue(detail);
@@ -300,6 +307,7 @@ describe("task mutations and output ownership", () => {
     await act(async () => { await result.current.runMutation.mutateAsync(); });
     expect(runSshTask).toHaveBeenCalledExactlyOnceWith({
       workspaceId: "w1", taskId: "task", connectionId: null, inputs: { ARG: "fixture" }, secretInputNames: [],
+      context: { environmentId: null, environmentUpdatedAt: null, taskVersion: "", inputSources: { ARG: "manual" } },
     });
     expect(result.current.activeRunTask).toEqual(detail);
     expect(result.current.runDialogTask).toBeNull();
@@ -528,4 +536,94 @@ it("keeps cleared task history when activity logging fails", async () => {
   expect(clearSshTaskRuns).toHaveBeenCalledExactlyOnceWith({ workspaceId: "w1", taskId: "task" });
   expect(warningMock).toHaveBeenCalledOnce();
   expect(handleError).not.toHaveBeenCalled();
+});
+
+
+describe("rerun dialog ownership", () => {
+  it("restores failed history into the current definition and does not execute until submitted", async () => {
+    vi.mocked(getSshTask).mockResolvedValue(inputDetail);
+    const previous: SshTaskRun = { ...run(), status: "failed", context: { version: 1, environmentId: "deleted-env", environmentUpdatedAt: "old", taskVersion: "old",
+      inputs: { VERSION: { source: "manual", value: "v1" }, CUSTOM: { source: "manual" } } } };
+    vi.mocked(listSshTaskRuns).mockResolvedValue([previous]);
+    const { result } = await setup();
+    await act(async () => { await result.current.prepareRun("task"); });
+    expect(result.current.runInputs).toEqual({ VERSION: "", CUSTOM: "" });
+    await act(async () => { await result.current.restorePreviousRun(); });
+    expect(result.current.runDialogTask).toEqual(inputDetail);
+    expect(result.current.runConnectionId).toBe("connection");
+    expect(result.current.runEnvironmentId).toBe("deleted-env");
+    expect(result.current.runInputs).toEqual({ VERSION: "v1", CUSTOM: "" });
+    expect(result.current.runSecretInputs).toContain("CUSTOM");
+    expect(result.current.runNotice).toBeTruthy();
+    expect(runSshTask).not.toHaveBeenCalled();
+    await act(async () => { await result.current.prepareRun("task", { ...previous, context: null }); });
+    expect(result.current.runEnvironmentId).toBe("");
+    expect(result.current.runInputs.VERSION).toBe("");
+    expect(result.current.runNotice).toBeTruthy();
+  });
+
+  it.each(["close", "workspace", "unmount"])("discards preparation completing after %s", async (action) => {
+    const { result, rerender, unmount } = await setup();
+    const response = deferred<SshTaskDetail>();
+    vi.mocked(getSshTask).mockReturnValue(response.promise);
+    let preparing!: Promise<void>;
+    await act(async () => { preparing = result.current.prepareRun("task"); });
+    if (action === "close") act(() => result.current.closeRunDialog());
+    if (action === "workspace") rerender({ active: true, workspaceId: "w2" });
+    if (action === "unmount") unmount();
+    await act(async () => { response.resolve(detail); await preparing; });
+    expect(result.current.runDialogTask).toBeNull();
+    expect(runSshTask).not.toHaveBeenCalled();
+  });
+
+  it("keeps the newest task when overlapping preparations complete in reverse order", async () => {
+    const { result } = await setup();
+    const older = deferred<SshTaskDetail>();
+    vi.mocked(getSshTask).mockImplementation((_workspace, id) => id === "task" ? older.promise : Promise.resolve({ ...detail, task: { ...detail.task, id } }));
+    let preparing!: Promise<void>;
+    await act(async () => { preparing = result.current.prepareRun("task"); });
+    await act(async () => { await result.current.prepareRun("new"); });
+    await act(async () => { older.resolve(detail); await preparing; });
+    expect(result.current.runDialogTask?.task.id).toBe("new");
+  });
+
+  it("coalesces duplicate submissions and does not reopen a closed dialog on completion", async () => {
+    const response = deferred<SshTaskRun>();
+    vi.mocked(runSshTask).mockReturnValue(response.promise);
+    const { result, invalidate } = await setup();
+    await act(async () => { await result.current.prepareRun("task"); });
+    let first!: Promise<SshTaskRun>;
+    let second!: Promise<SshTaskRun>;
+    await act(async () => { first = result.current.runMutation.mutateAsync(); second = result.current.runMutation.mutateAsync(); });
+    expect(runSshTask).toHaveBeenCalledOnce();
+    act(() => result.current.closeRunDialog());
+    await act(async () => { response.resolve(run()); await Promise.all([first, second]); });
+    expect(result.current.activeRun).toBeNull();
+    expect(result.current.runDialogTask).toBeNull();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["ssh-task-runs", "w1", "task"] });
+  });
+
+  it("does not attach a started run to a different workspace", async () => {
+    const response = deferred<SshTaskRun>();
+    vi.mocked(runSshTask).mockReturnValue(response.promise);
+    const { result, rerender } = await setup();
+    await act(async () => { await result.current.prepareRun("task"); });
+    let starting!: Promise<SshTaskRun>;
+    await act(async () => { starting = result.current.runMutation.mutateAsync(); });
+    rerender({ active: true, workspaceId: "w2" });
+    await act(async () => { response.resolve(run()); await starting; });
+    expect(result.current.activeRun).toBeNull();
+    expect(result.current.runDialogTask).toBeNull();
+  });
+
+  it("leaves a rejected submission editable and permits a subsequent new run", async () => {
+    vi.mocked(runSshTask).mockRejectedValueOnce(new Error("failure")).mockResolvedValueOnce(run("retry"));
+    const { result } = await setup();
+    await act(async () => { await result.current.prepareRun("task"); });
+    await act(async () => { await expect(result.current.runMutation.mutateAsync()).rejects.toThrow("failure"); });
+    expect(result.current.runDialogTask).toEqual(detail);
+    await act(async () => { await result.current.runMutation.mutateAsync(); });
+    expect(result.current.activeRun?.id).toBe("retry");
+    expect(runSshTask).toHaveBeenCalledTimes(2);
+  });
 });

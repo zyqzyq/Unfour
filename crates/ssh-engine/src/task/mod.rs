@@ -9,6 +9,7 @@ use unfour_core::models::{
 
 #[cfg(any(feature = "ssh-native", test))]
 mod command_step;
+mod context;
 mod domain;
 #[cfg(feature = "ssh-native")]
 mod download_step;
@@ -54,8 +55,10 @@ impl SshService {
     pub async fn run_task(&self, input: SshTaskRunInput) -> AppResult<SshTaskRun> {
         validate_workspace_id(&input.workspace_id)?;
         let detail = self.get_task(&input.workspace_id, &input.task_id).await?;
+        let mut secret_values = task_secret_values(&input.inputs, &input.secret_input_names)?;
         let connection_id = input
             .connection_id
+            .clone()
             .or_else(|| {
                 detail
                     .local_binding
@@ -74,8 +77,30 @@ impl SshService {
         let connection = self
             .get_connection(&input.workspace_id, &connection_id)
             .await?;
+        if input.context.is_some() {
+            if let Some(reference) = &connection.credential_ref {
+                secret_values.push(reference.clone());
+                match self
+                    .secret_store
+                    .read_secret(input.workspace_id.clone(), reference.clone())
+                    .await
+                {
+                    Ok(secret) if !secret.is_empty() => secret_values.push(secret),
+                    Ok(_) => {}
+                    // Fail closed for recall without changing background authentication semantics.
+                    Err(_) => secret_values.extend(
+                        input
+                            .inputs
+                            .values()
+                            .filter(|value| !value.is_empty())
+                            .cloned(),
+                    ),
+                }
+            }
+        }
+        secret_values.sort_by_key(|value| std::cmp::Reverse(value.len()));
+        let context = context::run_context(&input, &detail, &secret_values)?;
         let steps = resolve_enabled_steps(&detail.steps, &input.inputs)?;
-        let secret_values = task_secret_values(&input.inputs, &input.secret_input_names)?;
         if steps.is_empty() {
             return Err(AppError::Validation(
                 "SSH task has no enabled steps".to_string(),
@@ -84,7 +109,7 @@ impl SshService {
 
         #[cfg(not(feature = "ssh-native"))]
         {
-            let _ = (connection, steps, secret_values);
+            let _ = (connection, steps, secret_values, context);
             return Err(AppError::Unsupported(
                 "SSH task execution requires a build with the ssh-native feature".to_string(),
             ));
@@ -121,6 +146,7 @@ impl SshService {
             let log_path = self.task_log_path(&run_id)?;
             let mut log = TaskLogWriter::create(&log_path)?;
             let run = SshTaskRun {
+                context,
                 warnings: Vec::new(),
                 id: run_id.clone(),
                 workspace_id: input.workspace_id.clone(),

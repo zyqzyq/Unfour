@@ -481,12 +481,13 @@ impl CommandBus {
         Ok(())
     }
 
-    pub async fn run_ssh_task(&self, input: SshTaskRunInput) -> AppResult<SshTaskRun> {
+    pub async fn run_ssh_task(&self, mut input: SshTaskRunInput) -> AppResult<SshTaskRun> {
         let workspace_id = input.workspace_id.clone();
         let task_id = input.task_id.clone();
         for guard in self.extensions.ssh_task_execution_guards() {
             guard.validate(&workspace_id, &task_id).await?;
         }
+        self.prepare_ssh_task_context(&mut input).await?;
         let mut run = self.ssh.run_task(input).await?;
         run.warnings.extend(self.record_completion_activity(CommandActivity {
             workspace_id: Some(workspace_id), action: "ssh.task.run", target: Some(run.id.clone()),

@@ -25,6 +25,12 @@ async fn task_runs_remain_local_and_can_be_physically_cleared() {
     .await
     .unwrap();
     assert_eq!(uuid::Uuid::parse_str(&run_id).unwrap().get_version_num(), 7);
+    let legacy = service
+        .list_task_runs(workspace_id.clone(), saved.task.id.clone())
+        .await
+        .unwrap();
+    assert_eq!(legacy.len(), 1);
+    assert!(legacy[0].context.is_none());
 
     let result = service
         .clear_task_runs(SshTaskCleanupInput {

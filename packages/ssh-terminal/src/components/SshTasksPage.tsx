@@ -72,6 +72,8 @@ export function SshTasksPage({
   const [deleteTarget, setDeleteTarget] = useState<SshTask | null>(null);
   const [clearTaskId, setClearTaskId] = useState<string | null>(null);
   const nextNewTabIdRef = useRef(0);
+  const runPreparationRef = useRef(false);
+  const navigationVersionRef = useRef(0);
   const runSession = useSshTaskRunSession({
     active,
     handleError,
@@ -101,7 +103,11 @@ export function SshTasksPage({
     setActiveRun,
     setActiveRunTask,
     setRunConnectionId,
-    setRunDialogTask,
+    closeRunDialog,
+    runPreparing,
+    runNotice,
+    restorePreviousRun,
+    toggleSecretInput,
     setRunInputs,
   } = runSession;
 
@@ -207,6 +213,8 @@ export function SshTasksPage({
 
   const newTask = useCallback(
     (template?: SshTaskSaveInput) => {
+      navigationVersionRef.current += 1;
+      closeRunDialog();
       const tabId = `new:${++nextNewTabIdRef.current}`;
       setEditorState((current) =>
         openNewTaskTab(
@@ -222,12 +230,14 @@ export function SshTasksPage({
         ),
       );
     },
-    [workspaceId],
+    [closeRunDialog, workspaceId],
   );
 
   const selectTask = useCallback((taskId: string) => {
+    navigationVersionRef.current += 1;
+    closeRunDialog();
     setEditorState((current) => openSavedTaskTab(current, taskId));
-  }, []);
+  }, [closeRunDialog]);
 
   const saveActiveDraft = useCallback(async () => {
     if (!activeTab?.draft) return null;
@@ -241,7 +251,7 @@ export function SshTasksPage({
   }, [activeTab, handleError, saveTask, t]);
 
   const runActiveTask = useCallback(async () => {
-    if (!activeTab?.draft) return;
+    if (!activeTab?.draft || runPreparationRef.current) return;
     const currentDraft = activeTab.draft;
     if (!currentDraft.name.trim()) {
       handleError(new Error(t("ssh.tasks.editor.nameRequired")), {
@@ -255,13 +265,19 @@ export function SshTasksPage({
       });
       return;
     }
-    let taskId = currentDraft.id ?? null;
-    if (!taskId || isTaskTabDirty(activeTab)) {
-      const detail = await saveActiveDraft();
-      if (!detail) return;
-      taskId = detail.task.id;
+    const navigationVersion = navigationVersionRef.current;
+    runPreparationRef.current = true;
+    try {
+      let taskId = currentDraft.id ?? null;
+      if (!taskId || isTaskTabDirty(activeTab)) {
+        const detail = await saveActiveDraft();
+        if (!detail) return;
+        taskId = detail.task.id;
+      }
+      if (navigationVersion === navigationVersionRef.current) await prepareRun(taskId);
+    } finally {
+      runPreparationRef.current = false;
     }
-    await prepareRun(taskId);
   }, [activeTab, handleError, prepareRun, saveActiveDraft, t]);
 
   const handleListRun = useCallback(
@@ -338,6 +354,8 @@ export function SshTasksPage({
   }, [active, activeTab, draft, runActiveTask, saveMutation]);
 
   function requestCloseTab(tabId: string) {
+    navigationVersionRef.current += 1;
+    closeRunDialog();
     const tab = editorState.tabs.find((item) => item.id === tabId);
     if (tab && isTaskTabDirty(tab)) {
       setCloseTabId(tabId);
@@ -444,6 +462,7 @@ export function SshTasksPage({
         loading={runsQuery.isLoading}
         onClear={() => setClearTaskId(activeTaskId)}
         onSelectRun={(run) => void openHistoryRun(run)}
+        onRerun={(run) => void prepareRun(run.taskId, run)}
         runs={runsQuery.data ?? []}
         selectedRunId={activeRun?.id}
       />
@@ -472,9 +491,11 @@ export function SshTasksPage({
             ) : undefined
           }
           onClose={requestCloseTab}
-          onSelect={(tabId) =>
-            setEditorState((current) => ({ ...current, activeTabId: tabId }))
-          }
+          onSelect={(tabId) => {
+            navigationVersionRef.current += 1;
+            closeRunDialog();
+            setEditorState((current) => ({ ...current, activeTabId: tabId }));
+          }}
           tabs={taskTabs}
         />
         {draft && showHistory ? (
@@ -498,6 +519,7 @@ export function SshTasksPage({
             logLoading={historyLogLoading && historyLogByRun[activeRun.id] === undefined}
             logText={historyLogByRun[activeRun.id] ?? null}
             onCancel={() => cancelMutation.mutate()}
+            onRerun={() => void prepareRun(activeRun.taskId, activeRun)}
             onClose={() => {
               setActiveRun(null);
               setActiveRunTask(null);
@@ -523,10 +545,13 @@ export function SshTasksPage({
         onInputChange={(name, value) =>
           setRunInputs((current) => ({ ...current, [name]: value }))
         }
-        onOpenChange={(open) => !open && setRunDialogTask(null)}
+        onOpenChange={(open) => !open && closeRunDialog()}
+        onUsePrevious={() => void restorePreviousRun()}
+        onToggleSecret={toggleSecretInput}
+        notice={runNotice}
         onRun={() => runMutation.mutate()}
         open={runDialogTask !== null}
-        pending={runMutation.isPending}
+        pending={runMutation.isPending || runPreparing}
         secretInputNames={runSecretInputs}
         task={runDialogTask}
       />

@@ -11,6 +11,20 @@ const props: ComponentProps<typeof TaskRunPanel> = {
   task: { task: { id: "task", workspaceId: "ws", name: "Task", description: "", sortOrder: 0, createdAt: "", updatedAt: "", deletedAt: null }, steps: [], localBinding: null, detectedInputs: [] },
 };
 
+it("offers rerun after a terminal completion event even before history polling updates the run", () => {
+  const onRerun = vi.fn();
+  const { rerender } = render(<TaskRunPanel {...props} onRerun={onRerun} />);
+  expect(screen.queryByRole("button", { name: "Run again" })).not.toBeInTheDocument();
+  rerender(<TaskRunPanel {...props} onRerun={onRerun} events={[{
+    runId: "run", taskId: "task", kind: "run", status: "cancelled", stepId: null,
+    stepName: null, stepType: null, position: null, stream: null, data: null,
+    exitCode: null, durationMs: null, direction: null, transferredBytes: null,
+    totalBytes: null, bytesPerSecond: null, error: null, createdAt: "now",
+  }]} />);
+  fireEvent.click(screen.getByRole("button", { name: "Run again" }));
+  expect(onRerun).toHaveBeenCalledOnce();
+});
+
 it.each(["pointerUp", "pointerCancel", "unmount"])("removes resize listeners on %s without cancelling the SSH run", (finish) => {
   const add = vi.spyOn(window, "addEventListener");
   const remove = vi.spyOn(window, "removeEventListener");

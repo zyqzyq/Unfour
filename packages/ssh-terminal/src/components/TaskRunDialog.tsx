@@ -30,6 +30,9 @@ export function TaskRunDialog({
   onInputChange,
   onOpenChange,
   onRun,
+  onUsePrevious,
+  onToggleSecret,
+  notice,
   open,
   pending,
   secretInputNames,
@@ -49,6 +52,9 @@ export function TaskRunDialog({
   onInputChange: (name: string, value: string) => void;
   onOpenChange: (open: boolean) => void;
   onRun: () => void;
+  onUsePrevious?: () => void;
+  onToggleSecret?: (name: string) => void;
+  notice?: string | null;
   open: boolean;
   pending: boolean;
   secretInputNames: string[];
@@ -56,11 +62,17 @@ export function TaskRunDialog({
 }) {
   const { t } = useI18n();
   const detectedInputs = task ? detectTaskInputs(task.steps, true) : [];
-  const connection = connections.find((item) => item.id === connectionId) ?? null;
+  const connection = connections.find((item) => item.id === connectionId && !item.deletedAt && item.workspaceId === task?.task.workspaceId) ?? null;
+  const missingEnvironment = Boolean(environmentId && !environments.some((env) => env.id === environmentId));
   const missing = detectedInputs.some((name) => !inputValues[name]?.trim());
-  const canRun = Boolean(task && connection && !missing && task.steps.some((step) => step.enabled));
+  const canRun = Boolean(task && connection && !missing && !missingEnvironment && !environmentLoadFailed && task.steps.some((step) => step.enabled));
   const title = t("ssh.tasks.run.title");
   const secretNames = new Set(secretInputNames);
+  const errorMessage = error?.message.includes("SSH_TASK_DEFINITION_CHANGED") ? `${t("ssh.tasks.run.taskChanged")} ${t("ssh.tasks.run.prepareAgain")}`
+    : error?.message.includes("SSH_TASK_ENVIRONMENT_CHANGED") ? `${t("ssh.tasks.run.environmentChanged")} ${t("ssh.tasks.run.prepareAgain")}`
+    : error?.message.includes("SSH_TASK_ENVIRONMENT_MISSING") ? t("ssh.tasks.run.environmentMissing")
+    : error?.message.includes("SSH_TASK_INPUT_SOURCE_MISSING") ? t("ssh.tasks.run.prepareAgain")
+    : error?.message.includes("SSH_TASK_CONNECTION_REQUIRED") ? t("ssh.tasks.run.connectionMissing") : error?.message;
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -70,6 +82,8 @@ export function TaskRunDialog({
         </DialogHeader>
         <DialogBody className="max-h-[70vh] overflow-y-auto">
           <div className="flex flex-col gap-4">
+            {onUsePrevious && <div><Button disabled={pending} onClick={onUsePrevious} size="sm" variant="secondary">{t("ssh.tasks.run.usePrevious")}</Button></div>}
+            {notice && <p className="text-[12px] text-[var(--u-color-warning)]" role="status">{notice}</p>}
             <div className="grid grid-cols-2 gap-3 text-[12px]">
               <Summary label={t("ssh.tasks.run.taskName")} value={task?.task.name ?? "—"} />
               <Summary label={t("ssh.tasks.run.host")} value={connection ? `${connection.username}@${connection.host}:${connection.port}` : "—"} />
@@ -78,9 +92,10 @@ export function TaskRunDialog({
               <span className="text-[11px] font-medium text-[var(--u-color-text-muted)]">
                 {t("ssh.tasks.run.connection")}
               </span>
-              <Select onChange={(event) => onConnectionChange(event.target.value)} value={connectionId}>
+              <Select disabled={pending} onChange={(event) => onConnectionChange(event.target.value)} value={connectionId}>
                 <option value="">{t("ssh.tasks.run.selectConnection")}</option>
-                {connections.map((item) => (
+                {connectionId && !connection && <option disabled value={connectionId}>{t("ssh.tasks.run.connectionMissing")}</option>}
+                {connections.filter((item) => !item.deletedAt && item.workspaceId === task?.task.workspaceId).map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.name} · {item.host}
                   </option>
@@ -93,10 +108,12 @@ export function TaskRunDialog({
                 {t("ssh.tasks.run.environment")}
               </span>
               <Select
+                disabled={pending}
                 onChange={(event) => onEnvironmentChange(event.target.value)}
                 value={environmentId}
               >
                 <option value="">{t("ssh.tasks.run.workspaceOnly")}</option>
+                {missingEnvironment && <option disabled value={environmentId}>{t("ssh.tasks.run.environmentMissing")}</option>}
                 {environments.map((environment) => (
                   <option key={environment.id} value={environment.id}>
                     {environment.name}
@@ -104,6 +121,8 @@ export function TaskRunDialog({
                 ))}
               </Select>
             </label>
+            {missingEnvironment && <p className="text-[12px] text-[var(--u-color-danger)]" role="alert">{t("ssh.tasks.run.environmentMissing")}</p>}
+            {!connection && <p className="text-[12px] text-[var(--u-color-danger)]" role="alert">{t("ssh.tasks.run.connectionMissing")}</p>}
             {environmentLoadFailed && (
               <p className="text-[12px] text-[var(--u-color-warning)]" role="alert">
                 {t("ssh.tasks.run.environmentLoadFailed")}
@@ -129,11 +148,25 @@ export function TaskRunDialog({
                     <label className="flex flex-col gap-1" key={name}>
                       <span className="font-mono text-[11px] text-[var(--u-color-text-muted)]">{name}</span>
                       <Input
+                        aria-label={name}
+                        disabled={pending}
                         autoFocus={index === 0}
                         onChange={(event) => onInputChange(name, event.target.value)}
                         type={secretNames.has(name) ? "password" : "text"}
                         value={inputValues[name] ?? ""}
                       />
+                      {onToggleSecret && (
+                        <Button
+                          aria-pressed={secretNames.has(name)}
+                          disabled={pending}
+                          onClick={() => onToggleSecret(name)}
+                          size="sm"
+                          type="button"
+                          variant={secretNames.has(name) ? "secondary" : "ghost"}
+                        >
+                          {t(secretNames.has(name) ? "ssh.tasks.run.secretInput" : "ssh.tasks.run.markSensitive")}
+                        </Button>
+                      )}
                     </label>
                   ))}
                 </div>
@@ -166,7 +199,7 @@ export function TaskRunDialog({
             )}
             {error && (
               <p className="whitespace-pre-wrap text-[12px] text-[var(--u-color-danger)]" role="alert">
-                {error.message}
+                {errorMessage}
               </p>
             )}
           </div>

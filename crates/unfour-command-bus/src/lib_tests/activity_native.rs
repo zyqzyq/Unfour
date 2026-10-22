@@ -69,6 +69,7 @@ async fn ssh_run_handle_cancellation_and_flow_survive_activity_failure() {
         .execute(bus.db.pool()).await.unwrap();
     let run = bus
         .run_ssh_task(SshTaskRunInput {
+            context: None,
             workspace_id: workspace.clone(),
             task_id: tasks[0].task.id.clone(),
             connection_id: Some(connection.id),

@@ -108,6 +108,14 @@ pub(super) fn task_secret_values(
             values.push(value.to_string());
         }
     }
+    for (name, value) in inputs {
+        if super::context::sensitive_input(name, value)
+            && !value.is_empty()
+            && !values.contains(value)
+        {
+            values.push(value.clone());
+        }
+    }
     values.sort_by_key(|value| std::cmp::Reverse(value.len()));
     Ok(values)
 }

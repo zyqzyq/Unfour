@@ -155,6 +155,7 @@ mod tests {
 
         let error = bus
             .run_ssh_task(SshTaskRunInput {
+                context: None,
                 workspace_id,
                 task_id: "mcp-task".into(),
                 connection_id: None,

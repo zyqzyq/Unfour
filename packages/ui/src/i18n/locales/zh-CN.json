@@ -1322,6 +1322,7 @@
     },
     "tasks": {
       "actions": {
+        "rerun": "重新运行",
         "addCommand": "添加 Command",
         "addDownload": "添加 Download",
         "addStep": "添加步骤",
@@ -1390,6 +1391,7 @@
         "workingDirectory": "工作目录"
       },
       "history": {
+        "actions": "操作",
         "clear": "清理历史",
         "clearDescription": "删除此 Task 已持久化的运行摘要和日志文件？此操作无法撤销。",
         "clearTitle": "清理 SSH Task 历史？",
@@ -1429,9 +1431,20 @@
         "currentStep": "当前：{name}",
         "disabled": "已禁用",
         "environment": "变量环境",
-        "environmentLoadFailed": "无法加载 Workspace 环境，仍可为本次运行手动填写输入值。",
+        "environmentLoadFailed": "无法加载工作区变量或环境，请重新打开弹窗加载后再运行。",
         "exitCode": "退出码 {code}",
         "historyReplayHint": "此次历史运行没有可显示的输出。",
+        "usePrevious": "使用上次参数",
+        "noPrevious": "暂无可恢复的执行记录。",
+        "legacyContext": "此历史记录未保存参数，将使用当前默认值。请确认连接和环境。",
+        "taskChanged": "任务定义已变化，将使用当前定义从第一个启用步骤完整执行。请检查参数。",
+        "environmentChanged": "环境已变化，变量已重新解析。请检查参数和环境选择。",
+        "restoredContext": "已恢复安全的历史参数；变量已重新解析，未保存的敏感输入需重新填写。将完整执行当前任务。",
+        "environmentMissing": "原环境已不存在，请重新选择环境或明确选择仅工作区变量。",
+        "connectionMissing": "请选择有效的连接；原连接可能已删除。",
+        "secretInput": "敏感输入（不保存）",
+        "markSensitive": "标记为敏感输入",
+        "prepareAgain": "请重新打开运行弹窗并检查配置。",
         "host": "Host",
         "inputs": "本次运行输入",
         "loadingLog": "正在加载日志...",

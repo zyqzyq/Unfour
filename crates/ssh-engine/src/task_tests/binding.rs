@@ -113,6 +113,7 @@ async fn local_binding_is_optional_and_tracks_default_and_last_used_connections(
     assert!(saved.local_binding.is_none());
     let error = service
         .run_task(SshTaskRunInput {
+            context: None,
             workspace_id: workspace_id.clone(),
             task_id: saved.task.id.clone(),
             connection_id: None,

@@ -137,6 +137,7 @@ async fn deferred_remote_step_fails_closed_before_running_stale_local_task() {
 
     let error = bus
         .run_ssh_task(SshTaskRunInput {
+            context: None,
             workspace_id: workspace_id.clone(),
             task_id: task.task.id.clone(),
             connection_id: None,
@@ -190,6 +191,7 @@ async fn deferred_remote_task_does_not_block_an_unrelated_local_task() {
 
     let error = bus
         .run_ssh_task(SshTaskRunInput {
+            context: None,
             workspace_id,
             task_id: task.task.id,
             connection_id: None,
@@ -893,6 +895,7 @@ async fn supported_but_not_materialized_step_fails_closed_then_clears_after_rest
 
     let error = bus
         .run_ssh_task(SshTaskRunInput {
+            context: None,
             workspace_id: workspace_id.clone(),
             task_id: task.task.id.clone(),
             connection_id: None,
@@ -914,6 +917,7 @@ async fn supported_but_not_materialized_step_fails_closed_then_clears_after_rest
 
     let error = bus
         .run_ssh_task(SshTaskRunInput {
+            context: None,
             workspace_id,
             task_id: task.task.id,
             connection_id: None,
@@ -968,6 +972,7 @@ async fn supported_but_not_materialized_task_does_not_block_an_unrelated_task() 
 
     let error = bus
         .run_ssh_task(SshTaskRunInput {
+            context: None,
             workspace_id,
             task_id: task.task.id,
             connection_id: None,

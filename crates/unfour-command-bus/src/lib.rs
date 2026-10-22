@@ -56,6 +56,7 @@ mod domain_commands;
 mod flow_authoring;
 mod flow_commands;
 mod ssh_commands;
+mod ssh_task_context;
 mod workspace_variable_commands;
 
 pub use command_models::*;

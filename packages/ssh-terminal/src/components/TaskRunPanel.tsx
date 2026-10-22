@@ -22,6 +22,7 @@ export function TaskRunPanel({
   logText,
   onCancel,
   onClose,
+  onRerun,
   run,
   task,
 }: {
@@ -31,6 +32,7 @@ export function TaskRunPanel({
   logText?: string | null;
   onCancel: () => void;
   onClose: () => void;
+  onRerun?: () => void;
   run: SshTaskRun;
   task: SshTaskDetail;
 }) {
@@ -150,6 +152,7 @@ export function TaskRunPanel({
           )}
         </div>
         <div className="flex items-center gap-1">
+          {!running && onRerun && <Button onClick={onRerun} size="sm" variant="secondary">{t("ssh.tasks.actions.rerun")}</Button>}
           {run.logPath ? (
             <Button
               onClick={() => void revealItemInDir(run.logPath).catch(() => undefined)}

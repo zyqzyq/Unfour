@@ -309,6 +309,7 @@ mod unified_runtime_tests {
         let task_error = runtime
             .command_bus
             .run_ssh_task(SshTaskRunInput {
+                context: None,
                 workspace_id: workspace_id.clone(),
                 task_id: "desktop-incomplete-task".to_string(),
                 connection_id: None,

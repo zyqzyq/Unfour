@@ -159,6 +159,7 @@ fn detail() -> SshTaskDetail {
 
 fn run() -> SshTaskRun {
     SshTaskRun {
+        context: None,
         warnings: vec!["ACTIVITY_RECORD_FAILED".into()],
         id: "run-1".to_string(),
         workspace_id: "workspace-1".to_string(),

@@ -19,7 +19,7 @@ impl SshService {
         let rows = sqlx::query_as::<_, StoredRun>(
             r#"
             SELECT id, workspace_id, task_id, connection_id, status, started_at,
-                   finished_at, error_message, log_path
+                   finished_at, error_message, log_path, context_json
             FROM ssh_task_run
             WHERE workspace_id = ?1 AND task_id = ?2
             ORDER BY started_at DESC, id DESC
@@ -46,7 +46,7 @@ impl SshService {
         let run = sqlx::query_as::<_, StoredRun>(
             r#"
             SELECT id, workspace_id, task_id, connection_id, status, started_at,
-                   finished_at, error_message, log_path
+                   finished_at, error_message, log_path, context_json
             FROM ssh_task_run WHERE workspace_id = ?1 AND id = ?2
             "#,
         )
@@ -146,8 +146,8 @@ impl SshService {
             r#"
             INSERT INTO ssh_task_run (
               id, workspace_id, task_id, connection_id, status, started_at,
-              finished_at, error_message, log_path
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+              finished_at, error_message, log_path, context_json
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
             "#,
         )
         .bind(&run.id)
@@ -159,6 +159,12 @@ impl SshService {
         .bind(run.finished_at.as_deref())
         .bind(run.error_message.as_deref())
         .bind(&run.log_path)
+        .bind(
+            run.context
+                .as_ref()
+                .map(serde_json::to_string)
+                .transpose()?,
+        )
         .execute(self.db.pool())
         .await?;
         Ok(())
@@ -240,7 +246,7 @@ impl SshService {
         sqlx::query_as::<_, StoredRun>(
             r#"
             SELECT id, workspace_id, task_id, connection_id, status, started_at,
-                   finished_at, error_message, log_path
+                   finished_at, error_message, log_path, context_json
             FROM ssh_task_run WHERE workspace_id = ?1 AND id = ?2
             "#,
         )

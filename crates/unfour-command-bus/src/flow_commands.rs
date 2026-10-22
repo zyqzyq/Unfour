@@ -430,6 +430,7 @@ impl FlowExecutor for CommandBus {
                     }
                     let run = self
                         .run_ssh_task(SshTaskRunInput {
+                            context: None,
                             workspace_id: input.workspace_id.clone(),
                             task_id: action.resource_id.clone(),
                             connection_id: action.connection_id.clone(),

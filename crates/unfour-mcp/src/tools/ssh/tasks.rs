@@ -322,6 +322,7 @@ fn run_task(
     )?;
     let run = command_bus
         .run_ssh_task(SshTaskRunInput {
+            context: None,
             workspace_id: evaluation.workspace.workspace_id.clone(),
             task_id,
             connection_id,

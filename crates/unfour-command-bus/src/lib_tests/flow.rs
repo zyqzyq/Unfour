@@ -17,6 +17,9 @@ mod history;
 mod native;
 #[path = "flow_reference_safety.rs"]
 mod reference_safety;
+#[cfg(feature = "ssh-native")]
+#[path = "ssh_task_rerun_native.rs"]
+mod ssh_task_rerun_native;
 #[path = "flow_wait_until.rs"]
 mod wait_until;
 
