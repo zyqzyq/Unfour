@@ -1,4 +1,19 @@
-# v0.11.0 release checklist
+# Release checklist
+
+## v0.12.0 documentation preparation
+
+Target: **v0.12.0 — NOT RELEASED / RC NOT STARTED**. This is documentation
+preparation on current `main`; application versions remain `0.11.0`. Use the
+[draft notes](v0.12.0-release-notes.md) and the
+[v0.12.0 RC verification checklist](../testing/v0.12.0-rc-checklist.md) for the
+reviewed source, commit audit and prospective gates. Flow Definition Cloud Sync
+is enabled in the client; deployed-server compatibility and real two-device
+acceptance remain **NOT VERIFIED**. No Tag, workflow dispatch or server deployment
+is part of this preparation.
+
+The v0.11.0 and older outcomes below remain historical records. Their `PASS`
+results do not verify a v0.12.0 candidate. The shared procedure below is for a
+later separately authorized RC/release.
 
 ## v0.11.0 released status
 
@@ -135,7 +150,12 @@ historical records.
   recorded; unavailable live services remain `NOT VERIFIED`.
 - Exercise Flow Canvas authoring, API/SSH/Database actions, Condition branches,
   Wait Until, cancellation and run history through both Desktop and MCP.
-  Confirm Flow definitions/history remain local-only with Cloud Sync enabled.
+  For current `main` / planned v0.12.0, verify definition-only Cloud Sync on two
+  real devices, including offline recovery, whole-definition conflicts,
+  tombstones, upgrade backfill and history isolation using the
+  [v0.12.0 checklist](../testing/v0.12.0-rc-checklist.md).
+  Actual runtime inputs/outputs, history and credentials stay local;
+  deployed-server/two-device acceptance remains `NOT VERIFIED` until recorded.
   Use the [v0.11.0 acceptance checklist](../testing/v0.11.0-release-preparation-2026-10-10.md#manual-rc-acceptance)
   for v0.11.0 regressions; existing implementation reports do not establish
   released-artifact native/manual verification.

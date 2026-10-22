@@ -8,11 +8,11 @@ describe the current source, and they do not change any `NOT VERIFIED` result.
 
 Current source version: `0.11.0`. The latest published release is
 [v0.11.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.11.0), published on
-2026-10-10. Current development on `main` continues from v0.11.0; no next
-version or feature scope has been assigned. Earlier verification records
+2026-10-10. Current development on `main` targets **v0.12.0**, in documentation
+preparation only: **NOT RELEASED / RC NOT STARTED**. Earlier verification records
 remain historical and do not establish v0.11.0 manual coverage.
 
-## Current capabilities
+## Published capabilities through v0.11.0
 
 Shipped through v0.11.0:
 
@@ -25,6 +25,26 @@ Shipped through v0.11.0:
   password-encrypted local backups. Run history is not exported.
 - Pro Cloud Sync for supported non-secret workspace data. Flow definitions,
   Flow run history, and sensitive values are not synchronized.
+
+## v0.12.0 (Planned, current main)
+
+- Flow Definition Cloud Sync is enabled in the client: whole definitions,
+  durable offline intent, tombstones and keep-local/use-remote conflicts.
+  Runtime inputs/outputs, run history and credentials remain local. Input
+  declarations and ordinary defaults are definition data; recognized sensitive
+  and device-local material is rejected, but arbitrary secrets in free text
+  cannot be reliably detected. The cloud payload limit is 64 KiB.
+- SSH Task previous-parameter recall, reviewed history/result-panel reruns,
+  stale-input protection and sensitivity/source locks.
+- MCP/Database/SSH read-only enforcement, retained completed results after
+  activity logging failures, API history/diagnostic safety and Flow Runtime
+  environment/timeout fixes, plus first-use and navigation improvements.
+
+Deployed-server Flow support, real two-device convergence, offline/conflict/delete
+recovery, history isolation and old-version upgrade are **NOT VERIFIED**. See
+the [draft notes](release/v0.12.0-release-notes.md) and
+[prospective RC checklist](testing/v0.12.0-rc-checklist.md). No v0.12.0 workflow,
+artifact or release acceptance is established by this roadmap.
 
 ## Not yet verified for v0.11.0
 
@@ -370,14 +390,14 @@ Historical status:
 
 Release claims remain limited by the current verification matrix.
 
-## Beyond v0.11.0
+## Beyond v0.12.0
 
-No next version is assigned. Likely follow-up areas, none of which are release
-claims:
+No version beyond v0.12.0 is assigned. Likely follow-up areas, none of which are
+release claims:
 
 - operating-system code signing and macOS notarization;
 - richer database result interactions;
-- sensitive-data Cloud Sync, and Cloud Sync for Flow definitions or run history;
+- sensitive-data Cloud Sync and synchronization of Flow run history/runtime data;
 - plugin extension points.
 
 MCP and local Flow runbooks are current capabilities, not future AI work. A

@@ -41,6 +41,9 @@ stay in the owning domain and canonical mapping layers.
 All current entries participate in initial upload and support tombstones.
 Flow Definition uses a [whole-document adapter](flow-definition-cloud-sync.md)
 with schema 1 safety validation and a 64 KiB limit; run data remains local.
+These are current client capabilities, planned for unreleased v0.12.0.
+Deployed-server Flow acceptance and real two-device verification remain
+**NOT VERIFIED**; see the [RC checklist](../testing/v0.12.0-rc-checklist.md).
 Parent-before-child push ordering and child blocking continue to use descriptor
 topology plus the hierarchy-specific ordering needed for nested API folders and
 aggregate deletes.
@@ -91,9 +94,11 @@ committed cursor advances to the response's `nextCursor`. Snapshot skips use
 the same classification and do not interrupt pagination or the pinned
 `atCursor` contract.
 
-Inbound envelopes and canonical payload structs accept unknown object fields,
-so adding an optional field does not make an old reader reject an otherwise
-valid entity. Domain models remain strict: extensible discriminators such as
+Inbound envelopes and existing extensible canonical payload structs accept
+unknown object fields, so an optional field can remain readable for those
+entities. Flow schema 1 instead rejects unknown payload fields under its
+[strict entity-local contract](flow-definition-cloud-sync.md#payload-schema-1).
+Domain models remain strict: extensible discriminators such as
 API body/auth kind, Connection kind/driver/auth/SSL mode, Workspace mode, and
 SSH Task step kind/version are examined before conversion. A future value that
 an old client cannot apply without changing meaning causes an entity-local

@@ -15,9 +15,14 @@ Unfour opens into a single workspace surface:
 
 ## Current Capabilities
 
-This guide documents v0.11.0, released as Standard stable on 2026-10-10.
-See the [Release Notes](../release/v0.11.0-release-notes.md). Version-scoped
-results, including checks that remain `NOT VERIFIED`, are collected in
+This guide describes current `main`, targeting **v0.12.0** in documentation
+preparation only (**NOT RELEASED / RC NOT STARTED**). Flow Sync and SSH Task
+recall/rerun additions are identified below; live-service and real-device
+acceptance for the new target remains **NOT VERIFIED**.
+
+The latest published version is v0.11.0, released as Standard stable on
+2026-10-10; see its [Release Notes](../release/v0.11.0-release-notes.md).
+Version-scoped results, including checks that remain `NOT VERIFIED`, are collected in
 [release verification](../testing/release-verification.md#v0110-final-release-verification-record).
 This guide does not restate those results. Unrun v0.11.0 native, manual, and
 live-service checks remain `NOT VERIFIED`.
@@ -97,7 +102,7 @@ independently. Auto uses DEV full access, TEST guarded, and PROD read-only;
 the UI shows effective permissions and warns about PROD protection overrides.
 
 This is a local backup and transfer feature, separate from Pro Cloud Sync.
-v0.11.0 does not support sensitive-data Cloud Sync. Flow definitions are part
+Sensitive-data Cloud Sync remains unsupported. Flow definitions are part
 of this exchange. Flow run history stays on the device and is not exported or
 synchronized. See the [format and security boundaries](../architecture/workspace-bundle.md).
 
@@ -126,10 +131,17 @@ restate them. An unrecorded production or multi-device check stays
 
 Cloud Sync synchronizes the supported non-secret workspace data shown in the
 app, including workspace settings, connection definitions, environments,
-non-secret variables, API collections/folders/requests, and SSH tasks. Secrets,
-SSH credentials and local key paths, database credentials and local file paths,
-history, runtime results, and Flow definitions and run history remain local to
-each device.
+non-secret variables, API collections/folders/requests, SSH tasks and, in current
+`main`, Flow definitions. Flow execution, actual runtime inputs/outputs, history,
+resolved variables and selected run environments stay on each device. Secrets,
+SSH credentials and local key paths, database credentials and local file paths
+are excluded.
+
+Flow definition sync is planned for **v0.12.0**, which is not released or
+RC-accepted. It is enabled in the client; deployed-server compatibility and
+real two-device acceptance are **NOT VERIFIED**. The v0.11.0 download keeps Flow
+outside Cloud Sync. See the [draft notes](../release/v0.12.0-release-notes.md)
+and [verification checklist](../testing/v0.12.0-rc-checklist.md).
 
 ## Connect Codex or Cursor (MCP)
 
@@ -178,8 +190,39 @@ retry. Real production-policy client checks remain `NOT VERIFIED`; see
 
 Deleting a Flow keeps its run history and the referenced API, SSH, and database
 resources. Exporting the Workspace includes Flow definitions and omits run
-history. Flow is not part of Cloud Sync. Codex or Cursor can save, run, cancel,
-and query the same Flows through MCP; they do not write a playbook for you.
+history. Deleting the entire Workspace also purges its local Flow run history.
+Codex or Cursor can save, run, cancel, and query the same Flows through MCP;
+they do not write a playbook for you.
+
+### Flow Definition Cloud Sync (current main, planned v0.12.0)
+
+With an active Pro entitlement and a cloud-bound workspace, the client syncs
+the complete definition: name, input declarations (including ordinary defaults),
+steps and resource UUID references. It excludes actual run input values, outputs,
+history, execution snapshots, selected environment, consent and credentials.
+Receiving a definition does not run it. Referenced resources and credentials
+must be available locally before running; sync does not repair or remap missing
+references.
+
+- Cloud payloads are limited to **64 KiB** of compact UTF-8 JSON. Unbound/local
+  definitions retain their existing 1 MiB limit.
+- Secret or sensitive-name inputs must have no default. Use runtime references
+  for sensitive fields and configure resource credentials separately on each
+  device. Recognized sensitive literals and device-local credential material
+  are rejected; arbitrary secrets hidden in free text cannot be reliably found.
+- Unsafe/oversized first uploads reject enabling sync. Unsafe/oversized edits in
+  a bound workspace reject the save and retain the editor draft; values are not
+  silently stripped or truncated.
+- Offline edits/deletions retain durable local intent for the existing workspace
+  owner. Conflicts choose **Keep local** or **Use remote** for one entire
+  definition; steps are not merged. Definition deletion syncs a tombstone and
+  retains each device's local runs; Workspace deletion purges local runs.
+- v0.11.0 cannot materialize synced Flow definitions. Its retained envelopes and
+  pre-existing local definitions/deletions require upgrade regression coverage.
+
+These describe the implemented client contract. All real server, two-device,
+offline recovery, conflict, deletion and upgrade acceptance is **NOT VERIFIED**;
+use the [RC checklist](../testing/v0.12.0-rc-checklist.md) to record it separately.
 
 ## API Client
 
@@ -209,6 +252,19 @@ remain `NOT VERIFIED` are in
 Verify host-key fingerprints before trusting a new server. Review destructive
 commands before running them, and use disposable data when testing SFTP or SSH
 task workflows.
+
+On current `main` (planned v0.12.0), ordinary Task **Run** opens current defaults.
+Choose **Use previous parameters**, or a rerun action from completed history or
+the result panel, to prepare previous parameters for review. Rerun starts a new
+run with the current saved task; it does not resume a failed step. Variable
+sources are resolved again; safe manual values can be recalled, while sensitive
+manual values require re-entry. Old runs without context use current defaults.
+Recall preserves an edited dialog, and changed/missing variable sources require
+reloading before execution. Sensitivity locks and show/hide are independent;
+automatically sensitive sources stay locked. Recall context stays local and is
+excluded from Cloud Sync and Workspace bundles. Mark opaque manual secrets
+sensitive; content-based detection cannot identify every secret. Packaged
+real-host rerun acceptance is **NOT VERIFIED**.
 
 ## Database
 

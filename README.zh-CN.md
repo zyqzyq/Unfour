@@ -26,6 +26,12 @@ Unfour 在一个桌面应用中提供 API 测试、SSH、数据库工具、本�
 [Release Notes](docs/release/v0.11.0-release-notes.md)及
 [正式发布验证记录](docs/testing/release-verification.md#v0110-final-release-verification-record)。
 
+当前 `main` 正在准备 **v0.12.0**，尚未发布，也未完成 RC 验收。当前客户端已启用
+Flow Definition Cloud Sync；已部署服务端兼容性和真实双设备验收均为 **NOT VERIFIED**。
+请参阅[发布说明草稿](docs/release/v0.12.0-release-notes.md)和
+[验证清单](docs/testing/v0.12.0-rc-checklist.md)。下文能力描述基于当前源码；
+v0.11.0 下载版本不包含 Flow Cloud Sync。
+
 ## 下载
 
 请从 [GitHub Releases](https://github.com/zyqzyq/Unfour/releases/latest) 下载最新的 Unfour 正式版本。
@@ -47,8 +53,9 @@ Unfour 帮助后端开发者排查涉及 API、服务器及其数据库的故障
 
 统一、本地优先的工作区让请求、连接、本地活动和布局贯穿整个排查过程。
 API 测试、SSH 终端与数据库工具为这条链路中的各个步骤提供能力。Flow 将这些能力组合成
-本地 runbook，用于重复执行检查与任务。Flow 定义包含在工作区整体导入导出中；
-运行历史留在本机。Flow 不参与 Cloud Sync，它是工作区内的 runbook，不是通用工作流平台。
+本地 runbook，用于重复执行检查与任务。Flow 定义包含在工作区整体导入导出和当前
+Pro Cloud Sync 客户端中；执行与运行历史留在本机。Flow 是工作区内的 runbook，
+不是通用工作流平台。
 
 MCP 是可选的辅助层：Codex 与 Cursor 可以通过本地 stdio MCP 服务，使用与桌面应用相同的
 已保存 API、SSH、数据库和 Flow 数据。工具限定在工作区范围内，经由共享命令总线执行，并遵循
@@ -101,7 +108,8 @@ Unfour 本身不修改代码仓库：代码变更由 Coding 客户端负责，Un
   结构使用 SQL，数据支持 SQL、CSV 与 JSON。
 - **Flow** - 将已保存的 API 请求、SSH 任务与 Database 查询组合成本地 runbook，支持
   Condition 分支与 Wait Until 检查。通过 Canvas 编排步骤，查看步骤结果与运行历史。
-  定义随工作区整体导入导出转移；运行历史与 Cloud Sync 不包含 Flow。详见
+  定义随工作区整体导入导出转移，也参与当前 Pro Cloud Sync 客户端的同步。
+  仅同步定义，运行历史及实际运行输入、输出留在本机；真实双设备验收为 **NOT VERIFIED**。详见
   [Flow V1](docs/architecture/flow-v1.md)。
 - **Workspace（工作区）** - 将已保存的请求、共享环境变量、连接、活动、标签页与布局状态
   限定在某个本地工作区之内，并支持标题栏切换当前环境。可整体导入导出工作区定义（含 Flow
@@ -115,9 +123,11 @@ Unfour 本身不修改代码仓库：代码变更由 Coding 客户端负责，Un
 
 > [连接 Codex 与 Cursor 到 Unfour MCP →](docs/mcp/client-setup.md)
 
-加密备份是本地文件，与 Pro Cloud Sync 分开。v0.11.0 不支持敏感数据云同步。
-工作区导出包含 Flow 定义、不含运行历史；二者都不参与 Cloud Sync。备份不嵌入
-数据库文件或私钥文件。分享普通定义导出前，仍需检查脚本、SQL 等自由文本中的硬编码凭据。
+加密备份是本地文件，与 Pro Cloud Sync 分开。工作区导出包含 Flow 定义、不含运行历史。
+当前客户端同步 Flow 定义（含输入声明和普通默认值），云端载荷上限为 64 KiB；实际运行输入、
+输出、历史和凭据不参与同步。可识别的敏感字段及设备本地材料会被拒绝，但无法可靠识别
+任意自由文本中隐藏的秘密。请使用运行时 Secret 输入或资源凭据存储。备份不嵌入数据库文件
+或私钥文件。分享或同步前，仍需检查脚本、SQL 等自由文本中的硬编码凭据。
 
 ## 截图
 

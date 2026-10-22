@@ -48,6 +48,11 @@ transaction-scoped DomainMutations; bound workspace mutations retain durable
 intent even offline or signed out. Import does not create a Cloud binding.
 There is no separate Flow-only exchange format. See [Workspace bundle](workspace-bundle.md).
 
+This describes current `main`, planned for unreleased v0.12.0. v0.11.0 shipped
+Workspace exchange without Flow Cloud Sync. The current client is enabled, but
+deployed-server compatibility and real two-device acceptance are **NOT VERIFIED**;
+see the [v0.12.0 checklist](../testing/v0.12.0-rc-checklist.md).
+
 ## Invocation and expressions
 
 `FlowRunInput` explicitly provides `workspaceId`, `flowId`, `environmentId`,
@@ -388,7 +393,9 @@ or application restarts. Browser preview supports authoring only; execution
 requires the desktop backend and is never simulated as success.
 
 Parallelism, Sub-flow, arbitrary loops, Script, Scheduler, Webhook, LLM/Agent,
-Plugin, Team/RBAC, automatic resume, and Flow Cloud Sync are outside V1.
+Plugin, Team/RBAC, automatic resume, and synchronization of Flow run history or
+runtime data are outside V1. Definition-only Cloud Sync is implemented in the
+current client under the [separate sync contract](flow-definition-cloud-sync.md).
 
 Flow diagnostics use resolved auth configuration as credential provenance,
 including custom API-key names in headers/query and Basic credentials. SSH

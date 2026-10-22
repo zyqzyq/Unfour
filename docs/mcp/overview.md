@@ -295,12 +295,16 @@ The current Unfour MCP surface does not:
 - return raw secret values;
 - attach to the running desktop process over IPC;
 - edit MCP policy, known_hosts, or raw credentials;
-- put Flow definitions or run history into Cloud Sync.
+- synchronize Flow run history, actual runtime inputs/outputs or credentials.
 
 Flow execution is in scope when a caller explicitly uses the Flow tools above.
 Flow definitions travel with a whole-Workspace import or export. Run history
-does not. Cloud Sync still excludes both. Scheduler, webhook, subflow, and
-automatic playbook authoring remain outside Flow V1; see
+does not. Current `main` includes definition-only Cloud Sync through the shared
+transactional mutation hooks, including saves/deletes made through MCP; see the
+[Flow sync contract](../architecture/flow-definition-cloud-sync.md). It is planned
+for unreleased v0.12.0; deployed-server compatibility and real two-device
+acceptance are **NOT VERIFIED**. Scheduler, webhook, subflow, and automatic
+playbook authoring remain outside Flow V1; see
 [Flow V1](../architecture/flow-v1.md).
 
 See also:

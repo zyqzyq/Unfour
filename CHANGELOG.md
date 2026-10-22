@@ -6,6 +6,77 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
+Planned for **v0.12.0**; not released and no v0.12.0 RC acceptance is recorded.
+Flow Definition Cloud Sync is enabled in the current client; deployed-server
+compatibility and real two-device acceptance remain **NOT VERIFIED**. See the
+[draft release notes](docs/release/v0.12.0-release-notes.md) and
+[RC verification checklist](docs/testing/v0.12.0-rc-checklist.md).
+
+### Added
+
+- **Flow Definition Cloud Sync** — Add whole-definition upload, update, deletion
+  and keep-local/use-remote conflict choices to the existing Pro Cloud Sync
+  client. Sync names, input declarations, steps and resource references; keep
+  run history, actual runtime inputs/outputs, selected environment, execution
+  snapshots and credentials on the device. Definitions have a 64 KiB cloud
+  payload limit and reject recognized sensitive/device-local material; use
+  runtime secret inputs instead of hardcoded secrets. Arbitrary secrets hidden
+  in free text cannot be reliably detected. Real cross-device behavior and
+  server acceptance remain **NOT VERIFIED**.
+- **SSH Task parameter recall and reruns** — Explicitly restore previous
+  parameters or prepare a rerun from completed history/result entries. Review
+  and edit the parameters before starting a new run with the current saved task;
+  previous runs and logs remain under existing retention rules. Resolve variable
+  sources again and require sensitive manual values to be entered again. Legacy
+  runs without context use current defaults; reruns do not resume failed steps.
+
+### Improved
+
+- **SSH Task sensitive inputs** — Compact sensitivity locks and independent
+  show/hide controls; automatically sensitive names and Secret sources stay
+  locked, including after history recall and manual edits. New preparation,
+  environment changes and recall start masked. Preserve dialog edits during
+  recall and reject stale variable-source versions before execution.
+- **First-use guidance and navigation** — Add actionable Flow and Database empty,
+  loading and error states, direct Database connection setup with focus return,
+  a title-bar MCP entry, Flow/Settings/MCP command-palette entries, and in-place
+  MCP status refresh. Align sidebar creation controls and Flow keyboard
+  navigation, keep SSH connection headers visible while scrolling, and add
+  localized SSH log copy/export feedback. Clarify Workspace import/export scope.
+
+### Fixed
+
+- **MCP and Database read-only safety** — Share dialect-aware SQL classification
+  to reject wrapped writes, `SELECT INTO` and assignment PRAGMAs in read-only
+  paths. Establish and verify database-native read-only constraints for MCP reads
+  and read-only connections before sending user SQL. Tighten SSH diagnostic
+  argument validation to reject mutating forms. These checks do not replace a
+  least-privilege database/SSH account or isolate external effects of functions.
+- **Completed execution results** — Preserve completed API responses, SQL/row-edit
+  results, SSH/SFTP outcomes, task start/cancel handles and session/trust/history
+  mutation results when subsequent local activity logging fails. Return an
+  explicit warning without retrying the operation. Release opened SSH sessions
+  if terminal-history persistence fails; that storage failure still reports an
+  error.
+- **API history and diagnostics** — Show sanitized snapshots of the built request
+  rather than the editor draft, normalize executed history fields and keep
+  OpenAPI history matching compatible. Require review before reusing a history
+  snapshot; block redaction markers and incomplete explicit Auth. Redact
+  script-generated values in console, assertions and errors, including encoded
+  forms and failure paths.
+- **Flow Runtime** — Default Desktop runs to the active workspace environment,
+  recover that default after a failed lookup/retry, and preserve manual choices.
+  Retain completed step outcomes across timeout/cancellation races; mark an
+  unconfirmed in-flight outcome as uncertain without automatic retry. Improve
+  encoded-credential redaction in newly persisted run history.
+- **Database result limits** — Report actual client-side truncation separately
+  from SQL `LIMIT`, carry engine/response-size truncation through MCP, and keep
+  the displayed row cap tied to the in-flight execution.
+- **SSH history and MCP feedback** — Prevent stale task output from returning
+  after cleanup or workspace changes while keeping other tasks' logs. Base PROD
+  risk notices on the actual saved setting paired with each independent save.
+  Remove unimplemented reserved capabilities from MCP health output.
+
 ## [0.11.0] - 2026-10-10
 
 Standard stable release after `v0.10.0`, focused on portable Workspaces,

@@ -27,6 +27,13 @@ See the [v0.11.0 changelog](CHANGELOG.md#0110---2026-10-10),
 [Release Notes](docs/release/v0.11.0-release-notes.md), and
 [final release verification](docs/testing/release-verification.md#v0110-final-release-verification-record).
 
+Current `main` is preparing **v0.12.0**; it has not been released or accepted as
+an RC. Flow Definition Cloud Sync is enabled in this client; deployed-server
+compatibility and real two-device acceptance are **NOT VERIFIED**. See the
+[draft notes](docs/release/v0.12.0-release-notes.md) and
+[verification checklist](docs/testing/v0.12.0-rc-checklist.md). Capabilities below
+describe current source; the v0.11.0 download does not include Flow Cloud Sync.
+
 ## Download
 
 Download the [latest Unfour release](https://github.com/zyqzyq/Unfour/releases/latest)
@@ -55,9 +62,9 @@ A unified, local-first workspace keeps requests, connections, local activity,
 and layout together throughout the investigation. API testing, SSH terminals,
 and database tools provide the capabilities for each step in that loop. Flow
 combines those capabilities into local runbooks for repeatable checks and tasks.
-Flow definitions are included in a whole-Workspace import or export. Run history
-stays on the device. Flow is not part of Cloud Sync, and it is a runbook for
-this workspace, not a general workflow platform.
+Flow definitions are included in whole-Workspace import/export and the current
+Pro Cloud Sync client. Execution and run history stay on the device. Flow is a
+runbook for this workspace, not a general workflow platform.
 
 MCP is an optional assisted layer: Codex and Cursor can use the local stdio
 MCP server to work with the same saved API, SSH, database, and Flow data as
@@ -125,8 +132,10 @@ workspace, environment, risky actions, and final decision.
 - **Flow** - Compose saved API requests, SSH tasks, and Database queries into
   local runbooks with Condition branches and Wait Until checks. Author them on
   the Canvas and inspect step results and run history. Definitions travel with
-  a whole-Workspace import or export. Run history and Cloud Sync do not include
-  Flow. See [Flow V1](docs/architecture/flow-v1.md).
+  a whole-Workspace import or export and the current Pro Cloud Sync client.
+  Only definitions sync; run history and actual runtime inputs/outputs remain
+  local. Real two-device acceptance is **NOT VERIFIED**. See
+  [Flow V1](docs/architecture/flow-v1.md).
 - **Workspace** - Scope saved requests, shared environments/variables,
   connections, activity, tabs, and layout state to a local workspace, with
   title-bar active-environment switching. Export/import whole Workspace
@@ -143,11 +152,14 @@ workspace, environment, risky actions, and final decision.
 
 > [Connect Codex and Cursor to Unfour MCP →](docs/mcp/client-setup.md)
 
-Encrypted backups are local files, separate from Pro Cloud Sync. Sensitive data
-is not synchronized to the cloud in v0.11.0. A Workspace export includes Flow
-definitions and omits run history; neither is part of Cloud Sync. Backups do
-not embed database or private-key files. Review free-form scripts and SQL
-before sharing a definitions export.
+Encrypted backups are local files, separate from Pro Cloud Sync. A Workspace
+export includes Flow definitions and omits run history. The current client syncs
+Flow definitions with a 64 KiB payload limit, including input declarations and
+ordinary defaults, but excludes actual runtime inputs/outputs, history and
+credentials. Recognized sensitive/device-local material is rejected; arbitrary
+secrets in free text cannot be reliably detected. Keep secrets in runtime secret
+inputs or resource credential storage. Backups do not embed database or
+private-key files. Review free-form scripts and SQL before sharing or syncing.
 
 ## Screenshots
 

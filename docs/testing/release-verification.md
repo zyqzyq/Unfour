@@ -1,5 +1,12 @@
 # v0.11.0 Release Verification
 
+> Current `main` targets **v0.12.0 documentation preparation only**. Its
+> [draft notes](../release/v0.12.0-release-notes.md) and
+> [RC verification checklist](v0.12.0-rc-checklist.md) record the new scope.
+> v0.12.0 is **NOT RELEASED / RC NOT STARTED**; deployed-server Flow acceptance
+> and real two-device tests are **NOT VERIFIED**. Everything below retains its
+> original v0.11.0 or older scope and is not v0.12.0 acceptance evidence.
+
 This document records the published v0.11.0 release against `v0.10.0`
 (`96f0022ec344fd643b567a54fe6f3686c2272dc0`). Earlier release and RC
 preparation records retain their original scope and results below or in their
