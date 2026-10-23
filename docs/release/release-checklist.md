@@ -4,15 +4,25 @@
 
 Target: **v0.12.0 — NOT RELEASED / RC NOT STARTED**. This is documentation
 preparation on current `main`; application versions are synchronized to `0.12.0`.
-The reviewed base is `9f02b16caf18a858c694279617d561e03fd56f46`; the preparation
-is uncommitted, so that base SHA is not the final candidate. Use the
+The historical feature-audit baseline remains
+`9f02b16caf18a858c694279617d561e03fd56f46` (45 commits after v0.11.0).
+Version and primary documentation preparation was committed at
+`8f5d9db24b213b1e6e961901dfffe185f8559217`, with
+[CI #319](https://github.com/zyqzyq/Unfour/actions/runs/39803343722) passing all
+seven jobs. The 2026-10-23 documentation closeout advances HEAD beyond that
+tested SHA. Final RC SHA selection and push remain with the release operator;
+the historical baseline, CI baseline and latest HEAD are separate identities. Use the
 [draft notes](v0.12.0-release-notes.md) and the
 [v0.12.0 RC verification checklist](../testing/v0.12.0-rc-checklist.md) for the
-reviewed source, all 45 commits and acceptance gates, plus the
+historical audit and acceptance gates, plus the
 [dated preparation record](../testing/v0.12.0-release-preparation-2026-10-22.md)
-for actual automated results and blockers. The user confirms completing Flow
+for exact source identities, actual automated results and the dispatch decision.
+The user confirms completing Flow
 Sync manual validation; detailed rows without evidence stay **NOT VERIFIED**.
-RC dispatch waits for user review, commit and push of the exact candidate.
+Source preparation is **READY for manual Standard Release Candidate** after
+the operator selects and pushes the reviewed full SHA containing this closeout.
+This source decision covers candidate verification; RC acceptance and
+formal-release readiness remain pending.
 No Tag, workflow dispatch or server deployment is part of this preparation.
 
 The v0.11.0 and older outcomes below remain historical records. Their `PASS`
@@ -183,11 +193,18 @@ historical records.
 - Download all four `release-candidate-*` Actions artifacts. Verify canonical
   filenames, non-empty updater signatures, and that each file belongs to the
   expected architecture.
+- Record SHA-256 hashes for the downloaded RC files. The RC uploads per-platform
+  artifacts only; `SHA256SUMS.txt`, `latest.json` and `downloads.json` are
+  finalized by the formal Release publish job, not by the RC workflow.
 - Confirm Windows contains one NSIS installer plus `.sig`; each macOS artifact
   contains its DMG, `.app.tar.gz`, and `.app.tar.gz.sig`; Linux contains only
   the public x64 AppImage and `.sig` even if Tauri also built `.deb`/`.rpm`.
 - Record install, launch, upgrade, updater, signature rejection, OS trust, and
   uninstall results from the downloaded candidate artifacts.
+- Exercise candidate updater bytes/signatures through an isolated test fixture;
+  do not promote public Stable manifests to test an unreleased RC. The formal
+  Release rebuilds the accepted source through the same reusable workflow;
+  it does not automatically promote the downloaded RC artifacts.
 - For Linux Experimental (x86_64 AppImage only), record Ubuntu 22.04 executable
   permission, launch, first-window rendering, API/SSH/Database/Flow module opening,
   and quit/relaunch, plus an Ubuntu 24.04 launch smoke with the same artifact.

@@ -3,8 +3,9 @@
 > Current `main` prepares **v0.12.0 Standard Release Candidate** source. Its
 > [draft notes](../release/v0.12.0-release-notes.md) and
 > [RC verification checklist](v0.12.0-rc-checklist.md) record the new scope.
-> [fresh preparation record](v0.12.0-release-preparation-2026-10-22.md) records local
-> checks. v0.12.0 is **NOT RELEASED / RC NOT STARTED**. The user confirms Flow Sync
+> [preparation record](v0.12.0-release-preparation-2026-10-22.md) records CI #319
+> at `8f5d9db` and the limited local closeout checks on 2026-10-23.
+> v0.12.0 is **NOT RELEASED / RC NOT STARTED**. The user confirms Flow Sync
 > manual validation; detailed rows without evidence remain **NOT VERIFIED**.
 > Everything below retains its
 > original v0.11.0 or older scope and is not v0.12.0 acceptance evidence.
