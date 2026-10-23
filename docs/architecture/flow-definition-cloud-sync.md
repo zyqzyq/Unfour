@@ -6,6 +6,9 @@ required server contract. Server implementation/deployment remains separately
 managed. During v0.12.0 RC preparation the user reported completing Flow Sync
 manual validation; detailed service/device/scenario rows without evidence remain
 NOT VERIFIED in the [RC checklist](../testing/v0.12.0-rc-checklist.md).
+The client ships in v0.12.0 Standard stable, released on 2026-10-23. Its
+[final verification record](../testing/release-verification.md#v0120-final-release-verification-record)
+adds publication evidence without changing those scenario results.
 
 ## Ownership and activation boundary
 
@@ -219,10 +222,10 @@ atomically. Workspace deletion conflicts include pending Flow intent.
 
 ## Manual packaging verification
 
-The client is enabled in production code; packaging/publishing is a separate
-user-managed step. The user's general Flow Sync manual confirmation is recorded
-separately from the following detailed candidate gates. This RC preparation makes
-no Unfour-api changes or deployment checks. When packaging is verified, check:
+The v0.12.0 client is packaged and published; native/manual acceptance remains
+separate. The user's general Flow Sync manual confirmation is recorded separately
+from the following detailed gates. Server deployment and compatibility without
+scenario evidence remain **NOT VERIFIED**. For released-artifact acceptance, check:
 
 1. New and already-bound workspaces upload whole definitions, including upgrade
    backfill before remote updates/deletion; repeated sync stays quiet.

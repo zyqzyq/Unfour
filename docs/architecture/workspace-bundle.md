@@ -248,7 +248,7 @@ rules, signatures and large-bundle progress/cancellation can follow separately.
 Workspace bundles add no multi-device encrypted credential sync, separate
 Flow-only import/export, remote execution, or database file migration.
 Flow definitions travel inside the Workspace bundle; run history does not.
-Current `main` separately implements definition-only
-[Flow Cloud Sync](flow-definition-cloud-sync.md), planned for v0.12.0; it does
+v0.12.0 separately ships definition-only
+[Flow Cloud Sync](flow-definition-cloud-sync.md); it does
 not include runtime inputs/outputs, history or credentials. Deployed-server
 compatibility and real two-device acceptance remain **NOT VERIFIED**.

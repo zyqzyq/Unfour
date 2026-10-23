@@ -3,18 +3,19 @@
 This roadmap is a product-direction summary. It is not release evidence. Use
 [release verification](testing/release-verification.md) and
 [the release checklist](release/release-checklist.md) for release readiness.
-Sections through v0.10.0 record what those releases shipped. They do not
-describe the current source, and they do not change any `NOT VERIFIED` result.
+Versioned sections record what each release shipped. Historical entries do not
+describe the latest release, and they do not change any `NOT VERIFIED` result.
 
 Current source version: `0.12.0`. The latest published release is
-[v0.11.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.11.0), published on
-2026-10-10. Current development on `main` prepares **v0.12.0 Standard Release
-Candidate**: **NOT RELEASED / RC NOT STARTED**. Earlier verification records
-remain historical and do not establish v0.11.0 manual coverage.
+[v0.12.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.12.0), published as
+**Standard stable on 2026-10-23**. CI, RC builds, formal publication, checksums
+and Stable manifest evidence are in the
+[final verification record](testing/release-verification.md#v0120-final-release-verification-record).
+Unrecorded native/manual/live-service checks remain **NOT VERIFIED**.
 
-## Published capabilities through v0.11.0
+## Published capabilities through v0.12.0
 
-Shipped through v0.11.0:
+Shipped through v0.12.0:
 
 - API Client, SSH Terminal, Database, and local Flow runbooks in one workspace.
 - Local stdio MCP over the command bus, including Flow save, run, cancel, and
@@ -23,10 +24,11 @@ Shipped through v0.11.0:
   [MCP overview](mcp/overview.md).
 - Whole-Workspace import/export, including Flow definitions, plus
   password-encrypted local backups. Run history is not exported.
-- Pro Cloud Sync for supported non-secret workspace data. Flow definitions,
-  Flow run history, and sensitive values are not synchronized.
+- Pro Cloud Sync for supported non-secret workspace data, including Flow
+  definitions since v0.12.0. Flow run history, actual runtime inputs/outputs,
+  credentials and sensitive values are not synchronized.
 
-## v0.12.0 (Planned, current main)
+## v0.12.0 (Published)
 
 - Flow Definition Cloud Sync is enabled in the client: whole definitions,
   durable offline intent, tombstones and keep-local/use-remote conflicts.
@@ -49,11 +51,24 @@ Shipped through v0.11.0:
 The user confirms completing Flow Sync manual validation. Detailed service,
 device, offline/conflict/delete, history-isolation and upgrade rows without
 scenario evidence remain **NOT VERIFIED**. See
-the [draft notes](release/v0.12.0-release-notes.md) and
-[RC checklist](testing/v0.12.0-rc-checklist.md) and
-[fresh preparation checks](testing/v0.12.0-release-preparation-2026-10-22.md).
-No v0.12.0 workflow,
-artifact or release acceptance is established by this roadmap.
+the [Release Notes](release/v0.12.0-release-notes.md) and
+[final verification record](testing/release-verification.md#v0120-final-release-verification-record).
+The [RC checklist](testing/v0.12.0-rc-checklist.md) and
+[source preparation checks](testing/v0.12.0-release-preparation-2026-10-22.md)
+retain their original checkpoint and do not override the later publication evidence.
+
+## Not yet verified for v0.12.0
+
+The [final verification record](testing/release-verification.md#v0120-final-release-verification-record)
+keeps these checks **NOT VERIFIED**:
+
+- native install/launch/upgrade/uninstall, OS trust and sidecar replacement,
+  including Linux 22.04/24.04 runtime;
+- v0.11.0-to-v0.12.0 in-app update and invalid-signature rejection;
+- installed-artifact feature regressions and SSH Task reruns on real hosts;
+- detailed Flow Sync service/device/offline/conflict/deletion/upgrade/history
+  isolation, account and MCP production-policy journeys;
+- macOS/Linux credential stores, manual RC sign-off and separate MSIX/Store acceptance.
 
 ## Not yet verified for v0.11.0
 
@@ -81,11 +96,11 @@ The published follow-up from `v0.10.0` includes:
   including after import.
 
 Flow definitions are part of that Workspace exchange. Flow run history is not
-exported. Flow definitions and run history remain outside Cloud Sync. Sensitive
-data is not synchronized. MCP Flow tools shipped in v0.10.0 and remain the way
+exported. In v0.11.0, Flow definitions and run history were outside Cloud Sync.
+Sensitive data is not synchronized. MCP Flow tools shipped in v0.10.0 and remain the way
 to save, run, cancel, and query a Flow; they still do not author a playbook.
 
-Current status:
+Historical status:
 
 - `v0.11.0` was released on 2026-10-10;
 - CI, Standard Release Candidate, Standard Release, artifacts, checksums, and
@@ -93,7 +108,7 @@ Current status:
   [final verification record](testing/release-verification.md#v0110-final-release-verification-record);
 - the items in [Not yet verified for v0.11.0](#not-yet-verified-for-v0110)
   remain `NOT VERIFIED`;
-- current `main` continues from v0.11.0 with v0.12.0 RC preparation above.
+- v0.12.0 subsequently adds Flow Definition Cloud Sync and the changes above.
 
 Release claims remain limited by the current verification matrix.
 
@@ -384,8 +399,9 @@ The published follow-up from `v0.9.6` includes:
 
 Flow V1 at the v0.10.0 release was local-only. Its definitions and run history
 did not support Cloud Sync or workspace import/export. v0.11.0 later included
-Flow definitions in whole-Workspace import/export; run history and Cloud Sync
-still exclude Flow.
+Flow definitions in whole-Workspace import/export; Cloud Sync still excluded
+Flow definitions in that release. v0.12.0 adds definition-only Cloud Sync;
+run history remains local.
 
 Historical status:
 

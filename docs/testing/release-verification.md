@@ -1,14 +1,179 @@
-# v0.11.0 Release Verification
+# Release Verification
 
-> Current `main` prepares **v0.12.0 Standard Release Candidate** source. Its
-> [draft notes](../release/v0.12.0-release-notes.md) and
-> [RC verification checklist](v0.12.0-rc-checklist.md) record the new scope.
-> [preparation record](v0.12.0-release-preparation-2026-10-22.md) records CI #319
-> at `8f5d9db` and the limited local closeout checks on 2026-10-23.
-> v0.12.0 is **NOT RELEASED / RC NOT STARTED**. The user confirms Flow Sync
-> manual validation; detailed rows without evidence remain **NOT VERIFIED**.
-> Everything below retains its
-> original v0.11.0 or older scope and is not v0.12.0 acceptance evidence.
+This document records **v0.12.0 Standard stable**, released on **2026-10-23**,
+compared with `v0.11.0`. Published, automated-verified and manually-verified
+are separate states. Earlier release and RC/preparation records retain their
+original source identities, dates and limits.
+
+## v0.12.0 Final Release Verification Record
+
+Evidence checked on **2026-10-23 (Asia/Shanghai)** through GitHub Release/tag,
+workflow/job/artifact APIs and publish logs, plus direct public checksum and
+manifest HTTP reads. This follow-up changes documentation only.
+
+### Source and publication
+
+- Status: **RELEASED** as Standard stable; version `0.12.0`, tag `v0.12.0`.
+- Exact tag/CI/RC/Release commit:
+  [`4883df8dbfaf4d9d69c94ed5bae75c627d146e34`](https://github.com/zyqzyq/Unfour/commit/4883df8dbfaf4d9d69c94ed5bae75c627d146e34).
+  Local `main`/HEAD, local tag, GitHub tag and GitHub `main` agreed at entry;
+  the local working tree was clean. This follow-up uses the existing `main` branch.
+- [GitHub Release](https://github.com/zyqzyq/Unfour/releases/tag/v0.12.0):
+  `Unfour v0.12.0`, Release ID `421419257`, `draft=false`, `prerelease=false`,
+  published `2026-10-23T03:25:54Z` (11:25:54 Asia/Shanghai).
+  GitHub's latest-release API also returned `v0.12.0`.
+- [Version comparison](https://github.com/zyqzyq/Unfour/compare/v0.11.0...v0.12.0)
+  and [Release Notes](../release/v0.12.0-release-notes.md) describe the tagged scope.
+  The remote Release body remains the workflow's generic Standard distribution
+  text; the detailed local notes do not imply an edit to that remote body.
+- Release-operator working-tree cleanliness and manual RC sign-off at
+  publication: **NOT RECORDED / NOT VERIFIED**. The later clean tree and
+  successful workflows do not establish either earlier manual state.
+
+### Workflow and build results
+
+All three runs completed with `conclusion=success`, attempt **1**, on the
+exact SHA above. Jobs and applicable execution steps were inspected.
+
+| Workflow | Run / trigger | Result |
+| --- | --- | --- |
+| CI #320 | [39885807832](https://github.com/zyqzyq/Unfour/actions/runs/39885807832); `push`, `main` | PASS; 7/7 jobs: frontend lint/build/tests, Rust check/tests, release contracts, MCP contracts/tests |
+| Standard Release Candidate #20 | [39885870422](https://github.com/zyqzyq/Unfour/actions/runs/39885870422); `workflow_dispatch`, `main` | PASS (automated); identity, reusable verify, four signed updater builds and four Actions artifacts; no publish job |
+| Standard Release #33 | [39892644501](https://github.com/zyqzyq/Unfour/actions/runs/39892644501); `push`, `v0.12.0` | PASS; identity, reusable verify, four signed updater builds and publication |
+
+Both RC and Release verify jobs passed `pnpm run lint`, `pnpm run test`,
+`pnpm run test:release-env`, `pnpm run check`, `pnpm run check:rust:ssh`,
+`pnpm run test:rust` and `pnpm run test:e2e`. These are hosted results,
+not application suites rerun for this documentation task. Ordinary CI uses Test;
+the reusable Standard verify/build uses Stable. Browser smoke does not verify
+installed native behavior.
+
+The actual RC and Release Linux build logs report `Image: ubuntu-22.04`;
+the separate reusable verify job is configured on `ubuntu-latest`.
+OS code signing and macOS notarization remain disabled; updater signatures
+do not establish operating-system trust.
+
+The Actions API listed four artifacts per run, all `expired=false` at this
+check. Prefixes are `release-candidate-` and `release-assets-`, respectively.
+
+| Target suffix | RC artifact ID | Release artifact ID / build job |
+| --- | --- | --- |
+| `x86_64-pc-windows-msvc` | `12473274349` | `12476206489` / [120219390466](https://github.com/zyqzyq/Unfour/actions/runs/39892644501/job/120219390466) |
+| `aarch64-apple-darwin` | `12473686509` | `12475973401` / [120219390568](https://github.com/zyqzyq/Unfour/actions/runs/39892644501/job/120219390568) |
+| `x86_64-apple-darwin` | `12473289611` | `12475943673` / [120219390630](https://github.com/zyqzyq/Unfour/actions/runs/39892644501/job/120219390630) |
+| `x86_64-unknown-linux-gnu` | `12473736515` | `12476565796` / [120219390490](https://github.com/zyqzyq/Unfour/actions/runs/39892644501/job/120219390490) |
+
+RC and formal artifacts are separate builds of the same source. Their ZIP
+digests differ; no RC-to-Release byte-equality or manual artifact acceptance
+is claimed. GitHub and R2 receive the same formal build's staged files.
+
+### Published assets, checksums, and Stable manifests
+
+The [Release API](https://api.github.com/repos/zyqzyq/Unfour/releases/tags/v0.12.0)
+lists **13 assets**, all `state=uploaded`: six payloads, four updater signatures,
+checksums and two manifests. The six payloads are Windows x64 NSIS, macOS
+arm64/x64 DMG installers, both macOS updater `.app.tar.gz` archives, and Linux
+x64 AppImage. No MSIX, `.deb`, `.rpm` or Linux ARM64 asset is in this inventory.
+
+| Asset | Bytes | SHA-256 (Release API) |
+| --- | --- | --- |
+| [`downloads.json`](https://github.com/zyqzyq/Unfour/releases/download/v0.12.0/downloads.json) | 504 | `d8021883e95bae81b86f5f7b0416829f6957b48db5b8e3b0d294efe4380f40cf` |
+| [`latest.json`](https://github.com/zyqzyq/Unfour/releases/download/v0.12.0/latest.json) | 2,362 | `52e8c6af8b9f20cf541b5d83d46634c286bb1f3facf2c363f92336782efde053` |
+| [`SHA256SUMS.txt`](https://github.com/zyqzyq/Unfour/releases/download/v0.12.0/SHA256SUMS.txt) | 1,004 | `94c89e15dba2a923ae01af6eccb8888647a27228527ac5391724a0174a5640c6` |
+| [`Unfour_0.12.0_linux_x64.AppImage`](https://github.com/zyqzyq/Unfour/releases/download/v0.12.0/Unfour_0.12.0_linux_x64.AppImage) | 116,357,624 | `bcb09776db7f86e2ba1eb3b19cf392daad38fc4640825b789520b7b9fb7fb813` |
+| [`Unfour_0.12.0_linux_x64.AppImage.sig`](https://github.com/zyqzyq/Unfour/releases/download/v0.12.0/Unfour_0.12.0_linux_x64.AppImage.sig) | 420 | `94f7134ebc687cc11376cfaf616aac2743d5ce17a1a143f3f1fca114d639cd66` |
+| [`Unfour_0.12.0_macos_arm64.app.tar.gz`](https://github.com/zyqzyq/Unfour/releases/download/v0.12.0/Unfour_0.12.0_macos_arm64.app.tar.gz) | 38,876,471 | `ed712ccfa30fecd45ffe4ba94b4736d622ac8f0bc58de35b3c37c35765321aaf` |
+| [`Unfour_0.12.0_macos_arm64.app.tar.gz.sig`](https://github.com/zyqzyq/Unfour/releases/download/v0.12.0/Unfour_0.12.0_macos_arm64.app.tar.gz.sig) | 404 | `6ecf1a73b37c8e2506d14140e635cf5ba4dba9d84b0dc493ee0e81b1dd98222c` |
+| [`Unfour_0.12.0_macos_arm64.dmg`](https://github.com/zyqzyq/Unfour/releases/download/v0.12.0/Unfour_0.12.0_macos_arm64.dmg) | 39,398,486 | `ab9dd9d5f498e8c1aae50a953c5fb8b3225d0bfc7000a666ec2a96d9f2cc9f12` |
+| [`Unfour_0.12.0_macos_x64.app.tar.gz`](https://github.com/zyqzyq/Unfour/releases/download/v0.12.0/Unfour_0.12.0_macos_x64.app.tar.gz) | 41,580,901 | `4a1bdc02510c95e25762c67aa59d762c2d774272bfd133c1b1e8cdb85d136c81` |
+| [`Unfour_0.12.0_macos_x64.app.tar.gz.sig`](https://github.com/zyqzyq/Unfour/releases/download/v0.12.0/Unfour_0.12.0_macos_x64.app.tar.gz.sig) | 404 | `56fcd1849f350c197875ea185710d1593778418cb9c9d2f445858be9ad3d52ae` |
+| [`Unfour_0.12.0_macos_x64.dmg`](https://github.com/zyqzyq/Unfour/releases/download/v0.12.0/Unfour_0.12.0_macos_x64.dmg) | 42,428,910 | `b02cca99255470bddad2f9af42b4573dcce4dc8355d6a58b93d72302ae810224` |
+| [`Unfour_0.12.0_windows_x64.exe`](https://github.com/zyqzyq/Unfour/releases/download/v0.12.0/Unfour_0.12.0_windows_x64.exe) | 25,478,591 | `da1da0f54359e920366acc943a44973e9ff8645bc282a11e745efdd7ac81fab5` |
+| [`Unfour_0.12.0_windows_x64.exe.sig`](https://github.com/zyqzyq/Unfour/releases/download/v0.12.0/Unfour_0.12.0_windows_x64.exe.sig) | 416 | `2f5d5a32f151dbd9d6c3b88101f85121d1e19217b3f0fe82381f4b59e4d871b3` |
+
+The [publish job 120222954228](https://github.com/zyqzyq/Unfour/actions/runs/39892644501/job/120222954228)
+passed finalization, immutable R2 upload/re-download, GitHub publication and
+ordered Stable promotion. Its log reports all ten `sha256sum -c` entries
+as `OK` at `03:25:40–03:25:41Z`. The update-order check allowed `0.12.0`
+over `0.11.0`, then uploaded `stable/downloads.json` at `03:25:57Z` and
+`stable/latest.json` last at `03:25:58Z`.
+
+Direct public reads completed at **2026-10-23T11:18:46Z**
+(**19:18:46 Asia/Shanghai**); all six requests returned HTTP 200:
+
+- [Versioned R2 checksums](https://releases.unfour.dev/stable/0.12.0/SHA256SUMS.txt)
+  and [GitHub checksums](https://github.com/zyqzyq/Unfour/releases/download/v0.12.0/SHA256SUMS.txt)
+  are byte-identical: 1,004 bytes, SHA-256
+  `94c89e15dba2a923ae01af6eccb8888647a27228527ac5391724a0174a5640c6`.
+  Exactly ten payload/signature entries match all ten Release API digests;
+  neither manifest nor the checksum file itself is included.
+- [Stable downloads](https://releases.unfour.dev/stable/downloads.json):
+  `version=0.12.0`, exactly `windows-x64`, `macos-arm64`, `macos-x64`,
+  `linux-x64`, pointing to NSIS, DMG, DMG and AppImage.
+- [Stable updater](https://releases.unfour.dev/stable/latest.json):
+  `version=0.12.0`, exactly `windows-x86_64`, `darwin-aarch64`,
+  `darwin-x86_64`, `linux-x86_64`, each with a non-empty signature.
+  macOS updater URLs use `.app.tar.gz`. Its `pub_date` is
+  `2026-10-23T03:25:19.475Z`, the metadata-generation time before GitHub publication.
+- Both online manifests are byte-identical to their respective GitHub assets
+  and match the sizes/digests in the table. Both R2 responses have
+  `Content-Type: application/json` and `Cache-Control: no-cache`.
+  All eight payload URLs use canonical filenames under `stable/0.12.0/`.
+
+Stable pointers are mutable; these values describe the dated observation.
+Full R2 payload verification relies on the workflow's re-download/checksum log.
+No installer or Actions ZIP was downloaded, installed or rebuilt locally in
+this follow-up. Digest agreement and non-empty signatures do not establish
+an in-app update or manual invalid-signature-rejection result.
+
+### Manual limits and preserved preparation evidence
+
+| Gate | v0.12.0 release-level result |
+| --- | --- |
+| Windows/macOS/Linux install, launch, upgrade/uninstall, MCP sidecar replacement and OS trust; Linux 22.04/24.04 runtime | NOT VERIFIED; Linux remains Experimental; Windows/macOS OS signing and macOS notarization are not enabled |
+| v0.11.0-to-v0.12.0 in-app update and manual invalid-signature rejection | NOT VERIFIED |
+| Released-artifact Workspace exchange/backup, Auth/redaction, API/Database/MCP/Flow regressions and SSH Task reruns on real hosts | NOT VERIFIED; historical implementation and automated evidence retain their scope |
+| General Flow Sync manual validation | USER CONFIRMED on 2026-10-22; no scenario/build/service/device details supplied |
+| Detailed Flow Sync server contract, independent devices, offline/retry/conflict/deletion, history isolation, native view refresh and old-client upgrades | NOT VERIFIED where scenario evidence is absent; publication does not fill the FS/UP/RG rows |
+| Account/OAuth/billing, live API/SSH/database journeys and MCP production-policy clients | NOT VERIFIED |
+| Manual RC sign-off, macOS/Linux native credential stores and separate MSIX/Store build/install/servicing | NOT VERIFIED |
+
+The [original RC checklist](v0.12.0-rc-checklist.md) and
+[dated source preparation](v0.12.0-release-preparation-2026-10-22.md) are preserved
+unchanged. Their historical feature audit at `9f02b16`, version preparation and
+CI #319 at `8f5d9db`, unselected final candidate and
+`NOT RELEASED / RC NOT STARTED` statements describe the earlier checkpoint.
+The later SHA, CI #320, RC #20 and Release #33 above supersede only that
+publication/workflow status. They do not rewrite prior test results or turn
+unrecorded manual rows into `PASS`. Use those scenario steps against the exact
+released artifacts when manual verification is performed.
+
+### Documentation follow-up validation
+
+- `node scripts/sync-version.mjs --check`: **PASS**; all tracked consumers
+  remain `0.12.0`. `node scripts/release-contract.mjs v0.12.0`: **PASS**.
+- Local Markdown paths/anchors in all 13 changed documents: **PASS**;
+  168 local links and 41 anchors checked. Current-state references use v0.12.0;
+  old release and preparation statements retain explicit historical scope.
+- Published inventory comparison: **PASS**; all 13 documented asset names,
+  URLs, sizes and digests, three workflow identities and eight Actions artifact
+  IDs match the inspected GitHub API evidence.
+- `node scripts/audit-public-secrets.mjs`: **PASS**; 1,526 publishable files,
+  no findings. `git diff --check`: **PASS**.
+- Original v0.12.0 RC/preparation files, older changelog entries and the entire
+  v0.11.0-and-earlier verification body are unchanged (Git checkout line endings
+  normalized for content comparison). Only Markdown documents are modified.
+- Application build/tests and native/manual journeys: **NOT RUN** during this
+  prose-only follow-up; hosted results above remain attributed to their runs.
+  No version, dependency, workflow, business code, tag or remote publication is
+  changed; no branch, push, dispatch, deployment or package rebuild is performed.
+  A local documentation commit is subsequently authorized by the user.
+
+Release documentation is closed out; the next code-quality phase can begin
+without assigning a new version here. The manual checks above remain explicit
+follow-up work and are not represented as completed by this documentation task.
+
+## Historical v0.11.0 release record
 
 This document records the published v0.11.0 release against `v0.10.0`
 (`96f0022ec344fd643b567a54fe6f3686c2272dc0`). Earlier release and RC

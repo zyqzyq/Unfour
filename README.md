@@ -18,22 +18,21 @@ Unfour brings API testing, SSH, database tools, local Flow runbooks, and MCP-ass
 </div>
 
 > [!WARNING]
-> Unfour v0.11.0 was released on 2026-10-10. Windows NSIS
+> Unfour v0.12.0 was released on 2026-10-23. Windows NSIS
 > installers are unsigned and may trigger SmartScreen or other operating-system
 > security warnings. Use `SHA256SUMS.txt` from the GitHub Release to verify
 > downloaded files.
 
-See the [v0.11.0 changelog](CHANGELOG.md#0110---2026-10-10),
-[Release Notes](docs/release/v0.11.0-release-notes.md), and
-[final release verification](docs/testing/release-verification.md#v0110-final-release-verification-record).
+See the [v0.12.0 changelog](CHANGELOG.md#0120---2026-10-23),
+[Release Notes](docs/release/v0.12.0-release-notes.md), and
+[final release verification](docs/testing/release-verification.md#v0120-final-release-verification-record).
 
-Current `main` is preparing **v0.12.0 Standard Release Candidate**, with source
-version `0.12.0`; it has not been released or accepted as an RC. The user reports
-completing Flow Sync manual validation; detailed checks without evidence remain
-**NOT VERIFIED**. See the
-[draft notes](docs/release/v0.12.0-release-notes.md) and
-[verification checklist](docs/testing/v0.12.0-rc-checklist.md). Capabilities below
-describe current source; the v0.11.0 download does not include Flow Cloud Sync.
+The capabilities below describe **v0.12.0 Standard stable**, including Flow
+Definition Cloud Sync and reviewed SSH Task reruns. CI, RC builds and formal
+publication passed on the tagged source. Native install/update and detailed
+live-service/manual checks without evidence remain **NOT VERIFIED**. The
+[original RC checklist](docs/testing/v0.12.0-rc-checklist.md) preserves the user's
+general Flow Sync confirmation and the outstanding scenario matrix.
 
 ## Download
 
@@ -46,10 +45,9 @@ from GitHub Releases.
   verification was recorded for v0.9.0. They are not Apple-signed or notarized;
   Gatekeeper may block them.
 - Linux publishes an x86_64 (x64) AppImage only. It is Experimental and currently
-  targets Ubuntu 22.04+; Ubuntu 20.04 is not supported. The published v0.9.0
-  AppImage predates this build baseline; new-artifact runtime verification is
-  still pending. `.deb` and `.rpm` packages are not formally supported or
-  published.
+  targets Ubuntu 22.04+; Ubuntu 20.04 is not supported. v0.12.0 was built on
+  Ubuntu 22.04; installed-artifact runtime verification remains `NOT VERIFIED`.
+  `.deb` and `.rpm` packages are not formally supported or published.
 - Verify downloaded installers with the release `SHA256SUMS.txt` asset.
 
 ## What Is Unfour?
@@ -135,7 +133,7 @@ workspace, environment, risky actions, and final decision.
   the Canvas and inspect step results and run history. Definitions travel with
   a whole-Workspace import or export and the current Pro Cloud Sync client.
   Only definitions sync; run history and actual runtime inputs/outputs remain
-  local. Detailed candidate acceptance is tracked separately. See
+  local. Detailed manual acceptance is tracked separately. See
   [Flow V1](docs/architecture/flow-v1.md).
 - **Workspace** - Scope saved requests, shared environments/variables,
   connections, activity, tabs, and layout state to a local workspace, with
@@ -252,11 +250,11 @@ map.
 
 ## Release Status
 
-[Unfour v0.11.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.11.0) was
-published as a Standard stable release on 2026-10-10. CI, Standard Release
+[Unfour v0.12.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.12.0) was
+published as a Standard stable release on 2026-10-23. CI, Standard Release
 Candidate, Standard Release, published assets, checksums, and live updater/download
 manifests are verified. Native platform, live-service, and manual regressions
-without v0.11.0 evidence remain `NOT VERIFIED`. Earlier releases and v0.11.0
+without v0.12.0 evidence remain `NOT VERIFIED`. Earlier releases and v0.12.0
 RC preparation records retain their historical scope.
 Release verification evidence is documented in:
 
@@ -280,14 +278,14 @@ successfully for the target platform or is backed by current repository evidence
 
 The published v0.9.0 Linux AppImage built successfully but failed to launch on
 Ubuntu 20.04 because it requires Ubuntu 24.04-era GLIBC/GLIBCXX symbols. The
-v0.11.0 AppImage was built on Ubuntu 22.04; the immutable v0.9.0 download
-remains unchanged. v0.11.0 Ubuntu 22.04/24.04 runtime regression remains
+v0.12.0 AppImage was built on Ubuntu 22.04; the immutable v0.9.0 download
+remains unchanged. v0.12.0 Ubuntu 22.04/24.04 runtime regression remains
 `NOT VERIFIED` until installed-artifact testing is recorded; see
 [release verification](docs/testing/release-verification.md#linux-appimage-compatibility).
 
 Earlier live and manual results, including checks that remain `NOT VERIFIED`,
 are collected in [release verification](docs/testing/release-verification.md).
-That record still leaves these v0.11.0 items `NOT VERIFIED`: native install and
+That record still leaves these v0.12.0 items `NOT VERIFIED`: native install and
 update journeys, released-artifact Workspace/Auth/Database/MCP/Flow regressions,
 Account/Cloud Sync and MCP production-policy journeys, Linux runtime, macOS and
 Linux credential stores, and the manual MSIX/Store path. Publication does not

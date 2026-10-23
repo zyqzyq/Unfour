@@ -299,11 +299,13 @@ The current Unfour MCP surface does not:
 
 Flow execution is in scope when a caller explicitly uses the Flow tools above.
 Flow definitions travel with a whole-Workspace import or export. Run history
-does not. Current `main` includes definition-only Cloud Sync through the shared
+does not. v0.12.0 includes definition-only Cloud Sync through the shared
 transactional mutation hooks, including saves/deletes made through MCP; see the
-[Flow sync contract](../architecture/flow-definition-cloud-sync.md). It is planned
-for unreleased v0.12.0; deployed-server compatibility and real two-device
-acceptance are **NOT VERIFIED**. Scheduler, webhook, subflow, and automatic
+[Flow sync contract](../architecture/flow-definition-cloud-sync.md). The client
+ships in Standard stable; detailed deployed-server compatibility and real
+two-device acceptance without scenario evidence remain **NOT VERIFIED** in the
+[final verification record](../testing/release-verification.md#v0120-final-release-verification-record).
+Scheduler, webhook, subflow, and automatic
 playbook authoring remain outside Flow V1; see
 [Flow V1](../architecture/flow-v1.md).
 

@@ -15,18 +15,13 @@ Unfour opens into a single workspace surface:
 
 ## Current Capabilities
 
-This guide describes current `main`, prepared as **v0.12.0 Standard Release
-Candidate** source (**NOT RELEASED / RC NOT STARTED**). The user confirms
-completing Flow Sync manual validation; detailed live-service and real-device
-checks without evidence remain **NOT VERIFIED** in the
-[RC checklist](../testing/v0.12.0-rc-checklist.md).
-
-The latest published version is v0.11.0, released as Standard stable on
-2026-10-10; see its [Release Notes](../release/v0.11.0-release-notes.md).
-Version-scoped results, including checks that remain `NOT VERIFIED`, are collected in
-[release verification](../testing/release-verification.md#v0110-final-release-verification-record).
-This guide does not restate those results. Unrun v0.11.0 native, manual, and
-live-service checks remain `NOT VERIFIED`.
+This guide describes **v0.12.0**, released as Standard stable on **2026-10-23**;
+see the [Release Notes](../release/v0.12.0-release-notes.md). CI, RC builds,
+formal publication and distribution evidence are collected in
+[release verification](../testing/release-verification.md#v0120-final-release-verification-record).
+Native install/update, detailed live-service and real-device checks without
+evidence remain **NOT VERIFIED**. The [original RC checklist](../testing/v0.12.0-rc-checklist.md)
+preserves the user's general Flow Sync manual confirmation and the scenario matrix.
 
 - The workspace shell is usable. API, SSH, and Database sidebars keep
   independent bounded widths and restore their own layout when switching
@@ -132,17 +127,17 @@ restate them. An unrecorded production or multi-device check stays
 
 Cloud Sync synchronizes the supported non-secret workspace data shown in the
 app, including workspace settings, connection definitions, environments,
-non-secret variables, API collections/folders/requests, SSH tasks and, in current
-`main`, Flow definitions. Flow execution, actual runtime inputs/outputs, history,
+non-secret variables, API collections/folders/requests, SSH tasks and, since
+v0.12.0, Flow definitions. Flow execution, actual runtime inputs/outputs, history,
 resolved variables and selected run environments stay on each device. Secrets,
 SSH credentials and local key paths, database credentials and local file paths
 are excluded.
 
-Flow definition sync is prepared for **v0.12.0**, which is not released or
-RC-accepted. It is enabled in the client; the user's general manual confirmation
-does not establish individual scenarios or the final candidate. The v0.11.0 download keeps Flow
-outside Cloud Sync. See the [draft notes](../release/v0.12.0-release-notes.md)
-and [verification checklist](../testing/v0.12.0-rc-checklist.md).
+Flow definition sync ships in **v0.12.0**. The user's general manual confirmation
+and successful release workflows do not establish individual service/device
+scenarios. v0.11.0 keeps Flow outside Cloud Sync; upgrades and cross-device
+acceptance without evidence remain **NOT VERIFIED** in the
+[final verification record](../testing/release-verification.md#v0120-final-release-verification-record).
 
 After remote changes commit locally, already-open API, SSH, Database, Flow and
 variables/environment views refresh saved data, including the workspace switcher.
@@ -207,7 +202,7 @@ history. Deleting the entire Workspace also purges its local Flow run history.
 Codex or Cursor can save, run, cancel, and query the same Flows through MCP;
 they do not write a playbook for you.
 
-### Flow Definition Cloud Sync (current main, planned v0.12.0)
+### Flow Definition Cloud Sync (v0.12.0)
 
 With an active Pro entitlement and a cloud-bound workspace, the client syncs
 the complete definition: name, input declarations (including ordinary defaults),
@@ -267,7 +262,7 @@ Verify host-key fingerprints before trusting a new server. Review destructive
 commands before running them, and use disposable data when testing SFTP or SSH
 task workflows.
 
-On current `main` (planned v0.12.0), ordinary Task **Run** opens current defaults.
+In v0.12.0, ordinary Task **Run** opens current defaults.
 Choose **Use previous parameters**, or a rerun action from completed history or
 the result panel, to prepare previous parameters for review. Rerun starts a new
 run with the current saved task; it does not resume a failed step. Variable

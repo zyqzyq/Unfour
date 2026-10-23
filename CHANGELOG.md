@@ -6,11 +6,13 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
-Prepared as **v0.12.0 Standard Release Candidate** source; not released and no
-v0.12.0 RC acceptance is recorded. The user reports completing Flow Sync manual
-validation; individual scenarios without evidence remain **NOT VERIFIED**. See the
-[draft release notes](docs/release/v0.12.0-release-notes.md) and
-[RC verification checklist](docs/testing/v0.12.0-rc-checklist.md).
+## [0.12.0] - 2026-10-23
+
+Standard stable release after `v0.11.0`. See the
+[Release Notes](docs/release/v0.12.0-release-notes.md) and
+[final release verification](docs/testing/release-verification.md#v0120-final-release-verification-record).
+Native install/update and detailed live-service/manual checks without evidence
+remain **NOT VERIFIED**. The original RC checklist retains its preparation scope.
 
 ### Added
 
@@ -865,6 +867,8 @@ First public release.
 - Linux artifacts remain experimental/unverified until real-device smoke checks
   are complete.
 
+[Unreleased]: https://github.com/zyqzyq/Unfour/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/zyqzyq/Unfour/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/zyqzyq/Unfour/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/zyqzyq/Unfour/compare/v0.9.6...v0.10.0
 [0.9.6]: https://github.com/zyqzyq/Unfour/releases/tag/v0.9.6

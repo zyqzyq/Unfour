@@ -41,7 +41,8 @@ stay in the owning domain and canonical mapping layers.
 All current entries participate in initial upload and support tombstones.
 Flow Definition uses a [whole-document adapter](flow-definition-cloud-sync.md)
 with schema 1 safety validation and a 64 KiB limit; run data remains local.
-These are current client capabilities, prepared for unreleased v0.12.0 RC.
+These client capabilities ship in v0.12.0 Standard stable (2026-10-23); see the
+[final release verification](../testing/release-verification.md#v0120-final-release-verification-record).
 The user reports completing Flow Sync manual validation; detailed service/device
 rows without evidence remain **NOT VERIFIED** in the
 [RC checklist](../testing/v0.12.0-rc-checklist.md).

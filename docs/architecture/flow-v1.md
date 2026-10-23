@@ -48,10 +48,12 @@ transaction-scoped DomainMutations; bound workspace mutations retain durable
 intent even offline or signed out. Import does not create a Cloud binding.
 There is no separate Flow-only exchange format. See [Workspace bundle](workspace-bundle.md).
 
-This describes current `main`, planned for unreleased v0.12.0. v0.11.0 shipped
-Workspace exchange without Flow Cloud Sync. The current client is enabled, but
-deployed-server compatibility and real two-device acceptance are **NOT VERIFIED**;
-see the [v0.12.0 checklist](../testing/v0.12.0-rc-checklist.md).
+Definition-only Cloud Sync ships in v0.12.0 Standard stable (2026-10-23).
+v0.11.0 shipped Workspace exchange without Flow Cloud Sync. Detailed
+deployed-server compatibility and real two-device acceptance without scenario
+evidence remain **NOT VERIFIED**; see the
+[final release verification](../testing/release-verification.md#v0120-final-release-verification-record)
+and the preserved [RC checklist](../testing/v0.12.0-rc-checklist.md).
 
 ## Invocation and expressions
 
