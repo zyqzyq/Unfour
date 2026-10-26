@@ -7,6 +7,8 @@ use unfour_core::domain::{
 };
 use unfour_core::models::{WorkspaceEnvironment, WorkspaceVariable, WorkspaceVariableInput};
 
+mod ordering;
+
 struct TestWorkspaceService {
     inner: WorkspaceService,
     db: LocalDb,

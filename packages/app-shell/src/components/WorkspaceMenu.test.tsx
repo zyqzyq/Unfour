@@ -104,6 +104,56 @@ describe("WorkspaceMenu", () => {
     expect(secondTrigger.querySelector("svg")).toHaveClass("ml-auto");
   });
 
+  it("preserves backend workspace order when the active workspace changes", async () => {
+    const defaultWorkspace = { ...workspace("Default Workspace"), isDefault: true };
+    const older = {
+      ...workspace("Zeta"),
+      createdAt: "2026-01-02T00:00:00.000Z",
+      lastOpenedAt: null,
+    };
+    const newer = {
+      ...workspace("Alpha"),
+      createdAt: "2026-01-03T00:00:00.000Z",
+      lastOpenedAt: "2026-01-04T00:00:00.000Z",
+    };
+    const workspaces = [defaultWorkspace, older, newer];
+    const onActivateWorkspace = vi.fn();
+    const { rerender } = render(
+      <WorkspaceMenu
+        activeWorkspace={newer}
+        extensionContext={extensionContext(newer)}
+        onActivateWorkspace={onActivateWorkspace}
+        workspaces={workspaces}
+      />,
+      { wrapper: createWrapper() },
+    );
+    const expected = workspaces.map((item) => expect.stringContaining(item.name));
+    fireEvent.pointerDown(screen.getByRole("button", { name: /alpha/i }), {
+      button: 0, ctrlKey: false,
+    });
+    await screen.findByRole("menuitem", { name: /zeta/i });
+    expect(screen.getAllByRole("menuitem").slice(0, 3).map((item) => item.textContent))
+      .toEqual(expected);
+    fireEvent.click(screen.getByRole("menuitem", { name: /zeta/i }));
+    expect(onActivateWorkspace).toHaveBeenCalledWith(older.id);
+
+    const activated = { ...older, lastOpenedAt: "2026-01-05T00:00:00.000Z" };
+    rerender(
+      <WorkspaceMenu
+        activeWorkspace={activated}
+        extensionContext={extensionContext(activated)}
+        onActivateWorkspace={onActivateWorkspace}
+        workspaces={[defaultWorkspace, activated, newer]}
+      />,
+    );
+    fireEvent.pointerDown(screen.getByRole("button", { name: /zeta/i }), {
+      button: 0, ctrlKey: false,
+    });
+    await screen.findByRole("menuitem", { name: /alpha/i });
+    expect(screen.getAllByRole("menuitem").slice(0, 3).map((item) => item.textContent))
+      .toEqual(expected);
+  });
+
   it("mounts and survives parent rerenders without a maximum update depth error", () => {
     const active = workspace("Default Workspace");
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});

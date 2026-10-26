@@ -413,7 +413,7 @@ pub(crate) async fn list_on(connection: &mut SqliteConnection) -> AppResult<Vec<
           created_at, updated_at, deleted_at, revision
         FROM workspaces
         WHERE deleted_at IS NULL
-        ORDER BY is_default DESC, last_opened_at DESC, created_at ASC
+        ORDER BY is_default DESC, created_at ASC, id ASC
         "#,
     )
     .fetch_all(&mut *connection)
