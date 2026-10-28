@@ -91,7 +91,7 @@ export function ApiCollectionTree({
         </label>
       </div>
       <div className="flex shrink-0 items-center justify-between gap-2 px-2 pb-1">
-        <span className="text-[11px] font-semibold uppercase text-[var(--u-color-text-soft)]">
+        <span className="text-[length:var(--u-font-size-caption)] font-semibold uppercase text-[var(--u-color-text-muted)]">
           {t("api.sidebar.collections")}
         </span>
         <ApiCollectionToolbarActions

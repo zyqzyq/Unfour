@@ -53,7 +53,7 @@ export function KeyValueEditor({
         </Button>
       </div>
       <div className="overflow-hidden rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)]">
-        <div className="grid min-h-[28px] grid-cols-[28px_minmax(120px,1fr)_minmax(120px,1fr)_32px] items-center gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2 text-[11px] font-semibold uppercase text-[var(--u-color-text-soft)]">
+        <div className="grid min-h-[28px] grid-cols-[28px_minmax(120px,1fr)_minmax(120px,1fr)_32px] items-center gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2 text-[length:var(--u-font-size-caption)] font-semibold uppercase text-[var(--u-color-text-muted)]">
           <span />
           <span>{t("api.keyValue.key")}</span>
           <span>{t("api.keyValue.value")}</span>

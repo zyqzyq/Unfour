@@ -2,7 +2,7 @@ import { redactKeyValues, responseStateLabel } from "./response-tab-helpers";
 import { useState, type ReactNode } from "react";
 import Editor from "@monaco-editor/react";
 import { AlertCircle, CheckCircle2, Loader2, WifiOff } from "lucide-react";
-import { Badge, Button, EmptyState, cn, useI18n, useTheme } from "@unfour/ui";
+import { configureEditorThemes, Badge, Button, EmptyState, cn, useI18n, useTheme } from "@unfour/ui";
 import type { ApiExecutedRequestSnapshot, ApiResponse, KeyValue, ScriptExecutionResult } from "@unfour/command-client";
 import { formatByteSize } from "../request-utils";
 import { formatResponseBody, looksLikeJson } from "../model/api-request-state";
@@ -80,7 +80,7 @@ export function ResponseBodyView({
         tone="error"
       >
         {body && (
-          <pre className="max-h-60 w-full max-w-3xl overflow-auto whitespace-pre-wrap break-words rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-bg)] px-3 py-2 text-left font-mono text-[12px] leading-5 text-[var(--u-color-text-muted)]">
+          <pre className="max-h-60 w-full max-w-3xl overflow-auto whitespace-pre-wrap break-words rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-canvas)] px-3 py-2 text-left font-mono text-[12px] leading-5 text-[var(--u-color-text-muted)]">
             {displayBody}
           </pre>
         )}
@@ -136,8 +136,9 @@ export function ResponseBodyView({
           ))}
         </div>
       </div>
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 flex-1 bg-[var(--u-color-canvas)]">
         <Editor
+          beforeMount={(monaco) => configureEditorThemes(monaco, theme)}
           defaultLanguage={isJson && mode === "pretty" ? "json" : "plaintext"}
           options={{
             fontSize: 12,
@@ -168,7 +169,7 @@ export function RequestSnapshot({ request }: { request: ApiExecutedRequestSnapsh
     <div className="h-full overflow-auto p-3 text-[12px] text-[var(--u-color-text)]">
       <p className="mb-2 text-[var(--u-color-text-soft)]">{t("api.response.request.snapshotNotice")}</p>
       <div className="mb-3 rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-2">
-        <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--u-color-text-soft)]">
+        <div className="mb-1 text-[length:var(--u-font-size-caption)] font-semibold uppercase tracking-[0.06em] text-[var(--u-color-text-muted)]">
           {t("api.response.request.summary")}
         </div>
         <div className="flex min-w-0 items-center gap-2">
@@ -191,11 +192,11 @@ export function RequestSnapshot({ request }: { request: ApiExecutedRequestSnapsh
         title={t("api.response.request.headers")}
       />
       <section className="mt-3">
-        <h4 className="mb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--u-color-text-soft)]">
+        <h4 className="mb-1 text-[length:var(--u-font-size-caption)] font-semibold uppercase tracking-[0.06em] text-[var(--u-color-text-muted)]">
           {t("api.response.request.body")}
         </h4>
         {request.body?.trim() ? (
-          <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-bg)] px-3 py-2 font-mono text-[12px] leading-5 text-[var(--u-color-text-muted)]">
+          <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-canvas)] px-3 py-2 font-mono text-[12px] leading-5 text-[var(--u-color-text-muted)]">
             {request.body}
           </pre>
         ) : (
@@ -219,7 +220,7 @@ export function RequestKeyValueReadout({
 }) {
   return (
     <section className="mt-3">
-      <h4 className="mb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--u-color-text-soft)]">
+      <h4 className="mb-1 text-[length:var(--u-font-size-caption)] font-semibold uppercase tracking-[0.06em] text-[var(--u-color-text-muted)]">
         {title}
       </h4>
       {items.length ? (
@@ -363,7 +364,7 @@ export function ResponseTiming({ response }: { response: ApiResponse | null }) {
 export function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2 py-1">
-      <div className="text-[10px] uppercase text-[var(--u-color-text-soft)]">{label}</div>
+      <div className="text-[length:var(--u-font-size-caption)] uppercase text-[var(--u-color-text-muted)]">{label}</div>
       <div className="truncate font-medium">{value}</div>
     </div>
   );

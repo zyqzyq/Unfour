@@ -178,6 +178,7 @@ export function TerminalWorkspace({
     <div className="relative flex min-h-0 flex-1 flex-col">
       {hasSessions ? (
         <Tabs
+          activeBackground="terminal"
           activeId={activeSessionId ?? sessions[0]?.session.sessionId ?? ""}
           onClose={onCloseSession}
           onSelect={onSelectSession}

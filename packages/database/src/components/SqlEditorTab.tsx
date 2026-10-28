@@ -436,7 +436,7 @@ export function SqlEditorTab({
         // Monaco defaults to height:100%, which only resolves against a parent
         // with a definite height. Give it a flex-sized box so the editor fills
         // its split pane instead of collapsing to zero height.
-        <div className="min-h-0 flex-1">
+        <div className="min-h-0 flex-1 bg-[var(--u-color-canvas)]">
           <Editor
             defaultLanguage="sql"
             height="100%"
@@ -460,7 +460,7 @@ export function SqlEditorTab({
           <form onSubmit={submitSavedSql}>
             <DialogBody className="space-y-3">
               <label className="block space-y-1">
-                <span className="text-[11px] font-medium uppercase text-[var(--u-color-text-soft)]">
+                <span className="text-[length:var(--u-font-size-caption)] font-medium uppercase text-[var(--u-color-text-muted)]">
                   {t("database.saved.name")}
                 </span>
                 <Input
@@ -471,7 +471,7 @@ export function SqlEditorTab({
                 />
               </label>
               <div className="rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-2">
-                <div className="mb-1 truncate text-[11px] text-[var(--u-color-text-soft)]">
+                <div className="mb-1 truncate text-[length:var(--u-font-size-caption)] text-[var(--u-color-text-muted)]">
                   {selectedConnection
                     ? t("database.saved.connectionScope", { name: selectedConnection.name })
                     : t("database.saved.allConnections")}
@@ -522,7 +522,7 @@ export function SqlEditorTab({
                       <span className="block truncate text-[12px] font-semibold text-[var(--u-color-text)]">
                         {item.name}
                       </span>
-                      <span className="block truncate text-[11px] text-[var(--u-color-text-soft)]">
+                      <span className="block truncate text-[length:var(--u-font-size-caption)] text-[var(--u-color-text-muted)]">
                         {savedSqlConnectionLabel(item, connections, t("database.saved.allConnections"), t("database.saved.missingConnection"))}
                         {" · "}
                         {formatSavedSqlTime(item.updatedAt)}

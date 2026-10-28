@@ -163,6 +163,7 @@ export function DatabaseWorkspace({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <Tabs
+        activeBackground="subtle"
         activeId={activeTabId}
         onClose={(tabId) => {
           const tab = tabs.find((candidate) => candidate.id === tabId);

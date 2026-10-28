@@ -86,7 +86,7 @@ export function ApiHistoryTree({
 function HistoryMeta({ item }: { item: ApiHistoryItem }) {
   const time = formatHistoryTime(item.createdAt);
   return (
-    <span className="flex min-w-0 items-center gap-1 text-[10px] text-[var(--u-color-text-soft)]">
+    <span className="flex min-w-0 items-center gap-1 text-[length:var(--u-font-size-caption)] text-[var(--u-color-text-muted)]">
       {item.status !== null && (
         <span
           className={cn(

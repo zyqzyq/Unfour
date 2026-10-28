@@ -143,6 +143,8 @@ Core color tokens:
 
 ```css
 --u-color-bg
+--u-color-chrome
+--u-color-canvas
 --u-color-surface
 --u-color-surface-subtle
 --u-color-surface-muted
@@ -161,6 +163,29 @@ Core color tokens:
 --u-color-success
 --u-color-focus
 ```
+
+Surface roles (Catppuccin Latte / Mocha):
+
+- `chrome`: global toolbar, activity rail, status bar and shared `Tabs` rail
+  (Latte Crust `#dce0e8` / Mocha Crust `#11111b`).
+- `surface`: sidebar, forms and ordinary panels; retain Mantle in both themes.
+- `bg`: workspace Base; `surface-subtle` remains the existing section toolbar
+  and table header surface. Do not globally swap these roles.
+- `canvas`: data table bodies, SQL and API response/editor canvases
+  (`#ffffff` / Mocha Base `#1e1e2e`). Keep toolbars and headers separate.
+  Terminal canvases retain the theme-independent terminal tokens.
+
+Shared `Tabs` defaults to `surface`. Set `activeBackground="subtle"` when the
+next region is a section toolbar, or `"terminal"` for a terminal pane (including
+its light-theme foreground). The active lower edge joins that adjacent region.
+API request tabs already join their `surface` request bar; underline-style
+configuration/response tabs retain their own hierarchy.
+
+Monaco uses the shared `configureEditorThemes` helper in `packages/ui`, registered
+by each API editor before mounting and by the SQL editor on mount. Keep its
+literal canvas colors synchronized with the CSS tokens; API must render correctly
+before Database has ever been opened. This helper contains visual configuration
+only, not editor commands or feature behavior.
 
 Core size tokens:
 
@@ -226,9 +251,15 @@ larger than `space-6` inside workspace pages.
 | Label text | 12px |
 | Compact title | 14px |
 | Code text | 13px |
+| Caption (`--u-font-size-caption`) | 11px |
 
 Use monospace fonts for terminal, SQL editor, JSON viewer, logs, request
 payloads, and code snippets. Do not use large title text in workspace pages.
+
+Use `text-muted` for readable compact metadata such as table types, row counts,
+history times, and editor hints. Reserve `text-soft` for decorative or disabled
+details; do not combine it with 10/11px text that users need to read. Apply the
+caption token selectively without changing row heights or adding density modes.
 
 ## Borders, Radius, And Shadows
 

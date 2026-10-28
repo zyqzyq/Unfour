@@ -11,7 +11,7 @@
 :root {
   /* App chrome */
   --app-bg: var(--u-color-bg);
-  --app-surface: var(--u-color-surface-subtle);
+  --app-surface: var(--u-color-chrome);
 
   /* Panels / surfaces */
   --panel-bg: var(--u-color-surface);
@@ -32,7 +32,7 @@
   --accent-soft: var(--u-color-primary-soft);
 
   /* Sidebar */
-  --sidebar-bg: var(--u-color-surface-subtle);
+  --sidebar-bg: var(--u-color-surface);
   --sidebar-muted: var(--u-color-text-muted);
   --sidebar-border: var(--u-color-border);
 

@@ -11,6 +11,8 @@
 
   /* ── Color primitives (dark) — Catppuccin Mocha ── */
   --u-color-bg: #1e1e2e;
+  --u-color-chrome: #11111b;
+  --u-color-canvas: #1e1e2e;
   --u-color-surface: #181825;
   --u-color-surface-subtle: #1e1e2e;
   --u-color-surface-muted: #313244;

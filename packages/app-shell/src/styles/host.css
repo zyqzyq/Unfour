@@ -41,19 +41,7 @@ body {
 
 .app-shell { background: var(--app-bg); }
 
-.u-statusbar {
-  background: var(--u-color-primary-soft);
-  color: var(--u-color-text-muted);
-  border-top: 1px solid var(--u-color-border);
-}
-
-[data-theme="dark"] .u-statusbar {
-  background: var(--u-color-surface-active);
-  color: var(--u-color-text);
-}
-
-.u-statusbar .u-statusbar-hover:hover { background: rgba(0, 0, 0, 0.06); }
-[data-theme="dark"] .u-statusbar .u-statusbar-hover:hover { background: var(--u-color-surface-hover); }
+.u-statusbar .u-statusbar-hover:hover { background: var(--u-color-surface-hover); }
 .surface-panel { background: var(--panel-bg); border: 1px solid var(--border); overflow: hidden; }
 .surface-header { background: var(--app-surface); border-bottom: 1px solid var(--border); color: var(--text); }
 .empty-state { color: var(--text-muted); background: var(--u-color-surface-subtle); }

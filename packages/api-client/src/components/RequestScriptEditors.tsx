@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Editor from "@monaco-editor/react";
-import { cn, useI18n, useTheme } from "@unfour/ui";
+import { configureEditorThemes, cn, useI18n, useTheme } from "@unfour/ui";
 
 type ScriptKind = "pre" | "post";
 
@@ -42,21 +42,22 @@ export function RequestScriptEditors({
               : t("api.scripts.postResponse")}
           </button>
         ))}
-        <span className="ml-auto truncate text-[11px] text-[var(--u-color-text-soft)]">
+        <span className="ml-auto truncate text-[length:var(--u-font-size-caption)] text-[var(--u-color-text-muted)]">
           {active === "pre"
             ? t("api.scripts.preHint")
             : t("api.scripts.postHint")}
         </span>
       </div>
       {!value && (
-        <div className="shrink-0 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-3 py-1 font-mono text-[11px] text-[var(--u-color-text-soft)]">
+        <div className="shrink-0 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-3 py-1 font-mono text-[length:var(--u-font-size-caption)] text-[var(--u-color-text-muted)]">
           {active === "pre"
             ? t("api.scripts.preExample")
             : t("api.scripts.postExample")}
         </div>
       )}
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 flex-1 bg-[var(--u-color-canvas)]">
         <Editor
+          beforeMount={(monaco) => configureEditorThemes(monaco, theme)}
           language="javascript"
           onChange={(next) => onChange(next ?? "")}
           options={{

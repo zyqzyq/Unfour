@@ -4,7 +4,7 @@ import { useState } from "react";
 import type * as React from "react";
 import Editor from "@monaco-editor/react";
 import { Wand2 } from "lucide-react";
-import { Button, Input, SecretInput, cn, useI18n, useTheme } from "@unfour/ui";
+import { configureEditorThemes, Button, Input, SecretInput, cn, useI18n, useTheme } from "@unfour/ui";
 import type { KeyValue } from "@unfour/command-client";
 import { KeyValueEditor } from "./KeyValueEditor";
 import { RequestScriptEditors } from "./RequestScriptEditors";
@@ -377,6 +377,7 @@ function BodyEditor({
         )}
         {bodyMode === "raw" && (
           <Editor
+            beforeMount={(monaco) => configureEditorThemes(monaco, theme)}
             defaultLanguage={rawBodyType === "json" ? "json" : "plaintext"}
             onChange={(value) => {
               setFormatError(null);

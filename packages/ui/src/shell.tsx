@@ -57,7 +57,7 @@ export function ActivityBar({
   return (
     <aside
       className={cn(
-        "flex w-[48px] shrink-0 flex-col items-center border-r border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] py-2",
+        "flex w-[48px] shrink-0 flex-col items-center border-r border-[var(--u-color-border)] bg-[var(--u-color-chrome)] py-2",
         className,
       )}
     >
@@ -81,7 +81,7 @@ export function GlobalToolbar({
   return (
     <header
       className={cn(
-        "flex h-[var(--u-size-global-toolbar)] shrink-0 items-center border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] text-[var(--u-color-text)]",
+        "flex h-[var(--u-size-global-toolbar)] shrink-0 items-center border-b border-[var(--u-color-border)] bg-[var(--u-color-chrome)] text-[var(--u-color-text)]",
         className,
       )}
     >
@@ -286,7 +286,7 @@ export function StatusBar({
   return (
     <footer
       className={cn(
-        "u-statusbar flex h-[var(--u-size-statusbar)] shrink-0 items-center justify-between gap-3 border-t border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2 text-[11px] text-[var(--u-color-text-muted)]",
+        "u-statusbar flex h-[var(--u-size-statusbar)] shrink-0 items-center justify-between gap-3 border-t border-[var(--u-color-border)] bg-[var(--u-color-chrome)] px-2 text-[length:var(--u-font-size-caption)] text-[var(--u-color-text-muted)]",
         className,
       )}
     >

@@ -77,7 +77,7 @@ export function DatabaseSidebar({
   return (
     <section className="flex h-full min-h-0 flex-col space-y-1">
       <div className="flex h-7 shrink-0 items-center justify-between px-1">
-        <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase text-[var(--u-color-text-soft)]">
+        <span className="flex items-center gap-1.5 text-[length:var(--u-font-size-caption)] font-semibold uppercase text-[var(--u-color-text-muted)]">
           <Database size={13} />
           {t("database.sidebar.connections")}
           <Badge tone="neutral">{connections.length}</Badge>

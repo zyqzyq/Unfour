@@ -99,7 +99,7 @@ export function TableDataTab({
         <ToolbarGroup className="min-w-0">
           <span className="truncate text-[12px] font-medium text-[var(--u-color-text)]">{displayName}</span>
           {!isLoading && tableView ? (
-            <span className="text-[11px] text-[var(--u-color-text-soft)]">
+            <span className="text-[length:var(--u-font-size-caption)] text-[var(--u-color-text-muted)]">
               {t(tableView.totalRowsExact === false ? "database.grid.rowRange" : "database.grid.rowRangeTotal", { first: firstRow, last: lastRow, total: tableView.totalRows })}
             </span>
           ) : null}
@@ -128,7 +128,7 @@ export function TableDataTab({
             </Button>
           ) : null}
           {editing && !editing.canUpdateDelete ? (
-            <span className="max-w-[220px] truncate text-[11px] text-[var(--u-color-text-soft)]" title={t("database.editing.primaryKeyRequired")}>
+            <span className="max-w-[220px] truncate text-[length:var(--u-font-size-caption)] text-[var(--u-color-text-muted)]" title={t("database.editing.primaryKeyRequired")}>
               {t("database.editing.insertOnly")}
             </span>
           ) : null}
@@ -330,7 +330,7 @@ function AddRowDialog({
             ];
             return (
               <label className="grid grid-cols-[minmax(120px,1fr)_100px_minmax(160px,2fr)] items-center gap-2" key={column.name}>
-                <span className="min-w-0 truncate text-[11px] font-medium text-[var(--u-color-text-soft)]" title={column.name}>
+                <span className="min-w-0 truncate text-[length:var(--u-font-size-caption)] font-medium text-[var(--u-color-text-muted)]" title={column.name}>
                   {column.name}
                 </span>
                 <Select

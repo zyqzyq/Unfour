@@ -53,7 +53,7 @@ export function ApiRequestBar({
       }}
     >
       <div className="flex min-w-0 items-center gap-2">
-        <span className="w-16 shrink-0 whitespace-nowrap text-[11px] font-semibold text-[var(--u-color-text-soft)]">
+        <span className="w-16 shrink-0 whitespace-nowrap text-[length:var(--u-font-size-caption)] font-semibold text-[var(--u-color-text-muted)]">
           {t("api.request.nameLabel")}
         </span>
         <RequestNameEditor

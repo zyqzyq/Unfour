@@ -109,6 +109,7 @@ export function QueryResultPanel({
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-[var(--u-color-surface)]">
       <Tabs
+        activeBackground="subtle"
         activeId={activeTab}
         className="h-[30px]"
         onSelect={(tabId) => onSelectTab(tabId as DatabaseResultTab)}
@@ -118,7 +119,7 @@ export function QueryResultPanel({
           { id: "logs", title: t("database.result.tabLogs") },
           {
             id: "history",
-            meta: <span className="text-[11px] text-[var(--u-color-text-soft)]">{history.length}</span>,
+            meta: <span className="text-[length:var(--u-font-size-caption)] text-[var(--u-color-text-muted)]">{history.length}</span>,
             title: t("database.history.tab"),
           },
         ]}

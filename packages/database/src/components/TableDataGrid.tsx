@@ -356,7 +356,7 @@ export function TableDataGrid({
         />
         {!server && sort ? (
           <button
-            className="text-[11px] text-[var(--u-color-text-soft)] hover:text-[var(--u-color-text)]"
+            className="text-[length:var(--u-font-size-caption)] text-[var(--u-color-text-muted)] hover:text-[var(--u-color-text)]"
             onClick={() => setSort(null)}
             type="button"
           >
@@ -365,7 +365,7 @@ export function TableDataGrid({
         ) : null}
       </div>
       <DataTable
-        className="flex-1"
+        className="flex-1 bg-[var(--u-color-canvas)]"
         columns={dataColumns}
         empty={
           isLoading
@@ -381,7 +381,7 @@ export function TableDataGrid({
         rows={gridRows}
         selection={selection}
       />
-      <div className="flex h-7 shrink-0 items-center justify-between border-t border-[var(--u-color-border)] px-2 text-[11px] text-[var(--u-color-text-soft)]">
+      <div className="flex h-7 shrink-0 items-center justify-between border-t border-[var(--u-color-border)] px-2 text-[length:var(--u-font-size-caption)] text-[var(--u-color-text-muted)]">
         <div className="flex items-center gap-1">
           <span>{copyStatusLabel(copyStatus, t)}</span>
           {activeCell && visibleRows[activeCell.row] && result.columns[activeCell.column] ? (
@@ -430,7 +430,7 @@ export function TableDataGrid({
                     <StatusBadge>JSON</StatusBadge>
                     {viewerJson?.isJson ? (
                       <button
-                        className="text-[11px] text-[var(--u-color-text-soft)] hover:text-[var(--u-color-text)]"
+                        className="text-[length:var(--u-font-size-caption)] text-[var(--u-color-text-muted)] hover:text-[var(--u-color-text)]"
                         onClick={() => setViewerRaw((current) => !current)}
                         type="button"
                       >
@@ -445,14 +445,14 @@ export function TableDataGrid({
                   </pre>
                 </div>
                 {viewerTruncated ? (
-                  <p className="text-[11px] text-[var(--u-color-text-soft)]" role="status">
+                  <p className="text-[length:var(--u-font-size-caption)] text-[var(--u-color-text-muted)]" role="status">
                     {t("database.grid.valueTruncated", { count: MAX_VALUE_VIEWER_LENGTH })}
                   </p>
                 ) : null}
               </>
             )}
             <div className="flex items-center justify-between">
-              <span className="text-[11px] text-[var(--u-color-text-soft)]">{t("database.grid.selectToCopy")}</span>
+              <span className="text-[length:var(--u-font-size-caption)] text-[var(--u-color-text-muted)]">{t("database.grid.selectToCopy")}</span>
               <Button
                 disabled={viewer?.value == null}
                 onClick={() => viewer?.value != null && copyText(serializeDatabaseCell(viewer.value, "\t"), "copied-cell")}

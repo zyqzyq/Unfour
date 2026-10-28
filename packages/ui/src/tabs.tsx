@@ -28,6 +28,7 @@ export type TabsAction =
   | { closeRight: string; keep: string };
 
 export function Tabs({
+  activeBackground = "surface",
   activeId,
   className,
   endControl,
@@ -37,6 +38,8 @@ export function Tabs({
   onSelect,
   tabs,
 }: {
+  /** Match the immediately adjacent panel or toolbar, not the outer workspace. */
+  activeBackground?: "surface" | "subtle" | "terminal";
   activeId: string;
   className?: string;
   /** Optional element rendered at the right edge of the tab bar. */
@@ -163,12 +166,12 @@ export function Tabs({
     <>
       <div
         className={cn(
-          "flex h-[var(--u-size-tabbar)] shrink-0 items-end border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2",
+          "flex h-[var(--u-size-tabbar)] shrink-0 items-end border-b border-[var(--u-color-border)] bg-[var(--u-color-chrome)] px-2",
           className,
         )}
       >
         <div
-          className="flex min-w-0 flex-1 items-end overflow-x-auto"
+          className="flex min-w-0 flex-1 translate-y-px items-end overflow-x-auto"
           role="tablist"
         >
           {tabs.map((tab, index) => {
@@ -179,9 +182,13 @@ export function Tabs({
           const tabNode = (
             <div
               className={cn(
-                "group flex h-[30px] min-w-[120px] max-w-[220px] items-center gap-2 rounded-t-[var(--u-radius-sm)] border border-transparent px-2 text-[12px] font-medium text-[var(--u-color-text-muted)] transition-colors duration-150",
+                "group relative flex h-[30px] min-w-[120px] max-w-[220px] items-center gap-2 rounded-t-[var(--u-radius-sm)] border border-transparent px-2 text-[12px] font-medium text-[var(--u-color-text-muted)] transition-colors duration-150",
                 active
-                  ? "border-[var(--u-color-border)] border-b-[var(--u-color-surface)] bg-[var(--u-color-surface)] text-[var(--u-color-text)]"
+                  ? cn("border-[var(--u-color-border)]", {
+                    surface: "border-b-[var(--u-color-surface)] bg-[var(--u-color-surface)] text-[var(--u-color-text)]",
+                    subtle: "border-b-[var(--u-color-surface-subtle)] bg-[var(--u-color-surface-subtle)] text-[var(--u-color-text)]",
+                    terminal: "border-b-[var(--u-color-terminal-bg)] bg-[var(--u-color-terminal-bg)] text-[var(--u-color-terminal-text)]",
+                  }[activeBackground])
                   : "hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
                 isDragging && "opacity-40",
               )}
@@ -202,7 +209,7 @@ export function Tabs({
               )}
               <button
                 aria-selected={active}
-                className="flex min-w-0 flex-1 items-center gap-2 focus-visible:outline-none"
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--u-color-focus)]"
                 onClick={() => onSelect(tab.id)}
                 role="tab"
                 type="button"
@@ -221,7 +228,10 @@ export function Tabs({
               {onClose && (
                 <button
                   aria-label={`Close ${tab.title}`}
-                  className="grid h-5 w-5 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]"
+                  className={cn(
+                    "grid h-5 w-5 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--u-color-focus)]",
+                    active && activeBackground === "terminal" && "text-[var(--u-color-terminal-muted)]",
+                  )}
                   onClick={(event) => {
                     event.stopPropagation();
                     handleClose(tab.id);

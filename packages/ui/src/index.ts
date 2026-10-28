@@ -113,3 +113,5 @@ export { usePlatform, type Platform } from "./platform";
 export { VariableTable, type VariableTableItem } from "./variable-table";
 
 export { SecretInput, SavedSecretInput } from "./secret-input";
+
+export { configureEditorThemes } from "./editor-theme";

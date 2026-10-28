@@ -119,7 +119,7 @@ export function SidebarSection({
   return (
     <section className={cn("space-y-1", className)}>
       {title && (
-        <div className="flex h-7 items-center px-1 text-[11px] font-semibold uppercase text-[var(--u-color-text-soft)]">
+        <div className="flex h-7 items-center px-1 text-[length:var(--u-font-size-caption)] font-semibold uppercase text-[var(--u-color-text-muted)]">
           {title}
         </div>
       )}

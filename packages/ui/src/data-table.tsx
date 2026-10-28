@@ -221,7 +221,7 @@ export function DataTable<T>({
                     )}
                   >
                     <span className="truncate">{column.header}</span>
-                    {column.meta && <span className="shrink-0 text-[10px] uppercase text-[var(--u-color-text-soft)]">{column.meta}</span>}
+                    {column.meta && <span className="shrink-0 text-[length:var(--u-font-size-caption)] uppercase text-[var(--u-color-text-muted)]">{column.meta}</span>}
                   </div>
                   {onColumnResize && width && (
                     <div

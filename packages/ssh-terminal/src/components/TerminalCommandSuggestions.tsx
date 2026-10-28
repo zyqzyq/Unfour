@@ -63,7 +63,7 @@ export function TerminalCommandSuggestions({
       <div
         className={cn(
           "border-t border-[var(--u-color-border)] px-2 py-0.5",
-          "text-[11px] text-[var(--u-color-text-soft)]",
+          "text-[length:var(--u-font-size-caption)] text-[var(--u-color-text-muted)]",
         )}
       >
         {t("ssh.suggest.hint")}
