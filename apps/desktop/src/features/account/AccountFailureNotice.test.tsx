@@ -50,4 +50,14 @@ describe("account error presentation", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Restart Unfour");
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
+
+  it.each([
+    ["en", "Read startup callback", "Start new sign-in"],
+    ["zh-CN", "读取启动回调", "重新发起登录"],
+  ] as const)("offers fresh sign-in after startup callback lookup fails in %s", (locale, stage, action) => {
+    show("callback_read_failed", "callbackRead", locale);
+    expect(screen.getByRole("alert")).toHaveTextContent("callback_read_failed");
+    expect(screen.getByRole("alert")).toHaveTextContent(stage);
+    expect(screen.getByRole("button", { name: action })).toBeInTheDocument();
+  });
 });

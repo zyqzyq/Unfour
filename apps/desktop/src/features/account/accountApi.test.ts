@@ -62,14 +62,16 @@ describe("account callback delivery", () => {
   });
 
   it("keeps the runtime listener when cold-start lookup fails", async () => {
-    mocks.getCurrent.mockRejectedValue(new Error("private platform input"));
+    mocks.getCurrent.mockRejectedValue(new Error(callback));
     const { listenForAccountDeepLinks } = await import("./accountApi");
+    const onState = vi.fn();
     const onError = vi.fn();
-    const stop = await listenForAccountDeepLinks(vi.fn(), onError);
-    expect(onError).toHaveBeenCalledWith({ code: "callback_listener_failed", stage: "callbackListener" });
+    const stop = await listenForAccountDeepLinks(onState, onError);
+    expect(onError).toHaveBeenCalledExactlyOnceWith({ code: "callback_read_failed", stage: "callbackRead" });
     expect(mocks.stop).not.toHaveBeenCalled();
     mocks.listener?.([callback]);
-    await vi.waitFor(() => expect(mocks.invoke).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(onState).toHaveBeenCalledExactlyOnceWith(snapshot));
+    expect(mocks.invoke).toHaveBeenCalledExactlyOnceWith("account_handle_deep_link", { url: callback });
     stop();
     expect(mocks.stop).toHaveBeenCalledTimes(1);
   });
@@ -80,6 +82,7 @@ describe("account callback delivery", () => {
     await expect(listenForAccountDeepLinks(vi.fn(), vi.fn())).rejects.toEqual({
       code: "callback_listener_failed", stage: "callbackListener",
     });
+    expect(mocks.getCurrent).not.toHaveBeenCalled();
     mocks.getCurrent.mockResolvedValue(["unfour://workspace/open", "malformed", "https://example.test/auth/callback"]);
     await listenForAccountDeepLinks(vi.fn(), vi.fn());
     expect(mocks.invoke).not.toHaveBeenCalled();

@@ -50,6 +50,7 @@ const en = {
   },
   failureStage: {
     prepareSignIn: "Prepare sign-in", openBrowser: "Open browser", callbackListener: "Receive callback",
+    callbackRead: "Read startup callback",
     callbackValidation: "Validate callback", codeExchange: "Exchange authorization code",
     credentialRead: "Read or clear saved credentials", credentialSave: "Save credentials",
     accountRefresh: "Refresh account", signOut: "Sign out",

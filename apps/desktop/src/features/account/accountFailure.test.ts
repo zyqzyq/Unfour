@@ -13,6 +13,7 @@ describe("safe account diagnostics", () => {
     ["state_unavailable", "accountRefresh", "local", "refreshAccount"],
     ["keychain_unavailable", "accountRefresh", "local", "refreshAccount"],
     ["callback_listener_failed", "callbackListener", "local", "restartApp"],
+    ["callback_read_failed", "callbackRead", "local", "restartSignIn"],
   ])("maps %s at %s to an explicit recovery", (code, stage, category, recovery) => {
     expect(accountFailure({ code, stage }, "prepareSignIn")).toEqual({ code, stage, category, recovery });
   });

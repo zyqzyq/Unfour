@@ -50,6 +50,7 @@ const zhCN = {
   },
   failureStage: {
     prepareSignIn: "准备登录", openBrowser: "打开浏览器", callbackListener: "接收回调",
+    callbackRead: "读取启动回调",
     callbackValidation: "校验回调", codeExchange: "交换授权码",
     credentialRead: "读取或清理已存凭据", credentialSave: "保存凭据",
     accountRefresh: "刷新账号", signOut: "退出登录",

@@ -101,7 +101,7 @@ export async function listenForAccountDeepLinks(
     if (currentUrls) await dispatchDeepLinks(currentUrls, onSnapshot, onError);
   } catch {
     // Keep the live listener installed even if cold-start lookup fails.
-    onError({ code: "callback_listener_failed", stage: "callbackListener" });
+    onError({ code: "callback_read_failed", stage: "callbackRead" });
   }
 
   return unlisten;

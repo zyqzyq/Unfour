@@ -1,4 +1,4 @@
-export type AccountFailureStage = "prepareSignIn" | "openBrowser" | "callbackListener"
+export type AccountFailureStage = "prepareSignIn" | "openBrowser" | "callbackListener" | "callbackRead"
   | "callbackValidation" | "codeExchange" | "credentialRead" | "credentialSave"
   | "accountRefresh" | "signOut";
 export type AccountRecovery = "restartSignIn" | "refreshAccount" | "retrySignOut" | "restartApp";
@@ -16,13 +16,13 @@ const safeCodes = new Set([
   "authorization_denied", "api_unavailable", "api_timeout", "invalid_api_response",
   "keychain_unavailable", "installation_id_unavailable", "corrupt_installation_id",
   "corrupt_stored_session", "state_unavailable", "signed_out", "browser_open_failed",
-  "callback_listener_failed", "sign_out_sync_deactivation_failed", "sign_out_cleanup_failed",
+  "callback_listener_failed", "callback_read_failed", "sign_out_sync_deactivation_failed", "sign_out_cleanup_failed",
   "invalid_request", "unauthorized", "forbidden", "not_found", "method_not_allowed",
   "request_error", "internal_error", "not_ready", "invalid_state", "pkce_mismatch",
   "authorization_code_expired", "authorization_code_used", "desktop_session_expired", "rate_limited",
 ]);
 const stages = new Set<AccountFailureStage>([
-  "prepareSignIn", "openBrowser", "callbackListener", "callbackValidation", "codeExchange",
+  "prepareSignIn", "openBrowser", "callbackListener", "callbackRead", "callbackValidation", "codeExchange",
   "credentialRead", "credentialSave", "accountRefresh", "signOut",
 ]);
 const temporaryCodes = new Set(["api_unavailable", "api_timeout", "not_ready", "rate_limited"]);
@@ -34,7 +34,7 @@ const authorizationCodes = new Set([
 const localCodes = new Set([
   "invalid_configuration", "keychain_unavailable", "installation_id_unavailable",
   "corrupt_installation_id", "corrupt_stored_session", "state_unavailable",
-  "browser_open_failed", "callback_listener_failed", "sign_out_cleanup_failed",
+  "browser_open_failed", "callback_listener_failed", "callback_read_failed", "sign_out_cleanup_failed",
   "sign_out_sync_deactivation_failed", "invalid_deep_link",
 ]);
 
