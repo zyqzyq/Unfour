@@ -55,6 +55,15 @@ pub(crate) struct AccountClient {
 }
 
 impl AccountClient {
+    #[cfg(test)]
+    pub(crate) fn set_test_timeout(&mut self, timeout: Duration) {
+        self.http = reqwest::Client::builder()
+            .timeout(timeout)
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap();
+    }
+
     pub(crate) fn new(
         api_base_url: &str,
         web_base_url: &str,
@@ -102,34 +111,27 @@ impl AccountClient {
         code_verifier: String,
     ) -> Result<DesktopSession, AccountError> {
         let endpoint = self.api_endpoint(EXCHANGE_PATH)?;
-        with_transient_retry(|| {
-            let http = self.http.clone();
-            let endpoint = endpoint.clone();
-            let authorization_code = authorization_code.clone();
-            let state = state.clone();
-            let code_verifier = code_verifier.clone();
-            async move {
-                let response = http
-                    .post(endpoint)
-                    .header(ACCEPT, "application/json")
-                    .json(&DesktopTokenExchangeRequest {
-                        authorization_code,
-                        state,
-                        code_verifier,
-                    })
-                    .send()
-                    .await
-                    .map_err(|_| AccountError::ApiUnavailable)?;
-                let response = require_status(response, StatusCode::OK).await?;
-                let session = response
-                    .json::<DesktopSession>()
-                    .await
-                    .map_err(|_| AccountError::InvalidApiResponse)?;
-                session.validate()?;
-                Ok(session)
-            }
-        })
-        .await
+        // This code is single-use. A timeout or gateway response can occur after
+        // consumption, so neither transport failures nor 5xx justify replay.
+        let response = self
+            .http
+            .post(endpoint)
+            .header(ACCEPT, "application/json")
+            .json(&DesktopTokenExchangeRequest {
+                authorization_code,
+                state,
+                code_verifier,
+            })
+            .send()
+            .await
+            .map_err(transport_error)?;
+        let response = require_account_status(response).await?;
+        let session = response
+            .json::<DesktopSession>()
+            .await
+            .map_err(response_error)?;
+        session.validate()?;
+        Ok(session)
     }
 
     pub(crate) async fn get_account(
@@ -148,12 +150,12 @@ impl AccountClient {
                     .header(DESKTOP_SESSION_HEADER, session_token)
                     .send()
                     .await
-                    .map_err(|_| AccountError::ApiUnavailable)?;
-                let response = require_status(response, StatusCode::OK).await?;
+                    .map_err(transport_error)?;
+                let response = require_account_status(response).await?;
                 let account = response
                     .json::<AccountSummary>()
                     .await
-                    .map_err(|_| AccountError::InvalidApiResponse)?;
+                    .map_err(response_error)?;
                 account.validate()?;
                 Ok(account)
             }
@@ -288,11 +290,27 @@ fn is_gateway_status(status: StatusCode) -> bool {
 /// Transport and readiness failures that are safe to retry during API cold start.
 fn is_transient(error: &AccountError) -> bool {
     match error {
-        AccountError::ApiUnavailable => true,
+        AccountError::ApiUnavailable | AccountError::ApiTimeout => true,
         AccountError::ApiRejected { status, code } => {
             *code == ApiErrorCode::NotReady || matches!(*status, 502 | 503 | 504)
         }
         _ => false,
+    }
+}
+
+fn transport_error(error: reqwest::Error) -> AccountError {
+    if error.is_timeout() {
+        AccountError::ApiTimeout
+    } else {
+        AccountError::ApiUnavailable
+    }
+}
+
+fn response_error(error: reqwest::Error) -> AccountError {
+    if error.is_timeout() {
+        AccountError::ApiTimeout
+    } else {
+        AccountError::InvalidApiResponse
     }
 }
 
@@ -336,6 +354,24 @@ async fn require_status(
         .await
         .map_err(|_| AccountError::InvalidApiResponse)?;
     Err(parse_api_rejection(status, &body)?)
+}
+
+/// Preserve recognized API codes for sign-in and profile reads, with a safe
+/// fallback for gateway HTML/empty bodies. Billing keeps its existing behavior.
+async fn require_account_status(response: Response) -> Result<Response, AccountError> {
+    let status = response.status();
+    if status == StatusCode::OK {
+        return Ok(response);
+    }
+    if status.is_success() {
+        return Err(AccountError::InvalidApiResponse);
+    }
+    let body = response.bytes().await.map_err(response_error)?;
+    match parse_api_rejection(status, &body) {
+        Ok(error) => Err(error),
+        Err(_) if is_gateway_status(status) => Err(AccountError::ApiUnavailable),
+        Err(error) => Err(error),
+    }
 }
 
 fn parse_api_rejection(status: StatusCode, body: &[u8]) -> Result<AccountError, AccountError> {

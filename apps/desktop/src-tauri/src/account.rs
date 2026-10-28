@@ -2,7 +2,7 @@ use serde::Serialize;
 use std::future::Future;
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
-use unfour_account::{AccountError, AccountService, AccountState, BillingUrl};
+use unfour_account::{AccountError, AccountFailureStage, AccountService, AccountState, BillingUrl};
 use unfour_cloud_sync::{SyncAccountContext, SyncError, CLOUD_SYNC_ENTITLEMENT};
 
 pub struct AccountAppState {
@@ -25,17 +25,20 @@ impl AccountAppState {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountCommandError {
     code: &'static str,
     message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stage: Option<AccountFailureStage>,
 }
 
 impl From<AccountError> for AccountCommandError {
     fn from(error: AccountError) -> Self {
         Self {
             code: error.code(),
+            stage: error.stage(),
             message: error.to_string(),
         }
     }
@@ -54,6 +57,8 @@ pub enum SyncAccountContextState {
 pub struct AccountStateSnapshot {
     account: AccountState,
     sync_context: SyncAccountContextState,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    failure: Option<AccountCommandError>,
 }
 
 async fn reconcile_sync_account_context<Activate, ActivateFuture, Deactivate, DeactivateFuture>(
@@ -144,11 +149,15 @@ where
         (Ok(account_state), Ok(())) => Ok(account_state),
         (Ok(_), Err(_)) => Err(AccountCommandError {
             code: "sign_out_sync_deactivation_failed",
+            stage: Some(AccountFailureStage::SignOut),
             message: "Signed out locally, but Cloud Sync storage could not be paused.".into(),
         }),
-        (Err(account_error), Ok(())) => Err(account_error.into()),
+        (Err(account_error), Ok(())) => {
+            Err(account_error.at_stage(AccountFailureStage::SignOut).into())
+        }
         (Err(_), Err(_)) => Err(AccountCommandError {
             code: "sign_out_cleanup_failed",
+            stage: Some(AccountFailureStage::SignOut),
             message: "Local sign-out cleanup did not complete.".into(),
         }),
     }
@@ -159,12 +168,13 @@ pub async fn account_get_state(
     state: State<'_, AccountAppState>,
     sync_state: State<'_, crate::sync::SyncAppState>,
 ) -> Result<AccountStateSnapshot, AccountCommandError> {
-    let account_state = state.service.state().await?;
+    let (account_state, failure) = state.service.state_with_diagnostics().await?;
     let sync_context =
         update_sync_account_context(&state.service, &sync_state, &account_state).await;
     Ok(AccountStateSnapshot {
         account: account_state,
         sync_context,
+        failure: failure.map(AccountCommandError::from),
     })
 }
 
@@ -174,17 +184,26 @@ pub async fn account_begin_sign_in(
     state: State<'_, AccountAppState>,
 ) -> Result<AccountState, AccountCommandError> {
     let authorization_url = state.service.begin_sign_in().await?;
-    if let Err(error) = app
-        .opener()
-        .open_url(authorization_url.as_str(), None::<&str>)
-    {
+    if let Err(error) = open_sign_in_page(authorization_url.as_str(), |url| {
+        app.opener().open_url(url, None::<&str>)
+    }) {
         state.service.cancel_sign_in();
-        return Err(AccountCommandError {
-            code: "browser_open_failed",
-            message: format!("failed to open the account sign-in page: {error}"),
-        });
+        return Err(error);
     }
     Ok(AccountState::SigningIn)
+}
+
+fn open_sign_in_page<E>(
+    url: &str,
+    open: impl FnOnce(&str) -> Result<(), E>,
+) -> Result<(), AccountCommandError> {
+    // Platform errors can echo the authorization URL. Only fixed diagnostics
+    // may cross IPC; state, challenge and installation identity stay private.
+    open(url).map_err(|_| AccountCommandError {
+        code: "browser_open_failed",
+        stage: Some(AccountFailureStage::OpenBrowser),
+        message: "The account sign-in page could not be opened.".into(),
+    })
 }
 
 #[tauri::command]
@@ -203,6 +222,7 @@ pub async fn account_handle_deep_link(
     Ok(AccountStateSnapshot {
         account: account_state,
         sync_context,
+        failure: None,
     })
 }
 
@@ -230,10 +250,12 @@ impl BillingPage {
         match self {
             Self::Checkout => AccountCommandError {
                 code: "checkout_page_open_failed",
+                stage: None,
                 message: "The billing checkout page could not be opened.".into(),
             },
             Self::Portal => AccountCommandError {
                 code: "billing_portal_open_failed",
+                stage: None,
                 message: "The billing portal page could not be opened.".into(),
             },
         }
@@ -323,6 +345,7 @@ mod tests {
             let snapshot = AccountStateSnapshot {
                 account,
                 sync_context,
+                failure: None,
             };
 
             assert!(matches!(snapshot.account, AccountState::SignedIn { .. }));
@@ -357,6 +380,7 @@ mod tests {
             let snapshot = AccountStateSnapshot {
                 account,
                 sync_context,
+                failure: None,
             };
 
             assert!(matches!(
@@ -458,9 +482,60 @@ mod tests {
         let error = AccountCommandError::from(AccountError::StateMismatch);
         let value = serde_json::to_value(error).expect("serialize account error");
         assert_eq!(value["code"], "state_mismatch");
+        assert_eq!(value["stage"], "callbackValidation");
         assert!(value.get("accessToken").is_none());
         assert!(value.get("refreshToken").is_none());
         assert!(value.get("sessionToken").is_none());
+    }
+
+    #[test]
+    fn exchange_and_keychain_failures_preserve_their_stage_in_ipc() {
+        for (error, code, stage) in [
+            (
+                AccountError::ApiTimeout.at_stage(AccountFailureStage::CodeExchange),
+                "api_timeout",
+                "codeExchange",
+            ),
+            (
+                AccountError::KeychainUnavailable.at_stage(AccountFailureStage::CredentialSave),
+                "keychain_unavailable",
+                "credentialSave",
+            ),
+        ] {
+            let value = serde_json::to_value(AccountCommandError::from(error)).unwrap();
+            assert_eq!(value["code"], code);
+            assert_eq!(value["stage"], stage);
+            assert_eq!(value.as_object().unwrap().len(), 3);
+        }
+    }
+
+    #[test]
+    fn expired_session_notice_serializes_with_authoritative_signed_out_state() {
+        let snapshot = AccountStateSnapshot {
+            account: AccountState::SignedOut,
+            sync_context: SyncAccountContextState::Inactive,
+            failure: Some(
+                AccountError::SessionExpired
+                    .at_stage(AccountFailureStage::AccountRefresh)
+                    .into(),
+            ),
+        };
+        let value = serde_json::to_value(snapshot).unwrap();
+        assert_eq!(value["account"]["kind"], "signedOut");
+        assert_eq!(value["failure"]["code"], "desktop_session_expired");
+        assert_eq!(value["failure"]["stage"], "accountRefresh");
+    }
+
+    #[test]
+    fn sign_in_opener_failure_never_exposes_platform_error_or_authorization_url() {
+        let url = "https://example.test/login?state=private-state&codeChallenge=private-challenge";
+        let error =
+            open_sign_in_page(url, |value| Err(format!("failed to open {value}"))).unwrap_err();
+        let value = serde_json::to_value(error).unwrap();
+        assert_eq!(value["code"], "browser_open_failed");
+        assert_eq!(value["stage"], "openBrowser");
+        assert!(!value.to_string().contains("private-"));
+        assert!(!value.to_string().contains("https://"));
     }
 
     #[test]

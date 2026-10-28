@@ -2,12 +2,12 @@
 import "@testing-library/jest-dom/vitest";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { AccountProfile, AccountState, AccountStateSnapshot, CloudSyncAccountContextState } from "./accountTypes";
 
 const mocks = vi.hoisted(() => ({
   beginAccountSignIn: vi.fn(),
-  deepLinkError: undefined as (() => void) | undefined,
+  deepLinkError: undefined as ((error: unknown) => void) | undefined,
   deepLinkState: undefined as ((snapshot: AccountStateSnapshot) => void) | undefined,
   focus: undefined as (() => void) | undefined,
   getAccountState: vi.fn(),
@@ -22,7 +22,7 @@ vi.mock("./accountApi", () => ({
   isTauriRuntime: () => true,
   listenForAccountDeepLinks: vi.fn(async (
     onState: (snapshot: AccountStateSnapshot) => void,
-    onError: () => void,
+    onError: (error: unknown) => void,
   ) => {
     mocks.deepLinkState = onState;
     mocks.deepLinkError = onError;
@@ -87,6 +87,9 @@ function Probe({ children }: { children?: ReactNode }) {
       <span data-testid="account-id">{id}</span>
       <span data-testid="plan">{plan}</span>
       <span data-testid="sync-context">{sync}</span>
+      <span data-testid="failure">{JSON.stringify(account.failure)}</span>
+      <button onClick={account.signIn} type="button">sign in</button>
+      <button onClick={account.retry} type="button">recover</button>
       <button onClick={() => void account.refreshAccount().catch(() => undefined)} type="button">
         refresh
       </button>
@@ -107,6 +110,158 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("AccountProvider refresh", () => {
+  it("preserves a newer credential-save failure when an old exchange finishes", async () => {
+    mocks.getAccountState.mockResolvedValue(snapshot({ kind: "signedOut" }));
+    render(<AccountProvider><Probe /></AccountProvider>);
+    await waitFor(() => expect(mocks.focus).toBeTypeOf("function"));
+    mocks.deepLinkError?.({ code: "keychain_unavailable", stage: "credentialSave" });
+    await waitFor(() => expect(screen.getByTestId("failure")).toHaveTextContent("credentialSave"));
+    act(() => mocks.deepLinkError?.({ code: "no_pending_authorization", stage: "callbackValidation" }));
+    expect(screen.getByTestId("failure")).toHaveTextContent("credentialSave");
+    expect(screen.getByTestId("failure")).toHaveTextContent("keychain_unavailable");
+  });
+
+  it("shows a cold-start callback without pending PKCE as a fresh sign-in recovery", async () => {
+    mocks.getAccountState.mockResolvedValue(snapshot({ kind: "signedOut" }));
+    render(<AccountProvider><Probe /></AccountProvider>);
+    await waitFor(() => expect(mocks.focus).toBeTypeOf("function"));
+    mocks.deepLinkError?.({ code: "no_pending_authorization", stage: "callbackValidation" });
+    await waitFor(() => expect(screen.getByTestId("failure")).toHaveTextContent("no_pending_authorization"));
+    expect(screen.getByTestId("failure")).toHaveTextContent("restartSignIn");
+  });
+
+  it("ignores a superseded exchange after a newer sign-in succeeds", async () => {
+    mocks.getAccountState.mockResolvedValue(snapshot({ kind: "signedOut" }));
+    render(<AccountProvider><Probe /></AccountProvider>);
+    await waitFor(() => expect(mocks.focus).toBeTypeOf("function"));
+    mocks.deepLinkState?.(snapshot({ kind: "signedIn", profile: profile("newer", true) }));
+    await waitFor(() => expect(screen.getByTestId("account-id")).toHaveTextContent("newer"));
+    mocks.deepLinkError?.({ code: "no_pending_authorization", stage: "callbackValidation" });
+    mocks.focus?.();
+    await waitFor(() => expect(mocks.getAccountState).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId("failure")).toHaveTextContent("null");
+  });
+
+  it("does not let an old exchange hide the new browser-open failure", async () => {
+    const begin = deferred<AccountState>();
+    mocks.beginAccountSignIn.mockReturnValueOnce(begin.promise);
+    mocks.getAccountState.mockResolvedValue(snapshot({ kind: "signedOut" }));
+    render(<AccountProvider><Probe /></AccountProvider>);
+    await waitFor(() => expect(mocks.focus).toBeTypeOf("function"));
+    fireEvent.click(screen.getByRole("button", { name: "sign in" }));
+    mocks.deepLinkError?.({ code: "no_pending_authorization", stage: "callbackValidation" });
+    begin.reject({ code: "browser_open_failed", stage: "openBrowser" });
+    await waitFor(() => expect(screen.getByTestId("failure")).toHaveTextContent("browser_open_failed"));
+    expect(screen.getByTestId("account-id")).toHaveTextContent("error");
+  });
+
+  it("allows foreground recovery from a temporary account query failure", async () => {
+    mocks.getAccountState.mockRejectedValueOnce({ code: "api_timeout", stage: "accountRefresh" })
+      .mockResolvedValueOnce(snapshot({ kind: "signedIn", profile: profile("restored", true) }));
+    render(<AccountProvider><Probe /></AccountProvider>);
+    await waitFor(() => expect(screen.getByTestId("failure")).toHaveTextContent("api_timeout"));
+    mocks.focus?.();
+    await waitFor(() => expect(screen.getByTestId("account-id")).toHaveTextContent("restored"));
+    expect(screen.getByTestId("failure")).toHaveTextContent("null");
+  });
+
+  it("does not hide callback-listener failure behind a successful account refresh", async () => {
+    mocks.getAccountState.mockResolvedValue(snapshot({ kind: "signedOut" }));
+    render(<AccountProvider><Probe /></AccountProvider>);
+    await waitFor(() => expect(mocks.focus).toBeTypeOf("function"));
+    mocks.deepLinkError?.({ code: "callback_listener_failed", stage: "callbackListener" });
+    await waitFor(() => expect(screen.getByTestId("failure")).toHaveTextContent("callback_listener_failed"));
+    fireEvent.click(screen.getByRole("button", { name: "refresh" }));
+    await waitFor(() => expect(mocks.getAccountState).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByRole("button", { name: "sign in" }));
+    expect(mocks.beginAccountSignIn).not.toHaveBeenCalled();
+    expect(screen.getByTestId("failure")).toHaveTextContent("callback_listener_failed");
+  });
+
+  it("preserves exchange diagnostics across focus and starts fresh authorization on recovery", async () => {
+    mocks.getAccountState.mockResolvedValue(snapshot({ kind: "signedOut" }, { kind: "inactive" }));
+    render(<AccountProvider><Probe /></AccountProvider>);
+    await waitFor(() => expect(mocks.focus).toBeTypeOf("function"));
+    fireEvent.click(screen.getByRole("button", { name: "sign in" }));
+    await waitFor(() => expect(mocks.beginAccountSignIn).toHaveBeenCalledTimes(1));
+    mocks.deepLinkError?.({ code: "api_timeout", stage: "codeExchange", message: "secret" });
+    await waitFor(() => expect(screen.getByTestId("failure")).toHaveTextContent("api_timeout"));
+    expect(screen.getByTestId("failure")).toHaveTextContent("codeExchange");
+    expect(screen.getByTestId("failure")).not.toHaveTextContent("secret");
+    mocks.focus?.();
+    expect(mocks.getAccountState).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "recover" }));
+    await waitFor(() => expect(mocks.beginAccountSignIn).toHaveBeenCalledTimes(2));
+    expect(mocks.getAccountState).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes after query failure without starting authorization", async () => {
+    mocks.getAccountState.mockRejectedValueOnce({ code: "api_unavailable" })
+      .mockResolvedValueOnce(snapshot({ kind: "signedOut" }, { kind: "inactive" }));
+    render(<AccountProvider><Probe /></AccountProvider>);
+    await waitFor(() => expect(screen.getByTestId("failure")).toHaveTextContent("refreshAccount"));
+    fireEvent.click(screen.getByRole("button", { name: "recover" }));
+    await waitFor(() => expect(mocks.getAccountState).toHaveBeenCalledTimes(2));
+    expect(mocks.beginAccountSignIn).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByTestId("failure")).toHaveTextContent("null"));
+  });
+
+  it("retains invalid-session diagnostics while showing signed out", async () => {
+    mocks.getAccountState.mockResolvedValue({
+      ...snapshot({ kind: "signedOut" }, { kind: "inactive" }),
+      failure: { code: "desktop_session_expired", stage: "accountRefresh" },
+    });
+    render(<AccountProvider><Probe /></AccountProvider>);
+    await waitFor(() => expect(screen.getByTestId("failure")).toHaveTextContent("desktop_session_expired"));
+    expect(screen.getByTestId("account-id")).toHaveTextContent("signedOut");
+    fireEvent.click(screen.getByRole("button", { name: "recover" }));
+    await waitFor(() => expect(mocks.beginAccountSignIn).toHaveBeenCalledTimes(1));
+  });
+
+  it("does not let a delayed refresh failure overwrite callback diagnostics", async () => {
+    const older = deferred<AccountStateSnapshot>();
+    mocks.getAccountState.mockReturnValue(older.promise);
+    render(<AccountProvider><Probe /></AccountProvider>);
+    await waitFor(() => expect(mocks.focus).toBeTypeOf("function"));
+    mocks.deepLinkError?.({ code: "pkce_mismatch", stage: "codeExchange" });
+    await waitFor(() => expect(screen.getByTestId("failure")).toHaveTextContent("pkce_mismatch"));
+    older.reject({ code: "api_unavailable" });
+    await waitFor(() => expect(screen.getByTestId("failure")).toHaveTextContent("pkce_mismatch"));
+  });
+
+  it("surfaces browser-open failure and retries by starting a new sign-in", async () => {
+    mocks.getAccountState.mockResolvedValue(snapshot({ kind: "signedOut" }));
+    mocks.beginAccountSignIn.mockRejectedValueOnce({ code: "browser_open_failed", stage: "openBrowser" });
+    render(<AccountProvider><Probe /></AccountProvider>);
+    await waitFor(() => expect(mocks.focus).toBeTypeOf("function"));
+    fireEvent.click(screen.getByRole("button", { name: "sign in" }));
+    await waitFor(() => expect(screen.getByTestId("failure")).toHaveTextContent("browser_open_failed"));
+    fireEvent.click(screen.getByRole("button", { name: "recover" }));
+    await waitFor(() => expect(mocks.beginAccountSignIn).toHaveBeenCalledTimes(2));
+  });
+
+  it("does not start authorization when callback registration is unavailable", async () => {
+    mocks.getAccountState.mockResolvedValue(snapshot({ kind: "signedOut" }));
+    render(<AccountProvider><Probe /></AccountProvider>);
+    await waitFor(() => expect(mocks.focus).toBeTypeOf("function"));
+    mocks.deepLinkError?.({ code: "callback_listener_failed", stage: "callbackListener" });
+    await waitFor(() => expect(screen.getByTestId("failure")).toHaveTextContent("restartApp"));
+    fireEvent.click(screen.getByRole("button", { name: "sign in" }));
+    expect(mocks.beginAccountSignIn).not.toHaveBeenCalled();
+  });
+
+  it("retries sign-out cleanup instead of refreshing account state", async () => {
+    mocks.getAccountState.mockResolvedValue(snapshot({ kind: "signedIn", profile: profile("existing", true) }));
+    mocks.signOutAccount.mockRejectedValueOnce({ code: "keychain_unavailable", stage: "signOut" });
+    render(<AccountProvider><Probe /></AccountProvider>);
+    await waitFor(() => expect(screen.getByTestId("account-id")).toHaveTextContent("existing"));
+    fireEvent.click(screen.getByRole("button", { name: "sign out" }));
+    await waitFor(() => expect(screen.getByTestId("failure")).toHaveTextContent("retrySignOut"));
+    fireEvent.click(screen.getByRole("button", { name: "recover" }));
+    await waitFor(() => expect(mocks.signOutAccount).toHaveBeenCalledTimes(2));
+    expect(mocks.getAccountState).toHaveBeenCalledTimes(1);
+  });
+
   it("refreshes on focus and coalesces simultaneous foreground signals", async () => {
     const pending = deferred<AccountStateSnapshot>();
     mocks.getAccountState

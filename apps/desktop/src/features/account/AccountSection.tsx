@@ -6,6 +6,7 @@ import {
 } from "./accountDisplay";
 import type { AccountMockState } from "./accountTypes";
 import { AccountPlanSummary } from "./AccountPlanSummary";
+import { AccountFailureNotice, AccountRecoveryButton } from "./AccountFailureNotice";
 import { useAccount } from "./useAccount";
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -14,7 +15,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 export function AccountSection() {
   const { t } = useI18n();
-  const { preview, retry, setMockState, signIn, signOut, state } = useAccount();
+  const { failure, preview, setMockState, signIn, signOut, state } = useAccount();
   const status = state.kind === "signedIn"
     ? { label: t("account.statusSignedIn"), tone: "success" as const }
     : state.kind === "signingIn"
@@ -46,12 +47,13 @@ export function AccountSection() {
       </div>
 
       {state.kind === "signedIn" && <AccountPlanSummary profile={state.profile} />}
+      <AccountFailureNotice />
 
       <div className="flex gap-2">
-        {state.kind === "signedOut" && <Button onClick={signIn} size="sm" type="button">{t("account.signIn")}</Button>}
+        {state.kind === "signedOut" && !failure && <Button onClick={signIn} size="sm" type="button">{t("account.signIn")}</Button>}
         {state.kind === "signingIn" && <Button disabled size="sm" type="button">{t("account.signingIn")}</Button>}
         {state.kind === "signedIn" && <Button onClick={signOut} size="sm" type="button" variant="outline">{t("account.signOut")}</Button>}
-        {state.kind === "error" && <Button onClick={retry} size="sm" type="button">{t("account.retry")}</Button>}
+        <AccountRecoveryButton />
       </div>
 
       {preview && <section className="rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] p-3">

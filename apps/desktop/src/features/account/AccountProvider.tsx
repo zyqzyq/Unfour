@@ -9,6 +9,7 @@ import {
 import { listenForAccountForeground } from "./accountForeground";
 import { CLOUD_SYNC_ENTITLEMENT } from "./accountEntitlement";
 import { createAccountRefreshController } from "./accountRefresh";
+import { accountFailure, type AccountFailure } from "./accountFailure";
 import type {
   AccountMockState,
   AccountProfile,
@@ -42,6 +43,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [syncContext, setSyncContext] = useState<CloudSyncAccountContextState>({ kind: "inactive" });
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [failure, setFailure] = useState<AccountFailure | null>(null);
+  const failureRef = useRef(failure);
+  const listenerFailureRef = useRef<AccountFailure | null>(null);
   const stateRef = useRef(state);
   const signInTimerRef = useRef<number | null>(null);
   const actionGenerationRef = useRef(0);
@@ -53,10 +57,17 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     setState(nextState);
   }, []);
 
+  const applyFailure = useCallback((nextFailure: AccountFailure | null) => {
+    const visibleFailure = nextFailure ?? listenerFailureRef.current;
+    failureRef.current = visibleFailure;
+    setFailure(visibleFailure);
+  }, []);
+
   const applySnapshot = useCallback((snapshot: AccountStateSnapshot) => {
     applyState(snapshot.account);
     setSyncContext(snapshot.syncContext);
-  }, [applyState]);
+    applyFailure(snapshot.failure ? accountFailure(snapshot.failure, "accountRefresh") : null);
+  }, [applyFailure, applyState]);
 
   // The factory stores getState; it only invokes it after an async refresh fails.
   // eslint-disable-next-line react-hooks/refs -- this initializer never reads stateRef.current
@@ -65,6 +76,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       getState: () => stateRef.current,
       loadState: getAccountState,
       setSnapshot: applySnapshot,
+      onError: (error) => applyFailure(accountFailure(error, "accountRefresh")),
     }),
   );
 
@@ -81,14 +93,27 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   }, [refreshController]);
 
   const applyExternalSnapshot = useCallback((snapshot: AccountStateSnapshot) => {
+    // A successfully delivered callback proves that the live listener works.
+    listenerFailureRef.current = null;
     supersedePendingAccountRequests();
     applySnapshot(snapshot);
   }, [applySnapshot, supersedePendingAccountRequests]);
 
-  const applyExternalError = useCallback(() => {
-    supersedePendingAccountRequests();
-    if (stateRef.current.kind !== "signedIn") applyState({ kind: "error" });
-  }, [applyState, supersedePendingAccountRequests]);
+  const applyExternalError = useCallback((error: unknown) => {
+    const nextFailure = accountFailure(error, "callbackValidation");
+    // A replay or a superseded exchange cannot invalidate a newer login action.
+    // A cold-start callback with no pending PKCE still surfaces while signed out.
+    if (nextFailure.code === "no_pending_authorization"
+      && (stateRef.current.kind === "signedIn" || stateRef.current.kind === "signingIn"
+        || failureRef.current !== null)) return;
+    const preservesPending = stateRef.current.kind === "signingIn"
+      && ["state_mismatch", "invalid_deep_link"].includes(nextFailure.code);
+    if (preservesPending) refreshController.invalidate();
+    else supersedePendingAccountRequests();
+    if (nextFailure.stage === "callbackListener") listenerFailureRef.current = nextFailure;
+    applyFailure(nextFailure);
+    if (stateRef.current.kind !== "signedIn" && !preservesPending) applyState({ kind: "error" });
+  }, [applyFailure, applyState, refreshController, supersedePendingAccountRequests]);
 
   const refreshAccount = useCallback(async (): Promise<AccountStateSnapshot | null> => {
     if (preview) {
@@ -120,8 +145,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     const onSnapshot = (snapshot: AccountStateSnapshot) => {
       if (active) applyExternalSnapshot(snapshot);
     };
-    const onError = () => {
-      if (active) applyExternalError();
+    const onError = (error: unknown) => {
+      if (active) applyExternalError(error);
     };
 
     // eslint-disable-next-line react-hooks/set-state-in-effect -- start one external account refresh and show its pending state before awaiting it
@@ -133,7 +158,11 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       })
       .catch(onError);
     void listenForAccountForeground(() => {
-      if (active) void refreshAccount().catch(() => undefined);
+      // Foreground refresh must not hide a failed login or race an exchange.
+      if (active && stateRef.current.kind !== "signingIn"
+        && (!failureRef.current || failureRef.current.recovery === "refreshAccount")) {
+        void refreshAccount().catch(() => undefined);
+      }
     })
       .then((unlisten) => {
         if (active) stopForeground = unlisten;
@@ -152,10 +181,15 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   }, [applyExternalError, applyExternalSnapshot, preview, refreshAccount, refreshController]);
 
   const signIn = useCallback(() => {
+    if (listenerFailureRef.current || failureRef.current?.recovery === "restartApp") {
+      setOverlayOpen(true);
+      return;
+    }
     clearSignInTimer();
     supersedePendingAccountRequests();
     const actionGeneration = actionGenerationRef.current;
     applyState({ kind: "signingIn" });
+    applyFailure(null);
     setSyncContext({ kind: "inactive" });
     setOverlayOpen(true);
     if (preview) {
@@ -172,15 +206,19 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       .then((nextState) => {
         if (actionGeneration === actionGenerationRef.current) applyState(nextState);
       })
-      .catch(() => {
-        if (actionGeneration === actionGenerationRef.current) applyState({ kind: "error" });
+      .catch((error: unknown) => {
+        if (actionGeneration === actionGenerationRef.current) {
+          applyState({ kind: "error" });
+          applyFailure(accountFailure(error, "prepareSignIn"));
+        }
       });
-  }, [applyState, clearSignInTimer, preview, supersedePendingAccountRequests]);
+  }, [applyFailure, applyState, clearSignInTimer, preview, supersedePendingAccountRequests]);
 
   const signOut = useCallback(() => {
     clearSignInTimer();
     supersedePendingAccountRequests();
     const actionGeneration = actionGenerationRef.current;
+    applyFailure(null);
     setSyncContext({ kind: "inactive" });
     if (preview) {
       applyState({ kind: "signedOut" });
@@ -193,34 +231,45 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         applyState(nextState);
         setOverlayOpen(false);
       })
-      .catch(() => {
-        if (actionGeneration === actionGenerationRef.current) applyState({ kind: "error" });
+      .catch((error: unknown) => {
+        if (actionGeneration === actionGenerationRef.current) {
+          applyState({ kind: "error" });
+          applyFailure(accountFailure(error, "signOut"));
+        }
       });
-  }, [applyState, clearSignInTimer, preview, supersedePendingAccountRequests]);
+  }, [applyFailure, applyState, clearSignInTimer, preview, supersedePendingAccountRequests]);
 
   const retry = useCallback(() => {
-    if (preview) {
+    const recovery = failureRef.current?.recovery;
+    if (recovery === "restartApp") return;
+    if (recovery === "retrySignOut") {
+      signOut();
+      return;
+    }
+    if (preview || recovery === "restartSignIn" || stateRef.current.kind === "signingIn") {
       signIn();
       return;
     }
     clearSignInTimer();
     void refreshAccount().catch(() => undefined);
-  }, [clearSignInTimer, preview, refreshAccount, signIn]);
+  }, [clearSignInTimer, preview, refreshAccount, signIn, signOut]);
 
   const setMockState = useCallback((nextState: AccountMockState) => {
     if (!preview) return;
     clearSignInTimer();
     supersedePendingAccountRequests();
+    applyFailure(nextState === "error" ? accountFailure(null, "codeExchange") : null);
     applyState(nextState === "signedIn"
       ? { kind: "signedIn", profile: MOCK_PROFILE }
       : { kind: nextState });
     setSyncContext(nextState === "signedIn" ? { kind: "ready" } : { kind: "inactive" });
-  }, [applyState, clearSignInTimer, preview, supersedePendingAccountRequests]);
+  }, [applyFailure, applyState, clearSignInTimer, preview, supersedePendingAccountRequests]);
 
   const openOverlay = useCallback(() => setOverlayOpen(true), []);
   const value = useMemo(() => ({
     preview,
     state,
+    failure,
     syncContext,
     overlayOpen,
     refreshing,
@@ -231,7 +280,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     retry,
     refreshAccount,
     setMockState,
-  }), [openOverlay, overlayOpen, preview, refreshAccount, refreshing, retry, setMockState, signIn, signOut, state, syncContext]);
+  }), [failure, openOverlay, overlayOpen, preview, refreshAccount, refreshing, retry, setMockState, signIn, signOut, state, syncContext]);
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
 }

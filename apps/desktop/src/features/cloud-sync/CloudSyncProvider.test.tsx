@@ -63,6 +63,7 @@ function account(
 ): AccountContextValue {
   return {
     preview: false,
+    failure: null,
     state: { kind: "signedIn", profile: profile(hasCloudSyncCapability, status) },
     syncContext,
     overlayOpen: false,
@@ -346,9 +347,9 @@ describe("CloudSyncProvider account context boundary", () => {
     expect(mocks.syncNow).not.toHaveBeenCalled();
   });
 
-  it("does not sync when account refresh is temporarily unavailable", async () => {
+  it.each(["api_unavailable", "api_timeout"])("does not sync when account refresh fails with %s", async (code) => {
     const accountValue = account(true, { kind: "ready" });
-    accountValue.refreshAccount = vi.fn().mockRejectedValue({ code: "api_unavailable" });
+    accountValue.refreshAccount = vi.fn().mockRejectedValue({ code });
     mocks.account = accountValue;
     render(<CloudSyncProvider><Probe /></CloudSyncProvider>);
 

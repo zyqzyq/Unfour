@@ -39,7 +39,7 @@ function refreshFailureCode(error: unknown): string {
   }
   if (code === "entitlement_unavailable") return "cloud_sync_entitlement_required";
   if (code === "cloud_sync_account_changed") return code;
-  if (code === "api_unavailable") return "cloud_sync_transport_failed";
+  if (code === "api_unavailable" || code === "api_timeout") return "cloud_sync_transport_failed";
   if (ACCOUNT_SERVER_ERRORS.has(code)) return "cloud_sync_server_unavailable";
   if (ACCOUNT_PROTOCOL_ERRORS.has(code)) return "cloud_sync_protocol_incompatible";
   if (code === "cloud_sync_failed") return "cloud_sync_transport_failed";

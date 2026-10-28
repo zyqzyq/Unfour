@@ -1,3 +1,5 @@
+import type { AccountFailure } from "./accountFailure";
+
 export type EntitlementStatus = "active" | "expired" | "revoked" | "suspended";
 
 export interface EntitlementSummary {
@@ -40,11 +42,13 @@ export type CloudSyncAccountContextState =
 export interface AccountStateSnapshot {
   account: AccountState;
   syncContext: CloudSyncAccountContextState;
+  failure?: { code: string; stage?: string };
 }
 
 export interface AccountContextValue {
   preview: boolean;
   state: AccountState;
+  failure: AccountFailure | null;
   syncContext: CloudSyncAccountContextState;
   overlayOpen: boolean;
   setOverlayOpen(open: boolean): void;

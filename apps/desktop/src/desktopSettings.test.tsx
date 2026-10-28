@@ -45,6 +45,7 @@ const extensionContext: DesktopAppExtensionContext = {
 function createAccountContext(): AccountContextValue {
   return {
     preview: false,
+    failure: null,
     state: { kind: "signedIn", profile },
     syncContext: { kind: "ready" },
     overlayOpen: false,

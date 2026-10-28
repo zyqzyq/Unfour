@@ -14,10 +14,12 @@ export function createAccountRefreshController({
   getState,
   loadState,
   setSnapshot,
+  onError,
 }: {
   getState: () => AccountState;
   loadState: () => Promise<AccountStateSnapshot>;
   setSnapshot: (snapshot: AccountStateSnapshot) => void;
+  onError?: (error: unknown) => void;
 }): AccountRefreshController {
   let generation = 0;
   let inFlight: { generation: number; request: Promise<AccountStateSnapshot | null> } | null = null;
@@ -38,8 +40,11 @@ export function createAccountRefreshController({
           return snapshot;
         })
         .catch((error: unknown) => {
-          if (requestGeneration === generation && getState().kind !== "signedIn") {
-            setSnapshot({ account: { kind: "error" }, syncContext: { kind: "inactive" } });
+          if (requestGeneration === generation) {
+            if (getState().kind !== "signedIn") {
+              setSnapshot({ account: { kind: "error" }, syncContext: { kind: "inactive" } });
+            }
+            onError?.(error);
           }
           throw error;
         })

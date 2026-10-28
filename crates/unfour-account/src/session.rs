@@ -13,11 +13,17 @@ const SESSION_KEY: &str = "login-key";
 #[derive(Clone)]
 pub(crate) struct SessionStore {
     secrets: SecretStore,
+    #[cfg(test)]
+    pub(crate) fail_save: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl SessionStore {
     pub(crate) fn from_secret_store(secrets: SecretStore) -> Self {
-        Self { secrets }
+        Self {
+            secrets,
+            #[cfg(test)]
+            fail_save: Default::default(),
+        }
     }
 
     pub(crate) async fn load(&self) -> Result<Option<StoredSession>, AccountError> {
@@ -39,6 +45,10 @@ impl SessionStore {
     }
 
     pub(crate) async fn save(&self, session: StoredSession) -> Result<(), AccountError> {
+        #[cfg(test)]
+        if self.fail_save.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(AccountError::KeychainUnavailable);
+        }
         session.validate()?;
         if session.is_expired() {
             return Err(AccountError::InvalidApiResponse);
@@ -92,9 +102,7 @@ mod tests {
 
     #[test]
     fn session_round_trips_through_the_core_named_secret_store() {
-        let store = SessionStore {
-            secrets: SecretStore::in_memory(KEYCHAIN_SERVICE),
-        };
+        let store = SessionStore::from_secret_store(SecretStore::in_memory(KEYCHAIN_SERVICE));
         let session = StoredSession {
             session_token: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-abcde".to_string(),
             expires_at: OffsetDateTime::now_utc() + Duration::days(30),

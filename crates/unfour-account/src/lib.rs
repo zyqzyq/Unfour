@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod billing_tests;
 mod client;
+mod failure;
 mod installation;
 mod pkce;
 #[cfg(test)]
@@ -20,6 +21,7 @@ use thiserror::Error;
 use types::{AuthCallback, StoredSession};
 use url::Url;
 
+pub use failure::AccountFailureStage;
 pub use types::{
     AccountState, AccountSummary, ApiErrorCode, BillingUrl, DeviceSummary, EntitlementStatus,
     EntitlementSummary, AUTH_CALLBACK_URI,
@@ -27,6 +29,11 @@ pub use types::{
 
 #[derive(Debug, Error)]
 pub enum AccountError {
+    #[error("{source}")]
+    AtStage {
+        stage: AccountFailureStage,
+        source: Box<AccountError>,
+    },
     #[error("invalid account service configuration")]
     InvalidConfiguration,
     #[error("invalid account callback: {0}")]
@@ -39,6 +46,8 @@ pub enum AccountError {
     AuthorizationDenied,
     #[error("the account API is unavailable")]
     ApiUnavailable,
+    #[error("the account API request timed out")]
+    ApiTimeout,
     #[error("the account API rejected the request with status {status} ({code})")]
     ApiRejected { status: u16, code: ApiErrorCode },
     #[error("the account API returned an invalid response")]
@@ -57,6 +66,8 @@ pub enum AccountError {
     StateUnavailable,
     #[error("an account sign-in is required")]
     SignedOut,
+    #[error("the stored desktop session has expired")]
+    SessionExpired,
     #[error("the required account entitlement is unavailable")]
     EntitlementUnavailable,
 }
@@ -64,12 +75,14 @@ pub enum AccountError {
 impl AccountError {
     pub fn code(&self) -> &'static str {
         match self {
+            Self::AtStage { source, .. } => source.code(),
             Self::InvalidConfiguration => "invalid_configuration",
             Self::InvalidDeepLink(_) => "invalid_deep_link",
             Self::NoPendingAuthorization => "no_pending_authorization",
             Self::StateMismatch => "state_mismatch",
             Self::AuthorizationDenied => "authorization_denied",
             Self::ApiUnavailable => "api_unavailable",
+            Self::ApiTimeout => "api_timeout",
             Self::ApiRejected { code, .. } => code.as_str(),
             Self::InvalidApiResponse => "invalid_api_response",
             Self::InvalidBillingUrl => "invalid_billing_url",
@@ -79,6 +92,7 @@ impl AccountError {
             Self::CorruptStoredSession => "corrupt_stored_session",
             Self::StateUnavailable => "state_unavailable",
             Self::SignedOut => "signed_out",
+            Self::SessionExpired => "desktop_session_expired",
             Self::EntitlementUnavailable => "entitlement_unavailable",
         }
     }
@@ -104,6 +118,8 @@ pub struct AccountService {
     entitlement_cache: Arc<Mutex<Option<CachedAuthorization>>>,
     generation: Arc<AtomicU64>,
     session_transition: Arc<tokio::sync::Mutex<()>>,
+    authorization_epoch: Arc<AtomicU64>,
+    exchanging_epoch: Arc<AtomicU64>,
 }
 
 const ENTITLEMENT_CACHE_TTL: Duration = Duration::from_secs(30);
@@ -168,6 +184,8 @@ impl AccountService {
             entitlement_cache: Arc::new(Mutex::new(None)),
             generation: Arc::new(AtomicU64::new(0)),
             session_transition: Arc::new(tokio::sync::Mutex::new(())),
+            authorization_epoch: Arc::new(AtomicU64::new(0)),
+            exchanging_epoch: Arc::new(AtomicU64::new(0)),
         })
     }
 
@@ -284,50 +302,89 @@ impl AccountService {
     }
 
     pub async fn state(&self) -> Result<AccountState, AccountError> {
+        self.state_with_diagnostics().await.map(|(state, _)| state)
+    }
+
+    /// Keep the signed-out state authoritative while explaining why an existing
+    /// session was removed. Other consumers retain the original state contract.
+    pub async fn state_with_diagnostics(
+        &self,
+    ) -> Result<(AccountState, Option<AccountError>), AccountError> {
         loop {
             if self
                 .pending
                 .lock()
                 .map_err(|_| AccountError::StateUnavailable)?
                 .is_some()
+                || self.exchange_is_current()
             {
-                return Ok(AccountState::SigningIn);
+                return Ok((AccountState::SigningIn, None));
             }
             let request_generation = self.generation();
             let session = match self.sessions.load().await {
                 Ok(session) => session,
                 Err(AccountError::CorruptStoredSession) => {
-                    self.sessions.delete().await?;
+                    let _transition = self.session_transition.lock().await;
+                    if request_generation != self.generation() {
+                        continue;
+                    }
+                    self.sessions
+                        .delete()
+                        .await
+                        .map_err(|error| error.at_stage(AccountFailureStage::CredentialRead))?;
                     self.advance_generation();
-                    None
+                    return Ok((
+                        AccountState::SignedOut,
+                        Some(
+                            AccountError::CorruptStoredSession
+                                .at_stage(AccountFailureStage::CredentialRead),
+                        ),
+                    ));
                 }
-                Err(error) => return Err(error),
+                Err(error) => return Err(error.at_stage(AccountFailureStage::CredentialRead)),
             };
             let Some(session) = session else {
                 if request_generation == self.generation() {
-                    return Ok(AccountState::SignedOut);
+                    return Ok((AccountState::SignedOut, None));
                 }
                 continue;
             };
             if session.is_expired() {
-                if self.delete_session_if_current(&session).await? {
-                    return Ok(AccountState::SignedOut);
+                if self
+                    .delete_session_if_current(&session)
+                    .await
+                    .map_err(|error| error.at_stage(AccountFailureStage::CredentialRead))?
+                {
+                    return Ok((
+                        AccountState::SignedOut,
+                        Some(
+                            AccountError::SessionExpired
+                                .at_stage(AccountFailureStage::AccountRefresh),
+                        ),
+                    ));
                 }
                 continue;
             }
 
             match self.client.get_account(&session.session_token).await {
                 Ok(profile) if request_generation == self.generation() => {
-                    return Ok(AccountState::SignedIn { profile });
+                    return Ok((AccountState::SignedIn { profile }, None));
                 }
                 Ok(_) => continue,
                 Err(error) if error.is_invalid_session() => {
-                    if self.delete_session_if_current(&session).await? {
-                        return Ok(AccountState::SignedOut);
+                    if self
+                        .delete_session_if_current(&session)
+                        .await
+                        .map_err(|error| error.at_stage(AccountFailureStage::CredentialRead))?
+                    {
+                        return Ok((
+                            AccountState::SignedOut,
+                            Some(error.at_stage(AccountFailureStage::AccountRefresh)),
+                        ));
                     }
                     continue;
                 }
-                Err(error) => return Err(error),
+                Err(error) => return Err(error.at_stage(AccountFailureStage::AccountRefresh)),
             }
         }
     }
@@ -408,18 +465,26 @@ impl AccountService {
     /// The URL contains the stable installation ID, state, and PKCE challenge,
     /// never the verifier or a token.
     pub async fn begin_sign_in(&self) -> Result<Url, AccountError> {
-        let installation_id = self.installation.get_or_create().await?;
+        let _transition = self.session_transition.lock().await;
+        let installation_id = self
+            .installation
+            .get_or_create()
+            .await
+            .map_err(|error| error.at_stage(AccountFailureStage::PrepareSignIn))?;
         let pending = PendingAuthorization::generate();
         let url = self.client.authorization_url(&pending, &installation_id)?;
-        *self
+        let mut current = self
             .pending
             .lock()
-            .map_err(|_| AccountError::StateUnavailable)? = Some(pending);
+            .map_err(|_| AccountError::StateUnavailable)?;
+        self.authorization_epoch.fetch_add(1, Ordering::SeqCst);
+        *current = Some(pending);
         Ok(url)
     }
 
     pub fn cancel_sign_in(&self) {
         if let Ok(mut pending) = self.pending.lock() {
+            self.authorization_epoch.fetch_add(1, Ordering::SeqCst);
             pending.take();
         }
     }
@@ -427,7 +492,7 @@ impl AccountService {
     pub async fn handle_deep_link(&self, raw: &str) -> Result<AccountState, AccountError> {
         let callback = AuthCallback::parse(raw)?;
         let generation = self.generation();
-        let pending = {
+        let (pending, epoch) = {
             let mut guard = self
                 .pending
                 .lock()
@@ -436,7 +501,16 @@ impl AccountService {
             if callback.state() != pending.state {
                 return Err(AccountError::StateMismatch);
             }
-            guard.take().ok_or(AccountError::NoPendingAuthorization)?
+            let epoch = self.authorization_epoch.load(Ordering::SeqCst);
+            self.exchanging_epoch.store(epoch, Ordering::SeqCst);
+            (
+                guard.take().ok_or(AccountError::NoPendingAuthorization)?,
+                epoch,
+            )
+        };
+        let _exchange = ExchangeGuard {
+            epoch,
+            active: self.exchanging_epoch.clone(),
         };
 
         let AuthCallback::Code {
@@ -446,20 +520,32 @@ impl AccountService {
         else {
             return Err(AccountError::AuthorizationDenied);
         };
-        let session = self
+        let exchange = self
             .client
             .exchange_code(authorization_code, state, pending.code_verifier)
-            .await?;
-        let profile = session.account.clone();
+            .await;
         // Sign-out and exchange completion must not interleave keychain writes.
         // A response from before sign-out cannot restore the deleted session.
         let _transition = self.session_transition.lock().await;
-        if generation != self.generation() {
+        if generation != self.generation()
+            || epoch != self.authorization_epoch.load(Ordering::SeqCst)
+        {
             return Err(AccountError::NoPendingAuthorization);
         }
-        self.sessions.save(session.stored_session()).await?;
+        let session =
+            exchange.map_err(|error| error.at_stage(AccountFailureStage::CodeExchange))?;
+        let profile = session.account.clone();
+        self.sessions
+            .save(session.stored_session())
+            .await
+            .map_err(|error| error.at_stage(AccountFailureStage::CredentialSave))?;
         self.advance_generation();
         Ok(AccountState::SignedIn { profile })
+    }
+
+    fn exchange_is_current(&self) -> bool {
+        let epoch = self.exchanging_epoch.load(Ordering::SeqCst);
+        epoch != 0 && epoch == self.authorization_epoch.load(Ordering::SeqCst)
     }
 
     pub async fn sign_out(&self) -> Result<AccountState, AccountError> {
@@ -489,6 +575,19 @@ impl AccountService {
         };
         self.sessions.delete().await?;
         Ok(session)
+    }
+}
+
+struct ExchangeGuard {
+    epoch: u64,
+    active: Arc<AtomicU64>,
+}
+
+impl Drop for ExchangeGuard {
+    fn drop(&mut self) {
+        let _ = self
+            .active
+            .compare_exchange(self.epoch, 0, Ordering::SeqCst, Ordering::SeqCst);
     }
 }
 

@@ -11,6 +11,13 @@ pub(super) struct TestApi {
     task: JoinHandle<Vec<String>>,
 }
 
+pub(super) enum TestResponse {
+    Json(u16, Value),
+    Disconnect,
+    Truncated,
+    Delay(Duration),
+}
+
 impl Drop for TestApi {
     fn drop(&mut self) {
         self.task.abort();
@@ -19,11 +26,22 @@ impl Drop for TestApi {
 
 impl TestApi {
     pub async fn start(responses: Vec<(u16, Value)>, gate: Option<Arc<Barrier>>) -> Self {
+        Self::start_with(
+            responses
+                .into_iter()
+                .map(|(status, body)| TestResponse::Json(status, body))
+                .collect(),
+            gate,
+        )
+        .await
+    }
+
+    pub async fn start_with(responses: Vec<TestResponse>, gate: Option<Arc<Barrier>>) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let url = format!("http://{}", listener.local_addr().unwrap());
         let task = tokio::spawn(async move {
             let mut requests = Vec::new();
-            for (index, (status, body)) in responses.into_iter().enumerate() {
+            for (index, response) in responses.into_iter().enumerate() {
                 let (mut stream, _) = listener.accept().await.unwrap();
                 let mut request = Vec::new();
                 loop {
@@ -53,6 +71,18 @@ impl TestApi {
                         gate.wait().await;
                     }
                 }
+                let (status, body) = match response {
+                    TestResponse::Json(status, body) => (status, body),
+                    TestResponse::Disconnect => continue,
+                    TestResponse::Truncated => {
+                        stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 1000\r\nConnection: close\r\n\r\n{\"sessionToken\":").await.unwrap();
+                        continue;
+                    }
+                    TestResponse::Delay(duration) => {
+                        tokio::time::sleep(duration).await;
+                        continue;
+                    }
+                };
                 let body = body.to_string();
                 stream.write_all(format!(
                     "HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()

@@ -9,7 +9,6 @@ import {
   DialogTitle,
   DialogXClose,
   EmptyState,
-  ErrorState,
   LoadingState,
   useI18n,
 } from "@unfour/ui";
@@ -20,6 +19,7 @@ import {
   getAccountUsername,
 } from "./accountDisplay";
 import { AccountPlanSummary } from "./AccountPlanSummary";
+import { AccountFailureNotice, AccountRecoveryButton } from "./AccountFailureNotice";
 import { useAccount } from "./useAccount";
 
 function Row({ label, value }: { label: string; value: ReactNode }) {
@@ -33,7 +33,7 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
 
 export function AccountOverlays() {
   const { t } = useI18n();
-  const { overlayOpen, retry, setOverlayOpen, signIn, signOut, state } = useAccount();
+  const { failure, overlayOpen, setOverlayOpen, signIn, signOut, state } = useAccount();
 
   const accountFallback = t("account.title");
   const signedInProfile = state.kind === "signedIn" ? state.profile : null;
@@ -54,7 +54,7 @@ export function AccountOverlays() {
         <DialogBody>
           {state.kind === "signedOut" && <EmptyState>{t("account.signedOutDescription")}</EmptyState>}
           {state.kind === "signingIn" && <LoadingState>{t("account.signingInDescription")}</LoadingState>}
-          {state.kind === "error" && <ErrorState>{t("account.errorDescription")}</ErrorState>}
+          <AccountFailureNotice />
           {signedInProfile && (
             <div className="flex flex-col gap-3">
               <div className="rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-3 py-3">
@@ -86,9 +86,8 @@ export function AccountOverlays() {
         </DialogBody>
         <DialogFooter>
           <Button onClick={() => setOverlayOpen(false)} size="sm" type="button" variant="ghost">{t("account.close")}</Button>
-          {state.kind === "signedOut" && <Button onClick={signIn} size="sm" type="button">{t("account.signIn")}</Button>}
-          {state.kind === "signingIn" && <Button disabled size="sm" type="button">{t("account.signingIn")}</Button>}
-          {state.kind === "error" && <Button onClick={retry} size="sm" type="button">{t("account.retry")}</Button>}
+          {state.kind === "signedOut" && !failure && <Button onClick={signIn} size="sm" type="button">{t("account.signIn")}</Button>}
+          <AccountRecoveryButton />
           {state.kind === "signedIn" && <Button onClick={signOut} size="sm" type="button" variant="outline">{t("account.signOut")}</Button>}
         </DialogFooter>
       </DialogContent>

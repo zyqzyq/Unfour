@@ -4,6 +4,7 @@ import type { AccountState, AccountStateSnapshot } from "./accountTypes";
 
 const processedDeepLinks = new Set<string>();
 const inFlightDeepLinks = new Map<string, Promise<AccountStateSnapshot>>();
+const MAX_PROCESSED_LINKS = 64;
 
 export function isTauriRuntime(): boolean {
   return typeof window !== "undefined"
@@ -36,31 +37,45 @@ export function getAccountCommandErrorCode(error: unknown): string | null {
   return typeof code === "string" ? code : null;
 }
 
-function processDeepLink(url: string): Promise<AccountStateSnapshot | null> {
-  if (processedDeepLinks.has(url)) return Promise.resolve(null);
+async function processDeepLink(url: string): Promise<AccountStateSnapshot | null> {
+  let parsed: URL;
+  try { parsed = new URL(url); } catch { return null; }
+  if (parsed.protocol !== "unfour:" || parsed.hostname !== "auth" || parsed.pathname !== "/callback") return null;
+  // Keep only bounded digests in the replay cache, never raw codes or state.
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(url));
+  const key = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 
-  const existing = inFlightDeepLinks.get(url);
+  const existing = inFlightDeepLinks.get(key);
   if (existing) return existing;
+  if (processedDeepLinks.has(key)) return null;
+
+  // Failed exchanges also count as attempted: the code may already be used.
+  processedDeepLinks.add(key);
+  if (processedDeepLinks.size > MAX_PROCESSED_LINKS) {
+    const oldest = processedDeepLinks.values().next().value;
+    if (oldest) processedDeepLinks.delete(oldest);
+  }
 
   const request = invoke<AccountStateSnapshot>("account_handle_deep_link", { url })
-    .then((snapshot) => {
-      processedDeepLinks.add(url);
-      return snapshot;
-    })
     .finally(() => {
-      inFlightDeepLinks.delete(url);
+      inFlightDeepLinks.delete(key);
     });
-  inFlightDeepLinks.set(url, request);
+  inFlightDeepLinks.set(key, request);
   return request;
 }
 
 async function dispatchDeepLinks(
   urls: string[],
   onSnapshot: (snapshot: AccountStateSnapshot) => void,
+  onError: (error: unknown) => void,
 ): Promise<void> {
   for (const url of urls) {
-    const snapshot = await processDeepLink(url);
-    if (snapshot) onSnapshot(snapshot);
+    try {
+      const snapshot = await processDeepLink(url);
+      if (snapshot) onSnapshot(snapshot);
+    } catch (error) {
+      onError(error);
+    }
   }
 }
 
@@ -70,18 +85,23 @@ async function dispatchDeepLinks(
  */
 export async function listenForAccountDeepLinks(
   onSnapshot: (snapshot: AccountStateSnapshot) => void,
-  onError: () => void,
+  onError: (error: unknown) => void,
 ): Promise<() => void> {
-  const unlisten = await onOpenUrl((urls) => {
-    void dispatchDeepLinks(urls, onSnapshot).catch(onError);
-  });
+  let unlisten: () => void;
+  try {
+    unlisten = await onOpenUrl((urls) => {
+      void dispatchDeepLinks(urls, onSnapshot, onError);
+    });
+  } catch {
+    throw { code: "callback_listener_failed", stage: "callbackListener" };
+  }
 
   try {
     const currentUrls = await getCurrent();
-    if (currentUrls) await dispatchDeepLinks(currentUrls, onSnapshot);
-  } catch (error) {
-    unlisten();
-    throw error;
+    if (currentUrls) await dispatchDeepLinks(currentUrls, onSnapshot, onError);
+  } catch {
+    // Keep the live listener installed even if cold-start lookup fails.
+    onError({ code: "callback_listener_failed", stage: "callbackListener" });
   }
 
   return unlisten;

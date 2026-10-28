@@ -5,6 +5,8 @@ use serde_json::{json, Value};
 mod support;
 use support::*;
 
+mod login_failures;
+
 #[tokio::test]
 async fn callback_exchange_persists_only_session_and_replay_cannot_exchange_twice() {
     let api = TestApi::start(vec![(200, session_response())], None).await;
