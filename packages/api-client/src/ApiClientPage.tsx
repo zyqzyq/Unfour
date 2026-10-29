@@ -62,6 +62,7 @@ export function ApiClientPage({
   const closeAfterSaveRef = useRef<string | null>(null);
   const pendingCloseQueueRef = useRef<string[]>([]);
   const urlInputRef = useRef<HTMLInputElement>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
   const pendingIntentAction = useRef<{
     action: "save" | "send";
     tabId: string;
@@ -167,7 +168,17 @@ export function ApiClientPage({
   useEffect(() => {
     if (!active) return;
     function onKeyDown(event: KeyboardEvent) {
-      if (!(event.ctrlKey || event.metaKey) || !activeTab) {
+      // Bubble-phase listener: editors and inputs get first refusal. Portalled
+      // interaction layers also own shortcuts when focus has not moved yet.
+      if (
+        !(event.ctrlKey || event.metaKey) || !activeTab ||
+        event.defaultPrevented || event.isComposing || event.keyCode === 229 ||
+        event.repeat || event.altKey || event.shiftKey ||
+        saveDialogTabId || closeDialogTabId ||
+        document.querySelector(
+          '[role="dialog"]:not([data-state="closed"]), [role="alertdialog"]:not([data-state="closed"]), [role="menu"][data-state="open"], [role="listbox"][data-state="open"]',
+        )
+      ) {
         return;
       }
       if (event.key === "Enter") {
@@ -186,7 +197,7 @@ export function ApiClientPage({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [active, activeTab, requestSave, sendTab]);
+  }, [active, activeTab, closeDialogTabId, requestSave, saveDialogTabId, sendTab]);
 
   const saveDialogTab =
     state.tabs.find((tab) => tab.id === saveDialogTabId) ?? null;
@@ -393,7 +404,7 @@ export function ApiClientPage({
 
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[var(--u-color-bg)]">
+    <div ref={pageRef} className="flex h-full min-h-0 flex-col bg-[var(--u-color-bg)]">
       <div className="flex min-h-0 flex-1">
         {!usesShellSidebar && sidebar}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -434,6 +445,7 @@ export function ApiClientPage({
         </div>
       </div>
       <ApiClientDialogs
+        onRestoreFocus={() => pageRef.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus()}
         closeDialogTab={closeDialogTab}
         collections={collections}
         folders={folders}

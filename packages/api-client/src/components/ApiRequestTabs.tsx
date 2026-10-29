@@ -72,7 +72,7 @@ export function ApiRequestTabs({
                 className="flex min-w-0 flex-1 items-center gap-1.5"
                 onClick={() => onSelect(tab.id)}
                 role="tab"
-                title={title + " · " + visualState}
+                title={title + " · " + t("api.tabs.state." + visualState)}
                 type="button"
               >
                 <span
@@ -112,7 +112,7 @@ export function ApiRequestTabs({
             <ContextMenu key={tab.id}>
               <ContextMenuTrigger asChild>{tabNode}</ContextMenuTrigger>
               <ContextMenuContent>
-                <ContextMenuItem onSelect={() => onClose(tab)} shortcut="Ctrl+W">
+                <ContextMenuItem onSelect={() => onClose(tab)}>
                   {t("api.tabs.closeTab")}
                 </ContextMenuItem>
                 <ContextMenuItem onSelect={onCloseAll}>

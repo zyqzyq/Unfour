@@ -8,6 +8,9 @@ import {
   ContextMenuTrigger,
 } from "./menus";
 import { cn } from "./utils";
+import { Dialog } from "./dialog-primitives";
+import { DialogContent, DialogDescription, DialogTitle } from "./dialog";
+import { useI18n } from "./i18n";
 
 export type WorkspaceTab = {
   /** Right-click menu content (ContextMenuItem nodes) for this tab. */
@@ -51,27 +54,33 @@ export function Tabs({
   onSelect: (tabId: string) => void;
   tabs: WorkspaceTab[];
 }) {
+  const { t } = useI18n();
   const dragRef = React.useRef<{ id: string; index: number } | null>(null);
   const [dragIndex, setDragIndex] = React.useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = React.useState<number | null>(null);
-  const [confirmTabId, setConfirmTabId] = React.useState<string | null>(null);
-  const [confirmResolve, setConfirmResolve] = React.useState<((confirmed: boolean) => void) | null>(null);
+  const [pendingClose, setPendingClose] = React.useState<{ ids: string[]; action: TabsAction } | null>(null);
+  const returnFocusRef = React.useRef<HTMLElement | null>(null);
+  const tabbarRef = React.useRef<HTMLDivElement>(null);
+
+  const completeClose = React.useCallback((ids: string[], action: TabsAction) => {
+    if (onAction) onAction(action);
+    else ids.forEach((id) => onClose?.(id));
+  }, [onAction, onClose]);
+
+  const requestClose = React.useCallback((ids: string[], action: TabsAction) => {
+    if (tabs.some((tab) => ids.includes(tab.id) && tab.modified)) {
+      returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setPendingClose({ ids, action });
+    } else {
+      completeClose(ids, action);
+    }
+  }, [completeClose, tabs]);
 
   const handleClose = React.useCallback(
     (tabId: string) => {
-      const tab = tabs.find((t) => t.id === tabId);
-      if (tab?.modified) {
-        setConfirmTabId(tabId);
-        setConfirmResolve(() => (confirmed: boolean) => {
-          if (confirmed) onClose?.(tabId);
-          setConfirmTabId(null);
-          setConfirmResolve(null);
-        });
-      } else {
-        onClose?.(tabId);
-      }
+      requestClose([tabId], { close: tabId });
     },
-    [onClose, tabs],
+    [requestClose],
   );
 
   const handleDragStart = React.useCallback(
@@ -117,21 +126,18 @@ export function Tabs({
 
   const handleCloseOthers = React.useCallback(
     (keepId: string) => {
-      tabs.forEach((t) => {
-        if (t.id !== keepId) onClose?.(t.id);
-      });
+      requestClose(tabs.filter((tab) => tab.id !== keepId).map((tab) => tab.id), { closeOthers: keepId, keep: keepId });
     },
-    [onClose, tabs],
+    [requestClose, tabs],
   );
 
   const handleCloseRight = React.useCallback(
     (keepId: string) => {
       const keepIndex = tabs.findIndex((t) => t.id === keepId);
-      for (let i = tabs.length - 1; i > keepIndex; i--) {
-        onClose?.(tabs[i].id);
-      }
+      if (keepIndex < 0) return;
+      requestClose(tabs.slice(keepIndex + 1).map((tab) => tab.id), { closeRight: keepId, keep: keepId });
     },
-    [onClose, tabs],
+    [requestClose, tabs],
   );
 
   const defaultContextMenu = React.useMemo(
@@ -139,32 +145,33 @@ export function Tabs({
       <>
         <ContextMenuItem
           onSelect={() => handleClose(tabId)}
-          shortcut="Ctrl+W"
         >
-          Close
+          {t("common.tabs.close")}
         </ContextMenuItem>
         {tabs.length > 1 && (
           <>
             <ContextMenuItem
               onSelect={() => handleCloseOthers(tabId)}
             >
-              Close Others
+              {t("common.tabs.closeOthers")}
             </ContextMenuItem>
             <ContextMenuItem
+              disabled={tabs[tabs.length - 1]?.id === tabId}
               onSelect={() => handleCloseRight(tabId)}
             >
-              Close to the Right
+              {t("common.tabs.closeRight")}
             </ContextMenuItem>
           </>
         )}
       </>
     ),
-    [handleClose, handleCloseOthers, handleCloseRight, tabs.length],
+    [handleClose, handleCloseOthers, handleCloseRight, t, tabs],
   );
 
   return (
     <>
       <div
+        ref={tabbarRef}
         className={cn(
           "flex h-[var(--u-size-tabbar)] shrink-0 items-end border-b border-[var(--u-color-border)] bg-[var(--u-color-chrome)] px-2",
           className,
@@ -216,7 +223,7 @@ export function Tabs({
               >
                 <span className="min-w-0 flex-1 truncate text-left">
                   {tab.modified && (
-                    <span className="mr-0.5 inline-block h-2 w-2 rounded-full bg-[var(--u-color-primary)]" title="Unsaved changes" />
+                    <span className="mr-0.5 inline-block h-2 w-2 rounded-full bg-[var(--u-color-primary)]" title={t("common.tabs.unsaved")} />
                   )}
                   {tab.title}
                 </span>
@@ -225,9 +232,9 @@ export function Tabs({
                 )}
                 {tab.meta}
               </button>
-              {onClose && (
+              {(onClose || onAction) && (
                 <button
-                  aria-label={`Close ${tab.title}`}
+                  aria-label={t("common.tabs.closeLabel", { title: tab.title })}
                   className={cn(
                     "grid h-5 w-5 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--u-color-focus)]",
                     active && activeBackground === "terminal" && "text-[var(--u-color-terminal-muted)]",
@@ -236,7 +243,7 @@ export function Tabs({
                     event.stopPropagation();
                     handleClose(tab.id);
                   }}
-                  title={`Close ${tab.title}`}
+                  title={t("common.tabs.closeLabel", { title: tab.title })}
                   type="button"
                 >
                   <X size={12} />
@@ -252,13 +259,13 @@ export function Tabs({
             <ContextMenu key={tab.id}>
               <ContextMenuTrigger asChild>{tabNode}</ContextMenuTrigger>
               <ContextMenuContent>
-                {tab.contextMenu ?? defaultContextMenu(tab.id)}
+                {tab.contextMenu ?? ((onClose || onAction) && defaultContextMenu(tab.id))}
                 {tab.contextMenu && onAction && (
                   <ContextMenuSeparator />
                 )}
-                {onAction && (
-                  <ContextMenuItem onSelect={() => onAction({ close: tab.id })} shortcut="Ctrl+W">
-                    Close
+                {tab.contextMenu && onAction && (
+                  <ContextMenuItem onSelect={() => handleClose(tab.id)}>
+                    {t("common.tabs.close")}
                   </ContextMenuItem>
                 )}
               </ContextMenuContent>
@@ -271,40 +278,44 @@ export function Tabs({
         )}
       </div>
 
-      {/* Close confirmation popover */}
-      {confirmTabId && confirmResolve && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          onClick={() => confirmResolve(false)}
-        >
-          <div className="fixed inset-0 bg-black/30" />
-          <div
-            className="relative z-10 w-72 rounded-[var(--u-radius-lg)] border border-[var(--u-color-border)] bg-[var(--u-color-surface)] p-4 shadow-lg"
-            onClick={(e) => e.stopPropagation()}
+      <Dialog open={pendingClose !== null} onOpenChange={(open) => !open && setPendingClose(null)}>
+          <DialogContent
+            className="w-72 p-4"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              const target = returnFocusRef.current;
+              if (target?.isConnected && !target.closest('[role="menu"]')) target.focus();
+              else tabbarRef.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus();
+            }}
           >
-            <p className="text-[13px] font-medium text-[var(--u-color-text)]">
-              Unsaved changes
-            </p>
-            <p className="mt-1 text-[12px] text-[var(--u-color-text-muted)]">
-              Close this tab without saving?
-            </p>
+            <DialogTitle className="text-[13px] font-medium text-[var(--u-color-text)]">
+              {t("common.tabs.unsaved")}
+            </DialogTitle>
+            <DialogDescription className="mt-1 text-[12px] text-[var(--u-color-text-muted)]">
+              {t(pendingClose && pendingClose.ids.length > 1 ? "common.tabs.discardMany" : "common.tabs.discardOne")}
+            </DialogDescription>
             <div className="mt-3 flex justify-end gap-2">
               <button
+                autoFocus
+                type="button"
                 className="h-[var(--u-size-button)] rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3 text-[12px] text-[var(--u-color-text)] hover:bg-[var(--u-color-surface-hover)]"
-                onClick={() => confirmResolve(false)}
+                onClick={() => setPendingClose(null)}
               >
-                Cancel
+                {t("common.confirm.cancel")}
               </button>
               <button
+                type="button"
                 className="h-[var(--u-size-button)] rounded-[var(--u-radius-sm)] border border-[var(--u-color-danger)] bg-[var(--u-color-danger-soft)] px-3 text-[12px] text-[var(--u-color-danger)] hover:bg-[var(--u-color-danger-soft)]"
-                onClick={() => confirmResolve(true)}
+                onClick={() => {
+                  if (pendingClose) completeClose(pendingClose.ids, pendingClose.action);
+                  setPendingClose(null);
+                }}
               >
-                Discard
+                {t("common.tabs.discard")}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+          </DialogContent>
+      </Dialog>
     </>
   );
 }

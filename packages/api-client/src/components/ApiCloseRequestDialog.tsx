@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import {
   Button,
   Dialog,
@@ -7,41 +8,60 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  useI18n,
 } from "@unfour/ui";
 
 export function ApiCloseRequestDialog({
   onCancel,
   onDiscard,
   onSave,
+  onRestoreFocus,
   open,
   title,
 }: {
   onCancel: () => void;
   onDiscard: () => void;
   onSave: () => void;
+  onRestoreFocus: () => void;
   open: boolean;
   title: string;
 }) {
+  const { t } = useI18n();
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   return (
     <Dialog onOpenChange={(next) => !next && onCancel()} open={open}>
-      <DialogContent title="Close modified request">
+      <DialogContent
+        onOpenAutoFocus={() => {
+          returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          // A save dialog may have replaced this confirmation. Keep its focus.
+          if (document.querySelector('[role="dialog"][data-state="open"]')) return;
+          if (returnFocusRef.current?.isConnected && !returnFocusRef.current.closest('[role="menu"]')) {
+            returnFocusRef.current.focus();
+          } else {
+            onRestoreFocus();
+          }
+        }}
+      >
         <DialogHeader>
-          <DialogTitle>Save changes?</DialogTitle>
+          <DialogTitle>{t("api.close.title")}</DialogTitle>
         </DialogHeader>
         <DialogBody>
           <DialogDescription>
-            {title} has unsaved changes. Save before closing?
+            {t("api.close.description", { title })}
           </DialogDescription>
         </DialogBody>
         <DialogFooter>
           <Button onClick={onCancel} type="button" variant="ghost">
-            Cancel
+            {t("common.confirm.cancel")}
           </Button>
           <Button onClick={onDiscard} type="button" variant="outline">
-            Don't Save
+            {t("api.close.discard")}
           </Button>
           <Button onClick={onSave} type="button">
-            Save
+            {t("common.actions.save")}
           </Button>
         </DialogFooter>
       </DialogContent>

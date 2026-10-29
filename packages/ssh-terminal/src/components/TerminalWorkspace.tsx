@@ -132,7 +132,7 @@ export function TerminalWorkspace({
     const isLast = index === sessions.length - 1;
     return (
       <>
-        <ContextMenuItem onSelect={() => onCloseSession(sessionId)} shortcut="Ctrl+W">
+        <ContextMenuItem onSelect={() => onCloseSession(sessionId)}>
           <Unplug size={13} />
           {t("ssh.actions.closeConnection")}
         </ContextMenuItem>

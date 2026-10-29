@@ -85,10 +85,10 @@ describe("ApiRequestTabs", () => {
     );
   });
 
-  it("keeps long request names bounded while exposing the full name on hover", () => {
+  it.each([["en", "unsaved"], ["zh-CN", "未保存"]] as const)("keeps long request names bounded with a localized status on hover (%s)", (locale, status) => {
     const longName = "Query the current schema details for the selected dataset";
     render(
-      <I18nProvider initialLocale="en">
+      <I18nProvider initialLocale={locale}>
         <ApiRequestTabs
           activeId="new:1"
           onClose={vi.fn()}
@@ -104,7 +104,7 @@ describe("ApiRequestTabs", () => {
     );
 
     const tab = screen.getByRole("tab");
-    expect(tab).toHaveAttribute("title", `${longName} · unsaved`);
+    expect(tab).toHaveAttribute("title", `${longName} · ${status}`);
     expect(screen.getByText(longName)).toHaveClass("truncate");
   });
 });

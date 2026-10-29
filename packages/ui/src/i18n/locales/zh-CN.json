@@ -322,6 +322,11 @@
   },
   "api": {
     "errors": { "invalidJsonBody": "请求体不是有效的 JSON。" },
+    "close": {
+      "title": "保存更改？",
+      "description": "{title} 有未保存的更改。关闭前是否保存？",
+      "discard": "不保存"
+    },
     "multipart": {
       "mode": "form-data",
       "contentType": "form-data 的 Content-Type 由系统自动生成。",
@@ -554,6 +559,17 @@
     },
     "tabs": {
       "close": "关闭 {title}",
+      "state": {
+        "saved": "已保存",
+        "dirty": "有未保存的更改",
+        "unsaved": "未保存",
+        "saving": "保存中",
+        "sending": "发送中",
+        "cancelling": "取消中",
+        "cancelled": "已取消",
+        "success": "成功",
+        "failed": "失败"
+      },
       "closeAll": "关闭全部",
       "closeLeft": "关闭左侧全部",
       "closeSaved": "关闭所有已保存",
@@ -626,6 +642,16 @@
     "workspaceVariables": "工作区变量"
   },
   "common": {
+    "tabs": {
+      "close": "关闭",
+      "closeLabel": "关闭 {title}",
+      "closeOthers": "关闭其他标签页",
+      "closeRight": "关闭右侧标签页",
+      "unsaved": "未保存的更改",
+      "discardOne": "不保存更改并关闭此标签页？",
+      "discardMany": "不保存更改并关闭选中的标签页？",
+      "discard": "放弃更改"
+    },
     "secret": {
       "saved": "已保存凭据，输入新值可替换",
       "retaining": "保留已保存凭据",

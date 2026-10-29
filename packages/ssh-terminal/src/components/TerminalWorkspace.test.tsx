@@ -48,6 +48,24 @@ function workspaceProps(
 }
 
 describe("TerminalWorkspace progressive loading", () => {
+  it.each([
+    ["en", "Close Connection", "Close Others", "Close to the Right"],
+    ["zh-CN", "关闭连接", "关闭其他", "关闭右边"],
+  ] as const)("keeps close actions with the session owner and removes unsupported hints (%s)", (locale, close, others, right) => {
+    const sessions = ["one", "two"].map((id) => ({
+      title: id,
+      session: { sessionId: id, connectionId: id, workspaceId: "ws-1", status: "connected" as const, reconnectAttempt: 0, authKind: "password", host: id, username: "ops", cols: 80, rows: 24, createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z" },
+    }));
+    const props = workspaceProps({ sessions });
+    render(<I18nProvider initialLocale={locale}><TerminalWorkspace {...props} /></I18nProvider>);
+    for (const [label, callback] of [[close, props.onCloseSession], [others, props.onCloseOthers], [right, props.onCloseRight]] as const) {
+      fireEvent.contextMenu(screen.getByRole("tab", { name: /ops@one/ }));
+      expect(screen.queryByText("Ctrl+W")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("menuitem", { name: label }));
+      expect(callback).toHaveBeenCalledExactlyOnceWith("one");
+    }
+  });
+
   it("keeps the SSH workspace mounted while showing local loading feedback", () => {
     const { rerender } = render(
       <I18nProvider initialLocale="en">

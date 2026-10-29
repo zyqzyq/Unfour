@@ -41,8 +41,11 @@ export function ApiRequestBar({
   return (
     <div
       className="flex shrink-0 flex-col gap-1.5 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3 py-2"
-      onKeyDownCapture={(event) => {
+      onKeyDown={(event) => {
         if (
+          !event.defaultPrevented && !event.nativeEvent.isComposing &&
+          event.nativeEvent.keyCode !== 229 && !event.repeat &&
+          !event.altKey && !event.shiftKey &&
           (event.ctrlKey || event.metaKey) &&
           event.key.toLowerCase() === "s"
         ) {

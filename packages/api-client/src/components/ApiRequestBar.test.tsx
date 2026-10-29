@@ -51,6 +51,18 @@ afterEach(() => {
 });
 
 describe("ApiRequestBar", () => {
+  it("does not save while the name input is composing or has consumed the shortcut", () => {
+    const onSave = vi.fn();
+    render(<I18nProvider initialLocale="en"><ApiRequestBar tab={requestTab()} onNameCommit={vi.fn()} onSave={onSave} onSend={vi.fn()} onUpdate={vi.fn()} /></I18nProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Edit name" }));
+    const input = screen.getByRole("textbox", { name: "Request name" });
+    fireEvent.keyDown(input, { key: "s", ctrlKey: true, isComposing: true });
+    fireEvent.keyDown(input, { key: "s", metaKey: true, keyCode: 229 });
+    input.addEventListener("keydown", (event) => event.preventDefault());
+    fireEvent.keyDown(input, { key: "s", ctrlKey: true });
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it("labels history as a lossy snapshot and requires explicit review for a new send", () => {
     const tab = { ...requestTab(), source: "history" as const };
     const onUpdate = vi.fn();

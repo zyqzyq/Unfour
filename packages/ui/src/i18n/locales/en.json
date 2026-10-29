@@ -322,6 +322,11 @@
   },
   "api": {
     "errors": { "invalidJsonBody": "Request body is not valid JSON." },
+    "close": {
+      "title": "Save changes?",
+      "description": "{title} has unsaved changes. Save before closing?",
+      "discard": "Don't Save"
+    },
     "multipart": {
       "mode": "form-data",
       "contentType": "Content-Type is generated automatically for form-data.",
@@ -554,6 +559,17 @@
     },
     "tabs": {
       "close": "Close {title}",
+      "state": {
+        "saved": "saved",
+        "dirty": "dirty",
+        "unsaved": "unsaved",
+        "saving": "saving",
+        "sending": "sending",
+        "cancelling": "cancelling",
+        "cancelled": "cancelled",
+        "success": "success",
+        "failed": "failed"
+      },
       "closeAll": "Close All",
       "closeLeft": "Close Tabs to the Left",
       "closeSaved": "Close Saved",
@@ -626,6 +642,16 @@
     "workspaceVariables": "Workspace Variables"
   },
   "common": {
+    "tabs": {
+      "close": "Close",
+      "closeLabel": "Close {title}",
+      "closeOthers": "Close Others",
+      "closeRight": "Close to the Right",
+      "unsaved": "Unsaved changes",
+      "discardOne": "Close this tab without saving?",
+      "discardMany": "Close the selected tabs without saving their changes?",
+      "discard": "Discard"
+    },
     "secret": {
       "saved": "Saved credential; type to replace",
       "retaining": "Keep saved credential",

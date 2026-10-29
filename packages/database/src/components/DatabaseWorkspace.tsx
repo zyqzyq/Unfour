@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type {
   DatabaseConnection,
   DatabaseSchema,
@@ -112,6 +112,28 @@ export function DatabaseWorkspace({
   const { t } = useI18n();
   const [pendingCloseId, setPendingCloseId] = useState<DatabaseWorkspaceTabId | null>(null);
   const [blockedCloseId, setBlockedCloseId] = useState<string | null>(null);
+  const pendingCloseQueueRef = useRef<DatabaseWorkspaceTabId[]>([]);
+
+  function continueCloseQueue() {
+    setPendingCloseId(null);
+    while (pendingCloseQueueRef.current.length) {
+      const tabId = pendingCloseQueueRef.current.shift()!;
+      const tab = tabs.find((candidate) => candidate.id === tabId);
+      if (!tab) continue;
+      if (tab.kind === "query" && tab.loading) {
+        setBlockedCloseId(tabId);
+        continue;
+      }
+      if (
+        (tab.kind === "query" && queryTabHasUnsavedDraft(tab)) ||
+        (tab.kind === "table" && (tab.pendingChanges?.length ?? 0) > 0)
+      ) {
+        setPendingCloseId(tabId);
+        return;
+      }
+      onCloseTab(tabId);
+    }
+  }
   const activeQuery = activeTab?.kind === "query" ? activeTab : null;
   const activeTable = activeTab?.kind === "table" ? activeTab : null;
 
@@ -165,21 +187,16 @@ export function DatabaseWorkspace({
       <Tabs
         activeBackground="subtle"
         activeId={activeTabId}
-        onClose={(tabId) => {
-          const tab = tabs.find((candidate) => candidate.id === tabId);
-          if (tab?.kind === "query" && tab.loading) {
-            setBlockedCloseId(tabId);
-            return;
+        onAction={(action) => {
+          if ("close" in action) {
+            pendingCloseQueueRef.current = [action.close];
+          } else if ("closeOthers" in action) {
+            pendingCloseQueueRef.current = tabs.filter((tab) => tab.id !== action.keep).map((tab) => tab.id);
+          } else {
+            const index = tabs.findIndex((tab) => tab.id === action.keep);
+            pendingCloseQueueRef.current = index < 0 ? [] : tabs.slice(index + 1).map((tab) => tab.id);
           }
-          if (tab?.kind === "query" && queryTabHasUnsavedDraft(tab)) {
-            setPendingCloseId(tabId);
-            return;
-          }
-          if (tab?.kind === "table" && (tab.pendingChanges?.length ?? 0) > 0) {
-            setPendingCloseId(tabId);
-            return;
-          }
-          onCloseTab(tabId);
+          continueCloseQueue();
         }}
         onReorder={onReorderTabs}
         onSelect={(tabId) => onSelectTab(tabId as DatabaseWorkspaceTabId)}
@@ -300,9 +317,14 @@ export function DatabaseWorkspace({
         }
         onConfirm={() => {
           if (pendingCloseId) onCloseTab(pendingCloseId);
-          setPendingCloseId(null);
+          continueCloseQueue();
         }}
-        onOpenChange={(open) => !open && setPendingCloseId(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            pendingCloseQueueRef.current = [];
+            setPendingCloseId(null);
+          }
+        }}
         open={pendingCloseId !== null}
         pending={Boolean(!pendingQueryDraft && tableEditing?.pending)}
         title={pendingQueryDraft ? t("database.query.closeDraftTitle") : t("database.editing.discardTitle")}

@@ -17,6 +17,7 @@ export function ApiClientDialogs({
   onDiscardClose,
   onSaveClose,
   onSaveIdentity,
+  onRestoreFocus,
   savedRequests,
   saveDialogError,
   saveDialogPending,
@@ -30,6 +31,7 @@ export function ApiClientDialogs({
   onDiscardClose: () => void;
   onSaveClose: () => void;
   onSaveIdentity: (identity: SaveIdentity) => void;
+  onRestoreFocus: () => void;
   savedRequests: ApiSavedRequest[];
   saveDialogError: string | null;
   saveDialogPending?: boolean;
@@ -57,6 +59,7 @@ export function ApiClientDialogs({
         />
       )}
       <ApiCloseRequestDialog
+        onRestoreFocus={onRestoreFocus}
         onCancel={onCancelClose}
         onDiscard={onDiscardClose}
         onSave={onSaveClose}

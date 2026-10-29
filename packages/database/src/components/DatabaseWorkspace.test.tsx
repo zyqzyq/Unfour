@@ -114,6 +114,44 @@ function renderWorkspace(
 }
 
 describe("DatabaseWorkspace", () => {
+  it("skips a running query but still closes clean targets and confirms drafts", async () => {
+    const onCloseTab = vi.fn();
+    const mixedTabs: DatabaseWorkspaceTab[] = [
+      tabs[1],
+      { ...tabs[0], loading: true },
+      { ...tabs[0], id: "query-2", title: "Clean" },
+      { ...tabs[0], id: "query-3", title: "Draft", sql: "SELECT 3", sqlBaseline: "" },
+    ];
+    renderWorkspace({ onCloseTab, tabs: mixedTabs });
+    fireEvent.contextMenu(screen.getByRole("tab", { name: "users" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Close Others" }));
+    await screen.findByRole("dialog");
+    expect(onCloseTab).toHaveBeenCalledExactlyOnceWith("query-2");
+    fireEvent.click(screen.getByRole("button", { name: "Discard and close" }));
+    expect(onCloseTab.mock.calls).toEqual([["query-2"], ["query-3"]]);
+    expect(screen.getByRole("status")).toHaveTextContent("Stop the running script");
+  });
+
+  it.each(["Close Others", "Close to the Right"])("queues draft confirmations for %s without replacing an earlier confirmation", async (action) => {
+    const onCloseTab = vi.fn();
+    const draftTabs: DatabaseWorkspaceTab[] = [
+      tabs[1],
+      { ...tabs[0], sql: "SELECT 1", sqlBaseline: "" },
+      { ...tabs[0], id: "query-2", title: "Query 2", sql: "SELECT 2", sqlBaseline: "" },
+    ];
+    renderWorkspace({ onCloseTab, tabs: draftTabs });
+    fireEvent.contextMenu(screen.getByRole("tab", { name: "users" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: action }));
+    await screen.findByRole("dialog");
+    expect(onCloseTab).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Discard and close" }));
+    expect(onCloseTab).toHaveBeenCalledExactlyOnceWith("query-1");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(onCloseTab).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("renders dynamic tabs and forwards select, close, and reorder callbacks", () => {
     const onCloseTab = vi.fn();
     const onReorderTabs = vi.fn();
