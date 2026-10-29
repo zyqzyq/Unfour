@@ -1,11 +1,12 @@
 import { Database, Plus, RefreshCw } from "lucide-react";
+import { useState, type ComponentProps } from "react";
 import type {
   DatabaseConnection,
   DatabaseSchema,
   DatabaseTable,
   SavedSql,
 } from "@unfour/command-client";
-import { Badge, IconButton, useI18n } from "@unfour/ui";
+import { Badge, IconButton, SidebarSearch, useI18n } from "@unfour/ui";
 import { DatabaseConnectionTree } from "./DatabaseConnectionTree";
 import type { DatabaseConnectionSessionState } from "../model/types";
 
@@ -15,7 +16,11 @@ import type { DatabaseConnectionSessionState } from "../model/types";
  * use, so connection state stays in the feature package and the shell only
  * provides the mount surface.
  */
-export function DatabaseSidebar({
+export function DatabaseSidebar(props: ComponentProps<typeof DatabaseSidebarContent> & { workspaceId: string }) {
+  return <DatabaseSidebarContent {...props} key={props.workspaceId} connections={props.connections.filter((connection) => connection.workspaceId === props.workspaceId)} />;
+}
+
+function DatabaseSidebarContent({
   catalogNamesByConnection,
   connectionStates,
   connections,
@@ -73,6 +78,7 @@ export function DatabaseSidebar({
   selectedTableId?: string | null;
 }) {
   const { t } = useI18n();
+  const [search, setSearch] = useState("");
 
   return (
     <section className="flex h-full min-h-0 flex-col space-y-1">
@@ -91,6 +97,7 @@ export function DatabaseSidebar({
           </IconButton>
         </div>
       </div>
+      <SidebarSearch label={t("database.sidebar.searchAria")} placeholder={t("database.sidebar.searchPlaceholder")} value={search} onChange={setSearch} />
       <div className="min-h-0 flex-1 overflow-auto">
         <DatabaseConnectionTree
           catalogNamesByConnection={catalogNamesByConnection}
@@ -116,6 +123,7 @@ export function DatabaseSidebar({
           onUseSql={onUseSql}
           savedSqlByConnection={savedSqlByConnection}
           schemaCache={schemaCache}
+          search={search}
           selectedConnectionId={selectedConnectionId}
           selectedTableId={selectedTableId}
         />

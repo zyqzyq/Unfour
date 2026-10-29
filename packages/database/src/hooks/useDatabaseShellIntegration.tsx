@@ -82,6 +82,7 @@ export function useDatabaseShellIntegration({
   const shellSidebar = useMemo(
     () => (
       <DatabaseSidebar
+        workspaceId={workspaceId}
         catalogNamesByConnection={catalogNamesByConn}
         connectionStates={connectionStates}
         connections={connections}
@@ -105,6 +106,7 @@ export function useDatabaseShellIntegration({
       treeErrors,
       treeLoadingKeys,
       treeSchemaCache,
+      workspaceId,
     ],
   );
 

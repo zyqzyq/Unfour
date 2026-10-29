@@ -642,6 +642,7 @@
     "workspaceVariables": "工作区变量"
   },
   "common": {
+    "search": { "clear": "清空搜索" },
     "tabs": {
       "close": "关闭",
       "closeLabel": "关闭 {title}",
@@ -984,7 +985,10 @@
       "tabResults": "结果"
     },
     "sidebar": {
-      "connections": "连接"
+      "connections": "连接",
+      "searchAria": "搜索数据库资源",
+      "searchPlaceholder": "过滤已加载的资源",
+      "noMatches": "没有匹配的数据库资源"
     },
     "export": {
       "title": "导出表", "content": "内容", "structure": "结构", "data": "数据", "both": "结构和数据",
@@ -1055,6 +1059,11 @@
     "title": "数据库"
   },
   "ssh": {
+    "sidebar": {
+      "searchAria": "搜索 SSH 连接",
+      "searchPlaceholder": "过滤连接",
+      "noMatches": "没有匹配的 SSH 连接"
+    },
     "logs": {
       "title": "连接事件",
       "copy": "复制终端日志",

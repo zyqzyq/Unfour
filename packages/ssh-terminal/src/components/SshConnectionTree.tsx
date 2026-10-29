@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import {
   Copy,
   CopyPlus,
@@ -32,6 +32,7 @@ import {
   IconButton,
   SidebarRow,
   SidebarSection,
+  SidebarSearch,
   StatusBadge,
   TreeView,
   useFeedback,
@@ -49,7 +50,11 @@ import {
 } from "../model/terminal-session-status";
 import { SshSidebarModeSwitcher } from "./SshSidebarModeSwitcher";
 
-export function SshConnectionTree({
+export function SshConnectionTree(props: ComponentProps<typeof SshConnectionTreeContent>) {
+  return <SshConnectionTreeContent {...props} key={props.workspaceId} />;
+}
+
+function SshConnectionTreeContent({
   active,
   collapsed,
   onEditConnection,
@@ -67,6 +72,7 @@ export function SshConnectionTree({
   workspaceId: string;
 }) {
   const { t } = useI18n();
+  const [search, setSearch] = useState("");
   const feedback = useFeedback();
   const queryClient = useQueryClient();
   const { selectedSshConnectionId, setSelectedSshConnection } = useWorkspaceStore();
@@ -79,6 +85,12 @@ export function SshConnectionTree({
   const connectionsQuery = useSshConnections(workspaceId);
   const sessionsQuery = useTerminalSessions(workspaceId);
   const connections = connectionsQuery.data ?? [];
+  const searchText = search.trim().toLowerCase();
+  const visibleConnections = connections.filter((connection) =>
+    connection.workspaceId === workspaceId &&
+    [connection.name, connection.host, connection.username, String(connection.port)]
+      .some((value) => value.toLowerCase().includes(searchText)),
+  );
   const sessions = sessionsQuery.data ?? [];
   const [confirm, setConfirm] = useState<
     | { kind: "disconnect"; session: SshSessionSummary }
@@ -250,7 +262,7 @@ export function SshConnectionTree({
       }
     });
 
-  const connectionItems: TreeViewItem[] = connections.map((connection) => {
+  const connectionItems: TreeViewItem[] = visibleConnections.map((connection) => {
     const activeSession = activeSessionByConnection.get(connection.id);
     const connecting =
       connectMutation.isPending &&
@@ -397,7 +409,8 @@ export function SshConnectionTree({
           </IconButton>
         )}
       </div>
-      {connections.length ? (
+      <SidebarSearch label={t("ssh.sidebar.searchAria")} placeholder={t("ssh.sidebar.searchPlaceholder")} value={search} onChange={setSearch} />
+      {connectionItems.length ? (
         <TreeView
           className="min-h-0 flex-1 overflow-y-auto"
           items={connectionItems}
@@ -416,7 +429,7 @@ export function SshConnectionTree({
           selectedId={selectedSshConnectionId}
         />
       ) : (
-        <EmptyState className="min-h-[72px]">{t("ssh.empty.noConnectionsShort")}</EmptyState>
+        <EmptyState className="min-h-[72px]">{t(connections.length && searchText ? "ssh.sidebar.noMatches" : "ssh.empty.noConnectionsShort")}</EmptyState>
       )}
       {connectionsQuery.error && (
         <StatusBadge tone="danger">{t("ssh.empty.connectionsFailed")}</StatusBadge>

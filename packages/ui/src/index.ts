@@ -36,6 +36,7 @@ export {
   type TranslationTree,
 } from "./i18n";
 export { Input } from "./input";
+export { SidebarSearch } from "./sidebar-search";
 export {
   ContextMenu,
   ContextMenuContent,

@@ -21,6 +21,7 @@ export function TreeView({
   canDrop,
   className,
   defaultExpandedIds = [],
+  expandedIds: controlledExpandedIds,
   items,
   onActivate,
   onDrop,
@@ -36,6 +37,8 @@ export function TreeView({
   ) => boolean;
   className?: string;
   defaultExpandedIds?: string[];
+  /** Temporary controlled view; leaves manual expansion and lazy-load defaults intact. */
+  expandedIds?: string[];
   items: TreeViewItem[];
   /** Fired on double-click of a row label (e.g. "double-click to connect"). */
   onActivate?: (item: TreeViewItem) => void;
@@ -45,7 +48,11 @@ export function TreeView({
   onToggle?: (id: string, expanded: boolean) => void;
   selectedId?: string | null;
 }) {
-  const [expandedIds, setExpandedIds] = React.useState(() => new Set(defaultExpandedIds));
+  const [manualExpandedIds, setExpandedIds] = React.useState(() => new Set(defaultExpandedIds));
+  const expandedIds = React.useMemo(
+    () => controlledExpandedIds === undefined ? manualExpandedIds : new Set(controlledExpandedIds),
+    [controlledExpandedIds, manualExpandedIds],
+  );
   const [focusedId, setFocusedId] = React.useState<string | null>(null);
   const [dragSource, setDragSource] = React.useState<TreeViewItem | null>(null);
   const [dragTarget, setDragTarget] = React.useState<TreeViewDragTarget | null>(null);
@@ -61,6 +68,9 @@ export function TreeView({
   // honors defaultExpandedIds at mount, so content loaded later stays hidden.
   const appliedDefaultsRef = React.useRef<Set<string>>(new Set(defaultExpandedIds));
   React.useEffect(() => {
+    // Search can reveal loaded descendants without driving lazy loading or
+    // consuming defaults that should apply when normal browsing resumes.
+    if (controlledExpandedIds !== undefined) return;
     const applied = appliedDefaultsRef.current;
     const added = defaultExpandedIds.filter((id) => !applied.has(id));
     if (!added.length) {
@@ -83,7 +93,7 @@ export function TreeView({
     for (const id of added) {
       onToggle?.(id, true);
     }
-  }, [defaultExpandedIds, onToggle]);
+  }, [controlledExpandedIds, defaultExpandedIds, onToggle]);
 
   const flat = React.useMemo(() => flatten(items, expandedIds), [items, expandedIds]);
   const itemById = React.useMemo(
@@ -97,6 +107,10 @@ export function TreeView({
     // so reading a flag set inside it would always see the stale initial value
     // and report the wrong expanded state to onToggle (breaking lazy loading).
     const nowExpanded = !expandedIds.has(id);
+    if (controlledExpandedIds !== undefined) {
+      onToggle?.(id, nowExpanded);
+      return;
+    }
     setExpandedIds((current) => {
       const next = new Set(current);
       if (next.has(id)) {

@@ -642,6 +642,7 @@
     "workspaceVariables": "Workspace Variables"
   },
   "common": {
+    "search": { "clear": "Clear search" },
     "tabs": {
       "close": "Close",
       "closeLabel": "Close {title}",
@@ -985,7 +986,10 @@
       "tabResults": "Results"
     },
     "sidebar": {
-      "connections": "Connections"
+      "connections": "Connections",
+      "searchAria": "Search database resources",
+      "searchPlaceholder": "Filter loaded resources",
+      "noMatches": "No matching database resources"
     },
     "export": {
       "title": "Export Table", "content": "Content", "structure": "Structure", "data": "Data", "both": "Structure and data",
@@ -1056,6 +1060,11 @@
     "title": "Database"
   },
   "ssh": {
+    "sidebar": {
+      "searchAria": "Search SSH connections",
+      "searchPlaceholder": "Filter connections",
+      "noMatches": "No matching SSH connections"
+    },
     "logs": {
       "title": "Connection Events",
       "copy": "Copy terminal logs",

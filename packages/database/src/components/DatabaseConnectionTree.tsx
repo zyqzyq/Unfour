@@ -17,6 +17,7 @@ import {
   ConnectionRowMenu,
 } from "./database-tree-menus";
 import { TableExportDialog } from "./TableExportDialog";
+import { filterDatabaseTree } from "./database-tree-filter";
 
 
 export function DatabaseConnectionTree({
@@ -43,6 +44,7 @@ export function DatabaseConnectionTree({
   onUseSql,
   savedSqlByConnection,
   schemaCache,
+  search = "",
   selectedConnectionId,
   selectedTableId,
 }: {
@@ -76,10 +78,16 @@ export function DatabaseConnectionTree({
   savedSqlByConnection?: Record<string, SavedSql[]>;
   /** Loaded schemas keyed `${connectionId}::${catalog}` (catalog "" for SQLite). */
   schemaCache?: Record<string, DatabaseSchema>;
+  search?: string;
   selectedConnectionId: string | null;
   selectedTableId?: string | null;
 }) {
   const { t } = useI18n();
+  const query = search.trim().toLowerCase();
+  const [searchExpansion, setSearchExpansion] = useState({ query, collapsed: new Set<string>() });
+  if (searchExpansion.query !== query) {
+    setSearchExpansion({ query, collapsed: new Set() });
+  }
   const [pendingDelete, setPendingDelete] = useState<SavedSql | null>(null);
   const [exportTarget, setExportTarget] = useState<{ connection: DatabaseConnection; table: DatabaseTable } | null>(null);
   const requestDeleteSavedSql = onDeleteSavedSql
@@ -187,6 +195,7 @@ export function DatabaseConnectionTree({
   });
 
   const selectedId = selectedTableId ?? selectedConnection?.id ?? null;
+  const filtered = filterDatabaseTree(items, query);
 
   return (
     <>
@@ -195,7 +204,8 @@ export function DatabaseConnectionTree({
       // connection (or database) never collapses the others.
       key={connections.map((connection) => connection.id).join(",")}
       defaultExpandedIds={[...defaultExpandedIds]}
-      items={items}
+      expandedIds={query ? filtered.expandedIds.filter((id) => !searchExpansion.collapsed.has(id)) : undefined}
+      items={filtered.items}
       onActivate={(item) => {
         // Double-click a saved SQL snippet -> open it in a query tab.
         const savedSql = savedSqlLookup.get(item.id);
@@ -233,6 +243,15 @@ export function DatabaseConnectionTree({
         }
       }}
       onToggle={(id, expanded) => {
+        if (query) {
+          setSearchExpansion((current) => {
+            const collapsed = new Set(current.collapsed);
+            if (expanded) collapsed.delete(id);
+            else collapsed.add(id);
+            return { query, collapsed };
+          });
+          return;
+        }
         if (!expanded) {
           return;
         }
@@ -248,6 +267,9 @@ export function DatabaseConnectionTree({
       }}
       selectedId={selectedId}
     />
+    {query && !filtered.items.length && (
+      <EmptyState className="min-h-[72px]">{t("database.sidebar.noMatches")}</EmptyState>
+    )}
     <ConfirmDialog
       confirmLabel={t("common.actions.delete")}
       description={

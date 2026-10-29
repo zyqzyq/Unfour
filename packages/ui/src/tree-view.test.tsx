@@ -27,6 +27,24 @@ function dataTransfer(): DataTransfer {
 }
 
 describe("TreeView", () => {
+  it("temporarily controls expansion without changing manual state or firing lazy loaders", () => {
+    const items = [{ id: "parent", label: "Parent", children: [{ id: "child", label: "Child" }] }];
+    const onToggle = vi.fn();
+    const view = render(<TreeView items={items} defaultExpandedIds={["parent"]} onToggle={onToggle} />);
+    fireEvent.click(screen.getByRole("button", { name: "Collapse" }));
+    onToggle.mockClear();
+    view.rerender(<TreeView items={items} defaultExpandedIds={["parent"]} expandedIds={["parent"]} onToggle={onToggle} />);
+    expect(screen.getByText("Child")).toBeInTheDocument();
+    expect(onToggle).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Collapse" }));
+    expect(onToggle).toHaveBeenCalledExactlyOnceWith("parent", false);
+    // Controlled callers own the result, and manual expansion stays collapsed.
+    expect(screen.getByText("Child")).toBeInTheDocument();
+    view.rerender(<TreeView items={[]} defaultExpandedIds={["parent"]} expandedIds={[]} onToggle={onToggle} />);
+    view.rerender(<TreeView items={items} defaultExpandedIds={["parent"]} onToggle={onToggle} />);
+    expect(screen.queryByText("Child")).not.toBeInTheDocument();
+  });
+
   it("handles distinct default IDs with identical joined text without reopening collapsed nodes", () => {
     const items = ["a|b", "a", "b"].map((id) => ({ id, label: id, children: [{ id: `${id}-child`, label: `${id}-child` }] }));
     const onToggle = vi.fn();
