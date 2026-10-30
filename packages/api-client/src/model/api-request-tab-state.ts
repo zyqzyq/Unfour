@@ -51,7 +51,7 @@ type ApiTabStore = {
   completeTabSend: (workspaceId: string, tabId: string, execution: RequestExecutionResult) => void;
   failTabSave: (workspaceId: string, tabId: string, error: string) => void;
   failTabSend: (workspaceId: string, tabId: string, error: string, errorCode?: string | null) => void;
-  newRequest: (workspaceId: string) => void;
+  newRequest: (workspaceId: string, draft?: RequestDraft) => void;
   openHistory: (workspaceId: string, history: ApiHistoryDetail) => void;
   openSaved: (workspaceId: string, saved: ApiSavedRequest) => void;
   setActiveTab: (workspaceId: string, tabId: string) => void;
@@ -137,12 +137,12 @@ export const useApiRequestTabStore = create<ApiTabStore>((set) => ({
         nextNewIndex: slice.nextNewIndex,
       })),
     ),
-  newRequest: (workspaceId) =>
+  newRequest: (workspaceId, draft) =>
     set((state) =>
       withWorkspace(state, workspaceId, (slice) => {
         const id = `new:${slice.nextNewIndex}`;
         return {
-          ...createNewRequestTab(slice, id),
+          ...(draft ? updateTabDraft(createNewRequestTab(slice, id), id, draft) : createNewRequestTab(slice, id)),
           nextNewIndex: slice.nextNewIndex + 1,
         };
       }),

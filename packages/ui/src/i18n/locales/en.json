@@ -321,6 +321,25 @@
     }
   },
   "api": {
+    "curl": {
+      "title": "Import cURL",
+      "description": "Preview locally, then open an unsaved request. Nothing is sent or saved. Query encoding follows the Unfour parameter editor. Form bodies retain their original encoding as raw text. Secrets remain in memory until you explicitly save.",
+      "source": "cURL command",
+      "method": "HTTP Method",
+      "url": "URL",
+      "query": "Query",
+      "headers": "Headers",
+      "body": "Body",
+      "preview": "Preview",
+      "confirm": "Create request",
+      "errors": {
+        "CURL_SYNTAX": "Unsupported quoting, shell syntax, expansion or template variables, or input exceeds 262144 characters. Use one literal curl command. Cmd percent expansion and complex backslash escapes are not supported; try Copy as cURL (bash).",
+        "CURL_OPTION": "Unsupported option. V1 accepts only -X/--request, -H/--header, -d/--data, --data-raw, --data-binary, -G/--get, -b/--cookie (inline only) and --url. Remove other options only if their behavior is unnecessary.",
+        "CURL_FILE": "File references and multipart/upload options are not supported. Use an inline body.",
+        "CURL_URL": "Provide exactly one HTTP(S) URL without credentials, fragments, whitespace or URL globbing.",
+        "CURL_SEMANTICS": "This request cannot be represented safely: check method, GET/HEAD body, empty headers, Content-Type and query keys."
+      }
+    },
     "errors": { "invalidJsonBody": "Request body is not valid JSON." },
     "close": {
       "title": "Save changes?",

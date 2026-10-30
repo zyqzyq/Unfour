@@ -130,6 +130,17 @@ beforeEach(() => {
 });
 
 describe("API shortcut ownership", () => {
+  it("does not send or save from the cURL preview dialog", () => {
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "Import cURL" }));
+    fireEvent.change(screen.getByLabelText("cURL command"), { target: { value: "curl https://example.test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    fireEvent.click(screen.getByRole("button", { name: "Create request" }));
+    expect(sendTab).not.toHaveBeenCalled();
+    expect(saveTab).not.toHaveBeenCalled();
+  });
   it.each(["ctrlKey", "metaKey"])("keeps normal send/save and blocks send in the save dialog (%s)", (modifier) => {
     renderPage();
     fireEvent.keyDown(window, { key: "Enter", [modifier]: true });

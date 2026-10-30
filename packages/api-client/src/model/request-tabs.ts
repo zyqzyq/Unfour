@@ -438,7 +438,7 @@ function updateTab(
   };
 }
 
-function emptyDraft(): RequestDraft {
+export function emptyDraft(): RequestDraft {
   return {
     auth: defaultAuthConfig(),
     body: "",

@@ -135,8 +135,8 @@ export function useApiRequestTabs(workspaceId: string) {
     () => environments.find((environment) => environment.isActive) ?? null,
     [environments],
   );
-  const newRequest = useCallback(() => {
-    useApiRequestTabStore.getState().newRequest(workspaceId);
+  const newRequest = useCallback((draft?: RequestDraft) => {
+    useApiRequestTabStore.getState().newRequest(workspaceId, draft);
   }, [workspaceId]);
 
   const openSaved = useCallback(

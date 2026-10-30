@@ -321,6 +321,25 @@
     }
   },
   "api": {
+    "curl": {
+      "title": "导入 cURL",
+      "description": "在本地预览，确认后打开未保存请求，不会发送或保存。查询参数按 Unfour 参数编辑器规则编码；表单请求体以原始文本保留编码。敏感值仅保留在内存中，直到你主动保存。",
+      "source": "cURL 命令",
+      "method": "HTTP 方法",
+      "url": "URL",
+      "query": "查询参数",
+      "headers": "请求头",
+      "body": "请求体",
+      "preview": "预览",
+      "confirm": "创建请求",
+      "errors": {
+        "CURL_SYNTAX": "不支持此引号、Shell 语法、变量展开或模板变量，或内容超过 262144 个字符。请粘贴一条字面量 curl 命令。暂不支持 cmd 百分号展开及复杂反斜杠转义，可尝试复制为 cURL (bash)。",
+        "CURL_OPTION": "存在不支持的参数。V1 仅支持 -X/--request、-H/--header、-d/--data、--data-raw、--data-binary、-G/--get、-b/--cookie（仅内联值）和 --url。请仅在不需要其他参数的行为时移除它们。",
+        "CURL_FILE": "不支持文件引用、multipart 或上传参数。请使用内联请求体。",
+        "CURL_URL": "请提供一个 HTTP(S) URL，不得包含凭据、片段、空白或 URL 通配语法。",
+        "CURL_SEMANTICS": "无法安全转换此请求：请检查方法、GET/HEAD 请求体、空请求头、Content-Type 和查询参数名。"
+      }
+    },
     "errors": { "invalidJsonBody": "请求体不是有效的 JSON。" },
     "close": {
       "title": "保存更改？",

@@ -17,6 +17,7 @@ import { findDuplicateRequestName } from "./request-utils";
 import { ApiClientSidebar } from "./components/ApiClientSidebar";
 import { ApiClientDialogs } from "./components/ApiClientDialogs";
 import { ApiRequestWorkspace } from "./components/ApiRequestWorkspace";
+import { ApiCurlImport } from "./components/ApiCurlImport";
 
 export function ApiClientPage({
   active = true,
@@ -409,6 +410,7 @@ export function ApiClientPage({
         {!usesShellSidebar && sidebar}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <ApiRequestTabs
+            endControl={<ApiCurlImport key={workspaceId} onImport={newRequest} />}
             activeId={state.activeTabId}
             onClose={requestClose}
             onCloseAll={() => requestCloseMany(state.tabs)}
