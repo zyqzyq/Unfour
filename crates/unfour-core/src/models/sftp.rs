@@ -24,6 +24,15 @@ pub struct SftpPathInput {
     pub path: String,
 }
 
+/// Ephemeral response only: never persist or log remote file contents.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SftpTextPreview {
+    pub content: String,
+    /// Bytes read, including an optional UTF-8 BOM.
+    pub size: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SftpRenameInput {

@@ -1,5 +1,6 @@
 use super::*;
 
+mod preview;
 mod support;
 mod transfer_perf;
 use support::*;

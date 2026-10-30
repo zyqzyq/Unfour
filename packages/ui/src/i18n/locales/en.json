@@ -1283,6 +1283,27 @@
       "resetFailed": "Failed to reset host key"
     },
     "sftp": {
+      "preview": {
+        "action": "Preview",
+        "title": "Preview — {name}",
+        "description": "Read-only · UTF-8 · Maximum 1 MiB",
+        "content": "Remote text content",
+        "empty": "This file is empty.",
+        "loading": "Reading remote text…",
+        "copy": "Copy content",
+        "close": "Close",
+        "copied": "Copied",
+        "copyFailed": "Could not copy. Select the text and copy it manually.",
+        "tooLarge": "This file exceeds the 1 MiB preview limit.",
+        "binary": "This file contains binary data and cannot be previewed as text.",
+        "encoding": "This file is not valid UTF-8. Only UTF-8 text (with or without BOM) is supported.",
+        "notFile": "Only regular files can be previewed.",
+        "permissionDenied": "Permission denied. You do not have access to read this file.",
+        "disconnected": "The SSH/SFTP connection is unavailable or has changed. Reconnect and reopen the preview.",
+        "timeout": "Reading the file timed out. Check the connection and try again.",
+        "notFound": "This remote file no longer exists.",
+        "failed": "Could not read this remote file. Check its availability and try again."
+      },
       "activeTransfers": "{count} active transfer(s)",
       "cancelFailed": "Failed to cancel the transfer",
       "cancelTransfer": "Cancel transfer",

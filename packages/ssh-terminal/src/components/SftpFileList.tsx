@@ -23,6 +23,7 @@ export type SftpFileListActions = {
   onCopyPath: (entry: SftpFileEntry) => void;
   onDelete: (entry: SftpFileEntry) => void;
   onDownload: (entry: SftpFileEntry) => void;
+  onPreview: (entry: SftpFileEntry) => void;
   onNewFolder: () => void;
   onOpen: (entry: SftpFileEntry) => void;
   onParent: () => void;
@@ -260,6 +261,9 @@ function EntryContextMenu({
           <>
             {isFile ? (
               <>
+                <ContextMenuItem onSelect={() => actions.onPreview(entry)}>
+                  {t("ssh.sftp.preview.action")}
+                </ContextMenuItem>
                 <ContextMenuItem onSelect={() => actions.onDownload(entry)}>
                   {t("ssh.sftp.menu.download")}
                 </ContextMenuItem>

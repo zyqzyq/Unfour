@@ -22,6 +22,7 @@ function actions(overrides: Partial<SftpFileListActions> = {}): SftpFileListActi
     onCopyPath: vi.fn(),
     onDelete: vi.fn(),
     onDownload: vi.fn(),
+    onPreview: vi.fn(),
     onNewFolder: vi.fn(),
     onOpen: vi.fn(),
     onParent: vi.fn(),
@@ -65,6 +66,7 @@ describe("SftpFileList context menu", () => {
     });
 
     expect(screen.getByRole("menuitem", { name: "Download" })).toBeEnabled();
+    expect(screen.getByRole("menuitem", { name: "Preview" })).toBeEnabled();
     expect(screen.getByRole("menuitem", { name: "Rename" })).toBeEnabled();
     expect(screen.getByRole("menuitem", { name: "Copy path" })).toBeEnabled();
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
@@ -103,6 +105,7 @@ describe("SftpFileList context menu", () => {
     expect(screen.getByRole("menuitem", { name: "Open" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Upload here" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Download" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Preview" })).toBeNull();
   });
 
   it("shows blank-area actions without rename or delete", () => {

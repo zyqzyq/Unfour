@@ -479,6 +479,7 @@ macro_rules! generate_handlers {
             unfour_app::commands::ssh_sftp_open,
             unfour_app::commands::ssh_sftp_rename,
             unfour_app::commands::ssh_sftp_stat,
+            unfour_app::commands::ssh_sftp_preview_text,
             unfour_app::commands::ssh_sftp_transfers_list,
             unfour_app::commands::ssh_sftp_upload,
             unfour_app::commands::ssh_session_log_export,

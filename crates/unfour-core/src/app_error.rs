@@ -119,6 +119,33 @@ impl AppError {
             AppError::Validation(reason) if reason == "API_RESPONSE_TOO_LARGE" => {
                 "API_RESPONSE_TOO_LARGE"
             }
+            AppError::Validation(reason) if reason == "SFTP_PREVIEW_TOO_LARGE" => {
+                "SFTP_PREVIEW_TOO_LARGE"
+            }
+            AppError::Validation(reason) if reason == "SFTP_PREVIEW_BINARY" => {
+                "SFTP_PREVIEW_BINARY"
+            }
+            AppError::Validation(reason) if reason == "SFTP_PREVIEW_ENCODING" => {
+                "SFTP_PREVIEW_ENCODING"
+            }
+            AppError::Validation(reason) if reason == "SFTP_PREVIEW_NOT_FILE" => {
+                "SFTP_PREVIEW_NOT_FILE"
+            }
+            AppError::Validation(reason) if reason == "SFTP_PREVIEW_PERMISSION_DENIED" => {
+                "SFTP_PREVIEW_PERMISSION_DENIED"
+            }
+            AppError::Validation(reason) if reason == "SFTP_PREVIEW_DISCONNECTED" => {
+                "SFTP_PREVIEW_DISCONNECTED"
+            }
+            AppError::Validation(reason) if reason == "SFTP_PREVIEW_TIMEOUT" => {
+                "SFTP_PREVIEW_TIMEOUT"
+            }
+            AppError::Validation(reason) if reason == "SFTP_PREVIEW_NOT_FOUND" => {
+                "SFTP_PREVIEW_NOT_FOUND"
+            }
+            AppError::Validation(reason) if reason == "SFTP_PREVIEW_READ_FAILED" => {
+                "SFTP_PREVIEW_READ_FAILED"
+            }
             AppError::Validation(_) => "VALIDATION_ERROR",
             AppError::ReadOnly(_) => "READ_ONLY_CONNECTION",
             AppError::Timeout(_) => "QUERY_TIMEOUT",

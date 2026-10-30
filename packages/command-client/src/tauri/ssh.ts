@@ -39,6 +39,7 @@ import type {
   SftpMutationResult,
   SftpOpenResult,
   SftpPathInput,
+  SftpTextPreview,
   SftpRenameInput,
   SftpSessionInput,
   SftpTransferInput,
@@ -170,6 +171,10 @@ export function openSftp(input: SftpSessionInput) {
 
 export function listSftpDirectory(input: SftpPathInput) {
   return call<SftpDirectoryListing>("ssh_sftp_list_directory", { input });
+}
+
+export function previewSftpText(input: SftpPathInput) {
+  return call<SftpTextPreview>("ssh_sftp_preview_text", { input });
 }
 
 export function statSftpPath(input: SftpPathInput) {

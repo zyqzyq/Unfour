@@ -214,6 +214,9 @@ export type SftpOpenResult = SftpSessionInput & {
   homePath: string;
 };
 
+/** Ephemeral remote content; never persist or log this response. */
+export type SftpTextPreview = { content: string; size: number };
+
 export type SftpPathInput = SftpSessionInput & {
   path: string;
 };

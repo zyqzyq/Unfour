@@ -108,6 +108,16 @@ function handleSftpBrowseMock<T>(
   command: string,
   args?: Record<string, unknown>,
 ): MockResult<T> {
+  if (command === "ssh_sftp_preview_text") {
+    const input = args?.input as SftpPathInput;
+    connectedSession(input);
+    const entry = sftpEntries(input.sessionId).find((item) => item.path === input.path);
+    if (!entry) throw { code: "SFTP_PREVIEW_NOT_FOUND" };
+    if (entry.kind !== "file") throw { code: "SFTP_PREVIEW_NOT_FILE" };
+    const content = "Unfour SFTP preview fixture\nUTF-8 示例文本\n";
+    return { content, size: new TextEncoder().encode(content).length } as T;
+  }
+
   if (command === "ssh_sftp_open") {
     const input = args?.input as SftpSessionInput;
     const session = connectedSession(input);

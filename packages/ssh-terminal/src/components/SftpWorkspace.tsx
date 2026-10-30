@@ -226,6 +226,7 @@ export function SftpWorkspace({
             style={{ width: renderedPanelWidth }}
           >
             <SftpPanel
+              key={`${session.workspaceId}:${session.sessionId}:${session.connectionId}`}
               onClose={() => setPanelOpen(session.sessionId, session.connectionId, false)}
               session={session}
             />

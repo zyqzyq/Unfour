@@ -568,6 +568,14 @@ impl CommandBus {
         self.ssh.sftp_list_directory(input).await
     }
 
+    /// Ephemeral read: deliberately bypasses activity and transfer recording.
+    pub async fn preview_ssh_sftp_text(
+        &self,
+        input: SftpPathInput,
+    ) -> AppResult<unfour_core::models::SftpTextPreview> {
+        self.ssh.sftp_preview_text(input).await
+    }
+
     pub async fn stat_ssh_sftp_path(&self, input: SftpPathInput) -> AppResult<SftpFileEntry> {
         self.ssh.sftp_stat(input).await
     }

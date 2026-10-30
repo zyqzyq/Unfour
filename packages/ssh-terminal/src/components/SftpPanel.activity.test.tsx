@@ -17,10 +17,12 @@ const mocks = vi.hoisted(() => ({
   upload: vi.fn(),
   saveDialog: vi.fn(),
   openDialog: vi.fn(),
+  preview: vi.fn(),
 }));
 
 vi.mock("@unfour/command-client", () => ({
   openSftp: mocks.open,
+  previewSftpText: mocks.preview,
   listSftpDirectory: mocks.list,
   createSftpDirectory: mocks.mkdir,
   renameSftpPath: mocks.rename,
@@ -187,4 +189,28 @@ it("keeps SFTP success and transfer ids when activity logging fails", async () =
   expect(mocks.remove).toHaveBeenCalledTimes(1);
   expect(mocks.download).toHaveBeenCalledTimes(1);
   expect(mocks.upload).toHaveBeenCalledTimes(1);
+});
+
+
+it("previews on demand without transfer, mutation, local dialog, or persistent content", async () => {
+  mocks.preview.mockResolvedValue({ content: "private preview fixture", size: 23 });
+  const { unmount } = renderPanel();
+  const row = await screen.findByRole("row", { name: /notes\.txt/ });
+  expect(mocks.preview).not.toHaveBeenCalled();
+  fireEvent.doubleClick(row);
+  expect(mocks.preview).not.toHaveBeenCalled();
+  fireEvent.contextMenu(row);
+  fireEvent.click(screen.getByRole("menuitem", { name: "Preview" }));
+  await screen.findByText("private preview fixture");
+  expect(mocks.preview).toHaveBeenCalledExactlyOnceWith({
+    workspaceId: session.workspaceId, sessionId: session.sessionId, path: entry.path,
+  });
+  for (const action of [mocks.upload, mocks.download, mocks.mkdir, mocks.rename, mocks.remove, mocks.saveDialog, mocks.openDialog]) {
+    expect(action).not.toHaveBeenCalled();
+  }
+  expect(JSON.stringify(useSftpStore.getState())).not.toContain("private preview fixture");
+  expect(JSON.stringify(window.localStorage)).not.toContain("private preview fixture");
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(screen.queryByText("private preview fixture")).not.toBeInTheDocument();
+  unmount();
 });

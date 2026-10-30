@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   openSftp: vi.fn(),
   listDirectory: vi.fn(),
   listTransfers: vi.fn().mockResolvedValue([]),
+  preview: vi.fn(),
 }));
 
 vi.mock("@unfour/command-client", async (importOriginal) => {
@@ -20,6 +21,7 @@ vi.mock("@unfour/command-client", async (importOriginal) => {
     listSftpDirectory: (...args: unknown[]) => mocks.listDirectory(...args),
     listSftpTransfers: (...args: unknown[]) => mocks.listTransfers(...args),
     openSftp: (...args: unknown[]) => mocks.openSftp(...args),
+    previewSftpText: (...args: unknown[]) => mocks.preview(...args),
     registerSftpTransferChannel: vi.fn(async () => () => undefined),
   };
 });
@@ -58,6 +60,7 @@ function renderWorkspace(activeSession: SshSessionSummary, children: ReactNode =
 afterEach(() => {
   cleanup();
   mocks.openSftp.mockReset();
+  mocks.preview.mockReset();
   mocks.listDirectory.mockReset();
   mocks.listTransfers.mockReset();
   mocks.listTransfers.mockResolvedValue([]);
@@ -70,6 +73,32 @@ afterEach(() => {
 });
 
 describe("SftpWorkspace", () => {
+  it.each(["session", "workspace"])("closes a pending preview when the %s changes and does not restore it on return", async (scope) => {
+    const first = session("session-a", "connection-a");
+    const second = scope === "session" ? session("session-b", "connection-b") : { ...first, workspaceId: "workspace-2" };
+    let resolve!: (value: { content: string; size: number }) => void;
+    mocks.preview.mockReturnValue(new Promise((done) => { resolve = done; }));
+    mocks.openSftp.mockResolvedValue({ homePath: "/" });
+    mocks.listDirectory.mockResolvedValue({ entries: [{ kind: "file", name: "a.txt", path: "/a.txt", size: 10, modifiedAt: null }] });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const workspace = (active: SshSessionSummary) => (
+      <QueryClientProvider client={client}><SftpWorkspace session={active}>PTY</SftpWorkspace></QueryClientProvider>
+    );
+    const view = render(workspace(first));
+    fireEvent.click(screen.getByRole("button", { name: "Open Remote Files panel" }));
+    fireEvent.contextMenu(await screen.findByRole("row", { name: /a\.txt/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Preview" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    view.rerender(workspace(second));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await act(async () => resolve({ content: "stale secret", size: 12 }));
+    view.rerender(workspace(first));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByText("stale secret")).not.toBeInTheDocument();
+    expect(JSON.stringify(client.getQueryCache().getAll().map((query) => query.state.data))).not.toContain("stale secret");
+    expect(mocks.preview).toHaveBeenCalledOnce();
+  });
+
   it("keeps the panel closed and does not initialize SFTP until the edge handle is clicked", async () => {
     const activeSession = session("session-a", "connection-a");
     const opened = {

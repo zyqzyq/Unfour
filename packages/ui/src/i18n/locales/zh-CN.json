@@ -1281,6 +1281,27 @@
       "resetFailed": "重置主机密钥失败"
     },
     "sftp": {
+      "preview": {
+        "action": "预览",
+        "title": "预览 — {name}",
+        "description": "只读 · UTF-8 · 最大 1 MiB",
+        "content": "远程文本内容",
+        "empty": "此文件为空。",
+        "loading": "正在读取远程文本…",
+        "copy": "复制内容",
+        "close": "关闭",
+        "copied": "已复制",
+        "copyFailed": "复制失败，请选中文本后手动复制。",
+        "tooLarge": "此文件超过 1 MiB 预览大小限制。",
+        "binary": "此文件包含二进制数据，无法作为文本预览。",
+        "encoding": "此文件不是有效的 UTF-8 文本，仅支持 UTF-8 编码（可带 BOM）。",
+        "notFile": "仅支持预览普通文件。",
+        "permissionDenied": "权限不足，无法读取此文件。",
+        "disconnected": "SSH/SFTP 连接不可用或已变更，请重新连接后再次打开预览。",
+        "timeout": "读取文件超时，请检查连接后重试。",
+        "notFound": "此远程文件已不存在。",
+        "failed": "无法读取此远程文件，请确认文件可用后重试。"
+      },
       "activeTransfers": "{count} 个传输进行中",
       "cancelFailed": "取消传输失败",
       "cancelTransfer": "取消传输",

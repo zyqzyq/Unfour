@@ -257,6 +257,14 @@ pub async fn ssh_sftp_list_directory(
 }
 
 #[tauri::command]
+pub async fn ssh_sftp_preview_text(
+    input: SftpPathInput,
+    state: State<'_, AppState>,
+) -> AppResult<unfour_core::models::SftpTextPreview> {
+    state.command_bus.preview_ssh_sftp_text(input).await
+}
+
+#[tauri::command]
 pub async fn ssh_sftp_stat(
     input: SftpPathInput,
     state: State<'_, AppState>,

@@ -26,6 +26,7 @@ import { useSftpNativeDragDrop } from "../hooks/useSftpNativeDragDrop";
 import { useSftpStore } from "../model/sftp-state";
 import { SftpFileList } from "./SftpFileList";
 import { SftpNameDialog } from "./SftpNameDialog";
+import { SftpPreviewDialog } from "./SftpPreviewDialog";
 import { SftpTransferList } from "./SftpTransferList";
 import { SftpToolbar } from "./SftpToolbar";
 
@@ -67,6 +68,12 @@ export function SftpPanel({
     sessionId: string;
     value: string;
   }>({ dirty: false, sessionId: session.sessionId, value: "" });
+  const [preview, setPreview] = useState<{
+    entry: SftpFileEntry;
+    workspaceId: string;
+    sessionId: string;
+    connectionId: string;
+  } | null>(null);
   const [nameAction, setNameAction] = useState<NameAction | null>(null);
   const [nameValue, setNameValue] = useState("");
   const [localUploadPath, setLocalUploadPath] = useState<string | null>(null);
@@ -422,6 +429,12 @@ export function SftpPanel({
               onCopyPath: (entry) => void navigator.clipboard?.writeText(entry.path),
               onDelete: (entry) => beginDelete([entry]),
               onDownload: (entry) => void chooseDownload(entry),
+              onPreview: (entry) => setPreview({
+                entry,
+                workspaceId: session.workspaceId,
+                sessionId: session.sessionId,
+                connectionId: session.connectionId,
+              }),
               onNewFolder: () => {
                 setNameValue("");
                 setNameAction("mkdir");
@@ -463,6 +476,15 @@ export function SftpPanel({
         }}
         transfers={transfers}
       />
+      {preview && preview.workspaceId === session.workspaceId &&
+        preview.sessionId === session.sessionId && preview.connectionId === session.connectionId ? (
+        <SftpPreviewDialog
+          entry={preview.entry}
+          key={`${session.workspaceId}:${session.sessionId}:${session.connectionId}:${preview.entry.path}`}
+          onClose={() => setPreview(null)}
+          session={session}
+        />
+      ) : null}
       <SftpNameDialog
         confirmLabel={nameDialogConfirm}
         confirmDisabled={uploadBlocked}
