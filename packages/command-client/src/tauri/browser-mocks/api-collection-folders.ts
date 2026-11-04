@@ -51,6 +51,9 @@ export function renameMockCollectionFolder(args?: Record<string, unknown>) {
     (item) => item.workspaceId === workspaceId && item.id === folderId,
   );
   if (!folder) throw new Error("api collection folder not found");
+  if (args?.expectedUpdatedAt != null && args.expectedUpdatedAt !== folder.updatedAt) {
+    throw { code: "ROW_CONFLICT", message: "This item changed outside this editor. Reload it before saving." };
+  }
   folder.name = String(args?.name ?? folder.name).trim() || folder.name;
   folder.updatedAt = new Date().toISOString();
   return folder;

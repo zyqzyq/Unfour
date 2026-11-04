@@ -35,7 +35,7 @@ function unsupportedScript() {
 const handlers = new Map<string, (args: MockArgs) => unknown>([
   ["database_connections_list", (args) => listMockDatabaseConnections(workspaceId(args))],
   ["database_connection_save", (args) => saveMockDatabaseConnection(
-    args?.input as DatabaseConnectionInput, args?.secret as string | null,
+    args?.input as DatabaseConnectionInput, args?.secret as string | null, args?.expectedSnapshot as Parameters<typeof saveMockDatabaseConnection>[2],
   )],
   ["database_connection_delete", (args) => deleteMockDatabaseConnection(workspaceId(args), connectionId(args))],
   ["database_connection_test", (args) => testMockDatabaseConnection(connectionId(args))],

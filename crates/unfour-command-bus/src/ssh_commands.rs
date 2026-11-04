@@ -73,9 +73,14 @@ impl CommandBus {
         Ok(result)
     }
 
-    pub async fn save_ssh_connection(
+    pub async fn save_ssh_connection(&self, input: SshConnectionInput) -> AppResult<SshConnection> {
+        self.save_ssh_connection_checked(input, None).await
+    }
+
+    pub async fn save_ssh_connection_checked(
         &self,
         mut input: SshConnectionInput,
+        expected_snapshot: Option<SshConnection>,
     ) -> AppResult<SshConnection> {
         let _credential_guard = self.credential_stage_guard().await?;
         self.track_connection_credential_edit(&input.workspace_id, input.id.as_deref(), "ssh")
@@ -111,7 +116,12 @@ impl CommandBus {
                 move |connection| {
                     Box::pin(async move {
                         executor_service
-                            .save_connection_on(connection, &executor_context, transaction_input)
+                            .save_connection_checked_on(
+                                connection,
+                                &executor_context,
+                                transaction_input,
+                                expected_snapshot,
+                            )
                             .await
                     })
                 },
@@ -398,6 +408,14 @@ impl CommandBus {
     }
 
     pub async fn save_ssh_task(&self, input: SshTaskSaveInput) -> AppResult<SshTaskDetail> {
+        self.save_ssh_task_checked(input, None).await
+    }
+
+    pub async fn save_ssh_task_checked(
+        &self,
+        input: SshTaskSaveInput,
+        expected_snapshot: Option<SshTaskDetail>,
+    ) -> AppResult<SshTaskDetail> {
         let context = CommandContext::local("ssh.task.save");
         let executor_context = context.clone();
         let service = self.ssh.clone();
@@ -419,7 +437,12 @@ impl CommandBus {
             move |connection| {
                 Box::pin(async move {
                     service
-                        .save_task_on(connection, &executor_context, input)
+                        .save_task_checked_on(
+                            connection,
+                            &executor_context,
+                            input,
+                            expected_snapshot,
+                        )
                         .await
                 })
             },

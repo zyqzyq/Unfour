@@ -217,3 +217,63 @@ async fn saved_sql_detach_is_scoped_live_only_and_transactional() {
     assert_eq!(linked, 2);
     assert!(service.get_connection(&workspace, &saved.id).await.is_ok());
 }
+
+#[tokio::test]
+async fn checked_save_rejects_stale_local_credentials_and_deleted_connections() {
+    let (service, workspace) = service_with_workspace().await;
+    let mut input = mysql_input(&workspace, None);
+    let original = service.save_connection(input.clone()).await.unwrap();
+    input.id = Some(original.id.clone());
+    let mut external = input.clone();
+    external.credential_ref = Some(format!("test:{workspace}:database:external"));
+    let changed = service.save_connection(external).await.unwrap();
+    assert_eq!(changed.revision, original.revision);
+    let context = CommandContext::local("database.connection.save");
+    let mut tx = service.db.pool().begin().await.unwrap();
+    let error = service
+        .save_connection_checked_on(&mut tx, &context, input.clone(), Some(original))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, AppError::RowConflict(_)));
+    tx.rollback().await.unwrap();
+    assert_eq!(
+        service.list_connections(workspace.clone()).await.unwrap()[0].credential_ref,
+        changed.credential_ref
+    );
+    service
+        .delete_connection(workspace, changed.id.clone())
+        .await
+        .unwrap();
+    let mut tx = service.db.pool().begin().await.unwrap();
+    assert!(matches!(
+        service
+            .save_connection_checked_on(&mut tx, &context, input, Some(changed))
+            .await,
+        Err(AppError::RowConflict(_))
+    ));
+}
+
+#[tokio::test]
+async fn checked_save_ignores_connection_sync_acknowledgements() {
+    let (service, workspace) = service_with_workspace().await;
+    let mut input = mysql_input(&workspace, None);
+    let original = service.save_connection(input.clone()).await.unwrap();
+    input.id = Some(original.id.clone());
+    input.name = "Saved draft".into();
+    let mut expected = original;
+    expected.sync_status = "synced".into();
+    expected.remote_id = Some("remote".into());
+    expected.revision += 5;
+    let mut tx = service.db.pool().begin().await.unwrap();
+    let result = service
+        .save_connection_checked_on(
+            &mut tx,
+            &CommandContext::local("database.connection.save"),
+            input,
+            Some(expected),
+        )
+        .await
+        .unwrap();
+    assert_eq!(result.value.name, "Saved draft");
+    tx.commit().await.unwrap();
+}

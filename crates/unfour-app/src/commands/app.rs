@@ -5,6 +5,14 @@ use unfour_core::AppResult;
 
 use super::trace_command;
 
+#[tauri::command]
+pub async fn local_data_versions(
+    state: State<'_, AppState>,
+) -> AppResult<Vec<unfour_core::models::LocalDataVersion>> {
+    // Frequent, content-free local reads do not produce command activity/logs.
+    state.command_bus.local_data_versions().await
+}
+
 /// The distribution channel surfaced to the frontend. Serialized as the
 /// stable, locale-independent values (`"standard"` / `"microsoft-store"`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

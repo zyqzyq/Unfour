@@ -40,6 +40,13 @@ function createEnvironment(workspaceId = "w1", name = "Environment") {
 }
 
 describe("workspace command routing and lifecycle", () => {
+  it("rejects stale desktop rename and security baselines", async () => {
+    const expected = structuredClone(mockState.workspaces[0]);
+    await mockInvoke("workspace_rename", { workspaceId: "w1", name: "External" });
+    await expect(mockInvoke("workspace_rename", { workspaceId: "w1", name: "Stale", expectedName: expected.name })).rejects.toMatchObject({ code: "ROW_CONFLICT" });
+    await mockInvoke("workspace_update_environment", { workspaceId: "w1", environmentType: "prod" });
+    await expect(mockInvoke("workspace_update_mcp_policy", { workspaceId: "w1", mcpPolicy: "full_access", expected })).rejects.toMatchObject({ code: "ROW_CONFLICT" });
+  });
   it("preserves unsupported browser picker/export results and unknown command fallthrough", async () => {
     for (const command of ["workspace_bundle_pick", "workspace_environment_import_preview"]) {
       await expect(mockInvoke(command)).resolves.toBeNull();
@@ -91,6 +98,14 @@ describe("workspace command routing and lifecycle", () => {
 });
 
 describe("workspace variable record contracts", () => {
+  it("rejects stale replacement baselines including child-only changes", async () => {
+    const environment = await createEnvironment();
+    const expected = structuredClone(environment);
+    await mockInvoke("workspace_environment_variable_create", { workspaceId: "w1", environmentId: environment.id, input });
+    await expect(mockInvoke("workspace_environment_update", { workspaceId: "w1", environmentId: environment.id, name: "Stale", variables: [], expected })).rejects.toMatchObject({ code: "ROW_CONFLICT" });
+    await mockInvoke("workspace_variable_create", { workspaceId: "w1", input });
+    await expect(mockInvoke("workspace_variables_replace", { workspaceId: "w1", variables: [], expected: [] })).rejects.toMatchObject({ code: "ROW_CONFLICT" });
+  });
   it.each(["workspace_variables_replace", "workspace_environment_update", "workspace_environment_variables_replace"])(
     "%s retains scoped identity, creation time, revision and caller order", async (command) => {
       const environment = await createEnvironment();

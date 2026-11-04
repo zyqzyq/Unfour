@@ -12,6 +12,16 @@ import {
 } from "./task-editor-tabs";
 
 describe("SSH task editor tabs", () => {
+  it("refreshes clean task tabs and preserves dirty drafts with their baseline", () => {
+    let state = openSavedTaskTab(createEmptyTaskEditorState(), "task-a");
+    state = hydrateTaskTab(state, "task:task-a", draft("task-a", "Original"));
+    state = hydrateTaskTab(state, "task:task-a", draft("task-a", "External"));
+    expect(state.tabs[0].draft?.name).toBe("External");
+    state = updateTaskTabDraft(state, "task:task-a", draft("task-a", "Draft"));
+    state = hydrateTaskTab(state, "task:task-a", draft("task-a", "External again"));
+    expect(state.tabs[0].draft?.name).toBe("Draft");
+    expect(state.tabs[0].baseline?.name).toBe("External");
+  });
   it("opens each saved task in an independent tab and preserves its draft", () => {
     let state = openSavedTaskTab(createEmptyTaskEditorState(), "task-a");
     state = hydrateTaskTab(state, "task:task-a", draft("task-a", "Task A"));

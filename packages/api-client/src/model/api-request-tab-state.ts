@@ -16,6 +16,8 @@ import {
   failTabSend,
   openHistoryRequest,
   openSavedRequest,
+  reconcileSavedRequests,
+  reloadSavedRequest,
   setActiveApiTab,
   setApiSplitDirection,
   setTabRequestPanel,
@@ -54,6 +56,9 @@ type ApiTabStore = {
   newRequest: (workspaceId: string, draft?: RequestDraft) => void;
   openHistory: (workspaceId: string, history: ApiHistoryDetail) => void;
   openSaved: (workspaceId: string, saved: ApiSavedRequest) => void;
+  reconcileSaved: (workspaceId: string, saved: ApiSavedRequest[]) => void;
+  reloadSaved: (workspaceId: string, tabId: string, saved: ApiSavedRequest) => void;
+  setNameEditing: (workspaceId: string, tabId: string, editing: boolean) => void;
   setActiveTab: (workspaceId: string, tabId: string) => void;
   setApiSplitDirection: (workspaceId: string, splitDirection: ApiSplitDirection) => void;
   setRequestPanel: (workspaceId: string, tabId: string, requestTab: RequestParamsTab) => void;
@@ -95,6 +100,18 @@ function withWorkspace(
 
 export const useApiRequestTabStore = create<ApiTabStore>((set) => ({
   byWorkspace: {},
+  setNameEditing: (workspaceId, tabId, nameEditing) => set((state) => withWorkspace(state, workspaceId, (slice) => ({
+    ...slice, tabs: slice.tabs.map((tab) => tab.id === tabId ? { ...tab, nameEditing } : tab),
+  }))),
+  reconcileSaved: (workspaceId, saved) => set((state) => {
+    const slice = state.byWorkspace[workspaceId];
+    if (!slice) return state;
+    const next = reconcileSavedRequests(slice, saved);
+    return next === slice ? state : withWorkspace(state, workspaceId, () => ({ ...next, nextNewIndex: slice.nextNewIndex }));
+  }),
+  reloadSaved: (workspaceId, tabId, saved) => set((state) => withWorkspace(state, workspaceId, (slice) => ({
+    ...reloadSavedRequest(slice, tabId, saved), nextNewIndex: slice.nextNewIndex,
+  }))),
   closeTab: (workspaceId, tabId) =>
     set((state) =>
       withWorkspace(state, workspaceId, (slice) => ({

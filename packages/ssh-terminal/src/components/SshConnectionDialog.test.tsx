@@ -11,6 +11,17 @@ vi.mock("@unfour/command-client", async (importOriginal) => ({
 }));
 afterEach(cleanup);
 
+it("prevents editing and closing while a connection save is pending", () => {
+  const close = vi.fn();
+  render(<SshConnectionDialog canTest pending open onOpenChange={close}
+    form={{ workspaceId: "ws", name: "Host", host: "fixture", username: "dev", authKind: "none" }}
+    onSubmit={vi.fn()} onTest={vi.fn()} onUpdate={vi.fn()} />);
+  expect(screen.getByRole("textbox", { name: "Name" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+  expect(close).not.toHaveBeenCalled();
+});
+
 it.each(["password", "private-key"] as const)("keeps %s viewing separate from preserve, replace and clear save intents", async (authKind) => {
   const save = vi.fn();
   function Editor() {

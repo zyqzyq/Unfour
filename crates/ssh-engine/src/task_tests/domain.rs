@@ -103,3 +103,71 @@ async fn domain_entity_enumeration_uses_the_caller_transaction_view() {
         .iter()
         .any(|key| key.entity_id == saved.task.id));
 }
+
+#[tokio::test]
+async fn checked_save_rejects_changed_steps_even_when_task_revision_is_unchanged() {
+    let (service, workspace) = service().await;
+    let original = service
+        .save_task(docker_export_input(workspace.clone()))
+        .await
+        .unwrap();
+    let mut external = edit_input(&original);
+    external.steps[0].name = "External step".into();
+    let changed = service.save_task(external).await.unwrap();
+    assert_eq!(
+        serde_json::to_value(&changed.task).unwrap(),
+        serde_json::to_value(&original.task).unwrap()
+    );
+    let mut draft = edit_input(&original);
+    draft.name = "My draft".into();
+    let mut tx = service.db.pool().begin().await.unwrap();
+    let context = CommandContext::local("ssh.task.save");
+    assert!(matches!(
+        service
+            .save_task_checked_on(&mut tx, &context, draft, Some(original))
+            .await,
+        Err(unfour_core::AppError::RowConflict(_))
+    ));
+    tx.rollback().await.unwrap();
+    let persisted = service
+        .get_task(&workspace, &changed.task.id)
+        .await
+        .unwrap();
+    assert_eq!(persisted.task.name, changed.task.name);
+    assert_eq!(persisted.steps[0].name, "External step");
+}
+
+#[tokio::test]
+async fn checked_save_ignores_task_run_recall_and_timestamp_metadata() {
+    let (service, workspace) = service().await;
+    let original = service
+        .save_task(docker_export_input(workspace))
+        .await
+        .unwrap();
+    let mut expected = original.clone();
+    expected.task.updated_at = "older".into();
+    expected.task.sort_order = 99;
+    expected.local_binding = Some(unfour_core::models::SshTaskLocalBinding {
+        task_id: expected.task.id.clone(),
+        workspace_id: expected.task.workspace_id.clone(),
+        default_connection_id: None,
+        last_used_connection_id: Some("previous-run-host".into()),
+        created_at: "older".into(),
+        updated_at: "older".into(),
+    });
+    expected.steps[0].updated_at = "older".into();
+    let mut input = edit_input(&original);
+    input.name = "Saved draft".into();
+    let mut tx = service.db.pool().begin().await.unwrap();
+    let result = service
+        .save_task_checked_on(
+            &mut tx,
+            &CommandContext::local("ssh.task.save"),
+            input,
+            Some(expected),
+        )
+        .await
+        .unwrap();
+    assert_eq!(result.value.task.name, "Saved draft");
+    tx.commit().await.unwrap();
+}

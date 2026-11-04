@@ -52,6 +52,9 @@ export function renameMockCollection(args?: Record<string, unknown>) {
     (item) => item.workspaceId === workspaceId && item.id === collectionId,
   );
   if (!collection) throw new Error("api collection not found");
+  if (args?.expectedUpdatedAt != null && args.expectedUpdatedAt !== collection.updatedAt) {
+    throw { code: "ROW_CONFLICT", message: "This item changed outside this editor. Reload it before saving." };
+  }
   collection.name = String(args?.name ?? collection.name).trim() || collection.name;
   collection.updatedAt = new Date().toISOString();
   return collection;

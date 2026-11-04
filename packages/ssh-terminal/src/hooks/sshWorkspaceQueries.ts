@@ -17,7 +17,7 @@ export function sshSessionsQueryKey(workspaceId: string) {
 export function sshConnectionsQueryOptions(workspaceId: string) {
   return queryOptions({
     queryKey: sshConnectionsQueryKey(workspaceId),
-    meta: { cloudSyncWorkspaceId: workspaceId },
+    meta: { cloudSyncWorkspaceId: workspaceId, localDataDomains: ["ssh-connections"] },
     queryFn: () => listSshConnections(workspaceId),
     staleTime: SSH_WORKSPACE_STALE_TIME,
   });

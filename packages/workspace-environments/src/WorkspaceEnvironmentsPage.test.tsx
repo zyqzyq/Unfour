@@ -136,6 +136,16 @@ afterEach(() => {
 });
 
 describe("WorkspaceEnvironmentsPage", () => {
+  it("passes the original environment snapshot from the editor through its hook", async () => {
+    const original = environment({ variables: [environmentVariable()] });
+    listEnvironmentsMock.mockResolvedValue([original]);
+    updateMock.mockResolvedValue({ ...original, name: "Changed" });
+    renderPage();
+    const name = await screen.findByDisplayValue("Local");
+    fireEvent.change(name, { target: { value: "Changed" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(updateMock).toHaveBeenCalledWith("ws-1", "env-1", "Changed", expect.any(Array), original));
+  });
   it.each(["workspace", "environment"])("hides and reveals a SQLite %s Secret without dirtying it, then saves its exact value", async (scope) => {
     const value = "sqlite-secret-canary";
     const variable = workspaceVariable({ key: "access_token", value, isSecret: true });
@@ -208,7 +218,7 @@ describe("WorkspaceEnvironmentsPage", () => {
           description: null,
           sortOrder: 0,
         },
-      ]),
+      ], []),
     );
   });
 

@@ -25,6 +25,8 @@ mod flow_external;
 mod flows;
 #[path = "workspace_domain/hooks.rs"]
 mod hooks;
+#[path = "workspace_domain/stale_drafts.rs"]
+mod stale_drafts;
 #[path = "workspace_domain/variables.rs"]
 mod variables;
 #[path = "workspace_domain/workspace_usage.rs"]

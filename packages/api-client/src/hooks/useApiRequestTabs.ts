@@ -1,6 +1,6 @@
 import { useFeedback, useI18n, createTranslator, type TFunction } from "@unfour/ui";
 import { multipartRuntimeInput, multipartValidation } from "../model/multipart";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   deleteApiRequest,
@@ -14,6 +14,7 @@ import {
   sendApiRequest,
   updateApiRequest,
   type ApiRequestInput,
+  type ApiSavedRequest,
   type KeyValue,
 } from "@unfour/command-client";
 import { errorCode, formatError } from "../model/api-request-state";
@@ -49,7 +50,7 @@ export function useApiRequestTabs(workspaceId: string) {
   const savedQuery = useQuery({
     enabled: Boolean(workspaceId),
     queryKey: ["api-saved", workspaceId],
-    meta: { cloudSyncWorkspaceId: workspaceId },
+    meta: { cloudSyncWorkspaceId: workspaceId, localDataDomains: ["api-requests"] },
     queryFn: () => listSavedApiRequests(workspaceId),
   });
   const historyQuery = useQuery({
@@ -60,9 +61,14 @@ export function useApiRequestTabs(workspaceId: string) {
   const environmentsQuery = useQuery({
     enabled: Boolean(workspaceId),
     queryKey: ["workspace-environments", workspaceId],
-    meta: { cloudSyncWorkspaceId: workspaceId },
+    meta: { cloudSyncWorkspaceId: workspaceId, localDataDomains: ["environments"] },
     queryFn: () => listWorkspaceEnvironments(workspaceId),
   });
+
+  const savingTabs = state.tabs.filter((tab) => tab.saving).map((tab) => tab.id).join("|");
+  useEffect(() => {
+    if (savedQuery.data) useApiRequestTabStore.getState().reconcileSaved(workspaceId, savedQuery.data);
+  }, [savedQuery.data, workspaceId, savingTabs]);
 
   const sendMutation = useMutation({
     mutationFn: ({ executionId, input }: { executionId: string; input: ApiRequestInput; tabId: string }) =>
@@ -92,23 +98,36 @@ export function useApiRequestTabs(workspaceId: string) {
     mutationFn: ({
       input,
       requestId,
+      expectedRevision,
     }: {
       input: ApiRequestInput;
       requestId?: string | null;
       tabId: string;
+      expectedRevision?: number;
     }) =>
       requestId
-        ? updateApiRequest(input.workspaceId, requestId, input)
+        ? updateApiRequest(input.workspaceId, requestId, input, expectedRevision)
         : saveApiRequest(input),
-    onSuccess: (saved, variables) => {
+    onSuccess: async (saved, variables) => {
       const workspaceId = variables.input.workspaceId;
+      const queryKey = ["api-saved", workspaceId];
+      // A list read started before the save must not restore the old definition.
+      await queryClient.cancelQueries({ queryKey });
+      queryClient.setQueryData<ApiSavedRequest[]>(queryKey, (current = []) => {
+        const existing = current.find((item) => item.id === saved.id);
+        if (existing && existing.revision > saved.revision) return current;
+        return existing ? current.map((item) => item.id === saved.id ? saved : item) : [...current, saved];
+      });
       useApiRequestTabStore.getState().completeTabSave(workspaceId, variables.tabId, saved);
       queryClient.invalidateQueries({ queryKey: ["api-saved", workspaceId] });
       // Also invalidate collections in case a default was auto-created
       queryClient.invalidateQueries({ queryKey: ["api-collections", workspaceId] });
     },
-    onError: (error, variables) =>
-      useApiRequestTabStore.getState().failTabSave(variables.input.workspaceId, variables.tabId, formatError(error)),
+    onError: (error, variables) => {
+      useApiRequestTabStore.getState().failTabSave(variables.input.workspaceId, variables.tabId,
+        errorCode(error) === "ROW_CONFLICT" ? t("api.external.updated") : formatError(error));
+      queryClient.invalidateQueries({ queryKey: ["api-saved", variables.input.workspaceId] });
+    },
   });
 
   const duplicateMutation = useMutation({
@@ -199,6 +218,10 @@ export function useApiRequestTabs(workspaceId: string) {
       const liveTab = current ? current.tabs.find((item) => item.id === tab.id) : tab;
       if (!liveTab || liveTab.saving) return null;
       tab = liveTab;
+      if (tab.externalChange) {
+        useApiRequestTabStore.getState().failTabSave(workspaceId, tab.id, t(`api.external.${tab.externalChange}`));
+        return null;
+      }
       const replayError = historyReplayError(tab, t);
       if (replayError) {
         useApiRequestTabStore.getState().failTabSave(workspaceId, tab.id, replayError);
@@ -214,6 +237,7 @@ export function useApiRequestTabs(workspaceId: string) {
           input: tabToInput({ ...tab, draft }, workspaceId, { purpose: "save" }),
           requestId: tab.savedRequestId,
           tabId: tab.id,
+          expectedRevision: tab.savedRevision,
         });
         return saved.id;
       } catch {
@@ -241,6 +265,12 @@ export function useApiRequestTabs(workspaceId: string) {
     cancelTab,
     openHistory,
     openSaved,
+    reloadTab: async (tab: ApiRequestTab) => {
+      const result = await savedQuery.refetch();
+      if (!result.isSuccess) return;
+      const saved = result.data?.find((item) => item.id === tab.savedRequestId);
+      if (saved) useApiRequestTabStore.getState().reloadSaved(workspaceId, tab.id, saved);
+    },
     saveTab,
     selectTab: (tabId: string) =>
       useApiRequestTabStore.getState().setActiveTab(workspaceId, tabId),

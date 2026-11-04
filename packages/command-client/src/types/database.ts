@@ -1,4 +1,5 @@
 export type DatabaseConnectionInput = {
+  expectedSnapshot?: DatabaseConnection;
   id?: string;
   workspaceId: string;
   name: string;

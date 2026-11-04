@@ -43,11 +43,19 @@ export function WorkspaceDialogs({
   const [workspaceEnvironment, setWorkspaceEnvironment] =
     useState<WorkspaceEnvironmentType>("dev");
   const [renameDraft, setRenameDraft] = useState(activeWorkspace?.name ?? "");
+  const [renameSource, setRenameSource] = useState(activeWorkspace?.name ?? "");
+  const [renameSaveConflict, setRenameSaveConflict] = useState(false);
+  const [wasRenameOpen, setWasRenameOpen] = useState(renameOpen);
   const [lastSyncedWorkspaceId, setLastSyncedWorkspaceId] = useState(activeWorkspace?.id);
-  if (activeWorkspace?.id !== lastSyncedWorkspaceId) {
+  if (activeWorkspace?.id !== lastSyncedWorkspaceId || renameOpen !== wasRenameOpen ||
+      (renameDraft === renameSource && (activeWorkspace?.name ?? "") !== renameSource)) {
     setLastSyncedWorkspaceId(activeWorkspace?.id);
+    setWasRenameOpen(renameOpen);
     setRenameDraft(activeWorkspace?.name ?? "");
+    setRenameSource(activeWorkspace?.name ?? "");
+    setRenameSaveConflict(false);
   }
+  const renameConflict = renameSaveConflict || (activeWorkspace?.name ?? "") !== renameSource;
   const canDelete =
     Boolean(activeWorkspace) && !activeWorkspace?.isDefault && workspaces.length > 1;
 
@@ -75,13 +83,18 @@ export function WorkspaceDialogs({
   });
 
   const renameWorkspaceMutation = useMutation({
-    mutationFn: ({ name, workspaceId }: { name: string; workspaceId: string }) =>
-      renameWorkspace(workspaceId, name),
+    mutationFn: ({ name, workspaceId, expectedName }: { name: string; workspaceId: string; expectedName: string }) =>
+      renameWorkspace(workspaceId, name, expectedName),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspaces"] });
       onRenameClose();
     },
-    onError: (error) => handleError(error, { key: "feedback.workspace.renameFailed" }),
+    onError: async (error) => {
+      await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      if (typeof error === "object" && error !== null && "code" in error && (error.code === "ROW_CONFLICT" || error.code === "NOT_FOUND")) {
+        setRenameSaveConflict(true);
+      } else handleError(error, { key: "feedback.workspace.renameFailed" });
+    },
   });
 
   const deleteWorkspaceMutation = useMutation({
@@ -108,13 +121,14 @@ export function WorkspaceDialogs({
     const name = renameDraft.trim();
     if (
       !activeWorkspace ||
+      renameConflict ||
       !name ||
       name === activeWorkspace.name ||
       isDuplicateName(renameDraft, activeWorkspace.id)
     ) {
       return;
     }
-    renameWorkspaceMutation.mutate({ workspaceId: activeWorkspace.id, name });
+    renameWorkspaceMutation.mutate({ workspaceId: activeWorkspace.id, name, expectedName: renameSource });
   }
 
   function deleteWorkspaceFromDialog() {
@@ -200,10 +214,13 @@ export function WorkspaceDialogs({
         onClose={onEnvironmentClose}
       />}
 
-      <Dialog.Root onOpenChange={(open) => { if (!open) onRenameClose(); }} open={renameOpen}>
+      <Dialog.Root onOpenChange={(open) => { if (!open && !renameWorkspaceMutation.isPending) onRenameClose(); }} open={renameOpen}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-[var(--u-color-overlay)]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-md border border-[var(--u-color-border)] bg-[var(--u-color-surface)] p-4 shadow-xl">
+          <Dialog.Content
+            onEscapeKeyDown={(event) => { if (renameWorkspaceMutation.isPending) event.preventDefault(); }}
+            onPointerDownOutside={(event) => { if (renameWorkspaceMutation.isPending) event.preventDefault(); }}
+            className="fixed left-1/2 top-1/2 z-50 w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-md border border-[var(--u-color-border)] bg-[var(--u-color-surface)] p-4 shadow-xl">
             <Dialog.Title className="text-base font-semibold text-[var(--u-color-text)]">
               {t("app.workspace.dialog.renameTitle")}
             </Dialog.Title>
@@ -213,6 +230,7 @@ export function WorkspaceDialogs({
             <form className="mt-4 space-y-4" onSubmit={renameWorkspaceFromDialog}>
               <Input
                 autoFocus
+                disabled={renameWorkspaceMutation.isPending}
                 onChange={(event) => setRenameDraft(event.target.value)}
                 placeholder={t("app.workspace.dialog.namePlaceholder")}
                 value={renameDraft}
@@ -222,15 +240,24 @@ export function WorkspaceDialogs({
                   {t("app.workspace.dialog.nameExists")}
                 </p>
               )}
+              {renameConflict && <div role="alert" className="space-y-2 text-xs text-[var(--u-color-danger)]">
+                <p>{t("common.externalChange")}</p>
+                <Button type="button" variant="outline" disabled={renameWorkspaceMutation.isPending} onClick={() => {
+                  setRenameDraft(activeWorkspace?.name ?? "");
+                  setRenameSource(activeWorkspace?.name ?? "");
+                  setRenameSaveConflict(false);
+                }}>{t("common.reloadLatest")}</Button>
+              </div>}
               <div className="flex justify-end gap-2">
                 <Dialog.Close asChild>
-                  <Button type="button" variant="outline">
+                  <Button type="button" variant="outline" disabled={renameWorkspaceMutation.isPending}>
                     {t("app.workspace.dialog.cancel")}
                   </Button>
                 </Dialog.Close>
                 <Button
                   disabled={
                     renameWorkspaceMutation.isPending ||
+                    renameConflict ||
                     !renameDraft.trim() ||
                     renameDraft.trim() === activeWorkspace?.name ||
                     renameNameConflict

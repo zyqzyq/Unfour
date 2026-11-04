@@ -14,6 +14,7 @@ vi.mock("@unfour/command-client", async (original) => ({
   subscribeCloudSyncWorkspaceChanges: vi.fn(), listFlows: vi.fn(), listFlowRuns: vi.fn(),
   listSavedApiRequests: vi.fn(), listSshTasks: vi.fn(), listDatabaseConnections: vi.fn(),
   listSshConnections: vi.fn(), listWorkspaceEnvironments: vi.fn(), listWorkspaceVariables: vi.fn(),
+  saveFlow: vi.fn(),
 }));
 const flow: commands.FlowDefinition = {
   id: "flow-1", workspaceId: "ws", name: "Release", revision: 3, inputs: [],
@@ -60,8 +61,24 @@ it("refreshes synced Flow names and deletions while preserving an unsaved editor
   notify();
   await screen.findByText("Remote release");
   expect(screen.getByLabelText("Flow name")).toHaveValue("Unsaved draft");
+  expect(screen.getByRole("button", { name: /latest/i })).toBeInTheDocument();
   vi.mocked(commands.listFlows).mockResolvedValue([]);
   notify();
   await waitFor(() => expect(screen.queryByText("Remote release")).not.toBeInTheDocument());
   expect(screen.getByLabelText("Flow name")).toHaveValue("Unsaved draft");
+});
+
+it("does not mark its own saved revision as an external conflict while the list refetch is pending", async () => {
+  mount();
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.change(screen.getByLabelText("Flow name"), { target: { value: "Saved locally" } });
+  const saved = { ...flow, name: "Saved locally", revision: 4 };
+  vi.mocked(commands.saveFlow).mockResolvedValue(saved);
+  let finish!: (value: commands.FlowDefinition[]) => void;
+  vi.mocked(commands.listFlows).mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(finish).toBeDefined());
+  expect(screen.queryByRole("button", { name: /latest/i })).not.toBeInTheDocument();
+  await act(async () => finish([saved]));
+  expect(screen.getByLabelText("Flow name")).toHaveValue("Saved locally");
 });

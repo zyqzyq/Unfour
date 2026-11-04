@@ -91,7 +91,7 @@ export function openSavedRequest(
 ): ApiTabsState {
   const id = `saved:${saved.id}`;
   if (state.tabs.some((tab) => tab.id === id)) {
-    return { ...state, activeTabId: id };
+    return { ...state, activeTabId: id, tabs: state.tabs.map((tab) => tab.id === id ? refreshSavedTab(tab, saved, state.workspaceId) : tab) };
   }
 
   const draft = inputToDraft(savedRequestToInput(saved, state.workspaceId));
@@ -113,6 +113,7 @@ export function openSavedRequest(
         responseTab: "body",
         saveError: null,
         savedRequestId: saved.id,
+        savedRevision: saved.revision,
         sendError: null,
         sendErrorCode: null,
         sending: false,
@@ -122,6 +123,36 @@ export function openSavedRequest(
       },
     ],
   };
+}
+
+function refreshSavedTab(tab: ApiRequestTab, saved: ApiSavedRequest | undefined, workspaceId: string): ApiRequestTab {
+  if (tab.saving) return tab;
+  if (!saved) return tab.externalChange === "deleted" ? tab : { ...tab, externalChange: "deleted" };
+  const draft = inputToDraft(savedRequestToInput(saved, workspaceId));
+  const baseline = normalizeRequestDraft(draft);
+  if (saved.revision === tab.savedRevision && baseline === tab.baseline && !tab.externalChange) return tab;
+  if (tab.nameEditing || normalizeRequestDraft(tab.draft) !== tab.baseline) {
+    return tab.externalChange === "updated" ? tab : { ...tab, externalChange: "updated" };
+  }
+  draft.multipartParts = attachMultipartBindings(draft.multipartParts, tab.draft.multipartParts);
+  draft.envVariables = tab.draft.envVariables;
+  return { ...tab, draft, baseline, savedRevision: saved.revision, externalChange: undefined, saveError: null };
+}
+
+/** Query refreshes may replace clean drafts, but never unsaved edits or execution results. */
+export function reconcileSavedRequests(state: ApiTabsState, requests: ApiSavedRequest[]): ApiTabsState {
+  const byId = new Map(requests.map((request) => [request.id, request]));
+  const tabs = state.tabs.map((tab) => tab.savedRequestId
+    ? refreshSavedTab(tab, byId.get(tab.savedRequestId), state.workspaceId) : tab);
+  return tabs.every((tab, index) => tab === state.tabs[index]) ? state : { ...state, tabs };
+}
+
+export function reloadSavedRequest(state: ApiTabsState, tabId: string, saved: ApiSavedRequest): ApiTabsState {
+  return updateTab(state, tabId, (tab) => {
+    if (tab.saving || tab.savedRequestId !== saved.id) return tab;
+    const draft = inputToDraft(savedRequestToInput(saved, state.workspaceId));
+    return { ...tab, draft, baseline: normalizeRequestDraft(draft), savedRevision: saved.revision, externalChange: undefined, saveError: null };
+  });
 }
 
 export function openHistoryRequest(
@@ -319,6 +350,8 @@ export function completeTabSave(
             id: nextId,
             saveError: null,
             savedRequestId: saved.id,
+            savedRevision: saved.revision,
+            externalChange: undefined,
             saving: false,
             savingDraft: undefined,
             source: "saved" as const,

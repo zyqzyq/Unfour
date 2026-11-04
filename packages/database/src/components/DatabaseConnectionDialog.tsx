@@ -19,6 +19,8 @@ import { DatabaseErrorDetails } from "./DatabaseErrorDetails";
 
 export function DatabaseConnectionDialog({
   canTest,
+  externalChange = false,
+  onReload,
   error,
   form,
   onOpenChange,
@@ -33,6 +35,8 @@ export function DatabaseConnectionDialog({
   children,
 }: {
   canTest: boolean;
+  externalChange?: boolean;
+  onReload?: () => void;
   error: unknown;
   form: DatabaseConnectionInput;
   onOpenChange: (open: boolean) => void;
@@ -50,7 +54,7 @@ export function DatabaseConnectionDialog({
   const returnFocus = useRef<HTMLElement | null>(null);
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
+    <Dialog onOpenChange={(next) => { if (!savePending) onOpenChange(next); }} open={open}>
       <DialogContent
         onOpenAutoFocus={() => {
           returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -65,13 +69,15 @@ export function DatabaseConnectionDialog({
         <DialogHeader>
           <DialogTitle>{t("database.connection.settings")}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={onSubmit}>
+        <form onSubmit={(event) => { if (externalChange || savePending) event.preventDefault(); else onSubmit(event); }}>
+          <fieldset disabled={savePending} className="contents">
           <DialogBody className="space-y-2">
+            {externalChange && <div role="alert" className="text-[12px] text-[var(--u-color-text-muted)]">{t("common.externalChange")} <Button onClick={onReload} type="button" size="sm" variant="outline">{t("common.reloadLatest")}</Button></div>}
             <Field title={t("database.fields.name")}>
               <Input onChange={(event) => onUpdate({ name: event.target.value })} value={form.name} />
             </Field>
             <Field title={t("database.fields.driver")}>
-              {open && <ConnectionPresetSelect key={`${form.workspaceId}:${form.id ?? "new"}`} form={form} onUpdate={onUpdate} />}
+              {open && <ConnectionPresetSelect key={`${form.workspaceId}:${form.id ?? "new"}:${form.expectedSnapshot?.credentialRef ?? ""}`} form={form} onUpdate={onUpdate} />}
             </Field>
             {form.driver === "sqlite" ? (
               <Field title={t("database.fields.sqlitePath")}>
@@ -99,7 +105,7 @@ export function DatabaseConnectionDialog({
                   <Input onChange={(event) => onUpdate({ username: event.target.value })} value={form.username ?? ""} />
                 </Field>
                 <Field title={t("database.fields.password")}>
-                  {open && <ConnectionSecretEditor key={`${form.workspaceId}:${form.id ?? "new"}`} form={form} password={password} onPasswordChange={onPasswordChange} onUpdate={onUpdate} disabled={savePending} />}
+                  {open && <ConnectionSecretEditor key={`${form.workspaceId}:${form.id ?? "new"}:${form.expectedSnapshot?.credentialRef ?? ""}`} form={form} password={password} onPasswordChange={onPasswordChange} onUpdate={onUpdate} disabled={savePending} />}
                 </Field>
               </>
             )}
@@ -133,11 +139,12 @@ export function DatabaseConnectionDialog({
             <Button onClick={() => onOpenChange(false)} size="sm" type="button" variant="ghost">
               {t("common.confirm.cancel")}
             </Button>
-            <Button disabled={savePending} size="sm" type="submit">
+            <Button disabled={savePending || externalChange} size="sm" type="submit">
               <Save size={13} />
               {t("common.actions.save")}
             </Button>
           </DialogFooter>
+          </fieldset>
         </form>
         {children}
       </DialogContent>

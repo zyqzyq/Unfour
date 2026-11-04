@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   WorkspaceEnvironment,
   WorkspaceEnvironmentVariable,
@@ -18,13 +18,14 @@ type ExistingEnvironmentDraft = {
   kind: "existing";
   name: string;
   sourceName: string;
-  sourceUpdatedAt: string;
+  baseline: WorkspaceEnvironment;
   sourceVariables: WorkspaceVariableInput[];
   variables: WorkspaceVariableInput[];
 };
 
 type WorkspaceVariablesDraft = {
   kind: "workspace";
+  baseline: WorkspaceVariable[];
   sourceVariables: WorkspaceVariableInput[];
   variables: WorkspaceVariableInput[];
 };
@@ -56,14 +57,16 @@ export function WorkspaceEnvironmentEditor({
   modeRevision: number;
   onCreate: (name: string) => Promise<WorkspaceEnvironment>;
   onDirtyChange: (dirty: boolean) => void;
-  onEnvironmentCreated: (environmentId: string) => void;
+  onEnvironmentCreated: (environmentId: string, keepDraft?: boolean) => void;
   onReplaceWorkspaceVariables: (
     variables: WorkspaceVariableInput[],
+    expected: WorkspaceVariable[],
   ) => Promise<WorkspaceVariable[]>;
   onUpdate: (input: {
     id: string;
     name: string;
     variables: WorkspaceVariableInput[];
+    expected?: WorkspaceEnvironment;
   }) => Promise<WorkspaceEnvironment>;
   saving: boolean;
   workspaceVariables: WorkspaceVariable[];
@@ -75,11 +78,23 @@ export function WorkspaceEnvironmentEditor({
   const { t } = useI18n();
   const [draft, setDraft] = useState<EnvironmentDraft>({ kind: "none" });
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveConflict, setSaveConflict] = useState(false);
+  const latest = useRef({ draft, modeRevision, mounted: true });
+  useLayoutEffect(() => {
+    latest.current = { draft, modeRevision, mounted: true };
+    return () => { latest.current.mounted = false; };
+  }, [draft, modeRevision]);
   const dirty = isDraftDirty(draft);
   const selectedEnvironment =
     draft.kind === "existing"
       ? environments.find((environment) => environment.id === draft.id) ?? null
       : null;
+  const sourceChanged = draft.kind === "workspace"
+    ? JSON.stringify(workspaceVariables) !== JSON.stringify(draft.baseline)
+    : draft.kind === "existing"
+      ? !selectedEnvironment || environmentFingerprint(selectedEnvironment) !== environmentFingerprint(draft.baseline)
+      : false;
+  const conflict = dirty && sourceChanged || saveConflict;
   const duplicateName =
     draft.kind === "new" || draft.kind === "existing"
       ? findDuplicateEnvironmentName(
@@ -103,6 +118,7 @@ export function WorkspaceEnvironmentEditor({
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- an explicit selection resets the editor draft
     setSaveError(null);
+    setSaveConflict(false);
     if (mode.kind === "new") {
       setDraft({
         kind: "new",
@@ -136,22 +152,24 @@ export function WorkspaceEnvironmentEditor({
     }
     if (draft.kind === "workspace") {
       const next = draftFromWorkspaceVariables(workspaceVariables);
-      if (JSON.stringify(next.sourceVariables) !== JSON.stringify(draft.sourceVariables)) {
+      if (sourceChanged) {
         setDraft(next);
       }
       return;
     }
     if (draft.kind === "existing") {
-      if (!selectedEnvironment) return;
-      if (selectedEnvironment.updatedAt !== draft.sourceUpdatedAt) {
+      if (!selectedEnvironment && !environmentsLoading) {
+        setDraft({ kind: "none" });
+      } else if (selectedEnvironment && sourceChanged) {
         setDraft(draftFromEnvironment(selectedEnvironment));
       }
     }
-  }, [dirty, draft, environments, mode, selectedEnvironment, workspaceVariables]);
+  }, [dirty, draft, environments, environmentsLoading, mode, selectedEnvironment, sourceChanged, workspaceVariables]);
 
   const saveDisabled =
     draft.kind === "none" ||
     saving ||
+    conflict ||
     !dirty ||
     persistedVariables.some((variable) => !variable.key.trim()) ||
     hasDuplicateKeys(persistedVariables) ||
@@ -159,29 +177,49 @@ export function WorkspaceEnvironmentEditor({
       (!draft.name.trim() || Boolean(duplicateName)));
 
   async function saveDraft() {
-    if (draft.kind === "none") return;
+    if (draft.kind === "none" || saveDisabled) return;
     const variables = persistableVariables(draft.variables);
+    const stillSelected = () => latest.current.mounted && latest.current.modeRevision === modeRevision;
+    const acceptSaved = (saved: WorkspaceVariablesDraft | ExistingEnvironmentDraft) => {
+      if (!stillSelected()) return;
+      const current = latest.current.draft;
+      // A later keystroke belongs to the user. Advance only its persisted
+      // baseline, so our own completed save is not an external conflict.
+      if (current === draft) setDraft(saved);
+      else if (current.kind === "workspace" && saved.kind === "workspace") {
+        setDraft({ ...saved, variables: current.variables });
+      } else if ((current.kind === "existing" || current.kind === "new") && saved.kind === "existing") {
+        setDraft({ ...saved, name: current.name, variables: current.variables });
+      }
+    };
     setSaveError(null);
     try {
       if (draft.kind === "workspace") {
-        const saved = await onReplaceWorkspaceVariables(variables);
-        setDraft(draftFromWorkspaceVariables(saved));
+        const saved = await onReplaceWorkspaceVariables(variables, draft.baseline);
+        acceptSaved(draftFromWorkspaceVariables(saved));
         return;
       }
       const name = draft.name.trim();
       if (draft.kind === "new") {
         const created = await onCreate(name);
         const saved = variables.length
-          ? await onUpdate({ id: created.id, name, variables })
+          ? await onUpdate({ id: created.id, name, variables, expected: created })
           : created;
-        setDraft(draftFromEnvironment(saved));
-        onEnvironmentCreated(saved.id);
+        if (!stillSelected()) return;
+        const keepDraft = latest.current.draft !== draft;
+        acceptSaved(draftFromEnvironment(saved));
+        onEnvironmentCreated(saved.id, keepDraft);
         return;
       }
-      const saved = await onUpdate({ id: draft.id, name, variables });
-      setDraft(draftFromEnvironment(saved));
+      const saved = await onUpdate({ id: draft.id, name, variables, expected: draft.baseline });
+      acceptSaved(draftFromEnvironment(saved));
     } catch (error) {
-      setSaveError(formatError(error));
+      if (!stillSelected()) return;
+      if (typeof error === "object" && error !== null && "code" in error && (error.code === "ROW_CONFLICT" || error.code === "NOT_FOUND")) {
+        setSaveConflict(true);
+      } else {
+        setSaveError(formatError(error));
+      }
     }
   }
 
@@ -240,6 +278,17 @@ export function WorkspaceEnvironmentEditor({
           </Button>
         </div>
 
+        {conflict && (
+          <div role="alert" className="flex items-center justify-between gap-3 text-[12px] text-[var(--u-color-danger)]">
+            <span>{t("variables.externalChange")}</span>
+            <Button size="sm" variant="outline" disabled={saving} onClick={() => {
+              setDraft(draft.kind === "workspace" ? draftFromWorkspaceVariables(workspaceVariables) : selectedEnvironment ? draftFromEnvironment(selectedEnvironment) : { kind: "none" });
+              setSaveConflict(false);
+              setSaveError(null);
+            }}>{t("variables.reloadLatest")}</Button>
+          </div>
+        )}
+
         {!isWorkspace && (
           <label className="grid gap-1 text-[12px] text-[var(--u-color-text-muted)]">
             {t("variables.environmentName")}
@@ -296,7 +345,7 @@ function draftFromEnvironment(environment: WorkspaceEnvironment): ExistingEnviro
     kind: "existing",
     name: environment.name,
     sourceName: environment.name,
-    sourceUpdatedAt: environment.updatedAt,
+    baseline: environment,
     sourceVariables: variables,
     variables,
   };
@@ -304,7 +353,13 @@ function draftFromEnvironment(environment: WorkspaceEnvironment): ExistingEnviro
 
 function draftFromWorkspaceVariables(variables: WorkspaceVariable[]): WorkspaceVariablesDraft {
   const inputs = variables.map(toInput);
-  return { kind: "workspace", sourceVariables: inputs, variables: inputs };
+  return { kind: "workspace", baseline: variables, sourceVariables: inputs, variables: inputs };
+}
+
+function environmentFingerprint(environment: WorkspaceEnvironment) {
+  // Activation is local selection state, not editable environment content.
+  const { isActive: _isActive, ...content } = environment;
+  return JSON.stringify(content);
 }
 
 function toInput(variable: WorkspaceVariable): WorkspaceVariableInput {

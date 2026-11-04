@@ -12,16 +12,19 @@ export function useWorkspaceVariables(workspaceId: string) {
   const query = useQuery({
     enabled: Boolean(workspaceId),
     queryKey,
-    meta: { cloudSyncWorkspaceId: workspaceId },
+    meta: { cloudSyncWorkspaceId: workspaceId, localDataDomains: ["workspace-variables"] },
     queryFn: () => listWorkspaceVariables(workspaceId),
   });
   const replaceMut = useMutation({
-    mutationFn: (variables: WorkspaceVariableInput[]) =>
-      replaceWorkspaceVariables(workspaceId, variables),
+    mutationFn: ({ variables, expected }: { variables: WorkspaceVariableInput[]; expected: WorkspaceVariable[] }) =>
+      replaceWorkspaceVariables(workspaceId, variables, expected),
     // Write the mutation result directly so the editor sync effect does not
     // briefly rehydrate from a stale list while invalidate is in flight.
-    onSuccess: (saved: WorkspaceVariable[]) =>
-      queryClient.setQueryData(queryKey, saved),
+    onSuccess: async (saved: WorkspaceVariable[]) => {
+      await queryClient.cancelQueries({ queryKey });
+      queryClient.setQueryData(queryKey, saved);
+    },
+    onError: () => queryClient.invalidateQueries({ queryKey }),
   });
 
   return {

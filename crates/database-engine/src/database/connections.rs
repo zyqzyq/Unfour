@@ -99,6 +99,53 @@ impl DatabaseService {
         context: &CommandContext,
         input: DatabaseConnectionInput,
     ) -> AppResult<DomainCommandResult<DatabaseConnection>> {
+        self.save_connection_checked_on(connection, context, input, None)
+            .await
+    }
+
+    pub async fn save_connection_checked_on(
+        &self,
+        connection: &mut SqliteConnection,
+        context: &CommandContext,
+        input: DatabaseConnectionInput,
+        expected_snapshot: Option<DatabaseConnection>,
+    ) -> AppResult<DomainCommandResult<DatabaseConnection>> {
+        if let Some(expected) = expected_snapshot {
+            let id = input
+                .id
+                .as_deref()
+                .ok_or_else(|| AppError::RowConflict("record changed externally".into()))?;
+            let current = self
+                .get_connection_on(connection, &input.workspace_id, id)
+                .await
+                .map_err(|error| match error {
+                    AppError::NotFound(_) => {
+                        AppError::RowConflict("record deleted externally".into())
+                    }
+                    other => other,
+                })?;
+            let mut current = serde_json::to_value(current)?;
+            let mut expected = serde_json::to_value(expected)?;
+            for snapshot in [&mut current, &mut expected] {
+                if let Some(fields) = snapshot.as_object_mut() {
+                    for key in [
+                        "createdAt",
+                        "updatedAt",
+                        "deletedAt",
+                        "revision",
+                        "syncStatus",
+                        "remoteId",
+                    ] {
+                        fields.remove(key);
+                    }
+                }
+            }
+            if current != expected {
+                return Err(AppError::RowConflict(
+                    "record changed externally; reload before saving".into(),
+                ));
+            }
+        }
         validate_workspace_id(&input.workspace_id)?;
         let storage = input_to_storage(&input)?;
         let name = normalize_name(&input.name)?;

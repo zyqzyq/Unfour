@@ -43,8 +43,8 @@ export function createWorkspace(
   return call<Workspace>("workspace_create", { name, environmentType, mcpPolicy });
 }
 
-export function renameWorkspace(workspaceId: string, name: string) {
-  return call<Workspace>("workspace_rename", { workspaceId, name });
+export function renameWorkspace(workspaceId: string, name: string, expectedName?: string) {
+  return call<Workspace>("workspace_rename", { workspaceId, name, expectedName });
 }
 
 export function deleteWorkspace(workspaceId: string) {
@@ -58,18 +58,21 @@ export function setActiveWorkspace(workspaceId: string) {
 export function updateWorkspaceEnvironment(
   workspaceId: string,
   environmentType: WorkspaceEnvironmentType,
+  expected?: Workspace,
 ) {
   return call<Workspace>("workspace_update_environment", {
     workspaceId,
     environmentType,
+    expected,
   });
 }
 
 export function updateWorkspaceMcpPolicy(
   workspaceId: string,
   mcpPolicy: WorkspaceMcpPolicy,
+  expected?: Workspace,
 ) {
-  return call<Workspace>("workspace_update_mcp_policy", { workspaceId, mcpPolicy });
+  return call<Workspace>("workspace_update_mcp_policy", { workspaceId, mcpPolicy, expected });
 }
 
 export function setDefaultWorkspace(workspaceId: string) {
@@ -94,10 +97,12 @@ export function listWorkspaceVariables(workspaceId: string) {
 export function replaceWorkspaceVariables(
   workspaceId: string,
   variables: WorkspaceVariableInput[],
+  expected?: WorkspaceVariable[],
 ) {
   return call<WorkspaceVariable[]>("workspace_variables_replace", {
     workspaceId,
     variables,
+    expected,
   });
 }
 
@@ -143,12 +148,14 @@ export function updateWorkspaceEnvironmentVariables(
   environmentId: string,
   name: string,
   variables: WorkspaceVariableInput[],
+  expected?: WorkspaceEnvironment,
 ) {
   return call<WorkspaceEnvironment>("workspace_environment_update", {
     workspaceId,
     environmentId,
     name,
     variables,
+    expected,
   });
 }
 

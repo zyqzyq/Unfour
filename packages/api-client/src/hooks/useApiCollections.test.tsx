@@ -70,11 +70,11 @@ describe("useApiCollections", () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     result.current.createMut.mutate("New");
-    result.current.renameMut.mutate({ id: "c1", name: "Renamed" });
+    result.current.renameMut.mutate({ id: "c1", name: "Renamed", expectedUpdatedAt: "original-version" });
 
     await waitFor(() => expect(createMock).toHaveBeenCalledWith("ws-1", "New"));
     await waitFor(() =>
-      expect(renameMock).toHaveBeenCalledWith("ws-1", "c1", "Renamed"),
+      expect(renameMock).toHaveBeenCalledWith("ws-1", "c1", "Renamed", "original-version"),
     );
   });
 

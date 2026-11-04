@@ -15,6 +15,7 @@ import { requestTabTitle, type ApiRequestTab } from "../model/request-tabs";
 
 export function ApiRequestBar({
   onNameCommit,
+  onNameEditingChange,
   onSave,
   onSend,
   onStop = () => undefined,
@@ -23,6 +24,7 @@ export function ApiRequestBar({
   urlInputRef,
 }: {
   onNameCommit: (name: string) => void;
+  onNameEditingChange?: (editing: boolean) => void;
   onSave: (name?: string) => void;
   onSend: () => void;
   onStop?: () => void;
@@ -61,6 +63,7 @@ export function ApiRequestBar({
         </span>
         <RequestNameEditor
           onCommit={onNameCommit}
+          onEditingChange={onNameEditingChange}
           ref={nameEditorRef}
           saveButtonRef={saveButtonRef}
           tab={tab}
@@ -113,7 +116,7 @@ export function ApiRequestBar({
         )}
         <Button
           aria-label={tab.saving ? t("api.actions.saving") : t("api.actions.save")}
-          disabled={tab.saving}
+          disabled={tab.saving || Boolean(tab.externalChange)}
           ref={saveButtonRef}
           size="icon"
           onClick={handleSave}
@@ -154,14 +157,20 @@ const RequestNameEditor = forwardRef<
   RequestNameEditorHandle,
   {
     onCommit: (name: string) => void;
+    onEditingChange?: (editing: boolean) => void;
     saveButtonRef: RefObject<HTMLButtonElement | null>;
     tab: ApiRequestTab;
   }
->(function RequestNameEditor({ onCommit, saveButtonRef, tab }, ref) {
+>(function RequestNameEditor({ onCommit, onEditingChange, saveButtonRef, tab }, ref) {
   const { t } = useI18n();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(tab.draft.name);
   const editingRef = useRef(false);
+  const editingChangeRef = useRef(onEditingChange);
+  useEffect(() => { editingChangeRef.current = onEditingChange; }, [onEditingChange]);
+  useEffect(() => () => {
+    if (editingRef.current) editingChangeRef.current?.(false);
+  }, []);
 
   useEffect(() => {
     if (!editingRef.current) {
@@ -176,12 +185,14 @@ const RequestNameEditor = forwardRef<
       return;
     }
     editingRef.current = true;
+    onEditingChange?.(true);
     setValue(tab.draft.name);
     setEditing(true);
   }
 
   function cancelEditing() {
     editingRef.current = false;
+    onEditingChange?.(false);
     setEditing(false);
     setValue(tab.draft.name);
   }
@@ -191,6 +202,7 @@ const RequestNameEditor = forwardRef<
       return;
     }
     editingRef.current = false;
+    onEditingChange?.(false);
     setEditing(false);
 
     const nextName = value.trim();
@@ -215,6 +227,7 @@ const RequestNameEditor = forwardRef<
 
         const nextName = value.trim();
         editingRef.current = false;
+        onEditingChange?.(false);
         setEditing(false);
         if (tab.savedRequestId && !nextName) {
           setValue(tab.draft.name);
@@ -225,7 +238,7 @@ const RequestNameEditor = forwardRef<
         return nextName;
       },
     }),
-    [tab.draft.name, tab.savedRequestId, value],
+    [tab.draft.name, tab.savedRequestId, value, onEditingChange],
   );
 
   return editing ? (

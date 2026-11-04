@@ -46,9 +46,13 @@ pub async fn ssh_task_get(
 #[tauri::command]
 pub async fn ssh_task_save(
     input: SshTaskSaveInput,
+    expected_snapshot: Option<SshTaskDetail>,
     state: State<'_, AppState>,
 ) -> AppResult<SshTaskDetail> {
-    state.command_bus.save_ssh_task(input).await
+    state
+        .command_bus
+        .save_ssh_task_checked(input, expected_snapshot)
+        .await
 }
 
 #[tauri::command]
@@ -145,9 +149,13 @@ pub async fn ssh_connections_list(
 #[tauri::command]
 pub async fn ssh_connection_save(
     input: SshConnectionInput,
+    expected_snapshot: Option<SshConnection>,
     state: State<'_, AppState>,
 ) -> AppResult<SshConnection> {
-    state.command_bus.save_ssh_connection(input).await
+    state
+        .command_bus
+        .save_ssh_connection_checked(input, expected_snapshot)
+        .await
 }
 
 #[tauri::command]

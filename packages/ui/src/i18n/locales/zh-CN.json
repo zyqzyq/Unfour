@@ -321,6 +321,12 @@
     }
   },
   "api": {
+    "external": {
+      "updated": "此项目已在编辑器外更改。你的草稿已保留，请重新加载后再保存。",
+      "deleted": "此项目已在编辑器外删除。你的草稿已保留，无法保存到已删除的项目。",
+      "reload": "重新加载并放弃草稿",
+      "copyDraft": "将草稿复制为新请求"
+    },
     "curl": {
       "title": "导入 cURL",
       "description": "在本地预览，确认后打开未保存请求，不会发送或保存。查询参数按 Unfour 参数编辑器规则编码；表单请求体以原始文本保留编码。敏感值仅保留在内存中，直到你主动保存。",
@@ -612,6 +618,8 @@
     "title": "API 调试器"
   },
   "variables": {
+    "externalChange": "此数据已在其他位置更改或删除。你的编辑已保留。加载最新版本将放弃当前编辑并继续。",
+    "reloadLatest": "加载最新版本",
     "active": "当前",
     "activeEnvironment": "当前变量环境",
     "activeEnvironmentHelp": "用于 API、SSH Task 的变量解析，并在打开 Flow 运行框时作为默认值。工作区类型与 MCP 权限独立设置。",
@@ -661,6 +669,8 @@
     "workspaceVariables": "工作区变量"
   },
   "common": {
+    "externalChange": "此内容已被外部修改或删除。你的草稿已保留，请加载最新版本后再保存。",
+    "reloadLatest": "加载最新版本",
     "search": { "clear": "清空搜索" },
     "tabs": {
       "close": "关闭",

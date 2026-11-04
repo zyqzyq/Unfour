@@ -1,5 +1,9 @@
 import type { SshConnection, SshConnectionInput } from "@unfour/command-client";
 
+export function sshConnectionContent(connection: SshConnection | null) {
+  return connection ? JSON.stringify({ ...sshConnectionToInput(connection, connection.workspaceId), expectedSnapshot: undefined }) : null;
+}
+
 export function defaultSshConnectionInput(workspaceId: string): SshConnectionInput {
   return {
     workspaceId,
@@ -19,6 +23,7 @@ export function sshConnectionToInput(
 ): SshConnectionInput {
   return {
     id: connection.id,
+    expectedSnapshot: connection,
     workspaceId,
     name: connection.name,
     host: connection.host,

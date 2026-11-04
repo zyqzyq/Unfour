@@ -2,10 +2,11 @@ import { useState } from "react";
 import type { DatabaseConnection, DatabaseConnectionInput, DatabaseTestResult } from "@unfour/command-client";
 import {
   databaseConnectionToInput,
+  databaseConnectionContent,
   emptyDatabaseConnectionForm,
 } from "../model/database-credentials";
 
-/** Selection changes discard credentials and drafts; query/cache renders do not. */
+/** Refresh clean drafts; keep dirty drafts and their original save precondition. */
 export function useDatabaseConnectionForm(
   workspaceId: string,
   selectedConnectionId: string | null,
@@ -16,6 +17,11 @@ export function useDatabaseConnectionForm(
   const [testResult, setTestResult] = useState<DatabaseTestResult | null>(null);
   const [password, setPassword] = useState("");
   const [form, setForm] = useState<DatabaseConnectionInput>(() => emptyDatabaseConnectionForm(workspaceId));
+  const [observedConnection, setObservedConnection] = useState(selectedConnection);
+  const baseline = form.expectedSnapshot;
+  const latest = selectedConnection?.id === form.id ? selectedConnection : null;
+  const externalChange = Boolean(baseline && databaseConnectionContent(baseline) !== databaseConnectionContent(latest));
+  const dirty = Boolean(baseline && (password || JSON.stringify(form) !== JSON.stringify(databaseConnectionToInput(baseline, workspaceId))));
 
   if (workspaceId !== selection.workspaceId) {
     setSelection({ workspaceId, selectedConnectionId });
@@ -23,11 +29,17 @@ export function useDatabaseConnectionForm(
     setForm(emptyDatabaseConnectionForm(workspaceId));
     setEditorOpen(false);
     setTestResult(null);
-  } else if (selectedConnectionId !== selection.selectedConnectionId) {
+  } else if (selectedConnectionId !== selection.selectedConnectionId && !(editorOpen && form.id && !selectedConnectionId)) {
     setSelection({ workspaceId, selectedConnectionId });
     setPassword("");
     if (selectedConnection) {
       setForm(databaseConnectionToInput(selectedConnection, workspaceId));
+      setTestResult(null);
+    }
+  } else if (observedConnection !== selectedConnection) {
+    setObservedConnection(selectedConnection);
+    if (externalChange && !dirty && latest) {
+      setForm(databaseConnectionToInput(latest, workspaceId));
       setTestResult(null);
     }
   }
@@ -38,6 +50,12 @@ export function useDatabaseConnectionForm(
   }
 
   return {
+    externalChange,
+    reloadLatest: () => {
+      if (latest) hydrateFormFromConnection(latest);
+      else setEditorOpen(false);
+      setTestResult(null);
+    },
     editorOpen,
     setEditorOpen,
     testResult,

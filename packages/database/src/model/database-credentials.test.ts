@@ -40,6 +40,7 @@ describe("databaseConnectionToInput", () => {
       ),
     ).toEqual({
       id: "db-a",
+      expectedSnapshot: expect.objectContaining({ id: "db-a", workspaceId: "ws-saved", revision: 3 }),
       workspaceId: "ws-current",
       name: "App DB",
       driver: "postgres",

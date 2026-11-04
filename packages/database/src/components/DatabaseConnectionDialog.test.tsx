@@ -14,6 +14,17 @@ vi.mock("@unfour/command-client", async (importOriginal) => ({
 
 afterEach(cleanup);
 
+it("prevents editing and closing while a connection save is pending", () => {
+  const close = vi.fn();
+  render(<DatabaseConnectionDialog canTest savePending testPending={false} open onOpenChange={close}
+    form={{ workspaceId: "ws", name: "Database", driver: "sqlite" }} password=""
+    onPasswordChange={vi.fn()} onSubmit={vi.fn()} onTest={vi.fn()} onUpdate={vi.fn()} />);
+  expect(screen.getByRole("textbox", { name: "Name" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+  expect(close).not.toHaveBeenCalled();
+});
+
 it("saves the openGauss preset as postgres and reopens from the saved driver", () => {
   const save = vi.fn();
   function Editor() {

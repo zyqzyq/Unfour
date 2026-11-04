@@ -1,10 +1,12 @@
 mod delete_cascade;
 mod environment_exchange;
+mod expectations;
 mod external_apply;
 mod layout;
 mod local_bundle;
 mod snapshot;
 mod variable_executor;
+mod variable_expectations;
 mod variable_persistence;
 mod variable_secrets;
 mod variable_snapshot;

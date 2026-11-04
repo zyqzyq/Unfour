@@ -1,5 +1,6 @@
 pub mod activity_log;
 pub mod line_ending_checksums;
+mod local_data_versions;
 pub mod local_db;
 pub mod ssh_command_history;
 pub mod terminal_history;

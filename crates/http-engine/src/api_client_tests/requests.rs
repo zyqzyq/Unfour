@@ -2,6 +2,61 @@ use super::super::*;
 use super::support::{save_in_collection, service};
 
 #[tokio::test]
+async fn stale_editor_save_cannot_overwrite_an_external_update_or_deletion() {
+    let service = service().await;
+    let saved = save_in_collection(&service, "workspace-a", "Original", None).await;
+    let input: ApiRequestInput = serde_json::from_value(serde_json::json!({
+        "workspaceId": "workspace-a", "name": "Stale draft", "collectionId": saved.collection_id,
+        "method": "GET", "url": "https://stale.test", "headers": [], "query": [], "bodyKind": "none"
+    }))
+    .unwrap();
+    sqlx::query("UPDATE api_requests SET url = 'https://external.test', revision = revision + 1 WHERE id = ?1")
+        .bind(&saved.id).execute(service.db.pool()).await.unwrap();
+    let context = unfour_core::domain::CommandContext::local("api.update_request");
+    let mut tx = service.db.pool().begin().await.unwrap();
+    let error = service
+        .update_request_if_current_on(
+            &mut tx,
+            &context,
+            "workspace-a".into(),
+            saved.id.clone(),
+            input.clone(),
+            Some(saved.revision),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, AppError::RowConflict(_)));
+    tx.rollback().await.unwrap();
+    let latest = service
+        .list_saved_requests("workspace-a".into())
+        .await
+        .unwrap();
+    assert_eq!(latest[0].url, "https://external.test");
+    service
+        .delete_request("workspace-a".into(), saved.id.clone())
+        .await
+        .unwrap();
+    let mut tx = service.db.pool().begin().await.unwrap();
+    assert!(service
+        .update_request_if_current_on(
+            &mut tx,
+            &context,
+            "workspace-a".into(),
+            saved.id,
+            input,
+            Some(saved.revision)
+        )
+        .await
+        .is_err());
+    tx.rollback().await.unwrap();
+    assert!(service
+        .list_saved_requests("workspace-a".into())
+        .await
+        .unwrap()
+        .is_empty());
+}
+
+#[tokio::test]
 async fn saved_request_reopen_and_duplicate_preserve_timeout_settings() {
     let service = service().await;
     let saved = service

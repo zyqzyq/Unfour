@@ -24,6 +24,8 @@ import {
   methodToneClass,
   openHistoryRequest,
   openSavedRequest,
+  reconcileSavedRequests,
+  reloadSavedRequest,
   requestConfigTabs,
   requestTabTitle,
   requestTabVisualState,
@@ -35,6 +37,47 @@ import {
 } from "./request-tabs";
 
 describe("API request tab state", () => {
+  it("protects an inline name edit even before it is committed to the draft", () => {
+    const saved = savedRequest("req-1");
+    const opened = openSavedRequest(emptyApiTabsState("ws-1"), saved);
+    opened.tabs[0].nameEditing = true;
+    const next = reconcileSavedRequests(opened, [{ ...saved, name: "External", revision: saved.revision + 1 }]);
+    expect(next.tabs[0]).toMatchObject({ externalChange: "updated", draft: { name: saved.name }, savedRevision: saved.revision });
+  });
+  it("preserves dirty drafts and execution results, flags changes, and reloads only on request", () => {
+    const saved = savedRequest("req-1");
+    const opened = openSavedRequest(emptyApiTabsState("ws-1"), saved);
+    const dirty = updateTabDraft(opened, "saved:req-1", { body: "local draft" });
+    const latest = { ...saved, revision: saved.revision + 1, url: "https://external.test" };
+    const changed = reconcileSavedRequests(dirty, [latest]);
+    expect(changed.tabs[0]).toMatchObject({ externalChange: "updated", savedRevision: saved.revision, draft: { body: "local draft", url: saved.url } });
+    const deleted = reconcileSavedRequests(changed, []);
+    expect(deleted.tabs[0]).toMatchObject({ externalChange: "deleted", draft: { body: "local draft" } });
+    const reloaded = reloadSavedRequest(changed, "saved:req-1", latest);
+    expect(reloaded.tabs[0].draft.url).toBe(latest.url);
+    expect(reloaded.tabs[0].externalChange).toBeUndefined();
+    expect(getTabSaveState(reloaded.tabs[0])).toBe("saved");
+  });
+
+  it("reconciles all clean saved tabs without touching unsaved tabs or an in-flight save", () => {
+    const saved = savedRequest("req-1");
+    let state = openSavedRequest(emptyApiTabsState("ws-1"), saved);
+    state = createNewRequestTab(state, "new:1");
+    const latest = { ...saved, revision: saved.revision + 1, name: "External rename" };
+    const refreshed = reconcileSavedRequests(state, [latest]);
+    expect(refreshed.tabs[0].draft.name).toBe("External rename");
+    expect(refreshed.tabs[1]).toBe(state.tabs[1]);
+    expect(reconcileSavedRequests(startTabSave(state, "saved:req-1"), [latest]).tabs[0].draft.name).toBe(saved.name);
+  });
+
+  it("refreshes an unchanged open saved request when reopened after an external edit", () => {
+    const saved = savedRequest("req-1");
+    const opened = openSavedRequest(emptyApiTabsState("ws-1"), saved);
+    const refreshed = openSavedRequest(opened, { ...saved, revision: saved.revision + 1, url: "https://external.test" });
+    expect(refreshed.tabs[0].draft.url).toBe("https://external.test");
+    expect(getTabSaveState(refreshed.tabs[0])).toBe("saved");
+  });
+
   it("preserves edits made during save and keeps them dirty", () => {
     const saved = savedRequest("req-1");
     let state = openSavedRequest(emptyApiTabsState("ws-1"), saved);

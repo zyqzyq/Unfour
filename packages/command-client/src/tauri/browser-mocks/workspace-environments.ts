@@ -32,6 +32,10 @@ export function updateMockWorkspaceEnvironment(args?: Record<string, unknown>) {
   const workspaceId = String(args?.workspaceId ?? "");
   const environmentId = String(args?.environmentId ?? "");
   const environment = findWorkspaceEnvironment(workspaceId, environmentId);
+  const expected = args?.expected as WorkspaceEnvironment | undefined;
+  if (expected && JSON.stringify({ ...environment, isActive: expected.isActive }) !== JSON.stringify(expected)) {
+    throw { code: "ROW_CONFLICT", message: "workspace environment changed" };
+  }
   const inputs = (args?.variables ?? []) as WorkspaceVariableInput[];
   const now = new Date().toISOString();
   environment.name = String(args?.name ?? environment.name);

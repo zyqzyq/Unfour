@@ -43,6 +43,14 @@ describe("database browser command routing", () => {
 });
 
 describe("database browser connection records", () => {
+  it("rejects stale editor snapshots before changing credentials", () => {
+    const original = handleDatabaseMock<DatabaseConnection>("database_connection_save", { input: connectionInput }) as DatabaseConnection;
+    const input = { ...connectionInput, id: original.id };
+    const latest = handleDatabaseMock<DatabaseConnection>("database_connection_save", { input: { ...input, name: "External" } });
+    expect(() => handleDatabaseMock("database_connection_save", { input, expectedSnapshot: original, secret: "draft" })).toThrow();
+    expect(mockStore.databaseConnections[0]).toEqual(latest);
+    expect(mockStore.credentials).toEqual({});
+  });
   it("preserves defaults, revision, creation time, and connection order on update", async () => {
     const first = await mockInvoke<DatabaseConnection>("database_connection_save", { input: connectionInput });
     expect(first).toMatchObject({

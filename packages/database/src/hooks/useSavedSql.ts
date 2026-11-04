@@ -23,6 +23,7 @@ export function useSavedSql(
   const query = useQuery({
     enabled: Boolean(active && workspaceId),
     queryKey,
+    meta: { cloudSyncWorkspaceId: workspaceId, localDataDomains: ["saved-sql"] },
     queryFn: () => listSavedSql(workspaceId),
   });
 

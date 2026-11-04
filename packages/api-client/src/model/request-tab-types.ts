@@ -26,6 +26,9 @@ export type ApiRequestTab = {
   responseTab: ResponseTab;
   saveError: string | null;
   savedRequestId: string | null;
+  savedRevision?: number;
+  externalChange?: "updated" | "deleted";
+  nameEditing?: boolean;
   sendError: string | null;
   sendErrorCode: string | null;
   sending: boolean;

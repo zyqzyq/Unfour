@@ -51,8 +51,18 @@ impl CommandBus {
 
     pub async fn save_database_connection_with_secret(
         &self,
+        input: DatabaseConnectionInput,
+        secret: Option<String>,
+    ) -> AppResult<DatabaseConnection> {
+        self.save_database_connection_checked(input, secret, None)
+            .await
+    }
+
+    pub async fn save_database_connection_checked(
+        &self,
         mut input: DatabaseConnectionInput,
         secret: Option<String>,
+        expected_snapshot: Option<DatabaseConnection>,
     ) -> AppResult<DatabaseConnection> {
         let _credential_guard = self.credential_stage_guard().await?;
         self.track_connection_credential_edit(&input.workspace_id, input.id.as_deref(), "database")
@@ -91,7 +101,12 @@ impl CommandBus {
                 move |connection| {
                     Box::pin(async move {
                         service
-                            .save_connection_on(connection, &executor_context, input)
+                            .save_connection_checked_on(
+                                connection,
+                                &executor_context,
+                                input,
+                                expected_snapshot,
+                            )
                             .await
                     })
                 },

@@ -62,7 +62,7 @@ describe("useWorkspaceVariables", () => {
     });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    await result.current.replaceMut.mutateAsync([
+    await result.current.replaceMut.mutateAsync({ variables: [
       {
         id: null,
         key: "base_url",
@@ -72,7 +72,7 @@ describe("useWorkspaceVariables", () => {
         description: null,
         sortOrder: 0,
       },
-    ]);
+    ], expected: [] });
 
     await waitFor(() => expect(result.current.variables).toEqual(saved));
     expect(listMock).toHaveBeenCalledTimes(1);

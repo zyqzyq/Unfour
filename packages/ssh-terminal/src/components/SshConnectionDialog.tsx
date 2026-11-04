@@ -22,6 +22,8 @@ import { formatTerminalError } from "../model/errors";
 
 export function SshConnectionDialog({
   canTest,
+  externalChange = false,
+  onReload,
   error,
   form,
   onOpenChange,
@@ -34,6 +36,8 @@ export function SshConnectionDialog({
   children,
 }: {
   canTest: boolean;
+  externalChange?: boolean;
+  onReload?: () => void;
   error?: unknown;
   form: SshConnectionInput;
   onOpenChange: (open: boolean) => void;
@@ -48,9 +52,10 @@ export function SshConnectionDialog({
   const { t } = useI18n();
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
+    <Dialog onOpenChange={(next) => { if (!pending) onOpenChange(next); }} open={open}>
       <DialogContent>
-        <form className="flex min-h-0 flex-col" onSubmit={onSubmit}>
+        <form className="flex min-h-0 flex-col" onSubmit={(event) => { if (externalChange || pending) event.preventDefault(); else onSubmit(event); }}>
+          <fieldset disabled={pending} className="contents">
           <DialogHeader>
             <div className="min-w-0">
               <DialogTitle>
@@ -61,6 +66,7 @@ export function SshConnectionDialog({
             <DialogXClose />
           </DialogHeader>
           <DialogBody className="space-y-3">
+            {externalChange && <div role="alert" className="text-[12px] text-[var(--u-color-text-muted)]">{t("common.externalChange")} <Button onClick={onReload} type="button" size="sm" variant="outline">{t("common.reloadLatest")}</Button></div>}
             <FieldGroup title={t("ssh.dialog.name")}>
               <Input
                 autoFocus
@@ -120,7 +126,7 @@ export function SshConnectionDialog({
             </FieldGroup>
             {form.authKind === "password" && (
               <FieldGroup title={t("ssh.dialog.authPassword")}>
-                {open && <ConnectionSecretEditor key={`${form.workspaceId}:${form.id ?? "new"}:${form.authKind}`} form={form} onUpdate={onUpdate} disabled={pending} />}
+                {open && <ConnectionSecretEditor key={`${form.workspaceId}:${form.id ?? "new"}:${form.expectedSnapshot?.credentialRef ?? ""}:${form.authKind}`} form={form} onUpdate={onUpdate} disabled={pending} />}
                 {Boolean(form.id) && (
                   <span className="text-[11.5px] text-[var(--u-color-text-muted)]">
                     {t("ssh.dialog.passwordEditHint")}
@@ -138,7 +144,7 @@ export function SshConnectionDialog({
                   />
                 </FieldGroup>
                 <FieldGroup title={t("ssh.dialog.passphrase")}>
-                  {open && <ConnectionSecretEditor key={`${form.workspaceId}:${form.id ?? "new"}:${form.authKind}`} form={form} onUpdate={onUpdate} disabled={pending} />}
+                  {open && <ConnectionSecretEditor key={`${form.workspaceId}:${form.id ?? "new"}:${form.expectedSnapshot?.credentialRef ?? ""}:${form.authKind}`} form={form} onUpdate={onUpdate} disabled={pending} />}
                   {Boolean(form.id) && (
                     <span className="text-[11.5px] text-[var(--u-color-text-muted)]">
                       {t("ssh.dialog.passwordEditHint")}
@@ -174,11 +180,12 @@ export function SshConnectionDialog({
                 {t("ssh.dialog.cancel")}
               </Button>
             </DialogClose>
-            <Button disabled={pending} type="submit">
+            <Button disabled={pending || externalChange} type="submit">
               <Save size={14} />
               {t("ssh.dialog.save")}
             </Button>
           </DialogFooter>
+          </fieldset>
         </form>
         {children}
       </DialogContent>

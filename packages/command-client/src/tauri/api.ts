@@ -87,11 +87,13 @@ export function renameApiCollection(
   workspaceId: string,
   collectionId: string,
   name: string,
+  expectedUpdatedAt?: string,
 ) {
   return call<ApiCollection>("api_collection_rename", {
     workspaceId,
     collectionId,
     name,
+    expectedUpdatedAt,
   });
 }
 
@@ -130,11 +132,13 @@ export function renameApiCollectionFolder(
   workspaceId: string,
   folderId: string,
   name: string,
+  expectedUpdatedAt?: string,
 ) {
   return call<ApiCollectionFolder>("api_collection_folder_rename", {
     workspaceId,
     folderId,
     name,
+    expectedUpdatedAt,
   });
 }
 
@@ -223,11 +227,13 @@ export function updateApiRequest(
   workspaceId: string,
   requestId: string,
   input: ApiRequestInput,
+  expectedRevision?: number,
 ) {
   return call<ApiSavedRequest>("api_request_update", {
     workspaceId,
     requestId,
     input,
+    expectedRevision,
   });
 }
 

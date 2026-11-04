@@ -59,7 +59,8 @@ export function getSshTask(workspaceId: string, taskId: string) {
 }
 
 export function saveSshTask(input: SshTaskSaveInput) {
-  return call<SshTaskDetail>("ssh_task_save", { input });
+  const { expectedSnapshot, ...payload } = input;
+  return call<SshTaskDetail>("ssh_task_save", { input: payload, expectedSnapshot });
 }
 
 export function duplicateSshTask(workspaceId: string, taskId: string) {
@@ -95,7 +96,8 @@ export function listSshConnections(workspaceId: string) {
 }
 
 export function saveSshConnection(input: SshConnectionInput) {
-  return call<SshConnection>("ssh_connection_save", { input });
+  const { expectedSnapshot, ...payload } = input;
+  return call<SshConnection>("ssh_connection_save", { input: payload, expectedSnapshot });
 }
 
 export function testSshConnection(input: SshConnectionInput) {

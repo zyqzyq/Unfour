@@ -49,7 +49,7 @@ export function ApiCollectionTreeDialogs({ dialogs, workspaceId }: {
 }
 
 function NameDialog({ dialog, title, placeholder, maxLength }: {
-  dialog: Omit<NameDialogState, "target" | "open"> & { target: unknown };
+  dialog: Omit<NameDialogState, "target" | "open"> & { target: unknown; externalChange?: boolean; reload?: () => void };
   title: string;
   placeholder?: string;
   maxLength?: number;
@@ -68,10 +68,12 @@ function NameDialog({ dialog, title, placeholder, maxLength }: {
             placeholder={placeholder}
             value={dialog.value}
           />
+          {dialog.externalChange && <p role="status" className="text-[var(--u-color-text-muted)]">{t(dialog.reload ? "api.external.updated" : "api.external.deleted")}</p>}
         </DialogBody>
         <DialogFooter>
           <Button onClick={dialog.onClose} type="button" variant="ghost">{t("api.save.cancel")}</Button>
-          <Button disabled={!dialog.value.trim() || dialog.pending} onClick={dialog.confirm} type="button">{t("api.save.save")}</Button>
+          {dialog.externalChange && dialog.reload && <Button onClick={dialog.reload} type="button" variant="outline">{t("api.external.reload")}</Button>}
+          <Button disabled={!dialog.value.trim() || dialog.pending || dialog.externalChange} onClick={dialog.confirm} type="button">{t("api.save.save")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

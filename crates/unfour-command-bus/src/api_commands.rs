@@ -191,6 +191,17 @@ impl CommandBus {
         collection_id: String,
         name: String,
     ) -> AppResult<ApiCollection> {
+        self.api_collection_rename_if_current(workspace_id, collection_id, name, None)
+            .await
+    }
+
+    pub async fn api_collection_rename_if_current(
+        &self,
+        workspace_id: String,
+        collection_id: String,
+        name: String,
+        expected_updated_at: Option<String>,
+    ) -> AppResult<ApiCollection> {
         let context = CommandContext::local("api.collection.rename");
         let executor_context = context.clone();
         let service = self.api_client.clone();
@@ -206,12 +217,13 @@ impl CommandBus {
             move |connection| {
                 Box::pin(async move {
                     service
-                        .rename_collection_on(
+                        .rename_collection_if_current_on(
                             connection,
                             &executor_context,
                             workspace_id,
                             collection_id,
                             name,
+                            expected_updated_at,
                         )
                         .await
                 })
@@ -310,6 +322,17 @@ impl CommandBus {
         folder_id: String,
         name: String,
     ) -> AppResult<ApiCollectionFolder> {
+        self.api_collection_folder_rename_if_current(workspace_id, folder_id, name, None)
+            .await
+    }
+
+    pub async fn api_collection_folder_rename_if_current(
+        &self,
+        workspace_id: String,
+        folder_id: String,
+        name: String,
+        expected_updated_at: Option<String>,
+    ) -> AppResult<ApiCollectionFolder> {
         let context = CommandContext::local("api.collection.folder.rename");
         let executor_context = context.clone();
         let service = self.api_client.clone();
@@ -325,12 +348,13 @@ impl CommandBus {
             move |connection| {
                 Box::pin(async move {
                     service
-                        .rename_collection_folder_on(
+                        .rename_collection_folder_if_current_on(
                             connection,
                             &executor_context,
                             workspace_id,
                             folder_id,
                             name,
+                            expected_updated_at,
                         )
                         .await
                 })
@@ -629,6 +653,17 @@ impl CommandBus {
         request_id: String,
         input: ApiRequestInput,
     ) -> AppResult<ApiSavedRequest> {
+        self.update_api_request_if_current(workspace_id, request_id, input, None)
+            .await
+    }
+
+    pub async fn update_api_request_if_current(
+        &self,
+        workspace_id: String,
+        request_id: String,
+        input: ApiRequestInput,
+        expected_revision: Option<i64>,
+    ) -> AppResult<ApiSavedRequest> {
         let context = CommandContext::local("api.update_request");
         let executor_context = context.clone();
         let service = self.api_client.clone();
@@ -647,12 +682,13 @@ impl CommandBus {
             move |connection| {
                 Box::pin(async move {
                     service
-                        .update_request_on(
+                        .update_request_if_current_on(
                             connection,
                             &executor_context,
                             workspace_id,
                             request_id,
                             input,
+                            expected_revision,
                         )
                         .await
                 })

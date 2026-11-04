@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction, useState } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
 import { useMutation, type QueryClient } from "@tanstack/react-query";
 import {
   deleteDatabaseConnection,
@@ -51,15 +51,24 @@ export function useDatabaseConnectionMutations({
   t: ReturnType<typeof useI18n>["t"];
   workspaceId: string;
 }) {
+  const saveScope = useRef<string | null>(workspaceId);
+  useEffect(() => {
+    saveScope.current = workspaceId;
+    return () => { saveScope.current = null; };
+  }, [workspaceId]);
   const saveMutation = useMutation({
     mutationFn: async ({ input, secret }: { input: DatabaseConnectionInput; secret: string }) => {
       return saveDatabaseConnection(input, secret || null);
     },
-    onSuccess: (connection) => {
-      const queryKey = databaseConnectionsQueryKey(workspaceId);
+    onError: (_error, { input }) => { void queryClient.invalidateQueries({ queryKey: databaseConnectionsQueryKey(input.workspaceId) }); },
+    onSuccess: async (connection) => {
+      const queryKey = databaseConnectionsQueryKey(connection.workspaceId);
+      await queryClient.cancelQueries({ queryKey, exact: true });
       queryClient.setQueryData<DatabaseConnection[]>(queryKey, (current) =>
         replaceDatabaseConnectionInCache(current, connection),
       );
+      void queryClient.invalidateQueries({ queryKey });
+      if (saveScope.current !== connection.workspaceId) return;
       hydrateFormFromConnection(connection);
       setSelectedDatabaseConnection(connection.id);
       setEditorOpen(false);
@@ -67,7 +76,6 @@ export function useDatabaseConnectionMutations({
         message: t("database.connection.savedBrowseSchema"),
         status: "disconnected",
       });
-      void queryClient.invalidateQueries({ queryKey });
     },
   });
 

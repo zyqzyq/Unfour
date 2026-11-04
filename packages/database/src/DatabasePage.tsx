@@ -92,6 +92,8 @@ export function DatabasePage({
     form,
     setForm,
     hydrateFormFromConnection,
+    externalChange,
+    reloadLatest,
   } = useDatabaseConnectionForm(workspaceId, selectedConnectionId, selectedConnection);
   const tree = useDatabaseTreeController({
     schemaEnabled: context.schemaEnabled,
@@ -380,6 +382,8 @@ export function DatabasePage({
       </div>
       </>}
       <DatabaseConnectionDialog
+        externalChange={externalChange}
+        onReload={reloadLatest}
         canTest={canTest}
         error={saveMutation.error}
         form={form}

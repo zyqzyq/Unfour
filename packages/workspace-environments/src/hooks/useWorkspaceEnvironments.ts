@@ -18,11 +18,12 @@ export function useWorkspaceEnvironments(workspaceId: string) {
   const query = useQuery({
     enabled: Boolean(workspaceId),
     queryKey,
-    meta: { cloudSyncWorkspaceId: workspaceId },
+    meta: { cloudSyncWorkspaceId: workspaceId, localDataDomains: ["environments"] },
     queryFn: () => listWorkspaceEnvironments(workspaceId),
   });
 
-  const mergeEnvironment = (saved: WorkspaceEnvironment) => {
+  const mergeEnvironment = async (saved: WorkspaceEnvironment) => {
+    await queryClient.cancelQueries({ queryKey });
     queryClient.setQueryData<WorkspaceEnvironment[]>(queryKey, (current = []) => {
       const index = current.findIndex((environment) => environment.id === saved.id);
       if (index < 0) return [...current, saved];
@@ -42,14 +43,17 @@ export function useWorkspaceEnvironments(workspaceId: string) {
       id: string;
       name: string;
       variables: WorkspaceVariableInput[];
+      expected?: WorkspaceEnvironment;
     }) =>
       updateWorkspaceEnvironmentVariables(
         workspaceId,
         input.id,
         input.name,
         input.variables,
+        input.expected,
       ),
     onSuccess: mergeEnvironment,
+    onError: () => queryClient.invalidateQueries({ queryKey }),
   });
   const deleteMut = useMutation({
     mutationFn: (environmentId: string) =>

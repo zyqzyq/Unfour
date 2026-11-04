@@ -24,6 +24,10 @@ export function useFlowEditor(workspaceId: string, flows: FlowWorkspaceData["flo
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<"delete" | null>(null);
   const [pendingSelection, setPendingSelection] = useState<{ flow: FlowDefinition; latest?: boolean } | null>(null);
+  // Keep the revision pinned for run confirmations and dirty drafts, but make
+  // external edits/deletions visible as soon as the definitions query refreshes.
+  const externallyChanged = Boolean(draft?.id && flows.isSuccess &&
+    flows.data?.find((flow) => flow.id === draft.id)?.revision !== draft.revision);
 
   // Keep an untouched default pending through failures; any successful retry
   // can initialize it. Manual choices and new dialog contexts replace it.
@@ -87,10 +91,17 @@ export function useFlowEditor(workspaceId: string, flows: FlowWorkspaceData["flo
     if (!draft) return;
     return perform(async () => {
       const saved = await saveFlow(draft);
+      const queryKey = ["flows", workspaceId];
+      await queryClient.cancelQueries({ queryKey });
+      queryClient.setQueryData<FlowDefinition[]>(queryKey, (current = []) => {
+        const latest = current.find((flow) => flow.id === saved.id);
+        if (latest && latest.revision > saved.revision) return current;
+        return latest ? current.map((flow) => flow.id === saved.id ? saved : flow) : [...current, saved];
+      });
       setDraft(saved);
       setDirty(false);
       setRevisionConflict(false);
-      await queryClient.invalidateQueries({ queryKey: ["flows", workspaceId] });
+      await queryClient.invalidateQueries({ queryKey });
     });
   }
   function deleteDefinition() {
@@ -173,7 +184,7 @@ export function useFlowEditor(workspaceId: string, flows: FlowWorkspaceData["flo
   return {
     draft, dirty, selectedNode, setSelectedNode, removingNode, setRemovingNode, contextRevision,
     inputs, setInputs, invalid, secretInputNames, setSecretInputNames, environmentId: runEnvironment.id, environmentPending: runEnvironment.pending, setEnvironmentId,
-    runDialog, setRunDialog, revisionConflict, error, busy, confirm, setConfirm, pendingSelection, setPendingSelection,
+    runDialog, setRunDialog, revisionConflict: revisionConflict || externallyChanged, error, busy, confirm, setConfirm, pendingSelection, setPendingSelection,
     resetSelection, update, perform, save, deleteDefinition, reloadLatest, discardSelection,
     changeInputDefinitions, schemaValidity, stepValidity, changeStep, impact, removeStep, openRun, runValidity, restoreEditorSelection,
   };

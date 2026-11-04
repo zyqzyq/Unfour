@@ -27,6 +27,7 @@ export function updateMockWorkspaceEnvironment(args?: Record<string, unknown>) {
   const workspaceId = String(args?.workspaceId ?? "");
   const workspace = mockState.workspaces.find((item) => item.id === workspaceId);
   if (!workspace) throw new Error("workspace not found");
+  assertSecurityExpected(workspace, args?.expected as Workspace | undefined);
   workspace.environmentType = String(
     args?.environmentType ?? workspace.environmentType,
   ) as WorkspaceEnvironmentType;
@@ -38,6 +39,7 @@ export function updateMockWorkspacePolicy(args?: Record<string, unknown>) {
   const workspaceId = String(args?.workspaceId ?? "");
   const workspace = mockState.workspaces.find((item) => item.id === workspaceId);
   if (!workspace) throw new Error("workspace not found");
+  assertSecurityExpected(workspace, args?.expected as Workspace | undefined);
   workspace.mcpPolicy = String(args?.mcpPolicy ?? workspace.mcpPolicy) as WorkspaceMcpPolicy;
   workspace.updatedAt = new Date().toISOString();
   workspace.revision += 1;
@@ -65,9 +67,18 @@ export function renameMockWorkspace(args?: Record<string, unknown>) {
   const workspaceId = String(args?.workspaceId ?? "");
   const workspace = mockState.workspaces.find((item) => item.id === workspaceId);
   if (!workspace) throw new Error("workspace not found");
+  if (args?.expectedName != null && args.expectedName !== workspace.name) {
+    throw { code: "ROW_CONFLICT", message: "workspace name changed" };
+  }
   workspace.name = String(args?.name ?? workspace.name);
   workspace.updatedAt = new Date().toISOString();
   return workspace;
+}
+
+function assertSecurityExpected(current: Workspace, expected?: Workspace) {
+  if (expected && (current.id !== expected.id || current.environmentType !== expected.environmentType || current.mcpPolicy !== expected.mcpPolicy)) {
+    throw { code: "ROW_CONFLICT", message: "workspace security settings changed" };
+  }
 }
 
 export function deleteMockWorkspace(args?: Record<string, unknown>) {

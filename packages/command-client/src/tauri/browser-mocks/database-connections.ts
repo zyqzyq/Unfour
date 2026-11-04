@@ -1,5 +1,6 @@
 import type { DatabaseConnection, DatabaseConnectionInput, DatabaseTestResult } from "../../types";
 import { mockStore } from "./state";
+import { connectionEditSnapshot } from "./editor-snapshots";
 
 export function listMockDatabaseConnections(workspaceId: string) {
   return mockStore.databaseConnections.filter(
@@ -7,7 +8,10 @@ export function listMockDatabaseConnections(workspaceId: string) {
   );
 }
 
-export function saveMockDatabaseConnection(input: DatabaseConnectionInput, secret?: string | null) {
+export function saveMockDatabaseConnection(input: DatabaseConnectionInput, secret?: string | null, expectedSnapshot?: DatabaseConnection) {
+  if (expectedSnapshot && connectionEditSnapshot(expectedSnapshot) !== connectionEditSnapshot(
+    mockStore.databaseConnections.find((item) => item.id === input.id && item.workspaceId === input.workspaceId),
+  )) throw { code: "ROW_CONFLICT", message: "record changed externally; reload before saving" };
   let credentialRef = input.driver === "sqlite" ? null : input.credentialRef ?? null;
   if (input.driver !== "sqlite" && secret) {
     credentialRef = `unfour:${input.workspaceId}:database-password:${crypto.randomUUID()}`;

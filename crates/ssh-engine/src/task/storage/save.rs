@@ -37,8 +37,39 @@ impl SshService {
         &self,
         connection: &mut sqlx::SqliteConnection,
         context: &CommandContext,
-        mut input: SshTaskSaveInput,
+        input: SshTaskSaveInput,
     ) -> AppResult<DomainCommandResult<SshTaskDetail>> {
+        self.save_task_checked_on(connection, context, input, None)
+            .await
+    }
+
+    pub async fn save_task_checked_on(
+        &self,
+        connection: &mut sqlx::SqliteConnection,
+        context: &CommandContext,
+        mut input: SshTaskSaveInput,
+        expected_snapshot: Option<SshTaskDetail>,
+    ) -> AppResult<DomainCommandResult<SshTaskDetail>> {
+        if let Some(expected) = expected_snapshot {
+            let id = input
+                .id
+                .as_deref()
+                .ok_or_else(|| AppError::RowConflict("record changed externally".into()))?;
+            let current = self
+                .get_task_on(connection, &input.workspace_id, id)
+                .await
+                .map_err(|error| match error {
+                    AppError::NotFound(_) => {
+                        AppError::RowConflict("record deleted externally".into())
+                    }
+                    other => other,
+                })?;
+            if task_edit_snapshot(&current) != task_edit_snapshot(&expected) {
+                return Err(AppError::RowConflict(
+                    "record changed externally; reload before saving".into(),
+                ));
+            }
+        }
         validate_workspace_id(&input.workspace_id)?;
         validate_workspace_on(connection, &input.workspace_id).await?;
         let name = normalize_task_name(&input.name)?;
@@ -394,4 +425,25 @@ async fn validate_default_connection_on(
         return Err(AppError::NotFound("ssh connection".to_string()));
     }
     Ok(())
+}
+
+// Compare exactly the fields rewritten by the task editor. Run recall and
+// synchronization metadata cannot make an otherwise unchanged draft stale.
+fn task_edit_snapshot(detail: &SshTaskDetail) -> serde_json::Value {
+    serde_json::json!({
+        "id": detail.task.id,
+        "workspaceId": detail.task.workspace_id,
+        "name": detail.task.name,
+        "description": detail.task.description,
+        "defaultConnectionId": detail.local_binding.as_ref().and_then(|binding| binding.default_connection_id.as_ref()),
+        "steps": detail.steps.iter().map(|step| serde_json::json!({
+            "id": step.id,
+            "name": step.name,
+            "stepType": step.step_type,
+            "position": step.position,
+            "enabled": step.enabled,
+            "configVersion": step.config_version,
+            "configJson": step.config_json,
+        })).collect::<Vec<_>>()
+    })
 }

@@ -25,6 +25,7 @@ export function TaskEditor({
   onRun,
   onSave,
   runDisabledReason,
+  saveDisabled = false,
   saving,
 }: {
   connections: SshConnection[];
@@ -33,6 +34,7 @@ export function TaskEditor({
   onRun: () => void;
   onSave: () => void;
   runDisabledReason?: string | null;
+  saveDisabled?: boolean;
   saving: boolean;
 }) {
   const { t } = useI18n();
@@ -88,7 +90,7 @@ export function TaskEditor({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <fieldset disabled={saving} className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex h-[var(--u-size-section-toolbar)] shrink-0 items-center gap-2 border-b border-[var(--u-color-border)] px-2">
         <Input
           aria-label={t("ssh.tasks.editor.name")}
@@ -140,7 +142,7 @@ export function TaskEditor({
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <Button
-            disabled={!draft.name.trim() || saving}
+            disabled={!draft.name.trim() || saving || saveDisabled}
             onClick={onSave}
             size="sm"
             title="Ctrl+S"
@@ -264,6 +266,6 @@ export function TaskEditor({
           )}
         </div>
       </div>
-    </div>
+    </fieldset>
   );
 }

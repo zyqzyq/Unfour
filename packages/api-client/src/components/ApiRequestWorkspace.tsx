@@ -1,35 +1,43 @@
 import { useLayoutEffect, useRef, useState, type RefObject } from "react";
-import { SplitPane } from "@unfour/ui";
+import { Button, SplitPane, useI18n } from "@unfour/ui";
 
 import type { ApiRequestTab } from "../model/request-tabs";
 import type { RequestDraft, RequestParamsTab, ResponseTab } from "../model/types";
 import { ApiRequestBar } from "./ApiRequestBar";
 import { ApiRequestEditor } from "./ApiRequestEditor";
 import { ApiResponseViewer } from "./ApiResponseViewer";
+import { useApiRequestTabStore } from "../model/api-request-tab-state";
 
 export function ApiRequestWorkspace({
   activeTab,
+  workspaceId,
   collectionStatus,
   onRequestNameCommit,
   onRequestTabChange,
   onResponseTabChange,
   onSave,
+  onReload,
+  onCopyDraft,
   onSend,
   onStop,
   onUpdateDraft,
   urlInputRef,
 }: {
   activeTab: ApiRequestTab;
+  workspaceId: string;
   collectionStatus: string | null;
   onRequestNameCommit: (tab: ApiRequestTab, name: string) => void;
   onRequestTabChange: (tabId: string, tab: RequestParamsTab) => void;
   onResponseTabChange: (tabId: string, tab: ResponseTab) => void;
   onSave: (tab: ApiRequestTab, name?: string) => void;
+  onReload: (tab: ApiRequestTab) => void;
+  onCopyDraft: (tab: ApiRequestTab) => void;
   onSend: (tab: ApiRequestTab) => void;
   onStop: (tab: ApiRequestTab) => void;
   onUpdateDraft: (tabId: string, patch: Partial<RequestDraft>) => void;
   urlInputRef: RefObject<HTMLInputElement | null>;
 }) {
+  const { t } = useI18n();
   const splitHostRef = useRef<HTMLDivElement>(null);
   const [stacked, setStacked] = useState(false);
   useLayoutEffect(() => {
@@ -49,6 +57,8 @@ export function ApiRequestWorkspace({
   return (
     <>
       <ApiRequestBar
+        key={activeTab.id}
+        onNameEditingChange={(editing) => useApiRequestTabStore.getState().setNameEditing(workspaceId, activeTab.id, editing)}
         onNameCommit={(name) => onRequestNameCommit(activeTab, name)}
         onSave={(name) => onSave(activeTab, name)}
         onSend={() => onSend(activeTab)}
@@ -57,6 +67,13 @@ export function ApiRequestWorkspace({
         tab={activeTab}
         urlInputRef={urlInputRef}
       />
+      {activeTab.externalChange && (
+        <div role="status" className="flex shrink-0 items-center gap-2 border-b border-[var(--u-color-border)] px-3 py-1 text-[12px] text-[var(--u-color-text-muted)]">
+          <span className="flex-1">{t(`api.external.${activeTab.externalChange}`)}</span>
+          {activeTab.externalChange === "updated" && <Button size="sm" variant="outline" onClick={() => onReload(activeTab)}>{t("api.external.reload")}</Button>}
+          <Button size="sm" variant="ghost" onClick={() => onCopyDraft(activeTab)}>{t("api.external.copyDraft")}</Button>
+        </div>
+      )}
       {collectionStatus && (
         <div className="shrink-0 border-b border-[var(--u-color-border)] px-2 py-1 text-[12px] text-[var(--u-color-text-muted)]">
           {collectionStatus}

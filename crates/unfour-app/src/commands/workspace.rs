@@ -30,11 +30,12 @@ pub async fn workspace_create(
 pub async fn workspace_update_environment(
     workspace_id: String,
     environment_type: String,
+    expected: Option<Workspace>,
     state: State<'_, AppState>,
 ) -> AppResult<Workspace> {
     state
         .command_bus
-        .update_workspace_environment(workspace_id, environment_type)
+        .update_workspace_environment_checked(workspace_id, environment_type, expected)
         .await
 }
 
@@ -42,11 +43,12 @@ pub async fn workspace_update_environment(
 pub async fn workspace_update_mcp_policy(
     workspace_id: String,
     mcp_policy: String,
+    expected: Option<Workspace>,
     state: State<'_, AppState>,
 ) -> AppResult<Workspace> {
     state
         .command_bus
-        .update_workspace_mcp_policy(workspace_id, mcp_policy)
+        .update_workspace_mcp_policy_checked(workspace_id, mcp_policy, expected)
         .await
 }
 
@@ -62,9 +64,13 @@ pub async fn workspace_set_default(
 pub async fn workspace_rename(
     workspace_id: String,
     name: String,
+    expected_name: Option<String>,
     state: State<'_, AppState>,
 ) -> AppResult<Workspace> {
-    state.command_bus.rename_workspace(workspace_id, name).await
+    state
+        .command_bus
+        .rename_workspace_checked(workspace_id, name, expected_name)
+        .await
 }
 
 #[tauri::command]
@@ -118,11 +124,12 @@ pub async fn workspace_variables_list(
 pub async fn workspace_variables_replace(
     workspace_id: String,
     variables: Vec<WorkspaceVariableInput>,
+    expected: Option<Vec<WorkspaceVariable>>,
     state: State<'_, AppState>,
 ) -> AppResult<Vec<WorkspaceVariable>> {
     state
         .command_bus
-        .workspace_variables_replace(workspace_id, variables)
+        .workspace_variables_replace_checked(workspace_id, variables, expected)
         .await
 }
 
@@ -199,11 +206,18 @@ pub async fn workspace_environment_update(
     environment_id: String,
     name: String,
     variables: Vec<WorkspaceVariableInput>,
+    expected: Option<WorkspaceEnvironment>,
     state: State<'_, AppState>,
 ) -> AppResult<WorkspaceEnvironment> {
     state
         .command_bus
-        .workspace_environment_update(workspace_id, environment_id, name, variables)
+        .workspace_environment_update_checked(
+            workspace_id,
+            environment_id,
+            name,
+            variables,
+            expected,
+        )
         .await
 }
 

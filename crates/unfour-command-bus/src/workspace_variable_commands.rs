@@ -68,6 +68,16 @@ impl CommandBus {
         workspace_id: String,
         variables: Vec<WorkspaceVariableInput>,
     ) -> AppResult<Vec<WorkspaceVariable>> {
+        self.workspace_variables_replace_checked(workspace_id, variables, None)
+            .await
+    }
+
+    pub async fn workspace_variables_replace_checked(
+        &self,
+        workspace_id: String,
+        variables: Vec<WorkspaceVariableInput>,
+        expected: Option<Vec<WorkspaceVariable>>,
+    ) -> AppResult<Vec<WorkspaceVariable>> {
         let context = CommandContext::local("workspace.variables.replace");
         let executor_context = context.clone();
         let service = self.workspace.clone();
@@ -83,6 +93,11 @@ impl CommandBus {
             }),
             move |connection| {
                 Box::pin(async move {
+                    if let Some(expected) = expected {
+                        service
+                            .assert_variables_expected_on(connection, &workspace_id, &expected)
+                            .await?;
+                    }
                     service
                         .replace_variables_on(
                             connection,
@@ -234,6 +249,24 @@ impl CommandBus {
         name: String,
         variables: Vec<WorkspaceVariableInput>,
     ) -> AppResult<WorkspaceEnvironment> {
+        self.workspace_environment_update_checked(
+            workspace_id,
+            environment_id,
+            name,
+            variables,
+            None,
+        )
+        .await
+    }
+
+    pub async fn workspace_environment_update_checked(
+        &self,
+        workspace_id: String,
+        environment_id: String,
+        name: String,
+        variables: Vec<WorkspaceVariableInput>,
+        expected: Option<WorkspaceEnvironment>,
+    ) -> AppResult<WorkspaceEnvironment> {
         let context = CommandContext::local("workspace.environment.update");
         let executor_context = context.clone();
         let service = self.workspace.clone();
@@ -250,6 +283,16 @@ impl CommandBus {
             }),
             move |connection| {
                 Box::pin(async move {
+                    if let Some(expected) = expected {
+                        service
+                            .assert_environment_expected_on(
+                                connection,
+                                &workspace_id,
+                                &environment_id,
+                                &expected,
+                            )
+                            .await?;
+                    }
                     service
                         .update_environment_on(
                             connection,

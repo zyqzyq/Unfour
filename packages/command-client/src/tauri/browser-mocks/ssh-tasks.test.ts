@@ -44,6 +44,16 @@ describe("SSH task browser mocks", () => {
       }),
     ).toThrow("every active task");
   });
+
+  it("rejects a stale editor snapshot after a task changes or is deleted", () => {
+    const original = saveTask("Original");
+    const input = { id: original.task.id, workspaceId: "workspace", name: "External", description: "", steps: [] };
+    handleSshTaskMock("ssh_task_save", { input });
+    expect(() => handleSshTaskMock("ssh_task_save", { input: { ...input, name: "Draft" }, expectedSnapshot: original })).toThrow();
+    expect(mockStore.sshTasks[0].task.name).toBe("External");
+    handleSshTaskMock("ssh_task_delete", { workspaceId: "workspace", taskId: original.task.id });
+    expect(() => handleSshTaskMock("ssh_task_save", { input, expectedSnapshot: original })).toThrow();
+  });
 });
 
 function saveTask(name: string): SshTaskDetail {

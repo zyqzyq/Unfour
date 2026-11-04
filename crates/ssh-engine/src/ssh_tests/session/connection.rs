@@ -112,3 +112,30 @@ async fn ssh_connection_validation_keeps_secrets_out_of_config() {
     assert!(!password_config.0.contains("plain-text-password"));
     assert!(password_config.1.is_some());
 }
+
+#[tokio::test]
+async fn checked_save_rejects_stale_local_key_path_without_revision_change() {
+    let (service, workspace, _) = service_with_workspaces().await;
+    let mut input = password_input(&workspace);
+    input.auth_kind = "private-key".into();
+    input.key_path = Some("/fixture/original-key".into());
+    let original = service.save_connection(input.clone()).await.unwrap();
+    input.id = Some(original.id.clone());
+    let mut external = input.clone();
+    external.key_path = Some("/fixture/external-key".into());
+    let changed = service.save_connection(external).await.unwrap();
+    assert_eq!(changed.revision, original.revision);
+    let mut tx = service.db.pool().begin().await.unwrap();
+    let context = unfour_core::domain::CommandContext::local("ssh.connection.save");
+    assert!(matches!(
+        service
+            .save_connection_checked_on(&mut tx, &context, input, Some(original))
+            .await,
+        Err(AppError::RowConflict(_))
+    ));
+    tx.rollback().await.unwrap();
+    assert_eq!(
+        service.list_connections(workspace).await.unwrap()[0].key_path,
+        changed.key_path
+    );
+}

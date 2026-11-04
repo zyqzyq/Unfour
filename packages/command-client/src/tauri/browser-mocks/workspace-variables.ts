@@ -11,6 +11,9 @@ export function listMockWorkspaceVariables(args?: Record<string, unknown>) {
 
 export function replaceMockWorkspaceVariables(args?: Record<string, unknown>) {
   const workspaceId = String(args?.workspaceId ?? "");
+  if (args?.expected != null && JSON.stringify(listMockWorkspaceVariables(args)) !== JSON.stringify(args.expected)) {
+    throw { code: "ROW_CONFLICT", message: "workspace variables changed" };
+  }
   const inputs = (args?.variables ?? []) as WorkspaceVariableInput[];
   const current = mockStore.workspaceVariables.filter(
     (variable) => variable.workspaceId !== workspaceId,

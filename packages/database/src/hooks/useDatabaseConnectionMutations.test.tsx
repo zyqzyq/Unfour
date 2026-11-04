@@ -126,6 +126,20 @@ beforeEach(() => {
 afterEach(() => vi.resetAllMocks());
 
 describe("database credential save", () => {
+  it("does not hydrate an old save result after the editor switches workspace", async () => {
+    const existing = persisted({ credentialRef: CURRENT_REF });
+    let finishSave!: (connection: DatabaseConnection) => void;
+    saveMock.mockImplementationOnce(() => new Promise((resolve) => { finishSave = resolve; }));
+    const { Wrapper } = createWrapper(existing);
+    const { result, rerender } = renderHook(({ workspaceId }) => useEditorSession(workspaceId, existing.id), { wrapper: Wrapper, initialProps: { workspaceId: "ws-current" } });
+    let pending!: Promise<DatabaseConnection>;
+    act(() => { pending = result.current.mutations.saveMutation.mutateAsync({ input: databaseConnectionToInput(existing, "ws-current"), secret: "" }); });
+    await act(async () => Promise.resolve());
+    rerender({ workspaceId: "ws-next" });
+    await act(async () => { finishSave(persisted({ name: "Old workspace saved" })); await pending; });
+    expect(result.current.formState.form.workspaceId).toBe("ws-next");
+    expect(result.current.formState.form.name).toBe("");
+  });
   it("sends a replacement in the backend save and retains the returned reference", async () => {
     const existing = persisted({ credentialRef: CURRENT_REF });
     saveMock.mockResolvedValue(persisted({ credentialRef: NEW_REF }));

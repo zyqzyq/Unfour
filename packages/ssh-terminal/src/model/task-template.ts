@@ -168,6 +168,7 @@ export function normalizePositions(steps: SshTaskStepInput[]) {
 
 export function taskDetailToDraft(detail: SshTaskDetail): SshTaskSaveInput {
   return {
+    expectedSnapshot: detail,
     id: detail.task.id,
     workspaceId: detail.task.workspaceId,
     name: detail.task.name,

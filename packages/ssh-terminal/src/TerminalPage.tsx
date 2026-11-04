@@ -32,6 +32,7 @@ import { useTerminalStore } from "./model/terminal-state";
 import {
   defaultSshConnectionInput,
   sshConnectionToInput,
+  sshConnectionContent,
 } from "./model/ssh-connection-state";
 import {
   buildTerminalSessionTabs,
@@ -189,14 +190,22 @@ export function SshConnectionsPage({
       return;
     }
 
-    if (dialogMode === "new") {
+    if (dialogMode === "new" || (dialogOpen && dialogMode === "edit")) {
       return;
     }
 
     if (!selectedConnectionId || !connections.some((connection) => connection.id === selectedConnectionId)) {
       setSelectedSshConnection(connections[0].id);
     }
-  }, [connections, selectedConnectionId, setSelectedSshConnection, dialogMode]);
+  }, [connections, selectedConnectionId, setSelectedSshConnection, dialogMode, dialogOpen]);
+
+  const latestFormConnection = connections.find((item) => item.id === form.id) ?? null;
+  const formBaseline = form.expectedSnapshot;
+  const externalChange = Boolean(formBaseline && sshConnectionContent(formBaseline) !== sshConnectionContent(latestFormConnection));
+  const formDirty = Boolean(formBaseline && JSON.stringify(form) !== JSON.stringify(sshConnectionToInput(formBaseline, workspaceId)));
+  if (externalChange && !formDirty && latestFormConnection) {
+    setForm(sshConnectionToInput(latestFormConnection, workspaceId));
+  }
 
   // Sync form state when the selected connection changes (render-time adjustment pattern).
   if (selectedConnectionId !== previousSelectedConnectionId) {
@@ -222,13 +231,24 @@ export function SshConnectionsPage({
     }
   }, [activeSessionId, visibleSessions, setActiveSessionId]);
 
+  const saveScope = useRef<string | null>(workspaceId);
+  useEffect(() => {
+    saveScope.current = workspaceId;
+    return () => { saveScope.current = null; };
+  }, [workspaceId]);
   const saveMutation = useMutation({
     mutationFn: saveSshConnection,
-    onSuccess: (connection) => {
+    onError: (_error, input) => { void queryClient.invalidateQueries({ queryKey: ["ssh-connections", input.workspaceId] }); },
+    onSuccess: async (connection) => {
+      const queryKey = ["ssh-connections", connection.workspaceId];
+      await queryClient.cancelQueries({ queryKey, exact: true });
+      queryClient.setQueryData<SshConnection[]>(queryKey, (current = []) =>
+        [...current.filter((item) => item.id !== connection.id), connection]);
+      void queryClient.invalidateQueries({ queryKey });
+      if (saveScope.current !== connection.workspaceId) return;
       setSelectedSshConnection(connection.id);
       setDialogOpen(false);
       setDialogMode(null);
-      queryClient.invalidateQueries({ queryKey: ["ssh-connections", workspaceId] });
     },
   });
 
@@ -621,6 +641,12 @@ export function SshConnectionsPage({
         surfaceActive={active}
       />
       <SshConnectionDialog
+        externalChange={externalChange}
+        onReload={() => {
+          if (latestFormConnection) setForm(sshConnectionToInput(latestFormConnection, workspaceId));
+          else { setDialogOpen(false); setDialogMode(null); }
+          saveMutation.reset();
+        }}
         canTest={
           Boolean(form.host?.trim()) &&
           Boolean(form.username?.trim()) &&

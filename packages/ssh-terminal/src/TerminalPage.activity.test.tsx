@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { SshConnection, SshSessionSummary } from "@unfour/command-client";
@@ -115,7 +115,7 @@ function renderPage() {
       </QueryClientProvider>
     );
   }
-  return render(<Harness />);
+  return { ...render(<Harness />), client };
 }
 
 beforeEach(() => {
@@ -136,6 +136,26 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+it("refreshes clean connection settings and retains dirty settings after external change or deletion", async () => {
+  const { client } = renderPage();
+  fireEvent.contextMenu(await screen.findByText("Fixture"));
+  fireEvent.click(await screen.findByRole("menuitem", { name: /Edit/ }));
+  const name = await screen.findByRole("textbox", { name: "Name" });
+  act(() => client.setQueryData(["ssh-connections", "ws"], [{ ...connection, name: "External" }]));
+  await waitFor(() => expect(name).toHaveValue("External"));
+  fireEvent.change(name, { target: { value: "My draft" } });
+  act(() => client.setQueryData(["ssh-connections", "ws"], [{ ...connection, name: "External again" }]));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Your draft is retained");
+  expect(name).toHaveValue("My draft");
+  expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Load latest version" }));
+  expect(name).toHaveValue("External again");
+  fireEvent.change(name, { target: { value: "Retained after delete" } });
+  act(() => client.setQueryData(["ssh-connections", "ws"], []));
+  expect(await screen.findByRole("alert")).toHaveTextContent("deleted externally");
+  expect(name).toHaveValue("Retained after delete");
+});
 
 it("keeps the connected session id when activity logging fails", async () => {
   mocks.connect.mockImplementation(async () => {

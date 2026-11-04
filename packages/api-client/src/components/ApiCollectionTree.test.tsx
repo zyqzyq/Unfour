@@ -308,6 +308,7 @@ describe("ApiCollectionTree", () => {
           method: "GET",
           url: "https://api.example.com/users",
         }),
+        1,
       ),
     );
   });
@@ -629,7 +630,7 @@ describe("ApiCollectionTree state and action regressions", () => {
     else listFoldersMock.mockResolvedValue([folder({ name: nextName })]);
     fireEvent.keyDown(input, { key: "Enter" });
     const mutation = kind === "collection" ? renameApiCollection : renameApiCollectionFolder;
-    await waitFor(() => expect(mutation).toHaveBeenCalledWith("ws-1", kind === "collection" ? "col-1" : "folder-1", nextName));
+    await waitFor(() => expect(mutation).toHaveBeenCalledWith("ws-1", kind === "collection" ? "col-1" : "folder-1", nextName, kind === "collection" ? collection().updatedAt : folder().updatedAt));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(invalidate).toHaveBeenCalledWith({ queryKey: [kind === "collection" ? "api-collections" : "api-collection-folders", "ws-1"] });
     expect(await treeRow(nextName)).toHaveAttribute("data-tree-id", kind === "collection" ? "collection:col-1" : "folder:folder-1");
@@ -681,7 +682,7 @@ describe("ApiCollectionTree state and action regressions", () => {
     expect(input).toHaveValue("  LIST USERS  ");
     fireEvent.change(input, { target: { value: "  Get Users  " } });
     fireEvent.keyDown(input, { key: "Enter" });
-    await waitFor(() => expect(updateMock).toHaveBeenCalledWith("ws-1", "req-1", savedRequestToInput(savedRequest(), "ws-1")));
+    await waitFor(() => expect(updateMock).toHaveBeenCalledWith("ws-1", "req-1", savedRequestToInput(savedRequest(), "ws-1"), 1));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(await treeRow("Get Users")).toHaveAttribute("aria-selected", "true");
     expect(props.onOpenIntent).not.toHaveBeenCalled();
@@ -704,9 +705,36 @@ describe("ApiCollectionTree state and action regressions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save", exact: true }));
     await waitFor(() => expect(updateMock).toHaveBeenCalledWith("ws-1", "req-1", {
       ...savedRequestToInput(original, "ws-1"), name: "List Users",
-    }));
+    }, original.revision));
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["api-saved", "ws-1"] });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it.each(["collection", "folder", "request"])("preserves a %s rename draft after an external update and requires reload", async (kind) => {
+    listFoldersMock.mockResolvedValue([folder()]);
+    const { client } = renderTree();
+    const label = kind === "collection" ? "Users" : kind === "folder" ? "Auth" : "Get Users";
+    const action = kind === "collection" ? "Rename collection" : kind === "folder" ? "Rename folder" : "Rename request";
+    await contextAction(label, action);
+    const input = within(screen.getByRole("dialog")).getByRole("textbox");
+    fireEvent.change(input, { target: { value: "Unsaved rename" } });
+    const key = kind === "collection" ? "api-collections" : kind === "folder" ? "api-collection-folders" : "api-saved";
+    const changed = kind === "collection" ? collection({ name: "External", updatedAt: "2" })
+      : kind === "folder" ? folder({ name: "External", updatedAt: "2" }) : savedRequest({ name: "External", revision: 2 });
+    act(() => client.setQueryData([key, "ws-1"], [changed]));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save", exact: true })).toBeDisabled());
+    expect(input).toHaveValue("Unsaved rename");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(renameApiCollection).not.toHaveBeenCalled();
+    expect(renameApiCollectionFolder).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Reload and discard draft" }));
+    expect(input).toHaveValue("External");
+    expect(screen.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
+    act(() => client.setQueryData([key, "ws-1"], []));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save", exact: true })).toBeDisabled());
+    expect(input).toHaveValue("External");
+    expect(screen.queryByRole("button", { name: "Reload and discard draft" })).not.toBeInTheDocument();
   });
 
   it("keeps a rename dialog and value when its mutation fails", async () => {
@@ -816,7 +844,8 @@ describe("ApiCollectionTree state and action regressions", () => {
       act(() => store.openSaved("ws-1", records[0]));
       const reopened = useApiRequestTabStore.getState().byWorkspace["ws-1"];
       expect(reopened.activeTabId).toBe("saved:req-1");
-      expect(reopened.tabs).toBe(before.tabs);
+      expect(reopened.tabs.map((tab) => tab.draft)).toEqual(before.tabs.map((tab) => tab.draft));
+      expect(reopened.tabs.find((tab) => tab.id === "saved:req-1")?.externalChange).toBe("updated");
     }
   });
 

@@ -23,6 +23,27 @@ beforeEach(() => vi.resetAllMocks());
 afterEach(cleanup);
 
 describe("Workspace security settings", () => {
+  it("refreshes untouched security settings from an external update", () => {
+    const client = new QueryClient();
+    const view = (workspace: Workspace) => <I18nProvider initialLocale="en"><QueryClientProvider client={client}><WorkspaceSecurityDialog workspace={workspace} onClose={vi.fn()} /></QueryClientProvider></I18nProvider>;
+    const { rerender } = render(view(imported));
+    rerender(view({ ...imported, environmentType: "prod", mcpPolicy: "read_only", revision: 2 }));
+    expect(screen.getByLabelText("Workspace environment type")).toHaveValue("prod");
+    expect(screen.getByLabelText("MCP permissions")).toHaveValue("read_only");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+  it("retains dirty security settings after an external change and requires reload", () => {
+    const client = new QueryClient();
+    const view = (workspace: Workspace) => <I18nProvider initialLocale="en"><QueryClientProvider client={client}><WorkspaceSecurityDialog workspace={workspace} onClose={vi.fn()} /></QueryClientProvider></I18nProvider>;
+    const { rerender } = render(view(imported));
+    fireEvent.change(screen.getByLabelText("MCP permissions"), { target: { value: "full_access" } });
+    rerender(view({ ...imported, environmentType: "prod", revision: 2 }));
+    expect(screen.getByLabelText("MCP permissions")).toHaveValue("full_access");
+    expect(screen.getByRole("button", { name: "Save MCP permissions" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Load latest version" }));
+    expect(screen.getByLabelText("MCP permissions")).toHaveValue("disabled");
+    expect(screen.getByLabelText("Workspace environment type")).toHaveValue("prod");
+  });
   it.each(["en", "zh-CN"] as const)("previews environment saves using the saved policy rather than its draft in %s", (locale) => {
     mount({ ...imported, mcpPolicy: "auto" }, locale);
     const environment = screen.getByLabelText(locale === "en" ? "Workspace environment type" : "工作区环境类型");
@@ -71,7 +92,7 @@ describe("Workspace security settings", () => {
     vi.mocked(updateWorkspaceMcpPolicy).mockResolvedValue({ ...imported, mcpPolicy: "full_access", revision: 2 });
     fireEvent.click(screen.getByRole("button", { name: "Save MCP permissions" }));
     await waitFor(() => expect(screen.getByText("Saved permissions: Full access (full_access)")).toBeTruthy());
-    expect(updateWorkspaceMcpPolicy).toHaveBeenCalledExactlyOnceWith("imported", "full_access");
+    expect(updateWorkspaceMcpPolicy).toHaveBeenCalledExactlyOnceWith("imported", "full_access", imported);
     expect(updateWorkspaceEnvironment).not.toHaveBeenCalled();
     expect(screen.getByLabelText("Workspace environment type")).toHaveValue("prod");
     expect(client.getQueryData<WorkspaceState>(["workspaces"])?.workspaces[0]).toMatchObject({ environmentType: "dev", mcpPolicy: "full_access" });
@@ -86,7 +107,7 @@ describe("Workspace security settings", () => {
     expect(screen.getByText("Auto currently resolves to Full access (full_access) using the saved environment type.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Save environment" }));
     await waitFor(() => expect(screen.getByText("Auto currently resolves to Guarded (guarded) using the saved environment type.")).toBeTruthy());
-    expect(updateWorkspaceEnvironment).toHaveBeenCalledExactlyOnceWith("imported", "test");
+    expect(updateWorkspaceEnvironment).toHaveBeenCalledExactlyOnceWith("imported", "test", imported);
     expect(updateWorkspaceMcpPolicy).not.toHaveBeenCalled();
     expect(screen.getByLabelText("MCP permissions")).toHaveValue("auto");
     expect(client.getQueryData<WorkspaceState>(["workspaces"])?.workspaces[0]).toMatchObject({ environmentType: "test", mcpPolicy: "disabled" });
@@ -196,7 +217,7 @@ describe.each(["en", "zh-CN"] as const)("Independent security save risk previews
     await waitFor(() => expect(screen.getByText(labels.savedFull)).toBeTruthy());
     expect(policyForm.getByRole("status")).toHaveTextContent(labels.full);
     expect(environment).toHaveValue("dev");
-    expect(updateWorkspaceMcpPolicy).toHaveBeenCalledExactlyOnceWith(workspace.id, "full_access");
+    expect(updateWorkspaceMcpPolicy).toHaveBeenCalledExactlyOnceWith(workspace.id, "full_access", workspace);
     expect(updateWorkspaceEnvironment).not.toHaveBeenCalled();
     expect(client.getQueryData<WorkspaceState>(["workspaces"])?.workspaces[0]).toMatchObject({ environmentType: "prod", mcpPolicy: "full_access" });
     expect(close).not.toHaveBeenCalled();
@@ -236,7 +257,7 @@ describe.each(["en", "zh-CN"] as const)("Independent security save risk previews
     expect(policyForm.getByRole("status")).toHaveTextContent(labels.auto);
     expect(policy).toHaveValue("auto");
     expect(updateWorkspaceEnvironment).toHaveBeenCalledTimes(2);
-    expect(updateWorkspaceEnvironment).toHaveBeenLastCalledWith(workspace.id, "prod");
+    expect(updateWorkspaceEnvironment).toHaveBeenLastCalledWith(workspace.id, "prod", workspace);
     expect(updateWorkspaceMcpPolicy).not.toHaveBeenCalled();
     expect(client.getQueryData<WorkspaceState>(["workspaces"])?.workspaces[0]).toMatchObject({ environmentType: "prod", mcpPolicy: "full_access" });
     fireEvent.change(policy, { target: { value: "disabled" } });

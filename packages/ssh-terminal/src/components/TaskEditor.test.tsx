@@ -33,6 +33,11 @@ vi.mock("./TaskEditorSteps", () => ({
 afterEach(cleanup);
 
 describe("TaskEditor title field", () => {
+  it("prevents draft changes while the submitted version is being saved", () => {
+    render(<TaskEditor connections={[]} draft={draft({ name: "Pending" })} onChange={vi.fn()} onRun={vi.fn()} onSave={vi.fn()} saving />);
+    expect(screen.getByRole("textbox", { name: "ssh.tasks.editor.name" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "ssh.tasks.editor.defaultConnection" })).toBeDisabled();
+  });
   it("exposes the complete long title while giving the editor flexible space", () => {
     const name = "Deploy the production service with the latest migration bundle";
     render(

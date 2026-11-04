@@ -37,7 +37,7 @@ export function useDatabaseConnections(
   return useQuery({
     enabled: Boolean(active && workspaceId),
     queryKey: databaseConnectionsQueryKey(workspaceId),
-    meta: { cloudSyncWorkspaceId: workspaceId },
+    meta: { cloudSyncWorkspaceId: workspaceId, localDataDomains: ["database-connections"] },
     queryFn: () => listDatabaseConnections(workspaceId),
   });
 }

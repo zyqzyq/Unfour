@@ -112,6 +112,9 @@ export async function handleApiRequestMock<T>(
     );
     if (index === -1) throw new Error("api request not found");
     const current = mockStore.savedRequests[index];
+    if (args?.expectedRevision != null && args.expectedRevision !== current.revision) {
+      throw { code: "ROW_CONFLICT", message: "This item changed outside this editor. Reload it before saving." };
+    }
     const saved: ApiSavedRequest = {
       ...current,
       name: input.name || `${input.method} ${input.url}`,

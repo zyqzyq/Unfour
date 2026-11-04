@@ -174,10 +174,11 @@ export function WorkspaceEnvironmentsPage({
           modeRevision={modeRevision}
           onCreate={(name) => createMut.mutateAsync(name)}
           onDirtyChange={setDirty}
-          onEnvironmentCreated={(environmentId) =>
-            applySelection({ environmentId, kind: "environment" })
-          }
-          onReplaceWorkspaceVariables={(variables) => replaceMut.mutateAsync(variables)}
+          onEnvironmentCreated={(environmentId, keepDraft) => {
+            if (keepDraft) setSelection({ environmentId, kind: "environment" });
+            else applySelection({ environmentId, kind: "environment" });
+          }}
+          onReplaceWorkspaceVariables={(variables, expected) => replaceMut.mutateAsync({ variables, expected })}
           onUpdate={(input) => updateMut.mutateAsync(input)}
           saving={createMut.isPending || updateMut.isPending || replaceMut.isPending}
           workspaceVariables={workspaceVariables}

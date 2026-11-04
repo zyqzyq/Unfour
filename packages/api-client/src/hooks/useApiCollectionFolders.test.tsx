@@ -96,7 +96,7 @@ describe("useApiCollectionFolders", () => {
       ),
     );
     await waitFor(() =>
-      expect(renameMock).toHaveBeenCalledWith("ws-1", "folder-1", "Renamed"),
+      expect(renameMock).toHaveBeenCalledWith("ws-1", "folder-1", "Renamed", undefined),
     );
     await waitFor(() =>
       expect(moveRequestMock).toHaveBeenCalledWith(

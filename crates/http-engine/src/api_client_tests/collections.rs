@@ -2,6 +2,83 @@ use super::super::*;
 use super::support::{save_in_collection, service};
 
 #[tokio::test]
+async fn stale_collection_and_folder_rename_leave_external_names_unchanged() {
+    let service = service().await;
+    let collection = service
+        .create_collection("workspace-a".into(), "Original".into())
+        .await
+        .unwrap();
+    let folder = service
+        .create_collection_folder(
+            "workspace-a".into(),
+            collection.id.clone(),
+            None,
+            "Folder".into(),
+        )
+        .await
+        .unwrap();
+    service
+        .rename_collection(
+            "workspace-a".into(),
+            collection.id.clone(),
+            "External".into(),
+        )
+        .await
+        .unwrap();
+    service
+        .rename_collection_folder(
+            "workspace-a".into(),
+            folder.id.clone(),
+            "External folder".into(),
+        )
+        .await
+        .unwrap();
+    let context = unfour_core::domain::CommandContext::local("api.collection.rename");
+    let mut tx = service.db.pool().begin().await.unwrap();
+    let error = service
+        .rename_collection_if_current_on(
+            &mut tx,
+            &context,
+            "workspace-a".into(),
+            collection.id.clone(),
+            "Stale".into(),
+            Some(collection.updated_at),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, AppError::RowConflict(_)));
+    let error = service
+        .rename_collection_folder_if_current_on(
+            &mut tx,
+            &context,
+            "workspace-a".into(),
+            folder.id,
+            "Stale".into(),
+            Some(folder.updated_at),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, AppError::RowConflict(_)));
+    tx.rollback().await.unwrap();
+    assert_eq!(
+        service
+            .list_collections("workspace-a".into())
+            .await
+            .unwrap()[0]
+            .name,
+        "External"
+    );
+    assert_eq!(
+        service
+            .list_collection_folders("workspace-a".into(), Some(collection.id))
+            .await
+            .unwrap()[0]
+            .name,
+        "External folder"
+    );
+}
+
+#[tokio::test]
 async fn collection_names_are_workspace_scoped_case_insensitive_and_id_based() {
     let service = service().await;
     let first = service

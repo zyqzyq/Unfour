@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import type { ApiCollection, ApiCollectionFolder } from "@unfour/command-client";
+import type { ApiCollection, ApiCollectionFolder, ApiSavedRequest } from "@unfour/command-client";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, I18nProvider, Popover, PopoverContent, PopoverTrigger } from "@unfour/ui";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -49,6 +49,7 @@ const sendTab = vi.fn();
 const closeTab = vi.fn();
 const closeTabs = vi.fn();
 let requestTabs: ApiRequestTab[];
+let listedRequests: ApiSavedRequest[];
 const createCollectionMutateAsync = vi.fn();
 const createFolderMutateAsync = vi.fn();
 
@@ -65,7 +66,7 @@ vi.mock("./hooks/useApiRequestTabs", () => ({
       openHistory: vi.fn(),
       openSaved: vi.fn(),
       saveTab,
-      savedRequests: [],
+      savedRequests: listedRequests,
       selectTab: vi.fn(),
       sendTab,
       setCollectionStatus: vi.fn(),
@@ -126,10 +127,24 @@ afterEach(() => {
 
 beforeEach(() => {
   requestTabs = [unsavedTab()];
+  listedRequests = [];
   saveTab.mockResolvedValue("req-1");
 });
 
 describe("API shortcut ownership", () => {
+  it("does not replay a previous Send intent when saved requests refresh", () => {
+    requestTabs = [{ ...unsavedTab(), id: "saved:req-1", savedRequestId: "req-1" }];
+    listedRequests = [{ id: "req-1" } as ApiSavedRequest];
+    const intent = { kind: "saved" as const, action: "send" as const, requestId: "req-1", nonce: 1 };
+    const { rerender } = render(<ApiClientPage openIntent={intent} workspaceId="ws-1" />);
+    expect(sendTab).toHaveBeenCalledTimes(1);
+    requestTabs = [{ ...requestTabs[0], draft: { ...requestTabs[0].draft, url: "https://external.test" } }];
+    listedRequests = [{ ...listedRequests[0], revision: 2 }];
+    rerender(<ApiClientPage openIntent={intent} workspaceId="ws-1" />);
+    expect(sendTab).toHaveBeenCalledTimes(1);
+    rerender(<ApiClientPage openIntent={{ ...intent, nonce: 2 }} workspaceId="ws-1" />);
+    expect(sendTab).toHaveBeenCalledTimes(2);
+  });
   it("does not send or save from the cURL preview dialog", () => {
     renderPage();
     fireEvent.click(screen.getByRole("button", { name: "Import cURL" }));

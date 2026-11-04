@@ -30,7 +30,7 @@ export function useApiCollectionRequestActions(workspaceId: string) {
       updateApiRequest(workspaceId, request.id, {
         ...savedRequestToInput(request, workspaceId),
         name,
-      }),
+      }, request.revision),
     onSuccess: invalidateSaved,
     onError: (error) => handleError(error, { key: "feedback.api.requestRenameFailed" }),
   });

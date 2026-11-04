@@ -58,7 +58,8 @@ export function hydrateTaskTab(
   draft: SshTaskSaveInput,
 ): SshTaskEditorState {
   return updateTab(state, tabId, (tab) => {
-    if (tab.draft || tab.taskId !== draft.id) return tab;
+    if (tab.taskId !== draft.id || isTaskTabDirty(tab)) return tab;
+    if (JSON.stringify(tab.baseline) === JSON.stringify(draft)) return tab;
     return { ...tab, baseline: draft, draft };
   });
 }
@@ -146,7 +147,11 @@ export function removeTaskTabs(
 export function isTaskTabDirty(tab: SshTaskEditorTab): boolean {
   if (!tab.draft) return false;
   if (!tab.baseline) return true;
-  return JSON.stringify(tab.draft) !== JSON.stringify(tab.baseline);
+  return taskDraftContent(tab.draft) !== taskDraftContent(tab.baseline);
+}
+
+export function taskDraftContent(draft: SshTaskSaveInput | null) {
+  return draft ? JSON.stringify({ ...draft, expectedSnapshot: undefined }) : null;
 }
 
 function savedTaskTabId(taskId: string) {

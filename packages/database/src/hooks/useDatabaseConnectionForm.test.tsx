@@ -6,6 +6,54 @@ import { useDatabaseConnectionForm } from "./useDatabaseConnectionForm";
 
 afterEach(cleanup);
 
+it("refreshes a clean editor and retains a conflicting dirty draft", () => {
+  const { result, rerender } = renderHook(
+    ({ selected }) => useDatabaseConnectionForm("ws-a", selected.id, selected),
+    { initialProps: { selected: connection } },
+  );
+  act(() => result.current.hydrateFormFromConnection(connection));
+  rerender({ selected: { ...connection, name: "External" } });
+  expect(result.current.form.name).toBe("External");
+  act(() => result.current.setForm((form) => ({ ...form, name: "Draft" })));
+  rerender({ selected: { ...connection, name: "External again" } });
+  expect(result.current.form.name).toBe("Draft");
+  expect(result.current.externalChange).toBe(true);
+  act(() => result.current.reloadLatest());
+  expect(result.current.form.name).toBe("External again");
+  expect(result.current.externalChange).toBe(false);
+});
+
+it("retains an open draft and its precondition when an external deletion clears selection", () => {
+  const { result, rerender } = renderHook(
+    ({ selected }: { selected: DatabaseConnection | null }) => useDatabaseConnectionForm("ws-a", selected?.id ?? null, selected),
+    { initialProps: { selected: connection as DatabaseConnection | null } },
+  );
+  act(() => {
+    result.current.hydrateFormFromConnection(connection);
+    result.current.setEditorOpen(true);
+    result.current.setPassword("unsaved secret");
+  });
+  rerender({ selected: null });
+  expect(result.current.externalChange).toBe(true);
+  expect(result.current.form.expectedSnapshot).toEqual(connection);
+  expect(result.current.password).toBe("unsaved secret");
+  expect(result.current.editorOpen).toBe(true);
+});
+
+it("does not conflict with cloud acknowledgement metadata while editing", () => {
+  const { result, rerender } = renderHook(
+    ({ selected }) => useDatabaseConnectionForm("ws-a", selected.id, selected),
+    { initialProps: { selected: connection } },
+  );
+  act(() => {
+    result.current.hydrateFormFromConnection(connection);
+    result.current.setForm((form) => ({ ...form, name: "Draft" }));
+  });
+  rerender({ selected: { ...connection, syncStatus: "synced", remoteId: "remote", revision: 99 } });
+  expect(result.current.externalChange).toBe(false);
+  expect(result.current.form.name).toBe("Draft");
+});
+
 const connection: DatabaseConnection = {
   id: "db-a",
   workspaceId: "ws-a",

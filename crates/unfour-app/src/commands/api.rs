@@ -174,11 +174,12 @@ pub async fn api_collection_rename(
     workspace_id: String,
     collection_id: String,
     name: String,
+    expected_updated_at: Option<String>,
     state: State<'_, AppState>,
 ) -> AppResult<ApiCollection> {
     state
         .command_bus
-        .api_collection_rename(workspace_id, collection_id, name)
+        .api_collection_rename_if_current(workspace_id, collection_id, name, expected_updated_at)
         .await
 }
 
@@ -225,11 +226,12 @@ pub async fn api_collection_folder_rename(
     workspace_id: String,
     folder_id: String,
     name: String,
+    expected_updated_at: Option<String>,
     state: State<'_, AppState>,
 ) -> AppResult<ApiCollectionFolder> {
     state
         .command_bus
-        .api_collection_folder_rename(workspace_id, folder_id, name)
+        .api_collection_folder_rename_if_current(workspace_id, folder_id, name, expected_updated_at)
         .await
 }
 
@@ -390,11 +392,12 @@ pub async fn api_request_update(
     workspace_id: String,
     request_id: String,
     input: ApiRequestInput,
+    expected_revision: Option<i64>,
     state: State<'_, AppState>,
 ) -> AppResult<ApiSavedRequest> {
     state
         .command_bus
-        .update_api_request(workspace_id, request_id, input)
+        .update_api_request_if_current(workspace_id, request_id, input, expected_revision)
         .await
 }
 

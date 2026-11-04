@@ -22,7 +22,7 @@ export function useApiCollections(workspaceId: string) {
   const query = useQuery({
     enabled: Boolean(workspaceId),
     queryKey: ["api-collections", workspaceId],
-    meta: { cloudSyncWorkspaceId: workspaceId },
+    meta: { cloudSyncWorkspaceId: workspaceId, localDataDomains: ["api-collections"] },
     queryFn: () => listApiCollections(workspaceId),
   });
 
@@ -36,8 +36,8 @@ export function useApiCollections(workspaceId: string) {
       handleError(error, { key: "feedback.api.collectionCreateFailed" }),
   });
   const renameMut = useMutation({
-    mutationFn: (input: { id: string; name: string }) =>
-      renameApiCollection(workspaceId, input.id, input.name),
+    mutationFn: (input: { id: string; name: string; expectedUpdatedAt?: string }) =>
+      renameApiCollection(workspaceId, input.id, input.name, input.expectedUpdatedAt),
     onSuccess: invalidate,
     onError: (error) =>
       handleError(error, { key: "feedback.api.collectionRenameFailed" }),

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ApiCollection, ApiSavedRequest } from "@unfour/command-client";
+import type { ApiCollection, ApiCollectionFolder, ApiSavedRequest } from "@unfour/command-client";
 import { useI18n } from "@unfour/ui";
 import { findDuplicateRequestName, type FolderNode } from "../request-utils";
 import type { useApiCollections } from "./useApiCollections";
@@ -36,12 +36,18 @@ export function useApiCollectionTreeDialogs({
   const { t } = useI18n();
   const name = useNameDialog<NameTarget>();
   const rename = useNameDialog<ApiCollection>();
-  const renameFolder = useNameDialog<FolderNode>();
+  const renameFolder = useNameDialog<ApiCollectionFolder>();
   const renameRequest = useNameDialog<ApiSavedRequest>();
   const [deleteTarget, setDeleteTarget] = useState<ApiCollection | null>(null);
   const [deleteFolderTarget, setDeleteFolderTarget] = useState<FolderNode | null>(null);
   const [exportTarget, setExportTarget] = useState<ApiCollection | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const latestCollection = collections.collections.find((item) => item.id === rename.target?.id);
+  const latestFolder = folders.folders.find((item) => item.id === renameFolder.target?.id);
+  const latestRequest = requests.find((item) => item.id === renameRequest.target?.id);
+  const collectionChanged = Boolean(rename.target && latestCollection?.updatedAt !== rename.target.updatedAt);
+  const folderChanged = Boolean(renameFolder.target && latestFolder?.updatedAt !== renameFolder.target.updatedAt);
+  const requestChanged = Boolean(renameRequest.target && latestRequest?.revision !== renameRequest.target.revision);
 
   function confirmName() {
     const value = name.value.trim();
@@ -58,18 +64,18 @@ export function useApiCollectionTreeDialogs({
 
   function confirmRename() {
     const value = rename.value.trim();
-    if (!rename.target || !value) return;
+    if (!rename.target || !value || collectionChanged) return;
     collections.renameMut.mutate(
-      { id: rename.target.id, name: value },
+      { id: rename.target.id, name: value, expectedUpdatedAt: rename.target.updatedAt },
       { onSuccess: rename.onClose },
     );
   }
 
   function confirmFolderRename() {
     const value = renameFolder.value.trim();
-    if (!renameFolder.target || !value) return;
+    if (!renameFolder.target || !value || folderChanged) return;
     folders.renameFolderMut.mutate(
-      { folderId: renameFolder.target.id, name: value },
+      { folderId: renameFolder.target.id, name: value, expectedUpdatedAt: renameFolder.target.updatedAt },
       { onSuccess: renameFolder.onClose },
     );
   }
@@ -77,7 +83,7 @@ export function useApiCollectionTreeDialogs({
   function confirmRequestRename() {
     const value = renameRequest.value.trim();
     const request = renameRequest.target;
-    if (!request || !value) return;
+    if (!request || !value || requestChanged) return;
     if (findDuplicateRequestName(requests, value, request.collectionId, request.parentFolderId, request.id)) {
       setErrorMessage(t("api.save.duplicateName", { name: value }));
       return;
@@ -100,9 +106,12 @@ export function useApiCollectionTreeDialogs({
 
   return {
     name: { ...name, confirm: confirmName, pending: collections.createMut.isPending || folders.createFolderMut.isPending },
-    rename: { ...rename, confirm: confirmRename, pending: collections.renameMut.isPending },
-    renameFolder: { ...renameFolder, confirm: confirmFolderRename, pending: folders.renameFolderMut.isPending },
-    renameRequest: { ...renameRequest, confirm: confirmRequestRename, pending: requestActions.updateRequestMutation.isPending },
+    rename: { ...rename, confirm: confirmRename, pending: collections.renameMut.isPending,
+      externalChange: collectionChanged, reload: latestCollection ? () => rename.open(latestCollection, latestCollection.name) : undefined },
+    renameFolder: { ...renameFolder, confirm: confirmFolderRename, pending: folders.renameFolderMut.isPending,
+      externalChange: folderChanged, reload: latestFolder ? () => renameFolder.open(latestFolder, latestFolder.name) : undefined },
+    renameRequest: { ...renameRequest, confirm: confirmRequestRename, pending: requestActions.updateRequestMutation.isPending,
+      externalChange: requestChanged, reload: latestRequest ? () => renameRequest.open(latestRequest, latestRequest.name) : undefined },
     deleteCollection: { target: deleteTarget, onClose: () => setDeleteTarget(null), confirm: confirmDelete, pending: collections.deleteMut.isPending },
     deleteFolder: { target: deleteFolderTarget, onClose: () => setDeleteFolderTarget(null), confirm: confirmFolderDelete, pending: folders.deleteFolderMut.isPending },
     exportCollection: { target: exportTarget, onClose: () => setExportTarget(null) },
@@ -112,7 +121,10 @@ export function useApiCollectionTreeDialogs({
     openFolder: (collectionId: string, parentFolderId: string | null) =>
       name.open({ kind: "folder", collectionId, parentFolderId }, ""),
     renameCollection: (collection: ApiCollection) => rename.open(collection, collection.name),
-    renameFolderItem: (folder: FolderNode) => renameFolder.open(folder, folder.name),
+    renameFolderItem: (folder: FolderNode) => {
+      const record = folders.folders.find((item) => item.id === folder.id);
+      if (record) renameFolder.open(record, record.name);
+    },
     renameRequestItem: (request: ApiSavedRequest) => renameRequest.open(request, request.name),
     deleteCollectionItem: setDeleteTarget,
     deleteFolderItem: setDeleteFolderTarget,

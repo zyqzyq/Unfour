@@ -20,7 +20,7 @@ export function useApiCollectionFolders(workspaceId: string) {
   const query = useQuery({
     enabled: Boolean(workspaceId),
     queryKey: ["api-collection-folders", workspaceId],
-    meta: { cloudSyncWorkspaceId: workspaceId },
+    meta: { cloudSyncWorkspaceId: workspaceId, localDataDomains: ["api-folders"] },
     queryFn: () => listApiCollectionFolders(workspaceId),
   });
 
@@ -48,8 +48,8 @@ export function useApiCollectionFolders(workspaceId: string) {
   });
 
   const renameFolderMut = useMutation({
-    mutationFn: (input: { folderId: string; name: string }) =>
-      renameApiCollectionFolder(workspaceId, input.folderId, input.name),
+    mutationFn: (input: { folderId: string; name: string; expectedUpdatedAt?: string }) =>
+      renameApiCollectionFolder(workspaceId, input.folderId, input.name, input.expectedUpdatedAt),
     onSuccess: invalidateFolders,
     onError: (error) => handleError(error, { key: "feedback.api.folderRenameFailed" }),
   });

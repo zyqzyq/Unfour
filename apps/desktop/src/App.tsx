@@ -19,6 +19,7 @@ import {
 } from "./features/cloud-sync";
 import { createCloudSyncWorkspaceActions } from "./features/cloud-sync/workspaceMenuActions";
 import { useCloudSyncQueryRefresh } from "./features/cloud-sync/useCloudSyncQueryRefresh";
+import { useLocalDataQueryRefresh } from "./features/local-data/useLocalDataQueryRefresh";
 import {
   UpdateIndicator,
   UpdateOverlays,
@@ -40,6 +41,7 @@ function DesktopOverlays(context: DesktopAppExtensionContext) {
 
 function ExtendedDesktopApp() {
   useCloudSyncQueryRefresh();
+  useLocalDataQueryRefresh();
   const { t } = useI18n();
   const cloudSync = useCloudSync();
   const workspaceMenuActions: DesktopAppWorkspaceActionsProvider = (_context, workspace) =>

@@ -1,3 +1,4 @@
+import { taskEditSnapshot } from "./editor-snapshots";
 import type {
   SshTaskCleanupInput,
   SshTaskDetail,
@@ -103,6 +104,10 @@ function handleTaskSaveMock<T>(
   args?: Record<string, unknown>,
 ): MockResult<T> {
   if (command !== "ssh_task_save") return UNHANDLED;
+  const input = args?.input as SshTaskSaveInput;
+  if (args?.expectedSnapshot && taskEditSnapshot(args.expectedSnapshot as SshTaskDetail) !== taskEditSnapshot(
+    mockStore.sshTasks.find((detail) => detail.task.id === input.id && detail.task.workspaceId === input.workspaceId && !detail.task.deletedAt),
+  )) throw { code: "ROW_CONFLICT", message: "record changed externally; reload before saving" };
   return saveTask(args?.input as SshTaskSaveInput) as T;
 }
 

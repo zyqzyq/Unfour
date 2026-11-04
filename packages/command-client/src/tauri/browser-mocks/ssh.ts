@@ -1,4 +1,5 @@
 import { redactSshLog } from "./helpers";
+import { connectionEditSnapshot } from "./editor-snapshots";
 import {
   mockHostKeyFingerprintKey,
   mockState,
@@ -36,6 +37,9 @@ export function handleSshMock<T>(
 
   if (command === "ssh_connection_save") {
     const input = args?.input as SshConnectionInput;
+    if (args?.expectedSnapshot && connectionEditSnapshot(args.expectedSnapshot as SshConnection) !== connectionEditSnapshot(
+      mockStore.sshConnections.find((item) => item.id === input.id && item.workspaceId === input.workspaceId),
+    )) throw { code: "ROW_CONFLICT", message: "record changed externally; reload before saving" };
     const now = new Date().toISOString();
     const existingIndex = input.id
       ? mockStore.sshConnections.findIndex((item) => item.id === input.id)

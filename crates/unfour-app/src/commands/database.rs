@@ -49,11 +49,12 @@ pub async fn database_connections_list(
 pub async fn database_connection_save(
     input: DatabaseConnectionInput,
     secret: Option<String>,
+    expected_snapshot: Option<DatabaseConnection>,
     state: State<'_, AppState>,
 ) -> AppResult<DatabaseConnection> {
     state
         .command_bus
-        .save_database_connection_with_secret(input, secret)
+        .save_database_connection_checked(input, secret, expected_snapshot)
         .await
 }
 

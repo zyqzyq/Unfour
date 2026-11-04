@@ -200,6 +200,7 @@ function SshConnectionTreeContent({
     mutationFn: (connection: SshConnection) =>
       saveSshConnection({
         ...sshConnectionToInput(connection, workspaceId),
+        expectedSnapshot: undefined,
         id: undefined,
         name: t("ssh.tree.copyName", { name: connection.name }),
       }),

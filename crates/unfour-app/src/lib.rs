@@ -363,6 +363,7 @@ macro_rules! generate_handlers {
             unfour_app::commands::open_diagnostics_dir,
             unfour_app::commands::open_log_dir,
             unfour_app::commands::system_health,
+            unfour_app::commands::local_data_versions,
             unfour_app::commands::workspace_create,
             unfour_app::commands::workspace_delete,
             unfour_app::commands::workspace_list,

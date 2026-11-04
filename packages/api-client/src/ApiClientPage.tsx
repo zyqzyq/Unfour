@@ -42,6 +42,7 @@ export function ApiClientPage({
     newRequest,
     openHistory,
     openSaved,
+    reloadTab,
     saveTab,
     savedRequests,
     selectTab,
@@ -64,6 +65,7 @@ export function ApiClientPage({
   const pendingCloseQueueRef = useRef<string[]>([]);
   const urlInputRef = useRef<HTMLInputElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
+  const consumedOpenIntent = useRef<{ workspaceId: string; nonce: number } | null>(null);
   const pendingIntentAction = useRef<{
     action: "save" | "send";
     tabId: string;
@@ -130,6 +132,11 @@ export function ApiClientPage({
     if (!openIntent) {
       return;
     }
+    if (consumedOpenIntent.current?.workspaceId === workspaceId && consumedOpenIntent.current.nonce === openIntent.nonce) return;
+    // Wait for initial saved data, then consume this user action exactly once.
+    // Background query refreshes must never replay a Send or save intent.
+    if (openIntent.kind === "saved" && !savedRequests.some((item) => item.id === openIntent.requestId)) return;
+    consumedOpenIntent.current = { workspaceId, nonce: openIntent.nonce };
     if (openIntent.kind === "new") {
       newRequest();
       return;
@@ -151,7 +158,7 @@ export function ApiClientPage({
       };
     }
     void openHistory(openIntent.historyId);
-  }, [newRequest, openHistory, openIntent, openSaved]);
+  }, [newRequest, openHistory, openIntent, openSaved, savedRequests, workspaceId]);
 
   useEffect(() => {
     const pending = pendingIntentAction.current;
@@ -164,7 +171,7 @@ export function ApiClientPage({
     } else {
       setSaveDialogTabId(activeTab.id);
     }
-  }, [activeTab, sendTab]);
+  }, [activeTab, sendTab, openIntent]);
 
   useEffect(() => {
     if (!active) return;
@@ -432,12 +439,15 @@ export function ApiClientPage({
             </EmptyState>
           ) : (
             <ApiRequestWorkspace
+              workspaceId={workspaceId}
               activeTab={activeTab}
               collectionStatus={collectionStatus}
               onRequestNameCommit={handleRequestNameCommit}
               onRequestTabChange={setRequestTab}
               onResponseTabChange={setResponseTab}
               onSave={requestSave}
+              onReload={(tab) => void reloadTab(tab)}
+              onCopyDraft={(tab) => newRequest({ ...tab.draft, collectionId: null, parentFolderId: null })}
               onSend={sendTab}
               onStop={(tab) => void cancelTab(tab)}
               onUpdateDraft={updateDraft}

@@ -1,6 +1,12 @@
 use super::*;
 
 impl CommandBus {
+    pub async fn local_data_versions(
+        &self,
+    ) -> AppResult<Vec<unfour_core::models::LocalDataVersion>> {
+        self.db.local_data_versions().await
+    }
+
     pub async fn ephemeral() -> AppResult<Self> {
         let db = LocalDb::connect_ephemeral().await?;
         db.migrate().await?;
@@ -450,6 +456,16 @@ impl CommandBus {
         workspace_id: String,
         environment_type: String,
     ) -> AppResult<Workspace> {
+        self.update_workspace_environment_checked(workspace_id, environment_type, None)
+            .await
+    }
+
+    pub async fn update_workspace_environment_checked(
+        &self,
+        workspace_id: String,
+        environment_type: String,
+        expected: Option<Workspace>,
+    ) -> AppResult<Workspace> {
         let context = unfour_core::domain::CommandContext::local("workspace.environment.update");
         let executor_context = context.clone();
         let service = self.workspace.clone();
@@ -464,6 +480,11 @@ impl CommandBus {
             }),
             move |connection| {
                 Box::pin(async move {
+                    if let Some(expected) = expected {
+                        service
+                            .assert_security_expected_on(connection, &workspace_id, &expected)
+                            .await?;
+                    }
                     service
                         .update_environment_type_on(
                             connection,
@@ -483,6 +504,16 @@ impl CommandBus {
         workspace_id: String,
         mcp_policy: String,
     ) -> AppResult<Workspace> {
+        self.update_workspace_mcp_policy_checked(workspace_id, mcp_policy, None)
+            .await
+    }
+
+    pub async fn update_workspace_mcp_policy_checked(
+        &self,
+        workspace_id: String,
+        mcp_policy: String,
+        expected: Option<Workspace>,
+    ) -> AppResult<Workspace> {
         let context = unfour_core::domain::CommandContext::local("workspace.mcp_policy.update");
         let executor_context = context.clone();
         let service = self.workspace.clone();
@@ -497,6 +528,11 @@ impl CommandBus {
             }),
             move |connection| {
                 Box::pin(async move {
+                    if let Some(expected) = expected {
+                        service
+                            .assert_security_expected_on(connection, &workspace_id, &expected)
+                            .await?;
+                    }
                     service
                         .update_mcp_policy_on(
                             connection,
@@ -516,6 +552,16 @@ impl CommandBus {
         workspace_id: String,
         name: String,
     ) -> AppResult<Workspace> {
+        self.rename_workspace_checked(workspace_id, name, None)
+            .await
+    }
+
+    pub async fn rename_workspace_checked(
+        &self,
+        workspace_id: String,
+        name: String,
+        expected_name: Option<String>,
+    ) -> AppResult<Workspace> {
         let context = unfour_core::domain::CommandContext::local("workspace.rename");
         let executor_context = context.clone();
         let service = self.workspace.clone();
@@ -530,6 +576,11 @@ impl CommandBus {
             }),
             move |connection| {
                 Box::pin(async move {
+                    if let Some(expected) = expected_name {
+                        service
+                            .assert_name_expected_on(connection, &workspace_id, &expected)
+                            .await?;
+                    }
                     service
                         .rename_on(connection, &executor_context, workspace_id, name)
                         .await

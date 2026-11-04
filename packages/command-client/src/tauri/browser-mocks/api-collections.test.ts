@@ -48,6 +48,19 @@ function request(owner: ApiCollection, parentFolderId: string | null = null) {
 }
 
 describe("collection mock routing and lifecycle", () => {
+  it("rejects stale collection, folder and request editor writes", async () => {
+    const owner = await collection();
+    const child = await folder(owner);
+    const saved = await request(owner);
+    await expect(mockInvoke("api_collection_rename", { workspaceId: "w1", collectionId: owner.id, name: "Stale", expectedUpdatedAt: "old" })).rejects.toMatchObject({ code: "ROW_CONFLICT" });
+    await expect(mockInvoke("api_collection_folder_rename", { workspaceId: "w1", folderId: child.id, name: "Stale", expectedUpdatedAt: "old" })).rejects.toMatchObject({ code: "ROW_CONFLICT" });
+    await expect(mockInvoke("api_request_update", { workspaceId: "w1", requestId: saved.id, expectedRevision: 0, input: {
+      workspaceId: "w1", collectionId: owner.id, method: "GET", url: "https://stale.invalid", headers: [], query: [], bodyKind: "none",
+    } })).rejects.toMatchObject({ code: "ROW_CONFLICT" });
+    expect(owner.name).toBe("Collection");
+    expect(child.name).toBe("Folder");
+    expect(mockStore.savedRequests[0].url).toBe("https://example.invalid");
+  });
   it("preserves browser cancellation results and unknown-command fallthrough", async () => {
     await expect(mockInvoke("api_collection_import_preview")).resolves.toBeNull();
     await expect(mockInvoke("api_collection_import")).resolves.toEqual({

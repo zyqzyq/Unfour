@@ -321,6 +321,12 @@
     }
   },
   "api": {
+    "external": {
+      "updated": "This item changed outside this editor. Your draft is preserved. Reload before saving.",
+      "deleted": "This item was deleted outside this editor. Your draft is preserved; it cannot be saved to the deleted item.",
+      "reload": "Reload and discard draft",
+      "copyDraft": "Copy draft to new request"
+    },
     "curl": {
       "title": "Import cURL",
       "description": "Preview locally, then open an unsaved request. Nothing is sent or saved. Query encoding follows the Unfour parameter editor. Form bodies retain their original encoding as raw text. Secrets remain in memory until you explicitly save.",
@@ -612,6 +618,8 @@
     "title": "API Debugger"
   },
   "variables": {
+    "externalChange": "This data changed or was deleted elsewhere. Your edits are kept. Load the latest version to discard your edits and continue.",
+    "reloadLatest": "Load latest version",
     "active": "Active",
     "activeEnvironment": "Active variable environment",
     "activeEnvironmentHelp": "Used for API and SSH Task variables and as the default when opening a Flow run. Workspace type and MCP permissions are separate settings.",
@@ -661,6 +669,8 @@
     "workspaceVariables": "Workspace Variables"
   },
   "common": {
+    "externalChange": "This item changed or was deleted externally. Your draft is retained. Load the latest version before saving.",
+    "reloadLatest": "Load latest version",
     "search": { "clear": "Clear search" },
     "tabs": {
       "close": "Close",

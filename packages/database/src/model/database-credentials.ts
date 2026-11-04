@@ -5,6 +5,10 @@ import {
 
 export const DATABASE_PASSWORD_KIND = "database-password";
 
+export function databaseConnectionContent(connection: DatabaseConnection | null) {
+  return connection ? JSON.stringify({ ...databaseConnectionToInput(connection, connection.workspaceId), expectedSnapshot: undefined }) : null;
+}
+
 export function emptyDatabaseConnectionForm(
   workspaceId: string,
 ): DatabaseConnectionInput {
@@ -18,6 +22,7 @@ export function databaseConnectionToInput(
 ): DatabaseConnectionInput {
   return {
     id: connection.id,
+    expectedSnapshot: connection,
     workspaceId,
     name: connection.name,
     driver: connection.driver,

@@ -1,6 +1,7 @@
 export type SshAuthKind = "password" | "private-key" | "none";
 
 export type SshConnectionInput = {
+  expectedSnapshot?: SshConnection;
   id?: string;
   workspaceId: string;
   name: string;
@@ -368,6 +369,7 @@ export type SshTaskStepInput = {
 };
 
 export type SshTaskSaveInput = {
+  expectedSnapshot?: SshTaskDetail;
   id?: string;
   workspaceId: string;
   name: string;
