@@ -18,6 +18,7 @@ import { formatFileSize } from "../model/sftp-format";
 
 export type SftpFileListActions = {
   canGoParent: boolean;
+  canPreview: boolean;
   canRefresh: boolean;
   canUpload: boolean;
   onCopyPath: (entry: SftpFileEntry) => void;
@@ -261,8 +262,11 @@ function EntryContextMenu({
           <>
             {isFile ? (
               <>
-                <ContextMenuItem onSelect={() => actions.onPreview(entry)}>
+                <ContextMenuItem disabled={!actions.canPreview} onSelect={() => actions.onPreview(entry)}>
                   {t("ssh.sftp.preview.action")}
+                  {!actions.canPreview && (
+                    <span className="ml-auto text-[11px]">{t("ssh.sftp.preview.transferActive")}</span>
+                  )}
                 </ContextMenuItem>
                 <ContextMenuItem onSelect={() => actions.onDownload(entry)}>
                   {t("ssh.sftp.menu.download")}

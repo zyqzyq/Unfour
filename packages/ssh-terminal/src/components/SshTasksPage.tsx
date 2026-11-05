@@ -154,13 +154,22 @@ export function SshTasksPage({
     mutationFn: ({ draft: input }: { draft: SshTaskSaveInput; tabId: string }) =>
       saveSshTask(input),
     onSuccess: async (detail, { tabId }) => {
-      const detailKey = ["ssh-task", workspaceId, detail.task.id];
-      await queryClient.cancelQueries({ queryKey: detailKey, exact: true });
-      await queryClient.cancelQueries({ queryKey: ["ssh-tasks", workspaceId], exact: true });
+      const task = detail.task;
+      const detailKey = ["ssh-task", task.workspaceId, task.id];
+      const listKey = ["ssh-tasks", task.workspaceId];
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: detailKey, exact: true }),
+        queryClient.cancelQueries({ queryKey: listKey, exact: true }),
+      ]);
+      queryClient.setQueryData(detailKey, detail);
+      queryClient.setQueryData<SshTask[]>(listKey, (current = []) =>
+        current.some((row) => row.id === task.id)
+          ? current.map((row) => row.id === task.id ? task : row)
+          : [...current, task],
+      );
       const savedDraft = taskDetailToDraft(detail);
       setEditorState((current) => persistTaskTab(current, tabId, savedDraft));
-      queryClient.setQueryData(["ssh-task", workspaceId, detail.task.id], detail);
-      queryClient.invalidateQueries({ queryKey: ["ssh-tasks", workspaceId] });
+      void queryClient.invalidateQueries({ queryKey: listKey, exact: true });
       void queryClient.invalidateQueries({ queryKey: detailKey, exact: true });
     },
     onError: (error, { draft }) => {

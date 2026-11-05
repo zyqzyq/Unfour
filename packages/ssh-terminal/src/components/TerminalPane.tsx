@@ -227,7 +227,7 @@ export function TerminalPane({
     // WebView2 can leave xterm paused after a pane was hidden. Disable that
     // observer once for this terminal; `paintActive` already prevents hidden
     // panes from consuming output/render work.
-    window.requestAnimationFrame(() => resumeTerminalRendering(terminal));
+    const resumeFrame = window.requestAnimationFrame(() => resumeTerminalRendering(terminal));
 
     const syncFittedSize = () => {
       fitAndSyncTerminalSize(terminal, fitAddon, lastSizeRef, (cols, rows) => {
@@ -322,6 +322,7 @@ export function TerminalPane({
     resizeObserver?.observe(hostRef.current);
 
     return () => {
+      window.cancelAnimationFrame(resumeFrame);
       dataDisposable.dispose();
       resizeDisposable.dispose();
       resizeObserver?.disconnect();
@@ -338,8 +339,11 @@ export function TerminalPane({
   useEffect(() => {
     if (active) {
       setTerminalSearchAddon(searchAddonRef.current);
-      window.requestAnimationFrame(() => terminalRef.current?.focus());
-      return () => setTerminalSearchAddon(null);
+      const focusFrame = window.requestAnimationFrame(() => terminalRef.current?.focus());
+      return () => {
+        window.cancelAnimationFrame(focusFrame);
+        setTerminalSearchAddon(null);
+      };
     }
     return undefined;
   }, [active, setTerminalSearchAddon]);
@@ -352,7 +356,7 @@ export function TerminalPane({
     const fitAddon = fitAddonRef.current;
     const terminal = terminalRef.current;
     if (fitAddon && terminal && paintActive) {
-      window.requestAnimationFrame(() => {
+      const fitFrame = window.requestAnimationFrame(() => {
         resumeTerminalRendering(terminal);
         fitAndSyncTerminalSize(terminal, fitAddon, lastSizeRef, (cols, rows) => {
           const sid = sessionIdRef.current;
@@ -365,6 +369,7 @@ export function TerminalPane({
           terminal.focus();
         }
       });
+      return () => window.cancelAnimationFrame(fitFrame);
     }
   }, [active, paintActive, readOnly, session?.cols, session?.rows, session?.sessionId]);
 

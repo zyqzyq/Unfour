@@ -1293,6 +1293,7 @@
     "sftp": {
       "preview": {
         "action": "预览",
+        "transferActive": "传输结束后可预览",
         "title": "预览 — {name}",
         "description": "只读 · UTF-8 · 最大 1 MiB",
         "content": "远程文本内容",

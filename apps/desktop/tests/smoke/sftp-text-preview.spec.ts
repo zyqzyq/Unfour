@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-// Browser fixtures only; this does not validate a real SSH/SFTP server or xterm.
+// Real terminal renderer with browser fixtures for SSH and SFTP.
 for (const locale of ["en", "zh-CN"] as const) {
   test(`${locale}: SFTP text preview scrolls and closes without transfer`, async ({ page }, testInfo) => {
     const zh = locale === "zh-CN";
@@ -10,13 +10,6 @@ for (const locale of ["en", "zh-CN"] as const) {
       localStorage.setItem("unfour.locale", locale);
       localStorage.setItem("unfour.theme", theme);
     }, { locale, theme: zh ? "dark" : "light" });
-    // Keep this SFTP layout test independent of the PTY renderer. The full-page
-    // run's xterm dimensions failure is recorded in the verification document.
-    await page.route("**/components/TerminalPane.tsx*", async (route) => {
-      await route.fulfill({ contentType: "application/javascript", body: `
-        export function TerminalPane() { return "PTY fixture"; }
-      ` });
-    });
     await page.route("**/browser-mocks/ssh.ts*", async (route) => {
       const response = await route.fetch();
       await route.fulfill({ response, body: await response.text() + `
@@ -43,7 +36,12 @@ for (const locale of ["en", "zh-CN"] as const) {
     await page.getByRole("navigation", { name: zh ? "模块" : "Modules" })
       .getByRole("button", { name: zh ? "SSH 终端" : "SSH Terminal" }).click();
     await page.getByRole("treeitem").filter({ hasText: "Preview fixture" }).dblclick();
+    const screen = page.locator(".xterm-screen");
+    await expect(screen).toBeVisible();
+    const screenWidth = () => screen.evaluate((node) => node.getBoundingClientRect().width);
+    const fullWidth = await screenWidth();
     await page.getByRole("button", { name: zh ? "展开远程文件面板" : "Open Remote Files panel", exact: true }).click();
+    await expect.poll(screenWidth).toBeLessThan(fullWidth);
     const row = page.getByRole("row", { name: /application\.log/ });
     await row.dblclick();
     await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -60,6 +58,13 @@ for (const locale of ["en", "zh-CN"] as const) {
     const calls = await page.evaluate(() => (window as unknown as { __previewCalls: string[] }).__previewCalls);
     expect(calls.filter((command) => command === "ssh_sftp_preview_text")).toHaveLength(1);
     expect(calls.some((command) => /download|upload|delete|rename|create/.test(command))).toBe(false);
+    await page.getByRole("button", { name: zh ? "关闭 demo@fixture" : "Close demo@fixture" }).click();
+    await page.getByRole("button", { name: zh ? "关闭会话" : "Close Session", exact: true }).click();
+    await expect(screen).toHaveCount(0);
+    // Allow a pending pane callback and any xterm refresh it schedules to run.
+    await page.evaluate(() => new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    ));
     expect(errors).toEqual([]);
   });
 }

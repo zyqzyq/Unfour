@@ -39,6 +39,10 @@ type SftpUiState = {
 const TERMINAL_STATUSES: SftpTransferStatus[] = ["success", "failed", "cancelled"];
 const MAX_FINISHED_TRANSFERS_PER_SESSION = 32;
 
+export function hasActiveSftpTransfer(transfers: SftpTransferState[] | undefined) {
+  return transfers?.some(({ status }) => status === "pending" || status === "running") ?? false;
+}
+
 export function isTerminalTransferStatus(status: SftpTransferStatus | string) {
   return TERMINAL_STATUSES.includes(status as SftpTransferStatus);
 }

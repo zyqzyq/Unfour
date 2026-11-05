@@ -83,3 +83,46 @@ for both themes; overflow and Escape are also asserted.
 - **NOT VERIFIED:** real Linux/SFTP manual validation, explicitly deferred by
   the user. Actual server permissions, disconnect/reconnect, large files, remote
   filesystem behavior, and native desktop clipboard still need manual validation.
+
+## SSH follow-up on 2026-11-05
+
+Baseline: local `main` at `be9749a1`. Removing the static PTY replacement
+reproduced the xterm `dimensions` exception in both Chromium preview cases,
+after their SFTP assertions passed.
+
+In SSH Tasks, delaying the list refresh after a successful save left a new
+task missing and a renamed task showing its old name. The missing row also
+triggered the editor's external-deletion check. The save now cancels earlier
+detail/list reads, merges the returned row into that Workspace's cached list,
+and seeds the saved detail before updating the tab and refreshing in the
+background. The regression resolves a pre-save list read while that refresh
+is pending and checks the cache, sidebar, conflict banner and Save button.
+
+Native preview, upload and download reuse the same session's cached
+`Arc<SftpSession>`. The panel already deferred directory reads during pending
+or running transfers, but the file menu could still start a preview. The menu
+now disables Preview with a localized reason. The action and the request
+dispatch both recheck the latest transfer state received by this client for
+the target session. Transfers in other sessions can proceed independently.
+
+TerminalPane queued animation frames for renderer resume, focus and refit.
+A refit frame could call `refresh` after disposal, triggering xterm's deferred
+viewport sync. The effects now cancel their pending frames during cleanup.
+The full-page Chromium regression uses real xterm with SSH/SFTP command
+fixtures, checks that opening Remote Files shrinks the terminal screen, previews
+the file, closes the session, then checks for uncaught errors after two frames.
+
+Closing a preview discards its result. An issued read can continue on the
+shared channel until it completes or the 30-second timeout fires, and may
+contend with a transfer started in that interval. The 1 MiB limit and stale
+result checks still apply. Real Linux/SFTP and native Tauri manual checks
+for this follow-up are **NOT VERIFIED**.
+
+| Follow-up check | Result |
+| --- | --- |
+| `pnpm exec vitest run packages/ssh-terminal packages/ui/src/i18n.test.ts packages/command-client/src/tauri/sftp-preview.test.ts --maxWorkers=4` | PASS, 359 tests across 49 files |
+| `cargo test -p unfour-ssh-engine --features ssh-native sftp --lib` | PASS, 17 tests including bounded reads and session-generation isolation |
+| `pnpm exec playwright test sftp-text-preview.spec.ts ssh-task --workers=2` | PASS, 10 Chromium tests including both full-page preview cases |
+| `pnpm exec playwright test sftp-text-preview.spec.ts --repeat-each=3 --workers=2` | PASS, 6 repeated full-page cases |
+| `pnpm --filter @unfour/desktop exec tsc --noEmit` and `pnpm run build` | PASS, Vite reported the existing bundle-size warning |
+| ESLint on changed TypeScript, `pnpm run check:large-files`, `git diff --check` | PASS, four ESLint size/complexity warnings and zero blocking large files |

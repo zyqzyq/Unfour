@@ -17,6 +17,7 @@ function entry(
 function actions(overrides: Partial<SftpFileListActions> = {}): SftpFileListActions {
   return {
     canGoParent: true,
+    canPreview: true,
     canRefresh: true,
     canUpload: true,
     onCopyPath: vi.fn(),

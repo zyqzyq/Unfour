@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FeedbackProvider, I18nProvider } from "@unfour/ui";
 import type { SftpTransferState, SshSessionSummary } from "@unfour/command-client";
 import { SftpPanel } from "./SftpPanel";
+import { SftpPreviewDialog } from "./SftpPreviewDialog";
 import { useSftpStore } from "../model/sftp-state";
 
 const mocks = vi.hoisted(() => ({
@@ -191,6 +192,53 @@ it("keeps SFTP success and transfer ids when activity logging fails", async () =
   expect(mocks.upload).toHaveBeenCalledTimes(1);
 });
 
+
+it.each(["pending", "running"] as const)("disables Preview while a transfer is %s in this session", async (status) => {
+  mocks.preview.mockResolvedValue({ content: "ready", size: 5 });
+  renderPanel();
+  const row = await screen.findByRole("row", { name: /notes\.txt/ });
+  fireEvent.contextMenu(row);
+  const active = { ...transfer("transfer-1", "download"), status };
+  act(() => useSftpStore.getState().upsertTransfer(active));
+  const item = screen.getByRole("menuitem", { name: /^Preview/ });
+  expect(item).toHaveAttribute("aria-disabled", "true");
+  expect(within(item).getByText("Available after transfer")).toBeVisible();
+  fireEvent.click(item);
+  expect(mocks.preview).not.toHaveBeenCalled();
+
+  act(() => {
+    useSftpStore.getState().upsertTransfer({ ...active, sessionId: "other-session" });
+    useSftpStore.getState().upsertTransfer({ ...active, status: "success" });
+  });
+  fireEvent.click(screen.getByRole("menuitem", { name: "Preview" }));
+  expect(await screen.findByText("ready")).toBeVisible();
+});
+
+it("blocks selection from a still-enabled menu when a transfer has just started", async () => {
+  mocks.preview.mockResolvedValue({ content: "stale selection", size: 15 });
+  renderPanel();
+  fireEvent.contextMenu(await screen.findByRole("row", { name: /notes\.txt/ }));
+  const item = screen.getByRole("menuitem", { name: "Preview" });
+  act(() => {
+    useSftpStore.getState().upsertTransfer(transfer("transfer-1", "upload"));
+    expect(item).not.toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(item);
+  });
+  expect(mocks.preview).not.toHaveBeenCalled();
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+
+it("rechecks transfer state when a selected preview mounts and explains the delay in Chinese", () => {
+  mocks.preview.mockResolvedValue({ content: "late request", size: 12 });
+  useSftpStore.getState().upsertTransfer(transfer("transfer-1", "upload"));
+  render(
+    <I18nProvider initialLocale="zh-CN" storageKey="sftp-preview-transfer-test">
+      <SftpPreviewDialog entry={entry} session={session} onClose={vi.fn()} />
+    </I18nProvider>,
+  );
+  expect(mocks.preview).not.toHaveBeenCalled();
+  expect(screen.getByRole("alert")).toHaveTextContent("传输结束后可预览");
+});
 
 it("previews on demand without transfer, mutation, local dialog, or persistent content", async () => {
   mocks.preview.mockResolvedValue({ content: "private preview fixture", size: 23 });

@@ -23,7 +23,7 @@ import {
   useI18n,
 } from "@unfour/ui";
 import { useSftpNativeDragDrop } from "../hooks/useSftpNativeDragDrop";
-import { useSftpStore } from "../model/sftp-state";
+import { hasActiveSftpTransfer, useSftpStore } from "../model/sftp-state";
 import { SftpFileList } from "./SftpFileList";
 import { SftpNameDialog } from "./SftpNameDialog";
 import { SftpPreviewDialog } from "./SftpPreviewDialog";
@@ -33,10 +33,6 @@ import { SftpToolbar } from "./SftpToolbar";
 type NameAction = "mkdir" | "rename" | "upload";
 const EMPTY_TRANSFERS: SftpTransferState[] = [];
 const EMPTY_SELECTED_PATHS: string[] = [];
-
-function isActiveTransfer(transfer: SftpTransferState) {
-  return transfer.status === "pending" || transfer.status === "running";
-}
 
 export function SftpPanel({
   onClose,
@@ -79,7 +75,7 @@ export function SftpPanel({
   const [localUploadPath, setLocalUploadPath] = useState<string | null>(null);
   const [deleteTargets, setDeleteTargets] = useState<SftpFileEntry[]>([]);
   const connected = session.status === "connected";
-  const hasActiveTransfer = transfers.some(isActiveTransfer);
+  const hasActiveTransfer = hasActiveSftpTransfer(transfers);
   const seenUploadSuccessRef = useRef(new Set<string>());
 
   const openQuery = useQuery({
@@ -424,17 +420,21 @@ export function SftpPanel({
           <SftpFileList
             actions={{
               canGoParent,
+              canPreview: !hasActiveTransfer,
               canRefresh,
               canUpload,
               onCopyPath: (entry) => void navigator.clipboard?.writeText(entry.path),
               onDelete: (entry) => beginDelete([entry]),
               onDownload: (entry) => void chooseDownload(entry),
-              onPreview: (entry) => setPreview({
-                entry,
-                workspaceId: session.workspaceId,
-                sessionId: session.sessionId,
-                connectionId: session.connectionId,
-              }),
+              onPreview: (entry) => {
+                if (hasActiveSftpTransfer(useSftpStore.getState().transfers[session.sessionId])) return;
+                setPreview({
+                  entry,
+                  workspaceId: session.workspaceId,
+                  sessionId: session.sessionId,
+                  connectionId: session.connectionId,
+                });
+              },
               onNewFolder: () => {
                 setNameValue("");
                 setNameAction("mkdir");

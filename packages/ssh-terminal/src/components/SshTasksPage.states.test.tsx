@@ -90,6 +90,37 @@ it("does not downgrade a saved task when a pre-save detail read finishes late", 
   expect(client.getQueryData(["ssh-task", "workspace", "task"])).toEqual(saved);
 });
 
+it.each(["create", "rename"] as const)("shows the saved task during a delayed list refresh (%s)", async (operation) => {
+  const client = mount("en");
+  const sidebar = within(screen.getByRole("complementary", { name: "Task sidebar" }));
+  const existing = await sidebar.findByRole("button", { name: task.name });
+  const t = createTranslator("en");
+  fireEvent.click(operation === "create" ? sidebar.getByRole("button", { name: t("ssh.tasks.actions.new") }) : existing);
+  const name = await screen.findByRole("textbox", { name: t("ssh.tasks.editor.name") });
+  const saved = { ...task, id: operation === "create" ? "new" : task.id, name: "Saved task" };
+  const detail = { task: saved, steps: [], localBinding: null, detectedInputs: [] };
+  const expected = operation === "create" ? [task, saved] : [saved];
+  const listKey = ["ssh-tasks", task.workspaceId];
+  let finishOldRead!: (rows: commands.SshTask[]) => void;
+  let finishRefresh!: (rows: commands.SshTask[]) => void;
+  vi.mocked(commands.listSshTasks)
+    .mockImplementationOnce(() => new Promise((resolve) => { finishOldRead = resolve; }))
+    .mockImplementationOnce(() => new Promise((resolve) => { finishRefresh = resolve; }));
+  void client.invalidateQueries({ queryKey: listKey, exact: true });
+  await waitFor(() => expect(finishOldRead).toBeDefined());
+  vi.mocked(commands.saveSshTask).mockResolvedValue(detail);
+  vi.mocked(commands.getSshTask).mockResolvedValue(detail);
+  fireEvent.change(name, { target: { value: saved.name } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(finishRefresh).toBeDefined());
+  await act(async () => finishOldRead([task]));
+  expect(client.getQueryData(listKey)).toEqual(expected);
+  expect(await sidebar.findByRole("button", { name: saved.name })).toBeInTheDocument();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+  await act(async () => finishRefresh(expected));
+});
+
 it("refreshes immediately after a save conflict and ignores run-only task metadata", async () => {
   const client = mount("en");
   fireEvent.click(await screen.findByRole("button", { name: "Deploy" }));

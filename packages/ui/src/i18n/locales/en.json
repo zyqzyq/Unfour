@@ -1295,6 +1295,7 @@
     "sftp": {
       "preview": {
         "action": "Preview",
+        "transferActive": "Available after transfer",
         "title": "Preview — {name}",
         "description": "Read-only · UTF-8 · Maximum 1 MiB",
         "content": "Remote text content",

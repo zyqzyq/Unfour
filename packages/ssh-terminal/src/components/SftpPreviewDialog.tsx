@@ -10,6 +10,7 @@ import {
   DialogFooter, DialogHeader, DialogTitle, ErrorState, LoadingState, useI18n,
 } from "@unfour/ui";
 import { formatFileSize } from "../model/sftp-format";
+import { hasActiveSftpTransfer, useSftpStore } from "../model/sftp-state";
 
 type Props = {
   entry: SftpFileEntry;
@@ -34,6 +35,11 @@ function PreviewContent({ entry, onClose, session }: Props) {
 
   useEffect(() => {
     if (!connected) return;
+    const transfers = useSftpStore.getState().transfers[session.sessionId];
+    if (!request.current && hasActiveSftpTransfer(transfers)) {
+      setErrorKey("transferActive");
+      return;
+    }
     let active = true;
     // Component-local only: no React Query cache, Zustand store, or persistence.
     // Strict Mode can replay effects; share only this mounted preview's request.
