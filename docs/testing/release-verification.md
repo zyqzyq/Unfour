@@ -1,6 +1,9 @@
 # Release Verification
 
 Current source preparation is **v0.13.0 — NOT RELEASED / RC NOT STARTED**.
+The subsequent [release-hardening checkpoint](release-hardening-2026-11-07.md)
+records structural cleanup, SSH workspace-isolation fixes and fresh regression
+results; it does not supply native/live-service acceptance or authorize release.
 See the [2026-11-07 preparation record](v0.13.0-release-preparation-2026-11-07.md)
 for its source identity, fresh local checks and remaining acceptance.
 

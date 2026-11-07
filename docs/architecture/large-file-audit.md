@@ -1,181 +1,171 @@
 # Large File Audit
 
-Generated on 2026-07-05.
+Updated on **2026-11-07 (Asia/Shanghai)** against the v0.13.0 hardening tree.
+Entry baseline: `48df06828de6a642ca4b195bf56692fd0835e8d8` on `main`;
+previous release: `v0.12.0` (`4883df8dbfaf4d9d69c94ed5bae75c627d146e34`).
+This replaces the stale 2026-07-05 inventory; earlier splits remain in Git history.
+See [verification and audit decisions](../testing/release-hardening-2026-11-07.md).
 
-This audit is an architectural review aid, not a mandate to split files by line
-count alone. Splits should preserve public TypeScript exports, Rust command
-names, command-bus method names, database schema, and MCP tool names.
+## Method and baseline
 
-## Scope
+Run `node scripts/check-large-files.mjs --json --top 200` from the repository root.
+The existing checker scans `apps`, `packages`, `crates`, and `docs`, with its
+existing generated/dependency/build exclusions. Exact pinned Monaco copies
+are excluded by byte comparison, not by trusting a filename alone.
 
-The audit uses `scripts/check-large-files.mjs` and scans only:
+Categories remain **Critical >1200**, **P0 >800**, **P1 >500** lines.
+The categories are exclusive. A test-code flag can also mark an implementation
+file with inline tests; it is not a count of test-only files. Line counts are
+physical lines, distinct from ESLint's configured counts.
 
-- `apps`
-- `packages`
-- `crates`
-- `docs`
+| Snapshot | Critical | P0 | P1 | Total >500 | With test code | Blocking |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Entry main | 0 | 24 | 71 | 95 | 57 | 0 |
+| After hardening | 0 | 22 | 71 | 93 | 57 | 0 |
 
-The script excludes dependency, build, coverage, generated, lock, bundled, and
-minified outputs. It intentionally does not use a 150-line limit. Categories are:
+`scripts/large-files-baseline.json` has **zero exceptions**. No checker threshold,
+exclusion, ESLint rule, suppression or baseline allowance was added or relaxed.
+A passing size gate does not imply every long function has been decomposed.
 
-| Category | Rule |
-| --- | --- |
-| Critical | More than 1200 lines |
-| P0 | More than 800 lines |
-| P1 | More than 500 lines |
+## Responsibility changes
 
-Current summary: 23 files above P1; 6 Critical, 3 P0, 14 P1; 0 contain test
-code; 0 look like generated/build artifacts.
+| Existing file | Before | After | Responsibility moved or consolidated |
+| --- | ---: | ---: | --- |
+| `crates/database-engine/src/database/sql.rs` | 856 | 388 | SQL safety into `sql_safety.rs`; identifier/browse/export builders stay here |
+| `crates/unfour-mcp/src/tools/database.rs` | 1005 | 598 | Registration/schema into `database_registry.rs`; handlers and policy stay here |
+| `crates/ssh-engine/src/ssh/native_transport.rs` | 598 | 159 | Authentication into `native_auth.rs`, terminal supervision into `native_supervisor.rs`; shared dial stays here |
+| `crates/ssh-engine/src/ssh/session.rs` | 789 | 779 | Workspace-scoped teardown shared by close, reconnect cancellation and failed-connect cleanup |
+| `crates/ssh-engine/src/ssh/diagnostic_execution.rs` | 178 | 143 | Uses the shared authenticated connection entry point |
+| `crates/ssh-engine/src/task/native.rs` | 169 | 157 | Uses the shared dial entry point and existing authentication |
 
-## Test File Organization
+The extracted SQL classifier, SSH authentication and MCP registration definitions
+retain their bodies; visibility/import wiring changes only. The existing engine
+facades, CommandBus trait and public exports remain. Authentication, host-key
+identity, timeout policy and per-consumer error messages are preserved.
+See [SSH transport ownership](ssh-transport-boundary.md).
 
-Rust:
+## Remaining priorities
 
-- Small focused tests may stay inline in `#[cfg(test)] mod tests`.
-- If inline tests exceed roughly 80-120 lines, move them into
-  `src/<module>_tests/`.
-- Tests that need crate-private implementation access should live in
-  `src/<module>_tests/` and be declared from the owning module.
-- Integration tests that exercise only public APIs should live in
-  `crates/<crate>/tests/`.
-- Shared fixtures, mocks, and helpers should live in `test_support` or
-  `tests/common`.
-
-TypeScript / React:
-
-- Tests should live in `src/__tests__/` or adjacent
-  `*.test.ts` / `*.test.tsx` files.
-- Large mocks and fixtures should live in `__fixtures__/`.
-- Do not pile large tests or mock data at the bottom of component files.
-
-## Current Large Files
-
-| # | Path | Lines | Category | Test code | Suspected artifact |
-| --- | --- | ---: | --- | --- | --- |
-| 1 | `crates/database-engine/src/database.rs` | 3371 | Critical | No | No |
-| 2 | `crates/ssh-engine/src/ssh.rs` | 2131 | Critical | No | No |
-| 3 | `crates/http-engine/src/api_client.rs` | 1723 | Critical | No | No |
-| 4 | `crates/unfour-command-bus/src/lib.rs` | 1679 | Critical | No | No |
-| 5 | `packages/database/src/DatabasePage.tsx` | 1649 | Critical | No | No |
-| 6 | `crates/unfour-mcp/src/tools/api.rs` | 1428 | Critical | No | No |
-| 7 | `crates/unfour-mcp/src/tools/database.rs` | 1170 | P0 | No | No |
-| 8 | `crates/unfour-mcp/src/tools/ssh.rs` | 886 | P0 | No | No |
-| 9 | `packages/database/src/components/DatabaseConnectionTree.tsx` | 831 | P0 | No | No |
-| 10 | `packages/ui/src/tree-view.tsx` | 793 | P1 | No | No |
-| 11 | `crates/unfour-core/src/models.rs` | 790 | P1 | No | No |
-| 12 | `packages/api-client/src/components/ApiCollectionTree.tsx` | 789 | P1 | No | No |
-| 13 | `packages/ssh-terminal/src/TerminalPage.tsx` | 740 | P1 | No | No |
-| 14 | `packages/api-client/src/model/request-tabs.ts` | 605 | P1 | No | No |
-| 15 | `crates/workspace-engine/src/workspace.rs` | 584 | P1 | No | No |
-| 16 | `crates/unfour-mcp/src/command_bus_adapter.rs` | 582 | P1 | No | No |
-| 17 | `packages/api-client/src/components/ResponseTabs.tsx` | 572 | P1 | No | No |
-| 18 | `packages/api-client/src/request-utils.ts` | 561 | P1 | No | No |
-| 19 | `packages/database/src/components/SqlEditorTab.tsx` | 560 | P1 | No | No |
-| 20 | `packages/command-client/src/types.ts` | 558 | P1 | No | No |
-| 21 | `packages/api-client/src/ApiClientPage.tsx` | 542 | P1 | No | No |
-| 22 | `crates/unfour-mcp/src/tools/policy.rs` | 517 | P1 | No | No |
-| 23 | `packages/ui/src/shell.tsx` | 507 | P1 | No | No |
-
-## Completed Test-Only Splits
-
-This batch moved large inline tests out of business files without changing
-business behavior, public APIs, Tauri command signatures, database schema, or
-MCP tool names/schemas.
-
-| Original file | New test organization |
-| --- | --- |
-| `crates/local-storage/src/local_db.rs` | `crates/local-storage/src/local_db_tests/` split into scenario modules |
-| `crates/local-storage/src/terminal_history.rs` | `crates/local-storage/src/terminal_history_tests/` |
-| `crates/secret-store/src/secret_store.rs` | `crates/secret-store/src/secret_store_tests/` |
-| `crates/ssh-engine/src/host_key.rs` | `crates/ssh-engine/src/host_key_tests/` |
-| `crates/workspace-engine/src/workspace.rs` | `crates/workspace-engine/src/workspace_tests/` |
-| `crates/unfour-mcp/src/tools/mod.rs` | `crates/unfour-mcp/src/tools/tools_tests/` |
-| `crates/unfour-mcp/src/command_bus_adapter.rs` | `crates/unfour-mcp/src/command_bus_adapter_tests/` |
-| `crates/unfour-mcp/src/tools/policy.rs` | `crates/unfour-mcp/src/tools/policy_tests/` |
-| `crates/unfour-mcp/src/server.rs` | `crates/unfour-mcp/src/server_tests/` |
-| `crates/unfour-mcp/src/tools/database_tests.rs` | `crates/unfour-mcp/src/tools/database_tests/` scenario modules |
-| `crates/unfour-mcp/src/tools/api_tests.rs` | `crates/unfour-mcp/src/tools/api_tests/` scenario modules |
-| `crates/ssh-engine/src/ssh_tests/session.rs` | `crates/ssh-engine/src/ssh_tests/session/` scenario modules |
-| `crates/unfour-diag/src/lib.rs` | `crates/unfour-diag/src/lib_tests.rs` sibling module |
-
-## Completed Business Responsibility Splits
-
-These batches split adapter boundaries by command domain without changing
-public export names, caller import paths, Rust Tauri command names, command
-argument shapes, return shapes, database schema, or MCP tool names,
-descriptions, and input schemas.
-
-| Original file | New organization |
-| --- | --- |
-| `packages/command-client/src/tauri.ts` | Public facade re-exporting `src/tauri/{api,database,diagnostics,secret-store,ssh,workspace}.ts`; shared invoke/runtime code in `src/tauri/invoke.ts`; browser-dev mocks in `src/tauri/browser-mocks/` with per-domain handlers |
-| `crates/unfour-app/src/commands.rs` | Rust facade re-exporting `src/commands/{api,database,diagnostics,secret_store,ssh,workspace}.rs`; shared command tracing remains in `commands.rs`; existing `invoke_handler` paths remain valid through the facade |
-
-## Remaining Large Test Files
-
-No files containing test code currently exceed the P1 threshold.
-
-## Remaining Business Responsibility Splits
-
-These files no longer have large inline test blocks from this batch. They still
-need future splits by responsibility, not by line count alone.
-
-| Path | Recommended split direction | Risk |
+| Area | Current decision | Next useful boundary / risk |
 | --- | --- | --- |
-| `crates/database-engine/src/database.rs` | Keep `DatabaseService` as facade; extract driver modules, query safety, browse, row mutation, and storage conversion helpers. | High |
-| `crates/ssh-engine/src/ssh.rs` | Keep `SshService` facade; extract native transport, session registry, persistence conversion, diagnostics, and redaction. | High |
-| `crates/http-engine/src/api_client.rs` | Keep `ApiClientService` facade; extract send/history, environments, saved requests, collections, and folder ordering. | High |
-| `crates/unfour-command-bus/src/lib.rs` | Move read models and domain forwarding methods into modules; re-export through `lib.rs`. | High |
-| `packages/database/src/DatabasePage.tsx` | Extract connection dialog, page controller hooks, query-history orchestration, and shell slot builders. | Medium |
-| `crates/unfour-mcp/src/tools/api.rs` | Extract API argument parsers, redaction/truncation, and serializers; keep tool registry names unchanged. | High |
-| `crates/unfour-mcp/src/tools/database.rs` | Extract SQL validators, risk classifier, result truncation, and connection summary helpers. | High |
-| `crates/unfour-mcp/src/tools/ssh.rs` | Extract command builders, file operation helpers, workspace resolution, and parsers. | High |
-| `packages/database/src/components/DatabaseConnectionTree.tsx` | Extract tree model builders, context menus, status labels, and generated SQL snippet helpers. | Medium |
-| `packages/ui/src/tree-view.tsx` | Extract flatten/search/typeahead helpers and drag/drop target math; keep `TreeView` public API stable. | Medium |
-| `crates/unfour-core/src/models.rs` | Split models by domain only with a compatibility re-export layer; do not rename fields. | High |
-| `packages/api-client/src/components/ApiCollectionTree.tsx` | Extract dialog state, tree item builders, drag/drop movement helpers, and export helpers. | Medium |
-| `packages/ssh-terminal/src/TerminalPage.tsx` | Extract connection form hook, session action handlers, host-key trust flow, and shell sidebar builder. | Medium |
-| `packages/api-client/src/model/request-tabs.ts` | Extract method metadata, response-state derivation, tab close helpers, and history grouping. | Medium |
-| `crates/workspace-engine/src/workspace.rs` | Extract layout parsing/validation and environment/policy normalization helpers if the service grows further. | Medium |
-| `crates/unfour-mcp/src/command_bus_adapter.rs` | Split per-domain adapter mapping helpers without changing adapter method names. | High |
-| `packages/api-client/src/components/ResponseTabs.tsx` | Extract body viewer, snapshot readout, cookies parser, timing metrics, and state panels. | Medium |
-| `packages/api-client/src/request-utils.ts` | Extract import/export, auth metadata, key-value utilities, and redaction helpers. | Medium |
-| `packages/database/src/components/SqlEditorTab.tsx` | Extract Monaco setup, saved SQL dialogs, SQL formatting helpers, and action toolbar. | Medium |
-| `packages/command-client/src/types.ts` | Split frontend command types by domain with re-exports; keep names and shape stable. | High |
-| `packages/api-client/src/ApiClientPage.tsx` | Extract close/save workflow hook, environment tab controller, and sidebar intent handler. | Medium |
-| `crates/unfour-mcp/src/tools/policy.rs` | Extract confirmation text and policy classification helpers if the module grows further. | Medium |
-| `packages/ui/src/shell.tsx` | Extract resize behavior into hooks and split shell surface components if shell helpers continue growing. | Medium |
+| MCP `command_bus_adapter.rs` (1158) | Keep the trait implementation and bounded runtime facade | Forwarders are repetitive but splitting one trait impl would need delegation or macros; do not add indirection just for size. Revisit with an actual adapter capability change. |
+| CommandBus `api_commands.rs` (906) | Keep transactional orchestration | Separate execution from authoring only with existing activity, outbox and credential-lock tests; do not bypass the bus. |
+| Database export (820), Postgres (780) | Retain driver/stream ownership | Export cancellation, rollback and cursor disposal need protocol fixtures before changes. Pools are per-operation, not a shared cache. |
+| SSH SFTP (799), session (current count above) | Retain session/generation ownership | Transfer registration and reconnect cleanup have race-sensitive shared state; next split must preserve lock ordering and stale-generation rejection. |
+| HTTP OpenAPI import (823), collection domain (786) | Keep existing service/domain boundary | Parser/collection normalization can be isolated when behavior fixtures establish compatibility; do not remove legacy inputs by assumption. |
+| SSH TerminalPage (726), SshTasksPage (657) | Retain current controller and dialog ownership | Form/test/trust flows are candidates, but workspace remount and stale-save behavior require page-level coverage. |
+| Database SqlEditorTab (628) | Keep editor/execution context together this round | Extract execution UI only with selection, cancellation, context and multi-statement regressions. |
+| API RequestParamsTabs (584), request-tabs model (541) | Preserve draft/send/history contracts | Script/body sub-editors are candidates; avoid a second request-state mechanism. |
+| UI TreeView (421) | No size-driven split | Generic primitive; function length warning remains. No feature imports or new state framework introduced. |
+| Account / Cloud Sync | Preserve generation, outbox and single-owner invariants | Live OAuth, account switches and multi-device conflict/offline tests still require real-service acceptance. |
 
-## Baseline Status
+The broad audit uses source inventory, owner/call-chain inspection, lint and
+existing tests; it is not an exhaustive proof of every interleaving. No production
+file is marked safe solely because it falls below 500 lines. Current ESLint
+warnings and live-service limits are recorded in the verification report.
 
-`scripts/large-files-baseline.json` continues to cover the reviewed
-grandfathered files that are still above the higher thresholds:
+## Full current inventory over 500 lines
 
-- `crates/database-engine/src/database.rs`
-- `crates/ssh-engine/src/ssh.rs`
-- `crates/http-engine/src/api_client.rs`
-- `crates/unfour-command-bus/src/lib.rs`
-- `crates/unfour-mcp/src/tools/database.rs`
-- `crates/unfour-mcp/src/tools/api.rs`
-- `packages/database/src/DatabasePage.tsx`
+| Path | Lines | Category | Contains test code |
+| --- | ---: | --- | --- |
+| `crates/unfour-cloud-sync/tests/outbox.rs` | 1200 | P0 | Yes |
+| `crates/unfour-mcp/src/command_bus_adapter.rs` | 1158 | P0 | No |
+| `crates/unfour-cloud-sync-storage/src/lib.rs` | 1082 | P0 | Yes |
+| `packages/flow/src/FlowPage.test.tsx` | 1070 | P0 | Yes |
+| `crates/unfour-cloud-sync/src/canonical.rs` | 1047 | P0 | No |
+| `crates/unfour-command-bus/tests/ssh_task_domain.rs` | 1033 | P0 | Yes |
+| `crates/unfour-cloud-sync/tests/worker/hierarchy_conflicts.rs` | 995 | P0 | Yes |
+| `crates/unfour-command-bus/tests/connection_domain.rs` | 992 | P0 | Yes |
+| `crates/unfour-cloud-sync/tests/worker/ssh_tasks.rs` | 985 | P0 | Yes |
+| `crates/unfour-cloud-sync/tests/worker/dead_letter_recovery.rs` | 949 | P0 | Yes |
+| `crates/unfour-command-bus/src/lib_tests.rs` | 935 | P0 | Yes |
+| `crates/workspace-engine/src/workspace_tests/mod.rs` | 913 | P0 | Yes |
+| `crates/unfour-command-bus/src/api_commands.rs` | 906 | P0 | No |
+| `crates/unfour-mcp/src/command_bus_adapter_tests/flow.rs` | 894 | P0 | Yes |
+| `packages/api-client/src/components/ApiCollectionTree.test.tsx` | 879 | P0 | Yes |
+| `docs/testing/release-verification.md` | 881 | P0 | No |
+| `crates/database-engine/src/database_tests/sqlite.rs` | 838 | P0 | Yes |
+| `crates/unfour-app/src/mcp_client_config.rs` | 835 | P0 | Yes |
+| `crates/http-engine/src/api_client/openapi_import.rs` | 823 | P0 | Yes |
+| `crates/http-engine/src/api_client_tests/collections.rs` | 822 | P0 | Yes |
+| `crates/database-engine/src/database/export.rs` | 820 | P0 | Yes |
+| `crates/unfour-mcp/src/tools/tools_tests/mod.rs` | 803 | P0 | Yes |
+| `crates/ssh-engine/src/ssh/sftp.rs` | 799 | P1 | No |
+| `crates/http-engine/src/api_client/domain/collections.rs` | 786 | P1 | No |
+| `crates/database-engine/src/database/postgres.rs` | 780 | P1 | Yes |
+| `crates/unfour-mcp/src/tools/api_handlers.rs` | 773 | P1 | No |
+| `crates/ssh-engine/src/ssh/session.rs` | 779 | P1 | No |
+| `crates/unfour-account/src/lib.rs` | 769 | P1 | Yes |
+| `crates/unfour-mcp/src/command_bus_adapter/contract.rs` | 752 | P1 | No |
+| `crates/unfour-command-bus/src/lib_tests/flow_authoring.rs` | 747 | P1 | Yes |
+| `crates/unfour-command-bus/src/ssh_commands.rs` | 745 | P1 | No |
+| `crates/unfour-cloud-sync/tests/worker/connections.rs` | 738 | P1 | Yes |
+| `crates/unfour-mcp/src/tools/api.rs` | 737 | P1 | No |
+| `crates/unfour-command-bus/src/core_commands.rs` | 736 | P1 | No |
+| `packages/ssh-terminal/src/hooks/useSshTaskRunSession.test.tsx` | 734 | P1 | Yes |
+| `crates/unfour-cloud-sync/tests/worker/api_hierarchy.rs` | 729 | P1 | Yes |
+| `packages/ssh-terminal/src/TerminalPage.tsx` | 726 | P1 | No |
+| `crates/unfour-command-bus/src/workspace_variable_commands.rs` | 724 | P1 | No |
+| `crates/unfour-cloud-sync/tests/worker/ssh_tasks/conflicts.rs` | 717 | P1 | Yes |
+| `crates/http-engine/src/api_client/domain/requests.rs` | 694 | P1 | Yes |
+| `crates/http-engine/src/api_client/domain/secrets.rs` | 693 | P1 | Yes |
+| `crates/unfour-core/src/domain.rs` | 684 | P1 | Yes |
+| `crates/workspace-engine/src/workspace/variable_executor.rs` | 683 | P1 | No |
+| `crates/unfour-cloud-sync/tests/contracts.rs` | 676 | P1 | Yes |
+| `crates/unfour-paths/src/lib.rs` | 666 | P1 | Yes |
+| `crates/http-engine/src/script_runtime.rs` | 665 | P1 | Yes |
+| `crates/unfour-cloud-sync/src/repository/recovery.rs` | 663 | P1 | No |
+| `packages/ssh-terminal/src/components/SshTasksPage.tsx` | 657 | P1 | No |
+| `packages/ssh-terminal/src/components/TerminalPane.output.test.tsx` | 651 | P1 | Yes |
+| `crates/unfour-command-bus/tests/api_domain/snapshot_apply.rs` | 644 | P1 | Yes |
+| `apps/desktop/src-tauri/src/account.rs` | 639 | P1 | Yes |
+| `crates/workspace-engine/src/workspace.rs` | 633 | P1 | No |
+| `crates/unfour-mcp/src/tools/workspace.rs` | 629 | P1 | Yes |
+| `packages/database/src/components/SqlEditorTab.tsx` | 628 | P1 | No |
+| `crates/unfour-command-bus/src/lib_tests/activity_native.rs` | 625 | P1 | Yes |
+| `crates/unfour-cloud-sync/src/repository/reconciliation.rs` | 613 | P1 | No |
+| `crates/unfour-cloud-sync/src/transport.rs` | 612 | P1 | No |
+| `crates/unfour-mcp/src/tools/ssh_tests/history.rs` | 611 | P1 | Yes |
+| `crates/unfour-command-bus/tests/workspace_domain/external_apply.rs` | 607 | P1 | Yes |
+| `crates/unfour-mcp/src/tools/api_tests.rs` | 607 | P1 | Yes |
+| `crates/unfour-cloud-sync/src/canonical/tests.rs` | 604 | P1 | Yes |
+| `packages/ssh-terminal/src/components/TerminalPane.tsx` | 599 | P1 | No |
+| `crates/unfour-mcp/src/tools/database.rs` | 598 | P1 | No |
+| `crates/unfour-mcp/src/tools/database_tests.rs` | 595 | P1 | Yes |
+| `crates/unfour-account/src/client.rs` | 589 | P1 | Yes |
+| `crates/local-storage/src/local_db_tests/scenarios/migrations.rs` | 584 | P1 | Yes |
+| `packages/api-client/src/components/RequestParamsTabs.tsx` | 584 | P1 | No |
+| `crates/unfour-mcp/src/tools/policy.rs` | 582 | P1 | No |
+| `crates/unfour-cloud-sync/tests/worker/scheduling.rs` | 576 | P1 | Yes |
+| `crates/unfour-cloud-sync/src/entity_registry.rs` | 575 | P1 | Yes |
+| `packages/ssh-terminal/src/components/SftpPanel.tsx` | 574 | P1 | No |
+| `crates/unfour-command-bus/src/flow_commands.rs` | 573 | P1 | Yes |
+| `crates/database-engine/src/database/connection_domain.rs` | 570 | P1 | No |
+| `crates/ssh-engine/src/ssh/connection_domain.rs` | 569 | P1 | No |
+| `crates/ssh-engine/src/task/domain/external_apply.rs` | 569 | P1 | No |
+| `crates/unfour-cloud-sync/src/repository/bindings.rs` | 568 | P1 | No |
+| `crates/ssh-engine/src/ssh/connection_crud.rs` | 565 | P1 | No |
+| `crates/unfour-cloud-sync/src/types.rs` | 561 | P1 | No |
+| `apps/desktop/src-tauri/src/sync.rs` | 560 | P1 | Yes |
+| `crates/unfour-cloud-sync/src/service/worker.rs` | 551 | P1 | Yes |
+| `packages/api-client/src/model/request-tabs.test.ts` | 551 | P1 | Yes |
+| `crates/database-engine/src/database_tests/safety.rs` | 548 | P1 | Yes |
+| `crates/unfour-core/src/models/database.rs` | 547 | P1 | No |
+| `packages/api-client/src/model/request-tabs.ts` | 541 | P1 | No |
+| `crates/unfour-mcp/src/command_bus_adapter_tests/mod.rs` | 532 | P1 | Yes |
+| `packages/app-shell/src/DesktopApp.test.tsx` | 522 | P1 | Yes |
+| `crates/unfour-cloud-sync/src/service.rs` | 518 | P1 | No |
+| `crates/database-engine/src/database/tables.rs` | 513 | P1 | No |
+| `crates/unfour-command-bus/src/workspace_bundle/backup_tests.rs` | 513 | P1 | Yes |
+| `crates/unfour-command-bus/src/lib_tests/ssh_task_context.rs` | 512 | P1 | Yes |
+| `crates/unfour-app/src/lib.rs` | 505 | P1 | Yes |
+| `crates/unfour-cloud-sync/tests/worker/accounts.rs` | 505 | P1 | Yes |
+| `crates/unfour-core/src/redaction.rs` | 502 | P1 | Yes |
 
-No split in this batch required adding a new baseline exception. The previous
-`packages/command-client/src/tauri.ts` baseline entry was removed because the
-facade is no longer oversized.
+## Test organization
 
-## Priority Notes
-
-Top remaining business split candidates:
-
-1. `crates/unfour-command-bus/src/lib.rs`
-2. `packages/database/src/DatabasePage.tsx`
-3. `packages/database/src/components/DatabaseConnectionTree.tsx`
-4. `crates/unfour-mcp/src/tools/api.rs`
-5. `crates/unfour-mcp/src/tools/database.rs`
-6. `crates/unfour-mcp/src/tools/ssh.rs`
-7. `crates/database-engine/src/database.rs`
-8. `crates/ssh-engine/src/ssh.rs`
-9. `crates/http-engine/src/api_client.rs`
-
-Recommended next test-only cleanup:
-
-1. None currently identified above the P1 threshold.
+Keep focused tests adjacent to the implementation or under its existing
+`*_tests` module. Integration tests exercise public APIs; private-state lifecycle
+regressions remain with the owning crate. Shared fixtures belong to test support,
+not production UI modules. Split tests by scenario when it improves ownership,
+not merely to move a size warning to another file.
