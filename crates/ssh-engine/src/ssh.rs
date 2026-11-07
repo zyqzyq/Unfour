@@ -41,6 +41,8 @@ mod connection_domain;
 mod local_bundle;
 pub use connection_domain::SshConnectionCleanup;
 mod diagnostic_execution;
+mod native_auth;
+mod native_supervisor;
 mod native_transport;
 mod session;
 mod session_helpers;
@@ -50,7 +52,7 @@ mod storage;
 mod task;
 
 #[cfg(all(feature = "ssh-native", test))]
-use native_transport::terminal_output_from_channel_message;
+use native_supervisor::terminal_output_from_channel_message;
 use session_helpers::*;
 use storage::*;
 

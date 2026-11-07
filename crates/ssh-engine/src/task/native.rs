@@ -12,34 +12,22 @@ impl NativeTaskDriver {
         service: &SshService,
         connection: &SshConnection,
     ) -> Result<Self, TaskStepError> {
-        let config = Arc::new(native_client_config());
-        let handler = SshClientHandler {
-            host_key_store: HostKeyStore::new(service.db.pool().clone()),
-            workspace_id: connection.workspace_id.clone(),
-            host: connection.host.clone(),
-            port: connection.port,
-        };
-        let address = format!("{}:{}", connection.host, connection.port);
-        let mut handle = match tokio::time::timeout(
-            std::time::Duration::from_secs(15),
-            russh::client::connect(config, address, handler),
-        )
-        .await
-        {
-            Ok(Ok(handle)) => handle,
-            Ok(Err(error)) => {
-                return Err(TaskStepError::Failed {
-                    message: format!("SSH connection failed: {}", sanitize_ssh_error(&error)),
-                    exit_code: None,
-                });
-            }
-            Err(_) => {
-                return Err(TaskStepError::Failed {
-                    message: "SSH connection timed out after 15 seconds".to_string(),
-                    exit_code: None,
-                });
-            }
-        };
+        use crate::ssh::native_transport::NativeConnectError;
+
+        let mut handle = service
+            .dial_native_connection(connection)
+            .await
+            .map_err(|error| TaskStepError::Failed {
+                message: match error {
+                    NativeConnectError::Failed(message) => {
+                        format!("SSH connection failed: {message}")
+                    }
+                    NativeConnectError::TimedOut => {
+                        "SSH connection timed out after 15 seconds".to_string()
+                    }
+                },
+                exit_code: None,
+            })?;
         service
             .authenticate_native(&mut handle, connection, None)
             .await

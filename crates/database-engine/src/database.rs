@@ -40,6 +40,7 @@ mod script_connection;
 mod script_parser;
 mod scripts;
 mod sql;
+mod sql_safety;
 mod sqlite;
 mod tables;
 
@@ -52,7 +53,8 @@ pub use runtime_profile::{
     DatabaseCapabilities, DatabaseDialect, DetectedServerType, RuntimeDatabaseProfile,
 };
 use sql::*;
-pub use sql::{
+use sql_safety::*;
+pub use sql_safety::{
     classify_sql_safety, sql_has_outer_write_where_for_driver, sql_is_proven_read,
     sql_is_proven_read_for_driver, sql_is_single_statement, sql_is_single_statement_for_driver,
 };

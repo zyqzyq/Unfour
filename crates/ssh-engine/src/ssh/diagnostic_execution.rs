@@ -74,42 +74,7 @@ impl SshService {
         command: &str,
         timeout: std::time::Duration,
     ) -> AppResult<SshDiagnosticResult> {
-        let config = Arc::new(native_client_config());
-        let handler = SshClientHandler {
-            host_key_store: HostKeyStore::new(self.db.pool().clone()),
-            workspace_id: connection.workspace_id.clone(),
-            host: connection.host.clone(),
-            port: connection.port,
-        };
-        let addr = format!("{}:{}", connection.host, connection.port);
-        let connect_timeout = std::time::Duration::from_secs(15);
-        let mut handle = match tokio::time::timeout(
-            connect_timeout,
-            russh::client::connect(config, addr.as_str(), handler),
-        )
-        .await
-        {
-            Ok(Ok(handle)) => handle,
-            Ok(Err(error)) => {
-                return Err(AppError::Config(format!(
-                    "ssh connection to {}:{} failed: {}",
-                    connection.host,
-                    connection.port,
-                    sanitize_ssh_error(&error)
-                )));
-            }
-            Err(_) => {
-                return Err(AppError::Config(format!(
-                    "ssh connection to {}:{} timed out after {}s",
-                    connection.host,
-                    connection.port,
-                    connect_timeout.as_secs()
-                )));
-            }
-        };
-
-        self.authenticate_native(&mut handle, connection, None)
-            .await?;
+        let handle = self.open_authenticated_connection(connection, None).await?;
         let mut channel = handle
             .channel_open_session()
             .await
