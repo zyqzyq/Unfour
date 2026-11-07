@@ -31,14 +31,15 @@ test("app shell renders and module switching stays stable", async ({ page }) => 
     moduleNav.getByRole("button", { name: "Database" }),
   ).toHaveAttribute("title", "Database");
 
-  const moduleLabels: Record<string, string> = {
-    API: "API Client",
-    SSH: "SSH Terminal",
-    DB: "Database",
-  };
-  for (const label of Object.values(moduleLabels)) {
+  // Return to Database after another persistent feature has published its
+  // shell slots; the first mount alone did not catch the native RC render loop.
+  for (const label of ["API Client", "SSH Terminal", "Database", "Flow", "Database", "API Client", "Database"]) {
     await moduleNav.getByRole("button", { name: label }).click();
     await expect(page.locator(".app-shell")).toBeVisible();
+    if (label === "Database") {
+      await expect(page.getByRole("heading", { name: "Add your first database connection" })).toBeVisible();
+      await expect(page.getByRole("contentinfo")).toContainText("No active database session");
+    }
   }
 
   expect(consoleErrors).toEqual([]);

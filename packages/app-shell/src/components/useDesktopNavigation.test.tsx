@@ -22,10 +22,11 @@ function mount() {
   queryClient.setQueryData(["workspaces"], previousState);
   const setActiveTab = vi.fn();
   const preloadFeature = vi.fn().mockResolvedValue(undefined);
+  const tabs = [{ id: "ssh-main", kind: "ssh" as const, title: "SSH" }];
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   const hook = renderHook(() => useDesktopNavigation({
     activeWorkspace: previousState.workspaces[0], activeEnvironmentId: "dev",
-    tabs: [{ id: "ssh-main", kind: "ssh", title: "SSH" }], setActiveTab, preloadFeature,
+    tabs, setActiveTab, preloadFeature,
   }), { wrapper });
   return { ...hook, queryClient, setActiveTab, preloadFeature };
 }
@@ -34,6 +35,25 @@ beforeEach(() => {
   useWorkspaceStore.getState().setActiveWorkspace("one");
 });
 afterEach(cleanup);
+
+it("keeps workspace activation stable when the shell receives feature slot updates", () => {
+  const { result, rerender, queryClient } = mount();
+  const activate = result.current.handleActivateWorkspace;
+  // Database publishes its status bar back into shell state. That render must
+  // not replace extensionContext.activateWorkspace and republish the same slot.
+  rerender();
+  expect(result.current.handleActivateWorkspace).toBe(activate);
+  act(() => result.current.handleManageVariables());
+  act(() => result.current.setVariableManagerDirty(true));
+  const guardedActivate = result.current.handleActivateWorkspace;
+  expect(guardedActivate).not.toBe(activate);
+  rerender();
+  expect(result.current.handleActivateWorkspace).toBe(guardedActivate);
+  act(() => guardedActivate("two"));
+  expect(result.current.pendingVariableManagerLeave).toEqual({ kind: "activate-workspace", workspaceId: "two" });
+  expect(setActiveWorkspace).not.toHaveBeenCalled();
+  queryClient.clear();
+});
 
 it("keeps dirty variables until workspace leave is confirmed, including after cancellation", async () => {
   vi.mocked(setActiveWorkspace).mockResolvedValue({ ...previousState, activeWorkspaceId: "two" });

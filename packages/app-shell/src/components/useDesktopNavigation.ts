@@ -59,7 +59,10 @@ export function useDesktopNavigation({ activeWorkspace, activeEnvironmentId, tab
     setVariableManagerDirty(false);
     setPendingVariableManagerLeave(null);
   }, []);
-  const activateWorkspaceMutation = useWorkspaceActivation(closeVariableManager);
+  // Mutation result objects change on every render. Depend on their stable
+  // action so feature slot updates do not recreate the shell extension context
+  // and trigger another Database status-bar publication indefinitely.
+  const { mutate: activateWorkspace, isPending: activatingWorkspace } = useWorkspaceActivation(closeVariableManager);
   const variableManagerOpen = Boolean(activeWorkspace) && variableManagerRequest?.workspaceId === activeWorkspace?.id;
   const handleManageVariables = useCallback(() => {
     if (!activeWorkspace || variableManagerOpen) return;
@@ -71,15 +74,15 @@ export function useDesktopNavigation({ activeWorkspace, activeEnvironmentId, tab
       setActiveTab(leave.tabId);
       return;
     }
-    if (leave.kind === "activate-workspace") activateWorkspaceMutation.mutate(leave.workspaceId);
-  }, [activateWorkspaceMutation, closeVariableManager, setActiveTab]);
+    if (leave.kind === "activate-workspace") activateWorkspace(leave.workspaceId);
+  }, [activateWorkspace, closeVariableManager, setActiveTab]);
   const requestLeaveVariableManager = useCallback((leave: VariableManagerLeave) => {
     if (!variableManagerOpen) {
       if (leave.kind === "select-module") {
         setActiveTab(leave.tabId);
         return;
       }
-      activateWorkspaceMutation.mutate(leave.workspaceId);
+      activateWorkspace(leave.workspaceId);
       return;
     }
     if (variableManagerDirty) {
@@ -87,16 +90,16 @@ export function useDesktopNavigation({ activeWorkspace, activeEnvironmentId, tab
       return;
     }
     applyVariableManagerLeave(leave);
-  }, [activateWorkspaceMutation, applyVariableManagerLeave, setActiveTab, variableManagerDirty, variableManagerOpen]);
+  }, [activateWorkspace, applyVariableManagerLeave, setActiveTab, variableManagerDirty, variableManagerOpen]);
   const handleSelectModule = useCallback((tabId: string) => {
     const kind = tabs.find((tab) => tab.id === tabId)?.kind;
     if (kind) void preloadFeature(kind).catch(() => undefined);
     requestLeaveVariableManager({ kind: "select-module", tabId });
   }, [preloadFeature, requestLeaveVariableManager, tabs]);
   const handleActivateWorkspace = useCallback((workspaceId: string) => {
-    if (workspaceId === activeWorkspace?.id || activateWorkspaceMutation.isPending) return;
+    if (workspaceId === activeWorkspace?.id || activatingWorkspace) return;
     requestLeaveVariableManager({ kind: "activate-workspace", workspaceId });
-  }, [activateWorkspaceMutation.isPending, activeWorkspace?.id, requestLeaveVariableManager]);
+  }, [activatingWorkspace, activeWorkspace?.id, requestLeaveVariableManager]);
   const confirmVariableManagerLeave = () => {
     if (pendingVariableManagerLeave) applyVariableManagerLeave(pendingVariableManagerLeave);
   };

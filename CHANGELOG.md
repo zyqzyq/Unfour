@@ -39,6 +39,10 @@ Release preparation only; **not released**. See the
 - Reconcile successful SSH Task saves immediately with the list and editor;
   prevent SFTP preview dispatch during a known active transfer in that session;
   cancel terminal animation callbacks during teardown.
+- Check Workspace ownership before SSH session close/cancel or history flush,
+  and preserve newer terminal history after an obsolete read fails.
+- Keep Workspace navigation callbacks stable when feature slots refresh, avoiding
+  a workbench render loop when returning to Database after Flow execution.
 
 ## [0.12.0] - 2026-10-23
 
