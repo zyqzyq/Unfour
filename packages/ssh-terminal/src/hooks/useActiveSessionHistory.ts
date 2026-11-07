@@ -38,7 +38,11 @@ export function useActiveSessionHistory({
         hydrate(sessionId, events);
         completed = true;
       })
-      .catch(() => hydratedKeys.delete(hydrationKey));
+      .catch(() => {
+        // Cleanup already released this request's marker. A later request may
+        // own the same key now; an obsolete failure must not evict its result.
+        if (!cancelled) hydratedKeys.delete(hydrationKey);
+      });
 
     return () => {
       cancelled = true;

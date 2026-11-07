@@ -52,7 +52,8 @@ impl SshService {
             summary.username, summary.host, summary.cols, summary.rows
         );
         if let Err(error) = self.terminal_history.save_session(&summary).await {
-            self.discard_unpersisted_session(&summary.session_id).await;
+            self.discard_unpersisted_session(&input.workspace_id, &summary.session_id)
+                .await;
             unfour_diag::log_operation_event(
                 "ssh_connect_failed",
                 "ssh",
@@ -74,7 +75,8 @@ impl SshService {
             )
             .await
         {
-            self.discard_unpersisted_session(&summary.session_id).await;
+            self.discard_unpersisted_session(&input.workspace_id, &summary.session_id)
+                .await;
             unfour_diag::log_operation_event(
                 "ssh_connect_failed",
                 "ssh",
@@ -103,9 +105,19 @@ impl SshService {
     /// This path must not write terminal history again: the store is already
     /// failing. It only stops the supervisor, closes the transport, and removes
     /// the in-memory entry so a failed connect cannot reconnect in the background.
-    async fn discard_unpersisted_session(&self, session_id: &str) {
+    async fn discard_unpersisted_session(&self, workspace_id: &str, session_id: &str) {
         #[cfg(feature = "ssh-native")]
-        let native_handle = self.detach_native_session(session_id);
+        let native_handle = self
+            .detach_native_session(workspace_id, session_id)
+            .ok()
+            .flatten();
+        #[cfg(feature = "ssh-native")]
+        if let Ok(mut sessions) = self.sessions.lock() {
+            if let Some(state) = sessions.get_mut(session_id) {
+                state.summary.status = "disconnected".to_string();
+                state.summary.reconnect_attempt = 0;
+            }
+        }
         #[cfg(feature = "ssh-native")]
         if let Some(native) = native_handle {
             let _ = native.writer.close().await;
@@ -114,32 +126,43 @@ impl SshService {
                 .disconnect(russh::Disconnect::ByApplication, "session closed", "en")
                 .await;
         }
-        #[cfg(feature = "ssh-native")]
-        self.cancel_sftp_transfers_for_session(session_id);
+        #[cfg(not(feature = "ssh-native"))]
+        let _ = workspace_id;
         if let Ok(mut sessions) = self.sessions.lock() {
             sessions.remove(session_id);
         }
     }
 
+    /// Claim shutdown only after checking ownership. Both user teardown paths
+    /// invalidate SFTP and stop the supervisor before any network await.
     #[cfg(feature = "ssh-native")]
-    fn detach_native_session(&self, session_id: &str) -> Option<NativeSshHandle> {
-        let Ok(mut sessions) = self.sessions.lock() else {
-            return None;
+    fn detach_native_session(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+    ) -> AppResult<Option<NativeSshHandle>> {
+        let native = {
+            let mut sessions = self
+                .sessions
+                .lock()
+                .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?;
+            let Some(state) = sessions.get_mut(session_id) else {
+                return Ok(None);
+            };
+            if state.summary.workspace_id != workspace_id {
+                return Err(AppError::NotFound("ssh session".to_string()));
+            }
+            state.intentional_close = true;
+            if let Some(cancel_tx) = state.cancel_tx.take() {
+                let _ = cancel_tx.send(true);
+            }
+            state.sftp = None;
+            state.sftp_generation = state.sftp_generation.saturating_add(1);
+            state.native_handle.take()
         };
-        let Some(state) = sessions.get_mut(session_id) else {
-            return None;
-        };
-        // Mark closed before releasing the lock so a supervisor that observes
-        // the channel drop cannot start a reconnect.
-        state.intentional_close = true;
-        state.summary.status = "disconnected".to_string();
-        state.summary.reconnect_attempt = 0;
-        if let Some(cancel_tx) = state.cancel_tx.take() {
-            let _ = cancel_tx.send(true);
-        }
-        state.sftp = None;
-        state.sftp_generation = state.sftp_generation.saturating_add(1);
-        state.native_handle.take()
+        // Do not acquire the transfer lock while holding the session lock.
+        self.cancel_sftp_transfers_for_session(session_id);
+        Ok(native)
     }
 
     pub async fn list_sessions(&self, workspace_id: String) -> AppResult<Vec<SshSessionSummary>> {
@@ -501,30 +524,7 @@ impl SshService {
         );
 
         #[cfg(feature = "ssh-native")]
-        self.cancel_sftp_transfers_for_session(&input.session_id);
-
-        // Extract the native handle and mark the session as intentionally closed
-        // while the lock is held. The guard is dropped at the end of this block,
-        // so it is never held across an await.
-        #[cfg(feature = "ssh-native")]
-        let native_handle: Option<NativeSshHandle> = {
-            let mut sessions = self
-                .sessions
-                .lock()
-                .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?;
-            match sessions.get_mut(&input.session_id) {
-                Some(state) if state.summary.workspace_id == input.workspace_id => {
-                    state.intentional_close = true;
-                    if let Some(cancel_tx) = state.cancel_tx.take() {
-                        let _ = cancel_tx.send(true);
-                    }
-                    state.sftp = None;
-                    state.sftp_generation = state.sftp_generation.saturating_add(1);
-                    state.native_handle.take()
-                }
-                _ => None,
-            }
-        };
+        let native_handle = self.detach_native_session(&input.workspace_id, &input.session_id)?;
 
         // Close the native transport outside the mutex lock.
         #[cfg(feature = "ssh-native")]
@@ -613,27 +613,7 @@ impl SshService {
         validate_session_id(&input.session_id)?;
 
         #[cfg(feature = "ssh-native")]
-        self.cancel_sftp_transfers_for_session(&input.session_id);
-
-        #[cfg(feature = "ssh-native")]
-        let native_handle = {
-            let mut sessions = self
-                .sessions
-                .lock()
-                .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?;
-            match sessions.get_mut(&input.session_id) {
-                Some(state) if state.summary.workspace_id == input.workspace_id => {
-                    state.intentional_close = true;
-                    if let Some(cancel_tx) = state.cancel_tx.take() {
-                        let _ = cancel_tx.send(true);
-                    }
-                    state.sftp = None;
-                    state.sftp_generation = state.sftp_generation.saturating_add(1);
-                    state.native_handle.take()
-                }
-                _ => None,
-            }
-        };
+        let native_handle = self.detach_native_session(&input.workspace_id, &input.session_id)?;
 
         // Close the native transport outside the mutex lock. Match
         // `close_session`: shut the channel writer, then send an SSH-level
