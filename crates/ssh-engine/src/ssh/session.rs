@@ -193,7 +193,17 @@ impl SshService {
     pub async fn session_history(&self, input: SshCloseInput) -> AppResult<Vec<SshSessionEvent>> {
         validate_workspace_id(&input.workspace_id)?;
         validate_session_id(&input.session_id)?;
-        self.flush_session_history(&input.session_id).await?;
+        // Hydration is workspace scoped in storage; its preceding flush must
+        // also avoid writing another workspace's buffered terminal output.
+        let owns_live_session = self
+            .sessions
+            .lock()
+            .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?
+            .get(&input.session_id)
+            .is_some_and(|state| state.summary.workspace_id == input.workspace_id);
+        if owns_live_session {
+            self.flush_session_history(&input.session_id).await?;
+        }
         self.terminal_history
             .hydrate(&input.workspace_id, &input.session_id)
             .await

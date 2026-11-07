@@ -144,3 +144,77 @@ async fn close_checks_workspace_before_cancelling_native_resources() {
 async fn reconnect_cancel_checks_workspace_before_cancelling_native_resources() {
     assert_workspace_scoped_teardown(true).await;
 }
+
+#[tokio::test]
+async fn foreign_history_read_does_not_flush_session_output() {
+    let (service, owner, other) = service_with_workspaces().await;
+    let connection = service
+        .save_connection(password_input(&owner))
+        .await
+        .unwrap();
+    let session_id = Uuid::new_v4().to_string();
+    let summary: SshSessionSummary = serde_json::from_value(serde_json::json!({
+        "workspaceId": owner, "sessionId": session_id, "connectionId": connection.id,
+        "status": "connected", "reconnectAttempt": 0, "authKind": "password",
+        "host": "fixture", "username": "fixture", "cols": 80, "rows": 24,
+        "createdAt": "", "updatedAt": ""
+    }))
+    .unwrap();
+    service
+        .terminal_history
+        .save_session(&summary)
+        .await
+        .unwrap();
+    service.sessions.lock().unwrap().insert(
+        session_id.clone(),
+        SshSessionState {
+            summary,
+            events: vec![],
+            command_line: SshCommandLineTracker::new(),
+            pending_output: "owner output".into(),
+            history_flush_running: false,
+            intentional_close: false,
+            native_handle: None,
+            cancel_tx: None,
+            sftp: None,
+            sftp_generation: 0,
+        },
+    );
+
+    assert!(service
+        .session_history(SshCloseInput {
+            workspace_id: other,
+            session_id: session_id.clone(),
+        })
+        .await
+        .unwrap()
+        .is_empty());
+    assert_eq!(
+        service
+            .sessions
+            .lock()
+            .unwrap()
+            .get(&session_id)
+            .unwrap()
+            .pending_output,
+        "owner output"
+    );
+    let history = service
+        .session_history(SshCloseInput {
+            workspace_id: owner,
+            session_id: session_id.clone(),
+        })
+        .await
+        .unwrap();
+    assert!(history
+        .iter()
+        .any(|event| event.data.contains("owner output")));
+    assert!(service
+        .sessions
+        .lock()
+        .unwrap()
+        .get(&session_id)
+        .unwrap()
+        .pending_output
+        .is_empty());
+}
