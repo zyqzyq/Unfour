@@ -6,6 +6,40 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
+### Planned for v0.13.0
+
+Release preparation only; **not released**. See the
+[draft release notes](docs/release/v0.13.0-release-notes.md) and
+[preparation / verification record](docs/testing/v0.13.0-release-preparation-2026-11-07.md).
+
+### Added
+
+- **cURL import** — Preview supported cURL commands and open them as unsaved
+  API request tabs without sending a request. Mask sensitive preview fields;
+  reject unsupported shell syntax, file inputs and request shapes rather than
+  silently approximating them.
+- **Database and SSH sidebar search** — Filter already-loaded Database tree
+  names without fetching schemas, and SSH connections by name, host, username
+  or port. Preserve selection and restore normal expansion when clearing search.
+- **SFTP text preview** — Read regular UTF-8 text files up to 1 MiB in a read-only
+  dialog with explicit copy. Reject binary/unsupported encodings and oversized
+  files; discard stale results after closing or switching sessions/workspaces.
+
+### Fixed
+
+- Refresh open desktop reads after local MCP and other committed database writes,
+  including Cloud Sync. Guard supported editors against saving stale drafts over
+  externally changed records, while retaining unsaved work for review/reload.
+- Preserve useful account-login failure codes and stages, prevent authorization
+  code replay, and allow fresh sign-in after startup callback-read failure.
+- Keep Workspace list ordering stable when switching the active Workspace.
+- Respect IME composition, consumed keyboard events and open overlays in API
+  shortcuts; confirm modified tab close actions and pending Database edits.
+- Improve workbench surface and editor/data-grid contrast in both themes.
+- Reconcile successful SSH Task saves immediately with the list and editor;
+  prevent SFTP preview dispatch during a known active transfer in that session;
+  cancel terminal animation callbacks during teardown.
+
 ## [0.12.0] - 2026-10-23
 
 Standard stable release after `v0.11.0`. See the

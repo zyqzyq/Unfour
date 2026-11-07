@@ -34,6 +34,11 @@ Unfour 在一个桌面应用中提供 API 测试、SSH、数据库工具、本�
 
 ## 下载
 
+当前源码正在准备 **v0.13.0**，尚未发布。参见
+[发布说明草稿](docs/release/v0.13.0-release-notes.md)和
+[准备验证记录](docs/testing/v0.13.0-release-preparation-2026-11-07.md)。
+下载与已发布能力描述仍以 v0.12.0 为准。
+
 请从 [GitHub Releases](https://github.com/zyqzyq/Unfour/releases/latest) 下载最新的 Unfour 正式版本。
 
 - Windows 是主分发路径：NSIS `.exe` 安装包。该安装包尚未签名，可能触发

@@ -15,6 +15,11 @@ Unfour opens into a single workspace surface:
 
 ## Current Capabilities
 
+Source preparation for v0.13.0 adds cURL import, local Database/SSH search,
+SFTP text preview and consistency fixes. These are **not released**; see the
+[draft notes](../release/v0.13.0-release-notes.md). The released baseline below
+remains v0.12.0 until publication.
+
 This guide describes **v0.12.0**, released as Standard stable on **2026-10-23**;
 see the [Release Notes](../release/v0.12.0-release-notes.md). CI, RC builds,
 formal publication and distribution evidence are collected in

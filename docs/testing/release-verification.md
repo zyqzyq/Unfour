@@ -1,9 +1,13 @@
 # Release Verification
 
-This document records **v0.12.0 Standard stable**, released on **2026-10-23**,
-compared with `v0.11.0`. Published, automated-verified and manually-verified
-are separate states. Earlier release and RC/preparation records retain their
-original source identities, dates and limits.
+Current source preparation is **v0.13.0 — NOT RELEASED / RC NOT STARTED**.
+See the [2026-11-07 preparation record](v0.13.0-release-preparation-2026-11-07.md)
+for its source identity, fresh local checks and remaining acceptance.
+
+The latest published release remains **v0.12.0 Standard stable**, released on
+**2026-10-23**, compared with `v0.11.0`. Published, automated-verified and
+manually-verified are separate states. Earlier release and RC/preparation
+records retain their original source identities, dates and limits.
 
 ## v0.12.0 Final Release Verification Record
 

@@ -1,5 +1,21 @@
 # Release checklist
 
+## v0.13.0 preparation
+
+Status: **NOT RELEASED / RC NOT STARTED**. Source version `0.13.0`; latest
+published release remains `v0.12.0`. Preparation does not authorize tagging,
+pushing, workflow dispatch or publication.
+
+- [Draft release notes](v0.13.0-release-notes.md)
+- [Changelog](../../CHANGELOG.md#unreleased)
+- [Source identities, local verification and candidate acceptance](../testing/v0.13.0-release-preparation-2026-11-07.md)
+
+Before a later release decision, review the local preparation commit, select its
+exact full SHA, and record CI/Standard RC verification and native artifact
+acceptance on that SHA. The working-tree checks below are not evidence for an
+unbuilt installer. Keep the release date unset until publication, then archive
+the Unreleased entries and pin the v0.12.0 comparison to the final tag.
+
 ## v0.12.0 released status
 
 - Status: **RELEASED** as Standard stable on **2026-10-23**

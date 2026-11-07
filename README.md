@@ -36,6 +36,11 @@ general Flow Sync confirmation and the outstanding scenario matrix.
 
 ## Download
 
+Source is being prepared for **v0.13.0**; it is not released. See the
+[draft notes](docs/release/v0.13.0-release-notes.md) and
+[preparation checks](docs/testing/v0.13.0-release-preparation-2026-11-07.md).
+The download and released-capability descriptions still refer to v0.12.0.
+
 Download the [latest Unfour release](https://github.com/zyqzyq/Unfour/releases/latest)
 from GitHub Releases.
 
