@@ -56,7 +56,7 @@ export function StepRow({
 
   return (
     <article
-      className={`border border-[var(--u-color-border)] bg-[var(--u-color-surface)] ${
+      className={`overflow-hidden rounded-[var(--u-radius-lg)] border border-[var(--u-color-border)] bg-[var(--u-color-canvas)] shadow-[var(--u-shadow-sm)] ${
         step.enabled ? "" : "opacity-60"
       } ${expanded ? "border-[var(--u-color-border-strong)]" : ""} ${
         dragOver ? "border-[var(--u-color-primary)] ring-1 ring-[var(--u-color-primary)]" : ""
@@ -64,7 +64,7 @@ export function StepRow({
       data-step-index={index}
     >
       <div
-        className={`flex min-h-8 items-center gap-1 px-1.5 ${
+        className={`flex min-h-11 items-center gap-2 px-3 ${
           expanded
             ? "border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)]"
             : "cursor-pointer hover:bg-[var(--u-color-surface-hover)]"
@@ -95,7 +95,7 @@ export function StepRow({
         >
           <GripVertical aria-hidden className="pointer-events-none" size={13} />
         </span>
-        <span className="w-5 shrink-0 text-center font-mono text-[11px] text-[var(--u-color-text-soft)]">
+        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[var(--u-radius-sm)] bg-[var(--u-color-primary-soft)] font-mono text-[11px] text-[var(--u-color-primary)]">
           {index + 1}
         </span>
         <Badge>{t(`ssh.tasks.stepTypes.${step.stepType}`)}</Badge>
@@ -137,16 +137,16 @@ export function StepRow({
       </div>
 
       {expanded && (
-        <div className="flex flex-col gap-2 p-2" onClick={(event) => event.stopPropagation()}>
+        <div className="flex flex-col gap-3 p-4" onClick={(event) => event.stopPropagation()}>
           {step.stepType === "command" ? (
             <>
               <div className="relative">
-                <span className="pointer-events-none absolute left-2 top-2 font-mono text-[12px] text-[var(--u-color-text-soft)]">
+                <span className="pointer-events-none absolute left-2 top-2 font-mono text-[12px] text-[var(--u-color-terminal-muted)]">
                   $
                 </span>
                 <textarea
                   aria-label={t("ssh.tasks.editor.command")}
-                  className="min-h-[72px] w-full resize-y rounded-[var(--u-radius-sm)] border border-[var(--u-color-input)] bg-[var(--u-color-bg)] py-1.5 pl-6 pr-2 font-mono text-[12px] leading-5 text-[var(--u-color-text)] outline-none focus:border-[var(--u-color-focus)] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--u-color-focus)_16%,transparent)]"
+                  className="min-h-[96px] w-full resize-y rounded-[var(--u-radius-md)] border border-[var(--u-color-terminal-input-border)] bg-[var(--u-color-terminal-bg)] py-2 pl-6 pr-3 font-mono text-[12px] leading-5 text-[var(--u-color-terminal-text)] outline-none focus:border-[var(--u-color-terminal-cursor)] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--u-color-terminal-cursor)_16%,transparent)]"
                   onChange={(event) => onConfigChange("command", event.target.value)}
                   placeholder={t("ssh.tasks.editor.commandPlaceholder")}
                   rows={3}
@@ -278,7 +278,7 @@ export function AddStepMenu({
 export function StepInsertSlot({ onAdd }: { onAdd: (stepType: SshTaskStepType) => void }) {
   const { t } = useI18n();
   return (
-    <div className="group relative flex h-3 items-center justify-center">
+    <div className="group relative flex h-5 items-center justify-center">
       <div className="absolute inset-x-8 h-px bg-transparent transition-colors group-hover:bg-[var(--u-color-border)]" />
       <div className="relative z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         <DropdownMenu>

@@ -15,7 +15,7 @@ export function SshSidebarModeSwitcher({
   return (
     <div
       aria-label={t("ssh.title")}
-      className="flex min-w-0 flex-1 items-center gap-0.5"
+      className="flex min-w-0 flex-1 items-center gap-0.5 rounded-[var(--u-radius-md)] bg-[var(--u-color-surface-muted)] p-0.5"
       role="tablist"
     >
       {modes.map((mode) => {
@@ -23,9 +23,9 @@ export function SshSidebarModeSwitcher({
         return (
           <button
             aria-selected={active}
-            className={`h-6 cursor-pointer rounded-[var(--u-radius-sm)] px-2 text-[11px] font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--u-color-focus)] ${
+            className={`h-7 min-w-0 flex-1 cursor-pointer rounded-[var(--u-radius-sm)] px-2 text-[11px] font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--u-color-focus)] ${
               active
-                ? "bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]"
+                ? "bg-[var(--u-color-canvas)] text-[var(--u-color-primary)] shadow-[var(--u-shadow-sm)]"
                 : "text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]"
             }`}
             key={mode}

@@ -1,0 +1,1 @@
+PASS: 12 originals/clips load; API/Database, full/detail, B/C/C2 overview, overlay and swap verified. Two C/C2 detail comparison images captured from the viewer.

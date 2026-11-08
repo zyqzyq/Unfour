@@ -1,5 +1,5 @@
 import { responseCookies } from "./response-tab-helpers";
-import { AlertCircle, Ban, Copy, Send } from "lucide-react";
+import { AlertCircle, Ban, Clock3, Copy, HardDrive, Send } from "lucide-react";
 import { Button, useI18n } from "@unfour/ui";
 import { formatByteSize } from "../request-utils";
 import {
@@ -50,19 +50,21 @@ export function ResponseTabs({
   const isScriptTab = tab.responseTab === "tests" || tab.responseTab === "console";
 
   return (
-    <section className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--u-color-surface)]">
-      <div className="flex h-[var(--u-size-tabbar)] shrink-0 items-center gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-3">
-        <span className="text-[11px] font-bold uppercase tracking-[0.07em] text-[var(--u-color-text-muted)]">
+    <section className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--u-color-canvas)]">
+      <div className="flex min-h-[var(--u-size-tabbar)] shrink-0 flex-wrap items-center gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3 py-1.5">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--u-color-text-muted)]">
           {t("api.response.title")}
         </span>
         <ResponseStatus response={tab.response} state={responseState} />
         <PostResponseStatus result={execution?.postResponse} />
         {tab.response && (
-          <div className="ml-auto flex items-center gap-3 font-mono text-[12px] text-[var(--u-color-text-muted)]">
-            <span className="font-semibold text-[var(--u-color-text)]">
+          <div className="ml-auto flex items-center gap-2 font-mono text-[11px] text-[var(--u-color-text-muted)]">
+            <span className="flex items-center gap-1.5 rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-canvas)] px-2 py-1">
+              <Clock3 aria-hidden="true" size={11} />
               {tab.response.durationMs}ms
             </span>
-            <span className="font-semibold text-[var(--u-color-text)]">
+            <span className="flex items-center gap-1.5 rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-canvas)] px-2 py-1">
+              <HardDrive aria-hidden="true" size={11} />
               {responseSize}
             </span>
             <button
@@ -80,7 +82,7 @@ export function ResponseTabs({
       {showResponseTabs && (
         <CompactTabs
           active={tab.responseTab}
-          className="h-[30px] border-b bg-[var(--u-color-surface)]"
+          className="h-[38px] border-b bg-[var(--u-color-canvas)]"
           items={[
             { id: "body", label: t("api.response.tabs.body") },
             {

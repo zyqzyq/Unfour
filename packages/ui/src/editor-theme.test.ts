@@ -13,6 +13,9 @@ it.each(["light", "dark"] as const)("keeps %s Monaco canvases and readable metad
   expect(definition.colors["editor.background"]).toBe(token("canvas"));
   expect(definition.colors["editor.foreground"]).toBe(token("text"));
   expect(definition.colors["editorLineNumber.foreground"]).toBe(token("text-muted"));
+  expect(definition.colors["editor.selectionBackground"]).toBe(token("primary-soft"));
+  expect(definition.colors["editorCursor.foreground"]).toBe(token("focus"));
+  expect(definition.colors["editorGutter.background"]).toBe(token("canvas"));
   expect(`#${definition.rules.find((rule: { token: string }) => rule.token === "comment").foreground}`).toBe(token("text-muted"));
   expect(setTheme).toHaveBeenCalledWith(`unfour-${mode}`);
 });

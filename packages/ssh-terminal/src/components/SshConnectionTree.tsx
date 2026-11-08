@@ -395,7 +395,7 @@ function SshConnectionTreeContent({
 
   return (
     <SidebarSection className="flex h-full min-h-0 flex-col">
-      <div className="flex h-7 shrink-0 items-center justify-between gap-2 px-1">
+      <div className="flex min-h-10 shrink-0 items-center justify-between gap-2 px-1 py-1">
         <SshSidebarModeSwitcher
           activeMode="connections"
           onChange={(mode) => mode === "tasks" && onOpenTasks?.()}

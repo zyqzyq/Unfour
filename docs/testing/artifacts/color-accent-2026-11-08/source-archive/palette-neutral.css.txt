@@ -1,0 +1,144 @@
+/*
+ * Neutral / Periwinkle: achromatic work surfaces with a restrained action accent.
+ * Color-only experiment: layout, typography, icons and elevation are inherited.
+ */
+
+:root[data-palette="C"] {
+  --u-color-bg: #f2f3f5;
+  --u-color-chrome: #e7e8eb;
+  --u-color-canvas: #ffffff;
+  --u-color-surface: #fafafa;
+  --u-color-surface-subtle: #f2f2f3;
+  --u-color-surface-muted: #e9eaec;
+  --u-color-surface-hover: #e1e3e6;
+  --u-color-surface-active: #d5d8dd;
+  --u-color-border: #d7d9dd;
+  --u-color-border-strong: #a9adb5;
+  --u-color-input: #b8bdc5;
+  --u-color-text: #24262b;
+  --u-color-text-muted: #50545d;
+  --u-color-text-soft: #575d68;
+  --u-color-focus: #4452b4;
+  --u-color-primary: #4452b4;
+  --u-color-primary-hover: #3e49a5;
+  --u-color-primary-foreground: #ffffff;
+  --u-color-primary-soft: #e7eafd;
+  --u-color-danger: #a92b40;
+  --u-color-danger-soft: #f9e8ec;
+  --u-color-danger-hover: #932238;
+  --u-color-danger-text: #932238;
+  --u-color-success: #206747;
+  --u-color-success-soft: #e7f2eb;
+  --u-color-warning: #7e5508;
+  --u-color-warning-soft: #faf0d9;
+  --u-color-warning-text: #755008;
+  --u-color-info: #275e87;
+  --u-color-info-soft: #e7eff6;
+  --u-color-info-text: #22577e;
+  --u-color-secondary: #6e4a96;
+  --u-color-secondary-soft: #eee9f5;
+  --u-color-secondary-text: #67438e;
+  --u-color-neutral: #575d68;
+  --u-color-neutral-soft: #ececee;
+  --u-color-neutral-text: #50545d;
+  --u-color-text-on-color: #ffffff;
+  --u-color-overlay: rgba(16, 17, 21, 0.34);
+  --u-color-scrollbar: #b6bac2;
+  --u-color-scrollbar-hover: #969da9;
+
+  /* State badges retain their semantic hues. */
+  --u-badge-neutral-bg: #ececee;
+  --u-badge-neutral-text: #50545d;
+  --u-badge-neutral-ring: #b9bdc6;
+  --u-badge-success-bg: #e7f2eb;
+  --u-badge-success-text: #206747;
+  --u-badge-success-ring: #afcbbb;
+  --u-badge-warning-bg: #faf0d9;
+  --u-badge-warning-text: #755008;
+  --u-badge-warning-ring: #d7c28e;
+  --u-badge-danger-bg: #f9e8ec;
+  --u-badge-danger-text: #932238;
+  --u-badge-danger-ring: #dab0ba;
+  --u-badge-info-bg: #e7eff6;
+  --u-badge-info-text: #22577e;
+  --u-badge-info-ring: #adc4d8;
+
+  /* The terminal remains dark in both application themes. */
+  --u-color-terminal-bg: #16171a;
+  --u-color-terminal-text: #e0e2e6;
+  --u-color-terminal-muted: #abb0bb;
+  --u-color-terminal-border: #35383f;
+  --u-color-terminal-input-bg: #25272d;
+  --u-color-terminal-input-border: #4f545f;
+  --u-color-terminal-cursor: #acb5ff;
+}
+
+:root[data-theme="dark"][data-palette="C"] {
+  --u-color-bg: #18191d;
+  --u-color-chrome: #121316;
+  --u-color-canvas: #1f2025;
+  --u-color-surface: #25262c;
+  --u-color-surface-subtle: #2b2c33;
+  --u-color-surface-muted: #31333b;
+  --u-color-surface-hover: #383b44;
+  --u-color-surface-active: #414551;
+  --u-color-border: #393c46;
+  --u-color-border-strong: #666d7e;
+  --u-color-input: #555c6b;
+  --u-color-text: #eceef3;
+  --u-color-text-muted: #bfc3cf;
+  --u-color-text-soft: #aeb4c3;
+  --u-color-focus: #abb7ff;
+  --u-color-primary: #abb7ff;
+  --u-color-primary-hover: #c3cbff;
+  --u-color-primary-foreground: #1a2148;
+  --u-color-primary-soft: #2c3457;
+  --u-color-danger: #ffa3b2;
+  --u-color-danger-soft: #432a34;
+  --u-color-danger-hover: #ffbdc7;
+  --u-color-danger-text: #ffbdc7;
+  --u-color-success: #a3dab4;
+  --u-color-success-soft: #283c31;
+  --u-color-warning: #ecd08d;
+  --u-color-warning-soft: #3e3829;
+  --u-color-warning-text: #ecd08d;
+  --u-color-info: #a5cdea;
+  --u-color-info-soft: #2a3949;
+  --u-color-info-text: #b6daf3;
+  --u-color-secondary: #cfb7ec;
+  --u-color-secondary-soft: #393147;
+  --u-color-secondary-text: #dcc6f5;
+  --u-color-neutral: #bfc3cf;
+  --u-color-neutral-soft: #31333b;
+  --u-color-neutral-text: #c8ccd7;
+  --u-color-text-on-color: #19161d;
+  --u-color-overlay: rgba(6, 7, 10, 0.66);
+  --u-color-scrollbar: #4f5462;
+  --u-color-scrollbar-hover: #70798d;
+
+  /* State badges retain their semantic hues. */
+  --u-badge-neutral-bg: #31333b;
+  --u-badge-neutral-text: #c8ccd7;
+  --u-badge-neutral-ring: #646b7b;
+  --u-badge-success-bg: #283c31;
+  --u-badge-success-text: #a3dab4;
+  --u-badge-success-ring: #506b59;
+  --u-badge-warning-bg: #3e3829;
+  --u-badge-warning-text: #ecd08d;
+  --u-badge-warning-ring: #776741;
+  --u-badge-danger-bg: #432a34;
+  --u-badge-danger-text: #ffbdc7;
+  --u-badge-danger-ring: #815361;
+  --u-badge-info-bg: #2a3949;
+  --u-badge-info-text: #b6daf3;
+  --u-badge-info-ring: #536d84;
+
+  /* The terminal remains dark in both application themes. */
+  --u-color-terminal-bg: #16171a;
+  --u-color-terminal-text: #e0e2e6;
+  --u-color-terminal-muted: #abb0bb;
+  --u-color-terminal-border: #35383f;
+  --u-color-terminal-input-bg: #25272d;
+  --u-color-terminal-input-border: #4f545f;
+  --u-color-terminal-cursor: #acb5ff;
+}

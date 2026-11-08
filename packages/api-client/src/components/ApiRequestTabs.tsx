@@ -44,10 +44,10 @@ export function ApiRequestTabs({
   const savedTabCount = tabs.filter((tab) => getTabSaveState(tab) === "saved").length;
 
   return (
-    <div className="flex h-[var(--u-size-tabbar)] shrink-0 items-stretch border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)]">
+    <div className="flex h-[var(--u-size-tabbar)] shrink-0 items-stretch gap-1 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2 pt-1.5">
       <div
         aria-label={t("api.tabs.openRequests")}
-        className="flex min-w-0 shrink items-stretch overflow-x-auto"
+        className="flex min-w-0 shrink items-stretch gap-1 overflow-x-auto"
         role="tablist"
       >
         {tabs.map((tab, index) => {
@@ -58,18 +58,18 @@ export function ApiRequestTabs({
           const tabNode = (
             <div
               className={cn(
-                "group relative flex min-w-[150px] max-w-[230px] items-center gap-1 border-r border-[var(--u-color-border)] px-2 text-[12px]",
+                "group relative flex min-w-[150px] max-w-[230px] items-center gap-1 rounded-t-[var(--u-radius-md)] border border-b-0 border-transparent px-2.5 text-[12px]",
                 active
-                  ? "bg-[var(--u-color-surface)] text-[var(--u-color-text)]"
+                  ? "border-[var(--u-color-border)] bg-[var(--u-color-canvas)] font-medium text-[var(--u-color-text)]"
                   : "text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)]",
               )}
             >
               {active && (
-                <span className="absolute inset-x-0 top-0 h-0.5 bg-[var(--u-color-primary)]" />
+                <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-[var(--u-color-primary)]" />
               )}
               <button
                 aria-selected={active}
-                className="flex min-w-0 flex-1 items-center gap-1.5"
+                className="flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-[var(--u-radius-sm)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--u-color-focus)]"
                 onClick={() => onSelect(tab.id)}
                 role="tab"
                 title={title + " · " + t("api.tabs.state." + visualState)}
@@ -137,7 +137,7 @@ export function ApiRequestTabs({
       </div>
       <button
         aria-label={t("common.actions.newRequest")}
-        className="grid h-full w-8 shrink-0 place-items-center border-r border-[var(--u-color-border)] text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]"
+        className="grid h-7 w-7 shrink-0 self-center place-items-center rounded-[var(--u-radius-md)] text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]"
         onClick={onNew}
         title={t("common.actions.newRequest")}
         type="button"
@@ -146,7 +146,7 @@ export function ApiRequestTabs({
       </button>
       <div className="min-w-0 flex-1" />
       {endControl && (
-        <div className="flex shrink-0 items-center border-l border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2">
+        <div className="flex shrink-0 items-center pb-1.5 pl-2">
           <div className="flex shrink-0 items-center">{endControl}</div>
         </div>
       )}

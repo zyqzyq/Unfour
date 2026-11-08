@@ -107,13 +107,14 @@ export function StepEditor({
   }
   return (
     <section className="grid gap-2 border-b border-[var(--u-color-border)] py-3">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Input
+          className="min-w-0 flex-[1_1_100%]"
           aria-label={t("flow.stepName")}
           value={step.name}
           onChange={(e) => onChange({ ...step, name: e.target.value })}
         />
-        <details><summary>{t("flow.advanced")}</summary><code className="text-xs">{step.id}</code></details>
+        <details className="min-w-0 flex-1"><summary className="whitespace-nowrap">{t("flow.advanced")}</summary><code className="text-xs">{step.id}</code></details>
         <Button size="sm" variant="ghost" disabled={removeDisabled} onClick={onRemove}>
           {t("flow.remove")}
         </Button>

@@ -46,7 +46,7 @@ for (const locale of ["en", "zh-CN"] as const) {
     const sidebar = page.getByRole("complementary");
     const databaseSearch = sidebar.getByRole("textbox", { name: text.databaseSearch });
     await expect(databaseSearch).toBeVisible();
-    expect((await databaseSearch.boundingBox())?.height).toBe(28);
+    expect((await databaseSearch.boundingBox())?.height).toBe(32);
     await sidebar.getByRole("button", { name: "Search database", exact: true }).click({ button: "right" });
     await page.getByRole("menuitem", { name: text.connect, exact: true }).click();
     const users = sidebar.getByRole("button", { name: "users", exact: true });
@@ -71,7 +71,7 @@ for (const locale of ["en", "zh-CN"] as const) {
     await expect(terminal).toBeVisible();
     const terminalElement = await terminal.elementHandle();
     const sshSearch = sidebar.getByRole("textbox", { name: text.sshSearch });
-    expect((await sshSearch.boundingBox())?.height).toBe(28);
+    expect((await sshSearch.boundingBox())?.height).toBe(32);
     await sshSearch.fill("EXAMPLE.TEST");
     await expect(sidebar.getByRole("button", { name: "Search terminal", exact: true })).toBeVisible();
     await sshSearch.fill("no-result");

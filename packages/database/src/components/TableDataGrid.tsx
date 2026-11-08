@@ -343,12 +343,12 @@ export function TableDataGrid({
   const gridRows = isLoading ? [] : visibleRows;
 
   return (
-    <div aria-busy={isLoading} className="flex min-h-0 flex-1 flex-col">
-      <div className="flex h-8 shrink-0 items-center gap-2 border-b border-[var(--u-color-border)] px-2">
+    <div aria-busy={isLoading} className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="flex min-h-11 shrink-0 items-center gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3 py-1.5">
         <Search className="text-[var(--u-color-text-soft)]" size={13} />
         <Input
           aria-label={t("database.grid.filterPlaceholder")}
-          className="h-6 max-w-[260px]"
+          className="h-7 max-w-[320px] text-[12px]"
           disabled={isLoading || hasPendingChanges}
           onChange={(event) => (server ? server.onFilter(event.target.value) : setFilter(event.target.value))}
           placeholder={t("database.grid.filterPlaceholder")}
@@ -381,7 +381,7 @@ export function TableDataGrid({
         rows={gridRows}
         selection={selection}
       />
-      <div className="flex h-7 shrink-0 items-center justify-between border-t border-[var(--u-color-border)] px-2 text-[length:var(--u-font-size-caption)] text-[var(--u-color-text-muted)]">
+      <div className="flex h-8 shrink-0 items-center justify-between border-t border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3 text-[length:var(--u-font-size-caption)] tabular-nums text-[var(--u-color-text-muted)]">
         <div className="flex items-center gap-1">
           <span>{copyStatusLabel(copyStatus, t)}</span>
           {activeCell && visibleRows[activeCell.row] && result.columns[activeCell.column] ? (

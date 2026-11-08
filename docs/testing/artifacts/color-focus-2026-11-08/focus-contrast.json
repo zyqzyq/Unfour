@@ -1,0 +1,303 @@
+{
+  "method": "WCAG sRGB luminance; raw ratios, threshold 3:1 for focus. Nine workbench background surfaces, including every surface-* token and primary-soft. No composited rings or opacity assessed.",
+  "sources": {
+    "tokens.css": {
+      "path": "packages/ui/src/styles/tokens.css",
+      "sha256": "7cd024cd9f99e783d11b8520f380159076158d62d8d43b3f5802f534299583eb"
+    },
+    "theme.css": {
+      "path": "packages/ui/src/styles/theme.css",
+      "sha256": "3bf6ad5e0061eb5b54ab740583c7b4390af8cd66a8c976627d1e51fd9581c978"
+    },
+    "palette-legacy.css": {
+      "path": "packages/ui/src/styles/palette-legacy.css",
+      "sha256": "6752d4c1a66aa4827f34b4e9dc71fd0a09b4c459fa2b70b1bf96d0178c3d1536"
+    },
+    "palette-neutral.css": {
+      "path": "packages/ui/src/styles/palette-neutral.css",
+      "sha256": "347547ad7ff15ca89122c947d384594ba798fb370a7abb4caf514ec1d1e6c370"
+    },
+    "palette-ink.css": {
+      "path": "packages/ui/src/styles/palette-ink.css",
+      "sha256": "58ad68d636fd455f627b44e7816f747aac073f03b5c83c46053e076cedd94509"
+    },
+    "palette-focus.css": {
+      "path": "packages/ui/src/styles/palette-focus.css",
+      "sha256": "75d980c1a1763d7fc563b92840642ee40fd0f4ff61b5d933660bd4b097c601d7"
+    }
+  },
+  "baselineAudit": {
+    "manifestFiles": 184,
+    "changedFiles": [
+      "packages/ui/src/palette-experiment.ts",
+      "packages/ui/src/styles/index.css"
+    ],
+    "missingFiles": [],
+    "editorThemeHelperByteIdentical": true,
+    "indexOnlyAddsFocusImport": true
+  },
+  "override": {
+    "selector": ":root[data-theme=\"light\"][data-palette=\"C\"][data-palette-focus=\"violet\"]",
+    "declarations": {
+      "--u-color-focus": "#7640cd"
+    }
+  },
+  "results": [
+    {
+      "theme": "light",
+      "changedTokens": [
+        "--u-color-focus"
+      ],
+      "originalMinimum": {
+        "surface": "--u-color-surface-active",
+        "background": "#d5d8dd",
+        "originalFocus": "#4452b4",
+        "variantFocus": "#7640cd",
+        "originalRatio": 4.722616270425671,
+        "variantRatio": 4.341120053068395,
+        "threshold": 3,
+        "originalPass": true,
+        "variantPass": true
+      },
+      "variantMinimum": {
+        "surface": "--u-color-surface-active",
+        "background": "#d5d8dd",
+        "originalFocus": "#4452b4",
+        "variantFocus": "#7640cd",
+        "originalRatio": 4.722616270425671,
+        "variantRatio": 4.341120053068395,
+        "threshold": 3,
+        "originalPass": true,
+        "variantPass": true
+      },
+      "pairs": [
+        {
+          "surface": "--u-color-bg",
+          "background": "#f2f3f5",
+          "originalFocus": "#4452b4",
+          "variantFocus": "#7640cd",
+          "originalRatio": 6.078289741103884,
+          "variantRatio": 5.587281280654977,
+          "threshold": 3,
+          "originalPass": true,
+          "variantPass": true
+        },
+        {
+          "surface": "--u-color-chrome",
+          "background": "#e7e8eb",
+          "originalFocus": "#4452b4",
+          "variantFocus": "#7640cd",
+          "originalRatio": 5.508150422213776,
+          "variantRatio": 5.063198211324105,
+          "threshold": 3,
+          "originalPass": true,
+          "variantPass": true
+        },
+        {
+          "surface": "--u-color-canvas",
+          "background": "#ffffff",
+          "originalFocus": "#4452b4",
+          "variantFocus": "#7640cd",
+          "originalRatio": 6.7485847665440755,
+          "variantRatio": 6.203429409105001,
+          "threshold": 3,
+          "originalPass": true,
+          "variantPass": true
+        },
+        {
+          "surface": "--u-color-surface",
+          "background": "#fafafa",
+          "originalFocus": "#4452b4",
+          "variantFocus": "#7640cd",
+          "originalRatio": 6.465615664083233,
+          "variantRatio": 5.943318746973902,
+          "threshold": 3,
+          "originalPass": true,
+          "variantPass": true
+        },
+        {
+          "surface": "--u-color-surface-subtle",
+          "background": "#f2f2f3",
+          "originalFocus": "#4452b4",
+          "variantFocus": "#7640cd",
+          "originalRatio": 6.032114619597902,
+          "variantRatio": 5.544836217485698,
+          "threshold": 3,
+          "originalPass": true,
+          "variantPass": true
+        },
+        {
+          "surface": "--u-color-surface-muted",
+          "background": "#e9eaec",
+          "originalFocus": "#4452b4",
+          "variantFocus": "#7640cd",
+          "originalRatio": 5.6061717491929,
+          "variantRatio": 5.153301307534185,
+          "threshold": 3,
+          "originalPass": true,
+          "variantPass": true
+        },
+        {
+          "surface": "--u-color-surface-hover",
+          "background": "#e1e3e6",
+          "originalFocus": "#4452b4",
+          "variantFocus": "#7640cd",
+          "originalRatio": 5.248399613226979,
+          "variantRatio": 4.824430252818832,
+          "threshold": 3,
+          "originalPass": true,
+          "variantPass": true
+        },
+        {
+          "surface": "--u-color-surface-active",
+          "background": "#d5d8dd",
+          "originalFocus": "#4452b4",
+          "variantFocus": "#7640cd",
+          "originalRatio": 4.722616270425671,
+          "variantRatio": 4.341120053068395,
+          "threshold": 3,
+          "originalPass": true,
+          "variantPass": true
+        },
+        {
+          "surface": "--u-color-primary-soft",
+          "background": "#e7eafd",
+          "originalFocus": "#4452b4",
+          "variantFocus": "#7640cd",
+          "originalRatio": 5.651226984609736,
+          "variantRatio": 5.194716949789218,
+          "threshold": 3,
+          "originalPass": true,
+          "variantPass": true
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "changedTokens": [],
+      "originalMinimum": {
+        "surface": "--u-color-surface-active",
+        "background": "#414551",
+        "originalFocus": "#abb7ff",
+        "variantFocus": "#abb7ff",
+        "originalRatio": 4.988535617583864,
+        "variantRatio": 4.988535617583864,
+        "threshold": 3,
+        "originalPass": true,
+        "variantPass": true
+      },
+      "variantMinimum": {
+        "surface": "--u-color-surface-active",
+        "background": "#414551",
+        "originalFocus": "#abb7ff",
+        "variantFocus": "#abb7ff",
+        "originalRatio": 4.988535617583864,
+        "variantRatio": 4.988535617583864,
+        "threshold": 3,
+        "originalPass": true,
+        "variantPass": true
+      },
+      "pairs": [
+        {
+          "surface": "--u-color-bg",
+          "background": "#18191d",
+          "originalFocus": "#abb7ff",
+          "variantFocus": "#abb7ff",
+          "originalRatio": 9.157483162018394,
+          "variantRatio": 9.157483162018394,
+          "threshold": 3,
+          "originalPass": true,
+          "variantPass": true
+        },
+        {
+          "surface": "--u-color-chrome",
+          "background": "#121316",
+          "originalFocus": "#abb7ff",
+          "variantFocus": "#abb7ff",
+          "originalRatio": 9.685470768207638,
+          "variantRatio": 9.685470768207638,
+          "threshold": 3,
+          "originalPass": true,
+          "variantPass": true
+        },
+        {
+          "surface": "--u-color-canvas",
+          "background": "#1f2025",
+          "originalFocus": "#abb7ff",
+          "variantFocus": "#abb7ff",
+          "originalRatio": 8.477196334663338,
+          "variantRatio": 8.477196334663338,
+          "threshold": 3,
+          "originalPass": true,
+          "variantPass": true
+        },
+        {
+          "surface": "--u-color-surface",
+          "background": "#25262c",
+          "originalFocus": "#abb7ff",
+          "variantFocus": "#abb7ff",
+          "originalRatio": 7.864075629799207,
+          "variantRatio": 7.864075629799207,
+          "threshold": 3,
+          "originalPass": true,
+          "variantPass": true
+        },
+        {
+          "surface": "--u-color-surface-subtle",
+          "background": "#2b2c33",
+          "originalFocus": "#abb7ff",
+          "variantFocus": "#abb7ff",
+          "originalRatio": 7.247167499643473,
+          "variantRatio": 7.247167499643473,
+          "threshold": 3,
+          "originalPass": true,
+          "variantPass": true
+        },
+        {
+          "surface": "--u-color-surface-muted",
+          "background": "#31333b",
+          "originalFocus": "#abb7ff",
+          "variantFocus": "#abb7ff",
+          "originalRatio": 6.566981040031294,
+          "variantRatio": 6.566981040031294,
+          "threshold": 3,
+          "originalPass": true,
+          "variantPass": true
+        },
+        {
+          "surface": "--u-color-surface-hover",
+          "background": "#383b44",
+          "originalFocus": "#abb7ff",
+          "variantFocus": "#abb7ff",
+          "originalRatio": 5.832589070774667,
+          "variantRatio": 5.832589070774667,
+          "threshold": 3,
+          "originalPass": true,
+          "variantPass": true
+        },
+        {
+          "surface": "--u-color-surface-active",
+          "background": "#414551",
+          "originalFocus": "#abb7ff",
+          "variantFocus": "#abb7ff",
+          "originalRatio": 4.988535617583864,
+          "variantRatio": 4.988535617583864,
+          "threshold": 3,
+          "originalPass": true,
+          "variantPass": true
+        },
+        {
+          "surface": "--u-color-primary-soft",
+          "background": "#2c3457",
+          "originalFocus": "#abb7ff",
+          "variantFocus": "#abb7ff",
+          "originalRatio": 6.307324515439631,
+          "variantRatio": 6.307324515439631,
+          "threshold": 3,
+          "originalPass": true,
+          "variantPass": true
+        }
+      ]
+    }
+  ]
+}

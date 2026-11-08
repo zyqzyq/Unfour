@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Unfour · 四套配色对比</title>
+  <style>
+    :root { font-family: "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif; color: #eceef2; background: #17181c; font-synthesis: none; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    button, select, input { font: inherit; }
+    button, select { color: inherit; }
+    button, a, select, input { -webkit-tap-highlight-color: transparent; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .45; }
+    :focus-visible { outline: 2px solid #c1c9f7; outline-offset: 3px; }
+    [hidden] { display: none !important; }
+    a { color: #c8d0f3; text-decoration-color: #69738e; text-underline-offset: 3px; }
+    a:hover { color: #fff; }
+    header, main, footer { width: min(1760px, 100%); margin-inline: auto; padding-inline: 28px; }
+    header { padding-top: 28px; }
+    .eyebrow { margin: 0 0 8px; color: #a8acb8; font-size: 11px; letter-spacing: .13em; }
+    h1 { margin: 0; font-size: 25px; font-weight: 650; letter-spacing: -.03em; }
+    .intro { margin: 10px 0 20px; max-width: 1080px; color: #b8bdca; font-size: 13px; line-height: 1.75; }
+    .controls { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: flex-start; padding: 16px; border: 1px solid #363943; border-radius: 12px; background: #202228; }
+    .control-group { display: grid; gap: 7px; }
+    .control-label { font-size: 11px; color: #b3b8c5; }
+    .segments { display: flex; gap: 3px; padding: 3px; background: #17191e; border: 1px solid #383c47; border-radius: 8px; }
+    .segments button { border: 0; border-radius: 5px; background: transparent; padding: 7px 12px; font-size: 12px; white-space: nowrap; color: #bec3d0; }
+    .segments button:hover:not(:disabled) { background: #2b2f39; }
+    .segments button[aria-pressed="true"] { background: #414755; color: #fff; box-shadow: inset 0 0 0 1px #697287; }
+    .pair-options { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; padding: 14px 0 0; }
+    .pair-options label { display: grid; gap: 6px; font-size: 11px; color: #b7bdca; }
+    select { min-width: 230px; max-width: 100%; height: 34px; padding: 0 10px; border: 1px solid #525867; border-radius: 6px; background: #24272e; font-size: 12px; }
+    .swap { height: 34px; padding: 0 12px; border: 1px solid #525867; border-radius: 6px; background: #24272e; font-size: 12px; }
+    .swap:hover { background: #343945; }
+    .context { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 20px; margin: 18px 0 12px; }
+    #scene-summary { margin: 0; font-size: 13px; font-weight: 600; }
+    #availability { margin: 0; color: #b9becc; font-size: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    figure { min-width: 0; margin: 0; overflow: hidden; border: 1px solid #3b404b; border-radius: 10px; background: #22252c; }
+    figcaption { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #393e49; }
+    .caption-copy { min-width: 0; }
+    .caption-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+    .letter { display: inline-grid; width: 24px; height: 24px; place-items: center; flex-shrink: 0; border: 1px solid #6c7384; border-radius: 5px; color: #fff; font-size: 12px; }
+    .caption-detail { margin: 5px 0 0 32px; color: #b4bac7; font-size: 11px; line-height: 1.5; }
+    .original { flex-shrink: 0; font-size: 11px; }
+    .shot-button { display: block; width: 100%; padding: 0; border: 0; background: #101115; }
+    .shot-button img { display: block; width: 100%; height: auto; aspect-ratio: 8 / 5; object-fit: contain; }
+    .shot-button:hover img { outline: 2px solid #a6aec5; outline-offset: -2px; }
+    .shot-button:focus-visible { outline-offset: -3px; }
+    .missing { display: grid; aspect-ratio: 8 / 5; padding: 24px; place-items: center; color: #c5cbd8; font-size: 12px; text-align: center; }
+    .overlay-shell { overflow: hidden; border: 1px solid #464d5c; border-radius: 10px; background: #22252c; }
+    .overlay-labels { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #3c4350; font-size: 12px; }
+    .overlay-labels span { display: inline-flex; gap: 8px; align-items: center; }
+    .overlay-stage { position: relative; width: 100%; aspect-ratio: 8 / 5; background: #101115; overflow: hidden; touch-action: pan-y; cursor: col-resize; user-select: none; }
+    .overlay-stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+    .divider { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-1px); background: #fff; box-shadow: 0 0 0 1px #16171d; pointer-events: none; }
+    .divider::after { content: "↔"; position: absolute; top: 50%; left: 50%; display: grid; width: 30px; height: 44px; place-items: center; transform: translate(-50%, -50%); border: 1px solid #fff; border-radius: 8px; background: #252a36; color: #fff; font-size: 19px; }
+    .slider-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 13px 16px; }
+    .slider-row label { color: #c6cbd7; font-size: 12px; }
+    .slider-row input { flex: 1; min-width: 160px; accent-color: #bcc4e1; }
+    .slider-row output { min-width: 38px; font-size: 12px; font-variant-numeric: tabular-nums; }
+    .hint { margin: 0; padding: 0 16px 14px; color: #b3bbcc; font-size: 11px; line-height: 1.6; }
+    footer { padding-top: 20px; padding-bottom: 30px; color: #aeb5c3; font-size: 11px; line-height: 1.8; }
+    footer p { margin: 0; }
+    dialog { width: min(1600px, 96vw); max-height: 96vh; padding: 0; border: 1px solid #737d93; border-radius: 10px; background: #181b22; color: #eceef2; }
+    dialog::backdrop { background: rgb(0 0 0 / .8); }
+    .dialog-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; border-bottom: 1px solid #4c5363; }
+    #image-title { margin: 0; font-size: 13px; font-weight: 600; }
+    .dialog-actions { display: flex; align-items: center; gap: 18px; }
+    .dialog-actions button { border: 1px solid #616a7e; border-radius: 5px; background: #2c3240; padding: 6px 12px; font-size: 12px; }
+    #full-image { display: block; width: 100%; max-height: calc(96vh - 60px); object-fit: contain; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; clip: rect(0,0,0,0); overflow: hidden; white-space: nowrap; border: 0; }
+    @media (min-width: 1900px) { .grid.overview { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+    @media (max-width: 800px) { header, main, footer { padding-inline: 14px; } header { padding-top: 20px; } h1 { font-size: 22px; } .grid { grid-template-columns: minmax(0, 1fr); } .controls { gap: 14px; } .segments button { padding-inline: 10px; } select { min-width: 210px; } }
+    @media (prefers-reduced-motion: no-preference) { button, a { transition: background-color 100ms, color 100ms; } }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="eyebrow">UNFOUR / COLOR EXPERIMENT</p>
+    <h1>四套配色，同一工作台</h1>
+    <p class="intro">A–D 仅比较颜色。截图采用相同的 1440 × 900 视口、数据、布局和交互路径。可先总览，再选择两套配色并排或滑动叠加；点击截图查看大图。本页不预设推荐方案。</p>
+    <div class="controls">
+      <div class="control-group">
+        <span class="control-label" id="scene-label">业务场景</span>
+        <div class="segments" role="group" aria-labelledby="scene-label" id="scene-controls">
+          <button type="button" data-scene="api" aria-pressed="true">API</button>
+          <button type="button" data-scene="database" aria-pressed="false">Database</button>
+          <button type="button" data-scene="ssh" aria-pressed="false">SSH</button>
+          <button type="button" data-scene="flow" aria-pressed="false">Flow</button>
+        </div>
+      </div>
+      <div class="control-group">
+        <span class="control-label" id="theme-label">应用主题</span>
+        <div class="segments" role="group" aria-labelledby="theme-label" id="theme-controls">
+          <button type="button" data-theme="dark" aria-pressed="true">深色</button>
+          <button type="button" data-theme="light" aria-pressed="false">浅色</button>
+        </div>
+      </div>
+      <div class="control-group">
+        <span class="control-label" id="mode-label">比较方式</span>
+        <div class="segments" role="group" aria-labelledby="mode-label" id="mode-controls">
+          <button type="button" data-mode="overview" aria-pressed="true">四套总览</button>
+          <button type="button" data-mode="pair" aria-pressed="false">两套并排</button>
+          <button type="button" data-mode="overlay" aria-pressed="false">滑动叠加</button>
+        </div>
+      </div>
+    </div>
+    <div class="pair-options" id="pair-options" hidden>
+      <label>左侧方案<select id="left-palette" aria-label="左侧方案"></select></label>
+      <label>右侧方案<select id="right-palette" aria-label="右侧方案"></select></label>
+      <button type="button" class="swap" id="swap">交换左右</button>
+    </div>
+  </header>
+  <main>
+    <div class="context">
+      <h2 id="scene-summary">API · 深色 · 四套总览</h2>
+      <p id="availability">点击任一截图放大，原图链接可在新窗口打开。</p>
+    </div>
+    <div class="grid overview" id="gallery"></div>
+    <section class="overlay-shell" id="overlay" aria-label="同场景配色滑动叠加" hidden>
+      <div class="overlay-labels">
+        <span><strong id="overlay-left-title"></strong><a id="overlay-left-link" target="_blank" rel="noopener">查看原图</a></span>
+        <span><strong id="overlay-right-title"></strong><a id="overlay-right-link" target="_blank" rel="noopener">查看原图</a></span>
+      </div>
+      <div class="overlay-stage" id="overlay-stage" aria-label="拖动分界线，比较两套配色">
+        <img id="overlay-right-image" alt="" draggable="false">
+        <img id="overlay-left-image" alt="" draggable="false">
+        <div class="divider" id="divider" aria-hidden="true"></div>
+      </div>
+      <div class="slider-row">
+        <label for="divider-position">左侧方案显示比例</label>
+        <input type="range" id="divider-position" min="0" max="100" value="50" step="1" aria-valuetext="左侧方案 50%，右侧方案 50%">
+        <output for="divider-position" id="divider-value">50%</output>
+        <button type="button" class="swap" id="reset-divider">居中</button>
+      </div>
+      <p class="hint">拖动图片中的分界线，或用下方滑块精确比较；滑块支持方向键与 Home / End。两张原图保持同一比例，不做调色处理。</p>
+    </section>
+    <p id="announcement" class="sr-only" role="status" aria-live="polite"></p>
+  </main>
+  <footer>
+    <p>截图来自浏览器中实际运行的 React 界面，使用隔离、确定性的测试数据。API / Database 提供深浅主题；SSH / Flow 本组仅提供深色截图。</p>
+    <p>这组材料用于视觉比较，不能据此认定原生桌面、真实远程请求、SSH 会话或数据库业务已完成验证。</p>
+  </footer>
+  <dialog id="image-dialog" aria-labelledby="image-title">
+    <div class="dialog-bar">
+      <h2 id="image-title"></h2>
+      <div class="dialog-actions"><a class="original" id="full-original" target="_blank" rel="noopener">打开原图</a><button type="button" id="close-image">关闭</button></div>
+    </div>
+    <img id="full-image" alt="">
+  </dialog>
+  <script>
+    (() => {
+      const palettes = {
+        A: { name: 'Graphite / Jade', detail: '基线 · 石墨与玉绿色' },
+        B: { name: '旧版蓝紫', detail: '蓝紫主色与原有色彩语义' },
+        C: { name: '中性灰 + 克制蓝紫', detail: '灰阶表面与局部操作强调色' },
+        D: { name: '墨蓝 / 琥珀', detail: '墨蓝表面与暖琥珀操作强调色' }
+      };
+      const scenes = { api: 'API', database: 'Database', ssh: 'SSH', flow: 'Flow' };
+      const modes = { overview: '四套总览', pair: '两套并排', overlay: '滑动叠加' };
+      const state = { scene: 'api', theme: 'dark', mode: 'overview', left: 'A', right: 'B', position: 50 };
+      const byId = (id) => document.getElementById(id);
+      const file = (palette) => `${state.theme}/${state.scene}-${palette}.png`;
+      const themeLabel = () => state.theme === 'dark' ? '深色' : '浅色';
+      const title = (palette) => `${palette} · ${palettes[palette].name}`;
+      const imageDescription = (palette) => `${title(palette)}，${scenes[state.scene]}，${themeLabel()}，1440 × 900`;
+
+      function openImage(palette) {
+        byId('image-title').textContent = imageDescription(palette);
+        byId('full-image').src = file(palette);
+        byId('full-image').alt = imageDescription(palette);
+        byId('full-original').href = file(palette);
+        byId('image-dialog').showModal();
+      }
+
+      function card(palette) {
+        const figure = document.createElement('figure');
+        const caption = document.createElement('figcaption');
+        const copy = document.createElement('div');
+        copy.className = 'caption-copy';
+        const heading = document.createElement('div');
+        heading.className = 'caption-title';
+        const letter = document.createElement('span');
+        letter.className = 'letter';
+        letter.textContent = palette;
+        heading.append(letter, document.createTextNode(palettes[palette].name));
+        const detail = document.createElement('p');
+        detail.className = 'caption-detail';
+        detail.textContent = palettes[palette].detail;
+        copy.append(heading, detail);
+        const original = document.createElement('a');
+        original.className = 'original';
+        original.href = file(palette);
+        original.target = '_blank';
+        original.rel = 'noopener';
+        original.textContent = '原图 ↗';
+        original.setAttribute('aria-label', `在新窗口打开 ${imageDescription(palette)}`);
+        caption.append(copy, original);
+        const button = document.createElement('button');
+        button.className = 'shot-button';
+        button.type = 'button';
+        button.setAttribute('aria-label', `放大查看 ${imageDescription(palette)}`);
+        const img = document.createElement('img');
+        img.src = file(palette);
+        img.alt = imageDescription(palette);
+        img.width = 1440;
+        img.height = 900;
+        img.decoding = 'async';
+        const missing = document.createElement('span');
+        missing.className = 'missing';
+        missing.hidden = true;
+        missing.textContent = `截图暂未就绪：${file(palette)}。文件补齐后请刷新本页。`;
+        img.addEventListener('error', () => { img.hidden = true; missing.hidden = false; button.disabled = true; });
+        button.append(img, missing);
+        button.addEventListener('click', () => openImage(palette));
+        figure.append(caption, button);
+        return figure;
+      }
+
+      function updateDivider(position) {
+        state.position = Math.max(0, Math.min(100, Math.round(position)));
+        byId('overlay-left-image').style.clipPath = `inset(0 ${100 - state.position}% 0 0)`;
+        byId('divider').style.left = `${state.position}%`;
+        byId('divider-position').value = String(state.position);
+        byId('divider-position').setAttribute('aria-valuetext', `左侧 ${state.left} 显示 ${state.position}%，右侧 ${state.right} 显示 ${100 - state.position}%`);
+        byId('divider-value').value = `${state.position}%`;
+      }
+
+      function render() {
+        const onlyDark = state.scene === 'ssh' || state.scene === 'flow';
+        if (onlyDark) state.theme = 'dark';
+        document.querySelectorAll('[data-scene]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.scene === state.scene)));
+        document.querySelectorAll('[data-theme]').forEach((button) => {
+          button.setAttribute('aria-pressed', String(button.dataset.theme === state.theme));
+          button.disabled = onlyDark && button.dataset.theme === 'light';
+          button.title = button.disabled ? 'SSH / Flow 本组仅提供深色截图' : '';
+        });
+        document.querySelectorAll('[data-mode]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.mode === state.mode)));
+        byId('pair-options').hidden = state.mode === 'overview';
+        byId('left-palette').value = state.left;
+        byId('right-palette').value = state.right;
+        const summary = `${scenes[state.scene]} · ${themeLabel()} · ${modes[state.mode]}`;
+        byId('scene-summary').textContent = summary;
+        byId('announcement').textContent = summary;
+        byId('availability').textContent = onlyDark ? '本组 SSH / Flow 仅有深色截图；浅色切换已停用。' : '点击任一截图放大，原图链接可在新窗口打开。';
+        const isOverlay = state.mode === 'overlay';
+        byId('gallery').hidden = isOverlay;
+        byId('overlay').hidden = !isOverlay;
+        if (isOverlay) {
+          for (const side of ['left', 'right']) {
+            byId(`overlay-${side}-title`).textContent = title(state[side]);
+            byId(`overlay-${side}-link`).href = file(state[side]);
+            byId(`overlay-${side}-image`).src = file(state[side]);
+            byId(`overlay-${side}-image`).alt = imageDescription(state[side]);
+          }
+          updateDivider(state.position);
+        } else {
+          byId('gallery').className = `grid ${state.mode === 'overview' ? 'overview' : ''}`;
+          byId('gallery').replaceChildren(...(state.mode === 'overview' ? ['A', 'B', 'C', 'D'] : [state.left, state.right]).map(card));
+        }
+      }
+
+      for (const side of ['left', 'right']) {
+        for (const palette of Object.keys(palettes)) {
+          const option = document.createElement('option');
+          option.value = palette;
+          option.textContent = title(palette);
+          byId(`${side}-palette`).append(option);
+        }
+        byId(`${side}-palette`).addEventListener('change', (event) => { state[side] = event.target.value; render(); });
+      }
+      for (const key of ['scene', 'theme', 'mode']) {
+        document.querySelectorAll(`[data-${key}]`).forEach((button) => button.addEventListener('click', () => { state[key] = button.dataset[key]; render(); }));
+      }
+      byId('swap').addEventListener('click', () => { [state.left, state.right] = [state.right, state.left]; render(); });
+      byId('divider-position').addEventListener('input', (event) => updateDivider(Number(event.target.value)));
+      byId('reset-divider').addEventListener('click', () => updateDivider(50));
+      const stage = byId('overlay-stage');
+      const moveDivider = (event) => { const rect = stage.getBoundingClientRect(); updateDivider((event.clientX - rect.left) / rect.width * 100); };
+      stage.addEventListener('pointerdown', (event) => { if (event.button !== 0) return; stage.setPointerCapture(event.pointerId); moveDivider(event); });
+      stage.addEventListener('pointermove', (event) => { if (stage.hasPointerCapture(event.pointerId)) moveDivider(event); });
+      const release = (event) => { if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId); };
+      stage.addEventListener('pointerup', release);
+      stage.addEventListener('pointercancel', release);
+      byId('close-image').addEventListener('click', () => byId('image-dialog').close());
+      byId('image-dialog').addEventListener('click', (event) => { if (event.target === byId('image-dialog')) byId('image-dialog').close(); });
+      render();
+    })();
+  </script>
+</body>
+</html>

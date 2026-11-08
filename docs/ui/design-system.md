@@ -12,11 +12,18 @@ IDE or database client than a marketing dashboard.
 - Compact typography and stable panel geometry.
 - Minimal decoration.
 
+The adopted C2 design uses neutral work surfaces and a concentrated interaction
+accent: violet in light mode, periwinkle in dark mode. The labeled module rail,
+resource hierarchy, inset document frame, and filled selected states provide
+orientation. Semantic success, warning, error, and information colors remain
+distinct from the interaction accent. The packaged U application icon is
+unchanged; internal feature/action icons continue to use the shared icon style.
+
 Avoid:
 
 - marketing-style dashboard layouts;
 - oversized cards and hero sections;
-- large border radii;
+- oversized or decorative border radii beyond the shared 6/8/12px scale;
 - heavy shadows;
 - excessive whitespace;
 - decorative gradients;
@@ -28,14 +35,15 @@ Unfour uses one application shell. Feature modules provide trees, inspectors,
 main panels, status content, and bottom-panel content through slots.
 
 ```text
-GlobalToolbar 38px
-├─ Sidebar 240-320px
+GlobalToolbar 52px
+├─ ActivityRail 72px (60px at narrow widths)
+├─ Resizable/collapsible Sidebar
 ├─ MainWorkspace
-│  ├─ TabBar 34px
+│  ├─ TabBar 42px
 │  └─ Active module surface
 ├─ RightInspector optional 260-420px
 ├─ BottomPanel optional 180-360px
-└─ StatusBar 24px
+└─ StatusBar 28px
 ```
 
 ### Global Toolbar
@@ -43,10 +51,14 @@ GlobalToolbar 38px
 The global toolbar contains global operations only:
 
 - workspace switcher;
-- global search and command palette;
-- layout toggles;
-- sync/storage/status indicators;
+- active environment selector;
+- MCP and application settings;
+- host-provided global/account actions;
 - desktop window controls.
+
+Global search, the command palette, layout controls, and storage/status content
+remain shell operations in their existing rail, shortcut, and status-bar entry
+points; do not duplicate them merely to fill the title bar.
 
 Do not place module-specific actions such as Send, Run SQL, Connect, Save
 request, or Add connection in the global toolbar.
@@ -57,10 +69,19 @@ The sidebar is for navigation and resource trees. Forms and editors do not
 belong in the sidebar. Use dialogs, inspectors, or main tabs for edit-heavy
 workflows.
 
+The separate activity rail uses icons with translated short module labels.
+Resource section headers remain visible while lists scroll. Filled accent-soft
+selection and restrained hover surfaces distinguish the active resource.
+
 ### Main Workspace
 
 The main workspace owns the active module surface. Feature modules should not
 create their own outer application shell.
+
+Use the shared 12px document-frame corners, 8px right/bottom inset, subtle border,
+and small frame shadow to separate working content from the outer chrome. At
+narrow widths the right inset reduces to 4px. Preserve the existing resize,
+collapse, responsive split/stack behavior, and persistent feature mounts.
 
 ### Inspector And Bottom Panel
 
@@ -103,6 +124,10 @@ business-logic free.
 - Do not use emojis as functional icons.
 - Module actions belong in module toolbars, not in the global toolbar.
 - Each panel should expose no more than one primary action.
+- Use a filled primary button, outlined secondary actions, and quiet icon
+  actions. Inputs use the canvas surface and a clear focus treatment.
+- Document tabs join their adjacent surface; configuration tabs use compact
+  inset selected states. Dirty markers, close actions, and focus remain visible.
 - Secondary actions should move into dropdown menus, context menus, command
   palette entries, or secondary action groups.
 - Components should expose composition slots instead of importing feature
@@ -164,16 +189,51 @@ Core color tokens:
 --u-color-focus
 ```
 
-Surface roles (Catppuccin Latte / Mocha):
+### Adopted C2 palette
 
-- `chrome`: global toolbar, activity rail, status bar and shared `Tabs` rail
-  (Latte Crust `#dce0e8` / Mocha Crust `#11111b`).
-- `surface`: sidebar, forms and ordinary panels; retain Mantle in both themes.
-- `bg`: workspace Base; `surface-subtle` remains the existing section toolbar
-  and table header surface. Do not globally swap these roles.
-- `canvas`: data table bodies, SQL and API response/editor canvases
-  (`#ffffff` / Mocha Base `#1e1e2e`). Keep toolbars and headers separate.
-  Terminal canvases retain the theme-independent terminal tokens.
+| Role / token suffix | Light | Dark |
+| --- | --- | --- |
+| `bg` | `#f2f3f5` | `#18191d` |
+| `chrome` | `#e7e8eb` | `#121316` |
+| `canvas` | `#ffffff` | `#1f2025` |
+| `surface` | `#fafafa` | `#25262c` |
+| `surface-subtle` | `#f2f2f3` | `#2b2c33` |
+| `surface-muted` | `#e9eaec` | `#31333b` |
+| `surface-hover` | `#e1e3e6` | `#383b44` |
+| `surface-active` | `#d5d8dd` | `#414551` |
+| `border` | `#d7d9dd` | `#393c46` |
+| `border-strong` | `#a9adb5` | `#666d7e` |
+| `text` | `#24262b` | `#eceef3` |
+| `text-muted` | `#50545d` | `#bfc3cf` |
+| `text-soft` | `#575d68` | `#aeb4c3` |
+| `primary` | `#6e40bd` | `#abb7ff` |
+| `primary-hover` | `#5d32a8` | `#c3cbff` |
+| `primary-foreground` | `#ffffff` | `#1a2148` |
+| `primary-soft` | `#eee7fa` | `#2c3457` |
+| `focus` | `#7640cd` | `#abb7ff` |
+
+All suffixes above belong to `--u-color-*`. Full semantic, badge, scrollbar,
+terminal, and overlay values remain in the shared CSS source. C2 is the default
+design, not an extra theme choice. Light/dark/system selection, persistence,
+and locale settings retain their existing behavior; temporary palette URL
+switches are not part of the product.
+
+Surface roles:
+
+- `chrome`: title bar, activity rail, outer resource frame, status bar, and
+  document-tab rail.
+- `surface`: forms and ordinary panels; sidebar content may sit within the
+  surrounding chrome to retain the inset-document hierarchy.
+- `bg`: application background; `surface-subtle`: section toolbars, grouped
+  settings bands, and table headers. Do not globally swap these roles.
+- `canvas`: data table bodies, SQL, API response, and code/editor canvases.
+  Keep toolbars and headers separate from these working areas.
+- `primary` / `primary-soft`: primary actions, active navigation, selected
+  resources/tabs, and editor selections. Use `focus` for keyboard focus,
+  active-cell outlines, editor cursors, and matching-bracket borders.
+- Terminal canvases remain dark in both application themes: background
+  `#16171a`, foreground `#e0e2e6`, cursor `#acb5ff`. Use the terminal tokens
+  for their controls rather than a local light-theme override.
 
 Shared `Tabs` defaults to `surface`. Set `activeBackground="subtle"` when the
 next region is a section toolbar, or `"terminal"` for a terminal pane (including
@@ -182,10 +242,13 @@ API request tabs already join their `surface` request bar; underline-style
 configuration/response tabs retain their own hierarchy.
 
 Monaco uses the shared `configureEditorThemes` helper in `packages/ui`, registered
-by each API editor before mounting and by the SQL editor on mount. Keep its
-literal canvas colors synchronized with the CSS tokens; API must render correctly
-before Database has ever been opened. This helper contains visual configuration
-only, not editor commands or feature behavior.
+by each API editor before mounting and by the SQL editor on mount. Its concrete
+color values must stay aligned with the workbench's shared CSS tokens. Register both light and dark
+themes so an already-mounted editor follows settings changes; API must render
+correctly before Database has ever been opened. Syntax roles use semantic
+secondary, success, warning, info, and text tokens; do not recolor syntax just
+to match a primary button. This helper contains visual configuration only, not
+editor commands or feature behavior.
 
 Core size tokens:
 
@@ -232,15 +295,19 @@ larger than `space-6` inside workspace pages.
 
 | Element | Target |
 | --- | ---: |
-| Global toolbar | 38px |
-| Section toolbar | 34px |
-| Tab bar | 34px |
-| Sidebar row | 28px |
-| Table row | 30px |
-| Input | 32px |
-| Button | 30px |
+| Global toolbar | 52px |
+| Section toolbar | 44px |
+| Tab bar | 42px |
+| Sidebar row | 32px |
+| Table row | 34px |
+| Input | 34px |
+| Button | 32px |
 | Compact button | 28px |
-| Status bar | 24px |
+| Status bar | 28px |
+
+These are shared geometry targets, not fixed heights for wrapping content.
+Keep primary actions and existing secondary controls reachable in narrow
+layouts; toolbars may wrap and feature panels may stack.
 
 ## Typography
 
@@ -249,12 +316,17 @@ larger than `space-6` inside workspace pages.
 | UI text | 13px |
 | Small text | 12px |
 | Label text | 12px |
-| Compact title | 14px |
+| Task title | 15–16px |
+| Settings section heading | 19px |
 | Code text | 13px |
 | Caption (`--u-font-size-caption`) | 11px |
 
-Use monospace fonts for terminal, SQL editor, JSON viewer, logs, request
-payloads, and code snippets. Do not use large title text in workspace pages.
+Use the native `--u-font-sans` stack: Segoe UI Variable / Segoe UI, native Apple
+fonts, PingFang SC / Microsoft YaHei UI, and system fallbacks. The shared
+`--u-font-mono` stack starts with Cascadia Code / SFMono-Regular / Consolas;
+monospace editor fallbacks remain supported. No downloaded font is required.
+Use monospace for terminal, SQL, JSON, logs, request payloads, and technical
+values. Keep workspace titles within the compact sizes above.
 
 Use `text-muted` for readable compact metadata such as table types, row counts,
 history times, and editor hints. Reserve `text-soft` for decorative or disabled
@@ -266,10 +338,30 @@ caption token selectively without changing row heights or adding density modes.
 - Use subtle borders to separate structural regions.
 - Prefer one border between major regions rather than borders around every
   nested block.
-- Keep radius values at 8px or below.
-- Use shadows only for dropdowns, popovers, dialogs, and tooltips.
-- Avoid shadows for normal panels, sidebars, tab bars, tables, and main
-  workspace sections.
+- Use 6px corners for controls, 8px for groups, and 12px for document frames,
+  request-address groups, and dialogs. Use the shared radius tokens.
+- Use the small shared shadow for the inset document frame and subtle control
+  elevation; use overlay elevation for menus, popovers, dialogs, and tooltips.
+- Avoid stacked shadows on nested panels, sidebars, tab bars, and tables.
+- Dialogs use distinct title/footer bands, a restrained overlay, and internal
+  scrolling when content exceeds the available window height.
+
+## Module Composition
+
+- API: request identity above the method/address group; prominent Send and
+  nearby Save; scrollable request configuration tabs; grouped response status,
+  duration, and size. Retain the responsive request/response split.
+- Database: distinguish connection/schema navigation, SQL actions, and active
+  connection/catalog/schema context. Editors, result tabs, grids, filters,
+  pagination, and connection dialogs share the surface and control hierarchy.
+- SSH: retain dark terminal canvases and visible connection/session state.
+  SFTP, task editors, and run views use shared controls and spacing.
+- Flow: dotted canvas, capability icons, numbered step cards, compact start/end
+  nodes, accent selection, grouped canvas controls, and a contextual inspector.
+  Stack the inspector below the canvas when its content width requires it.
+- Workspace, Environment, and Settings: use the same controls and dialogs;
+  keep settings navigation separate from grouped content. Preserve all existing
+  theme, locale, connection, and persistence behavior.
 
 ## Required States
 

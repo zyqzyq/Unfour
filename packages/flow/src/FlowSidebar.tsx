@@ -20,8 +20,8 @@ export function FlowSidebar({ workspaceId, definitions = [], pending, failed, bu
   const { t } = useI18n();
   return (
     <section className="flex h-full min-h-0 flex-col space-y-1" aria-label={t("flow.title")} aria-busy={busy || pending}>
-      <div className="flex h-7 shrink-0 items-center justify-between gap-2 px-1">
-        <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase text-[var(--u-color-text-soft)]">
+      <div className="flex h-9 shrink-0 items-center justify-between gap-2 px-2">
+        <span className="flex items-center gap-2 text-[11px] font-semibold tracking-wide text-[var(--u-color-text-muted)]">
           <Workflow size={13} />
           {t("flow.title")}
         </span>

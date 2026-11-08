@@ -30,13 +30,13 @@ export function MultipartFormEditor({ parts, onChange }: {
     } catch { if (mounted.current) setError(true); }
     finally { if (mounted.current) setPicking(null); }
   }
-  const cell = "min-w-0 px-1 py-1";
+  const cell = "min-w-0 border-t border-[var(--u-color-border)] px-2 py-2";
   return <div className="space-y-2">
     <p className="text-[12px] text-[var(--u-color-text-muted)]">{t("api.multipart.contentType")}</p>
     {error && <p role="alert" className="text-[var(--u-color-danger)]">{t("api.multipart.pickError")}</p>}
-    <div className="overflow-auto">
-      <table className="w-full table-fixed text-[12px]">
-        <thead><tr>
+    <div className="overflow-auto rounded-[var(--u-radius-lg)] border border-[var(--u-color-border)] bg-[var(--u-color-canvas)]">
+      <table className="w-full min-w-[400px] table-fixed text-[12px]">
+        <thead className="h-9 bg-[var(--u-color-surface)] text-[10px] uppercase tracking-[0.06em] text-[var(--u-color-text-muted)]"><tr>
           <th className="w-10">{t("api.multipart.enabled")}</th>
           <th className="w-1/4">{t("api.multipart.key")}</th>
           <th className="w-20">{t("api.multipart.type")}</th>
@@ -45,7 +45,7 @@ export function MultipartFormEditor({ parts, onChange }: {
         <tbody>{parts.map((part) => <tr key={part.id}>
           <td className={cell}><input type="checkbox" aria-label={t("api.multipart.enabled")} checked={part.enabled} onChange={(event) => update(part.id, (row) => ({ ...row, enabled: event.target.checked }))} /></td>
           <td className={cell}><Input aria-label={t("api.multipart.key")} value={part.key} onChange={(event) => update(part.id, (row) => ({ ...row, key: event.target.value }))} /></td>
-          <td className={cell}><select aria-label={t("api.multipart.type")} value={part.type} className="h-[var(--u-size-input)] w-full bg-[var(--u-color-bg)]" onChange={(event) => update(part.id, (row) => event.target.value === "file"
+          <td className={cell}><select aria-label={t("api.multipart.type")} value={part.type} className="h-[var(--u-size-input)] w-full rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-1" onChange={(event) => update(part.id, (row) => event.target.value === "file"
             ? { id: row.id, enabled: row.enabled, key: row.key, type: "file", fileName: null, filePath: null }
             : { id: row.id, enabled: row.enabled, key: row.key, type: "text", value: "" })}>
             <option value="text">{t("api.multipart.text")}</option><option value="file">{t("api.multipart.file")}</option>

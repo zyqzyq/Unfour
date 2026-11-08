@@ -74,11 +74,14 @@ for (const theme of ["light", "dark"] as const) {
     await page.getByRole("textbox", { name: "Request URL", exact: true }).fill("https://example.test/visual");
     await page.getByRole("button", { name: "Send", exact: true }).first().click();
     await expect(page.locator(".monaco-editor").first()).toBeVisible();
-    const canvas = theme === "light" ? "rgb(255, 255, 255)" : "rgb(30, 30, 46)";
+    const canvas = theme === "light" ? "rgb(255, 255, 255)" : "rgb(31, 32, 37)";
     await expect(page.locator(".monaco-editor:visible")).toHaveCSS("background-color", canvas);
     await expectReadable(page.getByText("Collections", { exact: true }));
     const chrome = await background(page.locator(".app-shell > header"));
-    expect(chrome).not.toBe(await background(page.getByRole("complementary").last()));
+    // Navigation and resources share the outer chrome;
+    // the editing canvas stays visually separate inside its rounded frame.
+    expect(chrome).toBe(await background(page.getByRole("complementary").last()));
+    expect(chrome).not.toBe(canvas);
     await expect(page.locator(".u-statusbar")).toHaveCSS("background-color", chrome);
     await screenshot("api");
 
@@ -117,7 +120,7 @@ for (const theme of ["light", "dark"] as const) {
     await nav.getByRole("button", { name: "SSH Terminal", exact: true }).click();
     await expect(page.locator(".xterm-screen").first()).toBeVisible();
     const terminalTab = page.getByRole("tab", { name: /fixture@example.test/ });
-    await expect(terminalTab.locator("..")).toHaveCSS("background-color", "rgb(30, 30, 46)");
+    await expect(terminalTab.locator("..")).toHaveCSS("background-color", "rgb(22, 23, 26)");
     await expectReadable(terminalTab);
     await expectReadable(page.getByRole("button", { name: "Close fixture@example.test", exact: true }));
     await screenshot("ssh");
@@ -128,7 +131,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.locator(".app-shell > header").getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByRole("dialog").getByLabel("Theme", { exact: true }).selectOption(theme === "light" ? "dark" : "light");
     await page.keyboard.press("Escape");
-    const switchedCanvas = theme === "light" ? "rgb(30, 30, 46)" : "rgb(255, 255, 255)";
+    const switchedCanvas = theme === "light" ? "rgb(31, 32, 37)" : "rgb(255, 255, 255)";
     await expect(page.locator(".monaco-editor:visible")).toHaveCSS("background-color", switchedCanvas);
     await nav.getByRole("button", { name: "Database", exact: true }).click();
     await expect(page.locator(".monaco-editor:visible")).toHaveCSS("background-color", switchedCanvas);

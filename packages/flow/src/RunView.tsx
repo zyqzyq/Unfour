@@ -15,8 +15,8 @@ export function RunView({ run, cancel, selectedStep, onSelectStep, onEditStep, e
     const start = Date.parse(step.startedAt);
     return Number.isFinite(start) ? Math.max(step.durationMs, now - start, 0) : step.durationMs;
   }
-  return <section className="space-y-2 break-words">
-    <div className="flex items-center gap-2">
+  return <section className="flow-run-view space-y-3 break-words">
+    <div className="flex items-center gap-2 rounded-[var(--u-radius-md)] bg-[var(--u-color-surface-subtle)] p-3">
       <strong>{t(`flow.status.${run.status}`)}</strong>
       <code>r{run.definition.revision}</code>
       {run.status === "running" && cancel && <Button variant="secondary" onClick={cancel}>{t("flow.cancel")}</Button>}
@@ -36,7 +36,7 @@ export function RunView({ run, cancel, selectedStep, onSelectStep, onEditStep, e
     {run.steps.filter((step) => selectedStep === undefined || step.stepId === selectedStep).map((step) => {
       const latest = [...step.attempts].reverse().find((attempt) => attempt.output != null);
       const latestError = [...step.attempts].reverse().find((attempt) => attempt.error);
-      return <details key={step.stepId} className="border-b border-[var(--u-color-border)] py-2" open={selectedStep !== undefined || ["running", "failed", "timedOut", "interrupted"].includes(step.status)}>
+      return <details key={step.stepId} className="flow-run-step" open={selectedStep !== undefined || ["running", "failed", "timedOut", "interrupted"].includes(step.status)}>
         <summary className="cursor-pointer">
           {run.definition.steps.find((s) => s.id === step.stepId)?.name} · {t(`flow.status.${step.status}`)} · {t("flow.elapsed")}: {elapsed(step)} ms · {step.attempts.length} {t("flow.attempts")}
         </summary>

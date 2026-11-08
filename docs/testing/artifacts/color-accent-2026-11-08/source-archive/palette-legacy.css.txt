@@ -1,0 +1,135 @@
+/*
+ * Palette B — the original Catppuccin Latte / Mocha color family, adapted to
+ * the experiment's existing surfaces. Blue actions and violet focus retain
+ * Unfour's previous mood; stronger text and state colors improve readability.
+ * Color overrides only: geometry, typography, shadows and behavior stay in A.
+ */
+
+:root[data-palette="B"] {
+  --u-color-bg: #eff1f5;
+  --u-color-chrome: #e2e5ef;
+  --u-color-canvas: #ffffff;
+  --u-color-surface: #f8f9fc;
+  --u-color-surface-subtle: #f0f2f8;
+  --u-color-surface-muted: #e6e8f1;
+  --u-color-surface-hover: #dfe3ee;
+  --u-color-surface-active: #d8deeb;
+  --u-color-border: #d0d6e4;
+  --u-color-border-strong: #7f89a4;
+  --u-color-input: #8791ac;
+  --u-color-text: #3c415c;
+  --u-color-text-muted: #505870;
+  --u-color-text-soft: #565f77;
+  --u-color-focus: #7640cd;
+  --u-color-primary: #2558c7;
+  --u-color-primary-hover: #1e49ab;
+  --u-color-primary-foreground: #ffffff;
+  --u-color-primary-soft: #e1eafa;
+  --u-color-danger: #b82145;
+  --u-color-danger-soft: #fbe7ed;
+  --u-color-danger-hover: #9f1b3b;
+  --u-color-danger-text: #a52140;
+  --u-color-success: #266e26;
+  --u-color-success-soft: #e1f0db;
+  --u-color-warning: #885607;
+  --u-color-warning-soft: #fbefd9;
+  --u-color-warning-text: #805109;
+  --u-color-info: #0c6977;
+  --u-color-info-soft: #e0f1f3;
+  --u-color-info-text: #0c6471;
+  --u-color-secondary: #9a377e;
+  --u-color-secondary-soft: #f7e5f2;
+  --u-color-secondary-text: #8d3073;
+  --u-color-neutral: #565f77;
+  --u-color-neutral-soft: #e6e8f1;
+  --u-color-neutral-text: #505870;
+  --u-color-text-on-color: #ffffff;
+  --u-color-overlay: rgba(31, 35, 60, 0.32);
+  --u-color-scrollbar: #a7b0c8;
+  --u-color-scrollbar-hover: #7f89a4;
+
+  --u-badge-neutral-bg: #e6e8f1;
+  --u-badge-neutral-text: #505870;
+  --u-badge-neutral-ring: #a7b0c8;
+  --u-badge-success-bg: #e1f0db;
+  --u-badge-success-text: #266e26;
+  --u-badge-success-ring: #a0bd98;
+  --u-badge-warning-bg: #fbefd9;
+  --u-badge-warning-text: #805109;
+  --u-badge-warning-ring: #c6ae7e;
+  --u-badge-danger-bg: #fbe7ed;
+  --u-badge-danger-text: #a52140;
+  --u-badge-danger-ring: #d8a1b0;
+  --u-badge-info-bg: #e0f1f3;
+  --u-badge-info-text: #0c6471;
+  --u-badge-info-ring: #93b9c0;
+
+  /* Terminal surfaces retain the original Mocha family in either theme. */
+  --u-color-terminal-bg: #1e1e2e;
+  --u-color-terminal-text: #cdd6f4;
+  --u-color-terminal-muted: #a6adc8;
+  --u-color-terminal-border: #3b3d57;
+  --u-color-terminal-input-bg: #292a40;
+  --u-color-terminal-input-border: #66708e;
+  --u-color-terminal-cursor: #89b4fa;
+}
+
+:root[data-theme="dark"][data-palette="B"] {
+  --u-color-bg: #171723;
+  --u-color-chrome: #11111b;
+  --u-color-canvas: #1e1e2e;
+  --u-color-surface: #242436;
+  --u-color-surface-subtle: #2a2b40;
+  --u-color-surface-muted: #303247;
+  --u-color-surface-hover: #34374d;
+  --u-color-surface-active: #3c4059;
+  --u-color-border: #3b3d57;
+  --u-color-border-strong: #717b9b;
+  --u-color-input: #687392;
+  --u-color-text: #dce1f4;
+  --u-color-text-muted: #b8bfd8;
+  --u-color-text-soft: #a8b1cd;
+  --u-color-focus: #cba6f7;
+  --u-color-primary: #89b4fa;
+  --u-color-primary-hover: #a5c6fb;
+  --u-color-primary-foreground: #181b2b;
+  --u-color-primary-soft: #283b61;
+  --u-color-danger: #f79db6;
+  --u-color-danger-soft: #442937;
+  --u-color-danger-hover: #ffb2c6;
+  --u-color-danger-text: #ffb2c6;
+  --u-color-success: #a6e3a1;
+  --u-color-success-soft: #263c31;
+  --u-color-warning: #f9e2af;
+  --u-color-warning-soft: #413824;
+  --u-color-warning-text: #f9e2af;
+  --u-color-info: #89dceb;
+  --u-color-info-soft: #233b48;
+  --u-color-info-text: #a0e0ee;
+  --u-color-secondary: #f5c2e7;
+  --u-color-secondary-soft: #432e43;
+  --u-color-secondary-text: #f5c2e7;
+  --u-color-neutral: #b8bfd8;
+  --u-color-neutral-soft: #303247;
+  --u-color-neutral-text: #c4cbe2;
+  --u-color-text-on-color: #181b2b;
+  --u-color-overlay: rgba(10, 10, 20, 0.64);
+  --u-color-scrollbar: #626b89;
+  --u-color-scrollbar-hover: #858faf;
+
+  --u-badge-neutral-bg: #303247;
+  --u-badge-neutral-text: #c4cbe2;
+  --u-badge-neutral-ring: #626b89;
+  --u-badge-success-bg: #263c31;
+  --u-badge-success-text: #a6e3a1;
+  --u-badge-success-ring: #526d58;
+  --u-badge-warning-bg: #413824;
+  --u-badge-warning-text: #f9e2af;
+  --u-badge-warning-ring: #796a47;
+  --u-badge-danger-bg: #442937;
+  --u-badge-danger-text: #ffb2c6;
+  --u-badge-danger-ring: #86536a;
+  --u-badge-info-bg: #233b48;
+  --u-badge-info-text: #a0e0ee;
+  --u-badge-info-ring: #4b7181;
+}

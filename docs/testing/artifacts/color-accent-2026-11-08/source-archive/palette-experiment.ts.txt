@@ -1,0 +1,87 @@
+import type { OnMount } from "@monaco-editor/react";
+
+/** Temporary URL-only comparison. No preference, setting or business state is written. */
+export function readPaletteExperiment(search = globalThis.location?.search ?? ""): "A" | "B" | "C" | "D" {
+  const value = new URLSearchParams(search).get("palette")?.toUpperCase();
+  return value === "B" || value === "C" || value === "D" ? value : "A";
+}
+
+export function initializePaletteExperiment() {
+  const root = globalThis.document?.documentElement;
+  if (!root) return;
+  const palette = readPaletteExperiment();
+  root.setAttribute("data-palette", palette);
+  const params = new URLSearchParams(globalThis.location?.search ?? "");
+  const focus = params.get("focus");
+  if (palette === "C" && focus === "violet") root.setAttribute("data-palette-focus", "violet");
+  else root.removeAttribute("data-palette-focus");
+  if (palette === "C" && params.get("accent") === "violet") root.setAttribute("data-palette-accent", "violet");
+  else root.removeAttribute("data-palette-accent");
+}
+
+/** Monaco paints its own canvas; B–D read the same color tokens as the workbench. */
+export function configurePaletteEditorTheme(
+  monaco: { editor: Pick<Parameters<OnMount>[1]["editor"], "defineTheme" | "setTheme"> },
+  theme: "dark" | "light",
+): boolean {
+  const root = globalThis.document?.documentElement;
+  if (!root || !["B", "C", "D"].includes(root.getAttribute("data-palette") ?? "")) return false;
+  const originalTheme = root.getAttribute("data-theme");
+  // Editors switch between these names without remounting. Read both CSS token
+  // sets synchronously, restoring the root before the browser can paint.
+  try {
+    for (const mode of ["dark", "light"] as const) {
+      root.setAttribute("data-theme", mode);
+      definePaletteEditorTheme(monaco, root, mode);
+    }
+  } finally {
+    if (originalTheme === null) root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", originalTheme);
+  }
+  monaco.editor.setTheme(`unfour-${theme}`);
+  return true;
+}
+
+function definePaletteEditorTheme(
+  monaco: { editor: Pick<Parameters<OnMount>[1]["editor"], "defineTheme" | "setTheme"> },
+  root: HTMLElement,
+  theme: "dark" | "light",
+) {
+  const style = getComputedStyle(root);
+  const color = (name: string) => style.getPropertyValue(`--u-color-${name}`).trim();
+  const foreground = (name: string) => color(name).replace(/^#/, "");
+  const name = `unfour-${theme}`;
+  monaco.editor.defineTheme(name, {
+    base: theme === "dark" ? "vs-dark" : "vs",
+    inherit: true,
+    rules: [
+      ...["keyword", "keyword.sql", "keyword.json", "attribute.name"].map((token) => ({ token, foreground: foreground("secondary") })),
+      ...["string", "string.sql", "string.value.json", "attribute.value"].map((token) => ({ token, foreground: foreground("success") })),
+      ...["number", "number.json", "type"].map((token) => ({ token, foreground: foreground("warning-text") })),
+      ...["string.key.json", "operator", "function", "tag", "metatag"].map((token) => ({ token, foreground: foreground("info") })),
+      { token: "comment", foreground: foreground("text-muted"), fontStyle: "italic" },
+      { token: "delimiter", foreground: foreground("text-muted") },
+      { token: "identifier", foreground: foreground("text") },
+      { token: "variable", foreground: foreground("text") },
+    ],
+    colors: {
+      "editor.background": color("canvas"),
+      "editor.foreground": color("text"),
+      "editorGutter.background": color("canvas"),
+      "editor.lineHighlightBackground": color("surface-subtle"),
+      "editor.selectionBackground": color("primary-soft"),
+      "editorCursor.foreground": color("focus"),
+      "editor.inactiveSelectionBackground": color("surface-muted"),
+      "editorLineNumber.foreground": color("text-muted"),
+      "editorLineNumber.activeForeground": color("text"),
+      "editorIndentGuide.background": color("border"),
+      "editorIndentGuide.activeBackground": color("border-strong"),
+      "editorWhitespace.foreground": color("border-strong"),
+      "editorBracketMatch.background": color("primary-soft"),
+      "editorBracketMatch.border": color("focus"),
+      "scrollbarSlider.background": `${color("scrollbar")}80`,
+      "scrollbarSlider.hoverBackground": `${color("scrollbar-hover")}80`,
+      "scrollbarSlider.activeBackground": `${color("scrollbar-hover")}cc`,
+    },
+  });
+}

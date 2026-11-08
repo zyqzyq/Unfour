@@ -3,6 +3,13 @@
 Unfour UI is a developer desktop workbench: a lightweight IDE-style desktop
 tool for dense, object-first workflows.
 
+The adopted visual direction is **C2: neutral surfaces with violet interaction
+accents**. Light mode uses a white working canvas and purple primary actions;
+dark mode uses neutral graphite surfaces and periwinkle accents. Both retain
+the same labeled module rail, inset document frame, readable control density,
+and persistent workspace context. The packaged **U application icon** remains
+the product identity.
+
 ## Design Keywords
 
 - High information density.
@@ -26,6 +33,11 @@ full design review. Do not generate a replacement design system from a skill.
 Historical UI audit, token, component, layout, and refactor-plan documents live
 under `docs/archive/ui/`. They are preserved for context but are no longer the
 active source of truth.
+
+The November 2026 redesign and palette comparison records in `docs/ui/` and
+`docs/testing/` are also historical evidence. C2 is now the default design;
+the temporary palette URL switches are removed. Use the canonical documents
+below for current rules, not the earlier Graphite / Jade or A–D proposals.
 
 ## Document Responsibilities
 

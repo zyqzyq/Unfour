@@ -1,0 +1,10 @@
+/* C2: neutral C work surfaces with a visible violet interaction accent.
+ * Existing primary consumers cover actions, navigation and selected tabs.
+ * Text, neutral surfaces and semantic status colors remain C; dark is unchanged.
+ */
+:root[data-theme="light"][data-palette="C"][data-palette-accent="violet"] {
+  --u-color-primary: #6e40bd;
+  --u-color-primary-hover: #5d32a8;
+  --u-color-primary-soft: #eee7fa;
+  --u-color-focus: #7640cd;
+}

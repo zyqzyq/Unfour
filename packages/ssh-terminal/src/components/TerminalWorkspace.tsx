@@ -175,7 +175,7 @@ export function TerminalWorkspace({
   }
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col bg-[var(--u-color-canvas)]">
       {hasSessions ? (
         <Tabs
           activeBackground="terminal"
@@ -192,20 +192,16 @@ export function TerminalWorkspace({
         />
       ) : null}
       {actionError ? <TerminalActionError error={actionError} /> : null}
+      {splitMode !== "single" && (
+        <div className="flex shrink-0 items-center justify-end border-b border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3 py-1.5">
+          <Button onClick={() => setMode("single")} size="sm" type="button" variant="outline">
+            <PanelRightClose size={14} />
+            {t("ssh.actions.singlePane")}
+          </Button>
+        </div>
+      )}
       <SftpWorkspace session={activeSession}>
         <div className="relative flex min-h-0 min-w-0 flex-1">
-          {splitMode !== "single" && (
-            <Button
-              className="absolute left-3 top-3 z-10"
-              onClick={() => setMode("single")}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              <PanelRightClose size={14} />
-              {t("ssh.actions.singlePane")}
-            </Button>
-          )}
           <TerminalSearchBar />
           {loading ? (
             <LoadingState className="h-full min-h-0 flex-1 rounded-none border-0">

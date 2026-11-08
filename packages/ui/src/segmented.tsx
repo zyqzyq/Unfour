@@ -25,7 +25,7 @@ export function SegmentedControl<T extends string>({
   return (
     <div
       className={cn(
-        "flex overflow-hidden rounded-[var(--u-radius-md)] border border-[var(--u-color-input)] bg-[var(--u-color-bg)]",
+        "flex gap-1 overflow-hidden rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-bg)] p-1",
         className,
       )}
       role="radiogroup"
@@ -36,9 +36,9 @@ export function SegmentedControl<T extends string>({
           <button
             aria-checked={selected}
             className={cn(
-              "flex h-[var(--u-size-input)] flex-1 items-center justify-center gap-1.5 text-[12px] font-semibold transition-colors first:border-l-0 [&+button]:border-l [&+button]:border-[var(--u-color-input)]",
+              "flex h-[var(--u-size-input)] flex-1 items-center justify-center gap-1.5 text-[12px] font-semibold rounded-[var(--u-radius-sm)] transition-colors",
               selected
-                ? "bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]"
+                ? "bg-[var(--u-color-surface)] text-[var(--u-color-primary)] shadow-[var(--u-shadow-sm)]"
                 : "text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
             )}
             key={option.value}

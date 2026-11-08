@@ -1,0 +1,9 @@
+{
+  "baselineFiles": 216,
+  "changedOriginalFiles": [
+    "packages/ui/src/palette-experiment.ts",
+    "packages/ui/src/styles/index.css"
+  ],
+  "missing": [],
+  "previousPalettesAndArtifactsPreserved": true
+}

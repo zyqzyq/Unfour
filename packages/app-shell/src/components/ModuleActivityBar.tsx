@@ -32,8 +32,8 @@ export function ModuleActivityBar({
 
   return (
     <ActivityBar>
-      <div className="flex w-full flex-1 flex-col items-center gap-1">
-        <nav aria-label={t("app.sidebar.modules")} className="flex w-full flex-col items-center gap-1">
+      <div className="flex w-full flex-1 flex-col items-center gap-2">
+        <nav aria-label={t("app.sidebar.modules")} className="flex w-full flex-col items-center gap-2">
           {getModuleSwitcherItems(t).map((item) => {
             const active = item.kind === activeKind;
             return (
@@ -42,9 +42,9 @@ export function ModuleActivityBar({
                 aria-expanded={active ? !sidebarCollapsed : undefined}
                 aria-label={item.label}
                 className={cn(
-                  "relative flex h-9 w-9 items-center justify-center rounded-[var(--u-radius-md)] text-[var(--u-color-text-muted)] transition-colors duration-150 hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--u-color-focus)]",
+                  "u-module-button relative flex min-h-[58px] w-full flex-col items-center justify-center gap-1.5 rounded-[var(--u-radius-md)] text-[var(--u-color-text-muted)] transition-colors duration-150 hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--u-color-focus)]",
                   active &&
-                    "bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]",
+                    "bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--u-color-primary)_20%,transparent)]",
                 )}
                 key={item.id}
                 onClick={() => handleClick(item)}
@@ -55,9 +55,10 @@ export function ModuleActivityBar({
                 type="button"
               >
                 {active && (
-                  <span className="absolute inset-y-1.5 left-[-6px] w-[3px] rounded-r-[3px] bg-[var(--u-color-primary)]" />
+                  <span className="absolute inset-y-4 left-[-8px] w-[3px] rounded-r-[3px] bg-[var(--u-color-primary)]" />
                 )}
                 <ModuleIcon kind={item.kind} />
+                <span className="max-w-full truncate text-[10px] font-semibold tracking-wide">{item.shortLabel}</span>
               </button>
             );
           })}
@@ -78,8 +79,8 @@ export function ModuleActivityBar({
 }
 
 function ModuleIcon({ kind }: { kind: ModuleSwitcherItem["kind"] }) {
-  if (kind === "flow") return <ListTree size={16} />;
-  if (kind === "api") return <Globe2 size={16} />;
-  if (kind === "ssh") return <TerminalSquare size={16} />;
-  return <Database size={16} />;
+  if (kind === "flow") return <ListTree size={19} />;
+  if (kind === "api") return <Globe2 size={19} />;
+  if (kind === "ssh") return <TerminalSquare size={19} />;
+  return <Database size={19} />;
 }

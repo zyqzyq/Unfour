@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unfour · UI 实验对照</title>
+<style>
+  :root { color-scheme: dark; font: 14px/1.6 "Segoe UI", "Microsoft YaHei UI", sans-serif; color: #e2ebe8; background: #141a1d; }
+  * { box-sizing: border-box; }
+  body { max-width: 1500px; margin: auto; padding: 28px; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-bottom: 20px; }
+  h1 { margin: 0; font-size: 24px; letter-spacing: -0.5px; }
+  p { color: #afc1bb; margin: 6px 0 20px; }
+  .badge { border: 1px solid #405258; border-radius: 8px; padding: 3px 9px; color: #59d9b2; }
+  .tools { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin: 18px 0; }
+  select, button { padding: 8px 12px; background: #20282c; color: inherit; border: 1px solid #60767b; border-radius: 8px; font: inherit; }
+  input[type=range] { width: min(360px, 40vw); accent-color: #59d9b2; vertical-align: middle; }
+  a { color: #8dc9ec; }
+  .compare { position: relative; overflow: hidden; border: 1px solid #405258; border-radius: 12px; background: #111719; }
+  .compare img { display: block; width: 100%; }
+  .old { position: absolute; inset: 0; clip-path: inset(0 50% 0 0); }
+  .divider { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: #59d9b2; pointer-events: none; }
+  .legend { display: flex; justify-content: space-between; margin: 8px 0 28px; color: #afc1bb; }
+  h2 { margin: 36px 0 12px; font-size: 18px; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(440px,100%),1fr)); gap: 20px; }
+  figure { margin: 0; }
+  figure img { display: block; width: 100%; border: 1px solid #405258; border-radius: 10px; }
+  figcaption { padding: 8px 0; color: #afc1bb; }
+  :focus-visible { outline: 2px solid #59d9b2; outline-offset: 4px; }
+</style>
+<header><h1>Unfour · Graphite / Jade</h1><span class="badge">独立视觉实验 · 2026-11-08</span></header>
+<p>当前版本保留打包后的 U 应用主图标，移除四格品牌标记；界面内部图标、配色与布局继续采用新设计。截图来自隔离浏览器测试，不代表原生 SSH、数据库或 Tauri 集成验证。</p>
+<div class="tools">
+  <label>左侧对照 <select id="reference"><option value="before">原版 UI</option><option value="with-experimental-icons">首轮实验（含四格品牌标记）</option></select></label>
+  <label>对照页面 <select id="page">
+    <option value="api-dark">API · 深色</option><option value="api-light">API · 浅色</option>
+    <option value="database-table-dark">Database 表格 · 深色</option><option value="database-table-light">Database 表格 · 浅色</option>
+    <option value="database-sql-dark">SQL 编辑器 · 深色</option><option value="database-sql-light">SQL 编辑器 · 浅色</option>
+    <option value="ssh-dark">SSH Terminal · 深色</option><option value="ssh-light">SSH Terminal · 浅色</option>
+    <option value="flow-canvas-inspector">Flow · 相同编辑状态</option>
+  </select></label>
+  <label>旧版覆盖比例 <input id="split" type="range" min="0" max="100" value="50"> <output id="value">50%</output></label>
+  <button id="old" type="button">查看旧版</button><button id="new" type="button">查看新版</button>
+</div>
+<div class="compare">
+  <img id="newImage" src="after/api-dark.png" alt="新版 API 深色工作台">
+  <img id="oldImage" class="old" src="before/api-dark.png" alt="旧版 API 深色工作台">
+  <div class="divider" aria-hidden="true"></div>
+</div>
+<div class="legend"><span>左侧：所选对照版本 / <a id="oldLink" href="before/api-dark.png">打开原图</a></span><span>右侧：实验版 · 保留 U 主图标 / <a id="newLink" href="after/api-dark.png">打开原图</a></span></div>
+<p>API、Database、SSH 对照均为相同测试状态与 1440×900 视口；Flow 对照为相同的 1280×720 编辑测试。动态耗时、终端 resize 文本可能不同。下方补充完整 Flow、中文设置和窄窗口界面。</p>
+<h2>完整业务状态与小窗口</h2>
+<div class="gallery">
+  <figure><a href="after/flow-canvas-dark.png"><img loading="lazy" src="after/flow-canvas-dark.png" alt="新版深色 Flow 分支画布"></a><figcaption>Flow · 已配置分支与检查器</figcaption></figure>
+  <figure><a href="after/flow-canvas-light.png"><img loading="lazy" src="after/flow-canvas-light.png" alt="新版浅色 Flow 分支画布"></a><figcaption>Flow · 浅色主题</figcaption></figure>
+  <figure><a href="after/settings-chinese-dark.png"><img loading="lazy" src="after/settings-chinese-dark.png" alt="新版中文主题设置"></a><figcaption>中文设置 · 语言与主题持久化</figcaption></figure>
+  <figure><a href="after/api-compact.png"><img loading="lazy" src="after/api-compact.png" alt="960像素宽 API 请求响应界面"></a><figcaption>960×600 · API 请求与响应</figcaption></figure>
+  <figure><a href="after/ssh-task-editor.png"><img loading="lazy" src="after/ssh-task-editor.png" alt="新版 SSH 任务编辑器"></a><figcaption>SSH · 任务步骤与运行参数</figcaption></figure>
+  <figure><a href="after/sftp-workspace.png"><img loading="lazy" src="after/sftp-workspace.png" alt="新版 SFTP 文件工作区"></a><figcaption>SFTP · 文件工作区</figcaption></figure>
+</div>
+<script>
+  const selector = document.getElementById('page');
+  const reference = document.getElementById('reference');
+  const slider = document.getElementById('split');
+  function updateSplit(value) {
+    slider.value = value;
+    document.getElementById('value').value = value + '%';
+    document.getElementById('oldImage').style.clipPath = `inset(0 ${100 - value}% 0 0)`;
+    document.querySelector('.divider').style.left = value + '%';
+  }
+  function updateImages() {
+    for (const [version, folder] of [['old', reference.value], ['new', 'after']]) {
+      document.getElementById(version + 'Image').src = folder + '/' + selector.value + '.png';
+      document.getElementById(version + 'Image').alt = (version === 'old' ? '原版 ' : '实验版 ') + selector.selectedOptions[0].text;
+      document.getElementById(version + 'Link').href = folder + '/' + selector.value + '.png';
+    }
+  }
+  selector.addEventListener('change', updateImages);
+  reference.addEventListener('change', updateImages);
+  slider.addEventListener('input', () => updateSplit(Number(slider.value)));
+  document.getElementById('old').addEventListener('click', () => updateSplit(100));
+  document.getElementById('new').addEventListener('click', () => updateSplit(0));
+</script>
+</html>

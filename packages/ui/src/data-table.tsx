@@ -209,7 +209,7 @@ export function DataTable<T>({
               return (
                 <th
                   className={cn(
-                    "relative box-border h-[var(--u-size-table-row)] border-b border-r border-[var(--u-color-border)] px-2 font-medium last:border-r-0",
+                    "relative box-border h-[var(--u-size-table-row)] border-b border-r border-[var(--u-color-border)] px-3 font-semibold last:border-r-0",
                     column.align === "right" && "text-right",
                   )}
                   key={column.id}
@@ -268,7 +268,7 @@ export function DataTable<T>({
                 {columns.map((column, colIndex) => (
                   <td
                     className={cn(
-                      "box-border h-[var(--u-size-table-row)] truncate border-r border-[var(--u-color-border)] px-2 text-[var(--u-color-text)] last:border-r-0",
+                      "box-border h-[var(--u-size-table-row)] truncate border-r border-[var(--u-color-border)] px-3 text-[var(--u-color-text)] last:border-r-0",
                       column.align === "right" && "text-right",
                       isSelected(rowIndex, colIndex) && "bg-[color:color-mix(in_srgb,var(--u-color-primary)_12%,var(--u-color-surface))]",
                     )}

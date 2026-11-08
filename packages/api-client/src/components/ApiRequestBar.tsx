@@ -42,7 +42,7 @@ export function ApiRequestBar({
 
   return (
     <div
-      className="flex shrink-0 flex-col gap-1.5 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3 py-2"
+      className="flex shrink-0 flex-col gap-3 border-b border-[var(--u-color-border)] bg-[var(--u-color-canvas)] px-4 py-3"
       onKeyDown={(event) => {
         if (
           !event.defaultPrevented && !event.nativeEvent.isComposing &&
@@ -58,7 +58,7 @@ export function ApiRequestBar({
       }}
     >
       <div className="flex min-w-0 items-center gap-2">
-        <span className="w-16 shrink-0 whitespace-nowrap text-[length:var(--u-font-size-caption)] font-semibold text-[var(--u-color-text-muted)]">
+        <span className="shrink-0 whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--u-color-text-muted)]">
           {t("api.request.nameLabel")}
         </span>
         <RequestNameEditor
@@ -70,31 +70,34 @@ export function ApiRequestBar({
         />
       </div>
       <div className="flex min-w-0 items-center gap-2">
-        <select
-          aria-label={t("api.request.method")}
-          className="h-[var(--u-size-input)] shrink-0 cursor-pointer rounded-[var(--u-radius-md)] border bg-[var(--u-color-surface)] px-2.5 font-mono text-[12px] font-bold uppercase tracking-wide outline-none transition-colors duration-150 focus:border-[var(--u-color-focus)] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--u-color-focus)_16%,transparent)]"
-          onChange={(event) => onUpdate({ method: event.target.value })}
-          style={methodSelectStyle(tab.draft.method)}
-          value={tab.draft.method}
-        >
-          {httpMethods.map((method) => (
-            <option key={method} style={{ color: methodColor(method) }}>
-              {method}
-            </option>
-          ))}
-        </select>
-        <Input
-          aria-label={t("api.request.url")}
-          className="min-w-0 flex-1 rounded-[var(--u-radius-md)] border-[var(--u-color-border-strong)] bg-[var(--u-color-surface)] font-mono text-[12px]"
-          onChange={(event) => onUpdate({ url: event.target.value })}
-          placeholder={t("api.request.urlPlaceholder")}
-          ref={urlInputRef}
-          value={tab.draft.url}
-        />
+        <div className="flex min-w-0 flex-1 items-center rounded-[var(--u-radius-lg)] border border-[var(--u-color-border-strong)] bg-[var(--u-color-surface)] p-1 shadow-[var(--u-shadow-sm)] transition-colors focus-within:border-[var(--u-color-focus)]">
+          <select
+            aria-label={t("api.request.method")}
+            className="h-[var(--u-size-input)] shrink-0 cursor-pointer rounded-[var(--u-radius-md)] border border-transparent bg-[var(--u-color-canvas)] px-2.5 font-mono text-[12px] font-bold uppercase tracking-wide outline-none transition-colors duration-150 focus:border-[var(--u-color-focus)] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--u-color-focus)_16%,transparent)]"
+            onChange={(event) => onUpdate({ method: event.target.value })}
+            style={methodSelectStyle(tab.draft.method)}
+            value={tab.draft.method}
+          >
+            {httpMethods.map((method) => (
+              <option key={method} style={{ color: methodColor(method) }}>
+                {method}
+              </option>
+            ))}
+          </select>
+          <Input
+            aria-label={t("api.request.url")}
+            className="min-w-0 flex-1 border-transparent bg-transparent px-3 font-mono text-[12px] shadow-none hover:border-transparent focus:border-transparent focus:ring-0"
+            onChange={(event) => onUpdate({ url: event.target.value })}
+            placeholder={t("api.request.urlPlaceholder")}
+            ref={urlInputRef}
+            value={tab.draft.url}
+          />
+        </div>
         {tab.sending ? (
           <Button
             aria-label={tab.cancelling ? t("api.actions.cancelling") : t("api.actions.stop")}
             disabled={tab.cancelling}
+            className="h-[44px] px-4"
             size="sm"
             onClick={onStop}
             type="button"
@@ -105,6 +108,7 @@ export function ApiRequestBar({
           </Button>
         ) : (
           <Button
+            className="h-[44px] px-4 shadow-[var(--u-shadow-sm)]"
             disabled={!tab.draft.url.trim() || (tab.source === "history" && !tab.draft.historyReviewConfirmed)}
             size="sm"
             onClick={onSend}
@@ -116,6 +120,7 @@ export function ApiRequestBar({
         )}
         <Button
           aria-label={tab.saving ? t("api.actions.saving") : t("api.actions.save")}
+          className="h-[44px] w-[44px]"
           disabled={tab.saving || Boolean(tab.externalChange)}
           ref={saveButtonRef}
           size="icon"
@@ -270,7 +275,7 @@ const RequestNameEditor = forwardRef<
   ) : (
     <div className="flex min-w-0 flex-1 items-center gap-0.5">
       <span
-        className="min-w-0 max-w-full shrink truncate px-2 pr-1 text-[13px] font-medium text-[var(--u-color-text)]"
+        className="min-w-0 max-w-full shrink truncate px-2 pr-1 text-[16px] font-semibold tracking-[-0.02em] text-[var(--u-color-text)]"
         title={displayName}
       >
         {displayName}

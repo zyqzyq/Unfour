@@ -1,0 +1,3606 @@
+{
+  "A": {
+    "semanticContrast": {
+      "neutral": 7.856975493394031,
+      "success": 6.885080208031885,
+      "warning": 7.1710520143976035,
+      "danger": 7.16739360560307,
+      "info": 7.706077505443711
+    },
+    "apiContrast": {
+      "primary": 12.333047676198976,
+      "muted": 7.969981296741291,
+      "action": 10.016118978578012,
+      "status": 6.885080208031885
+    },
+    "apiGeometry": {
+      "titlebar": {
+        "bounds": [
+          0,
+          0,
+          1440,
+          52
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "navigation": {
+        "bounds": [
+          8,
+          64,
+          56,
+          256
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "main": {
+        "bounds": [
+          393,
+          53,
+          1038,
+          810
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "statusbar": {
+        "bounds": [
+          0,
+          872,
+          1440,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "11px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "16.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "8px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "12px",
+          "display": "flex"
+        }
+      },
+      "url": {
+        "bounds": [
+          505,
+          152,
+          761.86,
+          34
+        ],
+        "styles": {
+          "fontFamily": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "12px",
+          "paddingBottom": "0px",
+          "paddingLeft": "12px",
+          "borderRadius": "6px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "1px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "send": {
+        "bounds": [
+          1279.86,
+          147,
+          83.14,
+          44
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "16px",
+          "paddingBottom": "0px",
+          "paddingLeft": "16px",
+          "borderRadius": "6px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "1px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "requestTabs": {
+        "bounds": [
+          401,
+          59,
+          352.77,
+          35
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "4px",
+          "display": "flex"
+        }
+      },
+      "responseEditor": {
+        "bounds": [
+          871.02,
+          323,
+          559,
+          540
+        ],
+        "styles": {
+          "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe WPC\", \"Segoe UI\", HelveticaNeue-Light, system-ui, Ubuntu, \"Droid Sans\", sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "status": {
+        "bounds": [
+          949.16,
+          214,
+          68.41,
+          21
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "11px",
+          "fontWeight": "500",
+          "fontStyle": "normal",
+          "lineHeight": "16.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "2px",
+          "paddingRight": "10px",
+          "paddingBottom": "2px",
+          "paddingLeft": "10px",
+          "borderRadius": "3.35544e+07px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "6px",
+          "display": "flex"
+        }
+      }
+    },
+    "databaseContrast": {
+      "primary": 9.500932236928302,
+      "muted": 7.3693237007534,
+      "action": 8.713681881174557,
+      "status": 6.885080208031885
+    },
+    "databaseGeometry": {
+      "titlebar": {
+        "bounds": [
+          0,
+          0,
+          1440,
+          52
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "navigation": {
+        "bounds": [
+          8,
+          64,
+          56,
+          256
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "main": {
+        "bounds": [
+          353,
+          53,
+          1078,
+          810
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "statusbar": {
+        "bounds": [
+          0,
+          872,
+          1440,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "11px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "16.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "8px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "12px",
+          "display": "flex"
+        }
+      },
+      "editor": {
+        "bounds": [
+          353,
+          237,
+          1078,
+          125
+        ],
+        "styles": {
+          "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe WPC\", \"Segoe UI\", HelveticaNeue-Light, system-ui, Ubuntu, \"Droid Sans\", sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "run": {
+        "bounds": [
+          365,
+          153,
+          78.11,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "8px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "6px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "1px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "connection": {
+        "bounds": [
+          493,
+          200,
+          180,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "normal",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "32px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "6px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "1px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "resultTable": {
+        "bounds": [
+          353,
+          627.7,
+          837,
+          204.5
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "table"
+        }
+      },
+      "selected": {
+        "bounds": [
+          565,
+          661.7,
+          140,
+          34
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "12px",
+          "paddingBottom": "0px",
+          "paddingLeft": "12px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "table-cell"
+        }
+      }
+    },
+    "sshContrast": {
+      "tab": 14.33154297545753
+    },
+    "sshGeometry": {
+      "titlebar": {
+        "bounds": [
+          0,
+          0,
+          1440,
+          52
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "navigation": {
+        "bounds": [
+          8,
+          64,
+          56,
+          256
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "main": {
+        "bounds": [
+          321,
+          53,
+          1110,
+          810
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "statusbar": {
+        "bounds": [
+          0,
+          872,
+          1440,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "11px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "16.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "8px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "12px",
+          "display": "flex"
+        }
+      },
+      "terminal": {
+        "bounds": [
+          337,
+          153,
+          1059,
+          690
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "tab": {
+        "bounds": [
+          338,
+          68,
+          171.7,
+          18
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "4px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      }
+    },
+    "flowContrast": {
+      "primary": 13.272371566359727,
+      "action": 8.713681881174557,
+      "muted": 7.969981296741291
+    },
+    "flowGeometry": {
+      "titlebar": {
+        "bounds": [
+          0,
+          0,
+          1440,
+          52
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "navigation": {
+        "bounds": [
+          8,
+          64,
+          56,
+          256
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "main": {
+        "bounds": [
+          353,
+          53,
+          1078,
+          810
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "statusbar": {
+        "bounds": [
+          0,
+          872,
+          1440,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "11px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "16.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "8px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "12px",
+          "display": "flex"
+        }
+      },
+      "canvas": {
+        "bounds": [
+          353,
+          133,
+          718,
+          730
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "inspector": {
+        "bounds": [
+          1071,
+          133,
+          360,
+          730
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "16px",
+          "paddingRight": "16px",
+          "paddingBottom": "16px",
+          "paddingLeft": "16px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "1px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "selectedNode": {
+        "bounds": [
+          745,
+          505.5,
+          153,
+          81
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "run": {
+        "bounds": [
+          1125.94,
+          64.5,
+          71.27,
+          32
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "500",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "12px",
+          "paddingBottom": "0px",
+          "paddingLeft": "12px",
+          "borderRadius": "6px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "1px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      }
+    }
+  },
+  "B": {
+    "semanticContrast": {
+      "neutral": 7.7635848461293655,
+      "success": 7.965492326713262,
+      "warning": 9.100417411331376,
+      "danger": 7.685163264015111,
+      "info": 8.037179079651622
+    },
+    "apiContrast": {
+      "primary": 11.675478647555028,
+      "muted": 8.316451992953603,
+      "action": 9.718050221776291,
+      "status": 7.965492326713262
+    },
+    "apiGeometry": {
+      "titlebar": {
+        "bounds": [
+          0,
+          0,
+          1440,
+          52
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "navigation": {
+        "bounds": [
+          8,
+          64,
+          56,
+          256
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "main": {
+        "bounds": [
+          393,
+          53,
+          1038,
+          810
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "statusbar": {
+        "bounds": [
+          0,
+          872,
+          1440,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "11px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "16.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "8px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "12px",
+          "display": "flex"
+        }
+      },
+      "url": {
+        "bounds": [
+          505,
+          152,
+          761.86,
+          34
+        ],
+        "styles": {
+          "fontFamily": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "12px",
+          "paddingBottom": "0px",
+          "paddingLeft": "12px",
+          "borderRadius": "6px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "1px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "send": {
+        "bounds": [
+          1279.86,
+          147,
+          83.14,
+          44
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "16px",
+          "paddingBottom": "0px",
+          "paddingLeft": "16px",
+          "borderRadius": "6px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "1px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "requestTabs": {
+        "bounds": [
+          401,
+          59,
+          352.77,
+          35
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "4px",
+          "display": "flex"
+        }
+      },
+      "responseEditor": {
+        "bounds": [
+          871.02,
+          323,
+          559,
+          540
+        ],
+        "styles": {
+          "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe WPC\", \"Segoe UI\", HelveticaNeue-Light, system-ui, Ubuntu, \"Droid Sans\", sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "status": {
+        "bounds": [
+          949.16,
+          214,
+          68.41,
+          21
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "11px",
+          "fontWeight": "500",
+          "fontStyle": "normal",
+          "lineHeight": "16.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "2px",
+          "paddingRight": "10px",
+          "paddingBottom": "2px",
+          "paddingLeft": "10px",
+          "borderRadius": "3.35544e+07px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "6px",
+          "display": "flex"
+        }
+      }
+    },
+    "databaseContrast": {
+      "primary": 9.23793979236759,
+      "muted": 7.56371657452455,
+      "action": 8.104545938484526,
+      "status": 7.965492326713262
+    },
+    "databaseGeometry": {
+      "titlebar": {
+        "bounds": [
+          0,
+          0,
+          1440,
+          52
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "navigation": {
+        "bounds": [
+          8,
+          64,
+          56,
+          256
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "main": {
+        "bounds": [
+          353,
+          53,
+          1078,
+          810
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "statusbar": {
+        "bounds": [
+          0,
+          872,
+          1440,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "11px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "16.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "8px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "12px",
+          "display": "flex"
+        }
+      },
+      "editor": {
+        "bounds": [
+          353,
+          237,
+          1078,
+          125
+        ],
+        "styles": {
+          "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe WPC\", \"Segoe UI\", HelveticaNeue-Light, system-ui, Ubuntu, \"Droid Sans\", sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "run": {
+        "bounds": [
+          365,
+          153,
+          78.11,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "8px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "6px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "1px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "connection": {
+        "bounds": [
+          493,
+          200,
+          180,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "normal",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "32px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "6px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "1px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "resultTable": {
+        "bounds": [
+          353,
+          627.7,
+          837,
+          204.5
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "table"
+        }
+      },
+      "selected": {
+        "bounds": [
+          565,
+          661.7,
+          140,
+          34
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "12px",
+          "paddingBottom": "0px",
+          "paddingLeft": "12px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "table-cell"
+        }
+      }
+    },
+    "sshContrast": {
+      "tab": 11.341133436863977
+    },
+    "sshGeometry": {
+      "titlebar": {
+        "bounds": [
+          0,
+          0,
+          1440,
+          52
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "navigation": {
+        "bounds": [
+          8,
+          64,
+          56,
+          256
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "main": {
+        "bounds": [
+          321,
+          53,
+          1110,
+          810
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "statusbar": {
+        "bounds": [
+          0,
+          872,
+          1440,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "11px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "16.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "8px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "12px",
+          "display": "flex"
+        }
+      },
+      "terminal": {
+        "bounds": [
+          337,
+          153,
+          1059,
+          690
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "tab": {
+        "bounds": [
+          338,
+          68,
+          171.7,
+          18
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "4px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      }
+    },
+    "flowContrast": {
+      "primary": 12.589809207830983,
+      "action": 8.104545938484526,
+      "muted": 8.316451992953603
+    },
+    "flowGeometry": {
+      "titlebar": {
+        "bounds": [
+          0,
+          0,
+          1440,
+          52
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "navigation": {
+        "bounds": [
+          8,
+          64,
+          56,
+          256
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "main": {
+        "bounds": [
+          353,
+          53,
+          1078,
+          810
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "statusbar": {
+        "bounds": [
+          0,
+          872,
+          1440,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "11px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "16.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "8px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "12px",
+          "display": "flex"
+        }
+      },
+      "canvas": {
+        "bounds": [
+          353,
+          133,
+          718,
+          730
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "inspector": {
+        "bounds": [
+          1071,
+          133,
+          360,
+          730
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "16px",
+          "paddingRight": "16px",
+          "paddingBottom": "16px",
+          "paddingLeft": "16px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "1px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "selectedNode": {
+        "bounds": [
+          745,
+          505.5,
+          153,
+          81
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "run": {
+        "bounds": [
+          1125.94,
+          64.5,
+          71.27,
+          32
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "500",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "12px",
+          "paddingBottom": "0px",
+          "paddingLeft": "12px",
+          "borderRadius": "6px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "1px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      }
+    }
+  },
+  "C": {
+    "semanticContrast": {
+      "neutral": 7.841692465547531,
+      "success": 7.437138096636221,
+      "warning": 7.752246551714227,
+      "danger": 8.247183461167376,
+      "info": 8.040752439437373
+    },
+    "apiContrast": {
+      "primary": 12.993525667817206,
+      "muted": 8.563170738485791,
+      "action": 9.46734714543689,
+      "status": 7.437138096636221
+    },
+    "apiGeometry": {
+      "titlebar": {
+        "bounds": [
+          0,
+          0,
+          1440,
+          52
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "navigation": {
+        "bounds": [
+          8,
+          64,
+          56,
+          256
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "main": {
+        "bounds": [
+          393,
+          53,
+          1038,
+          810
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "statusbar": {
+        "bounds": [
+          0,
+          872,
+          1440,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "11px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "16.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "8px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "12px",
+          "display": "flex"
+        }
+      },
+      "url": {
+        "bounds": [
+          505,
+          152,
+          761.86,
+          34
+        ],
+        "styles": {
+          "fontFamily": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "12px",
+          "paddingBottom": "0px",
+          "paddingLeft": "12px",
+          "borderRadius": "6px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "1px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "send": {
+        "bounds": [
+          1279.86,
+          147,
+          83.14,
+          44
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "16px",
+          "paddingBottom": "0px",
+          "paddingLeft": "16px",
+          "borderRadius": "6px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "1px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "requestTabs": {
+        "bounds": [
+          401,
+          59,
+          352.77,
+          35
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "4px",
+          "display": "flex"
+        }
+      },
+      "responseEditor": {
+        "bounds": [
+          871.02,
+          323,
+          559,
+          540
+        ],
+        "styles": {
+          "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe WPC\", \"Segoe UI\", HelveticaNeue-Light, system-ui, Ubuntu, \"Droid Sans\", sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "status": {
+        "bounds": [
+          949.16,
+          214,
+          68.41,
+          21
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "11px",
+          "fontWeight": "500",
+          "fontStyle": "normal",
+          "lineHeight": "16.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "2px",
+          "paddingRight": "10px",
+          "paddingBottom": "2px",
+          "paddingLeft": "10px",
+          "borderRadius": "3.35544e+07px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "6px",
+          "display": "flex"
+        }
+      }
+    },
+    "databaseContrast": {
+      "primary": 10.141685751904946,
+      "muted": 7.891421139783311,
+      "action": 8.080183986516591,
+      "status": 7.437138096636221
+    },
+    "databaseGeometry": {
+      "titlebar": {
+        "bounds": [
+          0,
+          0,
+          1440,
+          52
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "navigation": {
+        "bounds": [
+          8,
+          64,
+          56,
+          256
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "main": {
+        "bounds": [
+          353,
+          53,
+          1078,
+          810
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "statusbar": {
+        "bounds": [
+          0,
+          872,
+          1440,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "11px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "16.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "8px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "12px",
+          "display": "flex"
+        }
+      },
+      "editor": {
+        "bounds": [
+          353,
+          237,
+          1078,
+          125
+        ],
+        "styles": {
+          "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe WPC\", \"Segoe UI\", HelveticaNeue-Light, system-ui, Ubuntu, \"Droid Sans\", sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "run": {
+        "bounds": [
+          365,
+          153,
+          78.11,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "8px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "6px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "1px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "connection": {
+        "bounds": [
+          493,
+          200,
+          180,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "normal",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "32px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "6px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "1px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "resultTable": {
+        "bounds": [
+          353,
+          627.7,
+          837,
+          204.5
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "table"
+        }
+      },
+      "selected": {
+        "bounds": [
+          565,
+          661.7,
+          140,
+          34
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "12px",
+          "paddingBottom": "0px",
+          "paddingLeft": "12px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "table-cell"
+        }
+      }
+    },
+    "sshContrast": {
+      "tab": 13.81937744781039
+    },
+    "sshGeometry": {
+      "titlebar": {
+        "bounds": [
+          0,
+          0,
+          1440,
+          52
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "navigation": {
+        "bounds": [
+          8,
+          64,
+          56,
+          256
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "main": {
+        "bounds": [
+          321,
+          53,
+          1110,
+          810
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "statusbar": {
+        "bounds": [
+          0,
+          872,
+          1440,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "11px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "16.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "8px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "12px",
+          "display": "flex"
+        }
+      },
+      "terminal": {
+        "bounds": [
+          337,
+          153,
+          1059,
+          690
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "tab": {
+        "bounds": [
+          338,
+          68,
+          171.7,
+          18
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "4px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      }
+    },
+    "flowContrast": {
+      "primary": 14.006562671929242,
+      "action": 8.080183986516591,
+      "muted": 8.563170738485791
+    },
+    "flowGeometry": {
+      "titlebar": {
+        "bounds": [
+          0,
+          0,
+          1440,
+          52
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "navigation": {
+        "bounds": [
+          8,
+          64,
+          56,
+          256
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "main": {
+        "bounds": [
+          353,
+          53,
+          1078,
+          810
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "statusbar": {
+        "bounds": [
+          0,
+          872,
+          1440,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "11px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "16.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "8px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "12px",
+          "display": "flex"
+        }
+      },
+      "canvas": {
+        "bounds": [
+          353,
+          133,
+          718,
+          730
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "inspector": {
+        "bounds": [
+          1071,
+          133,
+          360,
+          730
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "16px",
+          "paddingRight": "16px",
+          "paddingBottom": "16px",
+          "paddingLeft": "16px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "1px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "selectedNode": {
+        "bounds": [
+          745,
+          505.5,
+          153,
+          81
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "run": {
+        "bounds": [
+          1125.94,
+          64.5,
+          71.27,
+          32
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "500",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "12px",
+          "paddingBottom": "0px",
+          "paddingLeft": "12px",
+          "borderRadius": "6px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "1px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      }
+    }
+  },
+  "D": {
+    "semanticContrast": {
+      "neutral": 7.8992885388697855,
+      "success": 7.3672599511365675,
+      "warning": 7.78540575016917,
+      "danger": 8.453099491642668,
+      "info": 8.046264471287284
+    },
+    "apiContrast": {
+      "primary": 12.506767976424813,
+      "muted": 8.79905295038843,
+      "action": 12.796994568102134,
+      "status": 7.3672599511365675
+    },
+    "apiGeometry": {
+      "titlebar": {
+        "bounds": [
+          0,
+          0,
+          1440,
+          52
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "navigation": {
+        "bounds": [
+          8,
+          64,
+          56,
+          256
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "main": {
+        "bounds": [
+          393,
+          53,
+          1038,
+          810
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "statusbar": {
+        "bounds": [
+          0,
+          872,
+          1440,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "11px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "16.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "8px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "12px",
+          "display": "flex"
+        }
+      },
+      "url": {
+        "bounds": [
+          505,
+          152,
+          761.86,
+          34
+        ],
+        "styles": {
+          "fontFamily": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "12px",
+          "paddingBottom": "0px",
+          "paddingLeft": "12px",
+          "borderRadius": "6px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "1px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "send": {
+        "bounds": [
+          1279.86,
+          147,
+          83.14,
+          44
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "16px",
+          "paddingBottom": "0px",
+          "paddingLeft": "16px",
+          "borderRadius": "6px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "1px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "requestTabs": {
+        "bounds": [
+          401,
+          59,
+          352.77,
+          35
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "4px",
+          "display": "flex"
+        }
+      },
+      "responseEditor": {
+        "bounds": [
+          871.02,
+          323,
+          559,
+          540
+        ],
+        "styles": {
+          "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe WPC\", \"Segoe UI\", HelveticaNeue-Light, system-ui, Ubuntu, \"Droid Sans\", sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "status": {
+        "bounds": [
+          949.16,
+          214,
+          68.41,
+          21
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "11px",
+          "fontWeight": "500",
+          "fontStyle": "normal",
+          "lineHeight": "16.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "2px",
+          "paddingRight": "10px",
+          "paddingBottom": "2px",
+          "paddingLeft": "10px",
+          "borderRadius": "3.35544e+07px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "6px",
+          "display": "flex"
+        }
+      }
+    },
+    "databaseContrast": {
+      "primary": 9.487721929430236,
+      "muted": 7.9701809040296,
+      "action": 10.704034458503061,
+      "status": 7.3672599511365675
+    },
+    "databaseGeometry": {
+      "titlebar": {
+        "bounds": [
+          0,
+          0,
+          1440,
+          52
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "navigation": {
+        "bounds": [
+          8,
+          64,
+          56,
+          256
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "main": {
+        "bounds": [
+          353,
+          53,
+          1078,
+          810
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "statusbar": {
+        "bounds": [
+          0,
+          872,
+          1440,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "11px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "16.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "8px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "12px",
+          "display": "flex"
+        }
+      },
+      "editor": {
+        "bounds": [
+          353,
+          237,
+          1078,
+          125
+        ],
+        "styles": {
+          "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe WPC\", \"Segoe UI\", HelveticaNeue-Light, system-ui, Ubuntu, \"Droid Sans\", sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "run": {
+        "bounds": [
+          365,
+          153,
+          78.11,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "8px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "6px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "1px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "connection": {
+        "bounds": [
+          493,
+          200,
+          180,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "normal",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "32px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "6px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "1px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "resultTable": {
+        "bounds": [
+          353,
+          627.7,
+          837,
+          204.5
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "table"
+        }
+      },
+      "selected": {
+        "bounds": [
+          565,
+          661.7,
+          140,
+          34
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "12px",
+          "paddingBottom": "0px",
+          "paddingLeft": "12px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "table-cell"
+        }
+      }
+    },
+    "sshContrast": {
+      "tab": 14.697070909165186
+    },
+    "sshGeometry": {
+      "titlebar": {
+        "bounds": [
+          0,
+          0,
+          1440,
+          52
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "navigation": {
+        "bounds": [
+          8,
+          64,
+          56,
+          256
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "main": {
+        "bounds": [
+          321,
+          53,
+          1110,
+          810
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "statusbar": {
+        "bounds": [
+          0,
+          872,
+          1440,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "11px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "16.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "8px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "12px",
+          "display": "flex"
+        }
+      },
+      "terminal": {
+        "bounds": [
+          337,
+          153,
+          1059,
+          690
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "tab": {
+        "bounds": [
+          338,
+          68,
+          171.7,
+          18
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "fontStyle": "normal",
+          "lineHeight": "18px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "4px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      }
+    },
+    "flowContrast": {
+      "primary": 13.861453839480783,
+      "action": 10.704034458503061,
+      "muted": 8.79905295038843
+    },
+    "flowGeometry": {
+      "titlebar": {
+        "bounds": [
+          0,
+          0,
+          1440,
+          52
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "navigation": {
+        "bounds": [
+          8,
+          64,
+          56,
+          256
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      },
+      "main": {
+        "bounds": [
+          353,
+          53,
+          1078,
+          810
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "statusbar": {
+        "bounds": [
+          0,
+          872,
+          1440,
+          28
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "11px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "16.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "8px",
+          "paddingBottom": "0px",
+          "paddingLeft": "8px",
+          "borderRadius": "0px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "12px",
+          "display": "flex"
+        }
+      },
+      "canvas": {
+        "bounds": [
+          353,
+          133,
+          718,
+          730
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "flex"
+        }
+      },
+      "inspector": {
+        "bounds": [
+          1071,
+          133,
+          360,
+          730
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "16px",
+          "paddingRight": "16px",
+          "paddingBottom": "16px",
+          "paddingLeft": "16px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "1px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "selectedNode": {
+        "bounds": [
+          745,
+          505.5,
+          153,
+          81
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "400",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "0px",
+          "paddingBottom": "0px",
+          "paddingLeft": "0px",
+          "borderRadius": "0px",
+          "borderTopWidth": "0px",
+          "borderRightWidth": "0px",
+          "borderBottomWidth": "0px",
+          "borderLeftWidth": "0px",
+          "gap": "normal",
+          "display": "block"
+        }
+      },
+      "run": {
+        "bounds": [
+          1125.94,
+          64.5,
+          71.27,
+          32
+        ],
+        "styles": {
+          "fontFamily": "\"Segoe UI Variable\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+          "fontSize": "13px",
+          "fontWeight": "500",
+          "fontStyle": "normal",
+          "lineHeight": "19.5px",
+          "letterSpacing": "normal",
+          "paddingTop": "0px",
+          "paddingRight": "12px",
+          "paddingBottom": "0px",
+          "paddingLeft": "12px",
+          "borderRadius": "6px",
+          "borderTopWidth": "1px",
+          "borderRightWidth": "1px",
+          "borderBottomWidth": "1px",
+          "borderLeftWidth": "1px",
+          "gap": "8px",
+          "display": "flex"
+        }
+      }
+    }
+  }
+}

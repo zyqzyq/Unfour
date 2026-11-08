@@ -17,13 +17,13 @@ export function FlowInspector({ draft, editor, execution, validation, resources 
   const { viewingRun, currentRun, runDetail } = execution;
   const { schemaProblems, upstream, environmentKeys } = validation;
   return (
-    <aside aria-label={t(viewingRun ? "flow.runDetail" : "flow.inspector")} hidden={!selectedNode} className="flow-inspector w-[360px] min-w-0 shrink-0 overflow-auto border-l border-[var(--u-color-border)] p-3">
+    <aside aria-label={t(viewingRun ? "flow.runDetail" : "flow.inspector")} hidden={!selectedNode} className="flow-inspector w-[360px] min-w-0 shrink-0 overflow-auto border-l border-[var(--u-color-border)] p-4">
       {viewingRun && <>
-        <div className="flex items-center justify-between"><strong>{t("flow.runDetail")}</strong><Button variant="ghost" size="sm" onClick={() => setSelectedNode(null)}>{t("flow.closeInspector")}</Button></div>
+        <div className="flow-inspector-heading flex items-center justify-between gap-2"><strong className="text-xs font-semibold">{t("flow.runDetail")}</strong><Button variant="ghost" size="sm" onClick={() => setSelectedNode(null)}>{t("flow.closeInspector")}</Button></div>
         {currentRun ? <RunView key={`${currentRun.id}:${selectedNode}`} run={currentRun} selectedStep={selectedNode} onSelectStep={setSelectedNode} onEditStep={execution.editStep} editableStepIds={draft.steps.map((step) => step.id)} /> : !runDetail.isError && <p>{t("flow.loading")}</p>}
       </>}
       <fieldset disabled={busy || viewingRun} hidden={viewingRun}>
-      <div className="flex items-center justify-between"><strong>{t("flow.inspector")}</strong><Button variant="ghost" size="sm" onClick={() => setSelectedNode(null)}>{t("flow.closeInspector")}</Button></div>
+      <div className="flow-inspector-heading flex items-center justify-between gap-2"><strong className="text-xs font-semibold">{t("flow.inspector")}</strong><Button variant="ghost" size="sm" onClick={() => setSelectedNode(null)}>{t("flow.closeInspector")}</Button></div>
       <div hidden={selectedNode !== START}>
       <InputEditor key={contextRevision} definitions={draft.inputs} onChange={editor.changeInputDefinitions} onValidity={editor.schemaValidity} />
       </div>

@@ -58,7 +58,7 @@ export function SftpToolbar({
   const singleSelection = selectedCount === 1 && Boolean(selectedEntry);
   return (
     <>
-      <div className="flex h-[34px] shrink-0 items-center gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-1.5">
+      <div className="flex h-[var(--u-size-section-toolbar)] shrink-0 items-center gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-canvas)] px-2">
         <IconButton label={t("ssh.sftp.closePanel")} onClick={onClose} size="compact">
           <PanelRightClose size={14} />
         </IconButton>
@@ -67,13 +67,13 @@ export function SftpToolbar({
           {t("ssh.sftp.panelTitle")}
         </div>
         <div
-          className="max-w-[44%] truncate text-[11px] text-[var(--u-color-text-muted)]"
+          className="max-w-[44%] truncate rounded-[var(--u-radius-sm)] bg-[var(--u-color-surface-subtle)] px-2 py-1 font-mono text-[10px] text-[var(--u-color-text-muted)]"
           title={endpoint}
         >
           {endpoint}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-0.5 border-b border-[var(--u-color-border)] px-1.5 py-1">
+      <div className="flex shrink-0 items-center gap-1 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-2 py-1.5">
         <IconButton
           disabled={!connected || !currentPath || currentPath === "/"}
           label={t("ssh.sftp.parentDirectory")}
@@ -134,7 +134,7 @@ export function SftpToolbar({
         </IconButton>
       </div>
       <form
-        className="shrink-0 border-b border-[var(--u-color-border)] p-1.5"
+        className="shrink-0 border-b border-[var(--u-color-border)] bg-[var(--u-color-canvas)] p-2"
         onSubmit={(event) => {
           event.preventDefault();
           if (pathValue.trim()) onPathSubmit();
@@ -142,7 +142,7 @@ export function SftpToolbar({
       >
         <Input
           aria-label={t("ssh.sftp.path")}
-          className="h-7 font-mono text-[12px]"
+          className="h-8 font-mono text-[12px]"
           disabled={!connected || opening}
           onChange={(event) => onPathChange(event.target.value)}
           placeholder="/"

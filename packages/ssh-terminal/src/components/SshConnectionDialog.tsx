@@ -65,7 +65,7 @@ export function SshConnectionDialog({
             </div>
             <DialogXClose />
           </DialogHeader>
-          <DialogBody className="space-y-3">
+          <DialogBody className="space-y-4">
             {externalChange && <div role="alert" className="text-[12px] text-[var(--u-color-text-muted)]">{t("common.externalChange")} <Button onClick={onReload} type="button" size="sm" variant="outline">{t("common.reloadLatest")}</Button></div>}
             <FieldGroup title={t("ssh.dialog.name")}>
               <Input
@@ -196,7 +196,7 @@ export function SshConnectionDialog({
 function FieldGroup({ children, title }: { children: ReactNode; title: string }) {
   return (
     <label className="block space-y-1.5">
-      <span className="text-[12px] font-semibold uppercase text-[var(--u-color-text-soft)]">
+      <span className="text-[12px] font-medium text-[var(--u-color-text-muted)]">
         {title}
       </span>
       {children}

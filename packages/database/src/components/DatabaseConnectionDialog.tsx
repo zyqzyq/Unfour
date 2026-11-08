@@ -1,4 +1,4 @@
-import { Plug, Save } from "lucide-react";
+import { Database, Plug, Save } from "lucide-react";
 import { type FormEvent, type ReactNode, useRef, useState } from "react";
 import { revealConnectionSecret, type DatabaseConnectionInput } from "@unfour/command-client";
 import {
@@ -67,11 +67,16 @@ export function DatabaseConnectionDialog({
         title={t("database.connection.settings")}
       >
         <DialogHeader>
-          <DialogTitle>{t("database.connection.settings")}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2.5">
+            <span className="flex size-8 items-center justify-center rounded-[var(--u-radius-md)] bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]">
+              <Database aria-hidden="true" size={16} />
+            </span>
+            {t("database.connection.settings")}
+          </DialogTitle>
         </DialogHeader>
-        <form onSubmit={(event) => { if (externalChange || savePending) event.preventDefault(); else onSubmit(event); }}>
+        <form className="flex min-h-0 flex-col" onSubmit={(event) => { if (externalChange || savePending) event.preventDefault(); else onSubmit(event); }}>
           <fieldset disabled={savePending} className="contents">
-          <DialogBody className="space-y-2">
+          <DialogBody className="space-y-4">
             {externalChange && <div role="alert" className="text-[12px] text-[var(--u-color-text-muted)]">{t("common.externalChange")} <Button onClick={onReload} type="button" size="sm" variant="outline">{t("common.reloadLatest")}</Button></div>}
             <Field title={t("database.fields.name")}>
               <Input onChange={(event) => onUpdate({ name: event.target.value })} value={form.name} />
@@ -85,7 +90,7 @@ export function DatabaseConnectionDialog({
               </Field>
             ) : (
               <>
-                <div className="grid grid-cols-[1fr_76px] gap-2">
+                <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3">
                   <Field title={t("database.fields.host")}>
                     <Input onChange={(event) => onUpdate({ host: event.target.value })} placeholder="127.0.0.1" value={form.host ?? ""} />
                   </Field>
@@ -109,10 +114,10 @@ export function DatabaseConnectionDialog({
                 </Field>
               </>
             )}
-            <label className="flex items-start gap-2 pt-1">
+            <label className="flex items-start gap-3 rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-3">
               <input
                 checked={Boolean(form.readOnly)}
-                className="mt-0.5"
+                className="mt-0.5 accent-[var(--u-color-primary)]"
                 onChange={(event) => onUpdate({ readOnly: event.target.checked })}
                 type="checkbox"
               />
@@ -120,7 +125,7 @@ export function DatabaseConnectionDialog({
                 <span className="block text-[12px] font-medium text-[var(--u-color-text)]">
                   {t("database.fields.readOnly")}
                 </span>
-                <span className="block text-[11px] text-[var(--u-color-text-soft)]">
+                <span className="mt-1 block text-[11px] leading-relaxed text-[var(--u-color-text-muted)]">
                   {t("database.fields.readOnlyHint")}
                 </span>
               </span>
@@ -160,8 +165,8 @@ function Field({
   title: string;
 }) {
   return (
-    <label className="block space-y-1">
-      <span className="text-[11px] font-medium uppercase text-[var(--u-color-text-soft)]">{title}</span>
+    <label className="block space-y-1.5">
+      <span className="text-[12px] font-medium text-[var(--u-color-text-muted)]">{title}</span>
       {children}
     </label>
   );

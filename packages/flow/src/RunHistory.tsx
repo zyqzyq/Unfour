@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { FlowRunSummary } from "@unfour/command-client";
 import { Button, Popover, PopoverContent, PopoverTrigger, useI18n } from "@unfour/ui";
+import { History } from "lucide-react";
 
 export function RunHistory({ runs, loading, failed, disabled, selected, onSelect, onOpenChange, onRetry }: {
   runs: FlowRunSummary[]; loading: boolean; failed: boolean; disabled: boolean;
@@ -10,7 +11,7 @@ export function RunHistory({ runs, loading, failed, disabled, selected, onSelect
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   return <Popover open={open} onOpenChange={(next) => { setOpen(next); onOpenChange(next); }}>
-    <PopoverTrigger asChild><Button variant="secondary" disabled={disabled}>{t("flow.history")}</Button></PopoverTrigger>
+    <PopoverTrigger asChild><Button variant="secondary" disabled={disabled}><History aria-hidden="true" size={14} />{t("flow.history")}</Button></PopoverTrigger>
     <PopoverContent align="end" aria-label={t("flow.history")} className="max-h-80 w-80 overflow-y-auto p-2">
       <strong>{t("flow.history")}</strong>
       {loading && <p className="py-2">{t("flow.loading")}</p>}
@@ -18,7 +19,7 @@ export function RunHistory({ runs, loading, failed, disabled, selected, onSelect
       {!loading && !failed && !runs.length && <p className="py-2">{t("flow.noRuns")}</p>}
       {[...runs].sort((a, b) => b.startedAt.localeCompare(a.startedAt)).map((run) => {
         const duration = run.finishedAt ? Date.parse(run.finishedAt) - Date.parse(run.startedAt) : null;
-        return <Button key={run.id} variant="ghost" aria-pressed={selected === run.id} className="h-auto w-full justify-start py-2 text-left" onClick={() => { onSelect(run.id); setOpen(false); onOpenChange(false); }}>
+        return <Button key={run.id} variant="ghost" aria-pressed={selected === run.id} className="mt-1 h-auto w-full justify-start border border-[var(--u-color-border)] py-3 text-left aria-pressed:border-[var(--u-color-primary)] aria-pressed:bg-[var(--u-color-primary-soft)]" onClick={() => { onSelect(run.id); setOpen(false); onOpenChange(false); }}>
           <span className="grid gap-1"><span>{t(`flow.status.${run.status}`)} · <time dateTime={run.startedAt}>{run.startedAt}</time></span>
           {duration !== null && Number.isFinite(duration) && duration >= 0 && <span className="text-xs text-[var(--u-color-text-muted)]">{t("flow.elapsed")}: {duration} ms</span>}</span>
         </Button>;

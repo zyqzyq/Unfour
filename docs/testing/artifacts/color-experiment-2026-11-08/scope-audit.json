@@ -1,0 +1,13 @@
+{
+  "baselineFiles": 133,
+  "missing": [],
+  "changedBaselineFiles": [
+    "packages/ui/src/editor-theme.ts"
+  ],
+  "newlyModifiedTrackedFiles": [
+    "packages/ui/src/styles/index.css",
+    "packages/ui/src/theme-init.ts"
+  ],
+  "A_tokens_theme_and_editor_preserved": true,
+  "nativeAdapterAndUAssetsUnchanged": true
+}

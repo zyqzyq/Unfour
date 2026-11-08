@@ -1,0 +1,10 @@
+{
+  "priorFiles": 184,
+  "changed": [
+    "packages/ui/src/palette-experiment.ts",
+    "packages/ui/src/styles/index.css"
+  ],
+  "missing": [],
+  "originalPaletteFilesAndScreenshotsPreserved": true,
+  "nativeUUnchanged": true
+}

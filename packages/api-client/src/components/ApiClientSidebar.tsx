@@ -42,7 +42,7 @@ export function ApiClientSidebar({
         !shellSlot && "w-[248px] shrink-0 border-r border-[var(--u-color-border)]",
       )}
     >
-      <div className="flex h-[var(--u-size-tabbar)] shrink-0 items-center gap-1 border-b border-[var(--u-color-border)] px-2">
+      <div className="flex h-[var(--u-size-tabbar)] shrink-0 items-center gap-1 border-b border-[var(--u-color-border)] px-3">
         {sidebarTabs.map((tab) => {
           const active = activeTab === tab.id;
           return (
@@ -50,9 +50,9 @@ export function ApiClientSidebar({
               aria-label={t(tab.labelKey)}
               aria-pressed={active}
               className={cn(
-                "flex h-[26px] w-[26px] cursor-pointer items-center justify-center rounded-[var(--u-radius-md)] border border-transparent text-[var(--u-color-text-muted)] transition-colors",
+                "flex h-[28px] w-[36px] cursor-pointer items-center justify-center rounded-[var(--u-radius-md)] border border-transparent text-[var(--u-color-text-muted)] transition-colors focus-visible:outline-2 focus-visible:outline-[var(--u-color-focus)]",
                 active
-                  ? "bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]"
+                  ? "border-[color:color-mix(in_srgb,var(--u-color-primary)_22%,transparent)] bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]"
                   : "hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
               )}
               key={tab.id}

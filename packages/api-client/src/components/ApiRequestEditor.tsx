@@ -60,7 +60,7 @@ export function ApiRequestEditor({
   timeoutMs: number | null;
 }) {
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--u-color-canvas)]">
       <RequestParamsTabs
         auth={auth}
         body={body}

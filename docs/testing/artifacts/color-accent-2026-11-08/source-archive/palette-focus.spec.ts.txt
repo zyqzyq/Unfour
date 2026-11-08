@@ -1,0 +1,247 @@
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import { writeFile } from "node:fs/promises";
+import { openApiScene, openDatabaseScene, preparePaletteScene } from "./palette-experiment-fixtures";
+
+type Tokens = Record<string, string>;
+type Scene = "api" | "database";
+type Geometry = Record<string, { bounds: number[]; styles: Record<string, string> }>;
+type EditorColors = { cursor: string; bracket: string; focus: string; canvas: string };
+type Measurements = {
+  light: Tokens;
+  dark?: Tokens;
+  geometry: Partial<Record<Scene, Geometry>>;
+  editor: Record<string, EditorColors>;
+};
+
+async function tokens(page: Page): Promise<Tokens> {
+  return page.locator("html").evaluate((root) => {
+    const style = getComputedStyle(root);
+    // Monaco lazily adds internal icon variables after its first mount. Keep
+    // the complete app token/alias set while excluding those third-party keys.
+    return Object.fromEntries(Array.from(style).filter((name) => name.startsWith("--") && !name.startsWith("--vscode-") && !name.startsWith("--monaco-")).sort().map((name) => [name, style.getPropertyValue(name).trim()]));
+  });
+}
+
+async function geometry(controls: Record<string, Locator>): Promise<Geometry> {
+  const output: Geometry = {};
+  for (const [name, control] of Object.entries(controls)) {
+    output[name] = await control.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      const keys = ["fontFamily", "fontSize", "fontWeight", "fontStyle", "lineHeight", "letterSpacing", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "borderRadius", "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth", "gap", "display"] as const;
+      return {
+        bounds: [rect.x, rect.y, rect.width, rect.height].map((value) => Math.round(value * 100) / 100),
+        styles: Object.fromEntries(keys.map((key) => [key, style[key]])),
+      };
+    });
+  }
+  return output;
+}
+
+async function resolvedColor(page: Page, name: string) {
+  return page.evaluate((token) => {
+    const probe = document.createElement("span");
+    probe.style.color = `var(${token})`;
+    document.body.append(probe);
+    const value = getComputedStyle(probe).color;
+    probe.remove();
+    return value;
+  }, name);
+}
+
+async function inspectMonaco(page: Page): Promise<EditorColors> {
+  const editor = page.locator(".monaco-editor:visible");
+  await editor.click({ position: { x: 120, y: 22 } });
+  await page.keyboard.press("Control+Home");
+  const focus = await resolvedColor(page, "--u-color-focus");
+  const canvas = await resolvedColor(page, "--u-color-canvas");
+  const cursor = editor.locator(".cursor").first();
+  const bracket = editor.locator(".bracket-match").first();
+  await expect(cursor).toHaveCSS("background-color", focus);
+  await expect(bracket).toHaveCSS("border-top-color", focus);
+  await expect(editor).toHaveCSS("background-color", canvas);
+  return {
+    focus, canvas,
+    cursor: await cursor.evaluate((node) => getComputedStyle(node).backgroundColor),
+    bracket: await bracket.evaluate((node) => getComputedStyle(node).borderTopColor),
+  };
+}
+
+async function changeTheme(page: Page, theme: "light" | "dark") {
+  await page.locator(".app-shell > header").getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("dialog").getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+}
+
+async function comparePixels(page: Page, left: Buffer, right: Buffer) {
+  return page.evaluate(async ({ a, b }) => {
+    const decode = async (encoded: string) => {
+      const picture = new Image();
+      picture.src = `data:image/png;base64,${encoded}`;
+      await picture.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = picture.width; canvas.height = picture.height;
+      const context = canvas.getContext("2d", { willReadFrequently: true })!;
+      context.drawImage(picture, 0, 0);
+      return { width: picture.width, height: picture.height, pixels: context.getImageData(0, 0, picture.width, picture.height).data };
+    };
+    const one = await decode(a), two = await decode(b);
+    if (one.width !== two.width || one.height !== two.height) throw new Error("Screenshot dimensions differ");
+    let changedPixels = 0, maxChannelDifference = 0;
+    let minX = one.width, minY = one.height, maxX = -1, maxY = -1;
+    for (let i = 0; i < one.pixels.length; i += 4) {
+      let changed = false;
+      for (let channel = 0; channel < 4; channel++) {
+        const difference = Math.abs(one.pixels[i + channel] - two.pixels[i + channel]);
+        changed ||= difference > 0;
+        maxChannelDifference = Math.max(maxChannelDifference, difference);
+      }
+      if (changed) {
+        changedPixels++;
+        const pixel = i / 4, x = pixel % one.width, y = Math.floor(pixel / one.width);
+        minX = Math.min(minX, x); minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+      }
+    }
+    return { width: one.width, height: one.height, changedPixels, maxChannelDifference, changedBounds: changedPixels ? { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 } : null };
+  }, { a: left.toString("base64"), b: right.toString("base64") });
+}
+
+test("light C with violet focus preserves C tokens and geometry, including mounted editors", async ({ browser }, testInfo) => {
+  test.setTimeout(120_000);
+  const measurements: Record<string, Measurements> = {};
+  const unfocused: Record<string, Partial<Record<Scene, Buffer>>> = {};
+  const focused: Record<string, Partial<Record<Scene, Buffer>>> = {};
+  const pixelComparisons: Record<string, unknown> = {};
+  for (const variant of ["B", "C", "C-violet"] as const) {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+    const page = await context.newPage();
+    page.setDefaultTimeout(10_000);
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    try {
+      await preparePaletteScene(page, "light");
+      await page.goto(variant === "C-violet" ? "/?palette=C&focus=violet" : `/?palette=${variant}`);
+      await expect(page.locator("html")).toHaveAttribute("data-palette", variant === "B" ? "B" : "C");
+      if (variant === "C-violet") await expect(page.locator("html")).toHaveAttribute("data-palette-focus", "violet");
+      else await expect(page.locator("html")).not.toHaveAttribute("data-palette-focus", "violet");
+      const record: Measurements = { light: await tokens(page), geometry: {}, editor: {} };
+      measurements[variant] = record;
+      focused[variant] = {}; unfocused[variant] = {};
+      const verifyTitlebar = async () => {
+        // Editor keyboard navigation can scroll overflow-hidden ancestors.
+        // Restore only shell/titlebar scroll positions for the capture state.
+        await page.evaluate(() => {
+          document.scrollingElement?.scrollTo(0, 0);
+          document.querySelectorAll<HTMLElement>(".app-shell, .app-shell > header, .app-shell > header *").forEach((node) => {
+            if (node.scrollTop || node.scrollLeft) node.scrollTo(0, 0);
+          });
+        });
+        const titlebar = page.locator(".app-shell > header");
+        const titlebarBounds = await titlebar.boundingBox();
+        expect(titlebarBounds).not.toBeNull();
+        for (const control of [titlebar.getByRole("button", { name: /Atlas Development/ }), titlebar.getByRole("button", { name: "Settings", exact: true })]) {
+          await expect(control).toBeInViewport({ ratio: 1 });
+          const bounds = await control.boundingBox();
+          expect(bounds!.y).toBeGreaterThanOrEqual(titlebarBounds!.y);
+          expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(titlebarBounds!.y + titlebarBounds!.height);
+        }
+      };
+      const capture = async (scene: Scene, controls: Record<string, Locator>, detail: Locator) => {
+        await verifyTitlebar();
+        record.geometry[scene] = await geometry(controls);
+        focused[variant][scene] = await page.screenshot({ path: testInfo.outputPath(`${scene}-${variant}.png`), animations: "disabled", caret: "hide" });
+        const bounds = await detail.boundingBox();
+        if (!bounds) throw new Error(`Missing ${scene} focus detail bounds`);
+        // Native page clipping preserves the original pixels; no resized or
+        // reconstructed UI is used for the 1px border comparison.
+        const clip = { x: Math.max(0, Math.floor(bounds.x) - 12), y: Math.max(0, Math.floor(bounds.y) - 12), width: scene === "database" ? Math.min(680, Math.ceil(bounds.width) + 24) : Math.ceil(bounds.width) + 24, height: scene === "database" ? 160 : Math.ceil(bounds.height) + 24 };
+        await page.screenshot({ path: testInfo.outputPath(`detail-${scene}-${variant}.png`), clip, animations: "disabled", caret: "hide" });
+      };
+
+      await openApiScene(page);
+      const responseEditor = await page.locator(".monaco-editor:visible").elementHandle();
+      const url = page.getByRole("textbox", { name: "Request URL", exact: true });
+      await expect(url).toBeFocused();
+      await capture("api", {
+        titlebar: page.locator(".app-shell > header"), main: page.getByRole("main"), url,
+        urlBar: url.locator(".."), send: page.getByRole("button", { name: "Send", exact: true }).first(), editor: page.locator(".monaco-editor:visible"),
+      }, url.locator(".."));
+      if (variant !== "B") {
+        await page.getByRole("main").getByText("Response", { exact: true }).click();
+        await expect(url).not.toBeFocused();
+        await page.mouse.move(0, 0);
+        await verifyTitlebar();
+        unfocused[variant].api = await page.screenshot({ path: testInfo.outputPath(`unfocused-api-${variant}.png`), animations: "disabled", caret: "hide" });
+      }
+
+      await openDatabaseScene(page);
+      const sqlEditor = await page.locator(".monaco-editor:visible").elementHandle();
+      const cell = page.getByRole("cell", { name: "Avery Chen", exact: true });
+      await expect(cell.getByRole("button")).toBeFocused();
+      await capture("database", {
+        main: page.getByRole("main"), editor: page.locator(".monaco-editor:visible"), run: page.getByRole("button", { name: "Run All", exact: true }), table: page.getByRole("table"), cell,
+      }, page.getByRole("table"));
+      if (variant !== "B") {
+        // activeCell has a persistent focus-colored outline in the existing UI.
+        // Real tab navigation remounts the results grid without selecting a cell.
+        await page.getByRole("tab", { name: "Logs", exact: true }).click();
+        await page.getByRole("tab", { name: "Results", exact: true }).click();
+        await page.getByRole("main").getByText("postgres / app", { exact: true }).click();
+        await expect(cell).toBeVisible();
+        await page.mouse.move(0, 0);
+        await verifyTitlebar();
+        unfocused[variant].database = await page.screenshot({ path: testInfo.outputPath(`unfocused-database-${variant}.png`), animations: "disabled", caret: "hide" });
+      }
+
+      // Finish all comparison captures before moving Monaco's cursor.
+      await page.getByRole("navigation", { name: "Modules" }).getByRole("button", { name: "API Client", exact: true }).click();
+      record.editor.initialLight = await inspectMonaco(page);
+      await page.getByRole("navigation", { name: "Modules" }).getByRole("button", { name: "Database", exact: true }).click();
+      await changeTheme(page, "dark");
+      record.dark = await tokens(page);
+      expect(await sqlEditor?.evaluate((element) => element.isConnected)).toBe(true);
+      await expect(page.locator(".monaco-editor:visible")).toHaveCSS("background-color", await resolvedColor(page, "--u-color-canvas"));
+      await page.getByRole("navigation", { name: "Modules" }).getByRole("button", { name: "API Client", exact: true }).click();
+      expect(await responseEditor?.evaluate((element) => element.isConnected)).toBe(true);
+      record.editor.mountedDark = await inspectMonaco(page);
+      await changeTheme(page, "light");
+      record.editor.mountedLight = await inspectMonaco(page);
+      expect(await tokens(page)).toEqual(record.light);
+      expect(await responseEditor?.evaluate((element) => element.isConnected)).toBe(true);
+      await page.getByRole("navigation", { name: "Modules" }).getByRole("button", { name: "Database", exact: true }).click();
+      expect(await sqlEditor?.evaluate((element) => element.isConnected)).toBe(true);
+      await expect(page.locator(".monaco-editor:visible")).toHaveCSS("background-color", await resolvedColor(page, "--u-color-canvas"));
+      await expect(page.getByRole("cell", { name: "Jordan Park", exact: true })).toBeVisible();
+      expect(errors).toEqual([]);
+
+      if (variant === "C-violet") {
+        const changed = Object.keys(record.light).filter((name) => record.light[name] !== measurements.C.light[name]);
+        expect(changed).toEqual(["--focus", "--u-color-focus"]);
+        expect(record.light["--u-color-focus"]).toBe("#7640cd");
+        expect(record.dark).toEqual(measurements.C.dark);
+        expect(record.geometry).toEqual(measurements.C.geometry);
+        expect(record.geometry).toEqual(measurements.B.geometry);
+        for (const scene of ["api", "database"] as const) {
+          const before = unfocused.C[scene]!, after = unfocused[variant][scene]!;
+          const noFocus = await comparePixels(page, before, after);
+          // Record the supplementary blurred captures without requiring pixel
+          // equality: Monaco can retain its existing matching-bracket state.
+          const withFocus = await comparePixels(page, focused.C[scene]!, focused[variant][scene]!);
+          expect(withFocus.changedPixels, `${scene}: focus must create a visible difference`).toBeGreaterThan(0);
+          pixelComparisons[scene] = { unfocused: noFocus, focused: withFocus };
+        }
+      }
+    } catch (error) {
+      await page.screenshot({ path: testInfo.outputPath(`failure-${variant}.png`), animations: "disabled", caret: "hide" });
+      await testInfo.attach(`failure-${variant}`, { body: await page.locator("body").ariaSnapshot(), contentType: "text/plain" });
+      throw error;
+    } finally {
+      await context.close();
+    }
+  }
+  const path = testInfo.outputPath("measurements.json");
+  await writeFile(path, JSON.stringify({ measurements, pixelComparisons }, null, 2));
+  await testInfo.attach("focus-comparison-measurements", { path, contentType: "application/json" });
+});

@@ -1,11 +1,11 @@
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Terminal } from "lucide-react";
 import type {
   SshConnection,
   SshSessionEvent,
   SshSessionSummary,
 } from "@unfour/command-client";
-import { Button, SplitPane, cn, useI18n } from "@unfour/ui";
-import { shouldRenderTerminalPane } from "../model/terminal-session-status";
+import { Button, ConnectionStatus, SplitPane, cn, useI18n } from "@unfour/ui";
+import { shouldRenderTerminalPane, terminalSessionStatus, terminalSessionStatusLabel } from "../model/terminal-session-status";
 import type { TerminalSplitMode } from "../model/types";
 import { TerminalPane } from "./TerminalPane";
 
@@ -94,10 +94,15 @@ function PaneShell({
   return (
     <div
       className={cn(
-        "flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--u-color-terminal-bg)]",
-        active && "ring-1 ring-inset ring-[var(--u-color-focus)]",
+        "flex min-h-0 min-w-0 flex-1 flex-col border-t-2 bg-[var(--u-color-terminal-bg)]",
+        active ? "border-t-[var(--u-color-terminal-cursor)]" : "border-t-[var(--u-color-terminal-border)]",
       )}
     >
+      <div className="flex h-10 shrink-0 items-center gap-2.5 border-b border-[var(--u-color-terminal-border)] px-4 text-[11px] text-[var(--u-color-terminal-muted)]">
+        <Terminal aria-hidden="true" size={14} className="shrink-0 text-[var(--u-color-terminal-cursor)]" />
+        <span className="min-w-0 flex-1 truncate font-mono" title={`${session.username}@${session.host}`}>{model.connection?.name ?? `${session.username}@${session.host}`}</span>
+        <span className="flex shrink-0 items-center gap-1.5"><ConnectionStatus dotOnly label={terminalSessionStatusLabel(session, t)} status={terminalSessionStatus(session)} variant="dot" /><span>{terminalSessionStatusLabel(session, t)}</span></span>
+      </div>
       {showFailedPlaceholder ? (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 bg-[var(--u-color-terminal-bg)] p-6 text-center">
           <div className="space-y-1">

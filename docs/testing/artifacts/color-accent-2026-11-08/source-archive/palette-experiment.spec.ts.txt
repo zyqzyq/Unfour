@@ -1,0 +1,181 @@
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import { writeFile } from "node:fs/promises";
+import {
+  PALETTES, openApiScene, openDatabaseScene, openFlowScene, openSshScene,
+  preparePaletteScene, type Appearance,
+} from "./palette-experiment-fixtures";
+
+type Geometry = Record<string, { bounds: number[]; styles: Record<string, string> }>;
+async function geometry(controls: Record<string, Locator>): Promise<Geometry> {
+  const result: Geometry = {};
+  for (const [name, control] of Object.entries(controls)) {
+    await expect(control).toBeVisible();
+    result[name] = await control.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      const keys = ["fontFamily", "fontSize", "fontWeight", "fontStyle", "lineHeight", "letterSpacing", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "borderRadius", "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth", "gap", "display"] as const;
+      return {
+        bounds: [rect.x, rect.y, rect.width, rect.height].map((value) => Math.round(value * 100) / 100),
+        styles: Object.fromEntries(keys.map((key) => [key, style[key]])),
+      };
+    });
+  }
+  return result;
+}
+
+function shellControls(page: Page) {
+  return {
+    titlebar: page.locator(".app-shell > header"),
+    navigation: page.getByRole("navigation", { name: "Modules" }),
+    main: page.getByRole("main"),
+    statusbar: page.locator(".u-statusbar"),
+  };
+}
+
+async function contrast(control: Locator) {
+  return control.evaluate((element) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 1;
+    const context = canvas.getContext("2d", { willReadFrequently: true })!;
+    const rgba = (color: string) => {
+      context.clearRect(0, 0, 1, 1);
+      context.fillStyle = color;
+      context.fillRect(0, 0, 1, 1);
+      const pixel = context.getImageData(0, 0, 1, 1).data;
+      return [pixel[0], pixel[1], pixel[2], pixel[3] / 255];
+    };
+    const composite = (front: number[], back: number[]) =>
+      front.slice(0, 3).map((value, index) => value * front[3] + back[index] * (1 - front[3])).concat(1);
+    const ancestors: Element[] = [];
+    for (let node: Element | null = element; node; node = node.parentElement) ancestors.push(node);
+    const bg = ancestors.reverse().reduce((back, node) => composite(rgba(getComputedStyle(node).backgroundColor), back), [255, 255, 255, 1]);
+    const fg = composite(rgba(getComputedStyle(element).color), bg);
+    const luminance = (value: number[]) => value.slice(0, 3).map((c) => {
+      const channel = c / 255;
+      return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+    }).reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index], 0);
+    const a = luminance(fg), b = luminance(bg);
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  });
+}
+
+async function auditText(controls: Record<string, Locator>, label: string) {
+  const ratios: Record<string, number> = {};
+  for (const [name, control] of Object.entries(controls)) {
+    await expect(control).toBeVisible();
+    ratios[name] = await contrast(control);
+    expect.soft(ratios[name], `${label}: ${name} text contrast`).toBeGreaterThanOrEqual(4.5);
+  }
+  return ratios;
+}
+
+async function auditSemanticTokens(page: Page, label: string) {
+  const result = await page.evaluate(() => {
+    const root = getComputedStyle(document.documentElement);
+    const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
+    const luminance = (color: string) => {
+      ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = color; ctx.fillRect(0, 0, 1, 1);
+      return Array.from(ctx.getImageData(0, 0, 1, 1).data).slice(0, 3).map((value) => {
+        const n = value / 255;
+        return n <= 0.04045 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4;
+      }).reduce((sum, n, i) => sum + n * [0.2126, 0.7152, 0.0722][i], 0);
+    };
+    return Object.fromEntries(["neutral", "success", "warning", "danger", "info"].map((tone) => {
+      const a = luminance(root.getPropertyValue(`--u-badge-${tone}-text`).trim());
+      const b = luminance(root.getPropertyValue(`--u-badge-${tone}-bg`).trim());
+      return [tone, (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)];
+    }));
+  });
+  for (const [tone, ratio] of Object.entries(result)) expect.soft(ratio, `${label}: ${tone} badge contrast`).toBeGreaterThanOrEqual(4.5);
+  return result;
+}
+
+async function expectEditorCanvas(page: Page) {
+  const canvas = await page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--u-color-canvas)";
+    document.body.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
+  await expect(page.locator(".monaco-editor:visible")).toHaveCSS("background-color", canvas);
+}
+
+for (const theme of ["dark", "light"] as const) {
+  test(`${theme}: identical workbench scenes compare palettes A B C D`, async ({ browser }, testInfo) => {
+    test.setTimeout(120_000);
+    const baseline: Record<string, Geometry> = {};
+    const report: Record<string, unknown> = {};
+    for (const palette of PALETTES) {
+      const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+      const page = await context.newPage();
+      page.setDefaultTimeout(10_000);
+      const errors: string[] = [];
+      page.on("pageerror", (error) => errors.push(error.message));
+      try {
+        await preparePaletteScene(page, theme);
+        await page.goto(`/?palette=${palette}`);
+        await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+        await expect(page.locator("html")).toHaveAttribute("data-palette", palette);
+        const record: Record<string, unknown> = {};
+        report[palette] = record;
+        record.semanticContrast = await auditSemanticTokens(page, `${palette}/${theme}`);
+        const capture = async (scene: string, controls: Record<string, Locator>) => {
+          const signature = await geometry(controls);
+          if (palette === "A") baseline[scene] = signature;
+          else expect.soft(signature, `${scene}/${theme}: ${palette} must retain A geometry`).toEqual(baseline[scene]);
+          record[`${scene}Geometry`] = signature;
+          expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+          await page.screenshot({ path: testInfo.outputPath(`${scene}-${palette}-${theme}.png`), animations: "disabled", caret: "hide" });
+        };
+
+        await openApiScene(page);
+        await expectEditorCanvas(page);
+        const send = page.getByRole("button", { name: "Send", exact: true }).first();
+        const url = page.getByRole("textbox", { name: "Request URL", exact: true });
+        record.apiContrast = await auditText({ primary: url, muted: page.getByText("Collections", { exact: true }), action: send, status: page.getByText("200 OK", { exact: true }) }, `${palette}/${theme}/API`);
+        await capture("api", { ...shellControls(page), url, send, requestTabs: page.getByRole("tablist", { name: "Open API requests" }), responseEditor: page.locator(".monaco-editor:visible"), status: page.getByText("200 OK", { exact: true }) });
+
+        await openDatabaseScene(page);
+        await expectEditorCanvas(page);
+        const run = page.getByRole("button", { name: "Run All", exact: true });
+        const selected = page.getByRole("cell", { name: "Avery Chen", exact: true });
+        record.databaseContrast = await auditText({ primary: selected.getByRole("button"), muted: page.getByRole("columnheader", { name: /^name TEXT/ }).getByText("TEXT", { exact: true }), action: run, status: page.getByText("OK", { exact: true }) }, `${palette}/${theme}/Database`);
+        await capture("database", { ...shellControls(page), editor: page.locator(".monaco-editor:visible"), run, connection: page.getByRole("combobox", { name: "SQL editor connection", exact: true }), resultTable: page.getByRole("table"), selected });
+
+        if (theme === "dark") {
+          await openSshScene(page);
+          record.sshContrast = await auditText({ tab: page.getByRole("tab", { name: /developer@dev.example.test/ }) }, `${palette}/dark/SSH`);
+          await capture("ssh", { ...shellControls(page), terminal: page.locator(".xterm-screen").first(), tab: page.getByRole("tab", { name: /developer@dev.example.test/ }) });
+          await openFlowScene(page);
+          record.flowContrast = await auditText({ primary: page.getByRole("textbox", { name: "Flow name", exact: true }), action: page.getByRole("button", { name: "Run", exact: true }), muted: page.locator(".flow-canvas-help") }, `${palette}/dark/Flow`);
+          await capture("flow", { ...shellControls(page), canvas: page.locator(".flow-canvas"), inspector: page.getByRole("complementary", { name: "Inspector", exact: true }), selectedNode: page.getByRole("group", { name: "Ready to release", exact: true }), run: page.getByRole("button", { name: "Run", exact: true }) });
+        }
+
+        // Existing theme settings continue to update mounted editors and survive reload.
+        await page.getByRole("navigation", { name: "Modules" }).getByRole("button", { name: "API Client", exact: true }).click();
+        await page.locator(".app-shell > header").getByRole("button", { name: "Settings", exact: true }).click();
+        const switched: Appearance = theme === "dark" ? "light" : "dark";
+        await page.getByRole("dialog").getByRole("combobox", { name: "Theme", exact: true }).selectOption(switched);
+        await page.keyboard.press("Escape");
+        await expect(page.locator("html")).toHaveAttribute("data-theme", switched);
+        await expectEditorCanvas(page);
+        await page.reload();
+        await expect(page.locator("html")).toHaveAttribute("data-theme", switched);
+        await expect(page.locator("html")).toHaveAttribute("data-palette", palette);
+        expect(await page.evaluate(() => localStorage.getItem("unfour.theme"))).toBe(switched);
+        expect(errors).toEqual([]);
+      } catch (error) {
+        await page.screenshot({ path: testInfo.outputPath(`failure-${palette}-${theme}.png`), animations: "disabled", caret: "hide" });
+        await testInfo.attach(`failure-${palette}-${theme}`, { body: await page.locator("body").ariaSnapshot(), contentType: "text/plain" });
+        throw error;
+      } finally {
+        await context.close();
+      }
+    }
+    const measurements = testInfo.outputPath(`measurements-${theme}.json`);
+    await writeFile(measurements, JSON.stringify(report, null, 2));
+    await testInfo.attach(`palette-${theme}-measurements`, { path: measurements, contentType: "application/json" });
+  });
+}

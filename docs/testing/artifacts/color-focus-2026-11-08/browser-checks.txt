@@ -1,0 +1,10 @@
+[WebServer] (node:46968) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 1 test using 1 worker
+
+(node:18396) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 [chromium] › apps\desktop\tests\smoke\palette-focus.spec.ts:111:1 › light C with violet focus preserves C tokens and geometry, including mounted editors (16.8s)
+
+  1 passed (18.6s)

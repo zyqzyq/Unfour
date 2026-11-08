@@ -3,6 +3,10 @@
 This document defines Unfour's workbench interaction model. It is a stable
 interaction guide, not a refactor plan or progress audit.
 
+The adopted C2 visual design is defined in [design-system.md](design-system.md).
+Its new colors, dimensions, and selected states do not change the interaction,
+execution, confirmation, or persistence rules below.
+
 ## Product Interaction Model
 
 Unfour is object-first:
@@ -129,6 +133,8 @@ Rules:
   Connect/Disconnect.
 - Icon-only actions require accessible labels and tooltips.
 - Narrow layouts should hide text labels before hiding the primary action.
+- Wrap or scroll action groups when needed; the visual layout must keep
+  existing actions reachable rather than remove them to fit the window.
 - Pending actions must prevent duplicate submission.
 
 ## Empty, Loading, Error, And Success
@@ -279,5 +285,6 @@ high-impact operations. Do not use `window.confirm`.
 - API request state belongs in `packages/api-client`.
 - SQL execution and database view state belongs in `packages/database`.
 - SSH session state belongs in `packages/ssh-terminal`.
+- Flow authoring and run state belong in `packages/flow`.
 - Shell composition belongs in `packages/app-shell` and `apps/desktop`.
 - Backend execution and security policy belong behind the Rust command bus.

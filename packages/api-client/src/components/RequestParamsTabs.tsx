@@ -257,17 +257,18 @@ export function CompactTabs<T extends string>({
   return (
     <div
       className={cn(
-        "flex h-[var(--u-size-tabbar)] shrink-0 items-center gap-1 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-3",
+        "flex h-[var(--u-size-tabbar)] shrink-0 items-center gap-1 overflow-x-auto border-b border-[var(--u-color-border)] bg-[var(--u-color-canvas)] px-3",
         className,
       )}
     >
       {items.map((item) => (
         <button
+          aria-pressed={active === item.id}
           className={cn(
-            "relative flex h-full min-w-0 items-center gap-1.5 px-2 text-[12px] font-medium text-[var(--u-color-text-muted)] transition-colors after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:bg-transparent",
+            "relative flex h-7 shrink-0 items-center gap-1.5 rounded-[var(--u-radius-md)] px-2 text-[12px] font-medium text-[var(--u-color-text-muted)] transition-colors focus-visible:outline-2 focus-visible:outline-[var(--u-color-focus)]",
             active === item.id
-              ? "text-[var(--u-color-text)] after:bg-[var(--u-color-primary)]"
-              : "hover:text-[var(--u-color-text)]",
+              ? "bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]"
+              : "hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
           )}
           key={item.id}
           onClick={() => onChange(item.id)}
@@ -275,7 +276,7 @@ export function CompactTabs<T extends string>({
         >
           <span className="truncate">{item.label}</span>
           {typeof item.meta === "number" && item.meta > 0 && (
-            <span className="rounded-[var(--u-radius-sm)] bg-[var(--u-color-surface-muted)] px-1 text-[10px] leading-4 text-[var(--u-color-text-soft)]">
+            <span className="min-w-4 rounded-[var(--u-radius-sm)] bg-[color:color-mix(in_srgb,currentColor_9%,transparent)] px-1 text-center text-[10px] leading-4">
               {item.meta}
             </span>
           )}
@@ -286,7 +287,7 @@ export function CompactTabs<T extends string>({
 }
 
 function PaneScroll({ children }: { children: React.ReactNode }) {
-  return <div className="h-full min-h-0 overflow-auto p-3">{children}</div>;
+  return <div className="h-full min-h-0 overflow-auto p-4">{children}</div>;
 }
 
 function BodyEditor({
@@ -331,7 +332,7 @@ function BodyEditor({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex min-h-[38px] shrink-0 items-center justify-between gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-3">
+      <div className="flex min-h-[44px] shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3 py-1.5">
         <SegmentedControl<RequestBodyMode>
           items={[
             { id: "none", label: "none" },
@@ -385,6 +386,7 @@ function BodyEditor({
             }}
             options={{
               fontSize: 13,
+              padding: { top: 12, bottom: 12 },
               lineNumbersMinChars: 3,
               minimap: { enabled: false },
               scrollBeyondLastLine: false,
@@ -418,9 +420,9 @@ function AuthPanel({
   onAuthChange: (value: ApiAuthConfig) => void;
 }) {
   const inputClass =
-    "h-[var(--u-size-input)] rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-bg)] px-2 text-[12px] text-[var(--u-color-text)] outline-none focus:border-[var(--u-color-focus)]";
+    "h-[var(--u-size-input)] rounded-[var(--u-radius-md)] border border-[var(--u-color-input)] bg-[var(--u-color-canvas)] px-3 text-[12px] text-[var(--u-color-text)] outline-none focus:border-[var(--u-color-focus)]";
   return (
-    <div className="mb-4 space-y-3">
+    <div className="mb-4 space-y-4 rounded-[var(--u-radius-lg)] border border-[var(--u-color-border)] bg-[var(--u-color-surface)] p-4">
       <div className="flex items-center justify-between gap-3">
         <span className="text-[12px] font-semibold uppercase text-[var(--u-color-text-soft)]">
           Auth
@@ -530,14 +532,14 @@ function SegmentedControl<T extends string>({
   value: T;
 }) {
   return (
-    <div className="flex overflow-hidden rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)]">
+    <div className="flex max-w-full gap-0.5 overflow-x-auto rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-bg)] p-0.5">
       {items.map((item) => (
         <button
           aria-pressed={value === item.id}
           className={cn(
-            "h-[var(--u-size-button-compact)] border-r border-[var(--u-color-border)] px-2 text-[12px] last:border-r-0",
+            "h-[var(--u-size-button-compact)] shrink-0 rounded-[var(--u-radius-sm)] px-2 text-[12px] focus-visible:outline-2 focus-visible:outline-[var(--u-color-focus)]",
             value === item.id
-              ? "bg-[var(--u-color-surface-active)] text-[var(--u-color-text)]"
+              ? "bg-[var(--u-color-canvas)] font-medium text-[var(--u-color-primary)] shadow-[var(--u-shadow-sm)]"
               : "bg-[var(--u-color-bg)] text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
           )}
           key={item.id}

@@ -110,7 +110,7 @@ export function SettingsDialog({
             }}
           />
         </DialogHeader>
-        <DialogBody className="grid h-[600px] grid-cols-[154px_minmax(0,1fr)] overflow-hidden p-0">
+        <DialogBody className="grid h-[600px] grid-cols-[180px_minmax(0,1fr)] overflow-hidden p-0">
           <nav
             aria-label={t("app.settings.navigationLabel")}
             className="border-r border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-2"
@@ -121,7 +121,7 @@ export function SettingsDialog({
                 <Button
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "mb-1 w-full justify-start px-2",
+                    "mb-1 h-9 w-full justify-start px-3",
                     active &&
                       "border-[var(--u-color-primary-soft)] bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)] hover:bg-[var(--u-color-primary-soft)]",
                   )}
@@ -136,7 +136,7 @@ export function SettingsDialog({
               );
             })}
           </nav>
-          <section className="min-w-0 overflow-y-auto p-4">
+          <section className="min-w-0 overflow-y-auto p-6">
             {resolvedActiveSection === "general" && (
               <SettingsGeneral>{renderEmbeddedSections("general")}</SettingsGeneral>
             )}

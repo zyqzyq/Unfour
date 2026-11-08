@@ -1,0 +1,8 @@
+
+ RUN  v4.1.9 E:/unfour-workspace/unfour
+
+
+ Test Files  165 passed (165)
+      Tests  1225 passed (1225)
+   Start at  21:57:28
+   Duration  103.44s (transform 7.54s, setup 35.64s, import 89.06s, tests 65.91s, environment 177.44s)

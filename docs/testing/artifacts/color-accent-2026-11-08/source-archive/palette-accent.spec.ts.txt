@@ -1,0 +1,165 @@
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import { writeFile } from "node:fs/promises";
+import { openApiScene, openDatabaseScene, preparePaletteScene } from "./palette-experiment-fixtures";
+
+type Tokens = Record<string, string>;
+type Geometry = Record<string, { bounds: number[]; styles: Record<string, string> }>;
+type EditorColors = { focus: string; canvas: string; cursor: string; bracket: string };
+type Measurements = { light: Tokens; dark?: Tokens; geometry: Record<string, Geometry>; editor: Record<string, EditorColors> };
+
+async function tokens(page: Page): Promise<Tokens> {
+  return page.locator("html").evaluate((root) => {
+    const style = getComputedStyle(root);
+    // Exclude only third-party variables lazily injected by Monaco.
+    return Object.fromEntries(Array.from(style).filter((name) => name.startsWith("--") && !name.startsWith("--vscode-") && !name.startsWith("--monaco-")).sort().map((name) => [name, style.getPropertyValue(name).trim()]));
+  });
+}
+
+async function geometry(controls: Record<string, Locator>): Promise<Geometry> {
+  const output: Geometry = {};
+  for (const [name, control] of Object.entries(controls)) {
+    output[name] = await control.evaluate((element) => {
+      const rect = element.getBoundingClientRect(), style = getComputedStyle(element);
+      const keys = ["fontFamily", "fontSize", "fontWeight", "fontStyle", "lineHeight", "letterSpacing", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "borderRadius", "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth", "gap", "display"] as const;
+      return { bounds: [rect.x, rect.y, rect.width, rect.height].map((value) => Math.round(value * 100) / 100), styles: Object.fromEntries(keys.map((key) => [key, style[key]])) };
+    });
+  }
+  return output;
+}
+
+async function verifyTitlebar(page: Page) {
+  // Restore browser-induced scroll in overflow-hidden shell ancestors without
+  // changing the feature's selection, cursor, layout, or production behavior.
+  await page.evaluate(() => {
+    document.scrollingElement?.scrollTo(0, 0);
+    document.querySelectorAll<HTMLElement>(".app-shell, .app-shell > header, .app-shell > header *").forEach((node) => {
+      if (node.scrollTop || node.scrollLeft) node.scrollTo(0, 0);
+    });
+  });
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  const titlebar = page.locator(".app-shell > header"), outer = await titlebar.boundingBox();
+  expect(outer).not.toBeNull();
+  for (const control of [titlebar.getByRole("button", { name: /Atlas Development/ }), titlebar.getByRole("button", { name: "Settings", exact: true })]) {
+    await expect(control).toBeInViewport({ ratio: 1 });
+    const bounds = await control.boundingBox();
+    expect(bounds!.y).toBeGreaterThanOrEqual(outer!.y);
+    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(outer!.y + outer!.height);
+  }
+}
+
+async function resolvedColor(page: Page, name: string) {
+  return page.evaluate((token) => {
+    const probe = document.createElement("span");
+    probe.style.color = `var(${token})`; document.body.append(probe);
+    const value = getComputedStyle(probe).color; probe.remove(); return value;
+  }, name);
+}
+
+async function inspectMonaco(page: Page): Promise<EditorColors> {
+  const editor = page.locator(".monaco-editor:visible");
+  await editor.click({ position: { x: 120, y: 22 } });
+  await page.keyboard.press("Control+Home");
+  const focus = await resolvedColor(page, "--u-color-focus"), canvas = await resolvedColor(page, "--u-color-canvas");
+  const cursor = editor.locator(".cursor").first(), bracket = editor.locator(".bracket-match").first();
+  await expect(cursor).toHaveCSS("background-color", focus);
+  await expect(bracket).toHaveCSS("border-top-color", focus);
+  await expect(editor).toHaveCSS("background-color", canvas);
+  return { focus, canvas, cursor: await cursor.evaluate((node) => getComputedStyle(node).backgroundColor), bracket: await bracket.evaluate((node) => getComputedStyle(node).borderTopColor) };
+}
+
+async function changeTheme(page: Page, theme: "light" | "dark") {
+  await page.locator(".app-shell > header").getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("dialog").getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+}
+
+test("light violet accent changes only C interaction colors and keeps mounted theme switching", async ({ browser }, testInfo) => {
+  test.setTimeout(120_000);
+  const measurements: Record<string, Measurements> = {};
+  for (const variant of ["B", "C", "C-accent"] as const) {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+    const page = await context.newPage();
+    page.setDefaultTimeout(10_000);
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    try {
+      await preparePaletteScene(page, "light");
+      await page.goto(variant === "C-accent" ? "/?palette=C&accent=violet" : `/?palette=${variant}`);
+      await expect(page.locator("html")).toHaveAttribute("data-palette", variant === "B" ? "B" : "C");
+      if (variant === "C-accent") await expect(page.locator("html")).toHaveAttribute("data-palette-accent", "violet");
+      else await expect(page.locator("html")).not.toHaveAttribute("data-palette-accent", "violet");
+      const record: Measurements = { light: await tokens(page), geometry: {}, editor: {} };
+      measurements[variant] = record;
+      const capture = async (scene: "api" | "database", controls: Record<string, Locator>) => {
+        await verifyTitlebar(page);
+        record.geometry[scene] = await geometry(controls);
+        await page.screenshot({ path: testInfo.outputPath(`${scene}-${variant}.png`), animations: "disabled", caret: "hide" });
+      };
+      await openApiScene(page);
+      const responseEditor = await page.locator(".monaco-editor:visible").elementHandle();
+      const url = page.getByRole("textbox", { name: "Request URL", exact: true });
+      await expect(url).toBeFocused();
+      await capture("api", {
+        titlebar: page.locator(".app-shell > header"), main: page.getByRole("main"), url,
+        urlBar: url.locator(".."), send: page.getByRole("button", { name: "Send", exact: true }).first(), editor: page.locator(".monaco-editor:visible"),
+      });
+      await openDatabaseScene(page);
+      const sqlEditor = await page.locator(".monaco-editor:visible").elementHandle();
+      const cell = page.getByRole("cell", { name: "Avery Chen", exact: true });
+      await expect(cell.getByRole("button")).toBeFocused();
+      await capture("database", { main: page.getByRole("main"), editor: page.locator(".monaco-editor:visible"), run: page.getByRole("button", { name: "Run All", exact: true }), table: page.getByRole("table"), cell });
+
+      // Capture both full scenes before clipping; native clips can transiently
+      // change browser capture scroll state even when DOM bounds are restored.
+      await page.getByRole("navigation", { name: "Modules" }).getByRole("button", { name: "API Client", exact: true }).click();
+      await url.focus();
+      await page.mouse.move(0, 0);
+      await verifyTitlebar(page);
+      await page.screenshot({ path: testInfo.outputPath(`detail-api-${variant}.png`), clip: { x: 0, y: 40, width: 1440, height: 310 }, animations: "disabled", caret: "hide" });
+      await page.getByRole("navigation", { name: "Modules" }).getByRole("button", { name: "Database", exact: true }).click();
+      await cell.getByRole("button").focus();
+      await page.mouse.move(0, 0);
+      await verifyTitlebar(page);
+      await page.screenshot({ path: testInfo.outputPath(`detail-database-${variant}.png`), clip: { x: 0, y: 40, width: 1440, height: 300 }, animations: "disabled", caret: "hide" });
+
+      // Cursor inspection follows every screenshot to avoid keyboard-induced
+      // ancestor scrolling affecting the comparison scene.
+      await page.getByRole("navigation", { name: "Modules" }).getByRole("button", { name: "API Client", exact: true }).click();
+      record.editor.initialLight = await inspectMonaco(page);
+      await page.getByRole("navigation", { name: "Modules" }).getByRole("button", { name: "Database", exact: true }).click();
+      await changeTheme(page, "dark");
+      record.dark = await tokens(page);
+      expect(await sqlEditor?.evaluate((element) => element.isConnected)).toBe(true);
+      await expect(page.locator(".monaco-editor:visible")).toHaveCSS("background-color", await resolvedColor(page, "--u-color-canvas"));
+      await page.getByRole("navigation", { name: "Modules" }).getByRole("button", { name: "API Client", exact: true }).click();
+      expect(await responseEditor?.evaluate((element) => element.isConnected)).toBe(true);
+      record.editor.mountedDark = await inspectMonaco(page);
+      await changeTheme(page, "light");
+      record.editor.mountedLight = await inspectMonaco(page);
+      expect(await tokens(page)).toEqual(record.light);
+      expect(await responseEditor?.evaluate((element) => element.isConnected)).toBe(true);
+      await page.getByRole("navigation", { name: "Modules" }).getByRole("button", { name: "Database", exact: true }).click();
+      expect(await sqlEditor?.evaluate((element) => element.isConnected)).toBe(true);
+      await expect(page.locator(".monaco-editor:visible")).toHaveCSS("background-color", await resolvedColor(page, "--u-color-canvas"));
+      await expect(page.getByRole("cell", { name: "Jordan Park", exact: true })).toBeVisible();
+      expect(errors).toEqual([]);
+      if (variant === "C-accent") {
+        const changed = Object.keys(record.light).filter((name) => record.light[name] !== measurements.C.light[name]);
+        expect(changed).toEqual(["--accent", "--accent-soft", "--accent-strong", "--focus", "--u-color-focus", "--u-color-primary", "--u-color-primary-hover", "--u-color-primary-soft"]);
+        expect(Object.fromEntries(["--u-color-primary", "--u-color-primary-hover", "--u-color-primary-soft", "--u-color-focus"].map((name) => [name, record.light[name]]))).toEqual({ "--u-color-primary": "#6e40bd", "--u-color-primary-hover": "#5d32a8", "--u-color-primary-soft": "#eee7fa", "--u-color-focus": "#7640cd" });
+        expect(record.dark).toEqual(measurements.C.dark);
+        expect(record.geometry).toEqual(measurements.C.geometry);
+        expect(record.geometry).toEqual(measurements.B.geometry);
+      }
+    } catch (error) {
+      await page.screenshot({ path: testInfo.outputPath(`failure-${variant}.png`), animations: "disabled", caret: "hide" });
+      throw error;
+    } finally {
+      await context.close();
+    }
+  }
+  const path = testInfo.outputPath("measurements.json");
+  await writeFile(path, JSON.stringify({ measurements }, null, 2));
+  await testInfo.attach("accent-comparison-measurements", { path, contentType: "application/json" });
+});

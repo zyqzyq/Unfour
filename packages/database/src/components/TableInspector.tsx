@@ -54,23 +54,24 @@ export function TableInspector({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <Toolbar className="h-8">
-        <ToolbarGroup className="min-w-0">
-          <span className="truncate text-[12px] font-semibold text-[var(--u-color-text)]">
+      <Toolbar className="h-auto min-h-11 flex-wrap gap-y-2 px-3 py-1.5">
+        <ToolbarGroup className="min-w-0 gap-2">
+          <span className="truncate font-mono text-[12px] font-semibold text-[var(--u-color-text)]">
             {table ? qualifiedTableName(table) : t("database.structure.title")}
           </span>
           {table ? <StatusBadge>{table.kind}</StatusBadge> : null}
         </ToolbarGroup>
-        <ToolbarGroup>
+        <ToolbarGroup className="flex-wrap gap-1.5">
           {activeTab === "ddl" && structure?.ddl ? <Button onClick={() => void copyDdl()} size="sm" type="button" variant="ghost"><Copy size={13} />{t("database.export.copyDdl")}</Button> : null}
           {onSwitchToData ? (
-            <button
-              className="inline-flex h-[22px] items-center rounded-[5px] px-2 text-[12px] font-medium text-[var(--u-color-text-muted)] transition-colors duration-150 hover:text-[var(--u-color-text)]"
+            <Button
               onClick={onSwitchToData}
+              size="sm"
               type="button"
+              variant="ghost"
             >
               {t("database.editor.dataView")}
-            </button>
+            </Button>
           ) : null}
           <IconButton disabled={loading} label={t("database.structure.refresh")} onClick={onRefresh}>
             <RefreshCw size={13} />
@@ -145,7 +146,7 @@ function ColumnsGrid({
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto">
+    <div className="min-h-0 flex-1 overflow-auto bg-[var(--u-color-canvas)]">
       <table className="w-full table-fixed text-left text-[12px]">
         <colgroup>
           <col className="w-[30%]" />
@@ -208,15 +209,15 @@ function DetailPane({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col border-t border-[var(--u-color-border)]">
-      <div className="flex h-7 shrink-0 items-center gap-1 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-1">
+      <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-1 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2 py-1">
         {tabs.map((tab) => {
           const active = tab.id === activeTab;
           return (
             <button
-              className={`h-[22px] rounded-[5px] px-2.5 text-[12px] font-medium ${
+              className={`h-7 rounded-[var(--u-radius-md)] px-3 text-[12px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-[var(--u-color-focus)] ${
                 active
-                  ? "bg-[var(--u-color-surface)] text-[var(--u-color-text)] shadow-[0_1px_2px_rgba(0,0,0,0.08)]"
-                  : "text-[var(--u-color-text-muted)] hover:text-[var(--u-color-text)]"
+                  ? "bg-[var(--u-color-primary-soft)] text-[var(--u-color-primary)]"
+                  : "text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]"
               }`}
               key={tab.id}
               onClick={() => onSelectTab(tab.id)}
@@ -227,7 +228,7 @@ function DetailPane({
           );
         })}
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">{renderDetail({ activeTab, structure, table, t })}</div>
+      <div className="min-h-0 flex-1 overflow-auto bg-[var(--u-color-canvas)]">{renderDetail({ activeTab, structure, table, t })}</div>
     </div>
   );
 }
@@ -338,7 +339,7 @@ function renderDetail({
     return <EmptyState className="m-2 min-h-0 flex-1">{t("database.structure.emptyDdl")}</EmptyState>;
   }
   return (
-    <pre className="m-2 whitespace-pre-wrap break-words rounded border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-2 font-mono text-[12px] text-[var(--u-color-text)]">
+    <pre className="m-3 whitespace-pre-wrap break-words rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-surface)] p-4 font-mono text-[12px] leading-relaxed text-[var(--u-color-text)]">
       {structure.ddl}
     </pre>
   );

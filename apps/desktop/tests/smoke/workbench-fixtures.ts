@@ -1,0 +1,178 @@
+import { expect, type Page } from "@playwright/test";
+
+export type Appearance = "light" | "dark";
+export const MEMBER_SQL = "SELECT id, name, role, status, last_active\nFROM users WHERE status = 'active'\nORDER BY last_active DESC LIMIT 5;";
+const createdAt = "2026-11-08T06:20:00.000Z";
+const common = { workspaceId: "mock-workspace", createdAt, updatedAt: createdAt, deletedAt: null, revision: 1, syncStatus: "local", remoteId: null };
+// Browser terminal history normalizes CRLF. Explicit cursor-column reset keeps
+// these disposable output lines aligned without changing terminal behavior.
+const terminalOutput = [
+  "Atlas development server", "Ubuntu 24.04 LTS · workspace: atlas", "",
+  "$ git status --short", " M packages/api-client/src/request.ts", " M packages/database/src/editor.ts", "",
+  "$ pnpm test", "\u001b[92m✓ API client · 24 tests passed\u001b[0m", "\u001b[92m✓ Database · 18 tests passed\u001b[0m", "",
+  "Test Files  2 passed (2)", "     Tests  42 passed (42)", "", "$ ",
+].join("\n\u001b[1G");
+const members = [
+  ["101", "Avery Chen", "Owner", "active", "2026-11-08 14:12:06"],
+  ["102", "Morgan Lee", "Developer", "active", "2026-11-08 13:48:21"],
+  ["103", "Sam Rivera", "Developer", "active", "2026-11-08 12:35:48"],
+  ["104", "Taylor Kim", "Reviewer", "active", "2026-11-08 11:09:32"],
+  ["105", "Jordan Park", "Developer", "active", "2026-11-08 10:27:14"],
+];
+const queryResult = {
+  columns: [
+    { name: "id", dataType: "INTEGER" }, { name: "name", dataType: "TEXT" },
+    { name: "role", dataType: "VARCHAR" }, { name: "status", dataType: "VARCHAR" },
+    { name: "last_active", dataType: "TIMESTAMP" },
+  ],
+  rows: members,
+  affectedRows: 0,
+  durationMs: 7,
+  safety: { classification: "read", requiresConfirmation: false, confirmed: true, message: null },
+};
+const savedRequest = {
+  ...common, id: "workbench-members", collectionId: "workbench-collection", folderId: null,
+  sortOrder: 0, name: "List members", method: "GET", url: "https://api.example.test/v1/members",
+  headersJson: JSON.stringify([
+    { key: "Accept", value: "application/json", enabled: true },
+    { key: "X-Client", value: "unfour-desktop", enabled: true },
+  ]),
+  queryJson: JSON.stringify([
+    { key: "status", value: "active", enabled: true },
+    { key: "limit", value: "5", enabled: true },
+    { key: "include", value: "permissions", enabled: false },
+  ]),
+  bodyKind: "none", body: "",
+};
+
+/** Fixture interception stays in Playwright: production mocks and services are untouched. */
+export async function prepareWorkbenchScene(page: Page, theme: Appearance) {
+  await page.clock.setFixedTime(new Date(createdAt));
+  await page.addInitScript((mode) => {
+    localStorage.setItem("unfour.locale", "en");
+    if (!localStorage.getItem("unfour.theme")) localStorage.setItem("unfour.theme", mode);
+  }, theme);
+  await page.route("**/browser-mocks/state.ts*", async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, body: await response.text() + `
+      mockWorkspace.name = 'Atlas Development';
+      mockStore.collections.push(${JSON.stringify({ ...common, id: "workbench-collection", name: "Workspace API", description: null })});
+      mockStore.savedRequests.push(${JSON.stringify(savedRequest)});
+      mockStore.databaseConnections.push(${JSON.stringify({ ...common, id: "workbench-db", name: "Atlas PostgreSQL", driver: "postgres", database: "app", host: "db.example.test", port: 5432, username: "developer", sslMode: null, sqlitePath: null, credentialRef: null, readOnly: true })});
+      mockStore.savedSql.push(${JSON.stringify({ ...common, id: "workbench-query", connectionId: "workbench-db", catalog: "app", schema: "public", name: "Active members", sql: "SELECT id, name FROM users LIMIT 5;" })});
+      mockStore.sshConnections.push(${JSON.stringify({ ...common, id: "workbench-ssh", name: "Development server", host: "dev.example.test", port: 22, username: "developer", authKind: "agent", keyPath: null, credentialRef: null })});
+      mockStore.sshSessions.push(${JSON.stringify({ sessionId: "workbench-session", workspaceId: "mock-workspace", connectionId: "workbench-ssh", host: "dev.example.test", port: 22, username: "developer", authKind: "agent", status: "connected", cols: 120, rows: 32, createdAt, updatedAt: createdAt })});
+      mockStore.sshEvents.push(${JSON.stringify({ sessionId: "workbench-session", kind: "output", data: terminalOutput, createdAt })});
+    ` });
+  });
+  await page.route("**/browser-mocks/api-requests.ts*", async (route) => {
+    const response = await route.fetch();
+    const source = await response.text();
+    const body = source.replace("durationMs: Math.round(performance.now() - started)", "durationMs: 137");
+    expect(body, "The fixture must intercept the browser API adapter timing").not.toBe(source);
+    await route.fulfill({ response, body });
+  });
+  await page.route("**/browser-mocks/database-queries.ts*", async (route) => {
+    const response = await route.fetch();
+    const source = await response.text();
+    const body = source.replace(/function executeMockDatabaseQuery\(input\) \{/, (match) =>
+      `${match}\nif (input.sql.includes("FROM users")) return ${JSON.stringify(queryResult)};`,
+    );
+    expect(body, "The fixture must intercept SQL execution, not insert a static results panel").not.toBe(source);
+    await route.fulfill({ response, body });
+  });
+  await page.route("**/browser-mocks/database.ts*", async (route) => {
+    const response = await route.fetch();
+    const source = await response.text();
+    // The browser adapter intentionally rejects native SQL scripts. Supply the
+    // script response contract only in this disposable visual test, after Run All
+    // dispatches it; parsing/physical-session guarantees remain native-only.
+    const body = source.replace('["database_script_execute", unsupportedScript]',
+      '["database_script_execute", (args) => ({ statements: [{ index: 1, start: 0, end: args.input.sql.length, sql: args.input.sql, status: "success", result: executeMockDatabaseQuery(args.input), error: null }], stopped: false })]');
+    expect(body, "The test adapter must handle the dispatched Run All command").not.toBe(source);
+    await route.fulfill({ response, body });
+  });
+  await page.route("https://api.example.test/v1/members**", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    headers: { "x-request-id": "req_atlas_0142", "cache-control": "no-store" },
+    body: JSON.stringify({
+      workspace: "atlas", total: 5, has_more: false,
+      data: members.map(([id, name, role, status]) => ({ id: Number(id), name, role: role.toLowerCase(), status })),
+    }, null, 2),
+  }));
+}
+
+export async function openApiScene(page: Page) {
+  const sidebar = page.getByRole("complementary");
+  await sidebar.getByText("List members", { exact: true }).click();
+  const url = page.getByRole("textbox", { name: "Request URL", exact: true });
+  await expect(url).toHaveValue(`${savedRequest.url}?status=active&limit=5`);
+  await page.getByRole("button", { name: "Send", exact: true }).first().click();
+  await expect(page.getByText("200 OK", { exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByText("137ms", { exact: true })).toBeVisible();
+  await expect(page.locator(".monaco-editor:visible")).toBeVisible();
+  await url.focus();
+  await page.mouse.move(0, 0);
+}
+
+export async function openDatabaseScene(page: Page) {
+  await page.getByRole("navigation", { name: "Modules" }).getByRole("button", { name: "Database", exact: true }).click();
+  const tree = page.getByRole("complementary").getByRole("tree");
+  await tree.getByRole("button", { name: "Atlas PostgreSQL", exact: true }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Connect", exact: true }).click();
+  await expect(tree.getByRole("button", { name: "users", exact: true })).toBeVisible();
+  await tree.locator('[data-tree-id="workbench-db:catalog:app:saved-sql"]').getByRole("button", { name: "Expand", exact: true }).click();
+  await tree.getByRole("button", { name: "Active members", exact: true }).dblclick();
+  const editor = page.locator(".monaco-editor:visible");
+  await expect(editor).toBeVisible();
+  // Edit through Monaco's native keyboard path, then execute through the page's Run All action.
+  await editor.click({ position: { x: 120, y: 30 } });
+  await page.keyboard.press("Control+A");
+  await page.keyboard.insertText(MEMBER_SQL);
+  await expect(editor).toContainText("last_active");
+  await page.getByRole("button", { name: "Run All", exact: true }).click();
+  const cell = page.getByRole("cell", { name: "Avery Chen", exact: true });
+  await expect(cell).toBeVisible();
+  await expect(page.getByRole("row")).toHaveCount(6);
+  const divider = page.getByRole("separator", { name: /Resize vertical split/ });
+  const bounds = await divider.boundingBox();
+  if (!bounds) throw new Error("The SQL/results divider has no layout");
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + bounds.width / 2, 360, { steps: 10 });
+  await page.mouse.up();
+  await cell.click();
+  await cell.getByRole("button").focus();
+  await expect(page.getByRole("cell", { name: "Jordan Park", exact: true })).toBeInViewport();
+  await page.mouse.move(0, 0);
+}
+
+export async function openSshScene(page: Page) {
+  await page.getByRole("navigation", { name: "Modules" }).getByRole("button", { name: "SSH Terminal", exact: true }).click();
+  await expect(page.locator(".xterm-screen").first()).toBeVisible();
+  await expect(page.getByRole("tab", { name: /developer@dev.example.test/ })).toBeVisible();
+  await page.mouse.move(0, 0);
+}
+
+export async function openFlowScene(page: Page) {
+  await page.getByRole("navigation", { name: "Modules" }).getByRole("button", { name: "Flow", exact: true }).click();
+  await page.getByRole("button", { name: "New Flow", exact: true }).click();
+  await page.getByRole("textbox", { name: "Flow name", exact: true }).fill("Release readiness");
+  const inspector = page.getByRole("complementary", { name: "Inspector", exact: true });
+  await inspector.getByRole("button", { name: "Add input", exact: true }).click();
+  await inspector.getByRole("textbox", { name: "Input name", exact: true }).fill("ready");
+  await inspector.getByRole("combobox", { name: "Type", exact: true }).selectOption("boolean");
+  await page.getByRole("group", { name: "API Request", exact: true }).click();
+  await inspector.getByLabel("Referenced resource", { exact: true }).selectOption("workbench-members");
+  await inspector.getByRole("textbox", { name: "Step name", exact: true }).fill("Check workspace");
+  await page.getByRole("button", { name: "Insert node · Check workspace → End", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Condition", exact: true }).click();
+  await inspector.getByRole("textbox", { name: "Step name", exact: true }).fill("Ready to release");
+  await page.getByRole("button", { name: "Fit view", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText("r1", { exact: true })).toBeVisible();
+  await expect(page.locator(".react-flow__node")).toHaveCount(4);
+  await inspector.getByRole("textbox", { name: "Step name", exact: true }).focus();
+  await page.mouse.move(0, 0);
+}

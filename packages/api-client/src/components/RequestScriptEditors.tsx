@@ -23,14 +23,14 @@ export function RequestScriptEditors({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--u-color-bg)]">
-      <div className="flex h-8 shrink-0 items-center gap-1 border-b border-[var(--u-color-border)] px-3">
+      <div className="flex min-h-[42px] shrink-0 flex-wrap items-center gap-1 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3 py-1.5">
         {(["pre", "post"] as const).map((kind) => (
           <button
             aria-pressed={active === kind}
             className={cn(
-              "h-6 rounded-[var(--u-radius-sm)] px-2 text-[12px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--u-color-focus)]",
+              "h-7 shrink-0 rounded-[var(--u-radius-md)] px-2 text-[12px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--u-color-focus)]",
               active === kind
-                ? "bg-[var(--u-color-surface-active)] text-[var(--u-color-text)]"
+                ? "bg-[var(--u-color-primary-soft)] font-medium text-[var(--u-color-primary)]"
                 : "text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
             )}
             key={kind}
@@ -62,7 +62,8 @@ export function RequestScriptEditors({
           onChange={(next) => onChange(next ?? "")}
           options={{
             automaticLayout: true,
-            fontSize: 12,
+            fontSize: 13,
+            padding: { top: 12, bottom: 12 },
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
             tabSize: 2,

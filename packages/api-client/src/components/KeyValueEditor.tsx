@@ -31,12 +31,12 @@ export function KeyValueEditor({
   }
 
   const cellInputClass =
-    "h-[32px] rounded-none border-0 bg-transparent px-0 text-[12px] hover:border-0 focus:border-0 focus:ring-0 focus-visible:outline-none disabled:bg-transparent disabled:text-[var(--u-color-text-soft)]";
+    "h-[36px] min-w-0 rounded-none border-0 bg-transparent px-1 font-mono text-[12px] shadow-none hover:border-0 focus:border-0 focus:bg-[var(--u-color-primary-soft)] focus:ring-0 focus-visible:outline-none disabled:bg-transparent disabled:text-[var(--u-color-text-soft)]";
   const rows = [...items, { key: "", value: "", enabled: true }];
   const duplicateKeys = findDuplicateKeys(items);
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <div className={cn("flex items-center", showTitle ? "justify-between" : "justify-end")}>
         {showTitle && (
           <span className="text-xs font-semibold uppercase text-[var(--u-color-text-muted)]">
@@ -53,8 +53,8 @@ export function KeyValueEditor({
           {t("api.keyValue.add")}
         </Button>
       </div>
-      <div className="overflow-hidden rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)]">
-        <div className="grid min-h-[28px] grid-cols-[28px_minmax(120px,1fr)_minmax(120px,1fr)_32px] items-center gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2 text-[length:var(--u-font-size-caption)] font-semibold uppercase text-[var(--u-color-text-muted)]">
+      <div className="overflow-hidden rounded-[var(--u-radius-lg)] border border-[var(--u-color-border)] bg-[var(--u-color-canvas)]">
+        <div className="grid min-h-[32px] grid-cols-[24px_minmax(70px,1fr)_minmax(70px,1fr)_28px] items-center gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--u-color-text-muted)]">
           <span />
           <span>{t("api.keyValue.key")}</span>
           <span>{t("api.keyValue.value")}</span>
@@ -62,12 +62,12 @@ export function KeyValueEditor({
         </div>
         {rows.map((item, index) => (
           <div
-            className="grid min-h-[34px] grid-cols-[28px_minmax(120px,1fr)_minmax(120px,1fr)_32px] items-center gap-2 border-b border-[var(--u-color-border)] px-2 last:border-b-0 last-of-type:rounded-b-[var(--u-radius-sm)]"
+            className="grid min-h-[38px] grid-cols-[24px_minmax(70px,1fr)_minmax(70px,1fr)_28px] items-center gap-2 border-b border-[var(--u-color-border)] px-2 transition-colors last:border-b-0 focus-within:bg-[var(--u-color-surface)] hover:bg-[var(--u-color-surface)]"
             key={`${title}-${index}`}
           >
             <input
               checked={index === items.length ? false : item.enabled}
-              className="h-4 w-4"
+              className="h-3.5 w-3.5 accent-[var(--u-color-primary)]"
               onChange={(event) => update(index, { enabled: event.target.checked })}
               type="checkbox"
             />

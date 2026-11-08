@@ -35,7 +35,7 @@ export function ActiveEnvironmentSelect({
         <Button
           aria-label={t("variables.activeEnvironment")}
           aria-description={description}
-          className="max-w-[132px] justify-start gap-1.5 border-transparent bg-[var(--u-color-surface)] px-1.5 font-medium shadow-none hover:bg-[var(--u-color-surface-hover)]"
+          className="max-w-[156px] justify-start gap-2 border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-2.5 font-medium shadow-none hover:bg-[var(--u-color-surface-hover)]"
           size="sm"
           title={[t("variables.environmentPrefix", {
             name: activeEnvironment?.name ?? t("variables.noEnvironment"),

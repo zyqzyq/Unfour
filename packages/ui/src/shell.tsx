@@ -31,10 +31,10 @@ export function AppShellFrame({
       )}
     >
       {globalToolbar}
-      <div className="flex min-h-0 flex-1">
+      <div className="u-workbench flex min-h-0 flex-1">
         {activityBar}
         {sidebar}
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="u-workspace-frame flex min-w-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1">
             <div className="flex min-w-0 flex-1 flex-col">{children}</div>
             {rightInspector}
@@ -57,7 +57,7 @@ export function ActivityBar({
   return (
     <aside
       className={cn(
-        "flex w-[48px] shrink-0 flex-col items-center border-r border-[var(--u-color-border)] bg-[var(--u-color-chrome)] py-2",
+        "u-activitybar flex w-[72px] shrink-0 flex-col items-center bg-[var(--u-color-chrome)] px-2 py-3",
         className,
       )}
     >
@@ -81,7 +81,7 @@ export function GlobalToolbar({
   return (
     <header
       className={cn(
-        "flex h-[var(--u-size-global-toolbar)] shrink-0 items-center border-b border-[var(--u-color-border)] bg-[var(--u-color-chrome)] text-[var(--u-color-text)]",
+        "u-titlebar flex h-[var(--u-size-global-toolbar)] shrink-0 items-center bg-[var(--u-color-chrome)] text-[var(--u-color-text)]",
         className,
       )}
     >
@@ -119,7 +119,7 @@ export function MainWorkspace({
   tabBar: React.ReactNode;
 }) {
   return (
-    <main className={cn("flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--u-color-bg)]", className)}>
+    <main className={cn("flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--u-color-canvas)]", className)}>
       {tabBar}
       <section className="min-h-0 flex-1 overflow-hidden p-2">{children}</section>
     </main>

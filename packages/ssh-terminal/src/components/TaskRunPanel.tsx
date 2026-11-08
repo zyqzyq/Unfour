@@ -126,7 +126,7 @@ export function TaskRunPanel({
   return (
     <section
       aria-live="polite"
-      className="flex shrink-0 flex-col border-t border-[var(--u-color-border)] bg-[var(--u-color-bg)]"
+      className="flex shrink-0 flex-col border-t border-[var(--u-color-border)] bg-[var(--u-color-canvas)]"
       style={{ height }}
     >
       <div
@@ -137,7 +137,7 @@ export function TaskRunPanel({
       >
         <span className="h-0.5 w-8 rounded-full bg-[var(--u-color-border-strong)]" />
       </div>
-      <div className="flex h-[var(--u-size-section-toolbar)] items-center justify-between border-b border-[var(--u-color-border)] px-2">
+      <div className="flex h-[var(--u-size-section-toolbar)] items-center justify-between gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-4">
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-[12px] font-semibold text-[var(--u-color-text)]">
             {task.task.name}
@@ -178,7 +178,7 @@ export function TaskRunPanel({
         </div>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-[300px_minmax(0,1fr)]">
-        <ol className="min-h-0 overflow-y-auto border-r border-[var(--u-color-border)] py-1">
+        <ol className="min-h-0 overflow-y-auto border-r border-[var(--u-color-border)] bg-[var(--u-color-surface)] p-2">
           {task.steps
             .filter((step) => step.enabled)
             .map((step) => {
@@ -192,7 +192,7 @@ export function TaskRunPanel({
                   )
                 : null;
               return (
-                <li className="px-2 py-1.5" key={step.id}>
+                <li className="mb-1 rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-canvas)] px-2 py-2.5" key={step.id}>
                   <div className="flex items-center gap-2 text-[12px]">
                     <span className="w-5 text-right font-mono text-[var(--u-color-text-soft)]">
                       {step.position + 1}
@@ -233,7 +233,7 @@ export function TaskRunPanel({
             })}
         </ol>
         <pre
-          className="min-h-0 overflow-auto whitespace-pre-wrap break-words p-2 font-mono text-[11px] leading-5 text-[var(--u-color-text)]"
+          className="min-h-0 overflow-auto whitespace-pre-wrap break-words bg-[var(--u-color-canvas)] p-4 font-mono text-[12px] leading-6 text-[var(--u-color-text)]"
           ref={outputRef}
         >
           {hasLiveTranscript ? (

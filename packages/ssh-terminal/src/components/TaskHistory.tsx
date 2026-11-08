@@ -31,7 +31,7 @@ export function TaskHistory({
   }
   return (
     <div className="flex min-h-0 flex-1 flex-col border-t border-[var(--u-color-border)] bg-[var(--u-color-surface)]">
-      <div className="flex h-[var(--u-size-section-toolbar)] shrink-0 items-center justify-between border-b border-[var(--u-color-border)] px-2">
+      <div className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--u-color-border)] px-3">
         <span className="text-[12px] font-semibold text-[var(--u-color-text)]">
           {t("ssh.tasks.history.title")}
         </span>

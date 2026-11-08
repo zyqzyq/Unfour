@@ -1,0 +1,324 @@
+[WebServer] (node:31556) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 52 tests using 4 workers
+
+(node:9588) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21860) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:19880) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:45352) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  2 [chromium] › apps\desktop\tests\smoke\api-client-layout.spec.ts:3:1 › api client keeps a Postman-like vertical workbench layout (2.6s)
+  ok  1 [chromium] › apps\desktop\tests\smoke\api-curl-import.spec.ts:3:1 › cURL preview creates an unsaved request without execution (3.4s)
+  ok  3 [chromium] › apps\desktop\tests\smoke\api-save-layout.spec.ts:3:1 › API save keeps its footer visible after validation at a compact window size (3.5s)
+  ok  5 [chromium] › apps\desktop\tests\smoke\desktop-ux.spec.ts:8:3 › light: resizing preserves the request and keeps shell controls in view (1.8s)
+  ok  6 [chromium] › apps\desktop\tests\smoke\desktop-ux.spec.ts:8:3 › dark: resizing preserves the request and keeps shell controls in view (1.2s)
+  ok  7 [chromium] › apps\desktop\tests\smoke\desktop-ux.spec.ts:31:1 › command search, keyboard selection, and focus return work end to end (1.4s)
+  ok  4 [chromium] › apps\desktop\tests\smoke\database-tree.spec.ts:3:1 › database tree connects, lazily browses catalogs, previews tables, and confirms saved SQL deletion (6.1s)
+  ok  9 [chromium] › apps\desktop\tests\smoke\flow-authoring.spec.ts:3:1 › Flow uses saved API overrides, detected SSH inputs and a required SQL editor (2.1s)
+  ok 10 [chromium] › apps\desktop\tests\smoke\flow-canvas.spec.ts:3:1 › edge insertion menu escapes Canvas clipping near its right edge (1.7s)
+  ok  8 [chromium] › apps\desktop\tests\smoke\desktop-ux.spec.ts:52:1 › reopening variables preserves a draft and module navigation honors Cancel and Discard (2.5s)
+  ok 12 [chromium] › apps\desktop\tests\smoke\flow-canvas.spec.ts:98:1 › edge plus inserts independently on ordinary and Condition branch connections (1.9s)
+  ok 13 [chromium] › apps\desktop\tests\smoke\flow-control-authoring.spec.ts:3:1 › Flow condition and Wait Until use grouped variables and preserve legacy predicates (2.0s)
+  ok 14 [chromium] › apps\desktop\tests\smoke\flow-environment.spec.ts:5:3 › Flow snapshots the active variable environment and records the explicit selection (en) (2.7s)
+  ok 11 [chromium] › apps\desktop\tests\smoke\flow-canvas.spec.ts:42:1 › default Flow Canvas supports Inspector inputs, refs, insertion, deletion and save (3.9s)
+  ok 17 [chromium] › apps\desktop\tests\smoke\flow-run-experience.spec.ts:88:1 › failed run navigation and long diagnostics remain usable in a narrow window (1.6s)
+  ok 15 [chromium] › apps\desktop\tests\smoke\flow-environment.spec.ts:5:3 › Flow snapshots the active variable environment and records the explicit selection (zh-CN) (2.8s)
+  ok 18 [chromium] › apps\desktop\tests\smoke\offline-editor.spec.ts:3:1 › Monaco initializes and edits with all external network requests blocked (1.8s)
+  ok 19 [chromium] › apps\desktop\tests\smoke\redesign-workbench.spec.ts:62:3 › light: populated Flow retains inspector edits and saved revisions (2.5s)
+  ok 16 [chromium] › apps\desktop\tests\smoke\flow-run-experience.spec.ts:4:1 › Run dialog and History keep execution details beside the Canvas (5.2s)
+  ok 20 [chromium] › apps\desktop\tests\smoke\redesign-workbench.spec.ts:62:3 › dark: populated Flow retains inspector edits and saved revisions (2.7s)
+  ok 24 [chromium] › apps\desktop\tests\smoke\sftp-text-preview.spec.ts:5:3 › en: SFTP text preview scrolls and closes without transfer (2.0s)
+  ok 23 [chromium] › apps\desktop\tests\smoke\redesign-workbench.spec.ts:153:1 › Chinese settings persist locale and theme, including live system appearance (2.4s)
+  ok 21 [chromium] › apps\desktop\tests\smoke\redesign-workbench.spec.ts:98:3 › 1100x720: API, Flow and settings controls remain reachable (4.5s)
+  x  25 [chromium] › apps\desktop\tests\smoke\sftp-text-preview.spec.ts:5:3 › zh-CN: SFTP text preview scrolls and closes without transfer (1.8s)
+(node:5392) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 28 [chromium] › apps\desktop\tests\smoke\sidebar-consistency.spec.ts:57:1 › Flow and SSH keep creation visible while long lists scroll (1.9s)
+  x  26 [chromium] › apps\desktop\tests\smoke\sidebar-consistency.spec.ts:13:3 › en: resource creation uses compact header actions (5.9s)
+  ok 29 [chromium] › apps\desktop\tests\smoke\sidebar-search.spec.ts:4:3 › en: compact local sidebar filters preserve loaded trees and terminal panes (1.9s)
+  x  27 [chromium] › apps\desktop\tests\smoke\sidebar-consistency.spec.ts:13:3 › zh-CN: resource creation uses compact header actions (6.0s)
+  x  22 [chromium] › apps\desktop\tests\smoke\redesign-workbench.spec.ts:98:3 › 960x600: API, Flow and settings controls remain reachable (8.9s)
+(node:47108) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13448) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27756) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 30 [chromium] › apps\desktop\tests\smoke\ssh-task-first-recall.spec.ts:5:3 › SSH first recall restores parameters from editor without visiting history (1.8s)
+  ok 32 [chromium] › apps\desktop\tests\smoke\ssh-task-first-recall.spec.ts:5:3 › SSH first recall restores parameters from sidebar without visiting history (1.8s)
+  ok 31 [chromium] › apps\desktop\tests\smoke\sidebar-search.spec.ts:4:3 › zh-CN: compact local sidebar filters preserve loaded trees and terminal panes (2.6s)
+  ok 36 [chromium] › apps\desktop\tests\smoke\ssh-task-sensitive-sources.spec.ts:5:3 › SSH recalled sensitive provenance stays locked when Workspace source is shadowed (1.8s)
+  ok 33 [chromium] › apps\desktop\tests\smoke\ssh-task-load-error-layout.spec.ts:4:3 › en: SSH load errors preserve cached data in small panels (4.2s)
+  ok 35 [chromium] › apps\desktop\tests\smoke\ssh-task-rerun.spec.ts:4:1 › SSH history and previous parameters open the same editable run dialog (2.9s)
+  ok 34 [chromium] › apps\desktop\tests\smoke\ssh-task-load-error-layout.spec.ts:4:3 › zh-CN: SSH load errors preserve cached data in small panels (4.0s)
+  ok 40 [chromium] › apps\desktop\tests\smoke\ui-audit.spec.ts:5:5 › en dark: discover Flow and MCP without losing the API draft (3.6s)
+  x  39 [chromium] › apps\desktop\tests\smoke\ui-audit.spec.ts:5:5 › en light: discover Flow and MCP without losing the API draft (6.0s)
+(node:14644) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 41 [chromium] › apps\desktop\tests\smoke\ui-audit.spec.ts:5:5 › zh-CN light: discover Flow and MCP without losing the API draft (2.6s)
+  ok 43 [chromium] › apps\desktop\tests\smoke\ui-audit.spec.ts:49:1 › MCP failure stays local and refresh recovers without configuring a client (864ms)
+  ok 42 [chromium] › apps\desktop\tests\smoke\ui-audit.spec.ts:5:5 › zh-CN dark: discover Flow and MCP without losing the API draft (2.6s)
+  ok 44 [chromium] › apps\desktop\tests\smoke\ui-recovery.spec.ts:4:3 › en light: database first use and SSH clipboard recovery (1.9s)
+  x  45 [chromium] › apps\desktop\tests\smoke\ui-recovery.spec.ts:4:3 › en dark: database first use and SSH clipboard recovery (5.7s)
+  x  46 [chromium] › apps\desktop\tests\smoke\ui-recovery.spec.ts:4:3 › zh-CN light: database first use and SSH clipboard recovery (5.7s)
+(node:20868) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37612) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 48 [chromium] › apps\desktop\tests\smoke\ui-smoke.spec.ts:3:1 › app shell renders and module switching stays stable (1.5s)
+  ok 47 [chromium] › apps\desktop\tests\smoke\ui-recovery.spec.ts:4:3 › zh-CN dark: database first use and SSH clipboard recovery (2.2s)
+  ok 49 [chromium] › apps\desktop\tests\smoke\workspace-bundle.spec.ts:21:3 › en: Workspace bundle preview stays readable at a compact viewport (3.5s)
+  ok 50 [chromium] › apps\desktop\tests\smoke\workspace-bundle.spec.ts:108:3 › en: imported MCP permissions can be changed independently in security settings (6.1s)
+  ok 51 [chromium] › apps\desktop\tests\smoke\workspace-bundle.spec.ts:21:3 › zh-CN: Workspace bundle preview stays readable at a compact viewport (3.3s)
+  x  37 [chromium] › apps\desktop\tests\smoke\ssh-task-sensitive-sources.spec.ts:5:3 › SSH recalled sensitive provenance stays locked when Workspace source is removed (30.0s)
+  x  38 [chromium] › apps\desktop\tests\smoke\ssh-task-sensitive-sources.spec.ts:5:3 › SSH recalled sensitive provenance stays locked when Workspace source is public (30.0s)
+  ok 52 [chromium] › apps\desktop\tests\smoke\workspace-bundle.spec.ts:108:3 › zh-CN: imported MCP permissions can be changed independently in security settings (6.2s)
+
+
+  1) [chromium] › apps\desktop\tests\smoke\redesign-workbench.spec.ts:98:3 › 960x600: API, Flow and settings controls remain reachable
+
+    Error: expect(locator).toBeInViewport() failed
+
+    Locator: getByRole('dialog').getByRole('combobox', { name: 'Theme', exact: true })
+    Expected: in viewport
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeInViewport" with timeout 5000ms
+      - waiting for getByRole('dialog').getByRole('combobox', { name: 'Theme', exact: true })
+        - waiting for" http://127.0.0.1:1427/" navigation to finish...
+        - navigated to "http://127.0.0.1:1427/"
+
+
+      28 | async function expectReachable(control: Locator) {
+      29 |   await control.scrollIntoViewIfNeeded();
+    > 30 |   await expect(control).toBeInViewport({ ratio: 1 });
+         |                         ^
+      31 |   await expect(control).toBeEnabled();
+      32 |   // Actionability also checks overlays and clipping, beyond DOM visibility.
+      33 |   await control.click({ trial: true });
+        at expectReachable (E:\unfour-workspace\unfour\apps\desktop\tests\smoke\redesign-workbench.spec.ts:30:25)
+        at E:\unfour-workspace\unfour\apps\desktop\tests\smoke\redesign-workbench.spec.ts:142:5
+
+    Error Context: test-results\ui-redesign-workbench\redesign-workbench-960x600-4215b-s-controls-remain-reachable-chromium\error-context.md
+
+  2) [chromium] › apps\desktop\tests\smoke\sftp-text-preview.spec.ts:5:3 › zh-CN: SFTP text preview scrolls and closes without transfer
+
+    TypeError: Cannot read properties of undefined (reading 'filter')
+
+      57 |     await expect(dialog).toHaveCount(0);
+      58 |     const calls = await page.evaluate(() => (window as unknown as { __previewCalls: string[] }).__previewCalls);
+    > 59 |     expect(calls.filter((command) => command === "ssh_sftp_preview_text")).toHaveLength(1);
+         |                  ^
+      60 |     expect(calls.some((command) => /download|upload|delete|rename|create/.test(command))).toBe(false);
+      61 |     await page.getByRole("button", { name: zh ? "关闭 demo@fixture" : "Close demo@fixture" }).click();
+      62 |     await page.getByRole("button", { name: zh ? "关闭会话" : "Close Session", exact: true }).click();
+        at E:\unfour-workspace\unfour\apps\desktop\tests\smoke\sftp-text-preview.spec.ts:59:18
+
+    Error Context: test-results\ui-redesign-workbench\sftp-text-preview-zh-CN-SF-ffc40-and-closes-without-transfer-chromium\error-context.md
+
+  3) [chromium] › apps\desktop\tests\smoke\sidebar-consistency.spec.ts:13:3 › en: resource creation uses compact header actions
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('complementary').getByRole('button', { name: 'New Connection', exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByRole('complementary').getByRole('button', { name: 'New Connection', exact: true })
+        - waiting for" http://127.0.0.1:1427/" navigation to finish...
+        - navigated to "http://127.0.0.1:1427/"
+
+
+      2 |
+      3 | async function expectCompactCreate(button: Locator) {
+    > 4 |   await expect(button).toBeVisible();
+        |                        ^
+      5 |   await expect(button.locator("svg.lucide-plus")).toHaveCount(1);
+      6 |   await expect(button).toHaveAttribute("title", await button.getAttribute("aria-label") ?? "");
+      7 |   const bounds = await button.boundingBox();
+        at expectCompactCreate (E:\unfour-workspace\unfour\apps\desktop\tests\smoke\sidebar-consistency.spec.ts:4:24)
+        at E:\unfour-workspace\unfour\apps\desktop\tests\smoke\sidebar-consistency.spec.ts:38:11
+
+    Error Context: test-results\ui-redesign-workbench\sidebar-consistency-en-res-16766-uses-compact-header-actions-chromium\error-context.md
+
+  4) [chromium] › apps\desktop\tests\smoke\sidebar-consistency.spec.ts:13:3 › zh-CN: resource creation uses compact header actions
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('complementary').getByRole('button', { name: '新建连接', exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByRole('complementary').getByRole('button', { name: '新建连接', exact: true })
+        - waiting for" http://127.0.0.1:1427/" navigation to finish...
+        - navigated to "http://127.0.0.1:1427/"
+
+
+      2 |
+      3 | async function expectCompactCreate(button: Locator) {
+    > 4 |   await expect(button).toBeVisible();
+        |                        ^
+      5 |   await expect(button.locator("svg.lucide-plus")).toHaveCount(1);
+      6 |   await expect(button).toHaveAttribute("title", await button.getAttribute("aria-label") ?? "");
+      7 |   const bounds = await button.boundingBox();
+        at expectCompactCreate (E:\unfour-workspace\unfour\apps\desktop\tests\smoke\sidebar-consistency.spec.ts:4:24)
+        at E:\unfour-workspace\unfour\apps\desktop\tests\smoke\sidebar-consistency.spec.ts:38:11
+
+    Error Context: test-results\ui-redesign-workbench\sidebar-consistency-zh-CN--f7db4-uses-compact-header-actions-chromium\error-context.md
+
+  5) [chromium] › apps\desktop\tests\smoke\ssh-task-sensitive-sources.spec.ts:5:3 › SSH recalled sensitive provenance stays locked when Workspace source is removed
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByRole('dialog', { name: 'Run SSH Task', exact: true }).getByRole('button', { name: 'Use previous parameters' })
+        - locator resolved to <button class="inline-flex shrink-0 select-none items-center justify-center gap-2 rounded-[var(--u-radius-sm)] font-medium transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--u-color-focus)_32%,transparent)] border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] text-[var(--u-color-text)] hover:bg-[var(--u-color-surface-hover)] h-[var(--u-size-button-compact)]…>Use previous parameters</button>
+      - attempting click action
+        - waiting for element to be visible, enabled and stable
+        - element is not stable
+      - retrying click action
+        - waiting for" http://127.0.0.1:1427/" navigation to finish...
+        - navigated to "http://127.0.0.1:1427/"
+        - waiting for element to be visible, enabled and stable
+      - element was detached from the DOM, retrying
+        - waiting for" http://127.0.0.1:1427/" navigation to finish...
+        - navigated to "http://127.0.0.1:1427/"
+
+
+      45 |     await expect(region()).toHaveValue("environment-public");
+      46 |     await expect(region()).toHaveAttribute("type", "text");
+    > 47 |     await dialog.getByRole("button", { name: "Use previous parameters" }).click();
+         |                                                                           ^
+      48 |     await expect(region()).toHaveValue(sourceState === "removed" ? "" : `workspace-${sourceState === "public" ? "public" : "private"}`);
+      49 |     await expect(region()).toHaveAttribute("type", "password");
+      50 |     const lock = dialog.getByRole("button", { name: "REGION: Sensitive input (never saved)", exact: true });
+        at E:\unfour-workspace\unfour\apps\desktop\tests\smoke\ssh-task-sensitive-sources.spec.ts:47:75
+
+    Error Context: test-results\ui-redesign-workbench\ssh-task-sensitive-sources-2d4ba-Workspace-source-is-removed-chromium\error-context.md
+
+  6) [chromium] › apps\desktop\tests\smoke\ssh-task-sensitive-sources.spec.ts:5:3 › SSH recalled sensitive provenance stays locked when Workspace source is public
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByRole('treeitem').filter({ hasText: 'Sensitive source fixture' })
+        - locator resolved to <div tabindex="0" role="treeitem" data-state="closed" title="No description" data-tree-id="task:task" class="group relative flex h-[var(--u-size-sidebar-row)] min-w-0 items-center gap-0.5 rounded-[var(--u-radius-sm)] px-1 text-[12px] text-[var(--u-color-text-muted)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--u-color-focus)_32%,transparent)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]">…</div>
+      - attempting click action
+        - waiting for element to be visible, enabled and stable
+        - element is visible, enabled and stable
+        - scrolling into view if needed
+        - waiting for" http://127.0.0.1:1427/" navigation to finish...
+        - navigated to "http://127.0.0.1:1427/"
+
+
+      38 |     await page.getByRole("navigation", { name: "Modules" }).getByRole("button", { name: "SSH Terminal" }).click();
+      39 |     await page.getByRole("tab", { name: "Tasks", exact: true }).click();
+    > 40 |     await page.getByRole("treeitem").filter({ hasText: "Sensitive source fixture" }).click();
+         |                                                                                      ^
+      41 |     await page.getByRole("button", { name: "Run", exact: true }).last().click();
+      42 |     const dialog = page.getByRole("dialog", { name: "Run SSH Task", exact: true });
+      43 |     const region = () => dialog.getByLabel("REGION", { exact: true });
+        at E:\unfour-workspace\unfour\apps\desktop\tests\smoke\ssh-task-sensitive-sources.spec.ts:40:86
+
+    Error Context: test-results\ui-redesign-workbench\ssh-task-sensitive-sources-b30f5--Workspace-source-is-public-chromium\error-context.md
+
+  7) [chromium] › apps\desktop\tests\smoke\ui-audit.spec.ts:5:5 › en light: discover Flow and MCP without losing the API draft
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator: getByRole('dialog').getByRole('button', { name: 'MCP', exact: true })
+    Expected: "page"
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveAttribute" with timeout 5000ms
+      - waiting for getByRole('dialog').getByRole('button', { name: 'MCP', exact: true })
+
+
+      17 |       await mcp.click();
+      18 |       const dialog = page.getByRole("dialog");
+    > 19 |       await expect(dialog.getByRole("button", { name: "MCP", exact: true })).toHaveAttribute("aria-current", "page");
+         |                                                                              ^
+      20 |       const refresh = dialog.getByRole("button", { name: zh ? "刷新状态" : "Refresh status" });
+      21 |       await expect(refresh).toBeEnabled();
+      22 |       await refresh.click();
+        at E:\unfour-workspace\unfour\apps\desktop\tests\smoke\ui-audit.spec.ts:19:78
+
+    Error Context: test-results\ui-redesign-workbench\ui-audit-en-light-discover-d1bd4-ithout-losing-the-API-draft-chromium\error-context.md
+
+  8) [chromium] › apps\desktop\tests\smoke\ui-recovery.spec.ts:4:3 › en dark: database first use and SSH clipboard recovery
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('button', { name: 'Add connection', exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByRole('button', { name: 'Add connection', exact: true })
+
+
+      30 |     await database.click();
+      31 |     const create = page.getByRole("button", { name: zh ? "添加连接" : "Add connection", exact: true });
+    > 32 |     await expect(create).toBeVisible();
+         |                          ^
+      33 |     await expect(page.getByRole("button", { name: zh ? "全部运行" : "Run All", exact: true })).toHaveCount(0);
+      34 |     await page.screenshot({ path: testInfo.outputPath("database-start.png"), animations: "disabled" });
+      35 |     await database.click(); // Collapse sidebar; primary creation stays reachable.
+        at E:\unfour-workspace\unfour\apps\desktop\tests\smoke\ui-recovery.spec.ts:32:26
+
+    Error Context: test-results\ui-redesign-workbench\ui-recovery-en-dark-databa-c857d--and-SSH-clipboard-recovery-chromium\error-context.md
+
+  9) [chromium] › apps\desktop\tests\smoke\ui-recovery.spec.ts:4:3 › zh-CN light: database first use and SSH clipboard recovery
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('button', { name: '添加连接', exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByRole('button', { name: '添加连接', exact: true })
+
+
+      30 |     await database.click();
+      31 |     const create = page.getByRole("button", { name: zh ? "添加连接" : "Add connection", exact: true });
+    > 32 |     await expect(create).toBeVisible();
+         |                          ^
+      33 |     await expect(page.getByRole("button", { name: zh ? "全部运行" : "Run All", exact: true })).toHaveCount(0);
+      34 |     await page.screenshot({ path: testInfo.outputPath("database-start.png"), animations: "disabled" });
+      35 |     await database.click(); // Collapse sidebar; primary creation stays reachable.
+        at E:\unfour-workspace\unfour\apps\desktop\tests\smoke\ui-recovery.spec.ts:32:26
+
+    Error Context: test-results\ui-redesign-workbench\ui-recovery-zh-CN-light-da-f0eed--and-SSH-clipboard-recovery-chromium\error-context.md
+
+  9 failed
+    [chromium] › apps\desktop\tests\smoke\redesign-workbench.spec.ts:98:3 › 960x600: API, Flow and settings controls remain reachable
+    [chromium] › apps\desktop\tests\smoke\sftp-text-preview.spec.ts:5:3 › zh-CN: SFTP text preview scrolls and closes without transfer
+    [chromium] › apps\desktop\tests\smoke\sidebar-consistency.spec.ts:13:3 › en: resource creation uses compact header actions
+    [chromium] › apps\desktop\tests\smoke\sidebar-consistency.spec.ts:13:3 › zh-CN: resource creation uses compact header actions
+    [chromium] › apps\desktop\tests\smoke\ssh-task-sensitive-sources.spec.ts:5:3 › SSH recalled sensitive provenance stays locked when Workspace source is removed
+    [chromium] › apps\desktop\tests\smoke\ssh-task-sensitive-sources.spec.ts:5:3 › SSH recalled sensitive provenance stays locked when Workspace source is public
+    [chromium] › apps\desktop\tests\smoke\ui-audit.spec.ts:5:5 › en light: discover Flow and MCP without losing the API draft
+    [chromium] › apps\desktop\tests\smoke\ui-recovery.spec.ts:4:3 › en dark: database first use and SSH clipboard recovery
+    [chromium] › apps\desktop\tests\smoke\ui-recovery.spec.ts:4:3 › zh-CN light: database first use and SSH clipboard recovery
+  43 passed (1.0m)

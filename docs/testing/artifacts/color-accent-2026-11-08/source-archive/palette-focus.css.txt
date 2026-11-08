@@ -1,0 +1,7 @@
+/* C+ is a temporary light-mode comparison: C surfaces with B's violet focus.
+ * Primary actions, selection fills, typography and all other colors stay in C.
+ * Dark mode deliberately inherits C unchanged.
+ */
+:root[data-theme="light"][data-palette="C"][data-palette-focus="violet"] {
+  --u-color-focus: #7640cd;
+}

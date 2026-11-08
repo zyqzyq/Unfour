@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Unfour · C 与 C+ 紫色焦点对比</title>
+  <style>
+    :root { font-family: "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif; color: #eceef3; background: #18191d; font-synthesis: none; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    button, select, input { font: inherit; }
+    button, select { color: inherit; }
+    button { cursor: pointer; }
+    :focus-visible { outline: 2px solid #bfc7f0; outline-offset: 3px; }
+    [hidden] { display: none !important; }
+    a { color: #cad0ec; text-underline-offset: 3px; text-decoration-color: #6b748e; }
+    a:hover { color: #fff; }
+    header, main, footer { max-width: 1800px; margin: 0 auto; padding-inline: 28px; }
+    header { padding-top: 28px; }
+    .eyebrow { margin: 0 0 8px; font-size: 11px; letter-spacing: .12em; color: #a9afbc; }
+    h1 { margin: 0; font-size: 25px; font-weight: 650; letter-spacing: -.03em; }
+    .intro { margin: 12px 0 15px; max-width: 1100px; color: #bdc3d0; font-size: 13px; line-height: 1.8; }
+    code { font-family: Consolas, ui-monospace, monospace; font-size: .95em; color: #d8ddec; }
+    .scope { display: flex; flex-wrap: wrap; gap: 10px 24px; padding: 12px 16px; margin-bottom: 18px; border: 1px solid #414652; border-radius: 8px; background: #22252b; font-size: 12px; line-height: 1.7; }
+    .scope strong { color: #f1f3fa; font-weight: 600; }
+    .scope span { color: #bdc3d0; }
+    .controls { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: flex-end; padding: 15px 16px; border: 1px solid #383d48; border-radius: 10px; background: #202228; }
+    .control-group { display: grid; gap: 7px; }
+    .control-label { font-size: 11px; color: #b3bac8; }
+    .segments { display: flex; gap: 3px; padding: 3px; border: 1px solid #3c4250; border-radius: 7px; background: #17191e; }
+    .segments button { padding: 7px 12px; border: 0; border-radius: 4px; background: transparent; color: #c1c7d4; font-size: 12px; white-space: nowrap; }
+    .segments button:hover { background: #2f3541; }
+    .segments button[aria-pressed="true"] { background: #444b5c; color: #fff; box-shadow: inset 0 0 0 1px #76819a; }
+    .pair-options { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding-top: 14px; }
+    .pair-options label { display: grid; gap: 6px; font-size: 11px; color: #b7bfce; }
+    select { height: 34px; min-width: 240px; max-width: 100%; padding: 0 10px; border: 1px solid #596274; border-radius: 6px; background: #242832; font-size: 12px; }
+    .secondary-button { height: 34px; padding: 0 12px; border: 1px solid #596274; border-radius: 6px; background: #242832; font-size: 12px; }
+    .secondary-button:hover { background: #363e4d; }
+    .context { display: flex; flex-wrap: wrap; gap: 8px 20px; justify-content: space-between; align-items: baseline; margin: 20px 0 12px; }
+    h2 { margin: 0; font-size: 14px; font-weight: 600; }
+    .context p { margin: 0; font-size: 11px; color: #b4bdce; }
+    .gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+    .gallery.overview { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .gallery.detail { grid-template-columns: minmax(0, 1fr); max-width: 1440px; margin-inline: auto; }
+    figure { min-width: 0; margin: 0; overflow: hidden; border: 1px solid #424957; border-radius: 9px; background: #23272f; }
+    figcaption { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 13px 14px; border-bottom: 1px solid #424957; }
+    .caption-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+    .letter { display: inline-grid; min-width: 28px; height: 25px; padding: 0 4px; flex-shrink: 0; place-items: center; border: 1px solid #748198; border-radius: 5px; color: #fff; font-size: 12px; }
+    .caption-note { margin: 5px 0 0 36px; color: #b9c1d1; font-size: 11px; line-height: 1.5; }
+    .full-link { flex-shrink: 0; font-size: 11px; }
+    .shot-button { display: block; width: 100%; padding: 0; border: 0; background: #111318; }
+    .shot-button img { display: block; width: 100%; height: auto; }
+    .shot-button:hover img { outline: 2px solid #afb9d0; outline-offset: -2px; }
+    .shot-button:focus-visible { outline-offset: -3px; }
+    .missing { display: block; min-height: 160px; padding: 44px 24px; color: #c5ccdb; font-size: 12px; line-height: 1.7; }
+    .overlay-shell { border: 1px solid #4b5465; border-radius: 9px; overflow: hidden; background: #23272f; }
+    .overlay-labels { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px; padding: 13px 16px; font-size: 12px; border-bottom: 1px solid #424957; }
+    .overlay-labels span { display: inline-flex; align-items: center; gap: 12px; }
+    .overlay-stage { position: relative; width: 100%; background: #111318; overflow: hidden; cursor: col-resize; user-select: none; touch-action: pan-y; }
+    .overlay-stage img { display: block; width: 100%; height: auto; pointer-events: none; }
+    #overlay-left-image { position: absolute; left: 0; top: 0; }
+    .divider { position: absolute; inset-block: 0; left: 50%; width: 2px; transform: translateX(-1px); background: #fff; box-shadow: 0 0 0 1px #16191f; pointer-events: none; }
+    .divider::after { content: "↔"; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; width: 30px; height: 42px; place-items: center; border: 1px solid #fff; border-radius: 7px; background: #2a3140; color: #fff; font-size: 19px; }
+    .slider-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 13px 16px; }
+    .slider-row label { color: #c4ccdc; font-size: 12px; }
+    .slider-row input { flex: 1; min-width: 160px; accent-color: #b8c3e0; }
+    .slider-row output { min-width: 38px; font-variant-numeric: tabular-nums; font-size: 12px; }
+    .hint { margin: 0; padding: 0 16px 14px; color: #b4bfd2; font-size: 11px; line-height: 1.7; }
+    #overlay-error { margin: 0; padding: 15px 16px; border-top: 1px solid #5d5362; color: #e6bcc9; font-size: 12px; }
+    footer { padding-top: 20px; padding-bottom: 30px; color: #b0bacd; font-size: 11px; line-height: 1.8; }
+    footer p { margin: 0; }
+    dialog { width: min(1600px, 96vw); max-height: 96vh; padding: 0; border: 1px solid #737e94; border-radius: 9px; background: #1b2029; color: #edf1f9; overflow: auto; }
+    dialog::backdrop { background: rgb(0 0 0 / .8); }
+    .dialog-bar { position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 16px; border-bottom: 1px solid #4d596d; background: #1b2029; }
+    .dialog-actions { display: flex; align-items: center; gap: 18px; }
+    #full-image { display: block; width: 100%; height: auto; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    @media (max-width: 1000px) { .gallery.overview { grid-template-columns: minmax(0, 1fr); } }
+    @media (max-width: 760px) { header, main, footer { padding-inline: 14px; } header { padding-top: 20px; } h1 { font-size: 21px; } .gallery { grid-template-columns: minmax(0, 1fr); } .controls { gap: 14px; } .segments button { padding-inline: 9px; } select { min-width: 210px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="eyebrow">UNFOUR / LIGHT THEME FOCUS STUDY</p>
+    <h1>C 的中性背景，配上紫色焦点</h1>
+    <p class="intro">C+（C＋紫色焦点）只将浅色 <code>--u-color-focus</code> 从 C 的 <code>#4452b4</code> 换为 B 的 <code>#7640cd</code>。紫色提示沿用现有令牌消费者，包含焦点边框、当前编辑位置、编辑器光标及分割线悬停等小面积提示。默认比较 C 与 C+ 的真实局部截图，也可加入 B 作为参照。</p>
+    <div class="scope">
+      <strong>仅浅色焦点令牌改变</strong>
+      <span>背景、文字、主按钮、选中底色、语法色与状态色完全沿用 C。</span>
+      <span>深色仍是 C，未创建新的深色方案。</span>
+    </div>
+    <div class="controls">
+      <div class="control-group">
+        <span class="control-label" id="scene-label">业务场景</span>
+        <div class="segments" role="group" aria-labelledby="scene-label">
+          <button type="button" data-scene="api" aria-pressed="true">API</button>
+          <button type="button" data-scene="database" aria-pressed="false">Database</button>
+        </div>
+      </div>
+      <div class="control-group">
+        <span class="control-label" id="view-label">截图范围</span>
+        <div class="segments" role="group" aria-labelledby="view-label">
+          <button type="button" data-view="detail" aria-pressed="true">局部焦点放大</button>
+          <button type="button" data-view="full" aria-pressed="false">完整页面</button>
+        </div>
+      </div>
+      <div class="control-group">
+        <span class="control-label" id="mode-label">比较方式</span>
+        <div class="segments" role="group" aria-labelledby="mode-label">
+          <button type="button" data-mode="pair" aria-pressed="true">两套对照</button>
+          <button type="button" data-mode="overview" aria-pressed="false">B / C / C+ 总览</button>
+          <button type="button" data-mode="overlay" aria-pressed="false">滑动叠加</button>
+        </div>
+      </div>
+    </div>
+    <div class="pair-options" id="pair-options">
+      <label>左侧方案<select id="left-palette" aria-label="左侧方案"></select></label>
+      <label>右侧方案<select id="right-palette" aria-label="右侧方案"></select></label>
+      <button type="button" class="secondary-button" id="swap">交换左右</button>
+      <button type="button" class="secondary-button" id="reset-pair">回到 C 与 C+</button>
+    </div>
+  </header>
+  <main>
+    <div class="context">
+      <h2 id="scene-summary">API · 浅色 · 局部焦点放大 · 两套对照</h2>
+      <p id="view-note">局部截图纵向展示以保留细边框；完整页面可并排比较。</p>
+    </div>
+    <div class="gallery" id="gallery"></div>
+    <section class="overlay-shell" id="overlay" aria-label="同场景焦点颜色滑动叠加" hidden>
+      <div class="overlay-labels">
+        <span><strong id="overlay-left-title"></strong><a id="overlay-left-link" target="_blank" rel="noopener">完整原图</a></span>
+        <span><strong id="overlay-right-title"></strong><a id="overlay-right-link" target="_blank" rel="noopener">完整原图</a></span>
+      </div>
+      <div class="overlay-stage" id="overlay-stage" aria-label="拖动分界线比较两套方案">
+        <img id="overlay-right-image" alt="" draggable="false">
+        <img id="overlay-left-image" alt="" draggable="false">
+        <div class="divider" id="divider" aria-hidden="true"></div>
+      </div>
+      <p id="overlay-error" role="status" hidden>截图尚未就绪，请在文件补齐后刷新本页。</p>
+      <div class="slider-row">
+        <label for="divider-position">左侧方案显示比例</label>
+        <input type="range" id="divider-position" min="0" max="100" value="50" step="1">
+        <output for="divider-position" id="divider-value">50%</output>
+        <button type="button" class="secondary-button" id="reset-divider">分界居中</button>
+      </div>
+      <p class="hint">可拖动图片中的分界线，也可使用滑块及方向键、Home / End。图片使用原始像素，不进行重新绘制或调色。</p>
+    </section>
+    <p class="sr-only" id="announcement" role="status" aria-live="polite"></p>
+  </main>
+  <footer>
+    <p>完整截图来自相同 1440 × 900 视口中的真实 React 页面与隔离、确定性的测试数据；局部图直接裁切相同页面区域。C+ 预览参数：<code>?palette=C&amp;focus=violet</code>。</p>
+    <p>这些材料用于视觉比较，不能据此认定原生桌面、真实远程请求或数据库业务已完成验证，也不代表长期舒适度已经实测。</p>
+  </footer>
+  <dialog id="image-dialog" aria-labelledby="image-title">
+    <div class="dialog-bar">
+      <h2 id="image-title"></h2>
+      <div class="dialog-actions"><a class="full-link" id="full-original" target="_blank" rel="noopener">完整原图</a><button type="button" class="secondary-button" id="close-image">关闭</button></div>
+    </div>
+    <img id="full-image" alt="">
+  </dialog>
+  <script>
+    (() => {
+      const palettes = {
+        B: { label: 'B', name: '旧版蓝紫', note: '参照方案 · 紫色焦点 #7640cd' },
+        C: { label: 'C', name: '中性灰', note: '原始 C · 蓝紫焦点 #4452b4' },
+        'C-violet': { label: 'C+', name: 'C＋紫色焦点', note: '仅浅色焦点改为 #7640cd' }
+      };
+      const scenes = { api: 'API', database: 'Database' };
+      const modes = { pair: '两套对照', overview: 'B / C / C+ 总览', overlay: '滑动叠加' };
+      const views = { detail: '局部焦点放大', full: '完整页面' };
+      const state = { scene: 'api', view: 'detail', mode: 'pair', left: 'C', right: 'C-violet', position: 50 };
+      const byId = id => document.getElementById(id);
+      const file = (palette, full = false) => `${!full && state.view === 'detail' ? 'detail-' : ''}${state.scene}-${palette}.png`;
+      const title = palette => `${palettes[palette].label} · ${palettes[palette].name}`;
+      const description = palette => `${title(palette)}，${scenes[state.scene]}，浅色，${views[state.view]}`;
+
+      function openImage(palette) {
+        byId('image-title').textContent = description(palette);
+        byId('full-image').src = file(palette);
+        byId('full-image').alt = description(palette);
+        byId('full-original').href = file(palette, true);
+        byId('image-dialog').showModal();
+      }
+
+      function card(palette) {
+        const figure = document.createElement('figure');
+        const caption = document.createElement('figcaption');
+        const copy = document.createElement('div');
+        const heading = document.createElement('div');
+        heading.className = 'caption-title';
+        const letter = document.createElement('span');
+        letter.className = 'letter';
+        letter.textContent = palettes[palette].label;
+        heading.append(letter, document.createTextNode(palettes[palette].name));
+        const note = document.createElement('p');
+        note.className = 'caption-note';
+        note.textContent = palettes[palette].note;
+        copy.append(heading, note);
+        const link = document.createElement('a');
+        link.className = 'full-link';
+        link.href = file(palette, true);
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.textContent = '完整原图 ↗';
+        link.setAttribute('aria-label', `打开 ${title(palette)} ${scenes[state.scene]} 完整原图`);
+        caption.append(copy, link);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'shot-button';
+        button.setAttribute('aria-label', `放大查看 ${description(palette)}`);
+        const img = document.createElement('img');
+        img.src = file(palette);
+        img.alt = description(palette);
+        img.decoding = 'async';
+        const missing = document.createElement('span');
+        missing.className = 'missing';
+        missing.hidden = true;
+        missing.textContent = `截图尚未就绪：${file(palette)}。文件补齐后请刷新。`;
+        img.addEventListener('error', () => { img.hidden = true; missing.hidden = false; button.disabled = true; });
+        button.append(img, missing);
+        button.addEventListener('click', () => openImage(palette));
+        figure.append(caption, button);
+        return figure;
+      }
+
+      function updateDivider(value) {
+        state.position = Math.max(0, Math.min(100, Math.round(value)));
+        byId('overlay-left-image').style.clipPath = `inset(0 ${100 - state.position}% 0 0)`;
+        byId('divider').style.left = `${state.position}%`;
+        byId('divider-position').value = String(state.position);
+        byId('divider-position').setAttribute('aria-valuetext', `左侧 ${palettes[state.left].label} 显示 ${state.position}%，右侧 ${palettes[state.right].label} 显示 ${100 - state.position}%`);
+        byId('divider-value').value = `${state.position}%`;
+      }
+
+      function render() {
+        for (const key of ['scene', 'view', 'mode']) {
+          document.querySelectorAll(`[data-${key}]`).forEach(button => button.setAttribute('aria-pressed', String(button.dataset[key] === state[key])));
+        }
+        byId('pair-options').hidden = state.mode === 'overview';
+        byId('left-palette').value = state.left;
+        byId('right-palette').value = state.right;
+        const summary = `${scenes[state.scene]} · 浅色 · ${views[state.view]} · ${modes[state.mode]}`;
+        byId('scene-summary').textContent = summary;
+        byId('announcement').textContent = summary;
+        byId('view-note').textContent = state.view === 'detail' ? '局部截图纵向展示以保留细边框；完整页面可并排比较。' : '完整页面均为 1440 × 900；点击图片可放大或打开完整原图。';
+        const overlay = state.mode === 'overlay';
+        byId('gallery').hidden = overlay;
+        byId('overlay').hidden = !overlay;
+        if (overlay) {
+          byId('overlay-error').hidden = true;
+          for (const side of ['left', 'right']) {
+            byId(`overlay-${side}-title`).textContent = title(state[side]);
+            byId(`overlay-${side}-link`).href = file(state[side], true);
+            byId(`overlay-${side}-image`).src = file(state[side]);
+            byId(`overlay-${side}-image`).alt = description(state[side]);
+          }
+          updateDivider(state.position);
+        } else {
+          byId('gallery').className = `gallery${state.mode === 'overview' ? ' overview' : ''}${state.view === 'detail' ? ' detail' : ''}`;
+          byId('gallery').replaceChildren(...(state.mode === 'overview' ? ['B', 'C', 'C-violet'] : [state.left, state.right]).map(card));
+        }
+      }
+
+      for (const side of ['left', 'right']) {
+        for (const palette of Object.keys(palettes)) {
+          const option = document.createElement('option');
+          option.value = palette;
+          option.textContent = title(palette);
+          byId(`${side}-palette`).append(option);
+        }
+        byId(`${side}-palette`).addEventListener('change', event => { state[side] = event.target.value; render(); });
+        byId(`overlay-${side}-image`).addEventListener('error', () => { byId('overlay-error').hidden = false; });
+      }
+      for (const key of ['scene', 'view', 'mode']) {
+        document.querySelectorAll(`[data-${key}]`).forEach(button => button.addEventListener('click', () => { state[key] = button.dataset[key]; render(); }));
+      }
+      byId('swap').addEventListener('click', () => { [state.left, state.right] = [state.right, state.left]; render(); });
+      byId('reset-pair').addEventListener('click', () => { state.left = 'C'; state.right = 'C-violet'; render(); });
+      byId('divider-position').addEventListener('input', event => updateDivider(Number(event.target.value)));
+      byId('reset-divider').addEventListener('click', () => updateDivider(50));
+      const stage = byId('overlay-stage');
+      const move = event => { const rect = stage.getBoundingClientRect(); if (rect.width) updateDivider((event.clientX - rect.left) / rect.width * 100); };
+      stage.addEventListener('pointerdown', event => { if (event.button !== 0) return; stage.setPointerCapture(event.pointerId); move(event); });
+      stage.addEventListener('pointermove', event => { if (stage.hasPointerCapture(event.pointerId)) move(event); });
+      const release = event => { if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId); };
+      stage.addEventListener('pointerup', release);
+      stage.addEventListener('pointercancel', release);
+      byId('close-image').addEventListener('click', () => byId('image-dialog').close());
+      byId('image-dialog').addEventListener('click', event => { if (event.target === byId('image-dialog')) byId('image-dialog').close(); });
+      render();
+    })();
+  </script>
+</body>
+</html>

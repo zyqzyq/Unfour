@@ -111,20 +111,20 @@ export function ResponseBodyView({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex min-h-[32px] shrink-0 items-center justify-between border-b border-[var(--u-color-border)] px-3 py-1 text-[12px] text-[var(--u-color-text-muted)]">
+      <div className="flex min-h-[38px] shrink-0 items-center justify-between border-b border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3 py-1 text-[11px] text-[var(--u-color-text-muted)]">
         <span>
           {bodySize > 100_000
             ? t("api.response.longBody", { size: formatByteSize(bodySize) })
             : t("api.response.tabs.body")}
         </span>
-        <div className="flex overflow-hidden rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)]">
+        <div className="flex gap-0.5 overflow-hidden rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-bg)] p-0.5">
           {(["pretty", "raw"] as const).map((item) => (
             <button
               aria-pressed={mode === item}
               className={cn(
-                "h-6 px-2 text-[12px]",
+                "h-6 rounded-[var(--u-radius-sm)] px-2 text-[11px] focus-visible:outline-2 focus-visible:outline-[var(--u-color-focus)]",
                 mode === item
-                  ? "bg-[var(--u-color-surface-active)] text-[var(--u-color-text)]"
+                  ? "bg-[var(--u-color-canvas)] font-medium text-[var(--u-color-primary)] shadow-[var(--u-shadow-sm)]"
                   : "bg-[var(--u-color-bg)] text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
               )}
               key={item}
@@ -141,7 +141,8 @@ export function ResponseBodyView({
           beforeMount={(monaco) => configureEditorThemes(monaco, theme)}
           defaultLanguage={isJson && mode === "pretty" ? "json" : "plaintext"}
           options={{
-            fontSize: 12,
+            fontSize: 13,
+            padding: { top: 12, bottom: 12 },
             minimap: { enabled: false },
             readOnly: true,
             scrollBeyondLastLine: false,
@@ -343,7 +344,7 @@ export function ResponseTiming({ response }: { response: ApiResponse | null }) {
   }
   const bodyBytes = new TextEncoder().encode(response.body).length;
   return (
-    <div className="grid gap-2 p-3 text-[12px] sm:grid-cols-2">
+    <div className="grid gap-3 p-4 text-[12px] sm:grid-cols-2">
       <Metric label={t("api.response.metrics.total")} value={`${response.durationMs}ms`} />
       <Metric
         label={t("api.response.metrics.status")}
@@ -363,9 +364,9 @@ export function ResponseTiming({ response }: { response: ApiResponse | null }) {
 
 export function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2 py-1">
-      <div className="text-[length:var(--u-font-size-caption)] uppercase text-[var(--u-color-text-muted)]">{label}</div>
-      <div className="truncate font-medium">{value}</div>
+    <div className="rounded-[var(--u-radius-lg)] border border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-4 py-3">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--u-color-text-muted)]">{label}</div>
+      <div className="mt-2 truncate font-mono text-[20px] font-medium tracking-[-0.04em]">{value}</div>
     </div>
   );
 }

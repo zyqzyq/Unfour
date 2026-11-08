@@ -9,7 +9,7 @@ export function SettingsSectionHeading({
 }) {
   return (
     <div>
-      <h2 className="text-[14px] font-semibold text-[var(--u-color-text)]">{title}</h2>
+      <h2 className="text-[19px] font-semibold tracking-tight text-[var(--u-color-text)]">{title}</h2>
       <p className="mt-1 text-[12px] text-[var(--u-color-text-muted)]">{description}</p>
     </div>
   );
@@ -25,7 +25,7 @@ export function SettingsGroup({
   title: string;
 }) {
   return (
-    <section className="space-y-2">
+    <section className="space-y-3 rounded-[var(--u-radius-lg)] border border-[var(--u-color-border)] bg-[var(--u-color-canvas)] p-4">
       <h3 className="text-[12px] font-semibold text-[var(--u-color-text)]">{title}</h3>
       {description ? (
         <p className="text-[12px] leading-5 text-[var(--u-color-text-muted)]">{description}</p>

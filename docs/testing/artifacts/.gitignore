@@ -1,0 +1,3 @@
+# Local recovery snapshots from the visual experiment. Keep them on disk;
+# source changes, review screenshots and verification records are versioned.
+**/baseline/

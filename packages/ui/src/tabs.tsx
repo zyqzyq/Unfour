@@ -173,7 +173,7 @@ export function Tabs({
       <div
         ref={tabbarRef}
         className={cn(
-          "flex h-[var(--u-size-tabbar)] shrink-0 items-end border-b border-[var(--u-color-border)] bg-[var(--u-color-chrome)] px-2",
+          "u-tabbar flex h-[var(--u-size-tabbar)] shrink-0 items-end border-b border-[var(--u-color-border)] bg-[var(--u-color-chrome)] px-2",
           className,
         )}
       >
@@ -189,7 +189,7 @@ export function Tabs({
           const tabNode = (
             <div
               className={cn(
-                "group relative flex h-[30px] min-w-[120px] max-w-[220px] items-center gap-2 rounded-t-[var(--u-radius-sm)] border border-transparent px-2 text-[12px] font-medium text-[var(--u-color-text-muted)] transition-colors duration-150",
+                "group relative flex h-[36px] min-w-[132px] max-w-[240px] items-center gap-2 rounded-t-[var(--u-radius-md)] border border-transparent px-2 text-[12px] font-medium text-[var(--u-color-text-muted)] transition-colors duration-150",
                 active
                   ? cn("border-[var(--u-color-border)]", {
                     surface: "border-b-[var(--u-color-surface)] bg-[var(--u-color-surface)] text-[var(--u-color-text)]",

@@ -90,11 +90,11 @@ export function TaskEditor({
   }
 
   return (
-    <fieldset disabled={saving} className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex h-[var(--u-size-section-toolbar)] shrink-0 items-center gap-2 border-b border-[var(--u-color-border)] px-2">
+    <fieldset disabled={saving} className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--u-color-canvas)]">
+      <div className="flex min-h-[var(--u-size-section-toolbar)] shrink-0 flex-wrap items-center gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-canvas)] px-4 py-2">
         <Input
           aria-label={t("ssh.tasks.editor.name")}
-          className="h-7 min-w-0 max-w-[420px] flex-[1_1_320px]"
+          className="h-8 min-w-0 max-w-[420px] flex-[1_1_320px] border-transparent bg-transparent font-semibold"
           id="ssh-task-name"
           maxLength={128}
           onChange={(event) => onChange({ ...draft, name: event.target.value })}
@@ -104,7 +104,7 @@ export function TaskEditor({
         />
         <Select
           aria-label={t("ssh.tasks.editor.defaultConnection")}
-          className="h-7 max-w-[260px] shrink-0"
+          className="h-8 max-w-[260px] min-w-0 flex-[0_1_220px]"
           id="ssh-task-default-connection"
           onChange={(event) =>
             onChange({
@@ -131,7 +131,7 @@ export function TaskEditor({
             : t("ssh.tasks.editor.showDescription")}
         </Button>
         {inputs.length > 0 && (
-          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+          <div className="order-last flex min-w-0 w-full items-center gap-1.5 overflow-x-auto border-t border-[var(--u-color-border)] pt-2">
             <span className="shrink-0 text-[11px] text-[var(--u-color-text-soft)]">
               {t("ssh.tasks.editor.detectedInputs")}
             </span>
@@ -164,7 +164,7 @@ export function TaskEditor({
       </div>
 
       {showDescription && (
-        <div className="shrink-0 border-b border-[var(--u-color-border)] px-2 py-2">
+        <div className="shrink-0 border-b border-[var(--u-color-border)] px-4 py-3">
           <textarea
             aria-label={t("ssh.tasks.editor.description")}
             className="min-h-14 w-full resize-y rounded-[var(--u-radius-sm)] border border-[var(--u-color-input)] bg-[var(--u-color-surface)] px-2 py-1.5 text-[13px] text-[var(--u-color-text)] outline-none transition-colors focus:border-[var(--u-color-focus)] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--u-color-focus)_16%,transparent)]"
@@ -177,14 +177,14 @@ export function TaskEditor({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-[var(--u-color-bg)] p-5">
         <div className="mx-auto flex max-w-[920px] flex-col">
-          <div className="mb-1.5 flex items-center justify-between gap-2">
+          <div className="mb-4 flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <h3 className="text-[12px] font-semibold text-[var(--u-color-text)]">
+              <h3 className="text-[13px] font-semibold text-[var(--u-color-text)]">
                 {t("ssh.tasks.editor.steps")}
               </h3>
-              <p className="text-[11px] text-[var(--u-color-text-soft)]">
+              <p className="mt-1 text-[11px] text-[var(--u-color-text-muted)]">
                 {t("ssh.tasks.editor.inputHint")}
               </p>
             </div>

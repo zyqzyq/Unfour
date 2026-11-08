@@ -294,9 +294,9 @@ export function SqlEditorTab({
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <Toolbar className="h-9">
-        <ToolbarGroup>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <Toolbar className="h-auto min-h-11 flex-wrap gap-y-2 px-3 py-2">
+        <ToolbarGroup className="flex-wrap gap-1.5">
           {executePending ? (
             <Button onClick={onStop} size="sm" type="button">
               <StopCircle size={13} />
@@ -308,7 +308,7 @@ export function SqlEditorTab({
                 <Play size={13} />
                 {t("database.actions.confirmRun")}
               </Button>
-              <Button onClick={() => onRunRef.current({ cancelConfirmation: true })} size="sm" type="button">
+              <Button onClick={() => onRunRef.current({ cancelConfirmation: true })} size="sm" type="button" variant="outline">
                 {t("common.confirm.cancel")}
               </Button>
             </>
@@ -328,6 +328,7 @@ export function SqlEditorTab({
                 onClick={runSelectedFromEditor}
                 size="sm"
                 type="button"
+                variant="outline"
               >
                 <Play size={13} />
                 {t("database.actions.runSelected")}
@@ -374,10 +375,12 @@ export function SqlEditorTab({
             </DropdownMenuContent>
           </DropdownMenu>
         </ToolbarGroup>
-        <ToolbarGroup className="min-w-0">
+      </Toolbar>
+      <Toolbar className="h-auto min-h-10 flex-wrap gap-y-2 bg-[var(--u-color-surface)] px-3 py-2">
+        <ToolbarGroup className="w-full min-w-0 flex-wrap gap-2">
           <Select
             aria-label={t("database.result.rowLimitAria")}
-            className="max-w-[120px]"
+            className="h-7 w-[120px] text-[12px]"
             disabled={rowLimitLocked}
             onChange={(event) => {
               if (rowLimitLocked) {
@@ -396,7 +399,7 @@ export function SqlEditorTab({
           />
           <Select
             aria-label={t("database.editor.connectionAria")}
-            className="max-w-[220px]"
+            className="h-7 w-[180px] text-[12px]"
             onChange={(event) => onSelectConnection(event.target.value)}
             options={connections.map((connection) => ({ label: connection.name, value: connection.id }))}
             value={selectedConnectionId ?? ""}
@@ -407,7 +410,7 @@ export function SqlEditorTab({
           {(catalogOptions.length > 0 || queryCatalog) && (
             <Select
               aria-label={t("database.editor.catalogAria")}
-              className="max-w-[160px]"
+              className="h-7 w-[140px] text-[12px]"
               onChange={(event) => onChangeQueryContext({ catalog: event.target.value || null })}
               options={[
                 { label: t("database.editor.catalogDefault"), value: "" },
@@ -419,13 +422,13 @@ export function SqlEditorTab({
           {(schemaOptions.length > 0 || querySchema) && (
             <Select
               aria-label={t("database.editor.schemaAria")}
-              className="max-w-[160px]"
+              className="h-7 w-[140px] text-[12px]"
               onChange={(event) => onChangeQueryContext({ schema: event.target.value || null })}
               options={[{ label: t("database.editor.schemaDefault"), value: "" }, ...[...new Set([...schemaOptions, ...(querySchema ? [querySchema] : [])])].map((schema) => ({ label: schema, value: schema }))]}
               value={querySchema ?? ""}
             />
           )}
-          <span className="hidden min-w-0 truncate text-[12px] text-[var(--u-color-text-soft)] lg:inline">
+          <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--u-color-text-muted)]">
             {selectedConnection ? connectionContext(selectedConnection, queryCatalog) : t("database.editor.noConnectionSelected")}
           </span>
         </ToolbarGroup>
@@ -444,7 +447,9 @@ export function SqlEditorTab({
             onMount={handleMount}
             options={{
               fontSize: 13,
+              lineHeight: 21,
               minimap: { enabled: false },
+              padding: { top: 14, bottom: 14 },
               scrollBeyondLastLine: false,
               wordWrap: "on",
             }}

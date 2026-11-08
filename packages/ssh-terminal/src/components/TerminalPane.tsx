@@ -207,7 +207,7 @@ export function TerminalPane({
       // which corrupts the rendering of full-screen apps (vi, less, top) that
       // move the cursor explicitly. Write the bytes through verbatim instead.
       cursorBlink: true,
-      fontFamily: "JetBrains Mono, Consolas, ui-monospace, monospace",
+      fontFamily: token("--u-font-mono") || "Consolas, ui-monospace, monospace",
       fontSize: 13,
       theme: {
         background: token("--u-color-terminal-bg"),
@@ -488,7 +488,7 @@ export function TerminalPane({
     >
       <div
         className={cn(
-          "relative min-h-0 flex-1 overflow-hidden bg-[var(--u-color-terminal-bg)] p-2",
+          "relative min-h-0 flex-1 overflow-hidden bg-[var(--u-color-terminal-bg)] p-4",
           className,
         )}
         onClick={() => terminalRef.current?.focus()}

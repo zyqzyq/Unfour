@@ -1,0 +1,42 @@
+
+> unfour@0.13.0 build E:\unfour-workspace\unfour
+> pnpm --filter @unfour/desktop build
+
+
+> @unfour/desktop@0.13.0 build E:\unfour-workspace\unfour\apps\desktop
+> node ../../scripts/prepare-monaco.mjs && tsc && vite build
+
+vite v6.4.3 building for production...
+transforming...
+✓ 2677 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                            0.71 kB │ gzip:   0.37 kB
+dist/assets/xterm-6GBZ9nXN.css             5.24 kB │ gzip:   1.92 kB
+dist/assets/index-DMDaSyAj.css            21.36 kB │ gzip:   3.81 kB
+dist/assets/index-BTUwNL0X.css            81.64 kB │ gzip:  15.07 kB
+dist/assets/play-CkWKnH4f.js               0.36 kB │ gzip:   0.28 kB
+dist/assets/history-B28_LToc.js            0.41 kB │ gzip:   0.30 kB
+dist/assets/folder-plus-CBJZVanr.js        1.20 kB │ gzip:   0.50 kB
+dist/assets/eye-tjKTPAD7.js                1.33 kB │ gzip:   0.51 kB
+dist/assets/secret-input-BppMGW2N.js       2.87 kB │ gzip:   1.19 kB
+dist/assets/editor-theme-icoOslq2.js       3.27 kB │ gzip:   0.80 kB
+dist/assets/ssh-CO2KOk2B.js                4.37 kB │ gzip:   1.23 kB
+dist/assets/index-BZrc-MJR.js              9.83 kB │ gzip:   3.34 kB
+dist/assets/tree-view-BFUVwGTG.js         10.54 kB │ gzip:   4.09 kB
+dist/assets/monaco-BpqUKzTM.js            23.27 kB │ gzip:   8.16 kB
+dist/assets/index-gLmHGieG.js             23.49 kB │ gzip:   6.76 kB
+dist/assets/vendor-tanstack-NY2dT3jE.js   42.07 kB │ gzip:  12.70 kB
+dist/assets/vendor-radix-Ce5AJZ2w.js     101.36 kB │ gzip:  33.28 kB
+dist/assets/index-zj87Q8ns.js            109.24 kB │ gzip:  28.58 kB
+dist/assets/index-zZ64R59X.js            177.40 kB │ gzip:  49.49 kB
+dist/assets/index-BEnCccHy.js            269.63 kB │ gzip:  84.39 kB
+dist/assets/xterm-UBAlJZyB.js            366.82 kB │ gzip:  94.48 kB
+dist/assets/index-Cbeln_ii.js            439.76 kB │ gzip: 116.73 kB
+dist/assets/index-VqP5isim.js            792.13 kB │ gzip: 235.47 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 5.08s

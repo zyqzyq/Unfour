@@ -1,0 +1,1 @@
+PASS: 24 original images load at 1440x900; scenes/themes, pair view, overlay slider, swap and SSH light restriction verified. Two contact sheets captured directly from viewer.

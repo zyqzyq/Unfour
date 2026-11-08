@@ -209,8 +209,8 @@ export function ApiSaveDialog({
         <DialogHeader>
           <DialogTitle>{t("api.save.title")}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
-        <DialogBody className="space-y-3">
+        <form className="flex min-h-0 flex-col" onSubmit={handleSubmit}>
+        <DialogBody className="space-y-4">
           {notice && <p className="text-[12px] text-[var(--u-color-text-muted)]">{notice}</p>}
           <label className="block space-y-1">
             <span className="text-[12px] font-medium">{t("api.save.name")}</span>
@@ -228,7 +228,7 @@ export function ApiSaveDialog({
           <div className="space-y-1">
             <span className="text-[12px] font-medium">{t("api.save.location")}</span>
             <div
-              className="max-h-[200px] overflow-y-auto rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] p-1"
+              className="max-h-[200px] overflow-y-auto rounded-[var(--u-radius-lg)] border border-[var(--u-color-border)] bg-[var(--u-color-canvas)] p-2"
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault();

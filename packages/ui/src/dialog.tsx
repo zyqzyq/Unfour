@@ -14,7 +14,7 @@ export function DialogContent({
 }) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="u-dialog-overlay fixed inset-0 z-50 bg-[color:color-mix(in_srgb,var(--u-color-text)_24%,transparent)]" />
+      <DialogPrimitive.Overlay className="u-dialog-overlay fixed inset-0 z-50 bg-[var(--u-color-overlay)] backdrop-blur-[3px]" />
       <DialogPrimitive.Content
         className={cn(
           "u-dialog-content fixed left-1/2 top-1/2 z-50 flex max-h-[min(760px,calc(100vh-48px))] w-[min(560px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[var(--u-radius-lg)] border border-[var(--u-color-border)] bg-[var(--u-color-surface)] text-[13px] text-[var(--u-color-text)] shadow-lg focus-visible:outline-none",
@@ -39,7 +39,7 @@ export function DialogHeader({
   return (
     <div
       className={cn(
-        "flex min-h-[var(--u-size-section-toolbar)] shrink-0 items-center justify-between gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-3",
+        "flex min-h-[56px] shrink-0 items-center justify-between gap-3 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-5 py-3",
         className,
       )}
     >
@@ -54,7 +54,7 @@ export function DialogTitle({
 }: React.ComponentProps<typeof DialogPrimitive.Title>) {
   return (
     <DialogPrimitive.Title
-      className={cn("truncate text-[13px] font-semibold text-[var(--u-color-text)]", className)}
+      className={cn("truncate text-[15px] font-semibold tracking-tight text-[var(--u-color-text)]", className)}
       {...props}
     />
   );
@@ -79,7 +79,7 @@ export function DialogBody({
   children: React.ReactNode;
   className?: string;
 }) {
-  return <div className={cn("min-h-0 overflow-y-auto p-3", className)}>{children}</div>;
+  return <div className={cn("min-h-0 overflow-y-auto p-5", className)}>{children}</div>;
 }
 
 export function DialogFooter({
@@ -92,7 +92,7 @@ export function DialogFooter({
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center justify-end gap-2 border-t border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-3 py-2",
+        "flex shrink-0 items-center justify-end gap-2 border-t border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-5 py-3",
         className,
       )}
     >

@@ -78,8 +78,8 @@ export function ApiCollectionTree({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="px-2 py-2">
-        <label className="flex h-7 items-center gap-2 rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2 text-[12px] text-[var(--u-color-text-muted)]">
+      <div className="px-3 py-3">
+        <label className="flex h-[var(--u-size-input)] items-center gap-2 rounded-[var(--u-radius-md)] border border-[var(--u-color-border)] bg-[var(--u-color-canvas)] px-2.5 text-[12px] text-[var(--u-color-text-muted)] transition-colors focus-within:border-[var(--u-color-focus)]">
           <Search size={14} />
           <input
             aria-label={t("api.sidebar.searchAria")}
@@ -90,8 +90,8 @@ export function ApiCollectionTree({
           />
         </label>
       </div>
-      <div className="flex shrink-0 items-center justify-between gap-2 px-2 pb-1">
-        <span className="text-[length:var(--u-font-size-caption)] font-semibold uppercase text-[var(--u-color-text-muted)]">
+      <div className="flex shrink-0 items-center justify-between gap-2 px-3 pb-2">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--u-color-text-muted)]">
           {t("api.sidebar.collections")}
         </span>
         <ApiCollectionToolbarActions

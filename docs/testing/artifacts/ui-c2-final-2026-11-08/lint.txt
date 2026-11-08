@@ -1,0 +1,14 @@
+
+E:\unfour-workspace\unfour\packages\database\src\components\SqlEditorTab.tsx
+  50:8  warning  Function 'SqlEditorTab' has too many lines (503). Maximum allowed is 300  max-lines-per-function
+
+E:\unfour-workspace\unfour\packages\database\src\components\TableDataGrid.tsx
+  67:8  warning  Function 'TableDataGrid' has too many lines (394). Maximum allowed is 300  max-lines-per-function
+
+E:\unfour-workspace\unfour\packages\ssh-terminal\src\components\SshConnectionTree.tsx
+  57:1  warning  Function 'SshConnectionTreeContent' has too many lines (416). Maximum allowed is 300  max-lines-per-function
+
+E:\unfour-workspace\unfour\packages\ssh-terminal\src\components\TerminalPane.tsx
+  21:8  warning  Function 'TerminalPane' has too many lines (405). Maximum allowed is 300  max-lines-per-function
+
+✖ 4 problems (0 errors, 4 warnings)

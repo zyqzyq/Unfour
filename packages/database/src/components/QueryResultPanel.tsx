@@ -107,11 +107,11 @@ export function QueryResultPanel({
   }
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col bg-[var(--u-color-surface)]">
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--u-color-canvas)]">
       <Tabs
         activeBackground="subtle"
         activeId={activeTab}
-        className="h-[30px]"
+        className="h-9"
         onSelect={(tabId) => onSelectTab(tabId as DatabaseResultTab)}
         tabs={[
           { id: "results", title: t("database.result.tabResults") },
@@ -124,8 +124,8 @@ export function QueryResultPanel({
           },
         ]}
       />
-      <Toolbar className="h-8">
-        <ToolbarGroup>
+      <Toolbar className="h-auto min-h-10 flex-wrap gap-y-2 px-3 py-1.5">
+        <ToolbarGroup className="flex-wrap gap-2">
           {pendingConfirmation ? (
             <StatusBadge tone="warning">{t("database.batch.confirmationRequired")}</StatusBadge>
           ) : selectedError ? (
@@ -136,7 +136,7 @@ export function QueryResultPanel({
           {result?.truncated ? (
             <StatusBadge tone="warning">{t("database.result.truncatedBadge")}</StatusBadge>
           ) : null}
-          <span className="text-[12px] text-[var(--u-color-text-muted)]">
+          <span className="text-[12px] tabular-nums text-[var(--u-color-text-muted)]">
             {result
               ? t("database.result.rowsInMs", { rows: result.rows.length, durationMs: result.durationMs })
               : pendingConfirmation
@@ -213,7 +213,7 @@ export function QueryResultPanel({
       {activeTab === "results" && !pendingConfirmation && !statements.length && results.length > 1 ? (
         <Tabs
           activeId={`result-${activeResultIndex}`}
-          className="h-[28px] border-b border-[var(--u-color-border)]"
+          className="h-9 border-b border-[var(--u-color-border)]"
           onSelect={(tabId) => {
             const index = Number(String(tabId).replace("result-", ""));
             if (Number.isFinite(index)) {
@@ -432,7 +432,7 @@ function History({
     <div className="min-h-0 flex-1 overflow-auto text-[12px]">
       {entries.map((entry) => (
         <button
-          className="grid w-full cursor-pointer grid-cols-[86px_88px_minmax(0,1fr)_120px] items-center gap-2 border-b border-[var(--u-color-border)] px-2 py-1.5 text-left hover:bg-[var(--u-color-surface-hover)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--u-color-focus)]"
+          className="grid w-full cursor-pointer grid-cols-[72px_80px_minmax(0,1fr)_100px] items-center gap-3 border-b border-[var(--u-color-border)] px-3 py-3 text-left transition-colors hover:bg-[var(--u-color-surface-hover)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--u-color-focus)]"
           key={entry.id}
           onClick={() => onSelect(entry)}
           title={entry.sql}

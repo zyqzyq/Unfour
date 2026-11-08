@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Code2, Database, Download, Plus, RefreshCw, RotateCcw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Code2, Database, Download, Plus, RefreshCw, RotateCcw, Table2 } from "lucide-react";
 import { useState } from "react";
 import type {
   DatabaseCellValue,
@@ -95,25 +95,27 @@ export function TableDataTab({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <Toolbar className="h-8">
-        <ToolbarGroup className="min-w-0">
-          <span className="truncate text-[12px] font-medium text-[var(--u-color-text)]">{displayName}</span>
+      <Toolbar className="h-auto min-h-11 flex-wrap gap-y-2 px-3 py-1.5">
+        <ToolbarGroup className="min-w-0 gap-2">
+          <Table2 aria-hidden="true" className="shrink-0 text-[var(--u-color-primary)]" size={14} />
+          <span className="truncate font-mono text-[12px] font-semibold text-[var(--u-color-text)]">{displayName}</span>
           {!isLoading && tableView ? (
-            <span className="text-[length:var(--u-font-size-caption)] text-[var(--u-color-text-muted)]">
+            <span className="text-[length:var(--u-font-size-caption)] tabular-nums text-[var(--u-color-text-muted)]">
               {t(tableView.totalRowsExact === false ? "database.grid.rowRange" : "database.grid.rowRangeTotal", { first: firstRow, last: lastRow, total: tableView.totalRows })}
             </span>
           ) : null}
         </ToolbarGroup>
-        <ToolbarGroup>
+        <ToolbarGroup className="flex-wrap gap-1.5">
           <TableExportAction connection={connection} table={tableMeta} />
           {onSwitchToStructure ? (
-            <button
-              className="inline-flex h-[22px] items-center rounded-[5px] px-2 text-[12px] font-medium text-[var(--u-color-text-muted)] transition-colors duration-150 hover:text-[var(--u-color-text)]"
+            <Button
               onClick={onSwitchToStructure}
+              size="sm"
               type="button"
+              variant="ghost"
             >
               {t("database.editor.structureView")}
-            </button>
+            </Button>
           ) : null}
           {editing?.canInsert ? (
             <Button
@@ -186,7 +188,7 @@ export function TableDataTab({
           server={{ filter: tableFilter, onFilter: onTableFilter, onSort: onTableSort, sort: tableSort }}
         />
       </div>
-      <div className="flex h-9 shrink-0 items-center gap-3 border-t border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3">
+      <div className="flex h-10 shrink-0 items-center gap-3 border-t border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-3">
         <Database className="shrink-0 text-[var(--u-color-text-soft)]" size={13} />
         <code className="min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--u-color-text-muted)]" title={browseSql}>
           {browseSql}

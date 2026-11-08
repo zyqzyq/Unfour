@@ -46,9 +46,9 @@ describe("TerminalPane", () => {
     );
 
     expect(terminalState.openElement).not.toBeNull();
-    expect(terminalState.openElement).not.toHaveClass("p-2");
+    expect(terminalState.openElement).not.toHaveClass("p-4");
     expect(terminalState.openElement).toHaveClass("h-full", "w-full", "overflow-hidden");
-    expect(terminalState.openElement?.parentElement).toHaveClass("p-2");
+    expect(terminalState.openElement?.parentElement).toHaveClass("p-4");
   });
 
   it("serializes terminal input chunks for interactive programs", async () => {

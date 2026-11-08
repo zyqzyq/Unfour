@@ -160,7 +160,7 @@ export function SftpWorkspace({
         {session && !open ? (
           <IconButton
             aria-expanded={false}
-            className="absolute right-0 top-1/2 z-20 h-10 w-6 -translate-y-1/2 rounded-r-none border border-r-0 border-[var(--u-color-border-strong)] bg-[var(--u-color-surface)] shadow-sm hover:border-[var(--u-color-focus)]"
+            className="absolute right-0 top-1/2 z-20 h-12 w-8 -translate-y-1/2 rounded-r-none border border-r-0 border-[var(--u-color-border-strong)] bg-[var(--u-color-surface)] shadow-[var(--u-shadow-md)] hover:border-[var(--u-color-focus)]"
             label={t("ssh.sftp.openPanel")}
             onClick={() => setPanelOpen(session.sessionId, session.connectionId, true)}
             tooltip={t("ssh.sftp.openPanelTooltip")}
@@ -222,7 +222,7 @@ export function SftpWorkspace({
           </div>
           <aside
             aria-label={t("ssh.sftp.panelTitle")}
-            className="flex min-h-0 shrink-0 flex-col border-l border-[var(--u-color-border)] bg-[var(--u-color-surface)]"
+            className="flex min-h-0 shrink-0 flex-col border-l border-[var(--u-color-border)] bg-[var(--u-color-canvas)]"
             style={{ width: renderedPanelWidth }}
           >
             <SftpPanel
