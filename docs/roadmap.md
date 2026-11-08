@@ -6,19 +6,19 @@ This roadmap is a product-direction summary. It is not release evidence. Use
 Versioned sections record what each release shipped. Historical entries do not
 describe the latest release, and they do not change any `NOT VERIFIED` result.
 
-Current source version: `0.13.0` (**preparation only, not released**).
-See the [draft v0.13.0 notes](release/v0.13.0-release-notes.md) and
-[preparation evidence](testing/v0.13.0-release-preparation-2026-11-07.md).
+Current source version: `0.13.0` (**released**).
+See the [v0.13.0 notes](release/v0.13.0-release-notes.md) and
+[RC evidence](testing/v0.13.0-rc-final-verification-2026-11-07.md).
 The latest published release is
-[v0.12.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.12.0), published as
-**Standard stable on 2026-10-23**. CI, RC builds, formal publication, checksums
+[v0.13.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.13.0), published as
+**Standard stable on 2026-11-07**. CI, RC builds, formal publication, checksums
 and Stable manifest evidence are in the
-[final verification record](testing/release-verification.md#v0120-final-release-verification-record).
+[final verification record](testing/release-verification.md#v0130-final-release-verification-record).
 Unrecorded native/manual/live-service checks remain **NOT VERIFIED**.
 
-## Published capabilities through v0.12.0
+## Published capabilities through v0.13.0
 
-Shipped through v0.12.0:
+Shipped through v0.13.0:
 
 - API Client, SSH Terminal, Database, and local Flow runbooks in one workspace.
 - Local stdio MCP over the command bus, including Flow save, run, cancel, and
@@ -30,6 +30,16 @@ Shipped through v0.12.0:
 - Pro Cloud Sync for supported non-secret workspace data, including Flow
   definitions since v0.12.0. Flow run history, actual runtime inputs/outputs,
   credentials and sensitive values are not synchronized.
+
+## v0.13.0 (Published)
+
+- Supported cURL import with masked preview; local Database/SSH sidebar search;
+  bounded, read-only SFTP text preview.
+- Local MCP-driven Desktop refresh and stale-draft protection; account retry,
+  Workspace/keyboard, SSH ownership/history and Database navigation fixes.
+- Exact-SHA CI, four-platform RC and Standard publication pass. Targeted Windows
+  RC native/backend checks pass; unavailable real-service/manual checks retain
+  their recorded limits.
 
 ## v0.12.0 (Published)
 

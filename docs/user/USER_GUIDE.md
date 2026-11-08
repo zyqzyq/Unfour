@@ -15,18 +15,16 @@ Unfour opens into a single workspace surface:
 
 ## Current Capabilities
 
-Source preparation for v0.13.0 adds cURL import, local Database/SSH search,
-SFTP text preview and consistency fixes. These are **not released**; see the
-[draft notes](../release/v0.13.0-release-notes.md). The released baseline below
-remains v0.12.0 until publication.
-
-This guide describes **v0.12.0**, released as Standard stable on **2026-10-23**;
-see the [Release Notes](../release/v0.12.0-release-notes.md). CI, RC builds,
+This guide describes **v0.13.0**, released as Standard stable on **2026-11-07**.
+It adds supported cURL import with masked preview, local Database/SSH sidebar
+search, read-only UTF-8 SFTP preview up to 1 MiB, and consistency fixes. See the
+[Release Notes](../release/v0.13.0-release-notes.md). CI, RC builds,
 formal publication and distribution evidence are collected in
-[release verification](../testing/release-verification.md#v0120-final-release-verification-record).
+[release verification](../testing/release-verification.md#v0130-final-release-verification-record).
 Native install/update, detailed live-service and real-device checks without
-evidence remain **NOT VERIFIED**. The [original RC checklist](../testing/v0.12.0-rc-checklist.md)
-preserves the user's general Flow Sync manual confirmation and the scenario matrix.
+evidence remain **NOT VERIFIED**. The
+[v0.13.0 RC record](../testing/v0.13.0-rc-final-verification-2026-11-07.md)
+describes the targeted Windows checks and remaining scenario gaps.
 
 - The workspace shell is usable. API, SSH, and Database sidebars keep
   independent bounded widths and restore their own layout when switching

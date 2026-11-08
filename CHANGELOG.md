@@ -6,11 +6,14 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
-### Planned for v0.13.0
+## [0.13.0] - 2026-11-07
 
-Release preparation only; **not released**. See the
-[draft release notes](docs/release/v0.13.0-release-notes.md) and
-[preparation / verification record](docs/testing/v0.13.0-release-preparation-2026-11-07.md).
+Standard stable release after `v0.12.0`. See the
+[Release Notes](docs/release/v0.13.0-release-notes.md) and
+[final release verification](docs/testing/release-verification.md#v0130-final-release-verification-record).
+CI, four-platform RC and formal publication passed on the same tagged source.
+Remaining native installation/update and live-service checks without evidence
+remain **NOT VERIFIED**; the recorded Windows native checks used RC artifacts.
 
 ### Added
 
@@ -905,7 +908,8 @@ First public release.
 - Linux artifacts remain experimental/unverified until real-device smoke checks
   are complete.
 
-[Unreleased]: https://github.com/zyqzyq/Unfour/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/zyqzyq/Unfour/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/zyqzyq/Unfour/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/zyqzyq/Unfour/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/zyqzyq/Unfour/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/zyqzyq/Unfour/compare/v0.9.6...v0.10.0

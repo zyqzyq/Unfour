@@ -1,20 +1,39 @@
 # Release checklist
 
-## v0.13.0 preparation
+## v0.13.0 released status
 
-Status: **NOT RELEASED / RC NOT STARTED**. Source version `0.13.0`; latest
-published release remains `v0.12.0`. Preparation does not authorize tagging,
-pushing, workflow dispatch or publication.
+- Status: **RELEASED** as Standard stable on **2026-11-07**, at
+  `2026-11-07T15:19:26Z` (23:19:26 Asia/Shanghai); version `0.13.0`, tag `v0.13.0`.
+- Exact tag, CI, RC and formal Release SHA:
+  `e9fd2f7189e2569f9710588e5330a6da287e3cc3`.
+  [Comparison](https://github.com/zyqzyq/Unfour/compare/v0.12.0...v0.13.0).
+- [GitHub Release](https://github.com/zyqzyq/Unfour/releases/tag/v0.13.0):
+  ID `437654776`, non-draft, non-prerelease, 13 assets.
+- [Release Notes](v0.13.0-release-notes.md),
+  [Changelog](../../CHANGELOG.md#0130---2026-11-07) and
+  [final release verification](../testing/release-verification.md#v0130-final-release-verification-record)
+  record the published scope and evidence checked on 2026-11-08.
 
-- [Draft release notes](v0.13.0-release-notes.md)
-- [Changelog](../../CHANGELOG.md#unreleased)
-- [Source identities, local verification and candidate acceptance](../testing/v0.13.0-release-preparation-2026-11-07.md)
+| Gate | v0.13.0 result and evidence |
+| --- | --- |
+| CI on exact release SHA | PASS: [#334 / 42380089617](https://github.com/zyqzyq/Unfour/actions/runs/42380089617), 7/7 jobs |
+| Standard Release Candidate | PASS: [#22 / 42380108572](https://github.com/zyqzyq/Unfour/actions/runs/42380108572), 6/6 jobs, all four builds including macOS x64 |
+| Windows RC artifact and native regression | PASS within the [recorded scope](../testing/v0.13.0-rc-final-verification-2026-11-07.md): identity/signatures, isolated backend checks, Flow/Run Again -> Database, API -> Database, history and restart; DB-01 closed |
+| Standard Release | PASS: [#34 / 42383703464](https://github.com/zyqzyq/Unfour/actions/runs/42383703464), same SHA, 7/7 jobs, all four builds and publish |
+| GitHub / R2 distribution | PASS: 13 assets, ten R2 re-download checksum checks OK in publish logs; checksum entries match GitHub digests |
+| Stable manifests | PASS: both `0.13.0`, four platforms, public bytes match GitHub assets; downloads promoted before updater |
+| Installed upgrade, updater, formal-artifact native checks, macOS/Linux runtime/keychains | NOT VERIFIED; formal builds differ from tested RC bytes |
+| Real SSH/SFTP/Tasks, OAuth/accounts, remote DB, Cloud Sync and remaining MCP/manual scenarios | NOT VERIFIED where the RC matrix lacks evidence; no dedicated real resources |
+| Release-operator clean tree and explicit disposition of outstanding manual risks | NOT RECORDED / NOT VERIFIED |
+| Microsoft Store/MSIX | Separate path; NOT VERIFIED |
 
-Before a later release decision, review the local preparation commit, select its
-exact full SHA, and record CI/Standard RC verification and native artifact
-acceptance on that SHA. The working-tree checks below are not evidence for an
-unbuilt installer. Keep the release date unset until publication, then archive
-the Unreleased entries and pin the v0.12.0 comparison to the final tag.
+The [preparation](../testing/v0.13.0-release-preparation-2026-11-07.md),
+[hardening](../testing/release-hardening-2026-11-07.md) and
+[final RC record](../testing/v0.13.0-rc-final-verification-2026-11-07.md) retain
+historical checkpoints. Their NOT RELEASED and HOLD statements predate the
+completed publication; publication does not make missing manual checks PASS.
+This documentation follow-up includes prior local RC report edits, without
+moving the released tag, changing version or repeating publication.
 
 ## v0.12.0 released status
 

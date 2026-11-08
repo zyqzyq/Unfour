@@ -18,26 +18,21 @@ Unfour 在一个桌面应用中提供 API 测试、SSH、数据库工具、本�
 </div>
 
 > [!WARNING]
-> Unfour v0.12.0 已于 2026-10-23 正式发布。产品统一为 Unfour。
+> Unfour v0.13.0 已于 2026-11-07 正式发布。产品统一为 Unfour。
 > Windows NSIS 安装包尚未签名，可能触发 SmartScreen 或其他操作系统安全警告。
 > 请使用 GitHub Release 中的 `SHA256SUMS.txt` 校验下载文件。
 
-请参阅 [v0.12.0 变更记录](CHANGELOG.md#0120---2026-10-23)、
-[Release Notes](docs/release/v0.12.0-release-notes.md)及
-[正式发布验证记录](docs/testing/release-verification.md#v0120-final-release-verification-record)。
+请参阅 [v0.13.0 变更记录](CHANGELOG.md#0130---2026-11-07)、
+[Release Notes](docs/release/v0.13.0-release-notes.md)及
+[正式发布验证记录](docs/testing/release-verification.md#v0130-final-release-verification-record)。
 
-下文能力描述基于 **v0.12.0 Standard stable**，包含 Flow 定义 Cloud Sync 和审核后
-重跑 SSH Task。Tag 对应源码的 CI、RC 构建及正式发布均已通过。缺少证据的原生安装、
-升级、真实服务及详细人工验证仍为 **NOT VERIFIED**。
-[原始 RC 清单](docs/testing/v0.12.0-rc-checklist.md)保留用户对 Flow Sync 的总体手动
-确认及待验证的场景矩阵。
+下文能力描述基于 **v0.13.0 Standard stable**，新增受支持的 cURL 导入、Database/SSH
+侧栏搜索、SFTP 文本预览及一致性修复。Tag 对应源码的 CI、四平台 RC 构建和正式发布
+均已通过，Windows RC 的针对性原生复验也已通过。缺少证据的原生安装、升级、真实服务
+及人工验证仍为 **NOT VERIFIED**，具体范围见
+[RC 验收记录](docs/testing/v0.13.0-rc-final-verification-2026-11-07.md)。
 
 ## 下载
-
-当前源码正在准备 **v0.13.0**，尚未发布。参见
-[发布说明草稿](docs/release/v0.13.0-release-notes.md)和
-[准备验证记录](docs/testing/v0.13.0-release-preparation-2026-11-07.md)。
-下载与已发布能力描述仍以 v0.12.0 为准。
 
 请从 [GitHub Releases](https://github.com/zyqzyq/Unfour/releases/latest) 下载最新的 Unfour 正式版本。
 
@@ -46,7 +41,7 @@ Unfour 在一个桌面应用中提供 API 测试、SSH、数据库工具、本�
 - macOS 提供 Apple Silicon 与 Intel 包；v0.9.0 已记录真机安装运行验证，但未 Apple 签名、未公证；
   Gatekeeper 可能拦截。
 - Linux 目前只发布 x86_64（x64）AppImage，定位为 Experimental（实验性），
-  当前面向 Ubuntu 22.04+，不支持 Ubuntu 20.04。v0.12.0 使用 Ubuntu 22.04 构建，
+  当前面向 Ubuntu 22.04+，不支持 Ubuntu 20.04。v0.13.0 使用 Ubuntu 22.04 构建，
   已发布产物的真实运行验证仍为 `NOT VERIFIED`。`.deb` 和 `.rpm` 暂不正式支持，
   也不会公开发布。
 - 使用 Release 中的 `SHA256SUMS.txt` 校验下载的安装包。
@@ -218,11 +213,11 @@ pnpm run test:rust      # cargo test --workspace
 
 ## 发布状态
 
-[Unfour v0.12.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.12.0) 已于
-2026-10-23 作为 Standard stable 版本正式发布。CI、Standard Release Candidate、
+[Unfour v0.13.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.13.0) 已于
+2026-11-07 作为 Standard stable 版本正式发布。CI、Standard Release Candidate、
 Standard Release、发布资产、checksums 以及在线 updater/download manifests 已验证。
-没有 v0.12.0 实际证据的平台、真实服务与人工回归继续保持 `NOT VERIFIED`。
-早期版本及 v0.12.0 RC 准备记录保留其历史范围。产品统一为 Unfour。
+没有 v0.13.0 实际证据的平台、真实服务与人工回归继续保持 `NOT VERIFIED`。
+早期版本及 v0.13.0 RC 准备记录保留其历史范围。产品统一为 Unfour。
 发布验证证据见：
 
 - `docs/testing/release-verification.md`
@@ -240,13 +235,13 @@ glibc 版本就保证其他发行版兼容。`.deb` 和 `.rpm` 暂不正式支�
 否则不得声称其通过。
 
 已发布的 v0.9.0 Linux AppImage 构建成功，但因依赖 Ubuntu 24.04 时代的
-GLIBC/GLIBCXX 符号，在 Ubuntu 20.04 上启动失败。v0.12.0 AppImage 已使用
+GLIBC/GLIBCXX 符号，在 Ubuntu 20.04 上启动失败。v0.13.0 AppImage 已使用
 Ubuntu 22.04 构建，不会替换已发布的 v0.9.0 文件。在记录已发布产物的实际运行测试前，
-v0.12.0 Ubuntu 22.04/24.04 运行回归仍为 `NOT VERIFIED`，详见
+v0.13.0 Ubuntu 22.04/24.04 运行回归仍为 `NOT VERIFIED`，详见
 [发布验证记录](docs/testing/release-verification.md#linux-appimage-compatibility)。
 
 早期版本的真机与人工结果，以及仍然保持 `NOT VERIFIED` 的检查，集中记录在
-[发布验证](docs/testing/release-verification.md)。该记录中，下列 v0.12.0 事项仍为
+[发布验证](docs/testing/release-verification.md)。该记录中，下列 v0.13.0 事项仍为
 `NOT VERIFIED`：原生安装与更新、已发布产物上的工作区 / Auth / 数据库 / MCP / Flow
 回归、账号 / Cloud Sync 与 MCP 生产策略旅程、Linux 运行、macOS 与 Linux 凭据存储，
 以及人工 MSIX / Store 路径。正式发布不会把这些事项改成 `PASS`。v0.9.0 的平台结果

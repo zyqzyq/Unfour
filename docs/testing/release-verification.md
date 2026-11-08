@@ -1,16 +1,126 @@
 # Release Verification
 
-Current source preparation is **v0.13.0 — NOT RELEASED / RC NOT STARTED**.
-The subsequent [release-hardening checkpoint](release-hardening-2026-11-07.md)
-records structural cleanup, SSH workspace-isolation fixes and fresh regression
-results; it does not supply native/live-service acceptance or authorize release.
-See the [2026-11-07 preparation record](v0.13.0-release-preparation-2026-11-07.md)
-for its source identity, fresh local checks and remaining acceptance.
+Latest published release: **v0.13.0 Standard stable — RELEASED** on
+**2026-11-07**. Publication, automated verification and manual acceptance are
+separate states; missing scenario evidence remains **NOT VERIFIED**.
 
-The latest published release remains **v0.12.0 Standard stable**, released on
-**2026-10-23**, compared with `v0.11.0`. Published, automated-verified and
-manually-verified are separate states. Earlier release and RC/preparation
-records retain their original source identities, dates and limits.
+## v0.13.0 Final Release Verification Record
+
+Evidence checked on **2026-11-08 (Asia/Shanghai)** after the user reported
+successful publication. This follow-up reads GitHub tag/Release/workflow/job
+records, publish logs, public Stable manifests and the released checksum file;
+it updates documentation only and does not repeat publication.
+
+### Source and publication
+
+- Version `0.13.0`, tag `v0.13.0`; exact tag/CI/RC/Release source:
+  [`e9fd2f7189e2569f9710588e5330a6da287e3cc3`](https://github.com/zyqzyq/Unfour/commit/e9fd2f7189e2569f9710588e5330a6da287e3cc3).
+  The remote tag resolves directly to this commit. Remote `main` and local HEAD
+  also agreed at this documentation follow-up's entry; existing RC report edits
+  were uncommitted. This documentation commit is subsequent to the released source
+  and does not move the tag or require rebuilding the published version.
+- [GitHub Release](https://github.com/zyqzyq/Unfour/releases/tag/v0.13.0):
+  ID `437654776`, `draft=false`, `prerelease=false`, **13 assets**, published
+  `2026-11-07T15:19:26Z` (**23:19:26 Asia/Shanghai**).
+- [Comparison with v0.12.0](https://github.com/zyqzyq/Unfour/compare/v0.12.0...v0.13.0),
+  [Release Notes](../release/v0.13.0-release-notes.md) and
+  [Changelog](../../CHANGELOG.md#0130---2026-11-07) describe the released scope.
+- Release-operator working-tree cleanliness and explicit disposition of all
+  outstanding manual risks at publication: **NOT RECORDED / NOT VERIFIED**.
+  Successful publication does not establish those earlier manual states.
+
+### Workflow and four-platform build results
+
+All three runs completed successfully, attempt **1**, on the exact SHA above.
+
+| Workflow | Run / trigger | Result |
+| --- | --- | --- |
+| Hosted CI #334 | [42380089617](https://github.com/zyqzyq/Unfour/actions/runs/42380089617); push `main` | PASS; 7/7 jobs |
+| Standard Release Candidate #22 | [42380108572](https://github.com/zyqzyq/Unfour/actions/runs/42380108572); workflow dispatch | PASS; 6/6 jobs, identity, verify and four platform builds; no publish job |
+| Standard Release #34 | [42383703464](https://github.com/zyqzyq/Unfour/actions/runs/42383703464); tag push | PASS; 7/7 jobs, identity, verify, four platform builds and publish |
+
+Standard Release ran from `2026-11-07T14:53:23Z` through `15:19:35Z`.
+
+| Platform | RC artifact ID | Formal artifact ID / build job |
+| --- | --- | --- |
+| Windows x64 | `13578190574` | `13579104283` / [128439438773](https://github.com/zyqzyq/Unfour/actions/runs/42383703464/job/128439438773) |
+| macOS arm64 | `13577163802` | `13579605600` / [128439438838](https://github.com/zyqzyq/Unfour/actions/runs/42383703464/job/128439438838) |
+| macOS x64 | `13577614928` | `13579496338` / [128439438770](https://github.com/zyqzyq/Unfour/actions/runs/42383703464/job/128439438770) |
+| Linux x64 | `13577323393` | `13579950143` / [128439438765](https://github.com/zyqzyq/Unfour/actions/runs/42383703464/job/128439438765) |
+
+The [final RC record](v0.13.0-rc-final-verification-2026-11-07.md) contains test
+counts, Windows download/signature/identity checks, isolated upgrade/MCP checks
+and native regression evidence. The DB-01 Database navigation crash is closed
+by the committed fix and actual Windows RC native regression/restart.
+Only Windows was downloaded for replacement RC #22, as requested.
+
+Formal assets are **separate builds of the same SHA**, with different bytes
+from RC artifacts. No formal installer was downloaded or manually exercised in
+this documentation follow-up. RC native and offline cryptographic checks must
+not be attributed to formal bytes. Linux builds target Ubuntu 22.04; Linux
+runtime remains Experimental / NOT VERIFIED. OS code signing and macOS
+notarization remain disabled; updater signing does not establish OS trust.
+
+### Published assets, checksums and Stable manifests
+
+The [publish job](https://github.com/zyqzyq/Unfour/actions/runs/42383703464/job/128442595201)
+finalized ten immutable payload/signature files and re-downloaded them from R2:
+**10/10 SHA-256 checks OK** at `2026-11-07T15:19:14Z`. It uploaded thirteen GitHub
+assets and passed the manifest ordering guard for `0.12.0` -> `0.13.0`.
+Downloads were promoted at `15:19:31.152Z`, followed by updater at `15:19:33.646Z`.
+
+The released `SHA256SUMS.txt` has ten entries, all matching GitHub asset digests.
+Direct public reads of [Stable downloads](https://releases.unfour.dev/stable/downloads.json)
+and [Stable updater](https://releases.unfour.dev/stable/latest.json) both returned
+`0.13.0`, four expected platform entries and immutable `/stable/0.13.0/` URLs.
+Their bytes match the respective GitHub Release asset digests. All four updater
+signature fields decode to minisign signature text; this structural check is
+not an independent cryptographic verification of formal payloads.
+The updater `pub_date` is `2026-11-07T15:18:40.370Z` (manifest generation time).
+
+| Published asset | Bytes | SHA-256 (GitHub asset digest) |
+| --- | --- | --- |
+| `downloads.json` | 504 | `7699df1fe6b868914c0ce34026b99d4728666e66676adaf81c001fd815684b17` |
+| `latest.json` | 2,362 | `9523274c809b63ae33bec6f2394fa3e781a7f33bcaae6be4087ca0f9c3aca97a` |
+| `SHA256SUMS.txt` | 1,004 | `41557694d8630164b42cfc5440bb56197da9a3a0c8ad86bdc8e88d4502bf0ca2` |
+| `Unfour_0.13.0_linux_x64.AppImage` | 116,484,600 | `c8b1661be8654fb752f44216aad8156133babde4bec99efdfabb818e49d95b00` |
+| `Unfour_0.13.0_linux_x64.AppImage.sig` | 420 | `918e5680e3eaeff100a6df4f8b3f01d5f0143d8599ffed0f128138dc91c31777` |
+| `Unfour_0.13.0_macos_arm64.app.tar.gz` | 39,035,275 | `c4df022bf6cc6dfa3dc724a9b4632e3a13c6aa869d15d597a8c957b949a33257` |
+| `Unfour_0.13.0_macos_arm64.app.tar.gz.sig` | 404 | `09090128cdbaec37a3cf48e626c82e578ef4ab3d2aa8b91230e0d4035b82c43b` |
+| `Unfour_0.13.0_macos_arm64.dmg` | 39,528,224 | `5d489826d5b6877400a4963131c9d47683895c5a124c1f32f406e1d12fd6da88` |
+| `Unfour_0.13.0_macos_x64.app.tar.gz` | 41,735,719 | `1daa371227a6e968be92f2ef3a9bd4c8b21f4ac50b0063c80790199b8b30807c` |
+| `Unfour_0.13.0_macos_x64.app.tar.gz.sig` | 404 | `289953433f91b3cd391412fc09918eea05e8574780566ec90a4b06932294b272` |
+| `Unfour_0.13.0_macos_x64.dmg` | 42,570,078 | `bd6deea651a417708a5c73fa314f3582558fc95e402a1f91b18b9a9e4ccea67c` |
+| `Unfour_0.13.0_windows_x64.exe` | 25,619,310 | `855793eee5391643c4b7feb4e19ca1e78c7bb0a6030345f7569faa1eccb24918` |
+| `Unfour_0.13.0_windows_x64.exe.sig` | 416 | `32d04b1ccaf97c8060cbcb13310ea1d0c2423d7610401707af864a323dbd8d90` |
+
+The local evidence snapshot is under ignored
+`target/rc-final-v0.13.0/formal-release/`, with Release metadata at
+`target/rc-final-v0.13.0/release-v0.13.0.json`. Public Release/run links above
+provide the durable evidence references.
+
+### Remaining acceptance and follow-up
+
+No unresolved product-code blocker was found within the verified RC scope.
+Publication is complete; the earlier RC HOLD describes its pre-publication
+manual-gate recommendation, not the current distribution state. Keep these
+outstanding scenarios **NOT VERIFIED** until scoped evidence is recorded:
+
+- Representative v0.12.0 data and installed upgrade/keychain preservation;
+  native install/uninstall/updater and invalid-signature UI rejection.
+- Real Linux SSH/SFTP/session ownership, cancellation, Task failure/rerun and
+  workspace/history isolation; no dedicated test host was available.
+- OAuth/deep link/retry, real accounts, Flow Cloud Sync, complete draft-conflict
+  coverage and candidate Codex/Cursor integration; no dedicated resources.
+- Remote database engines, native SQL batch/permission journeys and remaining
+  API/Flow/manual scenarios in the RC matrix.
+- macOS/Linux runtime and credential stores; formal-artifact native regression;
+  the separate Microsoft Store/MSIX path.
+
+Do not recreate the existing tag, overwrite immutable assets or rerun publication
+for this documentation update. Preserve the preparation/hardening and original
+RC records with their source identities and limitations. The v0.12.0 and older
+release records below are unchanged historical evidence.
 
 ## v0.12.0 Final Release Verification Record
 
