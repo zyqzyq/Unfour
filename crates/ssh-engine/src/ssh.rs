@@ -41,6 +41,7 @@ mod connection_domain;
 mod local_bundle;
 pub use connection_domain::SshConnectionCleanup;
 mod diagnostic_execution;
+mod file_operations;
 mod native_auth;
 mod native_supervisor;
 mod native_transport;

@@ -23,7 +23,6 @@ fn command_output_schema() -> serde_json::Value {
 }
 
 const MAX_DIAGNOSTIC_TIMEOUT_MS: u64 = 60_000;
-const MAX_ONE_SHOT_COMMAND_CHARS: usize = 4096;
 const DEFAULT_FILE_LIMIT: u64 = 20 * 1024;
 const MAX_FILE_LIMIT: u64 = 128 * 1024;
 
@@ -154,7 +153,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                 name: "unfour.ssh.write_file",
                 title: "Write SSH File",
                 description:
-                    "Writes or appends a remote file through SSH. Dev allows ordinary project paths; test and high-risk paths require confirmation; prod is blocked by policy. The returned result contains only path/mode/byte counts and command status, never file content.",
+                    "Writes or appends a remote file through SFTP. Content is limited to 4 MiB of UTF-8 bytes; no terminal session or remote Python is needed. Overwriting an existing file requires SFTP posix-rename@openssh.com v1; unsupported servers leave the original untouched. Failed or timed-out appends may be partial; inspect before retrying. Dev allows ordinary project paths; test and high-risk paths require confirmation; prod is blocked by policy. The returned result contains only path/mode/byte counts and command status, never file content.",
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -181,7 +180,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                 name: "unfour.ssh.patch_file",
                 title: "Patch SSH File",
                 description:
-                    "Applies a small search/replace patch to a remote file through SSH and returns a diff summary without file content. Dev allows single-match project-file patches; test, system paths, or multi-match replacements require confirmation; prod is blocked by policy.",
+                    "Applies a search/replace patch through SSH stdin using Python 3 (4 MiB combined UTF-8 search/replace; 16 MiB target and result limit) and returns a diff summary without file content. Dev allows single-match project-file patches; test, system paths, or multi-match replacements require confirmation; prod is blocked by policy.",
                 input_schema: json!({
                     "type": "object",
                     "properties": {

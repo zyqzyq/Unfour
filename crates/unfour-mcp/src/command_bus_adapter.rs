@@ -1,6 +1,7 @@
 use unfour_core::models::{
     FlowDefinition, FlowRun, FlowRunInput, FlowRunPage, FlowRunSummary, FlowSummary,
 };
+use unfour_core::models::{SshFilePatchInput, SshFileWriteInput};
 mod contract;
 mod error;
 mod unified_runtime;
@@ -981,6 +982,32 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
             .map_err(|e| {
                 CommandBusAdapterError::from_app_error(
                     "The command-bus SSH command history list operation failed.",
+                    &e,
+                )
+            })
+    }
+
+    fn write_ssh_file(
+        &self,
+        input: SshFileWriteInput,
+    ) -> Result<SshDiagnosticResult, CommandBusAdapterError> {
+        self.run_execution(self.bus.write_ssh_file(input))
+            .map_err(|e| {
+                CommandBusAdapterError::from_ssh_app_error(
+                    "SSH file operation failed; inspect the target before retrying.",
+                    &e,
+                )
+            })
+    }
+
+    fn patch_ssh_file(
+        &self,
+        input: SshFilePatchInput,
+    ) -> Result<SshDiagnosticResult, CommandBusAdapterError> {
+        self.run_execution(self.bus.patch_ssh_file(input))
+            .map_err(|e| {
+                CommandBusAdapterError::from_ssh_app_error(
+                    "SSH file operation failed; inspect the target before retrying.",
                     &e,
                 )
             })

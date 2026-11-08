@@ -13,6 +13,7 @@ use unfour_core::models::{
 use unfour_core::models::{
     FlowDefinition, FlowRun, FlowRunInput, FlowRunPage, FlowRunSummary, FlowSummary,
 };
+use unfour_core::models::{SshFilePatchInput, SshFileWriteInput};
 
 use super::CommandBusAdapterError;
 
@@ -615,6 +616,28 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support SSH connection saves.",
+            details: serde_json::json!({}),
+        })
+    }
+
+    fn write_ssh_file(
+        &self,
+        _input: SshFileWriteInput,
+    ) -> Result<SshDiagnosticResult, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "SSH file operation is unavailable.",
+            details: serde_json::json!({}),
+        })
+    }
+
+    fn patch_ssh_file(
+        &self,
+        _input: SshFilePatchInput,
+    ) -> Result<SshDiagnosticResult, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "SSH file operation is unavailable.",
             details: serde_json::json!({}),
         })
     }

@@ -22,6 +22,17 @@ use unfour_core::AppError;
 use unfour_local_storage::LocalDb;
 
 #[test]
+fn atomic_replace_unsupported_keeps_safe_code_and_actionable_message() {
+    let mapped = CommandBusAdapterError::from_ssh_app_error(
+        "fallback",
+        &AppError::Unsupported("SSH_FILE_ATOMIC_REPLACE_UNSUPPORTED".into()),
+    );
+    assert_eq!(mapped.code, "SSH_FILE_ATOMIC_REPLACE_UNSUPPORTED");
+    assert!(mapped.message.contains("posix-rename@openssh.com v1"));
+    assert!(mapped.message.contains("original file was not modified"));
+}
+
+#[test]
 fn incomplete_remote_task_error_keeps_its_stable_code_at_the_mcp_boundary() {
     let mapped = CommandBusAdapterError::from_ssh_app_error(
         "fallback",

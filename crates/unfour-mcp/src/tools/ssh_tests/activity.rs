@@ -1,4 +1,5 @@
 use std::sync::{Arc, Mutex};
+use unfour_core::models::{SshFilePatchInput, SshFileWriteInput};
 
 use serde_json::json;
 use unfour_command_bus::{ReadCommand, ReadCommandResult};
@@ -47,6 +48,25 @@ impl CommandBusAdapter for ActivityBus {
         Ok(Self::kept(input))
     }
 
+    fn write_ssh_file(
+        &self,
+        input: SshFileWriteInput,
+    ) -> Result<SshDiagnosticResult, CommandBusAdapterError> {
+        let input = SshDiagnosticInput {
+            workspace_id: input.workspace_id,
+            connection_id: input.connection_id,
+            command: "sftp.write_file".into(),
+            timeout_ms: input.timeout_ms,
+        };
+        self.calls.lock().unwrap().push(input.command.clone());
+        Ok(Self::kept(input))
+    }
+    fn patch_ssh_file(
+        &self,
+        input: SshFilePatchInput,
+    ) -> Result<SshDiagnosticResult, CommandBusAdapterError> {
+        SshStubCommandBus.patch_ssh_file(input)
+    }
     fn run_ssh_command(
         &self,
         input: SshDiagnosticInput,

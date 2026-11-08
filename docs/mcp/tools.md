@@ -385,6 +385,45 @@ performs search/replace without returning full file content; if the search text
 matches multiple locations, it returns a confirmation request before replacing
 all matches.
 
+File mutations use typed command-bus/SSH-engine operations. `write_file` sends
+UTF-8 content through SFTP on a fresh authenticated connection; it does not
+require a terminal session, a local staging file, or remote Python. The single
+call limit is **4 MiB (4,194,304 UTF-8 bytes)**, including for append/create.
+`patch_file` sends path/search/replace through SSH stdin to a fixed Python 3
+helper. Its combined search + replace limit is also 4 MiB; target and resulting
+files are limited to **16 MiB**. Neither file payload consumes the ordinary
+4096-character SSH command budget. Over-limit inline content returns
+`SSH_FILE_CONTENT_TOO_LARGE` before remote execution. An oversized patch target
+or result returns exit code 4 and `SSH_PATCH_FILE_TOO_LARGE`, with `patched=false`.
+
+Writes accept regular files, rejecting observed symlinks and directories.
+Create stages a sibling file and uses SFTP's no-replace rename, so an existing
+or concurrently created destination fails. Overwriting an existing file requires
+`posix-rename@openssh.com` version 1 and atomically replaces the destination after
+all writes, metadata updates, optional server fsync, and close are acknowledged.
+Servers without that extension return `SSH_FILE_ATOMIC_REPLACE_UNSUPPORTED`
+before any file is opened for mutation. There is no backup-move fallback.
+Basic owner/group/mode metadata is preserved when replacing a file; new files
+start with mode 0600. Patch preserves UTF-8 bytes
+and line endings, stages a sibling file, checks the original metadata again,
+and replaces the target only after a complete successful write. Extended
+attributes/ACLs and hard-link identity are not preserved by replacement.
+Concurrent external changes still require coordination. The atomic rename
+request follows [OpenSSH PROTOCOL section 4.3](https://github.com/openssh/openssh-portable/blob/master/PROTOCOL).
+
+Timeout/cancellation can leave an uncertain remote outcome. Inspect the target
+before retrying, especially append: it can partially complete and is never
+automatically replayed. Before commit, failure leaves the original at its path;
+during an uncertain atomic commit, the destination is either the complete old
+file or the complete new file. Cancellation cannot retract a request the server
+already received. Cleanup only closes handles/removes unique staging files and
+never removes or renames the destination. It is best effort on disconnect;
+`.unfour-inline-*` or `.unfour-patch-*` siblings may remain. No fallback to
+shell-based writes is attempted if SFTP is unavailable. Atomic replacement does
+not promise survival of a server/filesystem power failure.
+Guarded confirmations bind to content digests, and file activity records contain
+metadata/byte counts/status only, never content or stdin payloads.
+
 SSH task metadata operations use the same task service and command-bus methods
 as the desktop UI. Task execution is asynchronous and returns a run summary.
 Because a saved task can contain multiple remote commands and transfers,

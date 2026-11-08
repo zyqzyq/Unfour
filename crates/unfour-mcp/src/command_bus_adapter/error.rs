@@ -64,6 +64,9 @@ impl CommandBusAdapterError {
 
     pub(super) fn from_ssh_app_error(message: &'static str, error: &AppError) -> Self {
         let message = match error {
+            AppError::Unsupported(reason) if reason == "SSH_FILE_ATOMIC_REPLACE_UNSUPPORTED" => {
+                "The SFTP server does not support atomic replacement (posix-rename@openssh.com v1). The original file was not modified."
+            }
             AppError::SshTaskIncompleteRemoteState => {
                 "The SSH task cannot run because its latest remote state requires a newer compatible client."
             }

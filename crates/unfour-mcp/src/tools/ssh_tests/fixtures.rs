@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use unfour_core::models::{SshFilePatchInput, SshFileWriteInput};
 
 use unfour_command_bus::{CurrentWorkspaceResult, ReadCommand, ReadCommandResult};
 use unfour_core::models::{
@@ -52,6 +53,39 @@ impl CommandBusAdapter for SshStubCommandBus {
         })
     }
 
+    fn write_ssh_file(
+        &self,
+        input: SshFileWriteInput,
+    ) -> Result<SshDiagnosticResult, CommandBusAdapterError> {
+        Ok(SshDiagnosticResult {
+            warnings: vec![],
+            connection_id: input.connection_id,
+            command: "sftp.write_file".into(),
+            stdout: String::new(),
+            stderr: String::new(),
+            exit_status: Some(0),
+            truncated: false,
+        })
+    }
+    fn patch_ssh_file(
+        &self,
+        input: SshFilePatchInput,
+    ) -> Result<SshDiagnosticResult, CommandBusAdapterError> {
+        Ok(SshDiagnosticResult {
+            warnings: vec![],
+            connection_id: input.connection_id,
+            command: "ssh.patch_file".into(),
+            stdout: if input.allow_multiple {
+                "__UNFOUR_MATCH_COUNT__ 2\n__UNFOUR_PATCHED__ 2\n"
+            } else {
+                "__UNFOUR_MATCH_COUNT__ 2\n"
+            }
+            .into(),
+            stderr: String::new(),
+            exit_status: Some(if input.allow_multiple { 0 } else { 3 }),
+            truncated: false,
+        })
+    }
     fn run_ssh_command(
         &self,
         input: SshDiagnosticInput,

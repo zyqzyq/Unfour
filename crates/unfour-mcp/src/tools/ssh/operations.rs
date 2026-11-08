@@ -1,5 +1,9 @@
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use unfour_core::models::SshDiagnosticInput;
+use unfour_core::models::{
+    SshFilePatchInput, SshFileWriteInput, SshFileWriteMode, SSH_FILE_MAX_CONTENT_BYTES,
+};
 
 use crate::command_bus_adapter::CommandBusAdapter;
 
@@ -171,6 +175,7 @@ pub(super) fn ssh_write_file(
     let connection_id = parse_required_string(&arguments, "connectionId", "unfour.ssh.write_file")?;
     let path = parse_required_string(&arguments, "path", "unfour.ssh.write_file")?;
     let content = parse_required_raw_string(&arguments, "content", "unfour.ssh.write_file", true)?;
+    ensure_file_content_size(content.len())?;
     let mode = parse_optional_string(&arguments, "mode")?.unwrap_or_else(|| "overwrite".into());
     let workspace = resolve_workspace(command_bus, &arguments)?;
     let timeout_ms = parse_optional_timeout(&arguments)?;
@@ -186,27 +191,30 @@ pub(super) fn ssh_write_file(
                 "connectionId": connection_id.clone(),
                 "path": path.clone(),
                 "mode": mode.clone(),
-                "contentBytes": content.len()
+                "contentBytes": content.len(),
+                "contentSha256": format!("{:x}", Sha256::digest(content.as_bytes()))
             }),
         )?;
     }
 
-    let python_mode = match mode.as_str() {
-        "append" => "ab",
-        "create" => "xb",
-        "overwrite" => "wb",
+    let write_mode = match mode.as_str() {
+        "append" => SshFileWriteMode::Append,
+        "create" => SshFileWriteMode::Create,
+        "overwrite" => SshFileWriteMode::Overwrite,
         _ => {
             return Err(ToolCallError::InvalidArguments(
                 "argument `mode` must be one of: overwrite, append, create".to_string(),
             ))
         }
     };
-    let command = python_write_file_command(&path, content.as_bytes(), python_mode)?;
+    let bytes = content.len();
     let result = command_bus
-        .run_ssh_command(SshDiagnosticInput {
+        .write_ssh_file(SshFileWriteInput {
             workspace_id: workspace.workspace_id,
             connection_id: connection_id.clone(),
-            command,
+            path: path.clone(),
+            content,
+            mode: write_mode,
             timeout_ms,
         })
         .map_err(|error| ToolCallError::Execution {
@@ -218,7 +226,7 @@ pub(super) fn ssh_write_file(
         "connectionId": connection_id,
         "path": path,
         "mode": mode,
-        "bytes": content.len(),
+        "bytes": bytes,
         "stdout": result.stdout,
         "stderr": result.stderr,
         "exitCode": result.exit_status,
@@ -252,6 +260,7 @@ pub(super) fn ssh_patch_file(
     let path = parse_required_string(&arguments, "path", "unfour.ssh.patch_file")?;
     let search = parse_required_raw_string(&arguments, "search", "unfour.ssh.patch_file", false)?;
     let replace = parse_required_raw_string(&arguments, "replace", "unfour.ssh.patch_file", true)?;
+    ensure_file_content_size(search.len().saturating_add(replace.len()))?;
     let workspace = resolve_workspace(command_bus, &arguments)?;
     let timeout_ms = parse_optional_timeout(&arguments)?;
     let multi_match_payload = json!({
@@ -261,14 +270,18 @@ pub(super) fn ssh_patch_file(
         "path": path.clone(),
         "searchBytes": search.len(),
         "replaceBytes": replace.len(),
+        "searchSha256": format!("{:x}", Sha256::digest(search.as_bytes())),
+        "replaceSha256": format!("{:x}", Sha256::digest(replace.as_bytes())),
         "replaceAllMatches": true
     });
-    let allow_multiple_matches = is_confirmed(
-        &arguments,
-        "SSH_PATCH_MULTIPLE_MATCHES",
-        &multi_match_payload,
-    );
-    if workspace.environment_type == "test" || is_sensitive_path(&path) {
+    let allow_multiple_matches = !evaluation.requires_confirmation()
+        || is_confirmed(
+            &arguments,
+            "SSH_PATCH_MULTIPLE_MATCHES",
+            &multi_match_payload,
+        );
+    if !allow_multiple_matches && (workspace.environment_type == "test" || is_sensitive_path(&path))
+    {
         ensure_confirmed_if_guarded(
             evaluation,
             &arguments,
@@ -280,22 +293,23 @@ pub(super) fn ssh_patch_file(
                 "connectionId": connection_id.clone(),
                 "path": path.clone(),
                 "searchBytes": search.len(),
-                "replaceBytes": replace.len()
+                "replaceBytes": replace.len(),
+                "searchSha256": format!("{:x}", Sha256::digest(search.as_bytes())),
+                "replaceSha256": format!("{:x}", Sha256::digest(replace.as_bytes()))
             }),
         )?;
     }
 
-    let command = python_patch_file_command(
-        &path,
-        &search,
-        &replace,
-        if allow_multiple_matches { "1" } else { "0" },
-    )?;
+    let search_bytes = search.len();
+    let replace_bytes = replace.len();
     let result = command_bus
-        .run_ssh_command(SshDiagnosticInput {
+        .patch_ssh_file(SshFilePatchInput {
             workspace_id: workspace.workspace_id,
             connection_id: connection_id.clone(),
-            command,
+            path: path.clone(),
+            search,
+            replace,
+            allow_multiple: allow_multiple_matches,
             timeout_ms,
         })
         .map_err(|error| ToolCallError::Execution {
@@ -327,8 +341,8 @@ pub(super) fn ssh_patch_file(
         "patched": result.exit_status == Some(0),
         "matches": matches,
         "diffSummary": {
-            "searchBytes": search.len(),
-            "replaceBytes": replace.len(),
+            "searchBytes": search_bytes,
+            "replaceBytes": replace_bytes,
             "replacements": replacements
         },
         "stdout": result.stdout,
@@ -386,4 +400,16 @@ pub(super) fn ssh_list_dir(
     });
     insert_activity_warnings(&mut value, &result.warnings);
     Ok(value)
+}
+
+fn ensure_file_content_size(bytes: usize) -> Result<(), ToolCallError> {
+    if bytes > SSH_FILE_MAX_CONTENT_BYTES {
+        return Err(ToolCallError::ExecutionWithDetails {
+            code: "SSH_FILE_CONTENT_TOO_LARGE",
+            message:
+                "File content (or combined search/replace) exceeds the 4 MiB UTF-8 byte limit.",
+            details: json!({ "actualBytes": bytes, "maxBytes": SSH_FILE_MAX_CONTENT_BYTES }),
+        });
+    }
+    Ok(())
 }

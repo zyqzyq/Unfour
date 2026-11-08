@@ -97,6 +97,9 @@ impl AppError {
             AppError::Io(_) => "IO_ERROR",
             AppError::NotFound(_) => "NOT_FOUND",
             AppError::Serialization(_) => "SERIALIZATION_ERROR",
+            AppError::Unsupported(reason) if reason == "SSH_FILE_ATOMIC_REPLACE_UNSUPPORTED" => {
+                "SSH_FILE_ATOMIC_REPLACE_UNSUPPORTED"
+            }
             AppError::Unsupported(_) => "UNSUPPORTED_OPERATION",
             AppError::Validation(reason) if reason == "FLOW_INVALID_REFERENCE" => {
                 "FLOW_INVALID_REFERENCE"
@@ -118,6 +121,9 @@ impl AppError {
             }
             AppError::Validation(reason) if reason == "API_RESPONSE_TOO_LARGE" => {
                 "API_RESPONSE_TOO_LARGE"
+            }
+            AppError::Validation(reason) if reason == "SSH_FILE_CONTENT_TOO_LARGE" => {
+                "SSH_FILE_CONTENT_TOO_LARGE"
             }
             AppError::Validation(reason) if reason == "SFTP_PREVIEW_TOO_LARGE" => {
                 "SFTP_PREVIEW_TOO_LARGE"

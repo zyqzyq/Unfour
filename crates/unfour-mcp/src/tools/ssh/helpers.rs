@@ -4,9 +4,9 @@ use unfour_core::models::SshConnection;
 
 use crate::command_bus_adapter::CommandBusAdapter;
 
-use super::super::ssh_risk::{parse_optional_u64, redact_command_display, shell_quote};
+use super::super::ssh_risk::{parse_optional_u64, redact_command_display};
 use super::super::ToolCallError;
-use super::{MAX_DIAGNOSTIC_TIMEOUT_MS, MAX_ONE_SHOT_COMMAND_CHARS};
+use super::MAX_DIAGNOSTIC_TIMEOUT_MS;
 #[derive(Debug, Clone)]
 pub(super) struct WorkspaceContext {
     pub(super) workspace_id: String,
@@ -128,58 +128,6 @@ pub(super) fn parse_optional_secret(
             "argument `{key}` must be a string"
         ))),
     }
-}
-
-pub(super) fn python_write_file_command(
-    path: &str,
-    content: &[u8],
-    python_mode: &str,
-) -> Result<String, ToolCallError> {
-    let script = "from pathlib import Path; import sys; data=bytes.fromhex(sys.argv[3]); f=Path(sys.argv[1]).open(sys.argv[2]); f.write(data); f.close()";
-    ensure_one_shot_command_length(format!(
-        "python3 -c {} -- {} {} {}",
-        shell_quote(script),
-        shell_quote(path),
-        shell_quote(python_mode),
-        shell_quote(&hex_encode(content))
-    ))
-}
-
-pub(super) fn python_patch_file_command(
-    path: &str,
-    search: &str,
-    replace: &str,
-    allow_multiple: &str,
-) -> Result<String, ToolCallError> {
-    let script = "import sys; from pathlib import Path; p=Path(sys.argv[1]); text=p.read_text(); search=bytes.fromhex(sys.argv[2]).decode(); replace=bytes.fromhex(sys.argv[3]).decode(); allow=sys.argv[4]=='1'; count=text.count(search); print('__UNFOUR_MATCH_COUNT__', count); sys.exit(3) if count == 0 or (count > 1 and not allow) else None; replacements=count if allow else 1; p.write_text(text.replace(search, replace, replacements)); print('__UNFOUR_PATCHED__', replacements)";
-    ensure_one_shot_command_length(format!(
-        "python3 -c {} -- {} {} {} {}",
-        shell_quote(script),
-        shell_quote(path),
-        shell_quote(&hex_encode(search.as_bytes())),
-        shell_quote(&hex_encode(replace.as_bytes())),
-        shell_quote(allow_multiple)
-    ))
-}
-
-pub(super) fn ensure_one_shot_command_length(command: String) -> Result<String, ToolCallError> {
-    if command.chars().count() > MAX_ONE_SHOT_COMMAND_CHARS {
-        return Err(ToolCallError::Execution {
-            code: "SSH_COMMAND_TOO_LARGE",
-            message: "The generated SSH command exceeds the one-shot command length limit.",
-        });
-    }
-    Ok(command)
-}
-
-pub(super) fn hex_encode(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut encoded = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        encoded.push(HEX[(byte >> 4) as usize] as char);
-        encoded.push(HEX[(byte & 0x0f) as usize] as char);
-    }
-    encoded
 }
 
 pub(super) fn parse_match_count(stdout: &str) -> Option<u64> {

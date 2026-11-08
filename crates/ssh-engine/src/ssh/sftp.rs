@@ -1,5 +1,9 @@
 use super::*;
 
+#[cfg(feature = "ssh-native")]
+pub(super) mod inline_session;
+#[cfg(feature = "ssh-native")]
+pub(super) mod inline_write;
 mod preview;
 mod support;
 mod transfer_perf;

@@ -4,6 +4,9 @@ mod flow;
 mod flow_safety;
 #[path = "lib_tests/multipart.rs"]
 mod multipart;
+#[cfg(feature = "ssh-native")]
+#[path = "lib_tests/ssh_file_native.rs"]
+mod ssh_file_native;
 #[path = "lib_tests/ssh_task_context.rs"]
 mod ssh_task_context;
 use super::*;

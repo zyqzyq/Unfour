@@ -55,7 +55,7 @@ fn patch_file_multi_match_requires_confirmation_then_replaces_all() {
 }
 
 #[test]
-fn write_file_accepts_multiline_content_without_multiline_shell_command() {
+fn write_file_accepts_multiline_content_through_typed_file_operation() {
     let content = "services:\n  db:\n    image: postgres:15\n";
     let result = registry()
         .call(
@@ -66,7 +66,7 @@ fn write_file_accepts_multiline_content_without_multiline_shell_command() {
                 "content": content
             }),
         )
-        .expect("multiline content should be encoded into a control-free command");
+        .expect("multiline content should travel as data");
 
     assert_eq!(result["isError"], false);
     assert_eq!(
@@ -75,6 +75,136 @@ fn write_file_accepts_multiline_content_without_multiline_shell_command() {
     );
     assert_eq!(result["structuredContent"]["mode"], "overwrite");
     assert_eq!(result["structuredContent"]["bytes"], content.len());
+}
+
+#[test]
+fn file_content_limit_is_four_mib_of_utf8_not_command_characters() {
+    use unfour_core::models::SSH_FILE_MAX_CONTENT_BYTES;
+    let content = format!("{}x", "界".repeat(SSH_FILE_MAX_CONTENT_BYTES / 3));
+    assert_eq!(content.len(), SSH_FILE_MAX_CONTENT_BYTES);
+    for mode in ["overwrite", "append", "create"] {
+        let result = registry()
+            .call(
+                "unfour.ssh.write_file",
+                json!({
+                    "connectionId":"conn-1", "path":"/srv/config", "mode":mode, "content":content,
+                }),
+            )
+            .unwrap();
+        assert_eq!(result["isError"], false);
+        assert_eq!(
+            result["structuredContent"]["bytes"],
+            SSH_FILE_MAX_CONTENT_BYTES
+        );
+        assert!(!result.to_string().contains(&content[..30]));
+    }
+    let result = registry()
+        .call(
+            "unfour.ssh.write_file",
+            json!({
+                "connectionId":"conn-1", "path":"/srv/config", "content":format!("{content}x"),
+            }),
+        )
+        .unwrap();
+    assert_eq!(
+        crate::response::error_json(&result)["error"]["code"],
+        "SSH_FILE_CONTENT_TOO_LARGE"
+    );
+    let details = &crate::response::error_json(&result)["error"]["details"];
+    assert_eq!(details["actualBytes"], SSH_FILE_MAX_CONTENT_BYTES + 1);
+    assert_eq!(details["maxBytes"], SSH_FILE_MAX_CONTENT_BYTES);
+}
+
+#[test]
+fn full_access_patch_can_replace_multiple_matches_without_confirmation_loop() {
+    use crate::tools::policy::{
+        McpCapability, McpRisk, ResolvedMcpPolicy, ToolPolicyEvaluation, WorkspacePolicyContext,
+    };
+    let evaluation = ToolPolicyEvaluation {
+        workspace: WorkspacePolicyContext {
+            workspace_id: "ws-active".into(),
+            workspace_name: "Active".into(),
+            environment_type: "dev".into(),
+            mcp_policy: "full_access".into(),
+        },
+        resolved_policy: ResolvedMcpPolicy::FullAccess,
+        capability: McpCapability::SshExec,
+        risk: McpRisk::Write,
+    };
+    let result = super::super::operations::ssh_patch_file(
+        &super::fixtures::SshStubCommandBus,
+        &evaluation,
+        json!({"connectionId":"conn-1", "path":"/srv/config", "search":"old", "replace":"new"}),
+    )
+    .unwrap();
+    assert_eq!(result["patched"], true);
+    assert_eq!(result["diffSummary"]["replacements"], 2);
+}
+
+#[test]
+fn patch_limit_applies_to_combined_search_and_replace() {
+    use unfour_core::models::SSH_FILE_MAX_CONTENT_BYTES;
+    let args = json!({"connectionId":"conn-1", "path":"/srv/config", "search":"a", "replace":"b".repeat(SSH_FILE_MAX_CONTENT_BYTES - 1)});
+    let result = registry()
+        .call("unfour.ssh.patch_file", args.clone())
+        .unwrap();
+    assert_eq!(
+        crate::response::error_json(&result)["error"]["code"],
+        "CONFIRMATION_REQUIRED"
+    );
+    let mut oversized = args;
+    oversized["search"] = json!("aa");
+    let result = registry().call("unfour.ssh.patch_file", oversized).unwrap();
+    assert_eq!(
+        crate::response::error_json(&result)["error"]["code"],
+        "SSH_FILE_CONTENT_TOO_LARGE"
+    );
+}
+
+#[test]
+fn write_confirmation_cannot_be_reused_for_different_same_length_content() {
+    let mut args = json!({"connectionId":"conn-1","path":"/etc/config","content":"old"});
+    let first = registry()
+        .call("unfour.ssh.write_file", args.clone())
+        .unwrap();
+    let confirmation = crate::response::error_json(&first)["confirmation_text"].clone();
+    args["confirm"] = json!(true);
+    args["confirmation_text"] = confirmation;
+    let accepted = registry()
+        .call("unfour.ssh.write_file", args.clone())
+        .unwrap();
+    assert_eq!(accepted["isError"], false);
+    args["content"] = json!("new");
+    let denied = registry().call("unfour.ssh.write_file", args).unwrap();
+    assert_eq!(
+        crate::response::error_json(&denied)["error"]["code"],
+        "CONFIRMATION_REQUIRED"
+    );
+}
+
+#[test]
+fn sensitive_multi_match_confirmation_completes_and_binds_content() {
+    let mut args =
+        json!({"connectionId":"conn-1","path":"/etc/config","search":"old","replace":"new"});
+    for _ in 0..2 {
+        let result = registry()
+            .call("unfour.ssh.patch_file", args.clone())
+            .unwrap();
+        assert_eq!(result["isError"], true);
+        args["confirm"] = json!(true);
+        args["confirmation_text"] =
+            crate::response::error_json(&result)["confirmation_text"].clone();
+    }
+    let accepted = registry()
+        .call("unfour.ssh.patch_file", args.clone())
+        .unwrap();
+    assert_eq!(accepted["structuredContent"]["patched"], true);
+    args["replace"] = json!("NEW");
+    let denied = registry().call("unfour.ssh.patch_file", args).unwrap();
+    assert_eq!(
+        crate::response::error_json(&denied)["error"]["code"],
+        "CONFIRMATION_REQUIRED"
+    );
 }
 
 #[test]
