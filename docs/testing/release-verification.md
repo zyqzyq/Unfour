@@ -1,5 +1,10 @@
 # Release Verification
 
+Current preparation: **v0.14.0 — NOT RELEASED / RC NOT STARTED**.
+Use the [2026-11-09 preparation record](v0.14.0-release-preparation-2026-11-09.md)
+for current source identity, fresh local results, native/live-service limits and
+the exact-SHA RC handoff. Historical records below are not v0.14.0 evidence.
+
 Latest published release: **v0.13.0 Standard stable — RELEASED** on
 **2026-11-07**. Publication, automated verification and manual acceptance are
 separate states; missing scenario evidence remains **NOT VERIFIED**.

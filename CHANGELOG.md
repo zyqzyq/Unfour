@@ -6,6 +6,48 @@ This file is the user-facing change history for Unfour, following
 
 ## [Unreleased]
 
+### v0.14.0 preparation — not released
+
+Planned Standard stable release after `v0.13.0`; no release date or final
+candidate commit has been selected. See the
+[draft Release Notes](docs/release/v0.14.0-release-notes.md) and
+[current verification](docs/testing/v0.14.0-release-preparation-2026-11-09.md).
+
+### Added
+
+- **MCP resource management** — 15 new tools for creating/renaming workspaces,
+  organizing API folders and moving/duplicating requests, managing Saved SQL,
+  and discovering database catalogs. Workspace creation preserves the active
+  selection and inherits its authorizing workspace's environment and MCP policy.
+  Saved SQL updates/deletes use revision checks; reads expose masked diagnostics.
+
+### Improved
+
+- **C2 workbench** — Updated light/dark workbench surfaces, navigation, focus
+  and compact layouts across API, Database, SSH, Flow and Settings; refined API
+  tabs and reduced accidental text selection while dragging workbench controls.
+- **SSH Task logs** — Pause automatic following while reading earlier output,
+  preserve the reading position across modules, and explicitly resume following.
+
+### Fixed
+
+- Show API errors and Retry in Request, Tests and Console tabs; retry the current
+  edited request. Show command-level database failures in Messages as well as
+  Results, and clear stale failure feedback after successful execution.
+- Protect unsaved Flow drafts, including invalid JSON and hidden editors, before
+  switching, creating or deleting workspaces. Keep pending lifecycle dialogs
+  open and prevent repeated submission. This is leave confirmation, not autosave
+  or crash recovery.
+- Serialize environment changes within a workspace and block Send/Retry/API
+  keyboard send until switching completes. Use the last successful activation;
+  failed activation retains the previously confirmed environment and shows an error.
+- Normalize loaded, dragged and saved layout dimensions to valid integer pixels.
+- Repair existing MCP SSH `write_file` / `patch_file` operations. Writes use SFTP;
+  replacing an existing file requires the server's POSIX rename extension. Patch
+  requires remote Python 3. Inline input is bounded to 4 MiB and patch files to
+  16 MiB. Append can partially complete; inspect remote state before retrying
+  after interruption. See the Release Notes for metadata and support limits.
+
 ## [0.13.0] - 2026-11-07
 
 Standard stable release after `v0.12.0`. See the

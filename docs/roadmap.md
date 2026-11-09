@@ -6,9 +6,9 @@ This roadmap is a product-direction summary. It is not release evidence. Use
 Versioned sections record what each release shipped. Historical entries do not
 describe the latest release, and they do not change any `NOT VERIFIED` result.
 
-Current source version: `0.13.0` (**released**).
-See the [v0.13.0 notes](release/v0.13.0-release-notes.md) and
-[RC evidence](testing/v0.13.0-rc-final-verification-2026-11-07.md).
+Current source version: `0.14.0` (**preparation; not released**).
+See the [draft v0.14.0 notes](release/v0.14.0-release-notes.md) and
+[current preparation evidence](testing/v0.14.0-release-preparation-2026-11-09.md).
 The latest published release is
 [v0.13.0](https://github.com/zyqzyq/Unfour/releases/tag/v0.13.0), published as
 **Standard stable on 2026-11-07**. CI, RC builds, formal publication, checksums

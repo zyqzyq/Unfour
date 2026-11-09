@@ -1,5 +1,40 @@
 # Release checklist
 
+## v0.14.0 preparation status
+
+Status: **NOT RELEASED / RC NOT STARTED** (2026-11-09, Asia/Shanghai).
+Version `0.14.0` is prepared locally; final complete candidate SHA is not selected.
+Latest published stable remains [v0.13.0](#v0130-released-status).
+
+- [Draft Release Notes](v0.14.0-release-notes.md),
+  [Unreleased changelog](../../CHANGELOG.md#unreleased), and
+  [source, local results and remaining acceptance](../testing/v0.14.0-release-preparation-2026-11-09.md).
+- Scope: C2 workbench, API/DB/SSH Task recovery, Flow/workspace/environment guards,
+  MCP resource management and fixes to existing SSH file tools, layout and selection.
+  JumpServer/AccessClient, website updates and additional refactoring are deferred.
+- Fresh GitHub checks: v0.13.0 is the latest non-draft/non-prerelease release;
+  `v0.14.0` tag absent and Release endpoint returns 404. Local/remote main at
+  `d3b35b91bd0e888c60719010a34babd78a6ce543`; entry working tree clean.
+- [CI 42577948027](https://github.com/zyqzyq/Unfour/actions/runs/42577948027)
+  passed 7/7 jobs on that entry SHA. It does not include this uncommitted preparation.
+
+| Required gate | Current disposition |
+| --- | --- |
+| Version, changelog, notes and local verification | See the dated preparation record; local evidence applies to HEAD plus the preparation diff |
+| Reviewed complete commit, push and CI on that exact SHA | PENDING; no commit/push performed in this task |
+| Standard Release Candidate on complete SHA | NOT RUN; do not dispatch entry HEAD or moving main as evidence for local edits |
+| Windows x64, macOS arm64/x64, Linux x64 candidate builds | NOT RUN for v0.14.0; all four required from the same RC run |
+| Candidate identity/checksum/signature and focused native acceptance | PENDING; local debug checks do not establish installed RC behavior |
+| Real SSH file create/overwrite/append/patch and basic permissions | NOT VERIFIED without a designated disposable remote directory and test connection |
+| Final go/no-go and manual-risk disposition | PENDING; no claim of all gates passing |
+| Formal tag / GitHub Release / Stable manifest promotion | OUT OF SCOPE; not performed |
+
+Commit the reviewed preparation, push it, wait for CI, then dispatch
+`release-candidate.yml` with `ref=<full-complete-commit-SHA>` as described in the
+dated record. Download and verify that run's artifacts, finish scoped acceptance,
+and record any remaining risk before a separately authorized formal release.
+Retain all historical records below with their original evidence boundaries.
+
 ## v0.13.0 released status
 
 - Status: **RELEASED** as Standard stable on **2026-11-07**, at
