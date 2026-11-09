@@ -19,7 +19,7 @@ export function ApiCurlImport({ onImport }: { onImport: (draft: RequestDraft) =>
   }
   return <>
     <Dialog open={open} onOpenChange={next => next ? setOpen(true) : close()}>
-      <DialogTrigger asChild><IconButton label={t("api.curl.title")} size="compact"><Upload size={14} /></IconButton></DialogTrigger>
+      <DialogTrigger asChild><IconButton label={t("api.curl.title")} size="compact" tooltipAlign="end"><Upload size={14} /></IconButton></DialogTrigger>
       <DialogContent title={t("api.curl.title")}>
         <DialogHeader><DialogTitle>{t("api.curl.title")}</DialogTitle></DialogHeader>
         <DialogBody>

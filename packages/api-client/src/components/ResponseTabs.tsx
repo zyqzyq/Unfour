@@ -105,7 +105,7 @@ export function ResponseTabs({
         />
       )}
       <ResponseSendNotice tab={tab} canRetry={canRetry} onRetry={onRetry} />
-      <div className="min-h-0 flex-1 overflow-hidden bg-[var(--u-color-canvas)]">
+      <div className="min-h-0 flex-1 select-text overflow-hidden bg-[var(--u-color-canvas)]">
         <ExecutionProgress
           isScriptTab={isScriptTab}
           responseState={responseState}

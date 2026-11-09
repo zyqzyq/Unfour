@@ -11,7 +11,7 @@ export function DatabaseErrorDetails({
   const message = confirmation ? confirmationMessage(error) : description.message;
 
   return (
-    <div className="min-w-0 space-y-1 text-left">
+    <div className="min-w-0 select-text space-y-1 text-left">
       <div className="font-semibold">{description.title}</div>
       <div className="break-words">{message}</div>
       {description.technicalDetail ? (

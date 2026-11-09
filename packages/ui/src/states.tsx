@@ -60,7 +60,7 @@ export function ErrorState({
       )}
     >
       <AlertCircle size={14} />
-      <span className="min-w-0">{children}</span>
+      <span className="min-w-0 select-text">{children}</span>
     </div>
   );
 }

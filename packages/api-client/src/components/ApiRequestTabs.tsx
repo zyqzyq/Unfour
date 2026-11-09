@@ -44,10 +44,10 @@ export function ApiRequestTabs({
   const savedTabCount = tabs.filter((tab) => getTabSaveState(tab) === "saved").length;
 
   return (
-    <div className="flex h-[var(--u-size-tabbar)] shrink-0 items-stretch gap-1 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2 pt-1.5">
+    <div className="flex h-[var(--u-size-tabbar)] shrink-0 items-end gap-1 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2">
       <div
         aria-label={t("api.tabs.openRequests")}
-        className="flex min-w-0 shrink items-stretch gap-1 overflow-x-auto"
+        className="flex min-w-0 shrink translate-y-px items-end gap-1 overflow-x-auto"
         role="tablist"
       >
         {tabs.map((tab, index) => {
@@ -58,14 +58,14 @@ export function ApiRequestTabs({
           const tabNode = (
             <div
               className={cn(
-                "group relative flex min-w-[150px] max-w-[230px] items-center gap-1 rounded-t-[var(--u-radius-md)] border border-b-0 border-transparent px-2.5 text-[12px]",
+                "group relative flex h-9 min-w-[150px] max-w-[230px] shrink-0 items-center gap-2 rounded-t-[var(--u-radius-sm)] border border-transparent px-2.5 text-[12px] transition-colors duration-150",
                 active
-                  ? "border-[var(--u-color-border)] bg-[var(--u-color-canvas)] font-medium text-[var(--u-color-text)]"
+                  ? "border-[var(--u-color-border)] border-b-[var(--u-color-canvas)] bg-[var(--u-color-canvas)] font-medium text-[var(--u-color-text)]"
                   : "text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)]",
               )}
             >
               {active && (
-                <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-[var(--u-color-primary)]" />
+                <span className="absolute inset-x-2 top-0 h-0.5 rounded-full bg-[var(--u-color-primary)]" />
               )}
               <button
                 aria-selected={active}
@@ -77,12 +77,13 @@ export function ApiRequestTabs({
               >
                 <span
                   className={cn(
-                    "w-9 shrink-0 text-left text-[10px] font-bold uppercase tabular-nums",
+                    "shrink-0 font-mono text-[10px] font-bold uppercase",
                     methodToneClass(tab.draft.method),
                   )}
                 >
                   {methodBadgeLabel(tab.draft.method)}
                 </span>
+                <span className="min-w-0 flex-1 truncate text-left">{title}</span>
                 {(saveState === "dirty" || saveState === "unsaved") && (
                   <span
                     aria-label={t("api.tabs." + saveState)}
@@ -96,7 +97,6 @@ export function ApiRequestTabs({
                     size={12}
                   />
                 )}
-                <span className="truncate">{title}</span>
               </button>
               <button
                 aria-label={t("api.tabs.close", { title })}
@@ -146,7 +146,7 @@ export function ApiRequestTabs({
       </button>
       <div className="min-w-0 flex-1" />
       {endControl && (
-        <div className="flex shrink-0 items-center pb-1.5 pl-2">
+        <div className="flex shrink-0 items-center self-center pl-2">
           <div className="flex shrink-0 items-center">{endControl}</div>
         </div>
       )}

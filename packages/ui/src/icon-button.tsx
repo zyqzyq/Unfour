@@ -4,6 +4,8 @@ import { cn } from "./utils";
 type IconButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   label: string;
   tooltip?: string;
+  /** Align edge actions' tooltips inside their containing panel. */
+  tooltipAlign?: "start" | "center" | "end";
   /** Hide the built-in hover/focus tooltip. Use inside scroll containers where
    *  the absolutely-positioned tooltip would otherwise create a phantom
    *  scrollbar (e.g. row action menus in a sidebar tree). The native `title`
@@ -13,7 +15,7 @@ type IconButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
-  ({ children, className, disableTooltip = false, label, size = "default", tooltip, type = "button", ...props }, ref) => (
+  ({ children, className, disableTooltip = false, label, size = "default", tooltip, tooltipAlign = "center", type = "button", ...props }, ref) => (
     <button
       aria-label={label}
       className={cn(
@@ -30,7 +32,10 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
     >
       {children}
       {!disableTooltip && (
-        <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-text)] px-2 py-1 text-[11px] font-medium text-[var(--u-color-surface)] shadow-sm group-hover:block group-focus-visible:block">
+        <span className={cn(
+          "pointer-events-none absolute top-full z-50 mt-1 hidden whitespace-nowrap rounded-[var(--u-radius-sm)] border border-[var(--u-color-border)] bg-[var(--u-color-text)] px-2 py-1 text-[11px] font-medium text-[var(--u-color-surface)] shadow-sm group-hover:block group-focus-visible:block",
+          { start: "left-0", center: "left-1/2 -translate-x-1/2", end: "right-0" }[tooltipAlign],
+        )}>
           {tooltip ?? label}
         </span>
       )}

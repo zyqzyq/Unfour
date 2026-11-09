@@ -10,6 +10,28 @@ body {
 }
 
 @layer base {
+  /* Workbench chrome should behave like a desktop UI when dragged. Keep
+     native selection in editors/readouts; custom content can use select-text. */
+  .app-shell {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  input,
+  textarea,
+  [contenteditable=""],
+  [contenteditable="true"],
+  [contenteditable="plaintext-only"],
+  pre,
+  code,
+  td,
+  [role="alert"],
+  .monaco-editor,
+  .xterm {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
   button,
   input,
   select,

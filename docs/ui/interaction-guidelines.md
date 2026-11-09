@@ -183,6 +183,15 @@ Rules:
 - Auto-save is appropriate for low-risk layout preferences, not requests, SQL,
   or connection credentials by default.
 
+## Text Selection
+
+- Workbench chrome (navigation, tabs, titles, labels, and table headers) should
+  not start native text selection on accidental drags.
+- Inputs, editable content, code, logs, result cells, and error details must
+  remain selectable. Custom readout containers use `select-text` to opt in.
+- Monaco and xterm retain their own selection and keyboard behavior. Do not
+  suppress pointer or keyboard events globally to prevent text selection.
+
 ## Keyboard Shortcuts
 
 Shell-level shortcuts should be registered centrally. Active modules may add

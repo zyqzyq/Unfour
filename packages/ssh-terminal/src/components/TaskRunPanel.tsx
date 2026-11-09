@@ -234,7 +234,7 @@ export function TaskRunPanel({
                     </div>
                   )}
                   {event?.error && (
-                    <p className="ml-7 mt-1 text-[10px] text-[var(--u-color-danger)]">
+                    <p className="ml-7 mt-1 select-text text-[10px] text-[var(--u-color-danger)]">
                       {event.error}
                     </p>
                   )}
