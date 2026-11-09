@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { Trash2 } from "lucide-react";
-import { FormEvent, useContext, useState } from "react";
+import { FormEvent, useContext, useRef, useState } from "react";
 import { WorkspaceLeaveContext } from "./workspace-leave-context";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -41,6 +41,9 @@ export function WorkspaceDialogs({
   const queryClient = useQueryClient();
   const { setActiveWorkspace } = useWorkspaceStore();
   const handleError = useFeedbackErrorHandler();
+  // Cover repeated events before React renders the mutation's pending state.
+  const creatingWorkspace = useRef(false);
+  const deletingWorkspace = useRef(false);
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspaceEnvironment, setWorkspaceEnvironment] =
     useState<WorkspaceEnvironmentType>("dev");
@@ -82,6 +85,7 @@ export function WorkspaceDialogs({
       onCreateClose();
     },
     onError: (error) => handleError(error, { key: "feedback.workspace.createFailed" }),
+    onSettled: () => { creatingWorkspace.current = false; },
   });
 
   const renameWorkspaceMutation = useMutation({
@@ -107,15 +111,18 @@ export function WorkspaceDialogs({
       onDeleteClose();
     },
     onError: (error) => handleError(error, { key: "feedback.workspace.deleteFailed" }),
+    onSettled: () => { deletingWorkspace.current = false; },
   });
 
   function createWorkspaceFromDialog(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = workspaceName.trim();
-    if (!name || isDuplicateName(workspaceName)) {
-      return;
-    }
-    requestWorkspaceLeave(() => createWorkspaceMutation.mutate({ name, environmentType: workspaceEnvironment }));
+    if (creatingWorkspace.current || createWorkspaceMutation.isPending || !name || isDuplicateName(workspaceName)) return;
+    requestWorkspaceLeave(() => {
+      if (creatingWorkspace.current) return;
+      creatingWorkspace.current = true;
+      createWorkspaceMutation.mutate({ name, environmentType: workspaceEnvironment });
+    });
   }
 
   function renameWorkspaceFromDialog(event: FormEvent<HTMLFormElement>) {
@@ -134,10 +141,12 @@ export function WorkspaceDialogs({
   }
 
   function deleteWorkspaceFromDialog() {
-    if (!activeWorkspace || !canDelete) {
-      return;
-    }
-    requestWorkspaceLeave(() => deleteWorkspaceMutation.mutate(activeWorkspace.id));
+    if (deletingWorkspace.current || deleteWorkspaceMutation.isPending || !activeWorkspace || !canDelete) return;
+    requestWorkspaceLeave(() => {
+      if (deletingWorkspace.current) return;
+      deletingWorkspace.current = true;
+      deleteWorkspaceMutation.mutate(activeWorkspace.id);
+    });
   }
 
   function isDuplicateName(name: string, exceptId?: string): boolean {
@@ -160,10 +169,13 @@ export function WorkspaceDialogs({
 
   return (
     <>
-      <Dialog.Root onOpenChange={(open) => { if (!open) onCreateClose(); }} open={createOpen}>
+      <Dialog.Root onOpenChange={(open) => { if (!open && !creatingWorkspace.current && !createWorkspaceMutation.isPending) onCreateClose(); }} open={createOpen}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-[var(--u-color-overlay)]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-md border border-[var(--u-color-border)] bg-[var(--u-color-surface)] p-4 shadow-xl">
+          <Dialog.Content
+            onEscapeKeyDown={(event) => { if (creatingWorkspace.current || createWorkspaceMutation.isPending) event.preventDefault(); }}
+            onPointerDownOutside={(event) => { if (creatingWorkspace.current || createWorkspaceMutation.isPending) event.preventDefault(); }}
+            className="fixed left-1/2 top-1/2 z-50 w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-md border border-[var(--u-color-border)] bg-[var(--u-color-surface)] p-4 shadow-xl">
             <Dialog.Title className="text-base font-semibold text-[var(--u-color-text)]">
               {t("app.workspace.dialog.createTitle")}
             </Dialog.Title>
@@ -173,6 +185,7 @@ export function WorkspaceDialogs({
             <form className="mt-4 space-y-4" onSubmit={createWorkspaceFromDialog}>
               <Input
                 autoFocus
+                disabled={createWorkspaceMutation.isPending}
                 onChange={(event) => setWorkspaceName(event.target.value)}
                 placeholder={t("app.workspace.dialog.namePlaceholder")}
                 value={workspaceName}
@@ -185,6 +198,7 @@ export function WorkspaceDialogs({
               <label className="block space-y-1.5 text-sm text-[var(--u-color-text)]">
                 <span className="font-medium">{t("app.workspace.environment.label")}</span>
                 <Select
+                  disabled={createWorkspaceMutation.isPending}
                   onChange={(event) =>
                     setWorkspaceEnvironment(event.target.value as WorkspaceEnvironmentType)
                   }
@@ -197,7 +211,7 @@ export function WorkspaceDialogs({
               </label>
               <div className="flex justify-end gap-2">
                 <Dialog.Close asChild>
-                  <Button type="button" variant="outline">
+                  <Button type="button" variant="outline" disabled={createWorkspaceMutation.isPending}>
                     {t("app.workspace.dialog.cancel")}
                   </Button>
                 </Dialog.Close>
@@ -274,10 +288,13 @@ export function WorkspaceDialogs({
         </Dialog.Portal>
       </Dialog.Root>
 
-      <Dialog.Root onOpenChange={(open) => { if (!open) onDeleteClose(); }} open={deleteOpen}>
+      <Dialog.Root onOpenChange={(open) => { if (!open && !deletingWorkspace.current && !deleteWorkspaceMutation.isPending) onDeleteClose(); }} open={deleteOpen}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-[var(--u-color-overlay)]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-md border border-[var(--u-color-border)] bg-[var(--u-color-surface)] p-4 shadow-xl">
+          <Dialog.Content
+            onEscapeKeyDown={(event) => { if (deletingWorkspace.current || deleteWorkspaceMutation.isPending) event.preventDefault(); }}
+            onPointerDownOutside={(event) => { if (deletingWorkspace.current || deleteWorkspaceMutation.isPending) event.preventDefault(); }}
+            className="fixed left-1/2 top-1/2 z-50 w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-md border border-[var(--u-color-border)] bg-[var(--u-color-surface)] p-4 shadow-xl">
             <Dialog.Title className="text-base font-semibold text-[var(--u-color-text)]">
               {t("app.workspace.dialog.deleteTitle")}
             </Dialog.Title>
@@ -288,7 +305,7 @@ export function WorkspaceDialogs({
             </Dialog.Description>
             <div className="mt-4 flex justify-end gap-2">
               <Dialog.Close asChild>
-                <Button type="button" variant="outline">
+                <Button type="button" variant="outline" disabled={deleteWorkspaceMutation.isPending}>
                   {t("app.workspace.dialog.cancel")}
                 </Button>
               </Dialog.Close>
