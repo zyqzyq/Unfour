@@ -119,6 +119,28 @@ impl WorkspaceService {
         environment_type: Option<String>,
         mcp_policy: Option<String>,
     ) -> AppResult<DomainCommandResult<Workspace>> {
+        self.create_with_activation_on(
+            connection,
+            context,
+            name,
+            environment_type,
+            mcp_policy,
+            true,
+        )
+        .await
+    }
+
+    /// Creation and activation are committed together; satellite callers can leave
+    /// the shared desktop selection untouched without a racy save/restore.
+    pub async fn create_with_activation_on(
+        &self,
+        connection: &mut SqliteConnection,
+        context: &CommandContext,
+        name: String,
+        environment_type: Option<String>,
+        mcp_policy: Option<String>,
+        activate: bool,
+    ) -> AppResult<DomainCommandResult<Workspace>> {
         let name = normalize_name(name)?;
         assert_name_unique_on(connection, &name, None).await?;
         let environment_type = normalize_environment_type(environment_type)?;
@@ -143,7 +165,9 @@ impl WorkspaceService {
         .execute(&mut *connection)
         .await?;
         insert_workspace_companions(connection, &id, &now).await?;
-        write_setting_on(connection, "active_workspace_id", &id).await?;
+        if activate {
+            write_setting_on(connection, "active_workspace_id", &id).await?;
+        }
 
         let workspace = get_workspace_on(connection, &id, false).await?;
         Ok(DomainCommandResult::new(

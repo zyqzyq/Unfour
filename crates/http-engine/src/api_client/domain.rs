@@ -1,5 +1,6 @@
 mod collections;
 mod concurrency;
+mod folder_delete_snapshot;
 pub(crate) use collections::resolve_collection_import_name_on;
 mod external_apply;
 mod multipart_secrets;

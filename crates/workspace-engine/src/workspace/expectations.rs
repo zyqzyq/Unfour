@@ -4,6 +4,25 @@ use unfour_core::models::Workspace;
 use unfour_core::{AppError, AppResult};
 
 impl WorkspaceService {
+    pub async fn assert_creation_source_on(
+        &self,
+        connection: &mut SqliteConnection,
+        source_id: &str,
+        environment_type: &str,
+        mcp_policy: &str,
+    ) -> AppResult<()> {
+        let source = get_workspace_on(connection, source_id, false).await?;
+        let active = super::read_setting_on(connection, "active_workspace_id").await?;
+        if active.as_deref() != Some(source_id)
+            || source.environment_type != environment_type
+            || source.mcp_policy != mcp_policy
+        {
+            return Err(AppError::RowConflict(
+                "workspace creation context changed".into(),
+            ));
+        }
+        Ok(())
+    }
     pub async fn assert_name_expected_on(
         &self,
         connection: &mut SqliteConnection,

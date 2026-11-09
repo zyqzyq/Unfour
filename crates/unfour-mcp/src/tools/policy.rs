@@ -184,6 +184,22 @@ pub(super) fn classify_mcp_action(
     database_driver: Option<&str>,
 ) -> Option<(McpCapability, McpRisk)> {
     Some(match tool_name {
+        "unfour.workspace.create" | "unfour.workspace.rename" | "unfour.db.save_saved_sql" => {
+            (McpCapability::WorkspaceMutate, McpRisk::Write)
+        }
+        "unfour.db.list_saved_sql" | "unfour.db.get_saved_sql" => {
+            (McpCapability::WorkspaceRead, McpRisk::Read)
+        }
+        "unfour.db.delete_saved_sql" => (McpCapability::WorkspaceMutate, McpRisk::Destructive),
+        "unfour.db.list_catalogs" => (McpCapability::DbSchemaRead, McpRisk::Read),
+        "unfour.api.list_folders" => (McpCapability::ApiRead, McpRisk::Read),
+        "unfour.api.create_folder"
+        | "unfour.api.rename_folder"
+        | "unfour.api.move_folder"
+        | "unfour.api.reorder_folders"
+        | "unfour.api.move_request"
+        | "unfour.api.duplicate_request" => (McpCapability::ApiMutate, McpRisk::Write),
+        "unfour.api.delete_folder" => (McpCapability::ApiMutate, McpRisk::Destructive),
         "unfour.flow.list"
         | "unfour.flow.get"
         | "unfour.flow.list_runs"
@@ -383,7 +399,13 @@ pub(super) fn evaluate_tool_policy(
             risk,
         });
     };
-    let mut workspace_id = parse_optional_string(arguments, "workspaceId");
+    // Creation is authorized only by the active workspace, never by a caller-
+    // selected writable workspace. The handler rejects all extra fields.
+    let mut workspace_id = if tool_name == "unfour.workspace.create" {
+        None
+    } else {
+        parse_optional_string(arguments, "workspaceId")
+    };
     let mut api_method = parse_optional_string(arguments, "method");
     let mut saved_request_has_scripts = false;
 

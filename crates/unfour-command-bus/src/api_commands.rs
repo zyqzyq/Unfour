@@ -368,6 +368,26 @@ impl CommandBus {
         workspace_id: String,
         folder_id: String,
     ) -> AppResult<Vec<ApiCollectionFolder>> {
+        self.api_collection_folder_delete_checked(workspace_id, folder_id, None)
+            .await
+    }
+
+    pub async fn api_folder_delete_snapshot(
+        &self,
+        workspace_id: String,
+        folder_id: String,
+    ) -> AppResult<unfour_core::models::ApiFolderDeleteSnapshot> {
+        self.api_client
+            .folder_delete_snapshot(&workspace_id, &folder_id)
+            .await
+    }
+
+    pub async fn api_collection_folder_delete_checked(
+        &self,
+        workspace_id: String,
+        folder_id: String,
+        expected: Option<unfour_core::models::ApiFolderDeleteSnapshot>,
+    ) -> AppResult<Vec<ApiCollectionFolder>> {
         let context = CommandContext::local("api.collection.folder.delete");
         let executor_context = context.clone();
         let service = self.api_client.clone();
@@ -383,6 +403,17 @@ impl CommandBus {
             }),
             move |connection| {
                 Box::pin(async move {
+                    if let Some(expected) = expected {
+                        if service
+                            .folder_delete_snapshot_on(connection, &workspace_id, &folder_id)
+                            .await?
+                            != expected
+                        {
+                            return Err(unfour_core::AppError::RowConflict(
+                                "API folder subtree changed".into(),
+                            ));
+                        }
+                    }
                     service
                         .delete_collection_folder_on(
                             connection,

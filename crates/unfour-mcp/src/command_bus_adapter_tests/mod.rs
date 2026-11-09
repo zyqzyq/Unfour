@@ -3,6 +3,7 @@ mod cancellation;
 mod database_workspace;
 mod diagnostics;
 mod flow;
+mod metadata;
 mod script_diagnostics;
 mod sql_policy;
 use std::path::{Path, PathBuf};

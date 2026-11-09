@@ -284,7 +284,18 @@ impl CommandBus {
     }
 
     pub async fn save_saved_sql(&self, input: SavedSqlInput) -> AppResult<SavedSql> {
-        let saved = self.database.save_sql(input).await?;
+        self.save_saved_sql_checked(input, None).await
+    }
+
+    pub async fn save_saved_sql_checked(
+        &self,
+        input: SavedSqlInput,
+        expected_revision: Option<i64>,
+    ) -> AppResult<SavedSql> {
+        let saved = self
+            .database
+            .save_sql_checked(input, expected_revision)
+            .await?;
         self.activity_log
             .record(
                 Some(&saved.workspace_id),
@@ -301,9 +312,18 @@ impl CommandBus {
         workspace_id: String,
         id: String,
     ) -> AppResult<Vec<SavedSql>> {
+        self.delete_saved_sql_checked(workspace_id, id, None).await
+    }
+
+    pub async fn delete_saved_sql_checked(
+        &self,
+        workspace_id: String,
+        id: String,
+        expected_revision: Option<i64>,
+    ) -> AppResult<Vec<SavedSql>> {
         let remaining = self
             .database
-            .delete_saved_sql(workspace_id.clone(), id.clone())
+            .delete_saved_sql_checked(workspace_id.clone(), id.clone(), expected_revision)
             .await?;
         self.activity_log
             .record(

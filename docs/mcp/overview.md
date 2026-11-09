@@ -49,6 +49,13 @@ The MCP layer is an adapter. It must not bypass command-bus safety,
 workspace scoping, redaction, credential reference rules, MCP policy checks,
 or high-risk confirmation checks.
 
+Workspace creation and renaming, API folder organization and request move/copy,
+Saved SQL management, and catalog discovery also use the shared CommandBus.
+Creation is authorized by the active workspace and inherits its safety settings;
+it cannot override policy or activate the new workspace. Recursive folder deletes
+and Saved SQL deletes bind confirmation to the current revision state and recheck
+that state atomically. See [tool contracts](tools.md#workspace-creation-and-organization).
+
 The single server applies the unified core + Cloud Sync migration chain and
 installs `SyncOutboxHook` on its writable Command Bus. MCP mutations therefore
 reach the same Workspace Domain Command coordinator as desktop and enqueue

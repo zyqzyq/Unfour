@@ -37,6 +37,14 @@ impl CommandBusAdapterError {
     /// Surface the `AppError` classification with a safe, operation-specific
     /// message. Display text may embed hosts, DSNs, or other sensitive detail.
     pub(super) fn from_app_error(message: &'static str, error: &AppError) -> Self {
+        if matches!(error, AppError::Validation(reason) if reason == "SAVED_SQL_REVISION_CONFLICT")
+        {
+            return Self {
+                code: "SAVED_SQL_REVISION_CONFLICT",
+                message: "Saved SQL changed. Reload before retrying.",
+                details: serde_json::json!({}),
+            };
+        }
         Self {
             code: error.code(),
             message,

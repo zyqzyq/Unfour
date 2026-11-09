@@ -1,15 +1,19 @@
 mod activity;
 mod api;
+mod api_organization;
 mod confirmation;
 mod connection_diagnostics;
 mod database;
 mod flow;
+mod metadata_support;
 mod policy;
 mod real;
+mod saved_sql;
 mod ssh;
 mod ssh_risk;
 mod system;
 mod workspace;
+mod workspace_management;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -139,6 +143,9 @@ impl ToolRegistry {
     pub fn with_command_bus(command_bus: Arc<dyn CommandBusAdapter>) -> Self {
         let mut tools = real::registered_tools();
         tools.extend(workspace::registered_tools());
+        tools.extend(workspace_management::registered_tools());
+        tools.extend(api_organization::registered_tools());
+        tools.extend(saved_sql::registered_tools());
         tools.extend(api::registered_tools());
         tools.extend(database::registered_tools());
         tools.extend(system::registered_tools());

@@ -371,7 +371,7 @@ fn host_key(
     Ok(r)
 }
 
-fn safe_sql(sql: &str) -> String {
+pub(super) fn safe_sql(sql: &str) -> String {
     // This is a display projection, not an execution parser. Withhold dialect
     // constructs we cannot safely mask; never execute this modified SQL.
     if sql.contains(['$', '#'])

@@ -46,6 +46,14 @@ pub struct ApiCollectionFolder {
     pub remote_id: Option<String>,
 }
 
+/// Stable, content-free revision set for a recursive folder deletion.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiFolderDeleteSnapshot {
+    pub folders: Vec<(String, i64)>,
+    pub requests: Vec<(String, i64)>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KeyValue {

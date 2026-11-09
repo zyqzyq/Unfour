@@ -16,8 +16,201 @@ use unfour_core::models::{
 use unfour_core::models::{SshFilePatchInput, SshFileWriteInput};
 
 use super::CommandBusAdapterError;
+use unfour_core::models::{ApiCollectionFolder, SavedSql, SavedSqlInput, Workspace};
 
 pub trait CommandBusAdapter: Send + Sync {
+    fn api_folder_delete_snapshot(
+        &self,
+        _workspace_id: String,
+        _folder_id: String,
+    ) -> Result<unfour_core::models::ApiFolderDeleteSnapshot, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Folder deletion preview is unavailable.",
+            details: serde_json::json!({}),
+        })
+    }
+    #[allow(unused_variables)]
+    fn create_workspace_inactive(
+        &self,
+        name: String,
+        source_id: String,
+        environment_type: String,
+        mcp_policy: String,
+    ) -> Result<Workspace, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Metadata operation is unavailable.",
+            details: serde_json::json!({}),
+        })
+    }
+    #[allow(unused_variables)]
+    fn rename_workspace(
+        &self,
+        workspace_id: String,
+        name: String,
+        expected_name: String,
+    ) -> Result<Workspace, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Metadata operation is unavailable.",
+            details: serde_json::json!({}),
+        })
+    }
+    #[allow(unused_variables)]
+    fn list_api_folders(
+        &self,
+        workspace_id: String,
+        collection_id: Option<String>,
+    ) -> Result<Vec<ApiCollectionFolder>, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Metadata operation is unavailable.",
+            details: serde_json::json!({}),
+        })
+    }
+    #[allow(unused_variables)]
+    fn create_api_folder(
+        &self,
+        workspace_id: String,
+        collection_id: String,
+        parent_folder_id: Option<String>,
+        name: String,
+    ) -> Result<ApiCollectionFolder, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Metadata operation is unavailable.",
+            details: serde_json::json!({}),
+        })
+    }
+    #[allow(unused_variables)]
+    fn rename_api_folder(
+        &self,
+        workspace_id: String,
+        folder_id: String,
+        name: String,
+        expected_updated_at: String,
+    ) -> Result<ApiCollectionFolder, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Metadata operation is unavailable.",
+            details: serde_json::json!({}),
+        })
+    }
+    #[allow(unused_variables)]
+    fn move_api_folder(
+        &self,
+        workspace_id: String,
+        folder_id: String,
+        parent_folder_id: Option<String>,
+    ) -> Result<ApiCollectionFolder, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Metadata operation is unavailable.",
+            details: serde_json::json!({}),
+        })
+    }
+    #[allow(unused_variables)]
+    fn delete_api_folder(
+        &self,
+        workspace_id: String,
+        folder_id: String,
+        expected: unfour_core::models::ApiFolderDeleteSnapshot,
+    ) -> Result<Vec<ApiCollectionFolder>, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Metadata operation is unavailable.",
+            details: serde_json::json!({}),
+        })
+    }
+    #[allow(unused_variables)]
+    fn reorder_api_folders(
+        &self,
+        workspace_id: String,
+        collection_id: String,
+        parent_folder_id: Option<String>,
+        folder_ids: Vec<String>,
+    ) -> Result<Vec<ApiCollectionFolder>, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Metadata operation is unavailable.",
+            details: serde_json::json!({}),
+        })
+    }
+    #[allow(unused_variables)]
+    fn move_api_request(
+        &self,
+        workspace_id: String,
+        request_id: String,
+        collection_id: String,
+        parent_folder_id: Option<String>,
+    ) -> Result<ApiSavedRequest, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Metadata operation is unavailable.",
+            details: serde_json::json!({}),
+        })
+    }
+    #[allow(unused_variables)]
+    fn duplicate_api_request(
+        &self,
+        workspace_id: String,
+        request_id: String,
+    ) -> Result<ApiSavedRequest, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Metadata operation is unavailable.",
+            details: serde_json::json!({}),
+        })
+    }
+    #[allow(unused_variables)]
+    fn list_saved_sql(
+        &self,
+        workspace_id: String,
+    ) -> Result<Vec<SavedSql>, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Metadata operation is unavailable.",
+            details: serde_json::json!({}),
+        })
+    }
+    #[allow(unused_variables)]
+    fn save_saved_sql(
+        &self,
+        input: SavedSqlInput,
+        expected_revision: Option<i64>,
+    ) -> Result<SavedSql, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Metadata operation is unavailable.",
+            details: serde_json::json!({}),
+        })
+    }
+    #[allow(unused_variables)]
+    fn delete_saved_sql(
+        &self,
+        workspace_id: String,
+        id: String,
+        expected_revision: i64,
+    ) -> Result<Vec<SavedSql>, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Metadata operation is unavailable.",
+            details: serde_json::json!({}),
+        })
+    }
+    #[allow(unused_variables)]
+    fn list_database_catalogs(
+        &self,
+        workspace_id: String,
+        connection_id: String,
+    ) -> Result<Vec<String>, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Metadata operation is unavailable.",
+            details: serde_json::json!({}),
+        })
+    }
     fn list_flows(&self, _workspace_id: &str) -> Result<Vec<FlowSummary>, CommandBusAdapterError> {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",

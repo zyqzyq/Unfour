@@ -43,6 +43,14 @@ impl DatabaseService {
     }
 
     pub async fn save_sql(&self, input: SavedSqlInput) -> AppResult<SavedSql> {
+        self.save_sql_checked(input, None).await
+    }
+
+    pub async fn save_sql_checked(
+        &self,
+        input: SavedSqlInput,
+        expected_revision: Option<i64>,
+    ) -> AppResult<SavedSql> {
         validate_workspace_id(&input.workspace_id)?;
         let name = input.name.trim().to_string();
         if name.is_empty() {
@@ -84,6 +92,7 @@ impl DatabaseService {
                 SET name = ?1, sql = ?2, connection_id = ?3, updated_at = ?4,
                     revision = revision + 1, sync_status = 'pending', catalog = ?7, schema = ?8
                 WHERE id = ?5 AND workspace_id = ?6 AND deleted_at IS NULL
+                  AND (?9 IS NULL OR revision = ?9)
                 "#,
             )
             .bind(&name)
@@ -94,9 +103,13 @@ impl DatabaseService {
             .bind(&input.workspace_id)
             .bind(&catalog)
             .bind(&schema)
+            .bind(expected_revision)
             .execute(self.db.pool())
             .await?;
             if result.rows_affected() == 0 {
+                if expected_revision.is_some() {
+                    return Err(AppError::Validation("SAVED_SQL_REVISION_CONFLICT".into()));
+                }
                 return Err(AppError::NotFound("saved SQL".to_string()));
             }
             return self.get_saved_sql(&input.workspace_id, id).await;
@@ -130,6 +143,15 @@ impl DatabaseService {
         workspace_id: String,
         id: String,
     ) -> AppResult<Vec<SavedSql>> {
+        self.delete_saved_sql_checked(workspace_id, id, None).await
+    }
+
+    pub async fn delete_saved_sql_checked(
+        &self,
+        workspace_id: String,
+        id: String,
+        expected_revision: Option<i64>,
+    ) -> AppResult<Vec<SavedSql>> {
         validate_workspace_id(&workspace_id)?;
         let id = id.trim().to_string();
         if id.is_empty() {
@@ -144,14 +166,19 @@ impl DatabaseService {
             SET deleted_at = ?1, updated_at = ?1,
                 revision = revision + 1, sync_status = 'deleted'
             WHERE id = ?2 AND workspace_id = ?3 AND deleted_at IS NULL
+              AND (?4 IS NULL OR revision = ?4)
             "#,
         )
         .bind(&now)
         .bind(&id)
         .bind(&workspace_id)
+        .bind(expected_revision)
         .execute(self.db.pool())
         .await?;
         if result.rows_affected() == 0 {
+            if expected_revision.is_some() {
+                return Err(AppError::Validation("SAVED_SQL_REVISION_CONFLICT".into()));
+            }
             return Err(AppError::NotFound("saved SQL".to_string()));
         }
         self.list_saved_sql(workspace_id).await

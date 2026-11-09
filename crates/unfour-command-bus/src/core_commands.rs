@@ -423,6 +423,47 @@ impl CommandBus {
         environment_type: Option<String>,
         mcp_policy: Option<String>,
     ) -> AppResult<Workspace> {
+        self.create_workspace_with_activation(name, environment_type, mcp_policy, true)
+            .await
+    }
+
+    pub async fn create_workspace_with_activation(
+        &self,
+        name: String,
+        environment_type: Option<String>,
+        mcp_policy: Option<String>,
+        activate: bool,
+    ) -> AppResult<Workspace> {
+        self.create_workspace_with_source(name, environment_type, mcp_policy, activate, None)
+            .await
+    }
+
+    /// Recheck the authorizing context inside the creation transaction.
+    pub async fn create_workspace_inactive_from(
+        &self,
+        name: String,
+        source_id: String,
+        environment_type: String,
+        mcp_policy: String,
+    ) -> AppResult<Workspace> {
+        self.create_workspace_with_source(
+            name,
+            Some(environment_type),
+            Some(mcp_policy),
+            false,
+            Some(source_id),
+        )
+        .await
+    }
+
+    async fn create_workspace_with_source(
+        &self,
+        name: String,
+        environment_type: Option<String>,
+        mcp_policy: Option<String>,
+        activate: bool,
+        source_id: Option<String>,
+    ) -> AppResult<Workspace> {
         let context = unfour_core::domain::CommandContext::local("workspace.create");
         let executor_context = context.clone();
         let service = self.workspace.clone();
@@ -436,13 +477,24 @@ impl CommandBus {
             }),
             move |connection| {
                 Box::pin(async move {
+                    if let Some(source_id) = source_id {
+                        service
+                            .assert_creation_source_on(
+                                connection,
+                                &source_id,
+                                environment_type.as_deref().unwrap_or_default(),
+                                mcp_policy.as_deref().unwrap_or_default(),
+                            )
+                            .await?;
+                    }
                     service
-                        .create_with_options_on(
+                        .create_with_activation_on(
                             connection,
                             &executor_context,
                             name,
                             environment_type,
                             mcp_policy,
+                            activate,
                         )
                         .await
                 })

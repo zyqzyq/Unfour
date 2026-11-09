@@ -8,6 +8,91 @@ non-goals, and the troubleshooting method are defined in
 [MCP Overview](overview.md). Installed-client configuration is in
 [client setup](client-setup.md).
 
+## Workspace creation and organization
+
+`unfour.workspace.create` accepts only `name`. It is authorized against the
+current workspace, which must permit MCP writes. The new workspace inherits
+that workspace's environment type and MCP policy; callers cannot supply a
+policy, environment override, source workspace ID, cloud binding or activation
+flag. Creation leaves the global active workspace unchanged. The source's
+identity, active selection and safety settings are checked again inside the
+creation transaction; concurrent changes return `ROW_CONFLICT`. Use the returned
+ID explicitly for subsequent calls. This does not initialize missing normal
+storage or copy resources. Desktop's existing create-and-activate behavior remains.
+
+`unfour.workspace.rename` requires `workspaceId`, `name`, and `expectedName`
+from `workspace.list`. It checks the target workspace policy and rejects a
+concurrent rename. Both operations return
+`{workspace:{id,name,environmentType,mcpPolicy}}`. Neither tool changes the
+security settings of an existing workspace.
+
+## API organization tools
+
+All tools below accept optional `workspaceId` (otherwise the active workspace).
+IDs and targets must belong to that workspace. Folder moves stay within their
+collection. Required nullable `parentFolderId` uses `null` for collection root;
+omitting it is an error, preventing accidental relocation.
+
+| Tool | Additional input | Result |
+| --- | --- | --- |
+| `unfour.api.list_folders` | Optional `collectionId` | `{folders: Folder[]}` |
+| `unfour.api.create_folder` | `collectionId`, `parentFolderId`, `name` | `{folder: Folder}` |
+| `unfour.api.rename_folder` | `folderId`, `name`, `expectedUpdatedAt` | `{folder: Folder}` |
+| `unfour.api.move_folder` | `folderId`, `parentFolderId` | `{folder: Folder}` |
+| `unfour.api.reorder_folders` | `collectionId`, `parentFolderId`, ordered `folderIds` | `{folders: Folder[]}` |
+| `unfour.api.delete_folder` | `folderId`; optional confirmation fields | `{deleted:true,folderId}` |
+| `unfour.api.move_request` | `requestId`, `collectionId`, `parentFolderId` | `{request: RequestLocation}` |
+| `unfour.api.duplicate_request` | `requestId` | `{request: RequestLocation}` |
+
+Folder has `id`, `workspaceId`, `collectionId`, `parentFolderId`, `name`,
+`sortOrder`, `updatedAt`, `revision`. RequestLocation has `id`, `workspaceId`,
+`collectionId`, `parentFolderId`, `name`, `revision`.
+
+Duplicate copies the original stored request in its current collection/folder
+with a fresh ID and the existing Desktop copy naming rule. It preserves full
+body, authentication and scripts without returning them or sending a request.
+Move preserves those fields and supports moving a request back to root.
+
+Folder deletion recursively soft-deletes descendants and their requests.
+Under guarded policy, use `confirm:true` and the returned `confirmation_text`
+(or `confirmationText`). Confirmation binds the selected workspace, root and
+the descendant folder/request revision snapshot. A change before confirmation
+requires a new token; a change after confirmation but before the transaction
+returns `ROW_CONFLICT` without deleting the newer subtree. Read-only and disabled
+policies reject all these writes; folder listing remains a local read.
+
+## Saved SQL and catalog discovery
+
+These tools accept optional `workspaceId` and never execute saved SQL.
+
+| Tool | Additional input | Result |
+| --- | --- | --- |
+| `unfour.db.list_saved_sql` | None | `{savedSql: Summary[]}` |
+| `unfour.db.get_saved_sql` | `savedSqlId` | `{savedSql: Detail}` |
+| `unfour.db.save_saved_sql` | Create: `name`, `sql`. Update: `savedSqlId`, `expectedRevision`; optional `name`, `sql`, `connectionId`, `catalog`, `schema` | `{savedSql: Summary}` |
+| `unfour.db.delete_saved_sql` | `savedSqlId`, `expectedRevision`; optional confirmation fields | `{deleted:true,savedSqlId}` |
+| `unfour.db.list_catalogs` | Saved `connectionId` | `{connectionId,catalogs:string[]}` |
+
+Summary has `id`, `workspaceId`, `name`, nullable `connectionId`, `catalog`
+and `schema`, plus `revision` and `updatedAt`. Detail adds `sql` and
+`sqlRedacted`. SQL uses the same conservative, 4096-character diagnostic
+projection as database history: quoted tokens/literals are masked and unsafe
+dialect constructs or sensitive markers are withheld. **Never execute or save
+that projection as original SQL.** Metadata-only updates omit `sql` and retain
+the original server-side text. To replace SQL, supply the intended complete text.
+
+Omitted update fields are preserved. Explicit null clears optional context,
+subject to the existing engine's inference of a configured server catalog from
+the selected connection. Foreign connection and snippet IDs are rejected.
+Updates and deletes check revisions atomically; a stale revision returns
+`SAVED_SQL_REVISION_CONFLICT`. Deletion uses guarded confirmation bound to the
+workspace, snippet and revision. It deletes the snippet, not remote data.
+Saved SQL retains the existing local persistence/Workspace bundle behavior;
+this does not add Saved SQL to Cloud Sync.
+
+Catalog discovery is a remote read through the existing database driver and
+saved connection. It accepts no ad-hoc credentials or connection string.
+
 ## Tool names
 
 Canonical tool names stay dotted, for example `unfour.system.health`.
