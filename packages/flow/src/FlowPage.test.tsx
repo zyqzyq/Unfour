@@ -176,22 +176,22 @@ async function selectHistory() {
   fireEvent.click(screen.getByRole("button", { name: "Run history" }));
   fireEvent.click(await screen.findByRole("button", { name: /2026-09-14T00:00:00Z/ }));
 }
-function Harness({ workspaceId = "ws" }: { workspaceId?: string }) {
+function Harness({ workspaceId = "ws", onDirtyChange }: { workspaceId?: string; onDirtyChange?: (dirty: boolean) => void }) {
   const [sidebar, setSidebar] = useState<ReactNode>(null);
   return (
     <>
       {sidebar}
-      <FlowPage workspaceId={workspaceId} onSidebarContentChange={setSidebar} />
+      <FlowPage workspaceId={workspaceId} onSidebarContentChange={setSidebar} onDirtyChange={onDirtyChange} />
     </>
   );
 }
-function mount(locale: "en" | "zh-CN" = "en", client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
+function mount(locale: "en" | "zh-CN" = "en", client = new QueryClient({ defaultOptions: { queries: { retry: false } } }), onDirtyChange?: (dirty: boolean) => void) {
   return render(
     <QueryClientProvider
       client={client}
     >
       <I18nProvider initialLocale={locale}>
-        <Harness />
+        <Harness onDirtyChange={onDirtyChange} />
       </I18nProvider>
     </QueryClientProvider>,
   );
@@ -205,6 +205,44 @@ it("offers a first Flow action that creates a draft without saving or running", 
   expect(screen.getByLabelText("Flow name")).toHaveValue("New Flow");
   expect(commands.saveFlow).not.toHaveBeenCalled();
   expect(commands.runFlow).not.toHaveBeenCalled();
+});
+
+it.each(["new", "name", "invalid-json"])("reports unsaved %s content to the workspace leave gate", async (edit) => {
+  vi.mocked(commands.listFlows).mockResolvedValue([{ ...flow, inputs: [{ name: "data", type: "json", required: false, secret: false, default: {} }] }]);
+  const dirty = vi.fn();
+  const view = mount("en", undefined, dirty);
+  await screen.findByText("Release");
+  expect(dirty).toHaveBeenLastCalledWith(false);
+  if (edit === "new") fireEvent.click(screen.getByRole("button", { name: "New Flow", exact: true }));
+  else {
+    fireEvent.click(screen.getByText("Release"));
+    expect(dirty).toHaveBeenLastCalledWith(false);
+    fireEvent.change(screen.getByLabelText(edit === "name" ? "Flow name" : "Default (optional)"), { target: { value: edit === "name" ? "Unsaved name" : '{"unfinished":' } });
+  }
+  expect(dirty).toHaveBeenLastCalledWith(true);
+  if (edit === "invalid-json") {
+    expect(screen.getByLabelText("Default (optional)")).toHaveValue('{"unfinished":');
+    expect(screen.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+  }
+  expect(commands.saveFlow).not.toHaveBeenCalled();
+  view.unmount();
+  expect(dirty).toHaveBeenLastCalledWith(false);
+});
+
+it.each(["success", "failure", "FLOW_REVISION_CONFLICT"])("only clears the leave guard after a successful explicit save (%s)", async (outcome) => {
+  if (outcome !== "success") vi.mocked(commands.saveFlow).mockRejectedValueOnce({ code: outcome, message: "isolated failure" });
+  const dirty = vi.fn();
+  mount("en", undefined, dirty);
+  fireEvent.click(await screen.findByText("Release"));
+  fireEvent.change(screen.getByLabelText("Flow name"), { target: { value: "Edited" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save", exact: true }));
+  await waitFor(() => expect(commands.saveFlow).toHaveBeenCalled());
+  if (outcome === "success") await waitFor(() => expect(dirty).toHaveBeenLastCalledWith(false));
+  else {
+    await screen.findByText(/isolated failure/);
+    expect(dirty).toHaveBeenLastCalledWith(true);
+    expect(screen.getByLabelText("Flow name")).toHaveValue("Edited");
+  }
 });
 
 it("waits for the Flow list before showing first-use guidance", async () => {

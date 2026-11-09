@@ -50,7 +50,7 @@ export function DesktopWorkspaceContent({
   return <MainWorkspace className="[&>section]:p-0" tabBar={null}>
     {!activeWorkspace && <WorkspaceStartupState query={workspaceQuery} />}
     {activeWorkspace && mounts.shouldMountFlow && <div className={activeTab.kind === "flow" && !variableManagerOpen ? "h-full" : "hidden"}>
-      <FlowModule key={activeWorkspace.id} workspaceId={activeWorkspace.id} onSidebarContentChange={onFlowSidebarChange} />
+      <FlowModule key={activeWorkspace.id} workspaceId={activeWorkspace.id} onSidebarContentChange={onFlowSidebarChange} onDirtyChange={navigation.setFlowDirty} />
     </div>}
     {activeWorkspace && mounts.shouldMountApi && <div className={activeTab.kind === "api" && !variableManagerOpen ? "h-full" : "hidden"}>
       <ApiClientModule

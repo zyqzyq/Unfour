@@ -63,9 +63,16 @@ export function useWorkspaceEnvironments(workspaceId: string) {
       handleError(error, { key: "feedback.api.environmentDeleteFailed" }),
   });
   const activateMut = useMutation({
+    mutationKey: ["workspace-environment-activation", workspaceId],
+    scope: { id: `workspace-environment-activation:${workspaceId}` },
+    onMutate: () => ({ workspaceId }),
     mutationFn: (environmentId: string | null) =>
       setActiveWorkspaceEnvironment(workspaceId, environmentId),
-    onSuccess: (saved) => queryClient.setQueryData(queryKey, saved),
+    onSuccess: async (saved, _id, context) => {
+      const key = ["workspace-environments", context.workspaceId];
+      await queryClient.cancelQueries({ queryKey: key });
+      queryClient.setQueryData(key, saved);
+    },
     onError: (error) =>
       handleError(error, { key: "feedback.api.environmentActivateFailed" }),
   });

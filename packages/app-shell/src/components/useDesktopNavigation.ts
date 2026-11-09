@@ -8,6 +8,7 @@ import type { useFeatureModulePreload } from "./useFeatureModulePreload";
 
 type VariableManagerLeave =
   | { kind: "activate-workspace"; workspaceId: string }
+  | { kind: "workspace-action"; action: () => void }
   | { kind: "select-module"; tabId: string };
 
 function useWorkspaceActivation(onActivated: () => void) {
@@ -41,7 +42,7 @@ function useWorkspaceActivation(onActivated: () => void) {
   });
 }
 
-/** Navigation and the unsaved workspace-variable draft's leave guard. */
+/** Navigation and leave protection for workspace-variable and Flow editors. */
 export function useDesktopNavigation({ activeWorkspace, activeEnvironmentId, tabs, setActiveTab, preloadFeature }: {
   activeWorkspace: DesktopWorkspaceController["activeWorkspace"];
   activeEnvironmentId: string | null;
@@ -53,6 +54,7 @@ export function useDesktopNavigation({ activeWorkspace, activeEnvironmentId, tab
     environmentId: string | null; workspaceId: string;
   } | null>(null);
   const [variableManagerDirty, setVariableManagerDirty] = useState(false);
+  const [flowDirty, setFlowDirty] = useState(false);
   const [pendingVariableManagerLeave, setPendingVariableManagerLeave] = useState<VariableManagerLeave | null>(null);
   const closeVariableManager = useCallback(() => {
     setVariableManagerRequest(null);
@@ -75,22 +77,27 @@ export function useDesktopNavigation({ activeWorkspace, activeEnvironmentId, tab
       return;
     }
     if (leave.kind === "activate-workspace") activateWorkspace(leave.workspaceId);
+    if (leave.kind === "workspace-action") leave.action();
   }, [activateWorkspace, closeVariableManager, setActiveTab]);
   const requestLeaveVariableManager = useCallback((leave: VariableManagerLeave) => {
+    if ((leave.kind !== "select-module" && flowDirty) || (variableManagerOpen && variableManagerDirty)) {
+      setPendingVariableManagerLeave(leave);
+      return;
+    }
     if (!variableManagerOpen) {
       if (leave.kind === "select-module") {
         setActiveTab(leave.tabId);
         return;
       }
-      activateWorkspace(leave.workspaceId);
-      return;
-    }
-    if (variableManagerDirty) {
-      setPendingVariableManagerLeave(leave);
+      if (leave.kind === "activate-workspace") activateWorkspace(leave.workspaceId);
+      else leave.action();
       return;
     }
     applyVariableManagerLeave(leave);
-  }, [activateWorkspace, applyVariableManagerLeave, setActiveTab, variableManagerDirty, variableManagerOpen]);
+  }, [activateWorkspace, applyVariableManagerLeave, setActiveTab, flowDirty, variableManagerDirty, variableManagerOpen]);
+  const requestWorkspaceLeave = useCallback((action: () => void) => {
+    if (!activatingWorkspace) requestLeaveVariableManager({ kind: "workspace-action", action });
+  }, [activatingWorkspace, requestLeaveVariableManager]);
   const handleSelectModule = useCallback((tabId: string) => {
     const kind = tabs.find((tab) => tab.id === tabId)?.kind;
     if (kind) void preloadFeature(kind).catch(() => undefined);
@@ -105,6 +112,7 @@ export function useDesktopNavigation({ activeWorkspace, activeEnvironmentId, tab
   };
   const cancelVariableManagerLeave = () => setPendingVariableManagerLeave(null);
   return {
+    flowDirty, setFlowDirty, requestWorkspaceLeave,
     variableManagerRequest, variableManagerOpen, pendingVariableManagerLeave, setVariableManagerDirty,
     closeVariableManager, confirmVariableManagerLeave, cancelVariableManagerLeave,
     handleManageVariables, handleSelectModule, handleActivateWorkspace,

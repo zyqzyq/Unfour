@@ -186,6 +186,12 @@ export function useApiRequestTabs(workspaceId: string) {
       const liveTab = current ? current.tabs.find((item) => item.id === tab.id) : tab;
       if (!liveTab || liveTab.sending || liveTab.cancelling) return;
       tab = liveTab;
+      // Read the mutation cache at the execution boundary (also covers Retry
+      // and keyboard Send), not a potentially stale rendered button state.
+      if (queryClient.isMutating({ mutationKey: ["workspace-environment-activation", workspaceId] })) {
+        useApiRequestTabStore.getState().failTabSend(workspaceId, tab.id, t("variables.environmentSwitchingSend"));
+        return;
+      }
       const validationError = validateBeforeSend(tab, t);
       if (validationError) {
         useApiRequestTabStore.getState().failTabSend(workspaceId, tab.id, validationError);
@@ -196,7 +202,7 @@ export function useApiRequestTabs(workspaceId: string) {
       useApiRequestTabStore.getState().startTabSend(workspaceId, tab.id, input, executionId);
       sendRequest({ executionId, input, tabId: tab.id });
     },
-    [sendRequest, workspaceId, t],
+    [sendRequest, workspaceId, t, queryClient],
   );
 
   const cancelTab = useCallback(async (tab: ApiRequestTab) => {

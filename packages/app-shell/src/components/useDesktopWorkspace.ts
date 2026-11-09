@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getSystemHealth,
   getWorkspaceLayout,
@@ -24,6 +24,7 @@ export function useDesktopWorkspace() {
     workspaceQuery.data?.workspaces.find(
       (w) => w.id === (activeWorkspaceId || workspaceQuery.data.activeWorkspaceId),
     ) ?? workspaceQuery.data?.workspaces[0];
+  const workspaceId = activeWorkspace?.id;
   const workspaceLayoutQuery = useQuery({
     enabled: Boolean(activeWorkspace?.id),
     queryKey: ["workspace-layout", activeWorkspace?.id],
@@ -45,13 +46,17 @@ export function useDesktopWorkspace() {
   useWorkspaceInit(workspaceQuery.data?.activeWorkspaceId, workspaceLayoutQuery.data, sidebarDatabaseConnectionsQuery.data);
   useLayoutPersistence(activeWorkspace?.id ?? null);
   const activateEnvironmentMutation = useMutation({
+    mutationKey: ["workspace-environment-activation", workspaceId],
+    scope: { id: `workspace-environment-activation:${workspaceId}` },
     mutationFn: (input: { environmentId: string | null; workspaceId: string }) =>
       setActiveWorkspaceEnvironment(input.workspaceId, input.environmentId),
-    onSuccess: (environments, input) => {
+    onSuccess: async (environments, input) => {
+      await queryClient.cancelQueries({ queryKey: ["workspace-environments", input.workspaceId] });
       queryClient.setQueryData(["workspace-environments", input.workspaceId], environments);
     },
     onError: (error) => handleError(error, { key: "feedback.api.environmentActivateFailed" }),
   });
+  const environmentSwitching = useIsMutating({ mutationKey: ["workspace-environment-activation", workspaceId] }) > 0;
   const workspaceEnvironments = workspaceEnvironmentsQuery.data ?? [];
   const activeEnvironment = workspaceEnvironments.find((environment) => environment.isActive) ?? null;
   const selectEnvironment = (environmentId: string | null) =>
@@ -64,7 +69,7 @@ export function useDesktopWorkspace() {
     await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
   }, [queryClient]);
   return {
-    activeEnvironment, activeWorkspace, healthQuery, workspaceEnvironments, workspaceQuery,
+    activeEnvironment, activeWorkspace, healthQuery, workspaceEnvironments, workspaceQuery, environmentSwitching,
     refreshWorkspaceEnvironments, refreshWorkspaces, selectEnvironment,
   };
 }

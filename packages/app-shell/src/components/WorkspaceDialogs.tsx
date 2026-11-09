@@ -1,6 +1,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { Trash2 } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { FormEvent, useContext, useState } from "react";
+import { WorkspaceLeaveContext } from "./workspace-leave-context";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   createWorkspace,
@@ -36,6 +37,7 @@ export function WorkspaceDialogs({
   workspaces: Workspace[];
 }) {
   const { t } = useI18n();
+  const requestWorkspaceLeave = useContext(WorkspaceLeaveContext);
   const queryClient = useQueryClient();
   const { setActiveWorkspace } = useWorkspaceStore();
   const handleError = useFeedbackErrorHandler();
@@ -113,7 +115,7 @@ export function WorkspaceDialogs({
     if (!name || isDuplicateName(workspaceName)) {
       return;
     }
-    createWorkspaceMutation.mutate({ name, environmentType: workspaceEnvironment });
+    requestWorkspaceLeave(() => createWorkspaceMutation.mutate({ name, environmentType: workspaceEnvironment }));
   }
 
   function renameWorkspaceFromDialog(event: FormEvent<HTMLFormElement>) {
@@ -135,7 +137,7 @@ export function WorkspaceDialogs({
     if (!activeWorkspace || !canDelete) {
       return;
     }
-    deleteWorkspaceMutation.mutate(activeWorkspace.id);
+    requestWorkspaceLeave(() => deleteWorkspaceMutation.mutate(activeWorkspace.id));
   }
 
   function isDuplicateName(name: string, exceptId?: string): boolean {

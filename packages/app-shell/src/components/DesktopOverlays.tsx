@@ -13,14 +13,15 @@ export function DesktopOverlays({ extensions, extensionContext, navigation, comm
 }) {
   const { t } = useI18n();
   const Overlays = extensions?.overlays;
+  const leavingFlow = navigation.flowDirty && navigation.pendingVariableManagerLeave?.kind !== "select-module";
   return <>
     <ConfirmDialog
-      confirmLabel={t("variables.discard")}
-      description={t("variables.discardChangesDescription")}
+      confirmLabel={t(leavingFlow ? "flow.workspaceLeaveDiscard" : "variables.discard")}
+      description={t(leavingFlow ? "flow.workspaceLeaveDescription" : "variables.discardChangesDescription")}
       onConfirm={navigation.confirmVariableManagerLeave}
       onOpenChange={(open) => !open && navigation.cancelVariableManagerLeave()}
       open={navigation.pendingVariableManagerLeave !== null}
-      title={t("variables.discardChangesTitle")}
+      title={t(leavingFlow ? "flow.workspaceLeaveTitle" : "variables.discardChangesTitle")}
     />
     <DesktopCommandPalette
       onOpenSettings={onOpenSettings}

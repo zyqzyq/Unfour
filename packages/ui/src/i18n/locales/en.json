@@ -618,6 +618,8 @@
     "title": "API Debugger"
   },
   "variables": {
+    "environmentSwitching": "Switching environment…",
+    "environmentSwitchingSend": "Environment switching. Wait for it to finish before sending.",
     "externalChange": "This data changed or was deleted elsewhere. Your edits are kept. Load the latest version to discard your edits and continue.",
     "reloadLatest": "Load latest version",
     "active": "Active",
@@ -1605,6 +1607,9 @@
     "title": "SSH Terminal"
   },
   "flow": {
+    "workspaceLeaveTitle": "Leave workspace?",
+    "workspaceLeaveDescription": "This workspace has unsaved Flow changes. Leaving discards them and any unsaved variable edits.",
+    "workspaceLeaveDiscard": "Discard and leave",
     "start": {
       "create": "Create Flow",
       "title": "Create your first Flow",

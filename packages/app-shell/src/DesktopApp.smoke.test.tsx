@@ -11,6 +11,7 @@ const queryMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
+  useIsMutating: () => 0,
   useMutation: () => ({ mutate: queryMocks.mutate }),
   useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
     if (queryKey[0] === "system-health") return { data: { storageReady: true } };

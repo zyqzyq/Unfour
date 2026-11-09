@@ -618,6 +618,8 @@
     "title": "API 调试器"
   },
   "variables": {
+    "environmentSwitching": "正在切换环境…",
+    "environmentSwitchingSend": "环境正在切换，请等待完成后再发送。",
     "externalChange": "此数据已在其他位置更改或删除。你的编辑已保留。加载最新版本将放弃当前编辑并继续。",
     "reloadLatest": "加载最新版本",
     "active": "当前",
@@ -1603,6 +1605,9 @@
     "title": "SSH 终端"
   },
   "flow": {
+    "workspaceLeaveTitle": "离开工作区？",
+    "workspaceLeaveDescription": "当前工作区有未保存的 Flow 更改。离开将放弃这些更改和尚未保存的变量编辑。",
+    "workspaceLeaveDiscard": "放弃并离开",
     "start": {
       "create": "创建 Flow",
       "title": "创建第一个 Flow",

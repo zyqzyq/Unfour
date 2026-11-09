@@ -17,11 +17,16 @@ import { useDesktopNavigation } from "./components/useDesktopNavigation";
 import { useDesktopWorkspace } from "./components/useDesktopWorkspace";
 import { useFeatureModulePreload } from "./components/useFeatureModulePreload";
 import { usePersistentFeatureMounts } from "./components/usePersistentFeatureMounts";
+import { WorkspaceLeaveContext } from "./components/workspace-leave-context";
 import type { DesktopAppExtensionContext, DesktopAppExtensions } from "./extensions";
 
 export type DesktopAppProps = { extensions?: DesktopAppExtensions };
 
-export function DesktopApp({ extensions }: DesktopAppProps) {
+export function DesktopApp(props: DesktopAppProps) {
+  return <FeedbackProvider><DesktopWorkbench {...props} /></FeedbackProvider>;
+}
+
+function DesktopWorkbench({ extensions }: DesktopAppProps) {
   const queryClient = useQueryClient();
   const [bottomPanelCollapsed, setBottomPanelCollapsed] = useState(true);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -70,7 +75,7 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
     () => <>{layoutControls}{StatusBarEnd && <StatusBarEnd {...extensionContext} />}</>,
     [extensionContext, layoutControls, StatusBarEnd],
   );
-  return <FeedbackProvider>
+  return <WorkspaceLeaveContext.Provider value={navigation.requestWorkspaceLeave}>
     <WorkspaceBundleExchangeProvider onImported={handleActivateWorkspace}>
     <AppShell
       activityBar={<ModuleActivityBar
@@ -90,6 +95,7 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
         workspaceId={activeWorkspace.id}
       /> : undefined}
       globalToolbar={<AppTitleBar
+        environmentSwitching={workspace.environmentSwitching}
         activeEnvironmentId={activeEnvironment?.id ?? null}
         activeWorkspace={activeWorkspace}
         environments={workspaceEnvironments}
@@ -157,7 +163,7 @@ export function DesktopApp({ extensions }: DesktopAppProps) {
       open={settingsOpen}
     />
     </WorkspaceBundleExchangeProvider>
-  </FeedbackProvider>;
+    </WorkspaceLeaveContext.Provider>;
 }
 
 export default DesktopApp;

@@ -21,10 +21,11 @@ afterEach(() => { cleanup(); resetApiRequestTabStore(); vi.clearAllMocks(); });
 function setup() {
   useApiRequestTabStore.getState().updateTabDraft("w", "new:1", { url: "https://example.test", method: "POST" });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  return renderHook(({ workspaceId }) => useApiRequestTabs(workspaceId), {
+  const hook = renderHook(({ workspaceId }) => useApiRequestTabs(workspaceId), {
     initialProps: { workspaceId: "w" },
     wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
   });
+  return { ...hook, client };
 }
 const execution: RequestExecutionResult = {
   response: { historyId: "h", status: 200, statusText: "OK", headers: [], body: "{}", durationMs: 1 },
@@ -73,6 +74,49 @@ it("ignores repeated sends, including calls with the same stale tab object", asy
   expect(result.current.activeTab!.sending).toBe(true);
   await act(async () => { result.current.sendTab(result.current.activeTab!); });
   expect(sendApiRequest).toHaveBeenCalledTimes(1);
+});
+
+it("gates the actual Send handler synchronously during activation and permits retry after failure", async () => {
+  vi.mocked(sendApiRequest).mockResolvedValue(execution);
+  const { result, client } = setup();
+  const send = result.current.sendTab;
+  const tab = result.current.activeTab!;
+  let reject!: (error: Error) => void;
+  const mutation = client.getMutationCache().build(client, {
+    mutationKey: ["workspace-environment-activation", "w"],
+    mutationFn: () => new Promise<void>((_resolve, fail) => { reject = fail; }),
+  });
+  let pending!: Promise<unknown>;
+  await act(async () => {
+    pending = mutation.execute(undefined).catch(() => undefined);
+    send(tab);
+  });
+  expect(sendApiRequest).not.toHaveBeenCalled();
+  expect(result.current.activeTab!.sending).toBe(false);
+  await act(async () => { reject(new Error("isolated activation failure")); await pending; });
+  await act(async () => send(tab));
+  expect(sendApiRequest).toHaveBeenCalledTimes(1);
+  expect(result.current.activeTab!.response?.status).toBe(200);
+});
+
+it("does not block sends in another workspace or change a running request when activation starts", async () => {
+  let finish!: (value: RequestExecutionResult) => void;
+  vi.mocked(sendApiRequest).mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+  const { result, client } = setup();
+  const mutation = client.getMutationCache().build(client, {
+    mutationKey: ["workspace-environment-activation", "other"], mutationFn: () => new Promise<void>(() => {}),
+  });
+  await act(async () => { void mutation.execute(undefined); result.current.sendTab(result.current.activeTab!); });
+  expect(sendApiRequest).toHaveBeenCalledTimes(1);
+  const input = vi.mocked(sendApiRequest).mock.calls[0][1];
+  const ownMutation = client.getMutationCache().build(client, {
+    mutationKey: ["workspace-environment-activation", "w"], mutationFn: () => new Promise<void>(() => {}),
+  });
+  await act(async () => { void ownMutation.execute(undefined); finish(execution); });
+  expect(sendApiRequest).toHaveBeenCalledTimes(1);
+  expect(input.workspaceId).toBe("w");
+  expect(result.current.activeTab!.response?.status).toBe(200);
+  client.clear();
 });
 
 it("applies a response only to the workspace that started the request", async () => {

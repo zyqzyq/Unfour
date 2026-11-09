@@ -16,11 +16,11 @@ import { useFlowEditor } from "./useFlowEditor";
 import { useFlowRuns } from "./useFlowRuns";
 import { getFlowPageValidation } from "./flowPageValidation";
 
-type FlowPageProps = { workspaceId: string; onSidebarContentChange: (node: ReactNode) => void };
+type FlowPageProps = { workspaceId: string; onSidebarContentChange: (node: ReactNode) => void; onDirtyChange?: (dirty: boolean) => void };
 export function FlowPage(props: FlowPageProps) {
   return <WorkspaceFlowPage key={props.workspaceId} {...props} />;
 }
-function WorkspaceFlowPage({ workspaceId, onSidebarContentChange }: FlowPageProps) {
+function WorkspaceFlowPage({ workspaceId, onSidebarContentChange, onDirtyChange }: FlowPageProps) {
   const { t } = useI18n();
   const data = useFlowWorkspaceData(workspaceId);
   const editor = useFlowEditor(workspaceId, data.flows, data.environments);
@@ -28,6 +28,10 @@ function WorkspaceFlowPage({ workspaceId, onSidebarContentChange }: FlowPageProp
   const runTrigger = useRef<HTMLButtonElement>(null);
   const backToEditor = useRef<HTMLButtonElement>(null);
   const { draft, busy, dirty, resetSelection: resetEditor, setPendingSelection } = editor;
+  // Report the editor's dirty bit, including raw inputs rejected by parsing.
+  // Hidden modules remain mounted, so their leave protection remains active.
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   const { resetSelection: resetRuns } = execution;
   // Reset both contexts in the same interaction, before any new Flow is rendered.
   const resetSelection = useCallback((flow: FlowDefinition) => {

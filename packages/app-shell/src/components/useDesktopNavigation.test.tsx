@@ -110,3 +110,36 @@ it("preloads a module while keeping the dirty manager until its leave is confirm
   expect(result.current.variableManagerOpen).toBe(false);
   queryClient.clear();
 });
+
+it("protects a hidden Flow and composes with variable protection without blocking module changes", async () => {
+  vi.mocked(setActiveWorkspace).mockResolvedValue({ ...previousState, activeWorkspaceId: "two" });
+  const { result, setActiveTab, queryClient } = mount();
+  act(() => result.current.setFlowDirty(true));
+  act(() => result.current.handleSelectModule("ssh-main"));
+  expect(setActiveTab).toHaveBeenCalledWith("ssh-main");
+  act(() => result.current.handleManageVariables());
+  act(() => result.current.setVariableManagerDirty(true));
+  act(() => result.current.handleActivateWorkspace("two"));
+  expect(setActiveWorkspace).not.toHaveBeenCalled();
+  act(() => result.current.cancelVariableManagerLeave());
+  expect(result.current.flowDirty).toBe(true);
+  expect(result.current.variableManagerOpen).toBe(true);
+  act(() => result.current.handleActivateWorkspace("two"));
+  act(() => result.current.confirmVariableManagerLeave());
+  await waitFor(() => expect(setActiveWorkspace).toHaveBeenCalledWith("two", expect.anything()));
+  queryClient.clear();
+});
+
+it("gates lifecycle commands before they can create/delete and switch the backend workspace", () => {
+  const { result, queryClient } = mount();
+  const lifecycle = vi.fn();
+  act(() => result.current.setFlowDirty(true));
+  act(() => result.current.requestWorkspaceLeave(lifecycle));
+  expect(lifecycle).not.toHaveBeenCalled();
+  act(() => result.current.cancelVariableManagerLeave());
+  expect(lifecycle).not.toHaveBeenCalled();
+  act(() => result.current.requestWorkspaceLeave(lifecycle));
+  act(() => result.current.confirmVariableManagerLeave());
+  expect(lifecycle).toHaveBeenCalledTimes(1);
+  queryClient.clear();
+});

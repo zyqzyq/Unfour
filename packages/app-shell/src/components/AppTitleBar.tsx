@@ -24,6 +24,7 @@ export function AppTitleBar({
   activeWorkspace,
   activeEnvironmentId = null,
   environments = [],
+  environmentSwitching = false,
   endAccessory,
   extensionContext,
   onActivateWorkspace,
@@ -41,6 +42,7 @@ export function AppTitleBar({
   activeWorkspace?: Workspace;
   activeEnvironmentId?: string | null;
   environments?: WorkspaceEnvironment[];
+  environmentSwitching?: boolean;
   endAccessory?: ReactNode;
   extensionContext: DesktopAppExtensionContext;
   onActivateWorkspace: (workspaceId: string) => void;
@@ -80,6 +82,7 @@ export function AppTitleBar({
               workspaces={workspaces}
             />
             <ActiveEnvironmentSelect
+              pending={environmentSwitching}
               description={t("variables.activeEnvironmentHelp")}
               activeEnvironmentId={activeEnvironmentId}
               environments={environments}

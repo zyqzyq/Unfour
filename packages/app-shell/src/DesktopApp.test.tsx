@@ -20,6 +20,7 @@ const queryMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
+  useIsMutating: () => 0,
   useMutation: () => ({ mutate: queryMocks.mutate }),
   useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
     if (queryKey[0] === "system-health") {
@@ -180,7 +181,7 @@ vi.mock("@unfour/workspace-environments", () => ({
 vi.mock("./components/LazyFeatureModules", () => ({
   ApiClientModule: () => <input aria-label="API draft" defaultValue="" />,
   DatabaseModule: () => <input aria-label="SQL draft" defaultValue="" />,
-  FlowModule: () => <input aria-label="Flow draft" defaultValue="" />,
+  FlowModule: ({ onDirtyChange }: { onDirtyChange?: (dirty: boolean) => void }) => <input aria-label="Flow draft" defaultValue="" onChange={() => onDirtyChange?.(true)} />,
   SshTerminalLogPanel: () => null,
   SshTerminalModule: () => <input aria-label="SSH draft" defaultValue="" />,
   SshTerminalStatusBar: ({ rightAccessory }: { rightAccessory?: ReactNode }) => (
@@ -474,6 +475,17 @@ describe("DesktopApp extensions", () => {
       queryKey: ["workspaces"],
     });
     expect(queryMocks.mutate).toHaveBeenCalledWith("ws-imported");
+  });
+
+  it("protects a hidden Flow when extensions or import callbacks request workspace activation", () => {
+    queryMocks.mutate.mockClear();
+    render(<DesktopApp />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Flow" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Flow draft" }), { target: { value: "Unparsed draft" } });
+    fireEvent.click(screen.getByRole("button", { name: "Open API Client" }));
+    fireEvent.click(screen.getByRole("button", { name: "Activate workspace through extension" }));
+    expect(screen.getByRole("dialog", { name: "flow.workspaceLeaveTitle" })).toBeInTheDocument();
+    expect(queryMocks.mutate).not.toHaveBeenCalled();
   });
 
   it("opens workspace variable management outside the API Client", async () => {

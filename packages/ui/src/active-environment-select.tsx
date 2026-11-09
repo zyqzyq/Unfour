@@ -16,6 +16,7 @@ export function ActiveEnvironmentSelect({
   onManage,
   onOpenChange,
   onSelect,
+  pending = false,
 }: {
   activeEnvironmentId: string | null;
   environments: EnvironmentSelectItem[];
@@ -23,6 +24,7 @@ export function ActiveEnvironmentSelect({
   onManage: () => void;
   onOpenChange?: (open: boolean) => void;
   onSelect: (environmentId: string | null) => void;
+  pending?: boolean;
 }) {
   const { t } = useI18n();
   const activeEnvironment = environments.find(
@@ -34,6 +36,7 @@ export function ActiveEnvironmentSelect({
       <DropdownMenu.Trigger asChild>
         <Button
           aria-label={t("variables.activeEnvironment")}
+          aria-busy={pending}
           aria-description={description}
           className="max-w-[156px] justify-start gap-2 border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-2.5 font-medium shadow-none hover:bg-[var(--u-color-surface-hover)]"
           size="sm"
@@ -52,7 +55,7 @@ export function ActiveEnvironmentSelect({
             )}
           />
           <span className="min-w-0 truncate">
-            {activeEnvironment?.name ?? t("variables.noEnvironment")}
+            {pending ? t("variables.environmentSwitching") : activeEnvironment?.name ?? t("variables.noEnvironment")}
           </span>
           <ChevronDown className="shrink-0 text-[var(--u-color-text-muted)]" size={12} />
         </Button>

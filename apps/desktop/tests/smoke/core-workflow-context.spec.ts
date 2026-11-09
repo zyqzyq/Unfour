@@ -47,6 +47,7 @@ test("test workspace/environment selection targets the next request and module s
 
   await page.getByRole("button", { name: /UE Test A/ }).click();
   await page.getByRole("menuitem", { name: /UE Test B/ }).click();
+  await page.getByRole("dialog", { name: "Leave workspace?" }).getByRole("button", { name: "Discard and leave" }).click();
   await expect(environment).toHaveText("Test B");
   await expect(url).not.toHaveValue("{{base_url}}/health");
   await url.fill("{{base_url}}/health");
