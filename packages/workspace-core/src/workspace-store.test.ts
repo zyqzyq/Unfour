@@ -10,6 +10,8 @@ beforeEach(() => {
     selectedSshConnectionId: null,
     sidebarCollapsed: false,
     sidebarWidths: { ...DEFAULT_SIDEBAR_WIDTHS },
+    bottomPanelHeight: 220,
+    rightInspectorWidth: 300,
     tabs: [
       { id: "api-main", title: "API Client", kind: "api" },
       { id: "ssh-main", title: "SSH Terminal", kind: "ssh" },
@@ -224,6 +226,34 @@ describe("hydrateLayout", () => {
 });
 
 describe("snapshotLayout", () => {
+  it("saves fractional resize values as integer pixel dimensions", () => {
+    const store = useWorkspaceStore.getState();
+    store.setModuleSidebarWidth("api", 350.75);
+    store.setModuleSidebarWidth("ssh", 260.25);
+    store.setModuleSidebarWidth("database", 400.5);
+    store.setModuleSidebarWidth("flow", 290.5);
+    store.setBottomPanelHeight(240.75);
+    store.setRightInspectorWidth(310.25);
+
+    const snapshot = useWorkspaceStore.getState().snapshotLayout("ws-resized");
+    expect(snapshot.sidebarWidths).toEqual({ api: 351, ssh: 260, database: 401, flow: 291 });
+    expect(snapshot.bottomPanelHeight).toBe(241);
+    expect(snapshot.rightInspectorWidth).toBe(310);
+  });
+
+  it("repairs stale fractional or non-finite dimensions before saving", () => {
+    useWorkspaceStore.setState({
+      sidebarWidths: { api: 350.75, ssh: Infinity, database: Number.NaN, flow: 290.5 },
+      bottomPanelHeight: Number.NaN,
+      rightInspectorWidth: Infinity,
+    });
+
+    const snapshot = useWorkspaceStore.getState().snapshotLayout("ws-stale");
+    expect(snapshot.sidebarWidths).toEqual({ api: 351, ssh: 248, database: 280, flow: 291 });
+    expect(snapshot.bottomPanelHeight).toBe(220);
+    expect(snapshot.rightInspectorWidth).toBe(300);
+  });
+
   it("captures current state as a layout snapshot", () => {
     useWorkspaceStore.setState({
       activeTabId: "ssh-main",
@@ -246,5 +276,41 @@ describe("snapshotLayout", () => {
     expect("sidebarWidth" in snapshot).toBe(false);
     expect(snapshot.tabs).toHaveLength(2);
     expect(snapshot.updatedAt).toBeDefined();
+  });
+});
+
+describe("panel dimensions", () => {
+  it.each([Number.NaN, Infinity, -Infinity, -1, 0, 2 ** 31])(
+    "replaces invalid panel dimensions (%s) with defaults on resize and hydration",
+    (value) => {
+      const store = useWorkspaceStore.getState();
+      store.setBottomPanelHeight(value);
+      store.setRightInspectorWidth(value);
+      expect(useWorkspaceStore.getState().bottomPanelHeight).toBe(220);
+      expect(useWorkspaceStore.getState().rightInspectorWidth).toBe(300);
+
+      store.hydrateLayout({
+        ...store.snapshotLayout("ws-invalid"),
+        bottomPanelHeight: value,
+        rightInspectorWidth: value,
+      });
+      expect(useWorkspaceStore.getState().bottomPanelHeight).toBe(220);
+      expect(useWorkspaceStore.getState().rightInspectorWidth).toBe(300);
+    },
+  );
+
+  it("normalizes fractional dimensions when restoring a layout", () => {
+    const store = useWorkspaceStore.getState();
+    store.hydrateLayout({
+      ...store.snapshotLayout("ws-hydrated"),
+      sidebarWidths: { api: 350.75, ssh: 260.25, database: 400.5, flow: 290.5 },
+      bottomPanelHeight: 240.75,
+      rightInspectorWidth: 310.25,
+    });
+
+    const state = useWorkspaceStore.getState();
+    expect(state.sidebarWidths).toEqual({ api: 351, ssh: 260, database: 401, flow: 291 });
+    expect(state.bottomPanelHeight).toBe(241);
+    expect(state.rightInspectorWidth).toBe(310);
   });
 });

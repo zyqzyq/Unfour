@@ -48,6 +48,15 @@ const initialTabs: WorkspaceTab[] = [
 const DEFAULT_BOTTOM_PANEL_HEIGHT = 220;
 const DEFAULT_RIGHT_INSPECTOR_WIDTH = 300;
 
+function normalizePanelDimension(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+  // Pointer coordinates can be fractional; persisted dimensions must fit i32.
+  const pixels = Math.round(value);
+  return pixels > 0 && pixels <= 2_147_483_647 ? pixels : fallback;
+}
+
 export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   activeTabId: "api-main",
   selectedApiRequestId: null,
@@ -70,8 +79,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         layout.sidebarWidths,
         "sidebarWidth" in layout ? layout.sidebarWidth : undefined,
       ),
-      bottomPanelHeight: layout.bottomPanelHeight ?? DEFAULT_BOTTOM_PANEL_HEIGHT,
-      rightInspectorWidth: layout.rightInspectorWidth ?? DEFAULT_RIGHT_INSPECTOR_WIDTH,
+      bottomPanelHeight: normalizePanelDimension(layout.bottomPanelHeight, DEFAULT_BOTTOM_PANEL_HEIGHT),
+      rightInspectorWidth: normalizePanelDimension(layout.rightInspectorWidth, DEFAULT_RIGHT_INSPECTOR_WIDTH),
       tabs: layout.tabs.length ? [...layout.tabs, ...initialTabs.filter(tab => tab.kind === "flow" && !layout.tabs.some(existing => existing.id === tab.id))] : initialTabs,
     }),
   openTab: (tab) =>
@@ -91,9 +100,9 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       selectedApiRequestId: state.selectedApiRequestId,
       selectedDatabaseConnectionId: state.selectedDatabaseConnectionId,
       selectedSshConnectionId: state.selectedSshConnectionId,
-      sidebarWidths: { ...state.sidebarWidths },
-      bottomPanelHeight: state.bottomPanelHeight,
-      rightInspectorWidth: state.rightInspectorWidth,
+      sidebarWidths: normalizeSidebarWidths(state.sidebarWidths),
+      bottomPanelHeight: normalizePanelDimension(state.bottomPanelHeight, DEFAULT_BOTTOM_PANEL_HEIGHT),
+      rightInspectorWidth: normalizePanelDimension(state.rightInspectorWidth, DEFAULT_RIGHT_INSPECTOR_WIDTH),
       updatedAt: new Date().toISOString(),
     };
   },
@@ -110,8 +119,10 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         [kind]: normalizeModuleSidebarWidth(kind, width),
       },
     })),
-  setBottomPanelHeight: (height) => set({ bottomPanelHeight: height }),
-  setRightInspectorWidth: (width) => set({ rightInspectorWidth: width }),
+  setBottomPanelHeight: (height) =>
+    set({ bottomPanelHeight: normalizePanelDimension(height, DEFAULT_BOTTOM_PANEL_HEIGHT) }),
+  setRightInspectorWidth: (width) =>
+    set({ rightInspectorWidth: normalizePanelDimension(width, DEFAULT_RIGHT_INSPECTOR_WIDTH) }),
   toggleSidebar: () =>
     set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 }));

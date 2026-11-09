@@ -46,7 +46,8 @@ export function normalizeModuleSidebarWidth(
     return config.defaultWidth;
   }
 
-  return Math.min(Math.max(value, config.minWidth), config.maxWidth);
+  // WorkspaceLayout dimensions are i32 pixels in the Rust command contract.
+  return Math.round(Math.min(Math.max(value, config.minWidth), config.maxWidth));
 }
 
 export function normalizeSidebarWidths(
