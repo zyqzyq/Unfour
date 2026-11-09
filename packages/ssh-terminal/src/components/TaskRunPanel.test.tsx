@@ -11,6 +11,25 @@ const props: ComponentProps<typeof TaskRunPanel> = {
   task: { task: { id: "task", workspaceId: "ws", name: "Task", description: "", sortOrder: 0, createdAt: "", updatedAt: "", deletedAt: null }, steps: [], localBinding: null, detectedInputs: [] },
 };
 
+it("pauses output follow while reading, resumes explicitly, and resets for a different run", () => {
+  const completed = { ...props.run, status: "success" as const };
+  const { rerender } = render(<TaskRunPanel {...props} run={completed} logText="first log" />);
+  const output = screen.getByLabelText("Task output");
+  Object.defineProperties(output, { scrollHeight: { configurable: true, value: 1000 }, clientHeight: { configurable: true, value: 200 } });
+  output.scrollTop = 100;
+  fireEvent.scroll(output);
+  rerender(<TaskRunPanel {...props} run={completed} logText="additional log" />);
+  expect(output.scrollTop).toBe(100);
+  fireEvent.click(screen.getByRole("button", { name: "Follow latest output" }));
+  expect(output.scrollTop).toBe(1000);
+  expect(output).toHaveFocus();
+  output.scrollTop = 100;
+  fireEvent.scroll(output);
+  rerender(<TaskRunPanel {...props} run={{ ...completed, id: "other-run" }} logText="different run" />);
+  expect(output.scrollTop).toBe(1000);
+  expect(screen.queryByRole("button", { name: "Follow latest output" })).not.toBeInTheDocument();
+});
+
 it("offers rerun after a terminal completion event even before history polling updates the run", () => {
   const onRerun = vi.fn();
   const { rerender } = render(<TaskRunPanel {...props} onRerun={onRerun} />);
@@ -23,6 +42,23 @@ it("offers rerun after a terminal completion event even before history polling u
   }]} />);
   fireEvent.click(screen.getByRole("button", { name: "Run again" }));
   expect(onRerun).toHaveBeenCalledOnce();
+});
+
+it("resets follow when returning from a short run that emitted no scroll event", () => {
+  const completed = { ...props.run, status: "success" as const };
+  const { rerender } = render(<TaskRunPanel {...props} run={completed} logText="long log" />);
+  const output = screen.getByLabelText("Task output");
+  Object.defineProperties(output, { scrollHeight: { configurable: true, value: 1000 }, clientHeight: { configurable: true, value: 200 } });
+  output.scrollTop = 0;
+  fireEvent.scroll(output);
+  expect(screen.getByRole("button", { name: "Follow latest output" })).toBeInTheDocument();
+  // A short log cannot scroll, so no browser scroll event updates the run ID.
+  Object.defineProperty(output, "scrollHeight", { configurable: true, value: 200 });
+  rerender(<TaskRunPanel {...props} run={{ ...completed, id: "short-run" }} logText="short log" />);
+  Object.defineProperty(output, "scrollHeight", { configurable: true, value: 1000 });
+  rerender(<TaskRunPanel {...props} run={completed} logText="long log" />);
+  expect(screen.queryByRole("button", { name: "Follow latest output" })).not.toBeInTheDocument();
+  expect(output.scrollTop).toBe(1000);
 });
 
 it.each(["pointerUp", "pointerCancel", "unmount"])("removes resize listeners on %s without cancelling the SSH run", (finish) => {

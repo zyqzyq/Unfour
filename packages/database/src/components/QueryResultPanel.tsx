@@ -229,7 +229,9 @@ export function QueryResultPanel({
       {activeTab === "results" && !pendingConfirmation && (statement?.status === "skipped"
         ? <EmptyState>{t("database.batch.skippedDetail")}</EmptyState>
         : renderResults({ error: selectedError, isPending, result, t }))}
-      {activeTab === "messages" && !pendingConfirmation && (statements.length ? <SqlBatchMessages statements={statements} /> : <Messages results={results} result={result} t={t} />)}
+      {activeTab === "messages" && !pendingConfirmation && (executionError || isPending
+        ? renderResults({ error: executionError, isPending, result: null, t })
+        : statements.length ? <SqlBatchMessages statements={statements} /> : <Messages results={results} result={result} t={t} />)}
       {activeTab === "logs" && !pendingConfirmation && (statements.length ? <SqlBatchMessages statements={statements} /> : <Logs error={executionError} isPending={isPending} results={results} result={result} t={t} />)}
       {activeTab === "history" && <History entries={history} onSelect={onSelectHistory} />}
     </section>

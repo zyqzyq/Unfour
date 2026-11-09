@@ -1576,7 +1576,9 @@
         "taskName": "Task",
         "title": "运行 SSH Task",
         "transferProgress": "{direction}: {transferred} / {total} ({speed})",
-        "waitingForOutput": "等待 stdout 或 stderr 输出..."
+        "waitingForOutput": "等待 stdout 或 stderr 输出...",
+        "followOutput": "跟随最新输出",
+        "output": "任务输出"
       },
       "stepTypes": {
         "command": "Command",

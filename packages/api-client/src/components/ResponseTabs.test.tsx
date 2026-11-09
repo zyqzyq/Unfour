@@ -247,3 +247,27 @@ it.each([
   fireEvent.click(screen.getByRole("button", { name: "Retry" }));
   expect(retry).toHaveBeenCalledTimes(1);
 });
+
+it.each(["request", "tests", "console"] as const)("keeps failure details and retry visible on %s without changing the view", (responseTab) => {
+  const base = baseTab();
+  const retry = vi.fn();
+  const selectView = vi.fn();
+  const tab = { ...base, responseTab, execution: execution(), sendError: "DNS lookup failed", sendErrorCode: "NETWORK_ERROR", draft: { ...base.draft, url: "https://example.test" } };
+  const { rerender } = render(withI18n(<ResponseTabs tab={tab} onRetry={retry} onOpenAuthSettings={vi.fn()} onResponseTabChange={selectView} />));
+  expect(screen.getByRole("alert")).toHaveTextContent("DNS lookup failed");
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  expect(retry).toHaveBeenCalledOnce();
+  expect(selectView).not.toHaveBeenCalled();
+  rerender(withI18n(<ResponseTabs tab={{ ...tab, sending: true }} onRetry={retry} onOpenAuthSettings={vi.fn()} onResponseTabChange={selectView} />));
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+});
+
+it("exposes pre-request script failure while keeping the console available", () => {
+  const scripted = execution();
+  scripted.preRequest.status = "failed";
+  scripted.preRequest.error = { kind: "runtime", code: "SCRIPT_RUNTIME_ERROR", message: "Invalid setup" };
+  render(withI18n(<ResponseTabs tab={baseTab({ execution: scripted, responseTab: "console" })} onRetry={vi.fn()} onOpenAuthSettings={vi.fn()} onResponseTabChange={vi.fn()} />));
+  expect(screen.getByRole("alert")).toHaveTextContent("Invalid setup");
+  expect(screen.getByText("pre message")).toBeInTheDocument();
+});

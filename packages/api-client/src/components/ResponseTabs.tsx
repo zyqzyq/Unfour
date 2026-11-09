@@ -17,6 +17,7 @@ import {
   ResponseFailureState,
   PostResponseStatus,
   ResponseStatus,
+  ResponseSendNotice,
   ResponseTiming,
   SendingState,
 } from "./response-tab-views";
@@ -103,6 +104,7 @@ export function ResponseTabs({
           onChange={onResponseTabChange}
         />
       )}
+      <ResponseSendNotice tab={tab} canRetry={canRetry} onRetry={onRetry} />
       <div className="min-h-0 flex-1 overflow-hidden bg-[var(--u-color-canvas)]">
         <ExecutionProgress
           isScriptTab={isScriptTab}

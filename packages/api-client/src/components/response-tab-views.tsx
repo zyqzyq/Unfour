@@ -6,7 +6,25 @@ import { configureEditorThemes, Badge, Button, EmptyState, cn, useI18n, useTheme
 import type { ApiExecutedRequestSnapshot, ApiResponse, KeyValue, ScriptExecutionResult } from "@unfour/command-client";
 import { formatByteSize } from "../request-utils";
 import { formatResponseBody, looksLikeJson } from "../model/api-request-state";
-import { deriveTabResponseState } from "../model/request-tabs";
+import { deriveTabResponseState, type ApiRequestTab } from "../model/request-tabs";
+
+/** Keep diagnostic views selected while making send failures actionable. */
+export function ResponseSendNotice({ tab, canRetry, onRetry }: {
+  tab: ApiRequestTab; canRetry: boolean; onRetry: () => void;
+}) {
+  const { t } = useI18n();
+  if (!["request", "tests", "console"].includes(tab.responseTab) ||
+    !["network", "timeout", "failed", "pre-script-error", "pre-script-timeout"].includes(deriveTabResponseState(tab))) return null;
+  return <div role="alert" className="flex max-h-32 shrink-0 items-start gap-2 overflow-auto border-b border-[var(--u-color-border)] bg-[var(--u-color-danger-soft)] px-3 py-2 text-[12px]">
+    <div className="min-w-0 flex-1 break-words">
+      <p className="font-medium text-[var(--u-color-danger)]">{t("api.response.failedTitle")}</p>
+      <p>{tab.sendError || tab.execution?.preRequest.error?.message || t("api.response.errorDescription")}</p>
+    </div>
+    <Button disabled={!canRetry} onClick={onRetry} size="sm" type="button" variant="outline">
+      {t("api.response.retry")}
+    </Button>
+  </div>;
+}
 
 export function PostResponseStatus({ result }: { result: ScriptExecutionResult | undefined }) {
   const { t } = useI18n();

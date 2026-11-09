@@ -5,6 +5,20 @@ import type { DatabaseStatementResult } from "@unfour/command-client";
 import { QueryResultPanel } from "./QueryResultPanel";
 afterEach(cleanup);
 
+it("keeps transport errors in Messages and clears them after successful retry", () => {
+  const { rerender } = render(<QueryResultPanel {...props} activeTab="messages" statements={[]} results={[]} error={{ code: "NETWORK_ERROR", message: "connection interrupted" }} />);
+  expect(screen.getByText("connection interrupted")).toBeInTheDocument();
+  expect(screen.queryByText("No messages")).not.toBeInTheDocument();
+  rerender(<QueryResultPanel {...props} activeTab="messages" statements={[]} error={null} result={statements[0].result} />);
+  expect(screen.queryByText("connection interrupted")).not.toBeInTheDocument();
+});
+
+it("keeps safety confirmation in Messages instead of presenting it as a failure", () => {
+  render(<QueryResultPanel {...props} activeTab="messages" statements={[]} results={[]} pendingConfirmation confirmationSql="DELETE FROM test;" error={{ code: "CONFIRMATION_REQUIRED", message: "confirm" }} />);
+  expect(screen.getByLabelText("Script awaiting confirmation")).toHaveTextContent("DELETE FROM test;");
+  expect(screen.queryByText("Execution failed")).not.toBeInTheDocument();
+});
+
 const statements: DatabaseStatementResult[] = [
   { index: 1, start: 0, end: 9, sql: "SELECT 1;", status: "success", error: null, result: {
     columns: [{ name: "value", dataType: "int" }], rows: [["retained-value"]], affectedRows: 0, durationMs: 1,

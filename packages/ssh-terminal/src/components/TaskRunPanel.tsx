@@ -40,6 +40,12 @@ export function TaskRunPanel({
   const [height, setHeight] = useState(readStoredHeight);
   const dragRef = useRef<{ startY: number; startHeight: number } | null>(null);
   const outputRef = useRef<HTMLPreElement | null>(null);
+  const [outputFollow, setOutputFollow] = useState({ runId: run.id, following: true });
+  // A short log may never dispatch scroll; reset on identity change itself.
+  if (outputFollow.runId !== run.id) {
+    setOutputFollow({ runId: run.id, following: true });
+  }
+  const following = outputFollow.following;
 
   useEffect(() => {
     localStorage.setItem(HEIGHT_KEY, String(height));
@@ -119,9 +125,9 @@ export function TaskRunPanel({
 
   useEffect(() => {
     const node = outputRef.current;
-    if (!node) return;
+    if (!node || !following) return;
     node.scrollTop = node.scrollHeight;
-  }, [transcript, historyLog, logLoading]);
+  }, [transcript, historyLog, logLoading, following, run.id]);
 
   return (
     <section
@@ -152,6 +158,10 @@ export function TaskRunPanel({
           )}
         </div>
         <div className="flex items-center gap-1">
+          {!following && <Button onClick={() => {
+            setOutputFollow({ runId: run.id, following: true });
+            outputRef.current?.focus({ preventScroll: true });
+          }} size="sm" variant="secondary">{t("ssh.tasks.run.followOutput")}</Button>}
           {!running && onRerun && <Button onClick={onRerun} size="sm" variant="secondary">{t("ssh.tasks.actions.rerun")}</Button>}
           {run.logPath ? (
             <Button
@@ -233,8 +243,18 @@ export function TaskRunPanel({
             })}
         </ol>
         <pre
+          aria-label={t("ssh.tasks.run.output")}
           className="min-h-0 overflow-auto whitespace-pre-wrap break-words bg-[var(--u-color-canvas)] p-4 font-mono text-[12px] leading-6 text-[var(--u-color-text)]"
+          onScroll={(event) => {
+            const node = event.currentTarget;
+            // Kept-alive modules have no viewport while hidden.
+            if (!node.clientHeight) return;
+            const atBottom = node.scrollHeight - node.scrollTop - node.clientHeight <= 24;
+            setOutputFollow((current) => current.runId === run.id && current.following === atBottom
+              ? current : { runId: run.id, following: atBottom });
+          }}
           ref={outputRef}
+          tabIndex={0}
         >
           {hasLiveTranscript ? (
             transcript.map((line) => (
