@@ -136,21 +136,34 @@ guarded 模式的 UPDATE/DELETE 确认使用解析后的最外层 WHERE 判断�
 
 ## 截图
 
-**应用总览 — 左侧模块切换栏与 API Client 工作台**
+以下截图于 2026-11-09 使用 Windows 上的 Unfour 0.14.0，连接专用 Demo Lab
+实际执行后采集。窗口原生尺寸为 1920 × 1032，展示虚构演示数据，不是界面模型图。
+
+**应用总览 — API 集合与三条固定基线订单**
 
 ![Unfour 总览](docs/screenshots/app-overview.png)
 
-**API Client — 含 Params / Auth / Headers / Body 的请求构造器与响应区**
+**API Client — 真实 Demo API 返回订单 1001**
 
 ![API Client](docs/screenshots/api-client.png)
 
-**SSH 终端 — 连接、会话、远程文件与任务**
+**SSH 终端 — 已连接的 Lab 会话与 SFTP 样本文件**
 
 ![SSH 终端](docs/screenshots/ssh-terminal.png)
 
-**数据库 — Schema 浏览与 SQL 查询输出**
+此会话使用已保存的 Lab root 连接，不代表普通账户的 SFTP 权限或传输验收通过。
+
+**数据库 — 只读角色查询相同的三条固定订单**
 
 ![数据库](docs/screenshots/database.png)
+
+**SSH Task — 保存的基线检查任务，执行成功且退出码为 0**
+
+![SSH Task](docs/screenshots/ssh-task.png)
+
+**Flow — API 存活检查、SSH 发布、就绪等待、版本与数据库查询**
+
+![Flow 成功运行](docs/screenshots/flow-success.png)
 
 ## 本地开发
 

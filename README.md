@@ -169,21 +169,36 @@ UPDATE/DELETE confirmation checks the parsed outer WHERE.
 
 ## Screenshots
 
-**App overview — sidebar with module switcher and the API Client workspace**
+Captured from Unfour 0.14.0 on Windows against the dedicated Demo Lab on
+2026-11-09, at a native window size of 1920 × 1032. These are real execution
+results with synthetic demo data, not mockups.
+
+**App overview — API collection and the three baseline orders**
 
 ![Unfour overview](docs/screenshots/app-overview.png)
 
-**API Client — request builder with params, auth, headers, body, and response**
+**API Client — order 1001 returned by the live Demo API**
 
 ![API Client](docs/screenshots/api-client.png)
 
-**SSH Terminal — connections, sessions, remote files, and tasks**
+**SSH Terminal — connected Lab session and SFTP sample files**
 
 ![SSH Terminal](docs/screenshots/ssh-terminal.png)
 
-**Database — schema browsing and SQL query output**
+This session uses the saved Lab root connection. It does not demonstrate
+ordinary-account SFTP permissions or transfer acceptance.
+
+**Database — read-only role querying the same three baseline orders**
 
 ![Database](docs/screenshots/database.png)
+
+**SSH Task — saved baseline check, completed with exit code 0**
+
+![SSH Task](docs/screenshots/ssh-task.png)
+
+**Flow — API health, SSH deployment, readiness, version, and database query**
+
+![Successful Flow run](docs/screenshots/flow-success.png)
 
 ## Local Development
 
