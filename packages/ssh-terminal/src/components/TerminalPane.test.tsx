@@ -7,11 +7,25 @@ import {
   sendInputMock,
   session,
   terminalState,
+  listHistoryMock,
+  temporaryInputMock,
+  temporaryResizeMock,
 } from "./terminal-pane-test-harness";
 import { TerminalPane } from "./TerminalPane";
 
 describe("TerminalPane", () => {
   beforeEach(resetTerminalMocks);
+
+  it("routes temporary I/O separately without saved history or endpoint display", async () => {
+    render(<TerminalPane active temporary events={[]} session={session} />);
+    await waitFor(() => expect(temporaryResizeMock).toHaveBeenCalled());
+    terminalState.dataHandlers.forEach((handler) => handler("synthetic-input"));
+    await waitFor(() => expect(temporaryInputMock).toHaveBeenCalledWith({ workspaceId: "ws-1", sessionId: "session-1", data: "synthetic-input" }));
+    expect(listHistoryMock).not.toHaveBeenCalled();
+    expect(sendInputMock).not.toHaveBeenCalled();
+    expect(resizeMock).not.toHaveBeenCalled();
+    expect(terminalState.writes.join("")).not.toContain("example.test");
+  });
 
   it("syncs the fitted terminal size to the SSH session even without an xterm resize event", async () => {
     render(

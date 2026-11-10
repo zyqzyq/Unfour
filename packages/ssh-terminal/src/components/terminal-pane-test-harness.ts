@@ -98,6 +98,8 @@ vi.mock("@unfour/command-client", async (importOriginal) => {
     listSshCommandHistory: vi.fn().mockResolvedValue([]),
     resizeSshSession: vi.fn().mockResolvedValue({}),
     sendSshInput: vi.fn(),
+    sendTemporarySshInput: vi.fn().mockResolvedValue({}),
+    resizeTemporarySsh: vi.fn().mockResolvedValue({}),
   };
 });
 
@@ -113,11 +115,15 @@ import {
   listSshCommandHistory,
   resizeSshSession,
   sendSshInput,
+  sendTemporarySshInput,
+  resizeTemporarySsh,
 } from "@unfour/command-client";
 
 export const listHistoryMock = vi.mocked(listSshCommandHistory);
 export const resizeMock = vi.mocked(resizeSshSession);
 export const sendInputMock = vi.mocked(sendSshInput);
+export const temporaryInputMock = vi.mocked(sendTemporarySshInput);
+export const temporaryResizeMock = vi.mocked(resizeTemporarySsh);
 export const clipboardReadMock = vi.fn();
 export const clipboardWriteMock = vi.fn();
 
@@ -164,6 +170,8 @@ export function resetTerminalMocks() {
   listHistoryMock.mockReset();
   listHistoryMock.mockResolvedValue([]);
   sendInputMock.mockReset();
+  temporaryInputMock.mockClear();
+  temporaryResizeMock.mockClear();
   sendInputMock.mockResolvedValue({
     sessionId: "session-1",
     kind: "output",

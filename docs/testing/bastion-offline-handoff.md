@@ -1,10 +1,14 @@
 # 堡垒机离线验收携带清单（A4 待执行）
 
 关联 [A4 #7](https://github.com/zyqzyq/Unfour/issues/7)。
-**当前只有 A1 证据与合成工具，没有可用于堡垒机接入验收的 Unfour 安装包。**
-不要把现有 main 安装包当成已实现 A2/A3 的版本。
+**A2/A3 内部基础能力已实现并进行合成／loopback 测试，真实 AccessClient 入口仍不支持。**
+本轮没有生成可用于现场接入验收的安装包，不要把基础能力 PR 或现有 main 包当成兼容版本。
+见 [基础验证报告](bastion-temporary-session-foundation-2026-11-10.md)。
 
 ## 先补 A1
+
+按 [一次 Xshell 测试会话的观察步骤](bastion-field-observation.md) 核实工具／权限和离线依赖，
+观察末端、交接形式、代理类别和正常关闭后的 helper 行为。只带回合成结构。
 
 携带 [本机证据与最小待补材料](bastion-accessclient-a1-2026-11-10.md)、
 [内部边界草案](../architecture/bastion-launch-contract.md)、

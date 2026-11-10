@@ -8,6 +8,8 @@ pub mod environment_exchange;
 pub mod mcp;
 pub mod secret_store;
 pub mod ssh;
+pub mod temporary_ssh;
+pub use temporary_ssh::*;
 pub mod workspace;
 pub use environment_exchange::*;
 

@@ -6,6 +6,7 @@
 //! to [`configure_core_app_with_extensions`].
 
 pub mod commands;
+mod launch;
 mod mcp_client_config;
 
 use std::sync::{Arc, Mutex};
@@ -162,7 +163,14 @@ where
 {
     let prepared_command_bus = extensions.prepared_command_bus.clone();
     builder
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            launch::inspect(
+                &argv
+                    .into_iter()
+                    .skip(1)
+                    .map(std::ffi::OsString::from)
+                    .collect::<Vec<_>>(),
+            );
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.set_focus();
@@ -172,6 +180,7 @@ where
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(move |app| {
+            launch::inspect(&std::env::args_os().skip(1).collect::<Vec<_>>());
             let logging_guard = initialize_logging(&config);
             let command_bus = match prepared_command_bus.clone() {
                 Some(command_bus) => command_bus,
@@ -466,6 +475,15 @@ macro_rules! generate_handlers {
             unfour_app::commands::ssh_known_hosts_export,
             unfour_app::commands::ssh_known_hosts_import,
             unfour_app::commands::ssh_session_close,
+            unfour_app::commands::ssh_temporary_list,
+            unfour_app::commands::ssh_temporary_claim,
+            unfour_app::commands::ssh_temporary_start,
+            unfour_app::commands::ssh_temporary_trust,
+            unfour_app::commands::ssh_temporary_cancel,
+            unfour_app::commands::ssh_temporary_close_workspace,
+            unfour_app::commands::ssh_temporary_output,
+            unfour_app::commands::ssh_temporary_input,
+            unfour_app::commands::ssh_temporary_resize,
             unfour_app::commands::ssh_session_connect,
             unfour_app::commands::ssh_session_history,
             unfour_app::commands::ssh_command_history_list,

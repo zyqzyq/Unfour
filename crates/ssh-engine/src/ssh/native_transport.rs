@@ -83,18 +83,7 @@ impl SshService {
         let handle = self
             .open_authenticated_connection(connection, override_secret)
             .await?;
-        let channel = handle
-            .channel_open_session()
-            .await
-            .map_err(|error| AppError::Config(format!("failed to open ssh channel: {}", error)))?;
-        channel
-            .request_pty(true, "xterm-256color", cols as u32, rows as u32, 0, 0, &[])
-            .await
-            .map_err(|error| AppError::Config(format!("failed to request ssh pty: {}", error)))?;
-        channel
-            .request_shell(true)
-            .await
-            .map_err(|error| AppError::Config(format!("failed to start ssh shell: {}", error)))?;
+        let (channel, _) = open_terminal_channel(&handle, cols, rows, false).await?;
 
         let (reader, writer) = channel.split();
         Ok(NativeSshHandle {
@@ -113,6 +102,7 @@ impl SshService {
     ) -> Result<russh::client::Handle<SshClientHandler>, NativeConnectError> {
         let config = Arc::new(native_client_config());
         let handler = SshClientHandler {
+            temporary_trust: None,
             host_key_store: HostKeyStore::new(self.db.pool().clone()),
             workspace_id: connection.workspace_id.clone(),
             host: connection.host.clone(),
@@ -155,5 +145,57 @@ impl SshService {
         self.authenticate_native(&mut handle, connection, override_secret)
             .await?;
         Ok(handle)
+    }
+}
+
+#[cfg(feature = "ssh-native")]
+pub(super) async fn open_terminal_channel(
+    handle: &russh::client::Handle<SshClientHandler>,
+    cols: u16,
+    rows: u16,
+    confirm_requests: bool,
+) -> AppResult<(russh::Channel<russh::client::Msg>, String)> {
+    let mut channel = handle
+        .channel_open_session()
+        .await
+        .map_err(|error| AppError::Config(format!("failed to open ssh channel: {}", error)))?;
+    channel
+        .request_pty(true, "xterm-256color", cols as u32, rows as u32, 0, 0, &[])
+        .await
+        .map_err(|error| AppError::Config(format!("failed to request ssh pty: {}", error)))?;
+    let mut prelude = String::new();
+    if confirm_requests {
+        confirm_terminal_request(&mut channel, &mut prelude).await?;
+    }
+    channel
+        .request_shell(true)
+        .await
+        .map_err(|error| AppError::Config(format!("failed to start ssh shell: {}", error)))?;
+    if confirm_requests {
+        confirm_terminal_request(&mut channel, &mut prelude).await?;
+    }
+    Ok((channel, prelude))
+}
+
+#[cfg(feature = "ssh-native")]
+async fn confirm_terminal_request(
+    channel: &mut russh::Channel<russh::client::Msg>,
+    prelude: &mut String,
+) -> AppResult<()> {
+    loop {
+        match channel.wait().await {
+            Some(russh::ChannelMsg::Success) => return Ok(()),
+            Some(
+                russh::ChannelMsg::Failure | russh::ChannelMsg::Close | russh::ChannelMsg::Eof,
+            )
+            | None => return Err(AppError::Config("ssh terminal request rejected".into())),
+            Some(message) => {
+                if let Some(text) =
+                    native_supervisor::terminal_output_from_channel_message(&message)
+                {
+                    append_pending_output(prelude, &text);
+                }
+            }
+        }
     }
 }

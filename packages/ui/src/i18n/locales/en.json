@@ -1091,6 +1091,33 @@
     "title": "Database"
   },
   "ssh": {
+    "temporary": {
+      "errors": {
+        "TEMPORARY_AUTH_TIMEOUT": "Authentication timed out.",
+        "TEMPORARY_CHANNEL_TIMEOUT": "Terminal channel setup timed out.",
+        "TEMPORARY_TRANSPORT_TIMEOUT": "SSH transport setup timed out.",
+        "TEMPORARY_TRANSPORT_OR_TRUST_FAILED": "SSH transport or host fingerprint verification failed.",
+        "TEMPORARY_AUTH_FAILED": "Authentication failed.",
+        "TEMPORARY_CHANNEL_FAILED": "Terminal channel setup failed."
+      },
+      "title": "Bastion temporary terminal",
+      "pending": "Temporary request · expires in {seconds}s",
+      "claim": "Connect in this workspace",
+      "connect": "Connect",
+      "cancel": "Close / cancel",
+      "saved": "Saved connections",
+      "trust": "Trust this fingerprint once",
+      "dismiss": "Dismiss",
+      "failed": "Temporary session action failed. Refresh or launch a new request from the bastion.",
+      "status": {
+        "claimed": "Ready to connect",
+        "connecting": "Connecting…",
+        "awaiting-trust": "Verify the fingerprint before trusting this session.",
+        "connected": "Temporary · no saved history",
+        "disconnected": "Disconnected. Launch a new session from the bastion.",
+        "expired": "Request expired. Launch again from the bastion."
+      }
+    },
     "sidebar": {
       "searchAria": "Search SSH connections",
       "searchPlaceholder": "Filter connections",

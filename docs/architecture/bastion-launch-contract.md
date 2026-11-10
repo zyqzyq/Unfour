@@ -1,4 +1,61 @@
-# 堡垒机外部连接：A1 内部边界草案
+# 堡垒机外部连接：内部基础契约
+
+## 2026-11-10 A2/A3 实现状态
+
+PR #8 已合并。本轮在用户明确授权下实现与现场格式无关的基础能力；
+**实际 AccessClient 入口仍不支持，现场兼容未验证**。
+见 [基础验证报告](../testing/bastion-temporary-session-foundation-2026-11-10.md)。
+本节是当前实现；后面的 A1 草案保留设计来源，其建议时限／未实现状态以本节为准。
+
+`ssh-engine` 拥有临时队列、认证、归属、主机信任和 runner；CommandBus 编排；
+`unfour-app` 只装配入口 guard 和句柄命令；`ssh-terminal` 复用 TerminalPane。
+没有在 app-shell 放业务状态，也没有新增 MCP 凭据注入入口。
+
+| 对象／操作 | 当前契约 |
+| --- | --- |
+| LaunchReceipt | Rust 随机接收 ID + 单调时钟截止时间；同一交接重投复用 receipt，用户再次发起创建新 receipt，不按凭据内容哈希去重 |
+| TemporaryRequest | endpoint、整个 username、password 的 Rust 内部类型；无 Debug/Clone/Serialize/Deserialize；字符串使用 Zeroizing；密码机制不代表 AccessClient 的实际格式 |
+| 安全摘要 | 随机 handle、可选工作区 ID、固定状态、剩余秒数、固定错误码；信任等待时仅附 SHA-256 指纹；没有端点、用户名、端口、原始 URL 或外部标题 |
+| claim/start | 检查工作区存在且未删除，原子绑定，重复 claim 返回当前状态；start 一次取走认证材料，重复 start 拒绝；同一 handle 标识临时请求／目标生命周期，与普通 connection 查找表完全分离 |
+| 输入边界 | 只有 typed Rust 接收函数；合成注入只存在于自动化测试。没有 UI/MCP/CLI/环境变量/文件注入 API |
+| OS 冷／热启动 | 只分类包络；未知 argv/URI/文件格式输出固定 BASTION_LAUNCH_UNSUPPORTED，不输出原始参数、不执行、不套用上游模板 |
+| 既有入口 | unfour:// 仍交 account consumer 校验；build-metadata CLI 仍优先处理；分类不表示 URL 已被账户模块接受 |
+
+最多保留 16 个请求／目标（含活动会话），请求字符串总长度最多 64 KiB。
+receipt 和未消费请求有效期为 120 秒；最多 256 个有效去重 tombstone，满时拒绝新请求，
+不提前淘汰导致重放。过期 receipt 永久拒绝。弱引用定时器独立清理，不依赖 UI readiness。
+UI 单飞拉取摘要；未认领时不连接，通知不作为存储。
+
+| 阶段／事件 | 当前行为 |
+| --- | --- |
+| 传输／主机握手 | 总上限 150 秒，包含最多 120 秒的显式未知指纹等待 |
+| 认证 | 独立 30 秒上限 |
+| 通道 | 单 channel + PTY + shell 共 15 秒上限；不预先测试，不开 exec/SFTP，不探测额外通道 |
+| 信任 | 只读工作区已有主机指纹，变更拒绝；未知指纹在同一握手上由用户确认，仅在目标内存保留；rekey 必须匹配，不写主机库 |
+| 取消／关闭标签 | 移除目标、取消等待、关闭已取得资源；迟到 transport/channel 不能恢复目标；输入/resize 上限 5 秒，关闭 channel/transport 各最多 2 秒 |
+| 断开 | 提示从堡垒机重新发起，不重连、不复用材料；临时传输关闭普通 keepalive 探测，避免其 9 秒失活策略抢先覆盖阶段超时 |
+| 工作区切换／关闭 | 离开该工作区的 SSH 容器时关闭所属临时目标，永不迁移；未认领请求保留原 TTL；StrictMode 即时 readiness 重放不会误关闭 |
+| 删除工作区 | CommandBus 删除后清理目标；workspace epoch 拒绝与关闭同时发生且仍在等待 DB 的迟到认领 |
+| 应用退出 | 释放本进程资源，不结束 AccessClient-owned helper，不保存恢复记录 |
+
+以上时限是本地资源上限，不能视为堡垒机授权有效期。单实例第二进程退出是否破坏代理仍未知。
+实际冷／热启动接入与 Windows 打包验收不能由 typed 队列测试代替。
+
+临时路径不调用普通保存连接、keychain、session/history、activity、Cloud Sync/outbox、
+Task/Flow 或日志导出路径。临时标签无日志导出、SFTP、duplicate/reconnect 控件。
+终端可见输出可能含远端回显，仅存有界内存：Rust 待拉取尾部最多 512 KiB；
+React 每标签约 256 Ki 字符（单块可能达 512 KiB）；xterm 有限滚动区。
+关闭即删除；断开后的 Rust 摘要／输出最多再保留 120 秒并独立定时清理。
+不承诺清零 OS argv、JS 或第三方库的副本；Zeroizing 仅覆盖所拥有 Rust 缓冲。
+
+新增直接依赖 serde 用于安全摘要、zeroize 用于秘密缓冲；tokio 从可选改为必需，
+确保非 native 构建也会定时清理。版本均复用现有锁定依赖；test-util 只用于确定性时钟测试。
+
+原生依赖关系保持 #4 → #5/#6 → #7，A2 不阻塞 A3。
+真实 parser、兼容启动器与 A4 仍需 [现场观察材料](../testing/bastion-field-observation.md)。
+`launch-shape.mjs` 仅为证据脱敏工具；Task、Flow、K3s、终端内 exec 回退均未实现。
+
+## A1 原始设计草案（历史上下文）
 
 关联 [A1 #4](https://github.com/zyqzyq/Unfour/issues/4)、
 [A2 #5](https://github.com/zyqzyq/Unfour/issues/5)、[A3 #6](https://github.com/zyqzyq/Unfour/issues/6)。
