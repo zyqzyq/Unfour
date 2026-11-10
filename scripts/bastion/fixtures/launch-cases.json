@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "syntheticOnly": true,
+  "accessClientHandoffVerified": false,
+  "cases": [
+    {
+      "id": "browser-envelope",
+      "evidence": "local-registry-shape-only",
+      "argv": ["accessclient://SYNTHETIC_PAYLOAD"],
+      "kinds": ["uri-shaped"]
+    },
+    {
+      "id": "reference-xshell",
+      "evidence": "upstream-reference-not-accessclient",
+      "argv": ["-newtab", "合成测试 甲", "-url", "ssh://SYNTHETIC_USER:SYNTHETIC_PASSWORD@asset.example.invalid:2222"],
+      "kinds": ["option", "opaque", "option", "uri-shaped"]
+    },
+    {
+      "id": "reference-winscp",
+      "evidence": "upstream-reference-not-accessclient",
+      "argv": ["sftp://SYNTHETIC_USER:SYNTHETIC_PASSWORD@files.example.invalid:2222"],
+      "kinds": ["uri-shaped"]
+    },
+    {
+      "id": "quoted-uri",
+      "evidence": "prospective-edge-case",
+      "argv": ["-URL", "\"ssh://SYNTHETIC_USER:SYNTHETIC_PASSWORD@asset.example.invalid:2222\"", "-NEWTAB", "合成 名称"],
+      "kinds": ["option", "uri-shaped", "option", "opaque"]
+    },
+    {
+      "id": "encoded-reserved-and-unicode",
+      "evidence": "prospective-edge-case",
+      "argv": ["-url", "ssh://SYNTHETIC%40USER:SYNTHETIC%3A%2F%25%20%E5%90%88@asset.example.invalid:2222"],
+      "kinds": ["option", "uri-shaped"]
+    },
+    {
+      "id": "ambiguous-ticket-separators",
+      "evidence": "prospective-edge-case",
+      "argv": ["ssh://SYNTHETIC@TENANT/asset.example.invalid/SYNTHETIC_USER:SYNTHETIC_PASSWORD@gateway.example.invalid:2222"],
+      "kinds": ["uri-shaped"]
+    },
+    {
+      "id": "malformed-encoding-and-url",
+      "evidence": "prospective-edge-case",
+      "argv": ["-url", "ssh://SYNTHETIC:%ZZ@[invalid", "ssh://SYNTHETIC%"],
+      "kinds": ["option", "uri-shaped", "uri-shaped"]
+    },
+    {
+      "id": "unknown-options-and-execution-input",
+      "evidence": "prospective-rejection-case",
+      "argv": ["/command=SYNTHETIC_COMMAND", "/script=C:\\Synthetic Folder\\fixture.txt", "--flow=SYNTHETIC_FLOW", "--task", "SYNTHETIC_TASK", "--unknown=SYNTHETIC_SECRET"],
+      "kinds": ["option", "option", "opaque", "opaque", "opaque", "opaque"]
+    },
+    {
+      "id": "session-path-is-opaque",
+      "evidence": "prospective-edge-case",
+      "argv": ["C:\\Synthetic Folder\\合成.xsh", "/sessionname=合成 名称", "/ini=nul", "/hostkey=SYNTHETIC_KEY", "/privatekey=C:\\Synthetic Folder\\key"],
+      "kinds": ["opaque", "option", "option", "option", "option"]
+    },
+    {
+      "id": "missing-duplicate-empty-control",
+      "evidence": "prospective-rejection-case",
+      "argv": ["-url", "", "-url", "SYNTHETIC\u0000\r\nVALUE"],
+      "kinds": ["option", "opaque", "option", "opaque"]
+    }
+  ]
+}
