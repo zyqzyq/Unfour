@@ -173,12 +173,13 @@ export function Tabs({
       <div
         ref={tabbarRef}
         className={cn(
-          "u-tabbar flex h-[var(--u-size-tabbar)] shrink-0 items-end border-b border-[var(--u-color-border)] bg-[var(--u-color-chrome)] px-2",
+          "u-tabbar u-document-tabbar h-[var(--u-size-tabbar)]",
           className,
         )}
+        data-surface={activeBackground}
       >
         <div
-          className="flex min-w-0 flex-1 translate-y-px items-end overflow-x-auto"
+          className="u-document-tablist flex-1"
           role="tablist"
         >
           {tabs.map((tab, index) => {
@@ -189,16 +190,10 @@ export function Tabs({
           const tabNode = (
             <div
               className={cn(
-                "group relative flex h-[36px] min-w-[132px] max-w-[240px] items-center gap-2 rounded-t-[var(--u-radius-md)] border border-transparent px-2 text-[12px] font-medium text-[var(--u-color-text-muted)] transition-colors duration-150",
-                active
-                  ? cn("border-[var(--u-color-border)]", {
-                    surface: "border-b-[var(--u-color-surface)] bg-[var(--u-color-surface)] text-[var(--u-color-text)]",
-                    subtle: "border-b-[var(--u-color-surface-subtle)] bg-[var(--u-color-surface-subtle)] text-[var(--u-color-text)]",
-                    terminal: "border-b-[var(--u-color-terminal-bg)] bg-[var(--u-color-terminal-bg)] text-[var(--u-color-terminal-text)]",
-                  }[activeBackground])
-                  : "hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)]",
+                "group u-document-tab",
                 isDragging && "opacity-40",
               )}
+              data-active={active}
               draggable={tab.draggable !== false}
               onDragEnd={handleDragEnd}
               onDragOver={(e) => handleDragOver(e, index)}
@@ -216,7 +211,7 @@ export function Tabs({
               )}
               <button
                 aria-selected={active}
-                className="flex min-w-0 flex-1 items-center gap-2 rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--u-color-focus)]"
+                className="flex h-full min-w-0 flex-1 items-center gap-2 rounded-[var(--u-radius-sm)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--u-color-focus)]"
                 onClick={() => onSelect(tab.id)}
                 role="tab"
                 type="button"
@@ -236,7 +231,7 @@ export function Tabs({
                 <button
                   aria-label={t("common.tabs.closeLabel", { title: tab.title })}
                   className={cn(
-                    "grid h-5 w-5 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--u-color-focus)]",
+                    "u-document-tab-close grid h-5 w-5 shrink-0 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)] hover:text-[var(--u-color-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--u-color-focus)]",
                     active && activeBackground === "terminal" && "text-[var(--u-color-terminal-muted)]",
                   )}
                   onClick={(event) => {

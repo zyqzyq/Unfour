@@ -11,6 +11,28 @@ for (const theme of ["light", "dark"]) {
     await page.goto("/");
     const url = page.getByRole("textbox", { name: "Request URL", exact: true });
     await url.fill("https://example.invalid/retained-draft");
+    const inputHandle = await url.elementHandle();
+    const divider = page.getByRole("separator", { name: "Resize sidebar", exact: true });
+    const sidebar = divider.locator("..");
+    const initial = (await sidebar.boundingBox())!;
+    const resizeSidebar = async (width: number) => {
+      const handle = (await divider.boundingBox())!;
+      await page.mouse.move(handle.x + handle.width / 2, handle.y + 80);
+      await page.mouse.down();
+      await page.mouse.move(initial.x + width, handle.y + 80, { steps: 5 });
+      await page.mouse.up();
+      await expect.poll(async () => (await sidebar.boundingBox())!.width).toBe(width);
+    };
+    await resizeSidebar(initial.width + 40);
+    const moduleButton = page.getByRole("navigation", { name: "Modules" })
+      .getByRole("button", { name: "API Client", exact: true });
+    await moduleButton.click();
+    await expect(divider).toHaveCount(0);
+    await expect(url).toHaveValue("https://example.invalid/retained-draft");
+    expect(await inputHandle!.evaluate(node => node.isConnected)).toBe(true);
+    await moduleButton.click();
+    await expect.poll(async () => (await sidebar.boundingBox())!.width).toBe(initial.width + 40);
+    await resizeSidebar(initial.width);
     await expect(page.getByRole("separator", { name: /Resize horizontal split/ })).toBeVisible();
     await page.setViewportSize({ width: 960, height: 600 });
     await expect(page.getByRole("separator", { name: /Resize vertical split/ })).toBeVisible();

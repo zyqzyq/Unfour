@@ -38,8 +38,8 @@ export function ApiClientSidebar({
   return (
     <div
       className={cn(
-        "flex h-full min-h-0 flex-col bg-[var(--u-color-surface)]",
-        !shellSlot && "w-[248px] shrink-0 border-r border-[var(--u-color-border)]",
+        "flex h-full min-h-0 flex-col",
+        !shellSlot && "w-[248px] shrink-0 border-r border-[var(--u-color-border)] bg-[var(--u-color-surface)]",
       )}
     >
       <div className="flex h-[var(--u-size-tabbar)] shrink-0 items-center gap-1 border-b border-[var(--u-color-border)] px-3">

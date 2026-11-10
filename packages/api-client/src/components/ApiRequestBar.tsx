@@ -4,12 +4,11 @@ import {
   useImperativeHandle,
   useRef,
   useState,
-  type CSSProperties,
   type Ref,
   type RefObject,
 } from "react";
 import { Pencil, Save, Send, Square } from "lucide-react";
-import { Button, IconButton, Input, useI18n } from "@unfour/ui";
+import { Button, IconButton, Input, Select, useI18n } from "@unfour/ui";
 import { httpMethods } from "../constants/http-methods";
 import { requestTabTitle, type ApiRequestTab } from "../model/request-tabs";
 
@@ -42,7 +41,7 @@ export function ApiRequestBar({
 
   return (
     <div
-      className="flex shrink-0 flex-col gap-3 border-b border-[var(--u-color-border)] bg-[var(--u-color-canvas)] px-4 py-3"
+      className="flex shrink-0 flex-col gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-canvas)] px-4 py-3"
       onKeyDown={(event) => {
         if (
           !event.defaultPrevented && !event.nativeEvent.isComposing &&
@@ -58,9 +57,6 @@ export function ApiRequestBar({
       }}
     >
       <div className="flex min-w-0 items-center gap-2">
-        <span className="shrink-0 whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--u-color-text-muted)]">
-          {t("api.request.nameLabel")}
-        </span>
         <RequestNameEditor
           onCommit={onNameCommit}
           onEditingChange={onNameEditingChange}
@@ -70,12 +66,12 @@ export function ApiRequestBar({
         />
       </div>
       <div className="flex min-w-0 items-center gap-2">
-        <div className="flex min-w-0 flex-1 items-center rounded-[var(--u-radius-lg)] border border-[var(--u-color-border-strong)] bg-[var(--u-color-surface)] p-1 shadow-[var(--u-shadow-sm)] transition-colors focus-within:border-[var(--u-color-focus)]">
-          <select
+        <div className="flex h-[38px] min-w-0 flex-1 items-center rounded-[var(--u-radius-md)] border border-[var(--u-color-input)] bg-[var(--u-color-canvas)] transition-colors focus-within:border-[var(--u-color-focus)] focus-within:ring-2 focus-within:ring-[color:color-mix(in_srgb,var(--u-color-focus)_16%,transparent)]">
+          <Select
             aria-label={t("api.request.method")}
-            className="h-[var(--u-size-input)] shrink-0 cursor-pointer rounded-[var(--u-radius-md)] border border-transparent bg-[var(--u-color-canvas)] px-2.5 font-mono text-[12px] font-bold uppercase tracking-wide outline-none transition-colors duration-150 focus:border-[var(--u-color-focus)] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--u-color-focus)_16%,transparent)]"
+            className="h-full w-auto shrink-0 cursor-pointer rounded-none rounded-l-[var(--u-radius-md)] border-0 bg-transparent px-2.5 font-mono text-[12px] font-bold uppercase tracking-wide focus:ring-0 focus-visible:outline-offset-[-3px]"
             onChange={(event) => onUpdate({ method: event.target.value })}
-            style={methodSelectStyle(tab.draft.method)}
+            style={{ color: methodColor(tab.draft.method) }}
             value={tab.draft.method}
           >
             {httpMethods.map((method) => (
@@ -83,10 +79,11 @@ export function ApiRequestBar({
                 {method}
               </option>
             ))}
-          </select>
+          </Select>
+          <span aria-hidden="true" className="h-4 w-px shrink-0 bg-[var(--u-color-border)]" />
           <Input
             aria-label={t("api.request.url")}
-            className="min-w-0 flex-1 border-transparent bg-transparent px-3 font-mono text-[12px] shadow-none hover:border-transparent focus:border-transparent focus:ring-0"
+            className="h-full min-w-0 flex-1 rounded-none rounded-r-[var(--u-radius-md)] border-0 bg-transparent px-3 font-mono text-[12px] shadow-none focus:ring-0"
             onChange={(event) => onUpdate({ url: event.target.value })}
             placeholder={t("api.request.urlPlaceholder")}
             ref={urlInputRef}
@@ -97,7 +94,7 @@ export function ApiRequestBar({
           <Button
             aria-label={tab.cancelling ? t("api.actions.cancelling") : t("api.actions.stop")}
             disabled={tab.cancelling}
-            className="h-[44px] px-4"
+            className="h-[38px] px-4"
             size="sm"
             onClick={onStop}
             type="button"
@@ -108,7 +105,7 @@ export function ApiRequestBar({
           </Button>
         ) : (
           <Button
-            className="h-[44px] px-4 shadow-[var(--u-shadow-sm)]"
+            className="h-[38px] px-4"
             disabled={!tab.draft.url.trim() || (tab.source === "history" && !tab.draft.historyReviewConfirmed)}
             size="sm"
             onClick={onSend}
@@ -120,14 +117,14 @@ export function ApiRequestBar({
         )}
         <Button
           aria-label={tab.saving ? t("api.actions.saving") : t("api.actions.save")}
-          className="h-[44px] w-[44px]"
+          className="h-[38px] w-[38px]"
           disabled={tab.saving || Boolean(tab.externalChange)}
           ref={saveButtonRef}
           size="icon"
           onClick={handleSave}
           title={tab.saving ? t("api.actions.saving") : t("api.actions.save")}
           type="button"
-          variant="outline"
+          variant="ghost"
         >
           <Save size={14} />
         </Button>
@@ -275,7 +272,7 @@ const RequestNameEditor = forwardRef<
   ) : (
     <div className="flex min-w-0 flex-1 items-center gap-0.5">
       <span
-        className="min-w-0 max-w-full shrink truncate px-2 pr-1 text-[16px] font-semibold tracking-[-0.02em] text-[var(--u-color-text)]"
+        className="min-w-0 max-w-full shrink truncate pr-1 text-[13px] font-medium text-[var(--u-color-text)]"
         title={displayName}
       >
         {displayName}
@@ -292,13 +289,6 @@ const RequestNameEditor = forwardRef<
     </div>
   );
 });
-
-function methodSelectStyle(method: string): CSSProperties {
-  return {
-    borderColor: methodBorderColor(method),
-    color: methodColor(method),
-  };
-}
 
 function methodColor(method: string): string {
   switch (method.trim().toUpperCase()) {
@@ -318,26 +308,5 @@ function methodColor(method: string): string {
       return "var(--u-color-neutral-text)";
     default:
       return "var(--u-color-text-muted)";
-  }
-}
-
-function methodBorderColor(method: string): string {
-  switch (method.trim().toUpperCase()) {
-    case "GET":
-      return "color-mix(in srgb, var(--u-color-info) 40%, var(--u-color-border))";
-    case "POST":
-      return "color-mix(in srgb, var(--u-color-success) 40%, var(--u-color-border))";
-    case "PUT":
-      return "color-mix(in srgb, var(--u-color-warning) 40%, var(--u-color-border))";
-    case "PATCH":
-      return "color-mix(in srgb, var(--u-color-primary) 42%, var(--u-color-border))";
-    case "DELETE":
-      return "color-mix(in srgb, var(--u-color-danger) 40%, var(--u-color-border))";
-    case "HEAD":
-      return "color-mix(in srgb, var(--u-color-secondary) 40%, var(--u-color-border))";
-    case "OPTIONS":
-      return "color-mix(in srgb, var(--u-color-neutral) 40%, var(--u-color-border))";
-    default:
-      return "var(--u-color-border-strong)";
   }
 }

@@ -14,7 +14,7 @@ export function SidebarSearch({ label, placeholder, value, onChange }: {
   const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   return (
-    <div className="relative mx-1 my-2 shrink-0">
+    <div className="relative mx-1 my-1 shrink-0">
       <Search aria-hidden size={13} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[var(--u-color-text-muted)]" />
       <Input
         aria-label={label}

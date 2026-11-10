@@ -44,10 +44,10 @@ export function ApiRequestTabs({
   const savedTabCount = tabs.filter((tab) => getTabSaveState(tab) === "saved").length;
 
   return (
-    <div className="flex h-[var(--u-size-tabbar)] shrink-0 items-end gap-1 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface-subtle)] px-2">
+    <div className="u-document-tabbar h-[var(--u-size-tabbar)]">
       <div
         aria-label={t("api.tabs.openRequests")}
-        className="flex min-w-0 shrink translate-y-px items-end gap-1 overflow-x-auto"
+        className="u-document-tablist shrink"
         role="tablist"
       >
         {tabs.map((tab, index) => {
@@ -57,16 +57,9 @@ export function ApiRequestTabs({
           const title = requestTabTitle(tab, t("api.request.untitled"));
           const tabNode = (
             <div
-              className={cn(
-                "group relative flex h-9 min-w-[150px] max-w-[230px] shrink-0 items-center gap-2 rounded-t-[var(--u-radius-sm)] border border-transparent px-2.5 text-[12px] transition-colors duration-150",
-                active
-                  ? "border-[var(--u-color-border)] border-b-[var(--u-color-canvas)] bg-[var(--u-color-canvas)] font-medium text-[var(--u-color-text)]"
-                  : "text-[var(--u-color-text-muted)] hover:bg-[var(--u-color-surface-hover)]",
-              )}
+              className="group u-document-tab"
+              data-active={active}
             >
-              {active && (
-                <span className="absolute inset-x-2 top-0 h-0.5 rounded-full bg-[var(--u-color-primary)]" />
-              )}
               <button
                 aria-selected={active}
                 className="flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-[var(--u-radius-sm)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--u-color-focus)]"
@@ -100,7 +93,7 @@ export function ApiRequestTabs({
               </button>
               <button
                 aria-label={t("api.tabs.close", { title })}
-                className="grid h-5 w-5 shrink-0 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] hover:bg-[var(--u-color-surface-hover)]"
+                className="u-document-tab-close grid h-5 w-5 shrink-0 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] hover:bg-[var(--u-color-surface-hover)]"
                 onClick={() => onClose(tab)}
                 type="button"
               >

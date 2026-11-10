@@ -44,13 +44,39 @@ for (const locale of ["en", "zh-CN"] as const) {
     await expect(importButton).toBeFocused();
     await expect(tooltip).toBeVisible();
 
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await add.click();
+    await add.click();
+    await tabs.getByRole("tab").first().click();
+    const inactive = tabs.locator(".u-document-tab").nth(1);
+    const close = inactive.locator(".u-document-tab-close");
+    await expect(close).toHaveCSS("opacity", "0");
+    const widthBeforeHover = (await inactive.boundingBox())!.width;
+    await inactive.hover();
+    await expect(close).toHaveCSS("opacity", "1");
+    expect((await inactive.boundingBox())!.width).toBe(widthBeforeHover);
+    await page.mouse.move(0, 0);
+    await close.focus();
+    await expect(close).toHaveCSS("opacity", "1");
+    await tabs.getByRole("tab").first().click();
+    await page.mouse.move(0, 0);
+    await expect(close).toHaveCSS("opacity", "0");
+    const rail = await tabs.locator("..").boundingBox();
+    await page.screenshot({
+      path: testInfo.outputPath("api-three-tabs.png"),
+      clip: { x: rail!.x, y: rail!.y, width: rail!.width, height: 142 },
+      animations: "disabled",
+    });
+
+    await page.setViewportSize({ width: 960, height: 900 });
     for (let index = 0; index < 8; index++) await add.click();
     expect(await tabs.evaluate(node => node.scrollWidth > node.clientWidth)).toBe(true);
+    expect(await tabs.evaluate(node => node.scrollHeight <= node.clientHeight)).toBe(true);
     await expect(add).toBeInViewport({ ratio: 1 });
     await expect(importButton).toBeInViewport({ ratio: 1 });
     const tabWidths = await tabs.getByRole("tab").evaluateAll(nodes =>
       nodes.map(node => node.parentElement!.getBoundingClientRect().width));
-    expect(tabWidths.every(width => width >= 150 && width <= 230)).toBe(true);
+    expect(tabWidths.every(width => width >= 128 && width <= 224)).toBe(true);
     const verticalBounds = await tabs.evaluate(node => {
       const bar = node.parentElement!.getBoundingClientRect();
       const list = node.getBoundingClientRect();

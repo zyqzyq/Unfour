@@ -81,8 +81,8 @@ function DatabaseSidebarContent({
   const [search, setSearch] = useState("");
 
   return (
-    <section className="flex h-full min-h-0 flex-col gap-2">
-      <div className="flex h-9 shrink-0 items-center justify-between px-1">
+    <section className="flex h-full min-h-0 flex-col gap-1">
+      <div className="flex h-[var(--u-size-tabbar)] shrink-0 items-center justify-between px-1">
         <span className="flex items-center gap-2 text-[12px] font-semibold text-[var(--u-color-text)]">
           <Database className="text-[var(--u-color-primary)]" size={14} />
           {t("database.sidebar.connections")}
@@ -98,7 +98,7 @@ function DatabaseSidebarContent({
         </div>
       </div>
       <SidebarSearch label={t("database.sidebar.searchAria")} placeholder={t("database.sidebar.searchPlaceholder")} value={search} onChange={setSearch} />
-      <div className="min-h-0 flex-1 overflow-auto pt-1">
+      <div className="min-h-0 flex-1 overflow-auto">
         <DatabaseConnectionTree
           catalogNamesByConnection={catalogNamesByConnection}
           connectionStates={connectionStates}

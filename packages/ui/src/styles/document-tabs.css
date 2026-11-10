@@ -1,0 +1,85 @@
+/* Flat editor tabs: the frame owns the corners, tabs own selection and state. */
+.u-document-tabbar {
+  --u-tab-surface: var(--u-color-canvas);
+  --u-tab-foreground: var(--u-color-text);
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  padding-right: 8px;
+  border-bottom: 1px solid var(--u-color-border);
+  background: var(--u-color-surface-subtle);
+}
+.u-document-tabbar[data-surface="surface"] { --u-tab-surface: var(--u-color-surface); }
+.u-document-tabbar[data-surface="subtle"] { --u-tab-surface: var(--u-color-surface-subtle); }
+.u-document-tabbar[data-surface="terminal"] {
+  --u-tab-surface: var(--u-color-terminal-bg);
+  --u-tab-foreground: var(--u-color-terminal-text);
+}
+.u-document-tablist {
+  display: flex;
+  height: 100%;
+  min-width: 0;
+  align-items: stretch;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.u-document-tab {
+  position: relative;
+  display: flex;
+  height: 100%;
+  min-width: 128px;
+  max-width: 224px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding-inline: 12px;
+  color: var(--u-color-text-muted);
+  font-size: 12px;
+  transition: background-color 150ms, color 150ms;
+}
+.u-document-tab + .u-document-tab::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: calc(50% - 7px);
+  width: 1px;
+  height: 14px;
+  background: var(--u-color-border);
+}
+.u-document-tab[data-active="true"]::before,
+.u-document-tab[data-active="true"] + .u-document-tab::before {
+  display: none;
+}
+.u-document-tab:hover {
+  background: var(--u-color-surface-hover);
+  color: var(--u-color-text);
+}
+.u-document-tab[data-active="true"] {
+  background: var(--u-tab-surface);
+  color: var(--u-tab-foreground);
+  font-weight: 500;
+}
+.u-document-tab[data-active="true"]::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 12px;
+  right: 12px;
+  height: 2px;
+  border-radius: var(--u-radius-sm);
+  background: var(--u-color-primary);
+  pointer-events: none;
+}
+.u-document-tab-close {
+  opacity: 0;
+  transition: opacity 150ms;
+}
+.u-document-tab[data-active="true"] .u-document-tab-close,
+.u-document-tab:hover .u-document-tab-close,
+.u-document-tab:focus-within .u-document-tab-close {
+  opacity: 1;
+}
+@media (hover: none) {
+  .u-document-tab-close { opacity: 1; }
+}

@@ -39,7 +39,9 @@ export function ModuleSidebar({
 
   return (
     <Sidebar
-      contentClassName={activeTab.kind === "api" ? "overflow-hidden p-0" : undefined}
+      contentClassName={activeTab.kind === "api"
+        ? "overflow-hidden p-0"
+        : "overflow-hidden px-1 pb-1 pt-0"}
       maxWidth={config.maxWidth}
       minWidth={config.minWidth}
       onWidthChange={(nextWidth) => onModuleWidthChange(kind, nextWidth)}

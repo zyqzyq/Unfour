@@ -168,7 +168,10 @@ export function TreeRow({
       <button
         aria-label={expanded ? "Collapse" : "Expand"}
         aria-busy={item.loading || undefined}
-        className="grid h-4 w-4 shrink-0 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] hover:bg-[var(--u-color-surface-hover)]"
+        className={cn(
+          "grid h-4 w-4 shrink-0 place-items-center rounded-[var(--u-radius-sm)] text-[var(--u-color-text-soft)] hover:bg-[var(--u-color-surface-hover)]",
+          level === 0 && !hasChildren && !item.loading && "hidden",
+        )}
         disabled={!hasChildren && !item.loading}
         onClick={() => hasChildren && toggle(item.id)}
         tabIndex={-1}

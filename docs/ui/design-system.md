@@ -37,12 +37,13 @@ main panels, status content, and bottom-panel content through slots.
 ```text
 GlobalToolbar 52px
 ├─ ActivityRail 72px (60px at narrow widths)
-├─ Resizable/collapsible Sidebar
-├─ MainWorkspace
-│  ├─ TabBar 42px
-│  └─ Active module surface
-├─ RightInspector optional 260-420px
-├─ BottomPanel optional 180-360px
+├─ Unified workspace frame (12px outer corners)
+│  ├─ Resizable/collapsible Sidebar
+│  └─ Editor region
+│     ├─ MainWorkspace + optional RightInspector 260-420px
+│     │  ├─ TabBar 42px
+│     │  └─ Active module surface
+│     └─ BottomPanel optional 180-360px
 └─ StatusBar 28px
 ```
 
@@ -72,16 +73,28 @@ workflows.
 The separate activity rail uses icons with translated short module labels.
 Resource section headers remain visible while lists scroll. Filled accent-soft
 selection and restrained hover surfaces distinguish the active resource.
+Shell module sidebars use a single 4px content gutter (8px at search fields),
+with headers aligned to the 42px document-tab rail. The API sidebar owns its
+internal padding. All four module sidebars use the shared `surface` background,
+distinct from the activity rail's `chrome`, with one straight right divider.
+The outer workspace frame clips both left corners; module content must not
+add its own outer background, border, or corner treatment when in the shell.
+Flat root rows do not reserve an empty expand-arrow column; nested tree rows
+retain their hierarchy indentation.
 
 ### Main Workspace
 
 The main workspace owns the active module surface. Feature modules should not
 create their own outer application shell.
 
-Use the shared 12px document-frame corners, 8px right/bottom inset, subtle border,
-and small frame shadow to separate working content from the outer chrome. At
-narrow widths the right inset reduces to 4px. Preserve the existing resize,
-collapse, responsive split/stack behavior, and persistent feature mounts.
+Enclose the resource sidebar and editor region in one frame with shared 12px
+outer corners, an 8px right/bottom inset, a subtle border, and a small shadow.
+The sidebar/editor seam is straight with no gap or nested rounded frame. The
+inspector and bottom panel stay within the editor region; the bottom panel
+does not shorten the resource sidebar. When the sidebar is collapsed, the
+same outer frame clips the editor's left corners. At narrow widths the right
+inset reduces to 4px. Preserve resize, collapse, responsive split/stack
+behavior, and persistent feature mounts.
 
 ### Inspector And Bottom Panel
 
@@ -126,8 +139,15 @@ business-logic free.
 - Each panel should expose no more than one primary action.
 - Use a filled primary button, outlined secondary actions, and quiet icon
   actions. Inputs use the canvas surface and a clear focus treatment.
-- Document tabs join their adjacent surface; configuration tabs use compact
-  inset selected states. Dirty markers, close actions, and focus remain visible.
+- Document tabs form a continuous flat 42px rail, with 128–224px-wide items.
+  The outer document frame owns the corner radius; tabs have no inset card
+  outline or top gutter. A panel-matched fill and short 2px bottom accent mark
+  the active tab; short separators distinguish inactive neighbors. Dirty and
+  loading markers remain visible. Close actions reserve their space and appear
+  on the active tab, hover, keyboard focus, or devices without hover.
+  Configuration tabs retain their compact inset selected states.
+  Nested result-tab bars may keep their existing 36px height through the shared
+  component's `className`; document-tab styling must not override that height.
 - Secondary actions should move into dropdown menus, context menus, command
   palette entries, or secondary action groups.
 - Components should expose composition slots instead of importing feature
@@ -220,10 +240,10 @@ switches are not part of the product.
 
 Surface roles:
 
-- `chrome`: title bar, activity rail, outer resource frame, status bar, and
-  document-tab rail.
-- `surface`: forms and ordinary panels; sidebar content may sit within the
-  surrounding chrome to retain the inset-document hierarchy.
+- `chrome`: title bar, activity rail, outer workspace surround, and status bar.
+  Document-tab rails use `surface-subtle` to keep the editor header quiet.
+- `surface`: forms, ordinary panels, and every module's resource sidebar.
+  The shared sidebar owns this background rather than individual features.
 - `bg`: application background; `surface-subtle`: section toolbars, grouped
   settings bands, and table headers. Do not globally swap these roles.
 - `canvas`: data table bodies, SQL, API response, and code/editor canvases.
@@ -237,8 +257,8 @@ Surface roles:
 
 Shared `Tabs` defaults to `surface`. Set `activeBackground="subtle"` when the
 next region is a section toolbar, or `"terminal"` for a terminal pane (including
-its light-theme foreground). The active lower edge joins that adjacent region.
-API request tabs already join their `surface` request bar; underline-style
+its light-theme foreground). The active fill matches that adjacent region.
+API request tabs join their `canvas` request bar; underline-style
 configuration/response tabs retain their own hierarchy.
 
 Monaco uses the shared `configureEditorThemes` helper in `packages/ui`, registered
@@ -338,8 +358,8 @@ caption token selectively without changing row heights or adding density modes.
 - Use subtle borders to separate structural regions.
 - Prefer one border between major regions rather than borders around every
   nested block.
-- Use 6px corners for controls, 8px for groups, and 12px for document frames,
-  request-address groups, and dialogs. Use the shared radius tokens.
+- Use 6px corners for controls, 8px for groups (including the request address),
+  and 12px for document frames and dialogs. Use the shared radius tokens.
 - Use the small shared shadow for the inset document frame and subtle control
   elevation; use overlay elevation for menus, popovers, dialogs, and tooltips.
 - Avoid stacked shadows on nested panels, sidebars, tab bars, and tables.
@@ -351,6 +371,11 @@ caption token selectively without changing row heights or adding density modes.
 - API: request identity above the method/address group; prominent Send and
   nearby Save; scrollable request configuration tabs; grouped response status,
   duration, and size. Retain the responsive request/response split.
+  The editable identity uses 13px medium text without a redundant Name label,
+  so it does not compete with the document tab or the request address.
+  Method and URL share a single 38px-high address outline and focus treatment,
+  separated by a short divider. Method color belongs to its text, not a nested
+  border. Send matches this height; Save remains a quiet adjacent icon action.
 - Database: distinguish connection/schema navigation, SQL actions, and active
   connection/catalog/schema context. Editors, result tabs, grids, filters,
   pagination, and connection dialogs share the surface and control hierarchy.

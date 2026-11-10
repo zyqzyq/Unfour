@@ -119,6 +119,9 @@ for (const theme of ["light", "dark"] as const) {
     await capture("api");
 
     await openDatabaseScene(page);
+    await expect(page.locator(".u-tabbar").filter({
+      has: page.getByRole("tab", { name: "Results", exact: true }),
+    })).toHaveCSS("height", "36px");
     const sqlEditor = await page.locator(".monaco-editor:visible").elementHandle();
     await expectEditorCanvas(page);
     const selected = page.getByRole("cell", { name: "Avery Chen", exact: true }).getByRole("button");

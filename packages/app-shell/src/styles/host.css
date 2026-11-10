@@ -63,19 +63,15 @@ body {
 
 .app-shell { background: var(--app-bg); }
 
-/* Graphite / Jade: a calm outer rail around a distinct working surface. */
+/* One inset frame encloses resource navigation and the working surface. */
 .u-workbench { background: var(--u-color-chrome); }
 .u-workspace-frame {
   margin: 0 8px 8px 0;
   overflow: hidden;
   border: 1px solid var(--u-color-border);
   border-radius: var(--u-radius-lg);
+  background: var(--u-color-canvas);
   box-shadow: var(--u-shadow-sm);
-}
-.u-workbench > aside:not(.u-activitybar) {
-  margin-bottom: 8px;
-  border-right: 0;
-  background: var(--u-color-chrome);
 }
 .u-titlebar { padding-left: 8px; }
 .u-module-button[aria-current="page"]:hover {
