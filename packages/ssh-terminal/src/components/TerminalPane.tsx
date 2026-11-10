@@ -7,6 +7,8 @@ import {
   listSshCommandHistory,
   resizeSshSession,
   sendSshInput,
+  sendTemporarySshInput,
+  resizeTemporarySsh,
   type SshSessionEvent,
   type SshSessionSummary,
 } from "@unfour/command-client";
@@ -26,6 +28,7 @@ export function TerminalPane({
   paintActive = true,
   readOnly,
   session,
+  temporary = false,
 }: {
   active?: boolean;
   className?: string;
@@ -34,7 +37,8 @@ export function TerminalPane({
   /** When false (Connections hidden under Tasks), skip xterm writes/refreshes. */
   paintActive?: boolean;
   readOnly?: boolean;
-  session: SshSessionSummary | null;
+  session: Pick<SshSessionSummary, "sessionId" | "workspaceId" | "connectionId" | "status" | "cols" | "rows" | "host" | "username"> | null;
+  temporary?: boolean;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<XTerm | null>(null);
@@ -73,13 +77,13 @@ export function TerminalPane({
             inputQueueRef.current = inputQueueRef.current
               .catch(() => undefined)
               .then(() =>
-                sendSshInput({
+                (temporary ? sendTemporarySshInput : sendSshInput)({
                   workspaceId,
                   sessionId,
                   data,
                 })
                   .then((event) => {
-                    if (!isTauriRuntime()) {
+                    if (!temporary && !isTauriRuntime()) {
                       appendTerminalEvents([event]);
                     }
                   })
@@ -100,7 +104,7 @@ export function TerminalPane({
     onResizeRef.current =
       sessionId && workspaceId && !readOnly && !inputDisabled
       ? (sessionId: string, cols: number, rows: number) => {
-          resizeSshSession({
+          (temporary ? resizeTemporarySsh : resizeSshSession)({
             workspaceId,
             sessionId,
             cols,
@@ -117,6 +121,7 @@ export function TerminalPane({
     handleError,
     inputDisabled,
     readOnly,
+    temporary,
     session?.sessionId,
     session?.workspaceId,
   ]);
@@ -152,7 +157,7 @@ export function TerminalPane({
     resetSuggestions();
     const workspaceId = session?.workspaceId;
     const connectionId = session?.connectionId;
-    if (!workspaceId || !connectionId || readOnly) return undefined;
+    if (!workspaceId || !connectionId || readOnly || temporary) return undefined;
 
     let cancelled = false;
     listSshCommandHistory({ workspaceId, connectionId, limit: 100 })
@@ -171,6 +176,7 @@ export function TerminalPane({
     };
   }, [
     readOnly,
+    temporary,
     refreshSuggestions,
     resetSuggestions,
     session?.connectionId,
@@ -404,7 +410,7 @@ export function TerminalPane({
       }
       terminal.reset();
       terminal.write(
-        session
+        temporary ? "" : session
           ? session.status === "connected"
             ? `Connected to ${session.username}@${session.host}. Waiting for output.\r\n`
             : `Session ${session.username}@${session.host} is disconnected.\r\n`
@@ -479,7 +485,7 @@ export function TerminalPane({
       refreshSuggestions();
     }
     lastRenderedEventRef.current = events[events.length - 1] ?? null;
-  }, [events, paintActive, refreshSuggestions, session]);
+  }, [events, paintActive, refreshSuggestions, session, temporary]);
 
   return (
     <TerminalContextMenu

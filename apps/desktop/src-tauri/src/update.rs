@@ -114,7 +114,12 @@ fn build_metadata() -> BuildMetadata {
 /// before it wraps the executable, preventing stale Standard binaries from
 /// entering a Microsoft Store package.
 pub fn handle_build_metadata_cli() -> Result<bool, String> {
-    let mut arguments = std::env::args_os().skip(1);
+    handle_build_metadata_arguments(std::env::args_os().skip(1))
+}
+
+fn handle_build_metadata_arguments(
+    mut arguments: impl Iterator<Item = std::ffi::OsString>,
+) -> Result<bool, String> {
     let Some(first) = arguments.next() else {
         return Ok(false);
     };
@@ -370,6 +375,39 @@ fn update_download_error(error: tauri_plugin_updater::Error) -> UpdateCommandErr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn metadata_cli_keeps_priority_and_validates_arguments() {
+        use std::ffi::OsString;
+        assert!(!handle_build_metadata_arguments(Vec::<OsString>::new().into_iter()).unwrap());
+        assert!(!handle_build_metadata_arguments(
+            [OsString::from("unfour://auth/callback?state=SYNTHETIC")].into_iter()
+        )
+        .unwrap());
+        for argv in [
+            vec!["--write-build-metadata"],
+            vec!["--write-build-metadata", "relative.json"],
+            vec!["--write-build-metadata", "relative.json", "extra"],
+        ] {
+            assert!(handle_build_metadata_arguments(argv.into_iter().map(OsString::from)).is_err());
+        }
+        let path = std::env::temp_dir().join(format!(
+            "unfour-metadata-fixture-{}.json",
+            unfour_core::id::new_id()
+        ));
+        assert!(handle_build_metadata_arguments(
+            [
+                OsString::from("--write-build-metadata"),
+                path.clone().into_os_string()
+            ]
+            .into_iter()
+        )
+        .unwrap());
+        let metadata: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(metadata["distribution"], compiled_distribution().as_str());
+        std::fs::remove_file(path).unwrap();
+    }
 
     #[test]
     fn microsoft_store_distribution_cannot_access_internal_updater() {

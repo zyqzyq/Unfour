@@ -7190,6 +7190,7 @@ dependencies = [
  "chrono",
  "russh",
  "russh-sftp",
+ "serde",
  "serde_json",
  "sha2 0.10.9",
  "sqlx",
@@ -7200,6 +7201,7 @@ dependencies = [
  "unfour-local-storage",
  "unfour-secret-store",
  "uuid",
+ "zeroize",
 ]
 
 [[package]]

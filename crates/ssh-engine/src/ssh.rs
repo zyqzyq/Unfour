@@ -51,6 +51,7 @@ mod sftp;
 mod storage;
 #[path = "task/mod.rs"]
 mod task;
+pub mod temporary;
 
 #[cfg(all(feature = "ssh-native", test))]
 use native_supervisor::terminal_output_from_channel_message;
@@ -72,6 +73,7 @@ pub type TaskRunCallback = Arc<dyn Fn(String) + Send + Sync + 'static>;
 
 #[derive(Clone)]
 pub struct SshService {
+    temporary: temporary::TemporarySessions,
     db: LocalDb,
     task_log_dir: Arc<std::path::PathBuf>,
     #[cfg_attr(not(feature = "ssh-native"), allow(dead_code))]
@@ -227,6 +229,7 @@ impl std::fmt::Debug for NativeSshHandle {
 
 #[cfg(feature = "ssh-native")]
 struct SshClientHandler {
+    temporary_trust: Option<temporary::TrustPrompt>,
     host_key_store: HostKeyStore,
     workspace_id: String,
     host: String,
@@ -244,6 +247,18 @@ impl russh::client::Handler for SshClientHandler {
         let fingerprint = server_public_key
             .fingerprint(ssh_key::HashAlg::Sha256)
             .to_string();
+
+        if let Some(trust) = &self.temporary_trust {
+            return Ok(trust
+                .verify(
+                    &self.host_key_store,
+                    &self.workspace_id,
+                    &self.host,
+                    self.port,
+                    &fingerprint,
+                )
+                .await);
+        }
 
         self.host_key_store
             .verify_or_record(&self.workspace_id, &self.host, self.port, &fingerprint)
@@ -266,6 +281,7 @@ impl russh::client::Handler for SshClientHandler {
 impl SshService {
     pub fn new(db: LocalDb, secret_store: SecretStore) -> Self {
         Self {
+            temporary: temporary::TemporarySessions::default(),
             db: db.clone(),
             task_log_dir: Arc::new(std::env::temp_dir().join("unfour-task-logs")),
             secret_store,

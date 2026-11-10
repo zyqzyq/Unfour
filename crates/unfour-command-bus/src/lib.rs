@@ -56,6 +56,8 @@ mod domain_commands;
 mod flow_authoring;
 mod flow_commands;
 mod ssh_commands;
+mod temporary_ssh_commands;
+pub use temporary_ssh_commands::{LaunchReceipt, TemporaryRequest, TemporarySummary};
 mod ssh_file_commands;
 mod ssh_task_context;
 mod workspace_variable_commands;

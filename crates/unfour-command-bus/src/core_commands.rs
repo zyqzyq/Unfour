@@ -667,6 +667,7 @@ impl CommandBus {
     }
 
     pub async fn delete_workspace(&self, workspace_id: String) -> AppResult<WorkspaceState> {
+        let temporary_workspace_id = workspace_id.clone();
         let context = unfour_core::domain::CommandContext::local("workspace.delete");
         let executor_context = context.clone();
         let service = self.workspace.clone();
@@ -721,6 +722,7 @@ impl CommandBus {
                 },
             )
             .await?;
+        cleanup_ssh.close_temporary_workspace(&temporary_workspace_id)?;
         cleanup_ssh
             .cleanup_connection_changes(ssh_connection_cleanups)
             .await;

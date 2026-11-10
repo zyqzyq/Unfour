@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { SshConnectionsPage } from "./TerminalPage";
 import { SshTasksPage } from "./components/SshTasksPage";
 import { useSshConnections } from "./hooks/useSshConnections";
+import { TemporaryTerminalWorkspace } from "./components/TemporaryTerminalWorkspace";
 
 export function TerminalPage({
   active = true,
@@ -20,6 +21,8 @@ export function TerminalPage({
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col bg-[var(--u-color-surface)]">
+      <TemporaryTerminalWorkspace key={workspaceId} workspaceId={workspaceId}>
+      {(temporaryActive) => <>
       <div
         className={
           activeMode === "connections"
@@ -28,7 +31,7 @@ export function TerminalPage({
         }
       >
         <SshConnectionsPage
-          active={active && activeMode === "connections"}
+          active={active && activeMode === "connections" && !temporaryActive}
           onOpenTasks={openTasks}
           onShellSidebarChange={onShellSidebarChange}
           workspaceId={workspaceId}
@@ -40,7 +43,7 @@ export function TerminalPage({
         }
       >
         <SshTasksPage
-          active={active && activeMode === "tasks"}
+          active={active && activeMode === "tasks" && !temporaryActive}
           connections={connectionsQuery.data ?? []}
           key={workspaceId}
           onOpenConnections={openConnections}
@@ -48,6 +51,8 @@ export function TerminalPage({
           workspaceId={workspaceId}
         />
       </div>
+      </>}
+      </TemporaryTerminalWorkspace>
     </div>
   );
 }

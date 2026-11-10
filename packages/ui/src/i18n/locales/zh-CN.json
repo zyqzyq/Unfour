@@ -1090,6 +1090,33 @@
     "title": "数据库"
   },
   "ssh": {
+    "temporary": {
+      "errors": {
+        "TEMPORARY_AUTH_TIMEOUT": "认证超时。",
+        "TEMPORARY_CHANNEL_TIMEOUT": "终端通道建立超时。",
+        "TEMPORARY_TRANSPORT_TIMEOUT": "SSH 传输建立超时。",
+        "TEMPORARY_TRANSPORT_OR_TRUST_FAILED": "SSH 传输或主机指纹校验失败。",
+        "TEMPORARY_AUTH_FAILED": "认证失败。",
+        "TEMPORARY_CHANNEL_FAILED": "终端通道建立失败。"
+      },
+      "title": "堡垒机临时终端",
+      "pending": "临时请求 · {seconds} 秒后过期",
+      "claim": "在当前工作区连接",
+      "connect": "连接",
+      "cancel": "关闭／取消",
+      "saved": "已保存连接",
+      "trust": "仅本次信任此指纹",
+      "dismiss": "关闭提示",
+      "failed": "临时会话操作失败。请刷新或从堡垒机重新发起请求。",
+      "status": {
+        "claimed": "等待连接",
+        "connecting": "正在连接…",
+        "awaiting-trust": "请核对指纹，再信任本次会话。",
+        "connected": "临时会话 · 不保存历史",
+        "disconnected": "连接已断开，请从堡垒机重新发起。",
+        "expired": "请求已过期，请从堡垒机重新发起。"
+      }
+    },
     "sidebar": {
       "searchAria": "搜索 SSH 连接",
       "searchPlaceholder": "过滤连接",
