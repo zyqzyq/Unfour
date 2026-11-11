@@ -1,5 +1,17 @@
 # AccessClient A1：本机只读证据与接入门槛
 
+## 2026-11-11 现场补证
+
+用户在任务管理器观察到网页经 QizhiTech AccessClient 4.6.15 打开 Xshell 7。已有 Xshell 窗口时新增标签。以下为外层进程原始命令行的合成结构。
+
+```text
+"Xshell.exe" -url ssh://<身份>:<凭据>@<入口域名>:22 -newtab <含有@的标签参数>
+```
+
+这次证据确定了外层开关顺序、目标 URI 的位置和独立标签参数。下文的 Xshell 8 版本来自前次开发机静态检查。特殊字符的编码规则、凭据复用、代理进程存活依赖和 AccessClient 对末端可执行文件的选择仍待现场确认。A2 的可测试子集见[离线复现说明](bastion-xshell-url-offline.md)。
+
+## 2026-11-10 静态检查记录
+
 关联 [总任务 #3](https://github.com/zyqzyq/Unfour/issues/3)、
 [A1 #4](https://github.com/zyqzyq/Unfour/issues/4)。检查日期：2026-11-10（Asia/Shanghai）。
 仓库基线：`0dc4460d1619c9d85c360006cf5d4103a93dc759`。

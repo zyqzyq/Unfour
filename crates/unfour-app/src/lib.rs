@@ -7,6 +7,8 @@
 
 pub mod commands;
 mod launch;
+#[cfg(windows)]
+pub use launch::validate_windows_launch;
 mod mcp_client_config;
 
 use std::sync::{Arc, Mutex};
@@ -162,25 +164,27 @@ where
     R: Runtime,
 {
     let prepared_command_bus = extensions.prepared_command_bus.clone();
+    let forwarded_bus = prepared_command_bus.clone();
     builder
-        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
-            launch::inspect(
-                &argv
-                    .into_iter()
-                    .skip(1)
-                    .map(std::ffi::OsString::from)
-                    .collect::<Vec<_>>(),
-            );
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
-        }))
+        .plugin(tauri_plugin_single_instance::init(
+            move |app, argv, _cwd| {
+                let state = app.try_state::<AppState>();
+                let bus = forwarded_bus
+                    .as_ref()
+                    .or_else(|| state.as_ref().map(|s| &s.command_bus));
+                if let Err(code) = launch::deliver(argv.get(1..).unwrap_or_default(), bus) {
+                    eprintln!("{code}");
+                }
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            },
+        ))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(move |app| {
-            launch::inspect(&std::env::args_os().skip(1).collect::<Vec<_>>());
             let logging_guard = initialize_logging(&config);
             let command_bus = match prepared_command_bus.clone() {
                 Some(command_bus) => command_bus,
@@ -198,6 +202,12 @@ where
             };
 
             let terminal_channel: TerminalChannelSlot = Arc::new(Mutex::new(None));
+            if let Err(code) = launch::deliver(
+                &std::env::args_os().skip(1).collect::<Vec<_>>(),
+                Some(&command_bus),
+            ) {
+                eprintln!("{code}");
+            }
             let sftp_transfer_channel: SftpTransferChannelSlot = Arc::new(Mutex::new(None));
             let task_run_channel: TaskRunChannelSlot = Arc::new(Mutex::new(None));
 

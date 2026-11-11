@@ -2,7 +2,14 @@
   "schemaVersion": 1,
   "syntheticOnly": true,
   "accessClientHandoffVerified": false,
+  "outerXshell7CommandLineObserved": true,
   "cases": [
+    {
+      "id": "accessclient-xshell7-outer",
+      "evidence": "field-reported-outer-command-line-synthetic-reconstruction",
+      "argv": ["-url", "ssh://SYNTHETIC_USER:SYNTHETIC_GRANT@entry.example.invalid:22", "-newtab", "合成@label.example.invalid"],
+      "kinds": ["option", "uri-shaped", "option", "opaque"]
+    },
     {
       "id": "browser-envelope",
       "evidence": "local-registry-shape-only",
