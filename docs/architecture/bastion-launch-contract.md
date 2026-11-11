@@ -1,11 +1,17 @@
 # 堡垒机外部连接：内部基础契约
 
+## 2026-11-11 Windows 外层调用
+
+Windows 桌面在 metadata CLI 之后、插件初始化之前校验已拆分的 argv。支持现场观察到的四个参数 `-url <SSH URL> -newtab <标签>`。适配器仅从 URL 构造 Rust 临时请求，校验后丢弃标签。Tauri 主实例在 setup 中接收冷启动请求，已有实例回调使用已准备的 CommandBus。每次真实进程调用分配一个 receipt，UI 就绪前请求沿用 Rust 队列的保留期。
+
+当前单实例插件在 Windows 上以 `|` 拼接 argv，故发送前检查边界，主实例在接收时再次校验。错误只输出固定码。URL 的支持子集、复现步骤与 A4 待确认项见[Windows 离线测试说明](../testing/bastion-xshell-url-offline.md)。以下记录描述 PR #9 时的基础契约。
+
 ## 2026-11-10 A2/A3 实现状态
 
 PR #8 已合并。本轮在用户明确授权下实现与现场格式无关的基础能力；
 **实际 AccessClient 入口仍不支持，现场兼容未验证**。
 见 [基础验证报告](../testing/bastion-temporary-session-foundation-2026-11-10.md)。
-本节是当前实现；后面的 A1 草案保留设计来源，其建议时限／未实现状态以本节为准。
+本节记录 PR #9 时的临时会话基础实现。Windows 外层入口的后续验证见 [A2 打包实测](../testing/bastion-xshell-url-a2-2026-11-11.md)。
 
 `ssh-engine` 拥有临时队列、认证、归属、主机信任和 runner；CommandBus 编排；
 `unfour-app` 只装配入口 guard 和句柄命令；`ssh-terminal` 复用 TerminalPane。

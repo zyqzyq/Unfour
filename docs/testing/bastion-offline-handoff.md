@@ -1,9 +1,7 @@
 # 堡垒机离线验收携带清单（A4 待执行）
 
 关联 [A4 #7](https://github.com/zyqzyq/Unfour/issues/7)。
-**A2/A3 内部基础能力已实现并进行合成／loopback 测试，真实 AccessClient 入口仍不支持。**
-本轮没有生成可用于现场接入验收的安装包，不要把基础能力 PR 或现有 main 包当成兼容版本。
-见 [基础验证报告](bastion-temporary-session-foundation-2026-11-10.md)。
+2026-11-11 已取得 AccessClient 4.6.15 → Xshell 7 的外层命令行证据。A2 提供按该结构构建的 Windows 外层入口和离线测试包。先按[便携包复现说明](bastion-xshell-url-offline.md)验证合成本机会话，真实网页链路留待 A4。内部临时会话能力见[基础验证报告](bastion-temporary-session-foundation-2026-11-10.md)。
 
 ## 先补 A1
 
