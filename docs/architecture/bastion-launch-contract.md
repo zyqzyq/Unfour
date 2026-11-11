@@ -11,7 +11,7 @@ Windows 桌面在 metadata CLI 之后、插件初始化之前校验已拆分的 
 PR #8 已合并。本轮在用户明确授权下实现与现场格式无关的基础能力；
 **实际 AccessClient 入口仍不支持，现场兼容未验证**。
 见 [基础验证报告](../testing/bastion-temporary-session-foundation-2026-11-10.md)。
-本节是当前实现；后面的 A1 草案保留设计来源，其建议时限／未实现状态以本节为准。
+本节记录 PR #9 时的临时会话基础实现。Windows 外层入口的后续验证见 [A2 打包实测](../testing/bastion-xshell-url-a2-2026-11-11.md)。
 
 `ssh-engine` 拥有临时队列、认证、归属、主机信任和 runner；CommandBus 编排；
 `unfour-app` 只装配入口 guard 和句柄命令；`ssh-terminal` 复用 TerminalPane。

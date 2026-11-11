@@ -17,7 +17,7 @@
 3. 等第一个窗口出现，再执行一次 `& .\unfour.exe @argsA2`。进入 **SSH**，应能看到两个待认领请求。每次选择“在当前工作区连接”，将界面指纹与第一个窗口的指纹逐字核对，再选择“仅本次信任此指纹”。
 4. 在每个临时终端分别输入 `check` 并回车，确认终端显示 `A2_ECHO_OK`。关闭该标签，再验证另一个请求。两个请求完成后，本机服务应各打印两次 `FIXTURE_AUTH_OK`、`FIXTURE_PTY_OK` 和 `FIXTURE_ROUNDTRIP_OK`。关闭 Unfour，用 Ctrl+C 停止本次服务。
 
-测试包附带应用、MCP sidecar 和独立的合成 SSH 服务。手工复现使用 Windows x64 与 Microsoft WebView2 Runtime。可在有 Runtime 的机器上直接离线运行。缺少 Runtime 的机器需要事先准备微软 x64 Evergreen Standalone Installer。微软将其列为离线安装方式。[WebView2 离线部署说明](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution#offline-deployment)
+测试包附带应用、MCP sidecar 和独立的合成 SSH 服务。手工复现使用 Windows x64、Microsoft WebView2 Runtime 和 Visual C++ x64 运行库。PE 依赖表显示 sidecar 与合成服务需要 `VCRUNTIME140.dll`。缺少运行库时，由现场按软件安装流程使用 `prerequisites` 目录中的微软签名离线安装程序。校验文件见 `SHA256SUMS.txt`。[WebView2 离线部署说明](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution#offline-deployment) · [Microsoft Visual C++ 运行库](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)
 
 现场只确认了 AccessClient 4.6.15 启动 Xshell 7 时的外层命令行结构，以及已有窗口新增标签的现象。支持的 argv 顺序为 `-url <SSH URL> -newtab <单一标签参数>`。本次解析接受 ASCII 域名或标准 IPv4、显式十进制端口、由 ASCII 字母数字和 `-._~` 构成的非空身份及凭据。标签可以含空格、非 ASCII 字符和 `@`。Windows 单实例转发以竖线分隔字段，入口因此拒绝含竖线的参数。未知开关、额外参数和未确认的编码均返回固定错误。
 
