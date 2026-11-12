@@ -444,44 +444,35 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         environment_id: Option<&str>,
     ) -> Result<ApiResponse, CommandBusAdapterError> {
         let execution_id = unfour_core::id::new_id();
-        let result = self
-            .run(crate::call_control::cooperative(
-                self.bus
-                    .execute_saved_api_request_with_scripts_controlled_in_workspace(
-                        &execution_id,
-                        workspace_id.map(str::to_string),
-                        request_id,
-                        timeout_ms,
-                        environment_id.map(str::to_string),
-                    ),
-                || self.bus.cancel_api_request(&execution_id),
-            ))
-            .map_err(|error| {
-                CommandBusAdapterError::from_app_error(
-                    "The command-bus scripted API send operation failed.",
-                    &error,
-                )
-            })?;
-        match result.response {
-            Some(mut response) => {
-                for warning in result.warnings {
-                    if !response.warnings.contains(&warning) {
-                        response.warnings.push(warning);
-                    }
-                }
-                Ok(response)
-            }
-            None if result.http_error.is_some() => Err(CommandBusAdapterError {
-                code: "HTTP_ERROR",
-                message: "The command-bus API send operation failed.",
-                details: serde_json::json!({}),
-            }),
-            None => Err(CommandBusAdapterError {
-                code: "API_SCRIPT_EXECUTION_FAILED",
-                message: "The saved API request pre-request script failed before sending.",
-                details: serde_json::json!({}),
-            }),
-        }
+        self.run_scripted_api_request(
+            &execution_id,
+            self.bus
+                .execute_saved_api_request_with_scripts_controlled_in_workspace(
+                    &execution_id,
+                    workspace_id.map(str::to_string),
+                    request_id,
+                    timeout_ms,
+                    environment_id.map(str::to_string),
+                ),
+        )
+    }
+
+    fn execute_saved_api_request_snapshot(
+        &self,
+        snapshot: &ApiSavedRequest,
+        timeout_ms: Option<u64>,
+        environment_id: Option<&str>,
+    ) -> Result<ApiResponse, CommandBusAdapterError> {
+        let execution_id = unfour_core::id::new_id();
+        self.run_scripted_api_request(
+            &execution_id,
+            self.bus.execute_saved_api_request_snapshot_controlled(
+                &execution_id,
+                snapshot,
+                timeout_ms,
+                environment_id.map(str::to_string),
+            ),
+        )
     }
 
     fn send_api_request(
@@ -532,17 +523,17 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         request_id: &str,
         input: ApiRequestInput,
     ) -> Result<ApiSavedRequest, CommandBusAdapterError> {
-        self.run(self.bus.update_api_request(
-            workspace_id.to_string(),
-            request_id.to_string(),
-            input,
-        ))
-        .map_err(|e| {
-            CommandBusAdapterError::from_app_error(
-                "The command-bus API request update operation failed.",
-                &e,
-            )
-        })
+        self.update_saved_request(workspace_id, request_id, input, None)
+    }
+
+    fn update_api_request_if_current(
+        &self,
+        workspace_id: &str,
+        request_id: &str,
+        input: ApiRequestInput,
+        expected_revision: i64,
+    ) -> Result<ApiSavedRequest, CommandBusAdapterError> {
+        self.update_saved_request(workspace_id, request_id, input, Some(expected_revision))
     }
 
     fn delete_api_request(

@@ -60,7 +60,8 @@ impl CommandBusAdapter for StubCommandBus {
                 count: 2,
                 source: "command-bus".to_string(),
             }),
-            ReadCommand::ListConnections { .. } => {
+            ReadCommand::ListConnections { .. }
+            | ReadCommand::ListConnectionsInWorkspace { .. } => {
                 ReadCommandResult::Connections(ConnectionListResult {
                     connections: vec![SafeConnection {
                         id: "database-1".to_string(),

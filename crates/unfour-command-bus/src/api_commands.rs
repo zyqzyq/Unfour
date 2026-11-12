@@ -821,39 +821,10 @@ impl CommandBus {
         request_id: &str,
         timeout_ms_override: Option<u64>,
     ) -> AppResult<ApiResponse> {
-        let saved = self.api_client.get_saved_request(request_id).await?;
-
-        if workspace_id
-            .as_deref()
-            .is_some_and(|id| saved.workspace_id != id)
-        {
-            return Err(unfour_core::AppError::NotFound("api request".to_string()));
-        }
-
-        let headers: Vec<KeyValue> = serde_json::from_str(&saved.headers_json).unwrap_or_default();
-        let query: Vec<KeyValue> = serde_json::from_str(&saved.query_json).unwrap_or_default();
-        let timeout_ms = Some(mcp_timeout(timeout_ms_override)?);
-
-        let input = ApiRequestInput {
-            workspace_id: saved.workspace_id.clone(),
-            name: Some(saved.name.clone()),
-            parent_folder_id: saved.parent_folder_id.clone(),
-            collection_id: Some(saved.collection_id.clone()),
-            auth_json: Some(saved.auth_json.clone()),
-            method: saved.method.clone(),
-            url: saved.url.clone(),
-            headers,
-            query,
-            body: saved.body.clone(),
-            body_kind: saved.body_kind.clone(),
-            timeout_ms,
-            pre_request_script: saved.pre_request_script.clone(),
-            post_response_script: saved.post_response_script.clone(),
-            script_schema_version: saved.script_schema_version,
-            multipart_parts: vec![],
-            temporary_variables: vec![],
-        };
-
+        let saved = self
+            .saved_request_in_workspace(workspace_id.as_deref(), request_id)
+            .await?;
+        let input = saved_replay_input(&saved, timeout_ms_override)?;
         let environment_id = self
             .resolve_api_environment_id(&input.workspace_id, None)
             .await?;
@@ -896,42 +867,69 @@ impl CommandBus {
         timeout_ms_override: Option<u64>,
         environment_id_override: Option<String>,
     ) -> AppResult<RequestExecutionResult> {
-        let saved = self.api_client.get_saved_request(request_id).await?;
-
-        if workspace_id
-            .as_deref()
-            .is_some_and(|id| saved.workspace_id != id)
-        {
-            return Err(unfour_core::AppError::NotFound("api request".to_string()));
-        }
-
-        let headers: Vec<KeyValue> = serde_json::from_str(&saved.headers_json).unwrap_or_default();
-        let query: Vec<KeyValue> = serde_json::from_str(&saved.query_json).unwrap_or_default();
-        let input = ApiRequestInput {
-            workspace_id: saved.workspace_id.clone(),
-            name: Some(saved.name.clone()),
-            parent_folder_id: saved.parent_folder_id.clone(),
-            collection_id: Some(saved.collection_id.clone()),
-            auth_json: Some(saved.auth_json.clone()),
-            method: saved.method.clone(),
-            url: saved.url.clone(),
-            headers,
-            query,
-            body: saved.body.clone(),
-            body_kind: saved.body_kind.clone(),
-            timeout_ms: Some(mcp_timeout(timeout_ms_override)?),
-            pre_request_script: saved.pre_request_script.clone(),
-            post_response_script: saved.post_response_script.clone(),
-            script_schema_version: saved.script_schema_version,
-            multipart_parts: vec![],
-            temporary_variables: vec![],
-        };
-
-        self.send_api_request_with_scripts_controlled_in_environment(
+        let saved = self
+            .saved_request_in_workspace(workspace_id.as_deref(), request_id)
+            .await?;
+        self.execute_saved_api_request_snapshot_controlled(
             execution_id,
-            input,
+            &saved,
+            timeout_ms_override,
             environment_id_override,
         )
         .await
     }
+
+    async fn saved_request_in_workspace(
+        &self,
+        workspace_id: Option<&str>,
+        request_id: &str,
+    ) -> AppResult<ApiSavedRequest> {
+        let saved = self.api_client.get_saved_request(request_id).await?;
+        if workspace_id.is_some_and(|id| saved.workspace_id != id) {
+            return Err(unfour_core::AppError::NotFound("api request".to_string()));
+        }
+        Ok(saved)
+    }
+
+    /// Replay the saved definition the adapter already authorized. The request
+    /// may be edited by another client while the adapter evaluates its policy.
+    pub async fn execute_saved_api_request_snapshot_controlled(
+        &self,
+        execution_id: &str,
+        saved: &ApiSavedRequest,
+        timeout_ms_override: Option<u64>,
+        environment_id_override: Option<String>,
+    ) -> AppResult<RequestExecutionResult> {
+        self.send_api_request_with_scripts_controlled_in_environment(
+            execution_id,
+            saved_replay_input(saved, timeout_ms_override)?,
+            environment_id_override,
+        )
+        .await
+    }
+}
+
+fn saved_replay_input(
+    saved: &ApiSavedRequest,
+    timeout_ms_override: Option<u64>,
+) -> AppResult<ApiRequestInput> {
+    Ok(ApiRequestInput {
+        workspace_id: saved.workspace_id.clone(),
+        name: Some(saved.name.clone()),
+        parent_folder_id: saved.parent_folder_id.clone(),
+        collection_id: Some(saved.collection_id.clone()),
+        auth_json: Some(saved.auth_json.clone()),
+        method: saved.method.clone(),
+        url: saved.url.clone(),
+        headers: serde_json::from_str(&saved.headers_json).unwrap_or_default(),
+        query: serde_json::from_str(&saved.query_json).unwrap_or_default(),
+        body: saved.body.clone(),
+        body_kind: saved.body_kind.clone(),
+        timeout_ms: Some(mcp_timeout(timeout_ms_override)?),
+        pre_request_script: saved.pre_request_script.clone(),
+        post_response_script: saved.post_response_script.clone(),
+        script_schema_version: saved.script_schema_version,
+        multipart_parts: vec![],
+        temporary_variables: vec![],
+    })
 }

@@ -118,7 +118,7 @@ fn file_content_limit_is_four_mib_of_utf8_not_command_characters() {
 #[test]
 fn full_access_patch_can_replace_multiple_matches_without_confirmation_loop() {
     use crate::tools::policy::{
-        McpCapability, McpRisk, ResolvedMcpPolicy, ToolPolicyEvaluation, WorkspacePolicyContext,
+        McpRisk, ResolvedMcpPolicy, ToolPolicyEvaluation, WorkspacePolicyContext,
     };
     let evaluation = ToolPolicyEvaluation {
         workspace: WorkspacePolicyContext {
@@ -126,10 +126,13 @@ fn full_access_patch_can_replace_multiple_matches_without_confirmation_loop() {
             workspace_name: "Active".into(),
             environment_type: "dev".into(),
             mcp_policy: "full_access".into(),
+            workspace_root: None,
+            mode: "local".into(),
+            source: "command-bus".into(),
         },
         resolved_policy: ResolvedMcpPolicy::FullAccess,
-        capability: McpCapability::SshExec,
         risk: McpRisk::Write,
+        saved_request: None,
     };
     let result = super::super::operations::ssh_patch_file(
         &super::fixtures::SshStubCommandBus,

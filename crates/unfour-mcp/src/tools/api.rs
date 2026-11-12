@@ -186,11 +186,11 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "properties": {
                         "requestId": {
                             "type": "string",
-                            "description": "Optional saved API request ID to replay. Omit when sending method/url directly."
+                            "description": "Replays one snapshot of the saved request, including its method and scripts. Omit for ad-hoc sends."
                         },
                         "workspaceId": {
                             "type": "string",
-                            "description": "Optional workspace ID for ad-hoc requests. Uses the active workspace if omitted."
+                            "description": "For saved replay, a supplied ID must match the request's workspace. Ad-hoc sends default to the workspace active when the call is authorized."
                         },
                         "name": {
                             "type": "string",

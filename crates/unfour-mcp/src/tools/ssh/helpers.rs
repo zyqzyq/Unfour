@@ -1,70 +1,9 @@
 use serde_json::{json, Map, Value};
-use unfour_command_bus::{ReadCommand, ReadCommandResult};
 use unfour_core::models::SshConnection;
-
-use crate::command_bus_adapter::CommandBusAdapter;
 
 use super::super::ssh_risk::{parse_optional_u64, redact_command_display};
 use super::super::ToolCallError;
 use super::MAX_DIAGNOSTIC_TIMEOUT_MS;
-#[derive(Debug, Clone)]
-pub(super) struct WorkspaceContext {
-    pub(super) workspace_id: String,
-    pub(super) environment_type: String,
-}
-
-pub(super) fn resolve_workspace(
-    command_bus: &dyn CommandBusAdapter,
-    arguments: &Map<String, Value>,
-) -> Result<WorkspaceContext, ToolCallError> {
-    match parse_optional_string(arguments, "workspaceId")? {
-        Some(id) => {
-            let result = command_bus
-                .execute_read(ReadCommand::ListWorkspaces)
-                .map_err(|error| ToolCallError::Execution {
-                    code: error.code,
-                    message: error.message,
-                })?;
-            let ReadCommandResult::Workspaces(workspaces) = result else {
-                return Err(ToolCallError::Execution {
-                    code: "COMMAND_BUS_RESULT_MISMATCH",
-                    message: "The command-bus returned an unexpected result.",
-                });
-            };
-            let workspace = workspaces
-                .workspaces
-                .into_iter()
-                .find(|workspace| workspace.id == id)
-                .ok_or(ToolCallError::Execution {
-                    code: "WORKSPACE_NOT_FOUND",
-                    message: "The requested workspace was not found.",
-                })?;
-            Ok(WorkspaceContext {
-                workspace_id: workspace.id,
-                environment_type: workspace.environment_type,
-            })
-        }
-        None => {
-            let result = command_bus
-                .execute_read(ReadCommand::CurrentWorkspace)
-                .map_err(|error| ToolCallError::Execution {
-                    code: error.code,
-                    message: error.message,
-                })?;
-            let ReadCommandResult::CurrentWorkspace(workspace) = result else {
-                return Err(ToolCallError::Execution {
-                    code: "COMMAND_BUS_RESULT_MISMATCH",
-                    message: "The command-bus returned an unexpected result.",
-                });
-            };
-            Ok(WorkspaceContext {
-                workspace_id: workspace.workspace_id,
-                environment_type: workspace.environment_type,
-            })
-        }
-    }
-}
-
 pub(super) fn ssh_command_result(
     result: unfour_core::models::SshDiagnosticResult,
     source: &str,
@@ -162,30 +101,6 @@ pub(super) fn parse_find_entries(stdout: &str) -> Vec<Value> {
             }))
         })
         .collect()
-}
-
-pub(super) fn resolve_workspace_id(
-    command_bus: &dyn CommandBusAdapter,
-    arguments: &Map<String, Value>,
-) -> Result<String, ToolCallError> {
-    match parse_optional_string(arguments, "workspaceId")? {
-        Some(id) => Ok(id),
-        None => {
-            let ws_result = command_bus
-                .execute_read(ReadCommand::CurrentWorkspace)
-                .map_err(|e| ToolCallError::Execution {
-                    code: e.code,
-                    message: e.message,
-                })?;
-            let ReadCommandResult::CurrentWorkspace(ws) = ws_result else {
-                return Err(ToolCallError::Execution {
-                    code: "COMMAND_BUS_RESULT_MISMATCH",
-                    message: "The command-bus returned an unexpected result.",
-                });
-            };
-            Ok(ws.workspace_id)
-        }
-    }
 }
 
 pub(super) fn parse_optional_string(

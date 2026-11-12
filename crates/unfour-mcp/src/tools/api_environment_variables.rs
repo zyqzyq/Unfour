@@ -2,7 +2,7 @@ use super::*;
 
 pub(super) fn api_set_environment_variable(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -17,7 +17,7 @@ pub(super) fn api_set_environment_variable(
             "description",
         ],
     )?;
-    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let environment_id = parse_required_string(
         &arguments,
         "environmentId",
@@ -104,7 +104,7 @@ pub(super) fn api_delete_environment_variable(
             "confirmation_text",
         ],
     )?;
-    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let environment_id = parse_required_string(
         &arguments,
         "environmentId",

@@ -63,6 +63,22 @@ fn send_request_passes_environment_override_to_saved_scripted_replay() {
 }
 
 #[test]
+fn saved_replay_requires_the_explicit_workspace_to_match_its_snapshot() {
+    let result = api_registry()
+        .call(
+            "unfour.api.send_request",
+            json!({"requestId": "req-1", "workspaceId": "another-workspace"}),
+        )
+        .unwrap();
+
+    assert_eq!(result["isError"], true);
+    assert_eq!(
+        crate::response::error_json(&result)["error"]["code"],
+        "NOT_FOUND"
+    );
+}
+
+#[test]
 fn send_request_passes_environment_override_to_ad_hoc_send() {
     let result = api_registry()
         .call(
@@ -171,106 +187,122 @@ fn send_request_blocks_prod_delete_ad_hoc() {
     );
 }
 
-#[test]
-fn send_request_blocks_scripted_saved_get_in_prod() {
-    struct ProdScriptedGetCommandBus;
+struct SavedGetPolicyBus {
+    request_reads: std::sync::atomic::AtomicUsize,
+    script: Option<&'static str>,
+    environment: &'static str,
+}
 
-    impl CommandBusAdapter for ProdScriptedGetCommandBus {
-        fn execute_read(
-            &self,
-            command: ReadCommand,
-        ) -> Result<ReadCommandResult, CommandBusAdapterError> {
-            match command {
-                ReadCommand::ApiGetRequest { request_id } => {
-                    Ok(ReadCommandResult::ApiRequest(ApiRequestDetailResult {
-                        request: ApiSavedRequest {
-                            id: request_id,
-                            workspace_id: "ws-prod".to_string(),
-                            name: "Scripted GET".to_string(),
-                            collection_id: "collection".to_string(),
-                            parent_folder_id: None,
-                            sort_order: 0,
-                            auth_json: "{}".to_string(),
-                            method: "GET".to_string(),
-                            url: "https://api.example.test".to_string(),
-                            headers_json: "[]".to_string(),
-                            query_json: "[]".to_string(),
-                            body: None,
-                            body_kind: "none".to_string(),
-                            pre_request_script: Some(
-                                "pm.environment.set('mutated', 'yes')".to_string(),
-                            ),
-                            post_response_script: None,
-                            script_schema_version: 1,
-                            settings_json: r#"{"timeoutMs":null}"#.to_string(),
-                            created_at: String::new(),
-                            updated_at: String::new(),
-                            deleted_at: None,
-                            revision: 1,
-                            sync_status: "local".to_string(),
-                            remote_id: None,
-                        },
-                        source: "command-bus".to_string(),
-                    }))
-                }
-                ReadCommand::ListWorkspaces => {
-                    Ok(ReadCommandResult::Workspaces(WorkspaceListResult {
-                        workspaces: vec![WorkspaceSummary {
-                            id: "ws-prod".to_string(),
-                            name: "Prod".to_string(),
-                            is_default: true,
-                            is_active: true,
-                            environment_type: "prod".to_string(),
-                            mcp_policy: "auto".to_string(),
-                            last_opened_at: None,
-                        }],
-                        active_workspace_id: "ws-prod".to_string(),
-                        count: 1,
-                        source: "command-bus".to_string(),
-                    }))
-                }
-                _ => unreachable!(),
+impl CommandBusAdapter for SavedGetPolicyBus {
+    fn execute_read(
+        &self,
+        command: ReadCommand,
+    ) -> Result<ReadCommandResult, CommandBusAdapterError> {
+        match ApiStubCommandBus.execute_read(command)? {
+            ReadCommandResult::ApiRequest(mut result) => {
+                assert_eq!(
+                    self.request_reads
+                        .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+                    0
+                );
+                result.request.method = "GET".into();
+                result.request.url = "https://example.test/catalog".into();
+                result.request.revision = 17;
+                result.request.post_response_script = self.script.map(str::to_owned);
+                Ok(ReadCommandResult::ApiRequest(result))
             }
-        }
-
-        fn execute_saved_api_request(
-            &self,
-            _request_id: &str,
-            _timeout_ms: Option<u64>,
-        ) -> Result<ApiResponse, CommandBusAdapterError> {
-            panic!("scripted prod GET should be blocked before execution")
-        }
-
-        fn list_db_connections(
-            &self,
-            _workspace_id: &str,
-        ) -> Result<Vec<DatabaseConnection>, CommandBusAdapterError> {
-            unreachable!()
-        }
-
-        fn get_db_schema(
-            &self,
-            _workspace_id: &str,
-            _connection_id: &str,
-        ) -> Result<DatabaseSchema, CommandBusAdapterError> {
-            unreachable!()
-        }
-
-        fn execute_db_query(
-            &self,
-            _input: DatabaseQueryInput,
-        ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
-            unreachable!()
+            ReadCommandResult::Workspaces(mut result) => {
+                result.workspaces[0].environment_type = self.environment.into();
+                Ok(ReadCommandResult::Workspaces(result))
+            }
+            _ => panic!("a saved replay resolves its workspace from the saved request"),
         }
     }
 
-    let result = ToolRegistry::with_command_bus(Arc::new(ProdScriptedGetCommandBus))
+    fn execute_saved_api_request_snapshot(
+        &self,
+        snapshot: &ApiSavedRequest,
+        timeout_ms: Option<u64>,
+        _environment_id: Option<&str>,
+    ) -> Result<ApiResponse, CommandBusAdapterError> {
+        assert_eq!(snapshot.workspace_id, "ws-1");
+        assert_eq!(snapshot.method, "GET");
+        assert_eq!(snapshot.url, "https://example.test/catalog");
+        assert_eq!(snapshot.revision, 17);
+        assert_eq!(snapshot.post_response_script.as_deref(), self.script);
+        ApiStubCommandBus.execute_saved_api_request(&snapshot.id, timeout_ms)
+    }
+
+    fn execute_saved_api_request(
+        &self,
+        _request_id: &str,
+        _timeout_ms: Option<u64>,
+    ) -> Result<ApiResponse, CommandBusAdapterError> {
+        panic!("policy-checked replay must not execute by ID");
+    }
+
+    fn list_db_connections(
+        &self,
+        _: &str,
+    ) -> Result<Vec<DatabaseConnection>, CommandBusAdapterError> {
+        unreachable!()
+    }
+
+    fn get_db_schema(&self, _: &str, _: &str) -> Result<DatabaseSchema, CommandBusAdapterError> {
+        unreachable!()
+    }
+
+    fn execute_db_query(
+        &self,
+        _: DatabaseQueryInput,
+    ) -> Result<DatabaseQueryResult, CommandBusAdapterError> {
+        unreachable!()
+    }
+}
+
+#[test]
+fn saved_replay_uses_one_definition_for_policy_and_execution() {
+    for (environment, script, risk) in [
+        ("prod", None, "low"),
+        ("dev", Some("// Inspect the response"), "medium"),
+    ] {
+        let bus = Arc::new(SavedGetPolicyBus {
+            request_reads: Default::default(),
+            script,
+            environment,
+        });
+        let result = ToolRegistry::with_command_bus(bus.clone())
+            .call(
+                "unfour.api.send_request",
+                json!({
+                    "requestId": "catalog",
+                    "method": "POST",
+                    "url": "https://example.test/ad-hoc",
+                }),
+            )
+            .unwrap();
+        assert_eq!(result["isError"], false);
+        crate::response::assert_call_meta(&result, environment, risk);
+        assert_eq!(
+            bus.request_reads.load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+    }
+}
+
+#[test]
+fn send_request_blocks_scripted_saved_get_in_prod() {
+    let bus = SavedGetPolicyBus {
+        request_reads: Default::default(),
+        script: Some("// Inspect the response"),
+        environment: "prod",
+    };
+    let result = ToolRegistry::with_command_bus(Arc::new(bus))
         .call(
             "unfour.api.send_request",
             json!({ "requestId": "scripted-get" }),
         )
         .expect("policy denial should be structured");
-
     assert_eq!(result["isError"], true);
     assert_eq!(
         crate::response::error_json(&result)["error"]["code"],
@@ -295,6 +327,24 @@ fn send_request_accepts_timeout_above_the_mcp_default() {
 fn send_request_rejects_missing_request_id() {
     let result = api_registry().call("unfour.api.send_request", json!({}));
     assert!(result.is_err(), "should fail without requestId");
+}
+
+#[test]
+fn send_request_validates_optional_request_id_before_selecting_replay() {
+    let registry = api_registry();
+    let mut args =
+        json!({"requestId": "   ", "method": "POST", "url": "https://example.test/catalog"});
+    let error = registry
+        .call("unfour.api.send_request", args.clone())
+        .unwrap_err();
+    assert!(
+        matches!(error, ToolCallError::InvalidArguments(message) if message.contains("requestId"))
+    );
+
+    // An empty optional ID has historically selected the ad-hoc form.
+    args["requestId"] = json!("");
+    let response = registry.call("unfour.api.send_request", args).unwrap();
+    assert_eq!(response["structuredContent"]["status"], 201);
 }
 
 #[test]
@@ -367,10 +417,9 @@ fn send_request_keeps_completed_response_when_activity_record_fails() {
             ApiStubCommandBus.execute_saved_api_request(request_id, timeout_ms)
         }
 
-        fn execute_saved_api_request_with_scripts_in_workspace(
+        fn execute_saved_api_request_snapshot(
             &self,
-            _workspace_id: Option<&str>,
-            _request_id: &str,
+            _snapshot: &ApiSavedRequest,
             _timeout_ms: Option<u64>,
             _environment_id: Option<&str>,
         ) -> Result<ApiResponse, CommandBusAdapterError> {

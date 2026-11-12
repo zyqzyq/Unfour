@@ -16,6 +16,10 @@ pub enum ReadCommand {
     ListConnections {
         connection_type: ConnectionType,
     },
+    ListConnectionsInWorkspace {
+        workspace_id: String,
+        connection_type: ConnectionType,
+    },
     ApiListCollections {
         workspace_id: Option<String>,
     },

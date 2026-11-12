@@ -344,33 +344,19 @@ impl CommandBusAdapter for ApiStubCommandBus {
         Ok(vec![])
     }
 
-    fn execute_saved_api_request_in_workspace(
+    fn execute_saved_api_request_snapshot(
         &self,
-        workspace_id: Option<&str>,
-        request_id: &str,
-        timeout_ms: Option<u64>,
-    ) -> Result<ApiResponse, CommandBusAdapterError> {
-        if request_id == "req-explicit-workspace" {
-            assert_eq!(workspace_id, Some("ws-1"));
-        } else {
-            assert_eq!(workspace_id, None);
-        }
-        self.execute_saved_api_request(request_id, timeout_ms)
-    }
-
-    fn execute_saved_api_request_with_scripts_in_workspace(
-        &self,
-        workspace_id: Option<&str>,
-        request_id: &str,
+        snapshot: &ApiSavedRequest,
         timeout_ms: Option<u64>,
         environment_id: Option<&str>,
     ) -> Result<ApiResponse, CommandBusAdapterError> {
-        if request_id == "req-environment-override" {
+        assert_eq!(snapshot.workspace_id, "ws-1");
+        if snapshot.id == "req-environment-override" {
             assert_eq!(environment_id, Some("env-test"));
         } else {
             assert_eq!(environment_id, None);
         }
-        self.execute_saved_api_request_in_workspace(workspace_id, request_id, timeout_ms)
+        self.execute_saved_api_request(&snapshot.id, timeout_ms)
     }
 
     fn send_api_request(
@@ -552,6 +538,15 @@ impl CommandBusAdapter for FailingApiCommandBus {
             message: "The command-bus API send operation failed.",
             details: serde_json::json!({}),
         })
+    }
+
+    fn execute_saved_api_request_snapshot(
+        &self,
+        snapshot: &ApiSavedRequest,
+        timeout_ms: Option<u64>,
+        _environment_id: Option<&str>,
+    ) -> Result<ApiResponse, CommandBusAdapterError> {
+        self.execute_saved_api_request(&snapshot.id, timeout_ms)
     }
 
     fn list_db_connections(

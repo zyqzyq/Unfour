@@ -369,6 +369,20 @@ pub trait CommandBusAdapter: Send + Sync {
         timeout_ms: Option<u64>,
     ) -> Result<ApiResponse, CommandBusAdapterError>;
 
+    /// Replay exactly the saved definition that the MCP policy evaluated.
+    fn execute_saved_api_request_snapshot(
+        &self,
+        _snapshot: &ApiSavedRequest,
+        _timeout_ms: Option<u64>,
+        _environment_id: Option<&str>,
+    ) -> Result<ApiResponse, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "This command-bus adapter does not support saved API request snapshots.",
+            details: serde_json::json!({}),
+        })
+    }
+
     fn execute_saved_api_request_in_workspace(
         &self,
         _workspace_id: Option<&str>,
@@ -441,6 +455,21 @@ pub trait CommandBusAdapter: Send + Sync {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support API request updates.",
+            details: serde_json::json!({}),
+        })
+    }
+
+    fn update_api_request_if_current(
+        &self,
+        _workspace_id: &str,
+        _request_id: &str,
+        _input: ApiRequestInput,
+        _expected_revision: i64,
+    ) -> Result<ApiSavedRequest, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message:
+                "This command-bus adapter does not support revision-checked API request updates.",
             details: serde_json::json!({}),
         })
     }

@@ -75,16 +75,6 @@ pub(super) fn result_columns(columns: &[unfour_core::models::DatabaseResultColum
 
 // --- Helpers ---
 
-pub(super) fn resolve_workspace_id(
-    evaluation: &ToolPolicyEvaluation,
-    arguments: &Map<String, Value>,
-) -> Result<String, ToolCallError> {
-    // Preserve argument validation, but never resolve the active workspace a
-    // second time after policy has authorized this call's target.
-    parse_optional_string(arguments, "workspaceId")?;
-    Ok(evaluation.workspace.workspace_id.clone())
-}
-
 pub(super) fn parse_required_string(
     arguments: &Map<String, Value>,
     key: &str,

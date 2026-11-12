@@ -9,7 +9,7 @@ use super::helpers::*;
 
 pub(super) fn ssh_create_connection(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -26,7 +26,7 @@ pub(super) fn ssh_create_connection(
             "secret",
         ],
     )?;
-    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let name = parse_required_string(&arguments, "name", "unfour.ssh.create_connection")?;
     let host = parse_required_string(&arguments, "host", "unfour.ssh.create_connection")?;
     let username = parse_required_string(&arguments, "username", "unfour.ssh.create_connection")?;
@@ -75,7 +75,7 @@ pub(super) fn ssh_create_connection(
 
 pub(super) fn ssh_run_diagnostic(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -85,7 +85,7 @@ pub(super) fn ssh_run_diagnostic(
     let connection_id =
         parse_required_string(&arguments, "connectionId", "unfour.ssh.run_diagnostic")?;
     let command = parse_required_string(&arguments, "command", "unfour.ssh.run_diagnostic")?;
-    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let timeout_ms = parse_optional_timeout(&arguments)?;
 
     let result = command_bus
@@ -115,13 +115,13 @@ pub(super) fn ssh_run_diagnostic(
 
 pub(super) fn ssh_list_connections(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
-    let arguments = object_with_allowed_keys(arguments, &["workspaceId"])?;
-    let workspace = resolve_workspace(command_bus, &arguments)?;
+    object_with_allowed_keys(arguments, &["workspaceId"])?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let connections = command_bus
-        .list_ssh_connections(&workspace.workspace_id)
+        .list_ssh_connections(&workspace_id)
         .map_err(|error| ToolCallError::Execution {
             code: error.code,
             message: error.message,
@@ -136,7 +136,7 @@ pub(super) fn ssh_list_connections(
                 "host": connection.host,
                 "port": connection.port,
                 "username": connection.username,
-                "environment": workspace.environment_type,
+                "environment": evaluation.workspace.environment_type,
                 "workspaceId": connection.workspace_id
             })
         })

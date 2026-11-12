@@ -1,6 +1,51 @@
 use super::*;
 
 #[tokio::test]
+async fn saved_replay_executes_the_request_snapshot_read_before_an_edit() {
+    let bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let (url, received) = spawn_api_test_server();
+    let mut input = api_script_test_input(workspace.clone(), format!("{url}?version=original"));
+    input.pre_request_script =
+        Some(r#"pm.request.headers.upsert({key:"X-Snapshot",value:"original"});"#.into());
+    let saved = bus.save_api_request(input.clone()).await.unwrap();
+    let ReadCommandResult::ApiRequest(snapshot) = bus
+        .execute_read(ReadCommand::ApiGetRequest {
+            request_id: saved.id.clone(),
+        })
+        .await
+        .unwrap()
+    else {
+        panic!("expected saved request");
+    };
+
+    input.method = "HEAD".into();
+    input.url = format!("{url}/edited");
+    input.pre_request_script = None;
+    bus.update_api_request(workspace, saved.id, input)
+        .await
+        .unwrap();
+
+    let result = bus
+        .execute_saved_api_request_snapshot_controlled(
+            "snapshot-replay",
+            &snapshot.request,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(result.response.unwrap().status, 200);
+    let wire = received
+        .recv_timeout(std::time::Duration::from_secs(2))
+        .unwrap();
+    assert!(wire.starts_with("GET /echo?version=original HTTP/"));
+    assert!(wire
+        .to_ascii_lowercase()
+        .contains("\r\nx-snapshot: original\r\n"));
+}
+
+#[tokio::test]
 async fn api_script_snapshot_and_history_hide_derived_values_but_wire_receives_them() {
     let bus = test_bus().await;
     let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;

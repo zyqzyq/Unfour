@@ -150,22 +150,12 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
 }
 
 fn workspace_current(
-    command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    _command_bus: &dyn CommandBusAdapter,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     object_with_allowed_keys(arguments, &[])?;
-    let result = command_bus
-        .execute_read(ReadCommand::CurrentWorkspace)
-        .map_err(|error| ToolCallError::Execution {
-            code: error.code,
-            message: error.message,
-        })?;
-    let ReadCommandResult::CurrentWorkspace(workspace) = result else {
-        return Err(unexpected_result());
-    };
-
-    serialize_safe(workspace)
+    serialize_safe(&evaluation.workspace)
 }
 
 fn workspace_list(
@@ -189,13 +179,16 @@ fn workspace_list(
 
 fn connection_list(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["type"])?;
     let connection_type = parse_connection_type(&arguments)?;
     let result = command_bus
-        .execute_read(ReadCommand::ListConnections { connection_type })
+        .execute_read(ReadCommand::ListConnectionsInWorkspace {
+            workspace_id: evaluation.workspace.workspace_id.clone(),
+            connection_type,
+        })
         .map_err(|error| ToolCallError::Execution {
             code: error.code,
             message: error.message,

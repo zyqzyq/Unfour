@@ -63,6 +63,27 @@ impl CommandBusAdapter for SwitchingBus {
         self.inner.list_db_connections(id)
     }
 
+    fn save_api_request(
+        &self,
+        input: ApiRequestInput,
+    ) -> Result<ApiSavedRequest, CommandBusAdapterError> {
+        self.inner.save_api_request(input)
+    }
+
+    fn save_ssh_connection(
+        &self,
+        input: SshConnectionInput,
+    ) -> Result<SshConnection, CommandBusAdapterError> {
+        self.inner.save_ssh_connection(input)
+    }
+
+    fn list_ssh_connections(
+        &self,
+        workspace_id: &str,
+    ) -> Result<Vec<SshConnection>, CommandBusAdapterError> {
+        self.inner.list_ssh_connections(workspace_id)
+    }
+
     fn get_db_schema(
         &self,
         id: &str,
@@ -151,6 +172,69 @@ fn switching(inner: Arc<LocalCommandBusAdapter>, from: &str, to: &str) -> Arc<Sw
         scopes: Mutex::new(Vec::new()),
         executions: Mutex::new(Vec::new()),
     })
+}
+
+#[test]
+fn workspace_switch_keeps_metadata_reads_and_writes_in_the_authorized_workspace() {
+    let inner = LocalCommandBusAdapter::ephemeral().unwrap();
+    let a = workspace(&inner, "dev", "full_access");
+    let b = workspace(&inner, "dev", "full_access");
+
+    for (tool, args, pointer) in [
+        (
+            "unfour.api.create_request",
+            json!({"name":"saved", "method":"GET", "url":"https://example.invalid"}),
+            "/request/workspaceId",
+        ),
+        (
+            "unfour.ssh.create_connection",
+            json!({"name":"saved", "host":"example.invalid", "username":"user", "authKind":"none"}),
+            "/connection/workspaceId",
+        ),
+        (
+            "unfour.api.list_requests",
+            json!({}),
+            "/requests/0/workspaceId",
+        ),
+        (
+            "unfour.ssh.list_connections",
+            json!({}),
+            "/connections/0/workspaceId",
+        ),
+        (
+            "unfour.connection.list",
+            json!({}),
+            "/connections/0/workspaceId",
+        ),
+        ("unfour.workspace.current", json!({}), "/workspaceId"),
+    ] {
+        let bus = switching(inner.clone(), &a, &b);
+        let registry = ToolRegistry::with_command_bus(bus.clone());
+        let result = registry.call(tool, args).unwrap();
+        assert_eq!(result["isError"], false, "{tool}: {result}");
+        assert!(bus.switched.load(Ordering::SeqCst), "{tool}");
+        assert_eq!(bus.current_reads.load(Ordering::SeqCst), 1, "{tool}");
+        assert_eq!(
+            result["structuredContent"].pointer(pointer),
+            Some(&json!(a)),
+            "{tool}"
+        );
+    }
+    assert!(inner.list_ssh_connections(&b).unwrap().is_empty());
+    // Direct CommandBus callers may still omit the ID to read the active B.
+    for workspace_id in [Some(b), None] {
+        let ReadCommandResult::ApiRequests(other) = inner
+            .execute_read(ReadCommand::ApiListRequests {
+                workspace_id,
+                collection_id: None,
+            })
+            .unwrap()
+        else {
+            panic!("expected API request list")
+        };
+        assert!(other.requests.is_empty());
+    }
+    inner.shutdown();
 }
 
 #[test]

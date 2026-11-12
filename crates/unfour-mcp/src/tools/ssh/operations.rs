@@ -40,7 +40,7 @@ pub(super) fn ssh_exec(
     )?;
     let connection_id = parse_required_string(&arguments, "connectionId", "unfour.ssh.exec")?;
     let raw_command = parse_required_string(&arguments, "command", "unfour.ssh.exec")?;
-    let workspace = resolve_workspace(command_bus, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let timeout_ms = parse_optional_timeout(&arguments)?;
     let cwd = parse_optional_string(&arguments, "cwd")?;
     let command = build_ssh_exec_command(
@@ -57,7 +57,7 @@ pub(super) fn ssh_exec(
             reason,
             json!({
                 "tool": "unfour.ssh.exec",
-                "workspaceId": workspace.workspace_id,
+                "workspaceId": workspace_id,
                 "connectionId": connection_id.clone(),
                 "command": command.clone()
             }),
@@ -65,7 +65,7 @@ pub(super) fn ssh_exec(
     }
 
     let input = SshDiagnosticInput {
-        workspace_id: workspace.workspace_id,
+        workspace_id,
         connection_id,
         command: command.clone(),
         timeout_ms,
@@ -85,7 +85,7 @@ pub(super) fn ssh_exec(
 
 pub(super) fn ssh_read_file(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -102,7 +102,7 @@ pub(super) fn ssh_read_file(
     )?;
     let connection_id = parse_required_string(&arguments, "connectionId", "unfour.ssh.read_file")?;
     let path = parse_required_string(&arguments, "path", "unfour.ssh.read_file")?;
-    let workspace = resolve_workspace(command_bus, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let timeout_ms = parse_optional_timeout(&arguments)?;
     let limit = parse_optional_u64(&arguments, "limit")?
         .unwrap_or(DEFAULT_FILE_LIMIT)
@@ -129,7 +129,7 @@ pub(super) fn ssh_read_file(
 
     let result = command_bus
         .run_ssh_command(SshDiagnosticInput {
-            workspace_id: workspace.workspace_id,
+            workspace_id,
             connection_id: connection_id.clone(),
             command,
             timeout_ms,
@@ -177,9 +177,9 @@ pub(super) fn ssh_write_file(
     let content = parse_required_raw_string(&arguments, "content", "unfour.ssh.write_file", true)?;
     ensure_file_content_size(content.len())?;
     let mode = parse_optional_string(&arguments, "mode")?.unwrap_or_else(|| "overwrite".into());
-    let workspace = resolve_workspace(command_bus, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let timeout_ms = parse_optional_timeout(&arguments)?;
-    if workspace.environment_type == "test" || is_sensitive_path(&path) {
+    if evaluation.workspace.environment_type == "test" || is_sensitive_path(&path) {
         ensure_confirmed_if_guarded(
             evaluation,
             &arguments,
@@ -187,7 +187,7 @@ pub(super) fn ssh_write_file(
             "Writing remote files in test or sensitive paths requires confirmation.",
             json!({
                 "tool": "unfour.ssh.write_file",
-                "workspaceId": workspace.workspace_id,
+                "workspaceId": workspace_id,
                 "connectionId": connection_id.clone(),
                 "path": path.clone(),
                 "mode": mode.clone(),
@@ -210,7 +210,7 @@ pub(super) fn ssh_write_file(
     let bytes = content.len();
     let result = command_bus
         .write_ssh_file(SshFileWriteInput {
-            workspace_id: workspace.workspace_id,
+            workspace_id,
             connection_id: connection_id.clone(),
             path: path.clone(),
             content,
@@ -261,11 +261,11 @@ pub(super) fn ssh_patch_file(
     let search = parse_required_raw_string(&arguments, "search", "unfour.ssh.patch_file", false)?;
     let replace = parse_required_raw_string(&arguments, "replace", "unfour.ssh.patch_file", true)?;
     ensure_file_content_size(search.len().saturating_add(replace.len()))?;
-    let workspace = resolve_workspace(command_bus, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let timeout_ms = parse_optional_timeout(&arguments)?;
     let multi_match_payload = json!({
         "tool": "unfour.ssh.patch_file",
-        "workspaceId": workspace.workspace_id.clone(),
+        "workspaceId": workspace_id.clone(),
         "connectionId": connection_id.clone(),
         "path": path.clone(),
         "searchBytes": search.len(),
@@ -280,7 +280,8 @@ pub(super) fn ssh_patch_file(
             "SSH_PATCH_MULTIPLE_MATCHES",
             &multi_match_payload,
         );
-    if !allow_multiple_matches && (workspace.environment_type == "test" || is_sensitive_path(&path))
+    if !allow_multiple_matches
+        && (evaluation.workspace.environment_type == "test" || is_sensitive_path(&path))
     {
         ensure_confirmed_if_guarded(
             evaluation,
@@ -289,7 +290,7 @@ pub(super) fn ssh_patch_file(
             "Patching remote files in test or sensitive paths requires confirmation.",
             json!({
                 "tool": "unfour.ssh.patch_file",
-                "workspaceId": workspace.workspace_id,
+                "workspaceId": workspace_id,
                 "connectionId": connection_id.clone(),
                 "path": path.clone(),
                 "searchBytes": search.len(),
@@ -304,7 +305,7 @@ pub(super) fn ssh_patch_file(
     let replace_bytes = replace.len();
     let result = command_bus
         .patch_ssh_file(SshFilePatchInput {
-            workspace_id: workspace.workspace_id,
+            workspace_id,
             connection_id: connection_id.clone(),
             path: path.clone(),
             search,
@@ -357,7 +358,7 @@ pub(super) fn ssh_patch_file(
 
 pub(super) fn ssh_list_dir(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -366,7 +367,7 @@ pub(super) fn ssh_list_dir(
     )?;
     let connection_id = parse_required_string(&arguments, "connectionId", "unfour.ssh.list_dir")?;
     let path = parse_required_string(&arguments, "path", "unfour.ssh.list_dir")?;
-    let workspace = resolve_workspace(command_bus, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let timeout_ms = parse_optional_timeout(&arguments)?;
     let limit = parse_optional_u64(&arguments, "limit")?
         .unwrap_or(200)
@@ -378,7 +379,7 @@ pub(super) fn ssh_list_dir(
     );
     let result = command_bus
         .run_ssh_command(SshDiagnosticInput {
-            workspace_id: workspace.workspace_id,
+            workspace_id,
             connection_id: connection_id.clone(),
             command,
             timeout_ms,

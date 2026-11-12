@@ -1,44 +1,5 @@
 use super::*;
 
-pub(super) fn resolve_workspace_id(
-    command_bus: &dyn CommandBusAdapter,
-    arguments: &Map<String, Value>,
-) -> Result<String, ToolCallError> {
-    match parse_optional_string(arguments, "workspaceId")? {
-        Some(id) => Ok(id),
-        None => {
-            let ws_result = command_bus
-                .execute_read(ReadCommand::CurrentWorkspace)
-                .map_err(|e| ToolCallError::Execution {
-                    code: e.code,
-                    message: e.message,
-                })?;
-            let ReadCommandResult::CurrentWorkspace(ws) = ws_result else {
-                return Err(unexpected_result());
-            };
-            Ok(ws.workspace_id)
-        }
-    }
-}
-
-pub(super) fn get_saved_request(
-    command_bus: &dyn CommandBusAdapter,
-    request_id: &str,
-) -> Result<ApiSavedRequest, ToolCallError> {
-    let result = command_bus
-        .execute_read(ReadCommand::ApiGetRequest {
-            request_id: request_id.to_string(),
-        })
-        .map_err(|error| ToolCallError::Execution {
-            code: error.code,
-            message: error.message,
-        })?;
-    let ReadCommandResult::ApiRequest(detail) = result else {
-        return Err(unexpected_result());
-    };
-    Ok(detail.request)
-}
-
 pub(super) fn parse_parent_folder_id(
     arguments: &Map<String, Value>,
 ) -> Result<Option<String>, ToolCallError> {

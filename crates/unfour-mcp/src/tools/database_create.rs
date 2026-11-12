@@ -9,7 +9,7 @@ use super::super::{
 };
 use super::{
     adapter_execution, parse_optional_bool, parse_optional_string, parse_required_string,
-    resolve_workspace_id, safe_connection_summary,
+    safe_connection_summary,
 };
 
 pub(super) fn registered_tool() -> RegisteredTool {
@@ -72,7 +72,7 @@ fn db_create_connection(
             "readOnly",
         ],
     )?;
-    let workspace_id = resolve_workspace_id(evaluation, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let name = parse_required_string(&arguments, "name", "unfour.db.create_connection")?;
     let driver = parse_required_string(&arguments, "driver", "unfour.db.create_connection")?;
     let supplied_credential_ref = parse_optional_string(&arguments, "credentialRef")?;

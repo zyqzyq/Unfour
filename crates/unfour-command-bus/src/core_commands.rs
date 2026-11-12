@@ -206,60 +206,15 @@ impl CommandBus {
                 }))
             }
             ReadCommand::ListConnections { connection_type } => {
-                let state = self.read_workspace_state().await?;
-                let workspace_id = state.active_workspace_id;
-                let mut connections = Vec::new();
-
-                if matches!(
-                    connection_type,
-                    ConnectionType::All | ConnectionType::Database
-                ) {
-                    connections.extend(
-                        self.list_database_connections(workspace_id.clone())
-                            .await?
-                            .into_iter()
-                            .map(|connection| SafeConnection {
-                                id: connection.id,
-                                name: connection.name,
-                                connection_type: "database".to_string(),
-                                workspace_id: connection.workspace_id,
-                                safe_summary: SafeConnectionSummary {
-                                    host: connection.host,
-                                    database_type: Some(connection.driver),
-                                    api_base_url: None,
-                                },
-                            }),
-                    );
-                }
-
-                if matches!(connection_type, ConnectionType::All | ConnectionType::Ssh) {
-                    connections.extend(
-                        self.list_ssh_connections(workspace_id)
-                            .await?
-                            .into_iter()
-                            .map(|connection| SafeConnection {
-                                id: connection.id,
-                                name: connection.name,
-                                connection_type: "ssh".to_string(),
-                                workspace_id: connection.workspace_id,
-                                safe_summary: SafeConnectionSummary {
-                                    host: Some(connection.host),
-                                    database_type: None,
-                                    api_base_url: None,
-                                },
-                            }),
-                    );
-                }
-
-                Ok(ReadCommandResult::Connections(ConnectionListResult {
-                    count: connections.len(),
-                    connections,
-                    source: "command-bus".to_string(),
-                }))
+                let workspace_id = self.read_workspace_state().await?.active_workspace_id;
+                self.read_connections(workspace_id, connection_type).await
             }
+            ReadCommand::ListConnectionsInWorkspace {
+                workspace_id,
+                connection_type,
+            } => self.read_connections(workspace_id, connection_type).await,
             ReadCommand::ApiListCollections { workspace_id } => {
-                let state = self.read_workspace_state().await?;
-                let ws_id = workspace_id.unwrap_or(state.active_workspace_id);
+                let ws_id = self.resolve_read_workspace(workspace_id).await?;
                 let collections = self.api_client.list_collections(ws_id.clone()).await?;
                 let requests = self.api_client.list_saved_requests(ws_id.clone()).await?;
 
@@ -294,8 +249,7 @@ impl CommandBus {
                 workspace_id,
                 collection_id,
             } => {
-                let state = self.read_workspace_state().await?;
-                let ws_id = workspace_id.unwrap_or(state.active_workspace_id);
+                let ws_id = self.resolve_read_workspace(workspace_id).await?;
                 let requests = self.api_client.list_saved_requests(ws_id.clone()).await?;
 
                 let filtered: Vec<_> = if let Some(ref cid) = collection_id {
@@ -347,8 +301,7 @@ impl CommandBus {
                 workspace_id,
                 limit,
             } => {
-                let state = self.read_workspace_state().await?;
-                let ws_id = workspace_id.unwrap_or(state.active_workspace_id);
+                let ws_id = self.resolve_read_workspace(workspace_id).await?;
                 let history = self.api_client.list_history(ws_id, limit).await?;
                 Ok(ReadCommandResult::ApiHistory(ApiHistoryListResult {
                     count: history.len(),
@@ -360,8 +313,7 @@ impl CommandBus {
                 workspace_id,
                 history_id,
             } => {
-                let state = self.read_workspace_state().await?;
-                let ws_id = workspace_id.unwrap_or(state.active_workspace_id);
+                let ws_id = self.resolve_read_workspace(workspace_id).await?;
                 let detail = self.api_client.history_detail(ws_id, history_id).await?;
                 Ok(ReadCommandResult::ApiHistoryDetailResult(
                     ApiHistoryDetailResult {
@@ -371,8 +323,7 @@ impl CommandBus {
                 ))
             }
             ReadCommand::ApiListEnvironments { workspace_id } => {
-                let state = self.read_workspace_state().await?;
-                let ws_id = workspace_id.unwrap_or(state.active_workspace_id);
+                let ws_id = self.resolve_read_workspace(workspace_id).await?;
                 let environments = self.api_environments_list(ws_id).await?;
                 Ok(ReadCommandResult::ApiEnvironments(
                     ApiEnvironmentListResult {
@@ -386,8 +337,7 @@ impl CommandBus {
                 workspace_id,
                 limit,
             } => {
-                let state = self.read_workspace_state().await?;
-                let ws_id = workspace_id.unwrap_or(state.active_workspace_id);
+                let ws_id = self.resolve_read_workspace(workspace_id).await?;
                 let limit = limit
                     .unwrap_or(DEFAULT_ACTIVITY_LIMIT)
                     .clamp(1, MAX_ACTIVITY_LIMIT);
@@ -411,6 +361,68 @@ impl CommandBus {
                 }))
             }
         }
+    }
+
+    async fn resolve_read_workspace(&self, workspace_id: Option<String>) -> AppResult<String> {
+        match workspace_id {
+            Some(id) => Ok(id),
+            None => Ok(self.read_workspace_state().await?.active_workspace_id),
+        }
+    }
+
+    async fn read_connections(
+        &self,
+        workspace_id: String,
+        connection_type: ConnectionType,
+    ) -> AppResult<ReadCommandResult> {
+        let mut connections = Vec::new();
+
+        if matches!(
+            connection_type,
+            ConnectionType::All | ConnectionType::Database
+        ) {
+            connections.extend(
+                self.list_database_connections(workspace_id.clone())
+                    .await?
+                    .into_iter()
+                    .map(|connection| SafeConnection {
+                        id: connection.id,
+                        name: connection.name,
+                        connection_type: "database".to_string(),
+                        workspace_id: connection.workspace_id,
+                        safe_summary: SafeConnectionSummary {
+                            host: connection.host,
+                            database_type: Some(connection.driver),
+                            api_base_url: None,
+                        },
+                    }),
+            );
+        }
+
+        if matches!(connection_type, ConnectionType::All | ConnectionType::Ssh) {
+            connections.extend(
+                self.list_ssh_connections(workspace_id)
+                    .await?
+                    .into_iter()
+                    .map(|connection| SafeConnection {
+                        id: connection.id,
+                        name: connection.name,
+                        connection_type: "ssh".to_string(),
+                        workspace_id: connection.workspace_id,
+                        safe_summary: SafeConnectionSummary {
+                            host: Some(connection.host),
+                            database_type: None,
+                            api_base_url: None,
+                        },
+                    }),
+            );
+        }
+
+        Ok(ReadCommandResult::Connections(ConnectionListResult {
+            count: connections.len(),
+            connections,
+            source: "command-bus".to_string(),
+        }))
     }
 
     pub async fn create_workspace(&self, name: String) -> AppResult<Workspace> {

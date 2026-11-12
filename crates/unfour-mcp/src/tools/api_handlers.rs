@@ -2,11 +2,11 @@ use super::*;
 
 pub(super) fn api_list_collections(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
-    let arguments = object_with_allowed_keys(arguments, &["workspaceId"])?;
-    let workspace_id = parse_optional_string(&arguments, "workspaceId")?;
+    object_with_allowed_keys(arguments, &["workspaceId"])?;
+    let workspace_id = Some(evaluation.workspace.workspace_id.clone());
 
     let result = command_bus
         .execute_read(ReadCommand::ApiListCollections { workspace_id })
@@ -24,11 +24,11 @@ pub(super) fn api_list_collections(
 
 pub(super) fn api_list_requests(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["workspaceId", "collectionId"])?;
-    let workspace_id = parse_optional_string(&arguments, "workspaceId")?;
+    let workspace_id = Some(evaluation.workspace.workspace_id.clone());
     let collection_id = parse_optional_string(&arguments, "collectionId")?;
 
     let result = command_bus
@@ -54,26 +54,15 @@ pub(super) fn api_list_requests(
 }
 
 pub(super) fn api_get_request(
-    command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    _command_bus: &dyn CommandBusAdapter,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["requestId", "includeBody"])?;
     let request_id = parse_required_string(&arguments, "requestId", "unfour.api.get_request")?;
     let include_body = parse_optional_bool(&arguments, "includeBody")?.unwrap_or(true);
 
-    let result = command_bus
-        .execute_read(ReadCommand::ApiGetRequest { request_id })
-        .map_err(|error| ToolCallError::Execution {
-            code: error.code,
-            message: error.message,
-        })?;
-
-    let ReadCommandResult::ApiRequest(detail) = result else {
-        return Err(unexpected_result());
-    };
-
-    let saved = detail.request;
+    let saved = evaluation.saved_request(&request_id)?;
 
     // Parse and redact headers
     let headers: Vec<Value> = serde_json::from_str::<Vec<Value>>(&saved.headers_json)
@@ -123,7 +112,7 @@ pub(super) fn api_get_request(
 
 pub(super) fn api_send_request(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -145,16 +134,10 @@ pub(super) fn api_send_request(
     let timeout_ms = parse_optional_timeout(&arguments)?;
     let environment_id = parse_optional_string(&arguments, "environmentId")?;
 
-    let response = if let Some(request_id) = parse_optional_string(&arguments, "requestId")? {
-        let workspace_id = parse_optional_string(&arguments, "workspaceId")?;
-        command_bus.execute_saved_api_request_with_scripts_in_workspace(
-            workspace_id.as_deref(),
-            &request_id,
-            timeout_ms,
-            environment_id.as_deref(),
-        )
+    let response = if let Some(saved) = &evaluation.saved_request {
+        command_bus.execute_saved_api_request_snapshot(saved, timeout_ms, environment_id.as_deref())
     } else {
-        let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+        let workspace_id = evaluation.workspace.workspace_id.clone();
         let method = parse_required_string(&arguments, "method", "unfour.api.send_request")?;
         let url = parse_required_string(&arguments, "url", "unfour.api.send_request")?;
         let input = ApiRequestInput {
@@ -223,7 +206,7 @@ pub(super) fn api_send_request(
 
 pub(super) fn api_create_request(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -244,7 +227,7 @@ pub(super) fn api_create_request(
             "authJson",
         ],
     )?;
-    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let input = ApiRequestInput {
         workspace_id,
         name: Some(parse_required_string(
@@ -284,7 +267,7 @@ pub(super) fn api_create_request(
 
 pub(super) fn api_update_request(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
@@ -307,11 +290,9 @@ pub(super) fn api_update_request(
         ],
     )?;
     let request_id = parse_required_string(&arguments, "requestId", "unfour.api.update_request")?;
-    let existing = get_saved_request(command_bus, &request_id)?;
-    let workspace_id = parse_optional_string(&arguments, "workspaceId")?
-        .unwrap_or_else(|| existing.workspace_id.clone());
+    let existing = evaluation.saved_request(&request_id)?;
     let input = ApiRequestInput {
-        workspace_id: workspace_id.clone(),
+        workspace_id: existing.workspace_id.clone(),
         name: parse_optional_string(&arguments, "name")?.or(Some(existing.name.clone())),
         parent_folder_id: parse_parent_folder_id(&arguments)?.or(existing.parent_folder_id.clone()),
         collection_id: parse_optional_string(&arguments, "collectionId")?
@@ -339,7 +320,12 @@ pub(super) fn api_update_request(
     };
 
     let saved = command_bus
-        .update_api_request(&workspace_id, &request_id, input)
+        .update_api_request_if_current(
+            &existing.workspace_id,
+            &request_id,
+            input,
+            existing.revision,
+        )
         .map_err(|error| ToolCallError::Execution {
             code: error.code,
             message: error.message,
@@ -366,10 +352,7 @@ pub(super) fn api_delete_request(
         ],
     )?;
     let request_id = parse_required_string(&arguments, "requestId", "unfour.api.delete_request")?;
-    let workspace_id = match parse_optional_string(&arguments, "workspaceId")? {
-        Some(workspace_id) => workspace_id,
-        None => get_saved_request(command_bus, &request_id)?.workspace_id,
-    };
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     ensure_confirmed_if_guarded(evaluation,
         &arguments,
         "API_DELETE_REQUEST",
@@ -397,11 +380,11 @@ pub(super) fn api_delete_request(
 
 pub(super) fn api_create_collection(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["workspaceId", "name"])?;
-    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let name = parse_required_string(&arguments, "name", "unfour.api.create_collection")?;
     let collection = command_bus
         .create_api_collection(&workspace_id, &name)
@@ -417,11 +400,11 @@ pub(super) fn api_create_collection(
 
 pub(super) fn api_update_collection(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["workspaceId", "collectionId", "name"])?;
-    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let collection_id =
         parse_required_string(&arguments, "collectionId", "unfour.api.update_collection")?;
     let name = parse_required_string(&arguments, "name", "unfour.api.update_collection")?;
@@ -452,7 +435,7 @@ pub(super) fn api_delete_collection(
             "confirmation_text",
         ],
     )?;
-    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let collection_id =
         parse_required_string(&arguments, "collectionId", "unfour.api.delete_collection")?;
     ensure_confirmed_if_guarded(evaluation,
@@ -481,11 +464,11 @@ pub(super) fn api_delete_collection(
 
 pub(super) fn api_list_history(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["workspaceId", "limit"])?;
-    let workspace_id = parse_optional_string(&arguments, "workspaceId")?;
+    let workspace_id = Some(evaluation.workspace.workspace_id.clone());
     let limit = parse_optional_history_limit(&arguments)?;
 
     let result = command_bus
@@ -527,12 +510,12 @@ pub(super) fn api_list_history(
 
 pub(super) fn api_get_history(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["historyId", "workspaceId"])?;
     let history_id = parse_required_string(&arguments, "historyId", "unfour.api.get_history")?;
-    let workspace_id = parse_optional_string(&arguments, "workspaceId")?;
+    let workspace_id = Some(evaluation.workspace.workspace_id.clone());
 
     let result = command_bus
         .execute_read(ReadCommand::ApiGetHistory {
@@ -581,11 +564,11 @@ pub(super) fn api_get_history(
 
 pub(super) fn api_list_environments(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
-    let arguments = object_with_allowed_keys(arguments, &["workspaceId"])?;
-    let workspace_id = parse_optional_string(&arguments, "workspaceId")?;
+    object_with_allowed_keys(arguments, &["workspaceId"])?;
+    let workspace_id = Some(evaluation.workspace.workspace_id.clone());
 
     let result = command_bus
         .execute_read(ReadCommand::ApiListEnvironments { workspace_id })
@@ -613,11 +596,11 @@ pub(super) fn api_list_environments(
 
 pub(super) fn api_create_environment(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["workspaceId", "name"])?;
-    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let name = parse_required_string(&arguments, "name", "unfour.api.create_environment")?;
     let environment = command_bus
         .create_api_environment(&workspace_id, &name)
@@ -633,14 +616,14 @@ pub(super) fn api_create_environment(
 
 pub(super) fn api_update_environment(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(
         arguments,
         &["workspaceId", "environmentId", "name", "variables"],
     )?;
-    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let environment_id =
         parse_required_string(&arguments, "environmentId", "unfour.api.update_environment")?;
     let name = parse_required_string(&arguments, "name", "unfour.api.update_environment")?;
@@ -672,7 +655,7 @@ pub(super) fn api_delete_environment(
             "confirmation_text",
         ],
     )?;
-    let workspace_id = resolve_workspace_id(command_bus, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let environment_id =
         parse_required_string(&arguments, "environmentId", "unfour.api.delete_environment")?;
     ensure_confirmed_if_guarded(

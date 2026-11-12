@@ -231,7 +231,10 @@ request metadata only when the workspace policy allows it.
 Important limits:
 
 - `unfour.api.send_request` can send either a saved `requestId` or an ad-hoc
-  `method` plus `url`.
+  `method` plus `url`. With `requestId`, MCP authorizes and sends one
+  snapshot of the saved request, including its workspace, method and scripts.
+  Only `timeoutMs` and `environmentId` override replay settings. An explicit
+  `workspaceId` must match the saved request's workspace.
 - Saved and ad-hoc requests both use the command bus so history, masking, and
   credential handling stay in one path.
 - `environmentId` selects the environment only for that call. URL, headers,

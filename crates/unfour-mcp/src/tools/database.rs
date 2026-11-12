@@ -34,8 +34,8 @@ fn db_list_connections(
     evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
-    let arguments = object_with_allowed_keys(arguments, &["workspaceId"])?;
-    let workspace_id = resolve_workspace_id(evaluation, &arguments)?;
+    object_with_allowed_keys(arguments, &["workspaceId"])?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
 
     let connections = command_bus
         .list_db_connections(&workspace_id)
@@ -60,7 +60,7 @@ fn db_list_tables(
         &["connectionId", "workspaceId", "limit", "catalog", "schema"],
     )?;
     let connection_id = parse_required_string(&arguments, "connectionId", "unfour.db.list_tables")?;
-    let workspace_id = resolve_workspace_id(evaluation, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let limit = parse_optional_limit(&arguments, "limit", DEFAULT_TABLE_LIMIT, MAX_TABLE_LIMIT)?;
     let catalog = parse_optional_string(&arguments, "catalog")?;
     let schema = parse_optional_string(&arguments, "schema")?;
@@ -122,7 +122,7 @@ fn db_describe_table(
     let table_name = parse_required_string(&arguments, "tableName", "unfour.db.describe_table")?;
     let catalog = parse_optional_string(&arguments, "catalog")?;
     let schema = parse_optional_string(&arguments, "schema")?;
-    let workspace_id = resolve_workspace_id(evaluation, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let table = command_bus
         .get_db_table_structure(DatabaseTableStructureInput {
             workspace_id,
@@ -166,7 +166,7 @@ fn db_export_table(
     let connection_id =
         parse_required_string(&arguments, "connectionId", "unfour.db.export_table")?;
     let table_name = parse_required_string(&arguments, "tableName", "unfour.db.export_table")?;
-    let workspace_id = resolve_workspace_id(evaluation, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let catalog = parse_optional_string(&arguments, "catalog")?;
     let schema = parse_optional_string(&arguments, "schema")?;
     let columns = parse_export_columns(&arguments)?;
@@ -288,7 +288,7 @@ fn db_query_readonly(
     let connection_id =
         parse_required_string(&arguments, "connectionId", "unfour.db.query_readonly")?;
     let sql = parse_required_string(&arguments, "sql", "unfour.db.query_readonly")?;
-    let workspace_id = resolve_workspace_id(evaluation, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let limit = parse_optional_limit(&arguments, "limit", DEFAULT_QUERY_LIMIT, MAX_QUERY_LIMIT)?;
     let catalog = parse_optional_string(&arguments, "catalog")?;
     let schema = parse_optional_string(&arguments, "schema")?;
@@ -367,7 +367,7 @@ fn db_execute(
     )?;
     let connection_id = parse_required_string(&arguments, "connectionId", "unfour.db.execute")?;
     let sql = parse_required_string(&arguments, "sql", "unfour.db.execute")?;
-    let workspace_id = resolve_workspace_id(evaluation, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let limit = parse_optional_limit(&arguments, "limit", DEFAULT_QUERY_LIMIT, MAX_QUERY_LIMIT)?;
     let catalog = parse_optional_string(&arguments, "catalog")?;
     let schema = parse_optional_string(&arguments, "schema")?;
@@ -490,7 +490,7 @@ fn db_explain(
     )?;
     let connection_id = parse_required_string(&arguments, "connectionId", "unfour.db.explain")?;
     let sql = parse_required_string(&arguments, "sql", "unfour.db.explain")?;
-    let workspace_id = resolve_workspace_id(evaluation, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
     let limit = parse_optional_limit(&arguments, "limit", DEFAULT_QUERY_LIMIT, MAX_QUERY_LIMIT)?;
     let catalog = parse_optional_string(&arguments, "catalog")?;
     let schema = parse_optional_string(&arguments, "schema")?;
@@ -571,7 +571,7 @@ fn db_test_connection(
     let arguments = object_with_allowed_keys(arguments, &["connectionId", "workspaceId"])?;
     let connection_id =
         parse_required_string(&arguments, "connectionId", "unfour.db.test_connection")?;
-    let workspace_id = resolve_workspace_id(evaluation, &arguments)?;
+    let workspace_id = evaluation.workspace.workspace_id.clone();
 
     match command_bus.test_db_connection(&workspace_id, &connection_id) {
         Ok(result) => Ok(json!({

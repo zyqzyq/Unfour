@@ -166,7 +166,8 @@ impl CommandBusAdapter for DbStubCommandBus {
                 count: 1,
                 source: "command-bus".to_string(),
             }),
-            ReadCommand::ListConnections { .. } => {
+            ReadCommand::ListConnections { .. }
+            | ReadCommand::ListConnectionsInWorkspace { .. } => {
                 ReadCommandResult::Connections(ConnectionListResult {
                     connections: vec![],
                     count: 0,

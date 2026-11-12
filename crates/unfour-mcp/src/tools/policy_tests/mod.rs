@@ -7,6 +7,9 @@ fn workspace(environment_type: &str, mcp_policy: &str) -> WorkspacePolicyContext
         workspace_name: "Production".to_string(),
         environment_type: environment_type.to_string(),
         mcp_policy: mcp_policy.to_string(),
+        workspace_root: None,
+        mode: "local".into(),
+        source: "command-bus".into(),
     }
 }
 

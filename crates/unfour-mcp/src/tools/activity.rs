@@ -66,11 +66,11 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
 
 fn activity_list(
     command_bus: &dyn CommandBusAdapter,
-    _evaluation: &ToolPolicyEvaluation,
+    evaluation: &ToolPolicyEvaluation,
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     let arguments = object_with_allowed_keys(arguments, &["workspaceId", "limit"])?;
-    let workspace_id = parse_optional_string(&arguments, "workspaceId")?;
+    let workspace_id = Some(evaluation.workspace.workspace_id.clone());
     let limit = parse_optional_limit(&arguments)?;
 
     let result = command_bus
@@ -111,21 +111,6 @@ fn activity_list(
         "count": activity.count,
         "source": "command-bus"
     }))
-}
-
-fn parse_optional_string(
-    arguments: &Map<String, Value>,
-    key: &str,
-) -> Result<Option<String>, ToolCallError> {
-    match arguments.get(key) {
-        None => Ok(None),
-        Some(Value::String(s)) if s.is_empty() => Ok(None),
-        Some(Value::String(s)) => Ok(Some(s.clone())),
-        Some(_) => Err(ToolCallError::InvalidArguments(format!(
-            "argument `{}` must be a string",
-            key
-        ))),
-    }
 }
 
 fn parse_optional_limit(arguments: &Map<String, Value>) -> Result<Option<i64>, ToolCallError> {

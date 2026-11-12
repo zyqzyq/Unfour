@@ -180,7 +180,7 @@ mod tests {
     #[test]
     fn guarded_requires_confirmation_but_full_access_skips() {
         use super::super::policy::{
-            McpCapability, McpRisk, ResolvedMcpPolicy, ToolPolicyEvaluation, WorkspacePolicyContext,
+            McpRisk, ResolvedMcpPolicy, ToolPolicyEvaluation, WorkspacePolicyContext,
         };
 
         let payload = json!({ "sql": "delete from users" });
@@ -192,10 +192,13 @@ mod tests {
                 workspace_name: "ws".to_string(),
                 environment_type: "test".to_string(),
                 mcp_policy: "guarded".to_string(),
+                workspace_root: None,
+                mode: "local".into(),
+                source: "command-bus".into(),
             },
             resolved_policy: ResolvedMcpPolicy::Guarded,
-            capability: McpCapability::DbDataWrite,
             risk: McpRisk::Write,
+            saved_request: None,
         };
 
         // Guarded tier: not yet confirmed, so a confirmation prompt is required.
@@ -211,7 +214,7 @@ mod tests {
         // FullAccess tier: same risky payload, but no confirmation prompt.
         let full = ToolPolicyEvaluation {
             resolved_policy: ResolvedMcpPolicy::FullAccess,
-            ..guarded.clone()
+            ..guarded
         };
         assert!(ensure_confirmed_if_guarded(
             &full,

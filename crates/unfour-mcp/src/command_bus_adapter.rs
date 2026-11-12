@@ -4,6 +4,7 @@ use unfour_core::models::{
 use unfour_core::models::{SshFilePatchInput, SshFileWriteInput};
 mod contract;
 mod implementation;
+mod saved_api;
 use unfour_core::models::{ApiCollectionFolder, SavedSql, SavedSqlInput, Workspace};
 mod error;
 mod unified_runtime;

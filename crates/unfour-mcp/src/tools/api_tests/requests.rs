@@ -102,3 +102,47 @@ fn get_request_requires_request_id() {
     let result = api_registry().call("unfour.api.get_request", json!({}));
     assert!(result.is_err(), "should fail without requestId");
 }
+
+#[test]
+fn request_update_keeps_an_edit_committed_after_policy_evaluation() {
+    let adapter =
+        crate::LocalCommandBusAdapter::from_storage_mode(crate::StorageMode::Ephemeral).unwrap();
+    let registry = ToolRegistry::with_command_bus(adapter.clone());
+    let created = registry
+        .call(
+            "unfour.api.create_request",
+            json!({
+                "name": "Catalog", "method": "GET", "url": "https://example.test/catalog",
+            }),
+        )
+        .unwrap();
+    let id = created["structuredContent"]["request"]["id"]
+        .as_str()
+        .unwrap();
+    let rename = json!({"requestId": id, "name": "Renamed"});
+    let tool = "unfour.api.update_request";
+    let evaluation =
+        crate::tools::policy::evaluate_tool_policy(adapter.as_ref(), tool, &rename).unwrap();
+
+    let edit = registry
+        .call(
+            tool,
+            json!({"requestId": id, "url": "https://example.test/items"}),
+        )
+        .unwrap();
+    assert_eq!(edit["isError"], false);
+    assert!(matches!(
+        api_update_request(adapter.as_ref(), &evaluation, rename),
+        Err(ToolCallError::Execution {
+            code: "ROW_CONFLICT",
+            ..
+        })
+    ));
+
+    let detail = registry
+        .call("unfour.api.get_request", json!({"requestId": id}))
+        .unwrap();
+    let request = &detail["structuredContent"]["request"];
+    assert_eq!(request["name"], "Catalog");
+    assert_eq!(request["url"], "https://example.test/items");
+}

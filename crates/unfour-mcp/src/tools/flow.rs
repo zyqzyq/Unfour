@@ -81,10 +81,9 @@ fn id(a: &Map<String, Value>, key: &str) -> Result<String, ToolCallError> {
 }
 fn workspace(a: &Map<String, Value>, p: &ToolPolicyEvaluation) -> Result<String, ToolCallError> {
     if a.contains_key("workspaceId") {
-        id(a, "workspaceId")
-    } else {
-        Ok(p.workspace.workspace_id.clone())
+        id(a, "workspaceId")?;
     }
+    Ok(p.workspace.workspace_id.clone())
 }
 fn list(
     b: &dyn CommandBusAdapter,

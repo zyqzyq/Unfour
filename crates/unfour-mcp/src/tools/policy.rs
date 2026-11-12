@@ -1,19 +1,14 @@
 use serde::Serialize;
 use serde_json::{Map, Value};
 use unfour_command_bus::{ReadCommand, ReadCommandResult};
+use unfour_core::models::ApiSavedRequest;
 
 use crate::command_bus_adapter::CommandBusAdapter;
 
 use super::ssh_risk::{build_ssh_exec_command, is_readonly_ssh_command};
 use super::ToolCallError;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct WorkspacePolicyContext {
-    pub workspace_id: String,
-    pub workspace_name: String,
-    pub environment_type: String,
-    pub mcp_policy: String,
-}
+pub(super) use unfour_command_bus::CurrentWorkspaceResult as WorkspacePolicyContext;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ResolvedMcpPolicy {
@@ -106,15 +101,24 @@ impl McpRisk {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ToolPolicyEvaluation {
     pub workspace: WorkspacePolicyContext,
     pub resolved_policy: ResolvedMcpPolicy,
-    pub capability: McpCapability,
     pub risk: McpRisk,
+    // Internal execution data can contain credentials. Keep it out of MCP results and logs.
+    pub(super) saved_request: Option<ApiSavedRequest>,
 }
 
 impl ToolPolicyEvaluation {
+    pub(super) fn saved_request(&self, id: &str) -> Result<&ApiSavedRequest, ToolCallError> {
+        self.saved_request
+            .as_ref()
+            .filter(|request| {
+                request.id == id && request.workspace_id == self.workspace.workspace_id
+            })
+            .ok_or_else(unexpected_result)
+    }
+
     /// Whether a risky / mutating action must be explicitly confirmed by the
     /// caller before execution under the active MCP policy.
     ///
@@ -372,15 +376,6 @@ pub(super) fn check_mcp_permission(
     }
 }
 
-#[allow(dead_code)]
-pub(super) fn check_tool_policy(
-    command_bus: &dyn CommandBusAdapter,
-    tool_name: &str,
-    arguments: &Value,
-) -> Result<(), ToolCallError> {
-    evaluate_tool_policy(command_bus, tool_name, arguments).map(|_| ())
-}
-
 pub(super) fn evaluate_tool_policy(
     command_bus: &dyn CommandBusAdapter,
     tool_name: &str,
@@ -395,8 +390,8 @@ pub(super) fn evaluate_tool_policy(
         return Ok(ToolPolicyEvaluation {
             workspace,
             resolved_policy,
-            capability,
             risk,
+            saved_request: None,
         });
     };
     // Creation is authorized only by the active workspace, never by a caller-
@@ -404,56 +399,54 @@ pub(super) fn evaluate_tool_policy(
     let mut workspace_id = if tool_name == "unfour.workspace.create" {
         None
     } else {
-        parse_optional_string(arguments, "workspaceId")
+        optional_id(arguments, "workspaceId")?
     };
-    let mut api_method = parse_optional_string(arguments, "method");
-    let mut saved_request_has_scripts = false;
-
-    if matches!(
+    let uses_saved_request = matches!(
         tool_name,
         "unfour.api.get_request" | "unfour.api.send_request" | "unfour.api.update_request"
-    ) {
-        if let Some(request_id) = parse_optional_string(arguments, "requestId") {
-            let result = command_bus
-                .execute_read(ReadCommand::ApiGetRequest { request_id })
-                .map_err(|error| ToolCallError::Execution {
-                    code: error.code,
-                    message: error.message,
-                })?;
-            let ReadCommandResult::ApiRequest(result) = result else {
-                return Err(unexpected_result());
-            };
-            saved_request_has_scripts = result
-                .request
-                .pre_request_script
-                .as_deref()
-                .is_some_and(|script| !script.trim().is_empty())
-                || result
-                    .request
-                    .post_response_script
-                    .as_deref()
-                    .is_some_and(|script| !script.trim().is_empty());
-            workspace_id = Some(result.request.workspace_id);
-            if api_method.is_none() {
-                api_method = Some(result.request.method);
-            }
+    ) || (tool_name == "unfour.api.delete_request"
+        && workspace_id.is_none());
+    let saved_request = if uses_saved_request {
+        optional_id(arguments, "requestId")?
+            .map(|id| read_saved_request(command_bus, id))
+            .transpose()?
+    } else {
+        None
+    };
+    if let Some(request) = &saved_request {
+        if workspace_id.is_some_and(|id| id != request.workspace_id) {
+            return Err(ToolCallError::Execution {
+                code: "NOT_FOUND",
+                message: "The requested API request was not found in this workspace.",
+            });
         }
+        workspace_id = Some(&request.workspace_id);
     }
 
     let workspace = match workspace_id {
-        Some(workspace_id) => workspace_context_by_id(command_bus, &workspace_id)?,
+        Some(workspace_id) => workspace_context_by_id(command_bus, workspace_id)?,
         None => active_workspace_context(command_bus)?,
     };
     let database_driver =
         database_driver_hint(command_bus, tool_name, arguments, &workspace.workspace_id);
-    let (capability, risk) = if tool_name == "unfour.api.send_request" && saved_request_has_scripts
-    {
+    let scripted_replay = tool_name == "unfour.api.send_request"
+        && saved_request.as_ref().is_some_and(|request| {
+            [&request.pre_request_script, &request.post_response_script]
+                .into_iter()
+                .flatten()
+                .any(|script| !script.trim().is_empty())
+        });
+    let (capability, risk) = if scripted_replay {
         (McpCapability::ApiMutate, McpRisk::Write)
     } else {
+        let api_method = saved_request
+            .as_ref()
+            .map(|request| request.method.as_str())
+            .or_else(|| arguments.get("method").and_then(Value::as_str));
         classify_mcp_action(
             tool_name,
             Some(arguments),
-            api_method.as_deref(),
+            api_method,
             database_driver.as_deref(),
         )
         .ok_or_else(unclassified_policy_error)?
@@ -463,9 +456,43 @@ pub(super) fn evaluate_tool_policy(
     Ok(ToolPolicyEvaluation {
         workspace,
         resolved_policy,
-        capability,
         risk,
+        saved_request,
     })
+}
+
+fn read_saved_request(
+    command_bus: &dyn CommandBusAdapter,
+    request_id: &str,
+) -> Result<ApiSavedRequest, ToolCallError> {
+    let result = command_bus
+        .execute_read(ReadCommand::ApiGetRequest {
+            request_id: request_id.to_owned(),
+        })
+        .map_err(|error| ToolCallError::Execution {
+            code: error.code,
+            message: error.message,
+        })?;
+    match result {
+        ReadCommandResult::ApiRequest(detail) if detail.request.id == request_id => {
+            Ok(detail.request)
+        }
+        _ => Err(unexpected_result()),
+    }
+}
+
+fn optional_id<'a>(
+    arguments: &'a Map<String, Value>,
+    key: &str,
+) -> Result<Option<&'a str>, ToolCallError> {
+    match arguments.get(key) {
+        None => Ok(None),
+        Some(Value::String(id)) if id.is_empty() => Ok(None),
+        Some(Value::String(id)) if !id.trim().is_empty() => Ok(Some(id.trim())),
+        Some(_) => Err(ToolCallError::InvalidArguments(format!(
+            "argument `{key}` must be a non-blank ID"
+        ))),
+    }
 }
 
 fn active_workspace_context(
@@ -481,12 +508,7 @@ fn active_workspace_context(
         return Err(unexpected_result());
     };
 
-    Ok(WorkspacePolicyContext {
-        workspace_id: workspace.workspace_id,
-        workspace_name: workspace.workspace_name,
-        environment_type: workspace.environment_type,
-        mcp_policy: workspace.mcp_policy,
-    })
+    Ok(workspace)
 }
 
 fn workspace_context_by_id(
@@ -516,6 +538,9 @@ fn workspace_context_by_id(
         workspace_name: workspace.name,
         environment_type: workspace.environment_type,
         mcp_policy: workspace.mcp_policy,
+        workspace_root: None,
+        mode: "local".into(),
+        source: result.source,
     })
 }
 
