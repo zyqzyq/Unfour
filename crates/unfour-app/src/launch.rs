@@ -103,9 +103,9 @@ pub fn validate_windows_launch() -> Result<(), &'static str> {
 pub(crate) fn deliver<S: AsRef<OsStr>>(
     args: &[S],
     bus: Option<&CommandBus>,
-) -> Result<(), &'static str> {
+) -> Result<bool, &'static str> {
     let Launch::Terminal(source) = parse(args)? else {
-        return Ok(());
+        return Ok(false);
     };
     if !cfg!(windows) {
         return Err(UNSUPPORTED);
@@ -123,7 +123,7 @@ pub(crate) fn deliver<S: AsRef<OsStr>>(
     let runtime = tauri::async_runtime::handle();
     let _entered = runtime.inner().enter();
     bus.receive_temporary_ssh(&LaunchReceipt::default(), request)
-        .map(|_| ())
+        .map(|_| true)
         .map_err(|_| "BASTION_LAUNCH_NOT_ACCEPTED")
 }
 

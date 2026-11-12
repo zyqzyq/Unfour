@@ -12,8 +12,8 @@ vi.mock("@unfour/command-client", () => ({
 }));
 vi.mock("./TerminalPane", () => ({ TerminalPane: ({ temporary }: { temporary: boolean }) => <div data-testid="temporary-pane">{String(temporary)}</div> }));
 const pending = { handle: "opaque-fixture", workspaceId: null, status: "pending", expiresInSeconds: 120, fingerprint: null, errorCode: null };
-function view(workspaceId = "workspace-a") {
-  return <I18nProvider initialLocale="en"><TemporaryTerminalWorkspace workspaceId={workspaceId}><div data-testid="saved">saved</div></TemporaryTerminalWorkspace></I18nProvider>;
+function view(workspaceId = "workspace-a", autoClaim = false, surfaceActive = true) {
+  return <I18nProvider initialLocale="en"><TemporaryTerminalWorkspace workspaceId={workspaceId} autoClaim={autoClaim} surfaceActive={surfaceActive}><div data-testid="saved">saved</div></TemporaryTerminalWorkspace></I18nProvider>;
 }
 describe("temporary terminal lifecycle", () => {
   afterEach(async () => { cleanup(); await new Promise((resolve) => setTimeout(resolve, 5)); });
@@ -30,6 +30,17 @@ describe("temporary terminal lifecycle", () => {
     fireEvent.click(screen.getByText("Connect in this workspace"));
     await waitFor(() => expect(api.start).toHaveBeenCalledWith("workspace-a", "opaque-fixture"));
     expect(api.claim).toHaveBeenCalledWith("workspace-a", "opaque-fixture");
+  });
+  it("claims a single-workspace launch once when SSH becomes visible", async () => {
+    const mounted = render(view("workspace-a", true, false));
+    await waitFor(() => expect(api.list).toHaveBeenCalled());
+    expect(api.claim).not.toHaveBeenCalled();
+    mounted.rerender(view("workspace-a", true));
+    await waitFor(() => expect(api.start).toHaveBeenCalledWith("workspace-a", pending.handle));
+    await waitFor(() => expect(api.list.mock.calls.length).toBeGreaterThan(1));
+    expect(api.claim).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Connect in this workspace")).toBeNull();
+    expect(api.trust).not.toHaveBeenCalled();
   });
   it("cancels a late claim after workspace unmount without connecting", async () => {
     let resolve!: (value: unknown) => void;

@@ -64,6 +64,7 @@ export function DesktopWorkspaceContent({
     {activeWorkspace && mounts.shouldMountSsh && <div className={activeTab.kind === "ssh" && !variableManagerOpen ? "h-full" : "hidden"}>
       <SshTerminalModule
         active={activeTab.kind === "ssh" && !variableManagerOpen}
+        singleWorkspace={workspaceQuery.data?.workspaces.length === 1}
         onShellSidebarChange={onSshSidebarChange}
         workspaceId={activeWorkspace.id}
       />

@@ -15,6 +15,7 @@ import { ModuleActivityBar } from "./components/ModuleActivityBar";
 import { ModuleSidebar } from "./components/ModuleSidebar";
 import { useDesktopNavigation } from "./components/useDesktopNavigation";
 import { useDesktopWorkspace } from "./components/useDesktopWorkspace";
+import { useExternalSshNavigation } from "./components/useExternalSshNavigation";
 import { useFeatureModulePreload } from "./components/useFeatureModulePreload";
 import { usePersistentFeatureMounts } from "./components/usePersistentFeatureMounts";
 import { WorkspaceLeaveContext } from "./components/workspace-leave-context";
@@ -42,7 +43,7 @@ function DesktopWorkbench({ extensions }: DesktopAppProps) {
   const [databaseSidebarContent, setDatabaseSidebarContent] = useState<ReactNode>(null);
   const [databaseStatusBarContent, setDatabaseStatusBarContent] = useState<ReactNode>(null);
   const {
-    activeTabId, bottomPanelHeight, setActiveTab: setActiveTabInStore,
+    activeTabId, layoutWorkspaceId, bottomPanelHeight, setActiveTab: setActiveTabInStore,
     setBottomPanelHeight, setSelectedApiRequest, setModuleSidebarWidth,
     sidebarCollapsed, sidebarWidths, toggleSidebar, tabs,
   } = useWorkspaceStore();
@@ -56,6 +57,7 @@ function DesktopWorkbench({ extensions }: DesktopAppProps) {
     tabs, setActiveTab: mounts.setActiveTab, preloadFeature: handlePreloadFeature,
   });
   const { variableManagerOpen, handleActivateWorkspace, handleManageVariables, handleSelectModule } = navigation;
+  useExternalSshNavigation(layoutWorkspaceId === activeWorkspace?.id ? activeWorkspace?.id : undefined, handleSelectModule);
   const extensionContext: DesktopAppExtensionContext = useMemo(
     () => ({ activeTab, activeWorkspace, activateWorkspace: handleActivateWorkspace, refreshWorkspaces }),
     [activeTab, activeWorkspace, handleActivateWorkspace, refreshWorkspaces],

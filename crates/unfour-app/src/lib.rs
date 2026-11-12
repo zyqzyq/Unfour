@@ -172,8 +172,13 @@ where
                 let bus = forwarded_bus
                     .as_ref()
                     .or_else(|| state.as_ref().map(|s| &s.command_bus));
-                if let Err(code) = launch::deliver(argv.get(1..).unwrap_or_default(), bus) {
-                    eprintln!("{code}");
+                match launch::deliver(argv.get(1..).unwrap_or_default(), bus) {
+                    Ok(true) => {
+                        use tauri::Emitter;
+                        let _ = app.emit_to("main", "ssh://launch-pending", ());
+                    }
+                    Ok(false) => {}
+                    Err(code) => eprintln!("{code}"),
                 }
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.show();

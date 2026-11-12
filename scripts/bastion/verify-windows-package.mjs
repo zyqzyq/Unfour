@@ -75,18 +75,18 @@ try {
   browser = await chromium.connectOverCDP("http://127.0.0.1:" + debugPort);
   const page = await waitFor(() => browser.contexts().flatMap((c) => c.pages()).find((p) => /^https?:\/\/tauri\.localhost\//.test(p.url())), "packaged application page did not load");
   page.setDefaultTimeout(12000);
-  const warm = launch("unfour.exe", argv);
-  await waitFor(() => warm.exitCode !== null, "secondary process did not forward and exit");
-  assert.equal(warm.exitCode, 0);
-  assert.equal(primary.exitCode, null);
-  assert.equal(received.filter((x) => x === "FIXTURE_AUTH_OK").length, 0);
-  console.log("Cold primary retained, warm process exited, zero logins before claim");
-  await page.getByRole("button", { name: /^(SSH|SSH Terminal|SSH 终端)$/i }).first().click();
-  const claim = page.getByRole("button", { name: /Connect in this workspace|在当前工作区连接/ });
-  await expect(claim).toHaveCount(2);
   for (let i = 0; i < 2; i++) {
-    await claim.first().click();
+    if (i === 1) {
+      await page.getByRole("button", { name: /^(API Client|API 客户端|API)$/i }).first().click();
+      const warm = launch("unfour.exe", argv);
+      await waitFor(() => warm.exitCode !== null, "secondary process did not forward and exit");
+      assert.equal(warm.exitCode, 0);
+      assert.equal(primary.exitCode, null);
+    }
     await expect(page.getByText(fingerprint, { exact: true })).toBeVisible();
+    const sidebarSearch = page.getByLabel(/Search SSH connections|搜索 SSH 连接/);
+    await expect(sidebarSearch).toBeVisible();
+    assert.equal(received.filter((x) => x === "FIXTURE_AUTH_OK").length, i);
     await page.getByRole("button", { name: /Trust this fingerprint once|仅本次信任此指纹/ }).click();
     const rows = page.locator(".xterm-rows:visible").last();
     await expect(rows).toContainText("A2 fixture ready", { timeout: 12000 });
@@ -98,7 +98,7 @@ try {
     const text = await page.locator("body").innerText();
     for (const secret of ["fixture-user", "fixture-grant", label, url]) assert.ok(!text.includes(secret));
     await page.getByRole("button", { name: /Close \/ cancel|关闭／取消/ }).last().click();
-    await expect(claim).toHaveCount(1 - i);
+    await expect(sidebarSearch).toBeVisible();
     console.log("Temporary terminal " + (i + 1) + " confirmed fingerprint, rendered SSH reply and closed");
   }
   for (const marker of ["FIXTURE_AUTH_OK", "FIXTURE_PTY_OK", "FIXTURE_ROUNDTRIP_OK"]) {

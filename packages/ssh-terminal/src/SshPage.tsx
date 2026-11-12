@@ -7,10 +7,12 @@ import { TemporaryTerminalWorkspace } from "./components/TemporaryTerminalWorksp
 
 export function TerminalPage({
   active = true,
+  singleWorkspace = false,
   onShellSidebarChange,
   workspaceId,
 }: {
   active?: boolean;
+  singleWorkspace?: boolean;
   onShellSidebarChange?: (sidebar: ReactNode | null) => void;
   workspaceId: string;
 }) {
@@ -21,8 +23,8 @@ export function TerminalPage({
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col bg-[var(--u-color-surface)]">
-      <TemporaryTerminalWorkspace key={workspaceId} workspaceId={workspaceId}>
-      {(temporaryActive) => <>
+      <TemporaryTerminalWorkspace key={workspaceId} workspaceId={workspaceId} autoClaim={singleWorkspace} surfaceActive={active} onSelectTemporary={openConnections}>
+      {(temporaryActive, showSaved) => <>
       <div
         className={
           activeMode === "connections"
@@ -32,6 +34,8 @@ export function TerminalPage({
       >
         <SshConnectionsPage
           active={active && activeMode === "connections" && !temporaryActive}
+          sidebarActive={active && activeMode === "connections"}
+          onShowSaved={showSaved}
           onOpenTasks={openTasks}
           onShellSidebarChange={onShellSidebarChange}
           workspaceId={workspaceId}

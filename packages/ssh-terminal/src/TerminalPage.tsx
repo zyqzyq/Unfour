@@ -42,11 +42,15 @@ import { formatTerminalError } from "./model/errors";
 
 export function SshConnectionsPage({
   active = true,
+  sidebarActive = active,
+  onShowSaved,
   onOpenTasks,
   onShellSidebarChange,
   workspaceId,
 }: {
   active?: boolean;
+  sidebarActive?: boolean;
+  onShowSaved?: () => void;
   onOpenTasks?: () => void;
   onShellSidebarChange?: (sidebar: ReactNode | null) => void;
   workspaceId: string;
@@ -436,16 +440,25 @@ export function SshConnectionsPage({
     editConnectionRef.current = editConnection;
   });
   const handleEditConnection = useCallback((connection: SshConnection) => {
+    onShowSaved?.();
     editConnectionRef.current(connection);
-  }, []);
+  }, [onShowSaved]);
   const newConnectionRef = useRef(newConnection);
   useEffect(() => {
     newConnectionRef.current = newConnection;
   });
   const handleNewConnection = useCallback(() => {
+    onShowSaved?.();
     newConnectionRef.current();
-  }, []);
-  const openTerminalTab = useCallback(() => setActiveTab("ssh-main"), [setActiveTab]);
+  }, [onShowSaved]);
+  const openTerminalTab = useCallback(() => {
+    onShowSaved?.();
+    setActiveTab("ssh-main");
+  }, [onShowSaved, setActiveTab]);
+  const openTasks = useCallback(() => {
+    onShowSaved?.();
+    onOpenTasks?.();
+  }, [onShowSaved, onOpenTasks]);
 
   const shellSidebar = useMemo(
     () => (
@@ -454,21 +467,21 @@ export function SshConnectionsPage({
         collapsed={false}
         onEditConnection={handleEditConnection}
         onNewConnection={handleNewConnection}
-        onOpenTasks={onOpenTasks}
+        onOpenTasks={onOpenTasks ? openTasks : undefined}
         onOpenTerminal={openTerminalTab}
         workspaceId={workspaceId}
       />
     ),
-    [handleEditConnection, handleNewConnection, onOpenTasks, openTerminalTab, workspaceId],
+    [handleEditConnection, handleNewConnection, onOpenTasks, openTasks, openTerminalTab, workspaceId],
   );
 
   useEffect(() => {
-    if (!active || !onShellSidebarChange) {
+    if (!sidebarActive || !onShellSidebarChange) {
       return;
     }
     onShellSidebarChange(shellSidebar);
     return () => onShellSidebarChange(null);
-  }, [active, onShellSidebarChange, shellSidebar]);
+  }, [sidebarActive, onShellSidebarChange, shellSidebar]);
 
   function submitConnection(event: FormEvent) {
     event.preventDefault();

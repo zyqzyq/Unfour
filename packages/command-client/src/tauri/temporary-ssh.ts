@@ -1,4 +1,5 @@
 import { call, isTauriRuntime } from "./invoke";
+import { listen } from "@tauri-apps/api/event";
 import type { SshSessionEvent, SshSessionInput, SshResizeInput } from "../types";
 
 export interface TemporarySshSummary {
@@ -12,6 +13,8 @@ export interface TemporarySshSummary {
 // Browser previews have no injection mechanism or fake credential parser.
 export const listTemporarySsh = (workspaceId: string) => isTauriRuntime()
   ? call<TemporarySshSummary[]>("ssh_temporary_list", { workspaceId }) : Promise.resolve([]);
+export const onTemporarySshLaunch = (notify: () => void) =>
+  isTauriRuntime() ? listen("ssh://launch-pending", notify) : Promise.resolve(null);
 export const claimTemporarySsh = (workspaceId: string, handle: string) => call<TemporarySshSummary>("ssh_temporary_claim", { workspaceId, handle });
 export const startTemporarySsh = (workspaceId: string, handle: string) => call<void>("ssh_temporary_start", { workspaceId, handle });
 export const trustTemporarySsh = (workspaceId: string, handle: string, fingerprint: string) => call<void>("ssh_temporary_trust", { workspaceId, handle, fingerprint });

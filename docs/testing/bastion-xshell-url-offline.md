@@ -14,7 +14,7 @@
    & .\unfour.exe @argsA2
    ```
 
-3. 等第一个窗口出现，再执行一次 `& .\unfour.exe @argsA2`。进入 **SSH**，应能看到两个待认领请求。每次选择“在当前工作区连接”，将界面指纹与第一个窗口的指纹逐字核对，再选择“仅本次信任此指纹”。
+3. 只有一个工作区时应自动进入 **SSH** 并显示主机指纹。将其与回显服务窗口的指纹核对后选择“仅本次信任此指纹”。在终端完成下述回显检查后，切到 API，重新执行一次 `& .\unfour.exe @argsA2`。应回到 SSH 并能再次核对指纹，两次均应保留左侧 SSH 连接列表。多个工作区时，在目标工作区手动认领请求。
 4. 在每个临时终端分别输入 `check` 并回车，确认终端显示 `A2_ECHO_OK`。关闭该标签，再验证另一个请求。两个请求完成后，本机服务应各打印两次 `FIXTURE_AUTH_OK`、`FIXTURE_PTY_OK` 和 `FIXTURE_ROUNDTRIP_OK`。关闭 Unfour，用 Ctrl+C 停止本次服务。
 
 测试包附带应用、MCP sidecar 和独立的合成 SSH 服务。手工复现使用 Windows x64、Microsoft WebView2 Runtime 和 Visual C++ x64 运行库。PE 依赖表显示 sidecar 与合成服务需要 `VCRUNTIME140.dll`。缺少运行库时，由现场按软件安装流程使用 `prerequisites` 目录中的微软签名离线安装程序。校验文件见 `SHA256SUMS.txt`。[WebView2 离线部署说明](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution#offline-deployment) · [Microsoft Visual C++ 运行库](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)
