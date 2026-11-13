@@ -56,6 +56,14 @@ impl russh::server::Handler for Server {
             .unwrap()
             .push(String::from_utf8_lossy(data).into_owned());
         session.channel_success(channel)?;
+        if data == b"disconnect-before-exit-status" {
+            // The execution was recorded above; end the transport without reporting its result.
+            return session.disconnect(
+                russh::Disconnect::ByApplication,
+                "fixture disconnect",
+                "en",
+            );
+        }
         if data == b"hold" {
             // A deterministic running channel for cancellation regression tests.
             return Ok(());
@@ -205,17 +213,15 @@ fn sftp_name(id: u32, path: &str) -> Vec<u8> {
     payload
 }
 
-#[tokio::test]
-async fn flow_real_api_condition_native_ssh_database() {
-    let mut bus = test_bus().await;
-    let logs = std::env::temp_dir().join(format!("unfour-flow-{}", unfour_core::id::new_id()));
-    bus.ssh = bus.ssh.with_task_log_dir(logs);
-    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+async fn start_ssh_fixture(
+    bus: &CommandBus,
+    workspace: &str,
+    commands: Arc<Mutex<Vec<String>>>,
+) -> (SshConnection, tokio::task::JoinHandle<()>) {
     // All endpoints and data are disposable; no user SSH server is contacted.
     let socket = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = socket.local_addr().unwrap().port();
-    let commands = Arc::new(Mutex::new(vec![]));
-    let mut server = Server::new(commands.clone());
+    let mut server = Server::new(commands);
     let config = Arc::new(russh::server::Config {
         keys: vec![russh::keys::PrivateKey::random(
             &mut rand::rng(),
@@ -230,7 +236,7 @@ async fn flow_real_api_condition_native_ssh_database() {
     let connection = bus
         .save_ssh_connection(SshConnectionInput {
             id: None,
-            workspace_id: workspace.clone(),
+            workspace_id: workspace.to_owned(),
             name: "flow fixture".into(),
             host: "127.0.0.1".into(),
             port: Some(port),
@@ -242,6 +248,17 @@ async fn flow_real_api_condition_native_ssh_database() {
         })
         .await
         .unwrap();
+    (connection, task)
+}
+
+#[tokio::test]
+async fn flow_real_api_condition_native_ssh_database() {
+    let mut bus = test_bus().await;
+    let logs = std::env::temp_dir().join(format!("unfour-flow-{}", unfour_core::id::new_id()));
+    bus.ssh = bus.ssh.with_task_log_dir(logs);
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let commands = Arc::new(Mutex::new(vec![]));
+    let (connection, task) = start_ssh_fixture(&bus, &workspace, commands.clone()).await;
     let ssh = bus
         .save_ssh_task(SshTaskSaveInput {
             id: None,
@@ -303,42 +320,87 @@ async fn flow_real_api_condition_native_ssh_database() {
 }
 
 #[tokio::test]
+async fn flow_ssh_disconnect_after_exec_stops_task_and_flow() {
+    let mut bus = test_bus().await;
+    let logs = std::env::temp_dir().join(format!("unfour-flow-{}", unfour_core::id::new_id()));
+    bus.ssh = bus.ssh.with_task_log_dir(logs.clone());
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let commands = Arc::new(Mutex::new(vec![]));
+    let (connection, server) = start_ssh_fixture(&bus, &workspace, commands.clone()).await;
+    let task = bus
+        .save_ssh_task(SshTaskSaveInput {
+            id: None,
+            workspace_id: workspace.clone(),
+            name: "disconnect regression".into(),
+            description: String::new(),
+            default_connection_id: None,
+            steps: ["disconnect-before-exit-status", "after-disconnect"]
+                .into_iter()
+                .enumerate()
+                .map(|(position, command)| SshTaskStepInput {
+                    id: None,
+                    name: command.to_owned(),
+                    step_type: "command".into(),
+                    position: position as i64,
+                    enabled: true,
+                    config_version: Some(1),
+                    config_json: json!({"command":command,"timeoutSeconds":5,"continueOnError":true}),
+                })
+                .collect(),
+        })
+        .await
+        .unwrap();
+    let flow = bus.save_flow(definition(&workspace, json!([
+        {"id":"ssh","name":"SSH","kind":"action","timeoutMs":10000,"action":{
+            "capability":"ssh","resourceId":task.task.id,"connectionId":connection.id,"arguments":{}}},
+        {"id":"later","name":"later","kind":"wait","timeoutMs":1000,"durationMs":1}
+    ]))).await.unwrap();
+
+    let run = bus.run_flow(request(&workspace, &flow.id)).await.unwrap();
+    let result = finished(&bus, &run).await;
+    assert_eq!(
+        commands.lock().unwrap().as_slice(),
+        ["disconnect-before-exit-status"]
+    );
+    assert_eq!(result.status, FlowRunStatus::Failed);
+    assert_eq!(result.error.as_deref(), Some("FLOW_OUTCOME_UNCERTAIN"));
+    assert_eq!(result.steps[0].error, result.error);
+    assert_eq!(result.steps[1].status, FlowStepRunStatus::Skipped);
+    assert!(result.steps[1].attempts.is_empty());
+    let history = bus
+        .list_flow_runs(workspace.clone(), flow.id)
+        .await
+        .unwrap();
+    assert!(history[0].outcome_uncertain);
+
+    let runs = bus
+        .list_ssh_task_runs(workspace.clone(), task.task.id)
+        .await
+        .unwrap();
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].status, "failed");
+    assert_eq!(
+        runs[0].error_message.as_deref(),
+        Some(SSH_TASK_OUTCOME_UNCERTAIN)
+    );
+    let log = bus
+        .read_ssh_task_run_log(workspace, runs[0].id.clone())
+        .await
+        .unwrap();
+    assert!(log.contains(SSH_TASK_OUTCOME_UNCERTAIN), "{log}");
+    assert!(!log.contains("after-disconnect"), "{log}");
+    server.abort();
+    std::fs::remove_dir_all(logs).unwrap();
+}
+
+#[tokio::test]
 async fn flow_native_ssh_secret_inputs_and_failed_history() {
     let mut bus = test_bus().await;
     let logs = std::env::temp_dir().join(format!("unfour-flow-{}", unfour_core::id::new_id()));
     bus.ssh = bus.ssh.with_task_log_dir(logs);
     let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
-    // All endpoints and data are disposable; no user SSH server is contacted.
-    let socket = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let port = socket.local_addr().unwrap().port();
     let commands = Arc::new(Mutex::new(vec![]));
-    let mut server = Server::new(commands.clone());
-    let config = Arc::new(russh::server::Config {
-        keys: vec![russh::keys::PrivateKey::random(
-            &mut rand::rng(),
-            russh::keys::Algorithm::Ed25519,
-        )
-        .unwrap()],
-        ..Default::default()
-    });
-    let task = tokio::spawn(async move {
-        server.run_on_socket(config, &socket).await.unwrap();
-    });
-    let connection = bus
-        .save_ssh_connection(SshConnectionInput {
-            id: None,
-            workspace_id: workspace.clone(),
-            name: "flow fixture".into(),
-            host: "127.0.0.1".into(),
-            port: Some(port),
-            username: "fixture".into(),
-            auth_kind: "password".into(),
-            key_path: None,
-            credential_ref: None,
-            secret: Some("disposable-fixture-password".into()),
-        })
-        .await
-        .unwrap();
+    let (connection, task) = start_ssh_fixture(&bus, &workspace, commands.clone()).await;
     let ssh = bus
         .save_ssh_task(SshTaskSaveInput {
             id: None,

@@ -56,6 +56,9 @@ pub(super) enum TaskStepError {
         message: String,
         exit_code: Option<i32>,
     },
+    OutcomeUncertain {
+        cancelled: bool,
+    },
     Cancelled,
 }
 
@@ -133,6 +136,20 @@ where
                 return TaskRunOutcome {
                     status: "cancelled".to_string(),
                     error: None,
+                };
+            }
+            Err(TaskStepError::OutcomeUncertain { cancelled }) => {
+                let status = if cancelled { "cancelled" } else { "failed" };
+                emit(RunnerEvent::StepFinished {
+                    step,
+                    status: status.to_string(),
+                    duration_ms,
+                    exit_code: None,
+                    error: Some(SSH_TASK_OUTCOME_UNCERTAIN.to_string()),
+                });
+                return TaskRunOutcome {
+                    status: status.to_string(),
+                    error: Some(SSH_TASK_OUTCOME_UNCERTAIN.to_string()),
                 };
             }
             Err(TaskStepError::Failed { message, exit_code }) => {
@@ -357,6 +374,7 @@ mod tests {
         )
         .await;
         assert_eq!(outcome.status, "cancelled");
+        assert!(outcome.error.is_none());
         assert!(driver.calls.lock().unwrap().is_empty());
         assert!(events.is_empty());
     }

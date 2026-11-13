@@ -608,8 +608,9 @@ local write; delete is destructive; cancel_run is execution;
 list/get/list_runs/get_run are local reads.
 A supplied confirmation cannot override a policy denial.
 
-Each history page uses at most 100 lightweight summaries with exactly id, flowId,
-status, startedAt and finishedAt, without reading run_json. Results are ordered
+Each history page uses at most 100 lightweight summaries with id, flowId,
+status, startedAt and finishedAt. Failed runs with error `FLOW_OUTCOME_UNCERTAIN`
+also include `outcomeUncertain: true`. The query reads summary columns. Results are ordered
 by startedAt descending, then id descending. Pass `nextCursor` as the next
 request's `cursor` until it is null; cursors are run IDs scoped to the selected
 workspace and Flow. Newer runs inserted between page requests do not shift

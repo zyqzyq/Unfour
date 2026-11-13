@@ -13,6 +13,7 @@ enum Mode {
     /// Return only after the runner has cancelled the step token.
     SuccessAfterSignal,
     FailureAfterSignal,
+    UnknownWithDiagnostics,
     CleanStop,
     Hang,
 }
@@ -45,6 +46,10 @@ impl FlowExecutor for Scripted {
                 let _ = started.send(());
             }
             match self.mode {
+                Mode::UnknownWithDiagnostics => Err(AppError::FlowActionFailed {
+                    source: Box::new(invalid("FLOW_OUTCOME_UNCERTAIN")),
+                    details: json!({"log": "x".repeat(32 * 1024)}),
+                }),
                 Mode::Hang => std::future::pending().await,
                 Mode::CleanStop => {
                     cancel.cancelled().await;
@@ -142,6 +147,44 @@ async fn run_scripted(mode: Mode, timeout_ms: u64, cancel: bool) -> (CommandBus,
     let result = finished(&bus, &run).await;
     assert_history_matches(&bus, &result).await;
     (bus, result)
+}
+
+#[tokio::test]
+async fn flow_preserves_uncertain_outcome_when_ssh_diagnostics_exceed_history_limit() {
+    let bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let service = FlowService::new(bus.db.clone());
+    let mut step = effect(20_000);
+    step["action"]["capability"] = json!("ssh");
+    // Expand a valid invocation input sixteen times in the recorded attempt.
+    let bindings = (0..16)
+        .map(|i| (format!("arg{i}"), json!({"$ref":"/inputs/value"})))
+        .collect::<serde_json::Map<_, _>>();
+    step["action"]["arguments"] = json!({"inputs": bindings});
+    let flow = service
+        .save(definition(&workspace, json!([step, later_wait()])))
+        .await
+        .unwrap();
+    for (input_size, fits_without_log) in [(255 * 1024, true), (256 * 1024 - 16, false)] {
+        let mut input = request(&workspace, &flow.id);
+        input.inputs = json!({"value": "v".repeat(input_size)});
+        let executor = Arc::new(Scripted {
+            started: Mutex::new(None),
+            mode: Mode::UnknownWithDiagnostics,
+        });
+        let started = service.run(input, executor).await.unwrap();
+        let run = finished(&bus, &started).await;
+
+        assert_eq!(run.error.as_deref(), Some("FLOW_OUTCOME_UNCERTAIN"));
+        let attempt = &run.steps[0].attempts[0];
+        assert_eq!(attempt.error, run.error);
+        assert_eq!(attempt.input.is_object(), fits_without_log);
+        assert!(attempt.output.is_none());
+        assert!(run.steps[0].output.is_none());
+        assert_eq!(run.steps[1].status, FlowStepRunStatus::Skipped);
+        assert!(serde_json::to_vec(&run.steps).unwrap().len() <= 4 * 1024 * 1024);
+        assert!(service.list_runs(&workspace, &flow.id).await.unwrap()[0].outcome_uncertain);
+    }
 }
 
 #[tokio::test]

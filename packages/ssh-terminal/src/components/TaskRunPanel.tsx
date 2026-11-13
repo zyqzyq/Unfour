@@ -8,6 +8,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Button, StatusBadge, useI18n } from "@unfour/ui";
 import { CircleStop, FolderOpen, X } from "lucide-react";
+import { formatTaskRunError, taskDisplayStatus } from "../model/errors";
 import { buildTaskRunTranscript } from "../model/task-run-transcript";
 
 const HEIGHT_KEY = "unfour.ssh.task-run-panel-height";
@@ -78,7 +79,8 @@ export function TaskRunPanel({
   const finalRunEvent = [...events]
     .reverse()
     .find((event) => event.kind === "run" && event.status !== "running");
-  const status = finalRunEvent?.status ?? run.status;
+  const error = finalRunEvent?.error ?? run.errorMessage;
+  const status = taskDisplayStatus(finalRunEvent?.status ?? run.status, error);
   const running = status === "running";
   const stepEvents = new Map<string, SshTaskRunEvent>();
   const transfers = new Map<string, SshTaskRunEvent>();
@@ -94,6 +96,7 @@ export function TaskRunPanel({
     () =>
       buildTaskRunTranscript(events, {
         stepHeader: (position, name) => t("ssh.tasks.run.stepHeader", { position, name }),
+        stepError: (error) => formatTaskRunError(error, t),
         stepDone: (stepStatus, detail) =>
           detail
             ? t("ssh.tasks.run.stepDoneWithDetail", {
@@ -194,7 +197,7 @@ export function TaskRunPanel({
             .map((step) => {
               const event = stepEvents.get(step.id);
               const transfer = transfers.get(step.id);
-              const stepStatus = event?.status ?? "pending";
+              const stepStatus = taskDisplayStatus(event?.status ?? "pending", event?.error);
               const progress = transfer?.totalBytes
                 ? Math.min(
                     100,
@@ -235,7 +238,7 @@ export function TaskRunPanel({
                   )}
                   {event?.error && (
                     <p className="ml-7 mt-1 select-text text-[10px] text-[var(--u-color-danger)]">
-                      {event.error}
+                      {formatTaskRunError(event.error, t)}
                     </p>
                   )}
                 </li>
@@ -281,8 +284,8 @@ export function TaskRunPanel({
             t("ssh.tasks.run.loadingLog")
           ) : showHistoryLog ? (
             historyLog
-          ) : run.errorMessage ? (
-            <span className="text-[var(--u-color-danger)]">{run.errorMessage === "SSH_TASK_RUN_INTERRUPTED" ? t("ssh.tasks.run.interrupted") : run.errorMessage}</span>
+          ) : error ? (
+            <span className="text-[var(--u-color-danger)]">{formatTaskRunError(error, t)}</span>
           ) : running || stepEvents.size > 0 ? (
             t("ssh.tasks.run.waitingForOutput")
           ) : (
@@ -307,6 +310,7 @@ function clampHeight(value: number) {
 function statusTone(status: string): "neutral" | "success" | "warning" | "danger" {
   if (status === "success") return "success";
   if (status === "failed") return "danger";
+  if (status === "outcomeUncertain") return "warning";
   if (status === "cancelled") return "warning";
   if (status === "running") return "warning";
   return "neutral";

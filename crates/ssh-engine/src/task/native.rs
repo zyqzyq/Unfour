@@ -11,30 +11,22 @@ impl NativeTaskDriver {
     pub(super) async fn connect(
         service: &SshService,
         connection: &SshConnection,
-    ) -> Result<Self, TaskStepError> {
+    ) -> Result<Self, String> {
         use crate::ssh::native_transport::NativeConnectError;
 
         let mut handle = service
             .dial_native_connection(connection)
             .await
-            .map_err(|error| TaskStepError::Failed {
-                message: match error {
-                    NativeConnectError::Failed(message) => {
-                        format!("SSH connection failed: {message}")
-                    }
-                    NativeConnectError::TimedOut => {
-                        "SSH connection timed out after 15 seconds".to_string()
-                    }
-                },
-                exit_code: None,
+            .map_err(|error| match error {
+                NativeConnectError::Failed(message) => format!("SSH connection failed: {message}"),
+                NativeConnectError::TimedOut => {
+                    "SSH connection timed out after 15 seconds".to_string()
+                }
             })?;
         service
             .authenticate_native(&mut handle, connection, None)
             .await
-            .map_err(|error| TaskStepError::Failed {
-                message: error.to_string(),
-                exit_code: None,
-            })?;
+            .map_err(|error| error.to_string())?;
         Ok(Self { handle, sftp: None })
     }
 

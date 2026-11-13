@@ -1,4 +1,5 @@
 import type { SshTaskRunEvent } from "@unfour/command-client";
+import { taskDisplayStatus } from "./errors";
 import { formatFileSize } from "./sftp-format";
 
 export type TaskRunTranscriptLine = {
@@ -11,6 +12,7 @@ export type TaskRunTranscriptLine = {
 type TranscriptLabels = {
   stepHeader: (position: number, name: string) => string;
   stepDone: (status: string, detail: string) => string;
+  stepError: (error: string) => string;
   transfer: (direction: string, transferred: string, total: string, speed: string) => string;
 };
 
@@ -84,10 +86,10 @@ function appendStep(
   state.lines.push({
     key: `done-${event.stepId}-${index}`,
     kind: "meta",
-    text: labels.stepDone(event.status, stepDetails(event)),
+    text: labels.stepDone(taskDisplayStatus(event.status, event.error), stepDetails(event)),
   });
   if (event.error) {
-    state.lines.push({ key: `error-${event.stepId}-${index}`, kind: "error", text: event.error });
+    state.lines.push({ key: `error-${event.stepId}-${index}`, kind: "error", text: labels.stepError(event.error) });
   }
 }
 

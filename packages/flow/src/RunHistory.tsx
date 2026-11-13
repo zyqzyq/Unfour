@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { FlowRunSummary } from "@unfour/command-client";
 import { Button, Popover, PopoverContent, PopoverTrigger, useI18n } from "@unfour/ui";
 import { History } from "lucide-react";
+import { flowDisplayStatus } from "./runStatus";
 
 export function RunHistory({ runs, loading, failed, disabled, selected, onSelect, onOpenChange, onRetry }: {
   runs: FlowRunSummary[]; loading: boolean; failed: boolean; disabled: boolean;
@@ -20,7 +21,7 @@ export function RunHistory({ runs, loading, failed, disabled, selected, onSelect
       {[...runs].sort((a, b) => b.startedAt.localeCompare(a.startedAt)).map((run) => {
         const duration = run.finishedAt ? Date.parse(run.finishedAt) - Date.parse(run.startedAt) : null;
         return <Button key={run.id} variant="ghost" aria-pressed={selected === run.id} className="mt-1 h-auto w-full justify-start border border-[var(--u-color-border)] py-3 text-left aria-pressed:border-[var(--u-color-primary)] aria-pressed:bg-[var(--u-color-primary-soft)]" onClick={() => { onSelect(run.id); setOpen(false); onOpenChange(false); }}>
-          <span className="grid gap-1"><span>{t(`flow.status.${run.status}`)} · <time dateTime={run.startedAt}>{run.startedAt}</time></span>
+          <span className="grid gap-1"><span>{t(`flow.status.${flowDisplayStatus(run)}`)} · <time dateTime={run.startedAt}>{run.startedAt}</time></span>
           {duration !== null && Number.isFinite(duration) && duration >= 0 && <span className="text-xs text-[var(--u-color-text-muted)]">{t("flow.elapsed")}: {duration} ms</span>}</span>
         </Button>;
       })}

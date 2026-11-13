@@ -273,6 +273,10 @@ that would be safe to retry. Run status values are unchanged. Remote effects
 may already have occurred and are never described as rolled back. There is no
 automatic retry.
 
+If an uncertain SSH result would exceed the history limit, the runner keeps
+the error code and drops that attempt's diagnostics. It also omits the resolved
+arguments if they still exceed the limit. The remaining steps stay skipped.
+
 Running nodes heartbeat every 100 ms. Reads mark a run with a heartbeat older
 than 30 seconds as `interrupted`; unfinished steps become interrupted/skipped.
 There is no automatic replay after process loss, avoiding duplicate effects.
@@ -381,8 +385,9 @@ Keep the MCP connection alive while a run is active.
 
 The UI polls the selected active Run and, while History is open, summaries
 containing running Runs. `flow_runs_list` / `listFlowRuns` return at most 100
-`FlowRunSummary` records (id, flowId, status, startedAt, finishedAt), read from
-independent columns without loading or decoding `run_json`. History loads on
+`FlowRunSummary` records (id, flowId, status, startedAt, finishedAt), with
+`outcomeUncertain: true` when a failed run has error `FLOW_OUTCOME_UNCERTAIN`.
+History reads these fields from independent columns without decoding `run_json`. It loads on
 open; selecting an entry loads its full snapshot with `getFlowRun`. Completion
 invalidates History for its next open or active refresh. The summary migration
 adds `finished_at`, backfilled once from snapshots; writes and stale-run recovery

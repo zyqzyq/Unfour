@@ -70,7 +70,7 @@ impl FlowService {
                 .ok_or_else(|| AppError::NotFound("flow run cursor".into()))?),
             None => None,
         };
-        let rows = sqlx::query("SELECT id, flow_id, status, started_at, finished_at FROM flow_runs WHERE workspace_id = ? AND flow_id = ? AND (? IS NULL OR started_at < ? OR (started_at = ? AND id < ?)) ORDER BY started_at DESC, id DESC LIMIT ?")
+        let rows = sqlx::query("SELECT id, flow_id, status, outcome_uncertain, started_at, finished_at FROM flow_runs WHERE workspace_id = ? AND flow_id = ? AND (? IS NULL OR started_at < ? OR (started_at = ? AND id < ?)) ORDER BY started_at DESC, id DESC LIMIT ?")
             .bind(workspace).bind(flow)
             .bind(cursor_start.as_deref()).bind(cursor_start.as_deref())
             .bind(cursor_start.as_deref()).bind(cursor)
@@ -83,6 +83,7 @@ impl FlowService {
                     id: row.try_get("id")?,
                     flow_id: row.try_get("flow_id")?,
                     status: serde_json::from_value(Value::String(row.try_get("status")?))?,
+                    outcome_uncertain: row.try_get("outcome_uncertain")?,
                     started_at: row.try_get("started_at")?,
                     finished_at: row.try_get("finished_at")?,
                 })

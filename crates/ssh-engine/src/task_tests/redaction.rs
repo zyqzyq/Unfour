@@ -1,6 +1,18 @@
 use super::super::*;
 use super::support::*;
 
+#[test]
+fn task_outcome_code_is_preserved_when_a_secret_matches_part_of_its_name() {
+    let secrets = vec!["SSH".to_string()];
+    assert_eq!(
+        redact_task_error(SSH_TASK_OUTCOME_UNCERTAIN.to_string(), &secrets),
+        SSH_TASK_OUTCOME_UNCERTAIN
+    );
+    assert!(
+        !redact_task_error("remote error containing SSH".to_string(), &secrets).contains("SSH")
+    );
+}
+
 #[tokio::test]
 async fn task_secrets_are_redacted_from_events_errors_and_persisted_logs() {
     let (service, workspace_id) = service().await;

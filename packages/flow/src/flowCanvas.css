@@ -61,9 +61,11 @@
 .flow-canvas-node[data-status="succeeded"] .flow-node-status { color: var(--u-color-success); background: var(--u-color-success-soft); }
 .flow-canvas-node[data-status="running"] .flow-node-status { color: var(--u-color-primary); background: var(--u-color-primary-soft); }
 .flow-canvas-node[data-status="failed"],
+.flow-canvas-node[data-status="outcomeUncertain"],
 .flow-canvas-node[data-status="timedOut"],
 .flow-canvas-node[data-status="interrupted"] { border-color: var(--u-color-danger); }
 .flow-canvas-node[data-status="failed"] .flow-node-status,
+.flow-canvas-node[data-status="outcomeUncertain"] .flow-node-status,
 .flow-canvas-node[data-status="timedOut"] .flow-node-status,
 .flow-canvas-node[data-status="interrupted"] .flow-node-status { color: var(--u-color-danger); background: var(--u-color-danger-soft); }
 .flow-canvas-node[data-kind="condition"] { padding-right: 36px; }

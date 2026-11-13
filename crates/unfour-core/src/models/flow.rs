@@ -137,6 +137,8 @@ pub struct FlowRunSummary {
     pub id: String,
     pub flow_id: String,
     pub status: FlowRunStatus,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub outcome_uncertain: bool,
     pub started_at: String,
     pub finished_at: Option<String>,
 }

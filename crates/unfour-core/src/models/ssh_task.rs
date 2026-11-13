@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+/// Terminal task or step error when a dispatched command has no confirmed outcome.
+pub const SSH_TASK_OUTCOME_UNCERTAIN: &str = "SSH_TASK_OUTCOME_UNCERTAIN";
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SshTask {

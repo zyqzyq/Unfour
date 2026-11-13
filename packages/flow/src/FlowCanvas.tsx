@@ -8,6 +8,7 @@ import type { FlowDefinition, FlowRun } from "@unfour/command-client";
 import { definitionToGraph, graphToDefinition, isCanvasConnectionValid, insertCanvasStep, type CanvasLayout, type CanvasNode } from "./canvasGraph";
 import { newStep, type Resources } from "./model";
 import { nodeSummary } from "./nodeSummary";
+import { flowDisplayStatus } from "./runStatus";
 import "@xyflow/react/dist/style.css";
 import "./flowCanvas.css";
 
@@ -58,7 +59,8 @@ export function FlowCanvas({ definition, onChange, disabled = false, readOnly = 
   const insertionEdge = graph.edges.find((edge) => edge.id === selectedEdge) ?? graph.edges[graph.edges.length - 1];
   const nodes = graph.nodes.map((node) => {
     const previous = presentation.find((item) => item.id === node.id);
-    return { ...node, data: { ...node.data, summary: node.data.step ? nodeSummary(node.data.step, definition.steps, resources, t) : undefined, status: run?.steps.find((step) => step.stepId === node.id)?.status }, measured: previous?.measured, selected: node.id === selected, ariaLabel: node.data.step?.name ?? t(`flow.canvas.${node.data.virtual}`) };
+    const recordedStep = run?.steps.find((step) => step.stepId === node.id);
+    return { ...node, data: { ...node.data, summary: node.data.step ? nodeSummary(node.data.step, definition.steps, resources, t) : undefined, status: recordedStep && flowDisplayStatus(recordedStep) }, measured: previous?.measured, selected: node.id === selected, ariaLabel: node.data.step?.name ?? t(`flow.canvas.${node.data.virtual}`) };
   });
   const selectedStep = definition.steps.find((step) => step.id === selected);
   function editGraph(action: () => FlowDefinition) {

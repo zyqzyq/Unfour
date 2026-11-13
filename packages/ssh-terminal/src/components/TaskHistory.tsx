@@ -2,6 +2,7 @@ import type { SshTaskRun } from "@unfour/command-client";
 import { Button, ConfirmDialog, ErrorState, LoadingState, StatusBadge, useI18n } from "@unfour/ui";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
+import { formatTaskRunError, taskDisplayStatus } from "../model/errors";
 
 export function TaskHistory({
   clearing,
@@ -71,8 +72,8 @@ export function TaskHistory({
             <tbody>
               {runs.map((run) => {
                 const selected = selectedRunId === run.id;
-                const error = run.errorMessage === "SSH_TASK_RUN_INTERRUPTED"
-                  ? t("ssh.tasks.run.interrupted") : run.errorMessage;
+                const status = taskDisplayStatus(run.status, run.errorMessage);
+                const error = run.errorMessage && formatTaskRunError(run.errorMessage, t);
                 return (
                   <tr
                     className={`h-9 cursor-pointer border-b border-[var(--u-color-border)] text-[var(--u-color-text)] ${
@@ -93,8 +94,8 @@ export function TaskHistory({
                     tabIndex={0}
                   >
                     <td className="px-2">
-                      <StatusBadge tone={tone(run.status)}>
-                        {t(`ssh.tasks.run.status.${run.status}`)}
+                      <StatusBadge tone={tone(status)}>
+                        {t(`ssh.tasks.run.status.${status}`)}
                       </StatusBadge>
                     </td>
                     <td className="truncate px-2">{formatDate(run.startedAt)}</td>
@@ -147,9 +148,9 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-function tone(status: SshTaskRun["status"]): "neutral" | "success" | "warning" | "danger" {
+function tone(status: string): "neutral" | "success" | "warning" | "danger" {
   if (status === "success") return "success";
   if (status === "failed") return "danger";
-  if (status === "cancelled") return "warning";
+  if (status === "cancelled" || status === "outcomeUncertain") return "warning";
   return "neutral";
 }

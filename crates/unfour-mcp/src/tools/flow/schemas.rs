@@ -71,7 +71,7 @@ fn definitions() -> Value {
     );
     let status = json!({"enum":["running","succeeded","failed","timedOut","cancelled","interrupted","validationFailed"]});
     let summary = object(
-        json!({"id":string(),"flowId":string(),"status":status,"startedAt":string(),"finishedAt":nullable_string()}),
+        json!({"id":string(),"flowId":string(),"status":status,"outcomeUncertain":{"type":"boolean"},"startedAt":string(),"finishedAt":nullable_string()}),
         &["id", "flowId", "status", "startedAt", "finishedAt"],
     );
     let context = object(

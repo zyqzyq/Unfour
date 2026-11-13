@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { ComponentProps } from "react";
+import { I18nProvider } from "@unfour/ui";
 import { TaskRunPanel } from "./TaskRunPanel";
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear(); });
@@ -10,6 +11,26 @@ const props: ComponentProps<typeof TaskRunPanel> = {
   run: { id: "run", workspaceId: "ws", taskId: "task", connectionId: "conn", status: "running", startedAt: "", finishedAt: null, errorMessage: null, logPath: "" },
   task: { task: { id: "task", workspaceId: "ws", name: "Task", description: "", sortOrder: 0, createdAt: "", updatedAt: "", deletedAt: null }, steps: [], localBinding: null, detectedInputs: [] },
 };
+
+it.each(["failed", "cancelled"] as const)("shows a localized unknown outcome for %s completion and after reopening the run", (status) => {
+  const error = "SSH_TASK_OUTCOME_UNCERTAIN";
+  const finalEvent = {
+    runId: "run", taskId: "task", kind: "run", status, stepId: null,
+    stepName: null, stepType: null, position: null, stream: null, data: null,
+    exitCode: null, durationMs: null, direction: null, transferredBytes: null,
+    totalBytes: null, bytesPerSecond: null, error, createdAt: "now",
+  } as const;
+  const { rerender } = render(<I18nProvider initialLocale="zh-CN"><TaskRunPanel {...props}
+    events={[{ ...finalEvent, kind: "step", stepId: "command" }, finalEvent]} /></I18nProvider>);
+  expect(screen.getByText("结果未知")).toBeVisible();
+  expect(screen.getByText(/↳ 结果未知/)).toBeVisible();
+  expect(screen.queryByText(error)).not.toBeInTheDocument();
+
+  rerender(<I18nProvider initialLocale="zh-CN"><TaskRunPanel {...props}
+    run={{ ...props.run, status, errorMessage: error }} /></I18nProvider>);
+  expect(screen.getByText("结果未知")).toBeVisible();
+  expect(screen.getByText(/命令已发送/)).toBeVisible();
+});
 
 it("pauses output follow while reading, resumes explicitly, and resets for a different run", () => {
   const completed = { ...props.run, status: "success" as const };
@@ -40,6 +61,7 @@ it("offers rerun after a terminal completion event even before history polling u
     exitCode: null, durationMs: null, direction: null, transferredBytes: null,
     totalBytes: null, bytesPerSecond: null, error: null, createdAt: "now",
   }]} />);
+  expect(screen.getByText("Cancelled")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Run again" }));
   expect(onRerun).toHaveBeenCalledOnce();
 });

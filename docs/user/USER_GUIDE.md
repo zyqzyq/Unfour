@@ -265,6 +265,11 @@ Verify host-key fingerprints before trusting a new server. Review destructive
 commands before running them, and use disposable data when testing SFTP or SSH
 task workflows.
 
+If a command has been sent and the connection drops, the command times out, or
+you cancel it before receiving its exit status or termination signal, the Task
+and its parent Flow show **Outcome unknown**. Later steps stop even if you
+enabled continuing after a command failure. Check the remote state before rerunning.
+
 In v0.12.0, ordinary Task **Run** opens current defaults.
 Choose **Use previous parameters**, or a rerun action from completed history or
 the result panel, to prepare previous parameters for review. Rerun starts a new

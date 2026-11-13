@@ -1483,7 +1483,7 @@
         "browseSave": "Choose save location",
         "command": "Command",
         "commandPlaceholder": "shell command — use {{name}} for run inputs",
-        "continueOnError": "Continue with later steps if this command fails",
+        "continueOnError": "Continue with later steps after a confirmed command failure",
         "defaultConnection": "Default SSH connection",
         "defaultStepName": "{type} {position}",
         "description": "Description",
@@ -1585,6 +1585,7 @@
         "inputs": "Inputs for this run",
         "loadingLog": "Loading log...",
         "interrupted": "The runner exited before recording a final result. Check the remote state before retrying.",
+        "outcomeUncertainHint": "The command was sent, but its exit status was not received. Check the remote state before running it again.",
         "markInterrupted": "Mark interrupted",
         "confirmLegacyInterruption": "Only continue after the older Unfour or MCP process that started this run has exited. This updates its local history. Remote commands may already have taken effect.",
         "repairFailed": "Could not update this SSH task run.",
@@ -1600,6 +1601,7 @@
         "status": {
           "cancelled": "Cancelled",
           "failed": "Failed",
+          "outcomeUncertain": "Outcome unknown",
           "pending": "Pending",
           "running": "Running",
           "success": "Success"
@@ -1775,7 +1777,8 @@
       "cancelled": "Cancelled",
       "timedOut": "Timed out",
       "interrupted": "Interrupted",
-      "validationFailed": "Validation failed"
+      "validationFailed": "Validation failed",
+      "outcomeUncertain": "Outcome unknown"
     },
     "secretInputs": "Secret input names (comma separated)",
     "waitUntil": "Wait Until",
@@ -1824,6 +1827,7 @@
     "nextCheck": "Next check",
     "latestResult": "Latest result",
     "latestError": "Latest error",
+    "outcomeUncertainHint": "The remote operation may have taken effect. Check the remote state before running the flow again.",
     "attemptHistory": "Attempt history",
     "inspector": "Inspector",
     "closeInspector": "Close inspector",

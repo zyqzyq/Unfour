@@ -199,7 +199,12 @@ async fn ssh_rerun_executes_current_definition_from_start_and_keeps_local_contex
     })
     .await
     .unwrap();
-    assert_eq!(done(&bus, &cancelled).await.status, "cancelled");
+    let cancelled = done(&bus, &cancelled).await;
+    assert_eq!(cancelled.status, "cancelled");
+    assert_eq!(
+        cancelled.error_message.as_deref(),
+        Some(unfour_core::models::SSH_TASK_OUTCOME_UNCERTAIN)
+    );
     task_input.steps[2].config_json["command"] = json!("echo after-cancel");
     let after_cancel = bus.save_ssh_task(task_input).await.unwrap();
     input.context.as_mut().unwrap().task_version = version(&after_cancel);

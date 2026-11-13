@@ -477,9 +477,20 @@ impl CommandBus {
         warnings: &[String],
         input: &FlowRunInput,
     ) -> AppResult<Value> {
+        let lost_result = current.error_message.as_deref() == Some(SSH_TASK_OUTCOME_UNCERTAIN);
+        // Diagnostics are secondary to a known uncertain outcome. If the log cannot
+        // be read or safely redacted, publish the stable code alone.
+        let diagnostics_error = |error| {
+            if lost_result {
+                invalid("FLOW_OUTCOME_UNCERTAIN")
+            } else {
+                error
+            }
+        };
         let mut log = self
             .read_ssh_task_run_log(input.workspace_id.clone(), current.id.clone())
-            .await?;
+            .await
+            .map_err(diagnostics_error)?;
         let log_truncated = log.len() > 65_536;
         if log_truncated {
             let mut end = 65_536;
@@ -499,9 +510,8 @@ impl CommandBus {
                 "warnings": warnings,
             }));
         }
-        // A cancelled task may already have executed remote commands. That is
-        // not a confirmed failure and it is not safe to treat as a no-op.
-        let code = if current.status == "cancelled" {
+        // Cancellation and a lost command result can both leave remote side effects.
+        let code = if current.status == "cancelled" || lost_result {
             "FLOW_OUTCOME_UNCERTAIN"
         } else {
             "FLOW_SSH_FAILED"
@@ -516,7 +526,10 @@ impl CommandBus {
         });
         Err(unfour_core::AppError::FlowActionFailed {
             source: Box::new(invalid(code)),
-            details: self.flow_diagnostics(details, input).await?,
+            details: self
+                .flow_diagnostics(details, input)
+                .await
+                .map_err(diagnostics_error)?,
         })
     }
 }
@@ -542,8 +555,32 @@ async fn finish_unless_dropped<F: Future>(cancel: &CancellationToken, work: F) -
 
 #[cfg(test)]
 mod tests {
-    use super::finish_unless_dropped;
-    use tokio_util::sync::CancellationToken;
+    use super::*;
+
+    #[tokio::test]
+    async fn missing_ssh_history_preserves_an_uncertain_remote_outcome() {
+        let bus = CommandBus::ephemeral().await.unwrap();
+        let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+        // History may have been cleared after the last poll and before log collection.
+        let run: SshTaskRun = serde_json::from_value(json!({
+            "id":"cleared-run","workspaceId":workspace,"taskId":"task","status":"failed",
+            "startedAt":"now","errorMessage":SSH_TASK_OUTCOME_UNCERTAIN,"logPath":""
+        }))
+        .unwrap();
+        let input = FlowRunInput {
+            workspace_id: workspace,
+            flow_id: "flow".into(),
+            inputs: json!({}),
+            environment_id: None,
+            secret_input_names: vec![],
+            initiator: FlowInitiator::Human,
+            confirm_effects: true,
+        };
+        let error = bus.flow_ssh_terminal(&run, &[], &input).await.unwrap_err();
+        assert!(
+            matches!(error, unfour_core::AppError::Validation(code) if code == "FLOW_OUTCOME_UNCERTAIN")
+        );
+    }
 
     #[tokio::test]
     async fn result_ready_with_cancellation_is_kept() {

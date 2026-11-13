@@ -1481,7 +1481,7 @@
         "browseSave": "选择保存位置",
         "command": "命令",
         "commandPlaceholder": "Shell 命令 — 使用 {{name}} 作为运行时输入",
-        "continueOnError": "该命令失败后继续执行后续步骤",
+        "continueOnError": "确认该命令失败后继续执行后续步骤",
         "defaultConnection": "默认 SSH 连接",
         "defaultStepName": "{type} {position}",
         "description": "描述",
@@ -1583,6 +1583,7 @@
         "inputs": "本次运行输入",
         "loadingLog": "正在加载日志...",
         "interrupted": "执行进程在记录最终结果前已退出。请核对远端状态后再重试。",
+        "outcomeUncertainHint": "命令已发送，但未收到退出状态。请核对远端状态后再决定是否重新运行。",
         "markInterrupted": "标记为中断",
         "confirmLegacyInterruption": "请先确认发起此任务的旧版 Unfour 或 MCP 进程已经退出。此操作会更新本地运行记录，远端命令可能已经生效。",
         "repairFailed": "无法更新这条 SSH 任务运行记录。",
@@ -1598,6 +1599,7 @@
         "status": {
           "cancelled": "已取消",
           "failed": "失败",
+          "outcomeUncertain": "结果未知",
           "pending": "等待中",
           "running": "运行中",
           "success": "成功"
@@ -1773,7 +1775,8 @@
       "cancelled": "已取消",
       "timedOut": "已超时",
       "interrupted": "已中断",
-      "validationFailed": "校验失败"
+      "validationFailed": "校验失败",
+      "outcomeUncertain": "结果未知"
     },
     "secretInputs": "敏感输入名称（逗号分隔）",
     "waitUntil": "等待条件满足",
@@ -1822,6 +1825,7 @@
     "nextCheck": "下次检查",
     "latestResult": "最新结果",
     "latestError": "最新错误",
+    "outcomeUncertainHint": "远端操作可能已经生效。请核对远端状态后再决定是否重新运行 Flow。",
     "attemptHistory": "尝试记录",
     "inspector": "节点配置",
     "closeInspector": "关闭配置",

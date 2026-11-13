@@ -174,6 +174,42 @@ async fn flow_history_migration_backfills_without_changing_snapshots() {
 }
 
 #[tokio::test]
+async fn flow_history_uncertainty_migration_marks_only_failed_unconfirmed_runs() {
+    let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+    sqlx::raw_sql(
+        r#"CREATE TABLE flow_runs (id TEXT, status TEXT, run_json TEXT);
+           INSERT INTO flow_runs VALUES
+             ('unknown', 'failed', '{"error":"FLOW_OUTCOME_UNCERTAIN"}'),
+             ('known', 'failed', '{"error":"FLOW_SSH_FAILED"}'),
+             ('stale', 'interrupted', '{"error":"FLOW_INTERRUPTED"}'),
+             ('active', 'running', '{"error":null}'),
+             ('legacy', 'failed', '{}'),
+             ('invalid', 'failed', 'invalid snapshot');"#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../../local-storage/migrations/20261113020000_core_flow_run_outcome_uncertain.sql"
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
+    // A sidecar started before the upgrade finishes using its original SQL.
+    sqlx::query("UPDATE flow_runs SET status = 'failed', run_json = ? WHERE id = 'active'")
+        .bind(r#"{"error":"FLOW_OUTCOME_UNCERTAIN"}"#)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let marked: Vec<String> =
+        sqlx::query_scalar("SELECT id FROM flow_runs WHERE outcome_uncertain = 1 ORDER BY id")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(marked, ["active", "unknown"]);
+}
+
+#[tokio::test]
 async fn flow_history_validation_failure_has_exact_finish_time() {
     let bus = test_bus().await;
     let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;

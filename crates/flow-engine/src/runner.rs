@@ -328,12 +328,23 @@ impl FlowService {
             }
         }
         if serde_json::to_vec(&run.steps)?.len() > 4_194_304 {
-            run.steps[index]
+            let record = run.steps[index]
                 .attempts
                 .last_mut()
-                .expect("attempt exists")
-                .output = None;
-            return Err(invalid("FLOW_HISTORY_LIMIT"));
+                .expect("attempt exists");
+            record.output = None;
+            if record.error.as_deref() != Some("FLOW_OUTCOME_UNCERTAIN") {
+                return Err(invalid("FLOW_HISTORY_LIMIT"));
+            }
+            // Keep the remote outcome even when its diagnostics cannot fit.
+            // Drop resolved arguments only if they still exceed the history budget.
+            if serde_json::to_vec(&run.steps)?.len() > 4_194_304 {
+                run.steps[index]
+                    .attempts
+                    .last_mut()
+                    .expect("attempt exists")
+                    .input = Value::Null;
+            }
         }
         self.persist_run(run).await?;
         // Keep executor failures separate from local persistence/limit errors:

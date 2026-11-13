@@ -1,5 +1,17 @@
 import type { TFunction } from "@unfour/ui";
 
+const taskOutcomeUncertain = "SSH_TASK_OUTCOME_UNCERTAIN";
+
+export function taskDisplayStatus(status: string, error?: string | null) {
+  return error === taskOutcomeUncertain ? "outcomeUncertain" : status;
+}
+
+export function formatTaskRunError(error: string, t: TFunction) {
+  if (error === taskOutcomeUncertain) return t("ssh.tasks.run.outcomeUncertainHint");
+  if (error === "SSH_TASK_RUN_INTERRUPTED") return t("ssh.tasks.run.interrupted");
+  return error;
+}
+
 export function formatTerminalError(error: unknown, t: TFunction) {
   const rawMessage = rawTerminalError(error);
   const normalized = rawMessage.toLowerCase();

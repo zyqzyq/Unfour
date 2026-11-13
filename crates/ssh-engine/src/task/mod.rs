@@ -1,11 +1,11 @@
 use super::*;
-#[cfg(any(feature = "ssh-native", test))]
-use unfour_core::models::SshTaskRunEvent;
 use unfour_core::models::{
     SshTask, SshTaskCancelInput, SshTaskCleanupInput, SshTaskCleanupResult, SshTaskCommandConfig,
     SshTaskDetail, SshTaskDownloadConfig, SshTaskLocalBinding, SshTaskRun, SshTaskRunInput,
     SshTaskSaveInput, SshTaskStep, SshTaskStepInput, SshTaskUploadConfig, SshTasksReorderInput,
 };
+#[cfg(any(feature = "ssh-native", test))]
+use unfour_core::models::{SshTaskRunEvent, SSH_TASK_OUTCOME_UNCERTAIN};
 
 #[cfg(any(feature = "ssh-native", test))]
 mod command_step;
@@ -256,11 +256,7 @@ impl SshService {
                 driver.disconnect().await;
                 outcome
             }
-            Err(TaskStepError::Cancelled) => TaskRunOutcome {
-                status: "cancelled".to_string(),
-                error: None,
-            },
-            Err(TaskStepError::Failed { message, .. }) => TaskRunOutcome {
+            Err(message) => TaskRunOutcome {
                 status: "failed".to_string(),
                 error: Some(message),
             },
@@ -347,7 +343,7 @@ fn task_run_event_from_runner(
             &status,
             Some(duration_ms),
             exit_code,
-            error.map(|value| redact_task_secret_values(&value, secret_values)),
+            error.map(|value| redact_task_error(value, secret_values)),
         ),
     }
 }
@@ -358,8 +354,18 @@ fn redact_task_run_outcome(outcome: TaskRunOutcome, secret_values: &[String]) ->
         status: outcome.status,
         error: outcome
             .error
-            .map(|value| redact_task_secret_values(&value, secret_values)),
+            .map(|value| redact_task_error(value, secret_values)),
     }
+}
+
+#[cfg(any(feature = "ssh-native", test))]
+fn redact_task_error(value: String, secret_values: &[String]) -> String {
+    // This fixed diagnostic contains no runtime data. Preserve its identity
+    // for history, live events and Flow even if a secret is part of its spelling.
+    if value == SSH_TASK_OUTCOME_UNCERTAIN {
+        return value;
+    }
+    redact_task_secret_values(&value, secret_values)
 }
 
 #[cfg(test)]

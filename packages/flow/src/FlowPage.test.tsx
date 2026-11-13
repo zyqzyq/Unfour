@@ -737,7 +737,16 @@ it("still shows selected run detail failures on the main page", async () => {
   expect(screen.queryByRole("dialog", { name: "Run history" })).not.toBeInTheDocument();
 });
 
-it("loads summaries on opening history and snapshots only after selection", async () => {
+it("distinguishes unknown outcomes from failures in history without loading snapshots until selection", async () => {
+  const error = "FLOW_OUTCOME_UNCERTAIN";
+  const recorded: commands.FlowRun = {
+    ...run, status: "failed", error, finishedAt: "2026-09-14T00:00:02Z",
+    steps: [{ ...run.steps[0], status: "failed", error }],
+  };
+  vi.mocked(commands.listFlowRuns).mockResolvedValue([
+    { ...summary(recorded), outcomeUncertain: true },
+    { ...summary(recorded), id: "ordinary-failure" },
+  ]);
   let resolveDetail!: (value: commands.FlowRun) => void;
   vi.mocked(commands.getFlowRun).mockImplementation(() => new Promise((resolve) => { resolveDetail = resolve; }));
   mount();
@@ -745,14 +754,19 @@ it("loads summaries on opening history and snapshots only after selection", asyn
   expect(commands.listFlowRuns).not.toHaveBeenCalled();
   expect(commands.getFlowRun).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Run history" }));
-  const entry = await screen.findByRole("button", { name: /2026-09-14T00:00:00Z/ });
+  const entry = await screen.findByRole("button", { name: /Outcome unknown ·/ });
+  expect(screen.getByRole("button", { name: /Failed ·/ })).toBeVisible();
   expect(commands.listFlowRuns).toHaveBeenCalledTimes(1);
   expect(commands.getFlowRun).not.toHaveBeenCalled();
   fireEvent.click(entry);
   await waitFor(() => expect(commands.getFlowRun).toHaveBeenCalledWith("ws", "run-1"));
   expect(document.querySelector(".flow-canvas-node[data-status]")).toBeNull();
-  resolveDetail(run);
-  await waitFor(() => expect(document.querySelector('.flow-canvas-node[data-status="running"]')).not.toBeNull());
+  resolveDetail(recorded);
+  fireEvent.click(await screen.findByRole("button", { name: "Locate: Wait · Outcome unknown" }));
+  expect(document.querySelector('.flow-canvas-node[data-status="outcomeUncertain"]')).toHaveTextContent("Outcome unknown");
+  const inspector = within(screen.getByRole("complementary", { name: "Run detail" }));
+  expect(inspector.getByText("Outcome unknown", { selector: "strong" })).toBeVisible();
+  expect(inspector.getByText(/Outcome unknown/, { selector: "summary" })).toBeVisible();
 });
 
 it("refreshes open running summaries to completed without fetching detail", async () => {

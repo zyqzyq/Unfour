@@ -28,6 +28,7 @@ function event(partial: Partial<SshTaskRunEvent>): SshTaskRunEvent {
 
 const labels = {
   stepHeader: (position: number, name: string) => `── ${position}. ${name} ──`,
+  stepError: (error: string) => error,
   stepDone: (status: string, detail: string) =>
     detail ? `↳ ${status} · ${detail}` : `↳ ${status}`,
   transfer: (direction: string, transferred: string, total: string, speed: string) =>
