@@ -52,6 +52,8 @@ mod storage;
 #[path = "task/mod.rs"]
 mod task;
 pub mod temporary;
+mod tunnel;
+pub use tunnel::{SshTunnel, TunnelProxyLease};
 
 #[cfg(all(feature = "ssh-native", test))]
 use native_supervisor::terminal_output_from_channel_message;
@@ -230,6 +232,7 @@ impl std::fmt::Debug for NativeSshHandle {
 #[cfg(feature = "ssh-native")]
 struct SshClientHandler {
     temporary_trust: Option<temporary::TrustPrompt>,
+    pinned_fingerprint: Option<String>,
     host_key_store: HostKeyStore,
     workspace_id: String,
     host: String,
@@ -247,6 +250,10 @@ impl russh::client::Handler for SshClientHandler {
         let fingerprint = server_public_key
             .fingerprint(ssh_key::HashAlg::Sha256)
             .to_string();
+
+        if let Some(expected) = &self.pinned_fingerprint {
+            return Ok(expected == &fingerprint);
+        }
 
         if let Some(trust) = &self.temporary_trust {
             return Ok(trust

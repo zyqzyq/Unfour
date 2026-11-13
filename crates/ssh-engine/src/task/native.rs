@@ -18,7 +18,9 @@ impl NativeTaskDriver {
             .dial_native_connection(connection)
             .await
             .map_err(|error| match error {
-                NativeConnectError::Failed(message) => format!("SSH connection failed: {message}"),
+                NativeConnectError::Failed(error) => {
+                    format!("SSH connection failed: {}", sanitize_ssh_error(&error))
+                }
                 NativeConnectError::TimedOut => {
                     "SSH connection timed out after 15 seconds".to_string()
                 }

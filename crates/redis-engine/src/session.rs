@@ -1,4 +1,4 @@
-use crate::{error, protocol, RedisEndpoint, RedisScanPage, PREVIEW_BYTES};
+use crate::{error, protocol, RedisEndpoint, RedisScanPage, RedisTransport, PREVIEW_BYTES};
 use protocol::{io_error, Reply};
 use rustls_platform_verifier::BuilderVerifierExt;
 use std::{future::Future, sync::Arc, time::Duration};
@@ -43,9 +43,18 @@ impl Session {
         }
         let deadline = Instant::now() + Duration::from_secs(8);
         let socket = bounded(deadline, async {
-            let stream = TcpStream::connect((host, endpoint.port))
-                .await
-                .map_err(io_error)?;
+            let stream: Box<dyn Socket> = match &endpoint.transport {
+                RedisTransport::Direct => Box::new(
+                    TcpStream::connect((host, endpoint.port))
+                        .await
+                        .map_err(io_error)?,
+                ),
+                RedisTransport::RequiresTunnel => return Err(error("SSH_TUNNEL_ROUTE_MISSING")),
+                RedisTransport::NeedsReview => return Err(error("SSH_TUNNEL_ROUTE_CHANGED")),
+                RedisTransport::Tunnel(connector) => {
+                    Box::new(connector.connect(host, endpoint.port).await?)
+                }
+            };
             let socket: Box<dyn Socket> = if endpoint.tls {
                 let name = rustls::pki_types::ServerName::try_from(host.to_owned())
                     .map_err(|_| error("REDIS_INVALID_INPUT"))?;
@@ -63,7 +72,7 @@ impl Session {
                         .map_err(|_| error("REDIS_TLS_FAILED"))?,
                 )
             } else {
-                Box::new(stream)
+                stream
             };
             Ok(socket)
         })

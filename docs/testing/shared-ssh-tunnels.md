@@ -1,0 +1,24 @@
+# SSH tunnel verification
+
+The native integration test runs an SSH server and its targets on loopback. Only the SSH server knows how to reach the test service names.
+
+| Check | Observed result |
+| --- | --- |
+| HTTP redirect | A saved environment routes an HTTP request through native SSH to two different HTTP origins. Both receive the original Host and the final response is returned. |
+| Completed HTTP writes | A tunneled POST returns 201 while the local history database is busy. The application preserves the successful response when recording history takes longer than the HTTP timeout. |
+| Flow and forwarding errors | A Flow runs a saved GET in that environment and the origin receives its original internal hostname. A target rejected by the jump host produces `SSH_TUNNEL_TARGET_UNREACHABLE`. |
+| Redis interoperability | A real Redis 8.10.3 process accepts a tunneled connection, authentication and SELECT 2. A confirmed write creates a binary String with a positive TTL and the workbench reads back the same bytes. |
+| Host trust and authentication | The SSH driver rejects missing and mismatched pins. The native fixture also exercises an encrypted OpenSSH key, authenticated local proxy access, and closing accepted relays when a lease ends. |
+| TLS and failure paths | Transport fixtures inspect ClientHello SNI for the original API and Redis names. HTTP proxy tests cover remote DNS, proxy authentication on multiple hops and disconnection without direct fallback. |
+| Desktop interactions | Chromium exercises environment inheritance and a request override through the API toolbar. Its browser transport reports SSH as unavailable. Redis component tests cover selecting a saved jump host and displaying a missing target. |
+| Concurrent edits | Route inserts, changes and removals advance the owning workspace's local refresh clock on commit. Rolling back a route edit leaves that clock unchanged. |
+| Cancellation and trust changes | A loopback SSH server observes the TCP connection closing when a pending key exchange is cancelled. Removing a trusted host key during the handshake stops authentication. A stale jump-host revision is rejected before dialing. |
+| Redis route changes and backup | A new or edited Redis connection refuses a stale jump-host revision during testing and saving. Restoring an encrypted workspace backup preserves a pending route review alongside the restored password. |
+
+Run the native HTTP test from the repository root:
+
+```sh
+cargo test --locked -p unfour-command-bus --features ssh-native --test ssh_tunnel_native
+```
+
+For the Redis case, set `UNFOUR_TEST_REDIS_SERVER` to a local redis-server executable and run the same command with `-- --ignored`. The fixture starts a temporary Redis instance with persistence disabled and closes it after the test. The tests use local services. Customer SSH servers and end-to-end deployments with customer-issued TLS certificates require separate verification.

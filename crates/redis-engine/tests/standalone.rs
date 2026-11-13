@@ -53,6 +53,7 @@ async fn standalone_cache_checks_use_the_selected_database_and_acl() {
         db_index: 0,
         username: None,
         tls: false,
+        transport: unfour_redis_engine::RedisTransport::Direct,
     };
     let deadline = Instant::now() + Duration::from_secs(12);
     while test_connection(&endpoint, Some(&password)).await.is_err() {

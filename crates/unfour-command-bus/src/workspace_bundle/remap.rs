@@ -51,7 +51,9 @@ pub(super) fn prepare(bundle: WorkspaceBundle, mcp_policy: Option<&str>) -> AppR
             &c.id,
             match c.config {
                 BundleConnectionConfig::Ssh { .. } if c.connection_type == "ssh" => "sshConnection",
-                BundleConnectionConfig::Redis { .. } if c.connection_type == "redis" => {
+                BundleConnectionConfig::Redis { .. } | BundleConnectionConfig::RedisSsh { .. }
+                    if c.connection_type == "redis" =>
+                {
                     "redisConnection"
                 }
                 BundleConnectionConfig::Database { .. } if c.connection_type == "database" => {
@@ -115,7 +117,18 @@ pub(super) fn prepare(bundle: WorkspaceBundle, mcp_policy: Option<&str>) -> AppR
         api_collections,
         ExternalApiCollectionApply
     );
-    plain!(bundle.connections, connections, ExternalConnectionApply);
+    for mut record in bundle.connections {
+        if let BundleConnectionConfig::RedisSsh {
+            ssh_connection_id, ..
+        } = &mut record.config
+        {
+            *ssh_connection_id = reference(&ids, ssh_connection_id, "sshConnection")?;
+        }
+        page.connections
+            .push(ExternalConnectionApply::Upsert(serde_json::from_value(
+                convert(serde_json::to_value(record)?)?,
+            )?));
+    }
     plain!(bundle.ssh_tasks, ssh_tasks, ExternalSshTaskApply);
     let variable_value = |r: &mut Value| -> AppResult<()> {
         let value: SnapshotVariableValue = serde_json::from_value(r["value"].clone())?;

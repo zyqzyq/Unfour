@@ -1,5 +1,6 @@
 import type {
   ApiResponse,
+  ApiRouteEdit,
   ApiSavedRequest,
   KeyValue,
 } from "@unfour/command-client";
@@ -45,6 +46,8 @@ export type MultipartPart =
   | { id: string; enabled: boolean; key: string; type: "file"; fileName: string | null; filePath: string | null };
 
 export type RequestDraft = {
+  /** Present only when a local routing override was edited in this draft. */
+  route?: ApiRouteEdit;
   /** Explicit review of a lossy historical snapshot; never serialized to IPC. */
   historyReviewConfirmed?: boolean;
   multipartParts: MultipartPart[];

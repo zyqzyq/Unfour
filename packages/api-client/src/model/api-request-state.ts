@@ -23,8 +23,9 @@ export function classifyRequestError(
 ): "cancelled" | "failed" | "network" | "timeout" {
   const code = errorCode(error);
   if (code === "API_CANCELLED") return "cancelled";
-  if (code === "API_TIMEOUT") return "timeout";
-  if (code === "NETWORK_ERROR") return "network";
+  if (code === "API_TIMEOUT" || code === "SSH_TUNNEL_TIMEOUT") return "timeout";
+  if (code === "NETWORK_ERROR" || code === "SSH_TUNNEL_CONNECT_FAILED" || code === "SSH_TUNNEL_TARGET_UNREACHABLE") return "network";
+  if (code?.startsWith("SSH_TUNNEL_")) return "failed";
   const message = formatError(error).toLowerCase();
   if (message.includes("timeout") || message.includes("timed out")) {
     return "timeout";

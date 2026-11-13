@@ -89,7 +89,11 @@ impl AppError {
     /// is safe to surface to external consumers (e.g. the MCP/LLM boundary).
     pub fn code(&self) -> &'static str {
         if let AppError::Validation(reason) = self {
-            if let Some(code) = REDIS_ERROR_CODES.iter().find(|code| **code == reason) {
+            if let Some(code) = REDIS_ERROR_CODES
+                .iter()
+                .chain(TUNNEL_ERROR_CODES)
+                .find(|code| **code == reason)
+            {
                 return code;
             }
         }
@@ -171,6 +175,21 @@ impl AppError {
 }
 
 // Allow only locally classified Redis failures through the serialized error boundary.
+const TUNNEL_ERROR_CODES: &[&str] = &[
+    "SSH_TUNNEL_UNAVAILABLE",
+    "SSH_TUNNEL_CONNECT_FAILED",
+    "SSH_TUNNEL_HOST_KEY_CHANGED",
+    "SSH_TUNNEL_HOST_KEY_UNTRUSTED",
+    "SSH_TUNNEL_AUTH_FAILED",
+    "SSH_TUNNEL_TARGET_UNREACHABLE",
+    "SSH_TUNNEL_TIMEOUT",
+    "SSH_TUNNEL_INVALID_TARGET",
+    "SSH_TUNNEL_PROXY_FAILED",
+    "SSH_TUNNEL_ROUTE_MISSING",
+    "SSH_TUNNEL_INVALID_ROUTE",
+    "SSH_TUNNEL_ROUTE_CHANGED",
+];
+
 const REDIS_ERROR_CODES: &[&str] = &[
     "REDIS_WRITE_READ_ONLY",
     "REDIS_WRITE_CONFIRMATION_REQUIRED",

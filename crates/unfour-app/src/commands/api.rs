@@ -1,6 +1,7 @@
 use crate::AppState;
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
+use unfour_core::network::{ApiRoute, ApiRouteEdit, ApiRoutes, ApiRoutingInput};
 use unfour_core::{
     models::{
         ApiClientPreferences, ApiCollection, ApiCollectionExportFormat, ApiCollectionExportResult,
@@ -318,13 +319,18 @@ pub async fn api_send_request(
 pub async fn api_send_request_v2(
     execution_id: String,
     input: ApiRequestInput,
+    routing: Option<ApiRoutingInput>,
     state: State<'_, AppState>,
 ) -> AppResult<RequestExecutionResult> {
     trace_command(
         "api_send_request_v2",
-        state
-            .command_bus
-            .send_api_request_with_scripts_controlled(&execution_id, input),
+        state.command_bus.send_api_request_routed(
+            &execution_id,
+            input,
+            None,
+            None,
+            routing.as_ref(),
+        ),
     )
     .await
 }
@@ -380,11 +386,45 @@ pub async fn api_history_detail(
 }
 
 #[tauri::command]
+pub async fn api_routes_get(
+    workspace_id: String,
+    request_id: Option<String>,
+    environment_id: Option<String>,
+    state: State<'_, AppState>,
+) -> AppResult<ApiRoutes> {
+    state
+        .command_bus
+        .api_routes(
+            &workspace_id,
+            request_id.as_deref(),
+            environment_id.as_deref(),
+        )
+        .await
+}
+
+#[tauri::command]
+pub async fn api_environment_route_set(
+    workspace_id: String,
+    environment_id: String,
+    edit: ApiRouteEdit,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    state
+        .command_bus
+        .set_api_environment_route(&workspace_id, &environment_id, edit)
+        .await
+}
+
+#[tauri::command]
 pub async fn api_request_save(
     input: ApiRequestInput,
+    route: Option<ApiRoute>,
     state: State<'_, AppState>,
 ) -> AppResult<ApiSavedRequest> {
-    state.command_bus.save_api_request(input).await
+    state
+        .command_bus
+        .save_api_request_routed(input, route)
+        .await
 }
 
 #[tauri::command]
@@ -393,11 +433,12 @@ pub async fn api_request_update(
     request_id: String,
     input: ApiRequestInput,
     expected_revision: Option<i64>,
+    route: Option<ApiRouteEdit>,
     state: State<'_, AppState>,
 ) -> AppResult<ApiSavedRequest> {
     state
         .command_bus
-        .update_api_request_if_current(workspace_id, request_id, input, expected_revision)
+        .update_api_request_routed(workspace_id, request_id, input, expected_revision, route)
         .await
 }
 

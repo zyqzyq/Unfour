@@ -2,6 +2,8 @@ use super::*;
 use crate::api_execution::mcp_timeout;
 use crate::transaction::CommandActivity;
 use unfour_core::domain::CommandContext;
+use unfour_core::network::{ApiRoute, ApiRouteEdit};
+use unfour_http_engine::local_routes;
 
 impl CommandBus {
     pub async fn api_environments_list(
@@ -607,12 +609,16 @@ impl CommandBus {
             .resolve_api_request_input_for_environment(input.clone(), environment_id.as_deref())
             .await?;
         let resolved_input = self.resolve_desktop_api_timeout(resolved_input).await?;
+        let routes = self
+            .api_routes_for_environment(&input.workspace_id, None, environment_id)
+            .await?;
         let mut response = self
-            .api_client
-            .send_cancellable_with_secrets(
+            .send_routed_http(
                 resolved_input,
                 tokio_util::sync::CancellationToken::new(),
                 &secrets,
+                &routes.effective,
+                None,
             )
             .await?;
         response.warnings = self
@@ -652,6 +658,14 @@ impl CommandBus {
     }
 
     pub async fn save_api_request(&self, input: ApiRequestInput) -> AppResult<ApiSavedRequest> {
+        self.save_api_request_routed(input, None).await
+    }
+
+    pub async fn save_api_request_routed(
+        &self,
+        input: ApiRequestInput,
+        route: Option<ApiRoute>,
+    ) -> AppResult<ApiSavedRequest> {
         let context = CommandContext::local("api.save_request");
         let executor_context = context.clone();
         let service = self.api_client.clone();
@@ -669,9 +683,19 @@ impl CommandBus {
             },
             move |connection| {
                 Box::pin(async move {
-                    service
+                    let saved = service
                         .save_request_on(connection, &executor_context, input)
-                        .await
+                        .await?;
+                    if let Some(route) = route {
+                        local_routes::save_request_route(
+                            connection,
+                            &saved.value.workspace_id,
+                            &saved.value.id,
+                            &route,
+                        )
+                        .await?;
+                    }
+                    Ok(saved)
                 })
             },
         )
@@ -695,6 +719,18 @@ impl CommandBus {
         input: ApiRequestInput,
         expected_revision: Option<i64>,
     ) -> AppResult<ApiSavedRequest> {
+        self.update_api_request_routed(workspace_id, request_id, input, expected_revision, None)
+            .await
+    }
+
+    pub async fn update_api_request_routed(
+        &self,
+        workspace_id: String,
+        request_id: String,
+        input: ApiRequestInput,
+        expected_revision: Option<i64>,
+        route: Option<ApiRouteEdit>,
+    ) -> AppResult<ApiSavedRequest> {
         let context = CommandContext::local("api.update_request");
         let executor_context = context.clone();
         let service = self.api_client.clone();
@@ -712,7 +748,7 @@ impl CommandBus {
             },
             move |connection| {
                 Box::pin(async move {
-                    service
+                    let saved = service
                         .update_request_if_current_on(
                             connection,
                             &executor_context,
@@ -721,7 +757,17 @@ impl CommandBus {
                             input,
                             expected_revision,
                         )
-                        .await
+                        .await?;
+                    if let Some(route) = route {
+                        local_routes::update_request_route(
+                            connection,
+                            &saved.value.workspace_id,
+                            &saved.value.id,
+                            &route,
+                        )
+                        .await?;
+                    }
+                    Ok(saved)
                 })
             },
         )
@@ -758,14 +804,24 @@ impl CommandBus {
             },
             move |connection| {
                 Box::pin(async move {
-                    service
+                    let route =
+                        local_routes::request_route(connection, &workspace_id, &request_id).await?;
+                    let duplicate = service
                         .duplicate_request_on(
                             connection,
                             &executor_context,
                             workspace_id,
                             request_id,
                         )
-                        .await
+                        .await?;
+                    local_routes::save_request_route(
+                        connection,
+                        &duplicate.value.workspace_id,
+                        &duplicate.value.id,
+                        &route,
+                    )
+                    .await?;
+                    Ok(duplicate)
                 })
             },
         )
@@ -831,13 +887,17 @@ impl CommandBus {
         let (input, secrets) = self
             .resolve_api_request_input_for_environment(input, environment_id.as_deref())
             .await?;
-        self.api_client
-            .send_cancellable_with_secrets(
-                input,
-                tokio_util::sync::CancellationToken::new(),
-                &secrets,
-            )
-            .await
+        let routes = self
+            .api_routes_for_environment(&input.workspace_id, Some(&saved.id), environment_id)
+            .await?;
+        self.send_routed_http(
+            input,
+            tokio_util::sync::CancellationToken::new(),
+            &secrets,
+            &routes.effective,
+            None,
+        )
+        .await
     }
 
     pub async fn execute_saved_api_request_with_scripts_in_workspace(
@@ -900,10 +960,12 @@ impl CommandBus {
         timeout_ms_override: Option<u64>,
         environment_id_override: Option<String>,
     ) -> AppResult<RequestExecutionResult> {
-        self.send_api_request_with_scripts_controlled_in_environment(
+        self.send_api_request_routed(
             execution_id,
             saved_replay_input(saved, timeout_ms_override)?,
             environment_id_override,
+            Some(&saved.id),
+            None,
         )
         .await
     }

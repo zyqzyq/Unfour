@@ -65,40 +65,30 @@ impl SshService {
                         key_path
                     )));
                 }
-                let private_key = match ssh_key::PrivateKey::read_openssh_file(path) {
-                    Ok(key) => key,
-                    Err(error) => {
-                        let has_passphrase = match connection.credential_ref.as_deref() {
-                            Some(credential_ref) => self
-                                .secret_store
-                                .read_secret(
-                                    connection.workspace_id.clone(),
-                                    credential_ref.to_string(),
+                let key_bytes = zeroize::Zeroizing::new(tokio::fs::read(path).await?);
+                let mut private_key = ssh_key::PrivateKey::from_openssh(&key_bytes)
+                    .map_err(|_| AppError::Config("failed to read ssh private key".into()))?;
+                if private_key.is_encrypted() {
+                    let passphrase = zeroize::Zeroizing::new(match override_secret {
+                        Some(secret) => secret.to_owned(),
+                        None => {
+                            let reference = connection.credential_ref.clone().ok_or_else(|| {
+                                AppError::Validation(
+                                    "encrypted SSH key requires a passphrase".into(),
                                 )
-                                .await
-                                .is_ok(),
-                            None => false,
-                        };
-                        if !has_passphrase {
-                            return Err(AppError::Config(format!(
-                                "failed to read ssh private key: {}. If the key is encrypted, save its passphrase as a credential.",
-                                error
-                            )));
+                            })?;
+                            self.secret_store
+                                .read_secret(connection.workspace_id.clone(), reference)
+                                .await?
                         }
-                        let pem_bytes = std::fs::read(path).map_err(|io_error| {
-                            AppError::Config(format!(
-                                "failed to read ssh private key file: {}",
-                                io_error
-                            ))
-                        })?;
-                        ssh_key::PrivateKey::from_openssh(&pem_bytes).map_err(|key_error| {
-                            AppError::Config(format!(
-                                "failed to decrypt ssh private key (passphrase may be incorrect or format unsupported): {}",
-                                key_error
-                            ))
-                        })?
-                    }
-                };
+                    });
+                    private_key = tokio::task::spawn_blocking(move || {
+                        private_key.decrypt(passphrase.as_bytes())
+                    })
+                    .await
+                    .map_err(|_| AppError::Config("failed to load ssh private key".into()))?
+                    .map_err(|_| AppError::Config("failed to decrypt ssh private key".into()))?;
+                }
                 let key = russh::keys::PrivateKeyWithHashAlg::new(Arc::new(private_key), None);
                 let result = handle
                     .authenticate_publickey(connection.username.clone(), key)

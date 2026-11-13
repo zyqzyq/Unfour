@@ -40,6 +40,8 @@ async fn redis_flow_checks_exact_key_and_waits_without_recording_private_operand
                 username: None,
                 tls: false,
                 allow_writes: None,
+                ssh_connection_id: None,
+                expected_ssh_revision: None,
                 expected_revision: None,
             },
             None,

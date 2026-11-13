@@ -235,6 +235,7 @@ async fn rejects_unsupported_versions_topologies_and_ttl_without_touching_data()
         username: None,
         db_index: 0,
         tls: false,
+        transport: crate::RedisTransport::Direct,
     };
     for ttl_ms in [0, u64::MAX] {
         assert_eq!(

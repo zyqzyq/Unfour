@@ -1,4 +1,5 @@
 import { multipartDefinition } from "./multipart";
+import { classifyRequestError } from "./api-request-state";
 import type { ApiTabSaveState, RequestDraft } from "./types";
 import type {
   ApiRequestTab,
@@ -52,7 +53,7 @@ export function deriveTabResponseState(
     return "sending";
   }
   if (tab.sendError) {
-    return classifyTabSendError(tab.sendError, tab.sendErrorCode);
+    return classifyRequestError({ code: tab.sendErrorCode, message: tab.sendError });
   }
   if (tab.execution?.preRequest.status === "timeout") {
     return "pre-script-timeout";
@@ -80,21 +81,6 @@ function hasRequestFailure(tab: ApiRequestTab): boolean {
   );
 }
 
-function classifyTabSendError(
-  error: string,
-  errorCode: string | null,
-): ApiTabResponseState {
-  if (errorCode === "API_CANCELLED") return "cancelled";
-  if (errorCode === "API_TIMEOUT") return "timeout";
-  if (errorCode === "NETWORK_ERROR") return "network";
-  const message = error.toLowerCase();
-  if (message.includes("timeout") || message.includes("timed out")) return "timeout";
-  if (["network", "connection", "dns", "fetch"].some((term) => message.includes(term))) {
-    return "network";
-  }
-  return "failed";
-}
-
 export function normalizeRequestDraft(draft: RequestDraft): string {
   return JSON.stringify({
     auth: draft.auth,
@@ -112,6 +98,7 @@ export function normalizeRequestDraft(draft: RequestDraft): string {
     query: normalizeKeyValues(draft.query),
     rawBodyType: draft.rawBodyType,
     timeoutMs: draft.timeoutMs,
+    route: draft.route,
     url: draft.url.trim(),
   });
 }

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
-import { act, cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { sendApiRequest, type RequestExecutionResult } from "@unfour/command-client";
@@ -17,17 +17,21 @@ vi.mock("@unfour/command-client", async (importOriginal) => ({
   listSavedApiRequests: vi.fn().mockResolvedValue([]),
   listApiHistory: vi.fn().mockResolvedValue([]),
   listWorkspaceEnvironments: vi.fn().mockResolvedValue([]),
+  getApiRoutes: vi.fn().mockResolvedValue({ request: { mode: "inherit" }, environment: { mode: "direct" }, effective: { mode: "direct" }, environmentId: null }),
+  listSshConnections: vi.fn().mockResolvedValue([]),
   sendApiRequest: vi.fn(),
 }));
 
 afterEach(() => { cleanup(); resetApiRequestTabStore(); vi.clearAllMocks(); });
 
-function setup() {
+async function setup() {
   useApiRequestTabStore.getState().updateTabDraft("w", "new:1", { url: "https://example.test", method: "POST" });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  return renderHook(() => useApiRequestTabs("w"), {
+  const hook = renderHook(() => useApiRequestTabs("w"), {
     wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
   });
+  await waitFor(() => expect(hook.result.current.routing.ready).toBe(true));
+  return hook;
 }
 
 const skipped = { status: "skipped" as const, console: [], tests: [], durationMs: 0, error: null };
@@ -44,7 +48,7 @@ function execution(patch: Partial<RequestExecutionResult> = {}): RequestExecutio
 
 it("keeps a completed response and shows an activity warning without sending again", async () => {
   vi.mocked(sendApiRequest).mockResolvedValue(execution({ warnings: ["ACTIVITY_RECORD_FAILED"] }));
-  const { result } = setup();
+  const { result } = await setup();
   await act(async () => { result.current.sendTab(result.current.activeTab!); });
   const tab = useApiRequestTabStore.getState().byWorkspace.w.tabs[0];
   expect(sendApiRequest).toHaveBeenCalledTimes(1);
@@ -63,7 +67,7 @@ it("does not present http or script failure as an accepted activity warning", as
     httpErrorCode: "HTTP_ERROR",
     warnings: ["ACTIVITY_RECORD_FAILED"],
   }));
-  const { result } = setup();
+  const { result } = await setup();
   await act(async () => { result.current.sendTab(result.current.activeTab!); });
   expect(useApiRequestTabStore.getState().byWorkspace.w.tabs[0].response?.historyId).toBe("hist-kept");
   expect(useApiRequestTabStore.getState().byWorkspace.w.tabs[0].sendError).toContain("connection refused");

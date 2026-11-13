@@ -21,6 +21,51 @@ impl ApiClientService {
         cancellation: CancellationToken,
         secrets: &[String],
     ) -> AppResult<ApiResponse> {
+        self.send_with_client(&self.client, input, cancellation, secrets, Duration::ZERO)
+            .await
+    }
+
+    /// The caller owns the authenticated loopback SOCKS lease until the body is consumed.
+    /// All redirects use the same proxy and the destination name is resolved over SSH.
+    pub async fn send_via_ssh_proxy(
+        &self,
+        input: ApiRequestInput,
+        cancellation: CancellationToken,
+        secrets: &[String],
+        address: std::net::SocketAddr,
+        username: &str,
+        password: &str,
+        route_started: Instant,
+    ) -> AppResult<ApiResponse> {
+        if !address.ip().is_loopback() || username.is_empty() || password.is_empty() {
+            return Err(AppError::Validation("SSH_TUNNEL_PROXY_FAILED".into()));
+        }
+        let proxy = reqwest::Proxy::all(format!("socks5h://{address}"))
+            .map_err(classify_http_error)?
+            .basic_auth(username, password);
+        let client = Client::builder()
+            .no_proxy()
+            .proxy(proxy)
+            .build()
+            .map_err(classify_http_error)?;
+        self.send_with_client(
+            &client,
+            input,
+            cancellation,
+            secrets,
+            route_started.elapsed(),
+        )
+        .await
+    }
+
+    async fn send_with_client(
+        &self,
+        client: &Client,
+        input: ApiRequestInput,
+        cancellation: CancellationToken,
+        secrets: &[String],
+        setup_time: Duration,
+    ) -> AppResult<ApiResponse> {
         validate_workspace_id(&input.workspace_id)?;
         super::execution_snapshot::validate_replay_values(&input)?;
         let mut runtime_secrets = runtime_request_secret_values(&input)?;
@@ -31,7 +76,16 @@ impl ApiClientService {
         }
         let method = parse_method(&input.method)?;
         let url = build_url(&input.url, &input.query)?;
-        let timeout = request_timeout_duration(input.timeout_ms);
+        // Bound network execution, including SSH setup. Recording an already received
+        // response in local history is outside the network deadline.
+        let timeout = request_timeout_duration(input.timeout_ms)
+            .map(|budget| {
+                budget
+                    .checked_sub(setup_time)
+                    .filter(|remaining| !remaining.is_zero())
+                    .ok_or_else(|| AppError::Validation("SSH_TUNNEL_TIMEOUT".into()))
+            })
+            .transpose()?;
         let request_id = unfour_diag::new_request_id();
         let request_fields = serde_json::json!({
             "request_id": request_id.as_str(),
@@ -40,7 +94,7 @@ impl ApiClientService {
             "path": super::history_redaction::scrub_values(url.path(), secrets),
         });
 
-        let mut builder = self.client.request(method.clone(), url.clone());
+        let mut builder = client.request(method.clone(), url.clone());
         if let Some(timeout) = timeout {
             builder = builder.timeout(timeout);
         }
@@ -100,7 +154,7 @@ impl ApiClientService {
         );
         let response_result = tokio::select! {
             biased;
-            response = self.client.execute(request) => response,
+            response = client.execute(request) => response,
             _ = cancellation.cancelled() => return Err(cancelled_error()),
         };
         let mut response = match response_result {

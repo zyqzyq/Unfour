@@ -3,6 +3,7 @@ import type {
   ApiCollection,
   CollectionImportPreview,
   ApiClientPreferences,
+  ApiRoute, ApiRouteEdit, ApiRoutes, ApiRoutingInput,
   ApiCollectionExportFormat,
   ApiCollectionExportResult,
   ApiCollectionFolder,
@@ -203,8 +204,16 @@ export function reorderApiRequests(
   });
 }
 
-export function sendApiRequest(executionId: string, input: ApiRequestInput) {
-  return call<RequestExecutionResult>("api_send_request_v2", { executionId, input });
+export function getApiRoutes(workspaceId: string, requestId?: string | null, environmentId?: string | null) {
+  return call<ApiRoutes>("api_routes_get", { workspaceId, requestId, environmentId });
+}
+
+export function setApiEnvironmentRoute(workspaceId: string, environmentId: string, edit: ApiRouteEdit) {
+  return call<void>("api_environment_route_set", { workspaceId, environmentId, edit });
+}
+
+export function sendApiRequest(executionId: string, input: ApiRequestInput, routing?: ApiRoutingInput) {
+  return call<RequestExecutionResult>("api_send_request_v2", { executionId, input, routing });
 }
 
 export function cancelApiRequest(executionId: string) {
@@ -219,8 +228,8 @@ export function updateApiClientPreferences(preferences: ApiClientPreferences) {
   return call<ApiClientPreferences>("api_client_preferences_update", { preferences });
 }
 
-export function saveApiRequest(input: ApiRequestInput) {
-  return call<ApiSavedRequest>("api_request_save", { input });
+export function saveApiRequest(input: ApiRequestInput, route?: ApiRoute) {
+  return call<ApiSavedRequest>("api_request_save", { input, route });
 }
 
 export function updateApiRequest(
@@ -228,12 +237,14 @@ export function updateApiRequest(
   requestId: string,
   input: ApiRequestInput,
   expectedRevision?: number,
+  route?: ApiRouteEdit,
 ) {
   return call<ApiSavedRequest>("api_request_update", {
     workspaceId,
     requestId,
     input,
     expectedRevision,
+    route,
   });
 }
 

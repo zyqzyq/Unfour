@@ -5,6 +5,7 @@ pub mod id;
 pub mod local_path;
 pub mod models;
 pub mod naming;
+pub mod network;
 pub mod redaction;
 pub mod time;
 

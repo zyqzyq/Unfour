@@ -1,5 +1,28 @@
 {
+  "network": {
+    "errors": {
+      "SSH_TUNNEL_UNAVAILABLE": "This build does not include native SSH forwarding.",
+      "SSH_TUNNEL_CONNECT_FAILED": "Could not connect to the SSH host. Check the saved SSH connection.",
+      "SSH_TUNNEL_HOST_KEY_CHANGED": "The SSH host key has changed. Review the host in SSH before reconnecting.",
+      "SSH_TUNNEL_HOST_KEY_UNTRUSTED": "Verify this host’s fingerprint in SSH before using it as a tunnel.",
+      "SSH_TUNNEL_AUTH_FAILED": "SSH authentication failed. Check the credentials in SSH.",
+      "SSH_TUNNEL_TARGET_UNREACHABLE": "The SSH host could not forward the connection to the target.",
+      "SSH_TUNNEL_TIMEOUT": "The request timed out on the SSH route.",
+      "SSH_TUNNEL_INVALID_TARGET": "The tunnel destination is invalid.",
+      "SSH_TUNNEL_PROXY_FAILED": "Could not open the local SSH transport.",
+      "SSH_TUNNEL_ROUTE_MISSING": "The selected connection or route is unavailable in this workspace.",
+      "SSH_TUNNEL_INVALID_ROUTE": "Invalid network route.",
+      "SSH_TUNNEL_ROUTE_CHANGED": "The network route changed. Review the connection and route before retrying."
+    }
+  },
   "redis": {
+    "route": {
+      "label": "Network route", "direct": "Direct", "via": "Via SSH · {name}",
+      "missing": "SSH connection unavailable", "loading": "Loading SSH connections…",
+      "noConnections": "To use a tunnel, save an SSH connection in this workspace.",
+      "replacePassword": "The connection target has changed. Enter its Redis password or clear the saved password.",
+      "listFailed": "Could not load the workspace's SSH connections."
+    },
     "write": {
       "allow": "Allow manual Redis writes on this device",
       "create": "New key",
@@ -439,6 +462,15 @@
     }
   },
   "api": {
+    "route": {
+      "title": "API network route", "edit": "Network route · {route}", "direct": "Direct", "via": "SSH · {name}",
+      "fromEnvironment": "Environment · {route}", "request": "This request", "inherit": "Use the environment default",
+      "environment": "Default for {name}", "missing": "SSH connection unavailable",
+      "unavailableShort": "Route unavailable", "unavailable": "Check the network route before sending.",
+      "localHelp": "Network routes apply on this device. Save the request to keep its override. Changing the environment default also affects other requests using that environment.",
+      "loadFailed": "The routing settings could not be loaded.", "retry": "Reload", "apply": "Apply",
+      "noHosts": "Add a connection in SSH to route requests through it.", "failed": "The selected network route is unavailable."
+    },
     "external": {
       "updated": "This item changed outside this editor. Your draft is preserved. Reload before saving.",
       "deleted": "This item was deleted outside this editor. Your draft is preserved; it cannot be saved to the deleted item.",

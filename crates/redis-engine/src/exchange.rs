@@ -18,6 +18,7 @@ struct Definition {
     username: Option<String>,
     db_index: u32,
     tls: bool,
+    ssh_connection_id: Option<String>,
     created_at: String,
     updated_at: String,
     revision: i64,
@@ -29,7 +30,7 @@ async fn definition(
     key: &DomainEntityKey,
 ) -> AppResult<Option<Definition>> {
     Ok(sqlx::query_as(
-        "SELECT c.name, c.host, c.port, r.username, r.db_index, r.tls,
+        "SELECT c.name, c.host, c.port, r.username, r.db_index, r.tls, r.ssh_connection_id,
                 c.created_at, c.updated_at, c.revision, c.deleted_at
          FROM connections c JOIN redis_connections r
            ON r.connection_id=c.id AND r.workspace_id=c.workspace_id
@@ -66,10 +67,18 @@ pub async fn snapshot_on(
         created_at: row.created_at,
         updated_at: row.updated_at,
         revision: row.revision,
-        config: ConnectionSnapshotConfig::Redis {
-            username: row.username,
-            db_index: row.db_index,
-            tls: row.tls,
+        config: match row.ssh_connection_id {
+            Some(ssh_connection_id) => ConnectionSnapshotConfig::RedisSsh {
+                username: row.username,
+                db_index: row.db_index,
+                tls: row.tls,
+                ssh_connection_id,
+            },
+            None => ConnectionSnapshotConfig::Redis {
+                username: row.username,
+                db_index: row.db_index,
+                tls: row.tls,
+            },
         },
     }))
 }
@@ -96,6 +105,47 @@ pub async fn credential_refs_on(
         "SELECT id, credential_ref FROM connections WHERE workspace_id=? AND connection_type='redis'
          AND deleted_at IS NULL AND credential_ref IS NOT NULL ORDER BY id",
     ).bind(workspace).fetch_all(db).await?)
+}
+
+pub async fn routes_requiring_review_on(
+    db: &mut SqliteConnection,
+    workspace: &str,
+) -> AppResult<Vec<String>> {
+    Ok(sqlx::query_scalar(
+        "SELECT r.connection_id FROM redis_connections r JOIN connections c
+        ON c.workspace_id=r.workspace_id AND c.id=r.connection_id WHERE r.workspace_id=?
+        AND r.route_review_generation>0 AND c.deleted_at IS NULL ORDER BY r.connection_id",
+    )
+    .bind(workspace)
+    .fetch_all(db)
+    .await?)
+}
+
+pub async fn restore_route_review_on(
+    db: &mut SqliteConnection,
+    workspace: &str,
+    id: &str,
+) -> AppResult<i64> {
+    let changed = sqlx::query(
+        "UPDATE redis_connections SET route_review_generation=1, allow_writes=0
+        WHERE workspace_id=? AND connection_id=? AND ssh_connection_id IS NOT NULL",
+    )
+    .bind(workspace)
+    .bind(id)
+    .execute(&mut *db)
+    .await?
+    .rows_affected();
+    if changed != 1 {
+        return Err(AppError::Validation("WORKSPACE_BUNDLE_INVALID".into()));
+    }
+    // The route invalidation trigger advances this newly imported connection's CAS.
+    Ok(
+        sqlx::query_scalar("SELECT revision FROM connections WHERE workspace_id=? AND id=?")
+            .bind(workspace)
+            .bind(id)
+            .fetch_one(db)
+            .await?,
+    )
 }
 
 pub async fn restore_credential_on(
@@ -195,13 +245,21 @@ async fn upsert_on(
     if record.connection_type != REDIS_CONNECTION_TYPE {
         return Err(invalid());
     }
-    let ConnectionSnapshotConfig::Redis {
-        username,
-        db_index,
-        tls,
-    } = record.config
-    else {
-        return Err(invalid());
+    let (username, db_index, tls, ssh_connection_id) = match record.config {
+        ConnectionSnapshotConfig::Redis {
+            username,
+            db_index,
+            tls,
+        } => (username, db_index, tls, None),
+        ConnectionSnapshotConfig::RedisSsh {
+            username,
+            db_index,
+            tls,
+            ssh_connection_id,
+        } if !ssh_connection_id.trim().is_empty() && ssh_connection_id.len() <= 128 => {
+            (username, db_index, tls, Some(ssh_connection_id))
+        }
+        _ => return Err(invalid()),
     };
     let host = record.host.ok_or_else(invalid)?;
     let port = record.port.ok_or_else(invalid)?;
@@ -225,6 +283,7 @@ async fn upsert_on(
             && current.username == username
             && current.db_index == db_index
             && current.tls == tls
+            && current.ssh_connection_id == ssh_connection_id
             && current.created_at == record.created_at
             && current.updated_at == record.updated_at
         {
@@ -238,6 +297,7 @@ async fn upsert_on(
             && old.port == port
             && old.username == username
             && old.tls == tls
+            && old.ssh_connection_id == ssh_connection_id
     });
     let retain_write_access = retain_secret && existing.is_some_and(|old| old.db_index == db_index);
     let revision: Option<i64> = sqlx::query_scalar(
@@ -249,11 +309,12 @@ async fn upsert_on(
     ).bind(&record.id).bind(&record.workspace_id).bind(&record.name).bind(host).bind(port)
         .bind(&record.created_at).bind(&record.updated_at).bind(retain_secret).fetch_optional(&mut *db).await?;
     let revision = revision.ok_or_else(invalid)?;
-    sqlx::query("INSERT INTO redis_connections (workspace_id,connection_id,username,db_index,tls) VALUES(?,?,?,?,?)
-        ON CONFLICT(connection_id) DO UPDATE SET username=excluded.username,db_index=excluded.db_index,tls=excluded.tls,
-        allow_writes=CASE WHEN ? THEN redis_connections.allow_writes ELSE 0 END")
+    sqlx::query("INSERT INTO redis_connections (workspace_id,connection_id,username,db_index,tls,ssh_connection_id) VALUES(?,?,?,?,?,?)
+        ON CONFLICT(connection_id) DO UPDATE SET username=excluded.username,db_index=excluded.db_index,tls=excluded.tls,ssh_connection_id=excluded.ssh_connection_id,
+        allow_writes=CASE WHEN ? THEN redis_connections.allow_writes ELSE 0 END,
+        route_review_generation=CASE WHEN excluded.ssh_connection_id IS redis_connections.ssh_connection_id THEN redis_connections.route_review_generation ELSE 0 END")
         .bind(&record.workspace_id).bind(&record.id).bind(username).bind(db_index).bind(tls)
-        .bind(retain_write_access).execute(db).await?;
+        .bind(ssh_connection_id).bind(retain_write_access).execute(db).await?;
     Ok(DomainCommandResult::new(
         (),
         vec![connection_mutation(

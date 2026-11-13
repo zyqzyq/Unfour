@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type Ref,
+  type ReactNode,
   type RefObject,
 } from "react";
 import { Pencil, Save, Send, Square } from "lucide-react";
@@ -21,6 +22,8 @@ export function ApiRequestBar({
   onUpdate,
   tab,
   urlInputRef,
+  routeControl,
+  routeReady = true,
 }: {
   onNameCommit: (name: string) => void;
   onNameEditingChange?: (editing: boolean) => void;
@@ -30,6 +33,8 @@ export function ApiRequestBar({
   onUpdate: (patch: Partial<ApiRequestTab["draft"]>) => void;
   tab: ApiRequestTab;
   urlInputRef?: Ref<HTMLInputElement>;
+  routeControl?: ReactNode;
+  routeReady?: boolean;
 }) {
   const { t } = useI18n();
   const nameEditorRef = useRef<RequestNameEditorHandle>(null);
@@ -64,6 +69,7 @@ export function ApiRequestBar({
           saveButtonRef={saveButtonRef}
           tab={tab}
         />
+        {routeControl}
       </div>
       <div className="flex min-w-0 items-center gap-2">
         <div className="flex h-[38px] min-w-0 flex-1 items-center rounded-[var(--u-radius-md)] border border-[var(--u-color-input)] bg-[var(--u-color-canvas)] transition-colors focus-within:border-[var(--u-color-focus)] focus-within:ring-2 focus-within:ring-[color:color-mix(in_srgb,var(--u-color-focus)_16%,transparent)]">
@@ -106,7 +112,7 @@ export function ApiRequestBar({
         ) : (
           <Button
             className="h-[38px] px-4"
-            disabled={!tab.draft.url.trim() || (tab.source === "history" && !tab.draft.historyReviewConfirmed)}
+            disabled={!routeReady || !tab.draft.url.trim() || (tab.source === "history" && !tab.draft.historyReviewConfirmed)}
             size="sm"
             onClick={onSend}
             type="button"

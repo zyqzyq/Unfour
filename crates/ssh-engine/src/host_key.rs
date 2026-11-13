@@ -43,10 +43,13 @@ impl HostKeyStore {
         let now = Utc::now().to_rfc3339();
         sqlx::query(
             r#"
-            INSERT OR REPLACE INTO ssh_host_keys (
+            INSERT INTO ssh_host_keys (
               workspace_id, host, port, fingerprint, key_type, public_key_data, created_at
             )
             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            ON CONFLICT(workspace_id,host,port) DO UPDATE SET
+              fingerprint=excluded.fingerprint, key_type=excluded.key_type,
+              public_key_data=excluded.public_key_data, created_at=excluded.created_at
             "#,
         )
         .bind(workspace_id)

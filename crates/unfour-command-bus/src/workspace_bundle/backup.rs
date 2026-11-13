@@ -10,6 +10,8 @@ use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 struct BackupPayload {
     bundle: WorkspaceBundle,
     secrets: Vec<BackupSecret>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    redis_routes_requiring_review: Vec<String>,
 }
 #[derive(Clone, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -44,6 +46,7 @@ fn decode(content: &str, options: &WorkspaceBundleOptions) -> AppResult<BackupPa
         BackupPayload {
             bundle: parse(content)?,
             secrets: vec![],
+            redis_routes_requiring_review: vec![],
         }
     };
     local::map_paths(&mut payload.bundle, &options.path_mappings)?;
@@ -52,6 +55,21 @@ fn decode(content: &str, options: &WorkspaceBundleOptions) -> AppResult<BackupPa
     Ok(payload)
 }
 fn validate_secrets(payload: &BackupPayload) -> AppResult<()> {
+    let review: HashSet<_> = payload.redis_routes_requiring_review.iter().collect();
+    if review.len() != payload.redis_routes_requiring_review.len()
+        || payload
+            .bundle
+            .connections
+            .iter()
+            .filter(|c| {
+                review.contains(&c.id)
+                    && matches!(c.config, BundleConnectionConfig::RedisSsh { .. })
+            })
+            .count()
+            != review.len()
+    {
+        return Err(invalid());
+    }
     let mut targets = HashSet::new();
     for secret in &payload.secrets {
         if secret.kind != "api-secret" && (!secret.field.is_empty() || !secret.pointer.is_empty()) {
@@ -85,7 +103,8 @@ fn validate_secrets(payload: &BackupPayload) -> AppResult<()> {
                     payload.bundle.connections.iter().any(|c| {
                         c.id == *target
                             && match &c.config {
-                                BundleConnectionConfig::Redis { .. } => {
+                                BundleConnectionConfig::Redis { .. }
+                                | BundleConnectionConfig::RedisSsh { .. } => {
                                     secret.kind == "redis-password"
                                 }
                                 BundleConnectionConfig::Ssh { auth_method, .. } => {
@@ -161,7 +180,8 @@ impl CommandBus {
                     BundleConnectionConfig::Database { driver, .. } if driver != "sqlite" => {
                         "database-password"
                     }
-                    BundleConnectionConfig::Redis { .. } => "redis-password",
+                    BundleConnectionConfig::Redis { .. }
+                    | BundleConnectionConfig::RedisSsh { .. } => "redis-password",
                     _ => continue,
                 }
                 .to_string();
@@ -251,9 +271,20 @@ impl CommandBus {
                 }
             }
         }
+        // Preserve the restriction alongside the restored credentials. The new
+        // workspace has no local knowledge of a retargeted jump's old identity.
+        let redis_routes_requiring_review = if options.password.is_some() {
+            unfour_redis_engine::exchange::routes_requiring_review_on(&mut db, &workspace).await?
+        } else {
+            vec![]
+        };
         db.rollback().await?;
         let suggested_file_name = filename::suggested_file_name(&bundle.workspace.name);
-        let payload = BackupPayload { bundle, secrets };
+        let payload = BackupPayload {
+            bundle,
+            secrets,
+            redis_routes_requiring_review,
+        };
         validate_secrets(&payload)?;
         let content = if let Some(password) = options.password.as_deref() {
             let plaintext = Zeroizing::new(serde_json::to_vec(&payload)?);
@@ -280,6 +311,7 @@ impl CommandBus {
             .iter()
             .filter(|s| s.kind != "api-secret")
             .flat_map(|s| s.targets.iter())
+            .filter(|id| !payload.redis_routes_requiring_review.contains(id))
             .collect();
         let mut preview = safety::preview(&payload.bundle);
         if options.check_paths {
@@ -350,7 +382,13 @@ impl CommandBus {
         tx.rollback().await?;
         let _credential_guard = self.credential_stage_guard().await?;
         let workspace = plan.workspace_id.clone();
-        let result = self.import_backup(plan, payload.secrets).await;
+        let result = self
+            .import_backup(
+                plan,
+                payload.secrets,
+                &payload.redis_routes_requiring_review,
+            )
+            .await;
         if result.is_err() {
             // Journal survives cleanup failures for recovery; never report a partial import as success.
             if self
@@ -371,7 +409,18 @@ impl CommandBus {
         &self,
         plan: remap::ImportPlan,
         secrets: Vec<BackupSecret>,
+        review: &[String],
     ) -> AppResult<Workspace> {
+        let review = review
+            .iter()
+            .map(|old| {
+                plan.ids
+                    .get(old)
+                    .filter(|(_, kind)| *kind == "redisConnection")
+                    .map(|(new, _)| new.clone())
+                    .ok_or_else(invalid)
+            })
+            .collect::<AppResult<HashSet<_>>>()?;
         let workspace_id = plan.workspace_id.clone();
         let mut bindings = Vec::new();
         for secret in &secrets {
@@ -415,7 +464,20 @@ impl CommandBus {
             None,
             move |db| {
                 Box::pin(async move {
-                    let mutations = bus.import_bundle_on(db, plan).await?;
+                    let mut mutations = bus.import_bundle_on(db, plan).await?;
+                    for mutation in &mut mutations {
+                        if mutation.entity.entity_type == DomainEntityType::Connection
+                            && review.contains(&mutation.entity.entity_id)
+                        {
+                            mutation.revision =
+                                unfour_redis_engine::exchange::restore_route_review_on(
+                                    db,
+                                    &workspace_id,
+                                    &mutation.entity.entity_id,
+                                )
+                                .await?;
+                        }
+                    }
                     for (id, kind, value, field, pointer) in bindings {
                         match kind {
                             "redisConnection" => {

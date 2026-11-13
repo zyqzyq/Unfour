@@ -111,13 +111,15 @@ fn connection_has_unsupported_subtype(
     };
     let config = config.as_object().ok_or(SyncError::InvalidData)?;
     let config_kind = string_field(config, "kind")?;
-    if config_kind.is_some_and(|value| !matches!(value, "ssh" | "database" | "redis")) {
+    if config_kind.is_some_and(|value| !matches!(value, "ssh" | "database" | "redis" | "redisSsh"))
+    {
         return Ok(true);
     }
-    if connection_type.is_some() && config_kind.is_some() && connection_type != config_kind {
+    let logical_kind = config_kind.map(|kind| if kind == "redisSsh" { "redis" } else { kind });
+    if connection_type.is_some() && logical_kind.is_some() && connection_type != logical_kind {
         return Err(SyncError::InvalidData);
     }
-    match config_kind.or(connection_type) {
+    match logical_kind.or(connection_type) {
         Some("ssh") => Ok(string_field(config, "authMethod")?
             .is_some_and(|value| !matches!(value, "password" | "private-key" | "none"))),
         Some("database") => {

@@ -45,6 +45,7 @@ pub use unfour_ssh_engine::validate_diagnostic_command;
 use unfour_workspace_engine::WorkspaceService;
 
 mod api_commands;
+mod api_routes;
 mod api_script_commands;
 mod command_models;
 mod completion_activity;

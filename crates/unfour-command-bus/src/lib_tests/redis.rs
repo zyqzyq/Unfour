@@ -10,9 +10,120 @@ fn draft(workspace_id: String) -> RedisConnectionInput {
         db_index: 0,
         tls: false,
         allow_writes: None,
+        ssh_connection_id: None,
+        expected_ssh_revision: None,
         username: None,
         expected_revision: None,
     }
+}
+
+#[tokio::test]
+async fn redis_route_retarget_revokes_write_access_and_rechecks_stored_password() {
+    let bus = test_bus().await;
+    let ws = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let jump = bus
+        .save_ssh_connection(unfour_core::models::SshConnectionInput {
+            id: None,
+            workspace_id: ws.clone(),
+            name: "Jump".into(),
+            host: "original.invalid".into(),
+            port: Some(22),
+            username: "reader".into(),
+            auth_kind: "none".into(),
+            key_path: None,
+            credential_ref: None,
+            secret: None,
+        })
+        .await
+        .unwrap();
+    let other = bus.create_workspace("Other".into()).await.unwrap().id;
+    let mut edit = draft(other);
+    edit.ssh_connection_id = Some(Some(jump.id.clone()));
+    assert_eq!(
+        bus.save_redis_connection(edit.clone(), None)
+            .await
+            .unwrap_err()
+            .code(),
+        "SSH_TUNNEL_ROUTE_MISSING"
+    );
+    edit.workspace_id = ws.clone();
+    edit.expected_ssh_revision = Some(jump.revision + 1);
+    assert_eq!(
+        bus.test_redis_connection_input(edit.clone(), Some("new-password".into()))
+            .await
+            .unwrap_err()
+            .code(),
+        "SSH_TUNNEL_ROUTE_CHANGED"
+    );
+    assert_eq!(
+        bus.save_redis_connection(edit.clone(), Some("new-password".into()))
+            .await
+            .unwrap_err()
+            .code(),
+        "SSH_TUNNEL_ROUTE_CHANGED"
+    );
+    assert!(bus.list_redis_connections(&ws).await.unwrap().is_empty());
+    edit.expected_ssh_revision = None;
+    edit.allow_writes = Some(true);
+    let saved = bus
+        .save_redis_connection(edit.clone(), Some("test-password".into()))
+        .await
+        .unwrap();
+    for host in ["second.invalid", "third.invalid"] {
+        sqlx::query("UPDATE connections SET host=? WHERE workspace_id=? AND id=?")
+            .bind(host)
+            .bind(&ws)
+            .bind(&jump.id)
+            .execute(bus.db.pool())
+            .await
+            .unwrap();
+    }
+    let changed = bus.list_redis_connections(&ws).await.unwrap().remove(0);
+    assert_eq!(changed.revision, saved.revision + 2);
+    assert!(changed.has_password && changed.route_needs_review && !changed.allow_writes);
+    assert_eq!(
+        bus.inspect_redis_key(&ws, &saved.id, "aw==", None, Some(changed.revision))
+            .await
+            .unwrap_err()
+            .code(),
+        "SSH_TUNNEL_ROUTE_CHANGED"
+    );
+    edit.id = Some(saved.id.clone());
+    edit.expected_revision = Some(changed.revision);
+    edit.allow_writes = None;
+    let legacy = RedisConnectionInput {
+        ssh_connection_id: None,
+        ..edit.clone()
+    };
+    assert_eq!(
+        bus.save_redis_connection(legacy, None)
+            .await
+            .unwrap_err()
+            .code(),
+        "SSH_TUNNEL_ROUTE_CHANGED"
+    );
+    assert_eq!(
+        bus.save_redis_connection(edit.clone(), None)
+            .await
+            .unwrap_err()
+            .code(),
+        "REDIS_ENDPOINT_REQUIRES_PASSWORD"
+    );
+    let approved = bus
+        .save_redis_connection(edit.clone(), Some("new-password".into()))
+        .await
+        .unwrap();
+    assert!(!approved.route_needs_review && !approved.allow_writes);
+    sqlx::query("INSERT INTO ssh_host_keys(workspace_id,host,port,fingerprint,created_at) VALUES(?, 'third.invalid',22,'test-fingerprint','now')")
+        .bind(&ws).execute(bus.db.pool()).await.unwrap();
+    sqlx::query(
+        "DELETE FROM ssh_host_keys WHERE workspace_id=? AND host='third.invalid' AND port=22",
+    )
+    .bind(&ws)
+    .execute(bus.db.pool())
+    .await
+    .unwrap();
+    assert!(bus.list_redis_connections(&ws).await.unwrap()[0].route_needs_review);
 }
 
 #[tokio::test]

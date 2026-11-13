@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { mutateRedisKey, type RedisConnection } from "@unfour/command-client";
 import { Button, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle, Input, Select, useI18n } from "@unfour/ui";
 import { redisErrorMessage } from "./redis-error";
+import { redisRouteLabel } from "./redis-route";
 import { hexBytes, readableText, redisName } from "./redis-bytes";
 import { createKind, initialWriteForm, keyCaption, parseWriteValue, prepareWrite, writesValue, type PreparedWrite, type WriteForm, type WriteTarget } from "./redis-write";
 
@@ -89,7 +90,7 @@ export function RedisWriteDialog({ connection, target, onClose, onResolve, onInv
     }}>
       <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
       <DialogBody className="space-y-3">
-        <p className="select-text break-all text-xs text-[var(--u-color-text-muted)]">{connection.name} · {connection.host}:{connection.port} · DB {connection.dbIndex}</p>
+        <p className="select-text break-all text-xs text-[var(--u-color-text-muted)]">{connection.name} · {connection.host}:{connection.port} · DB {connection.dbIndex} · {redisRouteLabel(connection, t)}</p>
         {review && ready
           ? <WriteReview ready={ready} form={form} target={target} />
           : <fieldset disabled={pending} className="grid gap-3 text-xs">

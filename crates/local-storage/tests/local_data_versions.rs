@@ -51,6 +51,56 @@ async fn child_changes_advance_only_the_affected_scope_and_rollback_is_invisible
 }
 
 #[tokio::test]
+async fn api_route_changes_publish_workspace_clocks_at_commit() {
+    let db = database().await;
+    sqlx::query("INSERT INTO workspace_environments(id,workspace_id,name,created_at,updated_at) VALUES('env','ws','Test','now','now')")
+        .execute(db.pool()).await.unwrap();
+    sqlx::query("INSERT INTO api_collections(id,workspace_id,name,created_at,updated_at) VALUES('c','ws','Collection','now','now')")
+        .execute(db.pool()).await.unwrap();
+    sqlx::query("INSERT INTO api_requests(id,workspace_id,collection_id,name,method,url,created_at,updated_at) VALUES('r','ws','c','Health','GET','https://example.test','now','now')")
+        .execute(db.pool()).await.unwrap();
+    for (table, id, domain, other) in [
+        (
+            "api_request_local_routes",
+            "r",
+            "api-requests",
+            "environments",
+        ),
+        (
+            "api_environment_local_routes",
+            "env",
+            "environments",
+            "api-requests",
+        ),
+    ] {
+        let unaffected = revision(&db, other).await;
+        let before = revision(&db, domain).await;
+        sqlx::query(&format!("INSERT INTO {table} VALUES ('ws',?,'first')"))
+            .bind(id)
+            .execute(db.pool())
+            .await
+            .unwrap();
+        assert!(revision(&db, domain).await > before);
+        let inserted = revision(&db, domain).await;
+        let update =
+            format!("UPDATE {table} SET ssh_connection_id='second' WHERE workspace_id='ws'");
+        let mut tx = db.pool().begin().await.unwrap();
+        sqlx::query(&update).execute(&mut *tx).await.unwrap();
+        tx.rollback().await.unwrap();
+        assert_eq!(revision(&db, domain).await, inserted);
+        sqlx::query(&update).execute(db.pool()).await.unwrap();
+        let updated = revision(&db, domain).await;
+        assert!(updated > inserted);
+        sqlx::query(&format!("DELETE FROM {table} WHERE workspace_id='ws'"))
+            .execute(db.pool())
+            .await
+            .unwrap();
+        assert!(revision(&db, domain).await > updated);
+        assert_eq!(revision(&db, other).await, unaffected);
+    }
+}
+
+#[tokio::test]
 async fn runtime_history_does_not_advance_definition_versions() {
     let db = database().await;
     let before: Vec<(String, String, i64)> = sqlx::query_as(

@@ -10,3 +10,4 @@ pub use script_runtime::{
     run_script, validate_script_config, ScriptPhase, ScriptRequestContext, ScriptResponseContext,
     ScriptRunInput, ScriptRunOutcome, ScriptVariable, SCRIPT_SCHEMA_VERSION,
 };
+pub mod local_routes;

@@ -56,6 +56,18 @@ impl CommandBus {
         input: ApiRequestInput,
         environment_id_override: Option<String>,
     ) -> AppResult<RequestExecutionResult> {
+        self.send_api_request_routed(execution_id, input, environment_id_override, None, None)
+            .await
+    }
+
+    pub async fn send_api_request_routed(
+        &self,
+        execution_id: &str,
+        input: ApiRequestInput,
+        environment_id_override: Option<String>,
+        saved_id: Option<&str>,
+        preview: Option<&unfour_core::network::ApiRoutingInput>,
+    ) -> AppResult<RequestExecutionResult> {
         let execution = self.api_executions.register(execution_id)?;
         let cancellation = execution.token();
         let input = self.resolve_desktop_api_timeout(input).await?;
@@ -77,6 +89,11 @@ impl CommandBus {
         let environment_id = self
             .resolve_api_environment_id(&input.workspace_id, environment_id_override.as_deref())
             .await?;
+        let request_id = saved_id.or_else(|| preview.and_then(|p| p.request_id.as_deref()));
+        let routes = self
+            .api_routes_for_environment(&input.workspace_id, request_id, environment_id.clone())
+            .await?;
+        let route = crate::api_routes::checked_editor_route(&routes, preview)?;
         let pre_environment = self
             .script_environment(&input.workspace_id, environment_id.as_deref())
             .await?;
@@ -176,8 +193,13 @@ impl CommandBus {
                 .map(|variable| variable.value.clone()),
         );
         let mut response = match self
-            .api_client
-            .send_cancellable_with_secrets(resolved_request.clone(), cancellation.clone(), &secrets)
+            .send_routed_http(
+                resolved_request.clone(),
+                cancellation.clone(),
+                &secrets,
+                &route,
+                preview.and_then(|p| p.expected_ssh_revision),
+            )
             .await
         {
             Ok(response) => response,

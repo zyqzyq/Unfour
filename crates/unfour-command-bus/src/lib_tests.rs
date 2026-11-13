@@ -18,6 +18,8 @@ mod api_activity_completion;
 mod api_auth;
 #[path = "lib_tests/api_environment_override.rs"]
 mod api_environment_override;
+#[path = "lib_tests/api_routes.rs"]
+mod api_routes;
 #[path = "lib_tests/api_snapshot.rs"]
 mod api_snapshot;
 #[path = "lib_tests/ephemeral_lifecycle.rs"]

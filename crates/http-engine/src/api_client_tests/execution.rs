@@ -135,7 +135,7 @@ fn history_redaction_keeps_form_context_and_scrubs_short_credential_echoes() {
     );
 }
 
-fn request(url: &str, timeout_ms: Option<u64>) -> ApiRequestInput {
+pub(super) fn request(url: &str, timeout_ms: Option<u64>) -> ApiRequestInput {
     ApiRequestInput {
         workspace_id: "workspace-a".to_string(),
         name: Some("execution control".to_string()),

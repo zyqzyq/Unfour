@@ -9,6 +9,8 @@ mod session;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use session::Session;
+use std::sync::Arc;
+use unfour_core::network::TunnelConnector;
 use unfour_core::{AppError, AppResult};
 
 pub use browse::{browse_collection, RedisCollectionKind, RedisCollectionPage, RedisCollectionRow};
@@ -21,12 +23,30 @@ const MAX_SCAN_BYTES: usize = 256 * 1024;
 const MAX_SCAN_KEYS: usize = 1024;
 
 #[derive(Clone)]
+pub enum RedisTransport {
+    Direct,
+    RequiresTunnel,
+    NeedsReview,
+    Tunnel(Arc<dyn TunnelConnector>),
+}
+
+#[derive(Clone)]
 pub struct RedisEndpoint {
     pub host: String,
     pub port: u16,
     pub db_index: u32,
     pub username: Option<String>,
     pub tls: bool,
+    pub transport: RedisTransport,
+}
+
+impl RedisEndpoint {
+    pub fn with_tunnel(mut self, connector: Arc<dyn TunnelConnector>) -> Self {
+        if !matches!(self.transport, RedisTransport::NeedsReview) {
+            self.transport = RedisTransport::Tunnel(connector);
+        }
+        self
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

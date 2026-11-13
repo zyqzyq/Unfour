@@ -1,11 +1,21 @@
 import type { RedisConnection, RedisConnectionInput } from "../../types";
 import { UNHANDLED, type MockResult } from "./types";
+import { mockStore } from "./state";
 
 const connections = new Map<string, RedisConnection>();
 
 function retainLocalWrites(old: RedisConnection | undefined, input: RedisConnectionInput) {
   return Boolean(old?.allowWrites && old.host === input.host && old.port === input.port
-    && old.tls === input.tls && old.dbIndex === input.dbIndex && old.username === input.username);
+    && old.tls === input.tls && old.dbIndex === input.dbIndex && old.username === input.username
+    && (input.sshConnectionId === undefined || (old.sshConnectionId ?? null) === input.sshConnectionId));
+}
+
+function resolveRoute(old: RedisConnection | undefined, input: RedisConnectionInput) {
+  const id = input.sshConnectionId === undefined ? old?.sshConnectionId ?? null : input.sshConnectionId;
+  const jump = mockStore.sshConnections.find((c) => c.workspaceId === input.workspaceId && c.id === id && !c.deletedAt);
+  if (id && !jump) throw { code: "SSH_TUNNEL_ROUTE_MISSING" };
+  if (input.expectedSshRevision !== undefined && input.expectedSshRevision !== jump?.revision) throw { code: "SSH_TUNNEL_ROUTE_CHANGED" };
+  return { sshConnectionId: id, sshConnectionName: jump?.name ?? null };
 }
 
 function save(input: RedisConnectionInput, secret: unknown) {
@@ -17,6 +27,7 @@ function save(input: RedisConnectionInput, secret: unknown) {
     id: old?.id ?? crypto.randomUUID(), workspaceId: input.workspaceId,
     name: input.name, host: input.host, port: input.port, dbIndex: input.dbIndex,
     tls: input.tls, username: input.username, revision: (old?.revision ?? 0) + 1,
+    ...resolveRoute(old, input),
     hasPassword: typeof secret === "string" ? secret.length > 0 : Boolean(old?.hasPassword),
     allowWrites: input.allowWrites ?? retainLocalWrites(old, input),
   };

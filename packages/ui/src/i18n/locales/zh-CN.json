@@ -1,5 +1,28 @@
 {
+  "network": {
+    "errors": {
+      "SSH_TUNNEL_UNAVAILABLE": "当前版本不支持原生 SSH 转发。",
+      "SSH_TUNNEL_CONNECT_FAILED": "无法连接 SSH 主机，请检查已保存的 SSH 连接。",
+      "SSH_TUNNEL_HOST_KEY_CHANGED": "SSH 主机密钥已改变，请先在 SSH 中核验主机。",
+      "SSH_TUNNEL_HOST_KEY_UNTRUSTED": "请先在 SSH 中核验并信任此主机指纹，再使用隧道。",
+      "SSH_TUNNEL_AUTH_FAILED": "SSH 认证失败，请在 SSH 中检查凭据。",
+      "SSH_TUNNEL_TARGET_UNREACHABLE": "SSH 主机无法转发到目标，请检查内网地址及转发权限。",
+      "SSH_TUNNEL_TIMEOUT": "经 SSH 的请求超时。",
+      "SSH_TUNNEL_INVALID_TARGET": "隧道目标地址无效。",
+      "SSH_TUNNEL_PROXY_FAILED": "无法建立本机 SSH 传输通道。",
+      "SSH_TUNNEL_ROUTE_MISSING": "当前工作区找不到所选的连接或路由。",
+      "SSH_TUNNEL_INVALID_ROUTE": "网络路由无效。",
+      "SSH_TUNNEL_ROUTE_CHANGED": "网络路由已变更，请重新核对连接和路由后再试。"
+    }
+  },
   "redis": {
+    "route": {
+      "label": "网络路由", "direct": "直连", "via": "经 SSH · {name}",
+      "missing": "SSH 连接不可用", "loading": "正在读取 SSH 连接…",
+      "noConnections": "要使用隧道，请先在此工作区保存一个 SSH 连接。",
+      "replacePassword": "连接目标已更改。请为当前目标填写 Redis 密码，或清除已保存的密码。",
+      "listFailed": "读取工作区的 SSH 连接失败。"
+    },
     "write": {
       "allow": "允许在此设备上手动写入 Redis",
       "create": "新建键",
@@ -438,6 +461,15 @@
     }
   },
   "api": {
+    "route": {
+      "title": "API 网络路由", "edit": "网络路由 · {route}", "direct": "直连", "via": "经 SSH · {name}",
+      "fromEnvironment": "环境 · {route}", "request": "当前请求", "inherit": "使用环境默认路由",
+      "environment": "{name} 的默认路由", "missing": "SSH 连接不可用",
+      "unavailableShort": "路由不可用", "unavailable": "请先核对网络路由，再发送请求。",
+      "localHelp": "路由设置在本机生效。保存请求后可保留它的路由选择。修改环境默认路由也会影响使用该环境默认路由的其他请求。",
+      "loadFailed": "无法加载网络路由设置。", "retry": "重新加载", "apply": "应用",
+      "noHosts": "先在 SSH 中添加连接，即可选择它访问 API。", "failed": "所选网络路由不可用。"
+    },
     "external": {
       "updated": "此项目已在编辑器外更改。你的草稿已保留，请重新加载后再保存。",
       "deleted": "此项目已在编辑器外删除。你的草稿已保留，无法保存到已删除的项目。",

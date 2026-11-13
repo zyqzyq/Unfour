@@ -207,3 +207,20 @@ export type RequestExecutionResult = {
   /** Non-fatal completion warnings; absent in older responses. */
   warnings?: string[];
 };
+export type ApiRoute = { mode: "inherit" } | { mode: "direct" } | { mode: "ssh"; sshConnectionId: string };
+export type ApiRouteEdit = { expected: ApiRoute; route: ApiRoute };
+
+export interface ApiRoutes {
+  request: ApiRoute;
+  environment: ApiRoute;
+  effective: ApiRoute;
+  environmentId: string | null;
+}
+
+export interface ApiRoutingInput {
+  requestId?: string | null;
+  route?: ApiRoute;
+  expectedEnvironmentId: string | null;
+  expectedEffective: ApiRoute;
+  expectedSshRevision?: number;
+}

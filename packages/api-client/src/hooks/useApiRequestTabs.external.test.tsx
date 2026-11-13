@@ -58,7 +58,7 @@ it("sends the original revision to reject an external edit that arrives before i
   act(() => result.current.updateDraft("saved:r", { body: "local", bodyMode: "raw", rawBodyType: "text" }));
   vi.mocked(updateApiRequest).mockRejectedValue({ code: "ROW_CONFLICT", message: "changed" });
   await act(async () => { await result.current.saveTab(result.current.activeTab!); });
-  expect(updateApiRequest).toHaveBeenCalledWith("w", "r", expect.objectContaining({ body: "local" }), 1);
+  expect(updateApiRequest).toHaveBeenCalledWith("w", "r", expect.objectContaining({ body: "local" }), 1, undefined);
   expect(result.current.activeTab?.draft.body).toBe("local");
   expect(result.current.activeTab?.saveError).toContain("changed outside this editor");
 });

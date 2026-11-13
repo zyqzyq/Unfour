@@ -447,6 +447,8 @@ macro_rules! generate_handlers {
             unfour_app::commands::api_request_delete,
             unfour_app::commands::api_request_duplicate,
             unfour_app::commands::api_request_save,
+            unfour_app::commands::api_routes_get,
+            unfour_app::commands::api_environment_route_set,
             unfour_app::commands::api_request_update,
             unfour_app::commands::api_saved_requests,
             unfour_app::commands::api_send_request,

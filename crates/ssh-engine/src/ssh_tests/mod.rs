@@ -4,3 +4,5 @@ mod native;
 mod native_lifecycle;
 mod session;
 mod support;
+#[cfg(feature = "ssh-native")]
+mod tunnel;

@@ -40,7 +40,8 @@ optional = true
 
 [dependencies.tokio]
 version = "1"
-features = ["fs", "io-util", "net", "rt", "sync", "time"]
+# select! coordinates bounded HTTP tunnel relays and their lifetime.
+features = ["fs", "io-util", "macros", "net", "rt", "sync", "time"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "test-util"] }

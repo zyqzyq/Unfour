@@ -58,6 +58,9 @@ mod tests {
             username: None,
             tls: false,
             allow_writes: false,
+            ssh_connection_id: None,
+            ssh_connection_name: None,
+            route_needs_review: false,
             has_password: false,
             revision: 2,
         };

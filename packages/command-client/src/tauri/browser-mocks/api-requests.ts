@@ -1,4 +1,5 @@
 import { redactHeaders, redactJsonBody, resolveInput } from "./helpers";
+import { mockApiRoutes, requireDirectBrowserRoute, writeMockRequestRoute, updateMockRequestRoute } from "./api-routes";
 import {
   assertMockCollection,
   assertMockFolder,
@@ -12,6 +13,7 @@ import {
 import { UNHANDLED } from "./types";
 import type {
   ApiClientPreferences,
+  ApiRoute, ApiRouteEdit, ApiRoutingInput,
   ApiRequestInput,
   ApiResponse,
   ApiSavedRequest,
@@ -94,6 +96,7 @@ export async function handleApiRequestMock<T>(
       syncStatus: "local",
       remoteId: null,
     };
+    writeMockRequestRoute(input.workspaceId, saved.id, args?.route as ApiRoute | undefined);
     mockStore.savedRequests = [saved, ...mockStore.savedRequests];
     return saved as T;
   }
@@ -139,6 +142,7 @@ export async function handleApiRequestMock<T>(
       revision: current.revision + 1,
       syncStatus: "pending",
     };
+    updateMockRequestRoute(workspaceId, requestId, args?.route as ApiRouteEdit | undefined);
     mockStore.savedRequests = [
       ...mockStore.savedRequests.slice(0, index),
       saved,
@@ -165,6 +169,7 @@ export async function handleApiRequestMock<T>(
       syncStatus: "local",
       remoteId: null,
     };
+    writeMockRequestRoute(workspaceId, duplicate.id, mockApiRoutes(workspaceId, requestId).request);
     mockStore.savedRequests = [duplicate, ...mockStore.savedRequests];
     return duplicate as T;
   }
@@ -184,6 +189,7 @@ export async function handleApiRequestMock<T>(
 
   if (command === "api_request_file_pick") return null as T;
   if (command === "api_send_request_v2" || command === "api_send_request") {
+    requireDirectBrowserRoute((args?.input as ApiRequestInput).workspaceId, args?.routing as ApiRoutingInput | undefined);
     const input = args?.input as ApiRequestInput;
     const versioned = command === "api_send_request_v2";
     if (input.bodyKind === "multipart-form-data" && !["GET", "HEAD"].includes(input.method)) {

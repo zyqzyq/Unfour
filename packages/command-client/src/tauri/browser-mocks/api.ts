@@ -1,9 +1,11 @@
 import { handleApiCollectionMock } from "./api-collections";
+import { handleApiRouteMock } from "./api-routes";
 import { handleApiEnvironmentMock } from "./api-environments";
 import { handleApiRequestMock } from "./api-requests";
 import { UNHANDLED, type MockCommandHandler } from "./types";
 
 const apiMockHandlers: MockCommandHandler[] = [
+  handleApiRouteMock,
   handleApiEnvironmentMock,
   handleApiCollectionMock,
   handleApiRequestMock,

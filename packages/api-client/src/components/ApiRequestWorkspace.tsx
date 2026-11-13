@@ -4,13 +4,18 @@ import { Button, SplitPane, useI18n } from "@unfour/ui";
 import type { ApiRequestTab } from "../model/request-tabs";
 import type { RequestDraft, RequestParamsTab, ResponseTab } from "../model/types";
 import { ApiRequestBar } from "./ApiRequestBar";
+import { ApiRoutePicker } from "./ApiRoutePicker";
+import type { ApiRouteControls } from "../hooks/useApiRoutes";
 import { ApiRequestEditor } from "./ApiRequestEditor";
 import { ApiResponseViewer } from "./ApiResponseViewer";
 import { useApiRequestTabStore } from "../model/api-request-tab-state";
 
 export function ApiRequestWorkspace({
+  active = true,
   activeTab,
   workspaceId,
+  routing,
+  environmentName,
   collectionStatus,
   onRequestNameCommit,
   onRequestTabChange,
@@ -23,8 +28,11 @@ export function ApiRequestWorkspace({
   onUpdateDraft,
   urlInputRef,
 }: {
+  active?: boolean;
   activeTab: ApiRequestTab;
   workspaceId: string;
+  routing: ApiRouteControls;
+  environmentName?: string;
   collectionStatus: string | null;
   onRequestNameCommit: (tab: ApiRequestTab, name: string) => void;
   onRequestTabChange: (tabId: string, tab: RequestParamsTab) => void;
@@ -58,6 +66,9 @@ export function ApiRequestWorkspace({
     <>
       <ApiRequestBar
         key={activeTab.id}
+        routeReady={routing.ready}
+        routeControl={active && <ApiRoutePicker key={workspaceId} routing={routing} environmentName={environmentName} draft={activeTab.draft.route}
+          disabled={activeTab.sending || activeTab.saving} onChange={(route) => onUpdateDraft(activeTab.id, { route })} />}
         onNameEditingChange={(editing) => useApiRequestTabStore.getState().setNameEditing(workspaceId, activeTab.id, editing)}
         onNameCommit={(name) => onRequestNameCommit(activeTab, name)}
         onSave={(name) => onSave(activeTab, name)}

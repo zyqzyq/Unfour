@@ -184,7 +184,8 @@ impl CommandBus {
                         matches!(auth_method.as_str(), "password" | "private-key")
                     }
                     BundleConnectionConfig::Database { driver, .. } => driver != "sqlite",
-                    BundleConnectionConfig::Redis { .. } => true,
+                    BundleConnectionConfig::Redis { .. }
+                    | BundleConnectionConfig::RedisSsh { .. } => true,
                 };
                 let uses_path = field != "keyPath"
                     || matches!(config, BundleConnectionConfig::Ssh { auth_method, .. } if auth_method == "private-key");

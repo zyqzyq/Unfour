@@ -4,6 +4,7 @@ import { Button, Input, useI18n } from "@unfour/ui";
 import { RedisKeyDetails } from "./RedisKeyDetails";
 import { isRedisCollectionKind, readableText, redisName, textKey } from "./redis-bytes";
 import { redisErrorMessage } from "./redis-error";
+import { redisRouteLabel } from "./redis-route";
 import { RedisCollectionBrowser } from "./RedisCollectionBrowser";
 import { RedisKeyWriteMenu } from "./RedisKeyWriteMenu";
 import { RedisWriteDialog } from "./RedisWriteDialog";
@@ -120,7 +121,7 @@ function RedisKeySession({ connection, active = true, onCreateFlow, onRefreshCon
 
   return <div className="flex h-full min-h-0 flex-col">
     <div className="flex flex-wrap items-center gap-2 border-b border-[var(--u-color-border)] px-3 py-2 text-xs">
-      <span className="mr-auto select-text truncate">{connection.name} · {connection.host}:{connection.port} · DB {connection.dbIndex}</span>
+      <span className="mr-auto select-text truncate">{connection.name} · {connection.host}:{connection.port} · DB {connection.dbIndex} · {redisRouteLabel(connection, t)}</span>
       {connection.allowWrites && <Button size="sm" variant="outline" onClick={() => setWrite({ kind: "createString", keyBase64: mode === "exact" ? textKey(key) : "" })}>{t("redis.write.create")}</Button>}
       <Button size="sm" variant={mode === "exact" ? "secondary" : "ghost"} aria-pressed={mode === "exact"} onClick={() => showMode("exact")}>{t("redis.exact")}</Button>
       <Button size="sm" variant={mode === "pattern" ? "secondary" : "ghost"} aria-pressed={mode === "pattern"} onClick={() => showMode("pattern")}>{t("redis.pattern")}</Button>

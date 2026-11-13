@@ -172,20 +172,22 @@ pub struct LocalPath {
 impl WorkspaceBundle {
     pub(super) fn uses_redis(&self) -> bool {
         use unfour_core::models::{FlowCapability, FlowNode};
-        self.connections
+        self.connections.iter().any(|c| {
+            matches!(
+                c.config,
+                BundleConnectionConfig::Redis { .. } | BundleConnectionConfig::RedisSsh { .. }
+            )
+        }) || self
+            .flows
             .iter()
-            .any(|c| matches!(c.config, BundleConnectionConfig::Redis { .. }))
-            || self
-                .flows
-                .iter()
-                .flat_map(|f| &f.steps)
-                .any(|step| match &step.node {
-                    FlowNode::Action { action } => action.capability == FlowCapability::Redis,
-                    FlowNode::Poll { probe, .. } | FlowNode::WaitUntil { probe, .. } => {
-                        probe.capability == FlowCapability::Redis
-                    }
-                    _ => false,
-                })
+            .flat_map(|f| &f.steps)
+            .any(|step| match &step.node {
+                FlowNode::Action { action } => action.capability == FlowCapability::Redis,
+                FlowNode::Poll { probe, .. } | FlowNode::WaitUntil { probe, .. } => {
+                    probe.capability == FlowCapability::Redis
+                }
+                _ => false,
+            })
     }
 }
 
@@ -197,6 +199,12 @@ impl WorkspaceBundle {
     deny_unknown_fields
 )]
 pub enum BundleConnectionConfig {
+    RedisSsh {
+        username: Option<String>,
+        db_index: u32,
+        tls: bool,
+        ssh_connection_id: String,
+    },
     Redis {
         username: Option<String>,
         db_index: u32,

@@ -2,8 +2,20 @@ use super::*;
 
 #[cfg(feature = "ssh-native")]
 pub(super) enum NativeConnectError {
-    Failed(String),
+    Failed(russh::Error),
     TimedOut,
+}
+
+#[cfg(feature = "ssh-native")]
+struct ShutdownOnDrop(Option<std::net::TcpStream>);
+
+#[cfg(feature = "ssh-native")]
+impl Drop for ShutdownOnDrop {
+    fn drop(&mut self) {
+        if let Some(socket) = self.0.take() {
+            let _ = socket.shutdown(std::net::Shutdown::Both);
+        }
+    }
 }
 
 impl SshService {
@@ -100,24 +112,49 @@ impl SshService {
         &self,
         connection: &SshConnection,
     ) -> Result<russh::client::Handle<SshClientHandler>, NativeConnectError> {
+        self.dial_saved_host(connection, None).await
+    }
+
+    #[cfg(feature = "ssh-native")]
+    pub(super) async fn dial_saved_host(
+        &self,
+        connection: &SshConnection,
+        pinned_fingerprint: Option<String>,
+    ) -> Result<russh::client::Handle<SshClientHandler>, NativeConnectError> {
         let config = Arc::new(native_client_config());
         let handler = SshClientHandler {
             temporary_trust: None,
+            pinned_fingerprint,
             host_key_store: HostKeyStore::new(self.db.pool().clone()),
             workspace_id: connection.workspace_id.clone(),
             host: connection.host.clone(),
             port: connection.port,
         };
-        let addr = format!("{}:{}", connection.host, connection.port);
+        let host = connection
+            .host
+            .strip_prefix('[')
+            .and_then(|s| s.strip_suffix(']'))
+            .unwrap_or(&connection.host);
         let timeout_duration = std::time::Duration::from_secs(15);
-        match tokio::time::timeout(
-            timeout_duration,
-            russh::client::connect(config, addr.as_str(), handler),
-        )
-        .await
-        {
+        let dial = async {
+            let socket = tokio::net::TcpStream::connect((host, connection.port)).await?;
+            socket.set_nodelay(config.nodelay)?;
+            let socket = socket.into_std()?;
+            // russh spawns its key-exchange task before returning a Handle. Dropping its
+            // future alone would leave that task waiting on the peer's TCP socket.
+            let mut guard = ShutdownOnDrop(Some(socket.try_clone()?));
+            let handle = russh::client::connect_stream(
+                config,
+                tokio::net::TcpStream::from_std(socket)?,
+                handler,
+            )
+            .await?;
+            guard.0.take();
+            Ok(handle)
+        };
+        match tokio::time::timeout(timeout_duration, dial).await {
             Ok(Ok(handle)) => Ok(handle),
-            Ok(Err(error)) => Err(NativeConnectError::Failed(sanitize_ssh_error(&error))),
+            Ok(Err(error)) => Err(NativeConnectError::Failed(error)),
             Err(_) => Err(NativeConnectError::TimedOut),
         }
     }
@@ -132,9 +169,11 @@ impl SshService {
             self.dial_native_connection(connection)
                 .await
                 .map_err(|error| match error {
-                    NativeConnectError::Failed(message) => AppError::Config(format!(
+                    NativeConnectError::Failed(error) => AppError::Config(format!(
                         "ssh connection to {}:{} failed: {}",
-                        connection.host, connection.port, message
+                        connection.host,
+                        connection.port,
+                        sanitize_ssh_error(&error)
                     )),
                     NativeConnectError::TimedOut => AppError::Config(format!(
                         "ssh connection to {}:{} timed out after 15s",

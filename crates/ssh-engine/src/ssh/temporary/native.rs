@@ -217,6 +217,7 @@ impl SshService {
         transport: &mut Option<Arc<tokio::sync::Mutex<russh::client::Handle<SshClientHandler>>>>,
     ) -> AppResult<NativeSshHandle> {
         let handler = SshClientHandler {
+            pinned_fingerprint: None,
             host_key_store: HostKeyStore::new(self.db.pool().clone()),
             workspace_id: workspace.into(),
             host: request.host.to_string(),

@@ -27,6 +27,8 @@ async fn redis_device_local_edits_preserve_pending_definition_and_uncertain_retr
         username: None,
         tls: true,
         allow_writes: None,
+        ssh_connection_id: None,
+        expected_ssh_revision: None,
         db_index: 0,
         port: 6379,
         expected_revision: None,
@@ -109,6 +111,8 @@ async fn redis_connection_syncs_only_portable_metadata_and_emits_tombstone() {
                 username: Some("reader".into()),
                 tls: true,
                 allow_writes: Some(true),
+                ssh_connection_id: None,
+                expected_ssh_revision: None,
                 db_index: 3,
                 port: 6379,
                 expected_revision: None,
@@ -153,7 +157,7 @@ async fn redis_connection_remote_pull_is_workspace_scoped_and_does_not_echo() {
         &ws,
         "remote-cache",
         "redis",
-        serde_json::json!({"kind":"redis","username":"reader","dbIndex":2,"tls":true}),
+        serde_json::json!({"kind":"redisSsh","username":"reader","dbIndex":2,"tls":true,"sshConnectionId":"missing-jump"}),
     );
     payload["host"] = serde_json::json!("cache.example.test");
     payload["port"] = serde_json::json!(6380);
@@ -175,6 +179,15 @@ async fn redis_connection_remote_pull_is_workspace_scoped_and_does_not_echo() {
     let records = bus.list_redis_connections(&ws).await.unwrap();
     let cache = records.iter().find(|c| c.id == "remote-cache").unwrap();
     assert!(!cache.allow_writes);
+    assert_eq!(cache.ssh_connection_id.as_deref(), Some("missing-jump"));
+    assert!(cache.ssh_connection_name.is_none());
+    assert_eq!(
+        unfour_redis_engine::test_connection(&cache.endpoint(), None)
+            .await
+            .unwrap_err()
+            .code(),
+        "SSH_TUNNEL_ROUTE_MISSING"
+    );
     assert_eq!(
         (
             cache.workspace_id.as_str(),

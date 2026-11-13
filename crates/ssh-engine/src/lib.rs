@@ -4,6 +4,7 @@ pub mod ssh;
 pub use host_key::{HostKeyStore, StoredHostKey};
 pub use ssh::{
     validate_diagnostic_command, PreparedSshConnectionSave, SshConnectionCleanup, SshService,
+    SshTunnel, TunnelProxyLease,
 };
 
 #[cfg(feature = "ssh-native")]

@@ -4,6 +4,8 @@ mod collection_pages;
 use crate::protocol::Reply;
 #[path = "tests/mutation.rs"]
 mod mutation_tests;
+#[path = "tests/tunnel.rs"]
+mod tunnel_tests;
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::TcpListener,
@@ -61,6 +63,7 @@ async fn scripted_with_linger(
             db_index: 0,
             username: None,
             tls: false,
+            transport: RedisTransport::Direct,
         },
         server,
     )
@@ -150,6 +153,7 @@ async fn tls_endpoint_never_falls_back_to_plaintext() {
         db_index: 0,
         username: None,
         tls: true,
+        transport: RedisTransport::Direct,
     };
     let failure = test_connection(&endpoint, Some("fixture-password"))
         .await
@@ -247,6 +251,7 @@ async fn connection_timeout_includes_partial_replies() {
         db_index: 0,
         username: None,
         tls: false,
+        transport: RedisTransport::Direct,
     };
     assert_eq!(
         test_connection(&endpoint, None).await.unwrap_err().code(),

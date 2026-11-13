@@ -18,6 +18,13 @@ pub const REDIS_CONNECTION_TYPE: &str = "redis";
     rename_all_fields = "camelCase"
 )]
 pub enum ConnectionSnapshotConfig {
+    /// Distinct wire subtype: older clients must defer instead of using direct TCP.
+    RedisSsh {
+        username: Option<String>,
+        db_index: u32,
+        tls: bool,
+        ssh_connection_id: String,
+    },
     Redis {
         username: Option<String>,
         db_index: u32,

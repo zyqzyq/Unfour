@@ -1,6 +1,7 @@
 use base64::{engine::general_purpose::STANDARD, Engine};
 use unfour_core::{domain::CommandContext, AppError, AppResult};
 use unfour_redis_engine::connections;
+use unfour_redis_engine::RedisEndpoint;
 use zeroize::Zeroizing;
 
 mod scan_cursor;
@@ -22,7 +23,7 @@ impl CommandBus {
         input.endpoint()?;
         let secret = secret.map(Zeroizing::new);
         let _guard = self.credential_stage_guard().await?;
-        let existing_ref = self.redis_draft_reference(&input, secret.is_some()).await?;
+        let (_, existing_ref) = self.redis_draft_reference(&input, secret.is_some()).await?;
         self.track_connection_credential_edit(&input.workspace_id, input.id.as_deref(), "redis")
             .await?;
         let credential = match secret.as_deref() {
@@ -101,18 +102,18 @@ impl CommandBus {
         &self,
         input: &RedisConnectionInput,
         supplied: bool,
-    ) -> AppResult<Option<String>> {
+    ) -> AppResult<(Option<RedisConnection>, Option<String>)> {
         let mut db = self.db.pool().acquire().await?;
         match input.id.as_deref() {
             Some(id) => {
                 let (record, reference) =
                     connections::get_on(&mut db, &input.workspace_id, id).await?;
                 input.check_existing(&record, supplied)?;
-                Ok(reference)
+                Ok((Some(record), reference))
             }
             None => {
                 connections::ensure_workspace_on(&mut db, &input.workspace_id).await?;
-                Ok(None)
+                Ok((None, None))
             }
         }
     }
@@ -138,7 +139,18 @@ impl CommandBus {
         secret: Option<String>,
     ) -> AppResult<()> {
         let endpoint = input.endpoint()?;
-        let reference = self.redis_draft_reference(&input, secret.is_some()).await?;
+        let (saved, reference) = self.redis_draft_reference(&input, secret.is_some()).await?;
+        let route_id = input.effective_ssh_connection_id(saved.as_ref());
+        {
+            let mut db = self.db.pool().acquire().await?;
+            connections::validate_jump(
+                &mut db,
+                &input.workspace_id,
+                route_id,
+                input.expected_ssh_revision,
+            )
+            .await?;
+        }
         let password = match secret {
             Some(value) => (!value.is_empty()).then(|| Zeroizing::new(value)),
             None => {
@@ -146,8 +158,67 @@ impl CommandBus {
                     .await?
             }
         };
+        let endpoint = self
+            .redis_endpoint_via(
+                &input.workspace_id,
+                endpoint,
+                route_id,
+                input.expected_ssh_revision,
+            )
+            .await?;
+        if let Some(record) = saved {
+            self.check_redis_revision(&record).await?;
+        }
         unfour_redis_engine::test_connection(&endpoint, password.as_deref().map(String::as_str))
             .await
+    }
+
+    async fn redis_endpoint_via(
+        &self,
+        workspace: &str,
+        endpoint: RedisEndpoint,
+        jump: Option<&str>,
+        expected_ssh_revision: Option<i64>,
+    ) -> AppResult<RedisEndpoint> {
+        let Some(jump) = jump else {
+            return Ok(endpoint);
+        };
+        let tunnel = self
+            .ssh
+            .open_tunnel_at_revision(workspace, jump, expected_ssh_revision)
+            .await
+            .map_err(|error| match error {
+                AppError::NotFound(_) => AppError::Validation("SSH_TUNNEL_ROUTE_MISSING".into()),
+                other => other,
+            })?;
+        Ok(endpoint.with_tunnel(std::sync::Arc::new(tunnel)))
+    }
+
+    async fn check_redis_revision(&self, record: &RedisConnection) -> AppResult<()> {
+        let mut db = self.db.pool().acquire().await?;
+        let (latest, _) = connections::get_on(&mut db, &record.workspace_id, &record.id).await?;
+        if latest.revision != record.revision {
+            return Err(AppError::RowConflict("REDIS_CONNECTION_CHANGED".into()));
+        }
+        Ok(())
+    }
+
+    async fn redis_saved_endpoint(&self, record: &RedisConnection) -> AppResult<RedisEndpoint> {
+        if record.route_needs_review {
+            return Err(AppError::Validation("SSH_TUNNEL_ROUTE_CHANGED".into()));
+        }
+        let endpoint = self
+            .redis_endpoint_via(
+                &record.workspace_id,
+                record.endpoint(),
+                record.ssh_connection_id.as_deref(),
+                None,
+            )
+            .await?;
+        if record.ssh_connection_id.is_some() {
+            self.check_redis_revision(record).await?;
+        }
+        Ok(endpoint)
     }
 
     async fn redis_target(
@@ -181,7 +252,7 @@ impl CommandBus {
         let field = field_base64.map(decode_argument).transpose()?;
         let (record, password) = self.redis_target(workspace, id, expected_revision).await?;
         unfour_redis_engine::inspect_key(
-            &record.endpoint(),
+            &self.redis_saved_endpoint(&record).await?,
             password.as_deref().map(String::as_str),
             &key,
             field.as_deref(),
@@ -204,7 +275,7 @@ impl CommandBus {
         let scope = scan_cursor::scope(&record, pattern);
         let offset = scan_cursor::unpack(&scope, cursor)?;
         let mut page = unfour_redis_engine::scan_keys(
-            &record.endpoint(),
+            &self.redis_saved_endpoint(&record).await?,
             password.as_deref().map(String::as_str),
             offset,
             pattern,
@@ -236,7 +307,7 @@ impl CommandBus {
     ) -> AppResult<unfour_redis_engine::RedisCheckResult> {
         let (record, password) = self.redis_target(workspace, id, revision).await?;
         unfour_redis_engine::check_key(
-            &record.endpoint(),
+            &self.redis_saved_endpoint(&record).await?,
             password.as_deref().map(String::as_str),
             key,
             field,
@@ -282,7 +353,7 @@ impl CommandBus {
             None => scan_cursor::unpack(&scope, cursor)?,
         };
         let mut page = unfour_redis_engine::browse_collection(
-            &record.endpoint(),
+            &self.redis_saved_endpoint(&record).await?,
             password.as_deref().map(String::as_str),
             &key,
             kind,
@@ -332,7 +403,7 @@ impl CommandBus {
             }
         }
         let result = unfour_redis_engine::mutate_key(
-            &record.endpoint(),
+            &self.redis_saved_endpoint(&record).await?,
             password.as_deref().map(String::as_str),
             &key,
             &mutation,

@@ -24,6 +24,12 @@ describe("formatError", () => {
 });
 
 describe("classifyRequestError", () => {
+  it("classifies tunnel errors consistently across display languages", () => {
+    expect(classifyRequestError({ code: "SSH_TUNNEL_TIMEOUT", message: "经 SSH 的请求超时。" })).toBe("timeout");
+    expect(classifyRequestError({ code: "SSH_TUNNEL_TARGET_UNREACHABLE", message: "无法连接目标" })).toBe("network");
+    expect(classifyRequestError({ code: "SSH_TUNNEL_ROUTE_CHANGED", message: "The network route changed" })).toBe("failed");
+  });
+
   it("prefers stable API error codes over localized messages", () => {
     expect(classifyRequestError({ code: "API_TIMEOUT", message: "localized" })).toBe(
       "timeout",

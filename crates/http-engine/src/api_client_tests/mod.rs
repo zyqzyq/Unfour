@@ -6,4 +6,5 @@ mod openapi_auth_history;
 mod openapi_history;
 mod openapi_safety;
 mod requests;
+mod ssh_proxy;
 mod support;

@@ -215,6 +215,18 @@ impl CommandBus {
             bundle.flows.push(portable(record)?);
         }
         if bundle.uses_redis() {
+            // Import remaps workspace-owned IDs. A missing SSH target would make
+            // even an encrypted backup impossible to restore.
+            let jumps: std::collections::HashSet<_> = bundle
+                .connections
+                .iter()
+                .filter(|c| c.connection_type == "ssh")
+                .map(|c| c.id.as_str())
+                .collect();
+            if bundle.connections.iter().any(|c| matches!(&c.config,
+                BundleConnectionConfig::RedisSsh { ssh_connection_id, .. } if !jumps.contains(ssh_connection_id.as_str()))) {
+                return Err(AppError::Validation("WORKSPACE_BUNDLE_MISSING_REFERENCE".into()));
+            }
             bundle.version = 3;
         }
         safety::sanitize(&mut bundle)?;

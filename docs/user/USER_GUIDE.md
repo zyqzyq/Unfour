@@ -186,6 +186,10 @@ outer UPDATE/DELETE WHERE can waive the existing unbounded-write confirmation;
 comments, literals and nested SELECTs cannot. A predicate such as `WHERE 1=1`
 can still affect every row. Full access keeps its existing confirmation bypass.
 
+## SSH routes for API and Redis
+
+To reach a private API or Redis host, save the jump host under **SSH** and verify its host fingerprint there. Use the service's internal hostname and port in the API URL or Redis connection, including when using TLS. In the API request toolbar, select the route, then choose an environment default or a request override. Save a request override to reuse it in Flow on the same device. In **Database → Redis**, select the SSH connection in the connection editor and test the route before saving. A tunnel failure stops the operation. [Shared SSH tunnel design](../architecture/shared-ssh-tunnels.md)
+
 ## Redis in the development client
 
 In **Database**, create a connection and choose **Redis**. Set the host, port, logical database, TLS and authentication, then test and save. Open the saved connection alongside your SQL tabs. Look up an exact key or browse a pattern such as `product:*`. A missing key, a key without expiry and a key with a positive TTL have different status indicators.

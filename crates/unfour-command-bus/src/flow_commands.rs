@@ -181,7 +181,24 @@ impl CommandBus {
                 if saved.workspace_id != *workspace || saved.deleted_at.is_some() {
                     return Err(invalid("FLOW_RESOURCE_MISSING"));
                 }
-                Ok(serde_json::to_value(saved)?)
+                let routes = self
+                    .api_routes_for_environment(
+                        workspace,
+                        Some(&saved.id),
+                        input.environment_id.clone(),
+                    )
+                    .await?;
+                let mut resource = serde_json::to_value(saved)?;
+                if let unfour_core::network::ApiRoute::Ssh { ssh_connection_id } = &routes.effective
+                {
+                    let revision: i64 = sqlx::query_scalar("SELECT revision FROM connections WHERE workspace_id=? AND id=? AND connection_type='ssh' AND deleted_at IS NULL")
+                        .bind(workspace).bind(ssh_connection_id).fetch_optional(self.db.pool()).await?
+                        .ok_or_else(|| invalid("FLOW_RESOURCE_MISSING"))?;
+                    resource["sshRevision"] = json!(revision);
+                }
+                resource["networkRoute"] = serde_json::to_value(routes.effective)?;
+                resource["routeEnvironmentId"] = serde_json::to_value(routes.environment_id)?;
+                Ok(resource)
             }
             FlowCapability::Ssh => {
                 let detail = self
@@ -362,7 +379,7 @@ impl FlowExecutor for CommandBus {
                     let (request, variable_secrets) = self
                         .resolve_api_request_input_for_environment(
                             request,
-                            input.environment_id.as_deref(),
+                            snapshot["resource"]["routeEnvironmentId"].as_str(),
                         )
                         .await?;
                     let request_secrets =
@@ -376,11 +393,15 @@ impl FlowExecutor for CommandBus {
                     // the request alive until then so a response that arrives
                     // during the window is recorded. Dropping it aborts the
                     // connection and leaves the remote outcome unconfirmed.
+                    let route =
+                        serde_json::from_value(snapshot["resource"]["networkRoute"].clone())?;
                     let response = match finish_unless_dropped(&cancel, {
-                        self.api_client.send_cancellable_with_secrets(
+                        self.send_routed_http(
                             request,
                             CancellationToken::new(),
                             &variable_secrets,
+                            &route,
+                            snapshot["resource"]["sshRevision"].as_i64(),
                         )
                     })
                     .await

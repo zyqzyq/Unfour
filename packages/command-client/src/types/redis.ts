@@ -7,15 +7,20 @@ export interface RedisConnectionInput {
   username: string | null;
   dbIndex: number;
   tls: boolean;
+  /** Missing keeps the saved route; null selects direct TCP. */
+  sshConnectionId?: string | null;
+  expectedSshRevision?: number;
   /** Device-local desktop grant. Missing on older inputs. */
   allowWrites?: boolean;
   expectedRevision?: number | null;
 }
 
-export interface RedisConnection extends Omit<RedisConnectionInput, "id" | "expectedRevision"> {
+export interface RedisConnection extends Omit<RedisConnectionInput, "id" | "expectedRevision" | "expectedSshRevision"> {
   id: string;
   revision: number;
   hasPassword: boolean;
+  sshConnectionName?: string | null;
+  routeNeedsReview?: boolean;
 }
 
 export interface RedisKeyInfo {

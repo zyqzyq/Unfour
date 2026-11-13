@@ -34,6 +34,8 @@ export function ApiClientPage({
 }) {
   const { t } = useI18n();
   const {
+    activeEnvironment,
+    routing,
     activeTab,
     closeTab,
     closeTabs,
@@ -165,13 +167,14 @@ export function ApiClientPage({
     if (!pending || activeTab?.id !== pending.tabId) {
       return;
     }
+    if (pending.action === "send" && routing?.pending) return;
     pendingIntentAction.current = null;
     if (pending.action === "send") {
       sendTab(activeTab);
     } else {
       setSaveDialogTabId(activeTab.id);
     }
-  }, [activeTab, sendTab, openIntent]);
+  }, [activeTab, sendTab, openIntent, routing?.pending]);
 
   useEffect(() => {
     if (!active) return;
@@ -439,6 +442,9 @@ export function ApiClientPage({
             </EmptyState>
           ) : (
             <ApiRequestWorkspace
+              active={active}
+              routing={routing}
+              environmentName={activeEnvironment?.name}
               workspaceId={workspaceId}
               activeTab={activeTab}
               collectionStatus={collectionStatus}
