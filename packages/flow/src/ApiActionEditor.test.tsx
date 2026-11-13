@@ -11,7 +11,7 @@ afterEach(cleanup);
 const pair = (value: string, occurrence: number, enabled = true) => ({ key: "tag", value, enabled, occurrence });
 function Editor({ changed, legacy = false }: { changed: (action: FlowAction) => void; legacy?: boolean }) {
   const [action, setAction] = useState<FlowAction>({ capability: "api", resourceId: "api", arguments: legacy ? { queryPatch: [{ key: "tag", value: "A", enabled: true }, { key: "tag", value: "B", enabled: true }] } : {} });
-  return <I18nProvider initialLocale="en"><ApiActionEditor action={action} resources={{ api: [{ id: "api", name: "API", queryJson: JSON.stringify([{ key: "tag", value: "a", enabled: true }, { key: "tag", value: "b", enabled: true }]) }], ssh: [], database: [], connections: [] }} variables={[]} onValidity={() => {}} onChange={(next) => { setAction(next); changed(next); }} /></I18nProvider>;
+  return <I18nProvider initialLocale="en"><ApiActionEditor action={action} resources={{ api: [{ id: "api", name: "API", queryJson: JSON.stringify([{ key: "tag", value: "a", enabled: true }, { key: "tag", value: "b", enabled: true }]) }], ssh: [], database: [], redis: [], connections: [] }} variables={[]} onValidity={() => {}} onChange={(next) => { setAction(next); changed(next); }} /></I18nProvider>;
 }
 it.each([0, 1])("targets query occurrence %i and restores only that occurrence", (target) => {
   const changed = vi.fn();

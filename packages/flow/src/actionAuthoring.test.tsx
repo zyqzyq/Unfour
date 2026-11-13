@@ -8,17 +8,37 @@ import type { FlowAction, FlowDefinition, SshTaskDetail } from "@unfour/command-
 import { sqlProblem } from "./actionAuthoring";
 import { ApiActionEditor } from "./ApiActionEditor";
 import { DatabaseActionEditor } from "./DatabaseActionEditor";
+import { RedisActionEditor } from "./RedisActionEditor";
 import { ActionTextField } from "./ActionTextField";
 import { StepEditor } from "./StepEditor";
 import { emptyAction, environmentInputErrors, resourceErrors, type Resources } from "./model";
 
 afterEach(cleanup);
+it("keeps an explicitly empty comparison or hash field until the check is disabled", () => {
+  const changed = vi.fn();
+  function Editor() {
+    const [action, setAction] = useState<FlowAction>({ ...emptyAction("redis"), arguments: { key: "cache" } });
+    return <RedisActionEditor action={action} resources={resources} variables={[]} onValidity={() => {}}
+      onChange={(next) => { setAction(next); changed(next.arguments); }} />;
+  }
+  render(<I18nProvider initialLocale="en"><Editor /></I18nProvider>);
+  fireEvent.click(screen.getByRole("checkbox", { name: "Check a Hash field" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Compare the value" }));
+  const expected = screen.getByRole("textbox", { name: "Expected value", exact: true });
+  fireEvent.change(expected, { target: { value: "old" } });
+  fireEvent.change(expected, { target: { value: "" } });
+  expect(changed).toHaveBeenLastCalledWith({ key: "cache", field: "", equals: "" });
+  fireEvent.click(screen.getByRole("checkbox", { name: "Compare the value" }));
+  expect(changed).toHaveBeenLastCalledWith({ key: "cache", field: "" });
+  fireEvent.click(screen.getByRole("checkbox", { name: "Check a Hash field" }));
+  expect(changed).toHaveBeenLastCalledWith({ key: "cache" });
+});
 const detail = { task: { id: "task", name: "Deploy" }, localBinding: { defaultConnectionId: "default", lastUsedConnectionId: "last" }, detectedInputs: ["VERSION", "directory", "file"], steps: [
   { enabled: true, stepType: "command", configJson: { command: "echo {{VERSION}} {{VERSION}}", workingDirectory: "{{directory}}" } },
   { enabled: true, stepType: "upload", configJson: { localPath: "{{file}}", remotePath: "{{directory}}" } },
   { enabled: false, stepType: "command", configJson: { command: "{{disabled}}" } },
 ] } as SshTaskDetail;
-const resources: Resources = { api: [{ id: "api", name: "Health", method: "GET", url: "https://example.test", bodyKind: "json", body: '{"ready":true}', headersJson: '[{"key":"Accept","value":"application/json","enabled":true}]' }], ssh: [{ id: "task", name: "Deploy", detail }], database: [{ id: "db", name: "Local" }], connections: [{ id: "default", name: "Default" }, { id: "last", name: "Last" }] };
+const resources: Resources = { api: [{ id: "api", name: "Health", method: "GET", url: "https://example.test", bodyKind: "json", body: '{"ready":true}', headersJson: '[{"key":"Accept","value":"application/json","enabled":true}]' }], ssh: [{ id: "task", name: "Deploy", detail }], database: [{ id: "db", name: "Local" }], redis: [], connections: [{ id: "default", name: "Default" }, { id: "last", name: "Last" }] };
 const variables = [{ label: "version", path: ["inputs", "version"] }, { label: "Fetch · body", path: ["steps", "fetch", "body"] }];
 
 it("uses the task engine's detected inputs instead of scanning templates again", () => {

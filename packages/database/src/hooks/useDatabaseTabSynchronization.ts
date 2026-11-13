@@ -10,7 +10,7 @@ export function useDatabaseTabSelection(
   setSelectedConnection: (id: string | null) => void,
   setSelectedTable: (table: DatabaseTable | null) => void,
 ) {
-  const tabId = activeTab?.id;
+  const tabId = activeTab?.kind === "redis" ? null : activeTab?.id;
   const connectionId = activeTab?.connectionId;
   const table = activeTab?.kind === "table" ? activeTab.table : null;
   useEffect(() => {

@@ -8,6 +8,7 @@ mod flow;
 mod metadata_support;
 mod policy;
 mod real;
+mod redis;
 mod saved_sql;
 mod ssh;
 mod ssh_risk;
@@ -148,6 +149,7 @@ impl ToolRegistry {
         tools.extend(saved_sql::registered_tools());
         tools.extend(api::registered_tools());
         tools.extend(database::registered_tools());
+        tools.push(redis::registered_tool());
         tools.extend(system::registered_tools());
         tools.extend(activity::registered_tools());
         tools.extend(flow::registered_tools());

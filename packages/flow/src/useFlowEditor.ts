@@ -23,7 +23,7 @@ export function useFlowEditor(workspaceId: string, flows: FlowWorkspaceData["flo
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<"delete" | null>(null);
-  const [pendingSelection, setPendingSelection] = useState<{ flow: FlowDefinition; latest?: boolean } | null>(null);
+  const [pendingSelection, setPendingSelection] = useState<{ flow: FlowDefinition; latest?: boolean; runtimeInputs?: Record<string, unknown> } | null>(null);
   // Keep the revision pinned for run confirmations and dirty drafts, but make
   // external edits/deletions visible as soon as the definitions query refreshes.
   const externallyChanged = Boolean(draft?.id && flows.isSuccess &&
@@ -128,6 +128,7 @@ export function useFlowEditor(workspaceId: string, flows: FlowWorkspaceData["flo
           cached?.map((flow) => flow.id === pendingSelection.flow.id ? pendingSelection.flow : flow));
       }
       reset(pendingSelection.flow);
+      if (pendingSelection.runtimeInputs) setInputs(pendingSelection.runtimeInputs);
     }
     setPendingSelection(null);
   }

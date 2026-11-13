@@ -29,6 +29,7 @@ vi.mock("@unfour/command-client", async (importOriginal) => ({
   listSavedApiRequests: vi.fn(),
   listSshTasks: vi.fn(),
   listDatabaseConnections: vi.fn(),
+  listRedisConnections: vi.fn(),
   listSshConnections: vi.fn(),
   listWorkspaceEnvironments: vi.fn(),
   listWorkspaceVariables: vi.fn(),
@@ -104,6 +105,7 @@ beforeEach(() => {
     commands.listSavedApiRequests,
     commands.listSshTasks,
     commands.listDatabaseConnections,
+    commands.listRedisConnections,
     commands.listSshConnections,
     commands.listWorkspaceEnvironments,
     commands.listWorkspaceVariables,
@@ -204,6 +206,29 @@ it("offers a first Flow action that creates a draft without saving or running", 
   fireEvent.click(screen.getByRole("button", { name: "Create Flow" }));
   expect(screen.getByLabelText("Flow name")).toHaveValue("New Flow");
   expect(commands.saveFlow).not.toHaveBeenCalled();
+  expect(commands.runFlow).not.toHaveBeenCalled();
+});
+
+it("keeps the inspected Redis key out of the saved draft and uses the selected connection", async () => {
+  vi.mocked(commands.listRedisConnections).mockResolvedValue([{
+    id: "cache", workspaceId: "ws", name: "Orders", host: "localhost", port: 6379,
+    username: null, tls: false, dbIndex: 0, hasPassword: false, revision: 1,
+  }]);
+  const handled = vi.fn();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><I18nProvider initialLocale="en"><FlowPage
+    workspaceId="ws" redisIntent={{ workspaceId: "ws", connectionId: "cache", key: "order:fixture:42" }}
+    onRedisIntentHandled={handled} onSidebarContentChange={() => {}} /></I18nProvider></QueryClientProvider>);
+  expect(await screen.findByLabelText("Flow name")).toHaveValue("Redis key check");
+  expect(handled).toHaveBeenCalledTimes(1);
+  const save = screen.getByRole("button", { name: "Save", exact: true });
+  await waitFor(() => expect(save).toBeEnabled());
+  fireEvent.click(save);
+  await waitFor(() => expect(commands.saveFlow).toHaveBeenCalledTimes(1));
+  const [definition] = vi.mocked(commands.saveFlow).mock.calls[0];
+  expect(definition.inputs).toEqual([{ name: "cacheKey", type: "string", required: true, secret: true }]);
+  expect(definition.steps[0]).toMatchObject({ action: { capability: "redis", resourceId: "cache", arguments: { key: { $ref: "/inputs/cacheKey" } } } });
+  expect(JSON.stringify(definition)).not.toContain("order:fixture:42");
   expect(commands.runFlow).not.toHaveBeenCalled();
 });
 

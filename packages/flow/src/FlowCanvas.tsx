@@ -16,7 +16,7 @@ function StepNode({ data, selected }: NodeProps<CanvasNode>) {
   const { t } = useI18n();
   const step = data.step;
   const kind = step?.kind === "action" ? step.action.capability : step?.kind;
-  const Icon = kind === "api" ? Globe : kind === "database" ? Database : kind === "ssh" ? Terminal : kind === "condition" ? GitBranch : kind === "wait" || kind === "waitUntil" ? Timer : data.virtual === "start" ? Play : data.virtual === "end" ? CircleCheck : ArrowRightLeft;
+  const Icon = kind === "api" ? Globe : (kind === "database" || kind === "redis") ? Database : kind === "ssh" ? Terminal : kind === "condition" ? GitBranch : kind === "wait" || kind === "waitUntil" ? Timer : data.virtual === "start" ? Play : data.virtual === "end" ? CircleCheck : ArrowRightLeft;
   return <div data-status={data.status} data-kind={kind ?? data.virtual} className={`flow-canvas-node${selected ? " is-selected" : ""}`}>
     {data.virtual !== "start" && <Handle id="in" type="target" position={Position.Left} />}
     <div className="flow-node-heading">
@@ -102,7 +102,7 @@ export function FlowCanvas({ definition, onChange, disabled = false, readOnly = 
     {!readOnly && <details className="flow-canvas-advanced"><summary className="text-xs">{t("flow.advanced")}</summary><label className="flex items-center gap-2 pb-2 text-xs"><span className="shrink-0">{t("flow.canvas.insertOn")}</span><Select aria-label={t("flow.canvas.insertOn")} value={insertionEdge.id} options={graph.edges.map((edge) => ({ value: edge.id, label: `${nodes.find((node) => node.id === edge.source)?.ariaLabel} ${edge.sourceHandle === "true" || edge.sourceHandle === "false" ? t(`flow.canvas.${edge.sourceHandle}`) : ""} → ${nodes.find((node) => node.id === edge.target)?.ariaLabel ?? edge.target}` }))} onChange={(event) => setSelectedEdge(event.target.value)} /></label>
       <Select className="mb-2 !w-40" aria-label={t("flow.addStep")} value="" disabled={disabled || definition.steps.length >= 100} options={[
         { value: "", label: t("flow.canvas.add") },
-        ...["api", "database", "ssh", "condition", "waitUntil", "wait"].map((value) => ({ value, label: t(`flow.${value}`) })),
+        ...["api", "database", "redis", "ssh", "condition", "waitUntil", "wait"].map((value) => ({ value, label: t(`flow.${value}`) })),
       ]} onChange={(event) => insertOn(insertionEdge.id, event.target.value)} /></details>}
     <p className="flow-canvas-help text-xs text-[var(--u-color-text-muted)]">{t(readOnly ? "flow.runCanvasHelp" : "flow.canvas.help")}</p>
     {invalid && <p role="alert" className="px-2 text-xs text-[var(--u-color-danger)]">{t("flow.canvas.invalid")}</p>}

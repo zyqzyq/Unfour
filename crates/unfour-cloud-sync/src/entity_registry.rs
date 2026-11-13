@@ -344,6 +344,9 @@ impl<'a> SyncEntityAdapters<'a> {
                 .fetch_optional(&mut *connection)
                 .await?;
                 match connection_type.as_deref() {
+                    Some("redis") => {
+                        unfour_redis_engine::exchange::snapshot_on(connection, key).await
+                    }
                     Some("ssh") => {
                         self.ssh
                             .read_connection_domain_snapshot_on(connection, key)

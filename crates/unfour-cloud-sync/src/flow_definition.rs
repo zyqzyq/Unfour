@@ -186,12 +186,12 @@ pub(crate) fn unsupported_subtype(payload: &Value) -> Result<bool, SyncError> {
             (
                 &step["action"],
                 "capability",
-                &["api", "ssh", "database"][..],
+                &["api", "ssh", "database", "redis"][..],
             ),
             (
                 &step["probe"],
                 "capability",
-                &["api", "ssh", "database"][..],
+                &["api", "ssh", "database", "redis"][..],
             ),
             (
                 &step["predicate"],

@@ -1,4 +1,63 @@
 {
+  "redis": {
+    "readAt": "读取时间",
+    "scanLimit": "已显示 {count} 个键，达到显示上限。请缩小匹配范围。",
+    "createFlow": "用此键新建 Flow",
+    "errors": {
+      "unknown": "Redis 操作失败。",
+      "REDIS_INVALID_INPUT": "请检查 Redis 连接或输入。",
+      "REDIS_INVALID_ENDPOINT": "请输入有效的主机和端口。",
+      "REDIS_INVALID_NAME": "请输入连接名称。",
+      "REDIS_INVALID_USERNAME": "请输入有效的 ACL 用户名。",
+      "REDIS_ENDPOINT_REQUIRES_PASSWORD": "请为新的连接地址重新输入密码。",
+      "REDIS_INVALID_KEY_ENCODING": "无法解码键名。",
+      "REDIS_KEY_TOO_LARGE": "键名超出大小限制。",
+      "REDIS_CONNECTION_FAILED": "无法连接。请检查主机、端口和网络。",
+      "REDIS_TLS_FAILED": "TLS 验证失败。请检查主机名和受信任的证书。",
+      "REDIS_AUTH_FAILED": "Redis 认证失败。请检查用户名和密码。",
+      "REDIS_DB_UNAVAILABLE": "无法选择逻辑库。请检查逻辑库编号和权限。",
+      "REDIS_PERMISSION_DENIED": "Redis 拒绝了此操作。请检查账号权限。",
+      "REDIS_TIMEOUT": "Redis 未在限定时间内响应。",
+      "REDIS_RESPONSE_TOO_LARGE": "响应超出读取上限。可尝试精确查键或缩小匹配范围。",
+      "REDIS_PROTOCOL_ERROR": "Redis 返回了无效响应。",
+      "REDIS_KEY_CHANGED": "读取期间键已发生变化，请重新查看。",
+      "REDIS_COMMAND_FAILED": "Redis 无法完成此次读取。",
+      "REDIS_CLUSTER_UNSUPPORTED": "请连接单实例 Redis。当前版本不支持集群路由。",
+      "REDIS_CONNECTION_CHANGED": "连接配置已更改。请刷新连接列表后重试。",
+      "REDIS_CHECK_TYPE_UNSUPPORTED": "此检查不支持当前键的类型。",
+      "ROW_CONFLICT": "连接配置已更改。请刷新连接列表后重试。",
+      "UNSUPPORTED_OPERATION": "Redis 网络访问需要桌面应用。"
+    },
+    "settings": "Redis 连接",
+    "logicalDb": "逻辑库编号",
+    "tls": "使用 TLS 并验证服务端证书",
+    "listFailed": "无法加载 Redis 连接。点击刷新重试。",
+    "unavailable": "此 Redis 连接已不可用。",
+    "exact": "精确查键",
+    "pattern": "按模式浏览",
+    "key": "完整键名",
+    "emptyKey": "（空键名）",
+    "match": "键匹配模式",
+    "inspect": "查看键",
+    "scan": "扫描",
+    "more": "继续扫描",
+    "scanDone": "扫描完成 · {count} 个键",
+    "scanPartial": "可继续扫描 · 已找到 {count} 个键",
+    "reading": "读取中…",
+    "type": "类型",
+    "persistent": "长期有效",
+    "milliseconds": "{count} 毫秒",
+    "bytes": "字节数",
+    "elements": "元素数",
+    "format": "预览格式",
+    "text": "文本",
+    "truncated": "部分值",
+    "emptyValue": "空值",
+    "missing": "键“{key}”不存在或已过期。",
+    "missingField": "字段不存在。",
+    "hashField": "Hash 字段",
+    "readField": "读取字段"
+  },
   "workspaceBundle": {
     "menuScope": "API、SSH、数据库、变量和 Flow",
     "import": "从文件导入 Workspace…",
@@ -773,7 +832,7 @@
   "database": {
     "start": {
       "title": "添加第一个数据库连接",
-      "description": "连接数据库后，即可浏览表结构、预览数据并编写 SQL。",
+      "description": "连接 SQL 数据库查看表和运行查询，或连接 Redis 查看键值与过期时间。",
       "create": "添加连接",
       "loading": "正在加载数据库连接…",
       "failed": "无法加载数据库连接。请重试。"
@@ -902,7 +961,7 @@
       "sqlite": "SQLite"
     },
     "errors": {
-      "noConnections": "暂无数据库连接。创建连接后可浏览 schema 或运行 SQL。",
+      "noConnections": "暂无数据库连接。添加 SQL 或 Redis 连接以开始使用。",
       "selectBeforePreview": "打开表预览前请先选择数据库连接。",
       "selectBeforeRun": "运行 SQL 前请先选择数据库连接。",
       "sqlEmpty": "SQL 不能为空。"
@@ -1643,6 +1702,16 @@
     "title": "SSH 终端"
   },
   "flow": {
+    "redis": "Redis 键检查",
+    "redisKeyRequired": "请输入 Redis 键或引用。",
+    "redisInvalidArguments": "key、field、equals 仅接受字符串或引用。键和字段各限 64 KiB，预期值限 16 KiB。",
+    "redisArgs": {
+      "key": "精确键或键模板",
+      "checkField": "检查指定 Hash 字段",
+      "compareValue": "比较值",
+      "field": "Hash 字段",
+      "equals": "预期值"
+    },
     "workspaceLeaveTitle": "离开工作区？",
     "workspaceLeaveDescription": "当前工作区有未保存的 Flow 更改。离开将放弃这些更改和尚未保存的变量编辑。",
     "workspaceLeaveDiscard": "放弃并离开",

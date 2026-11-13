@@ -27,7 +27,7 @@ stay in the owning domain and canonical mapping layers.
 | Entity | Wire name | Parent | Snapshot provider |
 | --- | --- | --- | --- |
 | Workspace | `workspace` | none; root | Workspace |
-| Connection | `connection` | none | SSH or Database connection |
+| Connection | `connection` | none | SSH, SQL Database, or Redis connection (Redis in development source) |
 | WorkspaceVariable | `workspaceVariable` | Workspace | Workspace |
 | WorkspaceEnvironment | `workspaceEnvironment` | Workspace | Workspace |
 | WorkspaceEnvironmentVariable | `workspaceEnvironmentVariable` | WorkspaceEnvironment | Workspace |
@@ -73,6 +73,10 @@ transaction, including while signed out, paused, offline, or entitlement
 blocked. Business mutations never depend on a UI Cloud Sync call. External
 apply uses an External-origin Command Bus operation and does not echo an outbox
 intent.
+
+Redis connection definitions capture their portable snapshot inside the local
+transaction. Changing only the device password advances the revision used by
+desktop editors without replacing a queued definition or an uncertain retry.
 
 ## Pull and Snapshot tolerant reader
 

@@ -3,6 +3,8 @@ use unfour_core::models::{
 };
 use unfour_core::models::{SshFilePatchInput, SshFileWriteInput};
 mod contract;
+mod redis;
+pub use redis::RedisCheck;
 mod implementation;
 mod saved_api;
 use unfour_core::models::{ApiCollectionFolder, SavedSql, SavedSqlInput, Workspace};

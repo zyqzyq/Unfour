@@ -1,6 +1,9 @@
 use super::*;
 use unfour_core::redaction::is_sensitive_flow_name;
 pub(super) fn sanitize(bundle: &mut WorkspaceBundle) -> AppResult<()> {
+    if bundle.version < 3 && bundle.uses_redis() {
+        return Err(invalid());
+    }
     for r in &mut bundle.variables {
         if unfour_core::redaction::is_sensitive_workspace_variable(
             &r.key,

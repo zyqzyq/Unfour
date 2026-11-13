@@ -1,6 +1,7 @@
 mod definitions;
 pub mod expression;
 mod external;
+mod redis_history;
 mod reference_graph;
 mod runner;
 mod storage;

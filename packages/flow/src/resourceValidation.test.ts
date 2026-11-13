@@ -5,7 +5,7 @@ import { environmentInputErrors, resourceErrors, type Resources } from "./model"
 const resources: Resources = {
   api: [{ id: "api", name: "API", method: "POST", bodyKind: "multipart-form-data", postResponseScript: "script" }],
   database: [{ id: "db", name: "DB", readOnly: false }],
-  connections: [{ id: "connection", name: "SSH" }],
+  redis: [], connections: [{ id: "connection", name: "SSH" }],
   ssh: [{ id: "task", name: "Task", detail: {
     task: { id: "task", workspaceId: "w", name: "Task", description: "", sortOrder: 0, createdAt: "", updatedAt: "", deletedAt: null },
     steps: [], localBinding: null, detectedInputs: ["Host"],
@@ -25,6 +25,18 @@ const keys = (flow: FlowDefinition, source = resources, defaults?: Map<string, s
   resourceErrors(flow, source, defaults).map((error) => error.key);
 
 describe("resource validation order and capability boundaries", () => {
+  it("validates advanced Redis operands by byte length and preserves empty strings", () => {
+    const check = (args: Record<string, unknown>) => keys(
+      definition({ capability: "redis", resourceId: "cache", arguments: args }),
+      { ...resources, redis: [{ id: "cache", name: "Cache" }] },
+    );
+    expect(check({})).toEqual(["flow.redisKeyRequired"]);
+    expect(check({ key: "order", field: "", equals: "" })).toEqual([]);
+    expect(check({ key: { $ref: "/inputs/cacheKey" } })).toEqual([]);
+    for (const args of [{ key: "item", pattern: "*" }, { key: 1 }, { key: "item", equals: "价".repeat(6000) }]) {
+      expect(check(args)).toEqual(["flow.redisInvalidArguments"]);
+    }
+  });
   it.each(["action", "poll", "waitUntil"] as const)("preserves %s error ordering and missing-resource short circuit", (kind) => {
     const flow = definition({ capability: "api", resourceId: "api", arguments: {} }, kind);
     const expected = ["flow.apiScriptsUnsupported", "flow.apiMultipartUnsupported"];

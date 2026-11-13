@@ -6,6 +6,177 @@ use unfour_core::models::{DatabaseConnectionInput, SshConnectionInput};
 #[path = "connections/failures.rs"]
 mod failures;
 
+#[tokio::test]
+async fn redis_password_edits_preserve_pending_definition_and_uncertain_retry() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let ws = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let transport = Arc::new(MockTransport::new());
+    let (service, hook, _) = SyncRuntime::build(db.clone(), transport.clone());
+    service.enable(&ws).await.unwrap();
+    clear_pushes(&transport);
+    let bus =
+        CommandBus::from_db_with_extensions(db.clone(), CommandBusExtensions::new(vec![hook]))
+            .await
+            .unwrap();
+    let mut input = unfour_command_bus::RedisConnectionInput {
+        workspace_id: ws.clone(),
+        id: None,
+        name: "Cache".into(),
+        host: "cache.example.test".into(),
+        username: None,
+        tls: true,
+        db_index: 0,
+        port: 6379,
+        expected_revision: None,
+    };
+    let saved = bus
+        .save_redis_connection(input.clone(), None)
+        .await
+        .unwrap();
+    input.id = Some(saved.id.clone());
+    input.expected_revision = Some(saved.revision);
+    let secured = bus
+        .save_redis_connection(input.clone(), Some("fixture-first-password".into()))
+        .await
+        .unwrap();
+    assert!(secured.revision > saved.revision);
+
+    transport.fail_pushes.store(1, Ordering::SeqCst);
+    assert_eq!(
+        service.sync_workspace(&ws).await.unwrap_err(),
+        SyncError::Transport
+    );
+    let uncertain = pushed_operations(&transport);
+    assert_eq!(uncertain.len(), 1);
+    assert_eq!(uncertain[0].entity_id, saved.id);
+    let original = serde_json::to_value(&uncertain[0]).unwrap();
+    let serialized = original.to_string();
+    assert!(!serialized.contains("fixture-first-password"));
+    assert!(!serialized.contains("credentialRef"));
+
+    input.expected_revision = Some(secured.revision);
+    let rotated = bus
+        .save_redis_connection(input.clone(), Some("fixture-second-password".into()))
+        .await
+        .unwrap();
+    sqlx::query("UPDATE cloud_sync_outbox SET next_attempt_at=NULL WHERE entity_id=?")
+        .bind(&saved.id)
+        .execute(db.pool())
+        .await
+        .unwrap();
+    service.sync_workspace(&ws).await.unwrap();
+    let attempts = pushed_operations(&transport);
+    assert_eq!(attempts.len(), 2);
+    assert_eq!(serde_json::to_value(&attempts[1]).unwrap(), original);
+
+    input.expected_revision = Some(rotated.revision);
+    bus.save_redis_connection(input, Some(String::new()))
+        .await
+        .unwrap();
+    service.sync_workspace(&ws).await.unwrap();
+    assert_eq!(pushed_operations(&transport).len(), 2);
+    assert_eq!(service.status(&ws).await.unwrap().pending_count, 0);
+}
+
+#[tokio::test]
+async fn redis_connection_syncs_only_portable_metadata_and_emits_tombstone() {
+    let db = database().await;
+    let seed = CommandBus::from_db(db.clone()).await.unwrap();
+    let ws = seed.list_workspaces().await.unwrap().active_workspace_id;
+    let transport = Arc::new(MockTransport::new());
+    let (service, hook, _) = SyncRuntime::build(db.clone(), transport.clone());
+    service.enable(&ws).await.unwrap();
+    clear_pushes(&transport);
+    let bus = CommandBus::from_db_with_extensions(db, CommandBusExtensions::new(vec![hook]))
+        .await
+        .unwrap();
+    let record = bus
+        .save_redis_connection(
+            unfour_command_bus::RedisConnectionInput {
+                workspace_id: ws.clone(),
+                id: None,
+                name: "Cache".into(),
+                host: "cache.example.test".into(),
+                username: Some("reader".into()),
+                tls: true,
+                db_index: 3,
+                port: 6379,
+                expected_revision: None,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    service.sync_workspace(&ws).await.unwrap();
+    let op = pushed_operations(&transport)
+        .into_iter()
+        .find(|op| op.entity_id == record.id)
+        .unwrap();
+    let payload = op.payload.unwrap();
+    assert_eq!(payload["connectionType"], "redis");
+    assert_eq!(
+        payload["config"],
+        serde_json::json!({"kind":"redis","username":"reader","tls":true,"dbIndex":3})
+    );
+    assert!(payload.get("credentialRef").is_none());
+    bus.delete_redis_connection(ws.clone(), record.id.clone(), record.revision)
+        .await
+        .unwrap();
+    service.sync_workspace(&ws).await.unwrap();
+    assert!(pushed_operations(&transport)
+        .iter()
+        .any(|op| op.entity_id == record.id && op.operation == SyncOperation::Delete));
+}
+
+#[tokio::test]
+async fn redis_connection_remote_pull_is_workspace_scoped_and_does_not_echo() {
+    let db = database().await;
+    let bus = CommandBus::from_db(db.clone()).await.unwrap();
+    let ws = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let transport = Arc::new(MockTransport::new());
+    let (service, _, _) = SyncRuntime::build(db, transport.clone());
+    service.enable(&ws).await.unwrap();
+    clear_pushes(&transport);
+    let binding = service.status(&ws).await.unwrap().binding.unwrap();
+    let cursor = binding.last_pulled_cursor + 1;
+    let mut payload = connection_payload(
+        &ws,
+        "remote-cache",
+        "redis",
+        serde_json::json!({"kind":"redis","username":"reader","dbIndex":2,"tls":true}),
+    );
+    payload["host"] = serde_json::json!("cache.example.test");
+    payload["port"] = serde_json::json!(6380);
+    transport.changes.lock().unwrap().push_back(ChangesPage {
+        protocol_version: PROTOCOL_VERSION,
+        cloud_workspace_id: binding.cloud_workspace_id,
+        current_cursor: cursor,
+        next_cursor: cursor,
+        changes: vec![remote_connection(
+            &ws,
+            cursor,
+            "remote-cache-op",
+            "remote-cache",
+            payload,
+        )],
+    });
+    transport.cursor.store(cursor as u64, Ordering::SeqCst);
+    service.sync_workspace(&ws).await.unwrap();
+    let records = bus.list_redis_connections(&ws).await.unwrap();
+    let cache = records.iter().find(|c| c.id == "remote-cache").unwrap();
+    assert_eq!(
+        (
+            cache.workspace_id.as_str(),
+            cache.db_index,
+            cache.tls,
+            cache.has_password
+        ),
+        (ws.as_str(), 2, true, false)
+    );
+    assert!(pushed_operations(&transport).is_empty());
+}
+
 fn ssh_input(
     workspace_id: &str,
     id: Option<String>,

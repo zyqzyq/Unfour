@@ -287,7 +287,11 @@ impl FlowService {
         let number = run.steps[index].attempts.len() as u32 + 1;
         run.steps[index].attempts.push(FlowAttempt {
             number,
-            input: resolved.arguments.clone(),
+            input: if action.capability == FlowCapability::Redis {
+                json!({})
+            } else {
+                resolved.arguments.clone()
+            },
             output: None,
             error: None,
             duration_ms: 0,

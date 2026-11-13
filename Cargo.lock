@@ -7132,6 +7132,7 @@ dependencies = [
  "unfour-flow-engine",
  "unfour-http-engine",
  "unfour-local-storage",
+ "unfour-redis-engine",
  "unfour-secret-store",
  "unfour-ssh-engine",
  "unfour-workspace-engine",
@@ -7153,6 +7154,7 @@ dependencies = [
 name = "unfour-command-bus"
 version = "0.14.0"
 dependencies = [
+ "base64 0.22.1",
  "rand 0.10.1",
  "russh",
  "serde",
@@ -7168,6 +7170,7 @@ dependencies = [
  "unfour-http-engine",
  "unfour-local-storage",
  "unfour-paths",
+ "unfour-redis-engine",
  "unfour-secret-store",
  "unfour-ssh-engine",
  "unfour-workspace-engine",
@@ -7291,6 +7294,20 @@ name = "unfour-paths"
 version = "0.14.0"
 dependencies = [
  "dirs 6.0.0",
+]
+
+[[package]]
+name = "unfour-redis-engine"
+version = "0.14.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "rustls-platform-verifier",
+ "serde",
+ "sqlx",
+ "tokio",
+ "tokio-rustls",
+ "unfour-core",
 ]
 
 [[package]]

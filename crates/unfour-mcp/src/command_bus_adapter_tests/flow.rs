@@ -43,6 +43,31 @@ fn success(registry: &ToolRegistry, tool: &str, args: Value) -> Value {
     assert_success_matches_output_schema(registry, &name, &result);
     result["structuredContent"].clone()
 }
+
+#[test]
+fn redis_flow_round_trips_through_published_mcp_schemas() {
+    let (adapter, registry, ws) = setup();
+    let cache = adapter
+        .run(
+            adapter.bus.save_redis_connection(
+                serde_json::from_value(json!({
+                    "workspaceId": ws, "name": "Cache", "host": "127.0.0.1",
+                    "port": 6379, "dbIndex": 0, "tls": false
+                }))
+                .unwrap(),
+                None,
+            ),
+        )
+        .unwrap();
+    let mut draft = definition(&ws);
+    draft.steps = serde_json::from_value(json!([{
+        "id": "check", "name": "Check cache", "kind": "action", "timeoutMs": 1000,
+        "action": {"capability":"redis","resourceId":cache.id,"arguments":{"key":{"$ref":"/inputs/value"}}}
+    }])).unwrap();
+    let saved = success(&registry, "save", json!({"definition":draft}))["flow"].clone();
+    let fetched = success(&registry, "get", json!({"flowId":saved["id"]}));
+    assert_eq!(fetched["flow"]["steps"][0]["action"]["capability"], "redis");
+}
 fn confirmation(registry: &ToolRegistry, args: Value) -> String {
     let result = registry.call("unfour.flow.run", args).unwrap();
     assert_eq!(result["isError"], true);

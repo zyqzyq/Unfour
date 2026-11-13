@@ -19,6 +19,22 @@ use super::ToolRegistry;
 struct StubCommandBus;
 
 impl CommandBusAdapter for StubCommandBus {
+    fn check_redis_key(
+        &self,
+        args: crate::command_bus_adapter::RedisCheck<'_>,
+    ) -> Result<unfour_command_bus::RedisCheckResult, CommandBusAdapterError> {
+        assert_eq!(args.workspace, "workspace-2");
+        assert_eq!(args.connection, "cache");
+        assert_eq!(args.key, b" private key ");
+        assert_eq!(args.field, Some(b"" as &[u8]));
+        assert_eq!(args.equals, Some(b"expected secret" as &[u8]));
+        Ok(unfour_command_bus::RedisCheckResult {
+            exists: true,
+            key_type: "hash".into(),
+            pttl_ms: 25,
+            matched: true,
+        })
+    }
     fn execute_read(
         &self,
         command: ReadCommand,
@@ -330,7 +346,7 @@ fn tool_annotations_classify_side_effects() {
 fn tool_schemas_are_available() {
     let definitions = ToolRegistry::with_command_bus(Arc::new(StubCommandBus)).definitions();
 
-    assert_eq!(definitions.len(), 87);
+    assert_eq!(definitions.len(), 88);
     assert!(definitions
         .iter()
         .any(|definition| definition.name == "unfour.db.export_table"));
@@ -447,6 +463,29 @@ fn workspace_current_returns_command_bus_result() {
     );
     assert_eq!(result["structuredContent"]["source"], "command-bus");
     assert_eq!(result["isError"], false);
+}
+
+#[test]
+fn redis_check_uses_policy_workspace_and_omits_input_and_value() {
+    let registry = ToolRegistry::with_command_bus(Arc::new(StubCommandBus));
+    let result=registry.call("unfour.redis.check_key",json!({
+        "workspaceId":"workspace-2","connectionId":"cache","key":" private key ","field":"","equals":"expected secret"
+    })).unwrap();
+    assert_eq!(
+        result["structuredContent"],
+        json!({"exists":true,"keyType":"hash","pttlMs":25,"matched":true})
+    );
+    let wire = result.to_string();
+    assert!(!wire.contains("private key") && !wire.contains("expected secret"));
+    assert_eq!(result["_meta"]["riskLevel"], "low");
+    let invalid = registry.call(
+        "unfour.redis.check_key",
+        json!({"connectionId":"cache","key":"one","command":"GET"}),
+    );
+    assert!(matches!(
+        invalid,
+        Err(super::ToolCallError::InvalidArguments(_))
+    ));
 }
 
 #[test]

@@ -1,0 +1,19 @@
+[package]
+name = "unfour-redis-engine"
+version.workspace = true
+edition = "2021"
+license = "Apache-2.0"
+
+[dependencies]
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+sqlx = { version = "0.8", default-features = false, features = ["chrono", "sqlite", "macros", "runtime-tokio-rustls"] }
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["io-util", "net", "time"] }
+# An explicit provider avoids process-wide defaults; trust and host verification use the OS.
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+rustls-platform-verifier = "0.7"
+unfour-core = { path = "../unfour-core" }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "test-util"] }

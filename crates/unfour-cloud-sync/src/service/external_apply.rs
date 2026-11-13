@@ -19,6 +19,7 @@ use crate::SyncError;
 
 #[derive(Default)]
 pub(super) struct ExternalApplyCleanup {
+    redis_connections_changed: bool,
     ssh_connections: Vec<SshConnectionCleanup>,
     database_connections: Vec<DatabaseConnectionCleanup>,
     materialized: HashSet<(DomainEntityType, String)>,
@@ -111,6 +112,16 @@ impl SyncService {
                 .map_err(|_| SyncError::Core)?;
             cleanup.record_keys(materialized);
             cleanup.database_connections.extend(cleanups);
+            let (changes, keys) = unfour_redis_engine::exchange::cascade_on(
+                connection,
+                &context,
+                workspace_id,
+                deleted_at,
+            )
+            .await
+            .map_err(|_| SyncError::Core)?;
+            cleanup.redis_connections_changed |= !changes.is_empty();
+            cleanup.record_keys(keys);
         }
         let workspace_outcome = self
             .workspace
@@ -161,6 +172,8 @@ impl SyncService {
                     }
                     if connection_type == SSH_CONNECTION_TYPE {
                         SSH_CONNECTION_TYPE
+                    } else if connection_type == "redis" {
+                        "redis"
                     } else if connection_type == DATABASE_CONNECTION_TYPE {
                         DATABASE_CONNECTION_TYPE
                     } else {
@@ -169,6 +182,18 @@ impl SyncService {
                 }
             };
             match connection_type {
+                "redis" => {
+                    let outcome = unfour_redis_engine::exchange::apply_on(
+                        connection,
+                        &context,
+                        change.clone(),
+                    )
+                    .await
+                    .map_err(|_| SyncError::Core)?;
+                    cleanup.record_connection(&change);
+                    cleanup.redis_connections_changed |= !outcome.mutations.is_empty();
+                    cleanup.record_keys(outcome.mutations.into_iter().map(|m| m.entity));
+                }
                 SSH_CONNECTION_TYPE => {
                     let outcome = self
                         .ssh
@@ -240,6 +265,12 @@ impl SyncService {
         self.database
             .cleanup_connection_changes(cleanup.database_connections)
             .await;
+        if cleanup.redis_connections_changed {
+            if let Ok(core) = self.core().await {
+                // A later commit or startup retries journal entries if the OS keychain is unavailable.
+                let _ = core.cleanup_bundle_garbage().await;
+            }
+        }
     }
 }
 

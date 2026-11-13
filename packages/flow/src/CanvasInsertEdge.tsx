@@ -19,7 +19,7 @@ export function CanvasInsertEdge(props: EdgeProps) {
     <EdgeLabelRenderer><div onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} className="nodrag nopan flex items-center gap-1" style={{ position: "absolute", transform: `translate(-50%, -50%) translate(${controlX}px, ${controlY}px)`, pointerEvents: "all" }}>
       {branch && <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 rounded px-1.5 py-0.5 bg-[var(--u-color-canvas)] text-[10px] text-[var(--u-color-text-muted)]">{branch}</span>}
       <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="!h-6 !w-6 !rounded-full !p-0 shadow-[var(--u-shadow-sm)]" disabled={disabled} aria-label={`${t("flow.canvas.add")} · ${props.data?.description ?? props.id}`} title={t("flow.canvas.add")}><Plus size={12} /></Button></DropdownMenuTrigger>
-        <DropdownMenuContent>{["api", "database", "ssh", "condition", "waitUntil", "wait"].map((kind) => <DropdownMenuItem key={kind} onSelect={() => insert(props.id, kind)}>{t(`flow.${kind}`)}</DropdownMenuItem>)}</DropdownMenuContent>
+        <DropdownMenuContent>{["api", "database", "redis", "ssh", "condition", "waitUntil", "wait"].map((kind) => <DropdownMenuItem key={kind} onSelect={() => insert(props.id, kind)}>{t(`flow.${kind}`)}</DropdownMenuItem>)}</DropdownMenuContent>
       </DropdownMenu>
     </div></EdgeLabelRenderer>
   </>;

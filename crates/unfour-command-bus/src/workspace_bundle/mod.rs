@@ -1,6 +1,8 @@
 mod backup;
 mod filename;
 mod local;
+#[cfg(test)]
+mod redis_tests;
 mod remap;
 mod safety;
 mod schema;
@@ -80,7 +82,7 @@ fn portable<T: serde::de::DeserializeOwned>(source: impl Serialize) -> AppResult
 fn parse(content: &str) -> AppResult<WorkspaceBundle> {
     check_file_size(content.len(), MAX_WORKSPACE_FILE_BYTES)?;
     let mut bundle: WorkspaceBundle = serde_json::from_str(content).map_err(|_| invalid())?;
-    if bundle.format != "unfour-workspace" || !matches!(bundle.version, 1 | 2) {
+    if bundle.format != "unfour-workspace" || !matches!(bundle.version, 1..=3) {
         return Err(AppError::Validation(
             "WORKSPACE_BUNDLE_UNSUPPORTED_VERSION".into(),
         ));
@@ -140,6 +142,7 @@ impl CommandBus {
                 .export_connection_snapshots_on(&mut *db, &workspace)
                 .await?,
         );
+        snapshots.extend(unfour_redis_engine::exchange::export_on(db, workspace).await?);
         for key in self
             .ssh
             .list_task_domain_entities_on(&mut *db, &workspace)
@@ -210,6 +213,9 @@ impl CommandBus {
             .await?
         {
             bundle.flows.push(portable(record)?);
+        }
+        if bundle.uses_redis() {
+            bundle.version = 3;
         }
         safety::sanitize(&mut bundle)?;
         Ok(bundle)
@@ -284,6 +290,10 @@ impl CommandBus {
             let result = if record.connection_type == "ssh" {
                 self.ssh
                     .apply_external_connection_on(connection, &context, change.clone())
+                    .await?
+                    .mutations
+            } else if record.connection_type == "redis" {
+                unfour_redis_engine::exchange::apply_on(connection, &context, change.clone())
                     .await?
                     .mutations
             } else {

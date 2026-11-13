@@ -476,13 +476,35 @@ pub(crate) async fn canonical_intent_on(
 ) -> Result<CanonicalIntent, SyncError> {
     let entity_type = SyncEntityType::try_from(mutation.entity.entity_type)?;
     let operation = SyncOperation::from(mutation.operation);
-    if entity_type == SyncEntityType::Flow {
-        let snapshot = unfour_flow_engine::FlowService::read_definition_snapshot_on(
-            connection,
-            &mutation.entity,
-        )
-        .await
-        .map_err(|_| SyncError::Core)?;
+    let snapshot = match entity_type {
+        SyncEntityType::Flow => Some(
+            unfour_flow_engine::FlowService::read_definition_snapshot_on(
+                connection,
+                &mutation.entity,
+            )
+            .await
+            .map_err(|_| SyncError::Core)?,
+        ),
+        SyncEntityType::Connection => {
+            // A device-local password edit advances the Redis connection's CAS
+            // revision without producing a new portable definition. Freeze the
+            // current definition before such an edit can overtake a pending push.
+            let is_redis: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM connections WHERE workspace_id=? AND id=? AND connection_type='redis')",
+            ).bind(&mutation.entity.workspace_id).bind(&mutation.entity.entity_id).fetch_one(&mut *connection).await?;
+            if is_redis {
+                Some(
+                    unfour_redis_engine::exchange::snapshot_on(connection, &mutation.entity)
+                        .await
+                        .map_err(|_| SyncError::Core)?,
+                )
+            } else {
+                None
+            }
+        }
+        _ => None,
+    };
+    if let Some(snapshot) = snapshot {
         let captured = canonical_snapshot_intent(snapshot)?;
         if captured.revision != mutation.revision || captured.intent.operation != operation {
             return Err(SyncError::InvalidData);

@@ -184,6 +184,7 @@ impl CommandBus {
                         matches!(auth_method.as_str(), "password" | "private-key")
                     }
                     BundleConnectionConfig::Database { driver, .. } => driver != "sqlite",
+                    BundleConnectionConfig::Redis { .. } => true,
                 };
                 let uses_path = field != "keyPath"
                     || matches!(config, BundleConnectionConfig::Ssh { auth_method, .. } if auth_method == "private-key");
@@ -201,6 +202,12 @@ impl CommandBus {
                     }
                 }
             }
+        }
+        for (id, reference) in
+            unfour_redis_engine::exchange::credential_refs_on(db, workspace).await?
+        {
+            bundle.credential_requirements.push(id.clone());
+            credentials.push((id, reference));
         }
         for (id, path, enabled) in self
             .ssh

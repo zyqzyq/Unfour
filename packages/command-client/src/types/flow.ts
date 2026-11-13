@@ -1,4 +1,4 @@
-export type FlowCapability = "api" | "ssh" | "database";
+export type FlowCapability = "api" | "ssh" | "database" | "redis";
 export type FlowAction = {
   capability: FlowCapability;
   resourceId: string;

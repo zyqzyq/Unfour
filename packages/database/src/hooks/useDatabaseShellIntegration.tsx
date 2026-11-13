@@ -1,13 +1,18 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import type { DatabaseConnection, DatabaseSchema, SavedSql, DatabaseTable } from "@unfour/command-client";
+import type { DatabaseConnection, DatabaseSchema, SavedSql, DatabaseTable, RedisConnection } from "@unfour/command-client";
 import { DatabaseSidebar } from "../components/DatabaseSidebar";
 import { DatabaseStatusBar } from "../components/DatabaseStatusBar";
 import { groupSavedSqlByConnection, type DatabasePageProps, type DatabaseSidebarActions } from "../model/database-page";
 import type { DatabaseConnectionSessionState } from "../model/types";
+import type { RedisTreeActions } from "../redis/RedisConnectionRows";
 
 type DatabaseShellIntegrationOptions = DatabasePageProps & {
   catalogNamesByConn: Record<string, string[]>;
   connections: DatabaseConnection[];
+  redisConnections?: RedisConnection[];
+  redisActions?: RedisTreeActions;
+  activeRedis?: RedisConnection;
+  redisListFailed?: boolean;
   connectionStates: Record<string, DatabaseConnectionSessionState>;
   executePending: boolean;
   savedSql: SavedSql[];
@@ -25,6 +30,10 @@ export function useDatabaseShellIntegration({
   active = true,
   catalogNamesByConn,
   connections,
+  redisConnections,
+  redisActions,
+  activeRedis,
+  redisListFailed,
   connectionStates,
   executePending,
   onShellSidebarChange,
@@ -86,6 +95,10 @@ export function useDatabaseShellIntegration({
         catalogNamesByConnection={catalogNamesByConn}
         connectionStates={connectionStates}
         connections={connections}
+        redisConnections={redisConnections}
+        redisActions={redisActions}
+        activeRedisId={activeRedis?.id}
+        redisListFailed={redisListFailed}
         loadErrors={treeErrors}
         loadingKeys={treeLoadingKeys}
         savedSqlByConnection={savedSqlByConnection}
@@ -99,6 +112,10 @@ export function useDatabaseShellIntegration({
       catalogNamesByConn,
       connectionStates,
       connections,
+      redisConnections,
+      redisActions,
+      activeRedis,
+      redisListFailed,
       savedSqlByConnection,
       selectedConnectionId,
       selectedTableId,
@@ -121,6 +138,7 @@ export function useDatabaseShellIntegration({
   const shellStatusBar = useMemo(
     () => (
       <DatabaseStatusBar
+        redis={activeRedis}
         connection={toolbarConnection}
         executing={executePending}
         rightAccessory={statusBarRightAccessory}
@@ -130,6 +148,7 @@ export function useDatabaseShellIntegration({
     ),
     [
       executePending,
+      activeRedis,
       toolbarConnection,
       toolbarSession,
       statusBarRightAccessory,

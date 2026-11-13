@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
-import type { FlowDefinition } from "@unfour/command-client";
+import type { FlowDefinition, RedisFlowIntent } from "@unfour/command-client";
 import { useI18n } from "@unfour/ui";
 import { FlowCanvas } from "./FlowCanvas";
 import { FlowSidebar } from "./FlowSidebar";
@@ -16,11 +16,14 @@ import { useFlowEditor } from "./useFlowEditor";
 import { useFlowRuns } from "./useFlowRuns";
 import { getFlowPageValidation } from "./flowPageValidation";
 
-type FlowPageProps = { workspaceId: string; onSidebarContentChange: (node: ReactNode) => void; onDirtyChange?: (dirty: boolean) => void };
+type FlowPageProps = {
+  workspaceId: string; onSidebarContentChange: (node: ReactNode) => void; onDirtyChange?: (dirty: boolean) => void;
+  redisIntent?: RedisFlowIntent | null; onRedisIntentHandled?: () => void;
+};
 export function FlowPage(props: FlowPageProps) {
   return <WorkspaceFlowPage key={props.workspaceId} {...props} />;
 }
-function WorkspaceFlowPage({ workspaceId, onSidebarContentChange, onDirtyChange }: FlowPageProps) {
+function WorkspaceFlowPage({ workspaceId, onSidebarContentChange, onDirtyChange, redisIntent, onRedisIntentHandled }: FlowPageProps) {
   const { t } = useI18n();
   const data = useFlowWorkspaceData(workspaceId);
   const editor = useFlowEditor(workspaceId, data.flows, data.environments);
@@ -46,6 +49,23 @@ function WorkspaceFlowPage({ workspaceId, onSidebarContentChange, onDirtyChange 
     }
     resetSelection(flow);
   }, [busy, dirty, resetSelection, setPendingSelection]);
+  const handled = useRef<RedisFlowIntent | null>(null);
+  const { setInputs } = editor;
+  useEffect(() => {
+    if (!redisIntent || redisIntent === handled.current || busy || redisIntent.workspaceId !== workspaceId) return;
+    handled.current = redisIntent;
+    const step = newStep("redis", t("flow.redis"));
+    if (step.kind !== "action") return;
+    const flow: FlowDefinition = {
+      id: "", workspaceId, name: t("flow.redis"), revision: 0,
+      inputs: [{ name: "cacheKey", type: "string", required: true, secret: true }],
+      steps: [{ ...step, action: { ...step.action, resourceId: redisIntent.connectionId, arguments: { key: { $ref: "/inputs/cacheKey" } } } }],
+    };
+    const runtimeInputs = { cacheKey: redisIntent.key };
+    if (dirty) setPendingSelection({ flow, runtimeInputs });
+    else { resetSelection(flow); setInputs(runtimeInputs); }
+    onRedisIntentHandled?.();
+  }, [busy, dirty, redisIntent, onRedisIntentHandled, resetSelection, setInputs, setPendingSelection, t, workspaceId]);
   const { data: definitions, isPending, isError, refetch } = data.flows;
   const sidebar = useMemo(() => (
     <FlowSidebar workspaceId={workspaceId} definitions={definitions} pending={isPending} failed={isError} busy={busy} retry={refetch} selectedFlowId={draft?.id} select={select} />

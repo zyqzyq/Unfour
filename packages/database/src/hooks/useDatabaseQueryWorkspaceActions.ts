@@ -211,7 +211,7 @@ export function useDatabaseQueryWorkspaceActions({
   function selectDatabaseTab(tabId: string) {
     const tab = databaseTabs.tabs.find((item) => item.id === tabId);
     databaseTabs.setActiveTabId(tabId);
-    if (!tab) {
+    if (!tab || tab.kind === "redis") {
       return;
     }
     setSelectedDatabaseConnection(tab.connectionId);

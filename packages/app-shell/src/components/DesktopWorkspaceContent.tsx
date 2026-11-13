@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import type { WorkspaceTab } from "@unfour/command-client";
+import { useCallback, useState, type ReactNode } from "react";
+import type { RedisFlowIntent, WorkspaceTab } from "@unfour/command-client";
 import { Button, EmptyState, ErrorState, LoadingState, MainWorkspace, useI18n } from "@unfour/ui";
 import type { DesktopAppExtensionContext, DesktopAppExtensions } from "../extensions";
 import { ApiClientModule, DatabaseModule, FlowModule, SshTerminalModule, WorkspaceEnvironmentsModule } from "./LazyFeatureModules";
@@ -47,10 +47,22 @@ export function DesktopWorkspaceContent({
 }: DesktopWorkspaceContentProps) {
   const { activeWorkspace, workspaceQuery } = workspace;
   const { variableManagerOpen, variableManagerRequest, closeVariableManager, setVariableManagerDirty } = navigation;
+  const [redisFlowIntent, setRedisFlowIntent] = useState<RedisFlowIntent | null>(null);
+  const clearIntent = useCallback(() => setRedisFlowIntent(null), []);
+  if (redisFlowIntent && redisFlowIntent.workspaceId !== activeWorkspace?.id) {
+    setRedisFlowIntent(null);
+  }
+  const openRedisFlow = (intent: RedisFlowIntent) => {
+    if (intent.workspaceId !== activeWorkspace?.id) return;
+    setRedisFlowIntent(intent);
+    navigation.handleSelectModule("flow-main");
+  };
   return <MainWorkspace className="[&>section]:p-0" tabBar={null}>
     {!activeWorkspace && <WorkspaceStartupState query={workspaceQuery} />}
     {activeWorkspace && mounts.shouldMountFlow && <div className={activeTab.kind === "flow" && !variableManagerOpen ? "h-full" : "hidden"}>
-      <FlowModule key={activeWorkspace.id} workspaceId={activeWorkspace.id} onSidebarContentChange={onFlowSidebarChange} onDirtyChange={navigation.setFlowDirty} />
+      <FlowModule key={activeWorkspace.id} workspaceId={activeWorkspace.id} onSidebarContentChange={onFlowSidebarChange} onDirtyChange={navigation.setFlowDirty}
+        redisIntent={activeTab.kind === "flow" && redisFlowIntent?.workspaceId === activeWorkspace.id ? redisFlowIntent : null}
+        onRedisIntentHandled={clearIntent} />
     </div>}
     {activeWorkspace && mounts.shouldMountApi && <div className={activeTab.kind === "api" && !variableManagerOpen ? "h-full" : "hidden"}>
       <ApiClientModule
@@ -73,6 +85,7 @@ export function DesktopWorkspaceContent({
         its theme and avoid a white repaint when returning to a query tab. */}
     {activeWorkspace && mounts.shouldMountDatabase && <div className={activeTab.kind === "database" && !variableManagerOpen ? "h-full" : "hidden"}>
       <DatabaseModule
+        onCreateRedisFlow={openRedisFlow}
         active={activeTab.kind === "database" && !variableManagerOpen}
         onShellSidebarChange={onDatabaseSidebarChange}
         onShellStatusBarChange={onDatabaseStatusBarChange}

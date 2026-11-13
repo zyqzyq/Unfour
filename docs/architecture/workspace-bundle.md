@@ -2,7 +2,7 @@
 
 A Workspace can be exported from its switcher menu and imported as a new local
 Workspace. This is a portable business definition package, not a database backup.
-The desktop exports `format: "unfour-workspace", version: 2`; V1 remains readable.
+The desktop exports `format: "unfour-workspace", version: 2` for existing connection types. The development client writes V3 for workspaces containing Redis connections or Redis Flow checks. V1 and V2 remain readable.
 V2 adds optional `localPaths`, `credentialRequirements`, and `apiTemplates` arrays.
 The V1 base record contract below is unchanged. Cloud Sync does not consume these
 local supplements or encrypted backups.
@@ -120,6 +120,7 @@ only schema-defined references, not strings that happen to resemble an ID.
 - SSH step → task. SSH task definitions do not store a selected connection.
 - Saved SQL → optional Database connection.
 - Flow API action/probe → API request.
+- Flow Redis action/probe → Redis connection (`resourceId`). Plain exports contain connection settings only. Encrypted backups can include the saved Redis password.
 - Flow SSH action → SSH task **and** SSH connection.
 - Flow Database action/probe → Database connection (`resourceId`). In the current
   model SQL is in action arguments, not a Saved SQL reference.

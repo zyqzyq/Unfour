@@ -8,6 +8,8 @@ use tokio_util::sync::CancellationToken;
 use unfour_core::{models::*, AppResult};
 use unfour_flow_engine::{expression::invalid, FlowExecutor, FlowFuture, FlowService};
 
+mod redis;
+
 impl CommandBus {
     fn flow_service(&self) -> FlowService {
         FlowService::new(self.db.clone())
@@ -35,6 +37,10 @@ impl CommandBus {
             };
             if action.capability == FlowCapability::Api {
                 validate_api_arguments(&action.arguments, true)?;
+            }
+            if action.capability == FlowCapability::Redis {
+                self.flow_redis_resource(&input.workspace_id, &action.resource_id)
+                    .await?;
             }
             if action.capability == FlowCapability::Database {
                 let connection = self
@@ -162,6 +168,10 @@ impl CommandBus {
     async fn flow_resource(&self, action: &FlowAction, input: &FlowRunInput) -> AppResult<Value> {
         let workspace = &input.workspace_id;
         match action.capability {
+            FlowCapability::Redis => {
+                self.flow_redis_resource(workspace, &action.resource_id)
+                    .await
+            }
             FlowCapability::Api => {
                 let saved = self
                     .api_client
@@ -238,6 +248,7 @@ impl FlowExecutor for CommandBus {
                 ],
                 FlowCapability::Ssh => &["inputs", "workspaceDefaults"],
                 FlowCapability::Database => &["sql", "catalog", "schema", "limit"],
+                FlowCapability::Redis => &["key", "field", "equals"],
             };
             if arguments.keys().any(|key| !allowed.contains(&key.as_str())) {
                 return Err(invalid("FLOW_UNKNOWN_ARGUMENT"));
@@ -337,6 +348,13 @@ impl FlowExecutor for CommandBus {
                 return Err(invalid("FLOW_CANCELLED"));
             }
             match action.capability {
+                FlowCapability::Redis => {
+                    let revision = snapshot["resource"]["revision"]
+                        .as_i64()
+                        .ok_or_else(|| invalid("FLOW_RESOURCE_CHANGED"))?;
+                    self.execute_redis_check(&input.workspace_id, action, revision, cancel)
+                        .await
+                }
                 FlowCapability::Api => {
                     let mut request = snapshot["request"].clone();
                     apply_api_arguments(&mut request, &action.arguments)?;

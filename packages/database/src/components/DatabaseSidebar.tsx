@@ -4,11 +4,13 @@ import type {
   DatabaseConnection,
   DatabaseSchema,
   DatabaseTable,
+  RedisConnection,
   SavedSql,
 } from "@unfour/command-client";
 import { Badge, IconButton, SidebarSearch, useI18n } from "@unfour/ui";
 import { DatabaseConnectionTree } from "./DatabaseConnectionTree";
 import type { DatabaseConnectionSessionState } from "../model/types";
+import type { RedisTreeActions } from "../redis/RedisConnectionRows";
 
 /**
  * Connection/schema tree mounted in the shell sidebar. The owning page pushes
@@ -24,6 +26,10 @@ function DatabaseSidebarContent({
   catalogNamesByConnection,
   connectionStates,
   connections,
+  redisConnections,
+  redisActions,
+  activeRedisId,
+  redisListFailed,
   loadErrors,
   loadingKeys,
   onConnect,
@@ -52,6 +58,10 @@ function DatabaseSidebarContent({
   catalogNamesByConnection?: Record<string, string[]>;
   connectionStates?: Record<string, DatabaseConnectionSessionState>;
   connections: DatabaseConnection[];
+  redisConnections?: RedisConnection[];
+  redisActions?: RedisTreeActions;
+  activeRedisId?: string | null;
+  redisListFailed?: boolean;
   loadErrors?: Record<string, string>;
   loadingKeys?: string[];
   onConnect: (connection: DatabaseConnection) => void;
@@ -86,7 +96,7 @@ function DatabaseSidebarContent({
         <span className="flex items-center gap-2 text-[12px] font-semibold text-[var(--u-color-text)]">
           <Database className="text-[var(--u-color-primary)]" size={14} />
           {t("database.sidebar.connections")}
-          <Badge tone="neutral">{connections.length}</Badge>
+          <Badge tone="neutral">{connections.length + (redisConnections?.length ?? 0)}</Badge>
         </span>
         <div className="flex items-center gap-1">
           <IconButton label={t("database.connection.newLabel")} onClick={onNewConnection} size="compact">
@@ -99,7 +109,11 @@ function DatabaseSidebarContent({
       </div>
       <SidebarSearch label={t("database.sidebar.searchAria")} placeholder={t("database.sidebar.searchPlaceholder")} value={search} onChange={setSearch} />
       <div className="min-h-0 flex-1 overflow-auto">
+        {redisListFailed && <p role="alert" className="px-2 text-[11px] text-[var(--u-color-danger)]">{t("redis.listFailed")}</p>}
         <DatabaseConnectionTree
+          redisConnections={redisConnections}
+          redisActions={redisActions}
+          activeRedisId={activeRedisId}
           catalogNamesByConnection={catalogNamesByConnection}
           connectionStates={connectionStates}
           connections={connections}

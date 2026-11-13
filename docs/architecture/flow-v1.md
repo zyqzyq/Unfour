@@ -100,6 +100,7 @@ The first error stops subsequent scheduling. There are no implicit retries.
 | API Request | Saved request ID; optional `url`, `body`, legacy `headers`/`query` replacements or `headersPatch`/`queryPatch` | `status`, `headers`, JSON-or-text `body`, `durationMs`, `historyId` |
 | SSH Task | Task ID, explicit connection ID, `inputs` object, opt-in `workspaceDefaults` | `runId`, `status`, timestamps, redacted `log`, `logTruncated` |
 | Database Query | Connection ID; `sql`, optional `catalog`, `schema`, `limit` | Existing Database query result, including columns and rows |
+| Redis key check (development source) | Redis connection ID, exact UTF-8 `key`, optional Hash `field` and expected string `equals` | `exists`, `keyType`, `pttlMs`, `matched`. Supported as an action or a read-only probe. |
 | Condition | Predicate and forward destinations | `matched` |
 | Wait Until | Probe, success/failure predicates, fixed interval, total timeout, optional attempt limit and probe error policy | `result`, `attempts`, `elapsedMs` |
 | Legacy Poll | Existing probe/predicate/interval/attempt limit | Original matching probe output, preserving old reference paths |

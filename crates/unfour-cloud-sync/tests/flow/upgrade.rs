@@ -41,7 +41,12 @@ async fn upgrade_replays_old_clients_retained_flow_and_tombstone_without_uploadi
         let binding = service.status(&ws).await.unwrap().binding.unwrap();
         // Older clients knew neither Flow nor its entity state, but retained
         // the complete envelope and advanced their cursor in Protocol 5.
-        let remote = change(&ws, FLOW_ID, (!tombstone).then(payload), 19);
+        let remote = change(&ws, FLOW_ID, (!tombstone).then(|| {
+            let mut retained = payload();
+            retained["steps"] = json!([{"id":"cache","name":"Cache","kind":"action","timeoutMs":1000,
+                "action":{"capability":"redis","resourceId":RESOURCE_ID,"arguments":{"key":"fixture:price"}}}]);
+            retained
+        }), 19);
         sqlx::query("INSERT INTO cloud_sync_remote_entity (account_id,cloud_workspace_id,entity_type,entity_id,parent_entity_id,server_version,payload_schema_version,operation,canonical_payload_json,deleted_at,operation_id,compatibility_state,created_at,updated_at) VALUES (?,?,'flow',?,?,19,1,?,?,?,?,'deferred_compatibility','now','now')")
             .bind(&binding.account_id).bind(&binding.cloud_workspace_id).bind(FLOW_ID).bind(&ws)
             .bind(remote.operation.as_str()).bind(remote.payload.as_ref().map(|p| serde_json::to_string(p).unwrap()))
@@ -59,6 +64,10 @@ async fn upgrade_replays_old_clients_retained_flow_and_tombstone_without_uploadi
             let current = current.unwrap();
             assert_eq!(current.name, "Deploy");
             assert_eq!(current.revision, 1);
+            assert_eq!(
+                serde_json::to_value(current.steps).unwrap()[0]["action"]["capability"],
+                "redis"
+            );
         }
         let state: (i64, i64, String) = sqlx::query_as("SELECT server_version,applied_reader_revision,sync_status FROM cloud_sync_entity_state WHERE entity_type='flow' AND entity_id=?")
             .bind(FLOW_ID).fetch_one(db.pool()).await.unwrap();

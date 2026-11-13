@@ -68,6 +68,15 @@ pub(crate) async fn cascade_workspace_feature_entities_on(
             .await?;
     mutations.extend(connection_mutations);
     materialized.extend(database_connection_materialized);
+    let (redis_mutations, redis_keys) = unfour_redis_engine::exchange::cascade_on(
+        connection,
+        context,
+        workspace_id,
+        &resolved_deleted_at,
+    )
+    .await?;
+    mutations.extend(redis_mutations);
+    materialized.extend(redis_keys);
     Ok(FeatureCascadeOutcome {
         mutations,
         materialized,
@@ -87,6 +96,10 @@ impl CommandBus {
             DomainEntityType::Connection => match self.connection_type_for_key(key).await?.as_str()
             {
                 SSH_CONNECTION_TYPE => self.ssh.read_connection_domain_snapshot(key).await,
+                "redis" => {
+                    let mut db = self.db.pool().acquire().await?;
+                    unfour_redis_engine::exchange::snapshot_on(&mut db, key).await
+                }
                 DATABASE_CONNECTION_TYPE => {
                     self.database.read_connection_domain_snapshot(key).await
                 }
@@ -409,6 +422,8 @@ async fn apply_external_connection_changes_on(
                         }
                         Some(if connection_type == SSH_CONNECTION_TYPE {
                             SSH_CONNECTION_TYPE
+                        } else if connection_type == "redis" {
+                            "redis"
                         } else if connection_type == DATABASE_CONNECTION_TYPE {
                             DATABASE_CONNECTION_TYPE
                         } else {
@@ -425,6 +440,13 @@ async fn apply_external_connection_changes_on(
             continue;
         };
         match connection_type {
+            "redis" => {
+                mutations.extend(
+                    unfour_redis_engine::exchange::apply_on(connection, context, change)
+                        .await?
+                        .mutations,
+                );
+            }
             SSH_CONNECTION_TYPE => {
                 let outcome = ssh
                     .apply_external_connection_on(connection, context, change)

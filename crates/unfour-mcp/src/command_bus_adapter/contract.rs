@@ -19,6 +19,16 @@ use super::CommandBusAdapterError;
 use unfour_core::models::{ApiCollectionFolder, SavedSql, SavedSqlInput, Workspace};
 
 pub trait CommandBusAdapter: Send + Sync {
+    fn check_redis_key(
+        &self,
+        _input: super::RedisCheck<'_>,
+    ) -> Result<unfour_command_bus::RedisCheckResult, CommandBusAdapterError> {
+        Err(CommandBusAdapterError {
+            code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
+            message: "Redis checks are unavailable.",
+            details: serde_json::json!({}),
+        })
+    }
     fn api_folder_delete_snapshot(
         &self,
         _workspace_id: String,

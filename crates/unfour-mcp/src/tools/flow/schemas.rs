@@ -21,7 +21,7 @@ fn definitions() -> Value {
         &["left", "op", "right"],
     );
     let action = object(
-        json!({"capability":{"enum":["api","ssh","database"]},"resourceId":string(),"connectionId":nullable_string(),"arguments":{"type":"object"}}),
+        json!({"capability":{"enum":["api","ssh","database","redis"]},"resourceId":string(),"connectionId":nullable_string(),"arguments":{"type":"object"}}),
         &["capability", "resourceId", "arguments"],
     );
     let input = object(

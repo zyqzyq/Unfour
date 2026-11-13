@@ -2,6 +2,7 @@ import { PredicateFields } from "./StructuredFields";
 import { ApiActionEditor } from "./ApiActionEditor";
 import { SshActionEditor } from "./SshActionEditor";
 import { DatabaseActionEditor } from "./DatabaseActionEditor";
+import { RedisActionEditor } from "./RedisActionEditor";
 import { variablesFor } from "./variables";
 import type { FlowInputDefinition } from "@unfour/command-client";
 import { emptyAction, isPredicate, type Resources } from "./model";
@@ -63,8 +64,8 @@ export function StepEditor({
               update(emptyAction(e.target.value as FlowCapability));
             }}
             options={(probe
-              ? ["api", "database"]
-              : ["api", "ssh", "database"]
+              ? ["api", "database", "redis"]
+              : ["api", "ssh", "database", "redis"]
             ).map((value) => ({ value, label: t(`flow.${value}`) }))}
           />
           <Select
@@ -84,7 +85,7 @@ export function StepEditor({
           />
         </div>
         {(() => {
-          const Editor = action.capability === "api" ? ApiActionEditor : action.capability === "ssh" ? SshActionEditor : DatabaseActionEditor;
+          const Editor = { api: ApiActionEditor, ssh: SshActionEditor, database: DatabaseActionEditor, redis: RedisActionEditor }[action.capability];
           const fields = <Editor action={action} resources={resources} variables={action.capability === "api" ? [...variables, ...environmentKeys.map((key) => ({ label: key, path: ["environment", key] }))] : variables} onChange={update} onValidity={(field, valid) => onValidity(`argument:${field}`, valid)} />;
           return probe ? <details><summary className="text-xs">{t("flow.probeOverrides")}</summary>{fields}</details> : fields;
         })()}

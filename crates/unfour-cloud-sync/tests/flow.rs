@@ -31,6 +31,30 @@ fn definition(workspace: &str) -> FlowDefinition {
     serde_json::from_value(value).unwrap()
 }
 
+#[test]
+fn redis_flow_wire_retains_exact_operation_and_rejects_scan_or_unknown_fields() {
+    let mut flow = payload();
+    flow["steps"] = json!([{"id":"cache","name":"Read cache","kind":"action","timeoutMs":1000,
+    "action":{"capability":"redis","resourceId":RESOURCE_ID,"arguments":{
+        "key":"product:${/inputs/id}","equals":{"$ref":"/inputs/price"}
+    }}}]);
+    let change_for = |payload| change("workspace", FLOW_ID, Some(payload), 1);
+    let ExternalFlowDefinitionApply::Upsert(applied) =
+        parse_change("workspace", &change_for(flow.clone())).unwrap()
+    else {
+        panic!("upsert");
+    };
+    assert_eq!(
+        applied.definition["steps"][0]["action"]["arguments"],
+        flow["steps"][0]["action"]["arguments"]
+    );
+    flow["steps"][0]["action"]["arguments"]["scan"] = json!("*");
+    assert!(matches!(
+        parse_change("workspace", &change_for(flow)),
+        Err(SyncError::InvalidData)
+    ));
+}
+
 fn change(workspace: &str, id: &str, payload: Option<Value>, version: i64) -> RemoteChange {
     RemoteChange {
         cursor: version,

@@ -87,6 +87,7 @@ pub enum FlowCapability {
     Api,
     Ssh,
     Database,
+    Redis,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

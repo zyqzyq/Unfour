@@ -4,6 +4,7 @@ import { sqlProblem } from "./actionAuthoring";
 export type Resources = {
   api: { id: string; name: string; url?: string; authJson?: string; headersJson?: string; queryJson?: string; body?: string | null; method?: string; bodyKind?: string; preRequestScript?: string | null; postResponseScript?: string | null }[];
   database: { id: string; name: string; readOnly?: boolean }[];
+  redis: { id: string; name: string }[];
   ssh: { id: string; name: string; detail?: SshTaskDetail }[];
   connections: { id: string; name: string }[];
 };
@@ -51,9 +52,27 @@ function actionResourceErrors(action: FlowAction, resources: Resources, probe: b
       return apiResourceErrors(resources.api.find((request) => request.id === action.resourceId)!, probe);
     case "database":
       return databaseResourceErrors(action, resources, probe);
+    case "redis":
+      return redisResourceErrors(action.arguments);
     case "ssh":
       return sshResourceErrors(action, resources, probe, defaults);
   }
+}
+
+function redisResourceErrors(args: Record<string, unknown>): string[] {
+  if (args.key == null) return ["flow.redisKeyRequired"];
+  for (const [name, value] of Object.entries(args)) {
+    if (name !== "key" && name !== "field" && name !== "equals") return ["flow.redisInvalidArguments"];
+    if (typeof value === "string") {
+      const maxBytes = name === "equals" ? 16 * 1024 : 64 * 1024;
+      if (new TextEncoder().encode(value).length <= maxBytes) continue;
+    } else if (value && typeof value === "object" && Object.keys(value).length === 1 &&
+      "$ref" in value && typeof value.$ref === "string" && value.$ref.startsWith("/")) {
+      continue;
+    }
+    return ["flow.redisInvalidArguments"];
+  }
+  return [];
 }
 
 function apiResourceErrors(request: Resources["api"][number], probe: boolean): string[] {

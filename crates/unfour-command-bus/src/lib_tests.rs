@@ -24,6 +24,8 @@ mod api_snapshot;
 mod ephemeral_lifecycle;
 #[path = "lib_tests/exchange.rs"]
 mod exchange;
+#[path = "lib_tests/redis.rs"]
+mod redis;
 #[path = "lib_tests/script_diagnostics.rs"]
 mod script_diagnostics;
 #[path = "lib_tests/script_rollback.rs"]

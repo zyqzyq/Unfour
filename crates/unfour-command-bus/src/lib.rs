@@ -52,6 +52,11 @@ mod core_commands;
 mod credential_commands;
 mod credential_lock;
 mod database_commands;
+mod redis_commands;
+pub use unfour_redis_engine::{
+    connections::{RedisConnection, RedisConnectionInput},
+    RedisCheckResult, RedisKeyInfo, RedisScanPage,
+};
 mod domain_commands;
 mod flow_authoring;
 mod flow_commands;

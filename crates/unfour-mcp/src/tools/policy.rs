@@ -266,7 +266,7 @@ pub(super) fn classify_mcp_action(
             (McpCapability::DbConnectionMutate, McpRisk::Write)
         }
         "unfour.db.delete_connection" => (McpCapability::DbConnectionMutate, McpRisk::Destructive),
-        "unfour.db.query_readonly" | "unfour.db.export_table" => {
+        "unfour.db.query_readonly" | "unfour.db.export_table" | "unfour.redis.check_key" => {
             (McpCapability::DbDataRead, McpRisk::Read)
         }
         "unfour.db.explain" => (McpCapability::DbDataRead, McpRisk::Read),

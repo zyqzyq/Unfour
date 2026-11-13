@@ -14,7 +14,9 @@ export const emptyAction = (
   resourceId: "",
   connectionId: null,
   arguments:
-    capability === "database"
+    capability === "redis"
+      ? { key: "" }
+      : capability === "database"
       ? { sql: "SELECT 1" }
       : capability === "ssh"
         ? { inputs: {} }

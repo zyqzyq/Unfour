@@ -13,6 +13,9 @@ fn transient(error: &AppError) -> bool {
     match error {
         AppError::FlowActionFailed { source, .. } => transient(source),
         AppError::ApiNetwork(_) | AppError::ApiTimeout(_) | AppError::Timeout(_) => true,
+        AppError::Validation(_) => {
+            matches!(error.code(), "REDIS_TIMEOUT" | "REDIS_CONNECTION_FAILED")
+        }
         AppError::HttpStatus(status) => matches!(*status, 408 | 429 | 500..=599),
         AppError::Http(error) => error.is_timeout() || error.is_connect() || error.is_body(),
         AppError::Database(sqlx::Error::PoolTimedOut) => true,

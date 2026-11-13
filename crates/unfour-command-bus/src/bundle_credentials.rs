@@ -114,6 +114,11 @@ impl CommandBus {
             return Ok(HashSet::new());
         }
         let mut live = HashSet::new();
+        for (_, reference) in
+            unfour_redis_engine::exchange::credential_refs_on(db, workspace).await?
+        {
+            live.insert(reference);
+        }
         for rows in [
             self.ssh.bundle_connection_fields_on(db, workspace).await?,
             self.database
@@ -152,7 +157,9 @@ impl CommandBus {
         Ok(())
     }
 
-    pub(crate) async fn cleanup_bundle_garbage(&self) -> AppResult<()> {
+    /// Reclaim detached managed credentials after a local or external commit.
+    /// The journal retains failed cleanup for a later attempt.
+    pub async fn cleanup_bundle_garbage(&self) -> AppResult<()> {
         self.collect_bundle_credentials(false).await
     }
 

@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-import type { DatabaseConnection, DatabaseTable, SavedSql } from "@unfour/command-client";
+import type { DatabaseConnection, DatabaseTable, RedisFlowIntent, SavedSql } from "@unfour/command-client";
 
 export type DatabasePageProps = {
   active?: boolean;
+  onCreateRedisFlow?: (intent: RedisFlowIntent) => void;
   onShellSidebarChange?: (sidebar: ReactNode | null) => void;
   onShellStatusBarChange?: (statusBar: ReactNode | null) => void;
   statusBarRightAccessory?: ReactNode;

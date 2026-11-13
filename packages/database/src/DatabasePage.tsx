@@ -30,12 +30,14 @@ import type { DatabasePageProps } from "./model/database-page";
 import { useDatabaseActiveContext, useDatabaseActiveTableEditing, useDatabaseContextOptions } from "./hooks/useDatabaseActiveContext";
 import { useDatabaseShellIntegration } from "./hooks/useDatabaseShellIntegration";
 import { useDatabaseTreeController, useDatabaseTreeRootLoading, useDatabaseTreeSynchronization } from "./hooks/useDatabaseTreeController";
+import { useRedisWorkspace } from "./redis/useRedisWorkspace";
 
 const DEFAULT_PREVIEW_PAGE_SIZE = 100;
 const MAX_HISTORY_ENTRIES = 25;
 
 export function DatabasePage({
   active = true,
+  onCreateRedisFlow,
   onShellSidebarChange,
   onShellStatusBarChange,
   statusBarRightAccessory,
@@ -73,6 +75,8 @@ export function DatabasePage({
   const savedSqlQuery = useSavedSql(workspaceId, { active });
   const connections = useMemo(() => connectionsQuery.data ?? [], [connectionsQuery.data]);
   const activeTab = databaseTabs.activeTab;
+  const redis = useRedisWorkspace(workspaceId, active);
+  const activeRedis = activeTab?.kind === "redis" ? redis.connections.find((c) => c.id === activeTab.connectionId) : undefined;
   const context = useDatabaseActiveContext({
     active,
     activeTab,
@@ -256,6 +260,10 @@ export function DatabasePage({
   const executePending = sqlRunning || browseMutation.isPending || rowMutation.isPending;
   useDatabaseShellIntegration({
     active,
+    activeRedis,
+    redisListFailed: redis.query.isError,
+    redisConnections: redis.connections,
+    redisActions: redis.actions,
     catalogNamesByConn: tree.catalogNamesByConn,
     connections,
     connectionStates,
@@ -278,7 +286,7 @@ export function DatabasePage({
       openSavedSql,
       previewTable: (connectionId, table) =>
         browseTablePage(connectionId, table, 0, DEFAULT_PREVIEW_PAGE_SIZE),
-      refresh: refreshConnectionsAndSchema,
+      refresh: () => { refreshConnectionsAndSchema(); void redis.query.refetch(); },
       refreshSchema: refreshConnectionSchema,
       selectConnection: (connection) => selectConnection(connection.id),
       selectTable,
@@ -306,7 +314,7 @@ export function DatabasePage({
 
   // Only replace an unused initial workspace. Existing drafts, results, errors
   // and multiple tabs must remain reachable even when connections disappear.
-  const showConnectionStart = connections.length === 0 && databaseTabs.tabs.length <= 1 &&
+  const showConnectionStart = connections.length === 0 && redis.connections.length === 0 && databaseTabs.tabs.length <= 1 &&
     databaseTabs.tabs.every((tab) => tab.kind === "query" && !tab.connectionId &&
       !tab.sql.trim() && !tab.sqlBaseline?.trim() && tab.resultTab === "results" && !tab.pendingSqlBatch &&
       !tab.result && !tab.results.length && !tab.statements?.length && !tab.error &&
@@ -315,19 +323,19 @@ export function DatabasePage({
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col bg-[var(--u-color-surface)]">
       {showConnectionStart ? <DatabaseStart
-        pending={connectionsQuery.isPending}
-        failed={connectionsQuery.isError}
-        refreshing={connectionsQuery.isFetching}
-        onRetry={() => void connectionsQuery.refetch()}
+        pending={connectionsQuery.isPending || redis.query.isPending}
+        failed={connectionsQuery.isError || redis.query.isError}
+        refreshing={connectionsQuery.isFetching || redis.query.isFetching}
+        onRetry={() => { void connectionsQuery.refetch(); void redis.query.refetch(); }}
         onCreate={handleNewConnection}
       /> : <>
-      <DatabaseModuleToolbar
+      {activeTab?.kind !== "redis" && <DatabaseModuleToolbar
         connectionStatus={context.toolbarConnectionStatus}
         onNewQuery={startNewQuery}
         selectedConnectionName={context.toolbarConnection?.name ?? null}
-      />
+      />}
       <div className="flex min-h-0 flex-1 flex-col">
-        {selectedConnection && selectedConnectionStatus === "failed" ? (
+        {activeTab?.kind !== "redis" && selectedConnection && selectedConnectionStatus === "failed" ? (
           <DatabaseConnectionErrorBanner
             connectionName={selectedConnection.name}
             message={context.selectedSession?.message}
@@ -336,6 +344,10 @@ export function DatabasePage({
           />
         ) : null}
         <DatabaseWorkspace
+          onCreateRedisFlow={onCreateRedisFlow}
+          redisConnections={redis.connections}
+          redisPending={redis.query.isPending}
+          redisListFailed={redis.query.isError}
           active={active}
           activeTab={activeTab}
           activeTabId={databaseTabs.activeTabId}
@@ -382,6 +394,7 @@ export function DatabasePage({
       </div>
       </>}
       <DatabaseConnectionDialog
+        onChooseRedis={() => { setEditorOpen(false); redis.create(form.name); }}
         externalChange={externalChange}
         onReload={reloadLatest}
         canTest={canTest}
@@ -403,6 +416,7 @@ export function DatabasePage({
           result={testResult}
         />
       </DatabaseConnectionDialog>
+      {redis.dialogs}
       <ConfirmDialog
         confirmLabel={t("common.actions.delete")}
         description={

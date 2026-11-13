@@ -1,4 +1,63 @@
 {
+  "redis": {
+    "readAt": "Read at",
+    "scanLimit": "Showing {count} keys. The display limit was reached. Narrow the pattern to inspect more.",
+    "createFlow": "Create Flow from this key",
+    "errors": {
+      "unknown": "Redis operation failed.",
+      "REDIS_INVALID_INPUT": "Check the Redis connection or input.",
+      "REDIS_INVALID_ENDPOINT": "Enter a valid host and port.",
+      "REDIS_INVALID_NAME": "Enter a connection name.",
+      "REDIS_INVALID_USERNAME": "Enter a valid ACL username.",
+      "REDIS_ENDPOINT_REQUIRES_PASSWORD": "Re-enter the password for the new connection endpoint.",
+      "REDIS_INVALID_KEY_ENCODING": "The key could not be decoded.",
+      "REDIS_KEY_TOO_LARGE": "This key exceeds the supported size.",
+      "REDIS_CONNECTION_FAILED": "Could not connect. Check the host, port and network.",
+      "REDIS_TLS_FAILED": "TLS verification failed. Check the hostname and trusted certificate.",
+      "REDIS_AUTH_FAILED": "Redis authentication failed. Check the username and password.",
+      "REDIS_DB_UNAVAILABLE": "The logical database could not be selected. Check the database index and permissions.",
+      "REDIS_PERMISSION_DENIED": "Redis denied this operation. Check the account permissions.",
+      "REDIS_TIMEOUT": "Redis did not respond before the timeout.",
+      "REDIS_RESPONSE_TOO_LARGE": "The response exceeds the read limit. Try an exact key or a narrower pattern.",
+      "REDIS_PROTOCOL_ERROR": "Redis returned an invalid response.",
+      "REDIS_KEY_CHANGED": "The key changed during the read. Inspect it again.",
+      "REDIS_COMMAND_FAILED": "Redis could not complete the requested read.",
+      "REDIS_CLUSTER_UNSUPPORTED": "Connect to a standalone Redis instance. Cluster routing is currently unavailable.",
+      "REDIS_CONNECTION_CHANGED": "The connection changed. Refresh the connection list and try again.",
+      "REDIS_CHECK_TYPE_UNSUPPORTED": "This check does not support the selected key type.",
+      "ROW_CONFLICT": "The saved connection changed. Refresh the connection list and try again.",
+      "UNSUPPORTED_OPERATION": "Redis network access requires the desktop app."
+    },
+    "settings": "Redis connection",
+    "logicalDb": "Logical database",
+    "tls": "Use TLS and verify the server certificate",
+    "listFailed": "Could not load Redis connections. Use Refresh to retry.",
+    "unavailable": "This Redis connection is no longer available.",
+    "exact": "Exact key",
+    "pattern": "Browse by pattern",
+    "key": "Exact key name",
+    "emptyKey": "(empty key)",
+    "match": "Redis key pattern",
+    "inspect": "Inspect key",
+    "scan": "Scan",
+    "more": "Continue scan",
+    "scanDone": "Scan complete · {count} unique keys",
+    "scanPartial": "Scan in progress · {count} unique keys found",
+    "reading": "Reading…",
+    "type": "Type",
+    "persistent": "No expiry",
+    "milliseconds": "{count} ms",
+    "bytes": "Bytes",
+    "elements": "Elements",
+    "format": "Preview format",
+    "text": "Text",
+    "truncated": "Partial value",
+    "emptyValue": "Empty value",
+    "missing": "Key “{key}” is missing or expired.",
+    "missingField": "Field does not exist.",
+    "hashField": "Hash field",
+    "readField": "Read field"
+  },
   "workspaceBundle": {
     "menuScope": "API, SSH, databases, variables & Flows",
     "import": "Import Workspace from File…",
@@ -774,7 +833,7 @@
   "database": {
     "start": {
       "title": "Add your first database connection",
-      "description": "Connect a database to browse schemas, preview table data and write SQL.",
+      "description": "Connect a SQL database to explore tables, or connect Redis to inspect keys and expiration times.",
       "create": "Add connection",
       "loading": "Loading database connections…",
       "failed": "Database connections could not be loaded. Please retry."
@@ -903,7 +962,7 @@
       "sqlite": "SQLite"
     },
     "errors": {
-      "noConnections": "No database connections. Create one to browse schema or run SQL.",
+      "noConnections": "No database connections. Add a SQL or Redis connection to get started.",
       "selectBeforePreview": "Select a database connection before opening table preview.",
       "selectBeforeRun": "Select a database connection before running SQL.",
       "sqlEmpty": "SQL cannot be empty."
@@ -1645,6 +1704,16 @@
     "title": "SSH Terminal"
   },
   "flow": {
+    "redis": "Redis key check",
+    "redisKeyRequired": "Enter a Redis key or a reference.",
+    "redisInvalidArguments": "Use key, field, and equals with strings or references. Key and field allow 64 KiB each; equals allows 16 KiB.",
+    "redisArgs": {
+      "key": "Exact key or key template",
+      "checkField": "Check a Hash field",
+      "compareValue": "Compare the value",
+      "field": "Hash field",
+      "equals": "Expected value"
+    },
     "workspaceLeaveTitle": "Leave workspace?",
     "workspaceLeaveDescription": "This workspace has unsaved Flow changes. Leaving discards them and any unsaved variable edits.",
     "workspaceLeaveDiscard": "Discard and leave",

@@ -88,7 +88,7 @@ Top level is a strict object:
 | `waitUntil` | `probe`, `successWhen`, nullable `failureWhen`, `intervalMs`, nullable `maxAttempts`, `probeErrorPolicy`, `intervalStrategy` |
 | `wait` | `durationMs` |
 
-Actions/probes are strict objects with `capability` (`api`, `ssh`, `database`),
+Actions/probes are strict objects with `capability` (`api`, `ssh`, `database`, and `redis` in the development client),
 `resourceId` (UUID), nullable `connectionId` (UUID), and `arguments` (JSON).
 Predicates are strict objects with `left`, `op` (`eq`, `ne`, `gt`, `ge`, `lt`,
 `le`, `in`) and `right`. Input types, forward-only branches, reference graph,
@@ -107,7 +107,7 @@ enter compatibility waiting without materializing definitions.
 
 ### Final schema 1 safety rules (client and required server alignment)
 
-The wire shape, schema version and reader revision stay **1**. These rules
+The wire shape, schema version and reader revision stay **1**. The upgraded reader reclassifies previously deferred Redis subtypes. These rules
 replace the former reference-only string restriction before production activation.
 Unfour-api must implement this final acceptance contract, not the old restriction.
 Validation accepts the complete definition unchanged or returns an explicit

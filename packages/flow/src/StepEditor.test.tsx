@@ -58,7 +58,7 @@ it("retains an incomplete numeric value and does not save its previous value sil
 
 function Editor({ initial, changed, onValidity = () => {} }: { initial: FlowStep; changed: (step: FlowStep) => void; onValidity?: (field: string, valid: boolean) => void }) {
   const [step, setStep] = useState(initial);
-  return <StepEditor step={step} after={[]} resources={{ api: [], database: [], ssh: [], connections: [] }} onRemove={() => {}} onValidity={onValidity} onChange={(value) => { setStep(value); changed(value); }} />;
+  return <StepEditor step={step} after={[]} resources={{ api: [], database: [], ssh: [], redis: [], connections: [] }} onRemove={() => {}} onValidity={onValidity} onChange={(value) => { setStep(value); changed(value); }} />;
 }
 it("edits canonical Wait Until policies and predicates with no mandatory attempt cap", () => {
   const changed = vi.fn();
@@ -144,7 +144,7 @@ it("preserves an invalid JSON default when a different input is removed", () => 
 it("uses localized Condition branch labels while retaining ifTrue/ifFalse fields", () => {
   const changed = vi.fn();
   const initial = { ...newStep("condition", "分支"), ifTrue: "later", ifFalse: "$end" } as FlowStep;
-  render(<I18nProvider initialLocale="zh-CN"><StepEditor step={initial} after={[{ ...newStep("wait", "后续"), id: "later" }]} resources={{ api: [], database: [], ssh: [], connections: [] }} onRemove={() => {}} onValidity={() => {}} onChange={changed} /></I18nProvider>);
+  render(<I18nProvider initialLocale="zh-CN"><StepEditor step={initial} after={[{ ...newStep("wait", "后续"), id: "later" }]} resources={{ api: [], database: [], ssh: [], redis: [], connections: [] }} onRemove={() => {}} onValidity={() => {}} onChange={changed} /></I18nProvider>);
   expect(screen.getByLabelText("满足时")).toHaveValue("later");
   expect(screen.getByLabelText("不满足时")).toHaveValue("$end");
   fireEvent.change(screen.getByLabelText("满足时"), { target: { value: "$end" } });

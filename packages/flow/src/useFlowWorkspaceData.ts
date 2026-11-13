@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   getSshTask,
   listDatabaseConnections,
+  listRedisConnections,
   listFlows,
   listSavedApiRequests,
   listSshConnections,
@@ -11,7 +12,7 @@ import {
 } from "@unfour/command-client";
 import type { Resources } from "./model";
 
-const emptyResources: Resources = { api: [], ssh: [], database: [], connections: [] };
+const emptyResources: Resources = { api: [], ssh: [], database: [], redis: [], connections: [] };
 
 export function useFlowWorkspaceData(workspaceId: string) {
   const flows = useQuery({
@@ -23,16 +24,17 @@ export function useFlowWorkspaceData(workspaceId: string) {
     queryKey: ["flow-resources", workspaceId],
     meta: { cloudSyncWorkspaceId: workspaceId, localDataDomains: ["api-requests", "ssh-tasks", "ssh-connections", "database-connections"] },
     queryFn: async (): Promise<Resources> => {
-      const [api, ssh, database, connections] = await Promise.all([
+      const [api, ssh, database, redis, connections] = await Promise.all([
         listSavedApiRequests(workspaceId),
         listSshTasks(workspaceId),
         listDatabaseConnections(workspaceId),
+        listRedisConnections(workspaceId),
         listSshConnections(workspaceId),
       ]);
       const detailedTasks = await Promise.all(ssh.map(async (task) => ({
         ...task, detail: await getSshTask(workspaceId, task.id),
       })));
-      return { api, ssh: detailedTasks, database, connections };
+      return { api, ssh: detailedTasks, database, redis, connections };
     },
   });
   const environments = useQuery({

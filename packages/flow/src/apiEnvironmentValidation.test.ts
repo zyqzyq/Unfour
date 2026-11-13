@@ -3,7 +3,7 @@ import type { FlowDefinition } from "@unfour/command-client";
 import { apiEnvironmentErrors } from "./apiEnvironmentValidation";
 import type { Resources } from "./model";
 
-const resources: Resources = { api: [{ id: "api", name: "API", url: "{{HOST}}/deploy", headersJson: '[{"key":"Authorization","value":"{{DEV_TOKEN}}","enabled":true}]', queryJson: '[]', body: "{{BODY}}", authJson: '{"type":"bearer","token":"{{AUTH}}"}' }], ssh: [], database: [], connections: [] };
+const resources: Resources = { api: [{ id: "api", name: "API", url: "{{HOST}}/deploy", headersJson: '[{"key":"Authorization","value":"{{DEV_TOKEN}}","enabled":true}]', queryJson: '[]', body: "{{BODY}}", authJson: '{"type":"bearer","token":"{{AUTH}}"}' }], ssh: [], database: [], redis: [], connections: [] };
 const flow = (args: Record<string, unknown> = {}): FlowDefinition => ({ id: "f", workspaceId: "ws", name: "Flow", revision: 1, inputs: [], steps: [{ id: "api", name: "Deploy API", kind: "action", timeoutMs: 1000, next: null, action: { capability: "api", resourceId: "api", connectionId: null, arguments: args } }] });
 
 it("reports static saved URL, headers, query, body and auth per step, preserving exact key case", () => {

@@ -3,6 +3,8 @@ import type {
   DatabaseConnection,
   DatabaseSchema,
   DatabaseTableStructure,
+  RedisConnection,
+  RedisFlowIntent,
   SavedSql,
 } from "@unfour/command-client";
 import type {
@@ -21,6 +23,7 @@ import { QueryResultPanel } from "./QueryResultPanel";
 import { SqlEditorTab } from "./SqlEditorTab";
 import { TableDataTab } from "./TableDataTab";
 import { TableInspector } from "./TableInspector";
+import { RedisKeyBrowser } from "../redis/RedisKeyBrowser";
 
 export function DatabaseWorkspace({
   active,
@@ -28,6 +31,10 @@ export function DatabaseWorkspace({
   activeTab,
   catalogOptions,
   connections,
+  redisConnections = [],
+  redisPending,
+  redisListFailed,
+  onCreateRedisFlow,
   executePending,
   history,
   onChangeQueryContext,
@@ -71,6 +78,10 @@ export function DatabaseWorkspace({
   activeTab: DatabaseWorkspaceTab | null;
   catalogOptions: string[];
   connections: DatabaseConnection[];
+  redisConnections?: RedisConnection[];
+  redisPending?: boolean;
+  redisListFailed?: boolean;
+  onCreateRedisFlow?: (intent: RedisFlowIntent) => void;
   executePending: boolean;
   history: SqlHistoryEntry[];
   onChangeQueryContext: (patch: { catalog?: string | null; schema?: string | null }) => void;
@@ -164,23 +175,7 @@ export function DatabaseWorkspace({
     ? tabs.find((tab) => tab.id === pendingCloseId)
     : undefined;
   const pendingQueryDraft = pendingCloseTab?.kind === "query";
-  const workspaceTabs: WorkspaceTab[] = tabs.map((tab) => ({
-    id: tab.id,
-    loading: Boolean(tab.loading),
-    meta:
-      tab.kind === "table" && (tab.pendingChanges?.length ?? 0) > 0 ? (
-        <span
-          className="h-2 w-2 rounded-full bg-[var(--u-color-warning)]"
-          title={t("database.editing.pendingIndicator")}
-        />
-      ) : tab.kind === "query" && queryTabHasUnsavedDraft(tab) ? (
-        <span
-          className="h-2 w-2 rounded-full bg-[var(--u-color-primary)]"
-          title={t("database.query.closeDraftIndicator")}
-        />
-      ) : null,
-    title: tab.title,
-  }));
+  const workspaceTabs = tabs.map((tab) => databaseTabItem(tab, redisConnections, t));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -202,8 +197,10 @@ export function DatabaseWorkspace({
         onSelect={(tabId) => onSelectTab(tabId as DatabaseWorkspaceTabId)}
         tabs={workspaceTabs}
       />
-      {tabs.some((tab) => tab.id === blockedCloseId && tab.loading) ? <div role="status" className="px-2 py-1 text-[12px]">{t("database.batch.closeRunning")}</div> : null}
+      {tabs.some((tab) => tab.id === blockedCloseId && tab.kind === "query" && tab.loading) ? <div role="status" className="px-2 py-1 text-[12px]">{t("database.batch.closeRunning")}</div> : null}
       <div className="flex min-h-0 flex-1 flex-col">
+        <RedisTabPanes tabs={tabs} activeId={activeTabId} workspaceId={workspaceId} connections={redisConnections}
+          pending={redisPending} failed={redisListFailed} onCreateFlow={onCreateRedisFlow} />
         {/* Table branch — keep mounted, toggle visibility to avoid remount flash */}
         <div className={showTable ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
           {renderTable && (
@@ -260,7 +257,7 @@ export function DatabaseWorkspace({
           {renderQuery && (
             <SplitPane className="min-h-0 flex-1" defaultRatio={62} minPaneSize={220} orientation="vertical" resizable>
               <SqlEditorTab
-                active={active}
+                active={active && showQuery}
                 catalogOptions={catalogOptions}
                 connections={connections}
                 executePending={executePending || Boolean(renderQuery.loading)}
@@ -336,5 +333,36 @@ export function DatabaseWorkspace({
 function EmptyWorkspace() {
   const { t } = useI18n();
   return <div className="p-3 text-[12px] text-[var(--u-color-text-soft)]">{t("database.editor.empty")}</div>;
+}
+
+function databaseTabItem(tab: DatabaseWorkspaceTab, redisConnections: RedisConnection[], t: ReturnType<typeof useI18n>["t"]): WorkspaceTab {
+  if (tab.kind === "redis") {
+    return { id: tab.id, title: redisConnections.find((c) => c.id === tab.connectionId)?.name ?? tab.title };
+  }
+  const meta = tab.kind === "table" && (tab.pendingChanges?.length ?? 0) > 0 ? (
+    <span className="h-2 w-2 rounded-full bg-[var(--u-color-warning)]" title={t("database.editing.pendingIndicator")} />
+  ) : tab.kind === "query" && queryTabHasUnsavedDraft(tab) ? (
+    <span className="h-2 w-2 rounded-full bg-[var(--u-color-primary)]" title={t("database.query.closeDraftIndicator")} />
+  ) : null;
+  return { id: tab.id, title: tab.title, loading: Boolean(tab.loading), meta };
+}
+
+function RedisTabPanes({ tabs, activeId, workspaceId, connections, pending, failed, onCreateFlow }: {
+  tabs: DatabaseWorkspaceTab[];
+  activeId: string;
+  workspaceId: string;
+  connections: RedisConnection[];
+  pending?: boolean;
+  failed?: boolean;
+  onCreateFlow?: (intent: RedisFlowIntent) => void;
+}) {
+  const { t } = useI18n();
+  return tabs.filter((tab) => tab.kind === "redis").map((tab) => {
+    const connection = connections.find((c) => c.id === tab.connectionId && c.workspaceId === workspaceId);
+    return <div key={tab.id} className={activeId === tab.id ? "min-h-0 flex-1" : "hidden"}>
+      {connection ? <RedisKeyBrowser connection={connection} onCreateFlow={onCreateFlow} /> :
+        <p role="status" className="p-3 text-xs">{t(pending ? "database.start.loading" : failed ? "redis.listFailed" : "redis.unavailable")}</p>}
+    </div>;
+  });
 }
 

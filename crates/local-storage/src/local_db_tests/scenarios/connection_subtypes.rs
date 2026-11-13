@@ -1,6 +1,70 @@
 use super::*;
 
 #[tokio::test]
+async fn redis_upgrade_preserves_live_foreign_keys_and_refreshes_database_connections() {
+    let db = test_db().await;
+    let mut old = core_migrator();
+    old.migrations = std::borrow::Cow::Owned(
+        old.iter()
+            .filter(|m| m.version < 20261113030000)
+            .cloned()
+            .collect(),
+    );
+    old.run(db.pool()).await.unwrap();
+    seed_workspace(&db, "w").await;
+    seed_workspace(&db, "other").await;
+    sqlx::raw_sql("
+        INSERT INTO connections (id,workspace_id,connection_type,name,created_at,updated_at)
+          VALUES ('s','w','ssh','shell','now','now'),('d','w','database','sql','now','now');
+        INSERT INTO ssh_connections (connection_id,username,auth_method) VALUES ('s','alice','none');
+        INSERT INTO database_connections (connection_id,driver) VALUES ('d','postgres');
+        INSERT INTO saved_sql (id,workspace_id,connection_id,name,sql,created_at,updated_at)
+          VALUES ('q','w','d','preserve','SELECT 1','now','now');")
+        .execute(db.pool()).await.unwrap();
+    db.migrate().await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, String>("SELECT connection_id FROM saved_sql WHERE id='q'")
+            .fetch_one(db.pool())
+            .await
+            .unwrap(),
+        "d"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, String>(
+            "SELECT username FROM ssh_connections WHERE connection_id='s'"
+        )
+        .fetch_one(db.pool())
+        .await
+        .unwrap(),
+        "alice"
+    );
+    sqlx::raw_sql("
+        INSERT INTO connections (id,workspace_id,connection_type,name,created_at,updated_at)
+          VALUES ('r','w','redis','cache','now','now');
+        INSERT INTO redis_connections (connection_id,workspace_id,db_index,tls) VALUES ('r','w',3,0);")
+        .execute(db.pool()).await.unwrap();
+    assert!(sqlx::query(
+        "UPDATE redis_connections SET workspace_id='other' WHERE connection_id='r'"
+    )
+    .execute(db.pool())
+    .await
+    .is_err());
+    assert!(sqlx::query("INSERT INTO redis_connections (connection_id,workspace_id,db_index,tls) VALUES ('d','w',0,0)").execute(db.pool()).await.is_err());
+    assert!(sqlx::query("PRAGMA foreign_key_check")
+        .fetch_all(db.pool())
+        .await
+        .unwrap()
+        .is_empty());
+    let domain: Option<String> = sqlx::query_scalar(
+        "SELECT domain FROM local_data_versions WHERE domain='redis-connections'",
+    )
+    .fetch_optional(db.pool())
+    .await
+    .unwrap();
+    assert!(domain.is_none());
+}
+
+#[tokio::test]
 async fn initial_schema_uses_connection_subtypes() {
     let db = test_db().await;
     db.migrate().await.expect("run migrations");

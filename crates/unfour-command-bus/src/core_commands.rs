@@ -399,6 +399,24 @@ impl CommandBus {
             );
         }
 
+        if matches!(connection_type, ConnectionType::All | ConnectionType::Redis) {
+            connections.extend(
+                self.list_redis_connections(&workspace_id)
+                    .await?
+                    .into_iter()
+                    .map(|record| SafeConnection {
+                        id: record.id,
+                        name: record.name,
+                        connection_type: "redis".into(),
+                        workspace_id: record.workspace_id,
+                        safe_summary: SafeConnectionSummary {
+                            host: Some(record.host),
+                            database_type: Some("redis".into()),
+                            api_base_url: None,
+                        },
+                    }),
+            );
+        }
         if matches!(connection_type, ConnectionType::All | ConnectionType::Ssh) {
             connections.extend(
                 self.list_ssh_connections(workspace_id)

@@ -1,6 +1,6 @@
-import { Database } from "lucide-react";
+import { Database, Layers } from "lucide-react";
 import { useState } from "react";
-import type { DatabaseConnection, DatabaseSchema, DatabaseTable, SavedSql } from "@unfour/command-client";
+import type { DatabaseConnection, DatabaseSchema, DatabaseTable, RedisConnection, SavedSql } from "@unfour/command-client";
 import {
   ConfirmDialog,
   ConnectionStatus,
@@ -18,12 +18,16 @@ import {
 } from "./database-tree-menus";
 import { TableExportDialog } from "./TableExportDialog";
 import { filterDatabaseTree } from "./database-tree-filter";
+import { RedisRowActions, type RedisTreeActions } from "../redis/RedisConnectionRows";
 
 
 export function DatabaseConnectionTree({
   catalogNamesByConnection,
   connectionStates,
   connections,
+  redisConnections = [],
+  redisActions,
+  activeRedisId,
   loadingKeys,
   loadErrors,
   onConnect,
@@ -52,6 +56,9 @@ export function DatabaseConnectionTree({
   catalogNamesByConnection?: Record<string, string[]>;
   connectionStates?: Record<string, DatabaseConnectionSessionState>;
   connections: DatabaseConnection[];
+  redisConnections?: RedisConnection[];
+  redisActions?: RedisTreeActions;
+  activeRedisId?: string | null;
   /** Keys (`names::id` / `id::catalog`) whose fetch is in flight. */
   loadingKeys?: string[];
   /** Error messages keyed the same way, surfaced inline in the tree. */
@@ -90,11 +97,16 @@ export function DatabaseConnectionTree({
   }
   const [pendingDelete, setPendingDelete] = useState<SavedSql | null>(null);
   const [exportTarget, setExportTarget] = useState<{ connection: DatabaseConnection; table: DatabaseTable } | null>(null);
+  // A single click on a SQL row selects it without closing the current Redis tab.
+  const [sidebarSelection, setSidebarSelection] = useState({ activeRedisId, preferSql: false });
+  if (sidebarSelection.activeRedisId !== activeRedisId) {
+    setSidebarSelection({ activeRedisId, preferSql: false });
+  }
   const requestDeleteSavedSql = onDeleteSavedSql
     ? (item: SavedSql) => setPendingDelete(item)
     : undefined;
 
-  if (!connections.length) {
+  if (!connections.length && !redisConnections.length) {
     return <EmptyState className="min-h-[72px]">{t("database.errors.noConnections")}</EmptyState>;
   }
 
@@ -194,7 +206,16 @@ export function DatabaseConnectionTree({
     };
   });
 
-  const selectedId = selectedTableId ?? selectedConnection?.id ?? null;
+  if (redisActions) items.push(...redisConnections.map((connection) => ({
+    id: `redis:${connection.id}`,
+    label: connection.name,
+    title: `${connection.host}:${connection.port} / ${connection.dbIndex}`,
+    icon: <Layers size={13} />,
+    meta: <span className="text-[10px] text-[var(--u-color-text-muted)]">Redis</span>,
+    actions: <span className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"><RedisRowActions connection={connection} actions={redisActions} /></span>,
+    contextMenu: <RedisRowActions connection={connection} actions={redisActions} contextMenu />,
+  })));
+  const selectedId = activeRedisId && !sidebarSelection.preferSql ? `redis:${activeRedisId}` : selectedTableId ?? selectedConnection?.id ?? null;
   const filtered = filterDatabaseTree(items, query);
 
   return (
@@ -226,6 +247,12 @@ export function DatabaseConnectionTree({
         }
       }}
       onSelect={(item) => {
+        const redis = redisConnections.find((connection) => item.id === `redis:${connection.id}`);
+        if (redis && redisActions) {
+          setSidebarSelection({ activeRedisId: redis.id, preferSql: false });
+          redisActions.open(redis);
+          return;
+        }
         // Single click a saved SQL snippet -> select only (no auto-open).
         if (savedSqlLookup.has(item.id)) {
           return;
@@ -233,12 +260,14 @@ export function DatabaseConnectionTree({
         // Single click a table -> select only (lightweight highlight, no Tab switch)
         const entry = tableLookup.get(item.id);
         if (entry) {
+          if (activeRedisId) setSidebarSelection({ activeRedisId, preferSql: true });
           onSelectTable?.(entry.connectionId, entry.table);
           return;
         }
 
         const connection = connections.find((candidate) => candidate.id === item.id);
         if (connection) {
+          if (activeRedisId) setSidebarSelection({ activeRedisId, preferSql: true });
           onSelectConnection(connection);
         }
       }}

@@ -35,7 +35,7 @@ fn decode(content: &str, options: &WorkspaceBundleOptions) -> AppResult<BackupPa
         let plaintext = encryption::decrypt(content, password)?;
         let mut payload: BackupPayload =
             serde_json::from_slice(&plaintext).map_err(|_| invalid())?;
-        if payload.bundle.format != "unfour-workspace" || payload.bundle.version != 2 {
+        if payload.bundle.format != "unfour-workspace" || !matches!(payload.bundle.version, 2 | 3) {
             return Err(invalid());
         }
         safety::sanitize(&mut payload.bundle)?;
@@ -81,10 +81,13 @@ fn validate_secrets(payload: &BackupPayload) -> AppResult<()> {
                     .requests
                     .iter()
                     .any(|r| r.id == *target && api_slot(r, &secret.field, &secret.pointer)),
-                "ssh-password" | "ssh-key-passphrase" | "database-password" => {
+                "ssh-password" | "ssh-key-passphrase" | "database-password" | "redis-password" => {
                     payload.bundle.connections.iter().any(|c| {
                         c.id == *target
                             && match &c.config {
+                                BundleConnectionConfig::Redis { .. } => {
+                                    secret.kind == "redis-password"
+                                }
                                 BundleConnectionConfig::Ssh { auth_method, .. } => {
                                     (secret.kind == "ssh-password" && auth_method == "password")
                                         || (secret.kind == "ssh-key-passphrase"
@@ -128,7 +131,7 @@ impl CommandBus {
         let mut bundle = self
             .workspace_bundle_snapshot_on(&mut db, &workspace)
             .await?;
-        bundle.version = 2;
+        bundle.version = bundle.version.max(2);
         let references = self
             .collect_local_fields_on(&mut db, &mut bundle, options.keep_local_paths)
             .await?;
@@ -158,6 +161,7 @@ impl CommandBus {
                     BundleConnectionConfig::Database { driver, .. } if driver != "sqlite" => {
                         "database-password"
                     }
+                    BundleConnectionConfig::Redis { .. } => "redis-password",
                     _ => continue,
                 }
                 .to_string();
@@ -373,7 +377,7 @@ impl CommandBus {
         for secret in &secrets {
             let value = if matches!(
                 secret.kind.as_str(),
-                "ssh-password" | "ssh-key-passphrase" | "database-password"
+                "ssh-password" | "ssh-key-passphrase" | "database-password" | "redis-password"
             ) {
                 let reference = self.secret_store.make_ref(
                     &workspace_id,
@@ -414,6 +418,15 @@ impl CommandBus {
                     let mutations = bus.import_bundle_on(db, plan).await?;
                     for (id, kind, value, field, pointer) in bindings {
                         match kind {
+                            "redisConnection" => {
+                                unfour_redis_engine::exchange::restore_credential_on(
+                                    db,
+                                    &workspace_id,
+                                    &id,
+                                    &value,
+                                )
+                                .await?
+                            }
                             "sshConnection" => {
                                 bus.ssh
                                     .restore_bundle_credential_on(db, &workspace_id, &id, &value)

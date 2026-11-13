@@ -41,6 +41,16 @@ pub fn validate(definition: &FlowDefinition) -> AppResult<()> {
         }
     }
     for (index, step) in definition.steps.iter().enumerate() {
+        match &step.node {
+            FlowNode::Action { action }
+            | FlowNode::Poll { probe: action, .. }
+            | FlowNode::WaitUntil { probe: action, .. }
+                if action.capability == FlowCapability::Redis =>
+            {
+                validate_redis_action(action)?;
+            }
+            _ => {}
+        }
         let forward = |target: &str| -> AppResult<()> {
             if target == "$end"
                 || definition
@@ -93,6 +103,29 @@ pub fn validate(definition: &FlowDefinition) -> AppResult<()> {
         }
     }
     crate::reference_graph::validate_references(&definition.steps)
+}
+
+fn validate_redis_action(action: &FlowAction) -> AppResult<()> {
+    let invalid_check = || invalid("FLOW_INVALID_REDIS_CHECK");
+    let args = action.arguments.as_object().ok_or_else(invalid_check)?;
+    if action.connection_id.is_some() || action.resource_id.is_empty() || !args.contains_key("key")
+    {
+        return Err(invalid_check());
+    }
+    for (name, value) in args {
+        let limit = match name.as_str() {
+            "key" | "field" => 65536,
+            "equals" => 16384,
+            _ => return Err(invalid_check()),
+        };
+        let reference = value.as_object().is_some_and(|obj| {
+            obj.len() == 1 && obj.get("$ref").is_some_and(serde_json::Value::is_string)
+        });
+        if !reference && !value.as_str().is_some_and(|text| text.len() <= limit) {
+            return Err(invalid_check());
+        }
+    }
+    Ok(())
 }
 
 fn matches_type(kind: FlowInputType, value: &serde_json::Value) -> bool {

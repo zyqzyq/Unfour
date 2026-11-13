@@ -6,6 +6,7 @@ members = [
   "crates/http-engine",
   "crates/flow-engine",
   "crates/database-engine",
+  "crates/redis-engine",
   "crates/ssh-engine",
   "crates/workspace-engine",
   "crates/unfour-paths",

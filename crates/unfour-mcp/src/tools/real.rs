@@ -100,7 +100,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                     "properties": {
                         "type": {
                             "type": "string",
-                            "enum": ["all", "api", "database", "ssh"],
+                            "enum": ["all", "api", "database", "redis", "ssh"],
                             "default": "all",
                             "description": "Optional connection type filter."
                         }
@@ -119,7 +119,7 @@ pub(super) fn registered_tools() -> Vec<RegisteredTool> {
                                     "name": { "type": "string" },
                                     "type": {
                                         "type": "string",
-                                        "enum": ["ssh", "database", "api"]
+                                        "enum": ["ssh", "database", "api", "redis"]
                                     },
                                     "workspaceId": { "type": "string" },
                                     "safeSummary": {
@@ -207,9 +207,10 @@ fn parse_connection_type(arguments: &Map<String, Value>) -> Result<ConnectionTyp
             "all" => Ok(ConnectionType::All),
             "api" => Ok(ConnectionType::Api),
             "database" => Ok(ConnectionType::Database),
+            "redis" => Ok(ConnectionType::Redis),
             "ssh" => Ok(ConnectionType::Ssh),
             _ => Err(ToolCallError::InvalidArguments(
-                "unfour.connection.list argument `type` must be one of: all, api, database, ssh"
+                "unfour.connection.list argument `type` must be one of: all, api, database, redis, ssh"
                     .to_string(),
             )),
         },

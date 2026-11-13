@@ -6,6 +6,7 @@ pub enum ConnectionType {
     All,
     Api,
     Database,
+    Redis,
     Ssh,
 }
 

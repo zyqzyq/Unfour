@@ -8,6 +8,7 @@ export function variablesFor(inputs: FlowInputDefinition[], before: FlowStep[], 
     if (step.kind === "poll") return outputFields({ ...step, kind: "action", action: step.probe });
     if (step.kind === "condition") return ["matched"];
     if (step.kind === "wait") return ["waitedMs"];
+    if (step.action.capability === "redis") return ["exists", "keyType", "pttlMs", "matched"];
     return step.action.capability === "api" ? ["status", "headers", "body", "durationMs"] : step.action.capability === "database" ? ["columns", "rows", "affectedRows", "durationMs"] : ["runId", "status", "log"];
   };
   const outputPaths = (step: FlowStep): string[][] => [[], ...outputFields(step).map((field) => [field]),

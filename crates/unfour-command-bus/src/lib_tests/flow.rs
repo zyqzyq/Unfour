@@ -15,6 +15,8 @@ mod history;
 #[cfg(feature = "ssh-native")]
 #[path = "flow_native.rs"]
 mod native;
+#[path = "flow_redis.rs"]
+mod redis;
 #[path = "flow_reference_safety.rs"]
 mod reference_safety;
 #[cfg(feature = "ssh-native")]

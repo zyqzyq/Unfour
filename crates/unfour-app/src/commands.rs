@@ -3,6 +3,8 @@ pub use flow::*;
 pub mod api;
 pub mod app;
 pub mod database;
+pub mod redis;
+pub use redis::*;
 pub mod diagnostics;
 pub mod environment_exchange;
 pub mod mcp;

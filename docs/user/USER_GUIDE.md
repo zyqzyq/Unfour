@@ -186,6 +186,12 @@ outer UPDATE/DELETE WHERE can waive the existing unbounded-write confirmation;
 comments, literals and nested SELECTs cannot. A predicate such as `WHERE 1=1`
 can still affect every row. Full access keeps its existing confirmation bypass.
 
+## Redis in the development client
+
+In **Database**, create a connection and choose **Redis**. Set the host, port, logical database, TLS and authentication, then test and save. Open the saved connection alongside your SQL tabs. Look up an exact key or browse a pattern such as `product:*`. A missing key, a key without expiry and a key with a positive TTL have different status indicators.
+
+For a readable text key, use **Create Flow from this key** to prepare an unsaved check. The new definition uses a secret runtime input for the actual key. You can also add a Redis key check in the Flow editor and feed its `matched` result into a Condition or Wait Until. This source feature targets standalone Redis. [Redis design and operation limits](../architecture/redis-workbench.md)
+
 ## Flow
 
 1. Open a workspace that already contains the saved API requests, SSH tasks, or

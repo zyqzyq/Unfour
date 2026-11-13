@@ -51,6 +51,9 @@ pub(super) fn prepare(bundle: WorkspaceBundle, mcp_policy: Option<&str>) -> AppR
             &c.id,
             match c.config {
                 BundleConnectionConfig::Ssh { .. } if c.connection_type == "ssh" => "sshConnection",
+                BundleConnectionConfig::Redis { .. } if c.connection_type == "redis" => {
+                    "redisConnection"
+                }
                 BundleConnectionConfig::Database { .. } if c.connection_type == "database" => {
                     "dbConnection"
                 }
@@ -288,6 +291,7 @@ pub(super) fn prepare(bundle: WorkspaceBundle, mcp_policy: Option<&str>) -> AppR
                     FlowCapability::Api => ("request", None),
                     FlowCapability::Ssh => ("task", Some("sshConnection")),
                     FlowCapability::Database => ("dbConnection", None),
+                    FlowCapability::Redis => ("redisConnection", None),
                 };
                 if conn.is_none() && action.connection_id.is_some() {
                     return Err(invalid());

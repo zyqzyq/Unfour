@@ -117,7 +117,7 @@ export type DatabaseWorkspaceTabId = string;
 
 export type TableSegment = "data" | "structure";
 
-export type DatabaseWorkspaceTabKind = "query" | "table";
+export type DatabaseWorkspaceTabKind = "query" | "table" | "redis";
 
 export type SqlBatchState = {
   tabId: string;
@@ -170,7 +170,14 @@ export type DatabaseTableWorkspaceTab = {
   title: string;
 };
 
-export type DatabaseWorkspaceTab = DatabaseQueryWorkspaceTab | DatabaseTableWorkspaceTab;
+export type RedisWorkspaceTab = {
+  connectionId: string;
+  id: DatabaseWorkspaceTabId;
+  kind: "redis";
+  title: string;
+};
+
+export type DatabaseWorkspaceTab = DatabaseQueryWorkspaceTab | DatabaseTableWorkspaceTab | RedisWorkspaceTab;
 
 export type DatabasePanelState = {
   connections: DatabaseConnection[];

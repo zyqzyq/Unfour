@@ -2,6 +2,12 @@
 use super::*;
 
 impl CommandBusAdapter for LocalCommandBusAdapter {
+    fn check_redis_key(
+        &self,
+        input: RedisCheck<'_>,
+    ) -> Result<unfour_command_bus::RedisCheckResult, CommandBusAdapterError> {
+        self.run_redis_check(input)
+    }
     fn api_folder_delete_snapshot(
         &self,
         workspace_id: String,

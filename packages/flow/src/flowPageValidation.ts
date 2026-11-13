@@ -15,7 +15,7 @@ function editorValidation(draft: FlowDefinition, invalid: FlowEditor["invalid"],
   const boundsProblems = authoringProblems(draft);
   const resourceProblems = data.resourcesQuery.data ? resourceErrors(draft, data.resources) : [];
   const invalidEditor = boundsProblems.length > 0 || referenceProblems.length > 0
-    || resourceProblems.some((problem) => ["flow.sqlRequired", "flow.sqlSingleStatement", "flow.sshMissingInputs", "flow.inputTypeError"].includes(problem.key))
+    || resourceProblems.some((problem) => ["flow.sqlRequired", "flow.sqlSingleStatement", "flow.sshMissingInputs", "flow.inputTypeError", "flow.redisKeyRequired", "flow.redisInvalidArguments"].includes(problem.key))
     || schemaProblems.length > 0 || Object.entries(invalid).some(([key, value]) => !key.startsWith("run:") && value);
   return { schemaProblems, referenceProblems, upstream, boundsProblems, resourceProblems, invalidEditor };
 }

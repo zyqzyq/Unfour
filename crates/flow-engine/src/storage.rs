@@ -154,6 +154,7 @@ fn decode_run(row: &str) -> AppResult<FlowRun> {
 }
 fn safe_run(run: &FlowRun, persistence_secrets: &[String]) -> AppResult<String> {
     let mut value: Value = serde_json::to_value(run)?;
+    let private_redis_inputs = crate::redis_history::protect_history(run, &mut value);
     // Invalid invocation payloads have no reliable field boundaries for secret
     // names. Retain only the validation error, never their raw contents.
     if !run.context.inputs.is_object() {
@@ -162,6 +163,13 @@ fn safe_run(run: &FlowRun, persistence_secrets: &[String]) -> AppResult<String> 
     // This list contains input names, not secret values. Keep it out of generic redaction.
     let secret_input_names = value["context"]["secretInputNames"].take();
     let mut secrets = persistence_secrets.to_vec();
+    // A normal runtime input selected as a Redis operand can also be echoed by an
+    // earlier or later step. Register its original leaves before the first write.
+    for name in private_redis_inputs {
+        if let Some(input) = run.context.inputs.get(&name) {
+            collect_secret_leaves(input, &mut secrets);
+        }
+    }
     // Schema flags such as inputs[].secret are metadata, not runtime secrets.
     for key in ["context", "resources", "steps"] {
         collect_secrets(&value[key], &mut secrets);
@@ -191,6 +199,7 @@ fn safe_run(run: &FlowRun, persistence_secrets: &[String]) -> AppResult<String> 
             }
         }
     }
+    crate::redis_history::preserve_check_metadata(run, &mut value);
     Ok(serde_json::to_string(&value)?)
 }
 

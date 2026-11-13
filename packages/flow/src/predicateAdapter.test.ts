@@ -27,5 +27,5 @@ it("summarizes business fields, resources and intervals without reference JSON",
   const step = newStep("waitUntil", "Ready");
   if (step.kind !== "waitUntil") throw new Error("fixture");
   step.successWhen = predicate; step.intervalMs = 5000; step.probe.resourceId = "status";
-  expect(nodeSummary(step, [step], { api: [{ id: "status", name: "Get status" }], ssh: [], database: [], connections: [] }, t)).toBe('Poll Get status · every 5s · until body.status equals "ready"');
+  expect(nodeSummary(step, [step], { api: [{ id: "status", name: "Get status" }], ssh: [], database: [], redis: [], connections: [] }, t)).toBe('Poll Get status · every 5s · until body.status equals "ready"');
 });

@@ -9,6 +9,7 @@ use super::{
 
 pub const SSH_CONNECTION_TYPE: &str = "ssh";
 pub const DATABASE_CONNECTION_TYPE: &str = "database";
+pub const REDIS_CONNECTION_TYPE: &str = "redis";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
@@ -17,6 +18,11 @@ pub const DATABASE_CONNECTION_TYPE: &str = "database";
     rename_all_fields = "camelCase"
 )]
 pub enum ConnectionSnapshotConfig {
+    Redis {
+        username: Option<String>,
+        db_index: u32,
+        tls: bool,
+    },
     Ssh {
         username: String,
         auth_method: String,

@@ -17,7 +17,7 @@ function environment(id: string, variables: WorkspaceVariable[]): WorkspaceEnvir
     revision: 1, variables: variables.map((item) => ({ ...item, environmentId: id })) };
 }
 const resources: Resources = {
-  api: [{ id: "api", name: "API", url: "{{HOST}}", method: "GET" }], database: [], connections: [{ id: "ssh", name: "SSH" }],
+  api: [{ id: "api", name: "API", url: "{{HOST}}", method: "GET" }], database: [], redis: [], connections: [{ id: "ssh", name: "SSH" }],
   ssh: [{ id: "task", name: "Task", detail: {
     task: { id: "task", workspaceId: "ws", name: "Task", description: "", sortOrder: 0, createdAt: "", updatedAt: "", deletedAt: null },
     steps: [], localBinding: null, detectedInputs: ["Host"],

@@ -103,7 +103,7 @@ fn connection_has_unsupported_subtype(
     object: &serde_json::Map<String, Value>,
 ) -> Result<bool, SyncError> {
     let connection_type = string_field(object, "connectionType")?;
-    if connection_type.is_some_and(|value| !matches!(value, "ssh" | "database")) {
+    if connection_type.is_some_and(|value| !matches!(value, "ssh" | "database" | "redis")) {
         return Ok(true);
     }
     let Some(config) = object.get("config") else {
@@ -111,7 +111,7 @@ fn connection_has_unsupported_subtype(
     };
     let config = config.as_object().ok_or(SyncError::InvalidData)?;
     let config_kind = string_field(config, "kind")?;
-    if config_kind.is_some_and(|value| !matches!(value, "ssh" | "database")) {
+    if config_kind.is_some_and(|value| !matches!(value, "ssh" | "database" | "redis")) {
         return Ok(true);
     }
     if connection_type.is_some() && config_kind.is_some() && connection_type != config_kind {
@@ -131,7 +131,7 @@ fn connection_has_unsupported_subtype(
             });
             Ok(driver_is_unknown || ssl_mode_is_unknown)
         }
-        None => Ok(false),
+        Some("redis") | None => Ok(false),
         Some(_) => unreachable!("unknown connection subtype returned above"),
     }
 }

@@ -49,6 +49,7 @@ type DatabaseTabStore = {
     input?: QueryTabInput,
     formatQueryTitle?: (index: number) => string,
   ) => DatabaseWorkspaceTabId;
+  openRedisTab: (workspaceId: string, connectionId: string, name: string) => void;
   openTableTab: (
     workspaceId: string,
     connectionId: string,
@@ -214,6 +215,16 @@ export const useDatabaseTabStore = create<DatabaseTabStore>((set, get) => ({
       }),
     );
     return tabId;
+  },
+  openRedisTab: (workspaceId, connectionId, name) => {
+    const id = `redis:${connectionId}`;
+    set((state) => withWorkspace(state, workspaceId, (slice) => ({
+      ...slice,
+      activeTabId: id,
+      tabs: slice.tabs.some((tab) => tab.id === id)
+        ? slice.tabs
+        : [...slice.tabs, { kind: "redis", id, connectionId, title: name }],
+    })));
   },
   removeConnectionTabs: (workspaceId, connectionId, formatQueryTitle) => {
     const fmt = formatQueryTitle ?? defaultQueryTitle;

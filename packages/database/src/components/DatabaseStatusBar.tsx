@@ -1,22 +1,28 @@
-import type { DatabaseConnection } from "@unfour/command-client";
+import type { DatabaseConnection, RedisConnection } from "@unfour/command-client";
 import type { ReactNode } from "react";
 import { ConnectionStatus, StatusBadge, StatusBar, useI18n } from "@unfour/ui";
 import type { DatabaseConnectionSessionState, DatabaseConnectionStatus } from "../model/types";
 
 export function DatabaseStatusBar({
   connection,
+  redis,
   executing,
   rightAccessory,
   session,
   workspaceName,
 }: {
   connection: DatabaseConnection | null;
+  redis?: RedisConnection;
   executing: boolean;
   rightAccessory?: ReactNode;
   session?: DatabaseConnectionSessionState;
   workspaceName: string;
 }) {
   const { t } = useI18n();
+  if (redis) return <StatusBar><div className="flex min-w-0 items-center gap-3">
+    <span className="truncate">{workspaceName}</span><span className="truncate">{redis.name}</span>
+    <span>DB {redis.dbIndex}</span><StatusBadge tone="neutral">{t("database.fields.readOnly")}</StatusBadge>
+  </div>{rightAccessory}</StatusBar>;
   const status: DatabaseConnectionStatus = session?.status ?? "disconnected";
   const message = executing
     ? t("database.connection.executingSql")

@@ -88,6 +88,11 @@ impl AppError {
     /// Stable, safe error classification code. Contains no dynamic detail, so it
     /// is safe to surface to external consumers (e.g. the MCP/LLM boundary).
     pub fn code(&self) -> &'static str {
+        if let AppError::Validation(reason) = self {
+            if let Some(code) = REDIS_ERROR_CODES.iter().find(|code| **code == reason) {
+                return code;
+            }
+        }
         match self {
             AppError::Config(_) => "CONFIG_ERROR",
             AppError::Database(_) => "DATABASE_ERROR",
@@ -164,6 +169,29 @@ impl AppError {
         }
     }
 }
+
+// Allow only locally classified Redis failures through the serialized error boundary.
+const REDIS_ERROR_CODES: &[&str] = &[
+    "REDIS_INVALID_INPUT",
+    "REDIS_INVALID_ENDPOINT",
+    "REDIS_INVALID_NAME",
+    "REDIS_INVALID_USERNAME",
+    "REDIS_ENDPOINT_REQUIRES_PASSWORD",
+    "REDIS_INVALID_KEY_ENCODING",
+    "REDIS_KEY_TOO_LARGE",
+    "REDIS_CONNECTION_FAILED",
+    "REDIS_TLS_FAILED",
+    "REDIS_AUTH_FAILED",
+    "REDIS_DB_UNAVAILABLE",
+    "REDIS_PERMISSION_DENIED",
+    "REDIS_TIMEOUT",
+    "REDIS_RESPONSE_TOO_LARGE",
+    "REDIS_PROTOCOL_ERROR",
+    "REDIS_KEY_CHANGED",
+    "REDIS_COMMAND_FAILED",
+    "REDIS_CLUSTER_UNSUPPORTED",
+    "REDIS_CHECK_TYPE_UNSUPPORTED",
+];
 
 impl serde::Serialize for AppError {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

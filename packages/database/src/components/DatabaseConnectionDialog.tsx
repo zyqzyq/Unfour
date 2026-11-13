@@ -21,6 +21,7 @@ export function DatabaseConnectionDialog({
   canTest,
   externalChange = false,
   onReload,
+  onChooseRedis,
   error,
   form,
   onOpenChange,
@@ -37,6 +38,7 @@ export function DatabaseConnectionDialog({
   canTest: boolean;
   externalChange?: boolean;
   onReload?: () => void;
+  onChooseRedis?: () => void;
   error: unknown;
   form: DatabaseConnectionInput;
   onOpenChange: (open: boolean) => void;
@@ -82,7 +84,7 @@ export function DatabaseConnectionDialog({
               <Input onChange={(event) => onUpdate({ name: event.target.value })} value={form.name} />
             </Field>
             <Field title={t("database.fields.driver")}>
-              {open && <ConnectionPresetSelect key={`${form.workspaceId}:${form.id ?? "new"}:${form.expectedSnapshot?.credentialRef ?? ""}`} form={form} onUpdate={onUpdate} />}
+              {open && <ConnectionPresetSelect key={`${form.workspaceId}:${form.id ?? "new"}:${form.expectedSnapshot?.credentialRef ?? ""}`} form={form} onUpdate={onUpdate} onChooseRedis={form.id ? undefined : onChooseRedis} />}
             </Field>
             {form.driver === "sqlite" ? (
               <Field title={t("database.fields.sqlitePath")}>
@@ -174,9 +176,10 @@ function Field({
 
 // A preset is transient editor state; only the existing transport fields leave
 // this component. Reopening an existing connection starts from its driver.
-function ConnectionPresetSelect({ form, onUpdate }: {
+function ConnectionPresetSelect({ form, onUpdate, onChooseRedis }: {
   form: DatabaseConnectionInput;
   onUpdate: (patch: Partial<DatabaseConnectionInput>) => void;
+  onChooseRedis?: () => void;
 }) {
   const { t } = useI18n();
   const [preset, setPreset] = useState<string>(form.driver);
@@ -187,9 +190,11 @@ function ConnectionPresetSelect({ form, onUpdate }: {
       { label: t("database.driver.opengauss"), value: "opengauss" },
       { label: t("database.driver.mysql"), value: "mysql" },
       { label: t("database.driver.sqlite"), value: "sqlite" },
+      ...(onChooseRedis ? [{ label: "Redis", value: "redis" }] : []),
     ]}
     onChange={(event) => {
       const value = event.target.value;
+      if (value === "redis") { onChooseRedis?.(); return; }
       const driver = value === "opengauss" ? "postgres" : value as DatabaseConnectionInput["driver"];
       setPreset(value);
       onUpdate({

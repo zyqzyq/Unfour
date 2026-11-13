@@ -2,6 +2,7 @@ import { handleApiMock } from "./api";
 import { handleFlowMock } from "./flow";
 import { handleAppMock } from "./app";
 import { handleDatabaseMock } from "./database";
+import { handleRedisMock } from "./redis";
 import { handleDiagnosticsMock } from "./diagnostics";
 import { handleMcpMock } from "./mcp";
 import { handleSecretStoreMock } from "./secret-store";
@@ -20,6 +21,7 @@ const mockHandlers: MockCommandHandler[] = [
   handleAppMock,
   handleSecretStoreMock,
   handleDatabaseMock,
+  handleRedisMock,
   handleSshMock,
   handleSshTaskMock,
   handleSftpMock,

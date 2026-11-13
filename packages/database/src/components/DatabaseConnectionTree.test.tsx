@@ -75,6 +75,20 @@ function renderTree(
 }
 
 describe("DatabaseConnectionTree", () => {
+  it("highlights a selected SQL connection while a Redis tab remains open", () => {
+    const cache = { id: "cache", workspaceId: "ws-1", name: "Cache", host: "localhost",
+      port: 6379, dbIndex: 0, username: null, tls: false, revision: 1, hasPassword: false };
+    const sqlSelect = vi.fn();
+    const redis = { open: vi.fn(), edit: vi.fn(), remove: vi.fn() };
+    renderTree({ activeRedisId: cache.id, redisConnections: [cache], redisActions: redis, onSelectConnection: sqlSelect });
+    const row = (name: string) => screen.getByRole("button", { name }).closest("[role='treeitem']");
+    expect(row("Cache")).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Local SQLite" }));
+    expect(sqlSelect).toHaveBeenCalledWith(sqliteConnection);
+    expect(row("Local SQLite")).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Cache" }));
+    expect(row("Cache")).toHaveAttribute("aria-selected", "true");
+  });
   it("does not expand a selected connection before it is connected", () => {
     renderTree();
 
