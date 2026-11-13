@@ -14,4 +14,5 @@ mod scripts;
 mod sql_context;
 mod sqlite;
 mod support;
+mod tunnels;
 mod workspace;

@@ -34,6 +34,8 @@ async fn script_activity_failure_does_not_hide_executed_mutations() {
     fixture.close().await;
     let connection = bus
         .save_database_connection(DatabaseConnectionInput {
+            ssh_connection_id: None,
+            expected_ssh_revision: None,
             id: None,
             workspace_id: workspace_id.clone(),
             name: "Script test".into(),

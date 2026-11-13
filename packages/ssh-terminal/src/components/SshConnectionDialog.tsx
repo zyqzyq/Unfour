@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { KeyRound, Lock, Plug, Save, ShieldOff } from "lucide-react";
-import { revealConnectionSecret, type SshConnectionInput } from "@unfour/command-client";
+import { listTemporaryRouteHandles, revealConnectionSecret, temporaryRouteOptions, type SshConnectionInput } from "@unfour/command-client";
 import {
   Button,
   Dialog,
@@ -16,6 +16,8 @@ import {
   Input,
   SavedSecretInput,
   SegmentedControl,
+  Select,
+  useLiveOptions,
   useI18n,
 } from "@unfour/ui";
 import { formatTerminalError } from "../model/errors";
@@ -50,6 +52,8 @@ export function SshConnectionDialog({
   children?: ReactNode;
 }) {
   const { t } = useI18n();
+  const sessions = useLiveOptions(form.workspaceId, listTemporaryRouteHandles, open);
+  const temporary = temporaryRouteOptions(sessions?.items ?? [], form.temporaryHandle, (id) => t("network.temporarySession", { id }), t("network.temporaryUnavailable"));
 
   return (
     <Dialog onOpenChange={(next) => { if (!pending) onOpenChange(next); }} open={open}>
@@ -93,6 +97,11 @@ export function SshConnectionDialog({
                 onChange={(event) => onUpdate({ username: event.target.value })}
                 value={form.username}
               />
+            </FieldGroup>
+            <FieldGroup title={t("redis.route.label")}>
+              <Select value={form.temporaryHandle ?? ""} options={[{ value: "", label: t("redis.route.direct") }, ...temporary]}
+                onChange={(event) => onUpdate({ temporaryHandle: event.target.value || null })} />
+              {form.temporaryHandle && <span className="text-xs text-[var(--u-color-text-muted)]">{t("network.temporaryHelp")}</span>}
             </FieldGroup>
             <FieldGroup title={t("ssh.dialog.authentication")}>
               <SegmentedControl<SshConnectionInput["authKind"]>

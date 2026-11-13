@@ -22,7 +22,7 @@ export function TerminalSplitView({
   splitMode,
   surfaceActive = true,
 }: {
-  onRetry: (connectionId: string) => void;
+  onRetry: (connectionId: string, sessionId: string) => void;
   primary: TerminalPaneModel;
   secondary: TerminalPaneModel | null;
   splitMode: TerminalSplitMode;
@@ -80,7 +80,7 @@ function PaneShell({
 }: {
   active?: boolean;
   model: TerminalPaneModel;
-  onRetry: (connectionId: string) => void;
+  onRetry: (connectionId: string, sessionId: string) => void;
   /** False while Connections is hidden under Tasks. */
   paintActive?: boolean;
   readOnly?: boolean;
@@ -114,7 +114,7 @@ function PaneShell({
             </div>
           </div>
           <Button
-            onClick={() => onRetry(session.connectionId)}
+            onClick={() => onRetry(session.connectionId, session.sessionId)}
             size="sm"
             type="button"
             variant="outline"

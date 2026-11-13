@@ -212,6 +212,8 @@ async fn imported_database_credential_delete_retains_other_connections() {
 
 fn database_input(connection: &DatabaseConnection) -> DatabaseConnectionInput {
     DatabaseConnectionInput {
+        ssh_connection_id: None,
+        expected_ssh_revision: None,
         id: Some(connection.id.clone()),
         workspace_id: connection.workspace_id.clone(),
         name: connection.name.clone(),

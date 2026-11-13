@@ -142,7 +142,18 @@ impl CommandBus {
     }
 
     pub async fn test_ssh_connection(&self, input: SshConnectionInput) -> AppResult<SshTestResult> {
-        let result = self.ssh.test_connection(input.clone()).await?;
+        self.test_ssh_connection_via(input, None).await
+    }
+
+    pub async fn test_ssh_connection_via(
+        &self,
+        input: SshConnectionInput,
+        temporary_handle: Option<&str>,
+    ) -> AppResult<SshTestResult> {
+        let result = self
+            .ssh
+            .test_connection_via(input.clone(), temporary_handle)
+            .await?;
         // The probe has already been closed. Retrying it does not repeat a
         // committed workspace mutation, so a missing audit record stays an error.
         self.activity_log
@@ -200,7 +211,28 @@ impl CommandBus {
         &self,
         input: SshConnectInput,
     ) -> AppResult<SshSessionSummary> {
-        let mut session = self.ssh.connect(input.clone()).await?;
+        self.connect_ssh_session_via(input, None).await
+    }
+
+    pub async fn connect_ssh_session_via(
+        &self,
+        input: SshConnectInput,
+        temporary_handle: Option<&str>,
+    ) -> AppResult<SshSessionSummary> {
+        self.connect_ssh_session_from(input, temporary_handle, None)
+            .await
+    }
+
+    pub async fn connect_ssh_session_from(
+        &self,
+        input: SshConnectInput,
+        temporary_handle: Option<&str>,
+        source_session_id: Option<&str>,
+    ) -> AppResult<SshSessionSummary> {
+        let mut session = self
+            .ssh
+            .connect_from_session(input.clone(), temporary_handle, source_session_id)
+            .await?;
         session.warnings.extend(
             self.record_completion_activity(
                 CommandActivity {
@@ -504,14 +536,22 @@ impl CommandBus {
         Ok(())
     }
 
-    pub async fn run_ssh_task(&self, mut input: SshTaskRunInput) -> AppResult<SshTaskRun> {
+    pub async fn run_ssh_task(&self, input: SshTaskRunInput) -> AppResult<SshTaskRun> {
+        self.run_ssh_task_via(input, None).await
+    }
+
+    pub async fn run_ssh_task_via(
+        &self,
+        mut input: SshTaskRunInput,
+        temporary_handle: Option<&str>,
+    ) -> AppResult<SshTaskRun> {
         let workspace_id = input.workspace_id.clone();
         let task_id = input.task_id.clone();
         for guard in self.extensions.ssh_task_execution_guards() {
             guard.validate(&workspace_id, &task_id).await?;
         }
         self.prepare_ssh_task_context(&mut input).await?;
-        let mut run = self.ssh.run_task(input).await?;
+        let mut run = self.ssh.run_task_via(input, temporary_handle).await?;
         run.warnings.extend(self.record_completion_activity(CommandActivity {
             workspace_id: Some(workspace_id), action: "ssh.task.run", target: Some(run.id.clone()),
             details: serde_json::json!({"taskId": task_id, "connectionId": run.connection_id}),

@@ -285,6 +285,8 @@ async fn flow_real_api_condition_native_ssh_database() {
         .unwrap();
     let database = bus
         .save_database_connection(DatabaseConnectionInput {
+            ssh_connection_id: None,
+            expected_ssh_revision: None,
             id: None,
             workspace_id: workspace.clone(),
             name: "flow database".into(),

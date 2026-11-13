@@ -46,7 +46,9 @@ impl ConnectionSubtype<'_> {
             r#"
             UPDATE database_connections
             SET driver = ?1, database_name = ?2, username = ?3,
-                ssl_mode = ?4, read_only = ?5, config_json = ?6
+                ssl_mode = ?4, read_only = ?5, config_json = ?6,
+                ssh_connection_id = CASE WHEN ?1 = 'sqlite' THEN NULL ELSE ssh_connection_id END,
+                ssh_revision = CASE WHEN ?1 = 'sqlite' THEN NULL ELSE ssh_revision END
             WHERE connection_id = ?7
             "#,
         )

@@ -42,8 +42,8 @@ impl DatabaseService {
     ) -> AppResult<RuntimePool<sqlx::Postgres>> {
         let options =
             pg_connect_options(connection, self.secret_store.as_ref(), password_override).await?;
-        let pool = PgPoolOptions::new()
-            .max_connections(4)
+        let pool = self
+            .routed_pool_options(connection, PgPoolOptions::new().max_connections(4))?
             .connect_with(options)
             .await
             .map_err(sanitize_pg_error)?;
@@ -82,9 +82,13 @@ impl DatabaseService {
         let options =
             mysql_connect_options(connection, self.secret_store.as_ref(), password_override)
                 .await?;
-        let pool = MySqlPoolOptions::new()
-            .max_connections(4)
-            .acquire_timeout(Duration::from_secs(5))
+        let pool = self
+            .routed_pool_options(
+                connection,
+                MySqlPoolOptions::new()
+                    .max_connections(4)
+                    .acquire_timeout(Duration::from_secs(5)),
+            )?
             .connect_with(options)
             .await
             .map_err(sanitize_mysql_error)?;

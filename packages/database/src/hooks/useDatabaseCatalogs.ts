@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { listDatabaseCatalogs } from "@unfour/command-client";
+import { databaseActionContext, listDatabaseCatalogs } from "@unfour/command-client";
 import type { DatabaseConnection } from "@unfour/command-client";
 
 // List the catalogs (databases) a connection can see. SQLite has none, so the
@@ -18,9 +18,10 @@ export function useDatabaseCatalogs({
 }) {
   const supportsCatalogs = connection?.driver === "postgres" || connection?.driver === "mysql";
 
+  const context = connection ? databaseActionContext(workspaceId, connection.id, connection) : undefined;
   return useQuery({
     enabled: Boolean(enabled && workspaceId && connectionId && supportsCatalogs),
-    queryKey: ["database-catalogs", workspaceId, connectionId],
-    queryFn: () => listDatabaseCatalogs(workspaceId, connectionId ?? ""),
+    queryKey: ["database-catalogs", workspaceId, connectionId, context],
+    queryFn: () => listDatabaseCatalogs(workspaceId, connectionId ?? "", context),
   });
 }

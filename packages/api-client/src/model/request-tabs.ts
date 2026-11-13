@@ -129,6 +129,7 @@ function refreshSavedTab(tab: ApiRequestTab, saved: ApiSavedRequest | undefined,
   if (tab.saving) return tab;
   if (!saved) return tab.externalChange === "deleted" ? tab : { ...tab, externalChange: "deleted" };
   const draft = inputToDraft(savedRequestToInput(saved, workspaceId));
+  draft.temporaryHandle = tab.draft.temporaryHandle;
   const baseline = normalizeRequestDraft(draft);
   if (saved.revision === tab.savedRevision && baseline === tab.baseline && !tab.externalChange) return tab;
   if (tab.nameEditing || normalizeRequestDraft(tab.draft) !== tab.baseline) {
@@ -151,6 +152,7 @@ export function reloadSavedRequest(state: ApiTabsState, tabId: string, saved: Ap
   return updateTab(state, tabId, (tab) => {
     if (tab.saving || tab.savedRequestId !== saved.id) return tab;
     const draft = inputToDraft(savedRequestToInput(saved, state.workspaceId));
+    draft.temporaryHandle = tab.draft.temporaryHandle;
     return { ...tab, draft, baseline: normalizeRequestDraft(draft), savedRevision: saved.revision, externalChange: undefined, saveError: null };
   });
 }
@@ -332,6 +334,7 @@ export function completeTabSave(
 ): ApiTabsState {
   const nextId = `saved:${saved.id}`;
   const savedDraft = inputToDraft(savedRequestToInput(saved, state.workspaceId));
+  savedDraft.temporaryHandle = state.tabs.find((tab) => tab.id === tabId)?.draft.temporaryHandle;
   savedDraft.multipartParts = attachMultipartBindings(
     savedDraft.multipartParts,
     state.tabs.find((tab) => tab.id === tabId)?.draft.multipartParts ?? [],

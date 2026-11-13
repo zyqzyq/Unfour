@@ -1,5 +1,6 @@
 import { type Dispatch, type FormEvent, type SetStateAction, useEffect } from "react";
 import type { QueryClient } from "@tanstack/react-query";
+import { databaseConnectionStamp } from "@unfour/command-client";
 import type {
   DatabaseConnection,
   DatabaseConnectionInput,
@@ -34,7 +35,7 @@ type SaveMutation = {
 };
 
 type TestMutation = {
-  mutate: (connectionId: string) => void;
+  mutate: (connection: DatabaseConnection) => void;
 };
 
 type TestInputMutation = {
@@ -122,6 +123,7 @@ export function useDatabaseWorkspaceController({
   workspaceId,
 }: DatabaseWorkspaceControllerOptions) {
   const { loadCatalogNames, loadCatalogSchema, loadConnectionRoot } = useDatabaseSchemaTreeActions({
+    connections,
     catalogNamesByConn,
     queryClient,
     setCatalogNamesByConn,
@@ -163,7 +165,7 @@ export function useDatabaseWorkspaceController({
   function connectConnection(connection: DatabaseConnection) {
     selectConnection(connection.id);
     setSelectedTable(null);
-    testMutation.mutate(connection.id);
+    testMutation.mutate(connection);
   }
 
   // Validate the dialog form against the backend without saving it. Mirrors the
@@ -258,6 +260,7 @@ export function useDatabaseWorkspaceController({
     previewSelectedTable,
     rowMutation,
   } = useDatabaseTableBrowse({
+    connections,
     activeTableTab,
     databaseTabs,
     selectedConnectionId,
@@ -306,7 +309,9 @@ export function useDatabaseWorkspaceController({
     t,
   });
 
+  const queryConnection = connections.find((connection) => connection.id === activeQueryTab?.connectionId);
   const { clearSql, runSql, selectQueryResult, sqlRunning, stopQuery } = useDatabaseSqlRunner({
+    expectedConnection: queryConnection ? databaseConnectionStamp(queryConnection) : undefined,
     activeQueryTab,
     browseMutation,
     browsingRef,

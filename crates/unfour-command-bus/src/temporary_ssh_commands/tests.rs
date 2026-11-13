@@ -7,6 +7,10 @@ use std::time::Duration;
 struct Server {
     calls: Arc<Mutex<Vec<&'static str>>>,
     stall: Option<&'static str>,
+    forward_target: Option<std::net::SocketAddr>,
+    downstream: bool,
+    forwarding_channels: std::collections::HashSet<russh::ChannelId>,
+    pending_open: Arc<tokio::sync::Notify>,
 }
 impl russh::server::Server for Server {
     type Handler = Self;
@@ -22,13 +26,47 @@ impl russh::server::Handler for Server {
         user: &str,
         password: &str,
     ) -> Result<russh::server::Auth, Self::Error> {
-        assert_eq!(user, "synthetic-ticket-user");
-        assert_eq!(password, "synthetic-password");
+        if self.downstream {
+            assert_eq!((user, password), ("target-user", "target-password"));
+        } else {
+            assert_eq!(
+                (user, password),
+                ("synthetic-ticket-user", "synthetic-password")
+            );
+        }
         self.calls.lock().unwrap().push("auth");
         if self.stall == Some("auth") {
             tokio::time::sleep(Duration::from_secs(60)).await;
         }
         Ok(russh::server::Auth::Accept)
+    }
+    async fn channel_open_direct_tcpip(
+        &mut self,
+        channel: russh::Channel<Msg>,
+        host: &str,
+        port: u32,
+        _: &str,
+        _: u32,
+        _: &mut Session,
+    ) -> Result<bool, Self::Error> {
+        let Some(address) = self.forward_target else {
+            panic!("unrequested forward");
+        };
+        self.calls.lock().unwrap().push("forward");
+        if host == "slow.fixture.invalid" {
+            self.pending_open.notified().await;
+            return Ok(false);
+        }
+        if host != "ssh-target.invalid" || port != 2222 {
+            return Ok(false);
+        }
+        self.forwarding_channels.insert(channel.id());
+        let mut target = tokio::net::TcpStream::connect(address).await?;
+        tokio::spawn(async move {
+            let mut stream = channel.into_stream();
+            let _ = tokio::io::copy_bidirectional(&mut stream, &mut target).await;
+        });
+        Ok(true)
     }
     async fn channel_open_session(
         &mut self,
@@ -91,17 +129,28 @@ impl russh::server::Handler for Server {
         data: &[u8],
         session: &mut Session,
     ) -> Result<(), Self::Error> {
+        // russh delivers channel bytes to both the Channel reader and this
+        // callback. The forwarding task consumes its own channels exclusively.
+        if self.forwarding_channels.contains(&channel) {
+            return Ok(());
+        }
         self.calls.lock().unwrap().push("input");
         session.data(channel, data.to_vec())?;
         Ok(())
     }
     async fn exec_request(
         &mut self,
-        _: russh::ChannelId,
-        _: &[u8],
-        _: &mut Session,
+        channel: russh::ChannelId,
+        data: &[u8],
+        session: &mut Session,
     ) -> Result<(), Self::Error> {
-        panic!("no exec probes")
+        assert!(self.downstream, "no exec probes on the bastion");
+        assert_eq!(data, b"fixture-task");
+        self.calls.lock().unwrap().push("task");
+        session.channel_success(channel)?;
+        session.exit_status_request(channel, 0)?;
+        session.eof(channel)?;
+        session.close(channel)
     }
     async fn subsystem_request(
         &mut self,
@@ -135,6 +184,8 @@ async fn wait_for(bus: &CommandBus, workspace: &str, status: &str) -> TemporaryS
         )
     })
 }
+
+mod forwarding;
 
 #[tokio::test]
 async fn temporary_rekey_requires_a_new_launch_during_setup_and_after_connecting() {
@@ -176,8 +227,11 @@ async fn temporary_rekey_requires_a_new_launch_during_setup_and_after_connecting
         let trust = wait_for(&bus, &workspace, "awaiting-trust").await;
         bus.trust_temporary_ssh(&workspace, &handle, trust.fingerprint.as_deref().unwrap())
             .unwrap();
+        let mut forwarding = None;
         if !during_setup {
             wait_for(&bus, &workspace, "connected").await;
+            let tunnel = bus.ssh.temporary_tunnel(&workspace, &handle).unwrap();
+            forwarding = Some((tunnel.http_proxy().await.unwrap(), tunnel));
             bus.temporary_ssh_input(SshSessionInput {
                 workspace_id: workspace.clone(),
                 session_id: handle.clone(),
@@ -191,6 +245,15 @@ async fn temporary_rekey_requires_a_new_launch_during_setup_and_after_connecting
             ended.error_code.as_deref(),
             Some("TEMPORARY_REKEY_REQUIRES_RELAUNCH")
         );
+        if let Some((lease, tunnel)) = forwarding {
+            tokio::time::timeout(Duration::from_secs(2), tunnel.closed())
+                .await
+                .unwrap();
+            assert!(tokio::net::TcpStream::connect(lease.address())
+                .await
+                .is_err());
+            assert!(tunnel.connect("ssh-target.invalid", 2222).await.is_err());
+        }
         bus.cancel_temporary_ssh(&workspace, &handle).unwrap();
         task.abort();
     }

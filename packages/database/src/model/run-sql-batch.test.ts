@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { executeDatabaseScript } from "@unfour/command-client";
+import { databaseRouteVersion, executeDatabaseScript } from "@unfour/command-client";
 import { canConfirmBatch, createSqlBatch, executeSqlBatch, sqlAwaitingConfirmation } from "./run-sql-batch";
 import type { DatabaseQueryWorkspaceTab } from "./types";
-vi.mock("@unfour/command-client", () => ({ executeDatabaseScript: vi.fn() }));
+vi.mock("@unfour/command-client", () => ({ databaseRouteVersion: vi.fn(() => 0), executeDatabaseScript: vi.fn() }));
 const tab: DatabaseQueryWorkspaceTab = {
   id: "q1", kind: "query", title: "SQL", sql: "SELECT 1; DELETE FROM t;",
   catalog: null, schema: null, connectionId: "db1", error: null, result: null,
@@ -11,6 +11,11 @@ const tab: DatabaseQueryWorkspaceTab = {
 beforeEach(() => vi.clearAllMocks());
 
 describe("SQL script command", () => {
+  it("requires a new preflight if the live route changes while confirmation is open", () => {
+    vi.mocked(databaseRouteVersion).mockReturnValueOnce(1).mockReturnValueOnce(2);
+    const batch = createSqlBatch(tab, { mode: "all" }, "ws");
+    expect(canConfirmBatch(batch, tab, "ws")).toBe(false);
+  });
   it("previews only the backend-selected current statement for confirmation", () => {
     const batch = createSqlBatch(tab, { cursorOffset: 15 }, "ws");
     expect(sqlAwaitingConfirmation(batch, { details: { statementRanges: [{ start: 10, end: tab.sql.length }] } })).toBe("DELETE FROM t;");

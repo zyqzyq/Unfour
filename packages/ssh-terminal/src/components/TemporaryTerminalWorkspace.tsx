@@ -106,6 +106,7 @@ export function TemporaryTerminalWorkspace({ workspaceId, autoClaim = false, sur
     {failed && <div role="alert" className="px-3 py-1 text-xs">{t("ssh.temporary.failed")} <Button variant="secondary" onClick={() => setFailed(false)}>{t("ssh.temporary.dismiss")}</Button></div>}
     {active ? <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-2 px-3 py-1 text-xs">
+        <span>{t("network.temporarySession", { id: active.handle.slice(-8) })}</span>
         <span>{t(`ssh.temporary.status.${active.status}`)}</span>
         {active.errorCode && <span role="alert">{t(`ssh.temporary.errors.${active.errorCode}`, t("ssh.temporary.failed"))}</span>}
         {active.status === "claimed" && <Button onClick={() => void connect(active.handle)}>{t("ssh.temporary.connect")}</Button>}

@@ -81,12 +81,12 @@ export function TerminalWorkspace({
   onCloseOthers: (sessionId: string) => void;
   onCloseRight: (sessionId: string) => void;
   onCloseSession: (sessionId: string) => void;
-  onDuplicate: (connectionId: string) => void;
+  onDuplicate: (connectionId: string, sourceSessionId: string) => void;
   onNewConnection: () => void;
   onNewSession: () => void;
   onOpenPreferences: (connection?: SshConnection | null) => void;
   onReconnect: (sessionId: string) => void;
-  onRetry: (connectionId: string) => void;
+  onRetry: (connectionId: string, sessionId: string) => void;
   onSelectSession: (sessionId: string) => void;
   selectedConnection: SshConnection | null;
   sessions: TerminalSessionTabState[];
@@ -161,7 +161,7 @@ export function TerminalWorkspace({
           {t("ssh.actions.closeAllSessions")}
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => onDuplicate(connectionId)}>
+        <ContextMenuItem onSelect={() => onDuplicate(connectionId, sessionId)}>
           <CopyPlus size={13} />
           {t("ssh.actions.duplicateSession")}
         </ContextMenuItem>

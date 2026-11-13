@@ -208,6 +208,8 @@ impl CommandBusAdapter for DbStubCommandBus {
         _workspace_id: &str,
     ) -> Result<Vec<DatabaseConnection>, CommandBusAdapterError> {
         Ok(vec![DatabaseConnection {
+            ssh_connection_id: None,
+            ssh_revision: None,
             id: "conn-1".to_string(),
             workspace_id: "workspace-1".to_string(),
             name: "Dev Database".to_string(),
@@ -246,6 +248,8 @@ impl CommandBusAdapter for DbStubCommandBus {
         input: DatabaseConnectionInput,
     ) -> Result<DatabaseConnection, CommandBusAdapterError> {
         Ok(DatabaseConnection {
+            ssh_connection_id: None,
+            ssh_revision: None,
             id: "created-db-1".to_string(),
             workspace_id: input.workspace_id,
             name: input.name,

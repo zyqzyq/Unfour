@@ -18,6 +18,8 @@ struct StoredDatabaseConnection {
     pub(super) database_name: Option<String>,
     pub(super) username: Option<String>,
     pub(super) ssl_mode: Option<String>,
+    ssh_connection_id: Option<String>,
+    ssh_revision: Option<i64>,
     pub(super) read_only: bool,
     config_json: String,
     credential_ref: Option<String>,
@@ -63,7 +65,7 @@ impl DatabaseService {
             SELECT
               c.id, c.workspace_id, c.name, c.host, c.port,
               sub.driver, sub.database_name, sub.username, sub.ssl_mode,
-              sub.read_only, sub.config_json, c.credential_ref,
+              sub.read_only, sub.config_json, sub.ssh_connection_id, sub.ssh_revision, c.credential_ref,
               c.created_at, c.updated_at, c.deleted_at, c.revision, c.sync_status, c.remote_id
             FROM connections c
             INNER JOIN database_connections sub ON sub.connection_id = c.id
@@ -289,6 +291,19 @@ impl DatabaseService {
             (id, 1, true)
         };
 
+        if let Some(route) = &input.ssh_connection_id {
+            let revision = self
+                .validate_sql_jump(
+                    connection,
+                    &input.workspace_id,
+                    &storage.driver,
+                    route.as_deref(),
+                    input.expected_ssh_revision,
+                )
+                .await?;
+            sqlx::query("UPDATE database_connections SET ssh_connection_id=?, ssh_revision=? WHERE connection_id=?")
+                .bind(route).bind(revision).bind(&id).execute(&mut *connection).await?;
+        }
         let saved = self
             .get_connection_on(connection, &input.workspace_id, &id)
             .await?;
@@ -377,14 +392,48 @@ impl DatabaseService {
         ))
     }
 
+    pub(super) async fn validate_sql_jump(
+        &self,
+        db: &mut SqliteConnection,
+        workspace: &str,
+        driver: &str,
+        route: Option<&str>,
+        expected: Option<i64>,
+    ) -> AppResult<Option<i64>> {
+        let Some(id) = route else {
+            return Ok(None);
+        };
+        if driver == "sqlite" {
+            return Err(AppError::Validation("SSH_TUNNEL_INVALID_ROUTE".into()));
+        }
+        let revision: i64 = sqlx::query_scalar("SELECT revision FROM connections WHERE workspace_id=? AND id=? AND connection_type='ssh' AND deleted_at IS NULL")
+            .bind(workspace).bind(id).fetch_optional(db).await?.ok_or_else(|| AppError::Validation("SSH_TUNNEL_ROUTE_MISSING".into()))?;
+        if expected.is_some_and(|value| value != revision) {
+            return Err(AppError::Validation("SSH_TUNNEL_ROUTE_CHANGED".into()));
+        }
+        Ok(Some(revision))
+    }
+
     pub(super) async fn get_connection(
         &self,
         workspace_id: &str,
         connection_id: &str,
     ) -> AppResult<DatabaseConnection> {
         let mut connection = self.db.pool().acquire().await?;
-        self.get_connection_on(&mut connection, workspace_id, connection_id)
-            .await
+        let record = self
+            .get_connection_on(&mut connection, workspace_id, connection_id)
+            .await?;
+        if self
+            .expected_connection
+            .as_ref()
+            .is_some_and(|expected| !expected.matches(&record))
+        {
+            return Err(AppError::Validation("SSH_TUNNEL_ROUTE_CHANGED".into()));
+        }
+        if record.driver == "sqlite" && self.temporary_handle.is_some() {
+            return Err(AppError::Validation("SSH_TUNNEL_INVALID_ROUTE".into()));
+        }
+        Ok(record)
     }
 
     pub(super) async fn get_connection_on(
@@ -401,7 +450,7 @@ impl DatabaseService {
             SELECT
               c.id, c.workspace_id, c.name, c.host, c.port,
               sub.driver, sub.database_name, sub.username, sub.ssl_mode,
-              sub.read_only, sub.config_json, c.credential_ref,
+              sub.read_only, sub.config_json, sub.ssh_connection_id, sub.ssh_revision, c.credential_ref,
               c.created_at, c.updated_at, c.deleted_at, c.revision, c.sync_status, c.remote_id
             FROM connections c
             INNER JOIN database_connections sub ON sub.connection_id = c.id
@@ -424,6 +473,8 @@ fn stored_to_database_connection(row: StoredDatabaseConnection) -> AppResult<Dat
     let config = parse_database_config(&row.id, &row.config_json)?;
     let port = decode_port(row.port, "database connection port")?;
     Ok(DatabaseConnection {
+        ssh_connection_id: row.ssh_connection_id,
+        ssh_revision: row.ssh_revision,
         id: row.id,
         workspace_id: row.workspace_id,
         name: row.name,

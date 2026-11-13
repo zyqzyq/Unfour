@@ -1,6 +1,12 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
+fn deserialize_ssh_route<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<Option<Option<String>>, D::Error> {
+    Option::<String>::deserialize(d).map(Some)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DatabaseConnectionInput {
@@ -14,6 +20,14 @@ pub struct DatabaseConnectionInput {
     pub username: Option<String>,
     #[serde(default)]
     pub ssl_mode: Option<String>,
+    /// Omission preserves the device's saved jump. Explicit null selects direct TCP.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_ssh_route",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub ssh_connection_id: Option<Option<String>>,
+    pub expected_ssh_revision: Option<i64>,
     pub sqlite_path: Option<String>,
     pub credential_ref: Option<String>,
     /// When true, the connection rejects any data- or schema-modifying SQL and
@@ -23,7 +37,7 @@ pub struct DatabaseConnectionInput {
     pub read_only: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DatabaseConnection {
     pub id: String,
@@ -36,6 +50,10 @@ pub struct DatabaseConnection {
     pub username: Option<String>,
     #[serde(default)]
     pub ssl_mode: Option<String>,
+    #[serde(default)]
+    pub ssh_connection_id: Option<String>,
+    #[serde(default)]
+    pub ssh_revision: Option<i64>,
     pub sqlite_path: Option<String>,
     pub credential_ref: Option<String>,
     #[serde(default)]
@@ -46,6 +64,24 @@ pub struct DatabaseConnection {
     pub revision: i64,
     pub sync_status: String,
     pub remote_id: Option<String>,
+}
+
+/// The saved connection and device-local jump displayed when the desktop
+/// obtained the data or requested confirmation for an operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseConnectionVersion {
+    pub revision: i64,
+    pub ssh_connection_id: Option<String>,
+    pub ssh_revision: Option<i64>,
+}
+
+impl DatabaseConnectionVersion {
+    pub fn matches(&self, connection: &DatabaseConnection) -> bool {
+        self.revision == connection.revision
+            && self.ssh_connection_id == connection.ssh_connection_id
+            && self.ssh_revision == connection.ssh_revision
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]

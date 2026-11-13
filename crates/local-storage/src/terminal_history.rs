@@ -18,6 +18,14 @@ impl TerminalHistoryService {
     }
 
     pub async fn save_session(&self, summary: &SshSessionSummary) -> AppResult<()> {
+        self.save_session_with_route(summary, false).await
+    }
+
+    pub async fn save_session_with_route(
+        &self,
+        summary: &SshSessionSummary,
+        requires_temporary_route: bool,
+    ) -> AppResult<()> {
         validate_identity(
             &summary.workspace_id,
             &summary.session_id,
@@ -28,9 +36,9 @@ impl TerminalHistoryService {
             INSERT INTO ssh_terminal_history (
               workspace_id, session_id, connection_id, status, reconnect_attempt,
               auth_kind, host, username, cols, rows, content, byte_len,
-              created_at, updated_at
+              created_at, updated_at, requires_temporary_route
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, '', 0, ?11, ?12)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, '', 0, ?11, ?12, ?13)
             ON CONFLICT(workspace_id, session_id) DO UPDATE SET
               connection_id = excluded.connection_id,
               status = excluded.status,
@@ -55,9 +63,21 @@ impl TerminalHistoryService {
         .bind(summary.rows as i64)
         .bind(&summary.created_at)
         .bind(&summary.updated_at)
+        .bind(requires_temporary_route)
         .execute(self.db.pool())
         .await?;
         Ok(())
+    }
+
+    pub async fn requires_temporary_route(
+        &self,
+        workspace: &str,
+        connection: &str,
+        session: &str,
+    ) -> AppResult<bool> {
+        sqlx::query_scalar("SELECT requires_temporary_route FROM ssh_terminal_history WHERE workspace_id=? AND connection_id=? AND session_id=?")
+            .bind(workspace).bind(connection).bind(session).fetch_optional(self.db.pool()).await?
+            .ok_or_else(|| AppError::NotFound("ssh session".into()))
     }
 
     pub async fn append_output(

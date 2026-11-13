@@ -1,9 +1,7 @@
 #[path = "outbox/flow_definitions.rs"]
 mod flow_definitions;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::{future::Future, pin::Pin, sync::Arc};
 
 use chrono::{DateTime, Utc};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
@@ -554,6 +552,8 @@ async fn connection_crud_uses_one_generic_outbox_row_per_aggregate() {
 
     let database = bus
         .save_database_connection(DatabaseConnectionInput {
+            ssh_connection_id: None,
+            expected_ssh_revision: None,
             id: None,
             workspace_id: workspace_id.clone(),
             name: "Device SQLite".into(),

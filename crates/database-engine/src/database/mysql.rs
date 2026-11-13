@@ -34,6 +34,18 @@ pub(super) async fn mysql_connect_options(
         .host(host)
         .port(port)
         .username(username);
+    if let Some(mode) = normalize_ssl_mode(connection.ssl_mode.clone())? {
+        use sqlx::mysql::MySqlSslMode;
+        let ssl = match mode.as_str() {
+            "disable" => MySqlSslMode::Disabled,
+            "prefer" => MySqlSslMode::Preferred,
+            "require" => MySqlSslMode::Required,
+            "verify-ca" => MySqlSslMode::VerifyCa,
+            "verify-full" => MySqlSslMode::VerifyIdentity,
+            _ => return Err(AppError::Validation("unsupported SSL mode".into())),
+        };
+        options = options.ssl_mode(ssl);
+    }
     if let Some(database) = database {
         options = options.database(database);
     }
@@ -397,6 +409,10 @@ pub(super) fn mysql_row_values(row: &sqlx::mysql::MySqlRow) -> AppResult<Vec<Opt
 }
 
 pub(super) fn sanitize_mysql_error(error: sqlx::Error) -> AppError {
+    let error = match tunnel::route_error(error) {
+        Ok(error) => error,
+        Err(route) => return route,
+    };
     let message = error.to_string();
     let safe = redact_connection_string(&message);
     if safe == message {

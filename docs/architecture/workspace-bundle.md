@@ -2,7 +2,7 @@
 
 A Workspace can be exported from its switcher menu and imported as a new local
 Workspace. This is a portable business definition package, not a database backup.
-The desktop exports `format: "unfour-workspace", version: 2` for existing connection types. The development client writes V3 for workspaces containing Redis connections or Redis Flow checks. V1 and V2 remain readable.
+The desktop exports `format: "unfour-workspace", version: 2` for existing connection types. The development client writes V3 for workspaces containing Redis connections or Redis Flow checks. A workspace containing saved SQL jump routes uses V4. The `databaseRoutes` array identifies each SQL connection, its SSH jump and whether the jump needs review. Import remaps both IDs and preserves pending reviews. V1 through V3 remain readable. Temporary session selections remain in the desktop window.
 V2 adds optional `localPaths`, `credentialRequirements`, and `apiTemplates` arrays.
 The V1 base record contract below is unchanged. Cloud Sync does not consume these
 local supplements or encrypted backups.

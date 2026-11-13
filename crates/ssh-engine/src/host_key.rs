@@ -98,14 +98,18 @@ impl HostKeyStore {
         port: u16,
         fingerprint: &str,
     ) -> AppResult<()> {
-        match self.get_fingerprint(workspace_id, host, port).await? {
-            None => {
-                self.record_fingerprint(workspace_id, host, port, fingerprint)
-                    .await?;
-                Ok(())
-            }
+        let stored = if let Some(pin) = self.get_fingerprint(workspace_id, host, port).await? {
+            Some(pin)
+        } else {
+            // Concurrent first connections can reach different hosts for the
+            // same DNS name via separate bastions. Never overwrite another pin.
+            sqlx::query("INSERT INTO ssh_host_keys(workspace_id,host,port,fingerprint,created_at) VALUES (?,?,?,?,?) ON CONFLICT(workspace_id,host,port) DO NOTHING")
+                .bind(workspace_id).bind(host).bind(port).bind(fingerprint).bind(Utc::now().to_rfc3339()).execute(&self.pool).await?;
+            self.get_fingerprint(workspace_id, host, port).await?
+        };
+        match stored {
             Some(stored) if stored == fingerprint => Ok(()),
-            Some(_) => Err(AppError::Config(format!(
+            _ => Err(AppError::Config(format!(
                 "SSH host key verification failed for {}:{}: \
                  server key fingerprint does not match the previously recorded \
                  fingerprint. This could indicate a man-in-the-middle attack.",

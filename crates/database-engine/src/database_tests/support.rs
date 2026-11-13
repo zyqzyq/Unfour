@@ -143,6 +143,8 @@ pub(super) async fn sqlite_fixture() -> PathBuf {
 
 pub(super) fn sqlite_input(workspace_id: &str, path: &PathBuf) -> DatabaseConnectionInput {
     DatabaseConnectionInput {
+        ssh_connection_id: None,
+        expected_ssh_revision: None,
         id: None,
         workspace_id: workspace_id.to_string(),
         name: "Local fixture".to_string(),
@@ -160,6 +162,8 @@ pub(super) fn sqlite_input(workspace_id: &str, path: &PathBuf) -> DatabaseConnec
 
 pub(super) fn postgres_input(workspace_id: &str) -> DatabaseConnectionInput {
     DatabaseConnectionInput {
+        ssh_connection_id: None,
+        expected_ssh_revision: None,
         id: None,
         workspace_id: workspace_id.to_string(),
         name: "PG test".to_string(),
@@ -180,6 +184,8 @@ pub(super) fn mysql_input(
     credential_ref: Option<String>,
 ) -> DatabaseConnectionInput {
     DatabaseConnectionInput {
+        ssh_connection_id: None,
+        expected_ssh_revision: None,
         id: None,
         workspace_id: workspace_id.to_string(),
         name: "MySQL test".to_string(),

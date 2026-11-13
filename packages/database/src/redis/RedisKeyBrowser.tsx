@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { inspectRedisKey, scanRedisKeys, type RedisConnection, type RedisFlowIntent, type RedisKeyInfo } from "@unfour/command-client";
+import { connectionTemporaryHandle, inspectRedisKey, scanRedisKeys, type RedisConnection, type RedisFlowIntent, type RedisKeyInfo } from "@unfour/command-client";
 import { Button, Input, useI18n } from "@unfour/ui";
 import { RedisKeyDetails } from "./RedisKeyDetails";
 import { isRedisCollectionKind, readableText, redisName, textKey } from "./redis-bytes";
@@ -33,7 +33,8 @@ function mergeScanBatch(previous: Scan | undefined, batch: { keys: string[]; cur
 
 export function RedisKeyBrowser(props: BrowserProps) {
   const { connection } = props;
-  return <RedisKeySession key={`${connection.workspaceId}:${connection.id}:${connection.revision}`} {...props} />;
+  const handle = connectionTemporaryHandle("redis", connection.workspaceId, connection.id);
+  return <RedisKeySession key={JSON.stringify([connection.workspaceId, connection.id, connection.revision, handle])} {...props} />;
 }
 
 function RedisKeySession({ connection, active = true, onCreateFlow, onRefreshConnections }: BrowserProps) {

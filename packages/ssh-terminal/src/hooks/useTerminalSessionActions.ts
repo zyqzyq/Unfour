@@ -13,7 +13,7 @@ export type TerminalBatchCloseRequest = {
 };
 
 type ConnectMutation = {
-  mutate: (connectionId: string) => void;
+  mutate: (request: string | { connectionId: string; sourceSessionId: string }, callbacks?: { onSuccess: () => void }) => void;
   reset: () => void;
 };
 
@@ -93,9 +93,10 @@ export function useTerminalSessionActions({
     if (!session) {
       return;
     }
-    closeSessionNow(sessionId);
     connectMutation.reset();
-    connectMutation.mutate(session.connectionId);
+    connectMutation.mutate(frontendFailedSessions[sessionId] ? session.connectionId : {
+      connectionId: session.connectionId, sourceSessionId: sessionId,
+    }, { onSuccess: () => closeSessionNow(sessionId) });
   }
 
   function requestBatchClose(kind: TerminalBatchCloseKind, sessionId?: string) {

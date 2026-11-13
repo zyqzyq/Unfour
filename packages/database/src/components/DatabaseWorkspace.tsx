@@ -209,6 +209,7 @@ export function DatabaseWorkspace({
             <>
               {renderTable.segment === "data" ? (
                 <TableDataTab
+                  readContext={renderTable.expectedConnection ? { expectedConnection: renderTable.expectedConnection, routeVersion: renderTable.routeVersion } : undefined}
                   connection={connections.find((candidate) => candidate.id === renderTable.connectionId) ?? null}
                   editing={tableEditing}
                   error={renderTable.error}

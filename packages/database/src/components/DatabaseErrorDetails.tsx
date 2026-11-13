@@ -1,4 +1,5 @@
 import { confirmationMessage, describeDatabaseError } from "../result-utils";
+import { useI18n } from "@unfour/ui";
 
 export function DatabaseErrorDetails({
   confirmation = false,
@@ -8,7 +9,9 @@ export function DatabaseErrorDetails({
   error: unknown;
 }) {
   const description = describeDatabaseError(error);
-  const message = confirmation ? confirmationMessage(error) : description.message;
+  const { t } = useI18n();
+  const message = confirmation ? confirmationMessage(error) : description.code?.startsWith("SSH_TUNNEL_")
+    ? t(`network.errors.${description.code}`, description.message) : description.message;
 
   return (
     <div className="min-w-0 select-text space-y-1 text-left">

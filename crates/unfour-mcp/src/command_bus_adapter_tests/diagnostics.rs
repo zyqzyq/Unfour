@@ -18,6 +18,8 @@ fn workspace(adapter: &LocalCommandBusAdapter, env: &str, policy: &str) -> Strin
 fn db(adapter: &LocalCommandBusAdapter, ws: &str) -> DatabaseConnection {
     adapter
         .save_db_connection(DatabaseConnectionInput {
+            ssh_connection_id: None,
+            expected_ssh_revision: None,
             id: None,
             workspace_id: ws.into(),
             name: "database".into(),

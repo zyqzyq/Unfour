@@ -1,5 +1,8 @@
-//! Exercise the saved-route command bus path across real SSH direct-tcpip channels.
+//! Exercise the routed command bus path across real SSH direct-tcpip channels.
 #![cfg(feature = "ssh-native")]
+
+#[path = "ssh_tunnel_native/temporary_routes.rs"]
+mod temporary_routes;
 
 use base64::{engine::general_purpose::STANDARD, Engine};
 use russh::server::{Auth, Msg, Server as _, Session};
@@ -19,7 +22,16 @@ use unfour_secret_store::SecretStore;
 use unfour_ssh_engine::HostKeyStore;
 
 #[derive(Clone)]
-struct JumpHost(Vec<(&'static str, u16, SocketAddr)>);
+struct JumpHost(
+    Vec<(&'static str, u16, SocketAddr)>,
+    Option<Arc<ForwardGate>>,
+);
+
+#[derive(Default)]
+struct ForwardGate {
+    opened: tokio::sync::Notify,
+    release: tokio::sync::Notify,
+}
 impl russh::server::Server for JumpHost {
     type Handler = Self;
     fn new_client(&mut self, _: Option<SocketAddr>) -> Self {
@@ -35,6 +47,38 @@ impl russh::server::Handler for JumpHost {
             Auth::reject()
         })
     }
+    async fn channel_open_session(
+        &mut self,
+        _: russh::Channel<Msg>,
+        _: &mut Session,
+    ) -> Result<bool, Self::Error> {
+        Ok(true)
+    }
+
+    async fn pty_request(
+        &mut self,
+        channel: russh::ChannelId,
+        _: &str,
+        _: u32,
+        _: u32,
+        _: u32,
+        _: u32,
+        _: &[(russh::Pty, u32)],
+        session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        session.channel_success(channel)?;
+        Ok(())
+    }
+
+    async fn shell_request(
+        &mut self,
+        channel: russh::ChannelId,
+        session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        session.channel_success(channel)?;
+        Ok(())
+    }
+
     async fn channel_open_direct_tcpip(
         &mut self,
         channel: russh::Channel<Msg>,
@@ -52,6 +96,10 @@ impl russh::server::Handler for JumpHost {
             return Ok(false);
         };
         let mut remote = TcpStream::connect(mapped).await?;
+        if let Some(gate) = &self.1 {
+            gate.opened.notify_one();
+            gate.release.notified().await;
+        }
         tokio::spawn(async move {
             let _ = tokio::io::copy_bidirectional(&mut remote, &mut channel.into_stream()).await;
         });
@@ -64,6 +112,7 @@ struct Fixture {
     db: LocalDb,
     workspace: String,
     jump: String,
+    port: u16,
     server: JoinHandle<()>,
 }
 impl Drop for Fixture {
@@ -72,6 +121,13 @@ impl Drop for Fixture {
     }
 }
 async fn fixture(routes: Vec<(&'static str, u16, SocketAddr)>) -> Fixture {
+    fixture_with_gate(routes, None).await
+}
+
+async fn fixture_with_gate(
+    routes: Vec<(&'static str, u16, SocketAddr)>,
+    gate: Option<Arc<ForwardGate>>,
+) -> Fixture {
     let db = LocalDb::connect_ephemeral().await.unwrap();
     db.migrate().await.unwrap();
     let bus =
@@ -79,7 +135,7 @@ async fn fixture(routes: Vec<(&'static str, u16, SocketAddr)>) -> Fixture {
             .await
             .unwrap();
     let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
-    let mut server = JumpHost(routes);
+    let mut server = JumpHost(routes, gate);
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     let host_key =
@@ -120,6 +176,7 @@ async fn fixture(routes: Vec<(&'static str, u16, SocketAddr)>) -> Fixture {
         db,
         workspace,
         jump,
+        port,
         server,
     }
 }

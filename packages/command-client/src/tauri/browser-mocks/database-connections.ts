@@ -9,6 +9,8 @@ export function listMockDatabaseConnections(workspaceId: string) {
 }
 
 export function saveMockDatabaseConnection(input: DatabaseConnectionInput, secret?: string | null, expectedSnapshot?: DatabaseConnection) {
+  const old = mockStore.databaseConnections.find((item) => item.workspaceId === input.workspaceId && item.id === input.id);
+  const route = resolveMockDatabaseRoute(input, old);
   if (expectedSnapshot && connectionEditSnapshot(expectedSnapshot) !== connectionEditSnapshot(
     mockStore.databaseConnections.find((item) => item.id === input.id && item.workspaceId === input.workspaceId),
   )) throw { code: "ROW_CONFLICT", message: "record changed externally; reload before saving" };
@@ -27,6 +29,7 @@ export function saveMockDatabaseConnection(input: DatabaseConnectionInput, secre
     name: input.name,
     driver: input.driver,
     ...connectionSettings(input),
+    ...route,
     credentialRef,
     createdAt:
       existingIndex >= 0
@@ -59,6 +62,16 @@ function connectionSettings(input: DatabaseConnectionInput) {
     sqlitePath: input.sqlitePath ?? null,
     readOnly: input.readOnly ?? false,
   };
+}
+
+export function resolveMockDatabaseRoute(input: DatabaseConnectionInput, old?: DatabaseConnection) {
+  const sshConnectionId = input.sshConnectionId === undefined ? old?.sshConnectionId ?? null : input.sshConnectionId;
+  if (!sshConnectionId) return { sshConnectionId: null, sshRevision: null };
+  if (input.driver === "sqlite") throw { code: "SSH_TUNNEL_INVALID_ROUTE" };
+  const host = mockStore.sshConnections.find((c) => c.workspaceId === input.workspaceId && c.id === sshConnectionId && !c.deletedAt);
+  if (!host) throw { code: "SSH_TUNNEL_ROUTE_MISSING" };
+  if (input.expectedSshRevision != null && host.revision !== input.expectedSshRevision) throw { code: "SSH_TUNNEL_ROUTE_CHANGED" };
+  return { sshConnectionId, sshRevision: input.sshConnectionId === undefined ? old?.sshRevision : host.revision };
 }
 
 export function deleteMockDatabaseConnection(workspaceId: string, connectionId: string) {

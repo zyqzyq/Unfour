@@ -144,7 +144,9 @@ describe("useTerminalSessionActions batch close", () => {
 
     expect(hook.result.current.batchCloseRequest).toBeNull();
     expect(hook.result.current.closeConfirmSessionId).toBeNull();
+    expect(closeMutation.mutate).not.toHaveBeenCalled();
+    expect(connectMutation.mutate).toHaveBeenCalledWith({ connectionId: "c2", sourceSessionId: "s2" }, expect.any(Object));
+    act(() => connectMutation.mutate.mock.lastCall![1].onSuccess());
     expect(closeMutation.mutate).toHaveBeenCalledWith("s2");
-    expect(connectMutation.mutate).toHaveBeenCalledWith("c2");
   });
 });

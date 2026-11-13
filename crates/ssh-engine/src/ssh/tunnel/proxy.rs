@@ -26,7 +26,10 @@ pub struct TunnelProxyLease {
 }
 
 impl TunnelProxyLease {
-    pub(super) async fn start(connector: Arc<dyn TunnelConnector>) -> AppResult<Self> {
+    pub(super) async fn start(
+        connector: Arc<dyn TunnelConnector>,
+        parent: Option<super::TemporarySshTunnel>,
+    ) -> AppResult<Self> {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
             .await
             .map_err(|_| failure("SSH_TUNNEL_PROXY_FAILED"))?;
@@ -35,12 +38,24 @@ impl TunnelProxyLease {
             .map_err(|_| failure("SSH_TUNNEL_PROXY_FAILED"))?;
         let password = Arc::new(Zeroizing::new(Uuid::new_v4().simple().to_string()));
         let remote_failure = Arc::new(OnceLock::new());
-        let task = tokio::spawn(serve(
+        let server = serve(
             listener,
             connector,
             password.clone(),
             remote_failure.clone(),
-        ));
+        );
+        let failure = remote_failure.clone();
+        let task = tokio::spawn(async move {
+            if let Some(parent) = parent {
+                tokio::select! {
+                    biased;
+                    _ = parent.closed() => { let _ = failure.set("SSH_TUNNEL_TEMPORARY_UNAVAILABLE"); }
+                    _ = server => {}
+                }
+            } else {
+                server.await;
+            }
+        });
         Ok(Self {
             address,
             password,

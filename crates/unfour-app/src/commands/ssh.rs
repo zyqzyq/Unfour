@@ -82,9 +82,16 @@ pub async fn ssh_task_delete(
 #[tauri::command]
 pub async fn ssh_task_run(
     input: SshTaskRunInput,
+    temporary_handle: Option<String>,
     state: State<'_, AppState>,
 ) -> AppResult<SshTaskRun> {
-    trace_command("ssh_task_run", state.command_bus.run_ssh_task(input)).await
+    trace_command(
+        "ssh_task_run",
+        state
+            .command_bus
+            .run_ssh_task_via(input, temporary_handle.as_deref()),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -173,9 +180,13 @@ pub async fn ssh_connection_save(
 #[tauri::command]
 pub async fn ssh_connection_test(
     input: SshConnectionInput,
+    temporary_handle: Option<String>,
     state: State<'_, AppState>,
 ) -> AppResult<SshTestResult> {
-    state.command_bus.test_ssh_connection(input).await
+    state
+        .command_bus
+        .test_ssh_connection_via(input, temporary_handle.as_deref())
+        .await
 }
 
 #[tauri::command]
@@ -193,11 +204,17 @@ pub async fn ssh_connection_delete(
 #[tauri::command]
 pub async fn ssh_session_connect(
     input: SshConnectInput,
+    temporary_handle: Option<String>,
+    source_session_id: Option<String>,
     state: State<'_, AppState>,
 ) -> AppResult<SshSessionSummary> {
     trace_command(
         "ssh_session_connect",
-        state.command_bus.connect_ssh_session(input),
+        state.command_bus.connect_ssh_session_from(
+            input,
+            temporary_handle.as_deref(),
+            source_session_id.as_deref(),
+        ),
     )
     .await
 }

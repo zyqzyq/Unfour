@@ -447,8 +447,12 @@ impl FlowExecutor for CommandBus {
                     }
                     // Dropping the query does not roll it back. Wait for a
                     // result that arrives during the runner's grace window.
-                    let result =
-                        finish_unless_dropped(&cancel, self.execute_database_query(query)).await?;
+                    let expected = serde_json::from_value(snapshot["resource"].clone())?;
+                    let result = finish_unless_dropped(
+                        &cancel,
+                        self.execute_database_query_checked(query, Some(&expected)),
+                    )
+                    .await?;
                     Ok(serde_json::to_value(result)?)
                 }
                 FlowCapability::Ssh => {

@@ -70,8 +70,6 @@ impl SshService {
 
             let channel = native
                 .handle
-                .lock()
-                .await
                 .channel_open_session()
                 .await
                 .map_err(|error| sftp_error("open SFTP channel", error))?;

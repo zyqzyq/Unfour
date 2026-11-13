@@ -17,7 +17,7 @@ Redis Insight 按数据类型呈现内容，并提供 JSON 和十六进制格式
 | 按模式浏览 | 显式启动 SCAN，每次只向服务端请求一个批次，允许停止继续加载。返回游标为零才结束。换连接、修订或模式时作废先前浏览状态。浏览结果可能包含重复键，空批次可以继续扫描。 |
 | 类型化详情 | String 用 GETRANGE 读取有限字节；完整 UTF-8 JSON 可格式化，其他字节保留可逆表示。Hash 展示字段数并支持查询指定字段。List、Set、ZSet、Stream 首先显示元素数。未知类型保留 Redis 返回的类型标识。 |
 
-逻辑库归属于一条连接。每个操作建立短生命周期连接，按其固定配置认证、选择逻辑库并在操作后释放。当前支持独立 Redis 单实例，可直连或经同工作区已保存的 SSH 连接访问。经 SSH 时由跳板解析 Redis 内网域名，Redis TLS 仍校验该域名。变更跳板地址、账户或受信指纹后，需重新核对 Redis 连接及凭据。工作区导入会重映射跳板 ID，缺失的跳板不会触发直连。Cluster 和 Sentinel 另行设计。[共享 SSH 隧道设计](shared-ssh-tunnels.md)
+逻辑库归属于一条连接。每个操作建立短生命周期连接，按其固定配置认证、选择逻辑库并在操作后释放。当前支持独立 Redis 单实例，可直连、复用同工作区已保存的 SSH 连接，或选用已连接的堡垒机临时会话。临时会话覆盖仅对当前窗口生效，使用该路由时可单独输入 Redis 目标密码。经 SSH 时由跳板解析 Redis 内网域名，Redis TLS 仍校验该域名。变更跳板地址、账户或受信指纹后，需重新核对 Redis 连接及凭据。工作区导入会重映射跳板 ID，缺失的跳板不会触发直连。Cluster 和 Sentinel 另行设计。[共享 SSH 隧道设计](shared-ssh-tunnels.md)
 
 SCAN 的 COUNT 是工作量提示。键集合在扫描中可能变化，UI 不能据此推导全库总数或稳定页码。PTTL 为 -1 表示永久，为 -2 表示键已不存在。键在读取元信息与内容之间可能过期或改变类型，刷新后以新结果为准。[SCAN](https://redis.io/docs/latest/commands/scan/) · [PTTL](https://redis.io/docs/latest/commands/pttl/) · [GETRANGE](https://redis.io/docs/latest/commands/getrange/)
 

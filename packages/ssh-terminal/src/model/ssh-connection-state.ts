@@ -1,4 +1,4 @@
-import type { SshConnection, SshConnectionInput } from "@unfour/command-client";
+import { connectionTemporaryHandle, type SshConnection, type SshConnectionInput } from "@unfour/command-client";
 
 export function sshConnectionContent(connection: SshConnection | null) {
   return connection ? JSON.stringify({ ...sshConnectionToInput(connection, connection.workspaceId), expectedSnapshot: undefined }) : null;
@@ -23,6 +23,7 @@ export function sshConnectionToInput(
 ): SshConnectionInput {
   return {
     id: connection.id,
+    temporaryHandle: connectionTemporaryHandle("ssh", workspaceId, connection.id) ?? null,
     expectedSnapshot: connection,
     workspaceId,
     name: connection.name,

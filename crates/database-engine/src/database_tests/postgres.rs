@@ -11,6 +11,8 @@ mod export_restore;
 #[test]
 fn postgres_config_maps_host_port_database_username() {
     let input = DatabaseConnectionInput {
+        ssh_connection_id: None,
+        expected_ssh_revision: None,
         id: None,
         workspace_id: "ws".to_string(),
         name: "My PG".to_string(),
@@ -115,6 +117,8 @@ async fn postgres_password_not_leaked_in_connection_error() {
     // The controlled endpoint fails the handshake without contacting a real DB.
     let connection = service
         .save_connection(DatabaseConnectionInput {
+            ssh_connection_id: None,
+            expected_ssh_revision: None,
             id: None,
             workspace_id: workspace_id.clone(),
             name: "Bad PG".to_string(),
@@ -147,6 +151,8 @@ async fn postgres_password_not_leaked_in_connection_error() {
 #[tokio::test]
 async fn postgres_connection_without_credential_ref_uses_no_password() {
     let connection = DatabaseConnection {
+        ssh_connection_id: None,
+        ssh_revision: None,
         id: "pg1".to_string(),
         workspace_id: "ws1".to_string(),
         name: "No PW".to_string(),
@@ -213,6 +219,8 @@ async fn postgres_connection_with_credential_ref_loads_password() {
         .expect("create credential");
 
     let connection = DatabaseConnection {
+        ssh_connection_id: None,
+        ssh_revision: None,
         id: "pg2".to_string(),
         workspace_id: "ws1".to_string(),
         name: "With PW".to_string(),

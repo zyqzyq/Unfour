@@ -249,6 +249,8 @@ async fn flow_real_http_start_poll_and_database() {
         .unwrap();
     let db = bus
         .save_database_connection(DatabaseConnectionInput {
+            ssh_connection_id: None,
+            expected_ssh_revision: None,
             id: None,
             workspace_id: workspace.clone(),
             name: "flow sqlite".into(),

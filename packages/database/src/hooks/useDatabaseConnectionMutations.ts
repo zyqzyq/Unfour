@@ -1,6 +1,10 @@
 import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
 import { useMutation, type QueryClient } from "@tanstack/react-query";
 import {
+  bindTemporaryHandle,
+  connectionTemporaryHandle,
+  databaseActionContext,
+  databaseRouteVersion,
   deleteDatabaseConnection,
   saveDatabaseConnection,
   testDatabaseConnection,
@@ -20,12 +24,14 @@ import {
   replaceDatabaseConnectionInCache,
 } from "./useDatabaseConnections";
 import { formatDatabaseError } from "../result-utils";
+import { onlyTemporaryRouteChanged } from "../model/database-credentials";
 
 export function useDatabaseConnectionMutations({
   databaseTabs,
   hydrateFormFromConnection,
   queryClient,
   removeConnection,
+  onRouteChanged,
   selectedConnectionId,
   setConnectionState,
   setEditorOpen,
@@ -39,6 +45,7 @@ export function useDatabaseConnectionMutations({
   hydrateFormFromConnection: (connection: DatabaseConnection) => void;
   queryClient: QueryClient;
   removeConnection: (connectionId: string) => void;
+  onRouteChanged?: (connectionId: string) => void;
   selectedConnectionId: string | null;
   setConnectionState: (
     connectionId: string,
@@ -58,10 +65,17 @@ export function useDatabaseConnectionMutations({
   }, [workspaceId]);
   const saveMutation = useMutation({
     mutationFn: async ({ input, secret }: { input: DatabaseConnectionInput; secret: string }) => {
+      // Selecting a live transport for an existing definition also works when its
+      // persistent jump has gone away. No business write is needed in that case.
+      if (input.expectedSnapshot && onlyTemporaryRouteChanged(input, secret)) {
+        bindTemporaryHandle("database", input.workspaceId, input.expectedSnapshot.id, input.temporaryHandle);
+        return input.expectedSnapshot;
+      }
       return saveDatabaseConnection(input, secret || null);
     },
+    onMutate: ({ input }) => ({ previous: connectionTemporaryHandle("database", input.workspaceId, input.id) }),
     onError: (_error, { input }) => { void queryClient.invalidateQueries({ queryKey: databaseConnectionsQueryKey(input.workspaceId) }); },
-    onSuccess: async (connection) => {
+    onSuccess: async (connection, { input }, before) => {
       const queryKey = databaseConnectionsQueryKey(connection.workspaceId);
       await queryClient.cancelQueries({ queryKey, exact: true });
       queryClient.setQueryData<DatabaseConnection[]>(queryKey, (current) =>
@@ -69,6 +83,11 @@ export function useDatabaseConnectionMutations({
       );
       void queryClient.invalidateQueries({ queryKey });
       if (saveScope.current !== connection.workspaceId) return;
+      if (input.id && (before?.previous !== connectionTemporaryHandle("database", connection.workspaceId, connection.id)
+        || input.expectedSnapshot?.sshConnectionId !== connection.sshConnectionId
+        || input.expectedSnapshot?.sshRevision !== connection.sshRevision)) {
+        onRouteChanged?.(connection.id);
+      }
       hydrateFormFromConnection(connection);
       setSelectedDatabaseConnection(connection.id);
       setEditorOpen(false);
@@ -108,6 +127,8 @@ export function useDatabaseConnectionMutations({
         workspaceId,
         name: t("database.tree.duplicateName", { name: connection.name }),
         driver: connection.driver,
+        sshConnectionId: connection.sshConnectionId,
+        expectedSshRevision: connection.sshRevision,
         host: connection.host,
         port: connection.port,
         database: connection.database,
@@ -124,21 +145,26 @@ export function useDatabaseConnectionMutations({
   });
 
   const testMutation = useMutation({
-    mutationFn: (connectionId: string) => testDatabaseConnection(workspaceId, connectionId),
-    onMutate: (connectionId) => {
-      setConnectionState(connectionId, {
+    mutationFn: (connection: DatabaseConnection) => testDatabaseConnection(connection.workspaceId, connection.id, databaseActionContext(connection.workspaceId, connection.id, connection)),
+    onMutate: (connection) => {
+      setConnectionState(connection.id, {
         message: t("common.actions.connecting"),
         status: "connecting",
       });
+      return databaseRouteVersion(connection.workspaceId, connection.id);
     },
-    onError: (error, connectionId) => {
+    onError: (error, connection, version) => {
+      if (saveScope.current !== connection.workspaceId || version !== databaseRouteVersion(connection.workspaceId, connection.id)) return;
+      const connectionId = connection.id;
       setTestResult(null);
       setConnectionState(connectionId, {
-        message: formatDatabaseError(error),
+        message: formatDatabaseError(error, t),
         status: "failed",
       });
     },
-    onSuccess: (result, connectionId) => {
+    onSuccess: (result, connection, version) => {
+      if (saveScope.current !== connection.workspaceId || version !== databaseRouteVersion(connection.workspaceId, connection.id)) return;
+      const connectionId = connection.id;
       setTestResult(result);
       setConnectionState(connectionId, {
         message: result.message,
@@ -160,7 +186,7 @@ export function useDatabaseConnectionMutations({
       testDatabaseConnectionInput(input, secret),
     onSuccess: (result) => setTestResult(result),
     onError: (error) =>
-      setTestResult({ ok: false, message: formatDatabaseError(error), serverVersion: null }),
+      setTestResult({ ok: false, message: formatDatabaseError(error, t), serverVersion: null }),
   });
 
   return {

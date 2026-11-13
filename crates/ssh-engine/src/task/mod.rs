@@ -54,7 +54,18 @@ impl SshService {
     }
 
     pub async fn run_task(&self, input: SshTaskRunInput) -> AppResult<SshTaskRun> {
+        self.run_task_via(input, None).await
+    }
+
+    pub async fn run_task_via(
+        &self,
+        input: SshTaskRunInput,
+        temporary_handle: Option<&str>,
+    ) -> AppResult<SshTaskRun> {
         validate_workspace_id(&input.workspace_id)?;
+        let temporary = temporary_handle
+            .map(|id| self.temporary_tunnel(&input.workspace_id, id))
+            .transpose()?;
         let detail = self.get_task(&input.workspace_id, &input.task_id).await?;
         let mut secret_values = task_secret_values(&input.inputs, &input.secret_input_names)?;
         let connection_id = input
@@ -110,7 +121,7 @@ impl SshService {
 
         #[cfg(not(feature = "ssh-native"))]
         {
-            let _ = (connection, steps, secret_values, context);
+            let _ = (connection, steps, secret_values, context, temporary);
             return Err(AppError::Unsupported(
                 "SSH task execution requires a build with the ssh-native feature".to_string(),
             ));
@@ -186,6 +197,7 @@ impl SshService {
                     .execute_task_background(
                         run_for_task,
                         connection,
+                        temporary,
                         steps,
                         secret_values,
                         cancel_rx,
@@ -237,13 +249,19 @@ impl SshService {
         &self,
         run: SshTaskRun,
         connection: SshConnection,
+        temporary: Option<TemporarySshTunnel>,
         steps: Vec<SshTaskStep>,
         secret_values: Vec<String>,
         mut cancel_rx: tokio::sync::watch::Receiver<bool>,
         mut log: TaskLogWriter,
     ) {
-        let outcome = match NativeTaskDriver::connect(self, &connection).await {
-            Ok(mut driver) => {
+        let connection = tokio::select! {
+            biased;
+            _ = cancel_rx.changed() => None,
+            result = NativeTaskDriver::connect(self, &connection, temporary.as_ref()) => Some(result),
+        };
+        let outcome = match connection {
+            Some(Ok(mut driver)) => {
                 let run_id = run.id.clone();
                 let task_id = run.task_id.clone();
                 let outcome = execute_serial(steps, &mut driver, &mut cancel_rx, |runner_event| {
@@ -256,9 +274,13 @@ impl SshService {
                 driver.disconnect().await;
                 outcome
             }
-            Err(message) => TaskRunOutcome {
+            Some(Err(message)) => TaskRunOutcome {
                 status: "failed".to_string(),
                 error: Some(message),
+            },
+            None => TaskRunOutcome {
+                status: "cancelled".into(),
+                error: None,
             },
         };
 

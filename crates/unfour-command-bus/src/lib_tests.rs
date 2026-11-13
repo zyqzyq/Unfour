@@ -659,6 +659,8 @@ async fn read_commands_return_current_workspace_and_safe_connections() {
 
     let workspace_id = workspace.workspace_id.clone();
     bus.save_database_connection(DatabaseConnectionInput {
+        ssh_connection_id: None,
+        expected_ssh_revision: None,
         id: None,
         workspace_id: workspace_id.clone(),
         name: "Database".to_string(),

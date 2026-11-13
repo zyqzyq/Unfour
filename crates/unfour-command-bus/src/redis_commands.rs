@@ -11,44 +11,8 @@ use crate::transaction::CommandActivity;
 use crate::{CommandBus, RedisConnection, RedisConnectionInput, RedisKeyInfo, RedisScanPage};
 use crate::{RedisCollectionKind, RedisCollectionPage, RedisMutation};
 
-/// Redis calls this connector inside its single network deadline. SSH setup,
-/// the forwarded channel and every subsequent command share that same budget.
-struct RedisJump {
-    bus: CommandBus,
-    workspace: String,
-    jump: String,
-    ssh_revision: Option<i64>,
-    saved: Option<(String, i64)>,
-}
-
-impl TunnelConnector for RedisJump {
-    fn connect<'a>(
-        &'a self,
-        host: &'a str,
-        port: u16,
-    ) -> Pin<Box<dyn Future<Output = AppResult<BoxedTunnelStream>> + Send + 'a>> {
-        Box::pin(async move {
-            let tunnel = self
-                .bus
-                .ssh
-                .open_tunnel_at_revision(&self.workspace, &self.jump, self.ssh_revision)
-                .await
-                .map_err(|error| match error {
-                    AppError::NotFound(_) => {
-                        AppError::Validation("SSH_TUNNEL_ROUTE_MISSING".into())
-                    }
-                    other => other,
-                })?;
-            let stream = tunnel.connect(host, port).await?;
-            if let Some((id, revision)) = &self.saved {
-                self.bus
-                    .check_redis_revision(&self.workspace, id, *revision)
-                    .await?;
-            }
-            Ok(stream)
-        })
-    }
-}
+mod routing;
+pub(super) use routing::TemporaryRedisRoute;
 
 impl CommandBus {
     pub async fn list_redis_connections(&self, workspace: &str) -> AppResult<Vec<RedisConnection>> {
@@ -64,7 +28,9 @@ impl CommandBus {
         input.endpoint()?;
         let secret = secret.map(Zeroizing::new);
         let _guard = self.credential_stage_guard().await?;
-        let (_, existing_ref) = self.redis_draft_reference(&input, secret.is_some()).await?;
+        let (_, existing_ref) = self
+            .redis_draft_reference(&input, secret.is_some(), false)
+            .await?;
         self.track_connection_credential_edit(&input.workspace_id, input.id.as_deref(), "redis")
             .await?;
         let credential = match secret.as_deref() {
@@ -143,13 +109,20 @@ impl CommandBus {
         &self,
         input: &RedisConnectionInput,
         supplied: bool,
+        temporary: bool,
     ) -> AppResult<(Option<RedisConnection>, Option<String>)> {
         let mut db = self.db.pool().acquire().await?;
         match input.id.as_deref() {
             Some(id) => {
                 let (record, reference) =
                     connections::get_on(&mut db, &input.workspace_id, id).await?;
-                input.check_existing(&record, supplied)?;
+                if temporary {
+                    if input.expected_revision != Some(record.revision) {
+                        return Err(AppError::RowConflict("REDIS_CONNECTION_CHANGED".into()));
+                    }
+                } else {
+                    input.check_existing(&record, supplied)?;
+                }
                 Ok((Some(record), reference))
             }
             None => {
@@ -164,6 +137,19 @@ impl CommandBus {
         workspace: &str,
         reference: Option<String>,
     ) -> AppResult<Option<Zeroizing<String>>> {
+        if let Some(route) = &self.redis_temporary {
+            if route.workspace != workspace {
+                return Err(AppError::Validation(
+                    "SSH_TUNNEL_TEMPORARY_UNAVAILABLE".into(),
+                ));
+            }
+            if reference.is_some() && route.password.is_none() {
+                return Err(AppError::Validation(
+                    "REDIS_ENDPOINT_REQUIRES_PASSWORD".into(),
+                ));
+            }
+            return Ok(route.password.clone().filter(|p| !p.is_empty()));
+        }
         match reference {
             Some(reference) => Ok(Some(Zeroizing::new(
                 self.secret_store
@@ -179,10 +165,21 @@ impl CommandBus {
         input: RedisConnectionInput,
         secret: Option<String>,
     ) -> AppResult<()> {
-        let endpoint = input.endpoint()?;
-        let (saved, reference) = self.redis_draft_reference(&input, secret.is_some()).await?;
-        let route_id = input.effective_ssh_connection_id(saved.as_ref());
+        if self
+            .redis_temporary
+            .as_ref()
+            .is_some_and(|route| route.workspace != input.workspace_id)
         {
+            return Err(AppError::Validation(
+                "SSH_TUNNEL_TEMPORARY_UNAVAILABLE".into(),
+            ));
+        }
+        let endpoint = input.endpoint()?;
+        let (saved, reference) = self
+            .redis_draft_reference(&input, secret.is_some(), self.redis_temporary.is_some())
+            .await?;
+        let route_id = input.effective_ssh_connection_id(saved.as_ref());
+        if self.redis_temporary.is_none() {
             let mut db = self.db.pool().acquire().await?;
             connections::validate_jump(
                 &mut db,
@@ -216,24 +213,11 @@ impl CommandBus {
             .await
     }
 
-    fn redis_endpoint_via(
-        &self,
-        workspace: &str,
-        endpoint: RedisEndpoint,
-        jump: Option<&str>,
-        expected_ssh_revision: Option<i64>,
-        saved: Option<&RedisConnection>,
-    ) -> RedisEndpoint {
-        let Some(jump) = jump else {
-            return endpoint;
-        };
-        endpoint.with_tunnel(Arc::new(RedisJump {
-            bus: self.clone(),
-            workspace: workspace.to_owned(),
-            jump: jump.to_owned(),
-            ssh_revision: expected_ssh_revision,
-            saved: saved.map(|record| (record.id.clone(), record.revision)),
-        }))
+    fn redis_cursor_scope(&self, record: &RedisConnection, view: impl std::hash::Hash) -> String {
+        match &self.redis_temporary {
+            Some(route) => scan_cursor::scope(record, (&route.handle, view)),
+            None => scan_cursor::scope(record, view),
+        }
     }
 
     async fn check_redis_revision(
@@ -311,7 +295,7 @@ impl CommandBus {
             return Err(AppError::Validation("REDIS_INVALID_INPUT".into()));
         }
         let (record, password) = self.redis_target(workspace, id, expected_revision).await?;
-        let scope = scan_cursor::scope(&record, pattern);
+        let scope = self.redis_cursor_scope(&record, pattern);
         let offset = scan_cursor::unpack(&scope, cursor)?;
         let mut page = unfour_redis_engine::scan_keys(
             &self.redis_saved_endpoint(&record),
@@ -377,7 +361,8 @@ impl CommandBus {
         let (record, password) = self
             .redis_target(workspace, id, Some(expected_revision))
             .await?;
-        let scope = scan_cursor::scope(&record, ("collection", &key, kind, pattern, descending));
+        let scope =
+            self.redis_cursor_scope(&record, ("collection", &key, kind, pattern, descending));
         let start;
         let offset = match start_index {
             Some(index)

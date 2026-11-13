@@ -2,12 +2,49 @@ use super::*;
 
 impl SshService {
     pub async fn connect(&self, input: SshConnectInput) -> AppResult<SshSessionSummary> {
+        self.connect_via(input, None).await
+    }
+
+    pub async fn connect_via(
+        &self,
+        input: SshConnectInput,
+        temporary_handle: Option<&str>,
+    ) -> AppResult<SshSessionSummary> {
+        self.connect_from_session(input, temporary_handle, None)
+            .await
+    }
+
+    pub async fn connect_from_session(
+        &self,
+        input: SshConnectInput,
+        selected_parent: Option<&str>,
+        source_session_id: Option<&str>,
+    ) -> AppResult<SshSessionSummary> {
         validate_workspace_id(&input.workspace_id)?;
         validate_connection_id(&input.connection_id)?;
+        let source_parent;
+        let temporary_handle = if let Some(source) = source_session_id {
+            validate_session_id(source)?;
+            let routed = self
+                .terminal_history
+                .requires_temporary_route(&input.workspace_id, &input.connection_id, source)
+                .await?;
+            source_parent = if routed {
+                Some(self.temporary_parent_for_child(&input.workspace_id, source)?)
+            } else {
+                None
+            };
+            source_parent.as_deref()
+        } else {
+            selected_parent
+        };
         let connection = self
             .get_connection(&input.workspace_id, &input.connection_id)
             .await?;
         validate_connection_ready_for_session(&connection)?;
+        let temporary = temporary_handle
+            .map(|id| self.temporary_tunnel(&input.workspace_id, id))
+            .transpose()?;
         let started = Instant::now();
         let fields = serde_json::json!({
             "auth_method": &connection.auth_kind,
@@ -25,9 +62,14 @@ impl SshService {
         );
 
         #[cfg(feature = "ssh-native")]
-        let result = self.connect_native(&connection, &input).await;
+        let result = self
+            .connect_native(&connection, &input, temporary.as_ref())
+            .await;
         #[cfg(not(feature = "ssh-native"))]
-        let result = self.connect_simulated(&connection, &input).await;
+        let result = {
+            let _ = temporary;
+            self.connect_simulated(&connection, &input).await
+        };
         let summary = match result {
             Ok(summary) => summary,
             Err(error) => {
@@ -51,7 +93,20 @@ impl SshService {
             "Connected to {}@{}. PTY {}x{} allocated.\r\n",
             summary.username, summary.host, summary.cols, summary.rows
         );
-        if let Err(error) = self.terminal_history.save_session(&summary).await {
+        if let Some(parent) = temporary_handle {
+            if let Err(error) =
+                self.attach_temporary_child(&input.workspace_id, parent, &summary.session_id)
+            {
+                self.discard_unpersisted_session(&input.workspace_id, &summary.session_id)
+                    .await;
+                return Err(error);
+            }
+        }
+        if let Err(error) = self
+            .terminal_history
+            .save_session_with_route(&summary, temporary_handle.is_some())
+            .await
+        {
             self.discard_unpersisted_session(&input.workspace_id, &summary.session_id)
                 .await;
             unfour_diag::log_operation_event(
@@ -121,7 +176,7 @@ impl SshService {
         #[cfg(feature = "ssh-native")]
         if let Some(native) = native_handle {
             let _ = native.writer.close().await;
-            let handle = native.handle.lock().await;
+            let handle = native.handle;
             let _ = handle
                 .disconnect(russh::Disconnect::ByApplication, "session closed", "en")
                 .await;
@@ -540,7 +595,7 @@ impl SshService {
         #[cfg(feature = "ssh-native")]
         if let Some(native) = native_handle {
             let _ = native.writer.close().await;
-            let handle = native.handle.lock().await;
+            let handle = native.handle;
             let _ = handle
                 .disconnect(russh::Disconnect::ByApplication, "session closed", "en")
                 .await;
@@ -632,7 +687,7 @@ impl SshService {
         #[cfg(feature = "ssh-native")]
         if let Some(native) = native_handle {
             let _ = native.writer.close().await;
-            let handle = native.handle.lock().await;
+            let handle = native.handle;
             let _ = handle
                 .disconnect(russh::Disconnect::ByApplication, "session closed", "en")
                 .await;

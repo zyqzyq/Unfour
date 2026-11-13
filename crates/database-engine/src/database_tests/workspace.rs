@@ -276,6 +276,8 @@ async fn connection_storage_columns_and_advanced_config_round_trip() {
 
     let created = service
         .save_connection(DatabaseConnectionInput {
+            ssh_connection_id: None,
+            expected_ssh_revision: None,
             id: None,
             workspace_id: workspace_id.clone(),
             name: "Structured PG".to_string(),
@@ -339,6 +341,8 @@ async fn connection_storage_columns_and_advanced_config_round_trip() {
 
     let updated = service
         .save_connection(DatabaseConnectionInput {
+            ssh_connection_id: None,
+            expected_ssh_revision: None,
             id: Some(created.id.clone()),
             workspace_id: workspace_id.clone(),
             name: "Structured SQLite".to_string(),

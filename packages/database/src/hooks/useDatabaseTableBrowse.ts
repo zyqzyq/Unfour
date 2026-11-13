@@ -1,5 +1,5 @@
 import { type Dispatch, type SetStateAction, useRef } from "react";
-import type { DatabaseTable } from "@unfour/command-client";
+import { databaseRouteVersion, databaseConnectionStamp, type DatabaseConnection, type DatabaseTable } from "@unfour/command-client";
 import { useI18n } from "@unfour/ui";
 import { databaseTableTabId, useDatabaseTabs } from "./useDatabaseTabs";
 import { useTableData, type TableBrowseRequest } from "./useTableData";
@@ -16,6 +16,7 @@ const DEFAULT_PREVIEW_PAGE_SIZE = 100;
 
 export function useDatabaseTableBrowse({
   activeTableTab,
+  connections,
   databaseTabs,
   selectedConnectionId,
   selectedTable,
@@ -26,6 +27,7 @@ export function useDatabaseTableBrowse({
   workspaceId,
 }: {
   activeTableTab: DatabaseTableWorkspaceTab | null;
+  connections: DatabaseConnection[];
   databaseTabs: ReturnType<typeof useDatabaseTabs>;
   selectedConnectionId: string | null;
   selectedTable: DatabaseTable | null;
@@ -64,10 +66,13 @@ export function useDatabaseTableBrowse({
       }
     },
     onSuccess: (browse, request) => {
-      if (cancelledBrowseRequestsRef.current.has(request)) {
+      if (cancelledBrowseRequestsRef.current.has(request) ||
+          request.routeVersion !== databaseRouteVersion(workspaceId, request.connectionId)) {
         return;
       }
       databaseTabs.updateTableTab(request.tabId, {
+        routeVersion: request.routeVersion,
+        expectedConnection: request.expectedConnection,
         error: null,
         loading: false,
         queryResult: browse.result,
@@ -99,6 +104,8 @@ export function useDatabaseTableBrowse({
     pageSize: number,
     query?: TableQueryState,
   ) {
+    const connection = connections.find((item) => item.id === connectionId);
+    if (!connection) return;
     const existingTab = databaseTabs.tabs.find((tab) => tab.id === databaseTableTabId(connectionId, table));
     const effectiveQuery =
       query ?? (existingTab?.kind === "table" ? existingTab.tableQuery : { ...emptyTableQuery });
@@ -114,6 +121,9 @@ export function useDatabaseTableBrowse({
     });
     browseMutation.reset();
     const request: TableBrowseRequest = {
+      expectedConnection: existingTab?.kind === "table" && existingTab.expectedConnection
+        ? existingTab.expectedConnection : databaseConnectionStamp(connection),
+      routeVersion: databaseRouteVersion(workspaceId, connectionId),
       connectionId,
       catalog: table.catalog,
       pageIndex: Math.max(0, pageIndex),

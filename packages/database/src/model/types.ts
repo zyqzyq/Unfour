@@ -1,5 +1,6 @@
 import type {
   DatabaseCellValue,
+  DatabaseConnectionStamp,
   DatabaseConnection,
   DatabaseQueryResult,
   DatabaseScriptInput,
@@ -120,6 +121,7 @@ export type TableSegment = "data" | "structure";
 export type DatabaseWorkspaceTabKind = "query" | "table" | "redis";
 
 export type SqlBatchState = {
+  routeVersion?: number;
   tabId: string;
   source: string;
   input: DatabaseScriptInput;
@@ -155,6 +157,8 @@ export type DatabaseQueryWorkspaceTab = {
 };
 
 export type DatabaseTableWorkspaceTab = {
+  expectedConnection?: DatabaseConnectionStamp;
+  routeVersion?: number;
   connectionId: string;
   error: unknown;
   id: DatabaseWorkspaceTabId;

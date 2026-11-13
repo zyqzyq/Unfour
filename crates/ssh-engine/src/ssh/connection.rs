@@ -2,8 +2,19 @@ use super::*;
 
 impl SshService {
     pub async fn test_connection(&self, input: SshConnectionInput) -> AppResult<SshTestResult> {
+        self.test_connection_via(input, None).await
+    }
+
+    pub async fn test_connection_via(
+        &self,
+        input: SshConnectionInput,
+        temporary_handle: Option<&str>,
+    ) -> AppResult<SshTestResult> {
         validate_workspace_id(&input.workspace_id)?;
         let storage = input_to_storage(&input)?;
+        let temporary = temporary_handle
+            .map(|id| self.temporary_tunnel(&input.workspace_id, id))
+            .transpose()?;
         let now = Utc::now().to_rfc3339();
         let temp_id = Uuid::new_v4().to_string();
         let connection = SshConnection {
@@ -47,7 +58,11 @@ impl SshService {
         );
 
         #[cfg(feature = "ssh-native")]
-        let result = self.connect_native(&connection, &connect_input).await;
+        let result = self
+            .connect_native(&connection, &connect_input, temporary.as_ref())
+            .await;
+        #[cfg(not(feature = "ssh-native"))]
+        let _ = temporary;
         #[cfg(not(feature = "ssh-native"))]
         let result = self.connect_simulated(&connection, &connect_input).await;
         match result {
@@ -302,7 +317,7 @@ impl SshService {
         for native in native_handles {
             // Close the channel first.
             let _ = native.writer.close().await;
-            let handle = native.handle.lock().await;
+            let handle = native.handle;
             let _ = handle
                 .disconnect(russh::Disconnect::ByApplication, "connection deleted", "en")
                 .await;

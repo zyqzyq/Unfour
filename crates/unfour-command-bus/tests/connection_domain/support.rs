@@ -153,6 +153,8 @@ pub(super) fn database_input(
 ) -> DatabaseConnectionInput {
     let sqlite = driver == "sqlite";
     DatabaseConnectionInput {
+        ssh_connection_id: None,
+        expected_ssh_revision: None,
         id,
         workspace_id: workspace_id.to_string(),
         name: name.to_string(),

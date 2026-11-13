@@ -825,6 +825,8 @@ async fn use_remote_workspace_delete_must_resolve_cross_module_cascade_conflicts
         .unwrap();
     let database_connection = seed
         .save_database_connection(DatabaseConnectionInput {
+            ssh_connection_id: None,
+            expected_ssh_revision: None,
             id: None,
             workspace_id: workspace_id.clone(),
             name: "App DB".into(),
@@ -876,6 +878,8 @@ async fn use_remote_workspace_delete_must_resolve_cross_module_cascade_conflicts
     .await
     .unwrap();
     bus.save_database_connection(DatabaseConnectionInput {
+        ssh_connection_id: None,
+        expected_ssh_revision: None,
         id: Some(database_connection.id.clone()),
         workspace_id: workspace_id.clone(),
         name: "Local DB".into(),

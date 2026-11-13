@@ -90,6 +90,19 @@ function expand(name: string) {
 }
 
 describe("DatabasePage structural regression", () => {
+  it("drops another window's old route views and keeps the SQL draft on a route-only change", async () => {
+    const { client, sidebar } = setup();
+    await waitFor(() => expect(sidebar().schemaCache?.["pg::app"]).toBeDefined());
+    const query = workspace().activeTab!;
+    act(() => {
+      const id = tabs().openTableTab("ws", pg.id, users);
+      tabs().updateTableTab("ws", id, { tableView: { pageIndex: 2, pageSize: 100, readOnly: false, tableName: "users", totalRows: 250 } });
+      tabs().setActiveTabId("ws", query.id);
+      client.setQueryData(databaseConnectionsQueryKey("ws"), [{ ...pg, sshConnectionId: "different-jump", sshRevision: 1 }, mysql, sqlite]);
+    });
+    await waitFor(() => expect(workspace().tabs.some((tab) => tab.kind === "table" && tab.connectionId === pg.id)).toBe(false));
+    expect(workspace().activeTab).toMatchObject({ id: query.id, sql: "select 1", pendingConfirmation: false });
+  });
   it("keeps multiple roots expanded and only loads a PostgreSQL catalog when expanded", async () => {
     const { sidebar } = setup();
     await waitFor(() => expect(sidebar().catalogNamesByConnection).toEqual({ pg: ["app", "analytics"], mysql: ["app", "archive"] }));
@@ -159,8 +172,9 @@ describe("DatabasePage structural regression", () => {
     schemaMock.mockClear();
     const invalidate = vi.spyOn(client, "invalidateQueries");
     act(() => sidebar().onRefreshSchema(pg));
+    const context = { routeVersion: 0, expectedConnection: { revision: pg.revision, sshConnectionId: null, sshRevision: null } };
     await waitFor(() => expect(schemaMock.mock.calls).toEqual(expect.arrayContaining([
-      ["ws", "pg", null], ["ws", "pg", "app"], ["ws", "pg", "analytics"],
+      ["ws", "pg", null, context], ["ws", "pg", "app", context], ["ws", "pg", "analytics", context],
     ])));
     await waitFor(() => expect(sidebar().loadingKeys).toEqual([]));
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["database-schema", "ws", "pg"] });

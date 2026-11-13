@@ -25,3 +25,8 @@ resolver = "2"
 [workspace.package]
 version = "0.14.0"
 
+[patch.crates-io]
+# SQLx 0.8.6 needs a pool-scoped socket factory to carry its normal database
+# handshake and TLS identity over an already authorized SSH channel.
+sqlx-core = { path = "vendor/sqlx-core" }
+

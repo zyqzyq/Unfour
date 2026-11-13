@@ -1,9 +1,11 @@
 import { useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { browseDatabaseTable } from "@unfour/command-client";
-import type { DatabaseBrowseResult } from "@unfour/command-client";
+import type { DatabaseBrowseResult, DatabaseConnectionStamp } from "@unfour/command-client";
 
 export type TableBrowseRequest = {
+  expectedConnection?: DatabaseConnectionStamp;
+  routeVersion?: number;
   catalog?: string | null;
   connectionId: string;
   filter?: string | null;
@@ -35,6 +37,7 @@ export function useTableData({
       onBrowseStart(request);
     },
     mutationFn: ({
+      expectedConnection, routeVersion,
       catalog,
       connectionId,
       filter,
@@ -46,6 +49,7 @@ export function useTableData({
       tableName,
     }: TableBrowseRequest) =>
       browseDatabaseTable({
+        expectedConnection, routeVersion,
         includeTotal: false,
         workspaceId,
         connectionId,

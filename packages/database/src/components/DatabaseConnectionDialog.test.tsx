@@ -1,18 +1,34 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { revealConnectionSecret, type DatabaseConnectionInput } from "@unfour/command-client";
+import { listTemporaryRouteHandles, listSshConnections, revealConnectionSecret, type DatabaseConnectionInput, type SshConnection } from "@unfour/command-client";
 import { DatabaseConnectionDialog } from "./DatabaseConnectionDialog";
 import { DatabaseTestResultDialog } from "./DatabaseTestResultDialog";
 
 vi.mock("@unfour/command-client", async (importOriginal) => ({
   ...await importOriginal<typeof import("@unfour/command-client")>(),
+  listTemporaryRouteHandles: vi.fn().mockResolvedValue([]), listSshConnections: vi.fn().mockResolvedValue([]),
   revealConnectionSecret: vi.fn().mockResolvedValue("saved-db-secret"),
 }));
 
 afterEach(cleanup);
+
+it("makes saved and live SSH sources selectable for a network database", async () => {
+  vi.mocked(listTemporaryRouteHandles).mockResolvedValueOnce(["session-12345678"]);
+  vi.mocked(listSshConnections).mockResolvedValueOnce([{ id: "jump", workspaceId: "ws", name: "Gateway", revision: 7,
+    host: "fixture", port: 22, username: "user" } as SshConnection]);
+  const update = vi.fn();
+  render(<DatabaseConnectionDialog canTest error={null} open form={{ workspaceId: "ws", name: "DB", driver: "mysql" }}
+    password="" onPasswordChange={vi.fn()} onOpenChange={vi.fn()} onUpdate={update} onTest={vi.fn()} onSubmit={vi.fn()}
+    savePending={false} testPending={false} />);
+  await screen.findByRole("option", { name: /Gateway/ });
+  fireEvent.change(screen.getByLabelText("Network route"), { target: { value: "saved:jump" } });
+  expect(update).toHaveBeenLastCalledWith({ sshConnectionId: "jump", expectedSshRevision: 7, temporaryHandle: null });
+  fireEvent.change(screen.getByLabelText("Network route"), { target: { value: "live:session-12345678" } });
+  expect(update).toHaveBeenLastCalledWith({ temporaryHandle: "session-12345678", sshConnectionId: null, expectedSshRevision: undefined });
+});
 
 it("prevents editing and closing while a connection save is pending", () => {
   const close = vi.fn();
@@ -40,14 +56,15 @@ it("saves the openGauss preset as postgres and reopens from the saved driver", (
     </>;
   }
   render(<Editor />);
-  expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["PostgreSQL", "openGauss", "MySQL / MariaDB", "SQLite"]);
-  fireEvent.change(screen.getByRole("combobox"), { target: { value: "opengauss" } });
-  expect(screen.getByRole("combobox")).toHaveValue("opengauss");
+  const driver = () => screen.getByRole("combobox", { name: "Database type" });
+  expect(within(driver()).getAllByRole("option").map((option) => option.textContent)).toEqual(["PostgreSQL", "openGauss", "MySQL / MariaDB", "SQLite"]);
+  fireEvent.change(driver(), { target: { value: "opengauss" } });
+  expect(driver()).toHaveValue("opengauss");
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(save).toHaveBeenCalledWith({ workspaceId: "ws", name: "Gauss", driver: "postgres", sqlitePath: null, sslMode: undefined, credentialRef: undefined });
   expect(JSON.stringify(save.mock.calls[0][0])).not.toContain("opengauss");
   fireEvent.click(screen.getByRole("button", { name: "Reopen" }));
-  expect(screen.getByRole("combobox")).toHaveValue("postgres");
+  expect(driver()).toHaveValue("postgres");
 });
 
 it("shows runtime detection separately from the protocol and raw banner", () => {

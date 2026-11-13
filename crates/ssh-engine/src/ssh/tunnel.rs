@@ -4,7 +4,9 @@ use std::{future::Future, pin::Pin};
 use unfour_core::network::{BoxedTunnelStream, TunnelConnector};
 
 mod proxy;
+mod temporary;
 pub use proxy::TunnelProxyLease;
+pub use temporary::TemporarySshTunnel;
 
 #[derive(Clone)]
 pub struct SshTunnel {
@@ -111,41 +113,63 @@ impl SshTunnel {
     }
 
     pub async fn connect(&self, host: &str, port: u16) -> AppResult<BoxedTunnelStream> {
-        if host.is_empty()
-            || host.len() > 255
-            || port == 0
-            || host.bytes().any(|b| {
-                b.is_ascii_control() || b.is_ascii_whitespace() || matches!(b, b'/' | b'\\' | b'@')
-            })
-        {
-            return Err(failure("SSH_TUNNEL_INVALID_TARGET"));
-        }
+        let host = target_host(host, port)?;
         #[cfg(not(feature = "ssh-native"))]
         {
+            let _ = host;
             Err(failure("SSH_TUNNEL_UNAVAILABLE"))
         }
         #[cfg(feature = "ssh-native")]
-        {
-            // No local DNS resolution. The origin address is local to this client, not a public listener.
-            let host = host
-                .strip_prefix('[')
-                .and_then(|s| s.strip_suffix(']'))
-                .unwrap_or(host);
-            let channel = tokio::time::timeout(
-                std::time::Duration::from_secs(15),
-                self.client
-                    .channel_open_direct_tcpip(host, u32::from(port), "127.0.0.1", 0),
-            )
-            .await
-            .map_err(|_| failure("SSH_TUNNEL_TIMEOUT"))?
-            .map_err(|_| failure("SSH_TUNNEL_TARGET_UNREACHABLE"))?;
-            Ok(Box::new(channel.into_stream()))
-        }
+        open_direct_channel(&self.client, host, port).await
     }
 
     pub async fn http_proxy(&self) -> AppResult<TunnelProxyLease> {
-        TunnelProxyLease::start(Arc::new(self.clone())).await
+        TunnelProxyLease::start(Arc::new(self.clone()), None).await
     }
+}
+
+fn target_host(host: &str, port: u16) -> AppResult<&str> {
+    if host.is_empty()
+        || host.len() > 255
+        || port == 0
+        || host.bytes().any(|b| {
+            b.is_ascii_control() || b.is_ascii_whitespace() || matches!(b, b'/' | b'\\' | b'@')
+        })
+    {
+        return Err(failure("SSH_TUNNEL_INVALID_TARGET"));
+    }
+    Ok(host
+        .strip_prefix('[')
+        .and_then(|s| s.strip_suffix(']'))
+        .unwrap_or(host))
+}
+
+#[cfg(feature = "ssh-native")]
+async fn open_direct_channel(
+    client: &russh::client::Handle<SshClientHandler>,
+    host: &str,
+    port: u16,
+) -> AppResult<BoxedTunnelStream> {
+    tokio::time::timeout(
+        std::time::Duration::from_secs(15),
+        forward_stream(client, host, port),
+    )
+    .await
+    .map_err(|_| failure("SSH_TUNNEL_TIMEOUT"))?
+}
+
+#[cfg(feature = "ssh-native")]
+async fn forward_stream(
+    client: &russh::client::Handle<SshClientHandler>,
+    host: &str,
+    port: u16,
+) -> AppResult<BoxedTunnelStream> {
+    // The forwarding host resolves the original destination name.
+    let channel = client
+        .channel_open_direct_tcpip(host, u32::from(port), "127.0.0.1", 0)
+        .await
+        .map_err(|_| failure("SSH_TUNNEL_TARGET_UNREACHABLE"))?;
+    Ok(Box::new(channel.into_stream()))
 }
 
 impl TunnelConnector for SshTunnel {

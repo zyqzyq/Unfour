@@ -53,7 +53,7 @@ mod storage;
 mod task;
 pub mod temporary;
 mod tunnel;
-pub use tunnel::{SshTunnel, TunnelProxyLease};
+pub use tunnel::{SshTunnel, TemporarySshTunnel, TunnelProxyLease};
 
 #[cfg(all(feature = "ssh-native", test))]
 use native_supervisor::terminal_output_from_channel_message;
@@ -198,7 +198,7 @@ const MAX_SESSION_EVENTS: usize = 2000;
 
 #[cfg(feature = "ssh-native")]
 struct NativeSshHandle {
-    handle: std::sync::Arc<tokio::sync::Mutex<russh::client::Handle<SshClientHandler>>>,
+    handle: Arc<russh::client::Handle<SshClientHandler>>,
     // The channel is split into independent halves so that the supervisor's
     // blocking `wait()` on the read half never holds a lock that keyboard input
     // needs to write. The write half's methods take `&self`, so it can be shared
@@ -233,6 +233,7 @@ impl std::fmt::Debug for NativeSshHandle {
 struct SshClientHandler {
     temporary_trust: Option<temporary::TrustPrompt>,
     pinned_fingerprint: Option<String>,
+    verified_fingerprint: Option<Arc<std::sync::OnceLock<String>>>,
     host_key_store: HostKeyStore,
     workspace_id: String,
     host: String,
@@ -282,7 +283,12 @@ impl russh::client::Handler for SshClientHandler {
         self.host_key_store
             .verify_or_record(&self.workspace_id, &self.host, self.port, &fingerprint)
             .await
-            .map(|()| true)
+            .map(|()| {
+                if let Some(verified) = &self.verified_fingerprint {
+                    let _ = verified.set(fingerprint);
+                }
+                true
+            })
             .map_err(|e| {
                 // Convert AppError to a russh::Error that preserves the message.
                 russh::Error::IO(std::io::Error::new(

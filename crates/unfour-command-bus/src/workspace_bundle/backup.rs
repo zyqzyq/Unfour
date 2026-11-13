@@ -37,7 +37,7 @@ fn decode(content: &str, options: &WorkspaceBundleOptions) -> AppResult<BackupPa
         let plaintext = encryption::decrypt(content, password)?;
         let mut payload: BackupPayload =
             serde_json::from_slice(&plaintext).map_err(|_| invalid())?;
-        if payload.bundle.format != "unfour-workspace" || !matches!(payload.bundle.version, 2 | 3) {
+        if payload.bundle.format != "unfour-workspace" || !matches!(payload.bundle.version, 2..=4) {
             return Err(invalid());
         }
         safety::sanitize(&mut payload.bundle)?;
@@ -375,6 +375,7 @@ impl CommandBus {
                 flows: plan.flows.clone(),
                 ids: plan.ids.clone(),
                 local_paths: plan.local_paths.clone(),
+                database_routes: plan.database_routes.clone(),
                 api_templates: plan.api_templates.clone(),
             },
         )

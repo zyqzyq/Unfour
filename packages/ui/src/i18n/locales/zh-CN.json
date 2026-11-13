@@ -1,6 +1,11 @@
 {
   "network": {
+    "temporarySession": "堡垒机会话 · {id}",
+    "temporaryUnavailable": "所选堡垒机会话已不可用",
+    "temporaryHelp": "当前窗口将使用所选的活动会话。会话关闭后，请重新选择路由。",
     "errors": {
+      "SSH_TUNNEL_TEMPORARY_UNAVAILABLE": "所选堡垒机会话在当前工作区不可用，请选择活动会话后重试。",
+      "SSH_TUNNEL_FORWARD_BUSY": "该堡垒机有过多转发请求正在等待响应，请稍后重试。",
       "SSH_TUNNEL_UNAVAILABLE": "当前版本不支持原生 SSH 转发。",
       "SSH_TUNNEL_CONNECT_FAILED": "无法连接 SSH 主机，请检查已保存的 SSH 连接。",
       "SSH_TUNNEL_HOST_KEY_CHANGED": "SSH 主机密钥已改变，请先在 SSH 中核验主机。",
@@ -17,6 +22,7 @@
   },
   "redis": {
     "route": {
+      "temporaryPassword": "本次会话的 Redis 密码",
       "label": "网络路由", "direct": "直连", "via": "经 SSH · {name}",
       "missing": "SSH 连接不可用", "loading": "正在读取 SSH 连接…",
       "noConnections": "要使用隧道，请先在此工作区保存一个 SSH 连接。",
@@ -1302,7 +1308,7 @@
       "copySessionLog": "复制会话日志",
       "duplicateSession": "复制连接 / 新标签页打开",
       "reconnectSession": "重新连接",
-      "reconnectHint": "会先断开当前会话并立即重新连接，不会再次确认。",
+      "reconnectHint": "通过原路由建立新连接，成功后关闭当前会话。",
       "newConnection": "新建连接",
       "newConnectionAria": "新建 SSH 连接",
       "newSession": "新建会话",

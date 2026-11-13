@@ -1,4 +1,5 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
+import { bindTemporaryHandle, temporaryRouteArgs } from "./session-routes";
 import { call, isTauriRuntime } from "./invoke";
 import type {
   SshCloseInput,
@@ -72,7 +73,7 @@ export function deleteSshTask(workspaceId: string, taskId: string) {
 }
 
 export function runSshTask(input: SshTaskRunInput) {
-  return call<SshTaskRun>("ssh_task_run", { input });
+  return call<SshTaskRun>("ssh_task_run", { input, ...(input.connectionId && temporaryRouteArgs("ssh", input.workspaceId, input.connectionId)) });
 }
 
 export function cancelSshTaskRun(input: SshTaskCancelInput) {
@@ -99,24 +100,30 @@ export function listSshConnections(workspaceId: string) {
   return call<SshConnection[]>("ssh_connections_list", { workspaceId });
 }
 
-export function saveSshConnection(input: SshConnectionInput) {
-  const { expectedSnapshot, ...payload } = input;
-  return call<SshConnection>("ssh_connection_save", { input: payload, expectedSnapshot });
+export async function saveSshConnection(input: SshConnectionInput) {
+  const { expectedSnapshot, temporaryHandle, ...payload } = input;
+  const saved = await call<SshConnection>("ssh_connection_save", { input: payload, expectedSnapshot });
+  if (temporaryHandle !== undefined) bindTemporaryHandle("ssh", input.workspaceId, saved.id, temporaryHandle);
+  return saved;
 }
 
 export function testSshConnection(input: SshConnectionInput) {
-  return call<SshTestResult>("ssh_connection_test", { input });
+  const { temporaryHandle, ...payload } = input;
+  return call<SshTestResult>("ssh_connection_test", { input: payload, ...(temporaryHandle && { temporaryHandle }) });
 }
 
-export function deleteSshConnection(workspaceId: string, connectionId: string) {
-  return call<SshConnection[]>("ssh_connection_delete", {
+export async function deleteSshConnection(workspaceId: string, connectionId: string) {
+  const remaining = await call<SshConnection[]>("ssh_connection_delete", {
     workspaceId,
     connectionId,
   });
+  bindTemporaryHandle("ssh", workspaceId, connectionId, null);
+  return remaining;
 }
 
-export function connectSshSession(input: SshConnectInput) {
-  return call<SshSessionSummary>("ssh_session_connect", { input });
+export function connectSshSession(input: SshConnectInput, sourceSessionId?: string) {
+  return call<SshSessionSummary>("ssh_session_connect", { input,
+    ...(sourceSessionId ? { sourceSessionId } : temporaryRouteArgs("ssh", input.workspaceId, input.connectionId)) });
 }
 
 export function listSshSessions(workspaceId: string) {

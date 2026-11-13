@@ -332,7 +332,7 @@ async fn connect_timeout_is_still_a_connection_error() {
 }
 
 #[tokio::test]
-async fn existing_sqlite_connection_needs_no_new_fields_or_migration() {
+async fn sqlite_runtime_profile_does_not_require_a_network_route() {
     let (service, workspace) = service_with_workspace().await;
     let path = sqlite_fixture().await;
     let saved = service
@@ -364,9 +364,20 @@ async fn existing_sqlite_connection_needs_no_new_fields_or_migration() {
             "username",
             "ssl_mode",
             "read_only",
-            "config_json"
+            "config_json",
+            "ssh_connection_id",
+            "ssh_revision",
+            "ssh_trust_generation",
         ]
     );
+    let route: (Option<String>, Option<i64>) = sqlx::query_as(
+        "SELECT ssh_connection_id, ssh_revision FROM database_connections WHERE connection_id=?",
+    )
+    .bind(&saved.id)
+    .fetch_one(service.db.pool())
+    .await
+    .unwrap();
+    assert_eq!(route, (None, None));
     let schema = service.schema(workspace, saved.id, None).await.unwrap();
     assert!(schema.tables.iter().any(|t| t.name == "deploys"));
     // SQLx closes dropped pools asynchronously; Windows retains file locks

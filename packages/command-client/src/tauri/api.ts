@@ -212,8 +212,8 @@ export function setApiEnvironmentRoute(workspaceId: string, environmentId: strin
   return call<void>("api_environment_route_set", { workspaceId, environmentId, edit });
 }
 
-export function sendApiRequest(executionId: string, input: ApiRequestInput, routing?: ApiRoutingInput) {
-  return call<RequestExecutionResult>("api_send_request_v2", { executionId, input, routing });
+export function sendApiRequest(executionId: string, input: ApiRequestInput, routing?: ApiRoutingInput, temporaryHandle?: string) {
+  return call<RequestExecutionResult>("api_send_request_v2", { executionId, input, routing, ...(temporaryHandle && { temporaryHandle }) });
 }
 
 export function cancelApiRequest(executionId: string) {

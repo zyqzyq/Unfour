@@ -3,10 +3,11 @@ use tauri::State;
 use unfour_core::{
     models::{
         DatabaseBrowseInput, DatabaseBrowseResult, DatabaseConnection, DatabaseConnectionInput,
-        DatabaseExportTableInput, DatabaseExportTableResult, DatabaseQueryInput,
-        DatabaseQueryResult, DatabaseRowMutationInput, DatabaseRowMutationResult, DatabaseSchema,
-        DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult,
-        DbQueryHistoryEntry, DbQueryHistoryRecordInput, SavedSql, SavedSqlInput,
+        DatabaseConnectionVersion, DatabaseExportTableInput, DatabaseExportTableResult,
+        DatabaseQueryInput, DatabaseQueryResult, DatabaseRowMutationInput,
+        DatabaseRowMutationResult, DatabaseSchema, DatabaseTableStructure,
+        DatabaseTableStructureInput, DatabaseTestResult, DbQueryHistoryEntry,
+        DbQueryHistoryRecordInput, SavedSql, SavedSqlInput,
     },
     AppResult,
 };
@@ -16,11 +17,16 @@ use super::trace_command;
 #[tauri::command]
 pub async fn database_script_execute(
     input: unfour_core::models::DatabaseScriptInput,
+    temporary_handle: Option<String>,
+    expected_connection: Option<DatabaseConnectionVersion>,
     state: State<'_, AppState>,
 ) -> AppResult<unfour_core::models::DatabaseScriptResult> {
     trace_command(
         "database_script_execute",
-        state.command_bus.execute_database_script(input),
+        state
+            .command_bus
+            .with_database_route(temporary_handle.as_deref(), expected_connection)
+            .execute_database_script(input),
     )
     .await
 }
@@ -74,12 +80,15 @@ pub async fn database_connection_delete(
 pub async fn database_connection_test(
     workspace_id: String,
     connection_id: String,
+    temporary_handle: Option<String>,
+    expected_connection: Option<DatabaseConnectionVersion>,
     state: State<'_, AppState>,
 ) -> AppResult<DatabaseTestResult> {
     trace_command(
         "database_connection_test",
         state
             .command_bus
+            .with_database_route(temporary_handle.as_deref(), expected_connection)
             .test_database_connection(workspace_id, connection_id),
     )
     .await
@@ -89,12 +98,15 @@ pub async fn database_connection_test(
 pub async fn database_connection_test_input(
     input: DatabaseConnectionInput,
     secret: Option<String>,
+    temporary_handle: Option<String>,
+    expected_connection: Option<DatabaseConnectionVersion>,
     state: State<'_, AppState>,
 ) -> AppResult<DatabaseTestResult> {
     trace_command(
         "database_connection_test_input",
         state
             .command_bus
+            .with_database_route(temporary_handle.as_deref(), expected_connection)
             .test_database_connection_input(input, secret),
     )
     .await
@@ -105,10 +117,13 @@ pub async fn database_schema_get(
     workspace_id: String,
     connection_id: String,
     catalog: Option<String>,
+    temporary_handle: Option<String>,
+    expected_connection: Option<DatabaseConnectionVersion>,
     state: State<'_, AppState>,
 ) -> AppResult<DatabaseSchema> {
     state
         .command_bus
+        .with_database_route(temporary_handle.as_deref(), expected_connection)
         .database_schema(workspace_id, connection_id, catalog)
         .await
 }
@@ -117,10 +132,13 @@ pub async fn database_schema_get(
 pub async fn database_catalogs_list(
     workspace_id: String,
     connection_id: String,
+    temporary_handle: Option<String>,
+    expected_connection: Option<DatabaseConnectionVersion>,
     state: State<'_, AppState>,
 ) -> AppResult<Vec<String>> {
     state
         .command_bus
+        .with_database_route(temporary_handle.as_deref(), expected_connection)
         .database_catalogs(workspace_id, connection_id)
         .await
 }
@@ -128,11 +146,16 @@ pub async fn database_catalogs_list(
 #[tauri::command]
 pub async fn database_query_execute(
     input: DatabaseQueryInput,
+    temporary_handle: Option<String>,
+    expected_connection: Option<DatabaseConnectionVersion>,
     state: State<'_, AppState>,
 ) -> AppResult<DatabaseQueryResult> {
     trace_command(
         "database_query_execute",
-        state.command_bus.execute_database_query(input),
+        state
+            .command_bus
+            .with_database_route(temporary_handle.as_deref(), expected_connection)
+            .execute_database_query(input),
     )
     .await
 }
@@ -196,31 +219,55 @@ pub async fn database_saved_sql_delete(
 #[tauri::command]
 pub async fn database_table_browse(
     input: DatabaseBrowseInput,
+    temporary_handle: Option<String>,
+    expected_connection: Option<DatabaseConnectionVersion>,
     state: State<'_, AppState>,
 ) -> AppResult<DatabaseBrowseResult> {
-    state.command_bus.browse_database_table(input).await
+    state
+        .command_bus
+        .with_database_route(temporary_handle.as_deref(), expected_connection)
+        .browse_database_table(input)
+        .await
 }
 
 #[tauri::command]
 pub async fn database_table_structure(
     input: DatabaseTableStructureInput,
+    temporary_handle: Option<String>,
+    expected_connection: Option<DatabaseConnectionVersion>,
     state: State<'_, AppState>,
 ) -> AppResult<DatabaseTableStructure> {
-    state.command_bus.database_table_structure(input).await
+    state
+        .command_bus
+        .with_database_route(temporary_handle.as_deref(), expected_connection)
+        .database_table_structure(input)
+        .await
 }
 
 #[tauri::command]
 pub async fn database_export_table(
     input: DatabaseExportTableInput,
+    temporary_handle: Option<String>,
+    expected_connection: Option<DatabaseConnectionVersion>,
     state: tauri::State<'_, crate::AppState>,
 ) -> AppResult<DatabaseExportTableResult> {
-    state.command_bus.database_export_table(input).await
+    state
+        .command_bus
+        .with_database_route(temporary_handle.as_deref(), expected_connection)
+        .database_export_table(input)
+        .await
 }
 
 #[tauri::command]
 pub async fn database_row_mutate(
     input: DatabaseRowMutationInput,
+    temporary_handle: Option<String>,
+    expected_connection: Option<DatabaseConnectionVersion>,
     state: State<'_, AppState>,
 ) -> AppResult<DatabaseRowMutationResult> {
-    state.command_bus.mutate_database_row(input).await
+    state
+        .command_bus
+        .with_database_route(temporary_handle.as_deref(), expected_connection)
+        .mutate_database_row(input)
+        .await
 }

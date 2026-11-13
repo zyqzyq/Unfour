@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 
-vi.mock("@unfour/command-client", () => ({
+vi.mock("@unfour/command-client", async (actual) => ({
+  ...await actual<typeof import("@unfour/command-client")>(),
   getDatabaseSchema: vi.fn(),
 }));
 
@@ -13,7 +14,7 @@ import { getDatabaseSchema } from "@unfour/command-client";
 import { useSchemaTree } from "./useSchemaTree";
 
 const schemaMock = vi.mocked(getDatabaseSchema);
-const connection = { id: "conn-1" } as unknown as DatabaseConnection;
+const connection = { id: "conn-1", revision: 2 } as DatabaseConnection;
 
 function createWrapper() {
   const client = new QueryClient({
@@ -42,7 +43,8 @@ describe("useSchemaTree", () => {
     );
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(schemaMock).toHaveBeenCalledWith("ws-1", "conn-1", null);
+    expect(schemaMock).toHaveBeenCalledWith("ws-1", "conn-1", null,
+      { expectedConnection: { revision: 2, sshConnectionId: null, sshRevision: null }, routeVersion: 0 });
   });
 
   it.each([

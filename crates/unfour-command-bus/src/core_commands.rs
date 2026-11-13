@@ -33,15 +33,23 @@ impl CommandBus {
     ) -> AppResult<Self> {
         let activity_log = ActivityLogService::new(db.clone());
         let workspace = WorkspaceService::new(db.clone());
+        let ssh =
+            SshService::new(db.clone(), secret_store.clone()).with_task_log_dir(task_log_dir()?);
         let bus = Self {
             db: db.clone(),
             extensions,
             api_client: ApiClientService::new(db.clone()),
             api_executions: api_execution::ApiExecutionManager::default(),
             activity_log,
-            database: DatabaseService::new(db.clone()).with_secret_store(secret_store.clone()),
+            database: DatabaseService::new(db.clone())
+                .with_secret_store(secret_store.clone())
+                .with_tunnel_resolver(std::sync::Arc::new(crate::database_routes::SqlRoutes::new(
+                    ssh.clone(),
+                    db.clone(),
+                ))),
+            redis_temporary: None,
             secret_store: secret_store.clone(),
-            ssh: SshService::new(db, secret_store).with_task_log_dir(task_log_dir()?),
+            ssh,
             workspace,
         };
         bus.api_client.redact_legacy_history().await?;
@@ -105,15 +113,23 @@ impl CommandBus {
         let activity_log = ActivityLogService::new(db.clone());
         let workspace = WorkspaceService::new(db.clone());
 
+        let ssh =
+            SshService::new(db.clone(), secret_store.clone()).with_task_log_dir(task_log_dir()?);
         let bus = Self {
             db: db.clone(),
             extensions,
             api_client: ApiClientService::new(db.clone()),
             api_executions: api_execution::ApiExecutionManager::default(),
             activity_log,
-            database: DatabaseService::new(db.clone()).with_secret_store(secret_store.clone()),
+            database: DatabaseService::new(db.clone())
+                .with_secret_store(secret_store.clone())
+                .with_tunnel_resolver(std::sync::Arc::new(crate::database_routes::SqlRoutes::new(
+                    ssh.clone(),
+                    db.clone(),
+                ))),
+            redis_temporary: None,
             secret_store: secret_store.clone(),
-            ssh: SshService::new(db, secret_store).with_task_log_dir(task_log_dir()?),
+            ssh,
             workspace,
         };
         bus.api_client.redact_legacy_history().await?;

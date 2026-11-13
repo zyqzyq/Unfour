@@ -2,6 +2,39 @@ use super::*;
 use sqlx::SqliteConnection;
 
 impl DatabaseService {
+    pub async fn bundle_sql_routes_on(
+        &self,
+        db: &mut SqliteConnection,
+        workspace: &str,
+    ) -> AppResult<Vec<(String, String, bool)>> {
+        let rows = sqlx::query_as("SELECT c.id, d.ssh_connection_id, jump.revision IS NOT d.ssh_revision
+            FROM connections c JOIN database_connections d ON d.connection_id=c.id
+            LEFT JOIN connections jump ON jump.id=d.ssh_connection_id AND jump.workspace_id=c.workspace_id AND jump.connection_type='ssh' AND jump.deleted_at IS NULL
+            WHERE c.workspace_id=? AND c.deleted_at IS NULL AND d.ssh_connection_id IS NOT NULL ORDER BY c.id")
+            .bind(workspace).fetch_all(db).await?;
+        Ok(rows)
+    }
+
+    pub async fn restore_bundle_sql_route_on(
+        &self,
+        db: &mut SqliteConnection,
+        workspace: &str,
+        database: &str,
+        jump: &str,
+        needs_review: bool,
+    ) -> AppResult<()> {
+        let target = self.get_connection_on(db, workspace, database).await?;
+        let revision = self
+            .validate_sql_jump(db, workspace, &target.driver, Some(jump), None)
+            .await?;
+        // Imported IDs start a new revision history. An already stale route
+        // must still require explicit review before its first SQL login.
+        let pin = if needs_review { Some(-1) } else { revision };
+        sqlx::query("UPDATE database_connections SET ssh_connection_id=?, ssh_revision=?, ssh_trust_generation=? WHERE connection_id=?")
+            .bind(jump).bind(pin).bind(i64::from(needs_review)).bind(database).execute(db).await?;
+        Ok(())
+    }
+
     pub async fn bundle_connection_fields_on(
         &self,
         db: &mut SqliteConnection,

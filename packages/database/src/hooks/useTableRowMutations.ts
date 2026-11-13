@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { mutateDatabaseRow } from "@unfour/command-client";
+import { databaseRouteVersion, mutateDatabaseRow } from "@unfour/command-client";
 import { useFeedback, useI18n } from "@unfour/ui";
 import type { DatabaseTableWorkspaceTab } from "../model/types";
 import type { useDatabaseTabs } from "./useDatabaseTabs";
@@ -31,8 +31,13 @@ export function useTableRowMutations({
     databaseTabs.updateTableTab(tab.id, { error: null });
 
     for (const change of [...tab.pendingChanges]) {
+      if ((tab.routeVersion ?? 0) !== databaseRouteVersion(workspaceId, tab.connectionId)) {
+        databaseTabs.updateTableTab(tab.id, { error: { code: "SSH_TUNNEL_ROUTE_CHANGED" } });
+        return;
+      }
       try {
         const result = await rowMutation.mutateAsync({
+          ...tab.expectedConnection && { expectedConnection: tab.expectedConnection, routeVersion: tab.routeVersion },
           workspaceId,
           connectionId: tab.connectionId,
           catalog: tab.table.catalog,

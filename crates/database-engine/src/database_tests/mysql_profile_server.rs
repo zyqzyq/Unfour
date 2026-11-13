@@ -62,7 +62,7 @@ async fn serve(
     transaction_read_only: Arc<Mutex<String>>,
     hang_version_probe: bool,
 ) -> std::io::Result<()> {
-    send_packet(&mut stream, 0, &handshake()).await?;
+    send_packet(&mut stream, 0, &handshake(false)).await?;
     let _client_handshake = read_packet(&mut stream).await?;
     send_packet(&mut stream, 2, &ok_packet()).await?;
     loop {
@@ -139,8 +139,9 @@ async fn answer_read_only_control(
     Ok(false)
 }
 
-fn handshake() -> Vec<u8> {
-    let caps: u32 = 1 // MYSQL
+pub(super) fn handshake(tls: bool) -> Vec<u8> {
+    let caps: u32 = (if tls { 0x0800 } else { 0 })
+        | 1 // MYSQL
         | 2 // FOUND_ROWS
         | 8 // CONNECT_WITH_DB
         | 256 // IGNORE_SPACE
@@ -176,7 +177,11 @@ fn err_packet(message: &str) -> Vec<u8> {
     body
 }
 
-async fn send_packet(stream: &mut TcpStream, seq: u8, payload: &[u8]) -> std::io::Result<()> {
+pub(super) async fn send_packet(
+    stream: &mut TcpStream,
+    seq: u8,
+    payload: &[u8],
+) -> std::io::Result<()> {
     let len = payload.len() as u32;
     let mut message = Vec::with_capacity(4 + payload.len());
     message.extend_from_slice(&len.to_le_bytes()[..3]);
@@ -261,7 +266,7 @@ async fn send_text_results(
     Ok(())
 }
 
-async fn read_packet(stream: &mut TcpStream) -> std::io::Result<Vec<u8>> {
+pub(super) async fn read_packet(stream: &mut TcpStream) -> std::io::Result<Vec<u8>> {
     let mut header = [0u8; 4];
     stream.read_exact(&mut header).await?;
     let len = u32::from_le_bytes([header[0], header[1], header[2], 0]) as usize;

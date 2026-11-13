@@ -11,7 +11,7 @@ vi.mock("@unfour/ui", async (importOriginal) => ({
   useFeedback: () => ({ info: warningMock }),
 }));
 
-vi.mock("@unfour/command-client", () => ({ mutateDatabaseRow: vi.fn() }));
+vi.mock("@unfour/command-client", () => ({ databaseRouteVersion: vi.fn(() => 0), mutateDatabaseRow: vi.fn() }));
 
 import { mutateDatabaseRow } from "@unfour/command-client";
 import { useTableRowMutations } from "./useTableRowMutations";
@@ -53,6 +53,15 @@ const tab: DatabaseTableWorkspaceTab = {
 beforeEach(() => vi.clearAllMocks());
 
 describe("useTableRowMutations", () => {
+  it("rejects an edit prepared through another network route", async () => {
+    const updateTableTab = vi.fn();
+    const { result } = renderHook(() => useTableRowMutations({ activeTableTab: { ...tab, routeVersion: 4 },
+      databaseTabs: { updateTableTab } as unknown as ReturnType<typeof useDatabaseTabs>, refreshTablePage: vi.fn(), workspaceId: "ws-1" }),
+    { wrapper: createWrapper() });
+    await act(() => result.current.applyPendingTableChanges());
+    expect(mutateMock).not.toHaveBeenCalled();
+    expect(updateTableTab).toHaveBeenCalledWith(tab.id, { error: { code: "SSH_TUNNEL_ROUTE_CHANGED" } });
+  });
   it.each([0, 1])("preserves failed and unattempted edits when row %i fails, then retries only those edits", async (failureIndex) => {
     const changes = [0, 1, 2].map((index) => ({
       ...tab.pendingChanges[0],

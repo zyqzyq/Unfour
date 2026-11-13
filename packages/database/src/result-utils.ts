@@ -1,5 +1,5 @@
 import type { DatabaseQueryResult } from "@unfour/command-client";
-import { serializeDelimitedCell as serializeDatabaseCell } from "@unfour/ui";
+import { serializeDelimitedCell as serializeDatabaseCell, type TFunction } from "@unfour/ui";
 import { formatSqlWithLibrary } from "./adapters/sql-format";
 
 export { serializeDatabaseCell };
@@ -136,8 +136,10 @@ export function describeDatabaseError(error: unknown): DatabaseErrorDescription 
   };
 }
 
-export function formatDatabaseError(error: unknown) {
-  return describeDatabaseError(error).message;
+export function formatDatabaseError(error: unknown, t?: TFunction) {
+  const description = describeDatabaseError(error);
+  if (description.code?.startsWith("SSH_TUNNEL_") && t) return t(`network.errors.${description.code}`, description.message);
+  return description.message;
 }
 
 function parseDatabaseError(error: unknown) {

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { stopDatabaseScript, type DatabaseQueryResult } from "@unfour/command-client";
+import { databaseRouteVersion, stopDatabaseScript, type DatabaseConnectionStamp, type DatabaseQueryResult } from "@unfour/command-client";
 import { useI18n } from "@unfour/ui";
 import { useDatabaseTabs } from "./useDatabaseTabs";
 import type { TableBrowseRequest } from "./useTableData";
@@ -14,6 +14,7 @@ import { describeDatabaseError, isConfirmationRequired } from "../result-utils";
 
 export function useDatabaseSqlRunner({
   activeQueryTab,
+  expectedConnection,
   browseMutation,
   browsingRef,
   cancelledBrowseRequestsRef,
@@ -25,6 +26,7 @@ export function useDatabaseSqlRunner({
   workspaceId,
 }: {
   activeQueryTab: DatabaseQueryWorkspaceTab | null;
+  expectedConnection?: DatabaseConnectionStamp;
   browseMutation: { isPending: boolean; reset: () => void };
   browsingRef: { current: TableBrowseRequest | null };
   cancelledBrowseRequestsRef: { current: WeakSet<TableBrowseRequest> };
@@ -63,6 +65,7 @@ export function useDatabaseSqlRunner({
     });
     try {
       const output = await executeSqlBatch(batch, confirmed);
+      if ((batch.routeVersion ?? 0) !== databaseRouteVersion(workspaceId, batch.input.connectionId)) return;
       const results = output.statements.flatMap((entry) => entry.result ? [entry.result] : []);
       const failedIndex = output.statements.findIndex((entry) => entry.status === "failed");
       const index = failedIndex >= 0 ? failedIndex : Math.max(0, results.length - 1);
@@ -82,6 +85,7 @@ export function useDatabaseSqlRunner({
       setConnectionState(batch.input.connectionId, { status: "connected", message: null });
       if (failed) updateConnectionError(batch.input.connectionId, failed.error);
     } catch (error) {
+      if ((batch.routeVersion ?? 0) !== databaseRouteVersion(workspaceId, batch.input.connectionId)) return;
       const cancelledPreflight = stopRequestedRef.current && isConfirmationRequired(error);
       const confirmation = !cancelledPreflight && isConfirmationRequired(error);
       confirmationRef.current = confirmation ? batch : null;
@@ -136,7 +140,7 @@ export function useDatabaseSqlRunner({
       });
       return;
     }
-    void runSqlBatch(createSqlBatch(activeQueryTab, request, workspaceId), false);
+    void runSqlBatch(createSqlBatch(activeQueryTab, request, workspaceId, expectedConnection), false);
   }
 
   function discardConfirmation(tabId: string, extra: { executionNotice?: string } = {}) {

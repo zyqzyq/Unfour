@@ -38,6 +38,25 @@ async fn test_store() -> HostKeyStore {
 }
 
 #[tokio::test]
+async fn simultaneous_first_connections_accept_only_the_key_that_was_pinned() {
+    let store = test_store().await;
+    let (a, b) = tokio::join!(
+        store.verify_or_record(WORKSPACE_A, "fixture", 22, "key-a"),
+        store.verify_or_record(WORKSPACE_A, "fixture", 22, "key-b")
+    );
+    assert_ne!(a.is_ok(), b.is_ok());
+    let expected = if a.is_ok() { "key-a" } else { "key-b" };
+    assert_eq!(
+        store
+            .get_fingerprint(WORKSPACE_A, "fixture", 22)
+            .await
+            .unwrap()
+            .as_deref(),
+        Some(expected)
+    );
+}
+
+#[tokio::test]
 async fn host_key_first_connect_records_fingerprint() {
     let store = test_store().await;
 

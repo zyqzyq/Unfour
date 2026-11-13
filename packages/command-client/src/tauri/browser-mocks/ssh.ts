@@ -98,6 +98,8 @@ export function handleSshMock<T>(
 
   if (command === "ssh_session_connect") {
     const input = args?.input as SshConnectInput;
+    if (args?.sourceSessionId != null && !mockStore.sshSessions.some((s) => s.sessionId === args.sourceSessionId &&
+      s.workspaceId === input.workspaceId && s.connectionId === input.connectionId)) throw { code: "SSH_TUNNEL_TEMPORARY_UNAVAILABLE" };
     const connection = mockStore.sshConnections.find(
       (item) => item.workspaceId === input.workspaceId && item.id === input.connectionId,
     );

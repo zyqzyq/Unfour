@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { DatabaseTable } from "@unfour/command-client";
+import { connectionTemporaryHandle, databaseActionContext, databaseConnectionStamp, type DatabaseTable } from "@unfour/command-client";
 import { useWorkspaceStore } from "@unfour/workspace-core";
 import {
   ConfirmDialog,
@@ -112,6 +112,10 @@ export function DatabasePage({
     treeModel: tree.treeModel,
   });
   const structureQuery = useTableStructure({
+    context: activeTableTab && context.activeTableConnection ? {
+      ...databaseActionContext(workspaceId, activeTableTab.connectionId, context.activeTableConnection),
+      ...(activeTableTab.expectedConnection && { expectedConnection: activeTableTab.expectedConnection, routeVersion: activeTableTab.routeVersion }),
+    } : undefined,
     connectionId: activeTableTab?.connectionId ?? null,
     enabled: context.structureEnabled,
     table: activeTableTab?.table ?? null,
@@ -148,6 +152,34 @@ export function DatabasePage({
   });
   useDatabaseQueryContext(activeTab, tree.treeModel, context.activeQueryConnection?.driver === "sqlite" ? null : context.activeQueryConnection?.database, databaseTabs.updateQueryTab);
 
+  function resetRouteViews(id: string) {
+    for (const family of ["database-schema", "database-catalogs", "database-table-structure"]) {
+      queryClient.removeQueries({ queryKey: [family, workspaceId, id] });
+    }
+    tree.setCatalogNamesByConn((old) => Object.fromEntries(Object.entries(old).filter(([key]) => key !== id)));
+    tree.setTreeSchemaCache((old) => Object.fromEntries(Object.entries(old).filter(([key]) => !key.startsWith(id + "::"))));
+    tree.setTreeErrors((old) => Object.fromEntries(Object.entries(old).filter(([key]) => key !== "names::" + id && !key.startsWith(id + "::"))));
+    for (const tab of databaseTabs.tabs) {
+      if (tab.connectionId !== id) continue;
+      if (tab.kind === "table") databaseTabs.closeTab(tab.id);
+      if (tab.kind === "query") databaseTabs.updateQueryTab(tab.id, { result: null, results: [], statements: [],
+        error: null, loading: false, executionRunId: null, pendingConfirmation: false, pendingSqlBatch: null, confirmationSql: null, executionNotice: null });
+    }
+    setSelectedTable(null);
+  }
+  const lastDefinitions = useRef(new Map<string, string>());
+  useEffect(() => {
+    const next = new Map<string, string>();
+    for (const connection of connections) {
+      const key = JSON.stringify([workspaceId, connection.id]);
+      const stamp = JSON.stringify(databaseConnectionStamp(connection));
+      const old = lastDefinitions.current.get(key);
+      next.set(key, stamp);
+      if (old && old !== stamp) resetRouteViews(connection.id);
+    }
+    lastDefinitions.current = next;
+  });
+
   const {
     deleteConfirm,
     deleteMutation,
@@ -161,6 +193,7 @@ export function DatabasePage({
     hydrateFormFromConnection,
     queryClient,
     removeConnection,
+    onRouteChanged: resetRouteViews,
     selectedConnectionId,
     setConnectionState,
     setEditorOpen,
@@ -333,6 +366,7 @@ export function DatabasePage({
         connectionStatus={context.toolbarConnectionStatus}
         onNewQuery={startNewQuery}
         selectedConnectionName={context.toolbarConnection?.name ?? null}
+        temporaryHandle={connectionTemporaryHandle("database", workspaceId, context.toolbarConnection?.id)}
       />}
       <div className="flex min-h-0 flex-1 flex-col">
         {activeTab?.kind !== "redis" && selectedConnection && selectedConnectionStatus === "failed" ? (

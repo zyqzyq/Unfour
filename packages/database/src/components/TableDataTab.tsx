@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, Code2, Database, Download, Plus, RefreshCw, 
 import { useState } from "react";
 import type {
   DatabaseCellValue,
+  DatabaseActionContext,
   DatabaseConnection,
   DatabaseQueryResult,
   DatabaseTable,
@@ -33,6 +34,7 @@ import { TableExportDialog } from "./TableExportDialog";
 
 export function TableDataTab({
   connection,
+  readContext,
   editing,
   error,
   executePending,
@@ -49,6 +51,7 @@ export function TableDataTab({
   tableView,
 }: {
   connection?: DatabaseConnection | null;
+  readContext?: DatabaseActionContext;
   editing?: TableEditing | null;
   error?: unknown;
   executePending: boolean;
@@ -106,7 +109,7 @@ export function TableDataTab({
           ) : null}
         </ToolbarGroup>
         <ToolbarGroup className="flex-wrap gap-1.5">
-          <TableExportAction connection={connection} table={tableMeta} />
+          <TableExportAction connection={connection} table={tableMeta} readContext={readContext} />
           {onSwitchToStructure ? (
             <Button
               onClick={onSwitchToStructure}
@@ -257,13 +260,13 @@ export function TableDataTab({
   );
 }
 
-function TableExportAction({ connection, table }: { connection?: DatabaseConnection | null; table: DatabaseTable | null }) {
+function TableExportAction({ connection, table, readContext }: { connection?: DatabaseConnection | null; table: DatabaseTable | null; readContext?: DatabaseActionContext }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   if (!connection || !table || table.kind !== "table") return null;
   return <>
     <Button onClick={() => setOpen(true)} size="sm" type="button" variant="outline"><Download size={13} />{t("database.export.export")}</Button>
-    {open ? <TableExportDialog connection={connection} onOpenChange={setOpen} table={table} /> : null}
+    {open ? <TableExportDialog connection={connection} onOpenChange={setOpen} table={table} readContext={readContext} /> : null}
   </>;
 }
 

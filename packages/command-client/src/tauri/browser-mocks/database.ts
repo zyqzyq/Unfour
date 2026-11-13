@@ -4,7 +4,7 @@ import type {
 } from "../../types";
 import {
   deleteMockDatabaseConnection, listMockDatabaseConnections,
-  saveMockDatabaseConnection, testMockDatabaseConnection,
+  resolveMockDatabaseRoute, saveMockDatabaseConnection, testMockDatabaseConnection,
 } from "./database-connections";
 import {
   browseMockDatabaseTable, executeMockDatabaseQuery,
@@ -12,7 +12,7 @@ import {
 } from "./database-queries";
 import { deleteMockSavedSql, listMockSavedSql, saveMockSavedSql } from "./database-saved-sql";
 import { getMockDatabaseSchema, listMockDatabaseCatalogs } from "./database-schema";
-import { mockState } from "./state";
+import { mockState, mockStore } from "./state";
 import { UNHANDLED, type MockResult } from "./types";
 
 type MockArgs = Record<string, unknown> | undefined;
@@ -56,6 +56,27 @@ const handlers = new Map<string, (args: MockArgs) => unknown>([
 ]);
 
 export function handleDatabaseMock<T>(command: string, args?: Record<string, unknown>): MockResult<T> {
+  const networkCommands = ["database_connection_test", "database_catalogs_list", "database_schema_get", "database_query_execute",
+    "database_table_browse", "database_table_structure", "database_row_mutate", "database_script_execute", "database_export_table"];
+  if (args?.expectedConnection && (networkCommands.includes(command) || command === "database_connection_test_input")) {
+    const input = (args.input ?? args) as { workspaceId?: string; connectionId?: string; id?: string };
+    const record = mockStore.databaseConnections.find((item) => item.workspaceId === input.workspaceId && item.id === (input.connectionId ?? input.id));
+    const exp = args.expectedConnection as { revision: number; sshConnectionId: string | null; sshRevision: number | null };
+    if (!record || record.revision !== exp.revision || (record.sshConnectionId ?? null) !== exp.sshConnectionId || (record.sshRevision ?? null) !== exp.sshRevision) {
+      throw { code: "SSH_TUNNEL_ROUTE_CHANGED" };
+    }
+  }
+  if (command === "database_connection_test_input") {
+    const input = args?.input as DatabaseConnectionInput;
+    const current = mockStore.databaseConnections.find((item) => item.workspaceId === input.workspaceId && item.id === input.id);
+    if (resolveMockDatabaseRoute(input, current).sshConnectionId) throw { code: "SSH_TUNNEL_UNAVAILABLE" };
+    return { ok: true, message: "Mock connection OK", serverVersion: "mock" } as T;
+  }
+  if (networkCommands.includes(command)) {
+    const input = (args?.input ?? args) as { workspaceId?: string; connectionId?: string };
+    const record = mockStore.databaseConnections.find((item) => item.workspaceId === input?.workspaceId && item.id === input?.connectionId);
+    if (record?.sshConnectionId) throw { code: "SSH_TUNNEL_UNAVAILABLE" };
+  }
   const handler = handlers.get(command);
   // A handled command may return undefined; only a missing handler falls through.
   return handler ? handler(args) as T : UNHANDLED;

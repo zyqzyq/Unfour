@@ -6,6 +6,8 @@ mod redis_tests;
 mod remap;
 mod safety;
 mod schema;
+#[cfg(test)]
+mod sql_route_tests;
 mod templates;
 pub use local::WorkspaceBundleOptions;
 #[cfg(test)]
@@ -82,7 +84,7 @@ fn portable<T: serde::de::DeserializeOwned>(source: impl Serialize) -> AppResult
 fn parse(content: &str) -> AppResult<WorkspaceBundle> {
     check_file_size(content.len(), MAX_WORKSPACE_FILE_BYTES)?;
     let mut bundle: WorkspaceBundle = serde_json::from_str(content).map_err(|_| invalid())?;
-    if bundle.format != "unfour-workspace" || !matches!(bundle.version, 1..=3) {
+    if bundle.format != "unfour-workspace" || !matches!(bundle.version, 1..=4) {
         return Err(AppError::Validation(
             "WORKSPACE_BUNDLE_UNSUPPORTED_VERSION".into(),
         ));
@@ -173,6 +175,7 @@ impl CommandBus {
             ssh_steps: vec![],
             saved_sql: vec![],
             flows: vec![],
+            database_routes: vec![],
             local_paths: vec![],
             api_templates: vec![],
             credential_requirements: vec![],
@@ -214,20 +217,38 @@ impl CommandBus {
         {
             bundle.flows.push(portable(record)?);
         }
-        if bundle.uses_redis() {
-            // Import remaps workspace-owned IDs. A missing SSH target would make
-            // even an encrypted backup impossible to restore.
+        let routes = self.database.bundle_sql_routes_on(db, workspace).await?;
+        if bundle.uses_redis() || !routes.is_empty() {
+            // Import assigns fresh IDs. A missing jump must never turn into a
+            // direct connection when a shared or encrypted bundle is restored.
             let jumps: std::collections::HashSet<_> = bundle
                 .connections
                 .iter()
-                .filter(|c| c.connection_type == "ssh")
-                .map(|c| c.id.as_str())
+                .filter(|record| record.connection_type == "ssh")
+                .map(|record| record.id.as_str())
                 .collect();
-            if bundle.connections.iter().any(|c| matches!(&c.config,
-                BundleConnectionConfig::RedisSsh { ssh_connection_id, .. } if !jumps.contains(ssh_connection_id.as_str()))) {
-                return Err(AppError::Validation("WORKSPACE_BUNDLE_MISSING_REFERENCE".into()));
+            let missing_redis_jump = bundle.connections.iter().any(|record| matches!(&record.config,
+                BundleConnectionConfig::RedisSsh { ssh_connection_id, .. } if !jumps.contains(ssh_connection_id.as_str())));
+            if missing_redis_jump
+                || routes
+                    .iter()
+                    .any(|(_, jump, _)| !jumps.contains(jump.as_str()))
+            {
+                return Err(AppError::Validation(
+                    "WORKSPACE_BUNDLE_MISSING_REFERENCE".into(),
+                ));
             }
-            bundle.version = 3;
+            bundle.version = if routes.is_empty() { 3 } else { 4 };
+            bundle.database_routes = routes
+                .into_iter()
+                .map(
+                    |(connection_id, ssh_connection_id, needs_review)| DatabaseRoute {
+                        connection_id,
+                        ssh_connection_id,
+                        needs_review,
+                    },
+                )
+                .collect();
         }
         safety::sanitize(&mut bundle)?;
         Ok(bundle)

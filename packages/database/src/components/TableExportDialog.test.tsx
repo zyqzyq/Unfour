@@ -10,11 +10,11 @@ const { save, exportDatabaseTable } = vi.hoisted(() => ({
   exportDatabaseTable: vi.fn().mockResolvedValue({ path: "C:\\exports\\users.csv", rowCount: 1500, bytesWritten: 8000, format: "csv" }),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ save }));
-vi.mock("@unfour/command-client", () => ({ exportDatabaseTable }));
+vi.mock("@unfour/command-client", async (actual) => ({ ...await actual<typeof import("@unfour/command-client")>(), exportDatabaseTable }));
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 it("exports the entire selected table without pagination parameters", async () => {
-  const connection = { id: "conn-1", workspaceId: "ws-1", driver: "sqlite" } as DatabaseConnection;
+  const connection = { id: "conn-1", workspaceId: "ws-1", driver: "sqlite", revision: 4 } as DatabaseConnection;
   const table = { name: "users", catalog: null, schema: null, kind: "table", columns: [] } as DatabaseTable;
   render(<TableExportDialog connection={connection} onOpenChange={vi.fn()} table={table} />);
   fireEvent.change(screen.getByLabelText("Content"), { target: { value: "data" } });
@@ -23,6 +23,7 @@ it("exports the entire selected table without pagination parameters", async () =
   await waitFor(() => expect(save).toHaveBeenCalled());
   fireEvent.click(screen.getByRole("button", { name: "Export" }));
   await waitFor(() => expect(exportDatabaseTable).toHaveBeenCalledWith({
+    expectedConnection: { revision: 4, sshConnectionId: null, sshRevision: null }, routeVersion: 0,
     workspaceId: "ws-1", connectionId: "conn-1", catalog: null, schema: null,
     tableName: "users", content: "data", format: "csv", destinationPath: "C:\\exports\\users.csv",
   }));

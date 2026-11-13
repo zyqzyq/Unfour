@@ -1,4 +1,4 @@
-import type { SshConnection, SshTaskDetail } from "@unfour/command-client";
+import { connectionTemporaryHandle, type SshConnection, type SshTaskDetail } from "@unfour/command-client";
 import { Lock, LockOpen } from "lucide-react";
 import { useId, type ChangeEvent } from "react";
 import {
@@ -71,6 +71,7 @@ export function TaskRunDialog({
   const { t } = useI18n();
   const detectedInputs = task ? detectTaskInputs(task.steps, true) : [];
   const connection = connections.find((item) => item.id === connectionId && !item.deletedAt && item.workspaceId === task?.task.workspaceId) ?? null;
+  const parent = connection && connectionTemporaryHandle("ssh", connection.workspaceId, connection.id);
   const missingEnvironment = Boolean(environmentId && !environments.some((env) => env.id === environmentId));
   const missing = detectedInputs.some((name) => !inputValues[name]?.trim());
   const canRun = Boolean(task && connection && !missing && !missingEnvironment && !environmentLoadFailed && task.steps.some((step) => step.enabled));
@@ -97,6 +98,7 @@ export function TaskRunDialog({
             <div className="grid grid-cols-2 gap-3 text-[12px]">
               <Summary label={t("ssh.tasks.run.taskName")} value={task?.task.name ?? "—"} />
               <Summary label={t("ssh.tasks.run.host")} value={connection ? `${connection.username}@${connection.host}:${connection.port}` : "—"} />
+              {parent && <Summary label={t("redis.route.label")} value={t("network.temporarySession", { id: parent.slice(-8) })} />}
             </div>
             <label className="flex flex-col gap-1">
               <span className="text-[11px] font-medium text-[var(--u-color-text-muted)]">

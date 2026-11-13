@@ -82,6 +82,10 @@ pub(super) async fn pg_connect_options(
         .database(database)
         .username(username);
 
+    if let Some(mode) = normalize_ssl_mode(connection.ssl_mode.clone())? {
+        options = options.ssl_mode(mode.parse::<sqlx::postgres::PgSslMode>()?);
+    }
+
     if let Some(pw) = password {
         options = options.password(&pw);
     }
@@ -820,6 +824,10 @@ fn decode_postgres_internal_char(bytes: &[u8]) -> AppResult<String> {
 /// password). This preserves useful errors such as "password authentication
 /// failed for user \"x\"" while still redacting the secret value.
 pub(super) fn sanitize_pg_error(error: sqlx::Error) -> AppError {
+    let error = match tunnel::route_error(error) {
+        Ok(error) => error,
+        Err(route) => return route,
+    };
     let msg = error.to_string();
     let safe = redact_connection_string(&msg);
     if safe == msg {

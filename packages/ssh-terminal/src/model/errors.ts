@@ -13,6 +13,9 @@ export function formatTaskRunError(error: string, t: TFunction) {
 }
 
 export function formatTerminalError(error: unknown, t: TFunction) {
+  if (error && typeof error === "object" && "code" in error && String(error.code).startsWith("SSH_TUNNEL_")) {
+    return t(`network.errors.${error.code}`, t("api.route.failed"));
+  }
   const rawMessage = rawTerminalError(error);
   const normalized = rawMessage.toLowerCase();
 

@@ -6,7 +6,7 @@ import { resetDatabaseTabStore } from "../model/database-tab-state";
 import { useDatabaseTabs } from "./useDatabaseTabs";
 import { useDatabaseSqlRunner } from "./useDatabaseSqlRunner";
 
-vi.mock("@unfour/command-client", () => ({ executeDatabaseScript: vi.fn(), stopDatabaseScript: vi.fn() }));
+vi.mock("@unfour/command-client", () => ({ executeDatabaseScript: vi.fn(), stopDatabaseScript: vi.fn(), databaseRouteVersion: vi.fn(() => 0) }));
 const execute = vi.mocked(executeDatabaseScript);
 const stop = vi.mocked(stopDatabaseScript);
 beforeEach(() => { resetDatabaseTabStore(); vi.resetAllMocks(); });

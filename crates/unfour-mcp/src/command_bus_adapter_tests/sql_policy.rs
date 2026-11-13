@@ -121,6 +121,8 @@ async fn open_pool(path: &Path) -> sqlx::SqlitePool {
 pub(super) fn connect(adapter: &LocalCommandBusAdapter, workspace_id: &str, path: &Path) -> String {
     adapter
         .save_db_connection(DatabaseConnectionInput {
+            ssh_connection_id: None,
+            expected_ssh_revision: None,
             id: None,
             workspace_id: workspace_id.into(),
             name: "sqlite".into(),

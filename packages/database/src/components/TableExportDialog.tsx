@@ -1,14 +1,17 @@
 import { save as saveFileDialog } from "@tauri-apps/plugin-dialog";
 import { useState } from "react";
-import { exportDatabaseTable, type DatabaseConnection, type DatabaseExportTableInput, type DatabaseTable } from "@unfour/command-client";
+import { databaseActionContext, exportDatabaseTable, type DatabaseActionContext, type DatabaseConnection, type DatabaseExportTableInput, type DatabaseTable } from "@unfour/command-client";
 import { Button, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle, Select, useI18n } from "@unfour/ui";
+import { formatDatabaseError } from "../result-utils";
 
-export function TableExportDialog({ connection, table, onOpenChange }: {
+export function TableExportDialog({ connection, table, onOpenChange, readContext }: {
   connection: DatabaseConnection;
+  readContext?: DatabaseActionContext;
   table: DatabaseTable;
   onOpenChange: (open: boolean) => void;
 }) {
   const { t } = useI18n();
+  const [context] = useState(() => readContext ?? databaseActionContext(connection.workspaceId, connection.id, connection));
   const [content, setContent] = useState<DatabaseExportTableInput["content"]>("structure-and-data");
   const [format, setFormat] = useState<DatabaseExportTableInput["format"]>("sql");
   const [path, setPath] = useState<string | null>(null);
@@ -29,12 +32,13 @@ export function TableExportDialog({ connection, table, onOpenChange }: {
     setError(null);
     try {
       const exported = await exportDatabaseTable({
+        ...context,
         workspaceId: connection.workspaceId, connectionId: connection.id,
         catalog: table.catalog, schema: table.schema, tableName: table.name,
         content, format, destinationPath: path,
       });
       setResult(t("database.export.done", { rows: exported.rowCount, bytes: exported.bytesWritten }));
-    } catch (cause) { setError(String(cause)); }
+    } catch (cause) { setError(formatDatabaseError(cause, t)); }
     finally { setPending(false); }
   }
 

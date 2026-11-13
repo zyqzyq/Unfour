@@ -21,7 +21,8 @@ const mocks = vi.hoisted(() => ({
   channel: vi.fn(),
 }));
 
-vi.mock("@unfour/command-client", () => ({
+vi.mock("@unfour/command-client", async (original) => ({
+  ...await original<typeof import("@unfour/command-client")>(),
   listSshConnections: mocks.listConnections,
   listSshSessions: mocks.listSessions,
   connectSshSession: mocks.connect,

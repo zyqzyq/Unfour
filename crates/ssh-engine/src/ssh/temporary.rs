@@ -101,6 +101,10 @@ struct Entry {
     trust: Option<tokio::sync::oneshot::Sender<bool>>,
     #[cfg(feature = "ssh-native")]
     native: Option<NativeSshHandle>,
+    #[cfg(feature = "ssh-native")]
+    pending_forwards: Arc<tokio::sync::Semaphore>,
+    // Only child session IDs are retained, never the downstream credentials.
+    children: std::collections::HashSet<String>,
     output: String,
 }
 
@@ -161,6 +165,47 @@ impl Queue {
 }
 
 impl SshService {
+    pub(super) fn attach_temporary_child(
+        &self,
+        workspace: &str,
+        parent: &str,
+        child: &str,
+    ) -> AppResult<()> {
+        let mut queue = self
+            .temporary
+            .0
+            .lock()
+            .map_err(|_| failure("SSH_TUNNEL_TEMPORARY_UNAVAILABLE"))?;
+        let entry = queue
+            .owned(workspace, parent)
+            .map_err(|_| failure("SSH_TUNNEL_TEMPORARY_UNAVAILABLE"))?;
+        if entry.summary.status != "connected" || entry.summary.error_code.is_some() {
+            return Err(failure("SSH_TUNNEL_TEMPORARY_UNAVAILABLE"));
+        }
+        entry.children.insert(child.to_owned());
+        Ok(())
+    }
+
+    pub(super) fn temporary_parent_for_child(
+        &self,
+        workspace: &str,
+        child: &str,
+    ) -> AppResult<String> {
+        let queue = self
+            .temporary
+            .0
+            .lock()
+            .map_err(|_| failure("SSH_TUNNEL_TEMPORARY_UNAVAILABLE"))?;
+        queue
+            .entries
+            .values()
+            .find(|e| {
+                e.summary.workspace_id.as_deref() == Some(workspace) && e.children.contains(child)
+            })
+            .map(|e| e.summary.handle.clone())
+            .ok_or_else(|| failure("SSH_TUNNEL_TEMPORARY_UNAVAILABLE"))
+    }
+
     /// Only trusted Rust adapters can submit typed requests. Never exposed by
     /// Tauri/MCP; test injection uses this same boundary in automated tests.
     pub fn receive_temporary(
@@ -203,6 +248,7 @@ impl SshService {
                 },
                 deadline: receipt.deadline,
                 request: Some(request),
+                children: Default::default(),
                 output: String::new(),
                 trusted_fingerprint: None,
                 #[cfg(feature = "ssh-native")]
@@ -211,6 +257,8 @@ impl SshService {
                 trust: None,
                 #[cfg(feature = "ssh-native")]
                 native: None,
+                #[cfg(feature = "ssh-native")]
+                pending_forwards: Arc::new(tokio::sync::Semaphore::new(32)),
             },
         );
         self.temporary.schedule_sweep(&runtime, receipt.deadline);

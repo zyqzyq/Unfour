@@ -68,7 +68,7 @@ export function ApiRequestWorkspace({
         key={activeTab.id}
         routeReady={routing.ready}
         routeControl={active && <ApiRoutePicker key={workspaceId} routing={routing} environmentName={environmentName} draft={activeTab.draft.route}
-          disabled={activeTab.sending || activeTab.saving} onChange={(route) => onUpdateDraft(activeTab.id, { route })} />}
+          disabled={activeTab.sending || activeTab.saving} onChange={(route, temporaryHandle) => onUpdateDraft(activeTab.id, { route, temporaryHandle })} />}
         onNameEditingChange={(editing) => useApiRequestTabStore.getState().setNameEditing(workspaceId, activeTab.id, editing)}
         onNameCommit={(name) => onRequestNameCommit(activeTab, name)}
         onSave={(name) => onSave(activeTab, name)}

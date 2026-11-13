@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { getDatabaseTableStructure } from "@unfour/command-client";
+import { getDatabaseTableStructure, type DatabaseActionContext } from "@unfour/command-client";
 import type { DatabaseTable } from "@unfour/command-client";
 
 export function useTableStructure({
@@ -7,11 +7,13 @@ export function useTableStructure({
   enabled = true,
   table,
   workspaceId,
+  context,
 }: {
   connectionId: string | null;
   enabled?: boolean;
   table: DatabaseTable | null;
   workspaceId: string;
+  context?: DatabaseActionContext;
 }) {
   return useQuery({
     enabled: Boolean(enabled && workspaceId && connectionId && table),
@@ -22,9 +24,11 @@ export function useTableStructure({
       table?.catalog ?? null,
       table?.schema ?? null,
       table?.name ?? null,
+      context,
     ],
     queryFn: () =>
       getDatabaseTableStructure({
+        ...context,
         workspaceId,
         connectionId: connectionId ?? "",
         catalog: table?.catalog ?? null,

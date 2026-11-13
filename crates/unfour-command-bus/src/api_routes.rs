@@ -94,63 +94,89 @@ impl CommandBus {
         route: &ApiRoute,
         expected_ssh_revision: Option<i64>,
     ) -> AppResult<ApiResponse> {
-        match route {
-            ApiRoute::Direct => {
-                self.api_client
-                    .send_cancellable_with_secrets(input, cancellation, secrets)
-                    .await
-            }
-            ApiRoute::Inherit => Err(AppError::Validation("SSH_TUNNEL_INVALID_ROUTE".into())),
-            ApiRoute::Ssh { ssh_connection_id } => {
-                let budget = input
-                    .timeout_ms
-                    .filter(|ms| *ms > 0)
-                    .map(Duration::from_millis);
-                let started = std::time::Instant::now();
-                let connect = async {
-                    let tunnel = self
-                        .ssh
-                        .open_tunnel_at_revision(
-                            &input.workspace_id,
-                            ssh_connection_id,
-                            expected_ssh_revision,
-                        )
-                        .await
-                        .map_err(|err| match err {
-                            AppError::NotFound(_) => {
-                                AppError::Validation("SSH_TUNNEL_ROUTE_MISSING".into())
-                            }
-                            other => other,
-                        })?;
-                    tunnel.http_proxy().await
-                };
-                let proxy = tokio::select! {
-                    biased;
-                    _ = cancellation.cancelled() => return Err(AppError::ApiCancelled("cancelled by user".into())),
-                    result = async {
-                        match budget {
-                            Some(limit) => tokio::time::timeout(limit, connect).await.map_err(|_| AppError::Validation("SSH_TUNNEL_TIMEOUT".into()))?,
-                            None => connect.await,
-                        }
-                    } => result?,
-                };
-                self.api_client
-                    .send_via_ssh_proxy(
-                        input,
-                        cancellation,
-                        secrets,
-                        proxy.address(),
-                        proxy.username(),
-                        proxy.password(),
-                        started,
-                    )
-                    .await
-                    .map_err(|err| match (&err, proxy.remote_failure_code()) {
-                        (AppError::ApiNetwork(_), Some(code)) => AppError::Validation(code.into()),
-                        _ => err,
-                    })
-            }
+        self.send_routed_http_via(
+            input,
+            cancellation,
+            secrets,
+            route,
+            expected_ssh_revision,
+            None,
+        )
+        .await
+    }
+
+    pub(super) async fn send_routed_http_via(
+        &self,
+        input: ApiRequestInput,
+        cancellation: CancellationToken,
+        secrets: &[String],
+        route: &ApiRoute,
+        expected_ssh_revision: Option<i64>,
+        temporary_handle: Option<&str>,
+    ) -> AppResult<ApiResponse> {
+        if temporary_handle.is_none() && *route == ApiRoute::Direct {
+            return self
+                .api_client
+                .send_cancellable_with_secrets(input, cancellation, secrets)
+                .await;
         }
+        let connect = async {
+            if let Some(handle) = temporary_handle {
+                return self
+                    .ssh
+                    .temporary_tunnel(&input.workspace_id, handle)?
+                    .http_proxy()
+                    .await;
+            }
+            let ApiRoute::Ssh { ssh_connection_id } = route else {
+                return Err(AppError::Validation("SSH_TUNNEL_INVALID_ROUTE".into()));
+            };
+            self.ssh
+                .open_tunnel_at_revision(
+                    &input.workspace_id,
+                    ssh_connection_id,
+                    expected_ssh_revision,
+                )
+                .await
+                .map_err(|err| match err {
+                    AppError::NotFound(_) => {
+                        AppError::Validation("SSH_TUNNEL_ROUTE_MISSING".into())
+                    }
+                    other => other,
+                })?
+                .http_proxy()
+                .await
+        };
+        let budget = input
+            .timeout_ms
+            .filter(|ms| *ms > 0)
+            .map(Duration::from_millis);
+        let started = std::time::Instant::now();
+        let proxy = tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return Err(AppError::ApiCancelled("cancelled by user".into())),
+            result = async {
+                match budget {
+                    Some(limit) => tokio::time::timeout(limit, connect).await.map_err(|_| AppError::Validation("SSH_TUNNEL_TIMEOUT".into()))?,
+                    None => connect.await,
+                }
+            } => result?,
+        };
+        self.api_client
+            .send_via_ssh_proxy(
+                input,
+                cancellation,
+                secrets,
+                proxy.address(),
+                proxy.username(),
+                proxy.password(),
+                started,
+            )
+            .await
+            .map_err(|err| match (&err, proxy.remote_failure_code()) {
+                (AppError::ApiNetwork(_), Some(code)) => AppError::Validation(code.into()),
+                _ => err,
+            })
     }
 }
 

@@ -1,6 +1,8 @@
 export type SshAuthKind = "password" | "private-key" | "none";
 
 export type SshConnectionInput = {
+  /** Runtime-only editor choice. Never included in the saved definition. */
+  temporaryHandle?: string | null;
   expectedSnapshot?: SshConnection;
   id?: string;
   workspaceId: string;

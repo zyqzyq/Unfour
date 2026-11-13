@@ -234,6 +234,17 @@ impl CommandBus {
         db: &mut sqlx::SqliteConnection,
         plan: &remap::ImportPlan,
     ) -> AppResult<()> {
+        for route in &plan.database_routes {
+            self.database
+                .restore_bundle_sql_route_on(
+                    db,
+                    &plan.workspace_id,
+                    &route.connection_id,
+                    &route.ssh_connection_id,
+                    route.needs_review,
+                )
+                .await?;
+        }
         for template in &plan.api_templates {
             let (id, _) = plan.ids.get(&template.entity_id).ok_or_else(invalid)?;
             self.api_client

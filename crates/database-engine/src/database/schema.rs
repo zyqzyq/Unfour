@@ -22,7 +22,43 @@ impl DatabaseService {
     ) -> AppResult<DatabaseTestResult> {
         validate_workspace_id(&input.workspace_id)?;
         let storage = input_to_storage(&input)?;
+        let saved = match input.id.as_deref() {
+            Some(id) => Some(self.get_connection(&input.workspace_id, id).await?),
+            None => None,
+        };
+        let password_override = secret.as_deref().filter(|value| !value.is_empty());
+        let credential = empty_to_none(input.credential_ref.clone());
+        if password_override.is_none()
+            && credential.is_some()
+            && saved
+                .as_ref()
+                .is_some_and(|record| record.credential_ref != credential)
+        {
+            return Err(AppError::Validation("SSH_TUNNEL_ROUTE_CHANGED".into()));
+        }
+        let (ssh_connection_id, ssh_revision) = match (&input.ssh_connection_id, saved.as_ref()) {
+            _ if self.temporary_handle.is_some() => (None, None),
+            (Some(route), _) => {
+                let mut db = self.db.pool().acquire().await?;
+                let revision = self
+                    .validate_sql_jump(
+                        &mut db,
+                        &input.workspace_id,
+                        &storage.driver,
+                        route.as_deref(),
+                        input.expected_ssh_revision,
+                    )
+                    .await?;
+                (route.clone(), revision)
+            }
+            (None, Some(saved)) if storage.driver != "sqlite" => {
+                (saved.ssh_connection_id.clone(), saved.ssh_revision)
+            }
+            _ => (None, None),
+        };
         let connection = DatabaseConnection {
+            ssh_connection_id,
+            ssh_revision,
             id: input.id.clone().unwrap_or_default(),
             workspace_id: input.workspace_id.clone(),
             name: input.name.trim().to_string(),
@@ -33,7 +69,7 @@ impl DatabaseService {
             username: storage.username.clone(),
             ssl_mode: storage.ssl_mode.clone(),
             sqlite_path: storage.config.sqlite_path.clone(),
-            credential_ref: empty_to_none(input.credential_ref.clone()),
+            credential_ref: credential,
             read_only: storage.read_only,
             created_at: String::new(),
             updated_at: String::new(),
@@ -42,8 +78,10 @@ impl DatabaseService {
             sync_status: "new".to_string(),
             remote_id: None,
         };
-        let password_override = secret.as_deref().filter(|value| !value.is_empty());
-        self.test_connection_inner(connection, password_override)
+        let mut service = self.clone();
+        service.draft_source = saved;
+        service
+            .test_connection_inner(connection, password_override)
             .await
     }
 
@@ -52,6 +90,9 @@ impl DatabaseService {
         connection: DatabaseConnection,
         password_override: Option<&str>,
     ) -> AppResult<DatabaseTestResult> {
+        if connection.driver == "sqlite" && self.temporary_handle.is_some() {
+            return Err(AppError::Validation("SSH_TUNNEL_INVALID_ROUTE".into()));
+        }
         let started = Instant::now();
         let fields = serde_json::json!({ "driver": &connection.driver });
         unfour_diag::log_operation_event(

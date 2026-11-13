@@ -68,6 +68,26 @@ impl CommandBus {
         saved_id: Option<&str>,
         preview: Option<&unfour_core::network::ApiRoutingInput>,
     ) -> AppResult<RequestExecutionResult> {
+        self.send_api_request_via(
+            execution_id,
+            input,
+            environment_id_override,
+            saved_id,
+            preview,
+            None,
+        )
+        .await
+    }
+
+    pub async fn send_api_request_via(
+        &self,
+        execution_id: &str,
+        input: ApiRequestInput,
+        environment_id_override: Option<String>,
+        saved_id: Option<&str>,
+        preview: Option<&unfour_core::network::ApiRoutingInput>,
+        temporary_handle: Option<&str>,
+    ) -> AppResult<RequestExecutionResult> {
         let execution = self.api_executions.register(execution_id)?;
         let cancellation = execution.token();
         let input = self.resolve_desktop_api_timeout(input).await?;
@@ -94,13 +114,17 @@ impl CommandBus {
             .api_routes_for_environment(&input.workspace_id, request_id, environment_id.clone())
             .await?;
         let route = crate::api_routes::checked_editor_route(&routes, preview)?;
-        let ssh_revision = self
-            .api_jump_revision(
+        let ssh_revision = if let Some(handle) = temporary_handle {
+            self.ssh.temporary_tunnel(&input.workspace_id, handle)?;
+            None
+        } else {
+            self.api_jump_revision(
                 &input.workspace_id,
                 &route,
                 preview.and_then(|p| p.expected_ssh_revision),
             )
-            .await?;
+            .await?
+        };
         let pre_environment = self
             .script_environment(&input.workspace_id, environment_id.as_deref())
             .await?;
@@ -200,12 +224,13 @@ impl CommandBus {
                 .map(|variable| variable.value.clone()),
         );
         let mut response = match self
-            .send_routed_http(
+            .send_routed_http_via(
                 resolved_request.clone(),
                 cancellation.clone(),
                 &secrets,
                 &route,
                 ssh_revision,
+                temporary_handle,
             )
             .await
         {

@@ -7,6 +7,7 @@ pub(super) struct ImportPlan {
     pub flows: Vec<FlowDefinition>,
     pub ids: HashMap<String, (String, &'static str)>,
     pub local_paths: Vec<LocalPath>,
+    pub database_routes: Vec<DatabaseRoute>,
     pub api_templates: Vec<templates::ApiTemplate>,
 }
 fn reference(
@@ -336,11 +337,21 @@ pub(super) fn prepare(bundle: WorkspaceBundle, mcp_policy: Option<&str>) -> AppR
         unfour_flow_engine::validate_definition(&definition)?;
         flows.push(definition);
     }
+    let mut database_routes = bundle.database_routes;
+    let mut routed = HashSet::new();
+    for route in &mut database_routes {
+        route.connection_id = reference(&ids, &route.connection_id, "dbConnection")?;
+        route.ssh_connection_id = reference(&ids, &route.ssh_connection_id, "sshConnection")?;
+        if !routed.insert(route.connection_id.clone()) {
+            return Err(invalid());
+        }
+    }
     Ok(ImportPlan {
         workspace_id,
         page,
         sql,
         flows,
+        database_routes,
         local_paths: bundle.local_paths,
         api_templates: bundle.api_templates,
         ids,

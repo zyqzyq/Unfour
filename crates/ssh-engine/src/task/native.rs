@@ -11,8 +11,17 @@ impl NativeTaskDriver {
     pub(super) async fn connect(
         service: &SshService,
         connection: &SshConnection,
+        temporary: Option<&TemporarySshTunnel>,
     ) -> Result<Self, String> {
         use crate::ssh::native_transport::NativeConnectError;
+
+        if let Some(tunnel) = temporary {
+            let handle = service
+                .open_forwarded_connection(connection, None, tunnel)
+                .await
+                .map_err(|error| error.to_string())?;
+            return Ok(Self { handle, sftp: None });
+        }
 
         let mut handle = service
             .dial_native_connection(connection)

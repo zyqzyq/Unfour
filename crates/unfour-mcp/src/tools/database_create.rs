@@ -109,6 +109,8 @@ fn db_create_connection(
 
     let connection = command_bus
         .save_db_connection(DatabaseConnectionInput {
+            ssh_connection_id: None,
+            expected_ssh_revision: None,
             id: None,
             workspace_id,
             name,

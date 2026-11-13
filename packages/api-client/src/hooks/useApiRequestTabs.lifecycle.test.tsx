@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { getApiRoutes, listSshConnections, sendApiRequest, saveApiRequest, type RequestExecutionResult, type SshConnection } from "@unfour/command-client";
+import { getApiRoutes, listSshConnections, listTemporaryRouteHandles, sendApiRequest, saveApiRequest, type RequestExecutionResult, type SshConnection } from "@unfour/command-client";
 import { useApiRequestTabs } from "./useApiRequestTabs";
 import { parseCurl } from "../model/curl-import";
 import { resetApiRequestTabStore, useApiRequestTabStore } from "../model/api-request-tab-state";
@@ -15,6 +15,7 @@ vi.mock("@unfour/command-client", async (importOriginal) => ({
   listWorkspaceEnvironments: vi.fn().mockResolvedValue([]),
   getApiRoutes: vi.fn().mockResolvedValue({ request: { mode: "inherit" }, environment: { mode: "direct" }, effective: { mode: "direct" }, environmentId: null }),
   listSshConnections: vi.fn().mockResolvedValue([]),
+  listTemporaryRouteHandles: vi.fn().mockResolvedValue([]),
   sendApiRequest: vi.fn(),
   saveApiRequest: vi.fn(),
 }));
@@ -94,6 +95,23 @@ it("pins the effective SSH host revision and distinguishes a draft override from
   expect(vi.mocked(sendApiRequest).mock.lastCall?.[2]).toEqual({
     expectedEffective: { mode: "direct" }, expectedEnvironmentId: null, expectedSshRevision: undefined, requestId: null, route: { mode: "direct" },
   });
+});
+
+it("sends the selected live handle separately and blocks retry when that session ends", async () => {
+  const handle = "local-session-handle";
+  vi.mocked(listTemporaryRouteHandles).mockResolvedValue([handle]);
+  vi.mocked(sendApiRequest).mockResolvedValue(execution);
+  const { result, client } = await setup();
+  act(() => result.current.updateDraft("new:1", { temporaryHandle: handle }));
+  await waitFor(() => expect(result.current.routing.ready).toBe(true));
+  await act(async () => result.current.sendTab(result.current.activeTab!));
+  const sent = vi.mocked(sendApiRequest).mock.lastCall!;
+  expect(sent[3]).toBe(handle);
+  expect(JSON.stringify([sent[1], sent[2]])).not.toContain(handle);
+  act(() => client.setQueryData(["api-live-sessions", "w"], []));
+  await waitFor(() => expect(result.current.routing.ready).toBe(false));
+  await act(async () => result.current.sendTab(result.current.activeTab!));
+  expect(sendApiRequest).toHaveBeenCalledTimes(1);
 });
 
 it("gates the actual Send handler synchronously during activation and permits retry after failure", async () => {

@@ -13,11 +13,23 @@ impl DatabaseService {
     }
 
     pub async fn execute_query(&self, input: DatabaseQueryInput) -> AppResult<DatabaseQueryResult> {
+        self.execute_query_checked(input, None).await
+    }
+
+    /// A confirmed Flow executes against the connection and route it displayed.
+    pub async fn execute_query_checked(
+        &self,
+        input: DatabaseQueryInput,
+        expected: Option<&DatabaseConnection>,
+    ) -> AppResult<DatabaseQueryResult> {
         validate_workspace_id(&input.workspace_id)?;
         validate_connection_id(&input.connection_id)?;
         let connection = self
             .get_connection(&input.workspace_id, &input.connection_id)
             .await?;
+        if expected.is_some_and(|snapshot| snapshot != &connection) {
+            return Err(AppError::Validation("FLOW_CONFIRMATION_STALE".into()));
+        }
         let dialect = DatabaseDialect::for_driver(&connection.driver);
         let statements = super::script_parser::split_script(&input.sql, dialect)?;
         if statements.len() != 1 {

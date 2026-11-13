@@ -6,10 +6,12 @@ export function DatabaseModuleToolbar({
   connectionStatus,
   onNewQuery,
   selectedConnectionName,
+  temporaryHandle,
 }: {
   onNewQuery: () => void;
   connectionStatus: DatabaseConnectionStatus;
   selectedConnectionName: string | null;
+  temporaryHandle?: string;
 }) {
   const { t } = useI18n();
   const connectionStatusLabel = t(`database.connection.${connectionStatus}`);
@@ -28,6 +30,7 @@ export function DatabaseModuleToolbar({
           status={connectionStatus === "failed" ? "error" : connectionStatus}
           variant="badge"
         />
+        {temporaryHandle && <span className="text-xs text-[var(--u-color-text-muted)]">{t("network.temporarySession", { id: temporaryHandle.slice(-8) })}</span>}
       </ToolbarGroup>
       <ToolbarGroup>
         <Button

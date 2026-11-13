@@ -16,6 +16,7 @@ import {
   useI18n,
 } from "@unfour/ui";
 import { DatabaseErrorDetails } from "./DatabaseErrorDetails";
+import { DatabaseNetworkRoute } from "./DatabaseNetworkRoute";
 
 export function DatabaseConnectionDialog({
   canTest,
@@ -105,6 +106,11 @@ export function DatabaseConnectionDialog({
                     />
                   </Field>
                 </div>
+                {open && <DatabaseNetworkRoute workspaceId={form.workspaceId} sshId={form.sshConnectionId} revision={form.expectedSshRevision}
+                  temporaryHandle={form.temporaryHandle} onChange={(route) => onUpdate(route.temporaryHandle
+                    ? { temporaryHandle: route.temporaryHandle, sshConnectionId: form.expectedSnapshot?.sshConnectionId ?? null,
+                      expectedSshRevision: form.expectedSnapshot?.sshRevision ?? undefined }
+                    : route)} />}
                 <Field title={t("database.fields.database")}>
                   <Input onChange={(event) => onUpdate({ database: event.target.value })} value={form.database ?? ""} />
                 </Field>
@@ -199,6 +205,7 @@ function ConnectionPresetSelect({ form, onUpdate, onChooseRedis }: {
       setPreset(value);
       onUpdate({
         driver,
+        ...(driver === "sqlite" && { sshConnectionId: null, expectedSshRevision: undefined, temporaryHandle: null }),
         sqlitePath: driver === "sqlite" ? form.sqlitePath : null,
         sslMode: driver === "sqlite" ? null : form.sslMode,
         credentialRef: driver === "sqlite" ? null : form.credentialRef,

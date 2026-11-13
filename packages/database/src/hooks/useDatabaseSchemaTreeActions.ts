@@ -3,12 +3,15 @@ import type { QueryClient } from "@tanstack/react-query";
 import {
   getDatabaseSchema,
   listDatabaseCatalogs,
+  databaseRouteVersion,
+  databaseActionContext,
 } from "@unfour/command-client";
 import type { DatabaseConnection, DatabaseSchema } from "@unfour/command-client";
 import { formatDatabaseError } from "../result-utils";
 
 export function useDatabaseSchemaTreeActions({
   catalogNamesByConn,
+  connections,
   queryClient,
   setCatalogNamesByConn,
   setTreeErrors,
@@ -19,6 +22,7 @@ export function useDatabaseSchemaTreeActions({
   workspaceId,
 }: {
   catalogNamesByConn: Record<string, string[]>;
+  connections?: DatabaseConnection[];
   queryClient: QueryClient;
   setCatalogNamesByConn: Dispatch<SetStateAction<Record<string, string[]>>>;
   setTreeErrors: Dispatch<SetStateAction<Record<string, string>>>;
@@ -44,6 +48,8 @@ export function useDatabaseSchemaTreeActions({
   }
 
   function loadCatalogNames(connectionId: string, options: { force?: boolean } = {}) {
+    const version = databaseRouteVersion(workspaceId, connectionId);
+    const context = databaseActionContext(workspaceId, connectionId, connections?.find((c) => c.id === connectionId));
     const key = `names::${connectionId}`;
     if ((!options.force && catalogNamesByConn[connectionId]) || treeLoadingKeys.includes(key)) {
       return;
@@ -51,10 +57,11 @@ export function useDatabaseSchemaTreeActions({
     setTreeLoadingKeys((current) => [...current, key]);
     queryClient
       .fetchQuery({
-        queryKey: ["database-catalogs", workspaceId, connectionId],
-        queryFn: () => listDatabaseCatalogs(workspaceId, connectionId),
+        queryKey: ["database-catalogs", workspaceId, connectionId, context],
+        queryFn: () => listDatabaseCatalogs(workspaceId, connectionId, context),
       })
       .then((names) => {
+        if (version !== databaseRouteVersion(workspaceId, connectionId)) return;
         setCatalogNamesByConn((prev) => ({ ...prev, [connectionId]: names }));
         clearTreeError(key);
       })
@@ -64,6 +71,8 @@ export function useDatabaseSchemaTreeActions({
 
   // Lazily fetch a database (catalog) schema when its tree node is expanded.
   function loadCatalogSchema(connectionId: string, catalog: string, options: { force?: boolean } = {}) {
+    const version = databaseRouteVersion(workspaceId, connectionId);
+    const context = databaseActionContext(workspaceId, connectionId, connections?.find((c) => c.id === connectionId));
     const key = `${connectionId}::${catalog}`;
     if ((!options.force && treeSchemaCache[key]) || treeLoadingKeys.includes(key)) {
       return;
@@ -71,10 +80,11 @@ export function useDatabaseSchemaTreeActions({
     setTreeLoadingKeys((current) => [...current, key]);
     queryClient
       .fetchQuery({
-        queryKey: ["database-schema", workspaceId, connectionId, catalog || null],
-        queryFn: () => getDatabaseSchema(workspaceId, connectionId, catalog || null),
+        queryKey: ["database-schema", workspaceId, connectionId, catalog || null, context],
+        queryFn: () => getDatabaseSchema(workspaceId, connectionId, catalog || null, context),
       })
       .then((data) => {
+        if (version !== databaseRouteVersion(workspaceId, connectionId)) return;
         setTreeSchemaCache((prev) => ({ ...prev, [key]: data }));
         clearTreeError(key);
       })

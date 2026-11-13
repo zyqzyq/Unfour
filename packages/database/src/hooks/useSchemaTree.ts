@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { getDatabaseSchema } from "@unfour/command-client";
+import { databaseActionContext, getDatabaseSchema } from "@unfour/command-client";
 import type { DatabaseConnection } from "@unfour/command-client";
 
 export function useSchemaTree({
@@ -17,9 +17,10 @@ export function useSchemaTree({
   enabled?: boolean;
   workspaceId: string;
 }) {
+  const context = connection ? databaseActionContext(workspaceId, connection.id, connection) : undefined;
   return useQuery({
     enabled: Boolean(enabled && workspaceId && connectionId && connection),
-    queryKey: ["database-schema", workspaceId, connectionId, catalog],
-    queryFn: () => getDatabaseSchema(workspaceId, connectionId ?? "", catalog),
+    queryKey: ["database-schema", workspaceId, connectionId, catalog, context],
+    queryFn: () => getDatabaseSchema(workspaceId, connectionId ?? "", catalog, context),
   });
 }

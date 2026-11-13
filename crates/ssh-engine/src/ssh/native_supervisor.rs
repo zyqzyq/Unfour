@@ -9,6 +9,7 @@ impl SshService {
         connection: SshConnection,
         initial_handle: NativeSshHandle,
         mut cancel_rx: tokio::sync::watch::Receiver<bool>,
+        automatic_reconnect: bool,
     ) {
         let service = self.clone();
         tokio::spawn(async move {
@@ -86,6 +87,21 @@ impl SshService {
                 if !channel_closed || !service.session_should_reconnect(&session_id) {
                     return;
                 }
+                if !automatic_reconnect {
+                    service.set_session_health(
+                        &session_id,
+                        "disconnected",
+                        0,
+                        "SSH session disconnected.\r\n",
+                    );
+                    service.clear_native_session_resources(&session_id);
+                    let _ = service.flush_session_history(&session_id).await;
+                    let _ = service.persist_session_summary(&session_id).await;
+                    if let Ok(mut sessions) = service.sessions.lock() {
+                        sessions.remove(&session_id);
+                    }
+                    return;
+                }
                 service.set_session_health(
                     &session_id,
                     "degraded",
@@ -125,6 +141,7 @@ impl SshService {
                         service.session_dimensions(&session_id).0,
                         service.session_dimensions(&session_id).1,
                         None,
+                        None,
                     );
                     let result = tokio::select! {
                         changed = cancel_rx.changed() => {
@@ -135,7 +152,7 @@ impl SshService {
                         }
                         result = reconnect => result,
                     };
-                    if let Ok(next_native) = result {
+                    if let Ok((next_native, _)) = result {
                         reconnected = Some(next_native);
                         break;
                     }
@@ -150,7 +167,7 @@ impl SshService {
                             // dropping it mid-stream (#11). Entry cleanup is
                             // handled by the close/cancel path that raced us.
                             let _ = next_native.writer.close().await;
-                            let handle = next_native.handle.lock().await;
+                            let handle = next_native.handle;
                             let _ = handle
                                 .disconnect(
                                     russh::Disconnect::ByApplication,

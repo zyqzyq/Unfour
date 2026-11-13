@@ -1,4 +1,4 @@
-import { useState, type ComponentProps } from "react";
+import { useEffect, useRef, useState, type ComponentProps } from "react";
 import {
   Copy,
   CopyPlus,
@@ -72,6 +72,11 @@ function SshConnectionTreeContent({
   workspaceId: string;
 }) {
   const { t } = useI18n();
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   const [search, setSearch] = useState("");
   const feedback = useFeedback();
   const queryClient = useQueryClient();
@@ -106,6 +111,10 @@ function SshConnectionTreeContent({
       split?: boolean;
     }) => connectSshSession({ workspaceId, connectionId, cols: 120, rows: 32 }),
     onSuccess: (session, variables) => {
+      if (!mounted.current || session.workspaceId !== workspaceId) {
+        void queryClient.invalidateQueries({ queryKey: ["ssh-sessions", session.workspaceId] });
+        return;
+      }
       if (session.warnings?.includes("ACTIVITY_RECORD_FAILED")) {
         feedback.info(t("feedback.activityRecordFailed"));
       }
@@ -134,6 +143,7 @@ function SshConnectionTreeContent({
       onOpenTerminal?.();
     },
     onError: (error, variables) => {
+      if (!mounted.current) return;
       const connection = connections.find((c) => c.id === variables.connectionId);
       if (!connection) return;
       const syntheticId = `__frontend_failed_${variables.connectionId}_${Date.now()}`;
@@ -168,6 +178,10 @@ function SshConnectionTreeContent({
   const closeMutation = useMutation({
     mutationFn: (sessionId: string) => closeSshSession({ workspaceId, sessionId }),
     onSuccess: (session) => {
+      if (!mounted.current || session.workspaceId !== workspaceId) {
+        void queryClient.invalidateQueries({ queryKey: ["ssh-sessions", session.workspaceId] });
+        return;
+      }
       if (session.warnings?.includes("ACTIVITY_RECORD_FAILED")) {
         feedback.info(t("feedback.activityRecordFailed"));
       }

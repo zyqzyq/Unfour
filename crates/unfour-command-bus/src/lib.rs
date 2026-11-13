@@ -53,6 +53,7 @@ mod core_commands;
 mod credential_commands;
 mod credential_lock;
 mod database_commands;
+mod database_routes;
 mod redis_commands;
 pub use unfour_redis_engine::{
     connections::{RedisConnection, RedisConnectionInput},
@@ -90,6 +91,7 @@ pub struct CommandBus {
     pub(crate) api_executions: api_execution::ApiExecutionManager,
     pub(crate) activity_log: ActivityLogService,
     pub(crate) database: DatabaseService,
+    redis_temporary: Option<std::sync::Arc<redis_commands::TemporaryRedisRoute>>,
     pub(crate) secret_store: SecretStore,
     pub(crate) ssh: SshService,
     pub(crate) workspace: WorkspaceService,

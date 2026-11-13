@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { listSshConnections, saveRedisConnection, testRedisConnectionInput, type RedisConnection, type RedisConnectionInput } from "@unfour/command-client";
-import { Button, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle, Input, SecretInput, Select, useI18n } from "@unfour/ui";
+import { bindRedisSession, connectionTemporaryHandle, listSshConnections, listTemporaryRouteHandles, redisTemporaryPassword, saveRedisConnection, temporaryRouteOptions, testRedisConnectionInput, type RedisConnection, type RedisConnectionInput } from "@unfour/command-client";
+import { Button, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle, Input, SecretInput, Select, useI18n, useLiveOptions } from "@unfour/ui";
 import { redisErrorMessage } from "./redis-error";
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -41,6 +41,12 @@ export function RedisConnectionDialog({ workspaceId, original, latest, initialNa
     sshConnectionId: original?.sshConnectionId ?? null,
   }));
   const [password, setPassword] = useState("");
+  const originalHandle = connectionTemporaryHandle("redis", workspaceId, original?.id);
+  const [temporaryHandle, setTemporaryHandle] = useState(originalHandle);
+  const [runtimePassword, setRuntimePassword] = useState(() => original && originalHandle ? redisTemporaryPassword(workspaceId, original.id, original.revision) ?? "" : "");
+  const [otherFieldsEdited, setOtherFieldsEdited] = useState(false);
+  const sessions = useLiveOptions(workspaceId, listTemporaryRouteHandles, true);
+  const live = temporaryRouteOptions(sessions?.items ?? [], temporaryHandle, (id) => t("network.temporarySession", { id }), t("network.temporaryUnavailable"));
   const [clear, setClear] = useState(false);
   const [pending, setPending] = useState<"save" | "test" | null>(null);
   const [tested, setTested] = useState(false);
@@ -52,10 +58,14 @@ export function RedisConnectionDialog({ workspaceId, original, latest, initialNa
     || form.host !== original.host || form.port !== original.port || form.username !== original.username || form.tls !== original.tls
   ));
   const changed = Boolean(original && latest?.revision !== original.revision);
-  const valid = !unknownJump && (!replacePassword || password || clear) && form.name.trim() && form.host.trim() && Number.isInteger(form.port) && form.port > 0 && form.port <= 65535 && Number.isSafeInteger(form.dbIndex) && form.dbIndex >= 0;
+  const runtimeOnly = Boolean(original && temporaryHandle && !otherFieldsEdited && !password && !clear);
+  const valid = (!unknownJump || temporaryHandle) && (!temporaryHandle || (sessions?.items.includes(temporaryHandle) && (!original?.hasPassword || runtimePassword))) &&
+    (runtimeOnly || !replacePassword || password || clear) && form.name.trim() && form.host.trim() && Number.isInteger(form.port) && form.port > 0 && form.port <= 65535 && Number.isSafeInteger(form.dbIndex) && form.dbIndex >= 0;
 
   function edit(patch: Partial<RedisConnectionInput>) {
+    if (!("sshConnectionId" in patch)) setOtherFieldsEdited(true);
     const changesTarget = ["host", "port", "username", "tls", "dbIndex", "sshConnectionId"].some((key) => key in patch);
+    if (changesTarget) setRuntimePassword("");
     setForm((current) => ({ ...current, ...patch, ...(changesTarget && { allowWrites: false }) }));
     setTested(false); setError("");
   }
@@ -65,8 +75,16 @@ export function RedisConnectionDialog({ workspaceId, original, latest, initialNa
     const secret = clear ? "" : password || null;
     const input = { ...form, expectedSshRevision: jumps.find(j => j.value === form.sshConnectionId)?.revision };
     try {
-      if (action === "test") { await testRedisConnectionInput(input, secret); setTested(true); }
-      else onSaved(await saveRedisConnection(input, secret));
+      if (action === "test") {
+        if (temporaryHandle) await testRedisConnectionInput(input, runtimePassword || null, temporaryHandle);
+        else await testRedisConnectionInput(input, secret);
+        setTested(true);
+      } else if (runtimeOnly && original && temporaryHandle) {
+        bindRedisSession(workspaceId, original.id, original.revision, temporaryHandle, runtimePassword);
+        onSaved(original);
+      } else if (temporaryHandle || originalHandle) {
+        onSaved(await saveRedisConnection(input, secret, { handle: temporaryHandle ?? null, password: runtimePassword }));
+      } else onSaved(await saveRedisConnection(input, secret));
     } catch (cause) {
       setError(redisErrorMessage(cause, t));
     } finally {
@@ -85,16 +103,31 @@ export function RedisConnectionDialog({ workspaceId, original, latest, initialNa
               <Field label={t("database.fields.port")}><Input type="number" required min={1} max={65535} value={form.port || ""} onChange={(event) => edit({ port: Number(event.target.value) })} /></Field>
             </div>
             <Field label={t("redis.logicalDb")}><Input required type="number" min={0} value={form.dbIndex} onChange={(event) => edit({ dbIndex: Number(event.target.value) })} /></Field>
-            <Field label={t("redis.route.label")}><Select value={form.sshConnectionId ?? ""}
+            <Field label={t("redis.route.label")}><Select value={temporaryHandle ? "live:" + temporaryHandle : form.sshConnectionId ?? ""}
               options={[{ value: "", label: t("redis.route.direct") }, ...jumps,
+                ...live.map((item) => ({ ...item, value: "live:" + item.value })),
                 ...(unknownJump ? [{ value: form.sshConnectionId!, label: listState === "loading" ? t("redis.route.loading") : t("redis.route.missing") }] : [])]}
-              onChange={(event) => edit({ sshConnectionId: event.target.value || null })} /></Field>
-            {listState === "ready" && !jumps.length && <p className="text-xs text-[var(--u-color-text-muted)]">{t("redis.route.noConnections")}</p>}
+              onChange={(event) => {
+                const value = event.target.value;
+                setRuntimePassword(""); setTested(false); setError("");
+                if (value.startsWith("live:")) {
+                  setTemporaryHandle(value.slice(5));
+                  setForm((current) => ({ ...current, sshConnectionId: original?.sshConnectionId ?? null,
+                    allowWrites: otherFieldsEdited ? current.allowWrites : original?.allowWrites ?? false }));
+                }
+                else { setTemporaryHandle(undefined); edit({ sshConnectionId: value || null }); }
+              }} /></Field>
+            {temporaryHandle && <>
+              <p className="text-xs text-[var(--u-color-text-muted)]">{t("network.temporaryHelp")}</p>
+              <Field label={t("redis.route.temporaryPassword")}><SecretInput value={runtimePassword}
+                onChange={(event) => { setRuntimePassword(event.target.value); setTested(false); }} /></Field>
+            </>}
+            {listState === "ready" && !jumps.length && !live.length && <p className="text-xs text-[var(--u-color-text-muted)]">{t("redis.route.noConnections")}</p>}
             {listState === "failed" && <p role="alert" className="text-xs">{t("redis.route.listFailed")}</p>}
             {original?.routeNeedsReview && <p role="status" className="text-xs">{t("network.errors.SSH_TUNNEL_ROUTE_CHANGED")}</p>}
             <Field label={t("database.fields.username")}><Input value={form.username ?? ""} onChange={(event) => edit({ username: event.target.value || null })} /></Field>
             <Field label={t("database.fields.password")}><SecretInput value={password} placeholder={original?.hasPassword && !clear && !replacePassword ? t("database.fields.passwordKeep") : undefined} onChange={(event) => { setPassword(event.target.value); setClear(false); setTested(false); }} /></Field>
-            {replacePassword && !password && !clear && <p className="text-xs text-[var(--u-color-text-muted)]">{t("redis.route.replacePassword")}</p>}
+            {!runtimeOnly && replacePassword && !password && !clear && <p className="text-xs text-[var(--u-color-text-muted)]">{t("redis.route.replacePassword")}</p>}
             {original?.hasPassword && <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={clear} onChange={(event) => { setClear(event.target.checked); setPassword(""); setTested(false); }} />{t("common.secret.clear")}</label>}
             <label className="flex items-center gap-2 text-xs"><input className="accent-[var(--u-color-primary)]" type="checkbox" checked={form.tls} onChange={(event) => edit({ tls: event.target.checked })} />{t("redis.tls")}</label>
             <label className="flex items-center gap-2 text-xs"><input className="accent-[var(--u-color-primary)]" type="checkbox" checked={form.allowWrites ?? false} onChange={(event) => edit({ allowWrites: event.target.checked })} />{t("redis.write.allow")}</label>

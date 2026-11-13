@@ -207,7 +207,18 @@ impl CommandBus {
         &self,
         input: DatabaseQueryInput,
     ) -> AppResult<DatabaseQueryResult> {
-        let mut result = self.database.execute_query(input.clone()).await?;
+        self.execute_database_query_checked(input, None).await
+    }
+
+    pub(super) async fn execute_database_query_checked(
+        &self,
+        input: DatabaseQueryInput,
+        expected: Option<&DatabaseConnection>,
+    ) -> AppResult<DatabaseQueryResult> {
+        let mut result = self
+            .database
+            .execute_query_checked(input.clone(), expected)
+            .await?;
         if result.safety.classification != "read" {
             let classification = result.safety.classification.clone();
             result.warnings.extend(self.record_completion_activity(CommandActivity {

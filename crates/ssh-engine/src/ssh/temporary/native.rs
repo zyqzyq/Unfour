@@ -19,6 +19,9 @@ impl TrustPrompt {
             if let Ok(mut queue) = queue.lock() {
                 if let Ok(entry) = queue.owned(workspace, &self.handle) {
                     entry.summary.error_code = Some("TEMPORARY_REKEY_REQUIRES_RELAUNCH".into());
+                    if let Some(cancel) = &entry.cancel {
+                        cancel.send_replace(true);
+                    }
                 }
             }
         }
@@ -137,7 +140,7 @@ impl SshService {
     ) {
         // Transport is retained outside the setup future so cancellation during
         // auth/PTY setup can explicitly disconnect it, including late success.
-        let mut transport = None;
+        let mut transport: Option<russh::client::Handle<SshClientHandler>> = None;
         let setup = self.setup_temporary(&workspace, &id, &request, &mut transport);
         let result = tokio::select! {
             biased;
@@ -191,7 +194,22 @@ impl SshService {
                         }
                     }
                 }
+                // Stop forwarding on shell EOF before awaiting SSH-level cleanup.
+                if let Ok(mut queue) = self.temporary.0.lock() {
+                    if let Ok(entry) = queue.owned(&workspace, &id) {
+                        if let Some(cancel) = &entry.cancel {
+                            cancel.send_replace(true);
+                        }
+                    }
+                }
                 let _ = tokio::time::timeout(Duration::from_secs(2), native.writer.close()).await;
+                let _ = tokio::time::timeout(
+                    Duration::from_secs(2),
+                    native
+                        .handle
+                        .disconnect(russh::Disconnect::ByApplication, "closed", "en"),
+                )
+                .await;
                 Ok(())
             }
             Err(error) => Err(error),
@@ -199,8 +217,6 @@ impl SshService {
         if let Some(transport) = transport {
             let _ = tokio::time::timeout(Duration::from_secs(2), async {
                 transport
-                    .lock()
-                    .await
                     .disconnect(russh::Disconnect::ByApplication, "closed", "en")
                     .await
             })
@@ -234,10 +250,11 @@ impl SshService {
         workspace: &str,
         id: &str,
         request: &TemporaryRequest,
-        transport: &mut Option<Arc<tokio::sync::Mutex<russh::client::Handle<SshClientHandler>>>>,
+        transport: &mut Option<russh::client::Handle<SshClientHandler>>,
     ) -> AppResult<NativeSshHandle> {
         let handler = SshClientHandler {
             pinned_fingerprint: None,
+            verified_fingerprint: None,
             host_key_store: HostKeyStore::new(self.db.pool().clone()),
             workspace_id: workspace.into(),
             host: request.host.to_string(),
@@ -267,12 +284,9 @@ impl SshService {
         .await
         .map_err(|_| failure("TEMPORARY_TRANSPORT_TIMEOUT"))?
         .map_err(|_| failure("TEMPORARY_TRANSPORT_OR_TRUST_FAILED"))?;
-        let handle = Arc::new(tokio::sync::Mutex::new(handle));
-        *transport = Some(handle.clone());
+        let handle = transport.insert(handle);
         let authenticated = tokio::time::timeout(Duration::from_secs(30), async {
             handle
-                .lock()
-                .await
                 .authenticate_password(request.username.to_string(), request.password.to_string())
                 .await
         })
@@ -283,8 +297,7 @@ impl SshService {
             return Err(failure("TEMPORARY_AUTH_FAILED"));
         }
         let (channel, prelude) = tokio::time::timeout(Duration::from_secs(15), async {
-            let guard = handle.lock().await;
-            super::super::native_transport::open_terminal_channel(&guard, 120, 32, true).await
+            super::super::native_transport::open_terminal_channel(handle, 120, 32, true).await
         })
         .await
         .map_err(|_| failure("TEMPORARY_CHANNEL_TIMEOUT"))?
@@ -299,10 +312,45 @@ impl SshService {
         }
         let (reader, writer) = channel.split();
         Ok(NativeSshHandle {
-            handle,
+            handle: Arc::new(
+                transport
+                    .take()
+                    .expect("authenticated transport is owned until handoff"),
+            ),
             reader: Arc::new(tokio::sync::Mutex::new(reader)),
             writer: Arc::new(writer),
         })
+    }
+
+    pub(in crate::ssh) fn temporary_forward_source(
+        &self,
+        workspace: &str,
+        handle: &str,
+    ) -> AppResult<(
+        Arc<russh::client::Handle<SshClientHandler>>,
+        watch::Receiver<bool>,
+        Arc<tokio::sync::Semaphore>,
+    )> {
+        let unavailable = || failure("SSH_TUNNEL_TEMPORARY_UNAVAILABLE");
+        let mut queue = self.temporary.0.lock().map_err(|_| unavailable())?;
+        let entry = queue.owned(workspace, handle).map_err(|_| unavailable())?;
+        let cancel = entry.cancel.as_ref().ok_or_else(unavailable)?;
+        if entry.summary.status != "connected"
+            || entry.summary.error_code.is_some()
+            || *cancel.borrow()
+        {
+            return Err(unavailable());
+        }
+        Ok((
+            entry
+                .native
+                .as_ref()
+                .ok_or_else(unavailable)?
+                .handle
+                .clone(),
+            cancel.subscribe(),
+            entry.pending_forwards.clone(),
+        ))
     }
 
     fn temporary_native(&self, workspace: &str, handle: &str) -> AppResult<NativeSshHandle> {

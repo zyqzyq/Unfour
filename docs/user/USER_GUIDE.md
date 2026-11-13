@@ -334,6 +334,17 @@ result, use **Copy TSV** or export CSV or JSON. When you filter or sort, **Copy
 and export scope** lets you choose between the current view across all its pages
 and all returned rows in their original order.
 
+For PostgreSQL, openGauss, and MySQL, choose a saved SSH connection in the
+database connection's network route and enter the database's original host and
+port. Test and save the connection. The same route carries queries, schema
+browsing, edits, and exports.
+
+To use a bastion session, first open it from the bastion client and finish its
+SSH trust prompt. Select the connected session in the API request toolbar or
+the Redis, SQL, or SSH connection editor in that workspace. Keep the bastion
+tab open while using the route. The session selection lasts for this window.
+The bastion must permit SSH TCP forwarding to the destination.
+
 SQLite, PostgreSQL, and MySQL are supported. Compatible MariaDB servers use the
 MySQL driver path. Recorded database checks, and the separate MariaDB matrix
 that the published record does not claim, are in

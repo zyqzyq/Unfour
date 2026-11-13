@@ -79,8 +79,8 @@ export function useApiRequestTabs(workspaceId: string) {
   }
 
   const sendMutation = useMutation({
-    mutationFn: ({ executionId, input, routing }: { executionId: string; input: ApiRequestInput; tabId: string; routing: NonNullable<Parameters<typeof sendApiRequest>[2]> }) =>
-      sendApiRequest(executionId, input, routing),
+    mutationFn: ({ executionId, input, routing, temporaryHandle }: { executionId: string; input: ApiRequestInput; tabId: string; routing: NonNullable<Parameters<typeof sendApiRequest>[2]>; temporaryHandle?: string }) =>
+      temporaryHandle ? sendApiRequest(executionId, input, routing, temporaryHandle) : sendApiRequest(executionId, input, routing),
     onSuccess: (execution, variables) => {
       const workspaceId = variables.input.workspaceId;
       if (execution.httpErrorCode === "API_RESPONSE_TOO_LARGE") execution = { ...execution, httpError: t("api.response.tooLarge") };
@@ -231,19 +231,21 @@ export function useApiRequestTabs(workspaceId: string) {
       }
       const routes = routing.routes;
       if (!routing.ready || !routes || tab.id !== activeTab?.id || queryClient.isMutating({ mutationKey: environmentRouteMutationKey(workspaceId) })) {
-        useApiRequestTabStore.getState().failTabSend(workspaceId, tab.id, t("api.route.unavailable"));
+        const message = tab.draft.temporaryHandle && !routing.temporary.data?.includes(tab.draft.temporaryHandle)
+          ? t("network.errors.SSH_TUNNEL_TEMPORARY_UNAVAILABLE") : t("api.route.unavailable");
+        useApiRequestTabStore.getState().failTabSend(workspaceId, tab.id, message);
         return;
       }
       const input = tabToInput(tab, workspaceId, { purpose: "send" });
       const executionId = crypto.randomUUID();
       useApiRequestTabStore.getState().startTabSend(workspaceId, tab.id, input, executionId);
-      sendRequest({ executionId, input, tabId: tab.id, routing: {
+      sendRequest({ executionId, input, tabId: tab.id, temporaryHandle: tab.draft.temporaryHandle, routing: {
         requestId: tab.savedRequestId, route: tab.draft.route?.route,
         expectedEnvironmentId: routes.environmentId, expectedEffective: effectiveApiRoute(routes, tab.draft.route?.route),
         expectedSshRevision: routing.selectedHost?.revision,
       } });
     },
-    [sendRequest, workspaceId, t, queryClient, activeTab?.id, routing.ready, routing.routes, routing.selectedHost?.revision],
+    [sendRequest, workspaceId, t, queryClient, activeTab?.id, routing.ready, routing.routes, routing.selectedHost?.revision, routing.temporary.data],
   );
 
   const cancelTab = useCallback(async (tab: ApiRequestTab) => {

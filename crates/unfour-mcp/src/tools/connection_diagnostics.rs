@@ -232,6 +232,8 @@ fn update_db(
         })
         .ok_or_else(missing)?;
     let input = DatabaseConnectionInput {
+        ssh_connection_id: None,
+        expected_ssh_revision: None,
         id: Some(c.id),
         workspace_id: c.workspace_id,
         name: c.name,

@@ -276,9 +276,16 @@ export function SshConnectionsPage({
   });
 
   const connectMutation = useMutation({
-    mutationFn: (connectionId: string) =>
-      connectSshSession({ workspaceId, connectionId, cols: 120, rows: 32 }),
+    mutationFn: (request: string | { connectionId: string; sourceSessionId: string }) => {
+      const connectionId = typeof request === "string" ? request : request.connectionId;
+      const input = { workspaceId, connectionId, cols: 120, rows: 32 };
+      return typeof request === "string" ? connectSshSession(input) : connectSshSession(input, request.sourceSessionId);
+    },
     onSuccess: (session) => {
+      if (saveScope.current !== session.workspaceId) {
+        void queryClient.invalidateQueries({ queryKey: ["ssh-sessions", session.workspaceId] });
+        return;
+      }
       if (session.warnings?.includes("ACTIVITY_RECORD_FAILED")) {
         feedback.info(t("feedback.activityRecordFailed"));
       }
@@ -303,7 +310,13 @@ export function SshConnectionsPage({
       );
       queryClient.invalidateQueries({ queryKey: ["ssh-sessions", workspaceId] });
     },
-    onError: (error, connectionId) => {
+    onError: (error, request) => {
+      if (saveScope.current !== workspaceId) return;
+      if (typeof request !== "string") {
+        feedback.error(formatTerminalError(error, t));
+        return;
+      }
+      const connectionId = request;
       const connection = connections.find((c) => c.id === connectionId);
       if (!connection) return;
       const syntheticId = `__frontend_failed_${connectionId}_${Date.now()}`;
@@ -337,6 +350,10 @@ export function SshConnectionsPage({
   const closeMutation = useMutation({
     mutationFn: (sessionId: string) => closeSshSession({ workspaceId, sessionId }),
     onSuccess: (session) => {
+      if (saveScope.current !== session.workspaceId) {
+        void queryClient.invalidateQueries({ queryKey: ["ssh-sessions", session.workspaceId] });
+        return;
+      }
       if (session.warnings?.includes("ACTIVITY_RECORD_FAILED")) {
         feedback.info(t("feedback.activityRecordFailed"));
       }
@@ -543,18 +560,9 @@ export function SshConnectionsPage({
     connectMutation.mutate(trustDialogState.connectionId);
   }
 
-  function retryConnection(connectionId: string) {
+  function openFromSession(connectionId: string, sourceSessionId: string) {
     connectMutation.reset();
-    connectMutation.mutate(connectionId);
-  }
-
-  // Open a brand-new parallel session to the same connection. Unlike
-  // `retryConnection` (used for the failed-pane Retry action), this is the
-  // "Duplicate session" menu entry: it always spins up a fresh session rather
-  // than implying a reconnect of an existing one.
-  function duplicateSession(connectionId: string) {
-    connectMutation.reset();
-    connectMutation.mutate(connectionId);
+    connectMutation.mutate(frontendFailedSessions[sourceSessionId] ? connectionId : { connectionId, sourceSessionId });
   }
 
   const {
@@ -641,12 +649,12 @@ export function SshConnectionsPage({
         onCloseOthers={closeOtherSessions}
         onCloseRight={closeSessionsToRight}
         onCloseSession={requestCloseSession}
-        onDuplicate={duplicateSession}
+        onDuplicate={openFromSession}
         onNewConnection={newConnection}
         onNewSession={connectSelectedConnection}
         onOpenPreferences={openConnectionSettings}
         onReconnect={reconnectSession}
-        onRetry={retryConnection}
+        onRetry={openFromSession}
         onSelectSession={setActiveSessionId}
         selectedConnection={selectedConnection}
         sessions={sessionTabs}

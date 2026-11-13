@@ -1,4 +1,11 @@
+export type DatabaseConnectionStamp = { revision: number; sshConnectionId: string | null; sshRevision: number | null };
+
+export type DatabaseActionContext = { expectedConnection?: DatabaseConnectionStamp; routeVersion?: number };
+
 export type DatabaseConnectionInput = {
+  temporaryHandle?: string | null;
+  sshConnectionId?: string | null;
+  expectedSshRevision?: number | null;
   expectedSnapshot?: DatabaseConnection;
   id?: string;
   workspaceId: string;
@@ -15,6 +22,8 @@ export type DatabaseConnectionInput = {
 };
 
 export type DatabaseConnection = {
+  sshConnectionId?: string | null;
+  sshRevision?: number | null;
   id: string;
   workspaceId: string;
   name: string;
@@ -82,7 +91,7 @@ export type DatabaseForeignKey = {
   referencedColumns: string[];
 };
 
-export type DatabaseTableStructureInput = {
+export type DatabaseTableStructureInput = DatabaseActionContext & {
   workspaceId: string;
   connectionId: string;
   catalog?: string | null;
@@ -108,7 +117,7 @@ export type DatabaseCellValue = {
   value?: string | null;
 };
 
-export type DatabaseRowMutationInput = {
+export type DatabaseRowMutationInput = DatabaseActionContext & {
   workspaceId: string;
   connectionId: string;
   catalog?: string | null;
@@ -128,7 +137,7 @@ export type DatabaseRowMutationResult = {
   sql: string;
 };
 
-export type DatabaseQueryInput = {
+export type DatabaseQueryInput = DatabaseActionContext & {
   workspaceId: string;
   connectionId: string;
   sql: string;
@@ -187,7 +196,7 @@ export type SavedSqlInput = {
   sql: string;
 };
 
-export type DatabaseBrowseInput = {
+export type DatabaseBrowseInput = DatabaseActionContext & {
   includeTotal?: boolean;
   workspaceId: string;
   connectionId: string;

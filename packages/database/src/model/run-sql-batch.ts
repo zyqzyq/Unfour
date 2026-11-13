@@ -1,19 +1,21 @@
-import { executeDatabaseScript } from "@unfour/command-client";
+import { databaseRouteVersion, executeDatabaseScript, type DatabaseConnectionStamp } from "@unfour/command-client";
 import { sqlResultRowLimit } from "./result-row-limit";
 import type { DatabaseQueryWorkspaceTab, RunSqlOptions, SqlBatchState } from "./types";
 
 export type { SqlBatchState };
 
 /** Preserve source SQL; all dialect parsing and preflight live in Rust. */
-export function createSqlBatch(tab: DatabaseQueryWorkspaceTab, options: RunSqlOptions, workspaceId: string): SqlBatchState {
+export function createSqlBatch(tab: DatabaseQueryWorkspaceTab, options: RunSqlOptions, workspaceId: string, expectedConnection?: DatabaseConnectionStamp): SqlBatchState {
   if (options.resume || options.cancelConfirmation) {
     throw new Error("Confirmation control requests cannot create a new SQL batch");
   }
   const runAll = options.mode === "all";
   return {
+    routeVersion: databaseRouteVersion(workspaceId, tab.connectionId),
     tabId: tab.id,
     source: tab.sql,
     input: {
+      expectedConnection,
       workspaceId,
       connectionId: tab.connectionId ?? "",
       catalog: tab.catalog,
@@ -31,11 +33,12 @@ export function createSqlBatch(tab: DatabaseQueryWorkspaceTab, options: RunSqlOp
 export function canConfirmBatch(batch: SqlBatchState, tab: DatabaseQueryWorkspaceTab, workspaceId: string) {
   return batch.tabId === tab.id && batch.source === tab.sql &&
     batch.input.workspaceId === workspaceId && batch.input.connectionId === (tab.connectionId ?? "") &&
+    (batch.routeVersion ?? 0) === databaseRouteVersion(workspaceId, tab.connectionId) &&
     sameNullableText(batch.input.catalog, tab.catalog) && sameNullableText(batch.input.schema, tab.schema);
 }
 
 export function executeSqlBatch(batch: SqlBatchState, confirmMutation: boolean) {
-  return executeDatabaseScript({ ...batch.input, confirmMutation });
+  return executeDatabaseScript({ ...batch.input, routeVersion: batch.routeVersion, confirmMutation });
 }
 
 export function sqlAwaitingConfirmation(batch: SqlBatchState, error: unknown): string {

@@ -117,3 +117,4 @@ export { VariableTable, type VariableTableItem } from "./variable-table";
 export { SecretInput, SavedSecretInput } from "./secret-input";
 
 export { configureEditorThemes } from "./editor-theme";
+export { useLiveOptions } from "./use-live-options";

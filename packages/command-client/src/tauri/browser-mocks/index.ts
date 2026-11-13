@@ -33,6 +33,7 @@ export async function mockInvoke<T>(
   command: string,
   args?: Record<string, unknown>,
 ): Promise<T> {
+  if (args?.temporaryHandle != null) throw { code: "SSH_TUNNEL_TEMPORARY_UNAVAILABLE" };
   for (const handler of mockHandlers) {
     const result = await handler<T>(command, args);
     if (result !== UNHANDLED) {

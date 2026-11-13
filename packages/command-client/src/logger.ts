@@ -33,6 +33,8 @@ const sensitiveKeys = new Set([
   "private_key",
   "api_key",
   "license_key",
+  "temporaryhandle",
+  "temporaryredispassword",
 ]);
 
 function isTauriRuntime() {

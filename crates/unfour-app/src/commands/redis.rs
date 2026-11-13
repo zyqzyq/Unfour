@@ -41,10 +41,12 @@ pub async fn redis_connection_delete(
 pub async fn redis_connection_test_input(
     input: RedisConnectionInput,
     secret: Option<String>,
+    temporary_handle: Option<String>,
     state: State<'_, AppState>,
 ) -> AppResult<()> {
     state
         .command_bus
+        .with_redis_temporary_route(&input.workspace_id, temporary_handle.as_deref(), None)?
         .test_redis_connection_input(input, secret)
         .await
 }
@@ -56,10 +58,17 @@ pub async fn redis_key_inspect(
     key_base64: String,
     field_base64: Option<String>,
     expected_revision: Option<i64>,
+    temporary_handle: Option<String>,
+    temporary_redis_password: Option<String>,
     state: State<'_, AppState>,
 ) -> AppResult<RedisKeyInfo> {
     state
         .command_bus
+        .with_redis_temporary_route(
+            &workspace_id,
+            temporary_handle.as_deref(),
+            temporary_redis_password,
+        )?
         .inspect_redis_key(
             &workspace_id,
             &connection_id,
@@ -77,10 +86,17 @@ pub async fn redis_keys_scan(
     cursor: String,
     pattern: String,
     expected_revision: Option<i64>,
+    temporary_handle: Option<String>,
+    temporary_redis_password: Option<String>,
     state: State<'_, AppState>,
 ) -> AppResult<RedisScanPage> {
     state
         .command_bus
+        .with_redis_temporary_route(
+            &workspace_id,
+            temporary_handle.as_deref(),
+            temporary_redis_password,
+        )?
         .scan_redis_keys(
             &workspace_id,
             &connection_id,
@@ -103,10 +119,17 @@ pub async fn redis_collection_browse(
     descending: bool,
     expected_revision: i64,
     start_index: Option<u64>,
+    temporary_handle: Option<String>,
+    temporary_redis_password: Option<String>,
     state: State<'_, AppState>,
 ) -> AppResult<RedisCollectionPage> {
     state
         .command_bus
+        .with_redis_temporary_route(
+            &workspace_id,
+            temporary_handle.as_deref(),
+            temporary_redis_password,
+        )?
         .browse_redis_collection(
             &workspace_id,
             &connection_id,
@@ -129,10 +152,17 @@ pub async fn redis_key_mutate(
     mutation: RedisMutation,
     expected_revision: i64,
     confirmed: bool,
+    temporary_handle: Option<String>,
+    temporary_redis_password: Option<String>,
     state: State<'_, AppState>,
 ) -> AppResult<()> {
     state
         .command_bus
+        .with_redis_temporary_route(
+            &workspace_id,
+            temporary_handle.as_deref(),
+            temporary_redis_password,
+        )?
         .mutate_redis_key(
             &workspace_id,
             &connection_id,

@@ -8,6 +8,8 @@ import { act, renderHook } from "@testing-library/react";
 import type { useDatabaseTabs } from "./useDatabaseTabs";
 
 vi.mock("@unfour/command-client", () => ({
+  connectionTemporaryHandle: vi.fn(),
+  bindTemporaryHandle: vi.fn(),
   createCredential: vi.fn(),
   deleteDatabaseConnection: vi.fn(),
   listDatabaseConnections: vi.fn(),
@@ -18,6 +20,7 @@ vi.mock("@unfour/command-client", () => ({
 }));
 
 import {
+  bindTemporaryHandle,
   createCredential,
   listDatabaseConnections,
   rotateCredential,
@@ -126,6 +129,17 @@ beforeEach(() => {
 afterEach(() => vi.resetAllMocks());
 
 describe("database credential save", () => {
+  it("applies a live session override while the persistent jump is missing without updating that definition", async () => {
+    const existing = persisted({ sshConnectionId: "missing-saved-jump", sshRevision: 6 });
+    const { Wrapper } = createWrapper(existing);
+    const { result } = renderHook(() => useEditorSession("ws-current", existing.id), { wrapper: Wrapper });
+    await act(async () => {
+      await result.current.mutations.saveMutation.mutateAsync({ input: { ...databaseConnectionToInput(existing, "ws-current"),
+        temporaryHandle: "current-session" }, secret: "" });
+    });
+    expect(bindTemporaryHandle).toHaveBeenCalledWith("database", "ws-current", existing.id, "current-session");
+    expect(saveMock).not.toHaveBeenCalled();
+  });
   it("does not hydrate an old save result after the editor switches workspace", async () => {
     const existing = persisted({ credentialRef: CURRENT_REF });
     let finishSave!: (connection: DatabaseConnection) => void;

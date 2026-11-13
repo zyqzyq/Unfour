@@ -7,13 +7,14 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 use unfour_core::models::{
     DatabaseBrowseInput, DatabaseBrowseResult, DatabaseCellValue, DatabaseConnection,
-    DatabaseConnectionConfig, DatabaseConnectionInput, DatabaseExportContent, DatabaseExportFilter,
-    DatabaseExportFilterOp, DatabaseExportFormat, DatabaseExportTableInput,
-    DatabaseExportTableResult, DatabaseForeignKey, DatabaseIndex, DatabaseQueryInput,
-    DatabaseQueryResult, DatabaseQuerySafety, DatabaseResultColumn, DatabaseRowMutationInput,
-    DatabaseRowMutationResult, DatabaseSchema, DatabaseTable, DatabaseTableColumn,
-    DatabaseTableList, DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTableSummary,
-    DatabaseTestResult, DbQueryHistoryEntry, DbQueryHistoryRecordInput, SavedSql, SavedSqlInput,
+    DatabaseConnectionConfig, DatabaseConnectionInput, DatabaseConnectionVersion,
+    DatabaseExportContent, DatabaseExportFilter, DatabaseExportFilterOp, DatabaseExportFormat,
+    DatabaseExportTableInput, DatabaseExportTableResult, DatabaseForeignKey, DatabaseIndex,
+    DatabaseQueryInput, DatabaseQueryResult, DatabaseQuerySafety, DatabaseResultColumn,
+    DatabaseRowMutationInput, DatabaseRowMutationResult, DatabaseSchema, DatabaseTable,
+    DatabaseTableColumn, DatabaseTableList, DatabaseTableStructure, DatabaseTableStructureInput,
+    DatabaseTableSummary, DatabaseTestResult, DbQueryHistoryEntry, DbQueryHistoryRecordInput,
+    SavedSql, SavedSqlInput,
 };
 use unfour_core::redaction::redact_connection_string;
 use unfour_core::{AppError, AppResult};
@@ -43,6 +44,7 @@ mod sql;
 mod sql_safety;
 mod sqlite;
 mod tables;
+mod tunnel;
 
 use connection_config::*;
 pub use connection_domain::DatabaseConnectionCleanup;
@@ -59,11 +61,16 @@ pub use sql_safety::{
     sql_is_proven_read_for_driver, sql_is_single_statement, sql_is_single_statement_for_driver,
 };
 use sqlite::*;
+pub use tunnel::DatabaseTunnelResolver;
 
 #[derive(Clone)]
 pub struct DatabaseService {
     pub(super) db: LocalDb,
     pub(super) secret_store: Option<SecretStore>,
+    tunnel_resolver: Option<std::sync::Arc<dyn DatabaseTunnelResolver>>,
+    temporary_handle: Option<String>,
+    expected_connection: Option<DatabaseConnectionVersion>,
+    draft_source: Option<DatabaseConnection>,
 }
 
 impl DatabaseService {
@@ -71,6 +78,10 @@ impl DatabaseService {
         Self {
             db,
             secret_store: None,
+            tunnel_resolver: None,
+            temporary_handle: None,
+            expected_connection: None,
+            draft_source: None,
         }
     }
 

@@ -14,6 +14,8 @@ libsqlite3-sys = "0.30.1"
 futures-util = "0.3"
 # Exact NUMERIC/DECIMAL decoding keeps SQL and JSON table exports lossless.
 sqlx = { version = "0.8", default-features = false, features = ["bigdecimal", "chrono", "json", "macros", "mysql", "postgres", "runtime-tokio-rustls", "sqlite", "uuid"] }
+# The pool socket factory is supplied by the workspace's pinned SQLx patch.
+sqlx-core = { version = "=0.8.6", default-features = false }
 tokio = { version = "1", default-features = false, features = ["time"] }
 unfour-core = { path = "../unfour-core" }
 unfour-diag = { path = "../unfour-diag" }

@@ -1,6 +1,11 @@
 {
   "network": {
+    "temporarySession": "Bastion session · {id}",
+    "temporaryUnavailable": "Selected bastion session unavailable",
+    "temporaryHelp": "This window uses the selected live session. If it closes, select another route to continue.",
     "errors": {
+      "SSH_TUNNEL_TEMPORARY_UNAVAILABLE": "The selected bastion session is unavailable in this workspace. Select an active session before retrying.",
+      "SSH_TUNNEL_FORWARD_BUSY": "Too many forwarding requests are awaiting a reply from this bastion. Try again after a request finishes.",
       "SSH_TUNNEL_UNAVAILABLE": "This build does not include native SSH forwarding.",
       "SSH_TUNNEL_CONNECT_FAILED": "Could not connect to the SSH host. Check the saved SSH connection.",
       "SSH_TUNNEL_HOST_KEY_CHANGED": "The SSH host key has changed. Review the host in SSH before reconnecting.",
@@ -17,6 +22,7 @@
   },
   "redis": {
     "route": {
+      "temporaryPassword": "Redis password for this session",
       "label": "Network route", "direct": "Direct", "via": "Via SSH · {name}",
       "missing": "SSH connection unavailable", "loading": "Loading SSH connections…",
       "noConnections": "To use a tunnel, save an SSH connection in this workspace.",
@@ -1304,7 +1310,7 @@
       "copySessionLog": "Copy Session Log",
       "duplicateSession": "Duplicate / Open in New Tab",
       "reconnectSession": "Reconnect",
-      "reconnectHint": "Disconnects this session and opens a new connection immediately. No extra confirmation.",
+      "reconnectHint": "Opens a new connection through the same route, then closes this session.",
       "newConnection": "New Connection",
       "newConnectionAria": "New SSH connection",
       "newSession": "New Session",

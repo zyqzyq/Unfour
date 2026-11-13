@@ -3,13 +3,13 @@ import type { ReactNode } from "react";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getDatabaseSchema, listDatabaseCatalogs, type DatabaseConnection, type DatabaseSchema } from "@unfour/command-client";
+import { databaseRouteVersion, getDatabaseSchema, listDatabaseCatalogs, type DatabaseConnection, type DatabaseSchema } from "@unfour/command-client";
 import type { DatabaseConnectionSessionState } from "../model/types";
 import { useDatabaseSchemaTreeActions } from "./useDatabaseSchemaTreeActions";
 import { useDatabaseTreeController, useDatabaseTreeRootLoading, useDatabaseTreeSynchronization } from "./useDatabaseTreeController";
 import { connection, deferred, schema, table } from "./database-controller.test-fixtures";
 
-vi.mock("@unfour/command-client", () => ({ getDatabaseSchema: vi.fn(), listDatabaseCatalogs: vi.fn() }));
+vi.mock("@unfour/command-client", () => ({ databaseActionContext: () => ({ routeVersion: 0 }), databaseRouteVersion: vi.fn(() => 0), getDatabaseSchema: vi.fn(), listDatabaseCatalogs: vi.fn() }));
 
 const postgres = connection("pg", "postgres");
 const mysql = connection("mysql", "mysql");
@@ -58,16 +58,25 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("database tree orchestration", () => {
+  it("discards a lazy schema completion from a previously selected route", async () => {
+    const { result } = setup({ active: false, selected: null, states: {} });
+    const reply = deferred<DatabaseSchema>();
+    schemaMock.mockReturnValueOnce(reply.promise);
+    act(() => result.current.loadCatalogSchema("pg", "analytics"));
+    vi.mocked(databaseRouteVersion).mockReturnValue(1);
+    await act(async () => reply.resolve(schema("pg", table("analytics", "old-host-table"))));
+    expect(result.current.treeSchemaCache["pg::analytics"]).toBeUndefined();
+  });
   it("loads every connected root, keeps other catalogs lazy and merges simultaneous completions", async () => {
     const pgCatalog = deferred<DatabaseSchema>();
     const mysqlCatalog = deferred<DatabaseSchema>();
     const { result, client, rootLoads } = setup();
     await waitFor(() => expect(result.current.treeSchemaCache["sqlite::"]).toBeDefined());
     await waitFor(() => expect(result.current.catalogNamesByConn).toEqual({ pg: ["app", "analytics"], mysql: ["app", "archive"] }));
-    expect(schemaMock.mock.calls).toEqual(expect.arrayContaining([["ws", "pg", null], ["ws", "sqlite", null]]));
-    expect(schemaMock).not.toHaveBeenCalledWith("ws", "pg", "analytics");
-    expect(schemaMock).not.toHaveBeenCalledWith("ws", "mysql", null);
-    expect(catalogsMock).not.toHaveBeenCalledWith("ws", "sqlite");
+    expect(schemaMock.mock.calls).toEqual(expect.arrayContaining([["ws", "pg", null, { routeVersion: 0 }], ["ws", "sqlite", null, { routeVersion: 0 }]]));
+    expect(schemaMock).not.toHaveBeenCalledWith("ws", "pg", "analytics", expect.anything());
+    expect(schemaMock).not.toHaveBeenCalledWith("ws", "mysql", null, expect.anything());
+    expect(catalogsMock).not.toHaveBeenCalledWith("ws", "sqlite", expect.anything());
     const initialRoots = rootLoads.mock.calls.length;
     schemaMock.mockImplementation((_workspace, id) => id === "pg" ? pgCatalog.promise : mysqlCatalog.promise);
     act(() => {
@@ -84,8 +93,8 @@ describe("database tree orchestration", () => {
     expect(rootLoads).toHaveBeenCalledTimes(initialRoots);
     act(() => result.current.loadCatalogSchema("pg", "analytics"));
     expect(schemaMock.mock.calls.filter(([, id, catalog]) => id === "pg" && catalog === "analytics")).toHaveLength(1);
-    expect(client.getQueryData(["database-schema", "ws", "pg", "analytics"])).toEqual(result.current.treeSchemaCache["pg::analytics"]);
-    expect(client.getQueryData(["database-catalogs", "ws", "mysql"])).toEqual(["app", "archive"]);
+    expect(client.getQueryData(["database-schema", "ws", "pg", "analytics", { routeVersion: 0 }])).toEqual(result.current.treeSchemaCache["pg::analytics"]);
+    expect(client.getQueryData(["database-catalogs", "ws", "mysql", { routeVersion: 0 }])).toEqual(["app", "archive"]);
   });
 
   it("keeps per-connection schemas across selection and inactivity, including MySQL grouping and empty SQLite", async () => {
@@ -109,7 +118,7 @@ describe("database tree orchestration", () => {
     await waitFor(() => expect(result.current.visibleSchema?.connectionId).toBe("pg"));
     expect(result.current.treeSchemaCache["mysql::archive"].tables[0].name).toBe("events");
     expect(setConnectionState).toHaveBeenCalledWith("pg", expect.objectContaining({ status: "connected" }));
-    act(() => { client.setQueryData(["database-schema", "ws", "sqlite", null], schema("sqlite")); });
+    act(() => { client.setQueryData(["database-schema", "ws", "sqlite", null, { routeVersion: 0 }], schema("sqlite")); });
     rerender({ active: true, selected: sqlite, states: connected });
     await waitFor(() => expect(result.current.treeSchemaCache["sqlite::"].tables).toEqual([]));
   });
@@ -138,7 +147,7 @@ describe("database tree orchestration", () => {
     }));
     rerender({ active: false, selected: postgres, states: connected });
     setConnectionState.mockClear();
-    act(() => { client.setQueryData(["database-schema", "ws", "pg", null], schema("pg", table("app"))); });
+    act(() => { client.setQueryData(["database-schema", "ws", "pg", null, { routeVersion: 0 }], schema("pg", table("app"))); });
     await waitFor(() => expect(result.current.treeSchemaCache["pg::app"]).toBeDefined());
     expect(result.current.visibleSchema).toBeUndefined();
     expect(setConnectionState).not.toHaveBeenCalled();
