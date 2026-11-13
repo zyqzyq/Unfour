@@ -6,6 +6,7 @@ export {
 export { Button, type ButtonProps } from "./button";
 export { ConfirmDialog } from "./confirm-dialog";
 export { DataTable, type DataTableColumn, type DataTableSelection } from "./data-table";
+export { serializeDelimitedCell } from "./data-table-clipboard";
 export { Dialog, DialogClose, DialogTrigger } from "./dialog-primitives";
 export {
   DialogBody,

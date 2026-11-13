@@ -1,11 +1,32 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { DataTable } from "./data-table";
+import { useState } from "react";
+import { DataTable, type DataTableSelection } from "./data-table";
 
 afterEach(cleanup);
 
 describe("DataTable", () => {
+  it("copies visible text from formatted columns in positional order after extending a selection backwards", () => {
+    function Grid() {
+      const [selection, setSelection] = useState<DataTableSelection | null>(null);
+      return <DataTable columns={[
+        { id: "count", header: "Count", cell: (row) => <strong>{row.count}</strong> },
+        { id: "name", header: "Name", cell: (row) => row.name },
+      ]} rows={[{ count: 1, name: "one" }, { count: 2, name: "two" }, { count: 3, name: "three" }]}
+        selection={selection} onSelectionChange={setSelection} />;
+    }
+    render(<Grid />);
+    const start = screen.getByText("three");
+    fireEvent.click(start);
+    fireEvent.keyDown(start, { key: "ArrowUp", shiftKey: true });
+    fireEvent.keyDown(start, { key: "ArrowUp", shiftKey: true });
+    fireEvent.keyDown(start, { key: "ArrowLeft", shiftKey: true });
+    const clipboardData = { setData: vi.fn() };
+    fireEvent.copy(start, { clipboardData });
+    expect(clipboardData.setData).toHaveBeenCalledWith("text/plain", "1\tone\r\n2\ttwo\r\n3\tthree");
+  });
+
   it("keeps explicit column widths shared by header and body cells", () => {
     render(
       <DataTable

@@ -1,4 +1,5 @@
 import * as React from "react";
+import { serializeDelimitedCell } from "./data-table-clipboard";
 import { cn } from "./utils";
 
 export type DataTableColumn<T> = {
@@ -6,6 +7,8 @@ export type DataTableColumn<T> = {
   /** Target width in px when the resize handle is double-clicked. */
   autoFitWidth?: number;
   cell?: (row: T, rowIndex: number) => React.ReactNode;
+  /** Raw clipboard value. Set false to omit an action column; by default copy the cell's visible text. */
+  copyValue?: ((row: T, rowIndex: number) => string | null) | false;
   id: string;
   header: React.ReactNode;
   meta?: React.ReactNode;
@@ -24,13 +27,9 @@ export type DataTableSelection = {
   startCol: number;
 };
 
-function normalizeSelection(a: DataTableSelection, b: DataTableSelection): DataTableSelection {
-  return {
-    startRow: Math.min(a.startRow, b.startRow),
-    endRow: Math.max(a.startRow, b.endRow),
-    startCol: Math.min(a.startCol, b.startCol),
-    endCol: Math.max(a.endCol, b.endCol),
-  };
+function isEditingCell(target: EventTarget) {
+  return target instanceof HTMLElement
+    && (target.isContentEditable || Boolean(target.closest("input,textarea,select,[role=combobox]")));
 }
 
 export function DataTable<T>({
@@ -81,38 +80,33 @@ export function DataTable<T>({
     (rowIndex: number, colIndex: number, e: React.MouseEvent) => {
       if (!isSelectable) return;
       const sel: DataTableSelection = { startRow: rowIndex, endRow: rowIndex, startCol: colIndex, endCol: colIndex };
-      onSelectionChange?.(e.shiftKey && selection ? normalizeSelection(selection, sel) : sel);
+      onSelectionChange?.(e.shiftKey && selection ? { ...selection, endRow: rowIndex, endCol: colIndex } : sel);
     },
     [isSelectable, onSelectionChange, selection],
   );
 
   const handleKeyDown = React.useCallback(
     (e: React.KeyboardEvent) => {
-      if (!isSelectable || !selection) return;
+      if (!isSelectable || !selection || e.defaultPrevented || isEditingCell(e.target)) return;
       const { startRow, endRow, startCol, endCol } = selection;
-      const row = e.shiftKey ? endRow : startRow;
-      const col = e.shiftKey ? endCol : startCol;
-      let next: DataTableSelection | undefined;
+      let row = e.shiftKey ? endRow : startRow;
+      let col = e.shiftKey ? endCol : startCol;
 
       switch (e.key) {
-        case "ArrowUp": next = { ...selection, endRow: Math.max(0, row - 1) }; break;
-        case "ArrowDown": next = { ...selection, endRow: Math.min(rows.length - 1, row + 1) }; break;
-        case "ArrowLeft": next = { ...selection, endCol: Math.max(0, col - 1) }; break;
-        case "ArrowRight": next = { ...selection, endCol: Math.min(columns.length - 1, col + 1) }; break;
+        case "ArrowUp": row = Math.max(0, row - 1); break;
+        case "ArrowDown": row = Math.min(rows.length - 1, row + 1); break;
+        case "ArrowLeft": col = Math.max(0, col - 1); break;
+        case "ArrowRight": col = Math.min(columns.length - 1, col + 1); break;
         case "Escape": onSelectionChange?.(null); return;
-        case "c":
-        case "C":
-          if (e.ctrlKey || e.metaKey) {
-            e.preventDefault();
-            copySelectionToClipboard(selection, columns, rows, tableRef.current);
-          }
-          return;
         default: return;
       }
-      if (next) {
-        e.preventDefault();
-        onSelectionChange?.(e.shiftKey ? normalizeSelection(selection, next) : { startRow: next.endRow, endRow: next.endRow, startCol: next.endCol, endCol: next.endCol });
-      }
+      e.preventDefault();
+      onSelectionChange?.({
+        startRow: e.shiftKey ? startRow : row,
+        startCol: e.shiftKey ? startCol : col,
+        endRow: row,
+        endCol: col,
+      });
     },
     [isSelectable, selection, columns, rows, onSelectionChange],
   );
@@ -175,11 +169,8 @@ export function DataTable<T>({
   const isSelected = React.useCallback(
     (rowIndex: number, colIndex: number) => {
       if (!selection) return false;
-      const n = selection.startRow <= selection.endRow
-        ? selection
-        : { startRow: selection.endRow, endRow: selection.startRow, startCol: selection.startCol, endCol: selection.endCol };
-      const colNorm = n.startCol <= n.endCol ? n : { ...n, startCol: n.endCol, endCol: n.startCol };
-      return rowIndex >= n.startRow && rowIndex <= n.endRow && colIndex >= colNorm.startCol && colIndex <= colNorm.endCol;
+      return rowIndex >= Math.min(selection.startRow, selection.endRow) && rowIndex <= Math.max(selection.startRow, selection.endRow)
+        && colIndex >= Math.min(selection.startCol, selection.endCol) && colIndex <= Math.max(selection.startCol, selection.endCol);
     },
     [selection],
   );
@@ -187,6 +178,13 @@ export function DataTable<T>({
   return (
     <div
       className={cn("min-h-0 overflow-auto", className)}
+      onCopy={(event) => {
+        if (!isSelectable || !selection || event.defaultPrevented || isEditingCell(event.target)) return;
+        const text = selectedCellText(selection, columns, rows, tableRef.current);
+        if (text === null) return;
+        event.clipboardData.setData("text/plain", text);
+        event.preventDefault();
+      }}
       onKeyDown={handleKeyDown}
       tabIndex={isSelectable ? 0 : undefined}
     >
@@ -265,20 +263,23 @@ export function DataTable<T>({
                 className="border-b border-[color:color-mix(in_srgb,var(--u-color-border)_62%,transparent)] hover:bg-[var(--u-color-surface-hover)]"
                 key={getRowKey?.(row, rowIndex) ?? rowIndex}
               >
-                {columns.map((column, colIndex) => (
-                  <td
-                    className={cn(
-                      "box-border h-[var(--u-size-table-row)] truncate border-r border-[var(--u-color-border)] px-3 text-[var(--u-color-text)] last:border-r-0",
-                      column.align === "right" && "text-right",
-                      isSelected(rowIndex, colIndex) && "bg-[color:color-mix(in_srgb,var(--u-color-primary)_12%,var(--u-color-surface))]",
-                    )}
-                    key={column.id}
-                    onClick={(e) => handleCellClick(rowIndex, colIndex, e)}
-                    title={String(column.cell?.(row, rowIndex) ?? "")}
-                  >
-                    {column.cell ? column.cell(row, rowIndex) : null}
-                  </td>
-                ))}
+                {columns.map((column, colIndex) => {
+                  const content = column.cell?.(row, rowIndex);
+                  return (
+                    <td
+                      className={cn(
+                        "box-border h-[var(--u-size-table-row)] truncate border-r border-[var(--u-color-border)] px-3 text-[var(--u-color-text)] last:border-r-0",
+                        column.align === "right" && "text-right",
+                        isSelected(rowIndex, colIndex) && "bg-[color:color-mix(in_srgb,var(--u-color-primary)_12%,var(--u-color-surface))]",
+                      )}
+                      key={column.id}
+                      onClick={(e) => handleCellClick(rowIndex, colIndex, e)}
+                      title={typeof content === "string" || typeof content === "number" ? String(content) : undefined}
+                    >
+                      {content}
+                    </td>
+                  );
+                })}
               </tr>
             ))
           )}
@@ -288,47 +289,26 @@ export function DataTable<T>({
   );
 }
 
-/** Copy selected cells as tab-separated values to clipboard. */
-function copySelectionToClipboard<T>(
+function selectedCellText<T>(
   selection: DataTableSelection,
   columns: DataTableColumn<T>[],
   rows: T[],
-  tableEl: HTMLTableElement | null,
-) {
-  const minRow = Math.min(selection.startRow, selection.endRow);
-  const maxRow = Math.max(selection.startRow, selection.endRow);
-  const minCol = Math.min(selection.startCol, selection.endCol);
-  const maxCol = Math.max(selection.startCol, selection.endCol);
-
+  table: HTMLTableElement | null,
+): string | null {
+  const minRow = Math.max(0, Math.min(selection.startRow, selection.endRow));
+  const maxRow = Math.min(rows.length - 1, Math.max(selection.startRow, selection.endRow));
+  const minCol = Math.max(0, Math.min(selection.startCol, selection.endCol));
+  const maxCol = Math.min(columns.length - 1, Math.max(selection.startCol, selection.endCol));
   const lines: string[] = [];
-  for (let r = minRow; r <= maxRow; r++) {
+  for (let row = minRow; row <= maxRow; row++) {
     const cells: string[] = [];
-    for (let c = minCol; c <= maxCol; c++) {
-      const col = columns[c];
-      const row = rows[r];
-      const text = col?.cell ? String(col.cell(row, r) ?? "") : "";
-      cells.push(text.includes("\t") ? `"${text}"` : text);
+    for (let col = minCol; col <= maxCol; col++) {
+      const { copyValue } = columns[col];
+      if (copyValue === false) continue;
+      const value = copyValue ? copyValue(rows[row], row) : table?.tBodies[0]?.rows[row]?.cells[col]?.textContent;
+      cells.push(serializeDelimitedCell(value, "\t"));
     }
-    lines.push(cells.join("\t"));
+    if (cells.length) lines.push(cells.join("\t"));
   }
-
-  navigator.clipboard?.writeText(lines.join("\n")).catch(() => {
-    // Fallback: select the table cells so the browser can copy
-    const sel = window.getSelection();
-    if (!sel || !tableEl) return;
-    // Try to use the table cells as a selection range
-    const range = document.createRange();
-    try {
-      const startCell = tableEl.rows[minRow + 1]?.cells[minCol];
-      const endCell = tableEl.rows[maxRow + 1]?.cells[maxCol];
-      if (startCell && endCell) {
-        range.setStart(startCell, 0);
-        range.setEnd(endCell, 0);
-        sel.removeAllRanges();
-        sel.addRange(range);
-      }
-    } catch {
-      // ignore
-    }
-  });
+  return lines.length ? lines.join("\r\n") : null;
 }
