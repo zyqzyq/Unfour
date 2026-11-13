@@ -101,6 +101,13 @@ jobs:
         if: matrix.task == 'check'
         run: cargo check --workspace
 
+      - name: Verify staged MCP sidecar
+        if: matrix.task == 'check'
+        run: |
+          host=$(rustc -vV | sed -n 's/^host: //p')
+          test -x target/debug/unfour-mcp
+          cmp "apps/desktop/src-tauri/binaries/unfour-mcp-$host" target/debug/unfour-mcp
+
       - name: cargo check (ssh-native)
         if: matrix.task == 'check'
         run: cargo check -p unfour --features ssh-native

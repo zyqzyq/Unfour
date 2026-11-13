@@ -16,7 +16,8 @@ name = "unfour_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+# Cargo 1.100 changed OUT_DIR; older helpers stage sidecars in the build directory.
+tauri-build = "2.7.1"
 # Bind the Store desktop metadata to the exact MCP binary staged alongside it.
 sha2 = "0.10"
 
