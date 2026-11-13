@@ -20,6 +20,7 @@ export function RedisConnectionDialog({ workspaceId, original, latest, initialNa
     workspaceId, id: original?.id, expectedRevision: original?.revision,
     name: original?.name ?? initialName, host: original?.host ?? "127.0.0.1", port: original?.port ?? 6379,
     dbIndex: original?.dbIndex ?? 0, username: original?.username ?? null, tls: original?.tls ?? false,
+    allowWrites: original?.allowWrites ?? false,
   }));
   const [password, setPassword] = useState("");
   const [clear, setClear] = useState(false);
@@ -30,7 +31,9 @@ export function RedisConnectionDialog({ workspaceId, original, latest, initialNa
   const valid = form.name.trim() && form.host.trim() && Number.isInteger(form.port) && form.port > 0 && form.port <= 65535 && Number.isSafeInteger(form.dbIndex) && form.dbIndex >= 0;
 
   function edit(patch: Partial<RedisConnectionInput>) {
-    setForm((current) => ({ ...current, ...patch })); setTested(false); setError("");
+    const changesTarget = ["host", "port", "username", "tls", "dbIndex"].some((key) => key in patch);
+    setForm((current) => ({ ...current, ...patch, ...(changesTarget && { allowWrites: false }) }));
+    setTested(false); setError("");
   }
   async function submit(action: "save" | "test") {
     if (!valid || pending || changed) return;
@@ -61,6 +64,7 @@ export function RedisConnectionDialog({ workspaceId, original, latest, initialNa
             <Field label={t("database.fields.password")}><SecretInput value={password} placeholder={original?.hasPassword && !clear ? t("database.fields.passwordKeep") : undefined} onChange={(event) => { setPassword(event.target.value); setClear(false); setTested(false); }} /></Field>
             {original?.hasPassword && <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={clear} onChange={(event) => { setClear(event.target.checked); setPassword(""); setTested(false); }} />{t("common.secret.clear")}</label>}
             <label className="flex items-center gap-2 text-xs"><input className="accent-[var(--u-color-primary)]" type="checkbox" checked={form.tls} onChange={(event) => edit({ tls: event.target.checked })} />{t("redis.tls")}</label>
+            <label className="flex items-center gap-2 text-xs"><input className="accent-[var(--u-color-primary)]" type="checkbox" checked={form.allowWrites ?? false} onChange={(event) => edit({ allowWrites: event.target.checked })} />{t("redis.write.allow")}</label>
             {changed && <p role="alert" className="text-xs">{t("common.externalChange")}</p>}
             {error && <p role="alert" className="select-text text-xs text-[var(--u-color-danger)]">{error}</p>}
             {tested && <p role="status" className="text-xs text-[var(--u-color-success)]">{t("database.connection.testSuccess")}</p>}

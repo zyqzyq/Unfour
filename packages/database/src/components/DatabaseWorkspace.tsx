@@ -34,6 +34,7 @@ export function DatabaseWorkspace({
   redisConnections = [],
   redisPending,
   redisListFailed,
+  onRefreshRedisConnections,
   onCreateRedisFlow,
   executePending,
   history,
@@ -81,6 +82,7 @@ export function DatabaseWorkspace({
   redisConnections?: RedisConnection[];
   redisPending?: boolean;
   redisListFailed?: boolean;
+  onRefreshRedisConnections?: () => Promise<unknown>;
   onCreateRedisFlow?: (intent: RedisFlowIntent) => void;
   executePending: boolean;
   history: SqlHistoryEntry[];
@@ -199,8 +201,8 @@ export function DatabaseWorkspace({
       />
       {tabs.some((tab) => tab.id === blockedCloseId && tab.kind === "query" && tab.loading) ? <div role="status" className="px-2 py-1 text-[12px]">{t("database.batch.closeRunning")}</div> : null}
       <div className="flex min-h-0 flex-1 flex-col">
-        <RedisTabPanes tabs={tabs} activeId={activeTabId} workspaceId={workspaceId} connections={redisConnections}
-          pending={redisPending} failed={redisListFailed} onCreateFlow={onCreateRedisFlow} />
+        <RedisTabPanes active={active} tabs={tabs} activeId={activeTabId} workspaceId={workspaceId} connections={redisConnections}
+          pending={redisPending} failed={redisListFailed} onRefreshConnections={onRefreshRedisConnections} onCreateFlow={onCreateRedisFlow} />
         {/* Table branch — keep mounted, toggle visibility to avoid remount flash */}
         <div className={showTable ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
           {renderTable && (
@@ -347,20 +349,22 @@ function databaseTabItem(tab: DatabaseWorkspaceTab, redisConnections: RedisConne
   return { id: tab.id, title: tab.title, loading: Boolean(tab.loading), meta };
 }
 
-function RedisTabPanes({ tabs, activeId, workspaceId, connections, pending, failed, onCreateFlow }: {
+function RedisTabPanes({ active, tabs, activeId, workspaceId, connections, pending, failed, onCreateFlow, onRefreshConnections }: {
+  active: boolean;
   tabs: DatabaseWorkspaceTab[];
   activeId: string;
   workspaceId: string;
   connections: RedisConnection[];
   pending?: boolean;
   failed?: boolean;
+  onRefreshConnections?: () => Promise<unknown>;
   onCreateFlow?: (intent: RedisFlowIntent) => void;
 }) {
   const { t } = useI18n();
   return tabs.filter((tab) => tab.kind === "redis").map((tab) => {
     const connection = connections.find((c) => c.id === tab.connectionId && c.workspaceId === workspaceId);
     return <div key={tab.id} className={activeId === tab.id ? "min-h-0 flex-1" : "hidden"}>
-      {connection ? <RedisKeyBrowser connection={connection} onCreateFlow={onCreateFlow} /> :
+      {connection ? <RedisKeyBrowser active={active && activeId === tab.id} connection={connection} onCreateFlow={onCreateFlow} onRefreshConnections={onRefreshConnections} /> :
         <p role="status" className="p-3 text-xs">{t(pending ? "database.start.loading" : failed ? "redis.listFailed" : "redis.unavailable")}</p>}
     </div>;
   });

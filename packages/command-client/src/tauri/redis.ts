@@ -1,4 +1,4 @@
-import type { RedisConnection, RedisConnectionInput, RedisKeyInfo, RedisScanPage } from "../types/redis";
+import type { RedisCollectionPage, RedisCollectionRequest, RedisConnection, RedisConnectionInput, RedisKeyInfo, RedisMutationRequest, RedisScanPage } from "../types/redis";
 import { call } from "./invoke";
 
 export function listRedisConnections(workspaceId: string) {
@@ -23,4 +23,12 @@ export function inspectRedisKey(workspaceId: string, connectionId: string, keyBa
 
 export function scanRedisKeys(workspaceId: string, connectionId: string, cursor: string, pattern: string, expectedRevision: number) {
   return call<RedisScanPage>("redis_keys_scan", { workspaceId, connectionId, cursor, pattern, expectedRevision });
+}
+
+export function browseRedisCollection(request: RedisCollectionRequest) {
+  return call<RedisCollectionPage>("redis_collection_browse", { ...request, startIndex: request.startIndex ?? null });
+}
+
+export function mutateRedisKey(request: RedisMutationRequest) {
+  return call<void>("redis_key_mutate", { ...request });
 }

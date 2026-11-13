@@ -1,5 +1,6 @@
 use crate::AppState;
 use tauri::State;
+use unfour_command_bus::{RedisCollectionKind, RedisCollectionPage, RedisMutation};
 use unfour_command_bus::{RedisConnection, RedisConnectionInput, RedisKeyInfo, RedisScanPage};
 use unfour_core::AppResult;
 
@@ -86,6 +87,59 @@ pub async fn redis_keys_scan(
             &cursor,
             &pattern,
             expected_revision,
+        )
+        .await
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn redis_collection_browse(
+    workspace_id: String,
+    connection_id: String,
+    key_base64: String,
+    kind: RedisCollectionKind,
+    cursor: String,
+    pattern: String,
+    descending: bool,
+    expected_revision: i64,
+    start_index: Option<u64>,
+    state: State<'_, AppState>,
+) -> AppResult<RedisCollectionPage> {
+    state
+        .command_bus
+        .browse_redis_collection(
+            &workspace_id,
+            &connection_id,
+            &key_base64,
+            kind,
+            &cursor,
+            &pattern,
+            descending,
+            expected_revision,
+            start_index,
+        )
+        .await
+}
+
+#[tauri::command]
+pub async fn redis_key_mutate(
+    workspace_id: String,
+    connection_id: String,
+    key_base64: String,
+    mutation: RedisMutation,
+    expected_revision: i64,
+    confirmed: bool,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    state
+        .command_bus
+        .mutate_redis_key(
+            &workspace_id,
+            &connection_id,
+            &key_base64,
+            mutation,
+            expected_revision,
+            confirmed,
         )
         .await
 }

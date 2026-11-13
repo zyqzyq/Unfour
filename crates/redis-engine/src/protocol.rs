@@ -1,4 +1,4 @@
-//! RESP2 shapes used by the read-only browser. Lengths are checked before allocating.
+//! RESP2 shapes used by the workbench. Lengths are checked before allocating.
 //! Connections are request-scoped, so a rejected frame can safely be abandoned.
 use super::{
     encoded, error, valid_cursor, RedisScanPage, MAX_KEY_BYTES, MAX_SCAN_BYTES, MAX_SCAN_KEYS,
@@ -64,6 +64,22 @@ fn number(bytes: &[u8]) -> AppResult<i64> {
         .ok_or_else(|| error("REDIS_PROTOCOL_ERROR"))
 }
 
+/// HPTTL and EXEC each return one reply for our single field or queued command.
+/// A null array is EXEC's optimistic conflict reply. The child reply is bounded.
+pub(super) async fn read_single_result(
+    reader: &mut (impl AsyncBufRead + Unpin),
+) -> AppResult<Option<Reply>> {
+    let (marker, length) = header(reader).await?;
+    if marker != b'*' {
+        return Err(error("REDIS_PROTOCOL_ERROR"));
+    }
+    match number(&length)? {
+        -1 => Ok(None),
+        1 => Ok(Some(read_reply(reader, 0).await?)),
+        _ => Err(error("REDIS_PROTOCOL_ERROR")),
+    }
+}
+
 async fn bulk(
     reader: &mut (impl AsyncBufRead + Unpin),
     field: &[u8],
@@ -111,9 +127,36 @@ async fn array_count(reader: &mut (impl AsyncBufRead + Unpin)) -> AppResult<usiz
     usize::try_from(number(&field)?).map_err(|_| error("REDIS_PROTOCOL_ERROR"))
 }
 
-pub(super) async fn read_scan(
+// Collection replies have at most two array levels (the outer scan envelope
+// and the list of elements). Validate lengths before allocating each buffer.
+pub(super) async fn read_collection_values(
     reader: &mut (impl AsyncBufRead + Unpin),
-) -> AppResult<RedisScanPage> {
+    scan: bool,
+    max_items: usize,
+) -> AppResult<(String, Vec<Vec<u8>>)> {
+    let cursor = if scan {
+        read_scan_cursor(reader).await?
+    } else {
+        String::new()
+    };
+    let count = array_count(reader).await?;
+    if count > max_items {
+        return Err(error("REDIS_RESPONSE_TOO_LARGE"));
+    }
+    let mut remaining = MAX_SCAN_BYTES;
+    let mut values = Vec::with_capacity(count);
+    for _ in 0..count {
+        let Reply::Bulk(Some(value)) = read_reply(reader, remaining.min(MAX_KEY_BYTES)).await?
+        else {
+            return Err(error("REDIS_PROTOCOL_ERROR"));
+        };
+        remaining -= value.len();
+        values.push(value);
+    }
+    Ok((cursor, values))
+}
+
+async fn read_scan_cursor(reader: &mut (impl AsyncBufRead + Unpin)) -> AppResult<String> {
     if array_count(reader).await? != 2 {
         return Err(error("REDIS_PROTOCOL_ERROR"));
     }
@@ -123,21 +166,15 @@ pub(super) async fn read_scan(
     if !valid_cursor(&cursor) {
         return Err(error("REDIS_PROTOCOL_ERROR"));
     }
-    let count = array_count(reader).await?;
-    if count > MAX_SCAN_KEYS {
-        return Err(error("REDIS_RESPONSE_TOO_LARGE"));
-    }
-    let mut keys = Vec::with_capacity(count);
-    let mut remaining = MAX_SCAN_BYTES;
-    for _ in 0..count {
-        let Reply::Bulk(Some(key)) = read_reply(reader, remaining.min(MAX_KEY_BYTES)).await? else {
-            return Err(error("REDIS_PROTOCOL_ERROR"));
-        };
-        remaining -= key.len();
-        keys.push(encoded(&key));
-    }
+    String::from_utf8(cursor).map_err(|_| error("REDIS_PROTOCOL_ERROR"))
+}
+
+pub(super) async fn read_scan(
+    reader: &mut (impl AsyncBufRead + Unpin),
+) -> AppResult<RedisScanPage> {
+    let (cursor, values) = read_collection_values(reader, true, MAX_SCAN_KEYS).await?;
     Ok(RedisScanPage {
-        cursor: String::from_utf8(cursor).map_err(|_| error("REDIS_PROTOCOL_ERROR"))?,
-        keys,
+        cursor,
+        keys: values.into_iter().map(|key| encoded(&key)).collect(),
     })
 }

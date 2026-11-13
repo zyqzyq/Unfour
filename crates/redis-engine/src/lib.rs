@@ -1,6 +1,8 @@
+mod browse;
 pub mod connections;
 pub mod exchange;
 mod inspect;
+mod mutation;
 mod protocol;
 mod session;
 
@@ -9,7 +11,9 @@ use serde::{Deserialize, Serialize};
 use session::Session;
 use unfour_core::{AppError, AppResult};
 
+pub use browse::{browse_collection, RedisCollectionKind, RedisCollectionPage, RedisCollectionRow};
 pub use inspect::{check_key, inspect_key};
+pub use mutation::{mutate_key, RedisMutation};
 
 const PREVIEW_BYTES: usize = 16 * 1024;
 const MAX_KEY_BYTES: usize = 64 * 1024;

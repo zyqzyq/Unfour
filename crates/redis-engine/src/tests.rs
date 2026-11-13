@@ -1,5 +1,9 @@
 use super::*;
+#[path = "tests/browse.rs"]
+mod collection_pages;
 use crate::protocol::Reply;
+#[path = "tests/mutation.rs"]
+mod mutation_tests;
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::TcpListener,
@@ -19,6 +23,13 @@ fn exchange(arguments: &[&[u8]], reply: &[u8]) -> Exchange {
 }
 
 async fn scripted(script: Vec<Exchange>) -> (RedisEndpoint, JoinHandle<()>) {
+    scripted_with_linger(script, std::time::Duration::ZERO).await
+}
+
+async fn scripted_with_linger(
+    script: Vec<Exchange>,
+    linger: std::time::Duration,
+) -> (RedisEndpoint, JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     let server = tokio::spawn(async move {
@@ -38,6 +49,9 @@ async fn scripted(script: Vec<Exchange>) -> (RedisEndpoint, JoinHandle<()>) {
                 assert_eq!(expected, argument);
             }
             reader.get_mut().write_all(&step.reply).await.unwrap();
+        }
+        if !linger.is_zero() {
+            tokio::time::sleep(linger).await;
         }
     });
     (

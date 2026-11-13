@@ -348,6 +348,7 @@ export function DatabasePage({
           redisConnections={redis.connections}
           redisPending={redis.query.isPending}
           redisListFailed={redis.query.isError}
+          onRefreshRedisConnections={() => redis.query.refetch({ throwOnError: true })}
           active={active}
           activeTab={activeTab}
           activeTabId={databaseTabs.activeTabId}

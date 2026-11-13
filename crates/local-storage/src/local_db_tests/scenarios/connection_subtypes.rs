@@ -1,6 +1,32 @@
 use super::*;
 
 #[tokio::test]
+async fn existing_redis_connections_upgrade_as_read_only() {
+    let db = test_db().await;
+    let mut old = core_migrator();
+    old.migrations = std::borrow::Cow::Owned(
+        old.iter()
+            .filter(|m| m.version < 20261113040000)
+            .cloned()
+            .collect(),
+    );
+    old.run(db.pool()).await.unwrap();
+    seed_workspace(&db, "w").await;
+    sqlx::raw_sql("INSERT INTO connections (id,workspace_id,connection_type,name,created_at,updated_at)
+        VALUES ('cache','w','redis','Cache','now','now');
+        INSERT INTO redis_connections (connection_id,workspace_id,db_index,tls) VALUES ('cache','w',3,0);")
+        .execute(db.pool()).await.unwrap();
+    db.migrate().await.unwrap();
+    let migrated: (i64, bool) = sqlx::query_as(
+        "SELECT db_index,allow_writes FROM redis_connections WHERE connection_id='cache'",
+    )
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(migrated, (3, false));
+}
+
+#[tokio::test]
 async fn redis_upgrade_preserves_live_foreign_keys_and_refreshes_database_connections() {
     let db = test_db().await;
     let mut old = core_migrator();

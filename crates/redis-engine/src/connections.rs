@@ -21,6 +21,7 @@ pub struct RedisConnection {
     pub db_index: u32,
     pub username: Option<String>,
     pub tls: bool,
+    pub allow_writes: bool,
     pub has_password: bool,
     pub revision: i64,
 }
@@ -36,6 +37,8 @@ pub struct RedisConnectionInput {
     pub db_index: u32,
     pub username: Option<String>,
     pub tls: bool,
+    /// Missing on older clients. Preserve local access only for the same target.
+    pub allow_writes: Option<bool>,
     pub expected_revision: Option<i64>,
 }
 
@@ -100,7 +103,7 @@ impl RedisConnectionInput {
 }
 
 const SELECT_CONNECTION: &str = "SELECT c.id,c.workspace_id,c.name,c.host,c.port,
-    r.db_index,r.username,r.tls,c.credential_ref IS NOT NULL AS has_password,c.revision,
+    r.db_index,r.username,r.tls,r.allow_writes,c.credential_ref IS NOT NULL AS has_password,c.revision,
     c.credential_ref FROM connections c
     JOIN redis_connections r ON r.connection_id=c.id AND r.workspace_id=c.workspace_id
     JOIN workspaces w ON w.id=c.workspace_id AND w.deleted_at IS NULL
@@ -170,17 +173,20 @@ pub async fn save_on(
     ensure_workspace_on(db, &input.workspace_id).await?;
     let now = Utc::now().to_rfc3339();
     let name = input.name.trim();
-    let (id, shared_changed) = if let Some(id) = input.id.as_deref() {
+    let (id, shared_changed, allow_writes) = if let Some(id) = input.id.as_deref() {
         let (current, old_ref) = get_on(db, &input.workspace_id, id).await?;
         input.check_existing(&current, credential.is_some())?;
-        let shared_changed = current.name != name
-            || current.host != input.host
+        let target_changed = current.host != input.host
             || current.port != input.port
             || current.tls != input.tls
             || current.db_index != input.db_index
             || current.username != input.username;
+        let shared_changed = target_changed || current.name != name;
+        let allow_writes = input
+            .allow_writes
+            .unwrap_or(current.allow_writes && !target_changed);
         let next_ref = credential.unwrap_or_else(|| old_ref.clone());
-        if !shared_changed && old_ref == next_ref {
+        if !shared_changed && old_ref == next_ref && current.allow_writes == allow_writes {
             return Ok(DomainCommandResult::unchanged(current));
         }
         sqlx::query("UPDATE connections SET name=?1,host=?2,port=?3,credential_ref=?4,revision=revision+1,
@@ -188,7 +194,7 @@ pub async fn save_on(
             sync_status=CASE WHEN ?5 THEN 'pending' ELSE sync_status END WHERE workspace_id=?7 AND id=?8")
             .bind(name).bind(&input.host).bind(input.port).bind(next_ref).bind(shared_changed)
             .bind(&now).bind(&input.workspace_id).bind(id).execute(&mut *db).await?;
-        (id.to_string(), shared_changed)
+        (id.to_string(), shared_changed, allow_writes)
     } else {
         if input.expected_revision.is_some() {
             return Err(AppError::RowConflict("REDIS_CONNECTION_CHANGED".into()));
@@ -198,11 +204,11 @@ pub async fn save_on(
             VALUES (?,?,'redis',?,?,?,?,?,?)")
             .bind(&id).bind(&input.workspace_id).bind(name).bind(&input.host).bind(input.port)
             .bind(credential.flatten()).bind(&now).bind(&now).execute(&mut *db).await?;
-        (id, true)
+        (id, true, input.allow_writes.unwrap_or(false))
     };
-    sqlx::query("INSERT INTO redis_connections (workspace_id,connection_id,username,db_index,tls) VALUES (?,?,?,?,?)
-        ON CONFLICT(connection_id) DO UPDATE SET username=excluded.username,db_index=excluded.db_index,tls=excluded.tls")
-        .bind(&input.workspace_id).bind(&id).bind(&input.username).bind(input.db_index).bind(input.tls)
+    sqlx::query("INSERT INTO redis_connections (workspace_id,connection_id,username,db_index,tls,allow_writes) VALUES (?,?,?,?,?,?)
+        ON CONFLICT(connection_id) DO UPDATE SET username=excluded.username,db_index=excluded.db_index,tls=excluded.tls,allow_writes=excluded.allow_writes")
+        .bind(&input.workspace_id).bind(&id).bind(&input.username).bind(input.db_index).bind(input.tls).bind(allow_writes)
         .execute(&mut *db).await?;
     let (saved, _) = get_on(db, &input.workspace_id, &id).await?;
     let mutations = if shared_changed {

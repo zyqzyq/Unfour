@@ -15,6 +15,7 @@ async fn redis_bundle_round_trip_keeps_credentials_device_scoped() {
         username: Some("reader".into()),
         db_index: 4,
         tls: true,
+        allow_writes: Some(true),
     };
     let source = bus
         .save_redis_connection(input, Some("test-only-cache-secret".into()))
@@ -61,6 +62,10 @@ async fn redis_bundle_round_trip_keeps_credentials_device_scoped() {
         copied.id
     );
     assert!(!copied.has_password);
+    assert!(!copied.allow_writes);
+    assert!(value["connections"][0]["config"]
+        .get("allowWrites")
+        .is_none());
     assert_eq!((copied.port, copied.db_index, copied.tls), (6380, 4, true));
 
     let backup = || WorkspaceBundleOptions {
@@ -77,6 +82,7 @@ async fn redis_bundle_round_trip_keeps_credentials_device_scoped() {
         .workspace_bundle_import_with_options(archive, "Restored cache".into(), backup())
         .await
         .unwrap();
+    assert!(!bus.list_redis_connections(&restored.id).await.unwrap()[0].allow_writes);
     let mut conn = bus.db.pool().acquire().await.unwrap();
     let refs = unfour_redis_engine::exchange::credential_refs_on(&mut conn, &restored.id)
         .await

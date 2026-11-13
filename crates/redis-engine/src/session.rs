@@ -137,6 +137,14 @@ impl Session {
             .await
     }
 
+    pub(super) async fn single_result(&mut self, arguments: &[&[u8]]) -> AppResult<Option<Reply>> {
+        bounded(self.deadline, async {
+            self.send(arguments).await?;
+            protocol::read_single_result(&mut self.socket).await
+        })
+        .await
+    }
+
     async fn command_with_budget(
         &mut self,
         arguments: &[&[u8]],
@@ -145,6 +153,19 @@ impl Session {
         bounded(self.deadline, async {
             self.send(arguments).await?;
             protocol::read_reply(&mut self.socket, budget).await
+        })
+        .await
+    }
+
+    pub(super) async fn collection_values(
+        &mut self,
+        args: &[&[u8]],
+        scan: bool,
+        max_items: usize,
+    ) -> AppResult<(String, Vec<Vec<u8>>)> {
+        bounded(self.deadline, async {
+            self.send(args).await?;
+            protocol::read_collection_values(&mut self.socket, scan, max_items).await
         })
         .await
     }

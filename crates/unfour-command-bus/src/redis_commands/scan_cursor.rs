@@ -5,14 +5,14 @@ use crate::RedisConnection;
 
 // Consistency tag for ephemeral paging within a single client version.
 // Authorization and connection lookup are performed on every call, independently.
-pub(super) fn scope(connection: &RedisConnection, pattern: &str) -> String {
+pub(super) fn scope(connection: &RedisConnection, view: impl Hash) -> String {
     let mut tag = DefaultHasher::new();
     (
         &connection.workspace_id,
         &connection.id,
         connection.revision,
         connection.db_index,
-        pattern,
+        view,
     )
         .hash(&mut tag);
     format!("r1.{:016x}.", tag.finish())
@@ -57,6 +57,7 @@ mod tests {
             db_index: 0,
             username: None,
             tls: false,
+            allow_writes: false,
             has_password: false,
             revision: 2,
         };

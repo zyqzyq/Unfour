@@ -39,6 +39,7 @@ async fn redis_flow_checks_exact_key_and_waits_without_recording_private_operand
                 db_index: 0,
                 username: None,
                 tls: false,
+                allow_writes: None,
                 expected_revision: None,
             },
             None,

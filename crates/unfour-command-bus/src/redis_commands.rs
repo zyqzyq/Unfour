@@ -6,6 +6,7 @@ use zeroize::Zeroizing;
 mod scan_cursor;
 use crate::transaction::CommandActivity;
 use crate::{CommandBus, RedisConnection, RedisConnectionInput, RedisKeyInfo, RedisScanPage};
+use crate::{RedisCollectionKind, RedisCollectionPage, RedisMutation};
 
 impl CommandBus {
     pub async fn list_redis_connections(&self, workspace: &str) -> AppResult<Vec<RedisConnection>> {
@@ -242,6 +243,112 @@ impl CommandBus {
             equals,
         )
         .await
+    }
+}
+
+impl CommandBus {
+    #[allow(clippy::too_many_arguments)]
+    pub async fn browse_redis_collection(
+        &self,
+        workspace: &str,
+        id: &str,
+        key_base64: &str,
+        kind: RedisCollectionKind,
+        cursor: &str,
+        pattern: &str,
+        descending: bool,
+        expected_revision: i64,
+        start_index: Option<u64>,
+    ) -> AppResult<RedisCollectionPage> {
+        let key = decode_argument(key_base64)?;
+        if cursor.len() > 40 || pattern.len() > 4096 {
+            return Err(AppError::Validation("REDIS_INVALID_INPUT".into()));
+        }
+        let (record, password) = self
+            .redis_target(workspace, id, Some(expected_revision))
+            .await?;
+        let scope = scan_cursor::scope(&record, ("collection", &key, kind, pattern, descending));
+        let start;
+        let offset = match start_index {
+            Some(index)
+                if cursor == "0"
+                    && index <= (1_u64 << 53) - 1
+                    && matches!(kind, RedisCollectionKind::List | RedisCollectionKind::Zset) =>
+            {
+                start = index.to_string();
+                start.as_str()
+            }
+            Some(_) => return Err(AppError::Validation("REDIS_INVALID_INPUT".into())),
+            None => scan_cursor::unpack(&scope, cursor)?,
+        };
+        let mut page = unfour_redis_engine::browse_collection(
+            &record.endpoint(),
+            password.as_deref().map(String::as_str),
+            &key,
+            kind,
+            offset,
+            pattern,
+            descending,
+        )
+        .await?;
+        page.cursor = scan_cursor::pack(&scope, &page.cursor);
+        Ok(page)
+    }
+
+    /// An explicit desktop write always pins the local grant and connection revision.
+    pub async fn mutate_redis_key(
+        &self,
+        workspace: &str,
+        id: &str,
+        key_base64: &str,
+        mutation: RedisMutation,
+        expected_revision: i64,
+        confirmed: bool,
+    ) -> AppResult<()> {
+        if !confirmed {
+            return Err(AppError::Validation(
+                "REDIS_WRITE_CONFIRMATION_REQUIRED".into(),
+            ));
+        }
+        let key = decode_argument(key_base64)?;
+        let (record, reference) = {
+            let mut db = self.db.pool().acquire().await?;
+            connections::get_on(&mut db, workspace, id).await?
+        };
+        if record.revision != expected_revision {
+            return Err(AppError::RowConflict("REDIS_CONNECTION_CHANGED".into()));
+        }
+        if !record.allow_writes {
+            return Err(AppError::Validation("REDIS_WRITE_READ_ONLY".into()));
+        }
+        let has_secret = reference.is_some();
+        let password = self.read_redis_password(workspace, reference).await?;
+        // OS credential access can block while another window revokes the local grant.
+        if has_secret {
+            let mut db = self.db.pool().acquire().await?;
+            let (latest, _) = connections::get_on(&mut db, workspace, id).await?;
+            if latest.revision != expected_revision || !latest.allow_writes {
+                return Err(AppError::RowConflict("REDIS_CONNECTION_CHANGED".into()));
+            }
+        }
+        let result = unfour_redis_engine::mutate_key(
+            &record.endpoint(),
+            password.as_deref().map(String::as_str),
+            &key,
+            &mutation,
+        )
+        .await;
+        // A local logging failure must never turn a remote commit into a retryable failure.
+        let outcome = match &result {
+            Ok(_) => "succeeded",
+            Err(error) if error.code() == "REDIS_WRITE_OUTCOME_UNKNOWN" => "unknown",
+            Err(_) => "failed",
+        };
+        self.record_completion_activity(CommandActivity {
+            workspace_id: Some(record.workspace_id), action: "redis.key.mutate", target: Some(record.id),
+            details: serde_json::json!({"operation": mutation.operation_name(), "outcome": outcome}),
+        }, "redis", "mutate_key").await;
+        result
     }
 }
 

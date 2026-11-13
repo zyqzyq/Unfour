@@ -7,7 +7,7 @@ use unfour_core::models::{DatabaseConnectionInput, SshConnectionInput};
 mod failures;
 
 #[tokio::test]
-async fn redis_password_edits_preserve_pending_definition_and_uncertain_retry() {
+async fn redis_device_local_edits_preserve_pending_definition_and_uncertain_retry() {
     let db = database().await;
     let seed = CommandBus::from_db(db.clone()).await.unwrap();
     let ws = seed.list_workspaces().await.unwrap().active_workspace_id;
@@ -26,6 +26,7 @@ async fn redis_password_edits_preserve_pending_definition_and_uncertain_retry() 
         host: "cache.example.test".into(),
         username: None,
         tls: true,
+        allow_writes: None,
         db_index: 0,
         port: 6379,
         expected_revision: None,
@@ -54,8 +55,10 @@ async fn redis_password_edits_preserve_pending_definition_and_uncertain_retry() 
     let serialized = original.to_string();
     assert!(!serialized.contains("fixture-first-password"));
     assert!(!serialized.contains("credentialRef"));
+    assert!(!serialized.contains("allowWrites"));
 
     input.expected_revision = Some(secured.revision);
+    input.allow_writes = Some(true);
     let rotated = bus
         .save_redis_connection(input.clone(), Some("fixture-second-password".into()))
         .await
@@ -71,9 +74,14 @@ async fn redis_password_edits_preserve_pending_definition_and_uncertain_retry() 
     assert_eq!(serde_json::to_value(&attempts[1]).unwrap(), original);
 
     input.expected_revision = Some(rotated.revision);
-    bus.save_redis_connection(input, Some(String::new()))
+    let cleared = bus
+        .save_redis_connection(input.clone(), Some(String::new()))
         .await
         .unwrap();
+    input.expected_revision = Some(cleared.revision);
+    input.allow_writes = Some(false);
+    let readonly = bus.save_redis_connection(input, None).await.unwrap();
+    assert!(!readonly.allow_writes && readonly.revision > cleared.revision);
     service.sync_workspace(&ws).await.unwrap();
     assert_eq!(pushed_operations(&transport).len(), 2);
     assert_eq!(service.status(&ws).await.unwrap().pending_count, 0);
@@ -100,6 +108,7 @@ async fn redis_connection_syncs_only_portable_metadata_and_emits_tombstone() {
                 host: "cache.example.test".into(),
                 username: Some("reader".into()),
                 tls: true,
+                allow_writes: Some(true),
                 db_index: 3,
                 port: 6379,
                 expected_revision: None,
@@ -165,6 +174,7 @@ async fn redis_connection_remote_pull_is_workspace_scoped_and_does_not_echo() {
     service.sync_workspace(&ws).await.unwrap();
     let records = bus.list_redis_connections(&ws).await.unwrap();
     let cache = records.iter().find(|c| c.id == "remote-cache").unwrap();
+    assert!(!cache.allow_writes);
     assert_eq!(
         (
             cache.workspace_id.as_str(),

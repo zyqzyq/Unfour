@@ -1,16 +1,54 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { inspectRedisKey, scanRedisKeys, type RedisConnection, type RedisKeyInfo } from "@unfour/command-client";
+import { inspectRedisKey, mutateRedisKey, scanRedisKeys, type RedisConnection, type RedisKeyInfo } from "@unfour/command-client";
 import { RedisKeyBrowser } from "./RedisKeyBrowser";
 
 vi.mock("@unfour/command-client", async (load) => ({
-  ...await load<typeof import("@unfour/command-client")>(), inspectRedisKey: vi.fn(), scanRedisKeys: vi.fn(),
+  ...await load<typeof import("@unfour/command-client")>(), inspectRedisKey: vi.fn(), mutateRedisKey: vi.fn(), scanRedisKeys: vi.fn(),
 }));
 const connection: RedisConnection = { workspaceId: "w", id: "r", name: "Cache", host: "localhost", port: 6379, username: null, dbIndex: 1, tls: false, revision: 1, hasPassword: false };
 const info: RedisKeyInfo = { exists: true, keyType: "string", length: 5, pttlMs: -1, fieldFound: null, preview: { base64: btoa("value"), truncated: false } };
 beforeEach(() => vi.resetAllMocks());
 afterEach(cleanup);
+
+it.each(["ROW_CONFLICT", "NOT_FOUND"])("refreshes just the connection list after %s and allows a failed refresh to be retried", async (code) => {
+  const writable = { ...connection, allowWrites: true };
+  const refresh = vi.fn().mockRejectedValueOnce(new Error("refresh failed")).mockResolvedValueOnce(undefined);
+  vi.mocked(inspectRedisKey).mockResolvedValue(info);
+  vi.mocked(mutateRedisKey).mockRejectedValue({ code });
+  const { rerender } = render(<RedisKeyBrowser connection={writable} onRefreshConnections={refresh} />);
+  fireEvent.change(screen.getByRole("textbox", { name: "Exact key name" }), { target: { value: "private:old-target" } });
+  fireEvent.click(screen.getByRole("button", { name: "Inspect key" }));
+  await screen.findByText("value");
+  fireEvent.click(screen.getByRole("button", { name: "New key" }));
+  fireEvent.click(screen.getByRole("button", { name: "Review change" }));
+  fireEvent.click(screen.getByRole("button", { name: "Apply change" }));
+  const action = await screen.findByRole("button", { name: "Refresh Connections" });
+  expect(screen.queryByText("value")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Read current state" })).not.toBeInTheDocument();
+  fireEvent.click(action);
+  await screen.findByText(/Could not load Redis connections/);
+  fireEvent.click(action);
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  rerender(<RedisKeyBrowser connection={{ ...writable, host: "new-target.invalid", revision: 2 }} onRefreshConnections={refresh} />);
+  expect(screen.getByRole("textbox", { name: "Exact key name" })).toHaveValue("");
+  expect(inspectRedisKey).toHaveBeenCalledTimes(1);
+  expect(refresh).toHaveBeenCalledTimes(2);
+  expect(mutateRedisKey).toHaveBeenCalledTimes(1);
+});
+
+it("keeps a confirmed write distinct from a failed refresh and does not replay it", async () => {
+  vi.mocked(inspectRedisKey).mockRejectedValue({ code: "REDIS_TIMEOUT" });
+  render(<RedisKeyBrowser connection={{ ...connection, allowWrites: true }} />);
+  fireEvent.click(screen.getByRole("button", { name: "New key" }));
+  fireEvent.click(screen.getByRole("button", { name: "Review change" }));
+  fireEvent.click(screen.getByRole("button", { name: "Apply change" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Redis applied the change. Refresh failed.");
+  expect(inspectRedisKey).toHaveBeenCalledTimes(1);
+  expect(mutateRedisKey).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
 
 it("looks up the exact key without scan permission, and discards an obsolete read", async () => {
   let resolve!: (result: RedisKeyInfo) => void;
@@ -26,6 +64,24 @@ it("looks up the exact key without scan permission, and discards an obsolete rea
   fireEvent.click(screen.getByRole("button", { name: "Inspect key" }));
   expect(await screen.findByText(/price:2.*missing or expired/)).toBeVisible();
   expect(scanRedisKeys).not.toHaveBeenCalled();
+});
+
+it("keeps a multiline key selected by scan byte-exact after a write", async () => {
+  const encoded = btoa("line\nbreak");
+  vi.mocked(scanRedisKeys).mockResolvedValue({ cursor: "0", keys: [encoded] });
+  vi.mocked(inspectRedisKey).mockResolvedValue(info);
+  render(<RedisKeyBrowser connection={{ ...connection, allowWrites: true }} />);
+  fireEvent.click(screen.getByRole("button", { name: "Browse by pattern" }));
+  fireEvent.click(screen.getByRole("button", { name: "Scan", exact: true }));
+  fireEvent.click(await screen.findByRole("button", { name: '"line\\nbreak"' }));
+  const actions = await screen.findByRole("button", { name: "Edit key…" });
+  fireEvent.keyDown(actions, { key: "Enter" });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Delete key" }));
+  vi.mocked(inspectRedisKey).mockResolvedValue({ ...info, exists: false });
+  fireEvent.click(screen.getByRole("button", { name: "Apply change" }));
+  expect(await screen.findByText(/missing or expired/)).toBeVisible();
+  expect(inspectRedisKey).toHaveBeenLastCalledWith("w", "r", encoded, undefined, 1);
+  expect(screen.getByRole("button", { name: "Browse by pattern" })).toHaveAttribute("aria-pressed", "true");
 });
 
 it("continues an empty non-final batch, deduplicates binary keys and reads the original bytes", async () => {

@@ -190,6 +190,10 @@ can still affect every row. Full access keeps its existing confirmation bypass.
 
 In **Database**, create a connection and choose **Redis**. Set the host, port, logical database, TLS and authentication, then test and save. Open the saved connection alongside your SQL tabs. Look up an exact key or browse a pattern such as `product:*`. A missing key, a key without expiry and a key with a positive TTL have different status indicators.
 
+Open a Hash or Set to browse members and filter by pattern. Lists show indices. Sorted sets show rank and score and support either direction. Continue loading or jump to a list index or sorted-set rank.
+
+Connections open read-only by default. To edit, enable writes for the saved connection on this device. Desktop edits support creating a String or a Hash with its first field, updating a complete String, adding/editing/deleting individual Hash fields, setting or removing a key's TTL, and deleting a single key. Check the connection, logical database and exact key in the preview before applying. Editing preserves existing expiry. If the original value changed or the server's reply was lost, read the key again before deciding what to do. The local grant stays off on imported connections. Flow and MCP checks remain read-only.
+
 For a readable text key, use **Create Flow from this key** to prepare an unsaved check. The new definition uses a secret runtime input for the actual key. You can also add a Redis key check in the Flow editor and feed its `matched` result into a Condition or Wait Until. This source feature targets standalone Redis. [Redis design and operation limits](../architecture/redis-workbench.md)
 
 ## Flow

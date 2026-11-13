@@ -64,7 +64,7 @@ async fn pttl(session: &mut Session, key: &[u8]) -> AppResult<i64> {
     Ok(ttl)
 }
 
-async fn key_type(session: &mut Session, key: &[u8]) -> AppResult<String> {
+pub(super) async fn key_type(session: &mut Session, key: &[u8]) -> AppResult<String> {
     let Reply::Simple(kind) = session.command(&[b"TYPE", key]).await? else {
         return Err(error("REDIS_PROTOCOL_ERROR"));
     };
@@ -74,7 +74,11 @@ async fn key_type(session: &mut Session, key: &[u8]) -> AppResult<String> {
     String::from_utf8(kind).map_err(|_| error("REDIS_PROTOCOL_ERROR"))
 }
 
-async fn read_field(session: &mut Session, key: &[u8], field: &[u8]) -> AppResult<Option<Vec<u8>>> {
+pub(super) async fn read_field(
+    session: &mut Session,
+    key: &[u8],
+    field: &[u8],
+) -> AppResult<Option<Vec<u8>>> {
     let length = integer(session.command(&[b"HSTRLEN", key, field]).await?)?;
     if length > PREVIEW_BYTES as i64 {
         return Err(error("REDIS_RESPONSE_TOO_LARGE"));

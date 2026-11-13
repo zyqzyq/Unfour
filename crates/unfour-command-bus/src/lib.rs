@@ -55,7 +55,8 @@ mod database_commands;
 mod redis_commands;
 pub use unfour_redis_engine::{
     connections::{RedisConnection, RedisConnectionInput},
-    RedisCheckResult, RedisKeyInfo, RedisScanPage,
+    RedisCheckResult, RedisCollectionKind, RedisCollectionPage, RedisKeyInfo, RedisMutation,
+    RedisScanPage,
 };
 mod domain_commands;
 mod flow_authoring;

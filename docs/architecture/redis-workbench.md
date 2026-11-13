@@ -17,7 +17,7 @@ Redis Insight 按数据类型呈现内容，并提供 JSON 和十六进制格式
 | 按模式浏览 | 显式启动 SCAN，每次只向服务端请求一个批次，允许停止继续加载。返回游标为零才结束。换连接、修订或模式时作废先前浏览状态。浏览结果可能包含重复键，空批次可以继续扫描。 |
 | 类型化详情 | String 用 GETRANGE 读取有限字节；完整 UTF-8 JSON 可格式化，其他字节保留可逆表示。Hash 展示字段数并支持查询指定字段。List、Set、ZSet、Stream 首先显示元素数。未知类型保留 Redis 返回的类型标识。 |
 
-逻辑库归属于一条连接。首版每个操作建立短生命周期连接，按其固定配置认证、选择逻辑库并在操作后释放。不同工作区或不同逻辑库的读取不会共享 SELECT 状态。如果后续性能数据表明 TLS 握手成为瓶颈，再按工作区、连接 ID、修订和逻辑库复用连接。首版按用户配置的单实例地址读取，Cluster、Sentinel、共享 SSH 隧道和修改缓存数据留待对应的协议及权限设计。
+逻辑库归属于一条连接。每个操作建立短生命周期连接，按其固定配置认证、选择逻辑库并在操作后释放。不同工作区或不同逻辑库的操作不会共享 SELECT 状态。当前面向独立 Redis 单实例。Cluster、Sentinel 和共享 SSH 隧道另行设计。
 
 SCAN 的 COUNT 是工作量提示。键集合在扫描中可能变化，UI 不能据此推导全库总数或稳定页码。PTTL 为 -1 表示永久，为 -2 表示键已不存在。键在读取元信息与内容之间可能过期或改变类型，刷新后以新结果为准。[SCAN](https://redis.io/docs/latest/commands/scan/) · [PTTL](https://redis.io/docs/latest/commands/pttl/) · [GETRANGE](https://redis.io/docs/latest/commands/getrange/)
 
@@ -27,15 +27,33 @@ SCAN 的 COUNT 是工作量提示。键集合在扫描中可能变化，UI 不�
 
 | 桌面命令 | 输入及输出 |
 | --- | --- |
-| redis_connections_list | workspaceId → 已保存的脱敏连接；仅暴露 hasPassword。 |
+| redis_connections_list | workspaceId → 已保存的连接、是否配置密码及本机写入许可。 |
 | redis_connection_save / redis_connection_delete | 工作区、草稿或资源 ID、编辑修订；独立 secret 参数区分保留、轮换和清除。 |
 | redis_connection_test_input | 测试当前草稿，无需预先保存。 |
 | redis_key_inspect | 工作区、连接、base64 编码的 key 和可选字段 → 存在性、类型、毫秒 TTL、长度、可选预览和截断标识。 |
 | redis_keys_scan | 工作区、连接、模式、继续标记 → 可逆编码的键及下个标记。`"0"` 表示起始或结束。其余标记绑定工作区、连接 ID、修订号、逻辑库和匹配模式，由界面原样透传。 |
+| redis_collection_browse | 工作区、连接及修订、精确键、类型、模式或排序方向、继续标记 → 成员和下个标记。List 和 ZSet 支持按索引或排名开始。 |
+| redis_key_mutate | 工作区、连接及修订、精确键、类型化变更、显式确认 → 执行结果。编辑 String 或 Hash 字段时须传入原始完整字节。 |
 
 读取操作不持久化 Redis 的键名、字段、值、命令参数或扫描记录。错误和活动事件只接受稳定状态和非敏感元信息。密码经凭据暂存、业务提交、回收流程进入系统凭据存储。检查连接草稿时，只有原端点才可复用已存密码。
 
-驱动直接使用工作区锁定的 Tokio、tokio-rustls、rustls-platform-verifier 与 base64。引擎仅解码这些只读操作所需的 RESP2 回复形状，在分配 bulk string 之前检查声明长度。单次网络操作总限时 8 秒，String 和 Hash 字段的值预览预算为 16 KiB，SCAN 单批原始键名预算为 256 KiB。大 String 可读取前缀，大 Hash 字段返回大小超限。TLS 使用系统信任链和真实主机名验证。
+驱动直接使用工作区锁定的 Tokio、tokio-rustls、rustls-platform-verifier 与 base64。引擎仅解码支持操作所需的 RESP2 回复形状，在分配 bulk string 之前检查声明长度。单次网络操作总限时 8 秒，String 和 Hash 字段的完整值编辑预算为 16 KiB，SCAN 单批原始键名预算为 256 KiB。大 String 可读取前缀，超限 Hash 字段的精确查询会报告大小超限。集合浏览另设单成员 64 KiB、单批数据 256 KiB 预算。TLS 使用系统信任链和真实主机名验证。
+
+## 集合浏览和桌面编辑
+
+DbGate 在同一数据源工作台中提供类型化编辑和保存前的命令预览，Redis Insight 依类型展示成员。Unfour 沿用现有 Database 标签页，在键详情中展开成员；写操作先给出连接、逻辑库、精确键、变更内容与过期策略，点击确认后才提交。[DbGate Redis GUI](https://www.dbgate.io/features/redis-gui/) · [Redis Insight](https://redis.io/docs/latest/develop/tools/insight/)
+
+| 操作 | 交互与执行语义 |
+| --- | --- |
+| Hash、Set 浏览 | 按 Redis glob 过滤字段或成员并继续扫描。Hash 同时显示字段和值，可选中某个字段查看或编辑。继续标记绑定连接修订、键、类型、筛选和方向。空批次仍可继续，直到游标归零。 |
+| List、ZSet 浏览 | 通过索引或排名分段读取。List 展示真实索引；ZSet 展示排序方向下的排名、成员和 score，支持升降序。读取预算约束元素数和协议字节数。并发插入、删除或调整分数时，后续各页代表当次读取时的集合。 |
+| String | 新建使用仅当键不存在的 SET，并可同时设置正 TTL。编辑从完整原始值开始，提交时比较类型和旧字节，更新保留原 TTL。截断预览不能提交为整键值。 |
+| Hash 字段 | 新建 Hash 同时写入第一个字段。增字段须确认原字段不存在；改、删只作用于一个精确字段，提交时比对旧值。删除最后一个字段会一并移除键。编辑保留整键 TTL；Redis 8+ 还保留字段 TTL，7.4 上遇到有独立 TTL 的字段拒绝覆盖。 |
+| TTL 与删除 | 针对选中的单键设置正 TTL，或单独选择移除过期时间。删除键用 UNLINK；用户看到键名、类型、连接和逻辑库。过期时间与删除操作针对确认的键名和类型，不比较整个集合的每个值。 |
+
+现有与新增连接默认只读。本机允许写入的设置保存在 Redis 连接附表。同步、普通导入和加密备份恢复都不会转移写入许可。加密备份可以单独还原凭据。远端改变端点、登录身份、TLS 或逻辑库时，撤销原目标的写许可。手工写入必须经过 Tauri → CommandBus 的 workspace/连接修订/本机许可/显式确认检查。Redis ACL 仍决定服务端能否执行。Flow 和 MCP 继续只读。活动只记操作种类、连接 ID 和结果。
+
+写入以 Redis 6.0.9+ 为基线，通过 INFO server 确认版本。每次写入在同一连接中 WATCH 并检查键/字段状态，再在事务内执行固定的单项变更。提交前检测到冲突时提示重读；EXEC 已派发而回复丢失时显示结果未知，用户须核对实际状态。客户端不自动重发。编辑时发现已过期的键不会重建。WATCH 捕获检查开始后的并发修改；初始编辑的旧值比较不会检测到历史上改过又恢复为相同字节的情况。[Redis 事务](https://redis.io/docs/latest/develop/using-commands/transactions/) · [SET](https://redis.io/docs/latest/commands/set/) · [HSETEX](https://redis.io/docs/latest/commands/hsetex/) · [EXPIRE](https://redis.io/docs/latest/commands/expire/) · [UNLINK](https://redis.io/docs/latest/commands/unlink/)
 
 ## 持久化和交换
 

@@ -472,6 +472,8 @@ macro_rules! generate_handlers {
             unfour_app::commands::redis_connection_test_input,
             unfour_app::commands::redis_key_inspect,
             unfour_app::commands::redis_keys_scan,
+            unfour_app::commands::redis_collection_browse,
+            unfour_app::commands::redis_key_mutate,
             unfour_app::commands::database_query_execute,
             unfour_app::commands::database_script_execute,
             unfour_app::commands::database_script_stop,

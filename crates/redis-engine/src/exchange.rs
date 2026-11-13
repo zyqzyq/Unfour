@@ -232,13 +232,14 @@ async fn upsert_on(
         }
     }
     // Preserve device credentials only while the authentication target matches.
-    let retain_secret = existing.is_some_and(|old| {
+    let retain_secret = existing.as_ref().is_some_and(|old| {
         old.deleted_at.is_none()
             && old.host == host
             && old.port == port
             && old.username == username
             && old.tls == tls
     });
+    let retain_write_access = retain_secret && existing.is_some_and(|old| old.db_index == db_index);
     let revision: Option<i64> = sqlx::query_scalar(
         "INSERT INTO connections (id,workspace_id,connection_type,name,host,port,created_at,updated_at)
          VALUES(?,?,'redis',?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,host=excluded.host,
@@ -249,8 +250,10 @@ async fn upsert_on(
         .bind(&record.created_at).bind(&record.updated_at).bind(retain_secret).fetch_optional(&mut *db).await?;
     let revision = revision.ok_or_else(invalid)?;
     sqlx::query("INSERT INTO redis_connections (workspace_id,connection_id,username,db_index,tls) VALUES(?,?,?,?,?)
-        ON CONFLICT(connection_id) DO UPDATE SET username=excluded.username,db_index=excluded.db_index,tls=excluded.tls")
-        .bind(&record.workspace_id).bind(&record.id).bind(username).bind(db_index).bind(tls).execute(db).await?;
+        ON CONFLICT(connection_id) DO UPDATE SET username=excluded.username,db_index=excluded.db_index,tls=excluded.tls,
+        allow_writes=CASE WHEN ? THEN redis_connections.allow_writes ELSE 0 END")
+        .bind(&record.workspace_id).bind(&record.id).bind(username).bind(db_index).bind(tls)
+        .bind(retain_write_access).execute(db).await?;
     Ok(DomainCommandResult::new(
         (),
         vec![connection_mutation(
