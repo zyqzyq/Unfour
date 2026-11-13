@@ -24,34 +24,47 @@ pub(super) fn transfer_sftp_error(error: russh_sftp::client::error::Error) -> Tr
 }
 
 #[cfg(feature = "ssh-native")]
-pub(super) async fn replace_local_file(
-    part: &std::path::Path,
+pub(super) async fn stage_download(
     target: &std::path::Path,
-    transfer_id: &str,
+) -> Result<(tokio::fs::File, tempfile::TempPath), TransferRunError> {
+    let parent = target
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .to_owned();
+    let staged = tokio::task::spawn_blocking(move || {
+        let mut builder = tempfile::Builder::new();
+        builder.prefix(".unfour-download-").suffix(".part");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            // The published download has ordinary file-creation permissions, subject to umask.
+            builder.permissions(std::fs::Permissions::from_mode(0o666));
+        }
+        builder.tempfile_in(parent)
+    })
+    .await
+    .map_err(|error| TransferRunError::Failed(error.to_string()))?
+    .map_err(|error| TransferRunError::Failed(error.to_string()))?;
+    let (file, staging) = staged.into_parts();
+    Ok((tokio::fs::File::from_std(file), staging))
+}
+
+#[cfg(feature = "ssh-native")]
+pub(super) async fn publish_download(
+    staging: tempfile::TempPath,
+    target: std::path::PathBuf,
     overwrite: bool,
 ) -> Result<(), TransferRunError> {
-    let backup = local_backup_path(target, transfer_id);
-    let had_target = target.exists();
-    if had_target {
-        if !overwrite {
-            return Err(TransferRunError::Failed(
-                "local target already exists".to_string(),
-            ));
+    tokio::task::spawn_blocking(move || {
+        if overwrite {
+            staging.persist(target)
+        } else {
+            staging.persist_noclobber(target)
         }
-        tokio::fs::rename(target, &backup)
-            .await
-            .map_err(|error| TransferRunError::Failed(error.to_string()))?;
-    }
-    if let Err(error) = tokio::fs::rename(part, target).await {
-        if had_target {
-            let _ = tokio::fs::rename(&backup, target).await;
-        }
-        return Err(TransferRunError::Failed(error.to_string()));
-    }
-    if had_target {
-        let _ = tokio::fs::remove_file(backup).await;
-    }
-    Ok(())
+    })
+    .await
+    .map_err(|error| TransferRunError::Failed(error.to_string()))?
+    .map_err(|error| TransferRunError::Failed(error.error.to_string()))
 }
 
 #[cfg(feature = "ssh-native")]
@@ -60,7 +73,16 @@ pub(super) async fn finalize_remote_upload(
     temp_path: &str,
     target_path: &str,
     transfer_id: &str,
+    overwrite: bool,
 ) -> Result<(), TransferRunError> {
+    if !overwrite {
+        // SSH_FXP_RENAME in SFTP v3 must fail if newpath exists. Let the
+        // server perform the no-replace operation after the upload completes.
+        return sftp
+            .rename(temp_path, target_path)
+            .await
+            .map_err(transfer_sftp_error);
+    }
     let backup = format!("{target_path}.unfour-backup-{transfer_id}");
     // Opportunistic backup avoids a prior try_exists RTT on overwrite uploads.
     let had_backup = sftp
@@ -147,22 +169,12 @@ pub(super) fn file_kind_rank(kind: &str) -> u8 {
 }
 
 #[cfg(any(feature = "ssh-native", test))]
-pub(super) fn upload_temp_path(remote_path: &str) -> String {
-    format!("{remote_path}.unfour-uploading")
-}
-
-#[cfg(any(feature = "ssh-native", test))]
-pub(super) fn download_part_path(target: &std::path::Path) -> std::path::PathBuf {
-    let mut value = target.as_os_str().to_os_string();
-    value.push(".part");
-    value.into()
-}
-
-#[cfg(feature = "ssh-native")]
-fn local_backup_path(target: &std::path::Path, transfer_id: &str) -> std::path::PathBuf {
-    let mut value = target.as_os_str().to_os_string();
-    value.push(format!(".unfour-backup-{transfer_id}"));
-    value.into()
+pub(super) fn upload_temp_path(remote_path: &str, transfer_id: &str) -> String {
+    let parent = remote_path
+        .rsplit_once('/')
+        .map(|(dir, _)| dir)
+        .unwrap_or(".");
+    format!("{parent}/.unfour-upload-{transfer_id}")
 }
 
 #[cfg(feature = "ssh-native")]
@@ -197,6 +209,28 @@ pub(super) fn finished_transfer_ids_to_prune(
 mod tests {
     use super::*;
 
+    #[cfg(all(unix, feature = "ssh-native"))]
+    #[tokio::test]
+    async fn published_downloads_use_normal_file_creation_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let control = std::fs::File::create(dir.path().join("control")).unwrap();
+        let expected = control.metadata().unwrap().permissions().mode() & 0o777;
+        let target = dir.path().join("download");
+        for overwrite in [false, true] {
+            let (file, staging) = stage_download(&target).await.unwrap();
+            drop(file);
+            publish_download(staging, target.clone(), overwrite)
+                .await
+                .unwrap();
+            assert_eq!(
+                std::fs::metadata(&target).unwrap().permissions().mode() & 0o777,
+                expected
+            );
+        }
+    }
+
     #[test]
     fn normalizes_remote_paths_without_shell_semantics() {
         assert_eq!(
@@ -218,14 +252,16 @@ mod tests {
     }
 
     #[test]
-    fn transfer_temporary_names_are_visibly_incomplete() {
+    fn uploads_use_short_per_transfer_siblings_even_for_the_same_destination() {
+        assert_eq!(upload_temp_path("/demo.txt", "a"), "/.unfour-upload-a");
         assert_eq!(
-            upload_temp_path("/tmp/demo.txt"),
-            "/tmp/demo.txt.unfour-uploading"
+            upload_temp_path("/tmp/demo.txt", "b"),
+            "/tmp/.unfour-upload-b"
         );
-        assert!(download_part_path(std::path::Path::new("demo.txt"))
-            .to_string_lossy()
-            .ends_with("demo.txt.part"));
+        assert_ne!(
+            upload_temp_path("/tmp/demo.txt", "a"),
+            upload_temp_path("/tmp/demo.txt", "b")
+        );
     }
 
     #[test]

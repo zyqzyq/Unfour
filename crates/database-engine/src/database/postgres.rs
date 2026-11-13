@@ -416,22 +416,42 @@ pub(super) async fn postgres_ddl(
             .ok_or_else(|| AppError::Unsupported("DDL is not available for this table".into()));
     }
 
+    // Deparse regclass defaults, constraints and indexes independently of the
+    // source or restore connection's user schemas. SET LOCAL ends with this transaction.
+    let mut catalog = pool.pool.begin().await?;
+    sqlx::query("SET LOCAL search_path TO pg_catalog")
+        .execute(&mut *catalog)
+        .await?;
     let rows = sqlx::query(
         r#"SELECT a.attname AS name, format_type(a.atttypid, a.atttypmod) AS data_type,
                   a.attnotnull AS not_null, pg_get_expr(d.adbin, d.adrelid) AS default_value,
-                  a.attidentity::text AS identity, a.attgenerated::text AS generated
+                  a.attidentity::text AS identity, a.attgenerated::text AS generated,
+                  seq_class.relname::text AS sequence_name,
+                  pg_catalog.format_type(seq.seqtypid, NULL) AS sequence_type,
+                  seq.seqstart AS sequence_start,
+                  CASE WHEN seq.seqrelid IS NOT NULL THEN pg_catalog.format(
+                    'START WITH %s INCREMENT BY %s MINVALUE %s MAXVALUE %s CACHE %s %s',
+                    seq.seqstart, seq.seqincrement, seq.seqmin, seq.seqmax, seq.seqcache,
+                    CASE WHEN seq.seqcycle THEN 'CYCLE' ELSE 'NO CYCLE' END
+                  ) END AS sequence_options
            FROM pg_attribute a
            JOIN pg_class c ON c.oid = a.attrelid
            JOIN pg_namespace n ON n.oid = c.relnamespace
            LEFT JOIN pg_attrdef d ON d.adrelid = c.oid AND d.adnum = a.attnum
+           LEFT JOIN pg_catalog.pg_sequence seq ON seq.seqrelid =
+               pg_catalog.pg_get_serial_sequence(pg_catalog.format('%I.%I', n.nspname, c.relname),
+                                                  a.attname)::regclass
+           LEFT JOIN pg_catalog.pg_class seq_class ON seq_class.oid = seq.seqrelid
            WHERE n.nspname = $1 AND c.relname = $2 AND a.attnum > 0 AND NOT a.attisdropped
            ORDER BY a.attnum"#,
     )
     .bind(schema)
     .bind(table_name)
-    .fetch_all(&pool.pool)
+    .fetch_all(&mut *catalog)
     .await?;
     let mut clauses = Vec::with_capacity(rows.len());
+    let mut create_sequences = String::new();
+    let mut after_table = Vec::new();
     for row in rows {
         let name: String = row.try_get("name")?;
         let data_type: String = row.try_get("data_type")?;
@@ -439,6 +459,33 @@ pub(super) async fn postgres_ddl(
         let default_value: Option<String> = row.try_get("default_value")?;
         let identity: String = row.try_get("identity")?;
         let generated: String = row.try_get("generated")?;
+        let mut identity_options = None;
+        if let Some(sequence_name) = row.try_get::<Option<String>, _>("sequence_name")? {
+            let sequence = quote_qualified_identifier(schema, &sequence_name);
+            let sequence_type: String = row.try_get("sequence_type")?;
+            let options: String = row.try_get("sequence_options")?;
+            if identity.is_empty() {
+                // A serial/default can be nullable or use a different integer
+                // type from its sequence. Keep the original default and ownership.
+                create_sequences.push_str(&format!(
+                    "CREATE SEQUENCE {sequence} AS {sequence_type} {options};\n"
+                ));
+                after_table.push(format!(
+                    "ALTER SEQUENCE {sequence} OWNED BY {qualified}.{}",
+                    quote_identifier(&name)
+                ));
+            } else if sequence_type == data_type {
+                identity_options = Some(format!("SEQUENCE NAME {sequence} {options}"));
+            } else {
+                // CREATE TABLE makes an identity sequence with the column's
+                // type. Set wider/narrower bounds only after it takes its own type.
+                identity_options = Some(format!("SEQUENCE NAME {sequence}"));
+                let start: i64 = row.try_get("sequence_start")?;
+                after_table.push(format!(
+                    "ALTER SEQUENCE {sequence} AS {sequence_type} {options} RESTART WITH {start}"
+                ));
+            }
+        }
         clauses.push(postgres_column_ddl(
             &name,
             &data_type,
@@ -446,6 +493,7 @@ pub(super) async fn postgres_ddl(
             default_value.as_deref(),
             &identity,
             &generated,
+            identity_options.as_deref(),
         ));
     }
     let constraints = sqlx::query(
@@ -457,7 +505,7 @@ pub(super) async fn postgres_ddl(
     )
     .bind(schema)
     .bind(table_name)
-    .fetch_all(&pool.pool)
+    .fetch_all(&mut *catalog)
     .await?;
     for row in constraints {
         let name: String = row.try_get("conname")?;
@@ -475,13 +523,12 @@ pub(super) async fn postgres_ddl(
     )
     .bind(schema)
     .bind(table_name)
-    .fetch_all(&pool.pool)
+    .fetch_all(&mut *catalog)
     .await?;
-    Ok(assemble_postgres_ddl(
-        &qualified,
-        &clauses,
-        indexes.into_iter().map(|(ddl,)| ddl),
-    ))
+    catalog.commit().await?;
+    after_table.extend(indexes.into_iter().map(|(ddl,)| ddl));
+    create_sequences.push_str(&assemble_postgres_ddl(&qualified, &clauses, after_table));
+    Ok(create_sequences)
 }
 
 fn postgres_constraint_ddl(name: &str, definition: &str) -> String {
@@ -491,15 +538,15 @@ fn postgres_constraint_ddl(name: &str, definition: &str) -> String {
 fn assemble_postgres_ddl(
     qualified: &str,
     clauses: &[String],
-    indexes: impl IntoIterator<Item = String>,
+    after_table: impl IntoIterator<Item = String>,
 ) -> String {
     let mut ddl = format!(
         "CREATE TABLE {qualified} (\n    {}\n);",
         clauses.join(",\n    ")
     );
-    for index in indexes {
+    for statement in after_table {
         ddl.push_str("\n");
-        ddl.push_str(index.trim_end_matches(';'));
+        ddl.push_str(statement.trim_end_matches(';'));
         ddl.push(';');
     }
     ddl
@@ -512,6 +559,7 @@ fn postgres_column_ddl(
     default_value: Option<&str>,
     identity: &str,
     generated: &str,
+    sequence_options: Option<&str>,
 ) -> String {
     let mut sql = format!("{} {}", quote_identifier(name), data_type);
     if generated == "s" || generated == "v" {
@@ -531,12 +579,9 @@ fn postgres_column_ddl(
         } else {
             " GENERATED BY DEFAULT AS IDENTITY"
         });
-    } else if default_value.is_some_and(|value| value.starts_with("nextval("))
-        && matches!(data_type, "smallint" | "integer" | "bigint")
-    {
-        // A SERIAL column's nextval default names a separate sequence. An
-        // identity column recreates that dependency in a standalone export.
-        sql.push_str(" GENERATED BY DEFAULT AS IDENTITY");
+        if let Some(options) = sequence_options {
+            sql.push_str(&format!(" ({options})"));
+        }
     } else if let Some(default_value) = default_value {
         sql.push_str(&format!(" DEFAULT {default_value}"));
     }
@@ -553,15 +598,23 @@ mod ddl_tests {
     #[test]
     fn postgres_column_ddl_handles_types_defaults_identity_and_generated() {
         assert_eq!(
-            postgres_column_ddl("user\"id", "bigint", true, Some("42"), "", ""),
+            postgres_column_ddl("user\"id", "bigint", true, Some("42"), "", "", None),
             "\"user\"\"id\" bigint DEFAULT 42 NOT NULL"
         );
         assert_eq!(
-            postgres_column_ddl("id", "integer", true, None, "a", ""),
-            "\"id\" integer GENERATED ALWAYS AS IDENTITY NOT NULL"
+            postgres_column_ddl(
+                "id",
+                "integer",
+                true,
+                None,
+                "a",
+                "",
+                Some("START WITH -7 INCREMENT BY -3")
+            ),
+            "\"id\" integer GENERATED ALWAYS AS IDENTITY (START WITH -7 INCREMENT BY -3) NOT NULL"
         );
         assert_eq!(
-            postgres_column_ddl("slug", "text", false, Some("lower(name)"), "", "s"),
+            postgres_column_ddl("slug", "text", false, Some("lower(name)"), "", "s", None),
             "\"slug\" text GENERATED ALWAYS AS (lower(name)) STORED"
         );
         assert_eq!(
@@ -571,16 +624,29 @@ mod ddl_tests {
                 true,
                 Some("nextval('items_id_seq'::regclass)"),
                 "",
-                ""
+                "",
+                None,
             ),
-            "\"id\" bigint GENERATED BY DEFAULT AS IDENTITY NOT NULL"
+            "\"id\" bigint DEFAULT nextval('items_id_seq'::regclass) NOT NULL"
+        );
+        assert_eq!(
+            postgres_column_ddl(
+                "id",
+                "bigint",
+                true,
+                Some("nextval('shared_sequence'::regclass)"),
+                "",
+                "",
+                None
+            ),
+            "\"id\" bigint DEFAULT nextval('shared_sequence'::regclass) NOT NULL"
         );
     }
 
     #[test]
     fn postgres_table_ddl_includes_primary_key_foreign_key_and_index() {
         let clauses = vec![
-            postgres_column_ddl("id", "integer", true, None, "", ""),
+            postgres_column_ddl("id", "integer", true, None, "", "", None),
             postgres_constraint_ddl("orders_pkey", "PRIMARY KEY (id)"),
             postgres_constraint_ddl(
                 "orders_customer_fk",

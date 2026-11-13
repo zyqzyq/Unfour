@@ -5,6 +5,8 @@ export interface UpdateMeta {
   channel: "test" | "stable";
   commit: string | null;
   updaterEnabled: boolean;
+  installerExitsApp: boolean;
+  installedVersion: string | null;
   endpoint: string | null;
 }
 
@@ -31,6 +33,7 @@ export type UpdateState =
   | { kind: "available"; info: UpdateInfo }
   | { kind: "downloading"; info: UpdateInfo; downloaded: number; total: number | null }
   | { kind: "installing"; info: UpdateInfo }
+  | { kind: "installed"; info: UpdateInfo; restartError?: string }
   | { kind: "error"; message: string; info?: UpdateInfo; recovery: UpdateRecovery };
 
 export interface UpdateContextValue {
@@ -41,4 +44,5 @@ export interface UpdateContextValue {
   openDialog(): void;
   check(): Promise<void>;
   install(): Promise<void>;
+  restart(): Promise<void>;
 }

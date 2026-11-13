@@ -32,16 +32,10 @@ function recoveryMessageKey(recovery: UpdateRecovery): string {
 
 export function UpdateDialog() {
   const { t } = useI18n();
-  const { meta, state, dialogOpen, setDialogOpen, check, install } = useUpdate();
+  const { meta, state, dialogOpen, setDialogOpen, check, install, restart } = useUpdate();
   if (meta?.distribution === "microsoft-store" || !meta?.updaterEnabled) return null;
   const busy = state.kind === "downloading" || state.kind === "installing";
-  const info = state.kind === "available"
-      || state.kind === "downloading"
-      || state.kind === "installing"
-    ? state.info
-    : state.kind === "error"
-      ? state.info
-      : undefined;
+  const info = "info" in state ? state.info : undefined;
   const percent = state.kind === "downloading" && state.total && state.total > 0
     ? Math.min(100, Math.round((state.downloaded / state.total) * 100))
     : null;
@@ -70,7 +64,9 @@ export function UpdateDialog() {
           {state.kind === "upToDate" && <p className="text-[var(--u-color-success)]">{t("updates.upToDate")}</p>}
           {state.kind === "downloading" && <div><p>{percent === null ? t("updates.downloadingUnknown") : t("updates.downloading", { percent })}</p>{percent !== null && <div className="mt-2 h-1.5 overflow-hidden rounded bg-[var(--u-color-surface-active)]"><div className="h-full bg-[var(--u-color-primary)]" style={{ width: `${percent}%` }} /></div>}</div>}
           {state.kind === "installing" && <p>{t("updates.startingInstaller")}</p>}
-          {(info || busy) && <p className="text-xs text-[var(--u-color-text-muted)]">{t("updates.exitNotice")}</p>}
+          {state.kind === "installed" && <p>{t("updates.installed", { version: state.info.version })} {t("updates.saveBeforeRestart")}</p>}
+          {state.kind === "installed" && state.restartError && <p role="alert">{t("updates.restartFailed", { message: state.restartError })}</p>}
+          {meta.installerExitsApp && (info || busy) && <p className="text-xs text-[var(--u-color-text-muted)]">{t("updates.exitNotice")}</p>}
           {busy && <p className="text-xs text-[var(--u-color-text-muted)]">{t("updates.backgroundNotice")}</p>}
           {state.kind === "error" && <div className="space-y-1"><p className="text-[var(--u-color-danger)]">{t(errorTitleKey(state.recovery))}</p><p className="text-xs text-[var(--u-color-text-muted)]">{t("updates.detail", { message: state.message })}</p><p className="text-xs text-[var(--u-color-text-muted)]">{t(recoveryMessageKey(state.recovery))}</p></div>}
         </DialogBody>
@@ -78,6 +74,7 @@ export function UpdateDialog() {
           <Button onClick={() => setDialogOpen(false)} size="sm" type="button" variant="ghost">{busy ? t("updates.hide") : t("updates.close")}</Button>
           {(state.kind === "idle" || state.kind === "checking" || state.kind === "upToDate" || (state.kind === "error" && state.recovery === "check")) && <Button disabled={state.kind === "checking"} onClick={() => void check()} size="sm" type="button">{state.kind === "error" ? t("updates.retryCheck") : state.kind === "checking" ? t("updates.checking") : t("updates.check")}</Button>}
           {(state.kind === "available" || (state.kind === "error" && state.info)) && <Button onClick={() => void install()} size="sm" type="button">{state.kind === "error" ? t("updates.retryInstall") : t("updates.downloadInstall")}</Button>}
+          {state.kind === "installed" && <Button onClick={() => void restart()} size="sm" type="button">{t("updates.restartNow")}</Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -3,6 +3,58 @@ use std::sync::Arc;
 const PASSWORD: &str = "test-only-backup-password";
 
 #[tokio::test]
+async fn large_v2_share_round_trips_and_rejects_one_byte_over_the_file_limit() {
+    let bus = CommandBus::ephemeral().await.unwrap();
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let collection = bus
+        .api_collection_create(workspace.clone(), "Large".into())
+        .await
+        .unwrap();
+    // Use an ordinary portable field so the fixture exercises the desktop's
+    // export, preview and import commands with an actual V2 document.
+    sqlx::query("UPDATE api_collections SET description = ? WHERE id = ?")
+        .bind("x".repeat(MAX_V1_BUNDLE_BYTES))
+        .bind(&collection.id)
+        .execute(bus.db.pool())
+        .await
+        .unwrap();
+    let artifact = bus
+        .workspace_bundle_export_with_options(workspace.clone(), Default::default())
+        .await
+        .unwrap();
+    assert!(artifact.content.len() > MAX_V1_BUNDLE_BYTES);
+    let padding = MAX_WORKSPACE_FILE_BYTES - artifact.content.len();
+    let mut content = artifact.content;
+    content.extend(std::iter::repeat_n(' ', padding));
+    bus.workspace_bundle_preview_with_options(&content, Default::default())
+        .await
+        .unwrap();
+    let copy = bus
+        .workspace_bundle_import_with_options(content, "Restored".into(), Default::default())
+        .await
+        .unwrap();
+    let size: i64 = sqlx::query_scalar(
+        "SELECT length(description) FROM api_collections WHERE workspace_id = ? AND name = 'Large'",
+    )
+    .bind(copy.id)
+    .fetch_one(bus.db.pool())
+    .await
+    .unwrap();
+    assert_eq!(size, MAX_V1_BUNDLE_BYTES as i64);
+    sqlx::query("UPDATE api_collections SET description = description || ? WHERE id = ?")
+        .bind("x".repeat(padding + 1))
+        .bind(collection.id)
+        .execute(bus.db.pool())
+        .await
+        .unwrap();
+    let error = bus
+        .workspace_bundle_export_with_options(workspace, Default::default())
+        .await
+        .unwrap_err();
+    assert!(matches!(error, AppError::Validation(code) if code == "WORKSPACE_BUNDLE_TOO_LARGE"));
+}
+
+#[tokio::test]
 async fn encrypted_import_uses_the_explicit_local_mcp_policy() {
     let bus = CommandBus::ephemeral().await.unwrap();
     let source = source(&bus).await;

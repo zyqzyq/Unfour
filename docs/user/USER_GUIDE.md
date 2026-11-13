@@ -283,6 +283,11 @@ translations. Loading, empty and load-failure states are distinct and offer
 retry. Refresh failures keep already-loaded tasks/history available, with compact
 messages in narrow sidebars and history panels.
 
+When a desktop or MCP process exits during a task, opening its history marks
+the run as failed with an interruption message. Check the remote state before
+rerunning steps. For a run started by an older version, first close the process
+that started it, then select **Mark interrupted** on that history row.
+
 ## Database
 
 The database screen can save workspace-scoped database connections.

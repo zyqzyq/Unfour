@@ -16,10 +16,12 @@ unfour-diag = { path = "../unfour-diag" }
 unfour-local-storage = { path = "../local-storage" }
 unfour-secret-store = { path = "../secret-store" }
 uuid = { version = "1", features = ["serde", "v4"] }
+# Download staging owns an exclusive sibling file and publishes with platform-native no-clobber semantics.
+tempfile = { version = "3", optional = true }
 
 [features]
 default = []
-ssh-native = ["dep:russh", "dep:russh-sftp", "dep:ssh-key"]
+ssh-native = ["dep:russh", "dep:russh-sftp", "dep:ssh-key", "dep:tempfile"]
 
 [dependencies.russh]
 version = "0.61"

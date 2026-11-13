@@ -95,5 +95,5 @@ mod tests;
 mod workspace_bundle;
 pub use workspace_bundle::{
     WorkspaceBundleExportArtifact, WorkspaceBundleIssue, WorkspaceBundleOptions,
-    WorkspaceBundlePreview,
+    WorkspaceBundlePreview, MAX_WORKSPACE_FILE_BYTES,
 };

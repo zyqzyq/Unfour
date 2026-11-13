@@ -1,7 +1,7 @@
-use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use tauri::ipc::Channel;
+use tauri::Emitter;
 use tauri_plugin_updater::{Update, UpdaterExt};
 
 pub fn app_config() -> unfour_app::UnfourAppConfig {
@@ -62,10 +62,12 @@ pub struct UpdateMeta {
     commit: Option<String>,
     updater_enabled: bool,
     endpoint: Option<String>,
+    installer_exits_app: bool,
+    installed_version: Option<String>,
 }
 
 #[tauri::command]
-pub fn get_update_info() -> UpdateMeta {
+pub fn get_update_info(pending: tauri::State<'_, PendingUpdate>) -> UpdateMeta {
     let metadata = build_metadata();
     UpdateMeta {
         name: metadata.name,
@@ -75,6 +77,8 @@ pub fn get_update_info() -> UpdateMeta {
         commit: metadata.commit,
         updater_enabled: metadata.updater_enabled,
         endpoint: metadata.updater_endpoint,
+        installer_exits_app: cfg!(windows),
+        installed_version: pending.installed_version.get().cloned(),
     }
 }
 
@@ -92,10 +96,13 @@ struct BuildMetadata {
     updater_enabled: bool,
     updater_endpoint: Option<String>,
     default_storage_profile: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mcp_sha256: Option<&'static str>,
 }
 
 fn build_metadata() -> BuildMetadata {
     BuildMetadata {
+        mcp_sha256: option_env!("UNFOUR_MCP_SHA256"),
         name: "Unfour".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         distribution: compiled_distribution().as_str().to_string(),
@@ -154,6 +161,7 @@ pub async fn check_for_update(
     pending: tauri::State<'_, PendingUpdate>,
 ) -> Result<Option<UpdateInfo>, UpdateCommandError> {
     ensure_internal_updater(compiled_distribution())?;
+    let mut candidate = pending.operation().await?;
     let endpoint = env!("UNFOUR_UPDATE_ENDPOINT");
     let url =
         url::Url::parse(endpoint).map_err(|error| UpdateCommandError::check(error.to_string()))?;
@@ -167,31 +175,20 @@ pub async fn check_for_update(
         .check()
         .await
         .map_err(|error| UpdateCommandError::check(error.to_string()))?;
-    let info = update.as_ref().map(|candidate| UpdateInfo {
-        version: candidate.version.clone(),
-        current_version: candidate.current_version.clone(),
-        date: candidate.date.map(|date| date.to_string()),
-        body: candidate.body.clone(),
-    });
-    let mut guard = pending.0.lock().map_err(|_| {
-        UpdateCommandError::check("update state is unavailable; restart Unfour and try again")
-    })?;
-    *guard = update;
+    let info = update.as_ref().map(UpdateInfo::from);
+    *candidate = update;
     Ok(info)
 }
 
 #[tauri::command]
 pub async fn install_update(
+    app: tauri::AppHandle,
     pending: tauri::State<'_, PendingUpdate>,
     on_event: Channel<UpdateDownloadEvent>,
 ) -> Result<(), UpdateCommandError> {
     ensure_internal_updater(compiled_distribution())?;
-    let mut update = pending
-        .0
-        .lock()
-        .map_err(|_| {
-            UpdateCommandError::check("update state is unavailable; restart Unfour and try again")
-        })?
+    let mut candidate = pending.operation().await?;
+    let mut update = candidate
         .clone()
         .ok_or_else(|| UpdateCommandError::check("check for updates again before installing"))?;
 
@@ -229,9 +226,27 @@ pub async fn install_update(
             "The operating system could not start the update installer: {error}. Close any MCP client using Unfour and try again"
         ))
     })?;
-    *pending.0.lock().map_err(|_| {
-        UpdateCommandError::check("update state is unavailable; restart Unfour and try again")
-    })? = None;
+    *candidate = None;
+    if !cfg!(windows) {
+        let info = UpdateInfo::from(&update);
+        let _ = pending.installed_version.set(info.version.clone());
+        let _ = app.emit("unfour:update-installed", &info);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn restart_after_update(
+    app: tauri::AppHandle,
+    pending: tauri::State<'_, PendingUpdate>,
+) -> Result<(), UpdateCommandError> {
+    ensure_internal_updater(compiled_distribution())?;
+    if pending.installed_version.get().is_none() {
+        return Err(UpdateCommandError::check(
+            "no installed update is awaiting restart",
+        ));
+    }
+    app.request_restart();
     Ok(())
 }
 
@@ -244,8 +259,38 @@ pub struct UpdateInfo {
     body: Option<String>,
 }
 
+impl From<&Update> for UpdateInfo {
+    fn from(update: &Update) -> Self {
+        Self {
+            version: update.version.clone(),
+            current_version: update.current_version.clone(),
+            date: update.date.map(|date| date.to_string()),
+            body: update.body.clone(),
+        }
+    }
+}
+
 #[derive(Default)]
-pub struct PendingUpdate(Mutex<Option<Update>>);
+pub struct PendingUpdate {
+    candidate: tokio::sync::Mutex<Option<Update>>,
+    installed_version: std::sync::OnceLock<String>,
+}
+
+impl PendingUpdate {
+    // The lock spans the entire check or download/install. A reloaded WebView
+    // cannot replace a candidate or begin another install before it finishes.
+    async fn operation(
+        &self,
+    ) -> Result<tokio::sync::MutexGuard<'_, Option<Update>>, UpdateCommandError> {
+        let candidate = self.candidate.lock().await;
+        if self.installed_version.get().is_some() {
+            return Err(UpdateCommandError::check(
+                "restart Unfour to use the installed update",
+            ));
+        }
+        Ok(candidate)
+    }
+}
 
 #[derive(Clone, serde::Serialize)]
 #[serde(tag = "event", rename_all = "camelCase")]
@@ -375,6 +420,25 @@ fn update_download_error(error: tauri_plugin_updater::Error) -> UpdateCommandErr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn update_operations_serialize_and_stop_after_installation() {
+        let pending = PendingUpdate::default();
+        let first = pending.operation().await.unwrap();
+        let second = pending.operation();
+        tokio::pin!(second);
+        tokio::select! {
+            biased;
+            _ = &mut second => panic!("update operations overlapped"),
+            _ = std::future::ready(()) => {}
+        }
+        // Returning from a failed operation releases the candidate for retry.
+        drop(first);
+        let retry = second.await.unwrap();
+        pending.installed_version.set("0.9.7".into()).unwrap();
+        drop(retry);
+        assert!(pending.operation().await.is_err());
+    }
 
     #[test]
     fn metadata_cli_keeps_priority_and_validates_arguments() {

@@ -58,6 +58,7 @@ vi.mock("./features/update/updateApi", () => ({
   checkForUpdate: vi.fn(),
   getUpdateInfo: mocks.getUpdateInfo,
   installUpdate: vi.fn(),
+  listenForInstalledUpdate: vi.fn().mockResolvedValue(() => {}),
   updaterError: (error: unknown) => ({ message: String(error), recovery: "check" }),
 }));
 

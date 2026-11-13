@@ -24,11 +24,20 @@ does not accept a destination path.
 - Vitest for `TableExportDialog`, `TableDataTab`, and `DatabaseConnectionTree`:
   whole-table request parameters and existing table UI behavior.
 
-## Live-database follow-up
+## Live-database verification
 
-The test environment has no PostgreSQL or MySQL server. Catalog queries for
-PostgreSQL DDL and live data decoding for these two drivers were compiled but
-not integration-tested against a server. PostgreSQL DDL is intended for common
+The PostgreSQL 16.6 regression replays a structure-and-data export and inserts
+a new row to check the generated IDs. It covers filtered rows, omitted ID
+columns, empty tables with an advanced sequence, descending sequences, and
+sequences that have never been called. It also checks a nullable integer using
+an owned bigint sequence, a bigint identity using a smallint sequence, and
+restore with the source schema absent from the destination search path.
+To repeat it, set `UNFOUR_TEST_PG_PORT`
+to a disposable local PostgreSQL server that accepts the `postgres` role, then
+run `cargo test -p unfour-database-engine --lib export_restore_preserves_owned_sequence_state_and_projection -- --ignored`.
+The exporting role needs `SELECT` on the owned sequences to read their state.
+
+Live MySQL verification remains pending. PostgreSQL DDL is intended for common
 development tables and views; specialized objects such as foreign tables and
 partitioning clauses are outside this single-table export scope. PostgreSQL
 array and custom types may return an unsupported-type error during data export.

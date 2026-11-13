@@ -41,6 +41,7 @@ pub(super) struct StoredBinding {
 
 #[derive(sqlx::FromRow)]
 pub(super) struct StoredRun {
+    pub(super) owner_lock: bool,
     context_json: Option<String>,
     id: String,
     workspace_id: String,
@@ -115,6 +116,7 @@ pub(super) fn binding_from_row(row: StoredBinding) -> SshTaskLocalBinding {
 
 pub(super) fn run_from_row(row: StoredRun) -> SshTaskRun {
     SshTaskRun {
+        legacy_recovery_available: !row.owner_lock && row.status == "running",
         context: row
             .context_json
             .and_then(|json| serde_json::from_str(&json).ok())

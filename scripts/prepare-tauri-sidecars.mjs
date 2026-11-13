@@ -71,16 +71,12 @@ function resolveTarget() {
   );
 }
 
-function executableName(name, target) {
-  return target.includes("windows") ? `${name}.exe` : name;
-}
-
 async function main() {
   const target = resolveTarget();
   const args = process.argv.slice(2);
   const isDebug = args.includes("--debug") || process.env.UNFOUR_SIDECAR_PROFILE === "debug";
   const profile = isDebug ? "debug" : "release";
-  const cargoArgs = ["build", "-p", binaryBaseName];
+  const cargoArgs = ["build", "-p", binaryBaseName, "--message-format=json-render-diagnostics"];
   if (profile === "release") {
     cargoArgs.push("--release");
   }
@@ -89,14 +85,22 @@ async function main() {
   console.log(`[prepare-tauri-sidecars] Building ${binaryBaseName} (${profile}) for ${target}`);
   const build = spawnSync("cargo", cargoArgs, {
     cwd: repoRoot,
-    stdio: "inherit",
+    stdio: ["inherit", "pipe", "inherit"],
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
   });
 
+  if (build.error) throw build.error;
   if (build.status !== 0) {
     throw new Error(`cargo ${cargoArgs.join(" ")} failed with exit code ${build.status}`);
   }
 
-  const source = join(repoRoot, "target", target, profile, executableName(binaryBaseName, target));
+  // Cargo's artifact path honors target-dir and per-user Cargo configuration.
+  const source = build.stdout.trim().split(/\r?\n/).map((line) => JSON.parse(line))
+    .find((message) => message.reason === "compiler-artifact"
+      && message.target.name === binaryBaseName && message.target.kind.includes("bin")
+      && message.executable)?.executable;
+  if (!source) throw new Error(`Cargo reported no ${binaryBaseName} executable for ${target}`);
   const destination = join(
     tauriDir,
     "binaries",

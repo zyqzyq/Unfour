@@ -14,6 +14,7 @@ vi.mock("@unfour/command-client", async (original) => ({
   getSshTask: vi.fn(),
   saveSshTask: vi.fn(),
   listSshTaskRuns: vi.fn(),
+  readSshTaskRunLog: vi.fn(),
   registerSshTaskRunChannel: vi.fn(async () => () => {}),
 }));
 
@@ -33,6 +34,7 @@ beforeEach(() => {
   vi.mocked(commands.listSshTasks).mockResolvedValue([task]);
   vi.mocked(commands.getSshTask).mockResolvedValue({ task, steps: [], localBinding: null, detectedInputs: [] });
   vi.mocked(commands.listSshTaskRuns).mockResolvedValue([]);
+  vi.mocked(commands.readSshTaskRunLog).mockResolvedValue("");
   vi.mocked(commands.registerSshTaskRunChannel).mockResolvedValue(() => {});
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -185,4 +187,50 @@ it.each(["en", "zh-CN"] as const)("creates the Docker example in the selected la
   const t = createTranslator(locale);
   fireEvent.click(await within(screen.getByRole("main")).findByRole("button", { name: t("ssh.tasks.actions.dockerExample") }));
   expect(await screen.findByRole("textbox", { name: t("ssh.tasks.editor.name") })).toHaveValue(locale === "en" ? "Docker Image Export" : "Docker 镜像导出");
+});
+
+it("settles an MCP-owned output panel after switching tasks and clearing its history", async () => {
+  const other = { ...task, id: "other", name: "Build" };
+  const running: commands.SshTaskRun = { ...run, status: "running", errorMessage: null };
+  const interrupted = { ...run, finishedAt: "2026-10-22T00:01:00Z", errorMessage: "SSH_TASK_RUN_INTERRUPTED" };
+  let external = running;
+  vi.mocked(commands.listSshTasks).mockResolvedValue([task, other]);
+  vi.mocked(commands.getSshTask).mockImplementation(async (_, id) => ({
+    task: id === task.id ? task : other, steps: [], localBinding: null, detectedInputs: [],
+  }));
+  vi.mocked(commands.listSshTaskRuns).mockImplementation(async (_, id) => id === task.id ? [external] : []);
+  const client = mount("en");
+  const t = createTranslator("en");
+  fireEvent.click(await screen.findByRole("button", { name: task.name }));
+  fireEvent.click(await screen.findByRole("radio", { name: t("ssh.tasks.tabs.history") }));
+  fireEvent.click(await screen.findByRole("button", { name: /run\.log/ }));
+  expect(await screen.findByRole("button", { name: t("ssh.tasks.actions.cancelRun") })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: other.name }));
+  expect(await screen.findByRole("textbox", { name: t("ssh.tasks.editor.name") })).toHaveValue(other.name);
+  fireEvent.click(screen.getByRole("radio", { name: t("ssh.tasks.tabs.history") }));
+  expect(await screen.findByText(t("ssh.tasks.history.empty"))).toBeInTheDocument();
+  external = interrupted;
+  await screen.findByText(t("ssh.tasks.run.interrupted"), {}, { timeout: 4_000 });
+  act(() => client.setQueryData(["ssh-task-runs", task.workspaceId, task.id], []));
+  expect(screen.queryByRole("button", { name: t("ssh.tasks.actions.cancelRun") })).not.toBeInTheDocument();
+  expect(screen.getByText(t("ssh.tasks.run.interrupted"))).toBeInTheDocument();
+  expect(screen.getByText(t("ssh.tasks.history.empty"))).toBeInTheDocument();
+});
+
+it("confirms a missing running row before closing its output", async () => {
+  const running: commands.SshTaskRun = { ...run, status: "running", errorMessage: null };
+  vi.mocked(commands.listSshTaskRuns).mockResolvedValue([running]);
+  const client = mount("en");
+  const t = createTranslator("en");
+  fireEvent.click(await screen.findByRole("button", { name: task.name }));
+  fireEvent.click(await screen.findByRole("radio", { name: t("ssh.tasks.tabs.history") }));
+  fireEvent.click(await screen.findByRole("button", { name: /run\.log/ }));
+  const cancel = await screen.findByRole("button", { name: t("ssh.tasks.actions.cancelRun") });
+  const key = ["ssh-task-runs", task.workspaceId, task.id];
+  act(() => client.setQueryData(key, []));
+  await waitFor(() => expect(client.getQueryData(key)).toEqual([running]));
+  expect(cancel).toBeInTheDocument();
+  vi.mocked(commands.listSshTaskRuns).mockResolvedValue([]);
+  await act(async () => { await client.invalidateQueries({ queryKey: key }); });
+  await waitFor(() => expect(cancel).not.toBeInTheDocument());
 });

@@ -17,6 +17,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+# Bind the Store desktop metadata to the exact MCP binary staged alongside it.
+sha2 = "0.10"
 
 [dependencies]
 async-trait = "0.1"

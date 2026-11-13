@@ -95,7 +95,8 @@ pub fn run() {
             telemetry::telemetry_record_active,
             update::get_update_info,
             update::check_for_update,
-            update::install_update
+            update::install_update,
+            update::restart_after_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running Unfour");

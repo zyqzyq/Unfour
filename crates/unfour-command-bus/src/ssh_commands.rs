@@ -546,6 +546,16 @@ impl CommandBus {
         self.ssh.list_task_runs(workspace_id, task_id).await
     }
 
+    pub async fn interrupt_legacy_ssh_task_run(
+        &self,
+        workspace_id: &str,
+        run_id: &str,
+    ) -> AppResult<SshTaskRun> {
+        self.ssh
+            .interrupt_legacy_task_run(workspace_id, run_id)
+            .await
+    }
+
     pub async fn read_ssh_task_run_log(
         &self,
         workspace_id: String,

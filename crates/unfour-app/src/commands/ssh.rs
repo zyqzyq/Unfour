@@ -96,6 +96,18 @@ pub async fn ssh_task_run_cancel(
 }
 
 #[tauri::command]
+pub async fn ssh_task_run_interrupt_legacy(
+    workspace_id: String,
+    run_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<SshTaskRun> {
+    state
+        .command_bus
+        .interrupt_legacy_ssh_task_run(&workspace_id, &run_id)
+        .await
+}
+
+#[tauri::command]
 pub async fn ssh_task_runs_list(
     workspace_id: String,
     task_id: String,

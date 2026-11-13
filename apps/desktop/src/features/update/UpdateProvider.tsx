@@ -1,13 +1,12 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
-import { checkForUpdate, getUpdateInfo, installUpdate, updaterError } from "./updateApi";
+import { checkForUpdate, getUpdateInfo, installUpdate, listenForInstalledUpdate, restartAfterUpdate, updaterError } from "./updateApi";
 import { recordSuccessfulUpdateCheck, wasUpdateCheckedRecently } from "./updateCheckPolicy";
 import type { UpdateMeta, UpdateState } from "./updateTypes";
 import { UpdateContext } from "./useUpdate";
@@ -17,35 +16,61 @@ let automaticCheckStarted = false;
 
 export function UpdateProvider({ children }: { children: ReactNode }) {
   const [meta, setMeta] = useState<UpdateMeta | null>(null);
-  const [state, setState] = useState<UpdateState>({ kind: "idle" });
+  const [state, renderState] = useState<UpdateState>({ kind: "idle" });
   const [dialogOpen, setDialogOpen] = useState(false);
   const mountedRef = useRef(false);
   const busyRef = useRef(false);
   const metaRef = useRef<UpdateMeta | null>(null);
   const stateRef = useRef(state);
-  useLayoutEffect(() => { stateRef.current = state; }, [state]);
+  const setState = useCallback((next: UpdateState) => {
+    if (!mountedRef.current || (stateRef.current.kind === "installed" && next.kind !== "installed")) return;
+    stateRef.current = next;
+    renderState(next);
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
-    getUpdateInfo()
-      .then((value) => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    async function load() {
+      try {
+        // Subscribe before reading the snapshot so a reload during installation
+        // observes completion even when this WebView did not initiate the install.
+        unlisten = await listenForInstalledUpdate((info) => {
+          if (!disposed) setState({ kind: "installed", info });
+        });
+      } catch {
+        // The metadata snapshot and initiating call still work without events.
+      }
+      if (disposed) { unlisten?.(); return; }
+      try {
+        const value = await getUpdateInfo();
+        if (disposed) return;
         metaRef.current = value;
-        if (!mountedRef.current) return;
         setMeta(value);
         if (!value.updaterEnabled || value.distribution === "microsoft-store") {
           setState({ kind: "managedByStore" });
+        } else if (value.installedVersion && stateRef.current.kind !== "installed") {
+          setState({ kind: "installed", info: {
+            version: value.installedVersion, currentVersion: value.version, date: null, body: null,
+          } });
         }
-      })
-      .catch(() => undefined);
+      } catch {
+        // The updater stays unavailable when native metadata cannot be read.
+      }
+    }
+    void load();
     return () => {
+      disposed = true;
       mountedRef.current = false;
+      unlisten?.();
     };
-  }, []);
+  }, [setState]);
 
   const runCheck = useCallback(async (silent = false) => {
     const currentMeta = metaRef.current;
     if (!currentMeta?.updaterEnabled || currentMeta.distribution !== "standard") return;
-    if (busyRef.current) return;
+    if (busyRef.current || stateRef.current.kind === "installed") return;
     busyRef.current = true;
     if (mountedRef.current) setState({ kind: "checking" });
     try {
@@ -61,7 +86,7 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
     } finally {
       busyRef.current = false;
     }
-  }, []);
+  }, [setState]);
 
   useEffect(() => {
     if (!meta?.updaterEnabled || meta.distribution !== "standard") return undefined;
@@ -78,17 +103,12 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
     if (!currentMeta?.updaterEnabled || currentMeta.distribution !== "standard") return;
     if (busyRef.current) return;
     const current = stateRef.current;
-    const info = current.kind === "available"
-        || current.kind === "downloading"
-        || current.kind === "installing"
-      ? current.info
-      : current.kind === "error"
-        ? current.info
-        : undefined;
+    const info = current.kind === "available" || current.kind === "error" ? current.info : undefined;
     if (!info) return;
 
     busyRef.current = true;
     let downloaded = 0;
+    let acceptingProgress = true;
     let total: number | null = null;
     const throttleMs = 120;
     let lastRender = 0;
@@ -107,7 +127,7 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
     setState({ kind: "downloading", info, downloaded, total });
     try {
       await installUpdate((event) => {
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || !acceptingProgress) return;
         if (event.event === "started") {
           total = Number.isFinite(event.contentLength) && event.contentLength! >= 0
             ? event.contentLength
@@ -125,14 +145,33 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
           setState({ kind: "installing", info });
         }
       });
+      if (mountedRef.current && !currentMeta.installerExitsApp) {
+        setState({ kind: "installed", info });
+      }
     } catch (error) {
       const detail = updaterError(error, "download");
       if (mountedRef.current) setState({ kind: "error", info, ...detail });
     } finally {
+      acceptingProgress = false;
       if (flushTimer !== null) clearTimeout(flushTimer);
       busyRef.current = false;
     }
-  }, []);
+  }, [setState]);
+
+  const restart = useCallback(async () => {
+    const current = stateRef.current;
+    if (current.kind !== "installed" || busyRef.current) return;
+    busyRef.current = true;
+    try {
+      await restartAfterUpdate();
+    } catch (error) {
+      if (mountedRef.current) {
+        setState({ ...current, restartError: updaterError(error, "installer").message });
+      }
+    } finally {
+      busyRef.current = false;
+    }
+  }, [setState]);
 
   const openDialog = useCallback(() => setDialogOpen(true), []);
   const value = useMemo(
@@ -144,8 +183,9 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
       openDialog,
       check: () => runCheck(false),
       install,
+      restart,
     }),
-    [dialogOpen, install, meta, openDialog, runCheck, state],
+    [dialogOpen, install, meta, openDialog, restart, runCheck, state],
   );
   return <UpdateContext.Provider value={value}>{children}</UpdateContext.Provider>;
 }

@@ -24,6 +24,22 @@ it("offers separate rerun actions for every completed status without selecting h
   expect(onSelectRun).not.toHaveBeenCalled();
 });
 
+it("confirms legacy repair for the selected run and keeps owned runs protected", () => {
+  const repair = vi.fn();
+  const run: SshTaskRun = {
+    id: "legacy", taskId: "task", workspaceId: "workspace", connectionId: null, status: "running",
+    startedAt: "2026-01-01T00:00:00Z", finishedAt: null, errorMessage: null, logPath: "", legacyRecoveryAvailable: true,
+  };
+  render(<TaskHistory clearing={false} failed={false} loading={false} retrying={false}
+    onClear={vi.fn()} onSelectRun={vi.fn()} onRetry={vi.fn()} onInterruptLegacy={repair}
+    runs={[run, { ...run, id: "owned", legacyRecoveryAvailable: false }]} />);
+  fireEvent.click(screen.getByRole("button", { name: "ssh.tasks.run.markInterrupted" }));
+  expect(repair).not.toHaveBeenCalled();
+  expect(screen.getByText("ssh.tasks.run.confirmLegacyInterruption")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "ssh.tasks.run.markInterrupted" }));
+  expect(repair).toHaveBeenCalledExactlyOnceWith(run);
+});
+
 it("keeps cached history visible when a refresh fails and offers retry", () => {
   const onRetry = vi.fn();
   const run: SshTaskRun = {

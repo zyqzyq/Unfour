@@ -87,7 +87,7 @@ added to the Cloud Sync domain registry.
 
 Import follows:
 
-1. Read bounded UTF-8 JSON (48 MiB envelope / 32 MiB plaintext maximum), check format/version and typed fields.
+1. Read bounded UTF-8 JSON and check format/version and typed fields. V2 sharing files and encrypted envelopes allow 48 MiB on both export and import. V1 sharing files and the decrypted backup payload retain their 32 MiB limit.
 2. Sanitize untrusted content with the same export security rules.
 3. Validate unique IDs, reference kinds, folder ownership/cycles, and Flow graph
    and expression constraints. At most 50,000 top-level records and 128 folder

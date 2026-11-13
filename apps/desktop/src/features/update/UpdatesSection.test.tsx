@@ -16,6 +16,7 @@ vi.mock("./useUpdate", () => ({
 }));
 
 import { UpdatesSection } from "./UpdatesSection";
+import { UpdateDialog } from "./UpdateDialog";
 
 function renderUpdates() {
   return render(
@@ -41,6 +42,8 @@ function createContext(
       channel: "stable",
       commit: null,
       updaterEnabled: distribution === "standard",
+      installerExitsApp: false,
+      installedVersion: null,
       endpoint: null,
     },
     state,
@@ -49,6 +52,7 @@ function createContext(
     openDialog: mocks.openDialog,
     check: mocks.check,
     install: async () => undefined,
+    restart: async () => undefined,
   };
 }
 
@@ -85,5 +89,30 @@ describe("UpdatesSection", () => {
 
     expect(screen.getByText("Updates are managed by Microsoft Store.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Check for updates" })).toBeNull();
+  });
+
+  it("reopens the installed update after the dialog is closed", () => {
+    mocks.context = createContext({ kind: "installed", info: { version: "0.9.7", currentVersion: "0.9.6", date: null, body: null } });
+    renderUpdates();
+    expect(screen.getByText("Version 0.9.7 is installed. Restart Unfour to use it.")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Restart to update" }));
+    expect(mocks.openDialog).toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Check for updates" })).toBeNull();
+  });
+
+  it("lets the user save their work and explicitly restart after installation", () => {
+    const restart = vi.fn().mockResolvedValue(undefined);
+    mocks.context = {
+      ...createContext({ kind: "installed", info: { version: "0.9.7", currentVersion: "0.9.6", date: null, body: null } }),
+      dialogOpen: true, restart,
+    };
+    render(<I18nProvider initialLocale="en" resources={updateI18nResources} storageKey="test.update-dialog">
+      <UpdateDialog />
+    </I18nProvider>);
+    expect(screen.getByText(/Save your work before restarting/)).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Download & install" })).toBeNull();
+    expect(restart).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Restart now" }));
+    expect(restart).toHaveBeenCalledTimes(1);
   });
 });

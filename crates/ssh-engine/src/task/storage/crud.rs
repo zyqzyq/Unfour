@@ -258,6 +258,8 @@ impl SshService {
     ) -> AppResult<DomainCommandResult<Vec<PathBuf>>> {
         self.get_task_on(connection, &workspace_id, &task_id)
             .await?;
+        self.recover_task_runs_on(connection, &workspace_id, Some(&task_id))
+            .await?;
         let running: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM ssh_task_run WHERE workspace_id = ?1 AND task_id = ?2 AND status = 'running'",
         )

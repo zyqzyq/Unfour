@@ -159,6 +159,8 @@ pub struct SshTaskCancelInput {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SshTaskRun {
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub legacy_recovery_available: bool,
     #[serde(default)]
     pub context: Option<SshTaskRunContext>,
     /// Response-only warnings, not persisted in the task-run table.

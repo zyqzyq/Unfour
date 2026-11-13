@@ -27,7 +27,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $outputRoot = [System.IO.Path]::GetFullPath((Join-Path $repoRoot "target\msix"))
-$stagingDirectory = Join-Path $outputRoot "staging"
+$stagingDirectory = Join-Path $outputRoot ("staging-" + [Guid]::NewGuid().ToString("N"))
 $targetTriple = "x86_64-pc-windows-msvc"
 $temporaryPfxPath = $null
 
@@ -71,17 +71,6 @@ function Find-WindowsSdkTool {
     throw "$ToolName was not found. Install the Windows SDK or provide an explicit tool path."
 }
 
-function Reset-OutputDirectory {
-    param([Parameter(Mandatory = $true)][string]$Path)
-    $fullPath = [IO.Path]::GetFullPath($Path)
-    if (-not $fullPath.StartsWith($outputRoot.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
-        throw "Refusing to reset a directory outside '$outputRoot': $fullPath"
-    }
-    if (Test-Path -LiteralPath $fullPath) { Remove-Item -LiteralPath $fullPath -Recurse -Force }
-    New-Item -ItemType Directory -Path $fullPath -Force | Out-Null
-    return $fullPath
-}
-
 function Copy-RequiredFile {
     param([Parameter(Mandatory = $true)][string]$Source, [Parameter(Mandatory = $true)][string]$Destination)
     if (-not (Test-Path -LiteralPath $Source -PathType Leaf)) {
@@ -121,14 +110,6 @@ function Assert-FormalValue {
     if ($Value -match '(?i)(__PARTNER_CENTER|PLACEHOLDER|CHANGEME|TODO|<[^>]+>)') {
         throw "$FieldName still contains a placeholder. Copy the exact value from Partner Center."
     }
-}
-
-function Find-BuildOutput {
-    param([Parameter(Mandatory = $true)][string[]]$Candidates)
-    foreach ($candidate in $Candidates) {
-        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return [IO.Path]::GetFullPath($candidate) }
-    }
-    throw "None of the expected build outputs exist: $($Candidates -join ', ')"
 }
 
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
@@ -231,20 +212,19 @@ try {
         } finally { $env:UNFOUR_TAURI_TARGET = $previousTarget }
     }
 
-    $appExecutable = Find-BuildOutput @(
-        (Join-Path $repoRoot "target\$targetTriple\release\unfour.exe"),
-        (Join-Path $repoRoot "target\release\unfour.exe")
-    )
-    $mcpExecutable = Find-BuildOutput @(
-        (Join-Path $repoRoot "target\tauri-sidecars\$targetTriple\release\unfour-mcp.exe"),
-        (Join-Path $repoRoot "target\$targetTriple\release\unfour-mcp.exe"),
-        (Join-Path $repoRoot "target\release\unfour-mcp.exe")
-    )
+    $cargoMetadata = & cargo metadata --offline --no-deps --format-version 1
+    if ($LASTEXITCODE -ne 0) { throw "Could not resolve the Cargo target directory." }
+    $targetRoot = ($cargoMetadata | ConvertFrom-Json).target_directory
+    $appExecutable = (Get-Item -LiteralPath (Join-Path $targetRoot "$targetTriple\release\unfour.exe")).FullName
+    $mcpExecutable = (Get-Item -LiteralPath (Join-Path $repoRoot "apps\desktop\src-tauri\binaries\unfour-mcp-$targetTriple.exe")).FullName
 
-    $buildMetadataPath = Join-Path $outputRoot "unfour-build-metadata.json"
-    New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
-    Remove-Item -LiteralPath $buildMetadataPath -Force -ErrorAction SilentlyContinue
-    $metadataProcess = Start-Process -FilePath $appExecutable -ArgumentList @("--write-build-metadata", "`"$buildMetadataPath`"") -WindowStyle Hidden -Wait -PassThru
+    # Cargo outputs can change during packaging. Read release metadata from
+    # the private copy that MakeAppx will consume.
+    $stagedDesktop = Join-Path $stagingDirectory "unfour.exe"
+    Copy-RequiredFile $appExecutable $stagedDesktop
+    Copy-RequiredFile $mcpExecutable (Join-Path $stagingDirectory "unfour-mcp.exe")
+    $buildMetadataPath = Join-Path $stagingDirectory "unfour-build-metadata.json"
+    $metadataProcess = Start-Process -FilePath $stagedDesktop -ArgumentList @("--write-build-metadata", "`"$buildMetadataPath`"") -WindowStyle Hidden -Wait -PassThru
     if ($metadataProcess.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $buildMetadataPath)) {
         throw "Application build metadata command failed."
     }
@@ -269,10 +249,9 @@ try {
         throw "MSIX packaging requires the unified repository commit."
     }
 
-    $stagingDirectory = Reset-OutputDirectory $stagingDirectory
-    Copy-RequiredFile $appExecutable (Join-Path $stagingDirectory "unfour.exe")
-    Copy-RequiredFile $mcpExecutable (Join-Path $stagingDirectory "unfour-mcp.exe")
-    Copy-RequiredFile $buildMetadataPath (Join-Path $stagingDirectory "unfour-build-metadata.json")
+    $desktopHash = (Get-FileHash -LiteralPath $stagedDesktop -Algorithm SHA256).Hash
+    $compiledMetadata | Add-Member -NotePropertyName desktopSha256 -NotePropertyValue $desktopHash
+    $compiledMetadata | ConvertTo-Json | Set-Content -LiteralPath $buildMetadataPath -Encoding utf8NoBOM
     $iconRoot = Join-Path $repoRoot "apps\desktop\src-tauri\icons"
     foreach ($iconName in @("StoreLogo.png", "Square44x44Logo.png", "Square71x71Logo.png", "Square150x150Logo.png", "Square310x310Logo.png")) {
         Copy-RequiredFile (Join-Path $iconRoot $iconName) (Join-Path $stagingDirectory "Assets\$iconName")
@@ -322,6 +301,10 @@ try {
     Write-Host "[build-msix] Protocol: unfour://"
     Write-Host "[build-msix] MCP command: unfour-mcp.exe"
 } finally {
+    $privateStaging = [IO.Path]::GetFullPath($stagingDirectory)
+    if ($privateStaging.StartsWith($outputRoot.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $privateStaging)) {
+        Remove-Item -LiteralPath $privateStaging -Recurse -Force
+    }
     if ($null -ne $temporaryPfxPath -and (Test-Path -LiteralPath $temporaryPfxPath)) {
         Remove-Item -LiteralPath $temporaryPfxPath -Force
     }

@@ -1,8 +1,11 @@
 use crate::AppState;
 use serde::Serialize;
+use std::io::{self, Read};
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
-use unfour_command_bus::{WorkspaceBundleOptions, WorkspaceBundlePreview};
+use unfour_command_bus::{
+    WorkspaceBundleOptions, WorkspaceBundlePreview, MAX_WORKSPACE_FILE_BYTES,
+};
 use unfour_core::{
     models::{ApiCollectionExportResult, Workspace},
     AppError, AppResult,
@@ -15,6 +18,18 @@ pub struct BundleFilePreview {
     preview: Option<WorkspaceBundlePreview>,
     encrypted: bool,
 }
+
+fn read_bundle_content(reader: impl Read, limit: usize) -> AppResult<String> {
+    let mut bytes = Vec::new();
+    reader.take(limit as u64 + 1).read_to_end(&mut bytes)?;
+    // Check the byte limit before decoding: the final byte read can split a UTF-8 character.
+    if bytes.len() > limit {
+        return Err(AppError::Validation("WORKSPACE_BUNDLE_TOO_LARGE".into()));
+    }
+    String::from_utf8(bytes)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.utf8_error()).into())
+}
+
 #[tauri::command]
 pub async fn workspace_bundle_pick(
     app: AppHandle,
@@ -32,14 +47,7 @@ pub async fn workspace_bundle_pick(
         .into_path()
         .map_err(|_| AppError::Validation("invalid import path".into()))?;
     // Bound the actual read, including files that grow during selection.
-    use std::io::Read;
-    let mut content = String::new();
-    std::fs::File::open(path)?
-        .take(48 * 1024 * 1024 + 1)
-        .read_to_string(&mut content)?;
-    if content.len() > 48 * 1024 * 1024 {
-        return Err(AppError::Validation("WORKSPACE_BUNDLE_TOO_LARGE".into()));
-    }
+    let content = read_bundle_content(std::fs::File::open(path)?, MAX_WORKSPACE_FILE_BYTES)?;
     let encrypted = serde_json::from_str::<serde_json::Value>(&content)
         .ok()
         .is_some_and(|v| v["format"] == "unfour-workspace-encrypted");
@@ -117,4 +125,19 @@ pub async fn workspace_bundle_export(
         .persist(&path)
         .map_err(|error| AppError::from(error.error))?;
     Ok(ApiCollectionExportResult { saved: true })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn picker_checks_byte_limit_before_decoding_utf8() {
+        let text = "共享";
+        assert_eq!(read_bundle_content(text.as_bytes(), 6).unwrap(), text);
+        assert!(matches!(
+            read_bundle_content(text.as_bytes(), 3),
+            Err(AppError::Validation(code)) if code == "WORKSPACE_BUNDLE_TOO_LARGE"
+        ));
+    }
 }

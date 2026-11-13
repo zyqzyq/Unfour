@@ -161,6 +161,7 @@ fn detail() -> SshTaskDetail {
 
 fn run() -> SshTaskRun {
     SshTaskRun {
+        legacy_recovery_available: false,
         context: None,
         warnings: vec!["ACTIVITY_RECORD_FAILED".into()],
         id: "run-1".to_string(),

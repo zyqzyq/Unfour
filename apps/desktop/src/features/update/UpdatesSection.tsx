@@ -38,18 +38,18 @@ export function UpdatesSection() {
             </span>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button
-              disabled={
-                state.kind === "checking"
-                || state.kind === "downloading"
-                || state.kind === "installing"
-              }
-              onClick={() => void check()}
-              size="sm"
-              type="button"
-            >
-              {state.kind === "checking" ? t("updates.checking") : t("updates.check")}
-            </Button>
+            {state.kind === "installed" ? (
+              <Button onClick={openDialog} size="sm" type="button">{t("updates.restartOptions")}</Button>
+            ) : (
+              <Button
+                disabled={state.kind === "checking" || state.kind === "downloading" || state.kind === "installing"}
+                onClick={() => void check()}
+                size="sm"
+                type="button"
+              >
+                {state.kind === "checking" ? t("updates.checking") : t("updates.check")}
+              </Button>
+            )}
             {available && (
               <Button onClick={openDialog} size="sm" type="button" variant="ghost">
                 {t("updates.indicator")}
@@ -78,6 +78,8 @@ function updateStatusLabel(state: UpdateState, t: TFunction) {
         : t("updates.downloadingUnknown");
     case "installing":
       return t("updates.startingInstaller");
+    case "installed":
+      return t("updates.installed", { version: state.info.version });
     case "error":
       return state.info ? t("updates.updateFailed") : t("updates.checkFailed");
     default:

@@ -24,6 +24,7 @@ const TASK_MOCK_HANDLERS: TaskMockHandler[] = [
   handleTaskDeleteMock,
   handleTaskStartRunMock,
   handleTaskCancelRunMock,
+  handleLegacyTaskInterruptMock,
   handleTaskRunsListMock,
   handleTaskRunLogReadMock,
   handleTaskRunsClearMock,
@@ -206,6 +207,21 @@ function handleTaskRunsListMock<T>(
   return mockStore.sshTaskRuns.filter(
     (run) => run.workspaceId === workspaceId && run.taskId === taskId,
   ) as T;
+}
+
+function handleLegacyTaskInterruptMock<T>(command: string, args?: Record<string, unknown>): MockResult<T> {
+  if (command !== "ssh_task_run_interrupt_legacy") return UNHANDLED;
+  const run = mockStore.sshTaskRuns.find((item) => item.workspaceId === args?.workspaceId && item.id === args?.runId);
+  if (!run) throw new Error("SSH task run not found");
+  if (run.status === "running") {
+    if (!run.legacyRecoveryAvailable) throw new Error("SSH_TASK_RUN_NOT_REPAIRABLE");
+    run.status = "failed";
+    run.errorMessage = "SSH_TASK_RUN_INTERRUPTED";
+    run.finishedAt = new Date().toISOString();
+    run.legacyRecoveryAvailable = false;
+  }
+  if (run.status !== "failed" || run.errorMessage !== "SSH_TASK_RUN_INTERRUPTED") throw new Error("SSH_TASK_RUN_NOT_REPAIRABLE");
+  return run as T;
 }
 
 function handleTaskRunLogReadMock<T>(

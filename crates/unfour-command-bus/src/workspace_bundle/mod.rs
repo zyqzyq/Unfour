@@ -24,7 +24,15 @@ use std::collections::BTreeMap;
 use unfour_core::{domain::*, models::*, AppError, AppResult};
 use unfour_flow_engine::FlowService;
 
-pub const MAX_BUNDLE_BYTES: usize = 32 * 1024 * 1024;
+const MAX_V1_BUNDLE_BYTES: usize = 32 * 1024 * 1024;
+pub use unfour_secret_store::backup::MAX_ARCHIVE_BYTES as MAX_WORKSPACE_FILE_BYTES;
+
+fn check_file_size(size: usize, limit: usize) -> AppResult<()> {
+    if size > limit {
+        return Err(AppError::Validation("WORKSPACE_BUNDLE_TOO_LARGE".into()));
+    }
+    Ok(())
+}
 #[derive(Debug, Clone)]
 pub struct WorkspaceBundleExportArtifact {
     pub content: String,
@@ -70,14 +78,15 @@ fn portable<T: serde::de::DeserializeOwned>(source: impl Serialize) -> AppResult
     Ok(serde_json::from_value(value)?)
 }
 fn parse(content: &str) -> AppResult<WorkspaceBundle> {
-    if content.len() > MAX_BUNDLE_BYTES {
-        return Err(AppError::Validation("WORKSPACE_BUNDLE_TOO_LARGE".into()));
-    }
+    check_file_size(content.len(), MAX_WORKSPACE_FILE_BYTES)?;
     let mut bundle: WorkspaceBundle = serde_json::from_str(content).map_err(|_| invalid())?;
     if bundle.format != "unfour-workspace" || !matches!(bundle.version, 1 | 2) {
         return Err(AppError::Validation(
             "WORKSPACE_BUNDLE_UNSUPPORTED_VERSION".into(),
         ));
+    }
+    if bundle.version == 1 {
+        check_file_size(content.len(), MAX_V1_BUNDLE_BYTES)?;
     }
     safety::sanitize(&mut bundle)?;
     local::validate_paths(&bundle)?;
@@ -100,9 +109,7 @@ impl CommandBus {
             .await?;
         tx.rollback().await?;
         let content = serde_json::to_string_pretty(&bundle)?;
-        if content.len() > MAX_BUNDLE_BYTES {
-            return Err(AppError::Validation("WORKSPACE_BUNDLE_TOO_LARGE".into()));
-        }
+        check_file_size(content.len(), MAX_V1_BUNDLE_BYTES)?;
         Ok(WorkspaceBundleExportArtifact {
             content,
             suggested_file_name: filename::suggested_file_name(&bundle.workspace.name),

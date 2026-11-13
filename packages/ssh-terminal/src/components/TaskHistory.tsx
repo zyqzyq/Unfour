@@ -1,6 +1,7 @@
 import type { SshTaskRun } from "@unfour/command-client";
-import { Button, ErrorState, LoadingState, StatusBadge, useI18n } from "@unfour/ui";
+import { Button, ConfirmDialog, ErrorState, LoadingState, StatusBadge, useI18n } from "@unfour/ui";
 import { Trash2 } from "lucide-react";
+import { useState } from "react";
 
 export function TaskHistory({
   clearing,
@@ -9,6 +10,7 @@ export function TaskHistory({
   onClear,
   onSelectRun,
   onRerun,
+  onInterruptLegacy,
   onRetry,
   retrying,
   runs,
@@ -20,12 +22,15 @@ export function TaskHistory({
   onClear: () => void;
   onSelectRun: (run: SshTaskRun) => void;
   onRerun?: (run: SshTaskRun) => void;
+  onInterruptLegacy?: (run: SshTaskRun) => void;
   onRetry: () => void;
   retrying: boolean;
   runs: SshTaskRun[];
   selectedRunId?: string | null;
 }) {
   const { t } = useI18n();
+  const [repairId, setRepairId] = useState<string | null>(null);
+  const repairTarget = runs.find((run) => run.id === repairId && run.legacyRecoveryAvailable);
   if (loading) {
     return <LoadingState>{t("ssh.tasks.history.loading")}</LoadingState>;
   }
@@ -66,6 +71,8 @@ export function TaskHistory({
             <tbody>
               {runs.map((run) => {
                 const selected = selectedRunId === run.id;
+                const error = run.errorMessage === "SSH_TASK_RUN_INTERRUPTED"
+                  ? t("ssh.tasks.run.interrupted") : run.errorMessage;
                 return (
                   <tr
                     className={`h-9 cursor-pointer border-b border-[var(--u-color-border)] text-[var(--u-color-text)] ${
@@ -96,9 +103,9 @@ export function TaskHistory({
                     </td>
                     <td
                       className="truncate px-2 text-[var(--u-color-danger)]"
-                      title={run.errorMessage ?? undefined}
+                      title={error ?? undefined}
                     >
-                      {run.errorMessage ?? "—"}
+                      {error ?? "—"}
                     </td>
                     <td
                       className="truncate px-2 font-mono text-[11px] text-[var(--u-color-text-muted)]"
@@ -108,6 +115,7 @@ export function TaskHistory({
                     </td>
                     <td className="px-2">
                       {onRerun && run.status !== "running" && <Button onClick={(event) => { event.stopPropagation(); onRerun(run); }} size="sm" variant={run.status === "failed" ? "secondary" : "ghost"}>{t("ssh.tasks.actions.rerun")}</Button>}
+                      {onInterruptLegacy && run.legacyRecoveryAvailable && <Button onClick={(event) => { event.stopPropagation(); setRepairId(run.id); }} size="sm" variant="secondary">{t("ssh.tasks.run.markInterrupted")}</Button>}
                     </td>
                   </tr>
                 );
@@ -120,6 +128,14 @@ export function TaskHistory({
           {t("ssh.tasks.history.empty")}
         </div>
       )}
+      {repairTarget && <ConfirmDialog
+        open
+        title={t("ssh.tasks.run.markInterrupted")}
+        description={t("ssh.tasks.run.confirmLegacyInterruption")}
+        confirmLabel={t("ssh.tasks.run.markInterrupted")}
+        onOpenChange={(open) => { if (!open) setRepairId(null); }}
+        onConfirm={() => { setRepairId(null); onInterruptLegacy?.(repairTarget); }}
+      />}
     </div>
   );
 }

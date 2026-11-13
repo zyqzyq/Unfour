@@ -5,8 +5,12 @@ pub(super) mod inline_session;
 #[cfg(feature = "ssh-native")]
 pub(super) mod inline_write;
 mod preview;
+#[cfg(all(test, feature = "ssh-native"))]
+mod protocol_fixture;
 mod support;
 mod transfer_perf;
+#[cfg(all(test, feature = "ssh-native"))]
+mod transfer_tests;
 use support::*;
 #[cfg(feature = "ssh-native")]
 use transfer_perf::*;
@@ -552,52 +556,41 @@ impl SshService {
                 "local target already exists".to_string(),
             ));
         }
-        let part = download_part_path(&target);
-        let result = async {
-            let total = sftp
-                .metadata(remote_path.to_string())
-                .await
-                .map_err(transfer_sftp_error)?
-                .len();
-            self.update_transfer(transfer_id, true, |state| state.total_bytes = total);
-            let mut local = tokio::fs::File::create(&part)
-                .await
-                .map_err(|error| TransferRunError::Failed(error.to_string()))?;
-            let started = std::time::Instant::now();
-            let mut progress = ProgressThrottle::new();
-            copy_remote_to_local_pipelined(
-                sftp.clone(),
-                remote_path,
-                &mut local,
-                total,
-                &mut cancel_rx,
-                |transferred| {
-                    self.report_transfer_progress(
-                        transfer_id,
-                        transferred,
-                        total,
-                        started,
-                        &mut progress,
-                    );
-                },
-            )
-            .await?;
-            self.ensure_sftp_generation(session_id, generation)
-                .map_err(|error| TransferRunError::Failed(error.to_string()))?;
-            local
-                .flush()
-                .await
-                .map_err(|error| TransferRunError::Failed(error.to_string()))?;
-            // Avoid sync_all(): on Windows it can stall the transfer for seconds.
-            drop(local);
-            replace_local_file(&part, &target, transfer_id, overwrite).await?;
-            Ok(())
-        }
-        .await;
-        if result.is_err() {
-            let _ = tokio::fs::remove_file(&part).await;
-        }
-        result
+        let total = sftp
+            .metadata(remote_path)
+            .await
+            .map_err(transfer_sftp_error)?
+            .len();
+        self.update_transfer(transfer_id, true, |state| state.total_bytes = total);
+        let (mut local, staging) = stage_download(&target).await?;
+        let started = std::time::Instant::now();
+        let mut progress = ProgressThrottle::new();
+        copy_remote_to_local_pipelined(
+            sftp,
+            remote_path,
+            &mut local,
+            total,
+            &mut cancel_rx,
+            |transferred| {
+                self.report_transfer_progress(
+                    transfer_id,
+                    transferred,
+                    total,
+                    started,
+                    &mut progress,
+                );
+            },
+        )
+        .await?;
+        local
+            .flush()
+            .await
+            .map_err(|error| TransferRunError::Failed(error.to_string()))?;
+        drop(local);
+        self.ensure_sftp_generation(session_id, generation)
+            .map_err(|error| TransferRunError::Failed(error.to_string()))?;
+        ensure_not_cancelled(&cancel_rx)?;
+        publish_download(staging, target, overwrite).await
     }
 
     #[cfg(feature = "ssh-native")]
@@ -633,9 +626,13 @@ impl SshService {
                 ));
             }
         }
-        let temp_path = upload_temp_path(remote_path);
+        let temp_path = upload_temp_path(remote_path, transfer_id);
+        use russh_sftp::protocol::OpenFlags;
         let mut remote = sftp
-            .create(temp_path.clone())
+            .open_with_flags(
+                temp_path.as_str(),
+                OpenFlags::WRITE | OpenFlags::CREATE | OpenFlags::EXCLUDE,
+            )
             .await
             .map_err(transfer_sftp_error)?;
         let started = std::time::Instant::now();
@@ -689,7 +686,8 @@ impl SshService {
                 .map_err(|error| TransferRunError::Failed(error.to_string()))?;
             self.ensure_sftp_generation(session_id, generation)
                 .map_err(|error| TransferRunError::Failed(error.to_string()))?;
-            finalize_remote_upload(&sftp, &temp_path, remote_path, transfer_id).await
+            ensure_not_cancelled(&cancel_rx)?;
+            finalize_remote_upload(&sftp, &temp_path, remote_path, transfer_id, overwrite).await
         }
         .await;
         if copy_result.is_err() {

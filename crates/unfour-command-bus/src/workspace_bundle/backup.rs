@@ -26,9 +26,7 @@ struct BackupSecret {
 }
 
 fn decode(content: &str, options: &WorkspaceBundleOptions) -> AppResult<BackupPayload> {
-    if content.len() > encryption::MAX_ARCHIVE_BYTES {
-        return Err(invalid());
-    }
+    check_file_size(content.len(), MAX_WORKSPACE_FILE_BYTES)?;
     let mut payload = if encryption::is_encrypted(content) {
         let password = options
             .password
@@ -259,9 +257,7 @@ impl CommandBus {
         } else {
             serde_json::to_string_pretty(&payload.bundle)?
         };
-        if content.len() > encryption::MAX_ARCHIVE_BYTES {
-            return Err(invalid());
-        }
+        check_file_size(content.len(), MAX_WORKSPACE_FILE_BYTES)?;
         Ok(WorkspaceBundleExportArtifact {
             content,
             suggested_file_name,

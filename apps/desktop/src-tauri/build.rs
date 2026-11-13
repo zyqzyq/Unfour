@@ -5,6 +5,7 @@
 //! profile, and build commit into the executable. Store builds therefore have
 //! no runtime switch that can re-enable the Standard updater.
 
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::process::Command;
@@ -12,6 +13,20 @@ use std::process::Command;
 fn main() {
     let profile = resolve_build_profile();
     bake_build_profile(&profile);
+    if profile.distribution == "microsoft-store" {
+        // Pin the MCP from this desktop build, including for a later -SkipBuild packaging run.
+        let triple = std::env::var("TARGET").expect("Cargo supplies TARGET");
+        let path = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap())
+            .join("binaries")
+            .join(format!("unfour-mcp-{triple}.exe"));
+        println!("cargo:rerun-if-changed={}", path.display());
+        let mut file = std::fs::File::open(&path).unwrap_or_else(|error| {
+            panic!("cannot read Store MCP sidecar {}: {error}", path.display())
+        });
+        let mut digest = Sha256::new();
+        std::io::copy(&mut file, &mut digest).expect("hash Store MCP sidecar");
+        println!("cargo:rustc-env=UNFOUR_MCP_SHA256={:x}", digest.finalize());
+    }
     resolve_build_commit();
     tauri_build::build();
 

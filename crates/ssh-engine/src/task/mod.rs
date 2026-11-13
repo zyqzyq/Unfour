@@ -17,6 +17,7 @@ mod download_step;
 mod events;
 #[cfg(feature = "ssh-native")]
 mod native;
+mod owner;
 #[cfg(any(feature = "ssh-native", test))]
 mod runner;
 mod storage;
@@ -144,8 +145,10 @@ impl SshService {
                 .await?;
             let run_id = unfour_core::id::new_id();
             let log_path = self.task_log_path(&run_id)?;
+            let owner = owner::RunOwner::acquire(self.task_owner_file(&run_id)?)?;
             let mut log = TaskLogWriter::create(&log_path)?;
             let run = SshTaskRun {
+                legacy_recovery_available: false,
                 context,
                 warnings: Vec::new(),
                 id: run_id.clone(),
@@ -178,6 +181,7 @@ impl SshService {
             let service = self.clone();
             let run_for_task = run.clone();
             tokio::spawn(async move {
+                let _owner = owner;
                 service
                     .execute_task_background(
                         run_for_task,
@@ -212,10 +216,19 @@ impl SshService {
                 runs.get(&input.run_id)
                     .filter(|runtime| runtime.workspace_id == input.workspace_id)
                     .map(|runtime| runtime.cancel_tx.clone())
-                    .ok_or_else(|| AppError::NotFound("running SSH task".to_string()))?
             };
-            let _ = cancel_tx.send(true);
-            self.get_task_run(&input.workspace_id, &input.run_id).await
+            if let Some(sender) = &cancel_tx {
+                let _ = sender.send(true);
+            }
+            let run = self
+                .get_task_run(&input.workspace_id, &input.run_id)
+                .await?;
+            if cancel_tx.is_none() && run.status == "running" {
+                return Err(AppError::NotFound(
+                    "running SSH task in this process".into(),
+                ));
+            }
+            Ok(run)
         }
     }
 
@@ -254,28 +267,49 @@ impl SshService {
         };
 
         let outcome = redact_task_run_outcome(outcome, &secret_values);
-        let final_event = run_event(
-            &run.id,
-            &run.task_id,
-            &outcome.status,
-            outcome.error.clone(),
-        );
-        log.write_event(&final_event);
-        let _ = self
-            .finish_task_run(
-                &run.workspace_id,
-                &run.id,
-                &outcome.status,
-                outcome.error.as_deref(),
-            )
-            .await;
-        self.emit_task_run_event(&final_event);
+        let persisted = self.persist_task_outcome(&run, &outcome).await;
         if let Ok(mut runs) = self.task_runs.lock() {
             runs.remove(&run.id);
         }
+        if !persisted {
+            // The workspace may have been deleted while the task was running.
+            return;
+        }
+        let final_event = run_event(&run.id, &run.task_id, &outcome.status, outcome.error);
+        log.write_event(&final_event);
+        self.emit_task_run_event(&final_event);
         let _ = self
             .cleanup_task_retention(&run.workspace_id, &run.task_id)
             .await;
+    }
+
+    #[cfg(any(feature = "ssh-native", test))]
+    async fn persist_task_outcome(&self, run: &SshTaskRun, outcome: &TaskRunOutcome) -> bool {
+        let finished_at = Utc::now().to_rfc3339();
+        let mut delay = std::time::Duration::from_millis(100);
+        loop {
+            match self.finish_task_run(run, outcome, &finished_at).await {
+                Ok(updated) => return updated,
+                Err(_) if self.db.pool().is_closed() => return false,
+                Err(error) => {
+                    // Keep ownership and retry the write only. Reexecuting a
+                    // task here could duplicate remote side effects.
+                    if delay == std::time::Duration::from_millis(100) {
+                        unfour_diag::log_operation_event(
+                            "ssh_task_outcome_commit_deferred",
+                            "ssh",
+                            "finish_task_run",
+                            "failed",
+                            None,
+                            Some(error.code()),
+                            serde_json::json!({"run_id":run.id}),
+                        );
+                    }
+                    tokio::time::sleep(delay).await;
+                    delay = (delay * 2).min(std::time::Duration::from_secs(5));
+                }
+            }
+        }
     }
 }
 

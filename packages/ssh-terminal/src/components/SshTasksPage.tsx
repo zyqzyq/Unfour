@@ -11,7 +11,6 @@ import {
   deleteSshTask,
   duplicateSshTask,
   getSshTask,
-  listSshTaskRuns,
   listSshTasks,
   reorderSshTasks,
   saveSshTask,
@@ -37,6 +36,7 @@ import { TaskRunPanel } from "./TaskRunPanel";
 import { TaskWorkspaceEmpty } from "./TaskWorkspaceEmpty";
 import { dockerImageExportTemplate, taskDetailToDraft } from "../model/task-template";
 import { useSshTaskRunSession } from "../hooks/useSshTaskRunSession";
+import { useSshTaskRunQueries } from "../hooks/useSshTaskRunQueries";
 import {
   closeTaskTab,
   createEmptyTaskEditorState,
@@ -135,10 +135,9 @@ export function SshTasksPage({
     queryFn: () => getSshTask(workspaceId, activeTaskId!),
     enabled: Boolean(active && activeTaskId),
   });
-  const runsQuery = useQuery({
-    queryKey: ["ssh-task-runs", workspaceId, activeTaskId],
-    queryFn: () => listSshTaskRuns(workspaceId, activeTaskId!),
-    enabled: Boolean(active && activeTaskId),
+  const runsQuery = useSshTaskRunQueries({
+    workspaceId, historyTaskId: showHistory ? activeTaskId : null, selected: activeRun, active,
+    onSettled: runSession.settleSelectedRun, onRemoved: runSession.closeRemovedRun,
   });
 
   useEffect(() => {
@@ -504,6 +503,7 @@ export function SshTasksPage({
         loading={runsQuery.isLoading}
         onClear={() => setClearTaskId(activeTaskId)}
         onSelectRun={(run) => void openHistoryRun(run)}
+        onInterruptLegacy={(run) => runSession.repairMutation.mutate(run)}
         onRerun={(run) => void prepareRun(run.taskId, run)}
         onRetry={() => void runsQuery.refetch()}
         retrying={runsQuery.isFetching}

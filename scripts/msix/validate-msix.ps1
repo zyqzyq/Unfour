@@ -96,7 +96,7 @@ try {
             throw "MSIX package is empty: $MsixPath"
         }
         $MakeAppxPath = Find-WindowsSdkTool -ToolName "makeappx.exe" -ExplicitPath $MakeAppxPath
-        $temporaryDirectory = Reset-TemporaryDirectory -Path (Join-Path $outputRoot "validate-unpacked")
+        $temporaryDirectory = Reset-TemporaryDirectory -Path (Join-Path $outputRoot ("validate-" + [Guid]::NewGuid().ToString("N")))
         & $MakeAppxPath unpack /p $MsixPath /d $temporaryDirectory /o | Out-Host
         if ($LASTEXITCODE -ne 0) { throw "MakeAppx unpack failed with exit code $LASTEXITCODE." }
         $StagingDirectory = $temporaryDirectory
@@ -162,6 +162,14 @@ try {
     Assert-ExpectedValue $publisherDisplayName $ExpectedPublisherDisplayName "Publisher Display Name"
 
     $metadata = Get-Content -LiteralPath (Join-Path $StagingDirectory "unfour-build-metadata.json") -Raw | ConvertFrom-Json
+    $desktopHash = (Get-FileHash -LiteralPath (Join-Path $StagingDirectory "unfour.exe") -Algorithm SHA256).Hash
+    if ($metadata.desktopSha256 -notmatch '^[0-9a-fA-F]{64}$' -or $desktopHash -ine $metadata.desktopSha256) {
+        throw "Packaged desktop executable differs from the copy that exported the build metadata."
+    }
+    $sidecarHash = (Get-FileHash -LiteralPath (Join-Path $StagingDirectory "unfour-mcp.exe") -Algorithm SHA256).Hash
+    if ($metadata.mcpSha256 -notmatch '^[0-9a-fA-F]{64}$' -or $sidecarHash -ine $metadata.mcpSha256) {
+        throw "Packaged MCP sidecar differs from the executable selected by the desktop build."
+    }
     if ([string]::IsNullOrWhiteSpace($ExpectedPackageChannel)) {
         $ExpectedPackageChannel = if ([string]$metadata.channel -ceq "stable") { "Store" } else { "Test" }
     }

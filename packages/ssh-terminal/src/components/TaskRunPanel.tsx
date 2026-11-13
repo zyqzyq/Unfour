@@ -282,7 +282,7 @@ export function TaskRunPanel({
           ) : showHistoryLog ? (
             historyLog
           ) : run.errorMessage ? (
-            <span className="text-[var(--u-color-danger)]">{run.errorMessage}</span>
+            <span className="text-[var(--u-color-danger)]">{run.errorMessage === "SSH_TASK_RUN_INTERRUPTED" ? t("ssh.tasks.run.interrupted") : run.errorMessage}</span>
           ) : running || stepEvents.size > 0 ? (
             t("ssh.tasks.run.waitingForOutput")
           ) : (

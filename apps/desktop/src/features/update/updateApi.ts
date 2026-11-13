@@ -1,4 +1,5 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type {
   UpdateDownloadEvent,
   UpdateInfo,
@@ -10,8 +11,16 @@ export async function getUpdateInfo(): Promise<UpdateMeta> {
   return invoke<UpdateMeta>("get_update_info");
 }
 
+export function listenForInstalledUpdate(onInstalled: (info: UpdateInfo) => void) {
+  return listen<UpdateInfo>("unfour:update-installed", (event) => onInstalled(event.payload));
+}
+
 export async function checkForUpdate(): Promise<UpdateInfo | null> {
   return invoke<UpdateInfo | null>("check_for_update");
+}
+
+export function restartAfterUpdate(): Promise<void> {
+  return invoke<void>("restart_after_update");
 }
 
 export async function installUpdate(

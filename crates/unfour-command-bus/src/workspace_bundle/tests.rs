@@ -36,6 +36,22 @@ async fn count(bus: &CommandBus, table: &str) -> i64 {
         .await
         .unwrap()
 }
+
+#[test]
+fn v1_share_keeps_its_original_size_limit() {
+    let mut content = fixture().to_string();
+    content.extend(std::iter::repeat_n(
+        ' ',
+        MAX_V1_BUNDLE_BYTES - content.len(),
+    ));
+    assert!(parse(&content).is_ok());
+    content.push(' ');
+    assert!(matches!(
+        parse(&content),
+        Err(AppError::Validation(code)) if code == "WORKSPACE_BUNDLE_TOO_LARGE"
+    ));
+}
+
 #[tokio::test]
 async fn bundle_export_file_name_uses_the_exported_workspace_name() {
     let bus = bus().await;
@@ -462,7 +478,7 @@ async fn bundle_sanitizes_untrusted_payloads_without_panics_or_secret_defaults()
     assert!(!output.contains("NEVER_EXPORT"));
     assert!(parsed.flows[0].inputs[0].default.is_none());
     assert!(bus
-        .workspace_bundle_preview(&"x".repeat(MAX_BUNDLE_BYTES + 1))
+        .workspace_bundle_preview(&"x".repeat(MAX_WORKSPACE_FILE_BYTES + 1))
         .await
         .is_err());
 }

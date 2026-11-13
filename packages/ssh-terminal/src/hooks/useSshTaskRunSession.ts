@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   cancelSshTaskRun,
+  interruptLegacySshTaskRun,
   clearSshTaskRuns,
   getSshTask,
   type SshTaskDetail,
@@ -68,8 +69,26 @@ export function useSshTaskRunSession({
 
   const cancelMutation = useMutation({
     mutationFn: () => cancelSshTaskRun({ workspaceId, runId: activeRun!.id }),
-    onSuccess: showCompletionWarning,
+    onSuccess: (run) => {
+      showCompletionWarning(run);
+      if (run.status !== "running") refreshRecoveredRun(run);
+    },
     onError: (error) => handleError(error, { key: "feedback.ssh.taskCancelFailed" }),
+  });
+  const settleSelectedRun = useCallback((run: SshTaskRun) => {
+    setActiveRunState((current) => current?.workspaceId === run.workspaceId && current.id === run.id ? run : current);
+  }, []);
+  const closeRemovedRun = useCallback((run: SshTaskRun) => {
+    setActiveRunState((current) => current?.workspaceId === run.workspaceId && current.id === run.id && current.status === "running" ? null : current);
+  }, []);
+  function refreshRecoveredRun(run: SshTaskRun) {
+    settleSelectedRun(run);
+    void queryClient.invalidateQueries({ queryKey: ["ssh-task-runs", run.workspaceId, run.taskId] });
+  }
+  const repairMutation = useMutation({
+    mutationFn: (run: SshTaskRun) => interruptLegacySshTaskRun(run.workspaceId, run.id),
+    onSuccess: refreshRecoveredRun,
+    onError: (error) => handleError(error, { key: "ssh.tasks.run.repairFailed" }),
   });
   const clearMutation = useMutation({
     mutationFn: async (taskId: string) => {
@@ -119,8 +138,8 @@ export function useSshTaskRunSession({
 
   return {
     ...dialog,
-    activeRun, activeRunTask, cancelMutation, clearMutation,
+    activeRun, activeRunTask, cancelMutation, clearMutation, repairMutation,
     eventsByRun, historyLogByRun, historyLogLoading, openHistoryRun,
-    setActiveRun, setActiveRunTask,
+    setActiveRun, setActiveRunTask, settleSelectedRun, closeRemovedRun,
   };
 }

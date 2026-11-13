@@ -19,6 +19,8 @@ async fn ssh_task_recall_upgrade_preserves_legacy_history() {
       VALUES ('task', 'recall-workspace', 'Task', '', 'created', 'updated');
       INSERT INTO ssh_task_run (id, workspace_id, task_id, status, started_at, log_path)
       VALUES ('legacy', 'recall-workspace', 'task', 'failed', 'started', 'original.log');
+      INSERT INTO ssh_task_run (id, workspace_id, task_id, status, started_at, log_path)
+      VALUES ('live-legacy', 'recall-workspace', 'task', 'running', 'started', 'running.log');
     "#,
     )
     .execute(db.pool())
@@ -33,6 +35,12 @@ async fn ssh_task_recall_upgrade_preserves_legacy_history() {
     .await
     .unwrap();
     assert_eq!(row, ("failed".into(), "original.log".into(), None));
+    let live: (String, i64) =
+        sqlx::query_as("SELECT status, owner_lock FROM ssh_task_run WHERE id = 'live-legacy'")
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert_eq!(live, ("running".into(), 0));
 }
 
 #[tokio::test]

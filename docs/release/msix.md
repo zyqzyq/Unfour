@@ -11,6 +11,10 @@ manually. The Standard workflow must never publish to Microsoft Store.
   update installation are disabled at backend and frontend boundaries.
 - The full-trust package contains `unfour.exe`, `unfour-mcp.exe`, build
   metadata, and Store assets.
+- The desktop build embeds the SHA-256 of its target-specific Tauri MCP
+  sidecar. The packager exports this metadata from its staged desktop copy
+  and records that copy's SHA-256 alongside it. Staging and unpacked-package
+  validation check both executable digests, including with `-SkipBuild`.
 - The manifest registers `unfour://` and the stable `unfour-mcp.exe` execution
   alias, and declares `runFullTrust`.
 - Identity Name, Publisher, and Publisher Display Name come exactly from

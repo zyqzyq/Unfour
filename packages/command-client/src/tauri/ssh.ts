@@ -79,6 +79,10 @@ export function cancelSshTaskRun(input: SshTaskCancelInput) {
   return call<SshTaskRun>("ssh_task_run_cancel", { input });
 }
 
+export function interruptLegacySshTaskRun(workspaceId: string, runId: string) {
+  return call<SshTaskRun>("ssh_task_run_interrupt_legacy", { workspaceId, runId });
+}
+
 export function listSshTaskRuns(workspaceId: string, taskId: string) {
   return call<SshTaskRun[]>("ssh_task_runs_list", { workspaceId, taskId });
 }

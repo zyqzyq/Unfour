@@ -157,6 +157,12 @@ impl DatabaseService {
                     while let Some(row) = rows.try_next().await.map_err(sanitize_pg_error)? {
                         writer.write_row(postgres_export_values(&row)?)?;
                     }
+                    drop(rows);
+                    if matches!(input.content, DatabaseExportContent::StructureAndData)
+                        && pool.profile.detected_server_type == DetectedServerType::PostgreSql
+                    {
+                        writer.restore_postgres_sequences(&pool).await?;
+                    }
                 }
                 "mysql" => {
                     let effective =
@@ -340,6 +346,44 @@ impl<W: Write> ExportWriter<W> {
             }
         }
         self.out.write_all(b"\r\n")?;
+        Ok(())
+    }
+
+    async fn restore_postgres_sequences(&mut self, pool: &sqlx::PgPool) -> AppResult<()> {
+        // Explicit IDs bypass nextval; columns omitted from the INSERT already
+        // advance their new sequence during replay. Read state after the rows
+        // so sequence allocations backing those rows have already happened.
+        self.flush_inserts()?;
+        let table = quote_sql_text(&self.table, DatabaseDialect::Postgres);
+        let columns: Vec<&str> = self
+            .insert_columns
+            .iter()
+            .map(|&i| self.columns[i].name.as_str())
+            .collect();
+        // Ownership is independent of how the default expression is spelled.
+        // The server returns schema-qualified, quoted sequence identifiers.
+        let sequences: Vec<(String, String)> = sqlx::query_as(
+            "SELECT col, sequence_name FROM (
+                SELECT col, pg_catalog.pg_get_serial_sequence($1, col) AS sequence_name
+                FROM pg_catalog.unnest($2::text[]) AS cols(col)
+             ) AS owned WHERE sequence_name IS NOT NULL",
+        )
+        .bind(&self.table)
+        .bind(columns)
+        .fetch_all(pool)
+        .await
+        .map_err(sanitize_pg_error)?;
+        for (column, source) in sequences {
+            let (last, called): (i64, bool) =
+                sqlx::query_as(&format!("SELECT last_value, is_called FROM {source}"))
+                    .fetch_one(pool)
+                    .await
+                    .map_err(sanitize_pg_error)?;
+            let name = quote_sql_text(&column, DatabaseDialect::Postgres);
+            writeln!(self.out,
+                "SELECT pg_catalog.setval(pg_catalog.pg_get_serial_sequence({table}, {name}), {last}, {called});"
+            )?;
+        }
         Ok(())
     }
 

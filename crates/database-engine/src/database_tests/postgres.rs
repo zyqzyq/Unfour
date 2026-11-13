@@ -1,6 +1,9 @@
 use super::super::*;
 use super::support::{postgres_input, service_with_workspace, RejectingServer};
 
+#[path = "postgres_export_restore.rs"]
+mod export_restore;
+
 // -----------------------------------------------------------------------
 // PostgreSQL-specific tests
 // -----------------------------------------------------------------------
