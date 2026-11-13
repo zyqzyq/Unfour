@@ -368,7 +368,7 @@ async fn flow_ssh_disconnect_after_exec_stops_task_and_flow() {
     assert_eq!(result.steps[1].status, FlowStepRunStatus::Skipped);
     assert!(result.steps[1].attempts.is_empty());
     let history = bus
-        .list_flow_runs(workspace.clone(), flow.id)
+        .list_flow_runs(workspace.clone(), flow.id.clone())
         .await
         .unwrap();
     assert!(history[0].outcome_uncertain);
@@ -384,11 +384,43 @@ async fn flow_ssh_disconnect_after_exec_stops_task_and_flow() {
         Some(SSH_TASK_OUTCOME_UNCERTAIN)
     );
     let log = bus
-        .read_ssh_task_run_log(workspace, runs[0].id.clone())
+        .read_ssh_task_run_log(workspace.clone(), runs[0].id.clone())
         .await
         .unwrap();
     assert!(log.contains(SSH_TASK_OUTCOME_UNCERTAIN), "{log}");
     assert!(!log.contains("after-disconnect"), "{log}");
+
+    // Model another window clearing completed Task history before Flow's next
+    // poll. A trigger makes that ordering deterministic on the isolated DB.
+    sqlx::query(
+        "CREATE TRIGGER clear_finished_task AFTER UPDATE OF status ON ssh_task_run
+         WHEN NEW.status <> 'running' BEGIN
+           DELETE FROM ssh_task_run WHERE workspace_id=NEW.workspace_id AND id=NEW.id;
+         END",
+    )
+    .execute(bus.db.pool())
+    .await
+    .unwrap();
+    let run = bus.run_flow(request(&workspace, &flow.id)).await.unwrap();
+    let result = finished(&bus, &run).await;
+    assert_eq!(result.error.as_deref(), Some("FLOW_OUTCOME_UNCERTAIN"));
+    assert_eq!(result.steps[0].error, result.error);
+    assert_eq!(result.steps[1].status, FlowStepRunStatus::Skipped);
+    assert_eq!(
+        commands.lock().unwrap().as_slice(),
+        [
+            "disconnect-before-exit-status",
+            "disconnect-before-exit-status"
+        ]
+    );
+    let history = bus.list_flow_runs(workspace, flow.id).await.unwrap();
+    assert!(
+        history
+            .iter()
+            .find(|entry| entry.id == run.id)
+            .unwrap()
+            .outcome_uncertain
+    );
     server.abort();
     std::fs::remove_dir_all(logs).unwrap();
 }

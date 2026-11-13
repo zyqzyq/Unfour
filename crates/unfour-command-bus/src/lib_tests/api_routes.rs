@@ -36,6 +36,37 @@ async fn api_routes_are_workspace_scoped_and_saved_atomically() {
         .await
         .unwrap();
     let input = api_script_test_input(ws.clone(), "http://service.invalid".into());
+    let preview = ApiRoutingInput {
+        request_id: None,
+        route: None,
+        expected_environment_id: Some(env.id.clone()),
+        expected_effective: routed.clone(),
+        expected_ssh_revision: Some(ssh.revision + 1),
+    };
+    let mut scripted = input.clone();
+    scripted.pre_request_script = Some(r#"pm.environment.set("unexpected", "changed")"#.into());
+    assert_eq!(
+        bus.send_api_request_routed(
+            "stale-jump",
+            scripted,
+            Some(env.id.clone()),
+            None,
+            Some(&preview)
+        )
+        .await
+        .unwrap_err()
+        .code(),
+        "SSH_TUNNEL_ROUTE_CHANGED"
+    );
+    assert!(bus
+        .workspace_environments_list(ws.clone())
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|item| item.id == env.id)
+        .unwrap()
+        .variables
+        .is_empty());
     let saved = bus.save_api_request(input.clone()).await.unwrap();
     assert_eq!(
         bus.api_routes(&ws, Some(&saved.id), Some(&env.id))

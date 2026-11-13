@@ -274,6 +274,9 @@ that would be safe to retry. Run status values are unchanged. Remote effects
 may already have occurred and are never described as rolled back. There is no
 automatic retry.
 
+If SSH Task history is cleared before Flow observes the task's terminal status,
+Flow records `FLOW_OUTCOME_UNCERTAIN` and skips the remaining steps.
+
 If an uncertain SSH result would exceed the history limit, the runner keeps
 the error code and drops that attempt's diagnostics. It also omits the resolved
 arguments if they still exceed the limit. The remaining steps stay skipped.

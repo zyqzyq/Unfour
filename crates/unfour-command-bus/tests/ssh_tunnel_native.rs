@@ -5,7 +5,7 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use russh::server::{Auth, Msg, Server as _, Session};
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
     net::{TcpListener, TcpStream},
     task::JoinHandle,
 };
@@ -142,6 +142,101 @@ async fn http_origin(reply: &'static str) -> (SocketAddr, JoinHandle<String>) {
         headers
     });
     (address, observed)
+}
+
+#[tokio::test]
+async fn redis_auth_and_reads_complete_on_the_forwarded_channel() {
+    let backend = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = backend.local_addr().unwrap();
+    let peer = tokio::spawn(async move {
+        let (mut stream, _) = backend.accept().await.unwrap();
+        for (request, reply) in [
+            ("*2\r\n$4\r\nAUTH\r\n$7\r\nfixture\r\n", "+OK\r\n"),
+            ("*2\r\n$6\r\nSELECT\r\n$1\r\n2\r\n", "+OK\r\n"),
+            ("*2\r\n$4\r\nTYPE\r\n$1\r\nk\r\n", "+string\r\n"),
+            ("*2\r\n$4\r\nPTTL\r\n$1\r\nk\r\n", ":1234\r\n"),
+        ] {
+            let mut actual = vec![0; request.len()];
+            stream.read_exact(&mut actual).await.unwrap();
+            assert_eq!(actual, request.as_bytes());
+            stream.write_all(reply.as_bytes()).await.unwrap();
+        }
+    });
+    let f = fixture(vec![("cache.invalid", 6379, address)]).await;
+    let saved = f
+        .bus
+        .save_redis_connection(
+            RedisConnectionInput {
+                id: None,
+                workspace_id: f.workspace.clone(),
+                name: "cache".into(),
+                host: "cache.invalid".into(),
+                port: 6379,
+                db_index: 2,
+                username: None,
+                tls: false,
+                ssh_connection_id: Some(Some(f.jump.clone())),
+                expected_ssh_revision: None,
+                expected_revision: None,
+                allow_writes: None,
+            },
+            Some("fixture".into()),
+        )
+        .await
+        .unwrap();
+    let result = f
+        .bus
+        .check_redis_key(&f.workspace, &saved.id, b"k", None, None)
+        .await
+        .unwrap();
+    assert!(result.exists && result.matched);
+    assert_eq!(result.pttl_ms, 1234);
+    peer.await.unwrap();
+}
+
+#[tokio::test]
+async fn redis_deadline_includes_waiting_for_the_jump_handshake() {
+    let f = fixture(vec![]).await;
+    let stalled = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = stalled.local_addr().unwrap().port();
+    sqlx::query("UPDATE connections SET port=? WHERE workspace_id=? AND id=?")
+        .bind(port)
+        .bind(&f.workspace)
+        .bind(&f.jump)
+        .execute(f.db.pool())
+        .await
+        .unwrap();
+    HostKeyStore::new(f.db.pool().clone())
+        .record_fingerprint(&f.workspace, "127.0.0.1", port, "fixture")
+        .await
+        .unwrap();
+    // Accept the SSH socket but never complete the identification exchange.
+    let server = tokio::spawn(async move {
+        let (stream, _) = stalled.accept().await.unwrap();
+        (stream, stalled)
+    });
+    let target = RedisConnectionInput {
+        workspace_id: f.workspace.clone(),
+        id: None,
+        name: "test".into(),
+        host: "cache.invalid".into(),
+        port: 6379,
+        db_index: 0,
+        username: None,
+        tls: false,
+        allow_writes: None,
+        ssh_connection_id: Some(Some(f.jump.clone())),
+        expected_ssh_revision: None,
+        expected_revision: None,
+    };
+    let result = tokio::time::timeout(
+        Duration::from_secs(12),
+        f.bus.test_redis_connection_input(target, None),
+    )
+    .await
+    .expect("Redis did not bound SSH setup");
+    assert_eq!(result.unwrap_err().code(), "REDIS_TIMEOUT");
+    let _ = server.await.unwrap();
 }
 
 #[tokio::test]

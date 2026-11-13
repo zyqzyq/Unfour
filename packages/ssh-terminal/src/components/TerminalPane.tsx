@@ -128,7 +128,9 @@ export function TerminalPane({
 
   useEffect(() => {
     const nextSessionId = session?.sessionId ?? null;
-    if (sessionIdRef.current !== nextSessionId) {
+    // A pane may be fitted before the PTY is ready to receive its first resize.
+    if (sessionIdRef.current !== nextSessionId ||
+        ((inputDisabledRef.current || readOnlyRef.current) && !inputDisabled && !readOnly)) {
       lastSizeRef.current = null;
     }
     inputDisabledRef.current = inputDisabled;
@@ -377,7 +379,7 @@ export function TerminalPane({
       });
       return () => window.cancelAnimationFrame(fitFrame);
     }
-  }, [active, paintActive, readOnly, session?.cols, session?.rows, session?.sessionId]);
+  }, [active, inputDisabled, paintActive, readOnly, session?.cols, session?.rows, session?.sessionId]);
 
   // ------------------------------------------------------------------
   // Paint terminal output from the store (single source of truth)

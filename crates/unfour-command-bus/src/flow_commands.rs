@@ -479,15 +479,18 @@ impl FlowExecutor for CommandBus {
                         .await?;
                     let mut cancel_noted = false;
                     loop {
+                        // Once the task has started, losing its history (or the
+                        // ability to read it) cannot establish a remote outcome.
                         let current = self
                             .list_ssh_task_runs(
                                 input.workspace_id.clone(),
                                 action.resource_id.clone(),
                             )
-                            .await?
+                            .await
+                            .map_err(|_| invalid("FLOW_OUTCOME_UNCERTAIN"))?
                             .into_iter()
                             .find(|r| r.id == run.id)
-                            .ok_or_else(|| invalid("FLOW_SSH_RUN_MISSING"))?;
+                            .ok_or_else(|| invalid("FLOW_OUTCOME_UNCERTAIN"))?;
                         if current.status != "running" {
                             return self.flow_ssh_terminal(&current, &run.warnings, input).await;
                         }
@@ -516,11 +519,12 @@ impl CommandBus {
         warnings: &[String],
         input: &FlowRunInput,
     ) -> AppResult<Value> {
-        let lost_result = current.error_message.as_deref() == Some(SSH_TASK_OUTCOME_UNCERTAIN);
+        let outcome_uncertain = current.status == "cancelled"
+            || current.error_message.as_deref() == Some(SSH_TASK_OUTCOME_UNCERTAIN);
         // Diagnostics are secondary to a known uncertain outcome. If the log cannot
         // be read or safely redacted, publish the stable code alone.
         let diagnostics_error = |error| {
-            if lost_result {
+            if outcome_uncertain {
                 invalid("FLOW_OUTCOME_UNCERTAIN")
             } else {
                 error
@@ -550,7 +554,7 @@ impl CommandBus {
             }));
         }
         // Cancellation and a lost command result can both leave remote side effects.
-        let code = if current.status == "cancelled" || lost_result {
+        let code = if outcome_uncertain {
             "FLOW_OUTCOME_UNCERTAIN"
         } else {
             "FLOW_SSH_FAILED"

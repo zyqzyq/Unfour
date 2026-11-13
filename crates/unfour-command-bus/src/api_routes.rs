@@ -59,6 +59,32 @@ impl CommandBus {
         Ok(())
     }
 
+    /// Check the editor's displayed jump before scripts can persist environment edits.
+    /// Pin the same revision again when dialing, since scripts can outlive an edit.
+    pub(super) async fn api_jump_revision(
+        &self,
+        workspace: &str,
+        route: &ApiRoute,
+        expected: Option<i64>,
+    ) -> AppResult<Option<i64>> {
+        let ApiRoute::Ssh { ssh_connection_id } = route else {
+            return Ok(None);
+        };
+        let revision: i64 = sqlx::query_scalar(
+            "SELECT revision FROM connections WHERE workspace_id=? AND id=?
+             AND connection_type='ssh' AND deleted_at IS NULL",
+        )
+        .bind(workspace)
+        .bind(ssh_connection_id)
+        .fetch_optional(self.db.pool())
+        .await?
+        .ok_or_else(|| AppError::Validation("SSH_TUNNEL_ROUTE_MISSING".into()))?;
+        if expected.is_some_and(|expected| expected != revision) {
+            return Err(AppError::Validation("SSH_TUNNEL_ROUTE_CHANGED".into()));
+        }
+        Ok(Some(revision))
+    }
+
     /// A request-scoped lease encloses redirect processing and the full response body.
     pub(crate) async fn send_routed_http(
         &self,

@@ -48,6 +48,20 @@ describe("TerminalPane", () => {
     );
   });
 
+  it("sends the already fitted size when the temporary PTY becomes writable", async () => {
+    const { rerender } = render(
+      <TerminalPane active temporary inputDisabled events={[]} session={{ ...session, status: "disconnected" }} />,
+    );
+    await waitFor(() => expect(terminalState.refreshCalls).toBeGreaterThan(0));
+    expect([terminalState.cols, terminalState.rows]).toEqual([96, 28]);
+    expect(temporaryResizeMock).not.toHaveBeenCalled();
+
+    rerender(<TerminalPane active temporary inputDisabled={false} events={[]} session={session} />);
+    await waitFor(() => expect(temporaryResizeMock).toHaveBeenCalledExactlyOnceWith({
+      workspaceId: session.workspaceId, sessionId: session.sessionId, cols: 96, rows: 28,
+    }));
+  });
+
   it("opens xterm in an unpadded fit host so padding cannot overflow the pane", () => {
     render(
       <TerminalPane

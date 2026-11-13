@@ -243,6 +243,18 @@ struct SshClientHandler {
 impl russh::client::Handler for SshClientHandler {
     type Error = russh::Error;
 
+    async fn kex_done(
+        &mut self,
+        _shared_secret: Option<&[u8]>,
+        _names: &russh::Names,
+        _session: &mut russh::client::Session,
+    ) -> Result<(), Self::Error> {
+        if let Some(trust) = &mut self.temporary_trust {
+            trust.finish_key_exchange(&self.workspace_id)?;
+        }
+        Ok(())
+    }
+
     async fn check_server_key(
         &mut self,
         server_public_key: &ssh_key::PublicKey,

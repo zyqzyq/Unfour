@@ -4,6 +4,18 @@ use tauri::ipc::Channel;
 use tauri::Emitter;
 use tauri_plugin_updater::{Update, UpdaterExt};
 
+/// The Windows updater and Tauri restart both read Manager::env(). Retain
+/// argv[0] for the installer. One-shot SSH and OAuth handoffs use the original
+/// OS arguments in their own startup and single-instance handlers.
+#[cfg(windows)]
+pub(super) fn configure_restart(
+    builder: tauri::Builder<tauri::Wry>,
+    mut env: tauri::Env,
+) -> tauri::Builder<tauri::Wry> {
+    env.args_os.truncate(1);
+    builder.manage(env)
+}
+
 pub fn app_config() -> unfour_app::UnfourAppConfig {
     unfour_app::UnfourAppConfig {
         app_name: "Unfour".to_string(),
@@ -420,6 +432,28 @@ fn update_download_error(error: tauri_plugin_updater::Error) -> UpdateCommandErr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_updater_and_restart_get_only_the_executable_after_bastion_launch() {
+        use tauri::Manager;
+        let mut env = tauri::Env::default();
+        let exe = env.args_os[0].clone();
+        env.args_os = vec![
+            exe.clone(),
+            "-url".into(),
+            "ssh://user:synthetic-grant@entry.invalid:22".into(),
+            "-newtab".into(),
+            "Test asset".into(),
+        ];
+        // Build the real runtime to verify initialization preserves our Env.
+        // No event loop, application window, network call, or install is needed.
+        let app = configure_restart(tauri::Builder::default().any_thread(), env)
+            .plugin(tauri_plugin_updater::Builder::new().build())
+            .build(tauri::generate_context!())
+            .unwrap();
+        assert_eq!(app.env().args_os, vec![exe]);
+    }
 
     #[tokio::test]
     async fn update_operations_serialize_and_stop_after_installation() {

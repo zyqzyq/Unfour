@@ -18,6 +18,26 @@ impl Drop for ShutdownOnDrop {
     }
 }
 
+#[cfg(feature = "ssh-native")]
+pub(super) async fn connect_transport(
+    host: &str,
+    port: u16,
+    config: Arc<russh::client::Config>,
+    handler: SshClientHandler,
+) -> Result<russh::client::Handle<SshClientHandler>, russh::Error> {
+    let socket = tokio::net::TcpStream::connect((host, port)).await?;
+    socket.set_nodelay(config.nodelay)?;
+    let socket = socket.into_std()?;
+    // russh runs key exchange in a separate task before returning a handle.
+    // Close its socket if the caller times out or cancels while awaiting it.
+    let mut guard = ShutdownOnDrop(Some(socket.try_clone()?));
+    let handle =
+        russh::client::connect_stream(config, tokio::net::TcpStream::from_std(socket)?, handler)
+            .await?;
+    guard.0.take();
+    Ok(handle)
+}
+
 impl SshService {
     // -----------------------------------------------------------------------
     // Native connect (ssh-native feature path)
@@ -136,22 +156,7 @@ impl SshService {
             .and_then(|s| s.strip_suffix(']'))
             .unwrap_or(&connection.host);
         let timeout_duration = std::time::Duration::from_secs(15);
-        let dial = async {
-            let socket = tokio::net::TcpStream::connect((host, connection.port)).await?;
-            socket.set_nodelay(config.nodelay)?;
-            let socket = socket.into_std()?;
-            // russh spawns its key-exchange task before returning a Handle. Dropping its
-            // future alone would leave that task waiting on the peer's TCP socket.
-            let mut guard = ShutdownOnDrop(Some(socket.try_clone()?));
-            let handle = russh::client::connect_stream(
-                config,
-                tokio::net::TcpStream::from_std(socket)?,
-                handler,
-            )
-            .await?;
-            guard.0.take();
-            Ok(handle)
-        };
+        let dial = connect_transport(host, connection.port, config, handler);
         match tokio::time::timeout(timeout_duration, dial).await {
             Ok(Ok(handle)) => Ok(handle),
             Ok(Err(error)) => Err(NativeConnectError::Failed(error)),

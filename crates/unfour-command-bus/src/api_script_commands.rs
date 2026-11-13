@@ -94,6 +94,13 @@ impl CommandBus {
             .api_routes_for_environment(&input.workspace_id, request_id, environment_id.clone())
             .await?;
         let route = crate::api_routes::checked_editor_route(&routes, preview)?;
+        let ssh_revision = self
+            .api_jump_revision(
+                &input.workspace_id,
+                &route,
+                preview.and_then(|p| p.expected_ssh_revision),
+            )
+            .await?;
         let pre_environment = self
             .script_environment(&input.workspace_id, environment_id.as_deref())
             .await?;
@@ -198,7 +205,7 @@ impl CommandBus {
                 cancellation.clone(),
                 &secrets,
                 &route,
-                preview.and_then(|p| p.expected_ssh_revision),
+                ssh_revision,
             )
             .await
         {

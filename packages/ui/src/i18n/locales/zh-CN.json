@@ -1250,6 +1250,7 @@
         "TEMPORARY_CHANNEL_TIMEOUT": "终端通道建立超时。",
         "TEMPORARY_TRANSPORT_TIMEOUT": "SSH 传输建立超时。",
         "TEMPORARY_TRANSPORT_OR_TRUST_FAILED": "SSH 传输或主机指纹校验失败。",
+        "TEMPORARY_REKEY_REQUIRES_RELAUNCH": "SSH 需要重新协商密钥。请从堡垒机发起新会话并重新核对主机指纹。",
         "TEMPORARY_AUTH_FAILED": "认证失败。",
         "TEMPORARY_CHANNEL_FAILED": "终端通道建立失败。"
       },

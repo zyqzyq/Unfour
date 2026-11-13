@@ -1,4 +1,6 @@
 use base64::{engine::general_purpose::STANDARD, Engine};
+use std::{future::Future, pin::Pin, sync::Arc};
+use unfour_core::network::{BoxedTunnelStream, TunnelConnector};
 use unfour_core::{domain::CommandContext, AppError, AppResult};
 use unfour_redis_engine::connections;
 use unfour_redis_engine::RedisEndpoint;
@@ -8,6 +10,45 @@ mod scan_cursor;
 use crate::transaction::CommandActivity;
 use crate::{CommandBus, RedisConnection, RedisConnectionInput, RedisKeyInfo, RedisScanPage};
 use crate::{RedisCollectionKind, RedisCollectionPage, RedisMutation};
+
+/// Redis calls this connector inside its single network deadline. SSH setup,
+/// the forwarded channel and every subsequent command share that same budget.
+struct RedisJump {
+    bus: CommandBus,
+    workspace: String,
+    jump: String,
+    ssh_revision: Option<i64>,
+    saved: Option<(String, i64)>,
+}
+
+impl TunnelConnector for RedisJump {
+    fn connect<'a>(
+        &'a self,
+        host: &'a str,
+        port: u16,
+    ) -> Pin<Box<dyn Future<Output = AppResult<BoxedTunnelStream>> + Send + 'a>> {
+        Box::pin(async move {
+            let tunnel = self
+                .bus
+                .ssh
+                .open_tunnel_at_revision(&self.workspace, &self.jump, self.ssh_revision)
+                .await
+                .map_err(|error| match error {
+                    AppError::NotFound(_) => {
+                        AppError::Validation("SSH_TUNNEL_ROUTE_MISSING".into())
+                    }
+                    other => other,
+                })?;
+            let stream = tunnel.connect(host, port).await?;
+            if let Some((id, revision)) = &self.saved {
+                self.bus
+                    .check_redis_revision(&self.workspace, id, *revision)
+                    .await?;
+            }
+            Ok(stream)
+        })
+    }
+}
 
 impl CommandBus {
     pub async fn list_redis_connections(&self, workspace: &str) -> AppResult<Vec<RedisConnection>> {
@@ -158,67 +199,65 @@ impl CommandBus {
                     .await?
             }
         };
-        let endpoint = self
-            .redis_endpoint_via(
-                &input.workspace_id,
-                endpoint,
-                route_id,
-                input.expected_ssh_revision,
-            )
-            .await?;
-        if let Some(record) = saved {
-            self.check_redis_revision(&record).await?;
+        let endpoint = self.redis_endpoint_via(
+            &input.workspace_id,
+            endpoint,
+            route_id,
+            input.expected_ssh_revision,
+            saved.as_ref(),
+        );
+        if route_id.is_none() {
+            if let Some(record) = &saved {
+                self.check_redis_revision(&record.workspace_id, &record.id, record.revision)
+                    .await?;
+            }
         }
         unfour_redis_engine::test_connection(&endpoint, password.as_deref().map(String::as_str))
             .await
     }
 
-    async fn redis_endpoint_via(
+    fn redis_endpoint_via(
         &self,
         workspace: &str,
         endpoint: RedisEndpoint,
         jump: Option<&str>,
         expected_ssh_revision: Option<i64>,
-    ) -> AppResult<RedisEndpoint> {
+        saved: Option<&RedisConnection>,
+    ) -> RedisEndpoint {
         let Some(jump) = jump else {
-            return Ok(endpoint);
+            return endpoint;
         };
-        let tunnel = self
-            .ssh
-            .open_tunnel_at_revision(workspace, jump, expected_ssh_revision)
-            .await
-            .map_err(|error| match error {
-                AppError::NotFound(_) => AppError::Validation("SSH_TUNNEL_ROUTE_MISSING".into()),
-                other => other,
-            })?;
-        Ok(endpoint.with_tunnel(std::sync::Arc::new(tunnel)))
+        endpoint.with_tunnel(Arc::new(RedisJump {
+            bus: self.clone(),
+            workspace: workspace.to_owned(),
+            jump: jump.to_owned(),
+            ssh_revision: expected_ssh_revision,
+            saved: saved.map(|record| (record.id.clone(), record.revision)),
+        }))
     }
 
-    async fn check_redis_revision(&self, record: &RedisConnection) -> AppResult<()> {
+    async fn check_redis_revision(
+        &self,
+        workspace: &str,
+        id: &str,
+        revision: i64,
+    ) -> AppResult<()> {
         let mut db = self.db.pool().acquire().await?;
-        let (latest, _) = connections::get_on(&mut db, &record.workspace_id, &record.id).await?;
-        if latest.revision != record.revision {
+        let (latest, _) = connections::get_on(&mut db, workspace, id).await?;
+        if latest.revision != revision {
             return Err(AppError::RowConflict("REDIS_CONNECTION_CHANGED".into()));
         }
         Ok(())
     }
 
-    async fn redis_saved_endpoint(&self, record: &RedisConnection) -> AppResult<RedisEndpoint> {
-        if record.route_needs_review {
-            return Err(AppError::Validation("SSH_TUNNEL_ROUTE_CHANGED".into()));
-        }
-        let endpoint = self
-            .redis_endpoint_via(
-                &record.workspace_id,
-                record.endpoint(),
-                record.ssh_connection_id.as_deref(),
-                None,
-            )
-            .await?;
-        if record.ssh_connection_id.is_some() {
-            self.check_redis_revision(record).await?;
-        }
-        Ok(endpoint)
+    fn redis_saved_endpoint(&self, record: &RedisConnection) -> RedisEndpoint {
+        self.redis_endpoint_via(
+            &record.workspace_id,
+            record.endpoint(),
+            record.ssh_connection_id.as_deref(),
+            None,
+            Some(record),
+        )
     }
 
     async fn redis_target(
@@ -252,7 +291,7 @@ impl CommandBus {
         let field = field_base64.map(decode_argument).transpose()?;
         let (record, password) = self.redis_target(workspace, id, expected_revision).await?;
         unfour_redis_engine::inspect_key(
-            &self.redis_saved_endpoint(&record).await?,
+            &self.redis_saved_endpoint(&record),
             password.as_deref().map(String::as_str),
             &key,
             field.as_deref(),
@@ -275,7 +314,7 @@ impl CommandBus {
         let scope = scan_cursor::scope(&record, pattern);
         let offset = scan_cursor::unpack(&scope, cursor)?;
         let mut page = unfour_redis_engine::scan_keys(
-            &self.redis_saved_endpoint(&record).await?,
+            &self.redis_saved_endpoint(&record),
             password.as_deref().map(String::as_str),
             offset,
             pattern,
@@ -307,7 +346,7 @@ impl CommandBus {
     ) -> AppResult<unfour_redis_engine::RedisCheckResult> {
         let (record, password) = self.redis_target(workspace, id, revision).await?;
         unfour_redis_engine::check_key(
-            &self.redis_saved_endpoint(&record).await?,
+            &self.redis_saved_endpoint(&record),
             password.as_deref().map(String::as_str),
             key,
             field,
@@ -353,7 +392,7 @@ impl CommandBus {
             None => scan_cursor::unpack(&scope, cursor)?,
         };
         let mut page = unfour_redis_engine::browse_collection(
-            &self.redis_saved_endpoint(&record).await?,
+            &self.redis_saved_endpoint(&record),
             password.as_deref().map(String::as_str),
             &key,
             kind,
@@ -403,7 +442,7 @@ impl CommandBus {
             }
         }
         let result = unfour_redis_engine::mutate_key(
-            &self.redis_saved_endpoint(&record).await?,
+            &self.redis_saved_endpoint(&record),
             password.as_deref().map(String::as_str),
             &key,
             &mutation,

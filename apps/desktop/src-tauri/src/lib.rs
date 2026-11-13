@@ -47,8 +47,11 @@ pub fn run() {
         background_sync.run_background(sync_receiver).await;
     });
 
+    let builder = tauri::Builder::default();
+    #[cfg(windows)]
+    let builder = update::configure_restart(builder, tauri::Env::default());
     let builder = unfour_app::configure_core_app_with_extensions(
-        tauri::Builder::default(),
+        builder,
         config,
         unfour_app::UnfourAppExtensions::with_prepared_command_bus(command_bus),
     )

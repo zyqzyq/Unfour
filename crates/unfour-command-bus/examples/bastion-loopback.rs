@@ -65,6 +65,19 @@ impl russh::server::Handler for Fixture {
         Ok(())
     }
 
+    async fn window_change_request(
+        &mut self,
+        _: ChannelId,
+        cols: u32,
+        rows: u32,
+        _: u32,
+        _: u32,
+        _: &mut Session,
+    ) -> Result<(), Self::Error> {
+        println!("FIXTURE_RESIZE {cols} {rows}");
+        Ok(())
+    }
+
     async fn data(
         &mut self,
         channel: ChannelId,

@@ -8,6 +8,7 @@ import {
   emptyApiTabsState,
   type ApiRequestTab,
 } from "./model/request-tabs";
+import type { ApiOpenIntent } from "./model/types";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -50,6 +51,8 @@ const closeTab = vi.fn();
 const closeTabs = vi.fn();
 let requestTabs: ApiRequestTab[];
 let listedRequests: ApiSavedRequest[];
+let routePending: boolean;
+let environmentId: string | null;
 const createCollectionMutateAsync = vi.fn();
 const createFolderMutateAsync = vi.fn();
 
@@ -58,13 +61,19 @@ vi.mock("./hooks/useApiRequestTabs", () => ({
     const tab = requestTabs[0];
     return {
       activeTab: tab,
+      activeEnvironment: environmentId ? { id: environmentId } : null,
+      routing: { pending: routePending, environmentStatus: "success" },
       cancelTab: vi.fn(),
       closeTab,
       closeTabs,
       collectionStatus: "",
       newRequest: vi.fn(),
       openHistory: vi.fn(),
-      openSaved: vi.fn(),
+      openSaved: (id: string) => {
+        const selected = requestTabs.find((item) => item.savedRequestId === id);
+        if (selected) requestTabs = [selected, ...requestTabs.filter((item) => item !== selected)];
+        return selected;
+      },
       saveTab,
       savedRequests: listedRequests,
       selectTab: vi.fn(),
@@ -93,7 +102,14 @@ vi.mock("./hooks/useApiCollectionFolders", () => ({
 }));
 
 vi.mock("./components/ApiClientSidebar", () => ({
-  ApiClientSidebar: () => null,
+  ApiClientSidebar: ({ onOpenIntent }: { onOpenIntent: (intent: ApiOpenIntent) => void }) => (<>
+    <button onClick={() => onOpenIntent({ action: "send", kind: "saved", nonce: 1, requestId: "req-1" })}>
+      Send saved request
+    </button>
+    <button onClick={() => onOpenIntent({ action: "save", kind: "history", nonce: 2, historyId: "h-1" })}>
+      Save history as request
+    </button>
+  </>),
 }));
 
 vi.mock("./components/ApiRequestWorkspace", () => ({
@@ -128,10 +144,75 @@ afterEach(() => {
 beforeEach(() => {
   requestTabs = [unsavedTab()];
   listedRequests = [];
+  routePending = false;
+  environmentId = null;
   saveTab.mockResolvedValue("req-1");
 });
 
 describe("API shortcut ownership", () => {
+  it("opens Save as request for the already active history tab", () => {
+    const target = { ...unsavedTab(), id: "history:h-1", source: "history" as const, sourceId: "h-1" };
+    requestTabs = [target];
+    const view = render(<ApiClientPage openIntent={null} workspaceId="ws-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Save history as request" }));
+    // openHistory publishes a new workspace slice without changing the existing tab.
+    view.rerender(<ApiClientPage openIntent={null} workspaceId="ws-1" />);
+    expect(requestTabs[0]).toBe(target);
+    expect(screen.getByRole("dialog")).toBeVisible();
+  });
+
+  it("sends the already active saved request from the sidebar once", () => {
+    const target = { ...unsavedTab(), id: "saved:req-1", savedRequestId: "req-1" };
+    requestTabs = [target];
+    const view = render(<ApiClientPage openIntent={null} workspaceId="ws-1" />);
+    fireEvent.click(screen.getByText("Send saved request"));
+    view.rerender(<ApiClientPage openIntent={null} workspaceId="ws-1" />);
+    expect(sendTab).toHaveBeenCalledExactlyOnceWith(target);
+  });
+
+  it.each(["close", "other tab", "open", "workspace", "environment", "draft", "module"] as const)(
+    "cancels a pending Send after changing its context: %s", (change) => {
+      const target = { ...unsavedTab(), id: "saved:req-1", savedRequestId: "req-1" };
+      target.draft.method = "POST";
+      const other = unsavedTab();
+      requestTabs = [target, other];
+      listedRequests = [{ id: "req-1" } as ApiSavedRequest];
+      const intent = { kind: "saved" as const, action: "send" as const, requestId: "req-1", nonce: 1 };
+      routePending = true;
+      const view = render(<ApiClientPage openIntent={intent} workspaceId="ws-1" />);
+      expect(sendTab).not.toHaveBeenCalled();
+
+      if (change === "close") requestTabs = [other];
+      if (change === "other tab") requestTabs = [other, target];
+      if (change === "environment") environmentId = "another-env";
+      if (change === "draft") requestTabs = [{ ...target, draft: { ...target.draft, body: "new body" } }];
+      const ordinaryOpen = { ...intent, nonce: 2, action: "open" as const };
+      routePending = false;
+      view.rerender(<ApiClientPage active={change !== "module"} workspaceId={change === "workspace" ? "ws-2" : "ws-1"}
+        openIntent={change === "open" ? ordinaryOpen : null} />);
+      expect(sendTab).not.toHaveBeenCalled();
+      requestTabs = [target, other];
+      environmentId = null;
+      view.rerender(<ApiClientPage openIntent={ordinaryOpen} workspaceId="ws-1" />);
+      expect(sendTab).not.toHaveBeenCalled();
+    },
+  );
+
+  it("sends exactly once after the requested tab opens and routing becomes available", () => {
+    const target = { ...unsavedTab(), id: "saved:req-1", savedRequestId: "req-1" };
+    requestTabs = [unsavedTab(), target];
+    listedRequests = [{ id: "req-1" } as ApiSavedRequest];
+    const intent = { kind: "saved" as const, action: "send" as const, requestId: "req-1", nonce: 1 };
+    routePending = true;
+    const view = render(<ApiClientPage openIntent={intent} workspaceId="ws-1" />);
+    expect(sendTab).not.toHaveBeenCalled();
+    routePending = false;
+    view.rerender(<ApiClientPage openIntent={intent} workspaceId="ws-1" />);
+    expect(sendTab).toHaveBeenCalledExactlyOnceWith(target);
+    view.rerender(<ApiClientPage openIntent={null} workspaceId="ws-1" />);
+    expect(sendTab).toHaveBeenCalledTimes(1);
+  });
+
   it("does not replay a previous Send intent when saved requests refresh", () => {
     requestTabs = [{ ...unsavedTab(), id: "saved:req-1", savedRequestId: "req-1" }];
     listedRequests = [{ id: "req-1" } as ApiSavedRequest];

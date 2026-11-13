@@ -1,12 +1,30 @@
 use super::*;
 use tokio::sync::{oneshot, watch};
 
-#[derive(Clone)]
 pub(crate) struct TrustPrompt {
     pub(super) queue: std::sync::Weak<Mutex<Queue>>,
     pub(super) handle: String,
+    pub(super) initial_exchange_seen: bool,
 }
 impl TrustPrompt {
+    pub(crate) fn finish_key_exchange(&mut self, workspace: &str) -> Result<(), russh::Error> {
+        if !self.initial_exchange_seen {
+            self.initial_exchange_seen = true;
+            return Ok(());
+        }
+        // russh 0.61 calls check_server_key only for the initial exchange. At
+        // this callback the new keys have not been installed; the host public
+        // key is unavailable, so a temporary session must end here.
+        if let Some(queue) = self.queue.upgrade() {
+            if let Ok(mut queue) = queue.lock() {
+                if let Ok(entry) = queue.owned(workspace, &self.handle) {
+                    entry.summary.error_code = Some("TEMPORARY_REKEY_REQUIRES_RELAUNCH".into());
+                }
+            }
+        }
+        Err(russh::Error::UnknownKey)
+    }
+
     pub(crate) async fn verify(
         &self,
         store: &HostKeyStore,
@@ -32,7 +50,7 @@ impl TrustPrompt {
             let Ok(entry) = queue.owned(workspace, &self.handle) else {
                 return false;
             };
-            // Rekey must match the explicitly approved key for this target.
+            // Any repeated fingerprint check must match the one approved here.
             if let Some(expected) = &entry.trusted_fingerprint {
                 return expected == fingerprint;
             }
@@ -198,10 +216,12 @@ impl SshService {
                 entry.summary.fingerprint = None;
                 entry.summary.status = "disconnected".into();
                 // All setup errors below are fixed codes, never driver text.
-                entry.summary.error_code = result.err().map(|error| match error {
-                    AppError::Validation(code) => code,
-                    _ => "TEMPORARY_FAILED".into(),
-                });
+                if entry.summary.error_code.is_none() {
+                    entry.summary.error_code = result.err().map(|error| match error {
+                        AppError::Validation(code) => code,
+                        _ => "TEMPORARY_FAILED".into(),
+                    });
+                }
                 entry.deadline = deadline;
             }
         }
@@ -225,6 +245,7 @@ impl SshService {
             temporary_trust: Some(TrustPrompt {
                 queue: Arc::downgrade(&self.temporary.0),
                 handle: id.into(),
+                initial_exchange_seen: false,
             }),
         };
         // Includes up to 120s of explicit host-trust waiting. Authentication
@@ -236,9 +257,10 @@ impl SshService {
         config.keepalive_interval = None;
         let handle = tokio::time::timeout(
             Duration::from_secs(150),
-            russh::client::connect(
+            native_transport::connect_transport(
+                request.host.as_str(),
+                request.port,
                 Arc::new(config),
-                (request.host.as_str(), request.port),
                 handler,
             ),
         )

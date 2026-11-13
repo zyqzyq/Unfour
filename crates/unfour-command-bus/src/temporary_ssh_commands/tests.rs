@@ -66,6 +66,11 @@ impl russh::server::Handler for Server {
         session: &mut Session,
     ) -> Result<(), Self::Error> {
         self.calls.lock().unwrap().push("shell");
+        if self.stall == Some("rekey-before-shell") {
+            // Cross the server's test-only rekey threshold before acknowledging the shell.
+            session.data(channel, vec![b'x'; 16 * 1024])?;
+            return Ok(());
+        }
         if self.stall == Some("shell") {
             tokio::time::sleep(Duration::from_secs(60)).await;
         }
@@ -129,6 +134,66 @@ async fn wait_for(bus: &CommandBus, workspace: &str, status: &str) -> TemporaryS
             bus.list_temporary_ssh(workspace).unwrap()
         )
     })
+}
+
+#[tokio::test]
+async fn temporary_rekey_requires_a_new_launch_during_setup_and_after_connecting() {
+    let bus = CommandBus::ephemeral().await.unwrap();
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    for during_setup in [true, false] {
+        let socket = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = socket.local_addr().unwrap().port();
+        let mut server = Server {
+            stall: during_setup.then_some("rekey-before-shell"),
+            ..Default::default()
+        };
+        let config = Arc::new(russh::server::Config {
+            keys: vec![russh::keys::PrivateKey::random(
+                &mut rand::rng(),
+                russh::keys::Algorithm::Ed25519,
+            )
+            .unwrap()],
+            limits: russh::Limits {
+                rekey_write_limit: 8 * 1024,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        let task =
+            tokio::spawn(async move { server.run_on_socket(config, &socket).await.unwrap() });
+        let request = TemporaryRequest::password(
+            "127.0.0.1".into(),
+            port,
+            "synthetic-ticket-user".into(),
+            "synthetic-password".into(),
+        )
+        .unwrap();
+        let handle = bus
+            .receive_temporary_ssh(&LaunchReceipt::default(), request)
+            .unwrap();
+        bus.claim_temporary_ssh(&workspace, &handle).await.unwrap();
+        bus.start_temporary_ssh(&workspace, &handle).unwrap();
+        let trust = wait_for(&bus, &workspace, "awaiting-trust").await;
+        bus.trust_temporary_ssh(&workspace, &handle, trust.fingerprint.as_deref().unwrap())
+            .unwrap();
+        if !during_setup {
+            wait_for(&bus, &workspace, "connected").await;
+            bus.temporary_ssh_input(SshSessionInput {
+                workspace_id: workspace.clone(),
+                session_id: handle.clone(),
+                data: "x".repeat(16 * 1024),
+            })
+            .await
+            .unwrap();
+        }
+        let ended = wait_for(&bus, &workspace, "disconnected").await;
+        assert_eq!(
+            ended.error_code.as_deref(),
+            Some("TEMPORARY_REKEY_REQUIRES_RELAUNCH")
+        );
+        bus.cancel_temporary_ssh(&workspace, &handle).unwrap();
+        task.abort();
+    }
 }
 
 #[tokio::test]

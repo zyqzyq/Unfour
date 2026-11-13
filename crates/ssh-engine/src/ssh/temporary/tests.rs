@@ -22,6 +22,69 @@ fn request() -> TemporaryRequest {
 }
 
 #[cfg(feature = "ssh-native")]
+#[tokio::test]
+async fn stalled_key_exchange_closes_socket_on_cancel_and_transport_timeout() {
+    use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+    let (service, workspace) = fixture().await;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    for cancel in [true, false] {
+        let request = TemporaryRequest::password(
+            "127.0.0.1".into(),
+            listener.local_addr().unwrap().port(),
+            "user".into(),
+            "grant".into(),
+        )
+        .unwrap();
+        let handle = service
+            .receive_temporary(&LaunchReceipt::default(), request)
+            .unwrap();
+        service.claim_temporary(&workspace, &handle).await.unwrap();
+        service.start_temporary(&workspace, &handle).unwrap();
+        let mut peer = tokio::time::timeout(Duration::from_secs(5), async {
+            let (socket, _) = listener.accept().await.unwrap();
+            let mut peer = BufReader::new(socket);
+            let mut banner = String::new();
+            peer.read_line(&mut banner).await.unwrap();
+            assert!(banner.starts_with("SSH-2.0-"));
+            peer.get_mut()
+                .write_all(b"SSH-2.0-stalled\r\n")
+                .await
+                .unwrap();
+            peer.read_exact(&mut [0; 5]).await.unwrap();
+            peer
+        })
+        .await
+        .unwrap();
+        if cancel {
+            service.cancel_temporary(&workspace, &handle).unwrap();
+        } else {
+            tokio::time::pause();
+            tokio::time::advance(Duration::from_secs(151)).await;
+            tokio::time::resume();
+        }
+        let closed =
+            tokio::time::timeout(Duration::from_secs(3), peer.read_to_end(&mut Vec::new()))
+                .await
+                .expect("stalled key exchange kept the client's TCP socket open");
+        if let Err(error) = closed {
+            assert!(matches!(
+                error.kind(),
+                std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::ConnectionAborted
+            ));
+        }
+        let entries = service.list_temporary(&workspace).unwrap();
+        if cancel {
+            assert!(entries.is_empty());
+        } else {
+            assert_eq!(
+                entries[0].error_code.as_deref(),
+                Some("TEMPORARY_TRANSPORT_TIMEOUT")
+            );
+        }
+    }
+}
+
+#[cfg(feature = "ssh-native")]
 #[test]
 fn sync_adapter_without_runtime_rejects_before_consuming() {
     let runtime = tokio::runtime::Runtime::new().unwrap();
@@ -197,6 +260,7 @@ async fn unknown_host_trust_wait_times_out_without_approval() {
     let prompt = TrustPrompt {
         queue: Arc::downgrade(&service.temporary.0),
         handle: handle.clone(),
+        initial_exchange_seen: false,
     };
     let verify = prompt.verify(&store, &workspace, "fixture", 22, "synthetic");
     tokio::pin!(verify);
@@ -246,6 +310,7 @@ async fn trust_matches_stored_key_and_never_writes_unknown_key() {
     let prompt = TrustPrompt {
         queue: Arc::downgrade(&service.temporary.0),
         handle: handle.clone(),
+        initial_exchange_seen: false,
     };
     assert!(
         prompt

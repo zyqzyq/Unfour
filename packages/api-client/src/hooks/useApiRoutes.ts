@@ -33,7 +33,7 @@ export function useApiRoutes(workspaceId: string, tab: ApiRequestTab | null, env
     onSuccess: () => client.invalidateQueries({ queryKey: ["api-routes", workspaceId] }),
   });
   const view = routePreview(query, ssh, tab?.draft.route?.route, environmentId, environmentStatus);
-  return { query, ssh, ...view, ready: view.ready && !environmentMutation.isPending, environmentMutation };
+  return { query, ssh, ...view, environmentStatus, ready: view.ready && !environmentMutation.isPending, environmentMutation };
 }
 
 function routePreview(

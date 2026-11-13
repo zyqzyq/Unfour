@@ -17,6 +17,8 @@
 3. 只有一个工作区时应自动进入 **SSH** 并显示主机指纹。将其与回显服务窗口的指纹核对后选择“仅本次信任此指纹”。在终端完成下述回显检查后，切到 API，重新执行一次 `& .\unfour.exe @argsA2`。应回到 SSH 并能再次核对指纹，两次均应保留左侧 SSH 连接列表。多个工作区时，在目标工作区手动认领请求。
 4. 在每个临时终端分别输入 `check` 并回车，确认终端显示 `A2_ECHO_OK`。关闭该标签，再验证另一个请求。两个请求完成后，本机服务应各打印两次 `FIXTURE_AUTH_OK`、`FIXTURE_PTY_OK` 和 `FIXTURE_ROUNDTRIP_OK`。关闭 Unfour，用 Ctrl+C 停止本次服务。
 
+当前回显服务还会打印 `FIXTURE_RESIZE <列数> <行数>`。首次连接成功后就应出现该消息。自动验收会对照 xterm 显示的行数检查每个会话。新构建使用同一份源码中的验包脚本、应用和回显服务。复测历史包 `e85a8ea7` 时使用其验收提交 `73a55e95` 中的说明和脚本。
+
 测试包附带应用、MCP sidecar 和独立的合成 SSH 服务。手工复现使用 Windows x64、Microsoft WebView2 Runtime 和 Visual C++ x64 运行库。PE 依赖表显示 sidecar 与合成服务需要 `VCRUNTIME140.dll`。缺少运行库时，由现场按软件安装流程使用 `prerequisites` 目录中的微软签名离线安装程序。校验文件见 `SHA256SUMS.txt`。[WebView2 离线部署说明](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution#offline-deployment) · [Microsoft Visual C++ 运行库](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)
 
 现场只确认了 AccessClient 4.6.15 启动 Xshell 7 时的外层命令行结构，以及已有窗口新增标签的现象。支持的 argv 顺序为 `-url <SSH URL> -newtab <单一标签参数>`。本次解析接受 ASCII 域名或标准 IPv4、显式十进制端口、由 ASCII 字母数字和 `-._~` 构成的非空身份及凭据。标签可以含空格、非 ASCII 字符和 `@`。Windows 单实例转发以竖线分隔字段，入口因此拒绝含竖线的参数。未知开关、额外参数和未确认的编码均返回固定错误。

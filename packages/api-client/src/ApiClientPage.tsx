@@ -68,10 +68,14 @@ export function ApiClientPage({
   const urlInputRef = useRef<HTMLInputElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
   const consumedOpenIntent = useRef<{ workspaceId: string; nonce: number } | null>(null);
-  const pendingIntentAction = useRef<{
-    action: "save" | "send";
-    tabId: string;
+  const pendingHistorySave = useRef<string | null>(null);
+  const pendingSend = useRef<{
+    tab: ApiRequestTab;
+    selected: boolean;
+    workspaceId: string;
+    environmentId: string | null | undefined;
   } | null>(null);
+  const environmentId = routing.environmentStatus === "success" ? activeEnvironment?.id ?? null : undefined;
 
   const requestSave = useCallback(
     (tab: ApiRequestTab, nameOverride?: string) => {
@@ -118,10 +122,12 @@ export function ApiClientPage({
   );
 
   const handleNewRequest = useCallback(() => {
+    pendingSend.current = null;
     newRequest();
   }, [newRequest]);
 
   const handleSelectTab = useCallback((tabId: string) => {
+    if (pendingSend.current?.tab.id !== tabId) pendingSend.current = null;
     selectTab(tabId);
   }, [selectTab]);
 
@@ -130,51 +136,58 @@ export function ApiClientPage({
     [activeTab?.savedRequestId, onActiveSavedRequestChange],
   );
 
-  useEffect(() => {
-    if (!openIntent) {
-      return;
-    }
-    if (consumedOpenIntent.current?.workspaceId === workspaceId && consumedOpenIntent.current.nonce === openIntent.nonce) return;
-    // Wait for initial saved data, then consume this user action exactly once.
-    // Background query refreshes must never replay a Send or save intent.
-    if (openIntent.kind === "saved" && !savedRequests.some((item) => item.id === openIntent.requestId)) return;
-    consumedOpenIntent.current = { workspaceId, nonce: openIntent.nonce };
-    if (openIntent.kind === "new") {
-      newRequest();
-      return;
-    }
-    if (openIntent.kind === "saved") {
-      if (openIntent.action === "send") {
-        pendingIntentAction.current = {
-          action: "send",
-          tabId: `saved:${openIntent.requestId}`,
-        };
+  const handleOpenIntent = useCallback((intent: ApiOpenIntent) => {
+    pendingHistorySave.current = null;
+    pendingSend.current = null;
+    if (intent.kind === "new") newRequest();
+    else if (intent.kind === "saved") {
+      const tab = openSaved(intent.requestId);
+      if (tab && intent.action === "send") {
+        pendingSend.current = { tab, workspaceId, environmentId, selected: false };
       }
-      openSaved(openIntent.requestId);
-      return;
+    } else {
+      if (intent.action === "save") pendingHistorySave.current = `history:${intent.historyId}`;
+      void openHistory(intent.historyId);
     }
-    if (openIntent.action === "save") {
-      pendingIntentAction.current = {
-        action: "save",
-        tabId: `history:${openIntent.historyId}`,
-      };
-    }
-    void openHistory(openIntent.historyId);
-  }, [newRequest, openHistory, openIntent, openSaved, savedRequests, workspaceId]);
+  }, [environmentId, newRequest, openHistory, openSaved, workspaceId]);
 
   useEffect(() => {
-    const pending = pendingIntentAction.current;
-    if (!pending || activeTab?.id !== pending.tabId) {
-      return;
-    }
-    if (pending.action === "send" && routing?.pending) return;
-    pendingIntentAction.current = null;
-    if (pending.action === "send") {
-      sendTab(activeTab);
-    } else {
+    if (!openIntent) return;
+    if (consumedOpenIntent.current?.workspaceId === workspaceId && consumedOpenIntent.current.nonce === openIntent.nonce) return;
+    // Wait for saved data, then consume the action once even if that query refreshes.
+    if (openIntent.kind === "saved" && !savedRequests.some((item) => item.id === openIntent.requestId)) return;
+    consumedOpenIntent.current = { workspaceId, nonce: openIntent.nonce };
+    handleOpenIntent(openIntent);
+  }, [handleOpenIntent, openIntent, savedRequests, workspaceId]);
+
+  useEffect(() => {
+    if (activeTab && pendingHistorySave.current === activeTab.id) {
+      pendingHistorySave.current = null;
       setSaveDialogTabId(activeTab.id);
     }
-  }, [activeTab, sendTab, openIntent, routing?.pending]);
+  }, [activeTab, openIntent, state]);
+
+  // openSaved publishes a new tab slice even when its target is already active.
+  useEffect(() => {
+    const pending = pendingSend.current;
+    if (!pending) return;
+    if (!active || workspaceId !== pending.workspaceId) {
+      pendingSend.current = null;
+      return;
+    }
+    // openSaved can select the target during the effect above. Wait for that
+    // selection to render, but never wait for a previously selected tab to return.
+    if (activeTab?.id !== pending.tab.id) {
+      if (pending.selected) pendingSend.current = null;
+      return;
+    }
+    pending.selected = true;
+    if (pending.environmentId === undefined) pending.environmentId = environmentId;
+    const sameRequest = activeTab.draft === pending.tab.draft && pending.environmentId === environmentId;
+    if (sameRequest && routing.pending) return;
+    pendingSend.current = null;
+    if (sameRequest) sendTab(activeTab);
+  }, [active, activeTab, environmentId, openIntent, routing.pending, sendTab, state, workspaceId]);
 
   useEffect(() => {
     if (!active) return;
@@ -243,6 +256,7 @@ export function ApiClientPage({
   }
 
   function requestCloseMany(tabsToClose: ApiRequestTab[]) {
+    if (tabsToClose.some((tab) => tab.id === pendingSend.current?.tab.id)) pendingSend.current = null;
     pendingCloseQueueRef.current = tabsToClose.map((tab) => tab.id);
     continuePendingCloseQueue();
   }
@@ -358,39 +372,12 @@ export function ApiClientPage({
     }
   }
 
-  const handleSidebarIntent = useCallback(
-    (intent: ApiOpenIntent) => {
-      if (intent.kind === "new") {
-        newRequest();
-        return;
-      }
-      if (intent.kind === "saved") {
-        if (intent.action === "send") {
-          pendingIntentAction.current = {
-            action: "send",
-            tabId: `saved:${intent.requestId}`,
-          };
-        }
-        openSaved(intent.requestId);
-        return;
-      }
-      if (intent.action === "save") {
-        pendingIntentAction.current = {
-          action: "save",
-          tabId: `history:${intent.historyId}`,
-        };
-      }
-      void openHistory(intent.historyId);
-    },
-    [newRequest, openHistory, openSaved],
-  );
-
   const usesShellSidebar = Boolean(onShellSidebarChange);
   const sidebar = useMemo(
     () => (
       <ApiClientSidebar
         onNewRequest={handleNewRequest}
-        onOpenIntent={handleSidebarIntent}
+        onOpenIntent={handleOpenIntent}
         selectedId={activeTab?.savedRequestId ?? null}
         shellSlot={usesShellSidebar}
         workspaceId={workspaceId}
@@ -399,7 +386,7 @@ export function ApiClientPage({
     [
       activeTab?.savedRequestId,
       handleNewRequest,
-      handleSidebarIntent,
+      handleOpenIntent,
       usesShellSidebar,
       workspaceId,
     ],

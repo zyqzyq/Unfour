@@ -1252,6 +1252,7 @@
         "TEMPORARY_CHANNEL_TIMEOUT": "Terminal channel setup timed out.",
         "TEMPORARY_TRANSPORT_TIMEOUT": "SSH transport setup timed out.",
         "TEMPORARY_TRANSPORT_OR_TRUST_FAILED": "SSH transport or host fingerprint verification failed.",
+        "TEMPORARY_REKEY_REQUIRES_RELAUNCH": "SSH requested a new key exchange. Start a new session from the bastion to verify the host fingerprint again.",
         "TEMPORARY_AUTH_FAILED": "Authentication failed.",
         "TEMPORARY_CHANNEL_FAILED": "Terminal channel setup failed."
       },

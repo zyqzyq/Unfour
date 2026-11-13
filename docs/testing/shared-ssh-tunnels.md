@@ -12,6 +12,8 @@ The native integration test runs an SSH server and its targets on loopback. Only
 | TLS and failure paths | Transport fixtures inspect ClientHello SNI for the original API and Redis names. HTTP proxy tests cover remote DNS, proxy authentication on multiple hops and disconnection without direct fallback. |
 | Desktop interactions | Chromium exercises environment inheritance and a request override through the API toolbar. Its browser transport reports SSH as unavailable. Redis component tests cover selecting a saved jump host and displaying a missing target. |
 | Concurrent edits | Route inserts, changes and removals advance the owning workspace's local refresh clock on commit. Rolling back a route edit leaves that clock unchanged. |
+| API pre-request scripts | A stale revision for the same jump host stops the request before its script can persist an environment variable. |
+| Redis timeout and activity | A stalled SSH handshake exhausts the Redis operation's eight-second budget. A confirmed write rejected during SSH setup records a failed activity. A loopback SSH relay carries AUTH, SELECT and a Redis key check on the forwarded stream. |
 | Cancellation and trust changes | A loopback SSH server observes the TCP connection closing when a pending key exchange is cancelled. Removing a trusted host key during the handshake stops authentication. A stale jump-host revision is rejected before dialing. |
 | Redis route changes and backup | A new or edited Redis connection refuses a stale jump-host revision during testing and saving. Restoring an encrypted workspace backup preserves a pending route review alongside the restored password. |
 

@@ -192,7 +192,9 @@ export function useApiRequestTabs(workspaceId: string) {
     (requestId: string) => {
       const saved = savedQuery.data?.find((item) => item.id === requestId);
       if (saved) {
-        useApiRequestTabStore.getState().openSaved(workspaceId, saved);
+        const store = useApiRequestTabStore.getState();
+        store.openSaved(workspaceId, saved);
+        return useApiRequestTabStore.getState().byWorkspace[workspaceId].tabs.find((tab) => tab.savedRequestId === requestId);
       }
     },
     [savedQuery.data, workspaceId],

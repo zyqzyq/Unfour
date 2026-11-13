@@ -69,6 +69,36 @@ async fn redis_route_retarget_revokes_write_access_and_rechecks_stored_password(
         .save_redis_connection(edit.clone(), Some("test-password".into()))
         .await
         .unwrap();
+    // This jump has no trust pin, so a write fails before any Redis command.
+    let error = bus
+        .mutate_redis_key(
+            &ws,
+            &saved.id,
+            "aw==",
+            RedisMutation::DeleteKey {
+                expected_type: "string".into(),
+            },
+            saved.revision,
+            true,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.code(),
+        if cfg!(feature = "ssh-native") {
+            "SSH_TUNNEL_HOST_KEY_UNTRUSTED"
+        } else {
+            "SSH_TUNNEL_UNAVAILABLE"
+        }
+    );
+    let details: Vec<String> = sqlx::query_scalar(
+        "SELECT details_json FROM activity_events WHERE workspace_id=? AND target=? AND action='redis.key.mutate'",
+    ).bind(&ws).bind(&saved.id).fetch_all(bus.db.pool()).await.unwrap();
+    assert_eq!(details.len(), 1);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&details[0]).unwrap(),
+        serde_json::json!({ "operation":"deleteKey", "outcome":"failed" })
+    );
     for host in ["second.invalid", "third.invalid"] {
         sqlx::query("UPDATE connections SET host=? WHERE workspace_id=? AND id=?")
             .bind(host)

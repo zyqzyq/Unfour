@@ -87,9 +87,17 @@ try {
     const sidebarSearch = page.getByLabel(/Search SSH connections|搜索 SSH 连接/);
     await expect(sidebarSearch).toBeVisible();
     assert.equal(received.filter((x) => x === "FIXTURE_AUTH_OK").length, i);
+    const sessionStart = received.length;
     await page.getByRole("button", { name: /Trust this fingerprint once|仅本次信任此指纹/ }).click();
     const rows = page.locator(".xterm-rows:visible").last();
     await expect(rows).toContainText("A2 fixture ready", { timeout: 12000 });
+    // The server must receive the fitted PTY size without a manual window resize.
+    const visibleRows = await rows.locator(":scope > div").count();
+    assert.ok(visibleRows > 0);
+    const remoteRows = Math.min(100, Math.max(8, visibleRows));
+    await waitFor(() => received.slice(sessionStart).some((line) =>
+      line.startsWith("FIXTURE_RESIZE ") && Number(line.split(" ")[2]) === remoteRows),
+      "new PTY did not receive the displayed row count");
     const input = page.locator(".xterm-helper-textarea:visible").last();
     await input.focus();
     await page.keyboard.type("check");
