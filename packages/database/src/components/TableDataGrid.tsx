@@ -20,9 +20,10 @@ import {
 import type { PendingTableChange, TableEditing } from "../model/types";
 import { databaseValue, pendingValue } from "../model/table-row-editing";
 import { serializeDatabaseCell, serializeDatabaseRow, tryFormatJson } from "../result-utils";
+import { QueryResultPagination } from "./QueryResultPagination";
+import { filterQueryResultRows, type QueryResultView } from "./query-result-view";
 import {
   calculateAutoFitWidth,
-  compareCells,
   copyStatusLabel,
   isLikelyJson,
   MAX_CELL_TITLE_LENGTH,
@@ -34,7 +35,8 @@ import {
   type SortState,
 } from "./table-data-grid-helpers";
 
-const MAX_RENDERED_ROWS = 500;
+const MAX_RENDERED_TABLE_ROWS = 500;
+const QUERY_RESULT_PAGE_SIZE = 100;
 const EMPTY_PENDING_CHANGES: PendingTableChange[] = [];
 const ROW_ACTION_COLUMN_WIDTH = 72;
 
@@ -68,19 +70,24 @@ export function TableDataGrid({
   columns,
   editing,
   loading,
+  queryView,
   result,
   server,
 }: {
   columns?: DatabaseTableColumn[] | null;
   editing?: TableEditing | null;
   loading?: boolean;
+  queryView?: QueryResultView;
   result: DatabaseQueryResult;
   server?: ServerControls | null;
 }) {
   const { t } = useI18n();
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied-cell" | "copied-row" | "failed">("idle");
-  const [filter, setFilter] = useState("");
-  const [sort, setSort] = useState<SortState | null>(null);
+  const [localFilter, setLocalFilter] = useState("");
+  const [localSort, setLocalSort] = useState<SortState | null>(null);
+  const filter = queryView ? queryView.filter : localFilter;
+  const sort = queryView ? queryView.sort : localSort;
+  const [page, setPage] = useState(0);
   const [activeCell, setActiveCell] = useState<{ row: number; column: number } | null>(null);
   const [viewer, setViewer] = useState<CellViewer | null>(null);
   const [viewerRaw, setViewerRaw] = useState(false);
@@ -91,6 +98,17 @@ export function TableDataGrid({
   const [columnsWidths, setColumnsWidths] = useState<Record<string, number>>(() => ({
     __row_actions: ROW_ACTION_COLUMN_WIDTH,
   }));
+  const [previousResult, setPreviousResult] = useState(result);
+  if (!server && previousResult !== result) {
+    setPreviousResult(result);
+    setPage(0);
+    setLocalFilter("");
+    setLocalSort(null);
+    setSelection(null);
+    setActiveCell(null);
+    setViewer(null);
+    setCopyStatus("idle");
+  }
 
   const viewerValue = viewer?.value ?? null;
   const viewerJson = viewerValue !== null && viewerValue.length <= MAX_VALUE_VIEWER_LENGTH
@@ -118,22 +136,18 @@ export function TableDataGrid({
     [editing?.pendingChanges, result.columns],
   );
 
-  const processedRows = useMemo(() => {
-    const rows = [...result.rows, ...insertedRows] as DataRow[];
-    if (server) return rows;
-    const needle = filter.trim().toLowerCase();
-    const filtered = needle
-      ? rows.filter((row) => row.some((value) => (value ?? "").toLowerCase().includes(needle)))
-      : rows;
-    if (!sort) return filtered;
-    return [...filtered].sort((left, right) => {
-      const compared = compareCells(left[sort.columnIndex], right[sort.columnIndex]);
-      return sort.direction === "asc" ? compared : -compared;
-    });
-  }, [filter, insertedRows, result.rows, server, sort]);
+  const queryRows = queryView?.rows;
+  const processedRows = useMemo<DataRow[]>(() => {
+    if (queryRows) return queryRows;
+    const rows = insertedRows.length ? [...result.rows, ...insertedRows] : result.rows;
+    return server ? rows : filterQueryResultRows(rows, filter, sort);
+  }, [queryRows, filter, insertedRows, result.rows, server, sort]);
+  const pageCount = Math.max(1, Math.ceil(processedRows.length / QUERY_RESULT_PAGE_SIZE));
+  const pageIndex = Math.min(page, pageCount - 1);
+  const offset = server ? 0 : pageIndex * QUERY_RESULT_PAGE_SIZE;
   const visibleRows = useMemo(
-    () => processedRows.slice(0, MAX_RENDERED_ROWS),
-    [processedRows],
+    () => processedRows.slice(offset, offset + (server ? MAX_RENDERED_TABLE_ROWS : QUERY_RESULT_PAGE_SIZE)),
+    [processedRows, offset, server],
   );
   const pendingChanges = editing?.pendingChanges ?? EMPTY_PENDING_CHANGES;
   const pendingChangesByRowKey = useMemo(
@@ -177,12 +191,25 @@ export function TableDataGrid({
     }
   }
 
+  function changePage(nextPage: number) {
+    setPage(nextPage);
+    setSelection(null);
+    setActiveCell(null);
+  }
+
+  function changeFilter(value: string) {
+    changePage(0);
+    (queryView?.onFilter ?? setLocalFilter)(value);
+  }
+
+  function changeSort(value: SortState | null) {
+    changePage(0);
+    (queryView?.onSort ?? setLocalSort)(value);
+  }
+
   function toggleSort(columnIndex: number) {
-    setSort((current) => {
-      if (!current || current.columnIndex !== columnIndex) return { columnIndex, direction: "asc" };
-      if (current.direction === "asc") return { columnIndex, direction: "desc" };
-      return null;
-    });
+    if (sort?.columnIndex !== columnIndex) changeSort({ columnIndex, direction: "asc" });
+    else changeSort(sort.direction === "asc" ? { columnIndex, direction: "desc" } : null);
   }
 
   function commitEdit() {
@@ -208,6 +235,7 @@ export function TableDataGrid({
     // Reserve both action slots up front so DataTable's initial width cache
     // cannot clip the delete action when editing appears.
     autoFitWidth: ROW_ACTION_COLUMN_WIDTH,
+    copyValue: false,
     cell: (row, rowIndex) => {
       const rowKey = row.pendingRowKey ?? editing?.rowKey(row);
       const deleted = rowKey
@@ -216,7 +244,7 @@ export function TableDataGrid({
       return (
         <div className="flex items-center gap-0.5">
           <IconButton
-            label={t("database.grid.copyRow", { row: rowIndex + 1 })}
+            label={t("database.grid.copyRow", { row: offset + rowIndex + 1 })}
             onClick={() => copyText(serializeDatabaseRow(result, row, "\t"), "copied-row")}
             size="compact"
           >
@@ -240,10 +268,17 @@ export function TableDataGrid({
     width: columnsWidths.__row_actions ?? ROW_ACTION_COLUMN_WIDTH,
   };
 
+  const columnIds = result.columns.map((column, index) =>
+    server && column.name ? column.name : `result-column-${index}`);
   const dataColumns: DataTableColumn<DataRow>[] = [
     rowActionColumn,
     ...result.columns.map((column, columnIndex) => ({
       autoFitWidth: autoFitWidths[columnIndex],
+      copyValue: (row: DataRow, rowIndex: number) => indexedPendingValue(
+        pendingChangesByRowKey.get(visibleRowKeys[rowIndex]),
+        column.name,
+        row[columnIndex] ?? null,
+      ),
       cell: (row: DataRow, rowIndex: number) => {
         const rowKey = row.pendingRowKey ?? editing?.rowKey(row) ?? JSON.stringify(row);
         const indexedChange = pendingChangesByRowKey.get(rowKey);
@@ -334,30 +369,33 @@ export function TableDataGrid({
           {server ? renderServerSortIcon(server.sort, column.name) : renderSortIcon(sort, columnIndex)}
         </button>
       ),
-      id: column.name || `column-${columnIndex}`,
+      id: columnIds[columnIndex],
       meta: column.dataType,
-      width: columnsWidths[column.name || `column-${columnIndex}`] ?? Math.min(Math.max(column.name.length * 9 + 96, 140), 360),
+      width: columnsWidths[columnIds[columnIndex]] ?? Math.min(Math.max(column.name.length * 9 + 96, 140), 360),
     })),
   ];
 
   const gridRows = isLoading ? [] : visibleRows;
 
   return (
-    <div aria-busy={isLoading} className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <div
+      aria-busy={isLoading}
+      className={`flex min-w-0 flex-1 flex-col ${queryView ? "min-h-[calc(var(--u-size-section-toolbar)+2rem+3*var(--u-size-table-row))]" : "min-h-0"}`}
+    >
       <div className="flex min-h-11 shrink-0 items-center gap-2 border-b border-[var(--u-color-border)] bg-[var(--u-color-surface)] px-3 py-1.5">
         <Search className="text-[var(--u-color-text-soft)]" size={13} />
         <Input
           aria-label={t("database.grid.filterPlaceholder")}
           className="h-7 max-w-[320px] text-[12px]"
           disabled={isLoading || hasPendingChanges}
-          onChange={(event) => (server ? server.onFilter(event.target.value) : setFilter(event.target.value))}
+          onChange={(event) => (server ? server.onFilter(event.target.value) : changeFilter(event.target.value))}
           placeholder={t("database.grid.filterPlaceholder")}
           value={server ? server.filter : filter}
         />
         {!server && sort ? (
           <button
             className="text-[length:var(--u-font-size-caption)] text-[var(--u-color-text-muted)] hover:text-[var(--u-color-text)]"
-            onClick={() => setSort(null)}
+            onClick={() => changeSort(null)}
             type="button"
           >
             {t("database.grid.clearSort")}
@@ -375,7 +413,11 @@ export function TableDataGrid({
               : t("database.grid.empty")
         }
         getRowKey={(row, index) => row.pendingRowKey ?? editing?.rowKey(row) ?? `${JSON.stringify(row)}:${index}`}
-        getColumnResizeLabel={(column) => t("database.grid.resizeColumn", { column: column.id === "__row_actions" ? "#" : column.id })}
+        getColumnResizeLabel={(column) => {
+          const index = columnIds.indexOf(column.id);
+          const name = column === rowActionColumn ? "#" : result.columns[index]?.name || `#${index + 1}`;
+          return t("database.grid.resizeColumn", { column: name });
+        }}
         onColumnResize={(columnId, width) => setColumnsWidths((current) => ({ ...current, [columnId]: width }))}
         onSelectionChange={setSelection}
         rows={gridRows}
@@ -407,13 +449,15 @@ export function TableDataGrid({
             </IconButton>
           ) : null}
         </div>
-        {!isLoading ? (
+        {!isLoading && (!server && pageCount > 1 ? (
+          <QueryResultPagination count={processedRows.length} onChange={changePage} page={pageIndex} pageSize={QUERY_RESULT_PAGE_SIZE} />
+        ) : (
           <span>
             {processedRows.length > visibleRows.length
               ? t("database.grid.showingFirst", { shown: visibleRows.length, total: processedRows.length })
               : t("database.grid.rowsRendered", { count: processedRows.length })}
           </span>
-        ) : null}
+        ))}
       </div>
       <Dialog onOpenChange={(open) => !open && setViewer(null)} open={viewer !== null}>
         <DialogContent title={t("database.grid.valueViewer")}>

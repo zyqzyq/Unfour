@@ -1,5 +1,8 @@
 import type { DatabaseQueryResult } from "@unfour/command-client";
+import { serializeDelimitedCell as serializeDatabaseCell } from "@unfour/ui";
 import { formatSqlWithLibrary } from "./adapters/sql-format";
+
+export { serializeDatabaseCell };
 
 export type DatabaseErrorCategory =
   | "confirmation"
@@ -35,13 +38,24 @@ export function serializeDatabaseResult(
  * NULL cells are preserved as JSON null.
  */
 export function serializeDatabaseResultJson(result: DatabaseQueryResult): string {
-  const rows = result.rows.map((row) => {
-    const record: Record<string, string | null> = {};
-    result.columns.forEach((column, index) => {
-      record[column.name] = row[index] ?? null;
-    });
-    return record;
+  // A join may return several columns called "id", including an explicit "id_2".
+  const taken = new Set(result.columns.map((column) => column.name));
+  const nextSuffix = new Map<string, number>();
+  const keys = result.columns.map(({ name }) => {
+    let suffix = nextSuffix.get(name);
+    if (suffix === undefined) {
+      nextSuffix.set(name, 2);
+      return name;
+    }
+    while (taken.has(`${name}_${suffix}`)) suffix += 1;
+    const key = `${name}_${suffix}`;
+    nextSuffix.set(name, suffix + 1);
+    taken.add(key);
+    return key;
   });
+  const rows = result.rows.map((row) =>
+    Object.fromEntries(keys.map((key, index) => [key, row[index] ?? null])),
+  );
   return JSON.stringify(rows, null, 2);
 }
 
@@ -69,19 +83,6 @@ export function serializeDatabaseRow(
   return result.columns
     .map((_, index) => serializeDatabaseCell(row[index], delimiter))
     .join(delimiter);
-}
-
-export function serializeDatabaseCell(value: string | null | undefined, delimiter: "," | "\t") {
-  const cell = value ?? "";
-  const needsQuotes =
-    cell.includes(delimiter) ||
-    cell.includes("\"") ||
-    cell.includes("\n") ||
-    cell.includes("\r");
-  if (!needsQuotes) {
-    return cell;
-  }
-  return `"${cell.replace(/"/g, "\"\"")}"`;
 }
 
 export function formatSql(sql: string): string {

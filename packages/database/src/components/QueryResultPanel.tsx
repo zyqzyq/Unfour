@@ -1,15 +1,10 @@
-import { Clipboard, Download, FileDown, FileJson, Info, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Info, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
 import type { DatabaseQueryResult, DatabaseStatementResult } from "@unfour/command-client";
 import {
   Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
   EmptyState,
   ErrorState,
-  IconButton,
   LoadingState,
   StatusBadge,
   Tabs,
@@ -18,10 +13,13 @@ import {
   useI18n,
 } from "@unfour/ui";
 import type { DatabaseResultTab, SqlHistoryEntry } from "../model/types";
-import { describeDatabaseError, serializeDatabaseResult, serializeDatabaseResultJson } from "../result-utils";
+import { describeDatabaseError } from "../result-utils";
+import { QueryResultOutputActions } from "./QueryResultOutputActions";
 import { DatabaseErrorDetails } from "./DatabaseErrorDetails";
 import { TableDataGrid } from "./TableDataGrid";
 import { SqlBatchMessages } from "./SqlBatchMessages";
+import { filterQueryResultRows, type QueryResultView } from "./query-result-view";
+import type { SortState } from "./table-data-grid-helpers";
 
 export function QueryResultPanel({
   activeResultIndex,
@@ -60,51 +58,17 @@ export function QueryResultPanel({
   const statement = statements[activeResultIndex];
   const selectedError = pendingConfirmation ? null : error ?? statement?.error;
   const executionError = pendingConfirmation ? null : error;
-  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
+  const [filter, setFilter] = useState("");
+  const [sort, setSort] = useState<SortState | null>(null);
   const [lastResult, setLastResult] = useState(result);
   if (result !== lastResult) {
     setLastResult(result);
-    setCopyStatus("idle");
+    setFilter("");
+    setSort(null);
   }
-
-  async function copyTsv() {
-    if (!result) {
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(serializeDatabaseResult(result, "\t"));
-      setCopyStatus("copied");
-      window.setTimeout(() => setCopyStatus("idle"), 1600);
-    } catch {
-      setCopyStatus("failed");
-    }
-  }
-
-  function downloadResult(content: string, mime: string, extension: string) {
-    const blob = new Blob([content], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `unfour-query-results-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.${extension}`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-  }
-
-  function exportCsv() {
-    if (!result) {
-      return;
-    }
-    downloadResult(serializeDatabaseResult(result, ","), "text/csv;charset=utf-8", "csv");
-  }
-
-  function exportJson() {
-    if (!result) {
-      return;
-    }
-    downloadResult(serializeDatabaseResultJson(result), "application/json;charset=utf-8", "json");
-  }
+  const viewRows = useMemo(() => filterQueryResultRows(result?.rows ?? [], filter, sort), [result, filter, sort]);
+  const queryView: QueryResultView = { filter, sort, rows: viewRows, onFilter: setFilter, onSort: setSort };
+  const filtered = Boolean(filter.trim());
 
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--u-color-canvas)]">
@@ -138,7 +102,9 @@ export function QueryResultPanel({
           ) : null}
           <span className="text-[12px] tabular-nums text-[var(--u-color-text-muted)]">
             {result
-              ? t("database.result.rowsInMs", { rows: result.rows.length, durationMs: result.durationMs })
+              ? filtered
+                ? t("database.result.filteredRowsInMs", { rows: result.rows.length, matched: viewRows.length, durationMs: result.durationMs })
+                : t("database.result.rowsInMs", { rows: result.rows.length, durationMs: result.durationMs })
               : pendingConfirmation
                 ? t("database.batch.confirmationPending")
                 : executionError
@@ -158,33 +124,7 @@ export function QueryResultPanel({
               {t("database.actions.clearHistory")}
             </Button>
           ) : (
-            <>
-              <Button disabled={!result} onClick={copyTsv} size="sm" type="button" variant="outline">
-                <Clipboard size={13} />
-                {copyStatus === "copied"
-                  ? t("database.result.copied")
-                  : copyStatus === "failed"
-                    ? t("database.result.copyFailed")
-                    : t("database.result.copy")}
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <IconButton disabled={!result} label={t("database.result.export")}>
-                    <Download size={13} />
-                  </IconButton>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuItem disabled={!result} onSelect={exportCsv}>
-                    <FileDown size={13} />
-                    {t("database.result.exportCsv")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem disabled={!result} onSelect={exportJson}>
-                    <FileJson size={13} />
-                    {t("database.result.exportJson")}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </>
+            <QueryResultOutputActions result={pendingConfirmation ? null : result} view={queryView} />
           )}
         </ToolbarGroup>
       </Toolbar>
@@ -228,7 +168,7 @@ export function QueryResultPanel({
       ) : null}
       {activeTab === "results" && !pendingConfirmation && (statement?.status === "skipped"
         ? <EmptyState>{t("database.batch.skippedDetail")}</EmptyState>
-        : renderResults({ error: selectedError, isPending, result, t }))}
+        : renderResults({ error: selectedError, isPending, result, queryView, t }))}
       {activeTab === "messages" && !pendingConfirmation && (executionError || isPending
         ? renderResults({ error: executionError, isPending, result: null, t })
         : statements.length ? <SqlBatchMessages statements={statements} /> : <Messages results={results} result={result} t={t} />)}
@@ -294,11 +234,13 @@ function renderResults({
   error,
   isPending,
   result,
+  queryView,
   t,
 }: {
   error: unknown;
   isPending: boolean;
   result: DatabaseQueryResult | null;
+  queryView?: QueryResultView;
   t: ReturnType<typeof useI18n>["t"];
 }) {
   if (error) {
@@ -340,7 +282,7 @@ function renderResults({
     );
   }
 
-  return <TableDataGrid result={result} />;
+  return <TableDataGrid result={result} queryView={queryView} />;
 }
 
 function Messages({

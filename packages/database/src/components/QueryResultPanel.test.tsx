@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { DatabaseStatementResult } from "@unfour/command-client";
 import { QueryResultPanel } from "./QueryResultPanel";
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 it("keeps transport errors in Messages and clears them after successful retry", () => {
   const { rerender } = render(<QueryResultPanel {...props} activeTab="messages" statements={[]} results={[]} error={{ code: "NETWORK_ERROR", message: "connection interrupted" }} />);
@@ -116,11 +120,70 @@ it("explains a real display-cap truncation separately from SQL LIMIT", () => {
     <QueryResultPanel {...props} activeResultIndex={0} result={result} results={[result]} statements={[statement]} />,
   );
   expect(screen.getByText("Truncated")).toBeInTheDocument();
-  expect(screen.getByText(/Showing 2 rows/)).toBeInTheDocument();
+  expect(screen.getByText(/Returned 2 rows/)).toBeInTheDocument();
   expect(screen.getByText(/display limit of 2/)).toBeInTheDocument();
   expect(screen.getByText(/separate from any LIMIT/)).toBeInTheDocument();
   rerender(
     <QueryResultPanel {...props} activeResultIndex={0} activeTab="messages" result={result} results={[result]} statements={[statement]} />,
   );
   expect(screen.getAllByText(/separate from any LIMIT/).length).toBeGreaterThan(0);
+});
+
+it("copies and exports filtered rows in sorted order, or every returned row in original order", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  vi.stubGlobal("navigator", Object.assign(Object.create(navigator), { clipboard: { writeText } }));
+  const blobs: Blob[] = [];
+  vi.stubGlobal("URL", class extends URL {
+    static createObjectURL(blob: Blob) { blobs.push(blob); return "blob:query-result"; }
+    static revokeObjectURL() {}
+  });
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+  const result = {
+    ...cappedResult, columns: [{ name: "id", dataType: "int" }, { name: "kind", dataType: "text" }],
+    rows: [["2", "active"], ["0", "other"], ["1", "active"]],
+  };
+  const next = { ...cappedResult, rows: [["next result"]] };
+  const panelProps = { ...props, statements: [], results: [result, next] };
+  const panel = render(<QueryResultPanel {...panelProps} activeResultIndex={0} result={result} />);
+  const search = screen.getByRole("textbox", { name: "Filter rows" });
+  fireEvent.change(search, { target: { value: "active" } });
+  fireEvent.click(screen.getByTitle("Sort by id"));
+  expect(screen.getByText("Returned 3 rows · 2 match · 4ms")).toBeVisible();
+  const scope = screen.getByRole("combobox", { name: "Copy and export scope" });
+  expect(scope).toHaveValue("view");
+  expect(screen.getByRole("option", { name: "Filtered rows (2)" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Copy TSV" }));
+  await waitFor(() => expect(writeText).toHaveBeenLastCalledWith("id\tkind\r\n1\tactive\r\n2\tactive"));
+
+  async function download(label: string) {
+    fireEvent.keyDown(screen.getByRole("button", { name: "Export" }), { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: label }));
+    const blob = blobs.at(-1)!;
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(blob);
+    });
+  }
+  expect(await download("Export CSV")).toBe("id,kind\r\n1,active\r\n2,active");
+  expect(JSON.parse(await download("Export JSON"))).toEqual([
+    { id: "1", kind: "active" }, { id: "2", kind: "active" },
+  ]);
+  fireEvent.change(scope, { target: { value: "all" } });
+  fireEvent.click(screen.getByRole("button", { name: "Copy TSV" }));
+  await waitFor(() => expect(writeText).toHaveBeenLastCalledWith("id\tkind\r\n2\tactive\r\n0\tother\r\n1\tactive"));
+  expect(JSON.parse(await download("Export JSON"))).toEqual([
+    { id: "2", kind: "active" }, { id: "0", kind: "other" }, { id: "1", kind: "active" },
+  ]);
+  fireEvent.change(scope, { target: { value: "view" } });
+  fireEvent.change(search, { target: { value: "missing" } });
+  expect(await download("Export CSV")).toBe("id,kind");
+  expect(JSON.parse(await download("Export JSON"))).toEqual([]);
+
+  panel.rerender(<QueryResultPanel {...panelProps} activeResultIndex={1} result={next} />);
+  expect(screen.getByRole("textbox", { name: "Filter rows" })).toHaveValue("");
+  expect(screen.queryByRole("combobox", { name: "Copy and export scope" })).not.toBeInTheDocument();
+  expect(await download("Export CSV")).toBe("n\r\nnext result");
 });

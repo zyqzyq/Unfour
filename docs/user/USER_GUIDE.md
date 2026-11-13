@@ -311,6 +311,15 @@ The database screen can save workspace-scoped database connections.
    current statement.
 10. Review result rows, affected rows, and duration.
 
+In **Results**, use the page controls to browse the rows returned by the selected
+statement. Filtering, sorting, and paging work on those rows without executing
+the SQL again. The execution's row limit still controls how many rows are returned.
+
+Select cells with Shift and copy them with Ctrl+C (Cmd+C on macOS). For a whole
+result, use **Copy TSV** or export CSV or JSON. When you filter or sort, **Copy
+and export scope** lets you choose between the current view across all its pages
+and all returned rows in their original order.
+
 SQLite, PostgreSQL, and MySQL are supported. Compatible MariaDB servers use the
 MySQL driver path. Recorded database checks, and the separate MariaDB matrix
 that the published record does not claim, are in

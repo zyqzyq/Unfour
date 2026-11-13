@@ -28,6 +28,15 @@ function makeResult(
 }
 
 describe("serializeDatabaseResultJson", () => {
+  it("preserves every joined column, reserved names and explicit alias suffixes", () => {
+    const columns = ["id", "id", "__proto__", "id_2", "id", "constructor"];
+    const result = makeResult(columns, [["1", "2", "literal", "3", null, "value"]]);
+    const [record] = JSON.parse(serializeDatabaseResultJson(result));
+    expect(Object.keys(record)).toEqual(["id", "id_3", "__proto__", "id_2", "id_4", "constructor"]);
+    expect(Object.values(record)).toEqual(result.rows[0]);
+    expect(serializeDatabaseResult(result, ",").split("\r\n")[0]).toBe(columns.join(","));
+  });
+
   it("serializes rows as JSON objects keyed by column, preserving null", () => {
     const result = makeResult(["id", "name"], [["1", "Alice"], ["2", null]]);
     expect(JSON.parse(serializeDatabaseResultJson(result))).toEqual([
