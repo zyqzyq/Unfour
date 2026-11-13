@@ -4,6 +4,8 @@ import { compareCells, type SortState } from "./table-data-grid-helpers";
 type ResultRows = DatabaseQueryResult["rows"];
 
 export type QueryResultView = {
+  page: number;
+  onPage: (page: number) => void;
   filter: string;
   sort: SortState | null;
   rows: ResultRows;
@@ -18,8 +20,6 @@ export function filterQueryResultRows(rows: ResultRows, filter: string, sort: So
     ? rows.filter((row) => row.some((value) => value?.toLowerCase().includes(needle)))
     : rows;
   if (!sort) return filtered;
-  return [...filtered].sort((left, right) => {
-    const compared = compareCells(left[sort.columnIndex], right[sort.columnIndex]);
-    return sort.direction === "asc" ? compared : -compared;
-  });
+  return [...filtered].sort((left, right) =>
+    compareCells(left[sort.columnIndex], right[sort.columnIndex], sort.direction));
 }

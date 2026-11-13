@@ -48,17 +48,24 @@ function estimateTextWidth(value: string, pixelsPerUnit = 7.2) {
   return Math.ceil(units * pixelsPerUnit);
 }
 
-export function compareCells(a: string | null, b: string | null) {
-  // NULLs always sort to the end regardless of direction.
+export function compareCells(a: string | null, b: string | null, direction: SortState["direction"]) {
   if (a === null && b === null) return 0;
   if (a === null) return 1;
   if (b === null) return -1;
+  const order = direction === "asc" ? 1 : -1;
   const numA = Number(a);
   const numB = Number(b);
   if (!Number.isNaN(numA) && !Number.isNaN(numB) && a.trim() !== "" && b.trim() !== "") {
-    return numA - numB;
+    if (numA !== numB) return (numA < numB ? -1 : 1) * order;
+    // Drivers return BIGINT values as strings. Adjacent IDs can round to the same Number.
+    if (!Number.isSafeInteger(numA) && /^[+-]?\d+$/.test(a) && /^[+-]?\d+$/.test(b)) {
+      const left = BigInt(a);
+      const right = BigInt(b);
+      if (left !== right) return (left < right ? -1 : 1) * order;
+    }
+    return 0;
   }
-  return a.localeCompare(b);
+  return a.localeCompare(b) * order;
 }
 
 export function renderSortIcon(sort: SortState | null, columnIndex: number) {

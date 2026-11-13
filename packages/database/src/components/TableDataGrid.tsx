@@ -1,5 +1,5 @@
 import { Clipboard, Eye, Search, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { DatabaseQueryResult, DatabaseTableColumn } from "@unfour/command-client";
 import {
   Button,
@@ -47,6 +47,13 @@ type IndexedPendingChange = {
   change: PendingTableChange;
   valuesByColumn: Map<string, PendingTableChange["values"][number]>;
 };
+
+function selectedDataCell(selection: DataTableSelection | null) {
+  // Grid column zero contains row actions, outside the result's data columns.
+  if (!selection || selection.endCol === 0) return null;
+  return { row: selection.endRow, column: selection.endCol - 1 };
+}
+
 type ServerControls = {
   sort: { column: string; descending: boolean } | null;
   filter: string;
@@ -85,28 +92,36 @@ export function TableDataGrid({
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied-cell" | "copied-row" | "failed">("idle");
   const [localFilter, setLocalFilter] = useState("");
   const [localSort, setLocalSort] = useState<SortState | null>(null);
-  const filter = queryView ? queryView.filter : localFilter;
-  const sort = queryView ? queryView.sort : localSort;
-  const [page, setPage] = useState(0);
-  const [activeCell, setActiveCell] = useState<{ row: number; column: number } | null>(null);
+  const [localPage, setLocalPage] = useState(0);
+  const { filter, sort, page, onFilter, onSort, onPage } = queryView ?? {
+    filter: localFilter, sort: localSort, page: localPage,
+    onFilter: setLocalFilter, onSort: setLocalSort, onPage: setLocalPage,
+  };
+  const viewport = useRef<HTMLDivElement>(null);
+  const localResult = server ? null : result;
+  useLayoutEffect(() => {
+    if (localResult && viewport.current) viewport.current.scrollTop = 0;
+  }, [page, filter, sort, localResult]);
   const [viewer, setViewer] = useState<CellViewer | null>(null);
   const [viewerRaw, setViewerRaw] = useState(false);
   const [edit, setEdit] = useState<EditTarget | null>(null);
   const [editValue, setEditValue] = useState("");
   const [editMode, setEditMode] = useState<"value" | "null">("value");
   const [selection, setSelection] = useState<DataTableSelection | null>(null);
+  const activeCell = selectedDataCell(selection);
   const [columnsWidths, setColumnsWidths] = useState<Record<string, number>>(() => ({
     __row_actions: ROW_ACTION_COLUMN_WIDTH,
   }));
-  const [previousResult, setPreviousResult] = useState(result);
-  if (!server && previousResult !== result) {
-    setPreviousResult(result);
-    setPage(0);
+  const currentResult = loading ? null : result;
+  const [previousResult, setPreviousResult] = useState(currentResult);
+  if (previousResult !== currentResult) {
+    setPreviousResult(currentResult);
+    setLocalPage(0);
     setLocalFilter("");
     setLocalSort(null);
     setSelection(null);
-    setActiveCell(null);
     setViewer(null);
+    setEdit(null);
     setCopyStatus("idle");
   }
 
@@ -181,6 +196,14 @@ export function TableDataGrid({
   );
   const hasPendingChanges = pendingChanges.length > 0;
 
+  function displayedValue(row: DataRow, rowIndex: number, columnIndex: number) {
+    return indexedPendingValue(
+      pendingChangesByRowKey.get(visibleRowKeys[rowIndex]),
+      result.columns[columnIndex].name,
+      row[columnIndex] ?? null,
+    );
+  }
+
   async function copyText(text: string, status: "copied-cell" | "copied-row") {
     try {
       await navigator.clipboard.writeText(text);
@@ -192,19 +215,18 @@ export function TableDataGrid({
   }
 
   function changePage(nextPage: number) {
-    setPage(nextPage);
+    onPage(nextPage);
     setSelection(null);
-    setActiveCell(null);
   }
 
   function changeFilter(value: string) {
     changePage(0);
-    (queryView?.onFilter ?? setLocalFilter)(value);
+    onFilter(value);
   }
 
   function changeSort(value: SortState | null) {
     changePage(0);
-    (queryView?.onSort ?? setLocalSort)(value);
+    onSort(value);
   }
 
   function toggleSort(columnIndex: number) {
@@ -245,7 +267,10 @@ export function TableDataGrid({
         <div className="flex items-center gap-0.5">
           <IconButton
             label={t("database.grid.copyRow", { row: offset + rowIndex + 1 })}
-            onClick={() => copyText(serializeDatabaseRow(result, row, "\t"), "copied-row")}
+            onClick={() => {
+              const values = result.columns.map((_, index) => displayedValue(row, rowIndex, index));
+              void copyText(serializeDatabaseRow(result, values, "\t"), "copied-row");
+            }}
             size="compact"
           >
             <Clipboard size={12} />
@@ -274,16 +299,12 @@ export function TableDataGrid({
     rowActionColumn,
     ...result.columns.map((column, columnIndex) => ({
       autoFitWidth: autoFitWidths[columnIndex],
-      copyValue: (row: DataRow, rowIndex: number) => indexedPendingValue(
-        pendingChangesByRowKey.get(visibleRowKeys[rowIndex]),
-        column.name,
-        row[columnIndex] ?? null,
-      ),
+      copyValue: (row: DataRow, rowIndex: number) => displayedValue(row, rowIndex, columnIndex),
       cell: (row: DataRow, rowIndex: number) => {
         const rowKey = row.pendingRowKey ?? editing?.rowKey(row) ?? JSON.stringify(row);
         const indexedChange = pendingChangesByRowKey.get(rowKey);
         const change = indexedChange?.change;
-        const value = indexedPendingValue(indexedChange, column.name, row[columnIndex] ?? null);
+        const value = displayedValue(row, rowIndex, columnIndex);
         const changed = indexedChange?.valuesByColumn.has(column.name);
         const deleted = change?.operation === "delete";
         const active = activeCell?.row === rowIndex && activeCell.column === columnIndex;
@@ -332,7 +353,6 @@ export function TableDataGrid({
               changed ? "bg-[color:color-mix(in_srgb,var(--u-color-warning)_15%,transparent)]" : "",
               deleted ? "line-through opacity-45" : "",
             ].join(" ")}
-            onClick={() => setActiveCell({ row: rowIndex, column: columnIndex })}
             onDoubleClick={
               editing &&
               (editing.canUpdateDelete || Boolean(row.pendingRowKey)) &&
@@ -404,6 +424,7 @@ export function TableDataGrid({
       </div>
       <DataTable
         className="flex-1 bg-[var(--u-color-canvas)]"
+        ref={viewport}
         columns={dataColumns}
         empty={
           isLoading
@@ -432,15 +453,10 @@ export function TableDataGrid({
               onClick={() => {
                 const row = visibleRows[activeCell.row];
                 const column = result.columns[activeCell.column];
-                const rowKey = row.pendingRowKey ?? editing?.rowKey(row) ?? JSON.stringify(row);
                 setViewerRaw(false);
                 setViewer({
                   columnName: column.name,
-                  value: indexedPendingValue(
-                    pendingChangesByRowKey.get(rowKey),
-                    column.name,
-                    row[activeCell.column] ?? null,
-                  ),
+                  value: displayedValue(row, activeCell.row, activeCell.column),
                 });
               }}
               size="compact"

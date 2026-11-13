@@ -172,18 +172,36 @@ it("copies and exports filtered rows in sorted order, or every returned row in o
     { id: "1", kind: "active" }, { id: "2", kind: "active" },
   ]);
   fireEvent.change(scope, { target: { value: "all" } });
+  panel.rerender(<QueryResultPanel {...panelProps} activeResultIndex={0} activeTab="history" result={result} />);
+  panel.rerender(<QueryResultPanel {...panelProps} activeResultIndex={0} activeTab="results" result={result} />);
+  const returnedScope = screen.getByRole("combobox", { name: "Copy and export scope" });
+  expect(returnedScope).toHaveValue("all");
   fireEvent.click(screen.getByRole("button", { name: "Copy TSV" }));
   await waitFor(() => expect(writeText).toHaveBeenLastCalledWith("id\tkind\r\n2\tactive\r\n0\tother\r\n1\tactive"));
   expect(JSON.parse(await download("Export JSON"))).toEqual([
     { id: "2", kind: "active" }, { id: "0", kind: "other" }, { id: "1", kind: "active" },
   ]);
-  fireEvent.change(scope, { target: { value: "view" } });
-  fireEvent.change(search, { target: { value: "missing" } });
+  fireEvent.change(returnedScope, { target: { value: "view" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Filter rows" }), { target: { value: "missing" } });
   expect(await download("Export CSV")).toBe("id,kind");
   expect(JSON.parse(await download("Export JSON"))).toEqual([]);
 
+  fireEvent.change(returnedScope, { target: { value: "all" } });
   panel.rerender(<QueryResultPanel {...panelProps} activeResultIndex={1} result={next} />);
   expect(screen.getByRole("textbox", { name: "Filter rows" })).toHaveValue("");
   expect(screen.queryByRole("combobox", { name: "Copy and export scope" })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole("textbox", { name: "Filter rows" }), { target: { value: "next" } });
+  expect(screen.getByRole("combobox", { name: "Copy and export scope" })).toHaveValue("view");
   expect(await download("Export CSV")).toBe("n\r\nnext result");
+});
+
+it("disables output and removes old row counts when an error hides a retained result", () => {
+  const result = { ...cappedResult, truncated: true };
+  render(<QueryResultPanel {...props} activeResultIndex={0} result={result} results={[result]}
+    statements={[]} error={{ code: "VALIDATION_ERROR", message: "Select a connection before running" }} />);
+  expect(screen.getByText("Select a connection before running")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Copy TSV" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Export" })).toBeDisabled();
+  expect(screen.queryByText("2 rows in 4ms")).not.toBeInTheDocument();
+  expect(screen.queryByText("Truncated")).not.toBeInTheDocument();
 });

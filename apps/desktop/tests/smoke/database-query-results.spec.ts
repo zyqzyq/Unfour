@@ -6,7 +6,11 @@ test("browses and exports the returned rows after one SQL execution", async ({ p
   await prepareWorkbenchScene(page, "light");
   await page.addInitScript(() => {
     document.addEventListener("copy", (event) => {
-      if (event.clipboardData) sessionStorage.setItem("copied", event.clipboardData.getData("text/plain"));
+      const text = event.defaultPrevented
+        ? event.clipboardData?.getData("text/plain")
+        : window.getSelection()?.toString();
+      sessionStorage.setItem("copied", text ?? "");
+      event.preventDefault();
     });
   });
   const rows = Array.from({ length: 800 }, (_, index) => [
@@ -53,6 +57,15 @@ test("browses and exports the returned rows after one SQL execution", async ({ p
   const next = panel.getByRole("button", { name: "Next page", exact: true });
   const lastRow = panel.getByRole("cell", { name: "800", exact: true });
   await expect(next).toBeEnabled();
+  const scrollArea = panel.getByRole("table").locator("..");
+  await scrollArea.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+  expect(await scrollArea.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await next.click();
+  await expect(panel.getByText("101-200 of 800")).toBeVisible();
+  await expect.poll(() => scrollArea.evaluate((element) => element.scrollTop)).toBe(0);
+  await panel.getByRole("tab", { name: "Messages", exact: true }).click();
+  await panel.getByRole("tab", { name: "Results", exact: true }).click();
+  await expect(panel.getByText("101-200 of 800")).toBeVisible();
   while (!(await lastRow.count()) && await next.isEnabled()) {
     await next.click();
   }
@@ -62,7 +75,25 @@ test("browses and exports the returned rows after one SQL execution", async ({ p
   await page.keyboard.press("Control+c");
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem("copied"))).toBe("800\tmatched");
 
+  const label = lastRow.locator("..").getByRole("button", { name: "matched", exact: true });
+  await label.click();
+  await label.evaluate((cell) => {
+    const text = cell.firstChild!;
+    const range = document.createRange();
+    range.setStart(text, 1);
+    range.setEnd(text, 4);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+  });
+  await page.keyboard.press("Control+c");
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("copied"))).toBe("atc");
+  await lastRow.getByRole("button").click({ modifiers: ["Shift"] });
+  await page.keyboard.press("Control+c");
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("copied"))).toBe("800\tmatched");
+
   await panel.getByRole("textbox", { name: "Filter rows" }).fill("matched");
+  await expect.poll(() => scrollArea.evaluate((element) => element.scrollTop)).toBe(0);
   const scope = panel.getByRole("combobox", { name: "Copy and export scope" });
   await expect(scope.locator("option:checked")).toContainText("400");
   await panel.getByRole("button", { name: "Export", exact: true }).click();

@@ -20,17 +20,15 @@ function downloadResult(content: string, mime: string, extension: string) {
   URL.revokeObjectURL(url);
 }
 
-export function QueryResultOutputActions({ result, view }: {
+export type QueryResultOutputScope = "view" | "all";
+
+export function QueryResultOutputActions({ result, view, scope, onScopeChange }: {
   result: DatabaseQueryResult | null;
   view: QueryResultView;
+  scope: QueryResultOutputScope;
+  onScopeChange: (scope: QueryResultOutputScope) => void;
 }) {
   const { t } = useI18n();
-  const [scope, setScope] = useState<"view" | "all">("view");
-  const [lastResult, setLastResult] = useState(result);
-  if (result !== lastResult) {
-    setLastResult(result);
-    setScope("view");
-  }
   const [feedback, setFeedback] = useState<{
     rows: DatabaseQueryResult["rows"]; status: "copied" | "failed";
   } | null>(null);
@@ -67,7 +65,7 @@ export function QueryResultOutputActions({ result, view }: {
       <Select
         aria-label={t("database.result.outputScope")}
         className="h-7 w-auto max-w-full text-[12px]"
-        onChange={(event) => setScope(event.target.value === "all" ? "all" : "view")}
+        onChange={(event) => onScopeChange(event.target.value === "all" ? "all" : "view")}
         value={scope}
       >
         <option value="view">

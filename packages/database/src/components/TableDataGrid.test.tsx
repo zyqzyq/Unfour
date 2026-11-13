@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseQueryResult } from "@unfour/command-client";
 import type { TableEditing } from "../model/types";
@@ -17,6 +17,7 @@ vi.mock("./table-data-grid-helpers", async (importOriginal) => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 const result: DatabaseQueryResult = {
@@ -77,6 +78,40 @@ describe("TableDataGrid", () => {
     expect(clipboardData.setData).not.toHaveBeenCalled();
   });
 
+  it("copies the same staged values from the row button and from a selection", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", Object.assign(Object.create(navigator), { clipboard: { writeText } }));
+    const pending: TableEditing = { ...editing, pendingChanges: [{
+      ...editing.pendingChanges[0],
+      values: [
+        { column: "name", mode: "value", value: "Ada Lovelace" },
+        { column: "city", mode: "null" },
+        { column: "role", mode: "default" },
+      ],
+    }] };
+    const columns = ["id", "name", "city", "role"].map((name) => ({ name, dataType: "TEXT" }));
+    render(<TableDataGrid result={{ ...result, columns, rows: [["1", "Ada", "London", "old role"]] }} editing={pending} />);
+    fireEvent.click(screen.getByRole("button", { name: "Copy row 1" }));
+    const expected = "1\tAda Lovelace\t\tDEFAULT";
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expected));
+    fireEvent.click(screen.getByRole("button", { name: "1" }));
+    const end = screen.getByRole("button", { name: "DEFAULT" });
+    fireEvent.click(end, { shiftKey: true });
+    const clipboardData = { setData: vi.fn() };
+    fireEvent.copy(end, { clipboardData });
+    expect(clipboardData.setData).toHaveBeenCalledWith("text/plain", expected);
+  });
+
+  it("opens the value viewer for the keyboard-selected cell", () => {
+    render(<TableDataGrid result={result} />);
+    const id = screen.getByRole("button", { name: "1" });
+    fireEvent.click(id);
+    fireEvent.keyDown(id, { key: "ArrowRight" });
+    fireEvent.click(screen.getByRole("button", { name: "Cell value" }));
+    const viewer = screen.getByRole("dialog");
+    expect(within(viewer).getByText("Ada")).toBeVisible();
+  });
+
   it("does not recalculate auto-fit widths for interaction-only rerenders", () => {
     render(<TableDataGrid editing={editing} result={result} />);
 
@@ -85,6 +120,19 @@ describe("TableDataGrid", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ada Lovelace" }));
 
     expect(calculateAutoFitWidth).toHaveBeenCalledTimes(result.columns.length);
+  });
+
+  it("clears stale cell selection when a server page replaces its rows", () => {
+    const server = { filter: "", sort: null, onFilter: vi.fn(), onSort: vi.fn() };
+    const view = render(<TableDataGrid result={result} server={server} />);
+    fireEvent.click(screen.getByRole("button", { name: "Ada" }));
+    expect(screen.getByRole("button", { name: "Cell value" })).toBeEnabled();
+    const nextResult = { ...result, rows: [["2", "Grace"]] };
+    view.rerender(<TableDataGrid result={nextResult} server={server} />);
+    expect(screen.queryByRole("button", { name: "Cell value" })).toBeNull();
+    const clipboardData = { setData: vi.fn() };
+    fireEvent.copy(screen.getByRole("button", { name: "Grace" }), { clipboardData });
+    expect(clipboardData.setData).not.toHaveBeenCalled();
   });
 
   it("keeps the grid body neutral during an initial load instead of flashing fake rows", () => {

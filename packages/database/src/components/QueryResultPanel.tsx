@@ -14,7 +14,7 @@ import {
 } from "@unfour/ui";
 import type { DatabaseResultTab, SqlHistoryEntry } from "../model/types";
 import { describeDatabaseError } from "../result-utils";
-import { QueryResultOutputActions } from "./QueryResultOutputActions";
+import { QueryResultOutputActions, type QueryResultOutputScope } from "./QueryResultOutputActions";
 import { DatabaseErrorDetails } from "./DatabaseErrorDetails";
 import { TableDataGrid } from "./TableDataGrid";
 import { SqlBatchMessages } from "./SqlBatchMessages";
@@ -58,16 +58,25 @@ export function QueryResultPanel({
   const statement = statements[activeResultIndex];
   const selectedError = pendingConfirmation ? null : error ?? statement?.error;
   const executionError = pendingConfirmation ? null : error;
+  const skipped = statement?.status === "skipped";
+  const displayResult = pendingConfirmation || isPending || selectedError || skipped ? null : result;
+  const [scope, setScope] = useState<QueryResultOutputScope>("view");
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<SortState | null>(null);
+  const [page, setPage] = useState(0);
   const [lastResult, setLastResult] = useState(result);
   if (result !== lastResult) {
     setLastResult(result);
+    setScope("view");
     setFilter("");
     setSort(null);
+    setPage(0);
   }
-  const viewRows = useMemo(() => filterQueryResultRows(result?.rows ?? [], filter, sort), [result, filter, sort]);
-  const queryView: QueryResultView = { filter, sort, rows: viewRows, onFilter: setFilter, onSort: setSort };
+  const viewRows = useMemo(() => filterQueryResultRows(displayResult?.rows ?? [], filter, sort), [displayResult, filter, sort]);
+  const queryView: QueryResultView = {
+    filter, sort, page, rows: viewRows,
+    onFilter: setFilter, onSort: setSort, onPage: setPage,
+  };
   const filtered = Boolean(filter.trim());
 
   return (
@@ -94,20 +103,20 @@ export function QueryResultPanel({
             <StatusBadge tone="warning">{t("database.batch.confirmationRequired")}</StatusBadge>
           ) : selectedError ? (
             <StatusBadge tone="danger">{t("database.result.statusFailed")}</StatusBadge>
-          ) : result ? (
+          ) : displayResult ? (
             <StatusBadge tone="success">{t("database.result.statusOk")}</StatusBadge>
           ) : null}
-          {result?.truncated ? (
+          {displayResult?.truncated ? (
             <StatusBadge tone="warning">{t("database.result.truncatedBadge")}</StatusBadge>
           ) : null}
           <span className="text-[12px] tabular-nums text-[var(--u-color-text-muted)]">
-            {result
+            {displayResult
               ? filtered
-                ? t("database.result.filteredRowsInMs", { rows: result.rows.length, matched: viewRows.length, durationMs: result.durationMs })
-                : t("database.result.rowsInMs", { rows: result.rows.length, durationMs: result.durationMs })
+                ? t("database.result.filteredRowsInMs", { rows: displayResult.rows.length, matched: viewRows.length, durationMs: displayResult.durationMs })
+                : t("database.result.rowsInMs", { rows: displayResult.rows.length, durationMs: displayResult.durationMs })
               : pendingConfirmation
                 ? t("database.batch.confirmationPending")
-                : executionError
+                : selectedError
                   ? t("database.result.executionFailed")
                   : t("database.result.noExecution")}
           </span>
@@ -124,14 +133,14 @@ export function QueryResultPanel({
               {t("database.actions.clearHistory")}
             </Button>
           ) : (
-            <QueryResultOutputActions result={pendingConfirmation ? null : result} view={queryView} />
+            <QueryResultOutputActions result={displayResult} view={queryView} scope={scope} onScopeChange={setScope} />
           )}
         </ToolbarGroup>
       </Toolbar>
       {executionNotice ? <div role="status" className="px-2 py-1 text-[12px] text-[var(--u-color-text-muted)]">{executionNotice}</div> : null}
-      {result?.truncated && !pendingConfirmation ? (
+      {displayResult?.truncated ? (
         <div role="status" className="px-2 py-1 text-[12px] text-[var(--u-color-text-muted)]">
-          {t("database.result.limitHint", { rows: result.rows.length, limit: result.rowLimit ?? result.rows.length })}
+          {t("database.result.limitHint", { rows: displayResult.rows.length, limit: displayResult.rowLimit ?? displayResult.rows.length })}
         </div>
       ) : null}
       {pendingConfirmation && activeTab !== "history" ? (
@@ -166,7 +175,7 @@ export function QueryResultPanel({
           }))}
         />
       ) : null}
-      {activeTab === "results" && !pendingConfirmation && (statement?.status === "skipped"
+      {activeTab === "results" && !pendingConfirmation && (skipped
         ? <EmptyState>{t("database.batch.skippedDetail")}</EmptyState>
         : renderResults({ error: selectedError, isPending, result, queryView, t }))}
       {activeTab === "messages" && !pendingConfirmation && (executionError || isPending

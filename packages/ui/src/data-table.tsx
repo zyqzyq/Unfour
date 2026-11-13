@@ -34,6 +34,7 @@ function isEditingCell(target: EventTarget) {
 
 export function DataTable<T>({
   className,
+  ref,
   columns,
   empty,
   getRowKey,
@@ -44,6 +45,7 @@ export function DataTable<T>({
   onColumnResize,
 }: {
   className?: string;
+  ref?: React.Ref<HTMLDivElement>;
   columns: DataTableColumn<T>[];
   empty?: React.ReactNode;
   getRowKey?: (row: T, rowIndex: number) => React.Key;
@@ -86,7 +88,7 @@ export function DataTable<T>({
   );
 
   const handleKeyDown = React.useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
       if (!isSelectable || !selection || e.defaultPrevented || isEditingCell(e.target)) return;
       const { startRow, endRow, startCol, endCol } = selection;
       let row = e.shiftKey ? endRow : startRow;
@@ -101,6 +103,7 @@ export function DataTable<T>({
         default: return;
       }
       e.preventDefault();
+      e.currentTarget.ownerDocument.getSelection()?.removeAllRanges();
       onSelectionChange?.({
         startRow: e.shiftKey ? startRow : row,
         startCol: e.shiftKey ? startCol : col,
@@ -178,8 +181,12 @@ export function DataTable<T>({
   return (
     <div
       className={cn("min-h-0 overflow-auto", className)}
+      ref={ref}
       onCopy={(event) => {
         if (!isSelectable || !selection || event.defaultPrevented || isEditingCell(event.target)) return;
+        // A user can select individual characters in a read-only result cell.
+        const textSelection = event.currentTarget.ownerDocument.getSelection();
+        if (textSelection && !textSelection.isCollapsed) return;
         const text = selectedCellText(selection, columns, rows, tableRef.current);
         if (text === null) return;
         event.clipboardData.setData("text/plain", text);
@@ -273,6 +280,14 @@ export function DataTable<T>({
                         isSelected(rowIndex, colIndex) && "bg-[color:color-mix(in_srgb,var(--u-color-primary)_12%,var(--u-color-surface))]",
                       )}
                       key={column.id}
+                      onMouseDown={(event) => {
+                        if (isSelectable && selection && event.shiftKey && event.button === 0 && !isEditingCell(event.target)) {
+                          // Shift-click extends the grid rectangle, not the browser's text range.
+                          event.preventDefault();
+                          event.currentTarget.ownerDocument.getSelection()?.removeAllRanges();
+                          tableRef.current?.parentElement?.focus({ preventScroll: true });
+                        }
+                      }}
                       onClick={(e) => handleCellClick(rowIndex, colIndex, e)}
                       title={typeof content === "string" || typeof content === "number" ? String(content) : undefined}
                     >

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { filterQueryResultRows } from "./query-result-view";
 import {
   calculateAutoFitWidth,
   isLikelyJson,
@@ -8,6 +9,16 @@ import {
 } from "./table-data-grid-helpers";
 
 describe("table data grid display limits", () => {
+  it("orders returned 64-bit IDs exactly and leaves NULL last in either direction", () => {
+    const rows = [["9007199254740993"], [null], ["-9007199254740992"], ["9007199254740992"], ["-9007199254740993"]];
+    const sorted = (direction: "asc" | "desc") =>
+      filterQueryResultRows(rows, "", { columnIndex: 0, direction }).map(([id]) => id);
+    const ascending = ["-9007199254740993", "-9007199254740992", "9007199254740992", "9007199254740993"];
+    expect(sorted("asc")).toEqual([...ascending, null]);
+    expect(sorted("desc")).toEqual([...ascending.reverse(), null]);
+    expect(rows[0][0]).toBe("9007199254740993");
+  });
+
   it("caps the rendered cell preview at the configured maximum", () => {
     const preview = truncatePreview("x".repeat(MAX_CELL_PREVIEW_LENGTH + 20));
 
