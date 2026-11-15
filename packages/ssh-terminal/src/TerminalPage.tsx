@@ -1,44 +1,17 @@
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  closeSshSession,
-  connectSshSession,
-  exportSshLog,
-  getSshHostFingerprint,
-  resetSshHostFingerprint,
-  saveSshConnection,
-  testSshConnection,
-  type SshConnection,
-  type SshConnectionInput,
-  type SshHostFingerprintInfo,
-  type SshSessionEvent,
-  type SshSessionSummary,
-} from "@unfour/command-client";
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
+import type { SshConnection } from "@unfour/command-client";
 import { useWorkspaceStore } from "@unfour/workspace-core";
-import { ConfirmDialog, useFeedback, useFeedbackErrorHandler, useI18n } from "@unfour/ui";
+import { ConfirmDialog, useI18n } from "@unfour/ui";
 import { TerminalWorkspace } from "./components/TerminalWorkspace";
 import { SshConnectionTree } from "./components/SshConnectionTree";
 import { SshConnectionDialog } from "./components/SshConnectionDialog";
 import { SshTestResultDialog } from "./components/SshTestResultDialog";
 import { HostKeyTrustDialog } from "./components/HostKeyTrustDialog";
 import { useSshConnections } from "./hooks/useSshConnections";
-import { useActiveSessionHistory } from "./hooks/useActiveSessionHistory";
-import { useSshTerminalChannel } from "./hooks/useSshTerminalChannel";
-import { useTerminalSessionActions } from "./hooks/useTerminalSessionActions";
-import { useTerminalSessions } from "./hooks/useTerminalSessions";
+import { useSshConnectionManagement } from "./hooks/useSshConnectionManagement";
+import { useTerminalSessionOrchestration } from "./hooks/useTerminalSessionOrchestration";
 import { useTerminalSplit } from "./hooks/useTerminalSplit";
-import { useSftpStore } from "./model/sftp-state";
 import { useTerminalStore } from "./model/terminal-state";
-import {
-  defaultSshConnectionInput,
-  sshConnectionToInput,
-  sshConnectionContent,
-} from "./model/ssh-connection-state";
-import {
-  buildTerminalSessionTabs,
-  shouldShowTerminalSessionTab,
-} from "./model/terminal-tabs";
-import { formatTerminalError } from "./model/errors";
 
 export function SshConnectionsPage({
   active = true,
@@ -56,169 +29,33 @@ export function SshConnectionsPage({
   workspaceId: string;
 }) {
   const { t } = useI18n();
-  const queryClient = useQueryClient();
-  const feedback = useFeedback();
-  const handleError = useFeedbackErrorHandler();
-  const {
-    selectedSshConnectionId: selectedConnectionId,
-    setActiveTab,
-    setSelectedSshConnection,
-  } = useWorkspaceStore();
-  const split = useTerminalSplit();
-  const activeSessionId = useTerminalStore((state) => state.activeSessionId);
+  const setActiveTab = useWorkspaceStore((state) => state.setActiveTab);
   const activateWorkspace = useTerminalStore((state) => state.activateWorkspace);
-  const addFrontendFailedSession = useTerminalStore(
-    (state) => state.addFrontendFailedSession,
-  );
-  const appendTerminalEvents = useTerminalStore((state) => state.appendTerminalEvents);
-  const clearTerminalSessionEvents = useTerminalStore(
-    (state) => state.clearTerminalSessionEvents,
-  );
-  const dismissSession = useTerminalStore((state) => state.dismissSession);
-  const removeSftpSession = useSftpStore((state) => state.removeSession);
-  const dismissedSessionIds = useTerminalStore((state) => state.dismissedSessionIds);
-  const frontendFailedSessions = useTerminalStore(
-    (state) => state.frontendFailedSessions,
-  );
-  const hydrateTerminalSession = useTerminalStore(
-    (state) => state.hydrateTerminalSession,
-  );
-  const setActiveSessionId = useTerminalStore((state) => state.setActiveSessionId);
-  const setExportedLog = useTerminalStore((state) => state.setExportedLog);
   const setSearchOpen = useTerminalStore((state) => state.setSearchOpen);
-  const startTerminalSession = useTerminalStore((state) => state.startTerminalSession);
-  // While Tasks keeps this page mounted but hidden, freeze the events snapshot so
-  // live PTY traffic does not re-render the Connections tree / xterm panes.
-  const frozenTerminalEventsRef = useRef<SshSessionEvent[]>([]);
-  const terminalEvents = useTerminalStore((state) => {
-    if (!active) {
-      return frozenTerminalEventsRef.current;
-    }
-    frozenTerminalEventsRef.current = state.terminalEvents;
-    return state.terminalEvents;
-  });
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogMode, setDialogMode] = useState<"new" | "edit" | null>(null);
-  const [trustDialogState, setTrustDialogState] = useState<{
-    open: boolean;
-    connectionId: string | null;
-    host: string;
-    port: number;
-    fingerprint: SshHostFingerprintInfo | null | undefined;
-    mismatchError: string | null;
-  }>({
-    open: false,
-    connectionId: null,
-    host: "",
-    port: 22,
-    fingerprint: undefined,
-    mismatchError: null,
-  });
-  const [form, setForm] = useState<SshConnectionInput>(() =>
-    defaultSshConnectionInput(workspaceId),
-  );
-  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(
-    null,
-  );
-
+  const split = useTerminalSplit();
+  const workspaceScope = useRef<string | null>(workspaceId);
   const connectionsQuery = useSshConnections(workspaceId, { active });
-  const sessionsQuery = useTerminalSessions(workspaceId, { active });
   const connections = useMemo(() => connectionsQuery.data ?? [], [connectionsQuery.data]);
-  const backendSessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data]);
-  // Merge frontend-only failed sessions (created when connect fails before the
-  // backend can produce a session record) with the backend session list.
-  const sessions = useMemo(() => {
-    const failed = Object.values(frontendFailedSessions);
-    if (failed.length === 0) return backendSessions;
-    // Auto-clean: drop frontend failed entries whose connectionId already has a
-    // real backend session (e.g. after a successful retry).
-    const backendConnectionIds = new Set(backendSessions.map((s) => s.connectionId));
-    const surviving = failed.filter(
-      (f) => !backendConnectionIds.has(f.connectionId),
-    );
-    return [...backendSessions, ...surviving];
-  }, [backendSessions, frontendFailedSessions]);
-  // The backend returns disconnected sessions as history. Keep the tab strip focused on
-  // active work, while preserving the currently selected session if it disconnects.
-  const visibleSessions = useMemo(
-    () =>
-      sessions
-        .filter((session) =>
-          shouldShowTerminalSessionTab({ activeSessionId, dismissedSessionIds, session }),
-        )
-        // The backend lists sessions by updated_at DESC, so the active session's
-        // tab would jump to the front on every 2s poll as its activity timestamp
-        // advances — making the highlighted tab appear to switch on its own. Pin
-        // the tab strip to a stable creation order instead.
-        .sort(
-          (a, b) =>
-            a.createdAt.localeCompare(b.createdAt) ||
-            a.sessionId.localeCompare(b.sessionId),
-        ),
-    [activeSessionId, dismissedSessionIds, sessions],
-  );
-  const selectedConnection = useMemo(
-    () => connections.find((item) => item.id === selectedConnectionId) ?? null,
-    [connections, selectedConnectionId],
-  );
-  const [previousSelectedConnectionId, setPreviousSelectedConnectionId] = useState(selectedConnectionId);
-  const activeSession = useMemo(
-    () => visibleSessions.find((item) => item.sessionId === activeSessionId) ?? null,
-    [activeSessionId, visibleSessions],
-  );
-  const sessionTabs = useMemo(
-    () => buildTerminalSessionTabs({ connections, sessions: visibleSessions }),
-    [connections, visibleSessions],
-  );
-
-  useSshTerminalChannel({
-    appendTerminalEvents,
-    workspaceId,
-  });
-  const markSessionHistoryHydrated = useActiveSessionHistory({
+  const terminal = useTerminalSessionOrchestration({
     active,
-    hydrate: hydrateTerminalSession,
-    sessionId: activeSession?.sessionId,
+    connections,
     workspaceId,
+    workspaceScope,
   });
 
   useEffect(() => {
     activateWorkspace(workspaceId);
   }, [activateWorkspace, workspaceId]);
 
-  useEffect(() => {
-    if (!connections.length) {
-      if (selectedConnectionId) {
-        setSelectedSshConnection(null);
-      }
-      return;
-    }
+  const connection = useSshConnectionManagement({
+    connections,
+    connectMutation: terminal.connectMutation,
+    workspaceId,
+    workspaceScope,
+  });
+  const { activeSessionId, setActiveSessionId, visibleSessions } = terminal;
 
-    if (dialogMode === "new" || (dialogOpen && dialogMode === "edit")) {
-      return;
-    }
-
-    if (!selectedConnectionId || !connections.some((connection) => connection.id === selectedConnectionId)) {
-      setSelectedSshConnection(connections[0].id);
-    }
-  }, [connections, selectedConnectionId, setSelectedSshConnection, dialogMode, dialogOpen]);
-
-  const latestFormConnection = connections.find((item) => item.id === form.id) ?? null;
-  const formBaseline = form.expectedSnapshot;
-  const externalChange = Boolean(formBaseline && sshConnectionContent(formBaseline) !== sshConnectionContent(latestFormConnection));
-  const formDirty = Boolean(formBaseline && JSON.stringify(form) !== JSON.stringify(sshConnectionToInput(formBaseline, workspaceId)));
-  if (externalChange && !formDirty && latestFormConnection) {
-    setForm(sshConnectionToInput(latestFormConnection, workspaceId));
-  }
-
-  // Sync form state when the selected connection changes (render-time adjustment pattern).
-  if (selectedConnectionId !== previousSelectedConnectionId) {
-    setPreviousSelectedConnectionId(selectedConnectionId);
-    if (selectedConnection && dialogMode !== "new") {
-      setForm(sshConnectionToInput(selectedConnection, workspaceId));
-    }
-  }
-
+  // Reconcile after workspace activation, preserving the store's workspace slice lifecycle.
   useEffect(() => {
     if (!visibleSessions.length) {
       if (activeSessionId) {
@@ -235,237 +72,25 @@ export function SshConnectionsPage({
     }
   }, [activeSessionId, visibleSessions, setActiveSessionId]);
 
-  const saveScope = useRef<string | null>(workspaceId);
   useEffect(() => {
-    saveScope.current = workspaceId;
-    return () => { saveScope.current = null; };
+    workspaceScope.current = workspaceId;
+    return () => { workspaceScope.current = null; };
   }, [workspaceId]);
-  const saveMutation = useMutation({
-    mutationFn: saveSshConnection,
-    onError: (_error, input) => { void queryClient.invalidateQueries({ queryKey: ["ssh-connections", input.workspaceId] }); },
-    onSuccess: async (connection) => {
-      const queryKey = ["ssh-connections", connection.workspaceId];
-      await queryClient.cancelQueries({ queryKey, exact: true });
-      queryClient.setQueryData<SshConnection[]>(queryKey, (current = []) =>
-        [...current.filter((item) => item.id !== connection.id), connection]);
-      void queryClient.invalidateQueries({ queryKey });
-      if (saveScope.current !== connection.workspaceId) return;
-      setSelectedSshConnection(connection.id);
-      setDialogOpen(false);
-      setDialogMode(null);
-    },
-  });
-
-  // Test a connection using the dedicated test endpoint, which accepts the full
-  // form payload. The backend resolves stored credentials via `credential_ref`
-  // (carried on the form for saved connections) and applies `secret` as an
-  // override, so a newly typed password/passphrase is honored as well. The
-  // endpoint spins up and tears down its own throwaway session.
-  const testMutation = useMutation({
-    mutationFn: async ({
-      form,
-    }: {
-      form: SshConnectionInput;
-    }) => {
-      return testSshConnection({ ...form, workspaceId });
-    },
-    onSuccess: (result) =>
-      setTestResult({ ok: result.ok, message: result.message }),
-    onError: (error) =>
-      setTestResult({ ok: false, message: formatTerminalError(error, t) }),
-  });
-
-  const connectMutation = useMutation({
-    mutationFn: (request: string | { connectionId: string; sourceSessionId: string }) => {
-      const connectionId = typeof request === "string" ? request : request.connectionId;
-      const input = { workspaceId, connectionId, cols: 120, rows: 32 };
-      return typeof request === "string" ? connectSshSession(input) : connectSshSession(input, request.sourceSessionId);
-    },
-    onSuccess: (session) => {
-      if (saveScope.current !== session.workspaceId) {
-        void queryClient.invalidateQueries({ queryKey: ["ssh-sessions", session.workspaceId] });
-        return;
-      }
-      if (session.warnings?.includes("ACTIVITY_RECORD_FAILED")) {
-        feedback.info(t("feedback.activityRecordFailed"));
-      }
-      markSessionHistoryHydrated(session.sessionId);
-      startTerminalSession(session.sessionId, [
-        {
-          sessionId: session.sessionId,
-          kind: "output",
-          data: `${t("ssh.session.connected", {
-            host: session.host,
-            username: session.username,
-          })}\r\n`,
-          createdAt: session.createdAt,
-        },
-      ]);
-      queryClient.setQueryData<SshSessionSummary[]>(
-        ["ssh-sessions", workspaceId],
-        (current = []) => [
-          ...current.filter((item) => item.sessionId !== session.sessionId),
-          session,
-        ],
-      );
-      queryClient.invalidateQueries({ queryKey: ["ssh-sessions", workspaceId] });
-    },
-    onError: (error, request) => {
-      if (saveScope.current !== workspaceId) return;
-      if (typeof request !== "string") {
-        feedback.error(formatTerminalError(error, t));
-        return;
-      }
-      const connectionId = request;
-      const connection = connections.find((c) => c.id === connectionId);
-      if (!connection) return;
-      const syntheticId = `__frontend_failed_${connectionId}_${Date.now()}`;
-      const now = new Date().toISOString();
-      const failedSession: SshSessionSummary = {
-        sessionId: syntheticId,
-        workspaceId,
-        connectionId,
-        status: "failed",
-        reconnectAttempt: 0,
-        authKind: connection.authKind,
-        host: connection.host,
-        username: connection.username,
-        cols: 120,
-        rows: 32,
-        createdAt: now,
-        updatedAt: now,
-      };
-      const errorMessage = formatTerminalError(error, t);
-      startTerminalSession(syntheticId, [
-        {
-          sessionId: syntheticId,
-          kind: "output",
-          data: `\x1b[31mConnection failed: ${errorMessage}\x1b[0m\r\n`,
-          createdAt: now,
-        },
-      ]);
-      addFrontendFailedSession(failedSession);
-    },
-  });
-  const closeMutation = useMutation({
-    mutationFn: (sessionId: string) => closeSshSession({ workspaceId, sessionId }),
-    onSuccess: (session) => {
-      if (saveScope.current !== session.workspaceId) {
-        void queryClient.invalidateQueries({ queryKey: ["ssh-sessions", session.workspaceId] });
-        return;
-      }
-      if (session.warnings?.includes("ACTIVITY_RECORD_FAILED")) {
-        feedback.info(t("feedback.activityRecordFailed"));
-      }
-      const historyWarning = session.warnings?.includes("SSH_HISTORY_RECORD_FAILED")
-        ? t("feedback.ssh.historyRecordFailed") : null;
-      if (historyWarning) feedback.info(historyWarning);
-      appendTerminalEvents([
-        {
-          sessionId: session.sessionId,
-          kind: "close",
-          data: `${t("ssh.session.closed")}\r\n${historyWarning ? `${historyWarning}\r\n` : ""}`,
-          createdAt: session.updatedAt,
-        },
-      ]);
-      queryClient.invalidateQueries({ queryKey: ["ssh-sessions", workspaceId] });
-    },
-  });
-
-  const exportMutation = useMutation({
-    mutationFn: (sessionId: string) => exportSshLog({ workspaceId, sessionId }),
-    onSuccess: (log) => setExportedLog(log.content),
-  });
-
-  // Reset a previously trusted host key (e.g. after a mismatch) and then
-  // re-attempt the connection. Surfaces failures via the feedback toast.
-  const resetHostKeyMutation = useMutation({
-    mutationFn: (input: { host: string; port: number }) =>
-      resetSshHostFingerprint({ workspaceId, ...input }),
-    onSuccess: (result) => {
-      if (result.warnings?.includes("ACTIVITY_RECORD_FAILED")) {
-        feedback.info(t("feedback.activityRecordFailed"));
-      }
-      setTrustDialogState((prev) => ({ ...prev, open: false, mismatchError: null }));
-      const targetConnectionId = trustDialogState.connectionId ?? selectedConnectionId;
-      if (targetConnectionId) {
-        connectMutation.reset();
-        connectMutation.mutate(targetConnectionId);
-      }
-    },
-    onError: (error) => handleError(error, { key: "ssh.trust.resetFailed" }),
-  });
-
-  function resetHostAndReconnect() {
-    if (!trustDialogState.host) {
-      return;
-    }
-    resetHostKeyMutation.mutate({
-      host: trustDialogState.host,
-      port: trustDialogState.port,
-    });
-  }
-
-  function updateForm(patch: Partial<SshConnectionInput>) {
-    setForm((current) => ({ ...current, ...patch, workspaceId }));
-  }
-
-  function newConnection() {
-    connectMutation.reset();
-    testMutation.reset();
-    setTestResult(null);
-    saveMutation.reset();
-    setSelectedSshConnection(null);
-    setForm(defaultSshConnectionInput(workspaceId));
-    setTrustDialogState((prev) => ({ ...prev, open: false }));
-    setDialogMode("new");
-    setDialogOpen(true);
-  }
-
-  function openConnectionSettings(connection?: SshConnection | null) {
-    connectMutation.reset();
-    testMutation.reset();
-    setTestResult(null);
-    saveMutation.reset();
-    const target = connection ?? selectedConnection;
-    if (target) {
-      setSelectedSshConnection(target.id);
-      setForm(sshConnectionToInput(target, workspaceId));
-      setDialogMode("edit");
-    } else {
-      setForm(defaultSshConnectionInput(workspaceId));
-      setDialogMode("new");
-    }
-    setTrustDialogState((prev) => ({ ...prev, open: false }));
-    setDialogOpen(true);
-  }
-
-  function editConnection(connection: SshConnection) {
-    connectMutation.reset();
-    testMutation.reset();
-    setTestResult(null);
-    saveMutation.reset();
-    setSelectedSshConnection(connection.id);
-    setForm(sshConnectionToInput(connection, workspaceId));
-    setTrustDialogState((prev) => ({ ...prev, open: false }));
-    setDialogMode("edit");
-    setDialogOpen(true);
-  }
 
   // Keep a stable callback identity for the pushed sidebar so re-renders do not
   // continually replace the shell sidebar node (which would loop via setState
   // in the parent).
-  const editConnectionRef = useRef(editConnection);
+  const editConnectionRef = useRef(connection.editConnection);
   useEffect(() => {
-    editConnectionRef.current = editConnection;
+    editConnectionRef.current = connection.editConnection;
   });
   const handleEditConnection = useCallback((connection: SshConnection) => {
     onShowSaved?.();
     editConnectionRef.current(connection);
   }, [onShowSaved]);
-  const newConnectionRef = useRef(newConnection);
+  const newConnectionRef = useRef(connection.newConnection);
   useEffect(() => {
-    newConnectionRef.current = newConnection;
+    newConnectionRef.current = connection.newConnection;
   });
   const handleNewConnection = useCallback(() => {
     onShowSaved?.();
@@ -503,117 +128,6 @@ export function SshConnectionsPage({
     return () => onShellSidebarChange(null);
   }, [sidebarActive, onShellSidebarChange, shellSidebar]);
 
-  function submitConnection(event: FormEvent) {
-    event.preventDefault();
-    saveMutation.mutate({
-      ...form,
-      workspaceId,
-      credentialRef: form.credentialRef?.trim() || null,
-      keyPath: form.keyPath?.trim() || null,
-      // Preserve the secret verbatim (passwords may contain spaces); an empty
-      // field means "keep the saved password".
-      secret: form.secret ? form.secret : null,
-    });
-  }
-
-  function testConnection() {
-    testMutation.reset();
-    setTestResult(null);
-    testMutation.mutate({ form });
-  }
-
-  function connectSelectedConnection() {
-    connectMutation.reset();
-    if (!selectedConnectionId || !selectedConnection) {
-      newConnection();
-      return;
-    }
-
-    const host = selectedConnection.host;
-    const port = selectedConnection.port ?? 22;
-
-    // Check if we already trust this host.
-    getSshHostFingerprint({ workspaceId, host, port })
-      .then((info) => {
-        if (info) {
-          // Already trusted — connect directly.
-          connectMutation.mutate(selectedConnectionId);
-        } else {
-          // First trust — show confirmation dialog.
-          setTrustDialogState({
-            open: true,
-            connectionId: selectedConnectionId,
-            host,
-            port,
-            fingerprint: null,
-            mismatchError: null,
-          });
-        }
-      })
-      .catch(() => {
-        // If fingerprint check fails, proceed with connection anyway
-        // (the backend TOFU will handle it).
-        connectMutation.mutate(selectedConnectionId);
-      });
-  }
-
-  function confirmTrustAndConnect() {
-    if (!trustDialogState.connectionId) return;
-    connectMutation.reset();
-    connectMutation.mutate(trustDialogState.connectionId);
-  }
-
-  function openFromSession(connectionId: string, sourceSessionId: string) {
-    connectMutation.reset();
-    connectMutation.mutate(frontendFailedSessions[sourceSessionId] ? connectionId : { connectionId, sourceSessionId });
-  }
-
-  const {
-    batchCloseRequest,
-    closeAllSessions,
-    closeConfirmSession,
-    closeConfirmSessionId,
-    closeOtherSessions,
-    closeSessionsToLeft,
-    closeSessionsToRight,
-    confirmBatchClose,
-    confirmCloseSession,
-    reconnectSession,
-    requestCloseSession,
-    setBatchCloseRequest,
-    setCloseConfirmSessionId,
-  } = useTerminalSessionActions({
-    closeMutation,
-    connectMutation,
-    dismissSession,
-    frontendFailedSessions,
-    removeSftpSession,
-    sessions,
-    sessionTabs,
-  });
-
-  // Detect host-key mismatch errors from connect failures.
-  useEffect(() => {
-    const error = connectMutation.error;
-    if (!error) return;
-    const message = error instanceof Error ? error.message : String(error);
-    if (
-      message.includes("host key verification failed") ||
-      message.includes("fingerprint does not match")
-    ) {
-      const conn = selectedConnection;
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- surfacing mutation error as trust dialog is an external-system sync
-      setTrustDialogState({
-        open: true,
-        connectionId: null,
-        host: conn?.host ?? "",
-        port: conn?.port ?? 22,
-        fingerprint: undefined,
-        mismatchError: message,
-      });
-    }
-  }, [connectMutation.error, selectedConnection]);
-
   // Search has no toolbar button anymore; Ctrl/Cmd+F opens the in-terminal search.
   useEffect(() => {
     if (!active) return;
@@ -627,123 +141,104 @@ export function SshConnectionsPage({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [active, setSearchOpen]);
 
-  const blockingError = connectionsQuery.error ?? sessionsQuery.error;
-  const actionError =
-    connectMutation.error ?? closeMutation.error ?? exportMutation.error;
+  const blockingError = connectionsQuery.error ?? terminal.sessionsQuery.error;
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--u-color-surface)]">
       <TerminalWorkspace
-        activeSession={activeSession}
-        activeSessionId={activeSessionId}
-        actionError={actionError}
-        connecting={connectMutation.isPending}
+        activeSession={terminal.activeSession}
+        activeSessionId={terminal.activeSessionId}
+        actionError={terminal.actionError}
+        connecting={terminal.connectMutation.isPending}
         error={blockingError}
-        events={terminalEvents}
+        events={terminal.terminalEvents}
         emptyMessage={
           connections.length
             ? t("ssh.empty.selectConnection")
             : t("ssh.empty.noConnections")
         }
         loading={connectionsQuery.isLoading}
-        onClear={(sessionId) => clearTerminalSessionEvents(sessionId)}
-        onCloseAll={closeAllSessions}
-        onCloseLeft={closeSessionsToLeft}
-        onCloseOthers={closeOtherSessions}
-        onCloseRight={closeSessionsToRight}
-        onCloseSession={requestCloseSession}
-        onDuplicate={openFromSession}
-        onNewConnection={newConnection}
-        onNewSession={connectSelectedConnection}
-        onOpenPreferences={openConnectionSettings}
-        onReconnect={reconnectSession}
-        onRetry={openFromSession}
-        onSelectSession={setActiveSessionId}
-        selectedConnection={selectedConnection}
-        sessions={sessionTabs}
+        onClear={(sessionId) => terminal.clearTerminalSessionEvents(sessionId)}
+        onCloseAll={terminal.closeAllSessions}
+        onCloseLeft={terminal.closeSessionsToLeft}
+        onCloseOthers={terminal.closeOtherSessions}
+        onCloseRight={terminal.closeSessionsToRight}
+        onCloseSession={terminal.requestCloseSession}
+        onDuplicate={terminal.openFromSession}
+        onNewConnection={connection.newConnection}
+        onNewSession={connection.connectSelectedConnection}
+        onOpenPreferences={connection.openConnectionSettings}
+        onReconnect={terminal.reconnectSession}
+        onRetry={terminal.openFromSession}
+        onSelectSession={terminal.setActiveSessionId}
+        selectedConnection={connection.selectedConnection}
+        sessions={terminal.sessionTabs}
         splitMode={split.mode}
         surfaceActive={active}
       />
       <SshConnectionDialog
-        externalChange={externalChange}
-        onReload={() => {
-          if (latestFormConnection) setForm(sshConnectionToInput(latestFormConnection, workspaceId));
-          else { setDialogOpen(false); setDialogMode(null); }
-          saveMutation.reset();
-        }}
-        canTest={
-          Boolean(form.host?.trim()) &&
-          Boolean(form.username?.trim()) &&
-          (form.authKind !== "private-key" || Boolean(form.keyPath?.trim())) &&
-          (form.authKind !== "password" ||
-            Boolean(form.id) ||
-            Boolean(form.secret?.trim()))
-        }
-        error={saveMutation.error}
-        form={form}
-        onOpenChange={(open) => {
-          setDialogOpen(open);
-          if (!open) {
-            setDialogMode(null);
-            setTestResult(null);
-          }
-        }}
-        onSubmit={submitConnection}
-        onTest={testConnection}
-        onUpdate={updateForm}
-        open={dialogOpen}
-        pending={saveMutation.isPending}
-        testing={testMutation.isPending}
+        externalChange={connection.externalChange}
+        onReload={connection.reloadForm}
+        canTest={connection.canTest}
+        error={connection.saveMutation.error}
+        form={connection.form}
+        onOpenChange={connection.changeDialogOpen}
+        onSubmit={connection.submitConnection}
+        onTest={connection.testConnection}
+        onUpdate={connection.updateForm}
+        open={connection.dialogOpen}
+        pending={connection.saveMutation.isPending}
+        testing={connection.testMutation.isPending}
       >
         <SshTestResultDialog
-          onOpenChange={(open) => !open && setTestResult(null)}
-          result={testResult}
+          onOpenChange={(open) => !open && connection.setTestResult(null)}
+          result={connection.testResult}
         />
       </SshConnectionDialog>
       <ConfirmDialog
         confirmLabel={t("ssh.actions.closeSession")}
         description={
-          closeConfirmSession
+          terminal.closeConfirmSession
             ? t("ssh.confirmClose", {
-                label: `${closeConfirmSession.username}@${closeConfirmSession.host}`,
+                label: `${terminal.closeConfirmSession.username}@${terminal.closeConfirmSession.host}`,
               })
             : ""
         }
-        onConfirm={confirmCloseSession}
-        onOpenChange={(open) => !open && setCloseConfirmSessionId(null)}
-        open={closeConfirmSessionId !== null}
-        pending={closeMutation.isPending}
+        onConfirm={terminal.confirmCloseSession}
+        onOpenChange={(open) => !open && terminal.setCloseConfirmSessionId(null)}
+        open={terminal.closeConfirmSessionId !== null}
+        pending={terminal.closeMutation.isPending}
         title={t("ssh.session.closeTitle")}
       />
       <ConfirmDialog
         confirmLabel={t("ssh.actions.closeSessions")}
         description={
-          batchCloseRequest
+          terminal.batchCloseRequest
             ? t("ssh.confirmCloseMany", {
-                count: batchCloseRequest.sessionIds.length,
-                labels: batchCloseRequest.labels.join(", "),
+                count: terminal.batchCloseRequest.sessionIds.length,
+                labels: terminal.batchCloseRequest.labels.join(", "),
               })
             : ""
         }
-        onConfirm={confirmBatchClose}
-        onOpenChange={(open) => !open && setBatchCloseRequest(null)}
-        open={batchCloseRequest !== null}
-        pending={closeMutation.isPending}
+        onConfirm={terminal.confirmBatchClose}
+        onOpenChange={(open) => !open && terminal.setBatchCloseRequest(null)}
+        open={terminal.batchCloseRequest !== null}
+        pending={terminal.closeMutation.isPending}
         title={t("ssh.session.closeManyTitle")}
       />
       <HostKeyTrustDialog
-        existingFingerprint={trustDialogState.fingerprint}
-        host={trustDialogState.host}
-        mismatchError={trustDialogState.mismatchError}
-        onConfirm={confirmTrustAndConnect}
+        existingFingerprint={connection.trustDialogState.fingerprint}
+        host={connection.trustDialogState.host}
+        mismatchError={connection.trustDialogState.mismatchError}
+        onConfirm={connection.confirmTrustAndConnect}
         onOpenChange={(open) =>
-          setTrustDialogState((prev) => ({ ...prev, open }))
+          connection.setTrustDialogState((prev) => ({ ...prev, open }))
         }
-        onResetAndReconnect={resetHostAndReconnect}
-        open={trustDialogState.open}
-        pending={connectMutation.isPending}
-        port={trustDialogState.port}
-        resetPending={resetHostKeyMutation.isPending}
+        onResetAndReconnect={connection.resetHostAndReconnect}
+        open={connection.trustDialogState.open}
+        pending={terminal.connectMutation.isPending}
+        port={connection.trustDialogState.port}
+        resetPending={connection.resetHostKeyMutation.isPending}
       />
     </div>
   );

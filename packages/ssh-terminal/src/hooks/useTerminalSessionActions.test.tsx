@@ -150,3 +150,109 @@ describe("useTerminalSessionActions batch close", () => {
     expect(closeMutation.mutate).toHaveBeenCalledWith("s2");
   });
 });
+
+describe("useTerminalSessionActions failure ownership", () => {
+  it("dismisses a frontend-only failure without closing a nonexistent backend session", () => {
+    const failed = session({ sessionId: "frontend-failed", connectionId: "c1", status: "failed" });
+    const { closeMutation, connectMutation, dismissSession, hook, removeSftpSession } = setup({
+      sessions: [failed],
+      frontendFailedSessions: { [failed.sessionId]: failed },
+      sessionTabs: [tab(failed, "failed")],
+    });
+
+    act(() => hook.result.current.requestCloseSession(failed.sessionId));
+
+    expect(hook.result.current.closeConfirmSessionId).toBeNull();
+    expect(closeMutation.mutate).not.toHaveBeenCalled();
+    expect(connectMutation.reset).toHaveBeenCalledOnce();
+    expect(dismissSession).toHaveBeenCalledExactlyOnceWith(failed.sessionId);
+    expect(removeSftpSession).toHaveBeenCalledExactlyOnceWith(failed.sessionId);
+  });
+
+  it("closes a backend-managed failed session even when no confirmation is needed", () => {
+    const failed = session({ sessionId: "backend-failed", connectionId: "c1", status: "failed" });
+    const { closeMutation, connectMutation, dismissSession, hook, removeSftpSession } = setup({
+      sessions: [failed],
+      sessionTabs: [tab(failed, "failed")],
+    });
+
+    act(() => hook.result.current.requestCloseSession(failed.sessionId));
+
+    expect(hook.result.current.closeConfirmSessionId).toBeNull();
+    expect(closeMutation.mutate).toHaveBeenCalledExactlyOnceWith(failed.sessionId);
+    expect(connectMutation.reset).not.toHaveBeenCalled();
+    expect(dismissSession).toHaveBeenCalledExactlyOnceWith(failed.sessionId);
+    expect(removeSftpSession).toHaveBeenCalledExactlyOnceWith(failed.sessionId);
+  });
+
+  it("retries a frontend-only failure by connection id and dismisses it only after success", () => {
+    const failed = session({ sessionId: "frontend-failed", connectionId: "c1", status: "failed" });
+    const { closeMutation, connectMutation, dismissSession, hook, removeSftpSession } = setup({
+      sessions: [failed],
+      frontendFailedSessions: { [failed.sessionId]: failed },
+      sessionTabs: [tab(failed, "failed")],
+    });
+
+    act(() => hook.result.current.reconnectSession(failed.sessionId));
+
+    expect(connectMutation.mutate).toHaveBeenCalledExactlyOnceWith("c1", expect.any(Object));
+    expect(dismissSession).not.toHaveBeenCalled();
+    expect(removeSftpSession).not.toHaveBeenCalled();
+    act(() => connectMutation.mutate.mock.lastCall![1].onSuccess());
+    expect(closeMutation.mutate).not.toHaveBeenCalled();
+    expect(dismissSession).toHaveBeenCalledExactlyOnceWith(failed.sessionId);
+    expect(removeSftpSession).toHaveBeenCalledExactlyOnceWith(failed.sessionId);
+  });
+
+  it("retains the source session and SFTP through an unsuccessful reconnect until a retry succeeds", () => {
+    const { closeMutation, connectMutation, dismissSession, hook, removeSftpSession } = setup();
+
+    act(() => hook.result.current.reconnectSession("s2"));
+    // An unsuccessful mutation does not deliver its per-call onSuccess callback.
+    expect(closeMutation.mutate).not.toHaveBeenCalled();
+    expect(dismissSession).not.toHaveBeenCalled();
+    expect(removeSftpSession).not.toHaveBeenCalled();
+
+    act(() => hook.result.current.reconnectSession("s2"));
+    expect(connectMutation.mutate).toHaveBeenCalledTimes(2);
+    expect(connectMutation.mutate).toHaveBeenLastCalledWith(
+      { connectionId: "c2", sourceSessionId: "s2" }, expect.any(Object),
+    );
+    expect(dismissSession).not.toHaveBeenCalled();
+    expect(removeSftpSession).not.toHaveBeenCalled();
+    act(() => connectMutation.mutate.mock.lastCall![1].onSuccess());
+
+    expect(closeMutation.mutate).toHaveBeenCalledExactlyOnceWith("s2");
+    expect(dismissSession).toHaveBeenCalledExactlyOnceWith("s2");
+    expect(removeSftpSession).toHaveBeenCalledExactlyOnceWith("s2");
+  });
+
+  it("closes exactly the confirmed right-hand tabs with mixed frontend and backend ownership", () => {
+    const kept = session({ sessionId: "kept", connectionId: "c1" });
+    const connected = session({ sessionId: "connected", connectionId: "c2" });
+    const frontend = session({ sessionId: "frontend", connectionId: "c3", status: "failed" });
+    const backend = session({ sessionId: "backend", connectionId: "c4", status: "failed" });
+    const historical = session({ sessionId: "historical", connectionId: "c5", status: "disconnected" });
+    const { closeMutation, connectMutation, dismissSession, hook, removeSftpSession } = setup({
+      sessions: [kept, connected, frontend, backend, historical],
+      frontendFailedSessions: { [frontend.sessionId]: frontend },
+      sessionTabs: [tab(kept, "one"), tab(connected, "two"), tab(frontend, "three"), tab(backend, "four")],
+    });
+
+    act(() => hook.result.current.closeSessionsToRight(kept.sessionId));
+    expect(hook.result.current.batchCloseRequest).toEqual({
+      labels: ["two", "three", "four"],
+      sessionIds: ["connected", "frontend", "backend"],
+    });
+    expect(closeMutation.mutate).not.toHaveBeenCalled();
+    expect(removeSftpSession).not.toHaveBeenCalled();
+
+    act(() => hook.result.current.confirmBatchClose());
+
+    expect(closeMutation.mutate.mock.calls).toEqual([["connected"], ["backend"]]);
+    expect(connectMutation.reset).toHaveBeenCalledOnce();
+    expect(dismissSession.mock.calls).toEqual([["connected"], ["frontend"], ["backend"]]);
+    expect(removeSftpSession.mock.calls).toEqual([["connected"], ["frontend"], ["backend"]]);
+    expect(hook.result.current.batchCloseRequest).toBeNull();
+  });
+});
