@@ -2,7 +2,7 @@ use serde_json::{json, Map, Value};
 use unfour_core::models::{WorkspaceVariable, WorkspaceVariableInput};
 
 use crate::command_bus_adapter::CommandBusAdapter;
-use crate::sanitize::{is_sensitive_key, mask_secret};
+use crate::sanitize::mask_variable_value;
 
 use super::confirmation::ensure_confirmed_if_guarded;
 use super::policy::ToolPolicyEvaluation;
@@ -342,11 +342,7 @@ fn find_workspace_variable(
 }
 
 fn safe_variable(variable: &WorkspaceVariable) -> Value {
-    let value = if variable.is_secret || is_sensitive_key(&variable.key) {
-        mask_secret(&variable.value)
-    } else {
-        variable.value.clone()
-    };
+    let value = mask_variable_value(&variable.key, &variable.value, variable.is_secret);
     json!({
         "id": variable.id,
         "workspaceId": variable.workspace_id,

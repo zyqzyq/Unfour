@@ -616,10 +616,10 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         &self,
         workspace_id: &str,
         name: &str,
-    ) -> Result<ApiEnvironment, CommandBusAdapterError> {
+    ) -> Result<WorkspaceEnvironment, CommandBusAdapterError> {
         self.run(
             self.bus
-                .api_environment_create(workspace_id.to_string(), name.to_string()),
+                .workspace_environment_create(workspace_id.to_string(), name.to_string()),
         )
         .map_err(|e| {
             CommandBusAdapterError::from_app_error(
@@ -635,8 +635,8 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         environment_id: &str,
         name: &str,
         variables: Vec<KeyValue>,
-    ) -> Result<ApiEnvironment, CommandBusAdapterError> {
-        self.run(self.bus.api_environment_update(
+    ) -> Result<WorkspaceEnvironment, CommandBusAdapterError> {
+        self.run(self.bus.api_environment_update_with_metadata(
             workspace_id.to_string(),
             environment_id.to_string(),
             name.to_string(),

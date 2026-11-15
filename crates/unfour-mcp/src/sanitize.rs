@@ -31,6 +31,18 @@ pub fn is_sensitive_key(name: &str) -> bool {
     )
 }
 
+/// Variable metadata uses the authoritative flag and the shared variable
+/// fallback, while retaining the MCP adapter's existing sensitive-key coverage.
+pub fn mask_variable_value(key: &str, value: &str, is_secret: bool) -> String {
+    if unfour_core::redaction::is_sensitive_workspace_variable(key, value, is_secret)
+        || is_sensitive_key(key)
+    {
+        mask_secret(value)
+    } else {
+        value.to_owned()
+    }
+}
+
 /// Produce a partial-mask descriptor for a sensitive value.
 ///
 /// The descriptor exposes diagnostic *shape* (auth scheme, structural kind,
@@ -65,13 +77,16 @@ pub fn mask_secret(value: &str) -> String {
 }
 
 /// Split a `Scheme credential` value (e.g. `Bearer abc`) into its scheme and
-/// credential. Only a purely-alphabetic leading word followed by a remainder is
-/// treated as a scheme (captures Bearer/Basic/Digest/Negotiate/NTLM); anything
-/// else is treated as an opaque secret with no scheme.
+/// credential. Only known authentication schemes are public diagnostic shape;
+/// an arbitrary leading word may itself be secret material.
 fn split_scheme(value: &str) -> (Option<&str>, &str) {
     if let Some((head, rest)) = value.split_once(char::is_whitespace) {
         let rest = rest.trim();
-        if !head.is_empty() && head.chars().all(|c| c.is_ascii_alphabetic()) && !rest.is_empty() {
+        if matches!(
+            head.to_ascii_lowercase().as_str(),
+            "bearer" | "basic" | "digest" | "negotiate" | "ntlm"
+        ) && !rest.is_empty()
+        {
             return (Some(head), rest);
         }
     }
@@ -130,9 +145,7 @@ fn is_hex(secret: &str) -> bool {
     secret.len() >= 16 && secret.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
-/// Reveal a structured prefix (e.g. `sk`, `ghp`) when a separator appears within
-/// the first 8 characters. The prefix itself is not the secret and strongly aids
-/// "wrong environment key" diagnosis.
+/// Reveal only recognized public token prefixes, never arbitrary secret text.
 fn structured_prefix(secret: &str) -> Option<String> {
     let window: String = secret.chars().take(8).collect();
     let idx = window.find(['_', '-'])?;
@@ -140,7 +153,10 @@ fn structured_prefix(secret: &str) -> Option<String> {
         return None;
     }
     let prefix = &window[..idx];
-    if prefix.chars().all(|c| c.is_ascii_alphanumeric()) {
+    if matches!(
+        prefix,
+        "sk" | "pk" | "ghp" | "gho" | "ghu" | "ghs" | "ghr" | "xoxb" | "xoxp"
+    ) {
         Some(prefix.to_string())
     } else {
         None

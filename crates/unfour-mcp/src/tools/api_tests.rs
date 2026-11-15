@@ -191,6 +191,7 @@ impl CommandBusAdapter for ApiStubCommandBus {
     ) -> Result<ApiResponse, CommandBusAdapterError> {
         Ok(ApiResponse {
             request_snapshot: None,
+            diagnostic_projection: None,
             history_id: "hist-1".to_string(),
             status: 200,
             status_text: "OK".to_string(),
@@ -216,8 +217,8 @@ impl CommandBusAdapter for ApiStubCommandBus {
         &self,
         workspace_id: &str,
         name: &str,
-    ) -> Result<ApiEnvironment, CommandBusAdapterError> {
-        Ok(ApiEnvironment {
+    ) -> Result<WorkspaceEnvironment, CommandBusAdapterError> {
+        Ok(WorkspaceEnvironment {
             id: "env-created".to_string(),
             workspace_id: workspace_id.to_string(),
             name: name.to_string(),
@@ -225,6 +226,9 @@ impl CommandBusAdapter for ApiStubCommandBus {
             is_active: false,
             created_at: String::new(),
             updated_at: String::new(),
+            sort_order: 0,
+            deleted_at: None,
+            revision: 1,
         })
     }
 
@@ -234,15 +238,36 @@ impl CommandBusAdapter for ApiStubCommandBus {
         environment_id: &str,
         name: &str,
         variables: Vec<KeyValue>,
-    ) -> Result<ApiEnvironment, CommandBusAdapterError> {
-        Ok(ApiEnvironment {
+    ) -> Result<WorkspaceEnvironment, CommandBusAdapterError> {
+        Ok(WorkspaceEnvironment {
             id: environment_id.to_string(),
             workspace_id: workspace_id.to_string(),
             name: name.to_string(),
-            variables,
+            variables: variables
+                .into_iter()
+                .map(|variable| {
+                    environment_variable_from_input(
+                        "var-updated",
+                        workspace_id,
+                        environment_id,
+                        WorkspaceVariableInput {
+                            id: None,
+                            key: variable.key,
+                            value: variable.value,
+                            is_secret: false,
+                            is_enabled: variable.enabled,
+                            description: None,
+                            sort_order: 0,
+                        },
+                    )
+                })
+                .collect(),
             is_active: false,
             created_at: String::new(),
             updated_at: String::new(),
+            sort_order: 0,
+            deleted_at: None,
+            revision: 1,
         })
     }
 
@@ -367,6 +392,7 @@ impl CommandBusAdapter for ApiStubCommandBus {
         assert_eq!(input.workspace_id, "ws-1");
         Ok(ApiResponse {
             request_snapshot: None,
+            diagnostic_projection: None,
             history_id: "hist-post".to_string(),
             status: 201,
             status_text: "Created".to_string(),

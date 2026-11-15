@@ -16,15 +16,14 @@ fn list_environments_masks_sensitive_variables_only() {
     assert_eq!(env["variableCount"], 2);
 
     let vars = env["variables"].as_array().unwrap();
-    let base = vars.iter().find(|v| v["key"] == "baseUrl").unwrap();
+    let base = vars.iter().find(|v| v["key"] == "BASE_URL").unwrap();
     // Non-sensitive value is shown verbatim so requests are intelligible.
     assert_eq!(base["value"], "https://api.staging.example.com");
 
-    let token = vars.iter().find(|v| v["key"] == "token").unwrap();
+    let token = vars.iter().find(|v| v["key"] == "DISPLAY_NAME").unwrap();
     let token_val = token["value"].as_str().unwrap();
     assert!(token_val.starts_with("[mask "));
-    assert!(token_val.contains("scheme=Bearer"));
-    assert!(!token_val.contains("secret-token"));
+    assert!(!result.to_string().contains("secret display value"));
 }
 
 #[test]

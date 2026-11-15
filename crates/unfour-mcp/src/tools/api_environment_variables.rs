@@ -194,11 +194,8 @@ fn parse_description_override(
 }
 
 fn safe_environment_variable(variable: &WorkspaceEnvironmentVariable) -> Value {
-    let value = if variable.is_secret || is_sensitive_key(&variable.key) {
-        mask_secret(&variable.value)
-    } else {
-        variable.value.clone()
-    };
+    let value =
+        crate::sanitize::mask_variable_value(&variable.key, &variable.value, variable.is_secret);
     json!({
         "id": variable.id,
         "environmentId": variable.environment_id,

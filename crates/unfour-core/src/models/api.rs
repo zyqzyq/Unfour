@@ -107,6 +107,10 @@ pub struct ApiClientPreferences {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiResponse {
+    /// Safe response view captured with the exact execution's secret provenance.
+    /// Kept in-process only: post scripts and Desktop still consume the raw body.
+    #[serde(skip)]
+    pub diagnostic_projection: Option<ApiResponseDiagnosticProjection>,
     /// Non-fatal completion warnings. The HTTP response and history id stay authoritative.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
@@ -120,6 +124,23 @@ pub struct ApiResponse {
     pub headers: Vec<KeyValue>,
     pub body: String,
     pub duration_ms: u128,
+}
+
+#[derive(Debug, Clone)]
+pub struct ApiResponseDiagnosticProjection {
+    pub headers: Vec<KeyValue>,
+    pub body: String,
+}
+
+impl ApiResponse {
+    /// Cross an untrusted diagnostic boundary without re-reading mutable variables.
+    pub fn into_diagnostic_projection(mut self) -> Self {
+        if let Some(safe) = self.diagnostic_projection.take() {
+            self.headers = safe.headers;
+            self.body = safe.body;
+        }
+        self
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

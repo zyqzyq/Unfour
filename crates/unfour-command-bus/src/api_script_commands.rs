@@ -328,7 +328,7 @@ impl CommandBus {
                     action: "api.send_request",
                     target: Some(response.history_id.clone()),
                     details: serde_json::json!({
-                        "method": input.method,
+                        "method": response.request_snapshot.as_ref().map(|snapshot| &snapshot.method),
                         "status": response.status,
                         "preScriptStatus": pre.execution.status,
                         "postScriptStatus": post.execution.status,

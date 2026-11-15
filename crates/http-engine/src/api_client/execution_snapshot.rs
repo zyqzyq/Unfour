@@ -65,7 +65,7 @@ pub(super) fn snapshot(
     complete.url = url.to_string();
     let url = super::history_redaction::sanitize_with_secrets(&complete, &[], "", secrets)?.url;
     Ok(ApiExecutedRequestSnapshot {
-        method: input.method.clone(),
+        method: super::history_redaction::scrub_values(&input.method, secrets),
         url,
         headers: serde_json::from_str(&safe.headers)?,
         query,

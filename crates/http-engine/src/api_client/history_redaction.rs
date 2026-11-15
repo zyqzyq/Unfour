@@ -57,7 +57,11 @@ pub(crate) fn scrub_values(value: &str, secrets: &[String]) -> String {
 }
 
 fn redact_rows(items: &[KeyValue], scrub: &impl Fn(&str) -> String) -> AppResult<String> {
-    let safe = items
+    Ok(serde_json::to_string(&redacted_rows(items, scrub))?)
+}
+
+fn redacted_rows(items: &[KeyValue], scrub: &impl Fn(&str) -> String) -> Vec<KeyValue> {
+    items
         .iter()
         .map(|item| KeyValue {
             key: scrub(&item.key),
@@ -70,8 +74,19 @@ fn redact_rows(items: &[KeyValue], scrub: &impl Fn(&str) -> String) -> AppResult
                 scrub(&item.value)
             },
         })
-        .collect::<Vec<_>>();
-    Ok(serde_json::to_string(&safe)?)
+        .collect()
+}
+
+pub(super) fn diagnostic_response(
+    headers: &[KeyValue],
+    body: &str,
+    secrets: &[String],
+) -> unfour_core::models::ApiResponseDiagnosticProjection {
+    let scrub = |value: &str| scrub_values(value, secrets);
+    unfour_core::models::ApiResponseDiagnosticProjection {
+        headers: redacted_rows(headers, &scrub),
+        body: scrub(&safe_body(body)),
+    }
 }
 
 fn redact_request_body(input: &ApiRequestInput, scrub: &impl Fn(&str) -> String) -> Option<String> {

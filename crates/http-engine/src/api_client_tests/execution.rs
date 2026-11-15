@@ -7,6 +7,161 @@ use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 
 #[tokio::test]
+async fn secret_projection_tracks_idna_host_without_masking_public_authorities() {
+    for (secret_in_host, entire_url_secret) in [(true, false), (false, false), (true, true)] {
+        let mut service = service().await;
+        let sentinel = format!("MCP-ÜNICODE-{}", unfour_core::id::new_id());
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let raw_url = if secret_in_host {
+            // A secret can be part of a larger IDNA label, not just a complete host.
+            format!("http://prefix-{sentinel}.invalid:{}/", address.port())
+        } else {
+            format!(
+                "http://user:{sentinel}@public.invalid:{}/?ordinary={sentinel}",
+                address.port()
+            )
+        };
+        // A complete secret URL may include outer whitespace that build_url trims.
+        let raw_url = if entire_url_secret {
+            format!(" \t{raw_url}\r\n ")
+        } else {
+            raw_url
+        };
+        let secret = if entire_url_secret {
+            raw_url.clone()
+        } else {
+            sentinel.clone()
+        };
+        let canonical_host = reqwest::Url::parse(&raw_url)
+            .unwrap()
+            .host_str()
+            .unwrap()
+            .to_owned();
+        service.client = Client::builder()
+            .no_proxy()
+            .resolve(&canonical_host, address)
+            .build()
+            .unwrap();
+        let echoed_host = canonical_host.clone();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut wire = Vec::new();
+            let mut chunk = [0_u8; 1024];
+            while !wire.windows(4).any(|part| part == b"\r\n\r\n") {
+                let size = stream.read(&mut chunk).unwrap();
+                assert!(size > 0);
+                wire.extend_from_slice(&chunk[..size]);
+            }
+            let body = serde_json::json!({"host": echoed_host}).to_string();
+            write!(stream, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+            String::from_utf8(wire).unwrap()
+        });
+        let response = service
+            .send_cancellable_with_secrets(
+                request(&raw_url, Some(2_000)),
+                CancellationToken::new(),
+                &[secret.clone()],
+            )
+            .await
+            .unwrap();
+        let wire = server.join().unwrap();
+        assert!(wire.contains(&canonical_host));
+        assert!(response.body.contains(&canonical_host));
+        let stored: (String, String) =
+            sqlx::query_as("SELECT url, response_body_preview FROM api_history WHERE id=?")
+                .bind(&response.history_id)
+                .fetch_one(service.db.pool())
+                .await
+                .unwrap();
+        let projected = response.into_diagnostic_projection();
+        let observable = serde_json::to_string(&(projected, stored)).unwrap();
+        assert!(!observable.contains(&sentinel));
+        assert!(!observable.contains(&secret));
+        if secret_in_host {
+            assert!(
+                !observable.contains(&canonical_host),
+                "IDNA secret host leaked through diagnostics/history/snapshot"
+            );
+        } else {
+            assert!(
+                observable.contains(&canonical_host),
+                "secrets in credentials/query must not hide the public host"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn secret_projection_tracks_canonical_host_and_header_names() {
+    let mut service = service().await;
+    let sentinel = format!("MCP-CANONICAL-{}", unfour_core::id::new_id()).to_uppercase();
+    let canonical = sentinel.to_ascii_lowercase();
+    let host = format!("{canonical}.invalid");
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    // Override DNS for this synthetic hostname; the request never leaves loopback.
+    service.client = Client::builder()
+        .no_proxy()
+        .resolve(&host, address)
+        .build()
+        .unwrap();
+    let response_value = canonical.clone();
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let mut wire = Vec::new();
+        let mut chunk = [0_u8; 1024];
+        while !wire.windows(4).any(|part| part == b"\r\n\r\n") {
+            let size = stream.read(&mut chunk).unwrap();
+            assert!(size > 0);
+            wire.extend_from_slice(&chunk[..size]);
+        }
+        let body = serde_json::json!({"echo": response_value}).to_string();
+        write!(stream, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+        String::from_utf8(wire).unwrap()
+    });
+    let mut input = request(
+        &format!("http://{sentinel}.invalid:{}/", address.port()),
+        Some(2_000),
+    );
+    input.headers.push(KeyValue {
+        key: sentinel.clone(),
+        value: "public-value".into(),
+        enabled: true,
+    });
+    let response = service
+        .send_cancellable_with_secrets(input, CancellationToken::new(), &[sentinel.clone()])
+        .await
+        .unwrap();
+    let wire = server.join().unwrap();
+    assert!(wire.contains(&format!("{canonical}: public-value")));
+    assert!(wire.contains(&host));
+    assert!(
+        response.body.contains(&canonical),
+        "raw runtime response remains unchanged"
+    );
+    let stored: (String, String, String) = sqlx::query_as(
+        "SELECT url, request_headers_json, response_body_preview FROM api_history WHERE id=?",
+    )
+    .bind(&response.history_id)
+    .fetch_one(service.db.pool())
+    .await
+    .unwrap();
+    let visible = serde_json::to_string(&(response.into_diagnostic_projection(), stored)).unwrap();
+    assert!(!visible.contains(&sentinel));
+    assert!(
+        !visible.contains(&canonical),
+        "canonical secret leaked through diagnostic response/history/snapshot"
+    );
+}
+
+#[tokio::test]
 async fn zero_timeout_is_unlimited_and_duration_includes_the_complete_body() {
     let service = service().await;
     let (url, server) = delayed_body_server(Duration::from_millis(90), "complete body");

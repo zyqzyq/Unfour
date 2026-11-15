@@ -70,12 +70,18 @@ impl ApiClientService {
         super::execution_snapshot::validate_replay_values(&input)?;
         let mut runtime_secrets = runtime_request_secret_values(&input)?;
         runtime_secrets.extend(secrets.iter().cloned());
-        let secrets = runtime_secrets.as_slice();
         if input.body_kind == unfour_core::models::MULTIPART_BODY_KIND {
             unfour_core::models::parse_multipart_definition(input.body.as_deref())?;
         }
-        let method = parse_method(&input.method)?;
+        let method = parse_method(&input.method).map_err(|error| match error {
+            AppError::Validation(message) => AppError::Validation(
+                super::history_redaction::scrub_values(&message, &runtime_secrets),
+            ),
+            other => other,
+        })?;
         let url = build_url(&input.url, &input.query)?;
+        retain_canonical_secret_values(&input, &url, &mut runtime_secrets);
+        let secrets = runtime_secrets.as_slice();
         // Bound network execution, including SSH setup. Recording an already received
         // response in local history is outside the network deadline.
         let timeout = request_timeout_duration(input.timeout_ms)
@@ -89,7 +95,7 @@ impl ApiClientService {
         let request_id = unfour_diag::new_request_id();
         let request_fields = serde_json::json!({
             "request_id": request_id.as_str(),
-            "method": method.as_str(),
+            "method": super::history_redaction::scrub_values(method.as_str(), secrets),
             "host": super::history_redaction::scrub_values(url.host_str().unwrap_or(""), secrets),
             "path": super::history_redaction::scrub_values(url.path(), secrets),
         });
@@ -118,7 +124,7 @@ impl ApiClientService {
             if !matches!(method, Method::GET | Method::HEAD) {
                 let form = tokio::select! {
                     biased;
-                    form = super::multipart::build_form(&input) => form?,
+                    form = super::multipart::build_form(&input, secrets) => form?,
                     _ = cancellation.cancelled() => return Err(cancelled_error()),
                 };
                 builder = builder.multipart(form);
@@ -228,7 +234,7 @@ impl ApiClientService {
                     Some(unfour_diag::app_error_kind(&error)),
                     serde_json::json!({
                         "request_id": request_id.as_str(),
-                        "method": method.as_str(),
+                        "method": super::history_redaction::scrub_values(method.as_str(), secrets),
                         "host": super::history_redaction::scrub_values(url.host_str().unwrap_or(""), secrets),
                         "path": super::history_redaction::scrub_values(url.path(), secrets),
                         "status_code": status.as_u16(),
@@ -246,7 +252,7 @@ impl ApiClientService {
             None,
             serde_json::json!({
                 "request_id": request_id.as_str(),
-                "method": method.as_str(),
+                "method": super::history_redaction::scrub_values(method.as_str(), secrets),
                 "host": super::history_redaction::scrub_values(url.host_str().unwrap_or(""), secrets),
                 "path": super::history_redaction::scrub_values(url.path(), secrets),
                 "status_code": status.as_u16(),
@@ -254,6 +260,11 @@ impl ApiClientService {
         );
 
         Ok(ApiResponse {
+            diagnostic_projection: Some(super::history_redaction::diagnostic_response(
+                &response_headers,
+                &body,
+                secrets,
+            )),
             warnings: Vec::new(),
             request_snapshot: Some(request_snapshot),
             history_id,
@@ -296,7 +307,10 @@ impl ApiClientService {
         .bind(&id)
         .bind(&input.workspace_id)
         .bind(safe.name)
-        .bind(input.method.to_uppercase())
+        .bind(super::history_redaction::scrub_values(
+            &input.method.to_uppercase(),
+            secrets,
+        ))
         .bind(safe.url)
         .bind(safe.headers)
         .bind(safe.query)
@@ -315,6 +329,68 @@ impl ApiClientService {
 }
 
 const MAX_RESPONSE_BYTES: usize = 10 * 1024 * 1024;
+
+fn retain_canonical_secret_values(
+    input: &ApiRequestInput,
+    url: &reqwest::Url,
+    secrets: &mut Vec<String>,
+) {
+    // HTTP normalizes methods to uppercase, and host/header names to lowercase.
+    // Keep those representations only where a known secret participates, so
+    // snapshots, logs, history and echoed responses share the same provenance.
+    let mut canonical = Vec::new();
+    // Keep the complete source: a secret may itself be a URL with whitespace
+    // that build_url accepts after trimming.
+    let raw_url = input.url.as_str();
+    let raw_host = raw_url_host_range(raw_url);
+    for secret in secrets.iter().filter(|secret| !secret.is_empty()) {
+        if input.method.contains(secret) {
+            canonical.push(secret.to_uppercase());
+        }
+        let lowercase = secret.to_ascii_lowercase();
+        if url.host_str().is_some_and(|host| host.contains(&lowercase))
+            || input
+                .headers
+                .iter()
+                .any(|header| header.enabled && header.key.contains(secret))
+        {
+            canonical.push(lowercase);
+        }
+        // IDNA (and numeric IP normalization) can transform the complete host
+        // label, so a secret substring has no standalone canonical equivalent.
+        // Retain the parsed host only when a secret overlaps the raw host span;
+        // a secret solely in userinfo, port, path or query must not hide it.
+        if let (Some(host), Some(span)) = (url.host_str(), raw_host.as_ref()) {
+            if !host.contains(&secret.to_ascii_lowercase())
+                && raw_url
+                    .match_indices(secret.as_str())
+                    .any(|(start, _)| start < span.end && start + secret.len() > span.start)
+            {
+                canonical.push(host.to_owned());
+            }
+        }
+    }
+    secrets.extend(canonical);
+}
+
+fn raw_url_host_range(raw_url: &str) -> Option<std::ops::Range<usize>> {
+    let (_, after_scheme) = raw_url.split_once(':')?;
+    // Match special-URL slash normalization without reparsing the host (which
+    // would already lose its Unicode/IDNA source representation).
+    let authority_suffix = after_scheme.trim_start_matches(['/', '\\']);
+    let authority = authority_suffix.split(['/', '\\', '?', '#']).next()?;
+    let host_port = authority.rsplit('@').next()?;
+    let host = if host_port.starts_with('[') {
+        &host_port[..=host_port.find(']')?]
+    } else {
+        host_port.split(':').next()?
+    };
+    if host.is_empty() {
+        return None;
+    }
+    let start = raw_url.len() - authority_suffix.len() + authority.len() - host_port.len();
+    Some(start..start + host.len())
+}
 
 async fn read_bounded_body(response: &mut reqwest::Response) -> AppResult<String> {
     if response

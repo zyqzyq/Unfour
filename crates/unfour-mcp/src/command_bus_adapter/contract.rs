@@ -537,7 +537,7 @@ pub trait CommandBusAdapter: Send + Sync {
         &self,
         _workspace_id: &str,
         _name: &str,
-    ) -> Result<ApiEnvironment, CommandBusAdapterError> {
+    ) -> Result<WorkspaceEnvironment, CommandBusAdapterError> {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support API environment creation.",
@@ -551,7 +551,7 @@ pub trait CommandBusAdapter: Send + Sync {
         _environment_id: &str,
         _name: &str,
         _variables: Vec<KeyValue>,
-    ) -> Result<ApiEnvironment, CommandBusAdapterError> {
+    ) -> Result<WorkspaceEnvironment, CommandBusAdapterError> {
         Err(CommandBusAdapterError {
             code: "COMMAND_BUS_OPERATION_UNSUPPORTED",
             message: "This command-bus adapter does not support API environment updates.",

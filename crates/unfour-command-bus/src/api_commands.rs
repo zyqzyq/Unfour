@@ -36,6 +36,25 @@ impl CommandBus {
         name: String,
         variables: Vec<KeyValue>,
     ) -> AppResult<ApiEnvironment> {
+        Ok(crate::workspace_variable_commands::legacy_api_environment(
+            self.api_environment_update_with_metadata(
+                workspace_id,
+                environment_id,
+                name,
+                variables,
+            )
+            .await?,
+        ))
+    }
+
+    /// Preserve variable classification until an adapter has applied its output policy.
+    pub async fn api_environment_update_with_metadata(
+        &self,
+        workspace_id: String,
+        environment_id: String,
+        name: String,
+        variables: Vec<KeyValue>,
+    ) -> AppResult<WorkspaceEnvironment> {
         let existing = self
             .workspace
             .list_environments(workspace_id.clone())
@@ -50,7 +69,7 @@ impl CommandBus {
                 let metadata = existing
                     .variables
                     .iter()
-                    .find(|current| current.key == variable.key);
+                    .find(|current| current.key.eq_ignore_ascii_case(variable.key.trim()));
                 WorkspaceVariableInput {
                     id: metadata.map(|current| current.id.clone()),
                     key: variable.key,
@@ -62,10 +81,16 @@ impl CommandBus {
                 }
             })
             .collect();
-        Ok(crate::workspace_variable_commands::legacy_api_environment(
-            self.workspace_environment_update(workspace_id, environment_id, name, variables)
-                .await?,
-        ))
+        // Classification came from this snapshot; reject concurrent edits instead
+        // of overwriting a newly marked secret with stale legacy metadata.
+        self.workspace_environment_update_checked(
+            workspace_id,
+            environment_id,
+            name,
+            variables,
+            Some(existing),
+        )
+        .await
     }
 
     pub async fn api_environment_delete(
@@ -628,7 +653,7 @@ impl CommandBus {
                     action: "api.send_request",
                     target: Some(response.history_id.clone()),
                     details: serde_json::json!({
-                        "method": input.method,
+                        "method": response.request_snapshot.as_ref().map(|snapshot| &snapshot.method),
                         "status": response.status
                     }),
                 },

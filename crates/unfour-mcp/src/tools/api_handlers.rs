@@ -165,11 +165,14 @@ pub(super) fn api_send_request(
 
     match response {
         Ok(response) => {
+            // Capture wire size before using the safe view generated from this
+            // execution's secrets. Trusted runtime consumers retain the raw body.
+            let size_bytes = response.body.len();
+            let body_type = guess_body_type(&response.body);
+            let response = response.into_diagnostic_projection();
             let body_raw = response.body;
-            let body_type = guess_body_type(&body_raw);
             let redacted_body = redact_body(&body_raw, &body_type);
             let (body_preview, truncated) = truncate_body(&redacted_body, MAX_BODY_PREVIEW_BYTES);
-            let size_bytes = body_raw.len();
 
             let headers: Vec<Value> = response
                 .headers
@@ -568,24 +571,16 @@ pub(super) fn api_list_environments(
     arguments: Value,
 ) -> Result<Value, ToolCallError> {
     object_with_allowed_keys(arguments, &["workspaceId"])?;
-    let workspace_id = Some(evaluation.workspace.workspace_id.clone());
-
-    let result = command_bus
-        .execute_read(ReadCommand::ApiListEnvironments { workspace_id })
+    // The legacy ApiEnvironment/KeyValue projection discards is_secret. Keep
+    // the workspace metadata until the single safe MCP payload is built.
+    let environments = command_bus
+        .list_workspace_environments(&evaluation.workspace.workspace_id)
         .map_err(|error| ToolCallError::Execution {
             code: error.code,
             message: error.message,
         })?;
 
-    let ReadCommandResult::ApiEnvironments(environments) = result else {
-        return Err(unexpected_result());
-    };
-
-    let environments: Vec<Value> = environments
-        .environments
-        .iter()
-        .map(safe_environment)
-        .collect();
+    let environments: Vec<Value> = environments.iter().map(safe_environment).collect();
 
     Ok(json!({
         "environments": environments,
@@ -696,17 +691,17 @@ fn parse_environment_variables(value: Option<&Value>) -> Result<Vec<KeyValue>, T
     })
 }
 
-fn safe_environment(environment: &unfour_core::models::ApiEnvironment) -> Value {
+fn safe_environment(environment: &WorkspaceEnvironment) -> Value {
     let variables: Vec<Value> = environment
         .variables
         .iter()
         .map(|variable| {
-            let value = if is_sensitive_key(&variable.key) {
-                mask_secret(&variable.value)
-            } else {
-                variable.value.clone()
-            };
-            json!({ "key": variable.key, "value": value, "enabled": variable.enabled })
+            let value = crate::sanitize::mask_variable_value(
+                &variable.key,
+                &variable.value,
+                variable.is_secret,
+            );
+            json!({ "key": variable.key, "value": value, "enabled": variable.is_enabled })
         })
         .collect();
     json!({

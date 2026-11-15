@@ -2,7 +2,7 @@ use reqwest::multipart::{Form, Part};
 use unfour_core::models::{parse_multipart_definition, ApiMultipartPart, ApiRequestInput};
 use unfour_core::{AppError, AppResult};
 
-pub(super) async fn build_form(input: &ApiRequestInput) -> AppResult<Form> {
+pub(super) async fn build_form(input: &ApiRequestInput, secrets: &[String]) -> AppResult<Form> {
     let parts = parse_multipart_definition(input.body.as_deref())?;
     let mut form = Form::new();
     for part in parts.into_iter().filter(ApiMultipartPart::enabled) {
@@ -24,6 +24,7 @@ pub(super) async fn build_form(input: &ApiRequestInput) -> AppResult<Form> {
                     .find(|binding| binding.id == id)
                     .filter(|binding| !binding.file_path.is_empty())
                     .ok_or_else(|| {
+                        let key = super::history_redaction::scrub_values(&key, secrets);
                         AppError::Validation(format!(
                             "Multipart file field \"{key}\" requires a local file selection."
                         ))

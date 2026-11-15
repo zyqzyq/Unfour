@@ -57,6 +57,13 @@ impl Read for DelayedEofReader {
 }
 
 impl CommandBusAdapter for StubCommandBus {
+    fn list_workspace_environments(
+        &self,
+        _workspace_id: &str,
+    ) -> Result<Vec<unfour_core::models::WorkspaceEnvironment>, CommandBusAdapterError> {
+        Ok(vec![])
+    }
+
     fn execute_read(
         &self,
         command: ReadCommand,
@@ -184,6 +191,7 @@ impl CommandBusAdapter for StubCommandBus {
     ) -> Result<ApiResponse, CommandBusAdapterError> {
         Ok(ApiResponse {
             request_snapshot: None,
+            diagnostic_projection: None,
             history_id: "h-1".to_string(),
             status: 200,
             status_text: "OK".to_string(),

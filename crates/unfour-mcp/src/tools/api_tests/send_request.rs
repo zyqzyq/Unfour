@@ -388,6 +388,7 @@ fn send_request_keeps_completed_response_when_activity_record_fails() {
         ApiResponse {
             warnings: vec!["ACTIVITY_RECORD_FAILED".into()],
             request_snapshot: None,
+            diagnostic_projection: None,
             history_id: "hist-kept".into(),
             status: 201,
             status_text: "Created".into(),
