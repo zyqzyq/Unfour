@@ -96,6 +96,215 @@ async fn send_activity_count(bus: &CommandBus) -> i64 {
 }
 
 #[tokio::test]
+async fn history_and_activity_failures_preserve_the_response_and_both_warnings() {
+    for scripted in [false, true] {
+        let bus = test_bus().await;
+        let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+        sqlx::query("CREATE TRIGGER reject_history BEFORE INSERT ON api_history BEGIN SELECT RAISE(FAIL, 'history unavailable'); END")
+            .execute(bus.db.pool()).await.unwrap();
+        fail_send_activity(&bus).await;
+        let (url, captured) = spawn_counting_api_server();
+        let mut input = api_script_test_input(workspace, url);
+        input.method = "POST".into();
+        let response = if scripted {
+            let execution = bus.send_api_request_with_scripts(input).await.unwrap();
+            assert_eq!(
+                execution.warnings,
+                ["API_HISTORY_RECORD_FAILED", "ACTIVITY_RECORD_FAILED"]
+            );
+            assert!(execution.http_error.is_none());
+            execution.response.unwrap()
+        } else {
+            bus.send_api_request(input).await.unwrap()
+        };
+        assert_eq!(response.status, 201);
+        assert!(response.history_id.is_empty());
+        assert_eq!(
+            response.warnings,
+            ["API_HISTORY_RECORD_FAILED", "ACTIVITY_RECORD_FAILED"]
+        );
+        assert_eq!(captured.hits.load(Ordering::SeqCst), 1);
+    }
+}
+
+#[tokio::test]
+async fn post_script_environment_persistence_failure_retains_http_response() {
+    let bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let environment = bus
+        .workspace_environment_create(workspace.clone(), "Post failure".into())
+        .await
+        .unwrap();
+    bus.workspace_environment_set_active(workspace.clone(), Some(environment.id.clone()))
+        .await
+        .unwrap();
+    sqlx::query("CREATE TRIGGER reject_post_variable BEFORE INSERT ON workspace_environment_variables BEGIN SELECT RAISE(FAIL, 'sensitive-storage-canary'); END")
+        .execute(bus.db.pool()).await.unwrap();
+    let (url, captured) = spawn_counting_api_server();
+    let mut input = api_script_test_input(workspace.clone(), url);
+    input.method = "POST".into();
+    input.post_response_script =
+        Some("pm.environment.set('after', 'done'); console.log('post ran');".into());
+    let execution = bus
+        .send_api_request_with_scripts(input)
+        .await
+        .expect("retain received response");
+    assert_eq!(execution.response.as_ref().unwrap().status, 201);
+    assert!(execution.http_error.is_none());
+    assert_eq!(
+        execution.post_response.status,
+        ScriptExecutionStatus::Failed
+    );
+    assert_eq!(
+        execution.post_response.error.as_ref().unwrap().code,
+        "API_POST_RESPONSE_FINALIZATION_FAILED"
+    );
+    assert!(!execution.post_response.console.is_empty());
+    assert!(!serde_json::to_string(&execution)
+        .unwrap()
+        .contains("sensitive-storage-canary"));
+    assert_eq!(captured.hits.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        bus.list_api_history(workspace, None).await.unwrap().len(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn cancellation_after_http_completion_keeps_response_and_marks_post_phase() {
+    let bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let (url, captured) = spawn_counting_api_server();
+    let mut input = api_script_test_input(workspace, url);
+    input.method = "POST".into();
+    input.post_response_script = Some("while (true) {}".into());
+    let runner = bus.clone();
+    let task = tokio::spawn(async move {
+        runner
+            .send_api_request_with_scripts_controlled("cancel-post", input)
+            .await
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        loop {
+            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM api_history")
+                .fetch_one(bus.db.pool())
+                .await
+                .unwrap();
+            if count == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert!(bus.cancel_api_request("cancel-post"));
+    let execution = task.await.unwrap().unwrap();
+    assert_eq!(execution.response.as_ref().unwrap().status, 201);
+    assert!(execution.http_error.is_none());
+    assert_eq!(execution.warnings, ["API_POST_RESPONSE_CANCELLED"]);
+    assert_eq!(captured.hits.load(Ordering::SeqCst), 1);
+    assert_eq!(bus.api_executions.active_count(), 0);
+}
+
+#[tokio::test]
+async fn cancellation_after_post_environment_commit_preserves_script_result() {
+    use std::{future::Future, pin::Pin, task::Poll, time::Duration};
+    use tokio::sync::Notify;
+    use unfour_core::domain::{CommandContext, DomainMutation};
+
+    struct PauseBeforeCommit {
+        ready: Notify,
+        resume: Notify,
+    }
+
+    impl TransactionalCommandHook for PauseBeforeCommit {
+        fn on_mutations<'a>(
+            &'a self,
+            _: &'a mut sqlx::SqliteConnection,
+            _: &'a CommandContext,
+            _: &'a [DomainMutation],
+        ) -> Pin<Box<dyn Future<Output = AppResult<()>> + Send + 'a>> {
+            Box::pin(async move {
+                self.ready.notify_one();
+                self.resume.notified().await;
+                Ok(())
+            })
+        }
+    }
+
+    let mut bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let environment = bus
+        .workspace_environment_create(workspace.clone(), "Post commit cancellation".into())
+        .await
+        .unwrap();
+    bus.workspace_environment_set_active(workspace.clone(), Some(environment.id.clone()))
+        .await
+        .unwrap();
+    let pause = Arc::new(PauseBeforeCommit {
+        ready: Notify::new(),
+        resume: Notify::new(),
+    });
+    bus.extensions = CommandBusExtensions::new(vec![pause.clone()]);
+    let (url, captured) = spawn_counting_api_server();
+    let mut input = api_script_test_input(workspace, url);
+    input.post_response_script = Some(
+        "pm.environment.set('after', 'committed'); console.log('post completed'); pm.test('response received', () => pm.expect(pm.response.code).to.equal(201));".into(),
+    );
+    let execution = bus.send_api_request_with_scripts_controlled("cancel-post-commit", input);
+    tokio::pin!(execution);
+    tokio::select! {
+        _ = pause.ready.notified() => {},
+        result = &mut execution => panic!("post commit was not reached: {result:?}"),
+        _ = tokio::time::sleep(Duration::from_secs(5)) => panic!("post commit did not start"),
+    }
+
+    // Queue ahead of post-commit cleanup on the ephemeral DB's only connection.
+    // Holding that connection after COMMIT gives cancellation a deterministic
+    // window where the environment is durable but cleanup is still pending.
+    let connection = bus.db.pool().acquire();
+    tokio::pin!(connection);
+    std::future::poll_fn(|cx| {
+        assert!(connection.as_mut().poll(cx).is_pending());
+        Poll::Ready(())
+    })
+    .await;
+    pause.resume.notify_one();
+    let mut connection = tokio::select! {
+        connection = &mut connection => connection.unwrap(),
+        result = &mut execution => panic!("cleanup must wait for the held connection: {result:?}"),
+        _ = tokio::time::sleep(Duration::from_secs(5)) => panic!("environment transaction did not commit"),
+    };
+    let value: String = sqlx::query_scalar(
+        "SELECT value FROM workspace_environment_variables WHERE environment_id = ? AND key = 'after'",
+    )
+    .bind(&environment.id)
+    .fetch_one(&mut *connection)
+    .await
+    .unwrap();
+    assert_eq!(value, "committed");
+    assert!(bus.cancel_api_request("cancel-post-commit"));
+    std::future::poll_fn(|cx| {
+        assert!(execution.as_mut().poll(cx).is_pending());
+        Poll::Ready(())
+    })
+    .await;
+    drop(connection);
+    let result = tokio::time::timeout(Duration::from_secs(5), execution)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(result.response.as_ref().unwrap().status, 201);
+    assert_eq!(result.post_response.status, ScriptExecutionStatus::Success);
+    assert!(!result.post_response.console.is_empty());
+    assert_eq!(result.post_response.tests.len(), 1);
+    assert!(result.warnings.is_empty());
+    assert_eq!(captured.hits.load(Ordering::SeqCst), 1);
+    assert_eq!(bus.api_executions.active_count(), 0);
+}
+
+#[tokio::test]
 async fn plain_send_keeps_response_and_history_when_activity_record_fails() {
     let bus = test_bus().await;
     let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;

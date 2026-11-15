@@ -3,6 +3,7 @@ mod cancellation;
 mod database_workspace;
 mod diagnostics;
 mod environment_secrets;
+mod execution_outcomes;
 mod flow;
 mod metadata;
 mod script_diagnostics;

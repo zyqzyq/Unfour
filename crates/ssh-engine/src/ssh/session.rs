@@ -627,7 +627,7 @@ impl SshService {
         // Idempotent path: the entry was already closed and dropped from memory,
         // so return the persisted disconnected summary. The lock is already
         // released here, so this await does not hold a `std::sync::MutexGuard`.
-        let summary = match found {
+        let mut summary = match found {
             Some(summary) => summary,
             None => {
                 return self
@@ -638,8 +638,8 @@ impl SshService {
 
         // The transport is already gone and intentional_close is set. Persist
         // the transcript, then drop memory even when that write fails. The
-        // returned error stays the history failure; it is not an activity-log
-        // warning and does not mean the remote session is still open.
+        // history failure is a response warning; it cannot undo the disconnect
+        // or turn a completed close into an apparent connection failure.
         let flush_result = self.flush_session_history(&input.session_id).await;
         let update_result = self.terminal_history.update_session(&summary).await;
         self.sessions
@@ -648,7 +648,7 @@ impl SshService {
             .remove(&input.session_id);
         if let Err(error) = flush_result.and(update_result) {
             unfour_diag::log_operation_event(
-                "ssh_disconnect_failed",
+                "ssh_disconnect_history_failed",
                 "ssh",
                 "close_session",
                 "error",
@@ -656,7 +656,7 @@ impl SshService {
                 Some(unfour_diag::app_error_kind(&error)),
                 serde_json::json!({ "status": &summary.status }),
             );
-            return Err(error);
+            summary.warnings.push("SSH_HISTORY_RECORD_FAILED".into());
         }
         unfour_diag::log_operation_event(
             "ssh_disconnected",
@@ -697,7 +697,7 @@ impl SshService {
         // entry so the session map cannot grow without bound (#4). The entry is
         // removed unconditionally even when persistence fails, so a persistence
         // error cannot leak the session.
-        let summary = {
+        let mut summary = {
             let mut sessions = self
                 .sessions
                 .lock()
@@ -718,8 +718,9 @@ impl SshService {
             .lock()
             .map_err(|_| AppError::Config("ssh session lock poisoned".to_string()))?
             .remove(&input.session_id);
-        flush_result?;
-        update_result?;
+        if flush_result.and(update_result).is_err() {
+            summary.warnings.push("SSH_HISTORY_RECORD_FAILED".into());
+        }
         Ok(summary)
     }
 

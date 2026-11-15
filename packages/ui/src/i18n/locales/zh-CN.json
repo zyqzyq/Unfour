@@ -869,6 +869,10 @@
   },
   "feedback": {
     "activityRecordFailed": "操作已执行或任务已启动，但活动日志保存失败。请保留返回结果或任务编号，不要为补写日志而重复操作。",
+    "apiHistoryRecordFailed": "已收到 HTTP 响应，但请求历史保存失败。请保留当前响应，不要为补写历史而再次发送请求。",
+    "apiPostResponseCancelled": "已收到 HTTP 响应。响应后处理已取消，再次执行前请检查脚本对本地状态的修改。",
+    "apiPostResponseFailed": "已收到 HTTP 响应，但响应后处理或脚本修改的保存失败。请保留当前响应，不要为修复本地状态而再次发送请求。",
+    "apiOutcomeUncertain": "本地请求停止不代表服务端已停止。远端副作用可能已经发生，再次发送写请求前请检查服务端实际状态。",
     "dismiss": "关闭提示",
     "error": {
       "default": "操作失败"
@@ -907,6 +911,7 @@
     "ssh": {
       "clipboardReadFailed": "读取剪贴板失败",
       "clipboardWriteFailed": "写入剪贴板失败",
+      "historyRecordFailed": "SSH 会话已断开，但历史记录保存失败。再次关闭不会恢复缺失的历史记录。",
       "inputFailed": "发送终端输入失败",
       "resizeFailed": "调整终端大小失败",
       "taskCancelFailed": "取消 SSH Task 失败",
@@ -1997,6 +2002,8 @@
     "latestResult": "最新结果",
     "latestError": "最新错误",
     "outcomeUncertainHint": "远端操作可能已经生效。请核对远端状态后再决定是否重新运行 Flow。",
+    "historyWriteFailedHint": "Flow 因历史记录保存失败而停止。已完成步骤保留已确认的结果。请核对远端状态后再决定是否重新运行。",
+    "resultLimitHint": "Flow 因结果超出历史记录大小限制而停止。已完成的操作可能已经生效。请核对远端状态后再决定是否重新运行。",
     "attemptHistory": "尝试记录",
     "inspector": "节点配置",
     "closeInspector": "关闭配置",

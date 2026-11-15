@@ -646,12 +646,12 @@ impl CommandBus {
                 None,
             )
             .await?;
-        response.warnings = self
+        let activity_warnings = self
             .record_completion_activity(
                 CommandActivity {
                     workspace_id: Some(input.workspace_id.clone()),
                     action: "api.send_request",
-                    target: Some(response.history_id.clone()),
+                    target: (!response.history_id.is_empty()).then(|| response.history_id.clone()),
                     details: serde_json::json!({
                         "method": response.request_snapshot.as_ref().map(|snapshot| &snapshot.method),
                         "status": response.status
@@ -661,6 +661,7 @@ impl CommandBus {
                 "send_request",
             )
             .await;
+        response.warnings.extend(activity_warnings);
         Ok(response)
     }
 

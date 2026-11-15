@@ -248,104 +248,110 @@ impl CommandBus {
             }
         };
 
-        if cancellation.is_cancelled() {
-            return Ok(RequestExecutionResult {
-                response: Some(response),
-                http_error: Some("API request cancelled: cancelled by user".to_string()),
-                http_error_code: Some("API_CANCELLED".to_string()),
-                pre_request: pre.execution,
-                post_response: ScriptExecutionResult::skipped(),
-                warnings: Vec::new(),
-            });
-        }
-
-        let post_environment = self
-            .script_environment(&input.workspace_id, environment_id.as_deref())
-            .await?;
-        let mut post_input = script_input(
-            ScriptPhase::PostResponse,
-            &resolved_request,
-            post_environment.as_ref(),
-            pre.variables,
-            Some(ScriptResponseContext::new(
-                response.status,
-                response.status_text.clone(),
-                response.duration_ms,
-                response.headers.clone(),
-                &response.body,
-            )),
-        )?;
-        // Carry pre-request mutation provenance across the phase boundary,
-        // including innocently named environment values and resolved Auth.
-        post_input.redactions.extend(secrets);
-        let post = tokio::select! {
-            _ = cancellation.cancelled() => {
-                return Ok(RequestExecutionResult {
-                    response: Some(response),
-                    http_error: Some("API request cancelled: cancelled by user".to_string()),
-                    http_error_code: Some("API_CANCELLED".to_string()),
-                    pre_request: pre.execution,
-                    post_response: ScriptExecutionResult::skipped(),
-                    warnings: Vec::new(),
-                });
-            }
-            result = run_script(input.post_response_script.clone().unwrap_or_default(), post_input) => result?,
-        };
-        if cancellation.is_cancelled() {
-            return Ok(RequestExecutionResult {
-                response: Some(response),
-                http_error: Some("API request cancelled: cancelled by user".to_string()),
-                http_error_code: Some("API_CANCELLED".to_string()),
-                pre_request: pre.execution,
-                post_response: post.execution,
-                warnings: Vec::new(),
-            });
-        }
-        if post.execution.status == ScriptExecutionStatus::Success && post.environment_changed {
-            self.commit_script_environment(
-                &input.workspace_id,
+        // Post-response preparation/runtime is cancellable independently of the
+        // received HTTP result. Persistence below must retain its commit outcome.
+        let post_phase = async {
+            let post_environment = self
+                .script_environment(&input.workspace_id, environment_id.as_deref())
+                .await?;
+            let mut post_input = script_input(
+                ScriptPhase::PostResponse,
+                &resolved_request,
                 post_environment.as_ref(),
-                &post.environment,
+                pre.variables,
+                Some(ScriptResponseContext::new(
+                    response.status,
+                    response.status_text.clone(),
+                    response.duration_ms,
+                    response.headers.clone(),
+                    &response.body,
+                )),
+            )?;
+            // Carry pre-request mutation provenance across the phase boundary,
+            // including innocently named environment values and resolved Auth.
+            post_input.redactions.extend(secrets);
+            let post = run_script(
+                input.post_response_script.clone().unwrap_or_default(),
+                post_input,
             )
             .await?;
-        }
+            Ok::<_, AppError>((post_environment, post))
+        };
+        let post_outcome = if cancellation.is_cancelled() {
+            drop(post_phase);
+            None
+        } else {
+            tokio::select! {
+                biased;
+                // Preserve script diagnostics when execution and cancel are ready
+                // together; cancellation can still prevent an unstarted commit.
+                result = post_phase => Some(result),
+                _ = cancellation.cancelled() => None,
+            }
+        };
+        let post = match post_outcome {
+            Some(Ok((post_environment, mut post))) => {
+                // Once persistence starts, wait through its acknowledgement and
+                // cleanup; dropping it can hide already-persisted changes.
+                if post.execution.status == ScriptExecutionStatus::Success
+                    && post.environment_changed
+                {
+                    if cancellation.is_cancelled() {
+                        response.warnings.push("API_POST_RESPONSE_CANCELLED".into());
+                    } else if self
+                        .commit_script_environment(
+                            &input.workspace_id,
+                            post_environment.as_ref(),
+                            &post.environment,
+                        )
+                        .await
+                        .is_err()
+                    {
+                        // Preserve console/tests while reporting the local failure.
+                        post.execution.status = ScriptExecutionStatus::Failed;
+                        post.execution.error = Some(post_finalization_error());
+                    }
+                }
+                post.execution
+            }
+            Some(Err(_)) => {
+                let mut failed = ScriptExecutionResult::skipped();
+                failed.status = ScriptExecutionStatus::Failed;
+                failed.error = Some(post_finalization_error());
+                failed
+            }
+            None => {
+                response.warnings.push("API_POST_RESPONSE_CANCELLED".into());
+                ScriptExecutionResult::skipped()
+            }
+        };
 
-        if cancellation.is_cancelled() {
-            return Ok(RequestExecutionResult {
-                response: Some(response),
-                http_error: Some("API request cancelled: cancelled by user".to_string()),
-                http_error_code: Some("API_CANCELLED".to_string()),
-                pre_request: pre.execution,
-                post_response: post.execution,
-                warnings: Vec::new(),
-            });
-        }
-
-        let warnings = self
+        let activity_warnings = self
             .record_completion_activity(
                 CommandActivity {
                     workspace_id: Some(input.workspace_id.clone()),
                     action: "api.send_request",
-                    target: Some(response.history_id.clone()),
+                    target: (!response.history_id.is_empty()).then(|| response.history_id.clone()),
                     details: serde_json::json!({
                         "method": response.request_snapshot.as_ref().map(|snapshot| &snapshot.method),
                         "status": response.status,
                         "preScriptStatus": pre.execution.status,
-                        "postScriptStatus": post.execution.status,
+                        "postScriptStatus": post.status,
                     }),
                 },
                 "api",
                 "send_request",
             )
             .await;
-        response.warnings.clone_from(&warnings);
+        response.warnings.extend(activity_warnings);
+        let warnings = response.warnings.clone();
 
         Ok(RequestExecutionResult {
             response: Some(response),
             http_error: None,
             http_error_code: None,
             pre_request: pre.execution,
-            post_response: post.execution,
+            post_response: post,
             warnings,
         })
     }
@@ -423,6 +429,14 @@ impl CommandBus {
         )
         .await?;
         Ok(())
+    }
+}
+
+fn post_finalization_error() -> unfour_core::models::ScriptError {
+    unfour_core::models::ScriptError {
+        kind: unfour_core::models::ScriptErrorKind::Runtime,
+        code: "API_POST_RESPONSE_FINALIZATION_FAILED".into(),
+        message: "The HTTP response was received, but post-response processing could not be completed. Do not resend the request to repair local state.".into(),
     }
 }
 

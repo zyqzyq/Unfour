@@ -13,6 +13,10 @@ fn read_string(stream: &mut TcpStream) -> Vec<u8> {
 }
 
 fn accept_socks(listener: &TcpListener, host: &str, port: u16) -> TcpStream {
+    accept_socks_reply(listener, host, port, 0)
+}
+
+fn accept_socks_reply(listener: &TcpListener, host: &str, port: u16, reply: u8) -> TcpStream {
     let (mut stream, _) = listener.accept().unwrap();
     stream
         .set_read_timeout(Some(Duration::from_secs(5)))
@@ -35,8 +39,52 @@ fn accept_socks(listener: &TcpListener, host: &str, port: u16) -> TcpStream {
     let mut network_port = [0; 2];
     stream.read_exact(&mut network_port).unwrap();
     assert_eq!(u16::from_be_bytes(network_port), port);
-    stream.write_all(&[5, 0, 0, 1, 127, 0, 0, 1, 0, 0]).unwrap();
     stream
+        .write_all(&[5, reply, 0, 1, 127, 0, 0, 1, 0, 0])
+        .unwrap();
+    stream
+}
+
+#[tokio::test]
+async fn redirect_target_failure_can_follow_a_completed_post() {
+    let service = service().await;
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = std::thread::spawn(move || {
+        let mut first = accept_socks(&listener, "write.invalid", 80);
+        let lines: Vec<String> = BufReader::new(&mut first)
+            .lines()
+            .map(Result::unwrap)
+            .take_while(|line| !line.is_empty())
+            .collect();
+        assert!(lines[0].starts_with("POST /commit"), "{}", lines[0]);
+        // The first service has committed the write before redirecting the client.
+        first.write_all(b"HTTP/1.1 307 Temporary Redirect\r\nLocation: http://result.invalid/check\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
+        drop(first);
+        let _failed_target = accept_socks_reply(&listener, "result.invalid", 80, 4);
+        1 // Exactly one HTTP POST reached a server; the next SOCKS connect failed.
+    });
+    let mut input = request("http://write.invalid/commit", Some(3000));
+    input.method = "POST".into();
+    let error = service
+        .send_via_ssh_proxy(
+            input,
+            CancellationToken::new(),
+            &[],
+            address,
+            "lease",
+            "private-token",
+            std::time::Instant::now(),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, unfour_core::AppError::ApiNetwork(_)));
+    assert_eq!(server.join().unwrap(), 1);
+    assert!(service
+        .list_history("workspace-a".into(), None)
+        .await
+        .unwrap()
+        .is_empty());
 }
 
 #[tokio::test]

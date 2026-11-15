@@ -54,11 +54,19 @@ impl NativeTaskDriver {
                 exit_code: None,
             });
         }
-        let temp_path = format!("{remote_path}.unfour-task-uploading-{}", step.id);
+        // A definition step ID is shared by concurrent runs. Each attempt owns
+        // its staging and backup names, including cleanup after cancellation.
+        let attempt_id = uuid::Uuid::new_v4().to_string();
+        let temp_path = format!("{remote_path}.unfour-task-uploading-{attempt_id}");
         let mut remote = sftp
-            .create(temp_path.clone())
+            .open_with_flags(
+                temp_path.clone(),
+                russh_sftp::protocol::OpenFlags::WRITE
+                    | russh_sftp::protocol::OpenFlags::CREATE
+                    | russh_sftp::protocol::OpenFlags::EXCLUDE,
+            )
             .await
-            .map_err(sftp_step_error("create remote upload file"))?;
+            .map_err(remote_mutation_error("create remote upload file"))?;
         let started = std::time::Instant::now();
         let mut progress_throttle = TransferProgressThrottle::new();
         let mut transferred = 0_u64;
@@ -95,10 +103,25 @@ impl NativeTaskDriver {
         }
         .await;
         if let Err(error) = copy_result {
-            let _ = sftp.remove_file(temp_path).await;
+            // Drop queues the handle close before removing owned staging. A
+            // failed cleanup leaves its state unknown; it does not prove that
+            // no remote temporary write occurred.
+            drop(remote);
+            if sftp.remove_file(temp_path).await.is_err() {
+                return Err(TaskStepError::OutcomeUncertain {
+                    cancelled: matches!(error, TaskStepError::Cancelled),
+                });
+            }
             return Err(error);
         }
-        replace_remote_file(&sftp, &temp_path, &remote_path, &step.id, config.overwrite).await?;
+        replace_remote_file(
+            &sftp,
+            &temp_path,
+            &remote_path,
+            &attempt_id,
+            config.overwrite,
+        )
+        .await?;
         emit(transfer_progress("upload", total, total, started));
         Ok(TaskStepResult { exit_code: None })
     }
@@ -109,31 +132,59 @@ async fn replace_remote_file(
     sftp: &russh_sftp::client::SftpSession,
     temp_path: &str,
     target_path: &str,
-    step_id: &str,
+    attempt_id: &str,
     overwrite: bool,
 ) -> Result<(), TaskStepError> {
-    let backup = format!("{target_path}.unfour-task-backup-{step_id}");
-    let had_backup = overwrite
-        && sftp
-            .rename(target_path.to_string(), backup.clone())
-            .await
-            .is_ok();
+    let backup = format!("{target_path}.unfour-task-backup-{attempt_id}");
+    let had_backup = if overwrite {
+        match sftp.rename(target_path, &backup).await {
+            Ok(()) => true,
+            Err(russh_sftp::client::error::Error::Status(status))
+                if status.status_code == russh_sftp::protocol::StatusCode::NoSuchFile =>
+            {
+                false
+            }
+            Err(error) => return Err(remote_mutation_error("backup remote upload target")(error)),
+        }
+    } else {
+        false
+    };
     if let Err(error) = sftp
         .rename(temp_path.to_string(), target_path.to_string())
         .await
     {
-        if had_backup {
-            let _ = sftp.rename(backup.clone(), target_path.to_string()).await;
+        let outcome = remote_mutation_error("finalize remote upload")(error);
+        // A missing ACK can follow a successful rename. Never issue another
+        // mutation (including rollback) based on an unconfirmed result.
+        if matches!(outcome, TaskStepError::OutcomeUncertain { .. }) {
+            return Err(outcome);
         }
-        return Err(TaskStepError::Failed {
-            message: format!("finalize remote upload failed: {error}"),
-            exit_code: None,
-        });
+        if had_backup && sftp.rename(&backup, target_path).await.is_err() {
+            return Err(TaskStepError::OutcomeUncertain { cancelled: false });
+        }
+        return Err(outcome);
     }
     if had_backup {
         let _ = sftp.remove_file(backup).await;
     }
     Ok(())
+}
+
+fn remote_mutation_error(
+    operation: &'static str,
+) -> impl FnOnce(russh_sftp::client::error::Error) -> TaskStepError {
+    move |error| match error {
+        russh_sftp::client::error::Error::Status(ref status)
+            if !matches!(
+                status.status_code,
+                russh_sftp::protocol::StatusCode::NoConnection
+                    | russh_sftp::protocol::StatusCode::ConnectionLost
+            ) =>
+        {
+            sftp_step_error(operation)(error)
+        }
+        _ => TaskStepError::OutcomeUncertain { cancelled: false },
+    }
 }
 
 #[cfg(feature = "ssh-native")]
@@ -155,3 +206,7 @@ pub(super) fn io_step_error(
         exit_code: None,
     }
 }
+
+#[cfg(test)]
+#[path = "upload_step_tests.rs"]
+mod tests;

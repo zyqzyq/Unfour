@@ -202,12 +202,23 @@ impl FlowService {
             tokio::spawn(async move {
                 let outcome = service.execute_run(&mut run, executor).await;
                 if let Err(error) = outcome {
-                    run.status = FlowRunStatus::Failed;
-                    run.error = Some(runner::error_code(&error));
+                    let code = runner::error_code(&error);
+                    run.status = if runner::local_result_error(&code) {
+                        FlowRunStatus::Interrupted
+                    } else {
+                        FlowRunStatus::Failed
+                    };
+                    run.error = Some(code);
                 }
                 for step in &mut run.steps {
                     if step.status == FlowStepRunStatus::Pending {
                         step.status = FlowStepRunStatus::Skipped;
+                    } else if step.status == FlowStepRunStatus::Running
+                        && run.status == FlowRunStatus::Interrupted
+                    {
+                        step.status = FlowStepRunStatus::Interrupted;
+                        step.error = run.error.clone();
+                        step.next_check_at = None;
                     }
                 }
                 run.finished_at = Some(chrono::Utc::now().to_rfc3339());

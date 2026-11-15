@@ -398,3 +398,184 @@ async fn flow_http_response_during_cancel_grace_is_stored() {
     assert_eq!(result.steps[1].status, FlowStepRunStatus::Skipped);
     server.join().unwrap();
 }
+
+#[tokio::test]
+async fn flow_history_write_failure_does_not_rewrite_completed_action() {
+    for failed_action in [false, true] {
+        let bus = test_bus().await;
+        let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+        let service = FlowService::new(bus.db.clone());
+        let mut step = effect(5_000);
+        step["action"]["resourceId"] = json!(if failed_action { "fail" } else { "ok" });
+        step["action"]["arguments"] = json!({"confirmed": true});
+        let flow = service
+            .save(definition(&workspace, json!([step, later_wait()])))
+            .await
+            .unwrap();
+        // Fail the result journal, but allow the terminal summary to be written.
+        sqlx::query(
+            "CREATE TRIGGER reject_result_journal BEFORE UPDATE OF run_json ON flow_runs
+            WHEN NEW.finished_at IS NULL AND
+              (json_extract(NEW.run_json, '$.steps[0].attempts[0].output') IS NOT NULL OR
+               json_extract(NEW.run_json, '$.steps[0].attempts[0].error') IS NOT NULL)
+            BEGIN SELECT RAISE(FAIL, 'fixture result journal unavailable'); END",
+        )
+        .execute(bus.db.pool())
+        .await
+        .unwrap();
+        let driver = Arc::new(Driver::default());
+        let run = service
+            .run(request(&workspace, &flow.id), driver.clone())
+            .await
+            .unwrap();
+        let result = finished(&bus, &run).await;
+        assert_eq!(driver.calls.lock().unwrap().len(), 1);
+        assert_eq!(result.steps[1].status, FlowStepRunStatus::Skipped);
+        if failed_action {
+            assert_eq!(result.status, FlowRunStatus::Failed);
+            assert_eq!(result.error.as_deref(), Some("FLOW_TEST_FAILURE"));
+            assert_eq!(result.steps[0].status, FlowStepRunStatus::Failed);
+            assert_eq!(result.steps[0].error.as_deref(), Some("FLOW_TEST_FAILURE"));
+        } else {
+            assert_eq!(result.status, FlowRunStatus::Interrupted);
+            assert_eq!(result.error.as_deref(), Some("FLOW_HISTORY_WRITE_FAILED"));
+            assert_eq!(result.steps[0].status, FlowStepRunStatus::Succeeded);
+            assert_eq!(result.steps[0].output.as_ref().unwrap()["confirmed"], true);
+        }
+        assert_history_matches(&bus, &result).await;
+    }
+}
+
+#[tokio::test]
+async fn flow_http_disconnect_after_remote_effect_is_uncertain_without_retry() {
+    use std::io::{BufRead, BufReader};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/effect", listener.local_addr().unwrap());
+    let effects = Arc::new(AtomicUsize::new(0));
+    let observed = effects.clone();
+    let server = std::thread::spawn(move || {
+        listener.set_nonblocking(true).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let (socket, _) = loop {
+            match listener.accept() {
+                Ok(accepted) => break accepted,
+                Err(error)
+                    if error.kind() == std::io::ErrorKind::WouldBlock
+                        && std::time::Instant::now() < deadline =>
+                {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(error) => panic!("HTTP fixture did not receive a request: {error}"),
+            }
+        };
+        socket
+            .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+            .unwrap();
+        let mut reader = BufReader::new(socket);
+        loop {
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            if line == "\r\n" {
+                break;
+            }
+        }
+        observed.fetch_add(1, Ordering::SeqCst);
+        // Commit the fixture effect, then drop the actual TCP transport
+        // without sending an HTTP response.
+    });
+    let mut api = api_script_test_input(workspace.clone(), url);
+    api.method = "POST".into();
+    api.body = None;
+    let api = bus.save_api_request(api).await.unwrap();
+    let mut step = effect(5000);
+    step["action"]["resourceId"] = json!(api.id);
+    let flow = bus
+        .save_flow(definition(&workspace, json!([step, later_wait()])))
+        .await
+        .unwrap();
+    let run = bus.run_flow(request(&workspace, &flow.id)).await.unwrap();
+    let result = finished(&bus, &run).await;
+    server.join().unwrap();
+    assert_eq!(effects.load(Ordering::SeqCst), 1);
+    assert_unconfirmed(&result);
+    assert_eq!(result.steps[0].attempts.len(), 1);
+    assert!(bus.list_flow_runs(workspace, flow.id).await.unwrap()[0].outcome_uncertain);
+}
+
+#[tokio::test]
+async fn flow_action_output_budget_preserves_success_and_stops_further_effects() {
+    let bus = test_bus().await;
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let service = FlowService::new(bus.db.clone());
+    let mut step = effect(5_000);
+    step["action"]["arguments"] = json!({"committed":true,"payload":"x".repeat(270_000)});
+    let flow = service
+        .save(definition(&workspace, json!([step, later_wait()])))
+        .await
+        .unwrap();
+    let driver = Arc::new(Driver::default());
+    let run = service
+        .run(request(&workspace, &flow.id), driver.clone())
+        .await
+        .unwrap();
+    let result = finished(&bus, &run).await;
+    assert_eq!(result.status, FlowRunStatus::Interrupted);
+    assert_eq!(result.error.as_deref(), Some("FLOW_OUTPUT_TOO_LARGE"));
+    assert_eq!(result.steps[0].status, FlowStepRunStatus::Succeeded);
+    assert_eq!(
+        result.steps[0].output.as_ref().unwrap()["outputOmitted"],
+        true
+    );
+    assert_eq!(result.steps[0].attempts[0].error, None);
+    assert_eq!(result.steps[1].status, FlowStepRunStatus::Skipped);
+    assert_eq!(driver.calls.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn flow_action_history_budget_preserves_known_success_and_failure() {
+    for failed in [false, true] {
+        let bus = test_bus().await;
+        let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+        let service = FlowService::new(bus.db.clone());
+        let mut step = effect(500);
+        let bindings = (0..17)
+            .map(|i| (format!("arg{i}"), json!({"$ref":"/inputs/value"})))
+            .collect::<serde_json::Map<_, _>>();
+        step["action"]["arguments"] = json!(bindings);
+        let flow = service
+            .save(definition(&workspace, json!([step, later_wait()])))
+            .await
+            .unwrap();
+        let mut input = request(&workspace, &flow.id);
+        input.inputs = json!({"value":"v".repeat(255 * 1024)});
+        let driver = Arc::new(Scripted {
+            started: Mutex::new(None),
+            mode: if failed {
+                Mode::FailureAfterSignal
+            } else {
+                Mode::SuccessAfterSignal
+            },
+        });
+        let run = service.run(input, driver).await.unwrap();
+        let result = finished(&bus, &run).await;
+        assert_eq!(result.steps[0].attempts.len(), 1);
+        assert_eq!(result.steps[1].status, FlowStepRunStatus::Skipped);
+        assert!(serde_json::to_vec(&result.steps).unwrap().len() <= 4_194_304);
+        if failed {
+            assert_eq!(result.status, FlowRunStatus::Failed);
+            assert_eq!(result.error.as_deref(), Some("FLOW_TEST_FAILURE"));
+            assert_eq!(result.steps[0].error, result.error);
+        } else {
+            assert_eq!(result.status, FlowRunStatus::Interrupted);
+            assert_eq!(result.error.as_deref(), Some("FLOW_HISTORY_LIMIT"));
+            assert_eq!(result.steps[0].status, FlowStepRunStatus::Succeeded);
+            assert_eq!(
+                result.steps[0].output.as_ref().unwrap()["outputOmitted"],
+                true
+            );
+        }
+    }
+}

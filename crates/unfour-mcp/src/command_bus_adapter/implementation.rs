@@ -418,12 +418,7 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         timeout_ms: Option<u64>,
     ) -> Result<ApiResponse, CommandBusAdapterError> {
         self.run_execution(self.bus.execute_saved_api_request(request_id, timeout_ms))
-            .map_err(|e| {
-                CommandBusAdapterError::from_app_error(
-                    "The command-bus API send operation failed.",
-                    &e,
-                )
-            })
+            .map_err(|e| CommandBusAdapterError::from_api_app_error(&e))
     }
 
     fn execute_saved_api_request_in_workspace(
@@ -437,9 +432,7 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
             request_id,
             timeout_ms,
         ))
-        .map_err(|e| {
-            CommandBusAdapterError::from_app_error("The command-bus API send operation failed.", &e)
-        })
+        .map_err(|e| CommandBusAdapterError::from_api_app_error(&e))
     }
 
     fn execute_saved_api_request_with_scripts_in_workspace(
@@ -486,12 +479,7 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
         input: ApiRequestInput,
     ) -> Result<ApiResponse, CommandBusAdapterError> {
         self.run_execution(self.bus.send_api_request(input))
-            .map_err(|e| {
-                CommandBusAdapterError::from_app_error(
-                    "The command-bus API send operation failed.",
-                    &e,
-                )
-            })
+            .map_err(|e| CommandBusAdapterError::from_api_app_error(&e))
     }
 
     fn send_api_request_in_environment(
@@ -503,12 +491,7 @@ impl CommandBusAdapter for LocalCommandBusAdapter {
             self.bus
                 .send_api_request_in_environment(input, environment_id.map(str::to_string)),
         )
-        .map_err(|error| {
-            CommandBusAdapterError::from_app_error(
-                "The command-bus API send operation failed.",
-                &error,
-            )
-        })
+        .map_err(|error| CommandBusAdapterError::from_api_app_error(&error))
     }
 
     fn save_api_request(

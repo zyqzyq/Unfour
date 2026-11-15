@@ -204,6 +204,24 @@ it("keeps a closed session when activity logging fails", async () => {
   expect(mocks.connect).not.toHaveBeenCalled();
 });
 
+it("keeps the session disconnected and reports history failure without reconnecting", async () => {
+  mocks.listSessions.mockResolvedValue([session({ warnings: [] })]);
+  mocks.close.mockImplementation(async () => {
+    const closed = session({ status: "disconnected", warnings: ["SSH_HISTORY_RECORD_FAILED"] });
+    mocks.listSessions.mockResolvedValue([closed]);
+    return closed;
+  });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Close session-kept" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Close Session" }));
+  expect(await screen.findByText(/session is disconnected.*history could not be saved/i)).toBeVisible();
+  expect(useTerminalStore.getState().terminalEvents.some((event) =>
+    event.kind === "close" && event.data.includes("history could not be saved"))).toBe(true);
+  expect(mocks.close).toHaveBeenCalledOnce();
+  expect(mocks.connect).not.toHaveBeenCalled();
+  expect(screen.queryByText(/activity log could not be saved/i)).not.toBeInTheDocument();
+});
+
 it("resets a mismatched host key once and reconnects when activity logging fails", async () => {
   mocks.connect
     .mockRejectedValueOnce(new Error("host key verification failed: fingerprint does not match"))

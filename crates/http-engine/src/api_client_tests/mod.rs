@@ -1,6 +1,7 @@
 mod collections;
 mod exchange;
 mod execution;
+mod lifecycle;
 mod multipart;
 mod openapi_auth_history;
 mod openapi_history;

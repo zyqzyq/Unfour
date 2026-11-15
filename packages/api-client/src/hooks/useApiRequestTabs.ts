@@ -89,12 +89,27 @@ export function useApiRequestTabs(workspaceId: string) {
         execution = { ...execution, httpError: t(`network.errors.${execution.httpErrorCode}`, t("api.route.failed")) };
         refreshRouteContext(workspaceId);
       }
+      if (!execution.response && ["API_TIMEOUT", "API_CANCELLED", "NETWORK_ERROR", "HTTP_ERROR", "API_RESPONSE_TOO_LARGE", "SSH_TUNNEL_TARGET_UNREACHABLE", "SSH_TUNNEL_TEMPORARY_UNAVAILABLE"].includes(execution.httpErrorCode ?? "")) {
+        execution = { ...execution, httpError: `${execution.httpError ?? ""} ${t("feedback.apiOutcomeUncertain")}`.trim() };
+      }
+      if (execution.postResponse.error?.code === "API_POST_RESPONSE_FINALIZATION_FAILED") {
+        execution = { ...execution, postResponse: { ...execution.postResponse, error: { ...execution.postResponse.error, message: t("feedback.apiPostResponseFailed") } } };
+      }
       const store = useApiRequestTabStore.getState();
       const current = store.byWorkspace[workspaceId]?.tabs.find((tab) => tab.executionId === variables.executionId);
       if (current) store.completeTabSend(workspaceId, current.id, execution);
       const warnings = execution.warnings ?? execution.response?.warnings;
       if (execution.response && !execution.httpError && warnings?.includes("ACTIVITY_RECORD_FAILED")) {
         feedback.info(t("feedback.activityRecordFailed"));
+      }
+      if (execution.response && warnings?.includes("API_HISTORY_RECORD_FAILED")) {
+        feedback.info(t("feedback.apiHistoryRecordFailed"));
+      }
+      if (execution.response && warnings?.includes("API_POST_RESPONSE_CANCELLED")) {
+        feedback.info(t("feedback.apiPostResponseCancelled"));
+      }
+      if (execution.postResponse.error?.code === "API_POST_RESPONSE_FINALIZATION_FAILED") {
+        feedback.info(t("feedback.apiPostResponseFailed"));
       }
       queryClient.invalidateQueries({ queryKey: ["api-history", workspaceId] });
     },

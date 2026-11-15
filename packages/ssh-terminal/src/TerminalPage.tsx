@@ -357,11 +357,14 @@ export function SshConnectionsPage({
       if (session.warnings?.includes("ACTIVITY_RECORD_FAILED")) {
         feedback.info(t("feedback.activityRecordFailed"));
       }
+      const historyWarning = session.warnings?.includes("SSH_HISTORY_RECORD_FAILED")
+        ? t("feedback.ssh.historyRecordFailed") : null;
+      if (historyWarning) feedback.info(historyWarning);
       appendTerminalEvents([
         {
           sessionId: session.sessionId,
           kind: "close",
-          data: `${t("ssh.session.closed")}\r\n`,
+          data: `${t("ssh.session.closed")}\r\n${historyWarning ? `${historyWarning}\r\n` : ""}`,
           createdAt: session.updatedAt,
         },
       ]);

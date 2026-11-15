@@ -15,5 +15,7 @@ export function flowDisplayStatus(run: {
 }
 
 export function formatFlowRunError(error: string, t: TFunction) {
+  if (error === "FLOW_HISTORY_WRITE_FAILED") return t("flow.historyWriteFailedHint");
+  if (error === "FLOW_OUTPUT_TOO_LARGE" || error === "FLOW_HISTORY_LIMIT") return t("flow.resultLimitHint");
   return error === outcomeUncertain ? t("flow.outcomeUncertainHint") : error;
 }

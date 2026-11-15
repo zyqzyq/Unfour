@@ -110,7 +110,9 @@ impl FlowService {
                 (chrono::Utc::now() + chrono::Duration::milliseconds(*interval_ms as i64))
                     .to_rfc3339(),
             );
-            self.persist_run(run).await?;
+            self.persist_run(run)
+                .await
+                .map_err(crate::runner::history_write_error)?;
             tokio::select! {
                 biased;
                 _ = tokio::time::sleep(Duration::from_millis(*interval_ms)) => {}

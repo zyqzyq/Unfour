@@ -410,12 +410,35 @@ impl FlowExecutor for CommandBus {
                         Err(unfour_core::AppError::ApiCancelled(_)) => {
                             return Err(invalid("FLOW_OUTCOME_UNCERTAIN"));
                         }
+                        Err(
+                            error @ (unfour_core::AppError::ApiTimeout(_)
+                            | unfour_core::AppError::ApiNetwork(_)
+                            | unfour_core::AppError::Http(_)),
+                        ) => {
+                            // A transport failure cannot prove that an HTTP action
+                            // did not take effect (including an earlier redirect hop).
+                            // Read-only probes retain their existing error policy.
+                            if snapshot["probe"] != true {
+                                return Err(invalid("FLOW_OUTCOME_UNCERTAIN"));
+                            }
+                            return Err(error);
+                        }
+                        Err(unfour_core::AppError::Validation(code))
+                            if matches!(
+                                code.as_str(),
+                                "API_RESPONSE_TOO_LARGE"
+                                    | "SSH_TUNNEL_TARGET_UNREACHABLE"
+                                    | "SSH_TUNNEL_TEMPORARY_UNAVAILABLE"
+                            ) && snapshot["probe"] != true =>
+                        {
+                            return Err(invalid("FLOW_OUTCOME_UNCERTAIN"));
+                        }
                         Err(error) => return Err(error),
                     };
                     let body = serde_json::from_str::<Value>(&response.body)
                         .unwrap_or(Value::String(response.body));
                     if response.status >= 400 {
-                        let mut details = json!({"status": response.status, "headers": response.headers, "body": body, "durationMs": response.duration_ms, "historyId": response.history_id});
+                        let mut details = json!({"status": response.status, "headers": response.headers, "body": body, "durationMs": response.duration_ms, "historyId": response.history_id, "warnings": response.warnings});
                         crate::flow_authoring::scrub_diagnostics(&mut details, &request_secrets);
                         return Err(unfour_core::AppError::FlowActionFailed {
                             source: Box::new(unfour_core::AppError::HttpStatus(response.status)),
@@ -423,7 +446,7 @@ impl FlowExecutor for CommandBus {
                         });
                     }
                     Ok(
-                        json!({"status": response.status, "headers": response.headers, "body": body, "durationMs": response.duration_ms, "historyId": response.history_id}),
+                        json!({"status": response.status, "headers": response.headers, "body": body, "durationMs": response.duration_ms, "historyId": response.history_id, "warnings": response.warnings}),
                     )
                 }
                 FlowCapability::Database => {
@@ -452,7 +475,8 @@ impl FlowExecutor for CommandBus {
                         &cancel,
                         self.execute_database_query_checked(query, Some(&expected)),
                     )
-                    .await?;
+                    .await
+                    .map_err(|error| flow_database_error(error, snapshot["probe"] == true))?;
                     Ok(serde_json::to_value(result)?)
                 }
                 FlowCapability::Ssh => {
@@ -516,6 +540,28 @@ impl FlowExecutor for CommandBus {
     }
 }
 
+fn flow_database_error(error: unfour_core::AppError, probe: bool) -> unfour_core::AppError {
+    use unfour_core::AppError;
+    // Statement errors, validation, safety checks and pool acquisition failures
+    // stay definite. Loss of the query result cannot prove a mutation rolled back.
+    if !probe
+        && matches!(
+            &error,
+            AppError::Timeout(_)
+                | AppError::Database(
+                    sqlx::Error::Io(_)
+                        | sqlx::Error::Protocol(_)
+                        | sqlx::Error::Tls(_)
+                        | sqlx::Error::WorkerCrashed
+                )
+        )
+    {
+        invalid("FLOW_OUTCOME_UNCERTAIN")
+    } else {
+        error
+    }
+}
+
 impl CommandBus {
     async fn flow_ssh_terminal(
         &self,
@@ -534,10 +580,20 @@ impl CommandBus {
                 error
             }
         };
-        let mut log = self
+        let mut warnings = warnings.to_vec();
+        let mut log = match self
             .read_ssh_task_run_log(input.workspace_id.clone(), current.id.clone())
             .await
-            .map_err(diagnostics_error)?;
+        {
+            Ok(log) => log,
+            Err(_) if outcome_uncertain => return Err(invalid("FLOW_OUTCOME_UNCERTAIN")),
+            Err(_) => {
+                // Terminal task status is already known; diagnostics cannot
+                // turn a completed command into an execution failure.
+                warnings.push("FLOW_SSH_LOG_READ_FAILED".into());
+                String::new()
+            }
+        };
         let log_truncated = log.len() > 65_536;
         if log_truncated {
             let mut end = 65_536;
@@ -604,6 +660,33 @@ async fn finish_unless_dropped<F: Future>(cancel: &CancellationToken, work: F) -
 mod tests {
     use super::*;
 
+    #[test]
+    fn flow_database_transport_errors_preserve_uncertainty_without_changing_preflight() {
+        use unfour_core::AppError;
+        for error in [
+            AppError::Timeout("query timeout".into()),
+            AppError::Database(sqlx::Error::Io(std::io::ErrorKind::ConnectionReset.into())),
+            AppError::Database(sqlx::Error::Protocol("truncated result".into())),
+            AppError::Database(sqlx::Error::WorkerCrashed),
+        ] {
+            assert!(
+                matches!(flow_database_error(error, false), AppError::Validation(code) if code == "FLOW_OUTCOME_UNCERTAIN")
+            );
+        }
+        assert!(matches!(
+            flow_database_error(AppError::Timeout("probe".into()), true),
+            AppError::Timeout(_)
+        ));
+        for error in [
+            AppError::Database(sqlx::Error::PoolTimedOut),
+            AppError::Validation("FLOW_CONFIRMATION_STALE".into()),
+            AppError::ReadOnly("blocked".into()),
+        ] {
+            let code = error.code();
+            assert_eq!(flow_database_error(error, false).code(), code);
+        }
+    }
+
     #[tokio::test]
     async fn missing_ssh_history_preserves_an_uncertain_remote_outcome() {
         let bus = CommandBus::ephemeral().await.unwrap();
@@ -627,6 +710,39 @@ mod tests {
         assert!(
             matches!(error, unfour_core::AppError::Validation(code) if code == "FLOW_OUTCOME_UNCERTAIN")
         );
+    }
+
+    #[tokio::test]
+    async fn missing_ssh_log_preserves_a_known_terminal_outcome() {
+        let bus = CommandBus::ephemeral().await.unwrap();
+        let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+        let input: FlowRunInput = serde_json::from_value(json!({
+            "workspaceId": workspace, "flowId":"flow", "inputs":{},
+            "initiator":"human", "confirmEffects":true
+        }))
+        .unwrap();
+        for status in ["success", "failed"] {
+            let run: SshTaskRun = serde_json::from_value(json!({
+                "id":"cleared-run","workspaceId":workspace,"taskId":"task","status":status,
+                "startedAt":"now","errorMessage":null,"logPath":""
+            }))
+            .unwrap();
+            let result = bus.flow_ssh_terminal(&run, &[], &input).await;
+            let details = if status == "success" {
+                result.unwrap()
+            } else {
+                match result.unwrap_err() {
+                    unfour_core::AppError::FlowActionFailed { source, details } => {
+                        assert!(
+                            matches!(*source, unfour_core::AppError::Validation(code) if code == "FLOW_SSH_FAILED")
+                        );
+                        details
+                    }
+                    error => panic!("unexpected {error:?}"),
+                }
+            };
+            assert_eq!(details["warnings"], json!(["FLOW_SSH_LOG_READ_FAILED"]));
+        }
     }
 
     #[tokio::test]

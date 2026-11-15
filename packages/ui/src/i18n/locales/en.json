@@ -871,6 +871,10 @@
   },
   "feedback": {
     "activityRecordFailed": "The operation was accepted, but its activity log could not be saved. Keep the returned result or task ID; do not repeat the operation to repair the log.",
+    "apiHistoryRecordFailed": "The HTTP response was received, but request history could not be saved. Keep this response; do not send the request again to repair history.",
+    "apiPostResponseCancelled": "The HTTP response was received. Post-response processing was cancelled; check local script changes before running it again.",
+    "apiPostResponseFailed": "The HTTP response was received, but post-response processing or saving script changes failed. Keep this response; do not resend the request to repair local state.",
+    "apiOutcomeUncertain": "Stopping the local request does not confirm that the server stopped. Remote effects may have occurred; check the server before sending a write request again.",
     "dismiss": "Dismiss",
     "error": {
       "default": "Operation failed"
@@ -909,6 +913,7 @@
     "ssh": {
       "clipboardReadFailed": "Failed to read from the clipboard",
       "clipboardWriteFailed": "Failed to write to the clipboard",
+      "historyRecordFailed": "The SSH session is disconnected, but its history could not be saved. Closing it again will not restore the missing history.",
       "inputFailed": "Failed to send terminal input",
       "resizeFailed": "Failed to resize terminal",
       "taskCancelFailed": "Failed to cancel SSH task",
@@ -2000,6 +2005,8 @@
     "latestResult": "Latest result",
     "latestError": "Latest error",
     "outcomeUncertainHint": "The remote operation may have taken effect. Check the remote state before running the flow again.",
+    "historyWriteFailedHint": "Flow stopped because its history could not be saved. Completed steps keep their recorded results. Check the remote state before running it again.",
+    "resultLimitHint": "Flow stopped because its result exceeded the history size limit. Completed operations may already have taken effect. Check the remote state before running it again.",
     "attemptHistory": "Attempt history",
     "inspector": "Inspector",
     "closeInspector": "Close inspector",

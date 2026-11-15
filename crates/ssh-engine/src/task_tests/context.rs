@@ -136,7 +136,15 @@ async fn reruns_create_independent_records_and_logs_without_modifying_original()
     let original_log = std::fs::read_to_string(&first.log_path).unwrap();
     let second = service.run_task(input.clone()).await.unwrap();
     let second = finished(&service, &second).await;
-    acceptor.await.unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(2), acceptor)
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "loopback fixture did not receive both runs: first={:?}, second={:?}",
+                first.error_message, second.error_message
+            )
+        })
+        .unwrap();
     assert_ne!(first.id, second.id);
     assert_ne!(first.log_path, second.log_path);
     assert_eq!(

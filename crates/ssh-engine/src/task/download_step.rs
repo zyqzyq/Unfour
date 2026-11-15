@@ -45,9 +45,6 @@ impl NativeTaskDriver {
                     })?;
             }
         }
-        let mut part_name = target.as_os_str().to_os_string();
-        part_name.push(format!(".unfour-task-part-{}", step.id));
-        let part = std::path::PathBuf::from(part_name);
         let sftp = self.sftp().await?;
         let total = sftp
             .metadata(remote_path.clone())
@@ -58,9 +55,7 @@ impl NativeTaskDriver {
             .open(remote_path)
             .await
             .map_err(sftp_step_error("open remote download file"))?;
-        let mut local = tokio::fs::File::create(&part)
-            .await
-            .map_err(io_step_error("create local download file"))?;
+        let (mut local, part) = stage_task_download(&target).await?;
         let started = std::time::Instant::now();
         let mut progress_throttle = TransferProgressThrottle::new();
         let mut transferred = 0_u64;
@@ -97,10 +92,9 @@ impl NativeTaskDriver {
         .await;
         drop(local);
         if let Err(error) = copy_result {
-            let _ = tokio::fs::remove_file(&part).await;
             return Err(error);
         }
-        replace_local_download(&part, &target, &step.id, config.overwrite).await?;
+        replace_local_download(part, target, config.overwrite).await?;
         emit(transfer_progress("download", total, total, started));
         Ok(TaskStepResult { exit_code: None })
     }
@@ -134,51 +128,89 @@ fn resolve_download_local_target(local_path: &str) -> Result<std::path::PathBuf,
 }
 
 #[cfg(feature = "ssh-native")]
-async fn replace_local_download(
-    part: &std::path::Path,
+async fn stage_task_download(
     target: &std::path::Path,
-    step_id: &str,
+) -> Result<(tokio::fs::File, tempfile::TempPath), TaskStepError> {
+    let parent = target
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .to_owned();
+    let staged = tokio::task::spawn_blocking(move || {
+        let mut builder = tempfile::Builder::new();
+        builder.prefix(".unfour-task-download-").suffix(".part");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            builder.permissions(std::fs::Permissions::from_mode(0o666));
+        }
+        builder.tempfile_in(parent)
+    })
+    .await
+    .map_err(|error| TaskStepError::Failed {
+        message: error.to_string(),
+        exit_code: None,
+    })?
+    .map_err(io_step_error("create local download file"))?;
+    let (file, part) = staged.into_parts();
+    Ok((tokio::fs::File::from_std(file), part))
+}
+
+#[cfg(feature = "ssh-native")]
+async fn replace_local_download(
+    part: tempfile::TempPath,
+    target: std::path::PathBuf,
     overwrite: bool,
 ) -> Result<(), TaskStepError> {
-    if target.is_dir() {
-        return Err(TaskStepError::Failed {
-            message: "local download path is a directory; append a file name".to_string(),
-            exit_code: None,
-        });
-    }
-    let mut backup_name = target.as_os_str().to_os_string();
-    backup_name.push(format!(".unfour-task-backup-{step_id}"));
-    let backup = std::path::PathBuf::from(backup_name);
-    let had_target = target.exists();
-    if had_target {
-        if !overwrite {
-            return Err(TaskStepError::Failed {
-                message: "local target already exists".to_string(),
-                exit_code: None,
-            });
+    // The publication itself enforces overwrite policy; an exists check cannot
+    // protect against a second run publishing between check and rename.
+    tokio::task::spawn_blocking(move || {
+        if overwrite {
+            part.persist(target)
+        } else {
+            part.persist_noclobber(target)
         }
-        tokio::fs::rename(target, &backup)
-            .await
-            .map_err(io_step_error("backup existing local download"))?;
-    }
-    if let Err(error) = tokio::fs::rename(part, target).await {
-        if had_target {
-            let _ = tokio::fs::rename(&backup, target).await;
-        }
-        return Err(TaskStepError::Failed {
-            message: format!("finalize local download failed: {error}"),
-            exit_code: None,
-        });
-    }
-    if had_target {
-        let _ = tokio::fs::remove_file(backup).await;
-    }
-    Ok(())
+    })
+    .await
+    .map_err(|error| TaskStepError::Failed {
+        message: error.to_string(),
+        exit_code: None,
+    })?
+    .map_err(|error| io_step_error("finalize local download")(error.error))
 }
 
 #[cfg(test)]
 mod tests {
     use super::resolve_download_local_target;
+
+    #[tokio::test]
+    async fn concurrent_download_staging_is_owned_and_publication_does_not_clobber() {
+        use super::{replace_local_download, stage_task_download};
+        use tokio::io::AsyncWriteExt;
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("result");
+        let (mut first, first_path) = stage_task_download(&target).await.unwrap();
+        let (mut second, second_path) = stage_task_download(&target).await.unwrap();
+        assert_ne!(&*first_path, &*second_path);
+        first.write_all(b"first").await.unwrap();
+        second.write_all(b"second").await.unwrap();
+        drop(first);
+        drop(second);
+        let (left, right) = tokio::join!(
+            replace_local_download(first_path, target.clone(), false),
+            replace_local_download(second_path, target.clone(), false)
+        );
+        assert_ne!(left.is_ok(), right.is_ok());
+        let bytes = std::fs::read(&target).unwrap();
+        assert_eq!(
+            bytes,
+            if left.is_ok() {
+                b"first".as_slice()
+            } else {
+                b"second".as_slice()
+            }
+        );
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
+    }
 
     #[test]
     fn rejects_trailing_directory_separators() {

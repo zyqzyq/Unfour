@@ -588,23 +588,39 @@ async fn native_history_persistence_failure_releases_the_session() {
         .execute(bus.db.pool())
         .await
         .unwrap();
-    let close_failure = bus
+    let closed = bus
         .close_ssh_session(SshCloseInput {
             workspace_id: workspace.clone(),
             session_id: session.session_id,
         })
         .await
-        .expect_err("close history failure must stay an error");
-    assert!(
-        close_failure
-            .to_string()
-            .contains("close history unavailable"),
-        "original close error was rewritten: {close_failure}"
-    );
-    assert!(!close_failure.to_string().contains("ACTIVITY_RECORD_FAILED"));
+        .expect("history failure must not hide the completed disconnect");
+    assert_eq!(closed.status, "disconnected");
+    assert_eq!(closed.warnings, ["SSH_HISTORY_RECORD_FAILED"]);
+    assert!(!serde_json::to_string(&closed)
+        .unwrap()
+        .contains("close history unavailable"));
     assert_no_live_ssh_session(&bus, &workspace, "close_session").await;
     tokio::time::sleep(Duration::from_millis(1_500)).await;
     assert_eq!(opened(), 3, "close history failure reconnected");
+    sqlx::query("DROP TRIGGER fail_close_history")
+        .execute(bus.db.pool())
+        .await
+        .unwrap();
+    let session = bus.connect_ssh_session(input).await.unwrap();
+    sqlx::query("CREATE TRIGGER fail_cancel_history BEFORE UPDATE ON ssh_terminal_history BEGIN SELECT RAISE(FAIL, 'cancel history unavailable'); END;")
+        .execute(bus.db.pool()).await.unwrap();
+    let cancelled = bus
+        .cancel_ssh_reconnect(SshReconnectCancelInput {
+            workspace_id: workspace.clone(),
+            session_id: session.session_id,
+        })
+        .await
+        .unwrap();
+    assert_eq!(cancelled.status, "disconnected");
+    assert_eq!(cancelled.warnings, ["SSH_HISTORY_RECORD_FAILED"]);
+    assert_no_live_ssh_session(&bus, &workspace, "cancel_reconnect").await;
+    assert_eq!(opened(), 4);
     server_task.abort();
 }
 

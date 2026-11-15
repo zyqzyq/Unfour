@@ -577,3 +577,61 @@ async fn flow_native_ssh_secret_inputs_and_failed_history() {
     }
     task.abort();
 }
+
+#[tokio::test]
+async fn flow_native_ssh_log_failure_preserves_remote_exit_status() {
+    let mut bus = test_bus().await;
+    let logs = std::env::temp_dir().join(format!("unfour-flow-log-{}", unfour_core::id::new_id()));
+    bus.ssh = bus.ssh.with_task_log_dir(logs.clone());
+    let workspace = bus.list_workspaces().await.unwrap().active_workspace_id;
+    let commands = Arc::new(Mutex::new(vec![]));
+    let (connection, server) = start_ssh_fixture(&bus, &workspace, commands.clone()).await;
+    // Corrupt only diagnostic access after a terminal SSH result is persisted.
+    sqlx::query("CREATE TRIGGER unavailable_finished_log AFTER UPDATE OF status ON ssh_task_run
+        WHEN NEW.status <> 'running' BEGIN UPDATE ssh_task_run SET log_path='' WHERE id=NEW.id; END")
+        .execute(bus.db.pool()).await.unwrap();
+    for command in ["echo fixture", "fail fixture"] {
+        let task = bus
+            .save_ssh_task(SshTaskSaveInput {
+                id: None,
+                workspace_id: workspace.clone(),
+                name: command.into(),
+                description: String::new(),
+                default_connection_id: None,
+                steps: vec![SshTaskStepInput {
+                    id: None,
+                    name: "command".into(),
+                    step_type: "command".into(),
+                    position: 0,
+                    enabled: true,
+                    config_version: Some(1),
+                    config_json: json!({"command":command,"timeoutSeconds":5}),
+                }],
+            })
+            .await
+            .unwrap();
+        let flow = bus.save_flow(definition(&workspace, json!([
+            {"id":"ssh","name":"SSH","kind":"action","timeoutMs":10000,"action":{
+                "capability":"ssh","resourceId":task.task.id,"connectionId":connection.id,"arguments":{}}}
+        ]))).await.unwrap();
+        let run = bus.run_flow(request(&workspace, &flow.id)).await.unwrap();
+        let result = finished(&bus, &run).await;
+        if command.starts_with("echo") {
+            assert_eq!(result.status, FlowRunStatus::Succeeded);
+            assert_eq!(result.steps[0].status, FlowStepRunStatus::Succeeded);
+        } else {
+            assert_eq!(result.status, FlowRunStatus::Failed);
+            assert_eq!(result.error.as_deref(), Some("FLOW_SSH_FAILED"));
+        }
+        let warnings = result.steps[0].output.as_ref().unwrap()["warnings"]
+            .as_array()
+            .unwrap();
+        assert!(warnings.contains(&json!("FLOW_SSH_LOG_READ_FAILED")));
+    }
+    assert_eq!(
+        commands.lock().unwrap().as_slice(),
+        ["echo fixture", "fail fixture"]
+    );
+    server.abort();
+    std::fs::remove_dir_all(logs).unwrap();
+}

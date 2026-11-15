@@ -111,13 +111,14 @@ pub struct ApiResponse {
     /// Kept in-process only: post scripts and Desktop still consume the raw body.
     #[serde(skip)]
     pub diagnostic_projection: Option<ApiResponseDiagnosticProjection>,
-    /// Non-fatal completion warnings. The HTTP response and history id stay authoritative.
+    /// Non-fatal completion warnings. The HTTP response stays authoritative.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
     /// Sanitized initial HTTP request, after resolution, scripts and auth.
     /// Optional for older adapters; never reconstruct it from a frontend draft.
     #[serde(default)]
     pub request_snapshot: Option<ApiExecutedRequestSnapshot>,
+    /// Empty when the complete HTTP response could not be recorded in history.
     pub history_id: String,
     pub status: u16,
     pub status_text: String,

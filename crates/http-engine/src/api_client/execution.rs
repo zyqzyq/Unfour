@@ -210,25 +210,25 @@ impl ApiClientService {
             }
         };
         let duration_ms = started.elapsed().as_millis();
-        let history_result = tokio::select! {
-            biased;
-            result = self.insert_history(
+        // Once the complete HTTP response is available, cancellation and local
+        // persistence cannot undo it or justify resending the remote operation.
+        let history_result = self
+            .insert_history(
                 &executed,
                 status.as_u16(),
                 duration_ms,
                 &response_headers,
                 &body,
                 secrets,
-            ) => result,
-            _ = cancellation.cancelled() => return Err(cancelled_error()),
-        };
-        let history_id = match history_result {
-            Ok(history_id) => history_id,
+            )
+            .await;
+        let (history_id, warnings) = match history_result {
+            Ok(history_id) => (history_id, Vec::new()),
             Err(error) => {
                 unfour_diag::log_operation_event(
-                    "api_request_failed",
+                    "api_history_record_failed",
                     "api_client",
-                    "send",
+                    "record_history",
                     "error",
                     Some(started.elapsed().as_millis()),
                     Some(unfour_diag::app_error_kind(&error)),
@@ -240,7 +240,7 @@ impl ApiClientService {
                         "status_code": status.as_u16(),
                     }),
                 );
-                return Err(error);
+                (String::new(), vec!["API_HISTORY_RECORD_FAILED".to_string()])
             }
         };
         unfour_diag::log_operation_event(
@@ -265,7 +265,7 @@ impl ApiClientService {
                 &body,
                 secrets,
             )),
-            warnings: Vec::new(),
+            warnings,
             request_snapshot: Some(request_snapshot),
             history_id,
             status: status.as_u16(),

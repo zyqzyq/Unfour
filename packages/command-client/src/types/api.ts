@@ -92,6 +92,7 @@ export type ApiResponse = {
   /** Non-fatal completion warnings; absent in older responses. */
   warnings?: string[];
   requestSnapshot?: ApiExecutedRequestSnapshot | null;
+  /** Empty when the complete HTTP response could not be recorded in history. */
   historyId: string;
   status: number;
   statusText: string;

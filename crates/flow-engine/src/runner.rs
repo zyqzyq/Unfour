@@ -48,7 +48,7 @@ impl FlowService {
             let step = run.definition.steps[index].clone();
             run.steps[index].status = FlowStepRunStatus::Running;
             run.steps[index].started_at = Some(chrono::Utc::now().to_rfc3339());
-            self.persist_run(run).await?;
+            self.persist_run(run).await.map_err(history_write_error)?;
             let lease = run.clone();
             let token = CancellationToken::new();
             let started = Instant::now();
@@ -126,11 +126,35 @@ impl FlowService {
                 }
                 Ok((output, next))
             });
+            if let Err(error) = &outcome {
+                let code = error_code(error);
+                let completed = completed_action_output(&step, &run.steps[index]);
+                if code == "FLOW_HISTORY_WRITE_FAILED"
+                    || (local_result_error(&code) && completed.is_some())
+                {
+                    if let Some(output) = completed {
+                        let output = if code == "FLOW_HISTORY_WRITE_FAILED" {
+                            output
+                        } else {
+                            omitted_output(&code)
+                        };
+                        run.steps[index].output = Some(output.clone());
+                        run.steps[index].attempts.last_mut().unwrap().output = Some(output);
+                        run.steps[index].status = FlowStepRunStatus::Succeeded;
+                        if serde_json::to_vec(&run.steps)?.len() > 4_194_304 {
+                            run.steps[index].attempts.last_mut().unwrap().input = Value::Null;
+                        }
+                    }
+                    // Stop scheduling effects, without rewriting a confirmed
+                    // Action result as a local journal/representation failure.
+                    return Err(invalid(&code));
+                }
+            }
             match outcome {
                 Ok((output, next)) => {
                     run.steps[index].status = FlowStepRunStatus::Succeeded;
                     context["steps"][&step.id] = output;
-                    self.persist_run(run).await?;
+                    self.persist_run(run).await.map_err(history_write_error)?;
                     let target = next.or(step.next);
                     let next_index = match target.as_deref() {
                         Some("$end") => run.steps.len(),
@@ -221,7 +245,7 @@ impl FlowService {
                     error: None,
                     duration_ms: 0,
                 });
-                self.persist_run(run).await?;
+                self.persist_run(run).await.map_err(history_write_error)?;
                 tokio::select! {
                     biased;
                     _ = tokio::time::sleep(Duration::from_millis(*duration_ms)) => {}
@@ -296,11 +320,12 @@ impl FlowService {
             error: None,
             duration_ms: 0,
         });
-        self.persist_run(run).await?;
+        self.persist_run(run).await.map_err(history_write_error)?;
         if cancel.is_cancelled() {
             return Err(invalid("FLOW_CANCELLED"));
         }
         let started = Instant::now();
+        let is_action = matches!(run.definition.steps[index].node, FlowNode::Action { .. });
         let output = executor
             .execute(
                 &resolved,
@@ -318,6 +343,9 @@ impl FlowService {
         match &output {
             Ok(value) => {
                 if serde_json::to_vec(value)?.len() > 262_144 {
+                    if is_action {
+                        record.output = Some(omitted_output("FLOW_OUTPUT_TOO_LARGE"));
+                    }
                     return Err(invalid("FLOW_OUTPUT_TOO_LARGE"));
                 }
                 record.output = Some(value.clone());
@@ -337,7 +365,11 @@ impl FlowService {
                 .last_mut()
                 .expect("attempt exists");
             record.output = None;
-            if record.error.as_deref() != Some("FLOW_OUTCOME_UNCERTAIN") {
+            if is_action && output.is_ok() {
+                record.output = Some(omitted_output("FLOW_HISTORY_LIMIT"));
+                return Err(invalid("FLOW_HISTORY_LIMIT"));
+            }
+            if !is_action && record.error.as_deref() != Some("FLOW_OUTCOME_UNCERTAIN") {
                 return Err(invalid("FLOW_HISTORY_LIMIT"));
             }
             // Keep the remote outcome even when its diagnostics cannot fit.
@@ -350,11 +382,32 @@ impl FlowService {
                     .input = Value::Null;
             }
         }
-        self.persist_run(run).await?;
+        if let Err(error) = self.persist_run(run).await {
+            // An executor failure (especially an uncertain remote outcome)
+            // remains primary even when recording its diagnostics fails.
+            if output.is_ok() || !is_action {
+                return Err(history_write_error(error));
+            }
+        }
         // Keep executor failures separate from local persistence/limit errors:
         // only the former are eligible for a probe retry.
         Ok(output)
     }
+}
+
+pub(crate) fn history_write_error(_: AppError) -> AppError {
+    invalid("FLOW_HISTORY_WRITE_FAILED")
+}
+
+pub(crate) fn local_result_error(code: &str) -> bool {
+    matches!(
+        code,
+        "FLOW_HISTORY_WRITE_FAILED" | "FLOW_OUTPUT_TOO_LARGE" | "FLOW_HISTORY_LIMIT"
+    )
+}
+
+fn omitted_output(code: &str) -> Value {
+    json!({"outputOmitted": true, "reason": code})
 }
 
 fn adopt_completed(

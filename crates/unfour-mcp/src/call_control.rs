@@ -42,8 +42,8 @@ async fn bounded_for<T>(
     }
 }
 
-/// Give the existing API cancellation path a bounded opportunity to roll back
-/// script mutations and clean up its execution registry before dropping it.
+/// Give the existing API cancellation path a bounded opportunity to finish
+/// script cleanup and release its execution registry before dropping it.
 pub(crate) async fn cooperative<T>(
     future: impl Future<Output = AppResult<T>>,
     cancel: impl FnOnce() -> bool,
@@ -57,7 +57,11 @@ pub(crate) async fn cooperative<T>(
         result = &mut future => return result,
     }
     if cancel() {
-        let _ = tokio::time::timeout(Duration::from_secs(2), &mut future).await;
+        if let Ok(result) = tokio::time::timeout(Duration::from_secs(2), &mut future).await {
+            // Cancellation is a request, not proof that the operation stopped.
+            // Preserve the result confirmed while the execution cleans up.
+            return result;
+        }
     }
     Err(AppError::Timeout(
         "MCP execution cancelled or exceeded its safety deadline".into(),
@@ -81,6 +85,36 @@ async fn cancelled(receiver: Option<watch::Receiver<bool>>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn cooperative_cancellation_preserves_confirmed_completion() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        for success in [true, false] {
+            let (tx, rx) = watch::channel(false);
+            let finished = tokio::sync::Notify::new();
+            let result = with_cancellation(rx, || {
+                rt.block_on(cooperative(
+                    async {
+                        tx.send(true).unwrap();
+                        finished.notified().await;
+                        if success {
+                            Ok(201)
+                        } else {
+                            Err(AppError::HttpStatus(409))
+                        }
+                    },
+                    || {
+                        finished.notify_one();
+                        true
+                    },
+                ))
+            });
+            if success {
+                assert_eq!(result.unwrap(), 201);
+            } else {
+                assert!(matches!(result, Err(AppError::HttpStatus(409))));
+            }
+        }
+    }
     #[test]
     fn unlimited_execution_still_has_a_safety_deadline() {
         let rt = tokio::runtime::Runtime::new().unwrap();

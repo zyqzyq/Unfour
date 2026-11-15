@@ -2,6 +2,14 @@ use super::CommandBusAdapterError;
 use unfour_core::AppError;
 
 impl CommandBusAdapterError {
+    pub(super) fn from_api_app_error(error: &AppError) -> Self {
+        Self {
+            code: error.code(),
+            message: api_execution_message(error.code()),
+            details: serde_json::json!({}),
+        }
+    }
+
     pub(super) fn from_flow_error(error: &AppError) -> Self {
         if matches!(error, AppError::Validation(reason) if reason == "FLOW_INVALID_REFERENCE") {
             return Self {
@@ -100,5 +108,15 @@ impl CommandBusAdapterError {
             message: "The command-bus adapter could not be initialized.",
             details: serde_json::json!({}),
         }
+    }
+}
+
+pub(super) fn api_execution_message(code: &str) -> &'static str {
+    match code {
+        "API_TIMEOUT" | "NETWORK_ERROR" | "HTTP_ERROR" | "API_CANCELLED"
+        | "API_RESPONSE_TOO_LARGE" | "QUERY_TIMEOUT" | "SSH_TUNNEL_TARGET_UNREACHABLE"
+        | "SSH_TUNNEL_TEMPORARY_UNAVAILABLE" =>
+            "The API result could not be fully confirmed. Remote effects may already have occurred; inspect the remote state before retrying.",
+        _ => "The command-bus API send operation failed.",
     }
 }

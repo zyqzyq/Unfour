@@ -85,3 +85,43 @@ it("does not present http or script failure as an accepted activity warning", as
   expect(useApiRequestTabStore.getState().byWorkspace.w.tabs[0].execution?.preRequest.status).toBe("failed");
   expect(warningMock).not.toHaveBeenCalled();
 });
+
+it("retains HTTP errors and shows history failure separately without retrying", async () => {
+  const result = execution();
+  result.response = { ...result.response!, historyId: "", status: 500 };
+  result.warnings = ["API_HISTORY_RECORD_FAILED"];
+  vi.mocked(sendApiRequest).mockResolvedValue(result);
+  const hook = await setup();
+  await act(async () => { hook.result.current.sendTab(hook.result.current.activeTab!); });
+  const tab = useApiRequestTabStore.getState().byWorkspace.w.tabs[0];
+  expect(tab.response?.status).toBe(500);
+  expect(tab.sendError).toBeNull();
+  expect(sendApiRequest).toHaveBeenCalledTimes(1);
+  expect(warningMock.mock.calls[0][0]).toContain("history could not be saved");
+});
+
+it("explains uncertainty after a network timeout and never automatically resends", async () => {
+  vi.mocked(sendApiRequest).mockResolvedValue(execution({ response: null, httpError: "Timed out", httpErrorCode: "API_TIMEOUT" }));
+  const hook = await setup();
+  await act(async () => { hook.result.current.sendTab(hook.result.current.activeTab!); });
+  expect(useApiRequestTabStore.getState().byWorkspace.w.tabs[0].sendError).toContain("Remote effects may have occurred");
+  expect(sendApiRequest).toHaveBeenCalledTimes(1);
+});
+
+it("ignores a late result after its tab execution has been replaced", async () => {
+  let finish!: (value: RequestExecutionResult) => void;
+  vi.mocked(sendApiRequest).mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+  const hook = await setup();
+  await act(async () => { hook.result.current.sendTab(hook.result.current.activeTab!); });
+  const input = vi.mocked(sendApiRequest).mock.calls[0][1];
+  const newer = execution();
+  newer.response = { ...newer.response!, body: "newer-result" };
+  act(() => {
+    const store = useApiRequestTabStore.getState();
+    store.startTabSend("w", "new:1", input, "replacement-execution");
+    store.completeTabSend("w", "new:1", newer);
+  });
+  await act(async () => { finish(execution()); });
+  expect(useApiRequestTabStore.getState().byWorkspace.w.tabs[0].response?.body).toBe("newer-result");
+  expect(sendApiRequest).toHaveBeenCalledTimes(1);
+});
