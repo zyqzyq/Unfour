@@ -167,6 +167,18 @@ impl CommandBus {
         self.workspace.state().await
     }
 
+    pub async fn workspace_layout(&self, workspace_id: String) -> AppResult<WorkspaceLayout> {
+        self.workspace.layout(workspace_id).await
+    }
+
+    pub async fn workspace_layout_update(
+        &self,
+        workspace_id: String,
+        layout: WorkspaceLayout,
+    ) -> AppResult<WorkspaceLayout> {
+        self.workspace.update_layout(workspace_id, layout).await
+    }
+
     pub(super) async fn read_workspace_state(&self) -> AppResult<WorkspaceState> {
         self.workspace.state_read_only().await
     }

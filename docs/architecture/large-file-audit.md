@@ -49,7 +49,7 @@ See [SSH transport ownership](ssh-transport-boundary.md).
 | Area | Current decision | Next useful boundary / risk |
 | --- | --- | --- |
 | MCP `command_bus_adapter.rs` (1158) | Keep the trait implementation and bounded runtime facade | Forwarders are repetitive but splitting one trait impl would need delegation or macros; do not add indirection just for size. Revisit with an actual adapter capability change. |
-| CommandBus `api_commands.rs` (906) | Keep transactional orchestration | Separate execution from authoring only with existing activity, outbox and credential-lock tests; do not bypass the bus. |
+| CommandBus `api_commands.rs` (906 at audit baseline) | Split into private responsibility modules on 2026-11-15; see [API CommandBus structure](api-command-bus.md) | Keep the existing transactional orchestration, Activity, outbox, credential, and execution boundaries; the inventory below remains the historical audit snapshot. |
 | Database export (820), Postgres (780) | Retain driver/stream ownership | Export cancellation, rollback and cursor disposal need protocol fixtures before changes. Pools are per-operation, not a shared cache. |
 | SSH SFTP (799), session (current count above) | Retain session/generation ownership | Transfer registration and reconnect cleanup have race-sensitive shared state; next split must preserve lock ordering and stale-generation rejection. |
 | HTTP OpenAPI import (823), collection domain (786) | Keep existing service/domain boundary | Parser/collection normalization can be isolated when behavior fixtures establish compatibility; do not remove legacy inputs by assumption. |

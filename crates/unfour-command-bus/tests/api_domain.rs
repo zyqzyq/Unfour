@@ -18,6 +18,8 @@ use unfour_local_storage::LocalDb;
 
 #[path = "api_domain/activity.rs"]
 mod activity;
+#[path = "api_domain/guards.rs"]
+mod guards;
 #[path = "api_domain/hook_rollback.rs"]
 mod hook_rollback;
 #[path = "api_domain/mutations.rs"]

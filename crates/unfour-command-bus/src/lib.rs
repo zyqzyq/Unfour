@@ -8,27 +8,27 @@ use activity_summary::{command_activity_kind, truncate_url_preview};
 use serde::{Deserialize, Serialize};
 pub use storage_paths::{default_database_path, DEFAULT_DATABASE_FILE, DEFAULT_PRODUCT_DATA_DIR};
 use unfour_core::ai_reserved;
+#[cfg(test)]
+use unfour_core::models::ApiResponse;
 use unfour_core::models::{
-    ApiCollection, ApiCollectionExportArtifact, ApiCollectionExportFormat, ApiCollectionFolder,
-    ApiCollectionImportResult, ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput,
-    ApiResponse, ApiSavedRequest, CredentialCreateInput, CredentialDeleteInput,
-    CredentialInspectInput, CredentialMetadata, CredentialRotateInput, DatabaseBrowseInput,
-    DatabaseBrowseResult, DatabaseConnection, DatabaseConnectionInput, DatabaseQueryInput,
-    DatabaseQueryResult, DatabaseRowMutationInput, DatabaseRowMutationResult, DatabaseSchema,
-    DatabaseTableList, DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult,
-    DbQueryHistoryEntry, DbQueryHistoryRecordInput, KeyValue, RequestExecutionResult, SavedSql,
-    SavedSqlInput, SftpCancelTransferInput, SftpDeleteInput, SftpDirectoryListing, SftpFileEntry,
-    SftpMutationResult, SftpOpenResult, SftpPathInput, SftpRenameInput, SftpSessionInput,
-    SftpTransferInput, SftpTransferState, SshCloseInput, SshCommandHistoryEntry,
-    SshCommandHistoryQuery, SshConnectInput, SshConnection, SshConnectionInput, SshDiagnosticInput,
-    SshDiagnosticResult, SshHostFingerprintInfo, SshHostKeyInput, SshHostKeyResetResult,
-    SshKnownHostsExportInput, SshKnownHostsExportResult, SshKnownHostsImportInput,
-    SshKnownHostsImportResult, SshLogExport, SshLogExportInput, SshReconnectCancelInput,
-    SshResizeInput, SshSessionEvent, SshSessionInput, SshSessionSummary, SshTask,
-    SshTaskCancelInput, SshTaskCleanupInput, SshTaskCleanupResult, SshTaskDetail, SshTaskRun,
-    SshTaskRunInput, SshTaskSaveInput, SshTasksReorderInput, SshTestResult, SystemHealth,
-    Workspace, WorkspaceEnvironment, WorkspaceEnvironmentVariable, WorkspaceLayout, WorkspaceState,
-    WorkspaceVariable, WorkspaceVariableInput,
+    ApiCollectionExportArtifact, ApiEnvironment, ApiHistoryDetail, ApiHistoryItem, ApiRequestInput,
+    ApiSavedRequest, CredentialCreateInput, CredentialDeleteInput, CredentialInspectInput,
+    CredentialMetadata, CredentialRotateInput, DatabaseBrowseInput, DatabaseBrowseResult,
+    DatabaseConnection, DatabaseConnectionInput, DatabaseQueryInput, DatabaseQueryResult,
+    DatabaseRowMutationInput, DatabaseRowMutationResult, DatabaseSchema, DatabaseTableList,
+    DatabaseTableStructure, DatabaseTableStructureInput, DatabaseTestResult, DbQueryHistoryEntry,
+    DbQueryHistoryRecordInput, KeyValue, SavedSql, SavedSqlInput, SftpCancelTransferInput,
+    SftpDeleteInput, SftpDirectoryListing, SftpFileEntry, SftpMutationResult, SftpOpenResult,
+    SftpPathInput, SftpRenameInput, SftpSessionInput, SftpTransferInput, SftpTransferState,
+    SshCloseInput, SshCommandHistoryEntry, SshCommandHistoryQuery, SshConnectInput, SshConnection,
+    SshConnectionInput, SshDiagnosticInput, SshDiagnosticResult, SshHostFingerprintInfo,
+    SshHostKeyInput, SshHostKeyResetResult, SshKnownHostsExportInput, SshKnownHostsExportResult,
+    SshKnownHostsImportInput, SshKnownHostsImportResult, SshLogExport, SshLogExportInput,
+    SshReconnectCancelInput, SshResizeInput, SshSessionEvent, SshSessionInput, SshSessionSummary,
+    SshTask, SshTaskCancelInput, SshTaskCleanupInput, SshTaskCleanupResult, SshTaskDetail,
+    SshTaskRun, SshTaskRunInput, SshTaskSaveInput, SshTasksReorderInput, SshTestResult,
+    SystemHealth, Workspace, WorkspaceEnvironment, WorkspaceEnvironmentVariable, WorkspaceLayout,
+    WorkspaceState, WorkspaceVariable, WorkspaceVariableInput,
 };
 use unfour_core::AppResult;
 use unfour_database_engine::DatabaseService;
