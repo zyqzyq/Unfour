@@ -94,7 +94,7 @@ try {
   const fixture = launch("bastion-loopback.exe", []);
   createInterface({ input: fixture.stdout }).on("line", (line) => received.push(line));
   const ready = await waitFor(() => received.find((line) => line.startsWith("FIXTURE_READY ")), "fixture did not start");
-  const [, port, fingerprint] = ready.split(" ");
+  const [, port] = ready.split(" ");
   const url = "ssh://fixture-user:fixture-grant@127.0.0.1:" + port;
   const xshellArgv = ["-url", url, "-newtab", label];
   const scrtArgv = ["/T", "/N", label, "/SSH2", "127.0.0.1", "/P", port, "/L", "fixture-user", "/PASSWORD", "fixture-grant"];
@@ -103,6 +103,7 @@ try {
   const launches = [mode, mode, mode === "scrt" ? "xshell" : "scrt"];
   await rejectWithDiagnostic([...argv, "-exec", "SYNTHETIC_EXTRA"], 1);
   console.log("Malformed Windows argv produced a redacted diagnostic before app startup");
+  const initialSessionStart = received.length;
   const primary = launch("unfour.exe", argv);
   // The ephemeral debugging port is discovered only inside our own child profile.
   const debugPort = await waitFor(async () => {
@@ -115,21 +116,22 @@ try {
   const page = await waitFor(() => browser.contexts().flatMap((c) => c.pages()).find((p) => /^https?:\/\/tauri\.localhost\//.test(p.url())), "packaged application page did not load");
   page.setDefaultTimeout(12000);
   for (let i = 0; i < launches.length; i++) {
+    let sessionStart = initialSessionStart;
     if (i > 0) {
       await page.getByRole("button", { name: /^(API Client|API 客户端|API)$/i }).first().click();
+      sessionStart = received.length;
       const warm = launch("unfour.exe", argvFor(launches[i]));
       await waitFor(() => warm.exitCode !== null, "secondary process did not forward and exit");
       assert.equal(warm.exitCode, 0);
       assert.equal(primary.exitCode, null);
     }
-    await expect(page.getByText(fingerprint, { exact: true })).toBeVisible();
+    await expect(page.getByRole("tab", { name: label + " · 127.0.0.1:" + port, exact: true })).toBeVisible();
     const sidebarSearch = page.getByLabel(/Search SSH connections|搜索 SSH 连接/);
     await expect(sidebarSearch).toBeVisible();
-    assert.equal(received.filter((x) => x === "FIXTURE_AUTH_OK").length, i);
-    const sessionStart = received.length;
-    await page.getByRole("button", { name: /Trust this fingerprint once|仅本次信任此指纹/ }).click();
+    await expect(page.getByRole("button", { name: /Trust this fingerprint once|仅本次信任此指纹/ })).toHaveCount(0);
     const rows = page.locator(".xterm-rows:visible").last();
     await expect(rows).toContainText("A2 fixture ready", { timeout: 12000 });
+    assert.equal(received.filter((x) => x === "FIXTURE_AUTH_OK").length, i + 1);
     // The server must receive the fitted PTY size without a manual window resize.
     const visibleRows = await rows.locator(":scope > div").count();
     assert.ok(visibleRows > 0);
@@ -149,10 +151,13 @@ try {
       await expect(sidebarSearch).toBeVisible();
     }
     const text = await page.locator("body").innerText();
-    for (const secret of ["fixture-user", "fixture-grant", label, url]) assert.ok(!text.includes(secret));
+    assert.ok(text.includes(label));
+    assert.ok(text.includes("127.0.0.1:" + port));
+    for (const secret of ["fixture-user", "fixture-grant", url]) assert.ok(!text.includes(secret));
     await page.getByRole("button", { name: /Close \/ cancel|关闭／取消/ }).last().click();
+    await expect(page.getByRole("tab", { name: label + " · 127.0.0.1:" + port, exact: true })).toHaveCount(0);
     await expect(sidebarSearch).toBeVisible();
-    console.log(launches[i] + " temporary terminal " + (i + 1) + " confirmed fingerprint, rendered SSH reply and closed");
+    console.log(launches[i] + " temporary terminal " + (i + 1) + " verified without a trust prompt, displayed the node, rendered SSH reply and closed");
   }
   for (const marker of ["FIXTURE_AUTH_OK", "FIXTURE_PTY_OK", "FIXTURE_ROUNDTRIP_OK"]) {
     assert.equal(received.filter((x) => x === marker).length, launches.length);

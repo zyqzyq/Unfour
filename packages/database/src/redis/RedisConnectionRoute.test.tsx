@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { bindRedisSession, listSshConnections, listTemporaryRouteHandles, saveRedisConnection, testRedisConnectionInput, type RedisConnection, type SshConnection } from "@unfour/command-client";
+import { bindRedisSession, listSshConnections, listTemporaryRoutes, saveRedisConnection, testRedisConnectionInput, type RedisConnection, type SshConnection } from "@unfour/command-client";
 import { RedisConnectionDialog } from "./RedisConnectionDialog";
 
 vi.mock("@unfour/command-client", async (load) => ({
   ...await load<typeof import("@unfour/command-client")>(),
   listSshConnections: vi.fn(), saveRedisConnection: vi.fn(), testRedisConnectionInput: vi.fn(),
-  listTemporaryRouteHandles: vi.fn().mockResolvedValue([]),
+  listTemporaryRoutes: vi.fn().mockResolvedValue([]),
   bindRedisSession: vi.fn(),
 }));
 const cache: RedisConnection = {
@@ -23,11 +23,11 @@ beforeEach(() => vi.resetAllMocks());
 afterEach(cleanup);
 
 it("keeps the temporary target password separate from the saved Redis password", async () => {
-  vi.mocked(listTemporaryRouteHandles).mockResolvedValue(["session-12345678"]);
+  vi.mocked(listTemporaryRoutes).mockResolvedValue([{ handle: "session-12345678", displayName: "Production node", endpoint: "10.0.0.8:22" }]);
   vi.mocked(listSshConnections).mockResolvedValue([]);
   const stale = { ...cache, sshConnectionId: "deleted-jump", routeNeedsReview: true };
   render(<RedisConnectionDialog workspaceId="w" original={stale} latest={stale} initialName="" onClose={vi.fn()} onSaved={vi.fn()} />);
-  await screen.findByRole("option", { name: "Bastion session · 12345678" });
+  await screen.findByRole("option", { name: "Production node · 10.0.0.8:22" });
   fireEvent.change(screen.getByLabelText("Network route"), { target: { value: "" } });
   fireEvent.change(screen.getByLabelText("Network route"), { target: { value: "live:session-12345678" } });
   expect(screen.getByRole("button", { name: "Test connection" })).toBeDisabled();

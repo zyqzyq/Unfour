@@ -1,5 +1,5 @@
 use super::*;
-use tokio::sync::{oneshot, watch};
+use tokio::sync::watch;
 
 pub(crate) struct TrustPrompt {
     pub(super) queue: std::sync::Weak<Mutex<Queue>>,
@@ -36,65 +36,79 @@ impl TrustPrompt {
         port: u16,
         fingerprint: &str,
     ) -> bool {
-        // Read existing trust, never persist an endpoint/authorization binding.
-        match store.get_fingerprint(workspace, host, port).await {
-            Ok(Some(expected)) => return expected == fingerprint,
+        // Match normal SSH's trust-on-first-use interaction, while retaining
+        // temporary endpoint associations only until the workspace closes.
+        // Existing durable pins still take precedence; never overwrite them.
+        let stored = match store
+            .matches_known_fingerprint(workspace, host, port, fingerprint)
+            .await
+        {
+            Ok(stored) => stored,
             Err(_) => return false,
-            Ok(None) => {}
-        }
-        let (tx, rx) = oneshot::channel();
+        };
         let Some(queue) = self.queue.upgrade() else {
             return false;
         };
-        {
-            let Ok(mut queue) = queue.lock() else {
-                return false;
-            };
-            let Ok(entry) = queue.owned(workspace, &self.handle) else {
-                return false;
-            };
-            // Any repeated fingerprint check must match the one approved here.
-            if let Some(expected) = &entry.trusted_fingerprint {
-                return expected == fingerprint;
-            }
-            entry.summary.fingerprint = Some(fingerprint.into());
-            entry.summary.status = "awaiting-trust".into();
-            entry.trust = Some(tx);
+        let Ok(mut queue) = queue.lock() else {
+            return false;
+        };
+        // Database lookup can yield while a label/workspace closes. Check
+        // ownership and lifecycle again before accepting even a known key.
+        let Ok(entry) = queue.owned(workspace, &self.handle) else {
+            return false;
+        };
+        if entry.summary.status != "connecting" || entry.summary.error_code.is_some() {
+            return false;
         }
-        matches!(
-            tokio::time::timeout(Duration::from_secs(120), rx).await,
-            Ok(Ok(true))
-        )
+        if stored == Some(false)
+            || entry
+                .trusted_fingerprint
+                .as_deref()
+                .is_some_and(|expected| expected != fingerprint)
+        {
+            entry.summary.error_code = Some("TEMPORARY_HOST_KEY_MISMATCH".into());
+            return false;
+        }
+        let key = (workspace.to_owned(), host.to_ascii_lowercase(), port);
+        if let Some(expected) = queue.trusted_hosts.get(&key) {
+            if expected != fingerprint {
+                queue
+                    .owned(workspace, &self.handle)
+                    .expect("owned while locked")
+                    .summary
+                    .error_code = Some("TEMPORARY_HOST_KEY_MISMATCH".into());
+                return false;
+            }
+        } else {
+            // Do not evict a pin and silently accept a changed key as new.
+            if queue.trusted_hosts.len() >= MAX_TRUSTED_HOSTS {
+                queue
+                    .owned(workspace, &self.handle)
+                    .expect("owned while locked")
+                    .summary
+                    .error_code = Some("TEMPORARY_TRUST_CAPACITY".into());
+                return false;
+            }
+            queue.trusted_hosts.insert(key, fingerprint.to_owned());
+        }
+        queue
+            .owned(workspace, &self.handle)
+            .expect("owned while locked")
+            .trusted_fingerprint = Some(fingerprint.to_owned());
+        true
     }
 }
 
 impl SshService {
     pub fn trust_temporary(
         &self,
-        workspace: &str,
-        handle: &str,
-        fingerprint: &str,
+        _workspace: &str,
+        _handle: &str,
+        _fingerprint: &str,
     ) -> AppResult<()> {
-        let mut queue = self
-            .temporary
-            .0
-            .lock()
-            .map_err(|_| failure("TEMPORARY_UNAVAILABLE"))?;
-        let entry = queue.owned(workspace, handle)?;
-        if entry.summary.status != "awaiting-trust"
-            || entry.summary.fingerprint.as_deref() != Some(fingerprint)
-        {
-            return Err(failure("TEMPORARY_TRUST_STATE"));
-        }
-        let tx = entry
-            .trust
-            .take()
-            .ok_or_else(|| failure("TEMPORARY_TRUST_STATE"))?;
-        tx.send(true)
-            .map_err(|_| failure("TEMPORARY_TRUST_STATE"))?;
-        entry.trusted_fingerprint = Some(fingerprint.into());
-        entry.summary.status = "connecting".into();
-        Ok(())
+        // Retain the command contract for old clients, without offering a way
+        // to override a mismatch after automatic first-use verification.
+        Err(failure("TEMPORARY_TRUST_STATE"))
     }
 
     pub fn start_temporary(&self, workspace: &str, handle: &str) -> AppResult<()> {
@@ -227,7 +241,6 @@ impl SshService {
             if let Ok(entry) = queue.owned(&workspace, &id) {
                 entry.native = None;
                 entry.cancel = None;
-                entry.trust = None;
                 entry.trusted_fingerprint = None;
                 entry.summary.fingerprint = None;
                 entry.summary.status = "disconnected".into();
@@ -265,15 +278,15 @@ impl SshService {
                 initial_exchange_seen: false,
             }),
         };
-        // Includes up to 120s of explicit host-trust waiting. Authentication
-        // gets its own 30s bound; a single PTY + shell gets 15s total.
+        // Key exchange, authentication and PTY + shell setup have independent
+        // bounds. First-use verification no longer waits for a UI response.
         let mut config = native_client_config();
         // A setup timeout must own its outcome. Normal-session keepalives
         // otherwise disconnect a slow authentication/channel after nine seconds.
         // Temporary sessions perform no background liveness probes or reconnect.
         config.keepalive_interval = None;
         let handle = tokio::time::timeout(
-            Duration::from_secs(150),
+            Duration::from_secs(30),
             native_transport::connect_transport(
                 request.host.as_str(),
                 request.port,

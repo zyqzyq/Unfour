@@ -1,0 +1,12 @@
+/* xterm's DOM renderer defaults to a 500ms visible/hidden cadence. Keep the
+   same calmer 700ms cadence for ordinary and bastion terminals. Override only
+   duration so remote cursor style/visibility controls continue to work. */
+.ssh-terminal-pane .xterm .xterm-screen .xterm-rows.xterm-focus .xterm-cursor.xterm-cursor-blink {
+  animation-duration: 1.4s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ssh-terminal-pane .xterm .xterm-screen .xterm-rows.xterm-focus .xterm-cursor.xterm-cursor-blink {
+    animation: none;
+  }
+}

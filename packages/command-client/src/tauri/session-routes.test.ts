@@ -3,7 +3,7 @@ import { call } from "./invoke";
 import { databaseActionContext, listDatabaseConnections, saveDatabaseConnection, executeDatabaseQuery, testDatabaseConnectionInput } from "./database";
 import { saveRedisConnection, inspectRedisKey } from "./redis";
 import { saveSshConnection, connectSshSession, testSshConnection, runSshTask } from "./ssh";
-import { cancelTemporarySsh, listTemporaryRouteHandles } from "./temporary-ssh";
+import { cancelTemporarySsh, listTemporaryRouteHandles, listTemporaryRoutes, temporaryRouteOptions, temporarySshLabel } from "./temporary-ssh";
 import type { DatabaseConnection } from "../types";
 
 vi.mock("./invoke", () => ({ call: vi.fn(), isTauriRuntime: () => true }));
@@ -21,6 +21,23 @@ it("only lists connected sources owned by the requested workspace", async () => 
     { handle: "closed", status: "disconnected", workspaceId: scope.workspaceId },
   ]);
   expect(await listTemporaryRouteHandles(scope.workspaceId)).toEqual([handle]);
+});
+
+it("uses allowlisted node labels and endpoints for route choices without changing handles", async () => {
+  const route = { handle, displayName: "Production node", endpoint: "10.0.0.8:22" };
+  vi.mocked(call).mockResolvedValueOnce([
+    { ...route, status: "connected", workspaceId: scope.workspaceId },
+    { ...route, handle: "foreign", status: "connected", workspaceId: "other" },
+    { ...route, handle: "closed", status: "disconnected", workspaceId: scope.workspaceId },
+  ]);
+  const live = await listTemporaryRoutes(scope.workspaceId);
+  expect(live).toEqual([route]);
+  expect(temporaryRouteOptions(live, "expired", (id) => `Session ${id}`, "Unavailable")).toEqual([
+    { value: handle, label: "Production node · 10.0.0.8:22" },
+    { value: "expired", label: "Unavailable" },
+  ]);
+  expect(temporarySshLabel({ ...route, displayName: route.endpoint }, "fallback")).toBe(route.endpoint);
+  expect(temporarySshLabel({ ...route, displayName: "", endpoint: "" }, "fallback")).toBe("fallback");
 });
 
 it("binds explicit SQL and SSH actions without including the handle in a connection save", async () => {

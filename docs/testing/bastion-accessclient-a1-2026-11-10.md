@@ -1,5 +1,14 @@
 # AccessClient A1：本机只读证据与接入门槛
 
+## 2026-11-16 当前进度
+
+Xshell 和 scrt 的已观察最小参数契约已实现，scrt 可执行文件路径交接已有用户报告的
+现场登录成功，见 [已交付包证据](bastion-scrt-launch-2026-11-16.md)。A1–A3 可按接入
+开发范围收口；未知的授权期限、代理生命周期、exec/SFTP 和登录/通道复用能力继续
+由 [A4 #7](https://github.com/zyqzyq/Unfour/issues/7) 验收。当前契约见
+[启动契约](../architecture/bastion-launch-contract.md)。以下日期段落保留当时证据与
+状态，不覆盖本次进度，也不把未知能力认定为已支持。
+
 ## 2026-11-11 现场补证
 
 用户在任务管理器观察到网页经 QizhiTech AccessClient 4.6.15 打开 Xshell 7。已有 Xshell 窗口时新增标签。以下为外层进程原始命令行的合成结构。

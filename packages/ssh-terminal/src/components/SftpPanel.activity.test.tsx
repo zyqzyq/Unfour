@@ -127,6 +127,20 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+it.each(["denied", "unavailable"])("reports %s clipboard access when copying a remote path", async (failure) => {
+  const writeText = vi.fn().mockRejectedValue(new DOMException("", "NotAllowedError"));
+  vi.stubGlobal("navigator", { clipboard: failure === "unavailable" ? undefined : { writeText } });
+  vi.spyOn(console, "error").mockImplementation(() => undefined);
+  renderPanel();
+  const row = await screen.findByRole("row", { name: /notes\.txt/ });
+  fireEvent.contextMenu(row);
+  fireEvent.click(screen.getByRole("menuitem", { name: "Copy path" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Failed to write to the clipboard");
+  if (failure === "denied") expect(writeText).toHaveBeenCalledExactlyOnceWith(entry.path);
+  for (const action of [mocks.upload, mocks.download, mocks.mkdir, mocks.rename, mocks.remove]) expect(action).not.toHaveBeenCalled();
 });
 
 it("keeps SFTP success and transfer ids when activity logging fails", async () => {

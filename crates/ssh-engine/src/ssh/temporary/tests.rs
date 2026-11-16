@@ -59,7 +59,7 @@ async fn stalled_key_exchange_closes_socket_on_cancel_and_transport_timeout() {
             service.cancel_temporary(&workspace, &handle).unwrap();
         } else {
             tokio::time::pause();
-            tokio::time::advance(Duration::from_secs(151)).await;
+            tokio::time::advance(Duration::from_secs(31)).await;
             tokio::time::resume();
         }
         let closed =
@@ -150,15 +150,11 @@ async fn isolation_safe_summary_and_zero_persistence() {
     assert!(service.temporary_output("other", &handle).is_err());
     let summary = serde_json::to_string(&service.list_temporary(&workspace).unwrap()).unwrap();
     let debug = format!("{:?}", service.list_temporary(&workspace).unwrap());
-    for secret in [
-        "SECRET_USER_SENTINEL",
-        "SECRET_PASSWORD_SENTINEL",
-        "synthetic.invalid",
-        "2222",
-    ] {
+    for secret in ["SECRET_USER_SENTINEL", "SECRET_PASSWORD_SENTINEL"] {
         assert!(!summary.contains(secret));
         assert!(!debug.contains(secret));
     }
+    assert!(summary.contains("synthetic.invalid:2222"));
     service.close_temporary_workspace(&workspace).unwrap();
     assert!(service.list_temporary(&workspace).unwrap().is_empty());
     assert!(service
@@ -172,6 +168,52 @@ async fn isolation_safe_summary_and_zero_persistence() {
         .await
         .unwrap();
     assert_eq!(before, after);
+}
+
+#[tokio::test]
+async fn display_metadata_is_bounded_and_never_uses_login_material() {
+    let (service, workspace) = fixture().await;
+    for (label, expected) in [
+        ("  生产节点  ".to_owned(), "生产节点".to_owned()),
+        (
+            "node\u{202e}\u{200b}\nname".to_owned(),
+            "nodename".to_owned(),
+        ),
+        ("节点".repeat(100), format!("{}…", "节点".repeat(80))),
+        (
+            "SECRET_USER_SENTINEL@node".to_owned(),
+            "synthetic.invalid:2222".to_owned(),
+        ),
+        (
+            "SECRET_PASSWORD_SENTINEL".to_owned(),
+            "synthetic.invalid:2222".to_owned(),
+        ),
+        (
+            "SECRET_PASS\u{200b}WORD_SENTINEL".to_owned(),
+            "synthetic.invalid:2222".to_owned(),
+        ),
+        (
+            "ssh://some:credentials@node".to_owned(),
+            "synthetic.invalid:2222".to_owned(),
+        ),
+        ("   ".to_owned(), "synthetic.invalid:2222".to_owned()),
+    ] {
+        let handle = service
+            .receive_temporary(
+                &LaunchReceipt::default(),
+                request().with_display_name(&label),
+            )
+            .unwrap();
+        let summary = service
+            .list_temporary(&workspace)
+            .unwrap()
+            .into_iter()
+            .find(|entry| entry.handle == handle)
+            .unwrap();
+        assert_eq!(summary.display_name, expected);
+        assert_eq!(summary.endpoint, "synthetic.invalid:2222");
+        service.cancel_temporary(&workspace, &handle).unwrap();
+    }
 }
 
 #[tokio::test]
@@ -244,43 +286,6 @@ async fn workspace_close_invalidates_claim_waiting_for_database() {
 
 #[cfg(feature = "ssh-native")]
 #[tokio::test]
-async fn unknown_host_trust_wait_times_out_without_approval() {
-    let (service, workspace) = fixture().await;
-    let store = HostKeyStore::new(service.db.pool().clone());
-    let handle = service
-        .receive_temporary(&LaunchReceipt::default(), request())
-        .unwrap();
-    service.claim_temporary(&workspace, &handle).await.unwrap();
-    {
-        let mut queue = service.temporary.0.lock().unwrap();
-        let entry = queue.owned(&workspace, &handle).unwrap();
-        entry.request = None;
-        entry.summary.status = "connecting".into();
-    }
-    let prompt = TrustPrompt {
-        queue: Arc::downgrade(&service.temporary.0),
-        handle: handle.clone(),
-        initial_exchange_seen: false,
-    };
-    let verify = prompt.verify(&store, &workspace, "fixture", 22, "synthetic");
-    tokio::pin!(verify);
-    loop {
-        tokio::select! { _ = &mut verify => panic!("must wait"), _ = tokio::time::sleep(Duration::from_millis(1)) => {} }
-        if service.list_temporary(&workspace).unwrap()[0].status == "awaiting-trust" {
-            break;
-        }
-    }
-    tokio::time::pause();
-    tokio::time::advance(Duration::from_secs(121)).await;
-    assert!(!verify.await);
-    assert!(service
-        .trust_temporary(&workspace, &handle, "synthetic")
-        .is_err());
-    service.cancel_temporary(&workspace, &handle).unwrap();
-}
-
-#[cfg(feature = "ssh-native")]
-#[tokio::test]
 async fn cancel_before_setup_is_polled_does_not_resurrect() {
     let (service, workspace) = fixture().await;
     let handle = service
@@ -295,61 +300,4 @@ async fn cancel_before_setup_is_polled_does_not_resurrect() {
 }
 
 #[cfg(feature = "ssh-native")]
-#[tokio::test]
-async fn trust_matches_stored_key_and_never_writes_unknown_key() {
-    let (service, workspace) = fixture().await;
-    let store = HostKeyStore::new(service.db.pool().clone());
-    store
-        .record_fingerprint(&workspace, "fixture", 22, "expected")
-        .await
-        .unwrap();
-    let handle = service
-        .receive_temporary(&LaunchReceipt::default(), request())
-        .unwrap();
-    service.claim_temporary(&workspace, &handle).await.unwrap();
-    let prompt = TrustPrompt {
-        queue: Arc::downgrade(&service.temporary.0),
-        handle: handle.clone(),
-        initial_exchange_seen: false,
-    };
-    assert!(
-        prompt
-            .verify(&store, &workspace, "fixture", 22, "expected")
-            .await
-    );
-    assert!(
-        !prompt
-            .verify(&store, &workspace, "fixture", 22, "changed")
-            .await
-    );
-    let verify = prompt.verify(&store, &workspace, "unknown", 22, "fingerprint");
-    tokio::pin!(verify);
-    loop {
-        tokio::select! { _ = &mut verify => panic!("must wait for explicit trust"), _ = tokio::time::sleep(Duration::from_millis(1)) => {} }
-        if service.list_temporary(&workspace).unwrap()[0].status == "awaiting-trust" {
-            break;
-        }
-    }
-    assert!(service
-        .trust_temporary("other", &handle, "fingerprint")
-        .is_err());
-    assert!(service
-        .trust_temporary(&workspace, &handle, "changed")
-        .is_err());
-    service
-        .trust_temporary(&workspace, &handle, "fingerprint")
-        .unwrap();
-    assert!(verify.await);
-    assert_eq!(
-        store
-            .get_fingerprint(&workspace, "unknown", 22)
-            .await
-            .unwrap(),
-        None
-    );
-    assert!(
-        !prompt
-            .verify(&store, &workspace, "unknown", 22, "changed")
-            .await
-    );
-}
+mod trust_tests;

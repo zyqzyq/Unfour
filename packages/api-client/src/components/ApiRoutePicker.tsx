@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Route } from "lucide-react";
-import { listTemporaryRouteHandles, temporaryRouteOptions, type ApiRoute, type ApiRouteEdit } from "@unfour/command-client";
+import { listTemporaryRoutes, temporaryRouteOptions, temporarySshLabel, type ApiRoute, type ApiRouteEdit } from "@unfour/command-client";
 import { Button, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Select, useI18n, useLiveOptions } from "@unfour/ui";
 import type { ApiRouteControls } from "../hooks/useApiRoutes";
 import { errorCode } from "../model/api-request-state";
@@ -25,7 +25,9 @@ export function ApiRoutePicker(props: Props) {
   const [open, setOpen] = useState(false);
   const effective = routing.effective;
   const name = routing.selectedHost?.name;
-  const label = routing.temporaryHandle ? (routing.ready ? t("network.temporarySession", { id: routing.temporaryHandle.slice(-8) }) : t("network.temporaryUnavailable")) : effective?.mode === "ssh"
+  const temporary = routing.temporary.data?.find((entry) => entry.handle === routing.temporaryHandle);
+  const temporaryFallback = t("network.temporarySession", { id: routing.temporaryHandle?.slice(-8) ?? "" });
+  const label = routing.temporaryHandle ? (routing.ready ? (temporary ? temporarySshLabel(temporary, temporaryFallback) : temporaryFallback) : t("network.temporaryUnavailable")) : effective?.mode === "ssh"
     ? t("api.route.via", { name: name || t("api.route.missing") })
     : routing.ready ? t("api.route.direct") : t("api.route.unavailableShort");
   const inherited = (draft?.route ?? routing.routes?.request)?.mode === "inherit";
@@ -44,7 +46,7 @@ function RouteDialog({ routing, draft, environmentName, onChange, onClose }: Pro
   const [request, setRequest] = useState<ApiRouteEdit | null>(null);
   const [environment, setEnvironment] = useState<ApiRouteEdit | null>(null);
   const [error, setError] = useState("");
-  const sessions = useLiveOptions(routing.workspaceId, listTemporaryRouteHandles, true);
+  const sessions = useLiveOptions(routing.workspaceId, listTemporaryRoutes, true);
   const [temporaryHandle, setTemporaryHandle] = useState(routing.temporaryHandle);
   const live = temporaryRouteOptions(sessions?.items ?? [], temporaryHandle, (id) => t("network.temporarySession", { id }), t("network.temporaryUnavailable"));
   const stored = routes?.request ?? { mode: "inherit" };

@@ -6,6 +6,7 @@ use unfour_command_bus::{CommandBus, LaunchReceipt, TemporaryRequest};
 const UNSUPPORTED: &str = "BASTION_LAUNCH_UNSUPPORTED";
 
 struct Endpoint<'a> {
+    label: &'a str,
     host: &'a str,
     port: u16,
     identity: &'a str,
@@ -40,7 +41,7 @@ fn parse<S: AsRef<OsStr>>(args: &[S]) -> Result<Launch<'_>, &'static str> {
             {
                 return Err(UNSUPPORTED);
             }
-            parse_endpoint(url).map(Launch::Terminal)
+            parse_endpoint(url, label).map(Launch::Terminal)
         }
         [tab, name, label, protocol, host, port_flag, port, login, identity, password, credential]
             if slash_option(tab.as_ref(), "/T")
@@ -90,8 +91,9 @@ fn parse_scrt(values: [&OsStr; 5]) -> Result<Endpoint<'_>, &'static str> {
     }
     // Separate argv values are literal UTF-8, not URL components. Never decode
     // percent escapes, trim credentials, split ticket usernames or execute a
-    // value resembling a switch. The external label is validated then discarded.
+    // value resembling a switch. The label is display metadata, never a target.
     Ok(Endpoint {
+        label,
         host,
         port: port.parse().map_err(|_| UNSUPPORTED)?,
         identity,
@@ -103,7 +105,7 @@ fn parse_scrt(values: [&OsStr; 5]) -> Result<Endpoint<'_>, &'static str> {
 #[path = "launch_scrt_tests.rs"]
 mod scrt_tests;
 
-fn parse_endpoint(url: &str) -> Result<Endpoint<'_>, &'static str> {
+fn parse_endpoint<'a>(url: &'a str, label: &'a str) -> Result<Endpoint<'a>, &'static str> {
     let authority = url.strip_prefix("ssh://").ok_or(UNSUPPORTED)?;
     let (userinfo, address) = authority.split_once('@').ok_or(UNSUPPORTED)?;
     let (identity, credential) = userinfo.split_once(':').ok_or(UNSUPPORTED)?;
@@ -125,6 +127,7 @@ fn parse_endpoint(url: &str) -> Result<Endpoint<'_>, &'static str> {
         return Err(UNSUPPORTED);
     }
     Ok(Endpoint {
+        label,
         host,
         port: port.parse().map_err(|_| UNSUPPORTED)?,
         identity,
@@ -174,7 +177,8 @@ pub(crate) fn deliver<S: AsRef<OsStr>>(
         source.identity.into(),
         source.credential.into(),
     )
-    .map_err(|_| UNSUPPORTED)?;
+    .map_err(|_| UNSUPPORTED)?
+    .with_display_name(source.label);
     // Windows callbacks run on the event-loop thread. Enter the Tauri runtime
     // for the queue's expiry timer without waiting for UI readiness or SSH.
     let runtime = tauri::async_runtime::handle();
@@ -209,6 +213,7 @@ mod tests {
             ),
             ("user-1", "grant_2", "entry.invalid", 22)
         );
+        assert_eq!(endpoint.label, args[3]);
     }
 
     #[test]
@@ -289,13 +294,10 @@ mod tests {
             .iter()
             .all(|p| p.workspace_id.is_none() && p.status == "pending"));
         let visible = serde_json::to_string(&pending).unwrap();
-        for sensitive in [
-            "synthetic-user",
-            "synthetic-grant",
-            "entry.invalid",
-            args[3],
-            args[1],
-        ] {
+        assert!(pending
+            .iter()
+            .all(|p| p.display_name == args[3] && p.endpoint == "entry.invalid:22"));
+        for sensitive in ["synthetic-user", "synthetic-grant", args[1]] {
             assert!(!visible.contains(sensitive));
         }
         bus.cancel_temporary_ssh("", &pending[0].handle).unwrap();

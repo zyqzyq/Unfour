@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { KeyRound, Lock, Plug, Save, ShieldOff } from "lucide-react";
-import { listTemporaryRouteHandles, revealConnectionSecret, temporaryRouteOptions, type SshConnectionInput } from "@unfour/command-client";
+import { listTemporaryRoutes, revealConnectionSecret, temporaryRouteOptions, type SshConnectionInput } from "@unfour/command-client";
 import {
   Button,
   Dialog,
@@ -52,7 +52,7 @@ export function SshConnectionDialog({
   children?: ReactNode;
 }) {
   const { t } = useI18n();
-  const sessions = useLiveOptions(form.workspaceId, listTemporaryRouteHandles, open);
+  const sessions = useLiveOptions(form.workspaceId, listTemporaryRoutes, open);
   const temporary = temporaryRouteOptions(sessions?.items ?? [], form.temporaryHandle, (id) => t("network.temporarySession", { id }), t("network.temporaryUnavailable"));
 
   return (

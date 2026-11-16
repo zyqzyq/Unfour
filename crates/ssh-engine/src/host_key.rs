@@ -86,6 +86,28 @@ impl HostKeyStore {
         Ok(row.map(|r| r.0))
     }
 
+    /// Read-only check for temporary launches. DNS names are case-insensitive;
+    /// every previously stored spelling must agree before credentials are sent.
+    /// None means no known pin, not a verified identity.
+    #[cfg(feature = "ssh-native")]
+    pub(crate) async fn matches_known_fingerprint(
+        &self,
+        workspace_id: &str,
+        host: &str,
+        port: u16,
+        fingerprint: &str,
+    ) -> AppResult<Option<bool>> {
+        let pins = sqlx::query_as::<_, (String,)>(
+            "SELECT fingerprint FROM ssh_host_keys WHERE workspace_id = ? AND host = ? COLLATE NOCASE AND port = ?",
+        )
+        .bind(workspace_id)
+        .bind(host)
+        .bind(port as i64)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok((!pins.is_empty()).then(|| pins.iter().all(|(pin,)| pin == fingerprint)))
+    }
+
     /// Verify or record a host key fingerprint.
     ///
     /// - If no fingerprint is stored, record the given one (first connection).

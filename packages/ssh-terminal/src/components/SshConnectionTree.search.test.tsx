@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { closeSshSession, connectSshSession, deleteSshConnection, listSshConnections, listSshSessions, saveSshConnection, type SshConnection, type SshSessionSummary } from "@unfour/command-client";
 import { useWorkspaceStore } from "@unfour/workspace-core";
-import { I18nProvider } from "@unfour/ui";
+import { FeedbackProvider, I18nProvider } from "@unfour/ui";
 import { useTerminalStore } from "../model/terminal-state";
 import { SshConnectionTree } from "./SshConnectionTree";
 
@@ -31,14 +31,14 @@ beforeEach(() => {
   useWorkspaceStore.setState({ selectedSshConnectionId: "prod" });
   useTerminalStore.setState({ activeSessionId: "live", terminalInput: "unfinished", splitMode: "vertical", terminalEvents: [{ sessionId: "live", kind: "output", data: "existing output", createdAt: "now" }] });
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 function setup(locale: "en" | "zh-CN" = "en") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity }, mutations: { retry: false } } });
   const onOpenTerminal = vi.fn();
   const onOpenTasks = vi.fn();
   const onEditConnection = vi.fn();
   const node = (workspaceId: string) => <QueryClientProvider client={client}><I18nProvider initialLocale={locale}>
-    <SshConnectionTree workspaceId={workspaceId} onOpenTerminal={onOpenTerminal} onOpenTasks={onOpenTasks} onEditConnection={onEditConnection} />
+    <FeedbackProvider><SshConnectionTree workspaceId={workspaceId} onOpenTerminal={onOpenTerminal} onOpenTasks={onOpenTasks} onEditConnection={onEditConnection} /></FeedbackProvider>
   </I18nProvider></QueryClientProvider>;
   const view = render(node("ws"));
   return { ...view, node, client, onOpenTerminal, onOpenTasks, onEditConnection };
@@ -116,5 +116,33 @@ describe("SSH connection local search", () => {
     expect(screen.getByText("没有匹配的 SSH 连接")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "清空搜索" }));
     expect(input).toHaveValue("");
+  });
+
+  it.each([
+    ["Copy Host", local.host],
+    ["Copy SSH Command", `ssh ${local.username}@${local.host} -p ${local.port}`],
+  ])("reports a failed %s and allows the next copy", async (label, text) => {
+    const writeText = vi.fn().mockRejectedValueOnce(new DOMException("", "NotAllowedError")).mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    setup();
+    const connection = await screen.findByRole("button", { name: "Local" });
+    fireEvent.contextMenu(connection);
+    fireEvent.click(screen.getByRole("menuitem", { name: label }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Failed to write to the clipboard");
+    fireEvent.contextMenu(connection);
+    fireEvent.click(screen.getByRole("menuitem", { name: label }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(2));
+    expect(writeText).toHaveBeenLastCalledWith(text);
+    expect(connectSshSession).not.toHaveBeenCalled();
+  });
+
+  it("reports an unavailable clipboard instead of silently dropping Copy Host", async () => {
+    vi.stubGlobal("navigator", { clipboard: undefined });
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    setup();
+    fireEvent.contextMenu(await screen.findByRole("button", { name: "Local" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Host" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Failed to write to the clipboard");
   });
 });

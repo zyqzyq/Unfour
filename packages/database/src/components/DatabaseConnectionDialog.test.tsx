@@ -3,20 +3,20 @@ import "@testing-library/jest-dom/vitest";
 import { useState } from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { listTemporaryRouteHandles, listSshConnections, revealConnectionSecret, type DatabaseConnectionInput, type SshConnection } from "@unfour/command-client";
+import { listTemporaryRoutes, listSshConnections, revealConnectionSecret, type DatabaseConnectionInput, type SshConnection } from "@unfour/command-client";
 import { DatabaseConnectionDialog } from "./DatabaseConnectionDialog";
 import { DatabaseTestResultDialog } from "./DatabaseTestResultDialog";
 
 vi.mock("@unfour/command-client", async (importOriginal) => ({
   ...await importOriginal<typeof import("@unfour/command-client")>(),
-  listTemporaryRouteHandles: vi.fn().mockResolvedValue([]), listSshConnections: vi.fn().mockResolvedValue([]),
+  listTemporaryRoutes: vi.fn().mockResolvedValue([]), listSshConnections: vi.fn().mockResolvedValue([]),
   revealConnectionSecret: vi.fn().mockResolvedValue("saved-db-secret"),
 }));
 
 afterEach(cleanup);
 
 it("makes saved and live SSH sources selectable for a network database", async () => {
-  vi.mocked(listTemporaryRouteHandles).mockResolvedValueOnce(["session-12345678"]);
+  vi.mocked(listTemporaryRoutes).mockResolvedValueOnce([{ handle: "session-12345678", displayName: "Production node", endpoint: "10.0.0.8:22" }]);
   vi.mocked(listSshConnections).mockResolvedValueOnce([{ id: "jump", workspaceId: "ws", name: "Gateway", revision: 7,
     host: "fixture", port: 22, username: "user" } as SshConnection]);
   const update = vi.fn();

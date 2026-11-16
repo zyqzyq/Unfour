@@ -26,6 +26,7 @@ fn observed_scrt_order_uses_host_and_auth_fields_not_label() {
         panic!("synthetic SecureCRT argv rejected")
     };
     assert_eq!((endpoint.host, endpoint.port), ("gateway.invalid", 22022));
+    assert_eq!(endpoint.label, args[2]);
     assert_eq!(
         (endpoint.identity, endpoint.credential),
         ("synthetic-user", "synthetic-grant")
@@ -130,7 +131,7 @@ fn invalid_unicode_in_any_value_is_rejected() {
 
 #[cfg(windows)]
 #[test]
-fn scrt_requests_wait_for_ui_without_serializing_values() {
+fn scrt_requests_expose_display_metadata_without_serializing_credentials() {
     let bus = tauri::async_runtime::block_on(CommandBus::ephemeral()).unwrap();
     let args = fixture();
     for _ in 0..2 {
@@ -143,7 +144,10 @@ fn scrt_requests_wait_for_ui_without_serializing_values() {
         .iter()
         .all(|p| p.workspace_id.is_none() && p.status == "pending"));
     let json = serde_json::to_string(&pending).unwrap();
-    for index in [2, 4, 8, 10] {
+    assert!(pending
+        .iter()
+        .all(|p| p.display_name == args[2] && p.endpoint == "gateway.invalid:22022"));
+    for index in [8, 10] {
         assert!(!json.contains(&args[index]));
     }
     for entry in pending {

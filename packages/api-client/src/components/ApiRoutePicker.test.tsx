@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { getApiRoutes, listSshConnections, listTemporaryRouteHandles, setApiEnvironmentRoute, type SshConnection } from "@unfour/command-client";
+import { getApiRoutes, listSshConnections, listTemporaryRoutes, setApiEnvironmentRoute, type SshConnection } from "@unfour/command-client";
 import { useState } from "react";
 import { useApiRoutes } from "../hooks/useApiRoutes";
 import { createNewRequestTab, emptyApiTabsState } from "../model/request-tabs";
@@ -12,7 +12,7 @@ import { ApiRoutePicker } from "./ApiRoutePicker";
 vi.mock("@unfour/command-client", async (load) => ({
   ...await load<typeof import("@unfour/command-client")>(),
   getApiRoutes: vi.fn(), listSshConnections: vi.fn(), setApiEnvironmentRoute: vi.fn(),
-  listTemporaryRouteHandles: vi.fn().mockResolvedValue([]),
+  listTemporaryRoutes: vi.fn().mockResolvedValue([]),
 }));
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
 const tab = createNewRequestTab(emptyApiTabsState("w"), "new:1").tabs[0];
@@ -27,18 +27,18 @@ function TestBar({ onApplied }: { onApplied?: (route: ApiRouteEdit | undefined) 
 it("offers a bastion session for this request only", async () => {
   vi.mocked(getApiRoutes).mockResolvedValue({ environmentId: "env-1", request: { mode: "inherit" }, environment: { mode: "direct" }, effective: { mode: "direct" } });
   vi.mocked(listSshConnections).mockResolvedValue([]);
-  vi.mocked(listTemporaryRouteHandles).mockResolvedValue(["session-12345678"]);
+  vi.mocked(listTemporaryRoutes).mockResolvedValue([{ handle: "session-12345678", displayName: "Production node", endpoint: "10.0.0.8:22" }]);
   const client = new QueryClient();
   const onApplied = vi.fn();
   render(<QueryClientProvider client={client}><TestBar onApplied={onApplied} /></QueryClientProvider>);
   fireEvent.click(await screen.findByRole("button", { name: /Network route · Environment · Direct/ }));
   const request = screen.getByLabelText("This request");
-  await within(request).findByRole("option", { name: "Bastion session · 12345678" });
+  await within(request).findByRole("option", { name: "Production node · 10.0.0.8:22" });
   expect(within(screen.getByLabelText("Default for QA")).queryByRole("option", { name: /Bastion session/ })).toBeNull();
   fireEvent.change(request, { target: { value: "direct" } });
   fireEvent.change(request, { target: { value: "live:session-12345678" } });
   fireEvent.click(screen.getByRole("button", { name: "Apply" }));
-  expect(await screen.findByRole("button", { name: "Network route · Bastion session · 12345678" })).toBeVisible();
+  expect(await screen.findByRole("button", { name: "Network route · Production node · 10.0.0.8:22" })).toBeVisible();
   expect(onApplied).toHaveBeenCalledWith(undefined);
   expect(setApiEnvironmentRoute).not.toHaveBeenCalled();
 });

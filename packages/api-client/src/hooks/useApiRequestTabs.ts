@@ -246,7 +246,7 @@ export function useApiRequestTabs(workspaceId: string) {
       }
       const routes = routing.routes;
       if (!routing.ready || !routes || tab.id !== activeTab?.id || queryClient.isMutating({ mutationKey: environmentRouteMutationKey(workspaceId) })) {
-        const message = tab.draft.temporaryHandle && !routing.temporary.data?.includes(tab.draft.temporaryHandle)
+        const message = tab.draft.temporaryHandle && !routing.temporary.data?.some((entry) => entry.handle === tab.draft.temporaryHandle)
           ? t("network.errors.SSH_TUNNEL_TEMPORARY_UNAVAILABLE") : t("api.route.unavailable");
         useApiRequestTabStore.getState().failTabSend(workspaceId, tab.id, message);
         return;

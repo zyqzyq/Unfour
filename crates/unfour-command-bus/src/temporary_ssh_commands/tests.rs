@@ -224,9 +224,6 @@ async fn temporary_rekey_requires_a_new_launch_during_setup_and_after_connecting
             .unwrap();
         bus.claim_temporary_ssh(&workspace, &handle).await.unwrap();
         bus.start_temporary_ssh(&workspace, &handle).unwrap();
-        let trust = wait_for(&bus, &workspace, "awaiting-trust").await;
-        bus.trust_temporary_ssh(&workspace, &handle, trust.fingerprint.as_deref().unwrap())
-            .unwrap();
         let mut forwarding = None;
         if !during_setup {
             wait_for(&bus, &workspace, "connected").await;
@@ -299,10 +296,6 @@ async fn temporary_loopback_terminal_single_login_channel_and_zero_database_writ
     );
     bus.claim_temporary_ssh(&workspace, &handle).await.unwrap();
     bus.start_temporary_ssh(&workspace, &handle).unwrap();
-    let trust = wait_for(&bus, &workspace, "awaiting-trust").await;
-    assert_eq!(calls.lock().unwrap().as_slice(), ["login"]);
-    bus.trust_temporary_ssh(&workspace, &handle, trust.fingerprint.as_deref().unwrap())
-        .unwrap();
     wait_for(&bus, &workspace, "connected").await;
     assert!(bus.start_temporary_ssh(&workspace, &handle).is_err());
     bus.temporary_ssh_input(SshSessionInput {
@@ -402,9 +395,6 @@ async fn stalled_session(stage: &'static str, cancel: bool) {
         .unwrap();
     bus.claim_temporary_ssh(&workspace, &handle).await.unwrap();
     bus.start_temporary_ssh(&workspace, &handle).unwrap();
-    let trust = wait_for(&bus, &workspace, "awaiting-trust").await;
-    bus.trust_temporary_ssh(&workspace, &handle, trust.fingerprint.as_deref().unwrap())
-        .unwrap();
     tokio::time::timeout(Duration::from_secs(5), async {
         while !calls.lock().unwrap().contains(&match stage {
             "late-shell" | "reject-shell" => "shell",

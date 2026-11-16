@@ -6,12 +6,13 @@ import { I18nProvider } from "@unfour/ui";
 import { TemporaryTerminalWorkspace } from "./TemporaryTerminalWorkspace";
 
 const api = vi.hoisted(() => ({ list: vi.fn(), claim: vi.fn(), start: vi.fn(), cancel: vi.fn(), close: vi.fn(), output: vi.fn(), trust: vi.fn() }));
-vi.mock("@unfour/command-client", () => ({
+vi.mock("@unfour/command-client", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@unfour/command-client")>(),
   listTemporarySsh: api.list, claimTemporarySsh: api.claim, startTemporarySsh: api.start,
   cancelTemporarySsh: api.cancel, closeTemporarySshWorkspace: api.close, readTemporarySshOutput: api.output, trustTemporarySsh: api.trust,
 }));
 vi.mock("./TerminalPane", () => ({ TerminalPane: ({ temporary }: { temporary: boolean }) => <div data-testid="temporary-pane">{String(temporary)}</div> }));
-const pending = { handle: "opaque-fixture", workspaceId: null, status: "pending", expiresInSeconds: 120, fingerprint: null, errorCode: null };
+const pending = { handle: "opaque-fixture", workspaceId: null, status: "pending", expiresInSeconds: 120, fingerprint: null, errorCode: null, displayName: "Production node", endpoint: "10.0.0.8:22" };
 function view(workspaceId = "workspace-a", autoClaim = false, surfaceActive = true) {
   return <I18nProvider initialLocale="en"><TemporaryTerminalWorkspace workspaceId={workspaceId} autoClaim={autoClaim} surfaceActive={surfaceActive}><div data-testid="saved">saved</div></TemporaryTerminalWorkspace></I18nProvider>;
 }
@@ -59,15 +60,18 @@ describe("temporary terminal lifecycle", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(api.close).not.toHaveBeenCalled(); expect(api.start).not.toHaveBeenCalled();
   });
-  it("keeps fingerprint trust explicit and preserves the mounted saved view", async () => {
-    api.list.mockResolvedValue([{ ...pending, workspaceId: "workspace-a", status: "awaiting-trust", fingerprint: "SHA256:synthetic" }]);
+  it("identifies connected nodes without a second trust action and preserves the mounted saved view", async () => {
+    api.list.mockResolvedValue([
+      { ...pending, workspaceId: "workspace-a", status: "connected" },
+      { ...pending, handle: "second-handle", workspaceId: "workspace-a", status: "connected", displayName: "Backup node", endpoint: "10.0.0.9:2222" },
+    ]);
     render(view());
-    fireEvent.click(await screen.findByText("Bastion temporary terminal"));
+    fireEvent.click(await screen.findByText("Production node · 10.0.0.8:22"));
+    expect(screen.getByText("Backup node · 10.0.0.9:2222")).toBeInTheDocument();
     expect(screen.getByTestId("temporary-pane")).toHaveTextContent("true");
     expect(screen.getByTestId("saved")).toBeInTheDocument();
     expect(api.trust).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByText("Trust this fingerprint once"));
-    await waitFor(() => expect(api.trust).toHaveBeenCalledWith("workspace-a", "opaque-fixture", "SHA256:synthetic"));
+    expect(screen.queryByText("Trust this fingerprint once")).not.toBeInTheDocument();
     expect(screen.queryByText(/reconnect/i)).not.toBeInTheDocument();
   });
 });

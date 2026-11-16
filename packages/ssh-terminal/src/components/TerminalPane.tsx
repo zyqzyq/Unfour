@@ -3,6 +3,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { Terminal as XTerm } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
+import "./terminal-pane.css";
 import {
   listSshCommandHistory,
   resizeSshSession,
@@ -492,11 +493,12 @@ export function TerminalPane({
   return (
     <TerminalContextMenu
       canPaste={Boolean(session?.sessionId && !readOnly && !inputDisabled)}
+      pasteTarget={session && active !== false && paintActive ? `${session.workspaceId}:${session.sessionId}` : null}
       terminalRef={terminalRef}
     >
       <div
         className={cn(
-          "relative min-h-0 flex-1 overflow-hidden bg-[var(--u-color-terminal-bg)] p-4",
+          "ssh-terminal-pane relative min-h-0 flex-1 overflow-hidden bg-[var(--u-color-terminal-bg)] p-4",
           className,
         )}
         onClick={() => terminalRef.current?.focus()}

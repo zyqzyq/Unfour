@@ -10,6 +10,8 @@ export interface TemporarySshSummary {
   expiresInSeconds: number;
   fingerprint: string | null;
   errorCode: string | null;
+  displayName: string;
+  endpoint: string;
 }
 // Browser previews have no injection mechanism or fake credential parser.
 const latestLists = new Map<string, number>();
@@ -24,15 +26,27 @@ export async function listTemporarySsh(workspaceId: string) {
   return summaries;
 }
 export async function listTemporaryRouteHandles(workspaceId: string): Promise<string[]> {
-  const summaries = await listTemporarySsh(workspaceId);
-  return summaries
-    .filter((entry) => entry.workspaceId === workspaceId && entry.status === "connected")
-    .map((entry) => entry.handle);
+  return (await listTemporaryRoutes(workspaceId)).map((entry) => entry.handle);
 }
-/** Use a short opaque identifier to distinguish sessions without exposing login data. */
-export function temporaryRouteOptions(handles: string[], selected: string | null | undefined, label: (id: string) => string, unavailable: string) {
-  const options = handles.map((handle) => ({ value: handle, label: label(handle.slice(-8)) }));
-  if (selected && !handles.includes(selected)) options.push({ value: selected, label: unavailable });
+export type TemporarySshRoute = Pick<TemporarySshSummary, "handle" | "displayName" | "endpoint">;
+export async function listTemporaryRoutes(workspaceId: string): Promise<TemporarySshRoute[]> {
+  return (await listTemporarySsh(workspaceId))
+    .filter((entry) => entry.workspaceId === workspaceId && entry.status === "connected")
+    .map(({ handle, displayName, endpoint }) => ({ handle, displayName, endpoint }));
+}
+/** Only allowlisted display metadata; authentication fields never reach the UI. */
+export function temporarySshLabel(entry: TemporarySshRoute, fallback: string) {
+  const name = entry.displayName?.trim();
+  const endpoint = entry.endpoint?.trim();
+  return name && endpoint && name !== endpoint ? `${name} · ${endpoint}` : name || endpoint || fallback;
+}
+export function temporaryRouteOptions(routes: (TemporarySshRoute | string)[], selected: string | null | undefined, label: (id: string) => string, unavailable: string) {
+  const options = routes.map((route) => {
+    const handle = typeof route === "string" ? route : route.handle;
+    const fallback = label(handle.slice(-8));
+    return { value: handle, label: typeof route === "string" ? fallback : temporarySshLabel(route, fallback) };
+  });
+  if (selected && !options.some((option) => option.value === selected)) options.push({ value: selected, label: unavailable });
   return options;
 }
 export const onTemporarySshLaunch = (notify: () => void) =>

@@ -31,7 +31,7 @@ vi.mock("@unfour/command-client", async (original) => ({
   registerSshTerminalChannel: mocks.channel,
   saveSshConnection: mocks.save,
   testSshConnection: mocks.test,
-  listTemporaryRouteHandles: vi.fn().mockResolvedValue({ items: [] }),
+  listTemporaryRoutes: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("./components/TerminalWorkspace", () => ({

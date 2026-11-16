@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
-import { getApiRoutes, listSshConnections, listTemporaryRouteHandles, setApiEnvironmentRoute, type ApiRoute, type ApiRouteEdit, type SshConnection } from "@unfour/command-client";
+import { getApiRoutes, listSshConnections, listTemporaryRoutes, setApiEnvironmentRoute, type ApiRoute, type ApiRouteEdit, type SshConnection } from "@unfour/command-client";
 import type { ApiRequestTab } from "../model/request-tabs";
 
 type Routes = Awaited<ReturnType<typeof getApiRoutes>>;
@@ -37,11 +37,11 @@ export function useApiRoutes(workspaceId: string, tab: ApiRequestTab | null, env
   const temporary = useQuery({
     enabled: Boolean(temporaryHandle),
     queryKey: ["api-live-sessions", workspaceId],
-    queryFn: () => listTemporaryRouteHandles(workspaceId),
+    queryFn: () => listTemporaryRoutes(workspaceId),
     refetchInterval: 2000,
   });
   const ready = temporaryHandle
-    ? query.isSuccess && query.data.environmentId === environmentId && environmentReady && temporary.isSuccess && temporary.data.includes(temporaryHandle)
+    ? query.isSuccess && query.data.environmentId === environmentId && environmentReady && temporary.isSuccess && temporary.data.some((entry) => entry.handle === temporaryHandle)
     : view.ready;
   return { query, ssh, ...view, workspaceId, temporaryHandle, temporary, environmentStatus, ready: ready && !environmentMutation.isPending,
     pending: temporaryHandle ? query.isLoading || temporary.isLoading || environmentStatus === "pending" : view.pending, environmentMutation };

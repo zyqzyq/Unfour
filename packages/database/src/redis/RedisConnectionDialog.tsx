@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { bindRedisSession, connectionTemporaryHandle, listSshConnections, listTemporaryRouteHandles, redisTemporaryPassword, saveRedisConnection, temporaryRouteOptions, testRedisConnectionInput, type RedisConnection, type RedisConnectionInput } from "@unfour/command-client";
+import { bindRedisSession, connectionTemporaryHandle, listSshConnections, listTemporaryRoutes, redisTemporaryPassword, saveRedisConnection, temporaryRouteOptions, testRedisConnectionInput, type RedisConnection, type RedisConnectionInput } from "@unfour/command-client";
 import { Button, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle, Input, SecretInput, Select, useI18n, useLiveOptions } from "@unfour/ui";
 import { redisErrorMessage } from "./redis-error";
 
@@ -45,7 +45,7 @@ export function RedisConnectionDialog({ workspaceId, original, latest, initialNa
   const [temporaryHandle, setTemporaryHandle] = useState(originalHandle);
   const [runtimePassword, setRuntimePassword] = useState(() => original && originalHandle ? redisTemporaryPassword(workspaceId, original.id, original.revision) ?? "" : "");
   const [otherFieldsEdited, setOtherFieldsEdited] = useState(false);
-  const sessions = useLiveOptions(workspaceId, listTemporaryRouteHandles, true);
+  const sessions = useLiveOptions(workspaceId, listTemporaryRoutes, true);
   const live = temporaryRouteOptions(sessions?.items ?? [], temporaryHandle, (id) => t("network.temporarySession", { id }), t("network.temporaryUnavailable"));
   const [clear, setClear] = useState(false);
   const [pending, setPending] = useState<"save" | "test" | null>(null);
@@ -59,7 +59,7 @@ export function RedisConnectionDialog({ workspaceId, original, latest, initialNa
   ));
   const changed = Boolean(original && latest?.revision !== original.revision);
   const runtimeOnly = Boolean(original && temporaryHandle && !otherFieldsEdited && !password && !clear);
-  const valid = (!unknownJump || temporaryHandle) && (!temporaryHandle || (sessions?.items.includes(temporaryHandle) && (!original?.hasPassword || runtimePassword))) &&
+  const valid = (!unknownJump || temporaryHandle) && (!temporaryHandle || (sessions?.items.some((entry) => entry.handle === temporaryHandle) && (!original?.hasPassword || runtimePassword))) &&
     (runtimeOnly || !replacePassword || password || clear) && form.name.trim() && form.host.trim() && Number.isInteger(form.port) && form.port > 0 && form.port <= 65535 && Number.isSafeInteger(form.dbIndex) && form.dbIndex >= 0;
 
   function edit(patch: Partial<RedisConnectionInput>) {

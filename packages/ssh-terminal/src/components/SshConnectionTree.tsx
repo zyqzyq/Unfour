@@ -40,6 +40,7 @@ import {
   type TreeViewItem,
 } from "@unfour/ui";
 import { useSshConnections } from "../hooks/useSshConnections";
+import { useSshClipboardWrite } from "../hooks/useSshClipboardWrite";
 import { useTerminalSessions } from "../hooks/useTerminalSessions";
 import { formatTerminalError } from "../model/errors";
 import { sshConnectionToInput } from "../model/ssh-connection-state";
@@ -79,6 +80,7 @@ function SshConnectionTreeContent({
   }, []);
   const [search, setSearch] = useState("");
   const feedback = useFeedback();
+  const copyText = useSshClipboardWrite();
   const queryClient = useQueryClient();
   const { selectedSshConnectionId, setSelectedSshConnection } = useWorkspaceStore();
   const appendTerminalEvents = useTerminalStore((state) => state.appendTerminalEvents);
@@ -322,12 +324,12 @@ function SshConnectionTreeContent({
             {t("ssh.tree.editConnection")}
           </ContextMenuItem>
         )}
-        <ContextMenuItem onSelect={() => void navigator.clipboard?.writeText(connection.host)}>
+        <ContextMenuItem onSelect={() => void copyText(connection.host)}>
           {t("ssh.tree.copyHost")}
         </ContextMenuItem>
         <ContextMenuItem
           onSelect={() =>
-            void navigator.clipboard?.writeText(
+            void copyText(
               `ssh ${connection.username}@${connection.host} -p ${connection.port}`,
             )
           }
@@ -374,7 +376,7 @@ function SshConnectionTreeContent({
                   {t("ssh.tree.editConnection")}
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem onSelect={() => void navigator.clipboard?.writeText(connection.host)}>
+              <DropdownMenuItem onSelect={() => void copyText(connection.host)}>
                 <Copy size={13} />
                 {t("ssh.tree.copyHost")}
               </DropdownMenuItem>

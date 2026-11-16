@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   clipboardReadMock,
@@ -163,5 +163,54 @@ describe("TerminalPane clipboard interactions", () => {
       }),
     );
     expect(sendInputMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["session", "disabled", "inactive", "hidden"])("drops a delayed paste when the pane becomes %s", async (change) => {
+    let resolveRead: (text: string) => void = () => undefined;
+    clipboardReadMock.mockImplementation(() => new Promise<string>((resolve) => { resolveRead = resolve; }));
+    const { rerender } = render(<TerminalPane active events={[]} session={session} />);
+    fireEvent.contextMenu(terminalState.inputElement as HTMLTextAreaElement);
+    fireEvent.click(screen.getByRole("menuitem", { name: /ssh\.actions\.pasteClipboard/ }));
+    expect(clipboardReadMock).toHaveBeenCalledOnce();
+
+    rerender(<TerminalPane
+      active={change !== "inactive"}
+      paintActive={change !== "hidden"}
+      inputDisabled={change === "disabled"}
+      events={[]}
+      session={change === "session" ? { ...session, sessionId: "session-2" } : session}
+    />);
+    await act(async () => resolveRead("must not reach another target\r"));
+
+    expect(terminalState.pasteCalls).toEqual([]);
+    expect(sendInputMock).not.toHaveBeenCalled();
+  });
+
+  it("drops a delayed clipboard read after the terminal unmounts", async () => {
+    let resolveRead: (text: string) => void = () => undefined;
+    clipboardReadMock.mockImplementation(() => new Promise<string>((resolve) => { resolveRead = resolve; }));
+    const { unmount } = render(<TerminalPane active events={[]} session={session} />);
+    fireEvent.contextMenu(terminalState.inputElement as HTMLTextAreaElement);
+    fireEvent.click(screen.getByRole("menuitem", { name: /ssh\.actions\.pasteClipboard/ }));
+    unmount();
+    await act(async () => resolveRead("must not be sent\r"));
+    expect(terminalState.pasteCalls).toEqual([]);
+    expect(sendInputMock).not.toHaveBeenCalled();
+  });
+
+  it("prevents duplicate clipboard reads while a permission prompt is pending", async () => {
+    let resolveRead: (text: string) => void = () => undefined;
+    clipboardReadMock.mockImplementation(() => new Promise<string>((resolve) => { resolveRead = resolve; }));
+    render(<TerminalPane active events={[]} session={session} />);
+    fireEvent.contextMenu(terminalState.inputElement as HTMLTextAreaElement);
+    fireEvent.click(screen.getByRole("menuitem", { name: /ssh\.actions\.pasteClipboard/ }));
+    fireEvent.contextMenu(terminalState.inputElement as HTMLTextAreaElement);
+    const paste = screen.getByRole("menuitem", { name: /ssh\.actions\.pasteClipboard/ });
+    expect(paste).toHaveAttribute("data-disabled");
+    fireEvent.click(paste);
+    expect(clipboardReadMock).toHaveBeenCalledOnce();
+    await act(async () => resolveRead("one paste"));
+    await waitFor(() => expect(sendInputMock).toHaveBeenCalledOnce());
+    expect(terminalState.pasteCalls).toEqual(["one paste"]);
   });
 });

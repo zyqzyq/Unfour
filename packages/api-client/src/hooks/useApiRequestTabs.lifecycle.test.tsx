@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { getApiRoutes, listSshConnections, listTemporaryRouteHandles, sendApiRequest, saveApiRequest, type RequestExecutionResult, type SshConnection } from "@unfour/command-client";
+import { getApiRoutes, listSshConnections, listTemporaryRoutes, sendApiRequest, saveApiRequest, type RequestExecutionResult, type SshConnection } from "@unfour/command-client";
 import { useApiRequestTabs } from "./useApiRequestTabs";
 import { parseCurl } from "../model/curl-import";
 import { resetApiRequestTabStore, useApiRequestTabStore } from "../model/api-request-tab-state";
@@ -15,7 +15,7 @@ vi.mock("@unfour/command-client", async (importOriginal) => ({
   listWorkspaceEnvironments: vi.fn().mockResolvedValue([]),
   getApiRoutes: vi.fn().mockResolvedValue({ request: { mode: "inherit" }, environment: { mode: "direct" }, effective: { mode: "direct" }, environmentId: null }),
   listSshConnections: vi.fn().mockResolvedValue([]),
-  listTemporaryRouteHandles: vi.fn().mockResolvedValue([]),
+  listTemporaryRoutes: vi.fn().mockResolvedValue([]),
   sendApiRequest: vi.fn(),
   saveApiRequest: vi.fn(),
 }));
@@ -99,7 +99,7 @@ it("pins the effective SSH host revision and distinguishes a draft override from
 
 it("sends the selected live handle separately and blocks retry when that session ends", async () => {
   const handle = "local-session-handle";
-  vi.mocked(listTemporaryRouteHandles).mockResolvedValue([handle]);
+  vi.mocked(listTemporaryRoutes).mockResolvedValue([{ handle, displayName: "Production node", endpoint: "10.0.0.8:22" }]);
   vi.mocked(sendApiRequest).mockResolvedValue(execution);
   const { result, client } = await setup();
   act(() => result.current.updateDraft("new:1", { temporaryHandle: handle }));

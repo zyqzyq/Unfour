@@ -38,6 +38,7 @@ import { TerminalSearchBar } from "./TerminalSearchBar";
 import { TerminalSessionTabMeta } from "./TerminalSessionTab";
 import { TerminalSplitView, type TerminalPaneModel } from "./TerminalSplitView";
 import { useTerminalSplit } from "../hooks/useTerminalSplit";
+import { useSshClipboardWrite } from "../hooks/useSshClipboardWrite";
 import { SftpWorkspace } from "./SftpWorkspace";
 
 export function TerminalWorkspace({
@@ -250,16 +251,15 @@ export function TerminalWorkspace({
 
 function TerminalActionError({ error }: { error: unknown }) {
   const { t } = useI18n();
+  const copyText = useSshClipboardWrite();
   const message = formatTerminalError(error, t);
   const [copied, setCopied] = useState(false);
 
   async function copyError() {
-    try {
-      await navigator.clipboard?.writeText(message);
-      setCopied(true);
+    const success = await copyText(message);
+    setCopied(success);
+    if (success) {
       window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      setCopied(false);
     }
   }
 

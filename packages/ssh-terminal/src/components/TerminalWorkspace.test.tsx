@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { I18nProvider } from "@unfour/ui";
+import { FeedbackProvider, I18nProvider } from "@unfour/ui";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TerminalWorkspace } from "./TerminalWorkspace";
 
@@ -17,7 +17,7 @@ vi.mock("../hooks/useTerminalSplit", () => ({
   useTerminalSplit: () => ({ setMode: vi.fn() }),
 }));
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 function workspaceProps(
   overrides: Partial<Parameters<typeof TerminalWorkspace>[0]> = {},
@@ -107,5 +107,16 @@ describe("TerminalWorkspace progressive loading", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy error" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(longError));
     vi.unstubAllGlobals();
+  });
+
+  it("does not claim an action error was copied when clipboard access is unavailable", async () => {
+    vi.stubGlobal("navigator", { clipboard: undefined });
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    render(<I18nProvider initialLocale="en"><FeedbackProvider>
+      <TerminalWorkspace {...workspaceProps({ actionError: new Error("SSH connection failed") })} />
+    </FeedbackProvider></I18nProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Copy error" }));
+    expect(await screen.findByText("Failed to write to the clipboard")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Copy error" })).toBeVisible();
   });
 });

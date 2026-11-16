@@ -15,6 +15,8 @@ mod tests;
 const RETENTION: Duration = Duration::from_secs(120);
 const MAX_REQUESTS: usize = 16;
 const MAX_RECEIPTS: usize = 256;
+#[cfg(feature = "ssh-native")]
+const MAX_TRUSTED_HOSTS: usize = 1024;
 
 /// Generated once at a trusted ingress boundary, reused only for redelivery.
 /// A new user launch gets a new receipt even for identical credentials.
@@ -49,6 +51,7 @@ pub struct TemporaryRequest {
     port: u16,
     username: Zeroizing<String>,
     password: Zeroizing<String>,
+    display_name: String,
 }
 impl TemporaryRequest {
     pub fn password(
@@ -58,6 +61,7 @@ impl TemporaryRequest {
         password: String,
     ) -> AppResult<Self> {
         let request = Self {
+            display_name: String::new(),
             host: Zeroizing::new(host),
             port,
             username: Zeroizing::new(username),
@@ -76,6 +80,41 @@ impl TemporaryRequest {
         }
         Ok(request)
     }
+
+    /// Display-only launcher metadata. Never use it for dialing or authentication.
+    pub fn with_display_name(mut self, label: &str) -> Self {
+        // Launch labels can be arbitrary. Never repeat credential-bearing URLs
+        // or login material into a frontend summary, even if mislabeled upstream.
+        if label.contains("://")
+            || label.contains(self.username.as_str())
+            || (!self.password.is_empty() && label.contains(self.password.as_str()))
+        {
+            return self;
+        }
+        let clean: String = label.chars().filter(|c| {
+            !c.is_control() && !matches!(c, '\u{061c}' | '\u{200b}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2060}'..='\u{206f}' | '\u{feff}')
+        }).collect();
+        if clean.contains("://")
+            || clean.contains(self.username.as_str())
+            || (!self.password.is_empty() && clean.contains(self.password.as_str()))
+        {
+            return self;
+        }
+        let mut chars = clean.trim().chars();
+        self.display_name = chars.by_ref().take(160).collect();
+        if chars.next().is_some() {
+            self.display_name.push('…');
+        }
+        self
+    }
+
+    fn display_endpoint(&self) -> String {
+        if self.host.contains(':') {
+            format!("[{}]:{}", self.host.as_str(), self.port)
+        } else {
+            format!("{}:{}", self.host.as_str(), self.port)
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -87,6 +126,8 @@ pub struct TemporarySummary {
     pub expires_in_seconds: u64,
     pub fingerprint: Option<String>,
     pub error_code: Option<String>,
+    pub display_name: String,
+    pub endpoint: String,
 }
 
 struct Entry {
@@ -97,8 +138,6 @@ struct Entry {
     trusted_fingerprint: Option<String>,
     #[cfg(feature = "ssh-native")]
     cancel: Option<tokio::sync::watch::Sender<bool>>,
-    #[cfg(feature = "ssh-native")]
-    trust: Option<tokio::sync::oneshot::Sender<bool>>,
     #[cfg(feature = "ssh-native")]
     native: Option<NativeSshHandle>,
     #[cfg(feature = "ssh-native")]
@@ -115,6 +154,10 @@ struct Queue {
     // again while valid. Expired receipts are always rejected, even after GC.
     receipts: HashMap<String, (Instant, String)>,
     workspace_epochs: HashMap<String, u64>,
+    // First-use pins survive individual launches, but never leave memory.
+    // Closing the workspace releases its endpoint associations.
+    #[cfg(feature = "ssh-native")]
+    trusted_hosts: HashMap<(String, String, u16), String>,
 }
 #[derive(Clone, Default)]
 pub(super) struct TemporarySessions(Arc<Mutex<Queue>>);
@@ -245,6 +288,12 @@ impl SshService {
                     expires_in_seconds: 120,
                     fingerprint: None,
                     error_code: None,
+                    display_name: if request.display_name.is_empty() {
+                        request.display_endpoint()
+                    } else {
+                        request.display_name.clone()
+                    },
+                    endpoint: request.display_endpoint(),
                 },
                 deadline: receipt.deadline,
                 request: Some(request),
@@ -253,8 +302,6 @@ impl SshService {
                 trusted_fingerprint: None,
                 #[cfg(feature = "ssh-native")]
                 cancel: None,
-                #[cfg(feature = "ssh-native")]
-                trust: None,
                 #[cfg(feature = "ssh-native")]
                 native: None,
                 #[cfg(feature = "ssh-native")]
@@ -373,6 +420,10 @@ impl SshService {
             .map_err(|_| failure("TEMPORARY_UNAVAILABLE"))?;
         let epoch = queue.workspace_epochs.entry(workspace.into()).or_default();
         *epoch = epoch.wrapping_add(1);
+        #[cfg(feature = "ssh-native")]
+        queue
+            .trusted_hosts
+            .retain(|(owner, _, _), _| owner != workspace);
         queue.entries.retain(|_, entry| {
             if entry.summary.workspace_id.as_deref() != Some(workspace) {
                 return true;

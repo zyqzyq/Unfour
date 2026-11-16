@@ -1,4 +1,16 @@
-# 堡垒机离线验收携带清单（A4 待执行）
+# 堡垒机离线验收携带清单（A4 部分验收）
+
+## 2026-11-16 当前进度
+
+A1–A3 的最小启动契约和临时终端实现已完成；scrt 兼容包已有用户报告的现场登录成功，
+见 [已交付包证据](bastion-scrt-launch-2026-11-16.md)。完整冷/热启动、资产核对、授权/
+代理生命周期、exec/退出码、通道复用和 SFTP 能力仍由 [#7](https://github.com/zyqzyq/Unfour/issues/7)
+跟踪。本轮 UX 优化尚未重新打包或现场复验，见 [交互回归记录](bastion-ux-review-2026-11-16.md)。
+
+下文保留原携带清单与补证要求；“先补 A1”等描述为 11 月 11 日的执行顺序，不表示
+当前生产启动入口仍未实现。
+
+## 2026-11-11 原携带清单
 
 关联 [A4 #7](https://github.com/zyqzyq/Unfour/issues/7)。
 2026-11-11 已取得 AccessClient 4.6.15 → Xshell 7 的外层命令行证据。A2 提供按该结构构建的 Windows 外层入口和离线测试包。先按[便携包复现说明](bastion-xshell-url-offline.md)验证合成本机会话，真实网页链路留待 A4。内部临时会话能力见[基础验证报告](bastion-temporary-session-foundation-2026-11-10.md)。

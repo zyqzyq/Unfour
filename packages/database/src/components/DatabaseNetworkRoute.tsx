@@ -1,4 +1,4 @@
-import { listSshConnections, listTemporaryRouteHandles, temporaryRouteOptions } from "@unfour/command-client";
+import { listSshConnections, listTemporaryRoutes, temporaryRouteOptions } from "@unfour/command-client";
 import { Button, Select, useI18n, useLiveOptions } from "@unfour/ui";
 
 export function DatabaseNetworkRoute({ workspaceId, sshId, revision, temporaryHandle, onChange }: {
@@ -10,7 +10,7 @@ export function DatabaseNetworkRoute({ workspaceId, sshId, revision, temporaryHa
 }) {
   const { t } = useI18n();
   const saved = useLiveOptions(workspaceId, listSshConnections, true);
-  const live = useLiveOptions(workspaceId, listTemporaryRouteHandles, true);
+  const live = useLiveOptions(workspaceId, listTemporaryRoutes, true);
   const hosts = saved?.items.filter((host) => host.workspaceId === workspaceId && !host.deletedAt) ?? [];
   const chosen = hosts.find((host) => host.id === sshId);
   const sessions = temporaryRouteOptions(live?.items ?? [], temporaryHandle, (id) => t("network.temporarySession", { id }), t("network.temporaryUnavailable"));

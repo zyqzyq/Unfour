@@ -36,7 +36,7 @@ async fn temporary_forwarding_uses_one_parent_login_and_authenticates_the_ssh_ta
     };
     let parent_calls = parent.calls.clone();
     let resume = parent.pending_open.clone();
-    let (parent_addr, parent_key, parent_task) = fixture_server(parent).await;
+    let (parent_addr, _parent_key, parent_task) = fixture_server(parent).await;
     let request = TemporaryRequest::password(
         "127.0.0.1".into(),
         parent_addr.port(),
@@ -50,10 +50,6 @@ async fn temporary_forwarding_uses_one_parent_login_and_authenticates_the_ssh_ta
     assert!(bus.ssh.temporary_tunnel(&workspace, &parent).is_err());
     bus.claim_temporary_ssh(&workspace, &parent).await.unwrap();
     bus.start_temporary_ssh(&workspace, &parent).unwrap();
-    wait_for(&bus, &workspace, "awaiting-trust").await;
-    assert!(bus.ssh.temporary_tunnel(&workspace, &parent).is_err());
-    bus.trust_temporary_ssh(&workspace, &parent, &parent_key)
-        .unwrap();
     wait_for(&bus, &workspace, "connected").await;
     assert!(bus.ssh.temporary_tunnel("elsewhere", &parent).is_err());
     let tunnel = bus.ssh.temporary_tunnel(&workspace, &parent).unwrap();

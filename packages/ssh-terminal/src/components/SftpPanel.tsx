@@ -23,6 +23,7 @@ import {
   useI18n,
 } from "@unfour/ui";
 import { useSftpNativeDragDrop } from "../hooks/useSftpNativeDragDrop";
+import { useSshClipboardWrite } from "../hooks/useSshClipboardWrite";
 import { hasActiveSftpTransfer, useSftpStore } from "../model/sftp-state";
 import { SftpFileList } from "./SftpFileList";
 import { SftpNameDialog } from "./SftpNameDialog";
@@ -45,6 +46,7 @@ export function SftpPanel({
   const feedback = useFeedback();
   const queryClient = useQueryClient();
   const handleError = useFeedbackErrorHandler();
+  const copyText = useSshClipboardWrite();
   const noteActivityWarning = (warnings?: string[]) => {
     if (warnings?.includes("ACTIVITY_RECORD_FAILED")) {
       feedback.info(t("feedback.activityRecordFailed"));
@@ -423,7 +425,7 @@ export function SftpPanel({
               canPreview: !hasActiveTransfer,
               canRefresh,
               canUpload,
-              onCopyPath: (entry) => void navigator.clipboard?.writeText(entry.path),
+              onCopyPath: (entry) => void copyText(entry.path),
               onDelete: (entry) => beginDelete([entry]),
               onDownload: (entry) => void chooseDownload(entry),
               onPreview: (entry) => {
