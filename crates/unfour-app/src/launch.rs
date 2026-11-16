@@ -1,4 +1,4 @@
-//! Windows outer Xshell argv, as observed with AccessClient 4.6.15.
+//! Windows outer Xshell and SecureCRT argv, observed with AccessClient 4.6.15.
 //! Delimiters and encoding inside other handoff formats are still unknown.
 use std::ffi::OsStr;
 use unfour_command_bus::{CommandBus, LaunchReceipt, TemporaryRequest};
@@ -42,9 +42,66 @@ fn parse<S: AsRef<OsStr>>(args: &[S]) -> Result<Launch<'_>, &'static str> {
             }
             parse_endpoint(url).map(Launch::Terminal)
         }
+        [tab, name, label, protocol, host, port_flag, port, login, identity, password, credential]
+            if slash_option(tab.as_ref(), "/T")
+                && slash_option(name.as_ref(), "/N")
+                && slash_option(protocol.as_ref(), "/SSH2")
+                && slash_option(port_flag.as_ref(), "/P")
+                && slash_option(login.as_ref(), "/L")
+                && slash_option(password.as_ref(), "/PASSWORD") =>
+        {
+            parse_scrt([
+                label.as_ref(),
+                host.as_ref(),
+                port.as_ref(),
+                identity.as_ref(),
+                credential.as_ref(),
+            ])
+            .map(Launch::Terminal)
+        }
         _ => Err(UNSUPPORTED),
     }
 }
+
+fn slash_option(value: &OsStr, expected: &str) -> bool {
+    value
+        .to_str()
+        .is_some_and(|value| value.eq_ignore_ascii_case(expected))
+}
+
+fn parse_scrt(values: [&OsStr; 5]) -> Result<Endpoint<'_>, &'static str> {
+    let [label, host, port, identity, credential] = values;
+    let label = label.to_str().ok_or(UNSUPPORTED)?;
+    let host = host.to_str().ok_or(UNSUPPORTED)?;
+    let port = port.to_str().ok_or(UNSUPPORTED)?;
+    let identity = identity.to_str().ok_or(UNSUPPORTED)?;
+    let credential = credential.to_str().ok_or(UNSUPPORTED)?;
+    let fields = [label, host, port, identity, credential];
+    if fields.iter().map(|v| v.len()).sum::<usize>() > 64 * 1024
+        || fields
+            .iter()
+            .any(|v| v.is_empty() || v.contains('|') || v.chars().any(char::is_control))
+        || label.trim().is_empty()
+        || !valid_host(host)
+        || port.starts_with('0')
+        || !port.bytes().all(|b| b.is_ascii_digit())
+    {
+        return Err(UNSUPPORTED);
+    }
+    // Separate argv values are literal UTF-8, not URL components. Never decode
+    // percent escapes, trim credentials, split ticket usernames or execute a
+    // value resembling a switch. The external label is validated then discarded.
+    Ok(Endpoint {
+        host,
+        port: port.parse().map_err(|_| UNSUPPORTED)?,
+        identity,
+        credential,
+    })
+}
+
+#[cfg(test)]
+#[path = "launch_scrt_tests.rs"]
+mod scrt_tests;
 
 fn parse_endpoint(url: &str) -> Result<Endpoint<'_>, &'static str> {
     let authority = url.strip_prefix("ssh://").ok_or(UNSUPPORTED)?;

@@ -7109,6 +7109,7 @@ dependencies = [
  "unfour-local-storage",
  "unfour-paths",
  "unfour-secret-store",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

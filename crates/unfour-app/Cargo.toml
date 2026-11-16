@@ -27,3 +27,7 @@ unfour-secret-store = { path = "../secret-store" }
 default = []
 deep-link = ["tauri-plugin-single-instance/deep-link"]
 ssh-native = ["unfour-command-bus/ssh-native"]
+
+[target.'cfg(windows)'.dependencies]
+# Report rejected launches before Tauri/WebView2 starts, including offline failures.
+windows-sys = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging"] }

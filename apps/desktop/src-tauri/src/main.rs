@@ -8,6 +8,7 @@ fn main() {
             #[cfg(windows)]
             if let Err(code) = unfour_app::validate_windows_launch() {
                 eprintln!("{code}");
+                unfour_app::report_windows_launch_failure();
                 std::process::exit(2);
             }
             unfour_lib::run();

@@ -7,8 +7,12 @@
 
 pub mod commands;
 mod launch;
+#[cfg(any(windows, test))]
+mod launch_diagnostics;
 #[cfg(windows)]
 pub use launch::validate_windows_launch;
+#[cfg(windows)]
+pub use launch_diagnostics::report_windows_launch_failure;
 mod mcp_client_config;
 
 use std::sync::{Arc, Mutex};
